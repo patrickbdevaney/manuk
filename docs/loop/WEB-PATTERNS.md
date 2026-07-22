@@ -3173,3 +3173,16 @@ be Vorbis (plays) or Opus (refused), so the honest canPlayType answer is exactly
 reject list; Ogg left it the tick the seam could read it.
 **The trap:** the silent-vanish class again — narrowing a sniff makes a whole format's loads die
 while every suite stays green; only a load-this-exact-fixture gate claim catches it.
+
+## AVIF alpha — the mask is a picture, and the fixture can lie (tick 368)
+
+**The class of the web this unlocks:** transparent heroes, logos and product shots — AVIF's alpha
+rides a separate auxiliary AV1 image, and ignoring it paints the encoded background over the page.
+**(1)** The aux image is monochrome and its Y plane IS the mask — decode it with the same decoder
+but NEVER through the color matrix, which would rescale the mask's numbers. **(2)** Deliver
+STRAIGHT alpha (un-premultiply per the container flag): src-over compositing double-darkens edges
+otherwise. **(3)** The negative claim matters as much: an alphaless file must stay A=255 — an alpha
+path that fires on everything fades the web.
+**The trap:** fixtures lie by NAME — Blink's `alpha-mask-*` files ARE masks (alpha_item=None), so a
+gate on one can never observe compositing. Probe the fixture's actual structure (10 lines of
+avif-parse) before debugging the code it "proves" broken.

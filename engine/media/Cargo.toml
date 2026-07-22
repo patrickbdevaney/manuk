@@ -106,6 +106,10 @@ name = "av1_decode"
 required-features = ["av1"]
 
 [[test]]
+name = "avif_alpha"
+required-features = ["avif"]
+
+[[test]]
 name = "playback_clock"
 required-features = ["video"]
 

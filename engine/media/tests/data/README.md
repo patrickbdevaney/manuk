@@ -57,3 +57,9 @@ All three are from the Chromium `media/test/data` corpus, which is BSD-licensed 
   honest-refusal fixture: symphonia has no Opus decoder, so this must fail as a NAMED error, never
   a panic and never a wrong sound), all from `chromium/media/test/data/` (Chromium, BSD-3 — test
   DATA with attribution per the tick-235 steer).
+
+- `red-with-alpha-8bpc.avif` — an AVIF carrying a real alpha AUXILIARY ITEM (8-bit), from the
+  Blink AVIF resources (Chromium, BSD-3, same provenance rule). NOTE the trap the first pick hit:
+  the `alpha-mask-*` fixtures ARE masks (monochrome primaries, alpha_item=None) — a gate on one
+  of those can never see compositing. The alpha gate asserts the A channel actually VARIES and
+  the color plane survives compositing.

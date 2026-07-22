@@ -1351,8 +1351,22 @@ G_AVIF_PAINT (shell suite = IN the wall): the solid-red Blink 8bpc fixture decod
 wrong picture); non-AVIF bytes are sniff-skipped. RED-proven: insert-drop (the silent vanish)
 and sniff-false, both watched fail.
 
-Honest residue: alpha (a separate aux AV1 image) renders opaque; 10/12-bit refused;
+~~Honest residue: alpha renders opaque~~ — composited by tick 368 (below); 10/12-bit refused;
 `data:`-URL AVIF in headless page loads stays undecoded (the isolation rule cuts both ways).
+
+### Tick 368 — alpha composites
+
+The aux item is a MONOCHROME AV1 picture whose Y plane IS the mask — decoded through the same
+dav1d path but deliberately NOT through `frame_from`: the YUV color matrix would rescale the very
+numbers the mask needs. Straight alpha is delivered (the paint path's src-over expects it;
+premultiplied color is un-multiplied per the container flag). Dimension mismatch → opaque
+fallback, never a scale and never a crash on hostile input.
+
+**The fixture trap, recorded:** the Blink `alpha-mask-*` fixtures ARE masks — monochrome
+primaries with `alpha_item=None` — so a gate on one can never see compositing and reads as "the
+code is broken." A 10-line avif-parse probe harness (`primary=49 alpha=None`) named the real
+problem in one run; `red-with-alpha-8bpc.avif` is the fixture with an actual aux item. Probe the
+FIXTURE before blaming the code — the same discipline as measuring boxes before theorizing.
 
 ## Tick 360 — the live media-IDL channel: .muted and .volume reach the device
 

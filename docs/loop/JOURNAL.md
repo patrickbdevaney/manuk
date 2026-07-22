@@ -16034,3 +16034,39 @@ designed. LAST_SURFACE_AUDIT 357→367; next due 377.
 TICK SHAPE: surface-audit (map-maintenance; the deliverable is Audit #10 + the WebMCP row). GATES +0. [no-pattern]
 CONSTELLATION: +1 row (agentic/navigator.modelContext missing — the H2 clock, on the map).
 WIKI: none — audit lives in SURFACE-AUDIT.md.
+
+## Tick 368 — AVIF alpha composites: the transparent hero stops rendering opaque (2026-07-22)
+
+The t355 residue's first named item: "alpha (a separate aux AV1 image) renders opaque." A transparent
+logo/hero on a dark page currently paints its encoded background instead of letting the page show
+through — degraded-and-honest then, a visible defect now that the rest of the pipeline works.
+
+HYPOTHESIS: the alpha_item OBUs decode through the SAME dav1d path as the color item (a monochrome
+AV1 image; its Y plane IS the mask), and compositing is one write per pixel into the A channel the
+t355 conversion already allocates as 255. avif-parse's premultiplied_alpha flag decides whether the
+color needs un-premultiplying (straight alpha is what the paint path's src-over expects). Dimension
+mismatch between color and alpha items → alpha ignored (opaque, honest) rather than scaled or
+crashed. Gate avif_alpha (engine, required-features avif): the Blink alpha-mask fixture decodes with
+a VARYING A channel (some pixels transparent, some opaque) while the red fixture stays all-opaque;
+RED = skip the alpha decode (A uniform 255).
+RESULT — LANDED. engine/media/src/avif.rs: decode_item (color) + decode_item_alpha (monochrome Y
+plane AS the mask — deliberately not frame_from, whose color matrix would rescale it) + one-pass
+composite into the A channel (straight alpha; premultiplied un-multiplied per the container flag;
+dimension mismatch → opaque fallback). Gate avif_alpha (required-features avif): varying A with
+genuinely non-opaque pixels on the real-alpha fixture, alphaless red stays all-255, color plane
+undisturbed.
+
+THE FIXTURE TRAP (cost ~10 minutes, recorded in wiki+README): the first fixture chosen —
+alpha-mask-full-range-8bpc.avif — IS a mask (monochrome primary, alpha_item=None), so the gate could
+never see compositing and the failure read as broken code. A 10-line avif-parse probe harness printed
+"primary=49 alpha=None" and named it; red-with-alpha-8bpc.avif carries a real aux item (alpha=Some(49)).
+Probe the FIXTURE before blaming the code.
+
+RED-PROVEN: alpha branch disabled → "min alpha seen: 255" (the exact pre-tick opaque-hero state).
+Restored byte-for-byte, cmp-verified.
+
+NO REGRESSION: manuk-media all-features green; G_AVIF_PAINT (opaque path) green; fmt clean.
+
+TICK SHAPE: capability (AVIF alpha — transparent heroes/logos let the page show through; [host-native pattern: same decoder, the Y-plane-is-the-mask insight, one compositing pass]). GATES +1 (avif_alpha, required-features lane); constellation AVIF row residue narrowed to bit-depth + headless data:-URLs.
+CONSTELLATION: doc / images: AVIF → alpha composited (avif_alpha).
+WIKI: docs/wiki/media-pipeline.md — Tick 368 alpha (Y-plane-is-the-mask, straight-alpha contract, the fixture trap).
