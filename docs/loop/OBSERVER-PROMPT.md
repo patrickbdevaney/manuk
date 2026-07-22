@@ -92,6 +92,16 @@ at the right target.
 - **Disk pressure**: `scripts/disk-hygiene.sh` is cron'd; if >90%, reap provably-dead gate
   binaries (stems with no test source in tree or wip branches) or orphaned old-hash binaries via
   cargo's `--message-format=json` keep-list — but NEVER run reaper cargo while the agent builds.
+  A no-cargo variant is always safe: delete known-test-stem binaries with atime+mtime >6h (the
+  walls touch every live binary far more often).
+- **"systemd-run unavailable — launching UNCONTAINED"** in the supervisor log (2026-07-22): an
+  OOM-killed agent scope goes `failed`, systemd --user turns `degraded`, and the next launch can
+  fall back uncontained (machine-hang risk). Also: agent-spawned headless Chromes (CDP port 9333)
+  can outlive their invocation, keeping a dead scope "active running" for DAYS and squatting the
+  debug port. Remedy: `systemctl --user stop <stale run-r*.scope>` (verify its cgroup.procs are
+  truly stale first), `systemctl --user reset-failed`, confirm `is-system-running` says running,
+  then bounce ONLY the uncontained agent at a wall-free moment — the supervisor relaunches it
+  contained.
 
 ## Safety rules — each one is a paid-for incident
 
