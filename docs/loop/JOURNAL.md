@@ -15357,3 +15357,31 @@ manuk-page compile clean under stylo,spidermonkey; g_drag_reorder passes (0.25s)
 TICK SHAPE: capability (drag-and-drop editor half; source-side dragstart→drop→dragend with a shared DataTransfer — the reorder handoff; [host-native pattern: mirror dispatch_drop in the engine we own]). GATES +1 (G_DRAG_REORDER); constellation row 61 flips partial→gated.
 CONSTELLATION: platform / drag and drop → gated (G_DROP_UPLOAD, G_DRAG_REORDER).
 WIKI: docs/wiki/interaction-surface.md — drag-and-drop editor half (dispatch_drag, setData→getData handoff, dragstart/dragend source events).
+
+## Tick 347 — HTTP `Expires` header as a freshness source (2026-07-22)
+
+CO-#1 / daily-driver capability, extending tick 345's cache work (constellation row 85, already gated).
+The http_cache derived freshness ONLY from Cache-Control `max-age`/`s-maxage`. But a great many CDNs and
+static-asset origins signal freshness with the older `Expires` absolute-date header INSTEAD of a max-age
+— so every one of those responses was treated as immediately stale and re-fetched (or, post-345, forced
+to revalidate) when it was in fact fresh for hours or days.
+
+THE FIX (engine/net/src/lib.rs http_cache + one visibility change in cookies.rs):
+- `expires_secs(response)` parses the `Expires` header (reusing `cookies::parse_http_date`, now
+  `pub(crate)` — one date parser, not two that could disagree) and converts the absolute deadline to a
+  lifetime-FROM-NOW at store time, so it slots into the existing `stored + fresh_for` model with no
+  second clock. Past/unparseable/absent → 0.
+- `put`'s freshness precedence is now RFC 7234 §5.3: `no-cache` (0) → `max-age`/`s-maxage` → `Expires`.
+- Composes with 345: a PAST Expires is a zero lifetime (stale), but if the response carried a validator
+  it is still kept and revalidated rather than dropped.
+
+RED-PROVEN (cp-snapshot restored + re-verified GREEN): forcing `expires_secs` to return 0 (ignore the
+header) makes `expires_header_provides_freshness_when_no_max_age` FAIL — a future Expires no longer makes
+the entry fresh. Restored byte-for-byte; 6/6 http_cache tests green.
+
+NO REGRESSION: additive freshness source; max-age still outranks Expires (asserted). Full manuk-net suite
+96 passed / 0 failed / 5 network-ignored (+2 from 345's 94). fmt clean. manuk-net is in verify.sh's
+crate-test loop, so these ride the wall.
+
+TICK SHAPE: capability (HTTP Expires-header freshness; a real cache-lifetime source many origins send instead of max-age; [host-native pattern: extend the net cache we own, reuse the cookie date parser]). GATES +2 crate tests; constellation row 85 note extended (already gated by tick 345).
+WIKI: docs/wiki/networking.md — Expires freshness (precedence after max-age, absolute-date→lifetime conversion, composes with revalidation).

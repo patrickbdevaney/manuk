@@ -3015,3 +3015,19 @@ misses it; the final state is captured in the `dragend` handler. **The trap:** t
 built from a files-array shape (`__makeFileList`), so an empty transfer must be `'[]'`, not `'{}'` —
 the latter makes `items.length = undefined` throw and silently aborts the entire gesture with no event
 delivered at all.
+
+## HTTP `Expires` freshness — the older date-based cache signal (tick 347)
+
+**The class of the web this unlocks:** static assets and CDN responses that predate (or simply prefer)
+`Cache-Control` — a huge amount of the images, CSS, JS and fonts on the long-tail web carry an `Expires:
+<date>` and no `max-age`. Without honouring it, every one of those is treated as stale on arrival and
+re-fetched (or, once revalidation exists, needlessly revalidated) on the next view.
+
+**(1)** `Expires` is an *absolute* deadline; the cache's freshness model is a *relative* lifetime
+(`stored + fresh_for`). Convert at store time — the entry was just stored, so `expires - now` is its
+lifetime — and it slots in with no second clock. **(2)** Precedence is fixed (RFC 7234 §5.3): `no-cache`
+forces revalidation, then `Cache-Control` `max-age`/`s-maxage`, then `Expires`. A response with both a
+past `Expires` and a positive `max-age` is fresh; `max-age` wins. **(3)** Reuse the ONE date parser the
+cookie jar already ships — a second one is a second thing that can disagree about the same date string.
+**The trap:** a past or unparseable `Expires` is not an error to surface, it is simply a zero lifetime —
+stale — which then composes with revalidation: kept and conditionally re-checked iff it carried a validator.

@@ -315,3 +315,48 @@ other `missing` CSS rows. Container queries (CO-#1 (3)) remain the largest singl
 **LAST_SURFACE_AUDIT set to 337.**
 
 **Next audit due: tick 347.**
+
+## Audit #8 — tick 347 (2026-07-22)
+
+### Sources (searched, not recalled)
+
+* [Interop 2026 focus areas — WebKit announcement](https://webkit.org/blog/17818/announcing-interop-2026/) ·
+  [web.dev](https://web.dev/blog/interop-2026) · [Igalia](https://www.igalia.com/news/interop-2026.html) ·
+  [Mozilla Hacks](https://hacks.mozilla.org/2026/02/launching-interop-2026/)
+* [Ladybird — This Month, June 2026](https://ladybird.org/newsletter/2026-06-30/) (WPT 2,078,912 subtests;
+  crossed 90% of all WPT in Oct 2025; first alpha 2026; entry now maintainers-only)
+
+### The external frame, June/July 2026
+
+Interop 2026 = **19 focus areas + 3 cleanup + 4 investigations**, agreed by Apple/Google/Igalia/
+Microsoft/Mozilla. Named areas cross-checked against our map: **Anchor Positioning** (row 94 `missing`),
+**advanced `attr()` / `zoom` / `shape()`** (row 95 `missing`), **View Transitions incl. cross-document**
+(same-doc gated row 89; cross-doc was ABSENT — added, below), **WebRTC** (91.6% pass rate industry-wide;
+constitutionally OUT for us — a second media-stack subsystem), **Dialog + Popover** (both gated here),
+**WebVTT** investigation (gated here). Investigations: **a11y-tree consistency** (our a11y is `partial`),
+**JPEG XL** (row 14/JPEG XL `missing`, measured t237), **Mobile WPT infra** (N/A to us).
+
+### ADDED
+
+* **cross-document View Transitions (MPA)** — `unknown`. Interop 2026 expands View Transitions to the
+  cross-document/navigation form (`@view-transition { navigation: auto }` + `pageswap`/`pagereveal`).
+  Our same-document `startViewTransition` is gated (t308); the MPA form is unmeasured. Re-probe first —
+  the same-doc plumbing may already cover part of it.
+
+### CORRECTED / what we had been wrong about
+
+* **The map is not blind to modern CSS — it is over-PESSIMISTIC about the bounded tail.** The dominant
+  error this window is the *inverse* of the six historical phantoms: capabilities the audit lists
+  (`DAILY-DRIVER-EDGES.md`, `PHASE0-BOUNDED-REMAINDER.md`) mark `missing`/`bounded` that are in fact
+  BUILT and GATED. Verified already-built while hunting a tick this session: `<details>`/`<summary>`
+  (g_details), `document.visibilityState`+`permissions.query` (G_VISIBILITY), `createObjectURL`,
+  cookie SameSite/`__Host-`/`__Secure-` prefixes (g_cookie_attributes), Fullscreen, IndexedDB indexes,
+  Selection scripting surface. Constellation UNKNOWNS are down to **3** (100-tab RSS, test262, and this
+  audit's cross-doc VT). **Implication for tick-selection:** the genuine bounded gaps are nearly mined
+  out; what remains is subsystems (media playback join, container queries, contenteditable, software
+  WebGL) + a thin tail of real half-builds. Ticks 345/347 (HTTP conditional revalidation + Expires
+  freshness) and 346 (drag editor half) were exactly that tail — real gaps behind rows marked `partial`.
+* **Interop's modern-CSS marquee (anchor positioning, attr()/shape()/zoom) stays honestly `missing`**,
+  not upgraded — it is in the board's named cut line (niche, feature-detects cleanly, cosmetic), and the
+  Ladybird lesson ("the final 17% is the hardest", MPA/web-compat quirks over spec purity) says the
+  daily-driver ROI is in the jarring-invariant tail and the subsystems, not the CSS niche.

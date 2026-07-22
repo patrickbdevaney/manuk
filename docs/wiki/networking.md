@@ -1214,3 +1214,14 @@ stale-but-validatable entry, and `fetch_inner` rides them on the first hop of th
 Modified` routes through `note_revalidated`, which refreshes freshness from the 304's own `Cache-Control`
 and returns the stored body with no re-download. Gated by two `manuk-net` crate tests in the verify wall.
 [[js-engine]]
+
+## HTTP `Expires` header freshness (tick 347)
+
+The cache derived freshness only from `Cache-Control` `max-age`/`s-maxage`. Tick 347 adds the older
+`Expires` absolute-date header, which many CDNs and static-asset origins send *instead of* a max-age —
+so those responses are now recognised as fresh rather than treated as immediately stale. `expires_secs`
+reuses `cookies::parse_http_date` (now `pub(crate)` — one date parser, not two) and converts the absolute
+deadline to a lifetime-from-now at store time, slotting into the existing `stored + fresh_for` model.
+Precedence (RFC 7234 §5.3): `no-cache` → `max-age`/`s-maxage` → `Expires`. A past/unparseable Expires is
+a zero lifetime — stale, and revalidatable iff a validator was present (composes with the tick-345 path).
+[[js-engine]]

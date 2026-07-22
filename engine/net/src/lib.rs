@@ -376,12 +376,18 @@ mod http_cache {
             return;
         }
         let (etag, last_modified) = validators(response);
-        // `no-cache` means "store, but never serve without revalidating" — a zero lifetime, not a
-        // refusal to store. `get` (fresh-only) will decline it; `revalidation_headers` will use it.
+        // Freshness lifetime, in precedence order (RFC 7234 §5.3): `no-cache` forces revalidation (a
+        // zero lifetime, not a refusal to store — `get` declines it, `revalidation_headers` uses it);
+        // then `Cache-Control` `max-age`/`s-maxage`; then the `Expires` header, the older absolute-date
+        // freshness signal a great many CDNs and static-asset servers still send *instead of* a
+        // `max-age`. `Expires` is converted to a lifetime-from-now here, so a past or unparseable date
+        // is simply a zero lifetime — stale, and revalidatable iff it carried a validator.
         let fresh_secs = if cc.contains("no-cache") {
             0
+        } else if let Some(secs) = max_age(&cc) {
+            secs
         } else {
-            max_age(&cc).unwrap_or(0)
+            expires_secs(response)
         };
         if fresh_secs == 0 && etag.is_none() && last_modified.is_none() {
             return;
@@ -449,6 +455,22 @@ mod http_cache {
             e.last_modified = last_modified;
         }
         Some(e.response.clone())
+    }
+
+    /// The `Expires` header expressed as a freshness lifetime in seconds *from now* — 0 when the
+    /// header is absent, unparseable, or already in the past. Converting the absolute deadline to a
+    /// relative lifetime at store time (the entry was just stored, so now ≈ stored) lets `Expires`
+    /// slot into the same `stored + fresh_for` model `max-age` uses, with no second clock.
+    fn expires_secs(response: &Response) -> u64 {
+        let Some(raw) = response.header("expires") else {
+            return 0;
+        };
+        let Some(when) = crate::cookies::parse_http_date(raw) else {
+            return 0;
+        };
+        when.duration_since(std::time::SystemTime::now())
+            .map(|d| d.as_secs())
+            .unwrap_or(0)
     }
 
     /// Parse `max-age`/`s-maxage` (seconds) from a lowercased `Cache-Control` value.
@@ -566,6 +588,55 @@ mod http_cache {
                     && v == "Wed, 21 Oct 2099 07:28:00 GMT"),
                 "a no-cache entry with Last-Modified revalidates via If-Modified-Since, got {cond:?}"
             );
+        }
+
+        #[test]
+        fn expires_header_provides_freshness_when_no_max_age() {
+            // A response with only an `Expires` far in the future (no Cache-Control) is fresh — the
+            // older freshness signal a great many static-asset servers still send.
+            let u = "https://e.test/expires-future";
+            let mut r = resp("");
+            r.headers = vec![("expires".into(), "Sun, 06 Nov 2099 08:49:37 GMT".into())];
+            put(u, &r);
+            assert!(get(u).is_some(), "a future Expires makes the entry fresh");
+
+            // `Cache-Control: max-age` OUTRANKS `Expires` (RFC 7234 §5.3): a past Expires next to a
+            // positive max-age is still fresh.
+            let u2 = "https://e.test/maxage-wins";
+            let mut r2 = resp("max-age=300");
+            r2.headers
+                .push(("expires".into(), "Sun, 06 Nov 1994 08:49:37 GMT".into()));
+            put(u2, &r2);
+            assert!(get(u2).is_some(), "max-age wins over a past Expires");
+        }
+
+        #[test]
+        fn past_expires_is_stale_but_revalidatable_with_a_validator() {
+            // A past `Expires` is a zero lifetime — stale — but if the response carried a validator it
+            // is still kept for revalidation, composing with the ETag path.
+            let u = "https://e.test/expires-past";
+            let mut r = resp("");
+            r.headers = vec![
+                ("expires".into(), "Sun, 06 Nov 1994 08:49:37 GMT".into()),
+                ("etag".into(), "\"e9\"".into()),
+            ];
+            put(u, &r);
+            assert!(get(u).is_none(), "a past Expires is not fresh");
+            assert!(
+                revalidation_headers(u)
+                    .iter()
+                    .any(|(k, v)| k == "if-none-match" && v == "\"e9\""),
+                "a stale-by-Expires entry with an ETag is still revalidatable"
+            );
+
+            // A past Expires with NO validator is dropped entirely — nothing to serve, nothing to
+            // revalidate.
+            let u2 = "https://e.test/expires-past-novalidator";
+            let mut r2 = resp("");
+            r2.headers = vec![("expires".into(), "Sun, 06 Nov 1994 08:49:37 GMT".into())];
+            put(u2, &r2);
+            assert!(get(u2).is_none());
+            assert!(revalidation_headers(u2).is_empty());
         }
 
         #[test]

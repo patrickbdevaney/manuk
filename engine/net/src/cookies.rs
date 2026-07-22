@@ -222,7 +222,11 @@ fn has_ci_prefix(name: &str, prefix: &str) -> bool {
 /// Parse an IMF-fixdate (`Sun, 06 Nov 1994 08:49:37 GMT`), the only `Expires` form
 /// servers realistically send. Returns `None` on anything else (the cookie then
 /// falls back to being a session cookie, which is the safe direction).
-fn parse_http_date(s: &str) -> Option<SystemTime> {
+///
+/// `pub(crate)` because the HTTP cache reuses it for the `Expires` response header — the same
+/// IMF-fixdate, the same "unparseable means already-stale" safe direction — rather than growing a
+/// second date parser that could disagree with this one.
+pub(crate) fn parse_http_date(s: &str) -> Option<SystemTime> {
     let s = s.trim();
     let rest = s.split_once(',').map(|(_, r)| r.trim()).unwrap_or(s);
     let mut it = rest.split_whitespace();
