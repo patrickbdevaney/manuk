@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **148** | ticks 1–355 |
-| median tick cycle | **21m** | 147 intervals |
+| ticks landed | **149** | ticks 1–356 |
+| median tick cycle | **21m** | 148 intervals |
 | median, last 10 | **25m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.56** | 263.8h elapsed |
-| median verify wall | **66s** | 87 ticks |
-| wall trend | 39s → 66s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.56** | 263.9h elapsed |
+| median verify wall | **66s** | 88 ticks |
+| wall trend | 39s → 60s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**81 of 148 ticks** (55%) moved a
+**81 of 149 ticks** (54%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **81** capability ticks, median cycle **21m**
-* median diff per tick: **+248 / −29** lines across 8 files
+* median diff per tick: **+246 / −29** lines across 8 files
 
 ## Every tick
 
@@ -245,5 +245,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **353** | 2026-07-22 04:05 | 25m | capability | 66s | +612/−42 | 183 | 81 | 56.0% · | AV1 decode: the codec the web is moving to, behind the trait built for it (2026-07-22) |
 | **354** | 2026-07-22 04:31 | 26m | capability | 68s | +201/−42 | 183 | 81 | 56.0% · | AV1 reaches the shell, and the registry starts telling the new truth (2026-07-22) |
 | **355** | 2026-07-22 04:51 | 21m | capability | 60s | +346/−46 | 183 | 81 | 56.0% · | AVIF stills: the blank-hero-image class, riding the AV1 decoder (2026-07-22) |
+| **356** | 2026-07-22 04:55 | 4m | self-audit | 55s | +59/−34 | 183 | 81 | 56.0% · | self-audit #10-cadence checkpoint (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

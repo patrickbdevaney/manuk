@@ -15702,3 +15702,27 @@ the avif feature is shell-only). fmt clean.
 TICK SHAPE: capability (AVIF stills — the blank-hero-image class closes; modern CDNs' first-choice image format renders; [BORROW pattern: avif-parse container walk over the t353 decoder, one join, zero new pixels code]). GATES +1 (G_AVIF_PAINT, shell suite = IN the wall); constellation row 'doc/images: AVIF' missing→gated.
 CONSTELLATION: doc / images: AVIF → gated (G_AVIF_PAINT).
 WIKI: docs/wiki/media-pipeline.md — Tick 355 AVIF (raw-bytes seam, isolation-decides-architecture, color-assert discipline).
+
+## Tick 356 — self-audit #10-cadence checkpoint (2026-07-22)
+
+CADENCE OBLIGATION: self-audit due every 10 ticks (LAST_AUDIT_TICK 346 → due at 356; the pre-commit
+hook blocks past-due commits). Ran `./scripts/self-audit.sh` — the honesty check that inspects
+artifacts, not memory.
+
+FINDING: CLEAN — "SELF-AUDIT: methodology and reality agree." Zero ✗. Verified present: Tier-0/Part-21
+artifacts, every falsifiable gate declares how to break it, process-defect ledger (49 defects, each
+naming its closing MECHANISM), tick-shape cross-check against the 640-cluster registry, generated
+STATUS.md, receipt-checked pre-commit hook, journal continuity (last 5 ticks), pattern ledger (424 rows,
+coverage marked as judgements), duplicate-work audit journaled.
+
+WINDOW REVIEW (347–355, the audit's real content): the window closed the HTTP cache-correctness arc
+(347 Expires / 348 Age), then drove the board's CO-#1 order (2) end-to-end — 349 MSE join, 350 audio
+device, 351 A/V master-slave sync, 352 muted plumbing, 353 AV1 decode, 354 AV1 ships + registries,
+355 AVIF stills. Every tick RED-proven, no ratchet trade, no WPT-chasing, zero html/dom grinding.
+Notable process catches INSIDE the window, all recorded in WEB-PATTERNS/wiki: the vacuous substring
+claim (t354), the flush-discard archaeology probed one variable at a time (t353), the
+one-JS-test-per-binary rule re-confirmed (t354). SINGLE_SITE_TICKS 0. Next self-audit due tick 366.
+
+TICK SHAPE: self-audit (a cadence/governance checkpoint — no engine change, no scoreboard move by design; the deliverable is the finding + LAST_AUDIT_TICK advanced). GATES +0. [no-pattern]
+CONSTELLATION: none (audit tick).
+WIKI: none — audit finding lives in this entry; no mechanism changed.
