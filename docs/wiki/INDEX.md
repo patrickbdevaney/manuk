@@ -689,6 +689,7 @@
   - L1178 · The teeth G_CRYPTO_HMAC uses
   - L1184 · crypto.subtle.deriveBits — HKDF key derivation (tick 307)
   - L1196 · The teeth G_CRYPTO_HKDF uses
+  - L1202 · HTTP conditional revalidation (tick 345)
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -829,4 +830,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-744 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+745 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

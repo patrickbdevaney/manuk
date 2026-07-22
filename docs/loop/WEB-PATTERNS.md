@@ -2974,3 +2974,24 @@ has no `Muted`/`Playing`/`Paused`/`Seeking` variant in `NonTSPseudoClass` (they 
 `video:muted { … }` cannot CASCADE without vendoring Stylo — the identical constraint `:has()` carries.
 CSS-cascade styling of player state and the dynamic media pseudo-classes are a Stylo-vendoring tick; the
 constellation row stays `partial`, not `works`, to keep that honest.
+
+## HTTP conditional revalidation — the 304 that reuses the body (tick 345)
+
+**The class of the web this unlocks:** every repeat visit and every warm subresource. A browser that
+only caches *fresh* responses re-downloads the whole body the instant `max-age` elapses — the CSS, the
+JS bundle, the font, the sprite, all pulled again in full on the second page view even though not a byte
+changed. Conditional revalidation is how that cost collapses to a header exchange: the server answers
+`304 Not Modified` with no body and the browser reuses the copy it already has.
+
+**(1)** The unit is a **stale-but-revalidatable** cache entry. A response that is immediately stale
+(`no-cache`, `max-age=0`, or no freshness at all) but carries a validator (`ETag` or `Last-Modified`) must
+be **kept, not dropped** — not to serve blind (the fresh-only read still declines it) but so the next
+request can *ask*. Dropping it is the bug: it turns every conditional-cacheable resource into a full
+re-download. **(2)** The next GET rides `If-None-Match: <etag>` (preferred) and/or
+`If-Modified-Since: <date>`; `ETag` wins but both are sent so a server keyed on either can answer. **(3)**
+A `304` refreshes the entry's freshness from the *304's own* `Cache-Control` and hands back the **stored**
+body — the whole point being that no body crossed the wire; the conditional round-trip still counts as a
+wire request (it is one), but the bandwidth saving is the body that didn't move. **The trap:** treating
+`no-cache` as "do not store." It means the opposite — *store, but always revalidate before serving* — so a
+`no-cache` response with a validator is exactly the case revalidation exists for, and dropping it is
+indistinguishable, on a cold second view, from having no cache at all.

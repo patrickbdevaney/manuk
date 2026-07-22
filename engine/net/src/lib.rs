@@ -324,6 +324,12 @@ mod http_cache {
         response: Response,
         stored: Instant,
         fresh_for: Duration,
+        /// The `ETag` the response carried, if any — echoed back as `If-None-Match` once the
+        /// entry goes stale, so the server can answer `304` instead of resending the body.
+        etag: Option<String>,
+        /// The `Last-Modified` date, echoed back as `If-Modified-Since` — the weaker validator,
+        /// used only when there is no `ETag`, exactly as a real browser prefers.
+        last_modified: Option<String>,
     }
 
     fn store() -> &'static Mutex<HashMap<String, Entry>> {
@@ -331,15 +337,33 @@ mod http_cache {
         S.get_or_init(|| Mutex::new(HashMap::new()))
     }
 
-    /// A still-fresh cached response for `url`, if any.
+    /// A still-fresh cached response for `url`, if any. Freshness only — a stale-but-revalidatable
+    /// entry is deliberately declined here so the caller goes to the wire; [`revalidation_headers`]
+    /// is what turns that trip into a conditional request.
     pub fn get(url: &str) -> Option<Response> {
         let map = store().lock().ok()?;
         let e = map.get(url)?;
         (e.stored.elapsed() < e.fresh_for).then(|| e.response.clone())
     }
 
-    /// Cache `response` for `url` if it is cacheable: `GET`-implied `200` with a positive
-    /// `max-age` and no `no-store`/`private`.
+    /// The `ETag` / `Last-Modified` validators carried by a response, trimmed and de-blanked.
+    fn validators(response: &Response) -> (Option<String>, Option<String>) {
+        let pick = |name| {
+            response
+                .header(name)
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        };
+        (pick("etag"), pick("last-modified"))
+    }
+
+    /// Cache `response` for `url` when it is storable — a `GET`-implied `200` that is not
+    /// `no-store`/`private`. An entry is kept in **two** cases, and this is the change that makes
+    /// revalidation possible: (1) it is *fresh* (a positive `max-age`), served directly by [`get`];
+    /// or (2) it is immediately stale (`no-cache`, `max-age=0`, or no lifetime at all) **but carries
+    /// a validator** — kept not to serve blind, but so the next request can ask "still current?" with
+    /// an `If-None-Match`/`If-Modified-Since` and take a `304` instead of re-downloading the body.
+    /// A response with neither a lifetime nor a validator is still dropped, exactly as before.
     pub fn put(url: &str, response: &Response) {
         if response.status != 200 {
             return;
@@ -348,11 +372,18 @@ mod http_cache {
             .header("cache-control")
             .unwrap_or("")
             .to_ascii_lowercase();
-        if cc.contains("no-store") || cc.contains("private") || cc.contains("no-cache") {
+        if cc.contains("no-store") || cc.contains("private") {
             return;
         }
-        let Some(secs) = max_age(&cc) else { return };
-        if secs == 0 {
+        let (etag, last_modified) = validators(response);
+        // `no-cache` means "store, but never serve without revalidating" — a zero lifetime, not a
+        // refusal to store. `get` (fresh-only) will decline it; `revalidation_headers` will use it.
+        let fresh_secs = if cc.contains("no-cache") {
+            0
+        } else {
+            max_age(&cc).unwrap_or(0)
+        };
+        if fresh_secs == 0 && etag.is_none() && last_modified.is_none() {
             return;
         }
         if let Ok(mut map) = store().lock() {
@@ -361,10 +392,63 @@ mod http_cache {
                 Entry {
                     response: response.clone(),
                     stored: Instant::now(),
-                    fresh_for: Duration::from_secs(secs),
+                    fresh_for: Duration::from_secs(fresh_secs),
+                    etag,
+                    last_modified,
                 },
             );
         }
+    }
+
+    /// Conditional-request headers for a **stale-but-revalidatable** stored entry, or empty when
+    /// there is nothing to revalidate. Empty in three cases: no entry, the entry is still *fresh*
+    /// (the caller already short-circuited through [`get`], so revalidating would be wasted), or the
+    /// entry carries no validator. `ETag` wins over `Last-Modified` when both are present, but both
+    /// are sent — a server keyed on either can then answer `304`.
+    pub fn revalidation_headers(url: &str) -> Vec<(String, String)> {
+        let Ok(map) = store().lock() else {
+            return Vec::new();
+        };
+        let Some(e) = map.get(url) else {
+            return Vec::new();
+        };
+        if e.stored.elapsed() < e.fresh_for {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        if let Some(tag) = &e.etag {
+            out.push(("if-none-match".to_string(), tag.clone()));
+        }
+        if let Some(lm) = &e.last_modified {
+            out.push(("if-modified-since".to_string(), lm.clone()));
+        }
+        out
+    }
+
+    /// A `304 Not Modified` says the stored body is still current. Refresh the entry's freshness
+    /// (from the `304`'s own `Cache-Control` if it carries one, else keep the prior lifetime), adopt
+    /// any validator the `304` restated, and hand back the **stored** body as a normal response — the
+    /// whole point being that no body crossed the wire. `None` when there is nothing stored to
+    /// revalidate against (a `304` we cannot honour, which should not happen but must not panic).
+    pub fn note_revalidated(url: &str, not_modified: &Response) -> Option<Response> {
+        let mut map = store().lock().ok()?;
+        let e = map.get_mut(url)?;
+        e.stored = Instant::now();
+        let cc = not_modified
+            .header("cache-control")
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if let Some(secs) = max_age(&cc) {
+            e.fresh_for = Duration::from_secs(secs);
+        }
+        let (etag, last_modified) = validators(not_modified);
+        if etag.is_some() {
+            e.etag = etag;
+        }
+        if last_modified.is_some() {
+            e.last_modified = last_modified;
+        }
+        Some(e.response.clone())
     }
 
     /// Parse `max-age`/`s-maxage` (seconds) from a lowercased `Cache-Control` value.
@@ -417,6 +501,83 @@ mod http_cache {
             assert!(
                 get("https://e.test/zero").is_none(),
                 "max-age=0 is not cached"
+            );
+        }
+
+        #[test]
+        fn revalidates_stale_entry_with_etag_and_serves_304() {
+            // A response that is immediately stale (`max-age=0`) but carries an `ETag` is STORED for
+            // revalidation — not discarded — even though the fresh-only `get` declines it.
+            let u = "https://e.test/revalidate";
+            let mut r = resp("max-age=0");
+            r.headers.push(("etag".into(), "\"v1\"".into()));
+            r.body = Bytes::from_static(b"ORIGINAL");
+            put(u, &r);
+
+            assert!(get(u).is_none(), "a max-age=0 entry is never served fresh");
+
+            // ...but it is revalidatable: the next request must carry the stored ETag.
+            let cond = revalidation_headers(u);
+            assert!(
+                cond.iter()
+                    .any(|(k, v)| k == "if-none-match" && v == "\"v1\""),
+                "a stale ETag entry yields an If-None-Match conditional header, got {cond:?}"
+            );
+
+            // The server answers `304 Not Modified` (no body); the stored body is reused, and the
+            // 304's own `max-age=60` refreshes the entry back to fresh.
+            let not_modified = Response {
+                status: 304,
+                headers: vec![("cache-control".into(), "max-age=60".into())],
+                body: Bytes::new(),
+                final_url: Url::parse(u).unwrap(),
+                http_version: HttpVersion::Http11,
+            };
+            let served = note_revalidated(u, &not_modified).expect("304 reuses the stored body");
+            assert_eq!(
+                served.body.as_ref(),
+                b"ORIGINAL",
+                "the cached body is served, not re-downloaded"
+            );
+            assert!(
+                get(u).is_some(),
+                "the 304's max-age refreshed the entry to fresh"
+            );
+        }
+
+        #[test]
+        fn no_cache_with_last_modified_revalidates_via_if_modified_since() {
+            // `no-cache` = store-but-always-revalidate. With a `Last-Modified` and no `ETag`, the
+            // conditional falls back to `If-Modified-Since`, exactly as a real browser prefers.
+            let u = "https://e.test/lastmod";
+            let mut r = resp("no-cache");
+            r.headers.push((
+                "last-modified".into(),
+                "Wed, 21 Oct 2099 07:28:00 GMT".into(),
+            ));
+            put(u, &r);
+            assert!(
+                get(u).is_none(),
+                "no-cache is never served without revalidating"
+            );
+            let cond = revalidation_headers(u);
+            assert!(
+                cond.iter().any(|(k, v)| k == "if-modified-since"
+                    && v == "Wed, 21 Oct 2099 07:28:00 GMT"),
+                "a no-cache entry with Last-Modified revalidates via If-Modified-Since, got {cond:?}"
+            );
+        }
+
+        #[test]
+        fn stale_entry_without_a_validator_is_not_stored() {
+            // The original guarantee holds: an uncacheable response with no validator is neither
+            // served fresh nor revalidatable — there is nothing to condition a request on.
+            let u = "https://e.test/novalidator";
+            put(u, &resp("max-age=0"));
+            assert!(get(u).is_none());
+            assert!(
+                revalidation_headers(u).is_empty(),
+                "nothing to revalidate without a validator"
             );
         }
     }
@@ -916,8 +1077,31 @@ async fn fetch_inner(url: &str, initiator: Option<&Url>) -> Result<Response> {
         }
     }
     let mut current = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
+    // A stale cache entry with a validator turns this GET into a *conditional* one: we ask the
+    // server "still `<etag>`?" and it can answer `304` with no body. The headers ride only the FIRST
+    // hop (the origin URL); a redirect target is a different resource and revalidates on its own.
+    let conditional = http_cache::revalidation_headers(url);
+    let mut first_hop = true;
     for _ in 0..=MAX_REDIRECTS {
-        let resp = send_once("GET", &current, &[], Bytes::new(), initiator).await?;
+        let cond_headers: Vec<(&str, &str)> = if first_hop {
+            conditional
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let resp = send_once("GET", &current, &cond_headers, Bytes::new(), initiator).await?;
+        first_hop = false;
+        // `304 Not Modified` confirms our stored copy — serve it, no re-download.
+        if resp.status == 304 {
+            if let Some(revalidated) = http_cache::note_revalidated(url, &resp) {
+                tracing::debug!(%url, "304 Not Modified — served revalidated cache");
+                return Ok(revalidated);
+            }
+            // A 304 with nothing to revalidate against: fall through and hand it back as-is
+            // rather than fabricate a body.
+        }
         if (300..400).contains(&resp.status) {
             if let Some(loc) = resp.header("location") {
                 let next = current

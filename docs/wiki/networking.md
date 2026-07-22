@@ -1198,3 +1198,19 @@ length). `importKey('raw', ikm, {name:'HKDF'}, …)` carries the input keying ma
 `okm-vector` — the output matches RFC 5869 Test Case 1 EXACTLY (`3cb25f25…`, 42 bytes from the
 0x0b-repeated IKM with the given salt/info), a known-answer a wrong Extract/Expand cannot fake; `length`
 (42 bytes derived). [[js-engine]]
+
+## HTTP conditional revalidation (tick 345)
+
+The HTTP cache (`engine/net/src/lib.rs`, `http_cache`) was **fresh-only**: once `max-age` elapsed the
+entry was dropped and the resource re-downloaded whole. Tick 345 adds the missing half — conditional
+revalidation — alongside the fresh-cache path and the already-built gzip/br/deflate decode.
+
+A stored `Entry` now carries the response's `etag`/`last_modified` validators. `put` keeps an entry in
+two cases: it is **fresh** (positive `max-age`, served by `get`), or it is immediately stale
+(`no-cache`/`max-age=0`) **but carries a validator** — kept so it can be revalidated rather than
+re-fetched. `no-store`/`private` are never stored; a stale entry with no validator is still dropped.
+`get` stays fresh-only. `revalidation_headers(url)` yields `If-None-Match`/`If-Modified-Since` for a
+stale-but-validatable entry, and `fetch_inner` rides them on the first hop of the GET; a `304 Not
+Modified` routes through `note_revalidated`, which refreshes freshness from the 304's own `Cache-Control`
+and returns the stored body with no re-download. Gated by two `manuk-net` crate tests in the verify wall.
+[[js-engine]]

@@ -137,3 +137,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 341	f3af3e5	1784690463	2026-07-21T23:21:03-04:00	719	infrastructure	80	6	195	40	182	81	3896	6960	0	320	0	Layer-2 jarring invariant: collapsed interactive target, the dead-control half of hittability (2026-07-21)
 342	376a017	1784691310	2026-07-21T23:35:10-04:00	847	infrastructure	70	8	204	61	182	81	3896	6960	0	320	0	Root-cause clustering: band geometry by offset magnitude (near-miss vs page-collapse) (2026-07-21)
 344	bf9a894	1784693109	2026-07-22T00:05:09-04:00	1799	capability	67	8	125	45	182	81	3896	6960	0	320	0	`:muted` media pseudo-class in the querySelector engine (styling player state) (2026-07-21)
+345	f01ebfc	1784695617	2026-07-22T00:46:57-04:00	2508	capability	66	9	310	43	182	81	3896	6960	0	320	0	HTTP conditional revalidation (ETag/Last-Modified → 304 → reuse body) (2026-07-22)

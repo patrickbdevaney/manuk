@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **138** | ticks 1–344 |
-| median tick cycle | **20m** | 137 intervals |
+| ticks landed | **139** | ticks 1–345 |
+| median tick cycle | **20m** | 138 intervals |
 | median, last 10 | **12m** | 10 intervals |
 | fastest / slowest | 3m / 5.4d | |
-| **ticks per hour** | **0.53** | 259.0h elapsed |
-| median verify wall | **61s** | 77 ticks |
-| wall trend | 39s → 70s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.53** | 259.7h elapsed |
+| median verify wall | **62s** | 78 ticks |
+| wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**71 of 138 ticks** (51%) moved a
+**72 of 139 ticks** (52%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **71** capability ticks, median cycle **20m**
+* **72** capability ticks, median cycle **20m**
 * median diff per tick: **+246 / −28** lines across 8 files
 
 ## Every tick
@@ -235,5 +235,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **341** | 2026-07-21 23:21 | 12m | infrastructure | 80s | +195/−40 | 182 | 81 | 56.0% · | Layer-2 jarring invariant: collapsed interactive target, the dead-control half of hittabil |
 | **342** | 2026-07-21 23:35 | 14m | infrastructure | 70s | +204/−61 | 182 | 81 | 56.0% · | Root-cause clustering: band geometry by offset magnitude (near-miss vs page-collapse) (202 |
 | **344** | 2026-07-22 00:05 | 30m | capability | 67s | +125/−45 | 182 | 81 | 56.0% · | `:muted` media pseudo-class in the querySelector engine (styling player state) (2026-07-21 |
+| **345** | 2026-07-22 00:46 | 42m | capability | 66s | +310/−43 | 182 | 81 | 56.0% · | HTTP conditional revalidation (ETag/Last-Modified → 304 → reuse body) (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

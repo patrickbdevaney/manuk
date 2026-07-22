@@ -15275,3 +15275,47 @@ media/"media pseudo-classes" flips missing→partial.
 CONSTELLATION: media / media pseudo-classes → partial (G_PROBE_CAPABILITIES).
 WIKI: docs/wiki/css-cascade.md — `:muted` querySelector-only fence (servo Stylo lacks the gecko-only Muted
 NonTSPseudoClass variant, same as `:has()`).
+
+## Tick 345 — HTTP conditional revalidation (ETag/Last-Modified → 304 → reuse body) (2026-07-22)
+
+CO-#1 / daily-driver capability (constellation row 85 "HTTP caching + compression", was `partial`). The
+board's bounded remainder + the audit lists proved uniformly stale-pessimistic this session (`<details>`,
+visibilityState, permissions.query, createObjectURL, cookie SameSite/`__Host-` prefixes — ALL already
+built + gated). The one genuine bounded gap the probes surfaced: the HTTP cache is **fresh-only**. Once
+`max-age` elapses the entry is dropped and the resource is re-downloaded in full — there is no conditional
+revalidation, the single most bandwidth-saving thing a browser does on every repeat visit.
+
+HYPOTHESIS: a stale cache entry that carries a validator (`ETag`/`Last-Modified`) should be KEPT, not
+dropped, so the next GET can ask "still current?" with `If-None-Match`/`If-Modified-Since` and take a
+`304 Not Modified` (no body) instead of re-fetching. This is additive to the fresh-cache path and the
+already-built gzip/br/deflate decode.
+
+THE FIX (engine/net/src/lib.rs, the `http_cache` module + the one `fetch_inner` GET path):
+- `Entry` gains `etag`/`last_modified`, extracted at `put` time.
+- `put` now stores in TWO cases: (1) *fresh* (positive `max-age`, served by `get` as before), or (2)
+  immediately stale (`no-cache`/`max-age=0`/no lifetime) BUT carrying a validator — kept solely so the
+  next request can revalidate. `no-store`/`private` still never stored; a stale entry with NO validator
+  still dropped (the original guarantee, asserted).
+- `get` stays FRESH-ONLY (unchanged) — a stale entry is never served blind.
+- `revalidation_headers(url)` returns `If-None-Match`/`If-Modified-Since` for a stored-but-stale entry
+  (empty when fresh, absent, or validator-less).
+- `note_revalidated(url, resp304)` refreshes freshness from the 304's own `Cache-Control`, adopts any
+  restated validator, and hands back the STORED body.
+- `fetch_inner` computes the conditional headers once, rides them on the FIRST hop only (a redirect
+  target revalidates on its own), and on a `304` serves the revalidated cache with no re-download.
+
+RED-PROVEN (cp-snapshot restored + re-verified GREEN): reverting the stale-entry storage guard in `put`
+(so it stores ONLY on positive freshness, as before) makes BOTH new tests FAIL — `revalidation_headers`
+returns `[]` because the validator-bearing stale entry was discarded. Restored byte-for-byte; 4/4 green.
+
+NO REGRESSION: additive fields + fns in `http_cache`; the fresh-cache path and its existing test
+(`caches_fresh_and_skips_uncacheable`) are untouched and pass. Full manuk-net suite 94 passed / 0 failed /
+5 network-ignored. `manuk-net` is in verify.sh's crate-test loop (line 586), so these gates ride the wall.
+
+TICK SHAPE: capability (HTTP conditional revalidation; a real wire behavior — a conditional GET that takes
+a 304 and reuses the body; [host-native pattern: extend the net layer we own]). GATES +2 crate tests
+(revalidates_stale_entry_with_etag_and_serves_304, no_cache_with_last_modified_revalidates_via_if_modified_since);
+constellation row 85 flips partial→gated.
+CONSTELLATION: cross / HTTP caching + compression → gated (http_revalidation).
+WIKI: docs/wiki/networking.md — conditional revalidation (stale-but-validatable storage, If-None-Match/
+If-Modified-Since, 304 body reuse).
