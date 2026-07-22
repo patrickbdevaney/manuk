@@ -382,13 +382,20 @@ mod http_cache {
         // freshness signal a great many CDNs and static-asset servers still send *instead of* a
         // `max-age`. `Expires` is converted to a lifetime-from-now here, so a past or unparseable date
         // is simply a zero lifetime — stale, and revalidatable iff it carried a validator.
-        let fresh_secs = if cc.contains("no-cache") {
+        let lifetime = if cc.contains("no-cache") {
             0
         } else if let Some(secs) = max_age(&cc) {
             secs
         } else {
             expires_secs(response)
         };
+        // The `Age` header is how long the response has ALREADY sat in a shared cache (a CDN) before
+        // reaching us, so its remaining freshness is `lifetime - age`, not the whole lifetime (RFC 7234
+        // §4.2.3). Without this, a `max-age=300` object a CDN reports as `Age: 290` would be treated as
+        // fresh for a full 5 minutes here when the origin considers it good for only 10 more seconds —
+        // serving content the origin already thinks is stale. An `Age` >= the lifetime lands at 0
+        // (stale), still revalidatable iff it carried a validator.
+        let fresh_secs = lifetime.saturating_sub(age_secs(response));
         if fresh_secs == 0 && etag.is_none() && last_modified.is_none() {
             return;
         }
@@ -470,6 +477,16 @@ mod http_cache {
         };
         when.duration_since(std::time::SystemTime::now())
             .map(|d| d.as_secs())
+            .unwrap_or(0)
+    }
+
+    /// The `Age` header — seconds the response has already spent in an upstream shared cache — as a
+    /// plain integer, 0 when absent or unparseable. Subtracted from the freshness lifetime so a
+    /// CDN-aged response is not treated as newer than the origin considers it.
+    fn age_secs(response: &Response) -> u64 {
+        response
+            .header("age")
+            .and_then(|v| v.trim().parse::<u64>().ok())
             .unwrap_or(0)
     }
 
@@ -637,6 +654,46 @@ mod http_cache {
             put(u2, &r2);
             assert!(get(u2).is_none());
             assert!(revalidation_headers(u2).is_empty());
+        }
+
+        #[test]
+        fn age_header_reduces_remaining_freshness() {
+            // A CDN-aged response is fresh only for `max-age - Age`. max-age=100, Age=90 → ~10s left,
+            // so it is still fresh right now (the test runs in well under 10s).
+            let u = "https://e.test/age-partial";
+            let mut r = resp("max-age=100");
+            r.headers.push(("age".into(), "90".into()));
+            put(u, &r);
+            assert!(
+                get(u).is_some(),
+                "max-age=100 with Age=90 is still fresh (~10s left)"
+            );
+
+            // max-age=100, Age=200 → the object is already older than its lifetime → stale on arrival.
+            // With no validator it is not even stored.
+            let u2 = "https://e.test/age-expired";
+            let mut r2 = resp("max-age=100");
+            r2.headers.push(("age".into(), "200".into()));
+            put(u2, &r2);
+            assert!(
+                get(u2).is_none(),
+                "an Age past the max-age lifetime is stale on arrival, not served fresh"
+            );
+
+            // ...and an over-aged response WITH a validator is kept for revalidation, composing with
+            // the ETag path.
+            let u3 = "https://e.test/age-expired-etag";
+            let mut r3 = resp("max-age=100");
+            r3.headers.push(("age".into(), "200".into()));
+            r3.headers.push(("etag".into(), "\"a1\"".into()));
+            put(u3, &r3);
+            assert!(get(u3).is_none(), "over-aged is not fresh");
+            assert!(
+                revalidation_headers(u3)
+                    .iter()
+                    .any(|(k, v)| k == "if-none-match" && v == "\"a1\""),
+                "an over-aged entry with an ETag is still revalidatable"
+            );
         }
 
         #[test]

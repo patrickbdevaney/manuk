@@ -15385,3 +15385,28 @@ crate-test loop, so these ride the wall.
 
 TICK SHAPE: capability (HTTP Expires-header freshness; a real cache-lifetime source many origins send instead of max-age; [host-native pattern: extend the net cache we own, reuse the cookie date parser]). GATES +2 crate tests; constellation row 85 note extended (already gated by tick 345).
 WIKI: docs/wiki/networking.md — Expires freshness (precedence after max-age, absolute-date→lifetime conversion, composes with revalidation).
+
+## Tick 348 — HTTP `Age` header reduces remaining cache freshness (2026-07-22)
+
+CO-#1 / daily-driver capability, completing the HTTP cache-correctness arc (t345 conditional revalidation
++ t347 Expires + this). Constellation row 85, already gated. The cache computed freshness from the full
+`max-age`/`Expires` lifetime, ignoring the `Age` response header — how long the object has ALREADY sat in
+an upstream shared cache (a CDN) before reaching us. So a `max-age=300` object a CDN reports as `Age: 290`
+was treated as fresh for a full 5 minutes when the origin considers it good for only 10 more seconds:
+serving content the origin already thinks is stale.
+
+THE FIX (engine/net/src/lib.rs http_cache): `age_secs(response)` parses the `Age` integer-seconds header
+(0 if absent/unparseable); `put` now computes `fresh_secs = lifetime.saturating_sub(age)` (RFC 7234
+§4.2.3). An `Age` >= the lifetime lands at 0 — stale on arrival — still revalidatable iff a validator was
+present (composes with t345/t347). No new dependency, no clock; a plain subtraction on the existing
+lifetime.
+
+RED-PROVEN (cp-snapshot restored + re-verified GREEN): using the full `lifetime` (ignoring Age) makes
+`age_header_reduces_remaining_freshness` FAIL — an `Age: 200` past a `max-age=100` is wrongly served
+fresh. Restored byte-for-byte; 7/7 http_cache tests green.
+
+NO REGRESSION: additive subtraction in the freshness calc; max-age/Expires paths unchanged, their tests
+pass. Full manuk-net 97 passed / 0 failed / 5 network-ignored (+1). fmt clean. manuk-net rides the wall.
+
+TICK SHAPE: capability (HTTP Age-header freshness accounting; a real cache-correctness behavior for CDN-served responses; [host-native pattern: extend the net cache we own]). GATES +1 crate test; constellation row 85 note extended (gated by t345).
+WIKI: docs/wiki/networking.md — Age header (RFC 7234 4.2.3 remaining-freshness = lifetime - Age).

@@ -1225,3 +1225,11 @@ deadline to a lifetime-from-now at store time, slotting into the existing `store
 Precedence (RFC 7234 §5.3): `no-cache` → `max-age`/`s-maxage` → `Expires`. A past/unparseable Expires is
 a zero lifetime — stale, and revalidatable iff a validator was present (composes with the tick-345 path).
 [[js-engine]]
+
+## HTTP `Age` header — CDN-aged freshness accounting (tick 348)
+
+Completes the cache-correctness arc (revalidation t345, Expires t347). The `Age` header reports how long
+a response has already sat in an upstream shared cache before reaching us, so its remaining freshness is
+`lifetime - Age`, not the whole lifetime (RFC 7234 §4.2.3). `age_secs` parses the integer header and
+`put` does `fresh_secs = lifetime.saturating_sub(age)`. An `Age` >= the lifetime is stale on arrival —
+and, composing with t345, still revalidatable iff a validator was present. [[js-engine]]

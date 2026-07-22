@@ -692,6 +692,7 @@
   - L1196 · The teeth G_CRYPTO_HKDF uses
   - L1202 · HTTP conditional revalidation (tick 345)
   - L1218 · HTTP Expires header freshness (tick 347)
+  - L1229 · HTTP Age header — CDN-aged freshness accounting (tick 348)
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -832,4 +833,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-747 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+748 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

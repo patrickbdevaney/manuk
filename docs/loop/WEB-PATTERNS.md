@@ -3031,3 +3031,16 @@ past `Expires` and a positive `max-age` is fresh; `max-age` wins. **(3)** Reuse 
 cookie jar already ships — a second one is a second thing that can disagree about the same date string.
 **The trap:** a past or unparseable `Expires` is not an error to surface, it is simply a zero lifetime —
 stale — which then composes with revalidation: kept and conditionally re-checked iff it carried a validator.
+
+## HTTP `Age` header — a CDN response is not as fresh as its max-age says (tick 348)
+
+**The class of the web this unlocks:** anything served through a CDN or shared proxy — which is most of
+the modern web's static assets. The origin says `max-age=300`, but the CDN edge has already been holding
+the object for 290 seconds and says so with `Age: 290`. Honour only the `max-age` and you serve it as
+fresh for a full 5 more minutes when the origin considers it good for 10 — content the origin already
+treats as stale. **(1)** Remaining freshness is `lifetime - Age` (RFC 7234 §4.2.3), a plain subtraction
+at store time on the lifetime already derived from `max-age`/`Expires`. **(2)** An `Age` at or past the
+lifetime is stale on arrival — which then composes with revalidation: kept and conditionally re-checked
+iff it carried a validator, dropped otherwise. **The trap:** treating the cache as a private cache that
+starts every object's clock at zero — behind a CDN the clock started upstream, and `Age` is the only
+thing that tells you by how much.
