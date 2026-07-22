@@ -3193,3 +3193,16 @@ avif-parse) before debugging the code it "proves" broken.
 **The one insight:** RIFF alone is NOT an audio signature (AVI and WebP are RIFF too); routing on
 4 bytes sends video containers into an audio probe. Check the form type at offset 8 and assert the
 NEGATIVE (an AVI-shaped RIFF must not route) alongside the positive.
+
+## The audio mixer — N elements, one device, honest degradation (tick 370)
+
+**The class of the web this unlocks:** any page with more than one sound — a video plus a
+notification, two players, a game with effects. One-stream-wins renders every later element mute.
+**(1)** Keep the mix PURE (a function over the feed-set) so the gate drives it headlessly — the
+same pump/device split that made t350 gateable. **(2)** Hard-clamp the sum: two loud streams
+overflow ±1 into device distortion. **(3)** Config mismatch = SILENT SKIP, never reinterpretation:
+pulling 48k frames at a 44.1k device is a pitch shift that sounds like playback. **(4)** Mastery
+follows consumption: with a mixer every contained feed is consumed, so sync mastery is
+membership, not identity-with-the-one.
+**The trap:** a clamp claim the fixture cannot trigger — the real stream was too quiet to clip and
+the RED edit passed; synthesize the loud case or the claim measures nothing.

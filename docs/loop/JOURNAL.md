@@ -16090,3 +16090,38 @@ stream_audio_formats + cpt-wav in g_mse_join. RED-proven: wav arm reverted → c
 TICK SHAPE: capability (audio/wav — the effects/samples class through the stream seam; the RIFF-form-type routing nuance gated both directions; [BORROW pattern: two features, six-line sniff]). GATES claims extended (stream_audio_formats + cpt-wav, shell = IN the wall); constellation row 71 tail now Opus+AC-3 only.
 CONSTELLATION: media / audio decode → WAV joined.
 WIKI: docs/wiki/media-pipeline.md — Tick 369 WAV rung (RIFF-form-type nuance).
+
+## Tick 370 — the mixer: two playing elements, one device, both audible (2026-07-22)
+
+Row 72's remaining named rung: "mixing >1 simultaneous playing element (one stream binds first
+feed)". Today the FIRST audio-carrying element wins the device and every later one plays silent —
+a page with a video and a notification sound, or two players, is half-mute. The t350 pump/device
+split makes the fix contained: the device callback pulls from a SET of feeds and SUMS.
+
+HYPOTHESIS: a `Mixer` (the shared feed-set) between MediaSet and the device: the callback iterates
+the set, fills a scratch buffer per feed, sums with clamp to [-1,1] (soft saturation is a nicety;
+hard clamp is honest and artifact-free at 2 typical streams). Feeds whose rate/channels mismatch the
+stream config are SKIPPED honestly (cross-rate mixing needs resampling — named residue), never
+pitch-shifted by misinterpretation. Mastery generalizes: with a mixer EVERY contained feed is
+device-consumed, so an entry may slave to its own feed iff the mixer contains it —
+MediaSet::advance's master parameter becomes the mixer set. Gates: G_MIX (pump level: two feeds sum
+sample-exact with clamping; a mismatched-rate feed contributes silence and is not misread) +
+mastery-through-the-set claims in G_AV_MASTER's shape.
+RESULT — LANDED. shell/src/audio.rs: Mixer type (shared feed-set), mix_into (pure sum+clamp, device-
+free per the t350 split), AudioOut opens over a mixer + add() (identity-deduped, config-checked);
+shell/src/media.rs: advance's master param → the mixer SET (an entry slaves to its own feed iff the
+set contains it), audio_feeds() enumerator; gui: every loaded feed joins the mixer each frame, the
+master-set snapshots the mixer contents.
+
+RED-PROVEN three ways + one gate-hole closed: (1) first-feed-wins (break after feed 1) → the sum
+assert fails; (2) clamp dropped → 0.8+0.8=1.6 caught — but ONLY after adding synthetic loud streams:
+the real fixture is too quiet to clip and the first RED run PASSED (a green that cannot go red —
+the t350 lesson recurring, hole closed in-tick); (3) mismatch check dropped → the pitch-shift misread
+caught, skipped feed not consumed.
+
+NO REGRESSION: manuk-shell 70/70 (+1) + teardown TWICE EXIT 0 (all mastery gates green through the
+set generalization); headless lane clean; fmt clean.
+
+TICK SHAPE: capability (the mixer — a page with a video and a second sound is fully audible; mastery generalizes to the set; [host-native pattern: pure mix fn behind the t350 pump/device split]). GATES +1 (G_MIX, shell suite = IN the wall); constellation row 72 rungs now: resampler, WSOLA, Opus/AC-3, High-profile.
+CONSTELLATION: media / audio output device → mixer landed (G_MIX).
+WIKI: docs/wiki/media-pipeline.md — Tick 370 mixer (sum+clamp, mismatch-skip, set-mastery, the too-quiet-fixture RED hole).

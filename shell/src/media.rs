@@ -275,6 +275,15 @@ impl MediaSet {
         self.players.get(&node)?.as_ref()?.audio.clone()
     }
 
+    /// Every element's audio feed — the GUI hands each to the device's mixer (tick 370).
+    pub fn audio_feeds(&self) -> Vec<Arc<Mutex<AudioFeed>>> {
+        self.players
+            .values()
+            .flatten()
+            .filter_map(|e| e.audio.clone())
+            .collect()
+    }
+
     /// Some element's audio feed — the one the single output stream binds to.
     ///
     /// One device stream, first feed found: mixing multiple simultaneously-playing videos is a
@@ -331,7 +340,7 @@ impl MediaSet {
         &mut self,
         dt: f64,
         page: &mut manuk_page::Page,
-        master: Option<&Arc<Mutex<AudioFeed>>>,
+        master: Option<&[Arc<Mutex<AudioFeed>>]>,
     ) -> bool {
         let mut changed = false;
         for (&node, slot) in self.players.iter_mut() {
@@ -384,7 +393,9 @@ impl MediaSet {
             // CORRECT (the audio position is where the sound is).
             let clock = match (master, entry.audio.as_ref()) {
                 _ if rate_scaled => None,
-                (Some(m), Some(a)) if Arc::ptr_eq(m, a) => match a.lock() {
+                // The mixer generalization (tick 370): EVERY feed the device's mixer contains is
+                // consumed, so each entry slaves to its OWN feed iff the set holds it.
+                (Some(set), Some(a)) if set.iter().any(|m| Arc::ptr_eq(m, a)) => match a.lock() {
                     Ok(f) if f.is_playing() && !f.exhausted() => {
                         let mut c = manuk_media::AudioClock::new(f.sample_rate());
                         c.seek(f.position_seconds());
@@ -912,13 +923,13 @@ mod tests {
                 .transport()
                 .position()
         };
-        set.advance(0.001, &mut page, Some(&feed));
+        set.advance(0.001, &mut page, Some(std::slice::from_ref(&feed)));
         assert!(
             (position(&set) - ta).abs() < 1e-9,
             "audio is master: the transport must land exactly on the device position {ta}, got {}",
             position(&set)
         );
-        set.advance(500.0, &mut page, Some(&feed));
+        set.advance(500.0, &mut page, Some(std::slice::from_ref(&feed)));
         assert!(
             (position(&set) - ta).abs() < 1e-9,
             "a wall-clock lie beside an unmoved device must be IGNORED — the picture ran ahead \
@@ -930,7 +941,7 @@ mod tests {
         let imposter = Arc::new(Mutex::new(crate::audio::AudioFeed::new(pcm.clone())));
         imposter.lock().unwrap().seek_seconds(0.8 * dur);
         let dt = 0.05 * dur;
-        set.advance(dt, &mut page, Some(&imposter));
+        set.advance(dt, &mut page, Some(std::slice::from_ref(&imposter)));
         assert!(
             (position(&set) - (ta + dt)).abs() < 1e-6,
             "a non-device feed must NOT be master — the wall clock governs (want {}, got {})",
@@ -950,7 +961,7 @@ mod tests {
             assert!(f.exhausted(), "the truncated master must read as exhausted");
         }
         let before = position(&set);
-        set.advance(dt, &mut page, Some(&feed));
+        set.advance(dt, &mut page, Some(std::slice::from_ref(&feed)));
         assert!(
             (position(&set) - (before + dt)).abs() < 1e-6,
             "an exhausted master hands time back to the wall — a frozen tail means the video \
@@ -1316,7 +1327,7 @@ mod tests {
         //    the scaled wall must win.
         feed.lock().unwrap().seek_seconds(0.1 * dur);
         let before = position(&set);
-        set.advance(dt, &mut page, Some(&feed));
+        set.advance(dt, &mut page, Some(std::slice::from_ref(&feed)));
         assert!(
             (position(&set) - (before + 2.0 * dt).min(dur)).abs() < 1e-9,
             "a 1x-consuming device must not govern a 2x transport — got {} want {}",
@@ -1328,7 +1339,7 @@ mod tests {
         //    the sound is) and the mute lifts.
         set.apply_prop(node, "playbackRate", 1.0);
         let device_pos = feed.lock().unwrap().position_seconds();
-        set.advance(0.001, &mut page, Some(&feed));
+        set.advance(0.001, &mut page, Some(std::slice::from_ref(&feed)));
         assert!(
             (position(&set) - device_pos).abs() < 1e-9,
             "rate 1 restores audio mastery — the snap to the device position is CORRECT"

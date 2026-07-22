@@ -1454,6 +1454,21 @@ load claims in G_MP3_DRIVE + four cpt claims in g_mse_join.
 RED ledger: flac canPlayType arm reverted (cpt-flac:false), sniff narrowed to mpeg (FLAC load
 dies while the suite stays green — the silent-vanish class again).
 
+### Tick 370 — the mixer: two playing elements, both audible
+
+`mix_into` (pure, device-free — the t350 split lets the gate drive it headlessly): sum every
+config-matching feed into the buffer, hard-clamped to ±1. Feeds whose rate/channels mismatch the
+stream config are SKIPPED — pulling 48k samples at a 44.1k device is a pitch shift misread as
+playback; cross-rate mixing needs a resampler (named residue). Mastery generalized: with a mixer
+EVERY contained feed is device-consumed, so `MediaSet::advance`'s master parameter became the
+mixer SET and an entry slaves to its own feed iff the set holds it. The GUI adds each new feed via
+`AudioOut::add` (identity-deduped, config-checked).
+
+RED ledger: first-feed-wins (the exact pre-tick state), clamp dropped (0.8+0.8 → 1.6 — proven
+with SYNTHETIC loud streams after the real fixture proved too quiet to clip; a clamp claim no
+input can trigger is a green that cannot go red), mismatch check dropped (the pitch-shift
+misread).
+
 ### Tick 369 — WAV rung
 
 Same seam, two more symphonia features (wav+pcm). The sniff nuance worth keeping: RIFF alone is

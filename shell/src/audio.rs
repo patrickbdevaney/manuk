@@ -167,6 +167,16 @@ impl AudioFeed {
     }
 }
 
+/// The feed-SET one device stream mixes (tick 370). Shared between the GUI (which adds each
+/// element's feed as media loads and clears it on navigation) and the device callback (which
+/// sums every contained feed into the output buffer).
+///
+/// Mixing is a SUM with a hard clamp to [-1, 1] — honest and artifact-free at the two-or-three
+/// simultaneous streams a real page plays. Feeds whose rate/channels mismatch the stream config
+/// are SKIPPED, not misread: pulling 48k samples at a 44.1k device rate is a pitch shift, and
+/// cross-rate mixing needs a resampler (named residue).
+pub type Mixer = std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<AudioFeed>>>>>;
+
 /// A live `cpal` output stream pulling from a shared [`AudioFeed`].
 ///
 /// Holding the struct holds the stream; dropping it (navigation clears media) stops the device.
@@ -174,11 +184,15 @@ impl AudioFeed {
 #[cfg(feature = "gui")]
 pub struct AudioOut {
     _stream: cpal::Stream,
-    /// The exact feed the device callback pulls from. Exposed so the A/V-sync rule can name its
-    /// master by **identity** — `MediaSet::advance` slaves a transport only to the feed the
-    /// device is really consuming (`Arc::ptr_eq`), because any other feed's cursor never moves
-    /// and a motionless master freezes the picture.
-    feed: std::sync::Arc<std::sync::Mutex<AudioFeed>>,
+    /// The mixer the device callback pulls from (tick 370). Exposed so the A/V-sync rule can
+    /// name its masters by **identity** — `MediaSet::advance` slaves a transport only to a feed
+    /// the device is really consuming (the mixer contains it), because any other feed's cursor
+    /// never moves and a motionless master freezes the picture.
+    mixer: Mixer,
+    /// The stream's fixed config, taken from the FIRST feed at open: feeds that disagree are
+    /// skipped by the callback (see [`Mixer`]).
+    channels: u16,
+    sample_rate: u32,
 }
 
 #[cfg(feature = "gui")]
@@ -189,12 +203,12 @@ impl AudioOut {
     /// Every failure returns `None`: no device on a headless box is the *normal* case, not an
     /// error, and the caller records the attempt so the browser does not re-probe the hardware
     /// every frame.
-    pub fn open(feed: std::sync::Arc<std::sync::Mutex<AudioFeed>>) -> Option<Self> {
+    pub fn open(first: std::sync::Arc<std::sync::Mutex<AudioFeed>>) -> Option<Self> {
         use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
         let device = cpal::default_host().default_output_device()?;
         let (channels, sample_rate) = {
-            let f = feed.lock().ok()?;
+            let f = first.lock().ok()?;
             (f.channels(), f.sample_rate())
         };
         if channels == 0 || sample_rate == 0 {
@@ -205,16 +219,13 @@ impl AudioOut {
             sample_rate,
             buffer_size: cpal::BufferSize::Default,
         };
-        let cb_feed = feed.clone();
+        let mixer: Mixer = std::sync::Arc::new(std::sync::Mutex::new(vec![first]));
+        let cb_mixer = mixer.clone();
         let stream = device
             .build_output_stream(
                 &config,
-                move |out: &mut [f32], _| match cb_feed.lock() {
-                    Ok(mut f) => {
-                        f.fill(out);
-                    }
-                    // A poisoned lock must still deliver silence — see the module note.
-                    Err(_) => out.fill(0.0),
+                move |out: &mut [f32], _| {
+                    mix_into(&cb_mixer, channels, sample_rate, out);
                 },
                 |e| tracing::debug!("audio output stream error: {e}"),
                 None,
@@ -224,13 +235,53 @@ impl AudioOut {
         stream.play().ok()?;
         Some(Self {
             _stream: stream,
-            feed,
+            mixer,
+            channels,
+            sample_rate,
         })
     }
 
-    /// The feed this device is bound to — the master clock for A/V sync.
-    pub fn feed(&self) -> &std::sync::Arc<std::sync::Mutex<AudioFeed>> {
-        &self.feed
+    /// The mixer the device pulls from — the master-set for A/V sync, and where the GUI adds
+    /// each newly-loaded element's feed.
+    pub fn mixer(&self) -> &Mixer {
+        &self.mixer
+    }
+
+    /// Add a feed to the mix, unless already present or config-mismatched (skipped honestly —
+    /// see [`Mixer`]; a mismatch is a silent element, never a pitch shift).
+    pub fn add(&self, feed: &std::sync::Arc<std::sync::Mutex<AudioFeed>>) {
+        let ok = feed
+            .lock()
+            .map(|f| f.channels() == self.channels && f.sample_rate() == self.sample_rate)
+            .unwrap_or(false);
+        if !ok {
+            return;
+        }
+        if let Ok(mut m) = self.mixer.lock() {
+            if !m.iter().any(|x| std::sync::Arc::ptr_eq(x, feed)) {
+                m.push(feed.clone());
+            }
+        }
+    }
+}
+
+/// The mix: sum every config-matching feed into `out`, clamped to [-1, 1]. Pure and free of the
+/// device so the gate drives it headlessly — the same split as pump/device (t350).
+pub fn mix_into(mixer: &Mixer, channels: u16, sample_rate: u32, out: &mut [f32]) {
+    out.fill(0.0);
+    let Ok(feeds) = mixer.lock() else {
+        return; // poisoned: silence, per the module contract
+    };
+    let mut scratch = vec![0.0f32; out.len()];
+    for feed in feeds.iter() {
+        let Ok(mut f) = feed.lock() else { continue };
+        if f.channels() != channels || f.sample_rate() != sample_rate {
+            continue; // mismatched config: silent, never pitch-shifted — see `Mixer`
+        }
+        let n = f.fill(&mut scratch);
+        for (o, s) in out.iter_mut().zip(scratch[..n].iter()) {
+            *o = (*o + *s).clamp(-1.0, 1.0);
+        }
     }
 }
 
@@ -265,6 +316,95 @@ mod tests {
         let movie = manuk_media::demux(AV).expect("fixture demuxes");
         let track = movie.audio().expect("fixture carries an audio track");
         manuk_media::decode_track(track, AV).expect("fixture AAC decodes")
+    }
+
+    /// # G_MIX — two feeds, one buffer, both audible (tick 370)
+    ///
+    /// Drives `mix_into` exactly as the device callback does, headlessly (the t350 split).
+    ///
+    /// ## How each claim goes RED
+    ///
+    /// - **the sum** — make `mix_into` stop after the first feed: the second element is silent,
+    ///   which is the exact one-stream-wins state this tick closes.
+    /// - **the clamp** — drop the `.clamp`: two loud streams overflow past ±1 and the device
+    ///   wraps/distorts.
+    /// - **the mismatch skip** — remove the config check: a 48k feed pulled at 44.1k is a pitch
+    ///   shift misread as music.
+    #[test]
+    fn g_mix() {
+        let pcm = decoded();
+        let (ch, rate) = (pcm.channels, pcm.sample_rate);
+        let a = std::sync::Arc::new(std::sync::Mutex::new(AudioFeed::new(pcm.clone())));
+        let b = std::sync::Arc::new(std::sync::Mutex::new(AudioFeed::new(pcm.clone())));
+        let mixer: Mixer = std::sync::Arc::new(std::sync::Mutex::new(vec![a.clone(), b.clone()]));
+
+        // ── Both feeds contribute: the mix is the clamped sum, sample-exact.
+        let want = pcm.samples.clone();
+        let mut out = vec![f32::NAN; 600];
+        mix_into(&mixer, ch, rate, &mut out);
+        for (i, o) in out.iter().enumerate() {
+            let expect = (want[i] + want[i]).clamp(-1.0, 1.0);
+            assert!(
+                (o - expect).abs() < 1e-6,
+                "mix sample {i} must be the clamped SUM of both feeds: got {o}, want {expect}"
+            );
+        }
+        // Both cursors advanced — feed B is not a spectator.
+        assert!(a.lock().unwrap().position_seconds() > 0.0);
+        assert!(
+            b.lock().unwrap().position_seconds() > 0.0,
+            "the second feed must be CONSUMED — one-stream-wins is the state this closes"
+        );
+
+        // ── The clamp: two LOUD feeds must saturate at ±1.0, not overflow past it. Synthetic
+        //    0.8-constant streams because the real fixture is too quiet to clip — a clamp claim
+        //    that no input can trigger is a green that cannot go red (the t350 lesson).
+        let loud = Pcm {
+            samples: vec![0.8f32; 512],
+            channels: ch,
+            sample_rate: rate,
+        };
+        let l1 = std::sync::Arc::new(std::sync::Mutex::new(AudioFeed::new(loud.clone())));
+        let l2 = std::sync::Arc::new(std::sync::Mutex::new(AudioFeed::new(loud)));
+        let loud_mix: Mixer = std::sync::Arc::new(std::sync::Mutex::new(vec![l1, l2]));
+        let mut lo = vec![f32::NAN; 256];
+        mix_into(&loud_mix, ch, rate, &mut lo);
+        assert!(
+            lo.iter().all(|&s| (s - 1.0).abs() < 1e-6),
+            "0.8 + 0.8 must CLAMP to 1.0 — an unclamped sum overflows the device and distorts \
+             (got {})",
+            lo[0]
+        );
+
+        // ── A config-mismatched feed contributes silence and is not misread.
+        let mut alien = pcm.clone();
+        alien.sample_rate = rate * 2;
+        let c = std::sync::Arc::new(std::sync::Mutex::new(AudioFeed::new(alien)));
+        let solo: Mixer = std::sync::Arc::new(std::sync::Mutex::new(vec![c.clone()]));
+        let mut out2 = vec![f32::NAN; 128];
+        mix_into(&solo, ch, rate, &mut out2);
+        assert!(
+            out2.iter().all(|&s| s == 0.0),
+            "a mismatched-rate feed must be SKIPPED (silence) — pulling 88.2k at 44.1k is a \
+             pitch shift, not playback"
+        );
+        assert!(
+            (c.lock().unwrap().position_seconds() - 0.0).abs() < 1e-12,
+            "a skipped feed must not be consumed"
+        );
+
+        // ── A paused member is silence without silencing the mix.
+        b.lock().unwrap().set_playing(false);
+        let mut out3 = vec![f32::NAN; 400];
+        mix_into(&mixer, ch, rate, &mut out3);
+        let a_pos_frames = 600 / ch as usize; // feed A already consumed 600 samples above
+        for (i, o) in out3.iter().enumerate() {
+            let expect = want[a_pos_frames * ch as usize + i].clamp(-1.0, 1.0);
+            assert!(
+                (o - expect).abs() < 1e-6,
+                "with B paused the mix is exactly A's stream: sample {i} got {o} want {expect}"
+            );
+        }
     }
 
     #[test]

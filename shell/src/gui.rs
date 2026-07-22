@@ -1481,25 +1481,34 @@ impl App {
         if self.media.is_empty() {
             return;
         }
-        // Bind the output device to the first audio-carrying stream, once per page (tick 350).
-        // A failed probe (no sound hardware) is remembered: video plays silently, and the
-        // browser does not interrogate the hardware again every frame.
+        // Bind the output device to the first audio-carrying stream, once per page (tick 350);
+        // from tick 370 every LATER feed joins the same device's mixer, so two playing elements
+        // are both audible. A failed probe (no sound hardware) is remembered: video plays
+        // silently, and the browser does not interrogate the hardware again every frame.
         if self.audio_out.is_none() && !self.audio_tried {
             if let Some(feed) = self.media.any_audio_feed() {
                 self.audio_out = crate::audio::AudioOut::open(feed);
                 self.audio_tried = true;
             }
         }
+        if let Some(out) = self.audio_out.as_ref() {
+            for feed in self.media.audio_feeds() {
+                out.add(&feed);
+            }
+        }
         let now = std::time::Instant::now();
         let dt = now.duration_since(self.media_last_tick).as_secs_f64();
         self.media_last_tick = now;
-        // The A/V-sync master (tick 351): the feed the device is actually consuming. `None`
-        // when no device bound — the wall clock stays the honest fallback.
-        let master = self.audio_out.as_ref().map(|o| o.feed().clone());
+        // The A/V-sync master-SET (ticks 351/370): the feeds the device's mixer is actually
+        // consuming. `None` when no device bound — the wall clock stays the honest fallback.
+        let master: Option<Vec<_>> = self
+            .audio_out
+            .as_ref()
+            .and_then(|o| o.mixer().lock().ok().map(|m| m.clone()));
         let Some(page) = self.page.as_mut() else {
             return;
         };
-        if self.media.advance(dt, page, master.as_ref()) {
+        if self.media.advance(dt, page, master.as_deref()) {
             self.needs_paint = true;
         }
     }
