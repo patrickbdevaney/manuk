@@ -149,3 +149,21 @@ driver), and the oracle's new starved-fetch discard adds nothing to wall time.
 NO TRIM: the admissible levers (nextest, runtime-sharing, section parallelism) all live in
 scripts/ — observer-owned, already named in prior audits. Agent-side discipline held: claims ride
 existing binaries, one JS test per binary, small fixtures. Wall stays lean; coverage grew again.
+
+## Audit #7 — tick 406 (wall 68s warm)
+
+FINDING: warm wall held (57s → 61-68s band vs Audit #6) across a window (387-405) that ADDED
+coverage: an_inline_svg_paints_its_vectors in G_FIRST_PAINT (t394), a stacklimit pin in
+G_PROBE_CAPABILITIES (t400), and THREE new page gates from the named-error harvest —
+G_DOCUMENT_LOCATION (t402), G_GET_PROPERTY_VALUE (t403), G_CURRENT_SCRIPT (t404) — each a small
+fixture, one #[test] per binary (the t354 rule), riding the parallel gate launch. Breakdown:
+T 21s (crate tests, 31%), P 14s (parity, 21%), G6 14s, B 11s, G1 4s, F 2s — same shape as #5/#6;
+the G6/B variance is box load (the re-keyed corpus crawl runs nice-19 off-path during this
+window; the wall still lands warm, which is the contention recipe working as documented). The
+cold-first-run shape after engine/js changes (346-499s this window) remains the relink cost —
+run 2 warm every time; no mark touched.
+
+NO TRIM: same conclusion as #5/#6 — the admissible levers (nextest, runtime-sharing, section
+parallelism) live in scripts/ (observer-owned, already named). Agent-side discipline held: three
+new gates cost ~0 marginal wall (parallel launch, small fixtures, no new runtime per assertion
+beyond the one-test-per-binary rule). Wall stays lean; coverage grew again.

@@ -16902,3 +16902,22 @@ LAST_AUDIT_TICK 396→405; next due 415.
 TICK SHAPE: self-audit (governance checkpoint). GATES +0. [no-pattern]
 CONSTELLATION: none.
 WIKI: none.
+
+## Tick 406 — Constitution Check #17: I5 cashed its cheque (2026-07-22)
+
+CADENCE OBLIGATION (398+8). Re-read CONSTITUTION.MD; wrote Check #17. Window 399-405 verdict:
+GATE-pointed. The instrument rebuild completed (redesign items a-d all live in the oracle
+command) and immediately paid: three named console errors → three RED-proven capabilities in
+three ticks. One wrong pin corrected (G_GLOBALS). Re-keyed corpus crawl running off-path;
+its ledger re-ranks the frontier when it banks. No invariant bent.
+LAST_CONSTITUTION_CHECK 398→406; next due 414.
+
+TICK SHAPE: constitution-check (governance checkpoint). GATES +0. [no-pattern]
+CONSTELLATION: none.
+WIKI: none.
+
+ADDENDUM (tick 406 is a governance PAIR): the hook demanded the wall audit at the same tick
+(386+20). Ran ./scripts/wall-audit.sh run: 68s warm, same shape as audits #5/#6 (T 31% / P 21%
+/ G6 21% / B 16%), NO TRIM — the three t402-404 gates cost ~0 marginal wall (one test per
+binary, parallel launch); variance is the off-path crawl's box load, and the wall lands warm
+through it. Audit #7 recorded in docs/loop/WALL-AUDIT.md; LAST_WALL_AUDIT 386→406.

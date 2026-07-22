@@ -627,3 +627,39 @@ its prescribed ASAN context, not chased or traded.
 **PART VI / VII correction.** None.
 
 **Next check due: tick 406.**
+
+---
+
+## Check #17 — tick 406
+
+**Horizon:** Phase 0 — the FULL daily-driver checklist, CONSTITUTION.MD **Part VII**. **Gate:** the
+FIDELITY-SCORING-REDESIGN.md certificate, NOT a WPT percentage.
+
+**Gate or scoreboard?** Gate — and this window closed the instrument arc and cashed it. Window
+399-405: **399** the keying spec (predictions written before the run), **400** stackTraceLimit
+probed to an honest no, **401** selector-path keying LANDED (RED both ways, okta's 316-phantom
+display family collapsed, MISSING rose honestly, baseline reset declared), **402/403/404** the
+named-error harvest — the re-keyed instrument named three organs on okta's console and the loop
+converted each into a RED-proven gated capability within one tick (document.location accessor,
+getPropertyValue totality, currentScript lifetime) — I5 working exactly as written: the oracle
+discovers, the engine follows. **405** self-audit clean.
+
+**Is the loop still pointed at the frontier?** Yes. The redesign's items (a)-(d) are ALL now
+landed in the oracle command; the re-keyed 265-site crawl is running off-path and its ledger
+becomes the new priority ranking (pre-401 numbers are not comparable — the baseline-reset rule
+is being honored, not spliced). Engine residue unchanged and named: SVG child geometry (spec
+ready), hydration-depth JS tree drift, the 13× perf outliers.
+
+**Is the agentic surface (component #2) being served?** Held — t402-404 are load-time
+capability (auth widgets mount, chunk loaders bootstrap): pages an agent could not previously
+observe now exist to observe. No semantic-model exposure lagged.
+
+**Any invariant bent?** No. The G_GLOBALS re-pin (currentScript null→element) corrected a claim
+that asserted the STUB's behavior against spec+Chrome — the t391 precedent, evidence first, not
+a gate retune: the old claim asserted the exact bug the tick fixed. I2 untouched (prelude-side
+fixes; no vendored source patched). The wall marks were never retuned (346s/499s first-runs
+re-run warm to 57-70s per the standing recipe).
+
+**PART VI / VII correction.** None.
+
+**Next check due: tick 414.**
