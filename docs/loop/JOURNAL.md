@@ -15726,3 +15726,21 @@ one-JS-test-per-binary rule re-confirmed (t354). SINGLE_SITE_TICKS 0. Next self-
 TICK SHAPE: self-audit (a cadence/governance checkpoint — no engine change, no scoreboard move by design; the deliverable is the finding + LAST_AUDIT_TICK advanced). GATES +0. [no-pattern]
 CONSTELLATION: none (audit tick).
 WIKI: none — audit finding lives in this entry; no mechanism changed.
+
+## Tick 357 — surface audit #9: the map leaves its own frame (2026-07-22)
+
+CADENCE OBLIGATION: surface audit due every 10 ticks (LAST_SURFACE_AUDIT 347 → due 357). Searched, not
+recalled: Ladybird June-2026 newsletter (WPT 2,078,912, +3,366/mo; pre-alpha) + Interop 2026 frame
+(no mid-year revision; the Feb frame stands as Audit #8 checked it).
+
+FINDINGS (full entry in docs/loop/SURFACE-AUDIT.md Audit #9): Ladybird's alpha-chase work-list mirrors
+our board — muted autoplay (they shipped policy the same month our t352 landed the plumbing), downloads/
+history (built here), container-relative units (subsumed by CO-#1 container queries), contrast-color()
+(cut line), process isolation (settled, sequenced). TWO UNLISTED ROWS ADDED to the constellation:
+media/playbackRate (IDL inert; bounded ladder video-rate → WSOLA borrow; rate≠1 must mute honestly,
+never chipmunk) and app/WebAssembly GC (likely already works via SpiderMonkey — cheap re-probe first).
+Audit #8's "remainder is subsystems + thin tail" claim HELD through the whole 349-355 window.
+
+TICK SHAPE: surface-audit (map-maintenance checkpoint; the deliverable is the audit entry + 2 added rows). GATES +0. [no-pattern]
+CONSTELLATION: +2 rows (media/playbackRate missing; app/WebAssembly GC unknown).
+WIKI: none — audit lives in SURFACE-AUDIT.md.

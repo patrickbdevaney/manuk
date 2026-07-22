@@ -360,3 +360,49 @@ constitutionally OUT for us — a second media-stack subsystem), **Dialog + Popo
   not upgraded — it is in the board's named cut line (niche, feature-detects cleanly, cosmetic), and the
   Ladybird lesson ("the final 17% is the hardest", MPA/web-compat quirks over spec purity) says the
   daily-driver ROI is in the jarring-invariant tail and the subsystems, not the CSS niche.
+
+## Audit #9 — tick 357 (2026-07-22)
+
+### Sources (searched, not recalled)
+
+* [Ladybird — This Month, June 2026](https://ladybird.org/newsletter/2026-06-30/) (WPT 2,075,546 →
+  2,078,912, +3,366; "getting closer to our first alpha")
+* [Interop 2026 dashboard/README](https://github.com/web-platform-tests/interop/blob/main/2026/README.md) ·
+  [Igalia announcement](https://www.igalia.com/news/interop-2026.html) — no mid-year revision found;
+  the February frame (20 focus + 4 investigations) stands as checked by Audit #8.
+
+### The external frame, July 2026
+
+Ladybird's June work-list is the sharpest available mirror for "what a pre-alpha engine chasing the
+daily-driver bar actually ships": downloads, history, DevTools, **media playback-speed with
+pitch-preservation (WSOLA)**, **muted-autoplay tri-state policy**, sandboxed services/GPU isolation,
+WebAssembly GC, container-relative units, `contrast-color()`, and per-site compat fixes. Cross-checked
+row by row against our map:
+
+* **muted autoplay** — landed HERE at t352 within the same month Ladybird shipped its policy. The two
+  projects independently ranked the same organ; validates the board's media ordering.
+* **downloads / history / session UX** — built and gated here (t4/t163-167/T5 arc). No action.
+* **container-relative units** — subsumed by the board's CO-#1 (3) container queries (Stylo-bound).
+* **`contrast-color()`** — CSS niche, stays in the named cut line.
+* **sandboxed services / GPU isolation** — our per-tab process model is SETTLED and sequenced
+  (PROCESS-MODEL.md); not re-opened by another engine's timeline.
+
+### ADDED
+
+* **media / `playbackRate` (audible speed control)** — `missing`, previously UNLISTED. The IDL property
+  exists inert (`el.playbackRate = 1`, event_loop.rs:2805) but the Transport does not scale time and the
+  AudioFeed cannot resample; podcast/lecture 1.5–2x is a real daily-driver class (Ladybird judged it
+  alpha-worthy). Bounded: video-only rate = scale dt; audible rate needs WSOLA-class time-stretch
+  (BORROW candidate) — without it, rate≠1 must mute honestly rather than chipmunk.
+* **app / WebAssembly GC** — `unknown`, previously UNLISTED. Kotlin/Wasm and Flutter-web class. Likely
+  ALREADY WORKS (SpiderMonkey ships WasmGC enabled since ~SM120; our core wasm is gated green t225) —
+  the stale-pessimistic rule says CHEAP RE-PROBE before any build: a `(ref struct)` module instantiate
+  probe pins the cell in minutes.
+
+### CORRECTED / what we had been wrong about
+
+* Audit #8's central claim ("bounded gaps nearly mined out; remainder is subsystems + a thin tail")
+  HELD through a 10-tick window that never once contradicted it: 349–355 were all subsystem organs
+  (MSE join → audio → sync → muted → AV1 → AVIF) off the board's named list, zero phantom-❌ hunts.
+  The map's error rate this window: two UNLISTED rows found by looking at another engine's changelog —
+  the outside-frame mechanism doing exactly its job; neither is a phantom, both are additions.
