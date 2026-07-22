@@ -1469,6 +1469,16 @@ with SYNTHETIC loud streams after the real fixture proved too quiet to clip; a c
 input can trigger is a green that cannot go red), mismatch check dropped (the pitch-shift
 misread).
 
+### Tick 375 — the mixer resamples
+
+Rate-mismatched feeds now join the mix: linear interpolation between source neighbours, pulling
+`ceil(out_frames * src_rate / dev_rate) + 1` source frames per callback. Policy arithmetic (the
+presentation-clock precedent), speech/effects-grade — windowed-sinc is the named quality rung if
+music artifacts surface. Two contracts gated: a CONSTANT stream resamples to the same constant
+(interpolation may not invent wobble), and the source cursor advances at the SOURCE's own rate —
+which is what mastery reads, so consuming at the device rate (the pitch shift t370's skip
+prevented) now fails the gate rather than shipping. Channel-count mismatch stays skipped.
+
 ### Tick 369 — WAV rung
 
 Same seam, two more symphonia features (wav+pcm). The sniff nuance worth keeping: RIFF alone is

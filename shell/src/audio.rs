@@ -275,12 +275,48 @@ pub fn mix_into(mixer: &Mixer, channels: u16, sample_rate: u32, out: &mut [f32])
     let mut scratch = vec![0.0f32; out.len()];
     for feed in feeds.iter() {
         let Ok(mut f) = feed.lock() else { continue };
-        if f.channels() != channels || f.sample_rate() != sample_rate {
-            continue; // mismatched config: silent, never pitch-shifted — see `Mixer`
+        if f.channels() != channels {
+            continue; // channel-count mismatch: a downmix matrix question, still skipped honestly
         }
-        let n = f.fill(&mut scratch);
-        for (o, s) in out.iter_mut().zip(scratch[..n].iter()) {
-            *o = (*o + *s).clamp(-1.0, 1.0);
+        let src_rate = f.sample_rate();
+        if src_rate == sample_rate {
+            let n = f.fill(&mut scratch);
+            for (o, s) in out.iter_mut().zip(scratch[..n].iter()) {
+                *o = (*o + *s).clamp(-1.0, 1.0);
+            }
+            continue;
+        }
+        if src_rate == 0 {
+            continue;
+        }
+        // Rate mismatch (tick 375): LINEAR resample — pull the source frames this buffer spans,
+        // interpolate between neighbours per output frame. Policy arithmetic, not a codec (the
+        // presentation-clock precedent); speech/effects-grade, and audible beats silent. The
+        // source cursor advances at the SOURCE's own rate, so the feed's position — which
+        // mastery reads — stays truthful.
+        let ch = channels as usize;
+        let out_frames = out.len() / ch;
+        let ratio = src_rate as f64 / sample_rate as f64;
+        // +1: the last output frame interpolates toward the frame AFTER its floor index.
+        let need_frames = (out_frames as f64 * ratio).ceil() as usize + 1;
+        let mut src = vec![0.0f32; need_frames * ch];
+        let got = f.fill(&mut src) / ch;
+        if got == 0 {
+            continue;
+        }
+        for of in 0..out_frames {
+            let pos = of as f64 * ratio;
+            let i0 = pos as usize;
+            if i0 >= got {
+                break;
+            }
+            let i1 = (i0 + 1).min(got - 1);
+            let t = (pos - i0 as f64) as f32;
+            for c in 0..ch {
+                let s = src[i0 * ch + c] * (1.0 - t) + src[i1 * ch + c] * t;
+                let o = &mut out[of * ch + c];
+                *o = (*o + s).clamp(-1.0, 1.0);
+            }
         }
     }
 }
@@ -376,22 +412,47 @@ mod tests {
             lo[0]
         );
 
-        // ── A config-mismatched feed contributes silence and is not misread.
-        let mut alien = pcm.clone();
-        alien.sample_rate = rate * 2;
-        let c = std::sync::Arc::new(std::sync::Mutex::new(AudioFeed::new(alien)));
+        // ── A rate-mismatched feed RESAMPLES into the mix (tick 375): a constant stream must
+        //    come out as the same constant (interpolation may not invent wobble), and the source
+        //    cursor advances at the SOURCE's own rate — which is what mastery reads.
+        let half = Pcm {
+            samples: vec![0.5f32; 4096 * ch as usize],
+            channels: ch,
+            sample_rate: rate / 2,
+        };
+        let c = std::sync::Arc::new(std::sync::Mutex::new(AudioFeed::new(half)));
         let solo: Mixer = std::sync::Arc::new(std::sync::Mutex::new(vec![c.clone()]));
-        let mut out2 = vec![f32::NAN; 128];
+        let mut out2 = vec![f32::NAN; 400 * ch as usize];
         mix_into(&solo, ch, rate, &mut out2);
         assert!(
-            out2.iter().all(|&s| s == 0.0),
-            "a mismatched-rate feed must be SKIPPED (silence) — pulling 88.2k at 44.1k is a \
-             pitch shift, not playback"
+            out2.iter().all(|&s| (s - 0.5).abs() < 1e-6),
+            "a half-rate CONSTANT stream must resample to the same constant — wobble here is \
+             interpolation reading the wrong neighbours (got {})",
+            out2[0]
         );
+        let consumed = c.lock().unwrap().position_seconds();
+        let expect = 400.0 / (rate as f64); // 400 device frames at half rate = 200 src frames +1
         assert!(
-            (c.lock().unwrap().position_seconds() - 0.0).abs() < 1e-12,
-            "a skipped feed must not be consumed"
+            (consumed - expect).abs() < 4.0 / rate as f64,
+            "the source cursor advances at the SOURCE rate ({consumed}s vs ~{expect}s) — \
+             consuming at the device rate is the pitch shift the t370 skip existed to prevent"
         );
+
+        // ── A CHANNEL-count mismatch is still skipped (a downmix matrix question, not a rate).
+        let alien = Pcm {
+            samples: vec![0.7f32; 1024],
+            channels: ch + 1,
+            sample_rate: rate,
+        };
+        let d = std::sync::Arc::new(std::sync::Mutex::new(AudioFeed::new(alien)));
+        let solo2: Mixer = std::sync::Arc::new(std::sync::Mutex::new(vec![d.clone()]));
+        let mut out3 = vec![f32::NAN; 128];
+        mix_into(&solo2, ch, rate, &mut out3);
+        assert!(
+            out3.iter().all(|&s| s == 0.0),
+            "a channel-mismatched feed stays SKIPPED"
+        );
+        assert!((d.lock().unwrap().position_seconds() - 0.0).abs() < 1e-12);
 
         // ── A paused member is silence without silencing the mix.
         b.lock().unwrap().set_playing(false);

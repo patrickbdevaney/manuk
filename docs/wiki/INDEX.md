@@ -642,7 +642,8 @@
   - L1427 · Tick 363 — the MP3 join: <audio> plays, audio-only entries exist
   - L1442 · Tick 364 — FLAC + Ogg/Vorbis through the seam; Opus refused honestly
   - L1457 · Tick 370 — the mixer: two playing elements, both audible
-  - L1472 · Tick 369 — WAV rung
+  - L1472 · Tick 375 — the mixer resamples
+  - L1482 · Tick 369 — WAV rung
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -861,4 +862,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-776 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+777 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

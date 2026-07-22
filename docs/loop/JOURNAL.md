@@ -16217,3 +16217,30 @@ Counters: LAST_CONSTITUTION_CHECK 366→374; next due 382 (self-audit 376, surfa
 TICK SHAPE: constitution-check (governance; the deliverable is Check #13 + the counter). GATES +0. [no-pattern]
 CONSTELLATION: none.
 WIKI: none — the check lives in CONSTITUTION-CHECK.md.
+
+## Tick 375 — the mixer resamples: mismatched-rate audio joins the mix audibly (2026-07-22)
+
+The t370 residue: a feed whose sample rate differs from the device stream's is SKIPPED silent —
+honest, but a 48k notification beside a 44.1k video is still a mute element. The fix is a linear
+resampler in the mix loop: pull source frames at the rate ratio, interpolate between neighbours.
+Linear interpolation is policy arithmetic (the presentation-clock precedent — small, entirely
+policy, no crate offers exactly this shape against our feed type), acceptable for speech/effects;
+a windowed-sinc borrow is the quality rung if music artifacts ever surface (named). CHANNEL-count
+mismatch stays skipped (mapping 5.1→stereo is a downmix matrix question, separate).
+
+HYPOTHESIS: mix_into consumes ceil(out_frames * src_rate / dev_rate) source frames per callback via
+AudioFeed::fill into scratch, then linearly interpolates to device rate and sums. Position accounting
+stays sample-exact on the SOURCE side (the feed's own cursor — which is also what mastery reads, so
+sync stays truthful). Gate: extend G_MIX — a half-rate feed (22050 vs 44100) contributes audibly
+(non-zero output where skipped before), its cursor advances at HALF the device's frame count, and a
+constant-value feed resamples to the same constant (interpolation must not invent wobble). RED =
+restore the skip.
+RESULT — LANDED. mix_into resamples rate-mismatched feeds (linear, +1-frame lookahead, clamp-summed);
+channel mismatch stays skipped. G_MIX rewritten for the new truth: constant-in→constant-out
+(wobble-free), source-rate consumption (mastery stays truthful), channel-skip retained. RED-PROVEN:
+(1) the t370 skip restored → constant claim fails (got 0 — the silent element); (2) device-rate
+consumption (the pitch shift) → caught. manuk-shell 70/70 + teardown TWICE EXIT 0; fmt clean.
+
+TICK SHAPE: capability (cross-rate audio mixes audibly — a 48k notification beside a 44.1k video both play; [policy-arithmetic pattern: linear resampler in the mix loop, quality rung named]). GATES G_MIX rewritten (+2 claims, shell = IN the wall); constellation row 72 residue: WSOLA, downmix, Opus/AC-3, High-profile.
+CONSTELLATION: media / audio output device → resampler landed (G_MIX).
+WIKI: docs/wiki/media-pipeline.md — Tick 375 resampler (linear, source-rate cursor contract).

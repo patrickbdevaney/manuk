@@ -3206,3 +3206,13 @@ follows consumption: with a mixer every contained feed is consumed, so sync mast
 membership, not identity-with-the-one.
 **The trap:** a clamp claim the fixture cannot trigger — the real stream was too quiet to clip and
 the RED edit passed; synthesize the loud case or the claim measures nothing.
+
+## Cross-rate mixing — resample on the source's clock (tick 375)
+
+**The class of the web this unlocks:** pages mixing sample rates — a 48k notification beside 44.1k
+video, TTS beside music. **(1)** Linear interpolation is policy arithmetic and speech-grade; name
+the quality rung (windowed-sinc) instead of silently shipping it. **(2)** THE contract: the source
+cursor advances at the SOURCE's rate — it is also the sync master's clock, and consuming at the
+device rate is a pitch shift that corrupts mastery arithmetic too. **(3)** Constant-in →
+constant-out is the wobble gate: interpolation reading wrong neighbours invents modulation a
+spectrum would show but a length check never will.
