@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **142** | ticks 1–348 |
-| median tick cycle | **20m** | 141 intervals |
+| ticks landed | **143** | ticks 1–349 |
+| median tick cycle | **20m** | 142 intervals |
 | median, last 10 | **23m** | 10 intervals |
-| fastest / slowest | 3m / 5.4d | |
+| fastest / slowest | 82s / 5.4d | |
 | **ticks per hour** | **0.54** | 261.8h elapsed |
-| median verify wall | **65s** | 81 ticks |
+| median verify wall | **65s** | 82 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**75 of 142 ticks** (53%) moved a
+**76 of 143 ticks** (53%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **75** capability ticks, median cycle **20m**
-* median diff per tick: **+248 / −29** lines across 8 files
+* **76** capability ticks, median cycle **20m**
+* median diff per tick: **+246 / −29** lines across 8 files
 
 ## Every tick
 
@@ -239,5 +239,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **346** | 2026-07-22 01:16 | 30m | capability | 66s | +378/−36 | 183 | 81 | 56.0% · | drag-and-drop EDITOR half: dispatch_drag source→target reorder handoff (2026-07-22) |
 | **347** | 2026-07-22 01:42 | 26m | capability | 68s | +218/−40 | 183 | 81 | 56.0% · | HTTP `Expires` header as a freshness source (2026-07-22) |
 | **348** | 2026-07-22 02:51 | 69m | capability | 67s | +521/−36 | 183 | 81 | 56.0% · | HTTP `Age` header reduces remaining cache freshness (2026-07-22) |
+| **349** | 2026-07-22 02:52 | 82s | capability | 67s | +31/−30 | 183 | 81 | 56.0% · | MSE playback join: appended bytes reach the decoder, and the registry tells the truth (202 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
