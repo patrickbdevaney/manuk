@@ -44,6 +44,13 @@ pub struct AudioFeed {
     /// copies and `seek_seconds` rounds to a frame boundary.
     cursor: usize,
     playing: bool,
+    /// **Mute is silent CONSUMPTION, never pause** (tick 352). A muted `fill` advances the
+    /// cursor exactly as an audible one and zeros the buffer — so the device clock keeps
+    /// running (the A/V mastery rule still governs while muted) and unmute is seamless and IN
+    /// SYNC, because the cursor is where the sound would have been. Mute-as-pause fails both
+    /// ways: the master freezes, and unmute resumes stale audio from where it was muted,
+    /// desynced by the whole muted interval.
+    muted: bool,
 }
 
 impl AudioFeed {
@@ -56,19 +63,26 @@ impl AudioFeed {
             sample_rate: pcm.sample_rate,
             cursor: 0,
             playing: true,
+            muted: false,
         }
     }
 
-    /// Hand the device its next buffer. Returns how many samples were real; the remainder of
-    /// `out` — all of it, when paused or exhausted — is zeroed (see the module note on silence).
+    /// Hand the device its next buffer. Returns how many samples were **consumed**; the remainder
+    /// of `out` — all of it, when paused or exhausted — is zeroed (see the module note on
+    /// silence). A muted feed consumes at full rate and delivers only zeros — see the field note
+    /// on why mute must never be pause.
     pub fn fill(&mut self, out: &mut [f32]) -> usize {
         if !self.playing || self.cursor >= self.samples.len() {
             out.fill(0.0);
             return 0;
         }
         let n = out.len().min(self.samples.len() - self.cursor);
-        out[..n].copy_from_slice(&self.samples[self.cursor..self.cursor + n]);
-        out[n..].fill(0.0);
+        if self.muted {
+            out.fill(0.0);
+        } else {
+            out[..n].copy_from_slice(&self.samples[self.cursor..self.cursor + n]);
+            out[n..].fill(0.0);
+        }
         self.cursor += n;
         n
     }
@@ -79,6 +93,14 @@ impl AudioFeed {
 
     pub fn is_playing(&self) -> bool {
         self.playing
+    }
+
+    pub fn set_muted(&mut self, muted: bool) {
+        self.muted = muted;
+    }
+
+    pub fn is_muted(&self) -> bool {
+        self.muted
     }
 
     /// Where playback stands, in seconds of consumed frames. This is the device-side clock the

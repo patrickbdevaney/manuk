@@ -15544,3 +15544,41 @@ scaled to the fixture's own measured durations — no assertion rides on a guess
 TICK SHAPE: capability (A/V master-slave sync — the device crystal owns time and the picture snaps to it; the lip-sync class closed at the join; [host-native pattern: wire the clock the engine already had to the feed the shell already had]). GATES +1 (G_AV_MASTER, shell suite = IN the verify wall); constellation row 72 note updated (sync closed; volume/muted + mixing + non-AAC remain).
 CONSTELLATION: media / audio output device → sync closed (G_AV_MASTER).
 WIKI: docs/wiki/media-pipeline.md — Tick 351 A/V master-slave sync (mastery-follows-the-device, two wall hand-backs, RED ledger).
+
+## Tick 352 — the `muted` attribute reaches the device: silent consumption, not pause (2026-07-22)
+
+CO-#1 order (2) MEDIA, next item in constellation row 72's remainder: "volume/muted attribute plumbing
+into the feed". The defect is daily-driver-critical and inverted from the usual missing-organ shape: the
+overwhelming autoplay pattern on the real web is `<video autoplay muted>` (Chrome only ALLOWS autoplay
+with sound if muted), and since t350 gave us a sound device, every such video now PLAYS SOUND — a page
+that was quiet in Chrome blasts audio here. The muted attribute exists in the DOM (t344's :muted pseudo
+reads it) and dies before the feed.
+
+HYPOTHESIS: mute is SILENT CONSUMPTION, never pause — AudioFeed gains `muted`; a muted fill advances the
+cursor exactly as an audible one and zeros the whole buffer. That keeps the device clock running, so
+(a) the t351 mastery rule still governs A/V sync while muted, and (b) unmute is seamless and IN SYNC
+(the cursor is where the sound would have been). Mute-as-pause fails both: the master freezes (picture
+hands back to the wall) and unmute resumes STALE audio from where it was muted — desynced by the whole
+muted interval. MediaSet::advance syncs each entry's feed from the element's DOM attribute per frame
+(picks up setAttribute/removeAttribute at runtime). Volume stays deferred honestly: it has NO content
+attribute (IDL-only), so it needs the live-property channel — named residue, not smuggled in half-built.
+Gate G_MUTED_OUT (shell suite = IN the wall): a muted video's feed mutes and a loud one's does not (the
+DOM read); a muted fill zeros a pre-fouled buffer while the position ADVANCES; unmute mid-stream delivers
+the exact samples at the position the silence reached.
+RESULT — LANDED. shell/src/audio.rs: AudioFeed::{muted, set_muted, is_muted}; a muted fill zeros the
+buffer while consuming at full rate (cursor advances — the field note records why pause is the wrong
+model). shell/src/media.rs: advance re-reads the element's muted attribute per frame into the feed
+before the mastery decision.
+
+RED-PROVEN three ways (each run, watched fail, cp-snapshot restored byte-for-byte, cmp-verified):
+(a) delete the DOM sync in advance → "a <video muted>'s feed must mute" FAILS (both videos loud);
+(b) mute-as-pause (return 0, no consume) → "a muted fill still CONSUMES samples" FAILS;
+(c) keep the copy under mute → "muted fill must deliver pure silence" FAILS (the NaN-fouled buffer
+catches the leak).
+
+NO REGRESSION: full manuk-shell 64/64 (+1) + g_teardown 2/2, run TWICE, EXIT 0 both; headless
+--no-default-features lane compiles clean; fmt clean. G_AUDIO_PUMP untouched (muted defaults false).
+
+TICK SHAPE: capability (the muted attribute reaches the device — the autoplay-muted class of the web is now quiet here as it is everywhere else; mute preserves the sync master and unmute lands in-sync; [host-native pattern: DOM attribute the engine already had, feed the shell already had]). GATES +1 (G_MUTED_OUT, shell suite = IN the verify wall); constellation row 72 note updated (volume/live-.muted IDL channel + mixing + non-AAC remain).
+CONSTELLATION: media / audio output device → muted plumbed (G_MUTED_OUT).
+WIKI: docs/wiki/media-pipeline.md — Tick 352 muted (silent-consumption design, RED ledger, residue).

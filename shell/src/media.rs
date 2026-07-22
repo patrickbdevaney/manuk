@@ -265,6 +265,22 @@ impl MediaSet {
             let Some(entry) = slot.as_mut() else {
                 continue; // a known-failed decode; never retried
             };
+            // The `muted` attribute reaches the device (tick 352), re-read every frame so
+            // setAttribute/removeAttribute takes effect live. `<video autoplay muted>` is THE
+            // autoplay pattern of the real web — Chrome only permits autoplay WITH sound when
+            // muted — so a device that ignores the attribute blasts audio on pages that were
+            // quiet everywhere else. The feed consumes silently rather than pausing (see the
+            // `AudioFeed::muted` field note), which is what keeps it a valid sync master.
+            if let Some(a) = entry.audio.as_ref() {
+                let muted = page
+                    .dom()
+                    .element(node)
+                    .map(|e| e.attr("muted").is_some())
+                    .unwrap_or(false);
+                if let Ok(mut f) = a.lock() {
+                    f.set_muted(muted);
+                }
+            }
             let clock = match (master, entry.audio.as_ref()) {
                 (Some(m), Some(a)) if Arc::ptr_eq(m, a) => match a.lock() {
                     Ok(f) if f.is_playing() && !f.exhausted() => {
@@ -737,6 +753,95 @@ mod tests {
             before + dt,
             position(&set)
         );
+    }
+
+    /// # G_MUTED_OUT — the `muted` attribute reaches the device, as silent consumption
+    ///
+    /// `<video autoplay muted>` is THE autoplay pattern of the real web (Chrome only permits
+    /// autoplay WITH sound when muted) — so from the moment the output device landed (t350),
+    /// ignoring the attribute means pages that are quiet in every other browser blast audio
+    /// here. And mute must be silent CONSUMPTION, not pause: the cursor advances at full rate
+    /// under zeros, so the feed remains a valid A/V master and unmute is seamless and in sync.
+    ///
+    /// ## How each claim goes RED (each was run, not assumed)
+    ///
+    /// - **the DOM attribute reaches the feed** — delete the sync block in `advance`: both
+    ///   videos play loud, and nothing else in the tree notices.
+    /// - **muted still consumes** — make the muted branch return without advancing the cursor
+    ///   (mute-as-pause): the clock freezes, the mastery rule hands the picture to the wall,
+    ///   and unmute resumes STALE audio desynced by the whole muted interval.
+    /// - **muted delivers zeros** — keep the copy in the muted branch: the sound leaks and only
+    ///   the pre-fouled buffer can see it.
+    #[test]
+    fn g_muted_out() {
+        const TWO: &str = r#"<!doctype html><html><body>
+            <video id="q" muted src="quiet.mp4"></video>
+            <video id="l" src="loud.mp4"></video>
+          </body></html>"#;
+        let fonts = manuk_text::FontContext::new();
+        let mut page = manuk_page::Page::load(TWO, "https://video.test/", &fonts, 800.0);
+        let wanted = page.pending_media_urls();
+        let node_of = |suffix: &str| {
+            wanted
+                .iter()
+                .find(|(_, u)| u.ends_with(suffix))
+                .map(|(n, _)| *n)
+                .expect("both videos request their media")
+        };
+        let (quiet, loud) = (node_of("quiet.mp4"), node_of("loud.mp4"));
+
+        let mut set = MediaSet::new();
+        assert!(set.load(quiet, AV) && set.load(loud, AV));
+        let qf = set.audio_feed(quiet).unwrap();
+        let lf = set.audio_feed(loud).unwrap();
+
+        // ── The attribute reaches the feed on the next advance — and ONLY where it is present.
+        set.advance(0.0, &mut page, None);
+        assert!(
+            qf.lock().unwrap().is_muted(),
+            "a <video muted>'s feed must mute — otherwise every autoplay-muted page on the \
+             web plays sound the moment a device exists"
+        );
+        assert!(
+            !lf.lock().unwrap().is_muted(),
+            "an unmuted video's feed must NOT mute"
+        );
+
+        // ── Muted = silent CONSUMPTION: zeros delivered, position advancing at full rate.
+        let movie = manuk_media::demux(AV).unwrap();
+        let want = manuk_media::decode_track(movie.audio().unwrap(), AV)
+            .unwrap()
+            .samples;
+        {
+            let mut f = qf.lock().unwrap();
+            let before = f.position_seconds();
+            let mut buf = [f32::NAN; 1024];
+            let n = f.fill(&mut buf);
+            assert_eq!(n, 1024, "a muted fill still CONSUMES samples");
+            assert!(
+                buf.iter().all(|&s| s == 0.0),
+                "a muted fill must deliver pure silence — anything else is the leak the \
+                 pre-fouled buffer exists to catch"
+            );
+            assert!(
+                f.position_seconds() > before,
+                "the muted clock must keep RUNNING — mute-as-pause freezes the A/V master and \
+                 desyncs the eventual unmute by the whole muted interval"
+            );
+
+            // ── Unmute mid-stream: the very next samples are the ones AT the position the
+            //    silence reached — sync held, nothing stale.
+            f.set_muted(false);
+            let mut aud = vec![0f32; 512];
+            assert_eq!(f.fill(&mut aud), 512);
+            assert_eq!(
+                &aud[..],
+                &want[1024..1536],
+                "unmute must resume at the position the silent consumption reached — getting \
+                 want[0..] here means the muted interval never consumed and the audio is late \
+                 by exactly that interval"
+            );
+        }
     }
 
     /// **What the viewer would actually see** — the page is painted and the rendered canvas is

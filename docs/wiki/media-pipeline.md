@@ -1260,3 +1260,21 @@ forever. The slave clock is built per frame: `AudioClock::new(rate)` + `seek(pos
    drop the `Arc::ptr_eq` guard.
 3. **exhaustion hands back** — truncate the master's PCM at its cursor; the tail still advances
    by dt. RED: drop the `exhausted()` check — the position pins to the audio's end.
+
+## Tick 352 — `muted` reaches the device: silent consumption, never pause
+
+`<video autoplay muted>` is THE autoplay pattern of the real web (Chrome only permits autoplay
+WITH sound when muted), so from the moment the device landed, ignoring the attribute meant quiet
+pages blast audio here. `MediaSet::advance` re-reads the element's `muted` content attribute
+every frame (so `setAttribute`/`removeAttribute` takes effect live) into `AudioFeed::muted`.
+
+The design point: a muted `fill` **consumes at full rate and delivers zeros** — the cursor
+advances exactly as if audible. Mute-as-pause fails twice: the feed stops being a valid A/V
+master (t351 hands a non-moving master back to the wall), and unmute resumes STALE audio
+desynced by the whole muted interval. With silent consumption the clock never stops and unmute
+lands on the exact sample the silence reached. G_MUTED_OUT RED-proofs: delete the DOM sync
+(both videos play loud), mute-as-pause (the clock freezes), keep the copy under mute (the
+pre-fouled buffer catches the leak).
+
+Residue, honestly: `volume` and the live `.muted` IDL property have NO content attribute — they
+need a JS live-property channel to the host (follow-on, not smuggled in half-built).

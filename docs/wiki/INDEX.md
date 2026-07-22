@@ -630,6 +630,7 @@
   - L1235 · Mastery follows the DEVICE, not the existence of a feed
   - L1245 · Two hand-backs to the wall, both load-bearing
   - L1254 · G_AV_MASTER (shell suite = IN the verify wall) — each claim RED-proven by edit
+  - L1264 · Tick 352 — muted reaches the device: silent consumption, never pause
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -848,4 +849,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-763 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+764 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
