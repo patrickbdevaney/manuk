@@ -2061,3 +2061,33 @@ dispatch makes the controlled-component read see the stale value. Honest limit: 
 burst** for one composed segment, not the stream of intermediate `compositionupdate` steps a live IME
 emits per keystroke, and it appends to the value rather than inserting at a caret — the GUI/shell owns
 the winit IME feed and caret geometry.
+
+## `:active` — the last dynamic pseudo-class, fed end-to-end (G_ACTIVE_PSEUDO)
+
+Three dynamic pseudo-classes gate on live pointer/focus state: `:hover`, `:focus`, `:active`. The first
+two were wired to the cascade (tick ~245 / tick 246); `:active` stayed hard-coded `P::Active => false`
+in `stylo_dom.rs`, so the press-feedback rule on essentially every interactive control
+(`button:active { transform: translateY(1px) }`, `a:active`, the nav item that darkens while tapped) was
+inert — and, like the hover-menu case, **nothing reported it**: the page rendered exactly what it was
+told, minus a state that never arrived.
+
+The fix mirrors the `:hover`/`:focus` plumbing exactly:
+
+- **State on `Dom`.** `active: Option<NodeId>`, reached by the cascade with no signature change (the same
+  reason `hovered`/`focused` live there). `Dom::set_active(Some|None)` is the input; `Dom::is_active`
+  answers the matcher.
+- **Ancestor-inclusive, both chains dirtied.** `:active` matches the pressed element **and every ancestor
+  of it** — a press on a button inside a card lights `.card:active`. `set_active` walks both the old and
+  new active chains marking per-node dirty bits (a dirty bit is per node, not per subtree; marking only
+  the endpoint leaves an ancestor whose rule just started matching un-restyled).
+- **`Page::set_active` recascades with the FULL source set** (`recascade_all_sources` + `relayout`), the
+  identical pair `set_focus`/`dispatch_hover_at` use. `relayout` alone recascades only a *grown* tree (a
+  press adds no nodes → nothing moves); `relayout_incremental` drops external `<link>` sheets. Both are
+  silent failure modes a naive fix hits.
+- **Fed live by the shell** (not a dead-end wire): `handle_click` hit-tests the pressed node on mousedown
+  and calls `set_active(Some(hit))`; the Left mouse-up clears it with `set_active(None)`.
+
+RED: reverting the matcher to `P::Active => false` fails the gate's "`#btn:active` must apply — got 100"
+(the button's `:active` rule lives in an EXTERNAL sheet, so this also proves the recascade keeps `<link>`
+stylesheets); the ancestor assertion (`.card:active` widens a sibling label to 250px) fails if `is_active`
+matches only the exact target or `set_active` marks only the endpoints.

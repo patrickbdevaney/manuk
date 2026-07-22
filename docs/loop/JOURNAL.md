@@ -14870,3 +14870,38 @@ TICK SHAPE: capability (a site class — CJK/accented text entry — goes from i
 +1 (g_ime_composition). CONSTELLATION: IME/composition events missing->gated.
 
 WIKI: docs/wiki/interaction-surface.md (IME composition section).
+
+## Tick 333 — :active is fed: the last dynamic pseudo-class matches while the pointer is held (2026-07-21)
+
+SELECTED: re-ran lever-board (frontier unchanged: fidelity instrument [parked subsystem] / media join [L]
+/ container queries [Stylo]). Swept the constellation "missing" rows for a BOUNDED, high-confidence
+capability that isn't a cut-line item or a subsystem. Found the cleanest one hiding in stylo_dom.rs
+line 382: `:active` was still hard-coded `P::Active => false` — the LAST of the three dynamic
+pseudo-classes left unfed (`:hover` landed ~t245, `:focus` t246 as an explicit "dead-end wire" fix).
+The mechanism to feed it already existed and was proven twice over.
+
+WHAT LANDED (engine/dom + engine/css + engine/page + shell/gui + new gate g_active_pseudo.rs), a direct
+mirror of the `:hover`/`:focus` plumbing: (1) Dom gains an `active: Option<NodeId>` cascade input with
+`set_active`/`is_active` — is_active matches the pressed element AND every ancestor (same ancestor-
+inclusive rule as :hover; a press inside a card lights `.card:active`), set_active walks BOTH chains
+marking per-node dirty bits. (2) The Stylo matcher: `P::Active => self.dom.is_active(self.node)`. (3)
+`Page::set_active(node, fonts, vw)` mirrors `set_focus` exactly — recascade_all_sources + relayout (NOT
+relayout alone, which recascades only a grown tree and moves nothing; NOT relayout_incremental, which
+drops external `<link>` sheets — the two traps g_hover documents). (4) NOT a dead-end wire: shell/gui.rs
+feeds it live — mousedown hit-tests the pressed node and set_active(Some(hit)); the Left mouseup clears
+it (set_active(None)) before finishing the click.
+
+RED-PROVEN (cp-snapshot of stylo_dom.rs, restored + re-verified GREEN): reverting the matcher to
+`P::Active => false` made g_active_pseudo FAIL at "#btn:active {width:300px} must apply — got 100" (the
+pseudo-class unfed). The gate puts the button's :active rule in an EXTERNAL stylesheet on purpose (the
+g_hover lesson) so it also proves the recascade keeps `<link>` sheets, and asserts the ancestor `.card`
+restyles a sibling label (250px) — proving both the ancestor match and the both-chains dirtying.
+
+NO REGRESSION: additive matcher arm + new state + new methods; dom (35) + css unit tests green, shell
+compiles under stylo,spidermonkey. RED edit reverted byte-for-byte. fmt clean.
+
+TICK SHAPE: capability (press-feedback styling — button:active/a:active on essentially every interactive
+site — goes from permanently-dead to live, fed end-to-end through the shell). GATES +1 (g_active_pseudo).
+CONSTELLATION: no dedicated row (like :hover/:focus, an untracked cascade capability).
+
+WIKI: docs/wiki/interaction-surface.md (:active section).

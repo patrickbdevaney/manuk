@@ -377,9 +377,11 @@ mod selector_impl {
                 P::Focus => self.dom.is_focused(self.node),
                 P::FocusWithin => self.dom.is_focus_within(self.node),
                 P::FocusVisible => self.dom.is_focus_visible(self.node),
-                // Still genuinely dynamic and still unfed: `:active` needs mousedown/mouseup, which
-                // is a separate input path from focus. Correct answer until then is "no".
-                P::Active => false,
+                // `:active` is fed by the shell's pointer press (`Page::set_active` →
+                // `Dom::set_active`, `mousedown` sets it, `mouseup` clears it) and matches the
+                // pressed element AND ALL ITS ANCESTORS — see `Dom::is_active`, the same
+                // ancestor-inclusive rule as `:hover` (a press inside a card lights the card).
+                P::Active => self.dom.is_active(self.node),
                 _ => false,
             }
         }

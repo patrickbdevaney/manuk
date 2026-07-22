@@ -2940,3 +2940,21 @@ carries `inputType: 'insertCompositionText'`: it is the veto point (read-only-wh
 maxlength guard) and the tag an undo stack uses to tell a composition commit from a paste. **The trap:**
 modelling only the `input` event reads as "text entry works" from the outside while every IME editor
 mis-fires; the burst and the `isComposing`/`inputType` fields are the capability, not decoration.
+
+## `:active` press feedback — the held pointer state that lights on press and releases on lift (tick 333)
+
+**The class of the web this unlocks:** press-state visual feedback on essentially every interactive
+control — `button:active { transform: translateY(1px) }`, `a:active { color: … }`, the tab/nav item that
+darkens while tapped, the "pressed" affordance a touch UI relies on. It was the last dynamic pseudo-class
+left unfed (the Stylo matcher answered a hard `false`), so all of it was dead, silently.
+
+**(1)** `:active` is a HELD state — true from `mousedown` to `mouseup`, not an attribute — so it needs a
+live input path, the same shape `:hover` (pointer motion) and `:focus` (focus tracking) already have. Wire
+it as a cascade input on the DOM the shell writes on pointer down/up, not as a one-shot on click. **(2)**
+It matches the pressed element **and every ancestor** (the press-anywhere-in-this-panel idiom); match only
+the exact target and a whole class of container-feedback rules silently fails. **(3)** The
+press→restyle→release cycle must recascade with the full stylesheet set both times and must CLEAR on
+release — a state only ever added leaves every control the pointer ever touched stuck lit. **The trap:**
+feeding `:active` only at the engine level (matcher + state) with no shell input is a "dead-end wire" — it
+reads as present at the cascade layer and never lights on a real press. The capability is the full path:
+matcher ↔ DOM state ↔ shell pointer feed.

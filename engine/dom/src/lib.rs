@@ -249,6 +249,16 @@ pub struct Dom {
     /// of the pseudo-class: clicking a button focuses it, and a ring on a mouse-clicked button is
     /// the visual noise `:focus-visible` was added to remove. See `Dom::set_focused`.
     focus_visible: bool,
+    /// **The element the primary pointer button is held down on** — the anchor of `:active`.
+    ///
+    /// `:active` is a HELD state, true from `mousedown` until `mouseup`, and — like `:hover` — it
+    /// matches the pressed element **and every ancestor of it** (a press inside a card lights the
+    /// card's own `:active` rule). It is the press-feedback primitive every button, link and nav
+    /// item uses (`button:active { transform: translateY(1px) }`), and it was the last unfed
+    /// dynamic pseudo-class: the matcher answered a hard `false`, so no page's pressed-state styling
+    /// ever showed. Same dead-end-wire shape as `:focus` before tick 246 — the shell knows the
+    /// pointer is down, the cascade never heard. The shell writes it on pointer down/up.
+    active: Option<NodeId>,
 }
 
 impl Default for Dom {
@@ -277,6 +287,7 @@ impl Dom {
             hovered: None,
             focused: None,
             focus_visible: false,
+            active: None,
         }
     }
 
@@ -410,6 +421,56 @@ impl Dom {
     /// every such menu flicker shut the instant the pointer enters the panel it just opened.
     pub fn is_hovered(&self, node: NodeId) -> bool {
         let Some(target) = self.hovered else {
+            return false;
+        };
+        if target == node {
+            return true;
+        }
+        let mut cur = self.parent(target);
+        while let Some(p) = cur {
+            if p == node {
+                return true;
+            }
+            cur = self.parent(p);
+        }
+        false
+    }
+
+    /// The element the primary pointer button is held down on, if any.
+    pub fn active(&self) -> Option<NodeId> {
+        self.active
+    }
+
+    /// **Press (or release) `node`** — the `:active` cascade input. `Some(node)` on `mousedown`,
+    /// `None` on `mouseup`. Returns `true` if the active target actually changed, on the same
+    /// reasoning as [`set_hovered`](Self::set_hovered): the caller uses it to decide whether a
+    /// restyle is needed, and this marks the tree dirty when it did (a press that does not dirty the
+    /// tree is a `:active` rule that matches while the pixels never move — the hover asymmetry).
+    pub fn set_active(&mut self, node: Option<NodeId>) -> bool {
+        let node = node.filter(|n| self.is_alive(*n));
+        if node == self.active {
+            return false;
+        }
+        let previous = self.active;
+        self.active = node;
+        // BOTH chains, exactly as hover walks both: `:active` matches every ancestor of the pressed
+        // element, so an ancestor's style can change without the press target itself being the node
+        // that restyles — a card whose `.card:active` rule lights when a button inside it is pressed.
+        for end in [previous, node].into_iter().flatten() {
+            let mut cur = Some(end);
+            while let Some(n) = cur {
+                self.mark_dirty(n);
+                cur = self.parent(n);
+            }
+        }
+        true
+    }
+
+    /// Does `:active` match this node? The pressed element **or any ancestor of it** — the same
+    /// ancestor-inclusive rule as `:hover`, and for the same reason (a press inside a container
+    /// lights the container's own `:active` styling).
+    pub fn is_active(&self, node: NodeId) -> bool {
+        let Some(target) = self.active else {
             return false;
         };
         if target == node {

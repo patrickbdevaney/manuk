@@ -4805,6 +4805,32 @@ impl Page {
         true
     }
 
+    /// **Route the shell's pointer press into the cascade** — `:active`. `Some(node)` on
+    /// `mousedown`, `None` on `mouseup`. Returns `true` if anything changed.
+    ///
+    /// `:active` was the last unfed dynamic pseudo-class: the Stylo matcher answered a hard `false`,
+    /// so every button/link/nav press-feedback rule (`button:active { … }`) was dead — the same
+    /// dead-end-wire shape `:focus` had before tick 246. The state lives on `Dom` (reached by the
+    /// cascade with no signature change), the shell writes it on pointer down/up, and this recascades
+    /// so the pressed styling appears BEFORE any handler that measures on `mousedown` runs.
+    ///
+    /// Recascade with the FULL source set + relayout, the exact pair the hover and focus paths use —
+    /// `relayout` alone recascades only a grown tree (a press adds no nodes, so nothing would move),
+    /// and `relayout_incremental` drops external stylesheets. See [`Page::dispatch_hover_at`].
+    pub fn set_active(
+        &mut self,
+        node: Option<manuk_dom::NodeId>,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        if !self.dom.set_active(node) {
+            return false;
+        }
+        self.recascade_all_sources(viewport_width);
+        self.relayout(fonts, viewport_width);
+        true
+    }
+
     pub fn a11y_tree(&self) -> manuk_a11y::A11yNode {
         let rects: std::collections::HashMap<_, _> = self
             .root_box

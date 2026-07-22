@@ -562,6 +562,14 @@ impl App {
         self.sel_start = Some((doc_x, doc_y));
         self.sel_end = None;
         self.selecting = true;
+        // Press feedback: `:active` matches the pressed element AND its ancestors until the button
+        // comes back up (cleared on mouse-up). Fed here so a page's `button:active`/`a:active`
+        // press styling actually shows — the pseudo-class was dead until it had this input.
+        if let Some(page) = self.page.as_mut() {
+            if let Some(hit) = page.a11y_tree().hit_test(doc_x, doc_y).map(|n| n.node) {
+                page.set_active(Some(hit), &self.fonts, w);
+            }
+        }
         self.rerender();
     }
 
@@ -4193,7 +4201,17 @@ impl ApplicationHandler<NavEvent> for App {
                 if state == ElementState::Released {
                     self.scrollbar_drag = None; // end any scrollbar drag
                     if button == winit::event::MouseButton::Left {
+                        // The primary button came up: nothing is pressed, so `:active` releases.
+                        let w = self.viewport.width;
+                        let cleared = self
+                            .page
+                            .as_mut()
+                            .map(|p| p.set_active(None, &self.fonts, w))
+                            .unwrap_or(false);
                         self.finish_page_interaction();
+                        if cleared {
+                            self.rerender();
+                        }
                     }
                 }
                 if state == ElementState::Pressed {
