@@ -1652,10 +1652,23 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
             .collect();
 
         let divs = diff_page(&short, &chrome, &manuk, tol);
+        // Layer-2 jarring invariant (FIDELITY-SCORING-REDESIGN.md): elements we alone push past the
+        // viewport. SHAPE scoring forgives a constant offset; this catches the different, highly-
+        // perceived failure of content spilling off-screen. Reported alongside the divergence count.
+        let (hover, hover_ex) =
+            manuk_wpt::oracle::jarring_h_overflow(&chrome, &manuk, vw as i64, tol);
         eprintln!(
-            "  {short}: {} divergence(s) over {} probed",
+            "  {short}: {} divergence(s) over {} probed{}",
             divs.len(),
-            chrome.len()
+            chrome.len(),
+            if hover > 0 {
+                format!(
+                    "  ⚠ {hover} h-overflow (e.g. {})",
+                    hover_ex.first().map(String::as_str).unwrap_or("")
+                )
+            } else {
+                String::new()
+            }
         );
 
         // **Emit, don't accumulate.** At 265 sites, holding the whole crawl in one process means one
@@ -1665,11 +1678,12 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
             let _ = std::fs::create_dir_all(dir);
             let mut out = String::new();
             out.push_str(&format!(
-                "{{\"kind\":\"meta\",\"site\":\"{short}\",\"class\":\"{}\",\"status\":\"ok\",\"probed\":{},\"manuk_ms\":{},\"chrome_ms\":{}}}\n",
+                "{{\"kind\":\"meta\",\"site\":\"{short}\",\"class\":\"{}\",\"status\":\"ok\",\"probed\":{},\"manuk_ms\":{},\"chrome_ms\":{},\"h_overflow\":{}}}\n",
                 flag(args, "--class").unwrap_or("?"),
                 chrome.len(),
                 manuk_ms,
-                chrome_ms
+                chrome_ms,
+                hover
             ));
             for d in &divs {
                 out.push_str(&format!(

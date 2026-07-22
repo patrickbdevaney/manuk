@@ -15018,3 +15018,34 @@ lever. Recorded in docs/loop/SURFACE-AUDIT.md Audit #7.
 TICK SHAPE: surface-audit (the map-checks-the-map governance face — leaves the loop's own frame on a
 cadence; no engine change, +1 map row by design). GATES +0. [no-pattern].
 WIKI: none — a cadence/governance audit; it widens the capability MAP, not a rendered construct.
+
+## Tick 338 — Layer-2 jarring invariant: horizontal overflow the oracle can now see (2026-07-21)
+
+CO-#1 (observer tick 328 STEP-2 (1)(d)): the fidelity-instrument rebuild — jarring invariants. Tick 335
+landed Layer-1 (SHAPE); this lands the FIRST Layer-2 invariant in the agent-editable manuk-wpt oracle
+(tests/wpt/src/oracle.rs), the "actual Phase-0 bar" per FIDELITY-SCORING-REDESIGN.md §2 Layer 2.
+
+WHY SHAPE ALONE IS BLIND HERE: SHAPE scores each box relative to its parent and forgives a constant page
+offset (correct — a user does not perceive one). But a box shaped perfectly relative to an OVER-WIDE
+parent still spills off the viewport, and content cut off / an unexpected horizontal scrollbar is one of
+the most-perceived "this page is broken" signals. SHAPE cannot see it; a distinct invariant must.
+
+THE INVARIANT: `oracle::jarring_h_overflow(chrome, manuk, vw, tol)` counts elements whose right edge
+(x+width) passes `vw` in MANUK while Chrome keeps the SAME element inside the viewport — attributing the
+spill to us, not to a site that legitimately scrolls sideways. Wired LIVE into run_oracle_cmd: it prints
+"⚠ N h-overflow (e.g. …)" per site and adds `h_overflow` to the --emit meta JSON, so it is measured on
+every oracle run, not a decoration (Part: a probe never invoked is indistinguishable from one that passes).
+
+RED-PROVEN (cp-snapshot restored + re-verified GREEN): dropping the "Chrome keeps the same element inside"
+guard (the `Some(c) if edge(c) <= vw+tol` arm) made `jarring_h_overflow_blames_only_our_own_spill` FAIL —
+count 2 vs 1, because a both-engines-wide element (right 2000, the site scrolls sideways) then gets blamed
+on us. The guard is the load-bearing line and the test pins it.
+
+NO REGRESSION: additive pub fn + one live call site; the meta emit gains a field (extra JSON key, parsers
+unaffected); the eprintln appends only when hover>0. manuk-wpt builds clean release, 3 oracle tests + 10
+existing wpt lib tests green. RED edit reverted byte-for-byte. fmt clean.
+
+TICK SHAPE: infrastructure (the fidelity instrument — Part 21; makes the Phase-0 exit measure see a
+failure mode it was blind to; no website-capability change, hence [no-pattern]). GATES +0; tests +1.
+CONSTELLATION: no row — the measuring instrument, not a rendered construct.
+WIKI: docs/wiki/conformance-and-oracles.md (Layer-2 jarring-invariants paragraph).

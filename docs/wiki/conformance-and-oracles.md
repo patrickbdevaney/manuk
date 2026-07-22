@@ -179,6 +179,16 @@ misshapen box" fixture reports the two pure inheritors as bugs again
 > post-load-stability) are Layer 2; pixel diffing stays a diagnostic on a small corpus only.
 > (`docs/loop/FIDELITY-SCORING-REDESIGN.md`.)
 
+**Layer 2 — jarring invariants (SHAPE cannot see these).** SHAPE forgives a constant offset because a user
+does not perceive one; but a box shaped *correctly relative to an over-wide parent* can still spill off the
+viewport, and content cut off / an unexpected horizontal scrollbar is a top "this page is broken"
+perception. `oracle::jarring_h_overflow` counts elements whose right edge passes `vw` in **Manuk** while
+Chrome keeps the *same* element inside — the guard that requires "Chrome fits" is load-bearing: without it,
+a site that legitimately scrolls sideways (right edge 2000 in both engines) is blamed on us. It reports per
+site in the oracle run and as `h_overflow` in the `--emit` meta line. This is the first of the Layer-2 set;
+the others (overlap, reading-order inversion, unhittable targets, post-load shift) are not yet wired, and
+the instrument does not claim Layer 2 is complete until they are.
+
 ## Gates must run the SHIPPING configuration
 
 The parity harness **defaulted to the simple cascade while the shell shipped Stylo** — so parity, fidelity

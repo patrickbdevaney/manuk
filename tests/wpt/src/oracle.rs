@@ -300,6 +300,47 @@ pub fn cluster(divs: &[Divergence]) -> Vec<Cluster> {
     out
 }
 
+/// **Jarring invariant — horizontal overflow (Layer 2 of FIDELITY-SCORING-REDESIGN.md).**
+///
+/// SHAPE scoring (above) certifies that boxes are the right size and in the right place *relative to
+/// their parents*; it deliberately forgives a constant page offset because a user does not perceive
+/// one. But a box whose right edge runs past the viewport is a different failure: content is cut off
+/// or an unexpected horizontal scrollbar appears — one of the most-perceived "this page is broken"
+/// signals, and one SHAPE cannot see because the overflowing box may be perfectly shaped relative to
+/// an over-wide parent. This counts the elements that spill past `vw` in **Manuk** while Chrome keeps
+/// the *same* element within the viewport — attributing the overflow to us, not to a site that
+/// legitimately scrolls sideways. `tol` absorbs sub-pixel/scrollbar-gutter noise.
+///
+/// Returns `(ours_only, examples)`: the count, and up to three `path → right-edge` strings for
+/// diagnosis. Chrome-also-overflows elements are excluded — the page, not the engine, is wide there.
+pub fn jarring_h_overflow(
+    chrome: &HashMap<String, Seen>,
+    manuk: &HashMap<String, Seen>,
+    vw: i64,
+    tol: i64,
+) -> (usize, Vec<String>) {
+    let edge = |b: &[i64; 4]| b[0] + b[2]; // x + width
+    let mut count = 0usize;
+    let mut examples: Vec<String> = Vec::new();
+    for (id, m) in manuk {
+        if edge(&m.rect) <= vw + tol {
+            continue; // within our own viewport — not overflowing
+        }
+        // Only OUR fault: Chrome must render the SAME element AND keep it inside the viewport.
+        match chrome.get(id) {
+            Some(c) if edge(&c.rect) <= vw + tol => {
+                count += 1;
+                if examples.len() < 3 {
+                    examples.push(format!("{id} → right {} > vw {vw}", edge(&m.rect)));
+                }
+            }
+            _ => {}
+        }
+    }
+    examples.sort();
+    (count, examples)
+}
+
 /// The report a tick actually reads.
 pub fn report(clusters: &[Cluster], sites: usize, skipped: usize) {
     println!("\n=== DIFFERENTIAL ORACLE — root causes, ranked by sites explained ===\n");
@@ -391,6 +432,40 @@ mod tests {
             divs.len(),
             2,
             "exactly the origin and the real bug, nothing amplified"
+        );
+    }
+
+    /// **The horizontal-overflow jarring invariant, and its RED proof.** One box spills past the
+    /// viewport in Manuk while Chrome keeps it inside (our fault); one spills in BOTH (the site
+    /// scrolls sideways — not our bug); one is within tolerance. Only the first must count.
+    ///
+    /// Dropping the "Chrome keeps the same element inside" guard (the `Some(c) if …` arm) makes the
+    /// legitimately-wide element count too, and this assertion fails — the guard is what keeps the
+    /// invariant from blaming us for a page that is simply wide.
+    #[test]
+    fn jarring_h_overflow_blames_only_our_own_spill() {
+        let vw = 1200;
+        let tol = 8;
+        let mut chrome: HashMap<String, Seen> = HashMap::new();
+        let mut manuk: HashMap<String, Seen> = HashMap::new();
+        // (a) OUR fault: Chrome fits (right 1200), Manuk spills (right 1400).
+        chrome.insert("body[0]/div[0]".into(), seen("div", [0, 0, 1200, 50]));
+        manuk.insert("body[0]/div[0]".into(), seen("div", [0, 0, 1400, 50]));
+        // (b) The SITE is wide: both spill (right 2000) — not our bug.
+        chrome.insert("body[0]/div[1]".into(), seen("div", [0, 60, 2000, 50]));
+        manuk.insert("body[0]/div[1]".into(), seen("div", [0, 60, 2000, 50]));
+        // (c) Within tolerance: right 1205 ≤ vw+tol.
+        chrome.insert("body[0]/div[2]".into(), seen("div", [0, 120, 1200, 50]));
+        manuk.insert("body[0]/div[2]".into(), seen("div", [0, 120, 1205, 50]));
+
+        let (count, examples) = jarring_h_overflow(&chrome, &manuk, vw, tol);
+        assert_eq!(
+            count, 1,
+            "only the element we alone push past the viewport counts"
+        );
+        assert!(
+            examples[0].starts_with("body[0]/div[0]"),
+            "the example names the offending element, got {examples:?}"
         );
     }
 
