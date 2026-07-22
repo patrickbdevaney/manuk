@@ -455,6 +455,7 @@
   - L2001 · Cookie attribute enforcement — the flags hold across the JS↔wire boundary (tick 331)
   - L2026 · IME composition — CJK / accented text arrives as a burst, not a keystroke (G_IME_COMPOSITION)
   - L2065 · :active — the last dynamic pseudo-class, fed end-to-end (G_ACTIVE_PSEUDO)
+  - L2095 · Drag-and-drop editor half (tick 346)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -830,4 +831,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-745 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+746 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

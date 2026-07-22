@@ -1097,6 +1097,37 @@ pub fn dispatch_drop(
     Ok(true)
 }
 
+/// Dispatch a within-page drag from `source` to `target` — `dragstart`/`drag`-sequence/`drop`/
+/// `dragend` sharing one `DataTransfer`, the source→target reorder handoff. Returns `false` iff a
+/// handler `preventDefault()`-ed the `drop`. See [`PageContext::dispatch_drag`].
+#[cfg(feature = "_sm")]
+#[allow(clippy::too_many_arguments)]
+pub fn dispatch_drag(
+    ctx: &PageContext,
+    dom: &mut manuk_dom::Dom,
+    source: manuk_dom::NodeId,
+    target: manuk_dom::NodeId,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<bool, JsError> {
+    with_runtime(|rt| {
+        ctx.dispatch_drag(rt, dom, source, target, layout, styles)
+            .map_err(|message| JsError { message })
+    })
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn dispatch_drag(
+    _ctx: &PageContext,
+    _dom: &mut manuk_dom::Dom,
+    _source: manuk_dom::NodeId,
+    _target: manuk_dom::NodeId,
+    _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<bool, JsError> {
+    Ok(true)
+}
+
 /// Dispatch the IME composition-commit sequence (`compositionstart`/`compositionupdate`/
 /// `beforeinput`/`input`/`compositionend`) that commits `data` into `node`. Returns `false` iff a
 /// handler `preventDefault()`-ed the `beforeinput`. See [`PageContext::dispatch_composition`].

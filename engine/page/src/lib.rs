@@ -2533,6 +2533,59 @@ impl Page {
         }
     }
 
+    /// **Drag `source` onto `target` within the page — the reorder gesture.**
+    ///
+    /// The source side of drag-and-drop, the half a sortable list or kanban board originates itself
+    /// (dragging a row to a new position, a card to another column). Fires `dragstart` on the source,
+    /// then `dragenter`/`dragover`/`drop` on the target, then `dragend` on the source, all sharing one
+    /// `DataTransfer` — so the id the source's `dragstart` writes with `setData` is the id the
+    /// target's `drop` reads with `getData`. See [`manuk_js::PageContext::dispatch_drag`]. Returns
+    /// `false` iff a handler `preventDefault()`-ed the `drop`.
+    pub fn dispatch_drag(
+        &mut self,
+        source: manuk_dom::NodeId,
+        target: manuk_dom::NodeId,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        #[cfg(feature = "spidermonkey")]
+        {
+            let Some(ctx) = &self.js else {
+                self.relayout(fonts, viewport_width);
+                return true;
+            };
+            let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                .root_box
+                .node_rects(&self.dom)
+                .into_iter()
+                .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                .collect();
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+            let proceed = match manuk_js::dispatch_drag(
+                ctx,
+                &mut self.dom,
+                source,
+                target,
+                &rects,
+                &self.styles,
+            ) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!("drag dispatch: {e}");
+                    true
+                }
+            };
+            self.relayout(fonts, viewport_width);
+            return proceed;
+        }
+        #[cfg(not(feature = "spidermonkey"))]
+        {
+            let _ = (source, target);
+            self.relayout(fonts, viewport_width);
+            true
+        }
+    }
+
     /// **Double-click `node` — the full sequence, not a bare `dblclick`.**
     ///
     /// Fires `click` (detail 1), `click` (detail 2), then `dblclick` (detail 2), which is the order

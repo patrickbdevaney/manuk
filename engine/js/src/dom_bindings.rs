@@ -8193,6 +8193,74 @@ impl PageContext {
         Ok(proceed)
     }
 
+    /// Dispatch a **within-page drag** from `source` to `target` — the EDITOR half of drag-and-drop,
+    /// the one a sortable list or a kanban board is built from (reorder a row, drop a card in a
+    /// column). The file-drop half ([`Self::dispatch_drop`]) already covers the *target* side of an
+    /// OS-file drag; this is the *source* side the page itself originates.
+    ///
+    /// **The whole protocol, in order, with ONE `DataTransfer` threaded through it** — and that is the
+    /// capability, not ceremony. A reorder works only because the value the `source`'s `dragstart`
+    /// handler writes with `e.dataTransfer.setData('text/plain', id)` is the value the `target`'s
+    /// `drop` handler reads back with `getData` — *the same object*. So: `dragstart` on the source
+    /// (which populates the transfer), then `dragenter`/`dragover`/`drop` on the target (the target
+    /// opts in by cancelling `dragover`, exactly as a file dropzone does), then `dragend` on the
+    /// source (the notification every library uses to clear its "dragging" class and finalize the
+    /// move). Firing `drop` alone would test a path no real drag reaches and would strand the
+    /// setData→getData handoff that is the entire point. Returns `false` iff a handler
+    /// `preventDefault()`-ed the `drop`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn dispatch_drag(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        source: NodeId,
+        target: NodeId,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<bool, String> {
+        set_view_maps(layout, styles);
+        set_current_dom(dom as *mut Dom);
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        unsafe {
+            let _ = new_reflector(raw_cx, dom as *mut Dom, source);
+            let _ = new_reflector(raw_cx, dom as *mut Dom, target);
+        }
+        // ONE DataTransfer for the whole gesture: the source writes it on `dragstart`, the target
+        // reads it on `drop`. A fresh, empty transfer — the page fills it, we do not.
+        let script = format!(
+            "(function(){{var dt=__makeDataTransfer('[]');\
+             __dispatchEvent({}, {{type:'dragstart', dataTransfer:dt, bubbles:true, cancelable:true}});\
+             var r=true;\
+             ['dragenter','dragover','drop'].forEach(function(t){{\
+               var ok=__dispatchEvent({}, {{type:t, dataTransfer:dt, bubbles:true, cancelable:true}});\
+               if(t==='drop'){{r=!(ok===false);}}\
+             }});\
+             __dispatchEvent({}, {{type:'dragend', dataTransfer:dt, bubbles:true, cancelable:true}});\
+             return r;}})()",
+            source.0, target.0, source.0,
+        );
+        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+        let opts =
+            CompileOptionsWrapper::new(runtime.cx_no_gc(), c"dispatch_drag.js".to_owned(), 1);
+        let proceed = match evaluate_script(
+            runtime.cx(),
+            global.handle(),
+            &script,
+            rval.handle_mut(),
+            opts,
+        ) {
+            Ok(()) => {
+                let v = rval.get();
+                !v.is_boolean() || v.to_boolean()
+            }
+            Err(()) => true,
+        };
+        crate::event_loop::run_deferred(runtime, global.handle())?;
+        Ok(proceed)
+    }
+
     /// Dispatch the **IME composition sequence that commits `data`** into the focused control —
     /// `compositionstart`, `compositionupdate`, `beforeinput`, `input`, `compositionend`, in that
     /// order — the way an input method editor (Pinyin, Kana, autocorrect, dead keys) delivers text.

@@ -15319,3 +15319,41 @@ constellation row 85 flips partial→gated.
 CONSTELLATION: cross / HTTP caching + compression → gated (http_revalidation).
 WIKI: docs/wiki/networking.md — conditional revalidation (stale-but-validatable storage, If-None-Match/
 If-Modified-Since, 304 body reuse).
+
+## Tick 346 — drag-and-drop EDITOR half: dispatch_drag source→target reorder handoff (2026-07-22)
+
+CO-#1 / daily-driver capability (constellation row 61 "drag and drop", was `partial`). The FILE-DROP
+(target) half was already real (G_DROP_UPLOAD t258: dragenter/dragover/drop, preventDefault opt-in,
+e.dataTransfer.files real bytes). The row's named STILL-MISSING half was the EDITOR side — the source a
+sortable list / kanban board originates itself: dragstart writes an id with setData, the target's drop
+reads it back with getData and moves the row.
+
+HYPOTHESIS: a within-page drag needs the SOURCE-side events the file-drop path never fires, threaded
+through ONE DataTransfer so the setData→getData handoff carries. The DataTransfer object
+(setData/getData/effectAllowed/dropEffect) and `draggable` reflection already exist; only the source
+dispatch was missing.
+
+THE FIX (mirrors dispatch_drop across the same 4 layers):
+- engine/js/src/dom_bindings.rs — `PageContext::dispatch_drag(source, target, ...)` synthesizes
+  dragstart(source) → dragenter/dragover/drop(target) → dragend(source), ONE __makeDataTransfer('[]')
+  shared across all of them; returns false iff a handler preventDefault()-ed the drop.
+- engine/js/src/lib.rs — `dispatch_drag` free fn (both _sm and not-_sm variants).
+- engine/page/src/lib.rs — `Page::dispatch_drag(source, target, fonts, viewport_width)`.
+- engine/page/tests/g_drag_reorder.rs — G_DRAG_REORDER: a draggable <li> whose dragstart setData's 'a',
+  a target whose drop getData's it back; asserts the handoff + event order + dragend + drop-preventDefault.
+
+TRAP HIT + FIXED: `__makeDataTransfer` takes a FILES-array JSON (calls __makeFileList); passing '{}'
+made `items.length = undefined` throw (RangeError), aborting the whole synth script silently (ev stayed
+'-'). '[]' (empty file list) is the correct empty transfer. Also: the drop handler writes #ev BEFORE
+dragend fires, so the final record is written in the dragend handler (the last event) to capture 'end'.
+
+RED-PROVEN (cp-snapshot restored + re-verified GREEN): removing the dragstart __dispatchEvent (and its
+format arg) makes the gate FAIL — got 'handoff:false order:false end:true' because nothing wrote the
+transfer, so getData returns ''. Restored byte-for-byte; gate GREEN, fmt clean.
+
+NO REGRESSION: additive method at each layer; dispatch_drop untouched, its gate unaffected. manuk-js +
+manuk-page compile clean under stylo,spidermonkey; g_drag_reorder passes (0.25s).
+
+TICK SHAPE: capability (drag-and-drop editor half; source-side dragstart→drop→dragend with a shared DataTransfer — the reorder handoff; [host-native pattern: mirror dispatch_drop in the engine we own]). GATES +1 (G_DRAG_REORDER); constellation row 61 flips partial→gated.
+CONSTELLATION: platform / drag and drop → gated (G_DROP_UPLOAD, G_DRAG_REORDER).
+WIKI: docs/wiki/interaction-surface.md — drag-and-drop editor half (dispatch_drag, setData→getData handoff, dragstart/dragend source events).

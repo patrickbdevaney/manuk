@@ -2091,3 +2091,15 @@ RED: reverting the matcher to `P::Active => false` fails the gate's "`#btn:activ
 (the button's `:active` rule lives in an EXTERNAL sheet, so this also proves the recascade keeps `<link>`
 stylesheets); the ancestor assertion (`.card:active` widens a sibling label to 250px) fails if `is_active`
 matches only the exact target or `set_active` marks only the endpoints.
+
+## Drag-and-drop editor half (tick 346)
+
+The file-drop half (`Page::dispatch_drop`, G_DROP_UPLOAD) covers the *target* side of an OS-file drag.
+Tick 346 adds the *source* side a sortable list / kanban board originates itself: `Page::dispatch_drag(
+source, target)` (→ `manuk_js::dispatch_drag` → `PageContext::dispatch_drag`) fires `dragstart` on the
+source, then `dragenter`/`dragover`/`drop` on the target, then `dragend` on the source, all sharing one
+`DataTransfer` (`__makeDataTransfer('[]')`). That shared object is the whole point: the id the source
+writes with `setData` on `dragstart` is the id the target reads with `getData` on `drop` — the reorder
+handoff. Returns `false` iff a handler `preventDefault()`-ed the drop. Gated by `g_drag_reorder`
+(G_DRAG_REORDER), RED-proven by neutering the dragstart dispatch (the handoff then returns `''`).
+[[js-engine]]

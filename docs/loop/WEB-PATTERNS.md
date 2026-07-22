@@ -2995,3 +2995,23 @@ wire request (it is one), but the bandwidth saving is the body that didn't move.
 `no-cache` as "do not store." It means the opposite — *store, but always revalidate before serving* — so a
 `no-cache` response with a validator is exactly the case revalidation exists for, and dropping it is
 indistinguishable, on a cold second view, from having no cache at all.
+
+## Drag-and-drop editor half — the source→target reorder handoff (tick 346)
+
+**The class of the web this unlocks:** everything reorderable a page drives itself — a sortable list, a
+kanban board's card between columns, a reorderable table row, a drag-to-rank UI. These are the *source*
+side of drag-and-drop, the half a file drop never touches: the page originates the drag from one of its
+own elements rather than receiving an OS file.
+
+**(1)** The capability is the **setData→getData handoff through ONE DataTransfer**. A reorder works only
+because the id the source writes on `dragstart` (`e.dataTransfer.setData('text/plain', id)`) is the id the
+target reads on `drop` (`getData`) — the *same object* threaded through the whole gesture. Fire `drop`
+alone and there is no `dragstart` to populate the transfer, so `getData` returns `''` and the card moves
+nowhere. **(2)** The full protocol matters at both ends: `dragstart` on the source, then
+`dragenter`/`dragover`/`drop` on the target (which opts in by cancelling `dragover`, exactly as a file
+dropzone does), then `dragend` on the source — the notification every drag library uses to clear its
+"dragging" class and commit the move. **(3)** `dragend` fires *last*, so a record written during `drop`
+misses it; the final state is captured in the `dragend` handler. **The trap:** the synthetic transfer is
+built from a files-array shape (`__makeFileList`), so an empty transfer must be `'[]'`, not `'{}'` —
+the latter makes `items.length = undefined` throw and silently aborts the entire gesture with no event
+delivered at all.

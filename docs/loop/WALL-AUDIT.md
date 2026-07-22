@@ -101,3 +101,19 @@ harness territory, deliberately left to the observer.** No gate cut, no floor wi
 **LAST_WALL_AUDIT set to 326.**
 
 **Next audit due: tick 346.**
+
+## Audit #4 — tick 346 (wall 66s warm / 348s first-run cold)
+
+FINDING: the warm wall is LEAN and unchanged in shape from Audit #3 — a 2nd back-to-back verify.sh on a
+quiet box comes in at **66s** (gate 66s, build 1s). The FIRST run of a session measures ~271-348s, but
+that is the documented cold-parity + disk-reclaim cost, not gate bloat: with `/home` at ~90% verify's
+own "reclaim before ENOSPC" step and the hygiene cron delete regenerable churn mid-build, forcing a
+relink on run 1; run 2 finds everything warm (build 1s). This is the same bistable wall the observer
+steers own (disk pressure), not a coverage or gate-scope regression.
+
+NO TRIM: none of the four rigor-preserving levers (redundancy / parallelism / caching / scope) applies
+without touching scripts/ (observer-owned) — the JS-runtime-startup redundancy (~1.5s/gate) is a
+cargo-nextest change in verify.sh, which is out of agent scope. The wall is already at its warm floor;
+the lever that matters (disk headroom so run 1 doesn't relink) is infrastructure the observer owns.
+Ticks 344/345/346 added +2 crate tests (manuk-net) + 1 page gate (g_drag_reorder, not in the curated
+_launch wall) — negligible wall cost, all under the warm floor. Wall stays lean; nothing cut.
