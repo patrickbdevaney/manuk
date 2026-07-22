@@ -320,3 +320,43 @@ retuned).
 certificate remains the exit; Part VII's four-component v1 scope is intact and unbent.
 
 **Next check due: tick 342.**
+
+## Check #9 — tick 342
+
+**Horizon:** Phase 0 — the FULL daily-driver checklist ("runs almost every website"), the v1 north star of
+CONSTITUTION.MD **Part VII**. **Gate:** the FIDELITY-SCORING-REDESIGN.md certificate (≥0.75 structural/
+placement fidelity on ≥95% of the corpus + ≥0.70 per top-20 category), NOT a WPT percentage. Authoritative
+work list: PHASE0-BOUNDED-REMAINDER.md.
+
+**Gate or scoreboard?** Gate. The window since Check #8 is dominated by the observer's ranked CO-#1 — the
+**fidelity-instrument rebuild** (FIDELITY-SCORING-REDESIGN.md), which the board explicitly ranks *above any
+single capability tick* because it is THE Part-VII component-#1 exit gate. Building the measuring instrument
+for "reliably renders the representative real internet" IS Part-VII v1 work, not a detour from it: **335**
+Layer-1 SHAPE scoring, **338** h-overflow, **339** sibling-overlap, **340** reading-order inversion, **341**
+collapsed interactive target (the box-dump half of hittability), **342** offset-magnitude banding in the
+root-cause cluster key. Interleaved: **336** self-audit, **337** surface audit. Zero WPT-chasing, zero
+encoding tail, zero work justified only by a deferred species — VII.1's TEST held every tick.
+
+**Is the loop still pointed at the frontier?** Yes. VII.1 says the bar for component #1 is *"reliably renders
+the representative real internet, NOT a WPT percentage"* — so the instrument that certifies exactly that
+outranks flipping subtests. The redesign's five jarring invariants are now 4/5 wired (overlap / h-overflow /
+reading-order / collapsed-target) on top of SHAPE + offset-banded clustering; only post-load stability (a
+CLS-equivalent needing a second post-settle snapshot) and the occlusion-cover half of hittability (needs
+paint order) remain — both honestly logged as unwired, neither over-claimed.
+
+**Is the agentic surface (component #2) being served?** Indirectly this window — the fidelity instrument
+scores the rendered tree the agent reads, so a truer instrument means a truer a11y/DOM surface. No component-
+#2 regression; the driving seams (dispatch_click/key/composition, set_active/focus) are untouched. When the
+instrument work completes, the frontier returns to Tier-1 capability + the agentic top-site drive.
+
+**Any invariant bent?** No. Bar 0 held — every landed tick is additive (a new pub fn + one live call site, or
+a signature refinement) and RED-proven with the RED edit reverted byte-for-byte; 7 oracle + 10 wpt lib tests
+green, no crash/regression. THE RATCHET honored — nothing traded; instrument fidelity (the third ratchet
+face) is precisely what this window *bought*, and it bought it without degrading capability or performance.
+The wall came in green at 68s on a quiet box; mark not retuned.
+
+**PART VI / VII correction.** None. The instrument-before-tail discipline is itself Part-VII-faithful:
+certifying component #1 honestly is the precondition for declaring Phase 0 done. Four-component v1 scope
+intact and unbent.
+
+**Next check due: tick 350.**

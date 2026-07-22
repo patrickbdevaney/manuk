@@ -239,6 +239,29 @@ fn common_frame<'a>(
     None
 }
 
+/// The order-of-magnitude band of a geometry offset, as a label for clustering.
+///
+/// The redesign (§3 (b)) clusters geometry failures "by the offset **value**", because the magnitude
+/// is what separates the three populations it identifies: a ~20px near-miss (a shared font-metric /
+/// margin constant), and a ~1400–6800px page-height collapse (content that never rendered) are
+/// *different causes* that must not merge into one cluster just because they share a tag and an axis.
+/// Without a magnitude in the signature they DO merge, and the board cannot tell a saturated near-miss
+/// from an amplified collapse.
+///
+/// Banded by power-of-two floor rather than an exact px: a 23px and a 28px drift are the same cause
+/// and must cluster (both land in the 16 band), while 23px and 1400px must not (16 vs 1024). Exact-px
+/// keys would over-split neighbours; the power-of-two ladder groups within an order of magnitude and
+/// separates across one — which is the distinction that matters.
+fn mag_band(mag: i64) -> i64 {
+    let m = mag.unsigned_abs();
+    if m == 0 {
+        0
+    } else {
+        // Largest power of two ≤ m: 23→16, 28→16, 45→32, 82→64, 1400→1024, 6822→4096.
+        1i64 << (63 - m.leading_zeros())
+    }
+}
+
 /// **Cluster the firehose into root causes**, ranked by how many distinct sites each explains.
 pub fn cluster(divs: &[Divergence]) -> Vec<Cluster> {
     // signature -> (kind, sites, hits, examples)
@@ -262,16 +285,18 @@ pub fn cluster(divs: &[Divergence]) -> Vec<Cluster> {
             // systematic vertical drift are different bugs with different causes.
             _ => {
                 let [dx, dy, dw, dh] = d.delta;
-                let axis = if dw.abs() > dx.abs().max(dy.abs()).max(dh.abs()) {
-                    "width"
+                // The dominant axis names WHICH dimension is wrong; its magnitude band names HOW wrong,
+                // which is what separates a near-miss from a page-height collapse (see `mag_band`).
+                let (axis, mag) = if dw.abs() > dx.abs().max(dy.abs()).max(dh.abs()) {
+                    ("width", dw)
                 } else if dh.abs() > dx.abs().max(dy.abs()) {
-                    "height"
+                    ("height", dh)
                 } else if dy.abs() > dx.abs() {
-                    "y (vertical drift)"
+                    ("y (vertical drift)", dy)
                 } else {
-                    "x (horizontal)"
+                    ("x (horizontal)", dx)
                 };
-                format!("geometry: {axis} wrong   (<{}>)", d.tag)
+                format!("geometry: {axis} ~{}px   (<{}>)", mag_band(mag), d.tag)
             }
         };
         let e = acc
@@ -575,6 +600,58 @@ mod tests {
             display: "block".into(),
             rect,
         }
+    }
+
+    fn geom_div(site: &str, tag: &str, delta: [i64; 4]) -> Divergence {
+        Divergence {
+            site: site.into(),
+            id: format!("body[0]/{tag}[0]"),
+            tag: tag.into(),
+            kind: "geometry".into(),
+            chrome: String::new(),
+            manuk: String::new(),
+            delta,
+        }
+    }
+
+    /// **Offset-magnitude banding in the geometry cluster key, and its RED proof.** Two sites drift a
+    /// `<header>` down by 23px and 28px — the same near-miss cause — and must cluster together (both
+    /// land in the 16px band). A third site collapses the same `<header>` by 1400px (content that never
+    /// rendered) — a *different* cause that must NOT merge with the near-miss (band 1024). So `cluster`
+    /// must yield TWO geometry causes, the near-miss explaining 2 sites and the collapse explaining 1.
+    ///
+    /// Dropping `mag_band` from the signature (keying on axis+tag alone, as before) merges all three
+    /// into ONE cluster of 3 sites — and this assertion fails. The magnitude band is what lets the
+    /// board tell a saturated near-miss from an amplified page collapse.
+    #[test]
+    fn cluster_bands_geometry_by_offset_magnitude() {
+        let divs = vec![
+            geom_div("a.example", "header", [0, 23, 0, 0]),
+            geom_div("b.example", "header", [0, 28, 0, 0]),
+            geom_div("c.example", "header", [0, 1400, 0, 0]),
+        ];
+        let clusters = cluster(&divs);
+        assert_eq!(
+            clusters.len(),
+            2,
+            "near-miss (23/28px) and collapse (1400px) are distinct causes, not one"
+        );
+        // Ranked by distinct sites: the near-miss (2 sites) leads the collapse (1 site).
+        assert_eq!(
+            clusters[0].sites, 2,
+            "the 23/28px near-miss clusters two sites"
+        );
+        assert!(
+            clusters[0].signature.contains("~16px"),
+            "near-miss lands in the 16px band, got {:?}",
+            clusters[0].signature
+        );
+        assert_eq!(clusters[1].sites, 1);
+        assert!(
+            clusters[1].signature.contains("~1024px"),
+            "the 1400px collapse lands in the 1024px band, got {:?}",
+            clusters[1].signature
+        );
     }
 
     /// **The Layer-1 SHAPE gate, and its RED proof.** A page uniformly shifted 23px down: the

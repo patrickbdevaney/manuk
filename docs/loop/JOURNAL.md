@@ -15168,3 +15168,40 @@ interactive controls, the collapse half of the 4th of 5 jarring invariants; no w
 order) and post-load stability (a CLS-equivalent, needs a second post-settle snapshot).
 CONSTELLATION: no row — the measuring instrument, not a rendered construct.
 WIKI: docs/wiki/conformance-and-oracles.md (Layer-2 collapsed-target paragraph).
+
+## Tick 342 — Root-cause clustering: band geometry by offset magnitude (near-miss vs page-collapse) (2026-07-21)
+
+CO-#1 (observer tick 328 STEP-2 (3) / FIDELITY-SCORING-REDESIGN.md §3(b)): "group failures by the offset
+VALUE and report DISTINCT CAUSES, not failing sites." The instrument already clusters (SHAPE-scored
+first-divergence divs → cluster() ranked by distinct sites), but the GEOMETRY signature keyed on axis+tag
+ALONE: `geometry: y (vertical drift) (<header>)`. That merges a 23px near-miss header drift and a 1400px
+page-height collapse on the same tag/axis into ONE cause — the exact near-miss-vs-collapse conflation the
+redesign's three-population analysis (§ tick-267 sweep) says must stay distinct.
+
+THE FIX: fold an offset-magnitude BAND into the geometry signature — `geometry: {axis} ~{band}px (<tag>)`.
+`mag_band(mag)` returns the power-of-two floor of the dominant-axis magnitude (23→16, 28→16, 45→32, 82→64,
+1400→1024, 6822→4096). Power-of-two rather than exact px on purpose: 23 and 28 are the SAME cause and must
+cluster (both band 16), while 23 and 1400 must NOT (16 vs 1024) — the ladder groups within an order of
+magnitude and separates across one, which is precisely the near-miss/collapse distinction that matters and
+avoids the ±1px over-split an exact key would cause.
+
+RED-PROVEN (cp-snapshot restored + re-verified GREEN): reverting the signature to the old axis+tag-only key
+made `cluster_bands_geometry_by_offset_magnitude` FAIL — three sites (23px, 28px, 1400px header drift) then
+collapse into ONE cluster of 3 sites instead of TWO distinct causes (a 2-site near-miss + a 1-site collapse).
+The band is what lets the board tell a saturated near-miss from an amplified collapse.
+
+NO REGRESSION: lib-only change (cluster() is already live in run_oracle_merge/report — no wiring needed); a
+private `mag_band` helper + a two-element tuple destructure in the existing signature match arm. No test
+asserted the old geometry signature string, so nothing else moved. manuk-wpt builds/tests clean, 7 oracle +
+10 existing wpt lib tests green. RED edit reverted byte-for-byte. fmt clean.
+
+CADENCE: Constitution Check #9 (tick 342) logged — the fidelity-instrument window (335-342) is Part-VII
+component-#1 exit-gate work, VII.1's TEST held every tick, no invariant bent, RATCHET's instrument-fidelity
+face is exactly what the window bought. Next check due tick 350.
+
+TICK SHAPE: infrastructure (the fidelity instrument — Part 21; root-cause clustering now separates the three
+placement populations the redesign identified; no website-capability change, [no-pattern]). GATES +0;
+tests +1.
+CONSTELLATION: no row — the measuring instrument, not a rendered construct.
+WIKI: docs/wiki/conformance-and-oracles.md (root-cause clustering already documented; band is an internal
+signature refinement — WIKI: none, no new user-facing surface).

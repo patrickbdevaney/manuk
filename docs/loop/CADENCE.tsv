@@ -134,3 +134,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 338	6f60c03	1784687852	2026-07-21T22:37:32-04:00	570	infrastructure	66	8	230	74	182	81	3896	6960	0	320	0	Layer-2 jarring invariant: horizontal overflow the oracle can now see (2026-07-21)
 339	806908f	1784689039	2026-07-21T22:57:19-04:00	1187	infrastructure	68	8	296	65	182	81	3896	6960	0	320	0	Layer-2 jarring invariant: sibling overlap, the #1 broken-page perception (2026-07-21)
 340	2344e58	1784689744	2026-07-21T23:09:04-04:00	705	infrastructure	68	8	214	64	182	81	3896	6960	0	320	0	Layer-2 jarring invariant: reading-order inversion, content out of sequence (2026-07-21)
+341	f3af3e5	1784690463	2026-07-21T23:21:03-04:00	719	infrastructure	80	6	195	40	182	81	3896	6960	0	320	0	Layer-2 jarring invariant: collapsed interactive target, the dead-control half of hittability (2026-07-21)
