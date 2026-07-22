@@ -537,6 +537,7 @@
   - L1011 · DOMQuad — four points, the enclosing box (tick 296)
   - L1021 · Error.stackTraceLimit — the property is a shim, the behavior is an honest no (tick 400)
   - L1032 · document.location is window.location — and the alias must be an accessor (tick 402)
+  - L1050 · getPropertyValue is total — a string for every input (tick 403)
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -877,4 +878,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-792 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+793 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

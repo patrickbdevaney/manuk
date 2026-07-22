@@ -1046,3 +1046,13 @@ by the t401 re-keyed oracle (okta Identity components die reading document.locat
 in their async mount). Post-fix: the rejection is gone, okta missing 128→117; total scored
 diffs RISE (523→795) because subtrees that never existed now mount and get scored — the
 instrument seeing more is the fix working, not a regression.
+
+## getPropertyValue is total — a string for every input (tick 403)
+
+The computed-style snapshot's accessor did `return this[m[p]||p]` — undefined for anything
+outside its hand map/property list — and the no-style fallback was a bare `({})` with no
+accessor at all. CSSOM's contract is total: the serialized value for supported properties,
+`''` for everything else (unknown, unlisted, custom). Fixed with never-undefined coercion +
+a generic kebab→camel fallback (the hand map stays, for the irregular names), and the empty
+fallback now carries `getPropertyValue(){return ''}`. Found as the t401 oracle's second named
+error (okta: `.getPropertyValue(x).trim()` threw in an async frame). G_GET_PROPERTY_VALUE.

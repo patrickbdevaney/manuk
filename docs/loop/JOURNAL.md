@@ -16824,3 +16824,29 @@ navigation, every alias to it must be an accessor — a copied reference is a fi
 time bomb]). GATES +1 (G_DOCUMENT_LOCATION, IN the wall via auto-discovered page tests).
 CONSTELLATION: none — no row for BOM basics; the gate is the record.
 WIKI: docs/wiki/js-engine.md — document.location accessor alias (tick 402).
+
+## Tick 403 — getPropertyValue returns a STRING, always (2026-07-22)
+
+HYPOTHESIS: the t401 instrument's second named error — `can't access property "trim",
+getComputedStyle(...).getPropertyValue(...) is undefined` — is a contract violation in the
+computed-style snapshot object: `return this[m[p]||p]` yields undefined for any property
+outside the snapshot (and the no-style fallback `({})` has NO getPropertyValue at all, which
+throws even harder). The CSSOM contract is: getPropertyValue returns a string for every input
+— the value for supported properties, '' for everything else (unknown, unlisted, custom).
+Every `.getPropertyValue(x).trim()` call site on the web (okta included) relies on it. Fix:
+never-undefined coercion + generic kebab→camel fallback + the empty-fallback keeps the
+accessor. Gate: G_GET_PROPERTY_VALUE — known props read, unknown reads '' and survives
+.trim(), the okta pattern verbatim. RED first.
+
+RESULTS: RED first (the gate reproduces okta's TypeError verbatim: unknown-type:undefined →
+THREW on .trim()). Fix in both spellings of the organ: the snapshot accessor gets
+never-undefined coercion + generic kebab→camel fallback (hand map retained for irregulars),
+and the no-style `({})` fallback now carries a ''-returning getPropertyValue. Gate green 6/6
+(known reads unchanged, unknown/custom/'trim-safe' all '' — the okta pattern verbatim). okta
+e2e deferred to the pending corpus re-crawl (the gate is the falsifiable check; one rebuild
+of manuk-wpt saved).
+
+TICK SHAPE: capability (t401 named-error harvest #2 — CSSOM contract totality; [pattern:
+CSSOM accessors are total functions — the unknown answer is '', and the FALLBACK object is
+part of the surface]). GATES +1 (G_GET_PROPERTY_VALUE, IN the wall). CONSTELLATION: none —
+gate is the record. WIKI: docs/wiki/js-engine.md — getPropertyValue totality (tick 403).

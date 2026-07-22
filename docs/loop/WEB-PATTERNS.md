@@ -3351,3 +3351,16 @@ errors — this fix is the first harvest of that pipeline: error names organ, or
 **The trap:** `history_bindings::install` carries a native Location and LOOKS like the live
 surface — it is dead code nothing calls; the prelude shim is the one BOM surface. Fixing the
 dead one would have changed nothing (the two-sources-of-truth class again).
+
+## .getPropertyValue(x).trim() is written as one expression (tick 403)
+
+**The class of the web this unlocks:** every style-reading utility that chains directly off
+getPropertyValue — theme detectors, CSS-variable readers, feature probes ("is backdrop-filter
+set?"), animation libraries reading a property they never set. They all write
+`getComputedStyle(el).getPropertyValue(p).trim()` in ONE expression, so a partial accessor
+kills the caller's whole async frame (okta.com, verbatim).
+**(1)** CSSOM accessors are TOTAL functions: the unknown answer is `''`, never undefined —
+a partial map plus "return the lookup" is a contract violation wearing a working demo's face.
+**The trap:** the FALLBACK object is part of the surface too — a no-style `({})` fallback
+throws "not a function" on the same line the main path merely returns undefined from; both
+spellings of the same missing contract.

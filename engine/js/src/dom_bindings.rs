@@ -708,7 +708,9 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
           'max-width':'maxWidth','min-height':'minHeight','max-height':'maxHeight',\
           'overflow-x':'overflowX','overflow-y':'overflowY',\
           'scroll-snap-type':'scrollSnapType','scroll-snap-align':'scrollSnapAlign'}};\
-          return this[m[p]||p];}}}})",
+          var k=m[p]||String(p).replace(/-([a-z])/g,function(_,c){{return c.toUpperCase();}});\
+          var v=this[k];if(v===undefined)v=this[p];\
+          return v===undefined?'':String(v);}}}})",
         q(&rgba_css(&cs.color)),
         q(&cs.background_color.map(|c| rgba_css(&c)).unwrap_or_else(|| "rgba(0, 0, 0, 0)".into())),
         q(&format!("{}px", cs.font_size)),
@@ -783,7 +785,10 @@ unsafe fn window_get_computed_style(cx: *mut RawJSContext, argc: u32, vp: *mut V
         let rect = layout_rect(n);
         with_style(n, |cs| computed_style_js(cs, rect))
     });
-    let src = js.unwrap_or_else(|| "({})".to_string());
+    // The no-style fallback still honours the CSSOM contract: getPropertyValue exists and
+    // returns '' — a bare `({})` turns `getComputedStyle(x).getPropertyValue(y).trim()` into
+    // "getPropertyValue is not a function" on any element we could not style.
+    let src = js.unwrap_or_else(|| "({getPropertyValue:function(){return '';}})".to_string());
     match eval_in_current_global(cx, &src) {
         Some(v) => *vp = v,
         None => *vp = NullValue(),
