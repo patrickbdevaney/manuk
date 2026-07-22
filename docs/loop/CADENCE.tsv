@@ -171,3 +171,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 377	7c06921	1784721862	2026-07-22T08:04:22-04:00	192	surface-audit	62	6	91	35	183	81	3896	6960	0	320	0	surface audit #11: two Baseline-crossers, one WebMCP enrichment (2026-07-22)
 378	3f4b78f	1784722771	2026-07-22T08:19:31-04:00	909	capability	61	10	112	35	183	81	3896	6960	0	320	0	promise-returning scroll methods: the truthful immediate resolve (2026-07-22)
 379	b4ccbfe	1784727042	2026-07-22T09:30:42-04:00	4271	capability	55	15	732	72	183	81	3896	6960	0	320	0	container queries: the sized re-pass and the @container source supplement (2026-07-22)
+380	bd17e17	1784730851	2026-07-22T10:34:11-04:00	3809	measurement	57	6	469	451	183	81	3896	6960	0	320	31	the corpus oracle runs END TO END: 265 sites, the jarring baseline, and the ledger (2026-07-22)

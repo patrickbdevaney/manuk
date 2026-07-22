@@ -16335,3 +16335,33 @@ parsers, evaluate per-element at match time — the :has() precedent, upgraded])
 (containerq:yes in G_PROBE_CAPABILITIES = IN the wall); constellation doc row missing→gated.
 CONSTELLATION: doc / container queries → gated (G_PROBE_CAPABILITIES).
 WIKI: docs/wiki/css-cascade.md — container queries section (re-pass model, supplement, residue).
+
+## Tick 380 — the corpus oracle runs END TO END: 265 sites, the jarring baseline, and the ledger (2026-07-22)
+
+The observer's FID-SWEEP/Scale ask (CO-#1 item 1) — the rebuilt instrument (Layer-1 SHAPE +
+four Layer-2 jarring invariants + first-divergence clustering, t335-343) had NEVER completed a
+full-corpus run (STATUS: ORACLE_CRAWLED 0 PARTIAL). Ran scripts/oracle-crawl.sh at the baseline
+6 jobs / 240s watchdog over all 265 corpus sites, then oracle-merge → docs/loop/CLUSTERS.md.
+
+RESULT — THE RUN COMPLETED: 197 diffed, 55 discarded (degraded oracle — never scored as ours),
+12 process TIMEOUTs (unattributed by design), 1 FAIL. THE NUMBERS (of 197 diffed):
+JARRING BASELINE — overlap 89 sites (45.2%) / h-overflow 66 (33.5%) / reorder 141 (71.6%) /
+dead-target 93 (47.2%). Phase-0 exit wants ≥95% clean per invariant; this is the honest distance.
+BAR-0 CLOCK: 31 sites manuk_ms>30s (worst: samsung 156s, wix 149s at 13× Chromium, atlassian
+137s at 13×) — a real count now, not a floor. LEDGER (627 clusters, ranked by sites): generic
+geometry tops (div 187, a 165, body 162 — downstream mass), but the ACTIONABLE cross-class
+clusters underneath are: (1) display inline→inline-block on <img> 81 sites / <svg> 80 — OUR
+UA default diverges from Chrome's computed 'inline' on replaced elements; (2) MISSING BOX <br>
+64 sites / <path> 61 / <div> 58 (11,795 hits); (3) an AUTHOR-STYLE-NOT-APPLIED family —
+none→block <div> 49 sites (we SHOW what Chrome hides), flex→block 43, block→inline <span> 39 —
+one likely shared cause (sheet fetch/parse gaps), worth one probe before three fixes.
+CRASH FOUND (outranks every cluster per the ledger header): netlify.com PANICS the engine —
+char-boundary slice `rest[..6]` at engine/css/src/lib.rs:1870 on multi-byte UTF-8 after '@' in
+its CSS. A browser must never panic on hostile bytes. That is the next tick.
+
+TICK SHAPE: measurement (the Phase-0 exit instrument ran end-to-end for the first time; the
+jarring baseline + ledger now steer the next N capability ticks; [pattern: measurement ticks
+are the highest-yield — this one found a real-site crash, a 13× perf outlier class, and
+collapsed thousands of diffs into three actionable families]). GATES +0 (instrument run, off
+the wall path). CONSTELLATION: cross/real-world-QUIRKS row enriched (baseline banked).
+WIKI: none — the ledger lives in docs/loop/CLUSTERS.md (generated, do-not-hand-edit).
