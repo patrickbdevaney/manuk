@@ -684,3 +684,34 @@ The fix is already specified: FIDELITY-SCORING-REDESIGN.md's selector-path keyin
 instead of minting a phantom style diff. This probe converts that item from "unlocks unmeasurable
 React sites" to "removes a phantom-divergence class the current ledger is polluted by": the
 display-diff families in CLUSTERS.md should be read as UPPER BOUNDS until it lands.
+
+## BUILD SPEC — selector-path keying: the class signature that stops silent mispairing (tick 399)
+
+The redesign's item (a), re-priced by t395 into the board's top instrument work. The current key
+is `tag[same-tag-sibling-index]` chained root-ward, computed twice — in the Chrome-side JS probe
+(`chrome.rs::oracle_probe`, `pathOf`) and in the Rust walk (`main.rs`, `path_of`) — and the two
+MUST stay byte-identical (the `html[0]` lesson: a one-level naming skew once reported `<html>`
+missing on every site, with total confidence).
+
+The new key component: `tag.SIG:nth-child(N)` where
+- `N` = index among ALL element siblings (not same-tag) — cheaper to compute identically and
+  stabler under mixed-tag insertion;
+- `SIG` = fnv1a-32 hex over the element's class list, ASCII-lowercased, SORTED, joined with
+  `.` — sorted so attribute-order and framework class-shuffling don't change identity; hashed so
+  Tailwind's 40-class strings don't bloat keys; fnv1a because both sides already have it (Rust:
+  `fnv` in main.rs; JS: 8 lines, `h=0x811c9dc5; h^=c; h*=0x01000193>>>0`);
+- classless elements emit `tag:nth-child(N)` (no empty sig — most of the anonymous-div web).
+
+Semantics change, and it is the POINT: an element whose class list differs from its positional
+counterpart now FAILS the key lookup and books as missing+extra (tree drift, which it is),
+instead of minting a phantom style/geometry diff between two unrelated elements. Expected
+effects, stated before the run so the run can falsify them: okta's 316 display diffs collapse
+(the t395 proof); the 9-LOW_SAMPLE/4-NO_IDS unmeasurable sites become measurable (the item's
+original motivation); MISSING totals RISE where trees genuinely drift (hydration) — that rise
+is honest and must not be "fixed" by loosening the sig.
+
+Build order (one tick): (1) fnv1a-32 in the JS probe + sig in `pathOf`; (2) the identical sig in
+`path_of`; (3) RED both ways — perturb the sig on ONE side (extra class in the hash) and every
+element on a fixture page must go missing; restore → align; (4) e2e okta: display diffs must
+drop by roughly the phantom mass; (5) re-crawl banks the re-keyed baseline as the NEW ratchet
+line (old numbers are not comparable — say so in the journal, do not splice trends).

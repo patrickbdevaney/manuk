@@ -141,6 +141,7 @@
   - L633 · Some capabilities cannot be probed from inside the page
   - L641 · The oracle must know whether the engine actually styled the page (tick 383)
   - L665 · Same-tag index paths misattribute TREE drift as STYLE drift (tick 395)
+  - L688 · BUILD SPEC — selector-path keying: the class signature that stops silent mispairing (tick 399)
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -873,4 +874,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-788 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+789 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

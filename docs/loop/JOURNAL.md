@@ -16732,3 +16732,23 @@ Chrome the tick after it landed. No invariant bent. LAST_CONSTITUTION_CHECK 390�
 TICK SHAPE: constitution-check (governance checkpoint). GATES +0. [no-pattern]
 CONSTELLATION: none.
 WIKI: none.
+
+## Tick 399 — the selector-path-keying build spec: identity that survives one inserted div (2026-07-22)
+
+Check #16's top item, specified to build-ready (the t371/t393 spec-tick pattern; the build is a
+two-sided symmetry change and gets a fresh context per atomicity). Key becomes
+tag.SIG:nth-child(N): N over ALL element siblings; SIG = fnv1a-32 over the lowercased SORTED
+class list (order-proof against framework shuffling, hash-proof against Tailwind bloat; fnv
+already exists on the Rust side, 8 lines in JS); classless → tag:nth-child(N). The semantics
+change IS the fix: mispaired elements fail the key and book as tree drift instead of phantom
+style diffs. Predictions stated falsifiably in the spec (okta's 316 collapse; unmeasurable
+sites become measurable; MISSING rises where trees genuinely drift — an honest rise, not to be
+tuned away). Build order + RED protocol (perturb one side's sig → all-missing) + the
+baseline-reset rule (re-keyed numbers are not comparable; do not splice trends) recorded in
+docs/wiki/conformance-and-oracles.md.
+
+TICK SHAPE: spec (the board's top instrument item probed to a two-sided contract with
+falsifiable predictions; [pattern: when a key is computed in two languages, the spec IS the
+symmetry contract — and predictions written before the run are what make the run a test]).
+GATES +0. CONSTELLATION: none — instrument-side.
+WIKI: docs/wiki/conformance-and-oracles.md — selector-path keying build spec (tick 399).
