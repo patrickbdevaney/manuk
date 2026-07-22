@@ -16996,3 +16996,29 @@ CONSTELLATION: doc-class "CSS attr()" partial→works for the content() form (at
 properties, the Level-5 form, remains out).
 WIKI: css-cascade.md — "content: attr(name) drew an EMPTY box until the extraction loop stopped
 keeping only strings".
+
+## Tick 410 — map honesty: record the 408/409 flips before they rot into re-discovery (2026-07-22)
+
+The constellation is scored every tick and a stale-PESSIMISTIC row is the documented
+re-discovery trap (the standing rule has cost re-work six times). Two rows had gone stale under
+ticks 408-409, so this tick trues the map:
+
+- Row 87 (scroll snap): the receipt still said "real horizontal carousels do not yet scroll at
+  all, let alone snap" (the t266 max_x=0 residue). Tick 408 CLOSED that — both carousel shapes
+  report full horizontal geometry (stale-pessimistic, layout work since t266 closed it as a
+  side effect) and G_SCROLL_SNAP_HORIZONTAL gates x-axis snap, including the synchronous JS
+  mirror snap. Rewrote the residue to the truth; residue now only the unmodelled
+  mandatory/proximity strictness.
+- Row 96 (CSS attr()/zoom/shape()/contrast-color()): missing→partial. Tick 409 made
+  `content: attr(name)` resolve in the shipping Stylo generated-content path. Kept the honest
+  remainder explicit: the Level-5 TYPED attr() as an arbitrary property (the row's t230 probe),
+  per-element `zoom`, shape(), contrast-color() are all still missing.
+
+Confirmed (no change needed — my grep-probe matched the map): SharedWorker row 46 is already
+"honest load-failure stub"; scroll-driven-animations row 88 and anchor-positioning row 95 are
+already "missing" with t230 probes. constellation.sh parses + scores clean; missing→partial is
+a forward move the ratchet welcomes.
+
+TICK SHAPE: map-maintenance (record two capability flips; no engine change). GATES +0. [no-pattern]
+CONSTELLATION: scroll-snap horizontal residue closed; CSS attr() missing→partial (content form).
+WIKI: none — the mechanisms are already captured (interaction-surface.md t408, css-cascade.md t409); this tick only trues the map.
