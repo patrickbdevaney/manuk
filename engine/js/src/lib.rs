@@ -564,6 +564,18 @@ pub fn set_host_clipboard(text: String) {
 #[cfg(not(feature = "_sm"))]
 pub fn set_host_clipboard(_text: String) {}
 
+/// Seed the OS-clipboard IMAGE the page may READ via `navigator.clipboard.read()`, as a MIME type and
+/// its raw bytes (e.g. `("image/png", png_bytes)`). The host sets this to whatever image is on the
+/// real OS clipboard so a paste-a-screenshot handler receives it; an empty MIME/bytes clears it.
+/// No-op without the JS feature.
+#[cfg(feature = "_sm")]
+pub fn set_host_clipboard_image(mime: String, bytes: Vec<u8>) {
+    dom_bindings::set_host_clipboard_image(mime, bytes);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_host_clipboard_image(_mime: String, _bytes: Vec<u8>) {}
+
 /// Allocate the next process-unique window id (for ordinary, non-`window.open` tabs), shared
 /// with the id space `window.open` draws from. `0` without the JS feature (unused there).
 #[cfg(feature = "_sm")]

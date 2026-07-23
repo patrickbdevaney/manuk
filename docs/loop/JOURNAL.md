@@ -18643,3 +18643,41 @@ Stylo-fenced), view-transition pseudo-classes. NON-atomic (skip): `user-select` 
 module-graph (subsystem). The custom-element reactions subsystem's remaining edge is property-reflector attribute
 writes (`id=`/`className=`) firing ACC — a separate rarely-observed path. L-sized marquees unchanged: MEDIA
 H.264-High, IndexedDB (redb/heed), contenteditable EDITING path.
+
+## Tick 461 — clipboard.read() returns a copied IMAGE (paste-a-screenshot) (2026-07-23)
+
+CONTINUES the bounded-partial-completion vein (the constellation `partial` rows; lever-board CO-#1 item
+(F) "clipboard.read/actuation-completers"). After the `?`-unknown probes (t459/t460) hit non-atomic
+residue (font-metric units, Stylo-fenced `contrast-color`, ESM subsystem), pivoted to the highest-value
+bounded partial: row 138, `clipboard.read()` + paste-image — the AI-chat / issue-tracker /
+rich-editor paste-a-screenshot workflow. Re-probed the neighbours first: `<details>`, `createObjectURL`,
+scroll-anchoring, conic gradients, canvas fillText were ALL already built (stale docs) — the genuine gap
+was exactly the one flagged: binary image blobs in the read bridge.
+
+PROBED (RED-proven): tick 287 wired `clipboard.read()`/`readText()` for `text/plain` only; an image the
+user copied elsewhere came back as an empty text item, so `it.types.includes('image/png')` was never true
+and the paste-screenshot path saw nothing.
+
+FIX (capability — 3 files, engine-only): (1) a `HOST_CLIPBOARD_IMAGE` thread-local `(mime, bytes)` +
+`manuk_js::set_host_clipboard_image(mime, bytes)` (lib.rs, with the `_sm`-off no-op variant) mirroring
+the text cell; (2) a native `__clipboardReadImage()` returning the image as `"<mime>;base64,<data>"` —
+base64 because a JS string is UTF-16 and raw bytes are not valid text, reusing the exact `b64` helper +
+`atob` transport that `data:`/`toDataURL` already use; (3) `clipboard.read()` decodes it (atob →
+Uint8Array → Blob, the t422 binary-Blob path) and returns a `ClipboardItem` keyed by the image MIME whose
+`getType(mime)` resolves a Blob carrying the exact bytes and correct `size`/`type`. An image-only
+clipboard yields no spurious text/plain item; `getType` of an absent type rejects.
+
+GATE: G_CLIPBOARD_IMAGE (page, `navigator_clipboard_read_returns_a_copied_image`) — teeth: `count:1`,
+`has-image`, `no-text`, `blob-type`, `blob-size` (10 bytes, not the base64 text), `bytes` (the seeded PNG
+signature 0x89 'P' 'N' 'G' round-trips), `rejects-absent`. RED-proven by disabling the `__clipboardReadImage`
+handling in read() → only a text item comes back. Siblings green: g_clipboard_read, g_blob_binary,
+g_blob_url. Headless (`_sm`-off) manuk-js + manuk-shell both still compile (the new lib.rs API is additive).
+
+TICK SHAPE: capability (clipboard.read() image blobs — the paste-a-screenshot READ path; +1 gate). GATES
++1. CONSTELLATION: row 138 `partial → gated`. WIKI: interaction-surface.md — new subsection after the t287
+clipboard-read section (whose honest-limit note is now closed).
+NEXT VEIN NOTE: clipboard image WRITE (`clipboard.write` of a ClipboardItem image → a binary host queue,
+parallel to the text write queue) + the shell round-trip to the real OS clipboard is the honest follow-on
+(needs a binary `take_pending_clipboard_writes` sibling and shell wiring — cross-crate, a fresh context).
+Bounded partials still open: playbackRate (media, not in wall), the full configurable Sanitizer. L-sized
+marquees unchanged: MEDIA H.264-High, IndexedDB (redb/heed), contenteditable EDITING path.

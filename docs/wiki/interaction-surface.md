@@ -548,8 +548,33 @@ a `ClipboardItem` is keyed by the types it holds (a shim that resolves every typ
 `writeText(x)` then `readText()` returns `x`. The `external` claim was demonstrated red (reverting
 `readText` to the self-echo) before the tick landed.
 
-**Honest limit:** `text/plain` only. Binary image blobs on the OS clipboard (paste-a-screenshot) need a
-binary bridge and are the follow-on; the constellation row is `partial`, not `works`. [[js-engine]]
+**Follow-on (landed tick 461, below):** binary image blobs on the OS clipboard (paste-a-screenshot). [[js-engine]]
+
+## `navigator.clipboard.read()` — paste-a-screenshot returns a real image Blob (tick 461)
+
+The tick-287 read bridge carried `text/plain` only, so an image the user copied in another app (a
+screenshot, a copied `<img>`) came back as an empty text item — and the modern workflow that every AI
+chat, issue tracker and rich editor ships (`for (const it of await navigator.clipboard.read()) if
+(it.types.includes('image/png')) drop(await it.getType('image/png'))`) never saw the picture.
+
+The binary READ direction is symmetric to the text one but carries bytes. A `HOST_CLIPBOARD_IMAGE`
+thread-local holds `(mime, bytes)`; the host seeds it via `manuk_js::set_host_clipboard_image(mime,
+bytes)`, and a native `__clipboardReadImage()` hands JS the image as `"<mime>;base64,<data>"`. Base64,
+not a raw binary string, because a JS string is UTF-16 and raw bytes are not valid text — this reuses
+the exact transport `data:` URLs and `canvas.toDataURL` already use (the `b64` helper + `atob`).
+`read()` decodes it (`atob` → `Uint8Array` → `Blob`, the binary-Blob path made correct in tick 422) and
+returns a `ClipboardItem` keyed by the image MIME whose `getType(mime)` resolves a Blob carrying the
+exact bytes and the right `size`/`type`. An image-only clipboard yields **no** spurious `text/plain`
+item, and `getType('text/plain')` on it rejects.
+
+### The teeth `G_CLIPBOARD_IMAGE` uses
+
+`has-image` — `read()` returns a `ClipboardItem` keyed by `image/png` (drop the `__clipboardReadImage`
+handling and only text comes back). `blob-size`/`blob-type` — the Blob is `image/png` of the right byte
+length, not a text wrapper of the base64. `bytes` — the Blob's first bytes are the PNG signature the
+host seeded (`0x89 'P' 'N' 'G'`), proving the actual bytes survived the base64 round-trip. RED-proven by
+disabling the image read. **Honest follow-on:** the WRITE direction (`clipboard.write` of an image →
+binary host queue) and the shell round-trip to the real OS clipboard.
 
 ## `keyup` fires on key release — the settled-value half of the keyboard trio (tick 180)
 

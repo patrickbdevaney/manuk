@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **239** | ticks 1–460 |
-| median tick cycle | **19m** | 238 intervals |
+| ticks landed | **240** | ticks 1–461 |
+| median tick cycle | **19m** | 239 intervals |
 | median, last 10 | **40m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.80** | 297.9h elapsed |
-| median verify wall | **60s** | 178 ticks |
+| **ticks per hour** | **0.80** | 298.4h elapsed |
+| median verify wall | **60s** | 179 ticks |
 | wall trend | 39s → 69s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **227**
+* **live gates**: 27 → **228**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**139 of 239 ticks** (58%) moved a
+**140 of 240 ticks** (58%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **139** capability ticks, median cycle **19m**
-* median diff per tick: **+215 / −34** lines across 9 files
+* **140** capability ticks, median cycle **19m**
+* median diff per tick: **+216 / −34** lines across 9 files
 
 ## Every tick
 
@@ -336,5 +336,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **456** | 2026-07-23 13:19 | 48m | capability | 60s | +240/−40 | 224 | 81 | 56.0% · | contenteditable QUERY surface: contentEditable / isContentEditable / designMode (2026-07-2 |
 | **458** | 2026-07-23 14:18 | 59m | capability | 69s | +208/−13 | 226 | 81 | 56.0% · | completeness identity: `navigator.deviceMemory` + canonical `navigator.platform` (2026-07- |
 | **460** | 2026-07-23 14:54 | 36m | capability | 4m | +232/−16 | 227 | 81 | 56.0% · | custom-element `attributeChangedCallback` fires on a LIVE setAttribute (2026-07-23) |
+| **461** | 2026-07-23 15:26 | 32m | capability | 60s | +407/−156 | 228 | 81 | 56.0% · | clipboard.read() returns a copied IMAGE (paste-a-screenshot) (2026-07-23) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

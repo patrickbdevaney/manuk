@@ -8032,6 +8032,14 @@ pub unsafe fn install(
     JS_DefineFunction(
         &mut wrap_cx(cx),
         global.handle(),
+        c"__clipboardReadImage".as_ptr(),
+        host_fn!(clipboard_read_image),
+        0,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
         c"__historyPush".as_ptr(),
         host_fn!(history_push),
         3,
@@ -12801,9 +12809,28 @@ const WINDOW_PRELUDE: &str = r#"
                 },
                 readText: function () { return Promise.resolve(__clipRead()); },
                 read: function () {
+                    var items = [];
+                    // An IMAGE on the clipboard (a screenshot the user copied elsewhere) comes back as
+                    // `"<mime>;base64,<data>"`; decode it to bytes and hand back a real image Blob, so a
+                    // paste-a-screenshot drop zone (AI chat, issue tracker, rich editor) gets the picture.
+                    var img = (typeof g.__clipboardReadImage === 'function')
+                        ? String(g.__clipboardReadImage() || '') : '';
+                    var ci = img.indexOf(';base64,');
+                    if (ci > 0) {
+                        var mime = img.slice(0, ci);
+                        var bin = (typeof g.atob === 'function') ? g.atob(img.slice(ci + 8)) : '';
+                        var bytes = new Uint8Array(bin.length);
+                        for (var i = 0; i < bin.length; i++) { bytes[i] = bin.charCodeAt(i) & 255; }
+                        var obj = {}; obj[mime] = new g.Blob([bytes], { type: mime });
+                        items.push(new g.ClipboardItem(obj));
+                    }
                     var text = __clipRead();
-                    var item = new g.ClipboardItem({ 'text/plain': new g.Blob([text], { type: 'text/plain' }) });
-                    return Promise.resolve([item]);
+                    // A text/plain item when there is text — OR when the clipboard is otherwise empty, so
+                    // `read()` still resolves to a single (empty) item, matching `readText()`'s contract.
+                    if (text !== '' || items.length === 0) {
+                        items.push(new g.ClipboardItem({ 'text/plain': new g.Blob([text], { type: 'text/plain' }) }));
+                    }
+                    return Promise.resolve(items);
                 },
                 write: function (items) {
                     // `write([ClipboardItem])` — the rich-write path. We honour the text/plain part
@@ -13881,6 +13908,12 @@ thread_local! {
     /// `read()` pull from here, so a page can paste what the user copied in another application.
     static HOST_CLIPBOARD: std::cell::RefCell<String> =
         const { std::cell::RefCell::new(String::new()) };
+    /// The current OS-clipboard IMAGE the page is allowed to SEE, seeded by the host via
+    /// [`set_host_clipboard_image`] as `(mime, bytes)`. This is the binary half of the read bridge:
+    /// `read()` returns an image `ClipboardItem` for it, so a page's paste-a-screenshot drop zone
+    /// (AI chat, an issue tracker, a rich editor) receives the real image the user copied elsewhere.
+    static HOST_CLIPBOARD_IMAGE: std::cell::RefCell<Option<(String, Vec<u8>)>> =
+        const { std::cell::RefCell::new(None) };
     /// MSE byte-streams published since the last drain: `(node_id, full accumulated bytes)`.
     /// `__msePublish` pushes one entry per settled `appendBuffer` whose SourceBuffer demuxed a
     /// video track — the FULL stream each time, not a delta, because an fMP4 decoder needs the
@@ -13927,6 +13960,20 @@ pub fn take_pending_clipboard_writes() -> Vec<String> {
 /// copied in another application — so paste works. Empty string means an empty clipboard.
 pub fn set_host_clipboard(text: String) {
     HOST_CLIPBOARD.with(|c| *c.borrow_mut() = text);
+}
+
+/// Seed the OS-clipboard IMAGE the page is allowed to READ (`navigator.clipboard.read()`), as a MIME
+/// type and its raw bytes (e.g. `("image/png", png_bytes)`). The host calls this with whatever image
+/// is on the real OS clipboard, so a paste-a-screenshot handler receives it. `None`/an empty MIME
+/// clears it. Independent of the text cell — the host seeds whichever formats the OS clipboard holds.
+pub fn set_host_clipboard_image(mime: String, bytes: Vec<u8>) {
+    HOST_CLIPBOARD_IMAGE.with(|c| {
+        *c.borrow_mut() = if mime.is_empty() || bytes.is_empty() {
+            None
+        } else {
+            Some((mime, bytes))
+        }
+    });
 }
 
 /// `postMessage` sends since the last drain, each `(target_win, json, origin, source_win)`.
@@ -13979,6 +14026,22 @@ unsafe fn clipboard_write(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> b
 unsafe fn clipboard_read(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let text = HOST_CLIPBOARD.with(|c| c.borrow().clone());
     return_string(cx, vp, &text);
+    true
+}
+
+/// `__clipboardReadImage()` — the OS-clipboard IMAGE the page may see, as `"<mime>;base64,<data>"`
+/// (base64 keeps the transport a plain ASCII string; the JS side `atob`s it into a Uint8Array and
+/// wraps it in a Blob, exactly like a `data:` URL). Empty string when no image is on the clipboard.
+/// Base64 rather than a raw binary string because a JS string is UTF-16 and raw bytes are not valid
+/// text — `data:`/`toDataURL` already move canvas image bytes this exact way (`b64`).
+unsafe fn clipboard_read_image(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let out = HOST_CLIPBOARD_IMAGE.with(|c| {
+        c.borrow()
+            .as_ref()
+            .map(|(mime, bytes)| format!("{mime};base64,{}", b64(bytes)))
+            .unwrap_or_default()
+    });
+    return_string(cx, vp, &out);
     true
 }
 

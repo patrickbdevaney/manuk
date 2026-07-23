@@ -3962,3 +3962,18 @@ actual change; unobserved attributes never fire. **The trap:** the MutationObser
 runs BEFORE the attribute is written (no new value) and is delivered async on a microtask, but a custom-element
 reaction is synchronous; wiring ACC onto that feed would be observably wrong. The fix wraps the JS setAttribute
 family directly.
+
+## Paste a screenshot into the page (tick 461)
+
+**The class of the web this unlocks (AI chat + issue trackers + rich editors — image paste):** every page
+whose paste handler reads `navigator.clipboard.read()` and branches on `it.types.includes('image/png')` to
+accept a copied image — ChatGPT/Claude-style "paste a screenshot", GitHub/Linear issue image paste, rich
+editors and image drop zones. The read bridge carried `text/plain` only, so a copied image came back as an
+empty text item and the picture never arrived.
+**(1)** `read()` now returns a `ClipboardItem` keyed by the image MIME whose `getType(mime)` resolves a real
+image Blob (exact bytes, correct size/type), seeded by the host via `set_host_clipboard_image`. **(2)** The
+binary transport is base64 (`"<mime>;base64,<data>"`) decoded with `atob` — a JS string is UTF-16 and raw
+bytes are not valid text, so the same `b64`/`data:`-URL transport is reused. **The trap:** an image-only
+clipboard must NOT invent a `text/plain` item — a ClipboardItem is keyed only by the types it holds, and a
+paste handler that finds a phantom text type takes the wrong branch. Follow-on: the WRITE direction + the
+shell round-trip to the real OS clipboard.
