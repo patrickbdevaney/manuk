@@ -333,6 +333,57 @@ pub const COLLECTIONS_JS: &str = r#"
   wrapMethod(document, 'getElementsByTagNameNS', HTMLCollection);
   wrapMethod(document, 'getElementsByClassName', HTMLCollection);
 
+  // ── Custom-element `attributeChangedCallback` on a LIVE attribute mutation.
+  //
+  // The upgrade path fires `attributeChangedCallback` for observed attributes PRESENT at upgrade time,
+  // but a subsequent `el.setAttribute('checked','')` / `removeAttribute` / `toggleAttribute` — the
+  // reactive-attribute idiom every design-system web component is built on (`<my-toggle checked>`
+  // flipping from script, `aria-expanded` driving open/closed state, Lit's own attribute→property
+  // reflection) — wrote the attribute into the DOM and never told the element, so a component's rendered
+  // state froze at whatever it was at boot. `record_mutation` (the MutationObserver feed) fires BEFORE
+  // the attribute is written and carries no new value, and the reaction must be SYNCHRONOUS anyway (the
+  // component has re-rendered by the next line of script), so it cannot ride that async microtask.
+  //
+  // Wrap the three attribute-mutating methods where they actually live (Node.prototype — Element.prototype
+  // is an empty link, see `ownerOf`) and, AFTER the native call has written the attribute, invoke
+  // `attributeChangedCallback(localName, old, new)` when `this` is an UPGRADED custom element observing
+  // that attribute. The `__ceUpgraded` fast-path keeps the two `getAttribute` reads off every plain
+  // element's set-attribute path (identity-cached reflectors mean the expando is always visible).
+  function fireACC(el, name, oldV, newV) {
+    if (typeof el.attributeChangedCallback !== 'function') return;
+    var ctor = el.constructor, obs = ctor && ctor.observedAttributes;
+    if (!obs || obs.length === undefined) return;
+    var ln = String(name).toLowerCase(), watched = false;
+    for (var i = 0; i < obs.length; i++) {
+      if (String(obs[i]).toLowerCase() === ln) { watched = true; break; }
+    }
+    if (!watched) return;
+    try { el.attributeChangedCallback(ln, oldV, newV); }
+    catch (e) { try { globalThis.__hostLog('warn', 'attributeChangedCallback: ' + e); } catch (x) {} }
+  }
+  function wrapAttrMutator(name, always) {
+    if (!EP) return;
+    var owner = ownerOf(EP, name);
+    if (!owner) return;
+    var orig = owner[name];
+    if (typeof orig !== 'function') return;
+    owner[name] = function () {
+      var el = this, isCE = el && el.__ceUpgraded, attr = arguments[0];
+      var before = isCE ? el.getAttribute(attr) : null;
+      var ret = orig.apply(el, arguments);
+      if (isCE) {
+        var after = el.getAttribute(attr);
+        // `setAttribute` reacts on every call (even to the same value, per the CE spec); `removeAttribute`
+        // / `toggleAttribute` only when the attribute's presence or value actually changed.
+        if (always || before !== after) fireACC(el, attr, before, after);
+      }
+      return ret;
+    };
+  }
+  wrapAttrMutator('setAttribute', true);
+  wrapAttrMutator('removeAttribute', false);
+  wrapAttrMutator('toggleAttribute', false);
+
   // `querySelectorAll` returns a STATIC NodeList — and that is the spec, not an oversight. Code relies on
   // it not moving under a loop, which is exactly why it exists alongside the live ones. Left alone.
 

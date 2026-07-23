@@ -311,17 +311,18 @@
   - L55 · Eight real framework bundles rendered NOTHING and threw ZERO exceptions — the silence WAS the finding
   - L79 · When a framework fails silently, the bug is BELOW the framework
   - L88 · An empty catch around connectedCallback silently deletes a whole component library
-  - L102 · The web FEATURE-DETECTS and *grades* the browser — one missing BOM object downgrades whole platforms
-  - L117 · Constructable stylesheets are a PREREQUISITE for web-component libraries
-  - L128 · SSR'd HTML renders with NO JavaScript at all — what breaks is client-side ROUTING, not rendering
-  - L140 · The Framework Exception Miner — an unthrown exception is a discovery signal you threw away
-  - L150 · Prioritise the binding surface from Chrome UseCounter + HTTP Archive, not by instrumenting Chrome
-  - L156 · The measured capability list that ranked the whole backlog
-  - L166 · The first named hydration failure: aljazeera, and React discarding its own server-rendered tree
-  - L177 · SSR hydration — measured working, and pinned (tick 217)
-  - L208 · Hydration works, and only a driven click can prove it (tick 229)
-  - L228 · pagereveal — the MPA activation hook (tick 372)
-  - L239 · Promise-returning scrolls + the synchronous scrollY contract (tick 378)
+  - L102 · attributeChangedCallback must fire on a LIVE setAttribute, not only at upgrade (tick 460)
+  - L124 · The web FEATURE-DETECTS and *grades* the browser — one missing BOM object downgrades whole platforms
+  - L139 · Constructable stylesheets are a PREREQUISITE for web-component libraries
+  - L150 · SSR'd HTML renders with NO JavaScript at all — what breaks is client-side ROUTING, not rendering
+  - L162 · The Framework Exception Miner — an unthrown exception is a discovery signal you threw away
+  - L172 · Prioritise the binding surface from Chrome UseCounter + HTTP Archive, not by instrumenting Chrome
+  - L178 · The measured capability list that ranked the whole backlog
+  - L188 · The first named hydration failure: aljazeera, and React discarding its own server-rendered tree
+  - L199 · SSR hydration — measured working, and pinned (tick 217)
+  - L230 · Hydration works, and only a driven click can prove it (tick 229)
+  - L250 · pagereveal — the MPA activation hook (tick 372)
+  - L261 · Promise-returning scrolls + the synchronous scrollY contract (tick 378)
 
 ## THE INTERACTION SURFACE — clicks, scroll, focus, and automation
 `docs/wiki/interaction-surface.md`
@@ -925,4 +926,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-840 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+841 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

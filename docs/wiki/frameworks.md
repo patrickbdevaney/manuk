@@ -99,6 +99,28 @@ wrong place.
 **Errors were being discarded in THREE distinct places:** empty `catch` blocks, swallowed exception
 messages, and **unhandled promise rejections.**
 
+## `attributeChangedCallback` must fire on a LIVE `setAttribute`, not only at upgrade (tick 460)
+
+The upgrade path fired `attributeChangedCallback` for the observed attributes PRESENT at boot, but a later
+script mutation — `el.setAttribute('checked','')`, `el.removeAttribute(...)`, `el.toggleAttribute(...)` —
+wrote the attribute into the DOM and never told the element. This is the reactive-attribute idiom *every*
+design-system web component is built on (`<my-toggle checked>` flipping from script, `aria-expanded` driving
+open/closed, Lit's own attribute→property reflection), so a component's rendered state froze at whatever it
+was at boot. The MutationObserver feed can't substitute: `record_mutation` fires BEFORE the attribute is
+written (and carries no new value), and a custom-element reaction is **synchronous** — the component has
+re-rendered by the next line of script, not on a later microtask.
+
+Fixed in `engine/js/src/collections_js.rs`: wrap `setAttribute`/`removeAttribute`/`toggleAttribute` where they
+actually live (`Node.prototype` — `Element.prototype` is an empty link, hence `ownerOf`) and, AFTER the native
+call writes the attribute, fire `attributeChangedCallback(localName, old, new)` when `this` is an upgraded
+custom element (`__ceUpgraded`) observing that attribute (`this.constructor.observedAttributes`). `setAttribute`
+reacts on every call (per the CE spec, even to the same value); `removeAttribute`/`toggleAttribute` only on an
+actual presence/value change; an unobserved attribute never fires. The `__ceUpgraded` fast-path keeps the two
+`getAttribute` reads off every *plain* element's set-attribute hot path (reflectors are identity-cached, so the
+upgrade expando is always visible on the element the page holds). Gate `G_CE_ATTR_CHANGED`. Honest scope: the
+JS `setAttribute` family is covered; property-reflector attribute writes (`id=`/`className=`) are a separate,
+rarely-observed edge left for later.
+
 ## The web FEATURE-DETECTS and *grades* the browser — one missing BOM object downgrades whole platforms
 
 MediaWiki's startup script runs

@@ -3946,3 +3946,19 @@ Array methods pass through unchanged, so `Array.isArray(sel.options)` / `instanc
 fresh snapshot makes every write to that snapshot a silent no-op; the fix is to make the collection LIVE, not
 to make the write louder. Closes the collection form of the clear-idiom (the element form `select.length = 0`
 landed t441).
+
+## Reactive web components respond to script-driven attribute changes (tick 460)
+
+**The class of the web this unlocks (design-system web components + Lit-class libraries):** any custom element
+that reacts to its own attributes changing from script — `<my-toggle checked>` / `<x-tab selected>` flipping on
+`setAttribute`, `aria-expanded`/`aria-pressed`-driven state, disclosure widgets, and Lit's attribute→property
+reflection. `attributeChangedCallback` fired only for attributes present at UPGRADE; a later
+`el.setAttribute('checked','')` / `removeAttribute` / `toggleAttribute` wrote the DOM and never told the element,
+so the component's rendered state froze at boot and every script-driven state flip was a silent no-op.
+**(1)** `setAttribute`/`removeAttribute`/`toggleAttribute` now fire `attributeChangedCallback(name, old, new)`
+SYNCHRONOUSLY (the component has re-rendered by the next line of script) when the element is an upgraded custom
+element observing that attribute. **(2)** setAttribute reacts on every call (spec); remove/toggle only on an
+actual change; unobserved attributes never fire. **The trap:** the MutationObserver feed cannot substitute — it
+runs BEFORE the attribute is written (no new value) and is delivered async on a microtask, but a custom-element
+reaction is synchronous; wiring ACC onto that feed would be observably wrong. The fix wraps the JS setAttribute
+family directly.

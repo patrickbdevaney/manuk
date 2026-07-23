@@ -18601,3 +18601,45 @@ on live setAttribute, `contrast-color()`/CSS `ic`/`ric` units. NON-atomic (skip 
 `user-select` (Stylo servo-pref fence), ESM module-graph (subsystem). The L-sized Tier-1 marquees remain
 MEDIA H.264-High (decode backend, decompose-first), IndexedDB (borrow redb/heed), and the contenteditable
 EDITING path (execCommand/beforeinput, needs a caret+Selection decompose).
+
+## Tick 460 — custom-element `attributeChangedCallback` fires on a LIVE setAttribute (2026-07-23)
+
+CONTINUES the constellation `?`-unknown probe vein (Const-Check #22/#23 pivot; lever-board CO-#1 item 2,
+"? outranks X"). After t459 closed row 188, probed the next high-daily-driver unknown: row 181, custom-element
+`attributeChangedCallback` on a live setAttribute — reactive web components (design systems, Lit's
+attribute→property reflection).
+
+PROBED (RED-proven): custom elements upgrade and fire `attributeChangedCallback` for observed attrs PRESENT at
+boot (dom_bindings.rs `__upgradeEl`), but `set_attribute_impl`/removeAttribute/toggleAttribute (native) only
+call `record_mutation` (the MutationObserver feed) — they never invoke `attributeChangedCallback`. So a later
+`el.setAttribute('checked','')` wrote the DOM and the component never reacted; its rendered state froze at boot.
+`record_mutation` can't stand in: it runs BEFORE `set_attr` (new value unreadable) and MutationObserver is async
+(a microtask), whereas a CE reaction is spec-SYNCHRONOUS (re-rendered by the next script line).
+
+FIX (capability — 1 file, `collections_js.rs`): wrap `setAttribute`/`removeAttribute`/`toggleAttribute` where
+they live (Node.prototype, via the existing `ownerOf` chain-walk — Element.prototype is an empty link) and,
+AFTER the native call writes the attribute, fire `attributeChangedCallback(localName, old, new)` when `this` is
+an upgraded custom element (`__ceUpgraded`) observing that attr (`this.constructor.observedAttributes`).
+setAttribute always reacts (per the CE spec, even same-value); remove/toggle only on an actual presence/value
+change; unobserved attrs never fire. The `__ceUpgraded` fast-path keeps the two `getAttribute` reads off every
+plain element's set-attribute hot path (reflectors are identity-cached — one wrapper per node — so the upgrade
+expando is always visible on the element the page holds).
+
+GATE: G_CE_ATTR_CHANGED (page, `attribute_changed_callback_fires_on_a_live_set_attribute`) — teeth: `boot`
+(upgrade-time callback still fires — regression guard), `set` (live setAttribute fires synchronously), and the
+exact reaction sequence `label:null->A|label:A->B|label:B->null|label:null->` (boot, live set, remove→null,
+toggle re-add null→'', and NO entry for the unobserved data-x). RED-proven by removing the setAttribute wrap →
+the live set is silent. Siblings green: g_hydration, g_mutation, g_attrs, g_attr_case, g_a11y_state, g_prototype,
+g_node_ergonomics, g_collections, g_form_elements, g_select_write, g_options_length. NOTE: g_reflect_numeric is a
+pre-existing heavy/slow test (100% CPU + multi-GB RAM growth) NOT in the verify wall — identical behaviour on the
+clean tick-459 tree with my change stashed, so it is exonerated as unrelated to this tick (isolated by bisect).
+
+TICK SHAPE: capability (custom-element attributeChangedCallback on live setAttribute, both add/remove/toggle;
++1 gate). GATES +1. CONSTELLATION: row 181 `unknown → gated`. WIKI: frameworks.md — new subsection after the
+connectedCallback section.
+NEXT VEIN NOTE: constellation now carries 8 `?` unknowns. Cheap next probes (measure-and-pin): `navigator.
+cpuPerformance` (identity-like, trivial), `contrast-color()`/CSS `ic`/`ric` units (CSS functions/units — may be
+Stylo-fenced), view-transition pseudo-classes. NON-atomic (skip): `user-select` (Stylo servo-pref fence), ESM
+module-graph (subsystem). The custom-element reactions subsystem's remaining edge is property-reflector attribute
+writes (`id=`/`className=`) firing ACC — a separate rarely-observed path. L-sized marquees unchanged: MEDIA
+H.264-High, IndexedDB (redb/heed), contenteditable EDITING path.
