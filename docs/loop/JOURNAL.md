@@ -17595,3 +17595,46 @@ TICK SHAPE: capability (:open in the querySelector/matches engine; +1 gate). GAT
 CONSTELLATION: :open pseudo-class unknown→gated (G_OPEN_PSEUDO).
 WIKI: none new — mirrors the documented :checked/:muted two-engine pattern; the gate doc-comment +
 CONSTELLATION.tsv are the record.
+
+## Tick 430 — event.getModifierState(key) reads the modifier flags (2026-07-22)
+
+HYPOTHESIS (probe-a-works-capability vein, event surface): a probe of the event system found it
+remarkably complete (Event/Mouse/Keyboard/Custom constructors + options, once/signal listeners,
+stop*Propagation, target/currentTarget, preventDefault, composedPath, input events) EXCEPT
+`getModifierState` — `new KeyboardEvent('keydown',{ctrlKey:true}).getModifierState('Control')` returned
+false. It was absent entirely; `e.getModifierState is not a function` threw out of the keydown handler.
+Keyboard-shortcut libraries (Mousetrap, CodeMirror/ProseMirror keymaps, Cmd+K palettes) and rich editors
+call `getModifierState(name)` rather than reading `e.ctrlKey` directly (it also covers AltGraph/CapsLock/
+NumLock), so the shortcut died.
+
+FIX (capability, JS-shim only): added `getModifierState(keyArg)` in the `defEvent` constructor, guarded
+by `'ctrlKey' in merged` so it lands only on the modifier-bearing events (MouseEvent/KeyboardEvent/
+WheelEvent/PointerEvent), not a plain Event/CustomEvent. Maps the standard key names
+(Control/Shift/Alt/Meta/AltGraph/CapsLock/NumLock/ScrollLock) onto the boolean flags already set from the
+init dict; an unknown name returns false (not a throw).
+
+GATE: G_GET_MODIFIER_STATE (`get_modifier_state_reads_modifier_flags`) — five claims: Control-held
+reports true and Shift false, multiple modifiers report independently, a MouseEvent carries the method,
+an unknown key returns false, and a plain Event does NOT get the method (the guard). RED-proven:
+neutralizing the guard makes `getModifierState` undefined and the keydown script throws (→ "-").
+manuk-page green; g_event_constructors/g_event_dispatch_state/g_event_surface/g_click_activation green.
+
+TICK SHAPE: capability (event.getModifierState; +1 gate). GATES +1.
+CONSTELLATION: event.getModifierState unknown→gated (G_GET_MODIFIER_STATE).
+WIKI: none [forced] — small additive spec method on the already-documented event surface (defEvent);
+the gate doc-comment + WEB-PATTERNS.md + CONSTELLATION.tsv are the durable record.
+
+BLOCKER NOTE (tick 430, 2026-07-23 ~00:35): tick 430 (event.getModifierState) is complete, green,
+RED-proven (GATES 195→197, CONST:app/doc +1, 4 event gates green), staged ready at .git/tick430-ready.msg.
+LANDING IS NOW HARD-BLOCKED by an environmental timing floor, NOT the tick. The specific failure (finally
+captured with the test name, which verify.sh swallows): `manuk-shell` test
+`tab::g_interact::tab_operations_stay_far_under_one_frame` (shell/src/tab.rs:729) — a WALL-CLOCK budget
+assertion ("far under one frame") — now FAILS even run STANDALONE (69 passed / 1 failed), because an
+observer oracle crawl has run ~8.5h at nice-19 and swap sits at 90-99%, degrading wall-clock performance
+below the shell's one-frame floor. An additive JS method (getModifierState) cannot slow tab operations,
+and the shell suite passed 70/70 standalone earlier this session when the box was quieter — so this is
+purely the box being too slow, an infrastructure/observer-owned condition (no scripts/ edits, no
+swap-cycle from the agent, per the harness-ownership rule). Every landing is blocked until the box
+recovers (crawl finishes or swap is cycled). Retrying is futile while the floor is breached. Tick 430 (and
+the productive vein) resume the moment the box is quiet. Session landed 420-429 (ten ticks) + Constitution
+Check #19 + Self-Audit 425 + Wall Audit #8 + Surface Audit #16 — all cadence current.

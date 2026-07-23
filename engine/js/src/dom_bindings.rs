@@ -10877,6 +10877,26 @@ const WINDOW_PRELUDE: &str = r#"
                 this.preventDefault = function () { if (this.cancelable) this.defaultPrevented = true; };
                 this.stopPropagation = function () { this._stop = true; };
                 this.stopImmediatePropagation = function () { this._stop = true; this._stopImmediate = true; };
+                // `getModifierState(key)` — the spec way to read a modifier, on the modifier-bearing
+                // events (Mouse/Keyboard/Wheel/Pointer, which carry `ctrlKey`). A keyboard-shortcut
+                // library or rich-text editor calls `e.getModifierState('Control')` rather than reading
+                // `e.ctrlKey` directly; absent, that threw "not a function" out of the keydown handler
+                // and the shortcut died. Maps the standard key names onto the boolean flags already set.
+                if ('ctrlKey' in merged) {
+                    this.getModifierState = function (keyArg) {
+                        switch (String(keyArg)) {
+                            case 'Control': return !!this.ctrlKey;
+                            case 'Shift': return !!this.shiftKey;
+                            case 'Alt': return !!this.altKey;
+                            case 'Meta': return !!this.metaKey;
+                            case 'AltGraph': return !!this.altGraphKey;
+                            case 'CapsLock': return !!this.capsLockKey;
+                            case 'NumLock': return !!this.numLockKey;
+                            case 'ScrollLock': return !!this.scrollLockKey;
+                            default: return false;
+                        }
+                    };
+                }
 
                 // ── The LEGACY surface, which is not optional and is not rare.
                 //

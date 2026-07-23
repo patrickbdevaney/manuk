@@ -3517,3 +3517,16 @@ script can't find it.
 **The trap:** testing `:open` only by whether `details:open {color}` renders passes while
 `matches(':open')` is still false. Test the JS engine (querySelectorAll/matches) explicitly, or the
 half that scripts depend on stays broken.
+
+## event.getModifierState reads modifiers; shortcut libs call it, not e.ctrlKey (tick 430)
+
+**The class of the web this unlocks:** every keyboard-shortcut library and rich-text editor —
+Mousetrap, CodeMirror/ProseMirror keymaps, the ubiquitous Cmd+K command palette — reads a modifier via
+`e.getModifierState('Control')` rather than `e.ctrlKey`, because it also answers `AltGraph`/`CapsLock`/
+`NumLock`. Absent, the call threw `not a function` inside the keydown handler and the whole shortcut
+dispatch died.
+**(1)** `getModifierState(name)` lives on the MODIFIER-BEARING events (Mouse/Keyboard/Wheel/Pointer) and
+maps the standard key names onto the boolean flags; a plain `Event`/`CustomEvent` does not have it.
+**The trap:** the flags (`e.ctrlKey`) worked, so direct reads passed while the spec accessor every
+library actually uses was missing — and a throw inside a keydown handler takes the entire keymap down,
+not just one shortcut.
