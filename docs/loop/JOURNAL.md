@@ -17418,3 +17418,49 @@ g_writable_transform_streams all still green (no streaming regression).
 TICK SHAPE: capability (TextDecoder label handling: windows-1252 + utf-16 LE/BE; +1 gate). GATES +1.
 CONSTELLATION: TextDecoder non-UTF-8 labels unknown→gated (G_TEXTDECODER_ENCODINGS).
 WIKI: js-engine.md — "TextDecoder honours its label (windows-1252 + utf-16), not UTF-8-for-everything".
+
+## Tick 425 — <template>.content holds the parsed children, not an empty fragment (2026-07-22)
+
+HYPOTHESIS (probe-a-works-capability vein, now the DOM-manipulation surface): a probe of common DOM
+APIs (DOMParser, XMLSerializer, closest/matches, classList, dataset, insertAdjacentHTML, append,
+Range…) found all correct EXCEPT `<template>.content` — the fragment existed but was EMPTY
+(childNodes 0), and the template element itself had 0 direct children. The parsed children
+`<div class=x>…</div>` had gone nowhere observable.
+
+ROOT CAUSE: two separate storages for template contents. The HTML parser (html5ever, via sink.rs)
+inserts a `<template>`'s children into its `template_contents` fragment (per the tree-construction
+rules — they are NOT direct children of the element). But the `.content` accessor called
+`template_content()` (dom/lib.rs), which read a DIFFERENT field (`shadow_root`) and built a fresh
+fragment from the template's DIRECT children — empty, because the parser put them in
+`template_contents`. So `.content` returned an empty fragment. Every compiler-based framework
+(lit-html, Svelte, Solid, Vue's compiled render fns) clones `tpl.content` per instance and got
+nothing — an empty component, no error. `.content` was marked "works" but was broken on the parser
+path (the imperative createElement+innerHTML path limped because its children ARE direct children).
+
+FIX (capability, DOM-core): `template_content()` now returns the parser-populated `template_contents`
+fragment when present (the only correct source for a parsed template); the imperative fallback (move
+direct children into a fragment) is kept but now caches into `template_contents` too, so the two paths
+share one storage. `template_content` is called ONLY by the `.content` accessor — a contained change.
+
+GATE: G_TEMPLATE_CONTENT (`template_content_holds_the_parsed_children`) — five claims: content
+childNodes count, querySelector into the fragment, firstElementChild, cloneNode(true) bringing BOTH
+children into the live tree, and an imperative template still exposing its content. RED-proven:
+ignoring the parser fragment drops the parsed template to `cn:0 qs:null` while the imperative path
+still works (`imp:y`) — pinpointing the fix. manuk-page green; manuk-dom (11) + manuk-html (12) crate
+tests green; g_dom_impl/g_iframe/g_iframe_rerender/g_traversal/g_display_contents/g_probe_capabilities
+all still green (no regression to shadow-DOM / clone / innerHTML paths).
+
+TICK SHAPE: capability (parsed <template>.content fragment; +1 gate). GATES +1.
+CONSTELLATION: <template> + slots works→gated (G_TEMPLATE_CONTENT) — was works-but-broken-on-parse.
+WIKI: dom-semantics.md — "<template>.content is the parser's fragment, not the element's direct
+children".
+
+WALL NOTE (tick 425, 2026-07-22 ~22:45): tick 425 complete, green, RED-proven (parsed <template>.content
+fragment; GATES 192→193, CONST:app +1, dom/html crates + iframe/traversal gates green). Wall-blocked
+ONLY: verify banks ~497-520s (build ~29-31s, unattributed ~490s) vs the 245s ceiling. Persistent
+environmental contention — an observer oracle crawl (nice-19 manuk-wpt PID 4022447) has run ~6.5h and
+contends the parity/F-latency gate phase, swap 95-99% (thrashing the memory-heavy benchmarks). The dom/
+lib.rs edit triggered a wider recompile but build is still only ~30s — the ~490s is all gate runtime,
+not the tick. The SAME tree landed at 57s during a quiet window earlier this session (tick 424 @ 22:05).
+Harness/infra observer-owned (no scripts/ edits, no swap-cycle). Holding tick 425 ready to land via
+`./scripts/tick.sh .git/tick425-ready.msg` on a warm re-run. Not re-baselining the WALL mark.

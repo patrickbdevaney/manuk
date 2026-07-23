@@ -1144,3 +1144,20 @@ demonstrated to make the first call throw before the tick landed.
 
 **Honest limit:** `contentVisibilityAuto` is not modelled (no `content-visibility` layout containment
 in the engine). [[js-engine]]
+
+## `<template>.content` is the parser's fragment, not the element's direct children (tick 425)
+
+A `<template>`'s contents live in a SEPARATE fragment, not as children of the element — the HTML
+tree-construction rules redirect everything parsed inside a `<template>` into its "template contents"
+fragment (`html5ever` calls `get_template_contents` and appends there). So `template.childNodes` is
+empty by design, and `template.content` must expose that fragment.
+
+The bug fixed at tick 425: the DOM kept the parser's fragment in the node's `template_contents` field,
+but the `.content` accessor (`Dom::template_content`) read a DIFFERENT field (`shadow_root`) and, finding
+nothing, built a fresh fragment from the template's own DIRECT children — which are empty on the parser
+path. So a parsed `<template>.content` came back empty, and every framework that clones it (lit-html,
+Svelte, Solid, Vue's compiled output) instantiated nothing, silently. The accessor now returns
+`template_contents` when present; the imperative `createElement`+`innerHTML` fallback (whose children DO
+land as direct children) still works and now caches into the same field. Declarative shadow DOM already
+aims `set_template_contents` at the shadow root, so `.content` returning `template_contents` stays
+consistent with that path.

@@ -211,3 +211,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 419	a644209	1784768495	2026-07-22T21:01:35-04:00	1075	measurement	66	10	266	45	188	81	3896	6960	0	328	31	Element.checkVisibility(): measure-and-pin (2026-07-22)
 421	3f5a794	1784770893	2026-07-22T21:41:33-04:00	2398	capability	57	10	216	36	190	81	3896	6960	0	328	31	structuredClone: preserve BINARY types, not degrade them (2026-07-22)
 423	f1ce857	1784773481	2026-07-22T22:24:41-04:00	2588	capability	57	10	222	34	192	81	3896	6960	0	328	31	canvas ImageData + putImageData: move real pixels, not no-op (2026-07-22)
+425	6be13ad	1784774967	2026-07-22T22:49:27-04:00	1486	capability	59	10	192	41	193	81	3896	6960	0	328	31	<template>.content holds the parsed children, not an empty fragment (2026-07-22)

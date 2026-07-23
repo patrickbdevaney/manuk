@@ -3458,3 +3458,17 @@ controls raw Latin-1 puts there; utf-16le/be are two bytes per unit and endianne
 **The trap:** UTF-8 is a superset of ASCII, so a label-ignoring decoder LOOKS correct on every English
 test string and only corrupts once a byte exceeds 0x7F — which is exactly the accented/CJK/symbol content
 the non-UTF-8 encoding existed to carry. Test a byte over 0x7F, or the bug hides.
+
+## A parsed <template>'s .content holds its children, not an empty fragment (tick 425)
+
+**The class of the web this unlocks:** every compiler-based framework's DOM instantiation — lit-html,
+Svelte, Solid, and Vue's compiled render functions parse a `<template>` once and `template.content
+.cloneNode(true)` (or `.content.firstChild.cloneNode(true)`) per instance. The element and its `.content`
+fragment both existed, but for a PARSED template the fragment was EMPTY, so the clone brought nothing and
+the component rendered blank with no error.
+**(1)** The HTML parser puts a `<template>`'s children in its content fragment, NOT as direct children of
+the element — so `.content` must read the parser's fragment, and `template.childNodes` is empty by design.
+**The trap:** two storages for "the template's contents" (the parser's fragment vs a lazily-moved copy of
+the element's direct children) look interchangeable until you notice the parser fills one and the accessor
+reads the other. The imperative `createElement('template')+innerHTML` path hid the bug — its children ARE
+direct children, so it limped while the parser path was silently empty.

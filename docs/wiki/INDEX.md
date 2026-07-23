@@ -278,6 +278,7 @@
   - L1109 · The teeth G_SANITIZER uses
   - L1121 · Element.checkVisibility() — is it actually rendered? (tick 291)
   - L1138 · The teeth G_CHECK_VISIBILITY uses
+  - L1148 · <template>.content is the parser's fragment, not the element's direct children (tick 425)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -892,4 +893,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-807 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+808 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -716,18 +716,25 @@ impl Dom {
     /// the exact sequence lit-html commits every template through — insert the CONTENT rather than an
     /// inert `<template>` wrapper.
     pub fn template_content(&mut self, template: NodeId) -> NodeId {
-        if let Some(existing) = self.nodes[template.index()].shadow_root {
-            if self.is_fragment(existing) {
-                return existing;
-            }
+        // The PARSER populates `template_contents` — html5ever inserts a `<template>`'s children into
+        // that fragment, NOT as direct children of the element (per the HTML tree-construction rules).
+        // That fragment IS what `.content` must expose. The old path ignored it and built a fresh
+        // fragment from the template's (therefore empty) DIRECT children, so every PARSED template got
+        // an EMPTY `.content` — and every framework that clones `tpl.content` (lit-html, Svelte, Solid,
+        // Vue's compiled render fns) got nothing, silently. Return the parser's fragment when present.
+        if let Some(existing) = self.nodes[template.index()].template_contents {
+            return existing;
         }
+        // A template built imperatively (createElement + innerHTML/appendChild) has no parser fragment;
+        // its children landed as direct children. Move them into a fragment once and cache it AS the
+        // template contents, so this and the parser path agree on one storage.
         let frag = self.create_fragment();
         let kids: Vec<NodeId> = self.children(template).collect();
         for k in kids {
             self.append_child(frag, k);
         }
         self.nodes[frag.index()].parent = Some(template);
-        self.nodes[template.index()].shadow_root = Some(frag);
+        self.nodes[template.index()].template_contents = Some(frag);
         frag
     }
 
