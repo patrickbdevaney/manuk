@@ -2290,3 +2290,26 @@ fields) returned nothing while the CSS styled them correctly. Two new `Pseudo` v
 = an input/textarea without `readonly` — so cascade and querySelector agree. The `contenteditable`-makes-
 `:read-write` edge is unmodelled on BOTH sides (kept identical so the engines never diverge). Gated by
 `G_READONLY_PSEUDO`, RED-proven by reverting `parse_pseudo`. [[css-cascade]]
+
+## The contenteditable editability query surface (tick 456)
+
+Brick 1 of the rich-editing subsystem (PHASE0-BOUNDED-REMAINDER Tier-1 #3), the pivot off the bounded
+selector/interaction vein. Every rich-text editor DETECTS its editable host before initialising —
+ProseMirror, Slate, Draft, TinyMCE, CKEditor all branch on `el.isContentEditable` — and it was `undefined`
+(falsy) on a `<div contenteditable>`; contenteditable was entirely greenfield. Three accessors on the shared
+`__protoHTMLElement`/`document` seam (the same one the validity/dialog/popover shims use): `el.contentEditable`
+(the enumerated IDL attribute — 'true'|'false'|'plaintext-only'|'inherit', setter round-trips to the content
+attribute and throws SyntaxError on garbage); `el.isContentEditable` (computed — walk self→ancestors, the
+nearest EXPLICIT true/false/plaintext-only wins, 'inherit' walks up, falling back to `document.designMode`);
+and `document.designMode` ('on' makes the whole document editable, default 'off'). Reflection + computed
+inheritance ONLY — the editing PATH (execCommand / beforeinput / keystroke DOM mutation) is a later brick and
+honestly still absent, so detection is correct without claiming typing works. Gated by
+G_CONTENTEDITABLE_QUERY, RED-proven by neutering the shim.
+
+## `:read-only`/`:read-write` and contenteditable — the open edge
+
+t454 mirrored `stylo_dom`'s rule (own `readonly` attr + input/textarea tag) and left `contenteditable`
+making an arbitrary element `:read-write` UNMODELLED on both selector engines (kept identical so they never
+diverge). Now that `isContentEditable` is computable (t456), `:read-write` honouring a contenteditable host
+is a bounded follow-on — but it must land in BOTH engines (pseudo_matches + stylo_dom) at once, and the
+cascade side needs the CSS engine to see the contenteditable inheritance the JS shim computes.

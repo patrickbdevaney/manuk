@@ -3898,3 +3898,19 @@ engines never diverge.
 **The trap:** the two-engines-disagree shape a third time (`:open` t429, `:disabled` t453, `:read-only`
 t454) — the cascade matcher and the querySelector engine are separate code; a pseudo-class working in one
 is not working in the browser.
+
+## Rich-text editors can detect their editable host (tick 456)
+
+**The class of the web this unlocks (messaging + docs + forums — editor DETECTION):** any page that mounts a
+rich-text editor or reads editability — ProseMirror, Slate, Draft, TinyMCE, CKEditor, and every
+`el.isContentEditable`-gated init path or contenteditable-detection library. `el.isContentEditable` was
+`undefined` (falsy) on a `<div contenteditable>` because the whole surface was absent, so an editor read its
+own mount point as plain and either bailed or initialised in the wrong mode.
+**(1)** `el.contentEditable` reflects the enumerated attribute; `el.isContentEditable` is computed up the
+ancestor chain (explicit `contenteditable=false` islands block an editable ancestor); `document.designMode`
+makes the whole document editable.
+**(2)** Honest scope — this is the QUERY surface (detection), not the editing path (`execCommand`/keystroke
+mutation), which is a separate later brick and still absent. Detection is correct without claiming typing works.
+**The trap:** a reflection-only brick of a subsystem is only honest if it does NOT imply the rest works — the
+gate asserts reflection + inheritance, never "editing works," and the journal names the editing path as the
+next brick. Brick 1 of the Tier-1 rich-editing subsystem, the pivot off the mined-out selector/interaction vein.

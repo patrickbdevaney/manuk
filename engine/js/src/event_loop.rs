@@ -4581,6 +4581,73 @@ const PRELUDE: &str = r#"
         } catch (e) {}
       }
 
+      // `contenteditable` — the editability QUERY surface (Tier-1 rich-editing subsystem, brick 1).
+      //
+      // Reflection + computed inheritance ONLY: `el.contentEditable` (the enumerated IDL attribute),
+      // `el.isContentEditable` (computed up the ancestor chain, falling back to `document.designMode`),
+      // and `document.designMode`. Every rich-text editor DETECTS an editable host before it initialises —
+      // ProseMirror, Slate, Draft, TinyMCE, CKEditor all branch on `el.isContentEditable` — and it was
+      // `undefined` (falsy) on a `<div contenteditable>`, so editor mounts and `contenteditable`-detection
+      // libraries read the element as plain. This makes DETECTION honest. It does NOT claim the keystroke/
+      // `execCommand` editing path, which is separately and honestly still absent — a later brick.
+      if (__HP && typeof __HP.isContentEditable === 'undefined') {
+        // The element's OWN contenteditable state, ignoring inheritance:
+        // 'true' | 'false' | 'plaintext-only' | 'inherit' (attribute absent or an unknown value).
+        var __ceState = function (el) {
+          if (!el || typeof el.getAttribute !== 'function' ||
+              typeof el.hasAttribute !== 'function' || !el.hasAttribute('contenteditable')) {
+            return 'inherit';
+          }
+          var v = el.getAttribute('contenteditable');
+          if (v == null) { return 'inherit'; }
+          v = String(v).toLowerCase();
+          if (v === '' || v === 'true') { return 'true'; }
+          if (v === 'false') { return 'false'; }
+          if (v === 'plaintext-only') { return 'plaintext-only'; }
+          return 'inherit';
+        };
+        Object.defineProperty(__HP, 'contentEditable', {
+          configurable: true,
+          get: function () { return __ceState(this); },
+          set: function (val) {
+            var v = (val == null ? '' : String(val)).toLowerCase();
+            if (v === 'inherit') { this.removeAttribute('contenteditable'); return; }
+            if (v === 'true') { this.setAttribute('contenteditable', 'true'); return; }
+            if (v === 'false') { this.setAttribute('contenteditable', 'false'); return; }
+            if (v === 'plaintext-only') { this.setAttribute('contenteditable', 'plaintext-only'); return; }
+            throw new DOMException(
+              "Failed to set the 'contentEditable' property: The value provided ('" + String(val) +
+              "') is not one of 'true', 'false', 'plaintext-only' or 'inherit'.", 'SyntaxError');
+          }
+        });
+        Object.defineProperty(__HP, 'isContentEditable', {
+          configurable: true,
+          get: function () {
+            // The nearest ancestor (self included) with an EXPLICIT true/false/plaintext-only state wins;
+            // 'inherit' keeps walking up. With no explicit state anywhere, the document decides.
+            for (var n = this; n && typeof n === 'object'; n = n.parentElement) {
+              var s = __ceState(n);
+              if (s === 'true' || s === 'plaintext-only') { return true; }
+              if (s === 'false') { return false; }
+            }
+            try { return !!(this.ownerDocument && this.ownerDocument.designMode === 'on'); }
+            catch (e) { return false; }
+          }
+        });
+      }
+      // `document.designMode` — 'on' makes the WHOLE document editable (body.isContentEditable ⇒ true);
+      // default 'off'. ASCII-case-insensitive; any non-'on' value is 'off' (the spec's parse).
+      try {
+        if (typeof document.designMode === 'undefined') {
+          document.__designMode = 'off';
+          Object.defineProperty(document, 'designMode', {
+            configurable: true,
+            get: function () { return this.__designMode || 'off'; },
+            set: function (v) { this.__designMode = (String(v).toLowerCase() === 'on') ? 'on' : 'off'; }
+          });
+        }
+      } catch (e) {}
+
       // `CSS.escape` / `CSS.supports` — feature detection, and the correct way to build a selector.
       //
       // `supports` used to be `return true`, which is the worst available answer. Progressive

@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **236** | ticks 1–454 |
-| median tick cycle | **19m** | 235 intervals |
+| ticks landed | **237** | ticks 1–456 |
+| median tick cycle | **19m** | 236 intervals |
 | median, last 10 | **38m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.80** | 295.5h elapsed |
-| median verify wall | **60s** | 175 ticks |
-| wall trend | 39s → 72s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.80** | 295.9h elapsed |
+| median verify wall | **60s** | 176 ticks |
+| wall trend | 39s → 70s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **222**
+* **live gates**: 27 → **223**
 * **✅ rows in the capability ledger**: 144 → **328**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**136 of 236 ticks** (58%) moved a
+**137 of 237 ticks** (58%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **136** capability ticks, median cycle **19m**
+* **137** capability ticks, median cycle **19m**
 * median diff per tick: **+215 / −34** lines across 9 files
 
 ## Every tick
@@ -333,5 +333,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **451** | 2026-07-23 10:52 | 25m | capability | 4m | +204/−34 | 219 | 81 | 56.0% · | the HTML `inert` attribute also blocks focus (2026-07-23) |
 | **452** | 2026-07-23 11:51 | 59m | capability | 72s | +240/−38 | 221 | 81 | 56.0% · | a `disabled` form control cannot receive focus (2026-07-23) |
 | **454** | 2026-07-23 12:31 | 41m | capability | 70s | +116/−35 | 222 | 81 | 56.0% · | `:read-only`/`:read-write` match in the querySelector engine (BOTH engines agree) (2026-07 |
+| **456** | 2026-07-23 12:57 | 26m | capability | 59s | +272/−34 | 223 | 81 | 56.0% · | contenteditable QUERY surface: contentEditable / isContentEditable / designMode (2026-07-2 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -18443,3 +18443,38 @@ TICK SHAPE: governance (self-audit GREEN + Constitution Check #23; map/instrumen
 change, zero WPT flip). CONSTELLATION: unchanged. Next constitution check due 463; self-audit due 465;
 surface audit due 458.
 WIKI: none — governance tick, no capability to document.
+
+## Tick 456 — contenteditable QUERY surface: contentEditable / isContentEditable / designMode (2026-07-23)
+
+PIVOT tick — the first brick of the Tier-1 rich-editing subsystem (PHASE0-BOUNDED-REMAINDER #3), per
+Constitution Check #23's recorded pivot off the mined-out selector/interaction vein. Decomposition:
+brick 1 = the editability QUERY surface (this tick); later bricks = the editing PATH (execCommand /
+beforeinput / keystroke DOM mutation) and Selection-in-editable. Kept atomic + honest: reflection +
+computed inheritance ONLY, never a claim that typing works.
+
+PROBED (RED-proven): contenteditable was ENTIRELY greenfield — no `isContentEditable`/`contentEditable`/
+`designMode` anywhere in engine/js or engine/page. So `el.isContentEditable` was `undefined` (falsy) on a
+`<div contenteditable>`, and every rich-text editor's editable-host DETECTION (ProseMirror/Slate/Draft/
+TinyMCE/CKEditor all branch on it) + every contenteditable-detection lib read the element as plain.
+
+FIX (capability — 1 file, event_loop.rs prelude, the `__HP`=__protoHTMLElement seam the validity/dialog/
+popover shims already use): (1) `el.contentEditable` — the enumerated IDL attribute getter/setter
+('true'|'false'|'plaintext-only'|'inherit'; setter round-trips to the content attribute, throws
+SyntaxError on garbage). (2) `el.isContentEditable` — computed: walk self→ancestors, the nearest EXPLICIT
+true/false/plaintext-only wins ('inherit' walks up), falling back to `document.designMode`. (3)
+`document.designMode` — 'on' makes the whole document editable; default 'off', ASCII-case-insensitive parse.
+
+GATE: G_CONTENTEDITABLE_QUERY (page, `contenteditable_query_surface_reflects_and_inherits`) — reflects the
+enumerated IDL, computes isContentEditable up the chain (inherit-down + explicit-false-blocks the walk),
+round-trips the setter, honours designMode on/off. RED-proven by neutering the shim guard → the whole
+surface reads undefined/false. Siblings green: g_check_visibility, g_selection, g_globals, g_reflect,
+g_global_reflect, g_capability, g_readonly_pseudo.
+
+TICK SHAPE: capability (contenteditable query surface — reflection + computed inheritance; +1 gate).
+GATES +1. CONSTELLATION: opens the contenteditable/rich-editor row (query half; editing path a later brick).
+WIKI: interaction-surface.md — the contenteditable editability query surface.
+NEXT VEIN NOTE: brick 2 of the subsystem is the EDITING path — `document.execCommand` (insertText/bold/
+italic at minimum) + `beforeinput`/`input` events + keystroke→DOM-text mutation on the editable host, fed
+through the existing dispatch_key/dispatch_composition seams; and `:read-write` honouring contenteditable
+(the edge left unmodelled in t454, now that the state is computable). Each is its own atomic brick — the
+editing path needs a decompose pass (caret model + Selection-in-editable) before starting.
