@@ -852,6 +852,24 @@ Collections reuse the existing `live(…, HTMLCollection)` factory (the `getElem
 the heap-sensitive `childNodes` NodeList path (tick-129 note). Gate `g_table_dom` (12 claims, proven red;
 the fixture writes `<tfoot>` before `<tbody>` so document order fails). [[js-engine]]
 
+## The `<table>` write API: `insertRow`/`insertCell` materialise structure (tick 436)
+
+The write side of the `<table>` DOM (`table.insertRow`, `tr.insertCell`, the `create*`/`delete*` section
+methods) was `undefined`, so a grid/spreadsheet widget that builds a table through the DOM instead of
+`innerHTML` — still a common shipped pattern — threw. Built on the tick-435 read helpers.
+
+- **`table.insertRow(index=-1)`** (and section `insertRow`) returns a new `<tr>`; `-1` appends. Inserting a
+  row into an **empty** table **materialises a `<tbody>`** and puts the row in it — a bare `<tr>` appended
+  to the `<table>` would then not even appear in `table.rows` (the logical-order reader). `tr.insertCell`
+  is the same on a row.
+- **An out-of-range index is an `IndexSizeError`** — a throw the caller branches on, *not* a clamp. Clamping
+  looks friendlier and silently corrupts a widget that inserts at a computed position inside a `try`.
+- **`createTHead`/`createTFoot`** REUSE an existing section (idempotent — libraries call them defensively);
+  `createTBody` always makes a new one; `createCaption` inserts the `<caption>` as the **first** child;
+  `deleteTHead`/`deleteTFoot`/`deleteCaption` remove them.
+
+Gate `g_table_write` (10 claims, proven red — all methods undefined pre-impl). [[js-engine]]
+
 ## `DOMStringMap` (`dataset`) and `NamedNodeMap` (`attributes`) enumerate their names (tick 130)
 
 The same legacy-platform-object gap as [[dom-semantics]]'s tick-129 `HTMLCollection`, on two more proxy-backed

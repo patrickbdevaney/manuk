@@ -654,5 +654,129 @@ pub const COLLECTIONS_JS: &str = r#"
       },
     });
   }
+
+  // ── The `<table>` WRITE API — insertRow/deleteRow/insertCell/deleteCell + the section/caption
+  //    convenience methods a data-grid library uses to BUILD a table programmatically.
+  //
+  // `table.insertRow()` and `tr.insertCell()` were `undefined`, so any code that constructs rows in JS
+  // (the classic non-framework pattern, and what many grid/spreadsheet widgets still emit) threw. The
+  // index rules are the spec's and they are exact: an out-of-range index is an IndexSizeError (not a
+  // clamp — code branches on the throw), `-1` means "at the end", and inserting into an empty table
+  // MATERIALISES a `<tbody>` rather than dropping a bare `<tr>` into the table.
+  function indexSizeError(msg) {
+    var e = new Error(msg || 'Index or size is negative or greater than the allowed amount');
+    e.name = 'IndexSizeError';
+    return e;
+  }
+  function ownerDoc(el) { return el.ownerDocument || (typeof document !== 'undefined' ? document : null); }
+  function lastChildTag(el, tag) {
+    var c = el.children, found = null;
+    for (var i = 0; i < c.length; i++) { if (c[i].tagName === tag) found = c[i]; }
+    return found;
+  }
+  if (EP) {
+    EP.insertRow = function (index) {
+      if (this.tagName !== 'TABLE' && this.tagName !== 'THEAD' && this.tagName !== 'TBODY' && this.tagName !== 'TFOOT') {
+        return undefined;
+      }
+      if (index === undefined) index = -1;
+      index = index | 0;
+      var isTable = this.tagName === 'TABLE';
+      var rows = isTable ? tableRows(this) : childRowsOf(this);
+      if (index < -1 || index > rows.length) { throw indexSizeError(); }
+      var doc = ownerDoc(this), tr = doc.createElement('tr');
+      if (!isTable) {
+        if (index === -1 || index === rows.length) { this.appendChild(tr); }
+        else { this.insertBefore(tr, rows[index]); }
+        return tr;
+      }
+      if (rows.length === 0) {
+        var tbody = lastChildTag(this, 'TBODY');
+        if (!tbody) { tbody = doc.createElement('tbody'); this.appendChild(tbody); }
+        tbody.appendChild(tr);
+      } else if (index === -1 || index === rows.length) {
+        var lastRow = rows[rows.length - 1];
+        lastRow.parentNode.appendChild(tr);
+      } else {
+        var ref = rows[index];
+        ref.parentNode.insertBefore(tr, ref);
+      }
+      return tr;
+    };
+    EP.deleteRow = function (index) {
+      if (this.tagName !== 'TABLE' && this.tagName !== 'THEAD' && this.tagName !== 'TBODY' && this.tagName !== 'TFOOT') {
+        return undefined;
+      }
+      index = index | 0;
+      var isTable = this.tagName === 'TABLE';
+      var rows = isTable ? tableRows(this) : childRowsOf(this);
+      if (index === -1) { index = rows.length - 1; }
+      if (index < 0 || index >= rows.length) { throw indexSizeError(); }
+      var row = rows[index];
+      row.parentNode.removeChild(row);
+    };
+    EP.insertCell = function (index) {
+      if (this.tagName !== 'TR') { return undefined; }
+      if (index === undefined) index = -1;
+      index = index | 0;
+      var cells = rowCells(this);
+      if (index < -1 || index > cells.length) { throw indexSizeError(); }
+      var td = ownerDoc(this).createElement('td');
+      if (index === -1 || index === cells.length) { this.appendChild(td); }
+      else { this.insertBefore(td, cells[index]); }
+      return td;
+    };
+    EP.deleteCell = function (index) {
+      if (this.tagName !== 'TR') { return undefined; }
+      index = index | 0;
+      var cells = rowCells(this);
+      if (index === -1) { index = cells.length - 1; }
+      if (index < 0 || index >= cells.length) { throw indexSizeError(); }
+      this.removeChild(cells[index]);
+    };
+    // createTHead/createTFoot REUSE an existing section; createTBody always makes a new one;
+    // createCaption reuses. thead is inserted before the first tbody/tfoot/tr; tfoot and tbody append.
+    function createOrGetSection(table, tag) {
+      var existing = firstChildTag(table, tag);
+      if (existing) return existing;
+      var doc = ownerDoc(table), sec = doc.createElement(tag.toLowerCase());
+      if (tag === 'THEAD') {
+        var before = null, c = table.children;
+        for (var i = 0; i < c.length; i++) {
+          var tn = c[i].tagName;
+          if (tn === 'TBODY' || tn === 'TFOOT' || tn === 'TR') { before = c[i]; break; }
+        }
+        if (before) { table.insertBefore(sec, before); } else { table.appendChild(sec); }
+      } else {
+        table.appendChild(sec);
+      }
+      return sec;
+    }
+    EP.createTHead = function () { return this.tagName === 'TABLE' ? createOrGetSection(this, 'THEAD') : undefined; };
+    EP.createTFoot = function () { return this.tagName === 'TABLE' ? createOrGetSection(this, 'TFOOT') : undefined; };
+    EP.createTBody = function () {
+      if (this.tagName !== 'TABLE') return undefined;
+      var doc = ownerDoc(this), tb = doc.createElement('tbody'), last = lastChildTag(this, 'TBODY');
+      if (last && last.nextSibling) { this.insertBefore(tb, last.nextSibling); }
+      else { this.appendChild(tb); }
+      return tb;
+    };
+    EP.createCaption = function () {
+      if (this.tagName !== 'TABLE') return undefined;
+      var existing = firstChildTag(this, 'CAPTION');
+      if (existing) return existing;
+      var doc = ownerDoc(this), cap = doc.createElement('caption');
+      if (this.firstChild) { this.insertBefore(cap, this.firstChild); } else { this.appendChild(cap); }
+      return cap;
+    };
+    function deleteFirstSection(table, tag) {
+      if (table.tagName !== 'TABLE') return undefined;
+      var s = firstChildTag(table, tag);
+      if (s) { table.removeChild(s); }
+    }
+    EP.deleteTHead = function () { return deleteFirstSection(this, 'THEAD'); };
+    EP.deleteTFoot = function () { return deleteFirstSection(this, 'TFOOT'); };
+    EP.deleteCaption = function () { return deleteFirstSection(this, 'CAPTION'); };
+  }
 })();
 "#;

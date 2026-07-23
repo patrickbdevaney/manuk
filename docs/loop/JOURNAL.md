@@ -17815,3 +17815,27 @@ WIKI: dom-semantics.md — table.rows is a live HTMLCollection in LOGICAL (thead
 SELF-AUDIT (tick 435, cadence): ./scripts/self-audit.sh → "methodology and reality agree" (all green —
 miner, gate-red-proofs, process-defect ledger 49, enforcement hooks, journal continuity, pattern ledger
 432 rows moving with the engine). LAST_AUDIT_TICK advanced 425→435.
+
+## Tick 436 — the <table> WRITE API: insertRow/deleteRow/insertCell + sections (2026-07-23)
+
+HYPOTHESIS (follow-on to t435's table READ surface, same collections vein): the write side was entirely
+`undefined` — a RED probe found insertRow/deleteRow/createTHead/createCaption/insertCell all undefined.
+Any code that builds table rows in JS (the classic non-framework pattern, still emitted by grid/
+spreadsheet widgets) threw.
+
+FIX (capability, engine/js/src/collections_js.rs — reuses t435's tableRows/childRowsOf/rowCells/firstChildTag):
+- `table.insertRow(index=-1)` / section `insertRow` → new <tr>; -1 appends; an EMPTY table MATERIALISES a
+  <tbody> (not a bare <tr>); out-of-range → IndexSizeError (a throw, never a clamp). `deleteRow(-1)` = last.
+- `tr.insertCell(index=-1)` / `deleteCell` → new/removed <td>, same index rules.
+- `createTHead`/`createTFoot` REUSE an existing section (thead inserted before the first tbody/tfoot/tr);
+  `createTBody` always makes a new one; `createCaption` inserts a <caption> as the first child; matching
+  `deleteTHead`/`deleteTFoot`/`deleteCaption`.
+
+GATE: G_TABLE_WRITE (`table_insert_delete_row_cell_and_sections`) — 10 claims incl. empty→tbody
+materialisation, insertRow(0)-before-existing, IndexSizeError on OOB, deleteRow(-1), createTHead reuse,
+createCaption-first-child. RED-proven (probe: all undefined). manuk-page green; g_table_dom / g_form_elements
+/ g_collections all still green.
+
+TICK SHAPE: capability (table insertRow/deleteRow/insertCell/deleteCell + createTHead/TFoot/TBody/Caption + deletes; +1 gate). GATES +1.
+CONSTELLATION: <table> DOM write API unknown→gated (G_TABLE_WRITE).
+WIKI: dom-semantics.md — the <table> write API (insertRow/insertCell materialise a tbody, OOB is IndexSizeError).

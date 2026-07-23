@@ -3612,3 +3612,18 @@ section; `cellIndex` is the index in `tr.cells`. Each is -1 when the element is 
 **The trap:** returning rows in document order looks right on the common `<thead><tbody><tfoot>` source
 and is silently wrong on the reordered one — which is exactly why the gate authors the fixture with the
 footer first. Collections reuse the existing HTMLCollection live() path, never the childNodes NodeList one.
+
+## The <table> write API: insertRow/deleteRow/insertCell + section methods (tick 436)
+
+**The class of the web this unlocks:** every grid/spreadsheet/data-table widget that BUILDS or edits a
+table through the DOM instead of innerHTML — the classic non-framework pattern, and what a lot of shipped
+table code still emits. The whole write side (`table.insertRow`, `tr.insertCell`, `createTHead`/`TFoot`/
+`TBody`/`Caption`, and the `delete*` inverses) was `undefined`.
+**(1)** The index rules are exact and code branches on them: `-1` means "at the end", an out-of-range
+index is an **IndexSizeError** (a THROW, never a clamp), and inserting a row into an EMPTY table
+**materialises a `<tbody>`** rather than dropping a bare `<tr>` into the table.
+**(2)** `createTHead`/`createTFoot` REUSE an existing section (idempotent — libraries call them defensively);
+`createTBody` always makes a new one; `createCaption` inserts the `<caption>` as the first child.
+**The trap:** clamping an out-of-range index looks friendlier but silently corrupts a widget that inserts
+at a computed position and catches the throw; and appending a bare `<tr>` to an empty `<table>` produces a
+row with no section, which then does not appear in `table.rows` (t435's logical-order reader).
