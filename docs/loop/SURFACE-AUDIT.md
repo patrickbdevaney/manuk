@@ -901,3 +901,58 @@ length unit — were invisible to the map. No stale-OPTIMISTIC lie found (nothin
 measured absent; the identity cluster was stale-PESSIMISTIC and is now measured/closed).
 
 LAST_SURFACE_AUDIT 448→458; next due 468.
+
+## Audit #20 — tick 468 (2026-07-23)
+
+**Sources (searched live, not from memory):**
+* web.dev/blog/interop-2026 · webkit.org/blog/17818 · hacks.mozilla.org (Launching Interop 2026) —
+  Interop 2026: 20 focus areas. Named: enhanced `attr()` (read any HTML attr into any property/type/unit),
+  media pseudo-classes (`:playing`/`:paused`/`:buffering`), Navigation API pre-commit handlers, scoped
+  custom element registry, cross-document view transitions.
+* web.dev/baseline/2026 + monthly digests (Jan/Apr/May 2026) — Baseline Newly Available: `contrast-color()`,
+  `@scope` (Firefox 146 joined), `:active-view-transition`, service-worker modules, Array
+  copy-transform methods (`toSorted`/`toReversed`/`with`), `field-sizing`.
+
+**RECONCILED — the map is largely FRESH (audits #17-19 held).** Every Interop-2026 focus area and most
+Baseline-2026 items were ALREADY on the map: `@scope` (doc, missing, t230), `:active-view-transition` (app),
+`attr()`/`shape()`/`contrast-color()` (doc — contrast-color now works, t466), media pseudo-classes
+(media, partial), scoped custom registries (app, missing), cross-document view transitions (app),
+`field-sizing` (doc, Baseline Jun 2026), `text-wrap: balance/pretty` (doc). `toSorted`/`toReversed`/`with`
+are mozjs Array methods — not a gap worth a row.
+
+### ADDED — genuine unknowns (the point of the audit)
+
+* **`::details-content` pseudo-element** (Baseline 2025) → new doc `unknown`. Styles/animates the OPEN
+  `<details>` disclosure panel — directly adjacent to this session's t467/t468 details work, and invisible
+  to the map. The canonical "animate a disclosure open" idiom pairs it with `@starting-style` +
+  `interpolate-size`.
+* **`@starting-style`** (Baseline 2025) → new doc `unknown`. The entry-transition primitive: the
+  before-open style for popover/dialog/`display:none`→shown animate-in. Widely used now that popover/dialog
+  are Baseline; a missing `@starting-style` means the element just pops in with no transition.
+* **`scrollbar-color` / `scrollbar-width`** (Baseline 2024) → new doc `unknown`. Dark-mode sites theme the
+  scrollbar; unstyled leaves a bright scrollbar on a dark UI. We have `scrollbar-gutter` (t155) but not the
+  color/width theming siblings.
+
+### THIS WINDOW'S CAPABILITY (context, not an audit find)
+
+* `<details>` completed on BOTH actuation paths: t467 summary-click exclusive `<details name>` accordions
+  (G_DETAILS_ACCORDION), t468 script-set `details.open` fires `toggle` + exclusivity via a contained
+  reflection-setter hook (G_DETAILS_OPEN_IDL). Re-probes confirmed dialog Escape/cancel, range/slider
+  actuation, DOM Range all already built (stale-PESSIMISTIC again).
+
+### STILL OPEN / EXCLUDED (with reason)
+
+* **`interpolate-size` / `calc-size`** — NOT added: already known via [[calc-size-interpolate-size-segfault]]
+  (open Bar-0 SIGSEGV, release-only heisenbug, fix in a fresh ASAN context). On the map by memory.
+* **`reading-flow`/`reading-order`, CSS `@function`, `if()`, `sibling-index()`/`sibling-count()`** — surfaced
+  as newer/bleeding-edge CSS (Chrome-2025, not yet cross-engine Baseline). Recorded here as CANDIDATES for a
+  future pass; not added as rows until they reach Baseline, to keep the map from filling with single-engine
+  experiments. `ic`/`ric` units (added audit #19) unchanged.
+* Service Worker runtime, WebGL, WebRTC, WebTransport, scroll-driven animations, JPEG XL, zstd — unchanged
+  (subsystems, v1-scope deferrals, or below the ROI line).
+
+**What we had been wrong about this pass:** `::details-content` and `@starting-style` — two Baseline-2025
+CSS features, one of them directly adjacent to the details work I shipped this very session — were invisible
+to the map. No stale-OPTIMISTIC lie found (nothing marked works/gated measured absent).
+
+LAST_SURFACE_AUDIT 458→468; next due 478.

@@ -18940,3 +18940,56 @@ NEXT VEIN NOTE: the bounded-gap re-probe vein (a near-done feature's ONE dropped
 `<details>` had the toggle but not the group. Similar candidates: `<dialog>` light-dismiss / `::backdrop`,
 form `<datalist>` autocomplete, `<output>` name-form association. Bigger honest moves unchanged: MEDIA
 H.264-High, IndexedDB (redb/heed), contenteditable EDITING subsystem, FID-SWEEP jarring invariants.
+
+## Tick 468 — script-set `details.open` fires `toggle` + enforces the accordion group (2026-07-23)
+
+The SCRIPT-path complement to t467. t467 made the summary-CLICK path fire `toggle` and enforce
+`<details name>` exclusivity (Rust, `Page::dispatch_click`). But a large slice of the web never clicks
+the summary — it drives the disclosure from STATE: React renders `<details open={isExpanded}>`, a
+controller writes `el.open = true`. Probed it: the `details.open` getter/setter already reflect (generic
+`reflect_js.rs` + `reflect_table.rs` `"details":[{"n":"open","t":"boolean"}]`), so the attribute flips —
+but SILENTLY: `fired:0`, no `toggle` event, and no name-exclusivity. A lazy-load `toggle` listener never
+fires (the section reveals empty) and a script-driven named accordion sits multiply-open.
+
+MECHANISM: the generic reflected-boolean setter (`reflect_js.rs`, the one shared accessor per IDL name on
+the Element prototype) is the single place BOTH `el.open=true` and `open={…}` funnel through. Added a
+CONTAINED side-effect in that accessor's `set`, scoped to `idl==='open' && tagName==='DETAILS'` (so
+`<dialog>.open` and every other reflection are untouched): capture the prior open-state, run the normal
+attribute set, and if open flipped, (a) if now-open and named, close every other open same-name
+`<details>` (iterate `getElementsByTagName('details')` + compare `name` — no selector quoting) and fire
+`toggle` on each, then (b) fire `toggle` on the element itself. Each actuation source (Rust click vs JS
+setter) fires its own toggle through its own entry point — no shared code, no double-fire.
+
+GATE: G_DETAILS_OPEN_IDL (page) — `el.open=true` on a named `<details>` closes its same-name sibling,
+fires `toggle` on BOTH (opened + auto-closed), and an UNNAMED details opened by script disturbs no group.
+Asserts on script-observable state (attribute presence + a toggle log) since `eval_for_test` does not
+re-lay-out; g_details_accordion already proves layout follows the attribute. RED-proven by gating the
+side-effect off → `aOpen:true`, empty log (the silent flip). Neighbors green: g_details,
+g_details_accordion, g_open_pseudo, g_dialog, AND the spec-critical reflection machinery I touched —
+g_reflect, g_global_reflect, g_reflect_numeric, g_ce_attr_changed, g_attrs.
+
+TICK SHAPE: capability (script-path details.open toggle+exclusivity via a contained reflection-setter
+hook; +1 gate). GATES +1. CONSTELLATION: state-driven / framework-controlled accordions now behave.
+WIKI: interaction-surface.md — extends the t467 accordion section. WEB-PATTERNS: React/state-driven
+disclosure UIs.
+NEXT VEIN NOTE: `<details>` is now COMPLETE on both actuation paths (click + script). The details.open
+side-effect hook establishes a pattern for the OTHER observable reflected boolean if one surfaces, but
+the surface is otherwise mature (dialog/range/sliders/Range all built — see [session-467-details-accordion]).
+Bigger honest moves unchanged: MEDIA H.264-High, IndexedDB (redb/heed), contenteditable EDITING subsystem,
+FID-SWEEP jarring invariants.
+
+### Tick 468 WALL-PARK note (harness-owned)
+t468 (G_DETAILS_OPEN_IDL) is COMPLETE + **VERIFY: all gates green** on this exact tree — build 21s warm,
+every gate passes INCLUDING manuk-shell (70) and the spec-critical reflection machinery I touched
+(g_reflect, g_global_reflect, g_reflect_numeric, g_ce_attr_changed), RED-proven, neighbors green. Parked
+on wall `gate 551s · build 21s · total 572s` > 245s ceiling — GATE RUNTIME under **swap 99.7% full**
+(8164/8191 MB stale pages, RAM otherwise free at 20GB) → mem-guard caps CARGO_BUILD_JOBS=8/32 and gate
+parallelism drags. NOT compute, NOT a t468 regression ([wall-ramdisk-incremental-flush] /
+[three-ticks-parked-wall-blocked]). A re-run reproduces ~551s because the cap is swap-driven, and swap
+won't clear without observer swapoff/swapon (sudo, harness-owned — I do not touch it per
+[harness-is-observer-owned]). Same park→warm-re-run land pattern as t465/t466: the tick lands on the next
+warm slot once the observer relieves memory pressure or a genuinely idle window frees the core cap. Not
+re-baselining the WALL mark (189s) per [wall-mark-min-lock-rebaseline]. **The worktree holds a COMPLETE
+tick — the next invocation should re-run ./scripts/tick.sh (message: /tmp/tick468.msg content, re-create
+it), NOT `git checkout -- .`.** Uncommitted set: engine/js/src/reflect_js.rs + g_details_open_idl.rs +
+wiki/web-patterns/journal/constellation(+3 unknowns)/surface-audit #20.

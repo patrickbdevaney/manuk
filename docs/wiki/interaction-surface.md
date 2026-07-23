@@ -2408,3 +2408,29 @@ Gated by `G_DETAILS_ACCORDION`: opening `#b` (`name="faq"`) auto-closes its open
 and fires exactly one `toggle` on `#a`; opening `#c` (`name="other"`) leaves `#b` open. RED-proven —
 without the exclusivity pass `#a` stays open when `#b` opens. Neighbors green: `g_details`,
 `g_open_pseudo`, `g_a11y_state`, `g_mouse_actuation`.
+
+## Script-set `<details>.open` fires `toggle` + honours the group (tick 468)
+
+The SCRIPT-path complement to the t467 accordion. t467 wired the summary-CLICK path (Rust,
+`Page::dispatch_click`); this wires the other way disclosures are driven — from STATE. A framework renders
+`<details open={isExpanded}>`, or a controller writes `el.open = true`. That goes through the IDL setter,
+not a click. The getter/setter already reflected (generic `reflect_js.rs` over the `reflect_table.rs`
+`"details":[{"n":"open","t":"boolean"}]` row), so the attribute flipped — but SILENTLY: no `toggle` event
+(`fired:0`) and no name-exclusivity. A lazy-load `toggle` listener never fired (the section revealed
+empty) and a script-driven named accordion could sit multiply-open.
+
+MECHANISM: the one shared reflected-boolean accessor (`reflect_js.rs`, defined once per IDL name on the
+Element prototype) is where BOTH `el.open=true` and `open={…}` funnel. A CONTAINED side-effect was added
+to that accessor's `set`, scoped to `idl==='open' && tagName==='DETAILS'` so `<dialog>.open` and every
+other reflection stay untouched: snapshot the prior open-state, do the normal attribute set, and if it
+flipped — when now-open and named, close every other open same-name `<details>`
+(`getElementsByTagName('details')` + `name` compare, no selector quoting) firing `toggle` on each; then
+fire `toggle` on the element itself. **Two entry points, not two sources of truth:** the Rust click path
+and the JS setter each fire their own toggle for their own actuation; they never call each other, so there
+is no double-fire and no shared exclusivity code to drift.
+
+Gated by `G_DETAILS_OPEN_IDL`: `el.open=true` on a named `<details>` closes its same-name sibling and
+fires `toggle` on both; an unnamed details opened by script disturbs no group. Asserts on script-observable
+state (attribute + toggle log) because `eval_for_test` does not re-lay-out — `g_details_accordion` already
+proves layout follows the attribute. RED-proven by gating the side-effect off (silent flip). Neighbors
+green incl. the reflection machinery: g_reflect, g_global_reflect, g_reflect_numeric, g_ce_attr_changed.

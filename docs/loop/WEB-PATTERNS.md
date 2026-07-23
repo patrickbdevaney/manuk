@@ -4071,3 +4071,16 @@ prevents, one level up. Now, when a `<details>` goes closed→open, if it carrie
 engine closes every other open same-name `<details>` and fires `toggle` on each. **The trap:** exclusivity
 is scoped strictly BY NAME — an empty name is not a group and a different name is a different group; closing
 "all other open details" regardless of name would break any page with two independent accordions.
+
+## State-driven disclosures reveal correctly (tick 468)
+
+**The class of the web this unlocks (React/Vue/state-controlled accordions & disclosures):** a framework
+that renders `<details open={isExpanded}>` — or any code that writes `el.open = true` — drives the widget
+through the IDL setter, never a summary click. The attribute already reflected, but the change was silent:
+no `toggle` event and no `<details name>` exclusivity, so a lazy-load listener wired to `toggle` never
+fired (the panel revealed empty) and a script-controlled named group could show every section at once. Now
+a contained hook in the shared reflected-boolean setter fires `toggle` and enforces same-name exclusivity
+on the script path too, matching the click path (tick 467). **The trap:** the hook is scoped strictly to
+`<details>.open` — `<dialog>.open` (driven by show()/close(), not the IDL boolean) and every other
+reflected attribute must stay side-effect-free, or the change becomes a regression in the spec-critical
+reflection machinery it lives in.

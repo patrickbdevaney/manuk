@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **243** | ticks 1–467 |
-| median tick cycle | **20m** | 242 intervals |
+| ticks landed | **244** | ticks 1–468 |
+| median tick cycle | **20m** | 243 intervals |
 | median, last 10 | **53m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.80** | 301.5h elapsed |
-| median verify wall | **60s** | 182 ticks |
+| **ticks per hour** | **0.80** | 302.1h elapsed |
+| median verify wall | **60s** | 183 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **234**
+* **live gates**: 27 → **235**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**143 of 243 ticks** (59%) moved a
+**144 of 244 ticks** (59%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **143** capability ticks, median cycle **20m**
-* median diff per tick: **+216 / −34** lines across 9 files
+* **144** capability ticks, median cycle **20m**
+* median diff per tick: **+217 / −34** lines across 9 files
 
 ## Every tick
 
@@ -340,5 +340,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **463** | 2026-07-23 16:52 | 61m | capability | 60s | +276/−56 | 231 | 81 | 56.0% · | document.execCommand('copy'/'selectAll'), the legacy copy-button path (2026-07-23) |
 | **465** | 2026-07-23 18:02 | 70m | capability | 69s | +164/−34 | 233 | 81 | 56.0% · | `color-scheme` reaches getComputedStyle AND darkens the canvas default (2026-07-23) |
 | **467** | 2026-07-23 18:31 | 29m | capability | 63s | +234/−5 | 234 | 81 | 56.0% · | exclusive `<details name>` accordions: one panel open at a time (2026-07-23) |
+| **468** | 2026-07-23 19:10 | 38m | capability | 58s | +272/−6 | 235 | 81 | 56.0% · | script-set `details.open` fires `toggle` + enforces the accordion group (2026-07-23) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

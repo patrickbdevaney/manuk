@@ -264,7 +264,40 @@ pub const REFLECT_JS: &str = r#"
       },
       set: function (v) {
         var d = descFor(this, idl);
-        if (d && !SKIP_TYPES[d.t]) set(this, d, v);
+        if (d && !SKIP_TYPES[d.t]) {
+          // `<details>.open` is the ONE reflected boolean with observable side effects: setting it via
+          // the IDL (a state-driven accordion writing `el.open = isOpen`, or React rendering `open={…}`)
+          // must fire `toggle` and, for a named group, enforce exclusivity — exactly as a summary click
+          // does (handled Rust-side in `Page::dispatch_click`; this is the SCRIPT-path complement). A
+          // plain reflection would flip the attribute silently, so a lazy-load `toggle` listener never
+          // fires and a `<details name>` group could sit multiply-open. Scoped to DETAILS/open so every
+          // other reflection — including `<dialog>.open`, driven by show()/close() — is untouched.
+          var detailsOpen = (idl === 'open' && this.tagName === 'DETAILS');
+          var wasOpen = detailsOpen && this.hasAttribute('open');
+          set(this, d, v);
+          if (detailsOpen) {
+            var isOpen = this.hasAttribute('open');
+            if (isOpen !== wasOpen) {
+              if (isOpen) {
+                // EXCLUSIVE ACCORDION: opening a named details closes its open same-name siblings, and
+                // fires `toggle` on each (a collapsed panel learns it collapsed). Iterate the tag rather
+                // than querySelector to avoid quoting a name into a selector. Empty name = not a group.
+                var nm = this.getAttribute('name');
+                if (nm) {
+                  var all = document.getElementsByTagName('details');
+                  for (var j = 0; j < all.length; j++) {
+                    var sib = all[j];
+                    if (sib !== this && sib.getAttribute('name') === nm && sib.hasAttribute('open')) {
+                      sib.removeAttribute('open');
+                      try { sib.dispatchEvent(new Event('toggle', { bubbles: false, cancelable: false })); } catch (e) {}
+                    }
+                  }
+                }
+              }
+              try { this.dispatchEvent(new Event('toggle', { bubbles: false, cancelable: false })); } catch (e) {}
+            }
+          }
+        }
         else Object.defineProperty(this, idl, { value: v, writable: true, configurable: true, enumerable: true });
       },
     });
