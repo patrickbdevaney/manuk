@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **211** | ticks 1–421 |
-| median tick cycle | **18m** | 210 intervals |
-| median, last 10 | **23m** | 10 intervals |
+| ticks landed | **212** | ticks 1–423 |
+| median tick cycle | **18m** | 211 intervals |
+| median, last 10 | **25m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.75** | 280.6h elapsed |
-| median verify wall | **59s** | 150 ticks |
+| **ticks per hour** | **0.75** | 281.1h elapsed |
+| median verify wall | **59s** | 151 ticks |
 | wall trend | 39s → 57s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **190**
+* **live gates**: 27 → **191**
 * **✅ rows in the capability ledger**: 144 → **328**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**112 of 211 ticks** (53%) moved a
+**113 of 212 ticks** (53%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **112** capability ticks, median cycle **18m**
-* median diff per tick: **+210 / −34** lines across 8 files
+* **113** capability ticks, median cycle **18m**
+* median diff per tick: **+212 / −34** lines across 8 files
 
 ## Every tick
 
@@ -308,5 +308,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **418** | 2026-07-22 20:43 | 26m | measurement | 55s | +78/−33 | 187 | 81 | 56.0% · | Intl: measure-and-pin the i18n formatting capability (2026-07-22) |
 | **419** | 2026-07-22 21:01 | 18m | measurement | 66s | +266/−45 | 188 | 81 | 56.0% · | Element.checkVisibility(): measure-and-pin (2026-07-22) |
 | **421** | 2026-07-22 21:41 | 40m | capability | 57s | +216/−36 | 190 | 81 | 56.0% · | structuredClone: preserve BINARY types, not degrade them (2026-07-22) |
+| **423** | 2026-07-22 22:08 | 27m | capability | 57s | +364/−40 | 191 | 81 | 56.0% · | canvas ImageData + putImageData: move real pixels, not no-op (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

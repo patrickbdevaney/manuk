@@ -1087,3 +1087,26 @@ element COUNT (`x.length`), a DataView a byte length — distinguished by `BYTES
 **Honest limit:** `Blob`/`File`/`SharedArrayBuffer` are still not cloned (SAB is cross-origin-isolated
 only; Blob/File match the IndexedDB encoding's known gap), and transfer-list transfer (vs copy) is not
 modelled.
+
+## putImageData is a raw pixel blit, ImageData is the buffer libraries build (tick 423)
+
+The canvas 2D backing store is a `tiny_skia::Pixmap` per `<canvas>` node (engine/js/src/canvas.rs,
+keyed by NodeId). `getImageData` reads it (demultiplying to straight-alpha RGBA); tick 423 added the
+write half. Two facts shape it:
+
+- **`putImageData` is NOT a draw.** The HTML spec says it ignores the current transform, `globalAlpha`,
+  `globalCompositeOperation`, shadows and clipping — it *replaces* the pixels in the destination
+  rectangle. So `canvas::put_image_data` bypasses `Paint` and assigns premultiplied pixels directly into
+  `Pixmap::pixels_mut()` (the exact inverse of `get_image_data`), then marks the node dirty. Routing it
+  through `fill_rect` would have applied the transform and alpha and quietly corrupted every filter.
+- **The dirty-rectangle overload is resolved on the JS side.** `putImageData(img, dx, dy, dirtyX,
+  dirtyY, dirtyW, dirtyH)` clips the source sub-rect (handling negative extents) and passes the narrowed
+  window to the FFI, so the native side has one simple `(x, y, w, h, data)` signature. The pixel array
+  crosses as a **plain `Array`**, not the `Uint8ClampedArray`, because the shared `arg_f32_array` reader
+  uses `GetArrayLength`, which only sees JS arrays.
+
+`ImageData` is the constructor global libraries build pixels into before blitting: `new ImageData(w, h)`
+(zeroed) or `new ImageData(Uint8ClampedArray, w[, h])` (adopt, infer height). Its absence threw
+`ImageData is not defined` and killed the pipeline on line one; `get`/`createImageData` now return real
+instances of it. **Honest limit:** `createImageBitmap` from an `ImageData`/`Blob` source still rejects
+(no decode-to-pixels path); this tick is the CPU-side pixel buffer, not a GPU upload.

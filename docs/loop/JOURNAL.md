@@ -17346,3 +17346,46 @@ g_form/g_response_json/g_xhr_progress all still green.
 TICK SHAPE: capability (Blob binary-part byte fidelity + readAsArrayBuffer; +1 gate). GATES +1.
 CONSTELLATION: Blob from binary parts unknown→gated (G_BLOB_BINARY).
 WIKI: storage.md — "a Blob holds BYTES, not String(part) — binary parts and readAsArrayBuffer".
+
+## Tick 423 — canvas ImageData + putImageData: move real pixels, not no-op (2026-07-22)
+
+HYPOTHESIS (probe-a-works-capability for hidden corruption, continued from t421/t422 — now the CANVAS
+2D pixel surface): a probe found `new ImageData(...)` throwing "not defined" and `putImageData` →
+`getImageData` NOT round-tripping. Two gaps: the `ImageData` constructor global was absent, and
+`putImageData` was `function(){}` — an honest no-op (comment said so). `getImageData` read the real
+tiny_skia surface (proven by fillRect→readback) but nothing could WRITE pixels back, so every canvas
+filter/histogram/editor/QR-reader silently discarded its edit. Direct pixel access is the whole of the
+canvas image-processing surface.
+
+FIX (capability, native + JS): (1) native `crate::canvas::put_image_data` — a raw premultiplied blit
+straight into the `Pixmap` (no transform / globalAlpha / compositing, per the HTML spec; the mirror of
+`get_image_data`, which demultiplies out), marks the node dirty. (2) `cv_put_image_data` FFI
+(`__cvPutImageData`, registered), reads the pixel Array via the existing `arg_f32_array` and narrows to
+bytes. (3) JS: `putImageData` handles both the 3-arg (whole image) and 7-arg dirty-rectangle overloads
+(clips the source sub-rect, writes it at dx+dirtyX/dy+dirtyY); passes a plain Array since
+`arg_f32_array` uses `GetArrayLength` (JS-Array-only, not typed arrays). (4) the `ImageData` constructor
+global (both `(w,h)` and `(Uint8ClampedArray, w[, h])` overloads, RangeError on bad dims); `getImageData`
+/`createImageData` now return real `ImageData` instances.
+
+GATE: G_CANVAS_IMAGE_DATA (`image_data_and_put_image_data_move_real_pixels`) — five claims on pixels
+read back through getImageData: ImageData(w,h) shape, ImageData(array,w) height-inference + array adopt,
+putImageData round-trip exact RGBA at an offset, no neighbour bleed, and the dirty-rect overload writing
+only its sub-region. RED-proven: neutering the native write (early return) drops the round-trip to
+`put:0,0,0,0` (the old no-op). manuk-page green; g_canvas/g_canvas_gradient/g_canvas_image/
+g_canvas_pattern/g_canvas_conic/g_canvas_text/g_create_image_bitmap all still green.
+
+TICK SHAPE: capability (canvas ImageData ctor + real putImageData pixel write; +1 gate). GATES +1.
+CONSTELLATION: canvas ImageData + putImageData unknown→gated (G_CANVAS_IMAGE_DATA).
+WIKI: (paint/canvas) — putImageData is a raw premultiplied blit, not a draw; ImageData is the pixel
+buffer libraries build.
+
+WALL NOTE (tick 423, 2026-07-22 ~22:00): tick 423 is complete, green, RED-proven (canvas ImageData +
+real putImageData; GATES 190→191, CONST:platform +1, no regressions). Wall-blocked ONLY: verify banks
+~483-500s (build ~21-32s, unattributed ~483s) vs the 245s ceiling. Cause is environmental — an
+observer oracle crawl (nice-19 manuk-wpt PID 4022447) has run ~5.8h and still contends the parity/
+F-latency gate phase, and swap sits at 96-99% (thrashing those memory-heavy benchmarks). A JS+native
+pixel-write cannot add 460s of gate runtime. Earlier THIS session the same tree banked 61s when swap
+pressure was momentarily lower (21:23), so the ceiling is real and the tick is sound. Harness/infra is
+observer-owned (no scripts/ edits, no swap-cycle from the agent). Holding tick 423 in the tree, ready to
+land via `./scripts/tick.sh .git/tick423-ready.msg` on a warm re-run once the crawl finishes / swap
+eases. Not re-baselining the WALL mark.

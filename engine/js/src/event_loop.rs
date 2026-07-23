@@ -1432,15 +1432,46 @@ const PRELUDE: &str = r#"
 
           // ── Pixels. Real ones.
           ctx.getImageData = function(x, y, w, h){
-            w = Math.max(0, w|0); h = Math.max(0, h|0);
+            w = Math.max(1, w|0); h = Math.max(1, h|0);
             var raw = el.__cvGetImageData(x|0, y|0, w, h) || [];
-            return { width: w, height: h, colorSpace: 'srgb', data: new Uint8ClampedArray(raw) };
+            return new globalThis.ImageData(new Uint8ClampedArray(raw), w, h);
           };
           ctx.createImageData = function(w, h){
-            w = Math.max(0, w|0); h = Math.max(0, h|0);
-            return { width: w, height: h, colorSpace: 'srgb', data: new Uint8ClampedArray(w*h*4) };
+            // createImageData(w, h) — or createImageData(existingImageData), copying its dimensions.
+            if (w && typeof w === 'object') { h = w.height; w = w.width; }
+            w = Math.max(1, w|0); h = Math.max(1, h|0);
+            return new globalThis.ImageData(w, h);
           };
-          ctx.putImageData = function(){};              // honest no-op
+          // putImageData — a raw pixel REPLACE (no transform, globalAlpha or compositing, per spec).
+          // Two overloads: (img, dx, dy) writes the whole ImageData; the 7-arg form writes only the
+          // (dirtyX, dirtyY, dirtyW, dirtyH) sub-rectangle of the source. `__cvPutImageData` reads a
+          // plain Array (not a typed array), so the source bytes are copied out with slice/loop.
+          ctx.putImageData = function(img, dx, dy, dirtyX, dirtyY, dirtyW, dirtyH){
+            if (!img || !img.data) return;
+            dx = dx|0; dy = dy|0;
+            var iw = img.width|0, ih = img.height|0, src = img.data;
+            if (arguments.length >= 7) {
+              dirtyX = dirtyX|0; dirtyY = dirtyY|0; dirtyW = dirtyW|0; dirtyH = dirtyH|0;
+              if (dirtyW < 0) { dirtyX += dirtyW; dirtyW = -dirtyW; }
+              if (dirtyH < 0) { dirtyY += dirtyH; dirtyH = -dirtyH; }
+              if (dirtyX < 0) { dirtyW += dirtyX; dirtyX = 0; }
+              if (dirtyY < 0) { dirtyH += dirtyY; dirtyY = 0; }
+              if (dirtyX + dirtyW > iw) dirtyW = iw - dirtyX;
+              if (dirtyY + dirtyH > ih) dirtyH = ih - dirtyY;
+              if (dirtyW <= 0 || dirtyH <= 0) return;
+              var sub = new Array(dirtyW * dirtyH * 4);
+              for (var ry = 0; ry < dirtyH; ry++) {
+                for (var rx = 0; rx < dirtyW; rx++) {
+                  var so = ((dirtyY + ry) * iw + (dirtyX + rx)) * 4;
+                  var to = (ry * dirtyW + rx) * 4;
+                  sub[to] = src[so]; sub[to+1] = src[so+1]; sub[to+2] = src[so+2]; sub[to+3] = src[so+3];
+                }
+              }
+              el.__cvPutImageData(dx + dirtyX, dy + dirtyY, dirtyW, dirtyH, sub);
+            } else {
+              el.__cvPutImageData(dx, dy, iw, ih, Array.prototype.slice.call(src));
+            }
+          };
 
           // ── drawImage. Three overloads, normalised HERE to one nine-argument shape so the FFI has a
           // single signature — argument COUNT is the only thing that distinguishes them, and that is
@@ -1676,6 +1707,31 @@ const PRELUDE: &str = r#"
           this.__done(buf);
         };
         FRp.abort = function () { this.readyState = 2; };
+      }
+
+      // `new ImageData(w, h)` / `new ImageData(Uint8ClampedArray, w [, h])` — the pixel buffer every
+      // image-processing library, filter, histogram and WebGL software fallback constructs to hand to
+      // `putImageData`. Absent, `new ImageData(...)` threw "not defined" and the whole pixel pipeline
+      // died on the first line. The data is always straight-alpha RGBA, `w*h*4` bytes; the array
+      // overload lets a library build pixels itself and wrap them without a canvas.
+      if (typeof globalThis.ImageData === 'undefined') {
+        globalThis.ImageData = function ImageData(a, b, c) {
+          var data, w, h;
+          if (a instanceof Uint8ClampedArray) {
+            data = a; w = b | 0;
+            if (w <= 0) { throw new RangeError('ImageData: width must be positive'); }
+            if (data.length === 0 || data.length % 4 !== 0) { throw new RangeError('ImageData: data length must be a positive multiple of 4'); }
+            var px = data.length / 4;
+            if (px % w !== 0) { throw new RangeError('ImageData: data length is not a multiple of (width * 4)'); }
+            h = (c !== undefined) ? (c | 0) : (px / w);
+            if (h <= 0 || px !== w * h) { throw new RangeError('ImageData: dimensions do not match data length'); }
+          } else {
+            w = a | 0; h = b | 0;
+            if (w <= 0 || h <= 0) { throw new RangeError('ImageData: dimensions must be positive'); }
+            data = new Uint8ClampedArray(w * h * 4);
+          }
+          this.width = w; this.height = h; this.colorSpace = 'srgb'; this.data = data;
+        };
       }
 
       // `new Image()` / `new Audio()` / `new Option()` — these are ELEMENT factories, and a page that

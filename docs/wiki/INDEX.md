@@ -544,6 +544,7 @@
   - L1050 · getPropertyValue is total — a string for every input (tick 403)
   - L1060 · document.currentScript — a thread-local, set per classic evaluation (tick 404)
   - L1071 · structuredClone preserves binary types — the plain-object degrade is silent corruption (tick 421)
+  - L1091 · putImageData is a raw pixel blit, ImageData is the buffer libraries build (tick 423)
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -890,4 +891,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-805 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+806 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

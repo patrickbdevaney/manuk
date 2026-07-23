@@ -1733,6 +1733,7 @@ unsafe fn define_members(
         def_guarded!(def, c"__cvText", cv_text, 14);
         def_guarded!(def, c"__cvMeasureText", cv_measure_text, 5);
         def_guarded!(def, c"__cvGetImageData", cv_get_image_data, 4);
+        def_guarded!(def, c"__cvPutImageData", cv_put_image_data, 5);
         def_guarded!(def, c"__cvToDataURL", cv_to_data_url, 0);
         def_guarded!(def, c"__cvDrawImage", cv_draw_image, 11);
         def_guarded!(def, c"__cvSourceSize", cv_source_size, 1);
@@ -2662,6 +2663,26 @@ unsafe fn cv_get_image_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) ->
         JS_SetElement(&mut wrap_cx(cx), arr.handle(), i as u32, v.handle());
     }
     *vp = ObjectValue(arr.get());
+    true
+}
+
+/// `__cvPutImageData(x, y, w, h, data)` — blit straight-alpha RGBA bytes into the surface. `data` is the
+/// ImageData's `Uint8ClampedArray`, read as f32 elements (0-255) and narrowed to bytes. This is a raw
+/// pixel replace, not a draw: the JS side has already resolved the spec's dirty-rectangle overload into
+/// the (x, y, w, h) window to write.
+unsafe fn cv_put_image_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((_, node)) = this_node(vp) {
+        let x = f(cx, vp, argc, 0) as i32;
+        let y = f(cx, vp, argc, 1) as i32;
+        let w = f(cx, vp, argc, 2).max(0.0) as u32;
+        let h = f(cx, vp, argc, 3).max(0.0) as u32;
+        let data: Vec<u8> = arg_f32_array(cx, vp, argc, 4)
+            .into_iter()
+            .map(|v| v.clamp(0.0, 255.0) as u8)
+            .collect();
+        crate::canvas::put_image_data(node.0, x, y, w, h, &data);
+    }
+    *vp = UndefinedValue();
     true
 }
 

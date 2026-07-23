@@ -715,3 +715,51 @@ harness contention (observer-owned), re-runs warm, mark not retuned.
 remains the work list and the fidelity certificate remains the exit.
 
 **Next check due: tick 423.**
+
+## Check #19 — tick 423
+
+**Horizon:** Phase 0 — the FULL daily-driver checklist ("runs almost every website"), the v1 north
+star of CONSTITUTION.MD **Part VII**. **Gate:** the FIDELITY-SCORING-REDESIGN.md certificate (≥0.75
+structural/placement fidelity on ≥95% of the corpus + ≥0.70 per top-20 category), NOT a WPT
+percentage. Authoritative work list: PHASE0-BOUNDED-REMAINDER.md.
+
+**Gate or scoreboard?** Gate. Window 416-423 shifted the vein one level: from re-probing near-done
+RENDERING features to **probing a "works"-marked capability for hidden BINARY corruption / a stubbed
+sub-path, RED-proving the exact silent-fail, and fixing it**. **416** text-indent (first-line indent
++ the `-9999px` image-replacement idiom), **417** -webkit-line-clamp (N-line + …), **418** Intl
+measure-and-pin (ICU-backed, de-DE RED-prover), **419** Element.checkVisibility() measure-and-pin,
+**420** IndexedDB getAllRecords() (Interop-2026, store+index, the key≠primaryKey RED-prover), **421**
+structuredClone preserves binary types (a Uint8Array was degrading to `{0:..}` — silent corruption
+also via postMessage), **422** Blob from binary parts holds BYTES not `String(part)` +
+readAsArrayBuffer un-stubbed, **423** canvas ImageData ctor + real putImageData pixel write (was an
+honest no-op that discarded every filter/histogram/editor edit). Each moved component #1 with a RED
+edit reverted byte-for-byte; 420-423 are a coherent sub-vein (the platform's binary-data seams were
+lossy behind a "works" label).
+
+**Is the loop still pointed at the frontier?** Yes, and this window is squarely inside VII.1's TEST
+(fix a *visibly-broken site class*, not a conformance edge): structuredClone/Blob/ImageData
+corruption silently breaks uploads, image processing, decoded-media handling, and worker messaging —
+whole classes of app, not cosmetics. The measure-first discipline (Process Rule 2) paid repeatedly:
+a batch probe found ~15 modern JS/DOM built-ins ALREADY working (pinned Intl, checkVisibility) and
+isolated the three real corruption gaps (421/422/423) instead of rebuilding what worked. The higher
+marquee frontier is unchanged: the Tier-1 JARRING subsystems (YouTube-plays media JOIN first,
+contenteditable, software WebGL) need a decompose-before-starting context, not an atomic tick.
+
+**Is the agentic surface (component #2) being served?** Held. The driving seams
+(dispatch_click/key/composition, set_active/focus) are untouched and un-rotted. This window was
+component-#1 correctness at the JS-platform/canvas layer; every fix lands page-observable and each
+capability got its gate (the semantic surface — getComputedStyle, IDB shim, canvas 2D — stayed in
+lockstep, so I3 is served).
+
+**Any invariant bent?** No. Bar 0 held — every landed tick (420/421/422) additive and RED-proven,
+related regression suites green (t422: 9 blob/form/fetch/xhr/clipboard gates; t423: 7 canvas gates).
+I2 intact — no dependency forked; fixes are in our own shims/native canvas against the specs' own
+algorithms (structured-clone, Blob byte semantics, HTML putImageData raw-blit). I3 served. THE RATCHET
+honored — nothing traded; the wall's repeated cold ~500s readings are harness contention (an
+observer 5.8h oracle crawl + 96-99% swap, both observer-owned), the SAME tree warms to 57-66s on a
+quiet window and lands, mark not retuned.
+
+**PART VI / VII correction.** None. The four-component v1 scope is intact; PHASE0-BOUNDED-REMAINDER.md
+remains the work list and the fidelity certificate remains the exit.
+
+**Next check due: tick 431.**

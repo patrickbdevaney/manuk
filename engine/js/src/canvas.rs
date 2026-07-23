@@ -32,7 +32,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use tiny_skia::{
-    Color, FillRule, GradientStop, LinearGradient, Paint, PathBuilder, Pixmap, Point,
+    Color, ColorU8, FillRule, GradientStop, LinearGradient, Paint, PathBuilder, Pixmap, Point,
     RadialGradient, Rect, Shader, SpreadMode, Stroke, SweepGradient, Transform,
 };
 
@@ -418,6 +418,39 @@ pub fn get_image_data(node: u64, x: i32, y: i32, w: u32, h: u32) -> Vec<u8> {
         }
     });
     out
+}
+
+/// `putImageData(x, y, w, h, data)` — write NON-premultiplied RGBA bytes straight into the surface.
+///
+/// Unlike every drawing op, `putImageData` REPLACES pixels: the HTML spec says it ignores the current
+/// transform, `globalAlpha`, `globalCompositeOperation`, shadows and clipping — it is a raw blit of the
+/// source rectangle onto the canvas. So this bypasses `Paint` entirely and assigns premultiplied pixels
+/// directly (the mirror of `get_image_data`, which demultiplies on the way out). Pixels that fall
+/// outside the surface are dropped. `data` is straight-alpha RGBA, four bytes per pixel, row-major.
+pub fn put_image_data(node: u64, x: i32, y: i32, w: u32, h: u32, data: &[u8]) {
+    CANVASES.with(|c| {
+        if let Some(px) = c.borrow_mut().get_mut(&node) {
+            let (pw, ph) = (px.width() as i32, px.height() as i32);
+            let dst = px.pixels_mut();
+            for row in 0..h as i32 {
+                for col in 0..w as i32 {
+                    let (dx, dy) = (x + col, y + row);
+                    if dx < 0 || dy < 0 || dx >= pw || dy >= ph {
+                        continue;
+                    }
+                    let o = ((row * w as i32 + col) * 4) as usize;
+                    if o + 3 >= data.len() {
+                        continue;
+                    }
+                    // Straight-alpha RGBA → premultiplied, the storage form `pixels()` reads back out.
+                    dst[(dy * pw + dx) as usize] =
+                        ColorU8::from_rgba(data[o], data[o + 1], data[o + 2], data[o + 3])
+                            .premultiply();
+                }
+            }
+        }
+    });
+    mark_dirty(node);
 }
 
 /// PNG bytes for `toDataURL`.

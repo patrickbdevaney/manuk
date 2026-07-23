@@ -3430,3 +3430,17 @@ its RAW BYTES; a typed-array view contributes only its own window of the buffer 
 both look like "we handled it", both are silent corruption. And the neighbouring stub was worse:
 `FileReader.readAsArrayBuffer` returned `new ArrayBuffer(0)`, an empty buffer that throws no error and
 loses every byte.
+
+## Canvas pixels must be writable, not just readable (tick 423)
+
+**The class of the web this unlocks:** every canvas image-processing routine — grayscale/blur/threshold
+filters, histograms, barcode and QR readers, in-browser image editors, and the CPU fallback path of
+WebGL/Three/Pixi demos. They all build a `Uint8ClampedArray`, wrap it in `new ImageData(...)`, and blit
+it with `putImageData`. The canvas could READ pixels (`getImageData`) but `putImageData` was a no-op and
+`ImageData` did not exist, so a filter ran, wrote nothing, and left the image untouched — no error.
+**(1)** `putImageData` REPLACES pixels: it ignores the transform, `globalAlpha` and compositing (unlike
+every draw op) — a raw blit of the source rectangle. Implement it as a direct pixel write, not a
+`fillRect`, or the alpha and transform silently corrupt the result.
+**The trap:** a canvas with a working `getImageData` LOOKS like it has pixel access — the read half
+passes every probe — while the write half is a `function(){}` stub that discards silently. A round-trip
+gate (put then get and compare) is the only thing that catches it.
