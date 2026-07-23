@@ -216,3 +216,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 428	ccf1b5e	1784779220	2026-07-23T00:00:20-04:00	650	measurement	61	7	155	34	195	81	3896	6960	0	328	31	surface audit #16 + Temporal measure-and-pin (2026-07-22)
 430	782001f	1784781623	2026-07-23T00:40:23-04:00	2403	capability	528	6	135	3	197	81	3896	6960	0	328	31	event.getModifierState(key) reads the modifier flags (2026-07-22)
 431	1ef930a	1784783479	2026-07-23T01:11:19-04:00	1856	capability	62	11	247	35	198	81	3896	6960	0	328	31	element.scrollTo / scrollBy / scroll (2026-07-23)
+432	9244f20	1784785375	2026-07-23T01:42:55-04:00	1896	capability	60	10	284	40	199	81	3896	6960	0	328	31	CSSStyleDeclaration is array-like and carries !important (2026-07-23)

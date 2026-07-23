@@ -837,3 +837,17 @@ variant, the `pseudo_matches` arm (`el.attr("open").is_some()`, matching the att
 `:checked` matches `checked` and `:muted` matches `muted`, not a runtime property), and the `"open" =>
 Pseudo::Open` parser mapping. **Honest limit:** `<select>`'s open state is UI-only (no `open` attribute),
 so it is out of reach here — the same runtime-property fence `:checked` documents. [[dom-semantics]]
+
+## CSSStyleDeclaration: array-like + !important priority (tick 432)
+
+A style declaration — inline `el.style` and computed `getComputedStyle(el)` — is spec'd as an array-like
+object as well as a property map. Both now expose `.length`, `.item(i)` (the dash-case property NAME at
+that index, `''` past the end), and the indexed getter `style[i]`. The computed snapshot's ordered name
+list (`__n`) is the 49 standard longhands it exposes followed by the cascaded custom-property names, in
+the same order `getPropertyValue` answers them.
+
+Value and priority are separate. Inline `setProperty(k, v, 'important')` appends the flag;
+`getPropertyValue` and a camelCase read (`el.style.color`) return the value WITHOUT it; `getPropertyPriority`
+returns `'important'`; `cssText` keeps the raw text (the single source of truth — priority is stripped on
+read and re-appended on write, never shadowed). Computed `getPropertyPriority` always returns `''`.
+Gated by G_CSSOM_ENUMERATION.

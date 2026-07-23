@@ -17679,3 +17679,37 @@ ALL ticks, not a defect in 431 or 430 (both additive, RED-proven, standalone-gre
 (eleven), + Constitution #19/#20, Self-Audit 425, Wall Audit #8, Surface Audit #16 — all cadence current;
 tick 431 staged-ready. The productive clean-bounded capability vein is now largely mined; remaining gaps
 (form.elements named access, custom-element reactions) are subsystems needing dedicated decomposition.
+
+## Tick 432 — CSSStyleDeclaration is array-like and carries !important (2026-07-23)
+
+HYPOTHESIS (probe-a-works-capability vein, CSSOM surface): a broad try/catch probe across form/table/
+CSSOM/dataset surfaces found most already complete (dataset get+set, insertAdjacentHTML/Text/Element,
+closest/matches/getRootNode, classList.replace/toggle(force), getClientRects, CSS.escape/supports,
+DOMParser, cloneNode) — but the CSSStyleDeclaration was NOT array-like and dropped priority: inline
+`el.style.item` and `el.style.getPropertyPriority` were `undefined`, computed `getComputedStyle(el)` had
+NO `.length` at all (`cs.length` → undefined) and no `.item`, and `setProperty(k, v, 'important')`
+silently dropped its third argument. So a style-copy / CSS-in-JS serializer doing
+`for (i=0;i<s.length;i++) s.item(i)` threw `s.item is not a function`, and any code reading or setting an
+`!important` from JS got the wrong answer.
+
+FIX (capability, our own CSSOM shims in engine/js/src/dom_bindings.rs):
+- Computed style (`computed_style_js`): added an ordered dash-case `__n` names array (the 49 standard
+  longhands this snapshot exposes + the cascaded custom-property names, in `getPropertyValue` order),
+  plus `.length`, `.item(i)` (→ the name, `''` past the end per the CSSOM contract), and
+  `getPropertyPriority()` (always `''` — a computed value never carries a priority). The no-style
+  fallback object got the same three so it cannot throw either.
+- Inline style (`__mkStyle` Proxy): added `item(i)`, `getPropertyPriority(k)`, an indexed getter
+  (`style[0]` → the property NAME), and a real `!important` round-trip — `setProperty(k, v, 'important')`
+  appends the flag, `getPropertyValue`/a camelCase read STRIP it (value alone), `getPropertyPriority`
+  reports `'important'`, and `cssText` keeps the raw text. `removeProperty` now returns the old value.
+
+GATE: G_CSSOM_ENUMERATION (`cssom_declaration_is_array_like_and_carries_priority`) — 13 claims:
+inline item(0)/indexed[1]/length/OOB-empty, the full setProperty(...,'important') round-trip
+(value/priority/camel-strip/cssText-kept), and computed length>40 / item(0) / getPropertyPriority-exists /
+custom-prop-enumerates. RED-proven: stashing the dom_bindings.rs impl makes the script throw (→ "-") and
+all 13 claims fail. manuk-page green; g_computed_style / g_computed_custom_properties / g_overflow_cssom /
+g_css_supports / g_transform / g_iframe_rerender / g_hydration / g_silent_fail all still green.
+
+TICK SHAPE: capability (CSSStyleDeclaration item/length/indexed/getPropertyPriority + !important; +1 gate). GATES +1.
+CONSTELLATION: CSSStyleDeclaration array-like + priority unknown→gated (G_CSSOM_ENUMERATION).
+WIKI: css-cascade.md — CSSStyleDeclaration is array-like (length/item/indexed) and separates value from !important priority.

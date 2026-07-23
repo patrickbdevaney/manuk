@@ -203,6 +203,7 @@
   - L787 · text-align: start/end are LOGICAL — resolve them against direction, or the RTL web left-aligns (tick 414)
   - L807 · Computed custom properties reach getComputedStyle from Stylo (tick 427)
   - L830 · :open is taught to BOTH selector engines (tick 429)
+  - L841 · CSSStyleDeclaration: array-like + !important priority (tick 432)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -897,4 +898,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-812 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+813 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -710,6 +710,77 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         manuk_css::Dim::Auto => "none".to_string(),
         other => dim_css(other),
     };
+    // The ordered dash-case property names this snapshot exposes — the backing list for the
+    // array-like `CSSStyleDeclaration` surface (`.length`, `.item(i)`). A library that copies a
+    // computed style does `for (i=0;i<s.length;i++) s.item(i)`, so an absent `length`/`item` makes
+    // the whole declaration un-enumerable. Custom properties (`--foo`) enumerate after the standard
+    // longhands, matching the order `getPropertyValue` already answers them in.
+    let names_js = {
+        const STD: &[&str] = &[
+            "color",
+            "background-color",
+            "font-size",
+            "font-weight",
+            "font-style",
+            "font-family",
+            "line-height",
+            "text-align",
+            "display",
+            "position",
+            "overflow",
+            "overflow-x",
+            "overflow-y",
+            "visibility",
+            "white-space",
+            "opacity",
+            "width",
+            "height",
+            "margin-top",
+            "margin-right",
+            "margin-bottom",
+            "margin-left",
+            "padding-top",
+            "padding-right",
+            "padding-bottom",
+            "padding-left",
+            "top",
+            "right",
+            "bottom",
+            "left",
+            "z-index",
+            "transform",
+            "justify-content",
+            "align-items",
+            "align-self",
+            "flex-direction",
+            "flex-wrap",
+            "flex-grow",
+            "flex-shrink",
+            "flex-basis",
+            "row-gap",
+            "column-gap",
+            "box-sizing",
+            "min-width",
+            "max-width",
+            "min-height",
+            "max-height",
+            "scroll-snap-type",
+            "scroll-snap-align",
+        ];
+        let mut arr = String::from("[");
+        for (i, n) in STD.iter().enumerate() {
+            if i > 0 {
+                arr.push(',');
+            }
+            arr.push_str(&js_string_literal(n));
+        }
+        for (name, _) in cs.custom_properties.iter() {
+            arr.push(',');
+            arr.push_str(&js_string_literal(name));
+        }
+        arr.push(']');
+        arr
+    };
     let q = js_string_literal;
     format!(
         "({{color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
@@ -740,7 +811,10 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
           'scroll-snap-type':'scrollSnapType','scroll-snap-align':'scrollSnapAlign'}};\
           var k=m[p]||String(p).replace(/-([a-z])/g,function(_,c){{return c.toUpperCase();}});\
           var v=this[k];if(v===undefined)v=this[p];\
-          return v===undefined?'':String(v);}}}})",
+          return v===undefined?'':String(v);}},\
+          __n:{}, length:{}, \
+          item:function(i){{var n=this.__n[i];return n===undefined?'':n;}},\
+          getPropertyPriority:function(){{return '';}}}})",
         q(&rgba_css(&cs.color)),
         q(&cs.background_color.map(|c| rgba_css(&c)).unwrap_or_else(|| "rgba(0, 0, 0, 0)".into())),
         q(&format!("{}px", cs.font_size)),
@@ -819,6 +893,8 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
             obj.push('}');
             obj
         },
+        names_js,
+        49 + cs.custom_properties.len(),
     )
 }
 
@@ -834,7 +910,11 @@ unsafe fn window_get_computed_style(cx: *mut RawJSContext, argc: u32, vp: *mut V
     // The no-style fallback still honours the CSSOM contract: getPropertyValue exists and
     // returns '' — a bare `({})` turns `getComputedStyle(x).getPropertyValue(y).trim()` into
     // "getPropertyValue is not a function" on any element we could not style.
-    let src = js.unwrap_or_else(|| "({getPropertyValue:function(){return '';}})".to_string());
+    let src = js.unwrap_or_else(|| {
+        "({getPropertyValue:function(){return '';}, length:0, item:function(){return '';}, \
+          getPropertyPriority:function(){return '';}})"
+            .to_string()
+    });
     match eval_in_current_global(cx, &src) {
         Some(v) => *vp = v,
         None => *vp = NullValue(),
@@ -9165,10 +9245,22 @@ const CSSOM_PRELUDE: &str = r#"
             for (var k in o) out.push(k + ': ' + o[k]);
             el.setAttribute('style', out.join('; '));
         };
+        // A declaration value can carry a trailing `!important`. It is a PRIORITY, not part of the
+        // value: `getPropertyValue` returns the value alone, `getPropertyPriority` returns 'important',
+        // and `cssText` keeps the raw text. Stripping it here is what makes `setProperty(k,v,'important')`
+        // round-trip instead of silently dropping the flag (the whole point of `!important` from JS).
+        var stripImp = function (v) { return String(v).replace(/\s*!\s*important\s*$/i, ''); };
+        var hasImp = function (v) { return /!\s*important\s*$/i.test(String(v)); };
         var api = {
-            setProperty: function (k, v) { var o = parse(); o[dash(k)] = String(v); write(o); },
-            removeProperty: function (k) { var o = parse(); delete o[dash(k)]; write(o); },
-            getPropertyValue: function (k) { return parse()[dash(k)] || ''; }
+            setProperty: function (k, v, prio) {
+                var o = parse(); var val = stripImp(v);
+                if (prio && /important/i.test(String(prio))) val += ' !important';
+                o[dash(k)] = val; write(o);
+            },
+            removeProperty: function (k) { var o = parse(); var d = dash(k); var old = o[d] || ''; delete o[d]; write(o); return stripImp(old); },
+            getPropertyValue: function (k) { return stripImp(parse()[dash(k)] || ''); },
+            getPropertyPriority: function (k) { return hasImp(parse()[dash(k)] || '') ? 'important' : ''; },
+            item: function (i) { var ks = Object.keys(parse()); return ks[i] === undefined ? '' : ks[i]; }
         };
         var p = new Proxy(api, {
             get: function (t, prop) {
@@ -9176,7 +9268,11 @@ const CSSOM_PRELUDE: &str = r#"
                 if (Object.prototype.hasOwnProperty.call(t, prop)) return t[prop];
                 if (prop === 'length') return Object.keys(parse()).length;
                 if (typeof prop !== 'string') return undefined;
-                return parse()[dash(prop)] || '';
+                // `style[0]` is the INDEXED getter — it returns the property NAME at that index (dash-case),
+                // the array-like half of CSSStyleDeclaration that `item(i)` mirrors. Out of range -> undefined.
+                if (/^\d+$/.test(prop)) { var ks = Object.keys(parse()); return ks[+prop]; }
+                // A camelCase/dash read (`style.color`) returns the value WITHOUT its `!important` priority.
+                return stripImp(parse()[dash(prop)] || '');
             },
             set: function (t, prop, v) {
                 if (prop === 'cssText') { el.setAttribute('style', String(v)); return true; }

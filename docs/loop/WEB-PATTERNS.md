@@ -3544,3 +3544,20 @@ they inherit clamping and scroll-snap — reimplementing the scroll math in the 
 **The trap:** `scrollTop = n` passing makes scrolling look done, while the method form the ecosystem uses
 is absent — and a throw inside a click handler kills the whole interaction. And `behavior: 'smooth'` must
 be ACCEPTED (ignored is fine — jump to the correct position) not rejected, or the option throws.
+
+## CSSStyleDeclaration is array-like and separates value from !important (tick 432)
+
+**The class of the web this unlocks:** every library that ENUMERATES a style declaration — copying a
+computed style onto another element, a CSS-in-JS serializer walking `for (i=0;i<s.length;i++) s.item(i)`,
+an animation lib reading every property — and everything that reads or sets an `!important` from JS.
+`getComputedStyle(el)` had no `.length` at all and neither declaration had `.item`, so the enumeration
+loop threw `s.item is not a function`; `setProperty(k, v, 'important')` silently dropped its third arg.
+**(1)** A `CSSStyleDeclaration` is BOTH a map (`getPropertyValue`/`setProperty`) and an array (`.length`,
+`.item(i)` → the property NAME, indexed `s[i]`). `item(i)` past the end returns `''`, not `null` (the
+CSSOM contract differs from FileList/DOMRectList here).
+**(2)** A value and its PRIORITY are separate: `getPropertyValue` and a camelCase read (`s.color`) return
+the value ALONE, `getPropertyPriority` returns `'important'`, `cssText` keeps the raw `!important` text.
+Computed style's `getPropertyPriority` always returns `''` — a computed value never carries a priority.
+**The trap:** `getPropertyValue`/`setProperty` (the map half) passing makes the declaration look done,
+while the array half every serializer uses is absent — and reusing the parse/write helpers for priority
+(strip on read, append on write) keeps `cssText` as the single source of truth instead of a shadow flag.
