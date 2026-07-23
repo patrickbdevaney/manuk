@@ -3472,3 +3472,19 @@ the element — so `.content` must read the parser's fragment, and `template.chi
 the element's direct children) look interchangeable until you notice the parser fills one and the accessor
 reads the other. The imperative `createElement('template')+innerHTML` path hid the bug — its children ARE
 direct children, so it limped while the parser path was silently empty.
+
+## url.searchParams is live; building a URL with query params depends on it (tick 426)
+
+**The class of the web this unlocks:** every paginator, filter bar, sort control and API client that
+assembles a request as `const u = new URL(page); u.searchParams.set('page', String(n)); fetch(u)`. The
+`searchParams` object existed but was a dead SNAPSHOT — the mutation never touched `u.href`/`u.search`,
+so the ORIGINAL url was fetched and the page "didn't paginate" with no error. And `new
+URLSearchParams(new FormData(form))` — the standard form-to-query-string idiom — read the FormData's
+methods as keys.
+**(1)** `searchParams` is LIVE: a `set`/`append`/`delete`/`sort` rewrites `search` and `href` (preserving
+the `#hash`, dropping the `?` when the query empties). Its constructor accepts any ITERABLE of pairs — a
+FormData, a Map, another URLSearchParams — not only a literal array.
+**The trap:** a snapshot `searchParams` passes every read-only test (`u.searchParams.get('x')` is right)
+and only fails once something MUTATES it and then reads the URL back — which is exactly what "build a URL"
+means. And `Array.isArray` looks like "handle the sequence form" but silently excludes every other
+iterable of pairs.

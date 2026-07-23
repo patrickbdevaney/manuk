@@ -1233,3 +1233,24 @@ a response has already sat in an upstream shared cache before reaching us, so it
 `lifetime - Age`, not the whole lifetime (RFC 7234 §4.2.3). `age_secs` parses the integer header and
 `put` does `fresh_secs = lifetime.saturating_sub(age)`. An `Age` >= the lifetime is stale on arrival —
 and, composing with t345, still revalidatable iff a validator was present. [[js-engine]]
+
+## `url.searchParams` is live; its constructor takes any iterable of pairs (tick 426)
+
+`new URL(...)` (dom_bindings.rs) parses the href once and copies the components (`href`, `search`,
+`hostname`, …) onto the object, then builds `searchParams` from `search`. Tick 426 closed two gaps on the
+"build a URL with query params" path:
+
+- **Live `searchParams`.** Each mutating `URLSearchParams` method (`set`/`append`/`delete`/`sort`) now
+  calls `this.__notify()`, and the URL constructor sets `searchParams.__onchange` to rewrite `self.search`
+  and `self.href`. The rewrite REPLACES the query component of the current href *string* — find the
+  `#hash` (preserve it), strip any existing `?…`, splice the new query in — so it is robust to userinfo
+  and port without a re-parse, and it drops the `?` entirely when the query empties. A standalone
+  `URLSearchParams` (not from a URL) has no `__onchange`, so `__notify` is inert — no behaviour change.
+- **Iterable constructor init.** The object branch now iterates ANY `init[Symbol.iterator]()` as
+  `[name, value]` pairs — a FormData (iterable of pairs, so `new URLSearchParams(new FormData(form))` is
+  the standard form→query idiom), a Map, another URLSearchParams — and only falls to the
+  `record<string,string>` (`for..in`, `hasOwnProperty`-guarded) path for a plain object.
+
+**Honest limit:** the reverse link is not wired — assigning `url.search = '…'` or `url.href = '…'` does
+NOT rebuild `searchParams` (the components are plain copied values, not accessors); only the
+`searchParams → url` direction is live.

@@ -11555,15 +11555,33 @@ const WINDOW_PRELUDE: &str = r#"
                         else pairs.push([dec(kv.slice(0, i)), dec(kv.slice(i + 1))]);
                     });
                 } else if (init && typeof init === 'object') {
-                    if (Array.isArray(init)) init.forEach(function (p) { pairs.push([String(p[0]), String(p[1])]); });
-                    else for (var k in init) pairs.push([k, String(init[k])]);
+                    // A SEQUENCE of [name, value] pairs is anything iterable — an array, a Map, another
+                    // URLSearchParams, and crucially a FormData (it is iterable of pairs, so
+                    // `new URLSearchParams(new FormData(form))` is the standard "serialize this form to a
+                    // query string" idiom). The old code only special-cased `Array.isArray`, so a
+                    // FormData fell through to the record branch, which iterates the object's OWN methods
+                    // (append/get/…) instead of its entries — producing garbage keys, silently.
+                    if (typeof init[Symbol.iterator] === 'function') {
+                        var it = init[Symbol.iterator](), step;
+                        while (!(step = it.next()).done) {
+                            var pr = step.value;
+                            pairs.push([String(pr[0]), String(pr[1])]);
+                        }
+                    } else {
+                        // A record<string,string>: its own enumerable keys become the pairs.
+                        for (var k in init) if (Object.prototype.hasOwnProperty.call(init, k)) pairs.push([k, String(init[k])]);
+                    }
                 }
                 this._p = pairs;
                 // `application/x-www-form-urlencoded`: a space is `+`, not `%20`. That is what a
                 // server's form parser expects. `encodeURIComponent` alone gets it wrong — quietly, and
                 // only for values containing spaces, which is the worst possible distribution of a bug.
                 var enc = function (x) { return encodeURIComponent(String(x)).replace(/%20/g, '+'); };
-                this.append = function (k, v) { this._p.push([String(k), String(v)]); };
+                // `__onchange` (set by URL) makes `url.searchParams` LIVE — every mutation reflects back
+                // into `url.search`/`url.href`, as the spec requires. A standalone URLSearchParams has no
+                // hook, so the guard is a no-op there.
+                this.__notify = function () { if (this.__onchange) this.__onchange(); };
+                this.append = function (k, v) { this._p.push([String(k), String(v)]); this.__notify(); };
                 this.set = function (k, v) {
                     var found = false;
                     this._p = this._p.filter(function (p) {
@@ -11574,6 +11592,7 @@ const WINDOW_PRELUDE: &str = r#"
                         return true;
                     });
                     if (!found) this._p.push([String(k), String(v)]);
+                    this.__notify();
                 };
                 this.get = function (k) {
                     for (var i = 0; i < this._p.length; i++) if (this._p[i][0] === String(k)) return this._p[i][1];
@@ -11598,6 +11617,7 @@ const WINDOW_PRELUDE: &str = r#"
                     this._p = this._p.filter(function (p) {
                         return !(p[0] === k && (v === undefined || p[1] === String(v)));
                     });
+                    this.__notify();
                 };
                 // `sort()` — stable sort by key (name), compared by code units, as the spec says.
                 // Decorate with the original index so equal keys keep their relative order.
@@ -11608,6 +11628,7 @@ const WINDOW_PRELUDE: &str = r#"
                             return a[0][0] < b[0][0] ? -1 : a[0][0] > b[0][0] ? 1 : a[1] - b[1];
                         })
                         .map(function (x) { return x[0]; });
+                    this.__notify();
                 };
                 this.forEach = function (fn, t) { this._p.forEach(function (p) { fn.call(t, p[1], p[0], this); }, this); };
                 this.keys = function () { return this._p.map(function (p) { return p[0]; })[Symbol.iterator](); };
@@ -11627,6 +11648,21 @@ const WINDOW_PRELUDE: &str = r#"
                 var self = this;
                 for (var k in p) self[k] = p[k];
                 self.searchParams = new g.URLSearchParams(self.search);
+                // Make `searchParams` LIVE: a mutation (set/append/delete/sort) rewrites `self.search`
+                // and `self.href`. Every "build a URL with query params" idiom does `u.searchParams.set(
+                // 'page', 2); fetch(u)` — before this the mutation vanished and the original href was
+                // fetched. Rewrite by REPLACING the query component of the current href string (robust to
+                // userinfo/port/hash, no re-parse needed).
+                self.searchParams.__onchange = function () {
+                    var qs = self.searchParams.toString();
+                    self.search = qs ? '?' + qs : '';
+                    var h = self.href, hashIdx = h.indexOf('#');
+                    var hash = hashIdx >= 0 ? h.slice(hashIdx) : '';
+                    var base = hashIdx >= 0 ? h.slice(0, hashIdx) : h;
+                    var qIdx = base.indexOf('?');
+                    if (qIdx >= 0) base = base.slice(0, qIdx);
+                    self.href = base + self.search + hash;
+                };
                 self.toString = function () { return self.href; };
                 self.toJSON = function () { return self.href; };
             };

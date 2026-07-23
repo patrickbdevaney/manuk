@@ -17464,3 +17464,36 @@ lib.rs edit triggered a wider recompile but build is still only ~30s — the ~49
 not the tick. The SAME tree landed at 57s during a quiet window earlier this session (tick 424 @ 22:05).
 Harness/infra observer-owned (no scripts/ edits, no swap-cycle). Holding tick 425 ready to land via
 `./scripts/tick.sh .git/tick425-ready.msg` on a warm re-run. Not re-baselining the WALL mark.
+
+## Tick 426 — live url.searchParams + iterable URLSearchParams init (2026-07-22)
+
+HYPOTHESIS (probe-a-works-capability vein, form/URL surface): a probe of form/URL/history APIs found
+most correct but two URL-query gaps: `url.searchParams` mutations did NOT propagate to `url.href`/
+`search` (a dead snapshot), and `new URLSearchParams(formData)` produced garbage. Both sit on the single
+most common "build a URL with query params" path — `const u = new URL(page); u.searchParams.set('page',
+2); fetch(u)` (paginators, filter bars, API clients) — so the mutation vanished and the ORIGINAL url was
+fetched, silently.
+
+ROOT CAUSE: (1) the URL ctor set `self.searchParams = new URLSearchParams(self.search)` as a one-time
+snapshot with no back-link. (2) the URLSearchParams ctor only special-cased `Array.isArray` for the
+sequence form, so a FormData (which is iterable of `[name,value]` pairs) fell to the record branch and
+iterated its own METHODS (append/get/…) as keys.
+
+FIX (capability, JS-shim only): (1) each mutating URLSearchParams method (set/append/delete/sort) now
+calls `this.__notify()`, and the URL ctor sets `searchParams.__onchange` to rewrite `self.search` and
+`self.href` — by REPLACING the query component of the current href string (robust to userinfo/port,
+preserves the `#hash`, drops the `?` when the query empties). A standalone URLSearchParams has no hook, so
+`__notify` is a no-op there (no regression). (2) the ctor's object branch now iterates ANY iterable
+(`init[Symbol.iterator]`) as pairs — FormData, Map, another URLSearchParams, arrays — and keeps the
+`hasOwnProperty`-guarded record path for plain objects.
+
+GATE: G_URL_SEARCHPARAMS_LIVE (`url_searchparams_is_live_and_accepts_iterables`) — seven claims:
+set/append/delete rewriting href+search, #hash preservation, `?` dropped when empty, FormData + Map
+constructor init, and a standalone URLSearchParams unaffected. RED-proven: neutering `__notify` leaves the
+live claims showing the original href while the constructor claims (fd/map/solo) still pass — pinpointing
+the live hook. manuk-page green; g_urlsearchparams_complete/g_url_static/g_urlpattern/g_blob_url/
+g_fetch_stream/g_navigation_api/g_response_json all still green.
+
+TICK SHAPE: capability (live url.searchParams + iterable init; +1 gate). GATES +1.
+CONSTELLATION: live url.searchParams + iterable init unknown→gated (G_URL_SEARCHPARAMS_LIVE).
+WIKI: networking.md — "url.searchParams is live; its constructor takes any iterable of pairs".
