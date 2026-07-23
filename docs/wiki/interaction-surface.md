@@ -2151,3 +2151,30 @@ range (`el.scrollTo(0, 1e9)` lands at the real maximum) and its scroll-snap alig
 getters read is updated so `el.scrollTo(0, 100); el.scrollTop` reads the snapped value on the same line —
 agreeing with Chrome. `behavior: 'smooth'` is accepted and ignored: with no compositor timeline the
 engine jumps to the correct final position, a conforming fallback. [[box-layout]]
+
+## pointer-events: none is transparent to hit-testing (tick 448)
+
+`pointer-events` was dropped by the cascade entirely. Two symptoms, one root cause: `getComputedStyle(el)
+.pointerEvents` was `undefined`, and — the load-bearing defect — `document.elementFromPoint(x, y)` returned
+the topmost box *even when that box was `pointer-events: none`*. So a full-bleed decorative overlay (a
+gradient scrim, a drag-ghost, a `::before` sheen) swallowed every click meant for the content beneath it.
+This is the agentic actuation surface ([[js-engine]] component #2): an agent resolving a click target via
+`elementFromPoint` hit the transparent overlay, dispatched the click there, and the button underneath never
+fired.
+
+The fix has three parts. (1) `pointer-events` is now an inherited field on `ComputedStyle`, bridged from
+Stylo in `stylo_map.rs` via `clone_pointer_events()` — Stylo's servo build models only `auto`/`none` (the
+SVG-only keywords are `cfg(gecko)`), so the 2-variant `manuk_css::PointerEvents` is a faithful match. (2)
+`doc_element_from_point` consults the published `STYLES_PTR` snapshot (the same NodeId→ComputedStyle map
+`getComputedStyle` reads) and drops any candidate whose computed value is `None` — the point passes through
+to whatever is behind. Because the property is *inherited*, the computed value on each node already reflects
+the overlay→subtree cascade, and a descendant that re-enables with `pointer-events: auto` computes to `Auto`
+and is hit again, both correct with no extra tree-walk. (3) `computed_style_js` serializes `pointerEvents`
+(+ the kebab `getPropertyValue('pointer-events')`), so the value is no longer `undefined`.
+
+Gated by `g_pointer_events` (G_POINTER_EVENTS), RED-proven: before, `elementFromPoint(50,50)` over a
+`pointer-events:none` ghost returned the ghost, and `getComputedStyle().pointerEvents` was `undefined`. The
+gate also pins the no-over-correction claim (a *normal* overlay still wins its hit). One latent bug fell out
+in the same edit: `computed_style_js` hardcoded its `.length` as `49 + customs` against a 49-entry name
+list; growing the list to 50 exposed that the CSSOM enumeration loop (`for i<length`) had been one short of
+the final custom property — the count is now derived correctly. [[css-cascade]]

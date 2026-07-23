@@ -654,6 +654,10 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         Visibility::Hidden => "hidden",
         Visibility::Collapse => "collapse",
     };
+    let pointer_events = match cs.pointer_events {
+        manuk_css::PointerEvents::Auto => "auto",
+        manuk_css::PointerEvents::None => "none",
+    };
     let white_space = match cs.white_space {
         WhiteSpace::Normal => "normal",
         WhiteSpace::NoWrap => "nowrap",
@@ -732,6 +736,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
             "overflow-y",
             "visibility",
             "white-space",
+            "pointer-events",
             "opacity",
             "width",
             "height",
@@ -785,7 +790,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
     format!(
         "({{color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
           fontFamily:{}, lineHeight:{}, textAlign:{}, display:{}, position:{}, overflow:{}, overflowX:{}, overflowY:{}, \
-          visibility:{}, whiteSpace:{}, opacity:{}, \
+          visibility:{}, whiteSpace:{}, pointerEvents:{}, opacity:{}, \
           width:{}, height:{}, marginTop:{}, marginRight:{}, marginBottom:{}, marginLeft:{}, \
           paddingTop:{}, paddingRight:{}, paddingBottom:{}, paddingLeft:{}, \
           top:{}, right:{}, bottom:{}, left:{}, zIndex:{}, transform:{}, \
@@ -798,6 +803,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
           var m={{'background-color':'backgroundColor','font-size':'fontSize',\
           'font-weight':'fontWeight','font-style':'fontStyle','font-family':'fontFamily',\
           'line-height':'lineHeight','text-align':'textAlign','white-space':'whiteSpace',\
+          'pointer-events':'pointerEvents',\
           'margin-top':'marginTop',\
           'margin-right':'marginRight','margin-bottom':'marginBottom','margin-left':'marginLeft',\
           'padding-top':'paddingTop','padding-right':'paddingRight','padding-bottom':'paddingBottom',\
@@ -830,6 +836,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         q(overflow_y),
         q(visibility),
         q(white_space),
+        q(pointer_events),
         q(&opacity),
         q(&dim_css(&cs.width)),
         q(&dim_css(&cs.height)),
@@ -894,7 +901,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
             obj
         },
         names_js,
-        49 + cs.custom_properties.len(),
+        50 + cs.custom_properties.len(),
     )
 }
 
@@ -2069,10 +2076,29 @@ unsafe fn doc_element_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
                 return None;
             }
             let rects = &*p;
+            // `pointer-events: none` makes an element transparent to hit-testing — the point passes
+            // through it to whatever is behind. Consult the published style map (the same snapshot
+            // getComputedStyle reads); a node whose computed value is `None` is skipped entirely, so a
+            // decorative full-bleed overlay never steals a click meant for the content beneath it.
+            let styles = STYLES_PTR.with(|c| c.get());
+            let hittable = |node: NodeId| -> bool {
+                if styles.is_null() {
+                    return true;
+                }
+                (*styles).get(&node).map_or(true, |cs| {
+                    cs.pointer_events != manuk_css::PointerEvents::None
+                })
+            };
             let mut best: Option<(NodeId, f32)> = None; // (node, border-box area)
             for (&node, r) in rects.iter() {
                 let (rx, ry, rw, rh) = (r[0], r[1], r[2], r[3]);
-                if x >= rx && x < rx + rw && y >= ry && y < ry + rh && (*dom).is_element(node) {
+                if x >= rx
+                    && x < rx + rw
+                    && y >= ry
+                    && y < ry + rh
+                    && (*dom).is_element(node)
+                    && hittable(node)
+                {
                     let area = rw * rh;
                     let better = match best {
                         None => true,

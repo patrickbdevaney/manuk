@@ -151,6 +151,19 @@ pub enum Overflow {
     Clip,
 }
 
+/// `pointer-events` (inherited). `None` makes the element (and, by inheritance, its subtree unless a
+/// descendant sets `auto`) transparent to hit-testing: `elementFromPoint` and click dispatch pass
+/// *through* it to whatever is behind. The canonical use is a full-bleed decorative overlay that must
+/// not swallow clicks meant for the content beneath it — get this wrong and an agent (or the page's own
+/// script) clicking a button under such an overlay hits the overlay and the button never fires.
+/// Stylo's servo build models only these two values; the SVG-only keywords are `cfg(gecko)`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum PointerEvents {
+    #[default]
+    Auto,
+    None,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextAlign {
     Left,
@@ -743,6 +756,9 @@ pub struct ComputedStyle {
     pub border_radius: f32,
     /// `visibility` (inherited). `Hidden`/`Collapse` boxes still take space but are not painted.
     pub visibility: Visibility,
+    /// `pointer-events` (inherited). `None` = transparent to hit-testing (`elementFromPoint`/click
+    /// dispatch pass through). See [`PointerEvents`].
+    pub pointer_events: PointerEvents,
     /// `field-sizing: content` (Baseline June 2026) — the form control sizes from its CONTENT,
     /// so the UA's fixed-size presentational hints (`<textarea cols>` above all) must stand down
     /// and let intrinsic sizing run. `false` = `fixed`, the initial value.
@@ -904,6 +920,7 @@ impl ComputedStyle {
             border_style: BorderStyle::default(),
             border_radius: 0.0,
             visibility: Visibility::Visible,
+            pointer_events: PointerEvents::Auto,
             field_sizing_content: false,
             line_height_normal: true,
             mask_image: None,

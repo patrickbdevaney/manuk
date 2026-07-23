@@ -494,6 +494,7 @@
   - L2097 · :active — the last dynamic pseudo-class, fed end-to-end (G_ACTIVE_PSEUDO)
   - L2127 · Drag-and-drop editor half (tick 346)
   - L2139 · scrollTo/scrollBy reuse the scrollTop/scrollLeft setters (clamp + snap) (tick 431)
+  - L2155 · pointer-events: none is transparent to hit-testing (tick 448)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -913,4 +914,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-828 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+829 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

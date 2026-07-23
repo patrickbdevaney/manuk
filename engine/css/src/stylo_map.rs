@@ -337,6 +337,13 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     // its `.length` — the inline-start indent applied to the first line box in layout.
     s.text_indent = lp_to_dim(&cv.clone_text_indent().length);
 
+    // `pointer-events` — inherited; Stylo's servo build models only `auto`/`none`. `None` drops the
+    // element out of hit-testing (`elementFromPoint`, click dispatch) so clicks reach what is behind it.
+    s.pointer_events = match cv.clone_pointer_events() {
+        stylo::values::computed::ui::PointerEvents::None => crate::PointerEvents::None,
+        _ => crate::PointerEvents::Auto,
+    };
+
     // Display.
     s.display = map_display(cv.clone_display());
 

@@ -230,3 +230,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 445	98b11d8	1784808144	2026-07-23T08:02:24-04:00	3424	capability	63	9	150	44	212	81	3896	6960	0	328	31	the .text property for a/script/title (2026-07-23)
 446	84efc8f	1784809775	2026-07-23T08:29:35-04:00	1631	capability	60	10	213	38	213	81	3896	6960	0	328	31	datetime-local + week typed values (2026-07-23)
 447	f5ba241	1784810810	2026-07-23T08:46:50-04:00	1035	capability	61	10	322	42	214	81	3896	6960	0	328	31	<a>/<area> URL-decomposition setters (2026-07-23)
+448	a7e4016	1784813171	2026-07-23T09:26:11-04:00	2361	capability	532	13	302	38	215	81	3896	6960	0	328	31	pointer-events: none is transparent to hit-testing (2026-07-23)

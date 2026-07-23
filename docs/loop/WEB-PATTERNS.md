@@ -3782,3 +3782,21 @@ net stack uses), so the getter and any subsequent navigation see the change.
 grows a spurious `href`.
 **The trap:** the read-side working made this look done — a getter that returns the right `search` while the
 matching setter throws the value away is the dead-setter class (cf. textarea.value t440, output.value t444).
+
+## pointer-events: none is transparent to hit-testing (tick 448)
+
+**The class of the web this unlocks:** every page that lays a full-bleed `pointer-events: none` element over
+its content — gradient hero scrims, toast/notification layers, drag-ghosts, `::before` sheens, chart tooltips,
+loading shimmers. Before, `document.elementFromPoint` returned that overlay, so a click resolved to it and was
+swallowed; the button, link or menu-item *underneath* never received the event. This is also the agentic
+actuation surface (component #2): an agent (or a test harness) that resolves a click target by coordinate hit
+the transparent overlay and actuated the wrong element.
+**(1)** `pointer-events` is now an inherited computed value bridged from Stylo; `elementFromPoint` (and the
+click-dispatch path it feeds) drop any `none` candidate via the published styles snapshot, so the point passes
+through to the element behind. Because the property inherits, a descendant that re-enables with
+`pointer-events: auto` is hit again — no extra tree-walk needed.
+**(2)** `getComputedStyle(el).pointerEvents` and `getPropertyValue('pointer-events')` now resolve `"none"`/
+`"auto"` instead of `undefined`, so feature-detection and overlay-management code read a real value.
+**The trap:** the getComputedStyle gap looked like the whole bug, but the load-bearing defect was behavioral —
+hit-testing ignored the property. And the property-list growth exposed a latent CSSOM enumeration-count bug
+(a hardcoded `.length` one short of the final custom property).

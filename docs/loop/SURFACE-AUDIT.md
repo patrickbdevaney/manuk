@@ -786,3 +786,59 @@ mode this instrument exists to catch. No stale-OPTIMISTIC lie found this pass (n
 that measured absent).
 
 LAST_SURFACE_AUDIT 428→438; next due 448.
+
+## Audit #18 — tick 448 (2026-07-23)
+
+**Sources (searched, not from memory):**
+* Interop 2026 focus areas + investigation efforts — authoritative list from the WPT interop repo
+  (https://github.com/web-platform-tests/interop/blob/main/2026/README.md) cross-checked against the
+  WebKit announcement (https://webkit.org/blog/17818/announcing-interop-2026/). The 20 focus areas:
+  Anchor Positioning, advanced attr(), Container Style Queries, contrast-color(), CSS Zoom, Custom
+  Highlights, Dialog/popover additions, Fetch uploads and ranges, IndexedDB getAllRecords(), JSPI for
+  Wasm, Media pseudo-classes, Navigation API, Scoped custom element registries, Scroll-driven
+  Animations, Scroll Snap, shape(), View Transitions, Web Compat, WebRTC, WebTransport. Investigation
+  efforts: Accessibility testing, JPEG XL, Mobile testing, WebVTT.
+* Ladybird 2026 newsletters (https://ladybird.org/newsletter/2026-06-30/) — WPT 2,078,912 subtests,
+  test262 97.8%; recent adds Web Locks + file download (both already on our map).
+
+**RECONCILE result — the map is CURRENT against Interop 2026.** Every one of the 20 focus areas and all
+4 investigation efforts is already a constellation row (a testament to audits #15–#17 which caught the
+Interop-2026 set as it was announced). Spot-check of the ones most likely to be unmapped:
+* CSS Zoom (per-element `zoom`), advanced/typed attr(), shape(), contrast-color() → all on row 99
+  (`doc — CSS attr()/zoom/shape()/contrast-color()`, partial: content:attr string form landed t409, the
+  Level-5 typed forms + per-element zoom + shape() + contrast-color still MISSING).
+* Container Style Queries → row 97 (gated t379; style()/scroll-state() queries are the named residue,
+  they follow the size machinery).
+* JSPI for Wasm → row 96 (missing; wasm core works). JPEG XL → row 101 (measured-absent, below ROI:
+  Safari-only adoption). Fetch uploads+ranges → row 102 (gated t228, Range+206 byte-exact).
+* Scroll-driven animations → row 91 (missing; ScrollTimeline absent). Scoped custom element registries,
+  Custom Highlights, Anchor Positioning, WebRTC, WebTransport → all present as `missing`/`✗` rows.
+
+### ADDED — genuine unknowns (the point of the audit)
+
+* **`pointer-events` (CSS)** → now `gated` (G_POINTER_EVENTS, t448 this same window). It had had ZERO hits
+  in engine/css and was NOT on the map at all — a true unknown-unknown that audits #15–#17 missed even
+  while cataloguing the whole Interop 2026 set, because it is an OLD Baseline property, not a new one. It
+  surfaced via the constellation's "? outranks ✗" probe pass this session, and it carried a real
+  behavioral defect (elementFromPoint returned a pointer-events:none overlay, swallowing clicks), not just
+  a getComputedStyle gap. Landed the same tick it was discovered.
+
+### STILL OPEN from prior audits (carried, not re-measured this pass)
+
+* **`user-select` (CSS)** (audit #15, row 165) — remains `unknown`. Re-confirmed genuinely absent this
+  session (ZERO hits, getComputedStyle undefined), but its load-bearing effect (suppress selection) needs
+  USER mouse-drag selection GEOMETRY, which is unmodelled (row 18). Its only testable surface today is
+  getComputedStyle honesty — thinner than pointer-events, so pinned not built.
+
+### EXCLUDED (with reason)
+
+* Service Worker runtime, WebGL, WebRTC, WebTransport, JSPI, scroll-driven animations, JPEG XL — unchanged
+  from prior audits (XL out-of-v1 subsystems, or measured below the ROI line).
+
+**What we had been wrong about this pass:** `pointer-events` — a Baseline-since-forever property with a
+real click-eating defect — was invisible to the map entirely. The recurring lesson holds: the audit's job
+is to find holes the histogram can't see, and an OLD property is exactly the blind spot a "what's new in
+Interop 2026" scan walks right past. No stale-OPTIMISTIC lie found (visibilityState/permissions.query/
+userAgentData were probed and confirmed already-gated — stale-PESSIMISTIC on the pivot list, not the map).
+
+LAST_SURFACE_AUDIT 438→448; next due 458.

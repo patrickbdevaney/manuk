@@ -18158,3 +18158,42 @@ TICK SHAPE: capability (a/area URL-component setters re-serialise href via the u
 Also: Constitution Check #22 (tick 447; cadence) + Wall-time Audit #9 (tick 446; wall lean at 60s, no trim).
 CONSTELLATION: anchor URL-decomposition setters unknown→gated (G_ANCHOR_URL_SETTERS).
 WIKI: dom-semantics.md — <a>/<area> URL-decomposition setters (re-serialise href via the url crate).
+
+## Tick 448 — pointer-events: none is transparent to hit-testing (2026-07-23)
+
+PIVOT (Const-Check #22 + observer steer: the bounded value/URL-accessor vein is near-exhausted — move to a
+different vein). Probed the constellation `?` unknowns per the "? outranks ✗" rule. Found visibilityState/
+permissions.query/userAgentData ALREADY built+gated (stale-pessimistic on the pivot list). `user-select` and
+`pointer-events` genuinely absent (ZERO hits in engine/css). Picked `pointer-events` — it has a REAL
+behavioral defect, not just a getComputedStyle gap, AND it lands on the agentic actuation surface (component #2).
+
+HYPOTHESIS: `pointer-events` was dropped by the cascade entirely. RED probe (throwaway):
+`getComputedStyle(el).pointerEvents` = `undefined`; and `document.elementFromPoint(50,50)` over a full-bleed
+`pointer-events:none` overlay returned the OVERLAY (`efp:over`), not the element behind it — so an agent (or the
+page's own script) clicking a button under a decorative scrim hits the scrim and the button never fires.
+
+FIX (capability — 3 files):
+- engine/css/src/lib.rs: new inherited `PointerEvents{Auto,None}` enum + `ComputedStyle.pointer_events` field
+  (Default Auto). Servo Stylo models only auto/none (SVG keywords are cfg(gecko)) → faithful 2-variant match.
+- engine/css/src/stylo_map.rs: bridge `cv.clone_pointer_events()` → the field (inherited, so each node's computed
+  value already reflects the overlay→subtree cascade; a child's `pointer-events:auto` computes to Auto and is hit).
+- engine/js/src/dom_bindings.rs: `doc_element_from_point` consults the published STYLES_PTR snapshot (same map
+  getComputedStyle reads) and DROPS any `None` candidate — the point passes through to what's behind. Plus
+  `computed_style_js` serializes `pointerEvents` + kebab `getPropertyValue('pointer-events')`.
+
+CAUGHT IN THE SAME EDIT (latent bug): `computed_style_js` hardcoded `.length` as `49 + customs` against a
+49-entry STD name list; growing the list to 50 revealed the CSSOM enumeration loop (`for i<length`) had been one
+short of the final custom property. g_cssom_enumeration went RED (`custom:false`) → fixed the count to 50 → green.
+
+GATE: G_POINTER_EVENTS (`pointer_events_none_is_transparent_to_hit_testing`) — 5 claims: efp passes THROUGH a
+pointer-events:none overlay to the element behind; a NORMAL overlay still wins (no over-correction); pointerEvents
+resolves "none"; getPropertyValue kebab maps the same; initial value "auto" not undefined. RED-proven (efp:over;
+pointerEvents undefined). Sibling gates green: g_computed_style, g_element_from_point, g_cssom_enumeration (after
+count fix), g_get_property_value, g_overflow_cssom, all manuk-css (43).
+
+TICK SHAPE: capability (pointer-events cascade bridge + hit-test transparency + getComputedStyle exposure; +1 gate).
+GATES +1. CONSTELLATION: pointer-events (CSS) unknown→gated (G_POINTER_EVENTS).
+WIKI: interaction-surface.md — pointer-events: none is transparent to hit-testing.
+NEXT VEIN NOTE: `user-select` is the sibling unknown still open, but its behavioral effect (suppress selection)
+needs USER mouse-drag selection geometry which is unmodelled (see CONSTELLATION line 18) — its only testable
+surface today is getComputedStyle honesty (thinner). The richer pivot targets remain the Tier-1 subsystems.
