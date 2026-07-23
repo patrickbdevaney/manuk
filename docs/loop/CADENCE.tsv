@@ -240,4 +240,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 460	8abc9ba	1784832864	2026-07-23T14:54:24-04:00	2130	capability	214	8	232	16	227	81	3896	6960	0	329	31	custom-element `attributeChangedCallback` fires on a LIVE setAttribute (2026-07-23)
 461	c21b6d9	1784836296	2026-07-23T15:51:36-04:00	3432	capability	62	9	390	161	229	81	3896	6960	0	329	31	clipboard.read() returns a copied IMAGE (paste-a-screenshot) (2026-07-23)
 463	bdcda5f	1784839969	2026-07-23T16:52:49-04:00	3673	capability	60	10	276	56	231	81	3896	6960	0	329	31	document.execCommand('copy'/'selectAll'), the legacy copy-button path (2026-07-23)
-465	b36467d	1784842752	2026-07-23T17:39:12-04:00	2783	capability	60	12	367	88	232	81	3896	6960	0	329	31	`color-scheme` reaches getComputedStyle AND darkens the canvas default (2026-07-23)
+465	a5f5c24	1784844157	2026-07-23T18:02:37-04:00	4188	capability	69	9	164	34	233	81	3896	6960	0	329	31	`color-scheme` reaches getComputedStyle AND darkens the canvas default (2026-07-23)

@@ -18871,3 +18871,40 @@ regression — the tick is correct and green. Per [harness-is-observer-owned] I 
 cgroups. t465 stays parked in-tree; it lands on a warm re-run once the box has capacity for a sub-245s
 gate wall (observer relieves the memory pressure, or a genuinely idle slot). Not re-baselining the WALL
 mark (per [wall-mark-min-lock-rebaseline] / [three-ticks-parked-wall-blocked]).
+
+## Tick 466 — `contrast-color()` resolves to its legible black/white companion (2026-07-23)
+
+The high-yield PROBE pattern ("? outranks ✗; re-probe finds things already working"): `contrast-color()`
+was a constellation `?`-unknown. Probed it — CSS Color 5's `contrast-color(<color>)` (Baseline 2026, the
+accessible-theming idiom `color: contrast-color(var(--brand))` — pick a legible text color for a dynamic
+background without JS) turned out to WORK end-to-end with a single Option-1 pref flip.
+
+MECHANISM: Stylo 0.19 parses `contrast-color()` only behind its own `layout.css.contrast-color.enabled`
+pref (off by default → the declaration drops at parse and the color falls back to inherited/initial). Once
+on, Stylo computes a `ComputedColor::ContrastColor` variant, and this engine's color mapping ALREADY
+resolves it to the absolute black/white companion via `resolve_to_absolute` (the same path
+`background-color` uses). So the fix is one line in each of the two cascade pref-flip sites — no new
+resolution code.
+
+GATE: G_CONTRAST_COLOR (page, `contrast_color_resolves_to_the_legible_companion`) — `background-color:
+contrast-color(black)`→`rgb(255,255,255)`, `contrast-color(white)`→`rgb(0,0,0)`, and `color:
+contrast-color(black)`→white (the `color` property resolves it too). RED-proven by flipping the pref off →
+the declaration drops, backgroundColor reads `rgba(0,0,0,0)` and color stays black. Neighbors green:
+g_computed_style, g_get_property_value, g_color_scheme, g_css_supports.
+
+TICK SHAPE: capability (contrast-color() resolution via Option-1 pref flip; +1 gate). GATES +1.
+CONSTELLATION: flips the `doc`-class `? contrast-color()` unknown → works|gated. WIKI: css-cascade.md —
+new subsection after the color-scheme note.
+NEXT VEIN NOTE: the pref-flip vein (grid/container-queries/unimplemented/contrast-color) is now well-mined
+for the CHEAP wins. Remaining constellation `?` are subsystems (ESM module-graph, ic/ric CJK metrics) or
+measurement runs (test262, 100-tab RSS). Honest next moves: the ROADMAP-ANCHOR named ledger items or the
+FID-SWEEP jarring-invariant fixes. L-marquees unchanged: MEDIA H.264-High, IndexedDB (redb/heed),
+contenteditable EDITING subsystem.
+
+### Tick 466 WALL-PARK note (harness-owned)
+t466 (G_CONTRAST_COLOR) is COMPLETE + **VERIFY: all gates green** on this exact tree (build 22s warm,
+every gate incl. the new one passes, RED-proven, neighbors green). Parked on wall 554s>245s — GATE RUNTIME
+under swap-94% + mem-guard 8/32-core, NOT compute, NOT a regression ([wall-ramdisk-incremental-flush]:
+verify re-built the workspace TWICE mid-run, the flush-under-compiler race). Same park→warm-re-run land
+pattern as t465 earlier this session (which took 3-4 verify cycles for the box to free a sub-245s window,
+then landed at 60s). Not re-baselining the WALL mark. Lands on the next quiet slot.

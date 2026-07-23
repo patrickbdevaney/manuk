@@ -206,6 +206,7 @@
   - L840 · Computed custom properties reach getComputedStyle from Stylo (tick 427)
   - L863 · :open is taught to BOTH selector engines (tick 429)
   - L874 · CSSStyleDeclaration: array-like + !important priority (tick 432)
+  - L888 · contrast-color() is a one-pref win: the resolution path was already wired (tick 466)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -932,4 +933,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-847 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+848 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -4044,3 +4044,18 @@ while `light dark` defers to `prefers-color-scheme`. **Scope boundary:** only th
 modelled (the void has no text, so darkening it cannot make content unreadable); UA control/scrollbar
 appearance and the default dark text color are deeper system-color adjustments not modelled, and dark pages
 set their own content colors in practice.
+
+## Accessible theming picks legible text without JS (tick 466)
+
+**The class of the web this unlocks (dynamic-theme / brand-color UIs):** `contrast-color(<color>)` (CSS
+Color 5, Baseline 2026) returns whichever of black/white contrasts more with the given color — so a page
+can write `color: contrast-color(var(--brand))` and get legible text over any dynamic background without a
+JS luminance calculation. Before this the function was dropped at parse (Stylo gates it behind
+`layout.css.contrast-color.enabled`) and the declaration fell back to the inherited/initial color —
+unreadable text on a saturated background.
+**(1)** Flipping the pref lets Stylo parse it and compute a `ComputedColor::ContrastColor`, which the
+engine's color mapping already resolves to the absolute companion via `resolve_to_absolute`. **(2)** It
+resolves for both `color` and `background-color` (any color property), and `getComputedStyle` reports the
+resolved rgb. **The trap:** the function computes to a deferred `ContrastColor` variant, NOT an absolute
+color at computed time — it works only because the used-value resolution path was already wired; a naive
+`clone_*` that skipped resolution would have serialized `contrast-color(...)` back as a string.

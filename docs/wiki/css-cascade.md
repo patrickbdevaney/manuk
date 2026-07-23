@@ -884,3 +884,14 @@ Value and priority are separate. Inline `setProperty(k, v, 'important')` appends
 returns `'important'`; `cssText` keeps the raw text (the single source of truth — priority is stripped on
 read and re-appended on write, never shadowed). Computed `getPropertyPriority` always returns `''`.
 Gated by G_CSSOM_ENUMERATION.
+
+### `contrast-color()` is a one-pref win: the resolution path was already wired (tick 466)
+
+`contrast-color(<color>)` (CSS Color 5, Baseline 2026) is gated behind Stylo's own
+`layout.css.contrast-color.enabled` pref (its OWN pref, not the shared `layout.unimplemented`). Off by
+default → dropped at parse → the color declaration falls back. Flipping it on is an Option-1 pref flip like
+`layout.grid.enabled`: Stylo then computes a `ComputedColor::ContrastColor(Box<Color>)` variant, which the
+engine's `stylo_map` color path ALREADY resolves to the black/white companion through `resolve_to_absolute`
+(the same call `background-color` uses at line 268). So no new resolution code — the value lands as
+`rgb(255,255,255)` / `rgb(0,0,0)` in `getComputedStyle`. The lesson repeats: re-probe a `?`-unknown before
+building it — `contrast-color()` was carried as unknown and worked end-to-end behind one pref.

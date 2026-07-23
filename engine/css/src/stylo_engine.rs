@@ -323,6 +323,13 @@ pub fn cascade_via_stylo_sized(
     // set of computed values via explicit `clone_*` calls (user_select is the sole addition from this
     // set), so enabling the other properties it also ungates changes nothing we read.
     stylo_static_prefs::set_pref!("layout.unimplemented", true);
+    // `contrast-color(<color>)` (CSS Color 5, Baseline 2026) is gated behind its own
+    // `layout.css.contrast-color.enabled` pref — off by default, so `color: contrast-color(black)` is
+    // dropped at parse and the declaration falls back. Flip it on: Stylo then parses the function and
+    // computes a `ComputedColor::ContrastColor`, which our color mapping already resolves to the
+    // black/white companion through `resolve_to_absolute` (the accessible-theming idiom: pick the
+    // legible text color for a dynamic background without JS).
+    stylo_static_prefs::set_pref!("layout.css.contrast-color.enabled", true);
     // **The parser's verdict, read off the `Dom` it already handed us.** Everything below that used to
     // say `QuirksMode::NoQuirks` unconditionally now says `qm`. Stylo already implements the quirks
     // themselves (unitless lengths, case-insensitive id/class matching, the `<font size>` table) — this
@@ -1641,6 +1648,7 @@ pub fn supports_condition(condition: &str) -> bool {
     stylo_static_prefs::set_pref!("layout.grid.enabled", true);
     stylo_static_prefs::set_pref!("layout.container-queries.enabled", true);
     stylo_static_prefs::set_pref!("layout.unimplemented", true);
+    stylo_static_prefs::set_pref!("layout.css.contrast-color.enabled", true);
 
     // `CSS.supports(cond)` takes a <supports-condition>, but every browser also accepts a bare
     // declaration (`CSS.supports('display: flex')`). Wrap only when the caller did not, and leave
