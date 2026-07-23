@@ -5807,16 +5807,31 @@ impl Page {
     /// is exactly "a page shorter than its viewport", and it was never an iframe bug at all.
     fn canvas_background(&self) -> Rgba {
         let root = self.dom.root();
+        let mut dark_scheme = false;
         for sel in ["html", "body"] {
             let Some(n) = self.dom.find_first(sel) else {
                 continue;
             };
             let _ = root;
-            if let Some(bg) = self.styles.get(&n).and_then(|st| st.background_color) {
-                if bg.a > 0 {
-                    return bg;
+            if let Some(st) = self.styles.get(&n) {
+                // `color-scheme: dark` on the root opts the whole page into a dark UA appearance —
+                // its most visible effect is the canvas default: a dark-only page with no explicit
+                // background must paint dark below its content, not on the white void the old
+                // hard-coded WHITE produced. An explicit background still wins (checked first).
+                if st.color_scheme.is_dark() {
+                    dark_scheme = true;
+                }
+                if let Some(bg) = st.background_color {
+                    if bg.a > 0 {
+                        return bg;
+                    }
                 }
             }
+        }
+        // The UA dark canvas surface (Chrome renders the dark `Canvas` system color, ~#121212). We
+        // do not pin the exact value — Bar 2 is deferred — only that a dark-scheme page is dark.
+        if dark_scheme {
+            return Rgba::new(18, 18, 18, 255);
         }
         Rgba::WHITE
     }

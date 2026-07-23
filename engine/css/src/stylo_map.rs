@@ -356,6 +356,24 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         stylo::values::computed::ui::UserSelect::Auto => crate::UserSelect::Auto,
     };
 
+    // `color-scheme` — inherited; parses only with `layout.unimplemented` on (same flip as
+    // `user_select`). Stylo computes a `ColorScheme { bits }` bitfield of the LIGHT/DARK keywords the
+    // author listed. We collapse it to the four cases that decide the canvas default and the
+    // `getComputedStyle` string. `only` is a preference-strength hint, not a scheme, so it does not
+    // change which keyword set we resolve.
+    {
+        use stylo::values::specified::color::ColorSchemeFlags as F;
+        let bits = cv.clone_color_scheme().bits;
+        let light = bits.contains(F::LIGHT);
+        let dark = bits.contains(F::DARK);
+        s.color_scheme = match (light, dark) {
+            (true, true) => crate::ColorScheme::LightDark,
+            (false, true) => crate::ColorScheme::Dark,
+            (true, false) => crate::ColorScheme::Light,
+            (false, false) => crate::ColorScheme::Normal,
+        };
+    }
+
     // Display.
     s.display = map_display(cv.clone_display());
 

@@ -101,6 +101,22 @@ identical two-cascade-free pattern) and serializes in `getComputedStyle` as `use
 CSSOM reports; the geometry of a user mouse-drag selection honouring `user-select` is a layout/hit-test
 concern the engine does not model — the same boundary the `Selection` shim documents.
 
+### `color-scheme` rides the same pref and has a REAL paint tooth: the dark canvas default (tick 465)
+
+`color-scheme` is in the same `layout.unimplemented` set (so t464's flip already lets it parse; it is
+`inherited_ui`), but unlike `user-select` its computed value drives PAINT, not just the CSSOM. Stylo
+computes it as a `ColorScheme { bits: LIGHT|DARK|ONLY }` bitfield; `stylo_map.rs` collapses it to
+`Normal/Light/Dark/LightDark`. The load-bearing effect is in `Page::canvas_background()`: CSS propagates
+the root background to the whole viewport, so a dark-only page (`color-scheme: dark`, no explicit
+background) must paint the canvas dark — otherwise its content sits on a dark box floating in a WHITE void
+below the fold (the identical failure the `<body>`-background-propagation fix addressed, just triggered by
+the scheme). The used scheme is dark iff the page lists `dark` and NOT `light` — a dark-only page renders
+dark regardless of the OS preference (Chrome's behaviour); `light dark` defers to `prefers-color-scheme`,
+which defaults light here. **Scope boundary:** only the canvas default (the void) is modelled — the void
+has no text so darkening it cannot make content unreadable. `color-scheme` also flips UA form-control/
+scrollbar appearance and the default TEXT color under dark; those are deeper system-color used-value
+adjustments not modelled, and pages declaring dark almost always set their own text/control colors.
+
 ## Skipping `@supports` renders the FALLBACK branch of every progressively-enhanced site
 
 The modern idiom is `.thing { display: none } @supports (display: grid) { .thing { display: block } }` —

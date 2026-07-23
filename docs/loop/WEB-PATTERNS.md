@@ -4026,3 +4026,21 @@ properties, so there is no per-property flip — flipping it is safe only becaus
 consume a fixed set of computed values via explicit `clone_*` calls. **Scope boundary:** this resolves the
 COMPUTED VALUE; the geometry of a user mouse-drag selection honouring `user-select` is a layout/hit-test
 concern not modelled — the same boundary the `Selection` shim documents.
+
+## The dark-mode page is dark all the way down (tick 465)
+
+**The class of the web this unlocks (dark-themed sites and dark-mode UIs):** a page opts into a dark UA
+appearance with `color-scheme: dark` (the property or `<meta name="color-scheme" content="dark">`). Its
+most visible effect is the canvas: CSS propagates the root's background to the whole viewport, so a
+dark-only page with no explicit background must paint the void below its content dark. Before this,
+`color-scheme` did not exist in the engine and the canvas fell through to a hard-coded WHITE — dark content
+floating in a white void below the fold, and `getComputedStyle(el).colorScheme` was `undefined`.
+**(1)** `color-scheme` now cascades (via the `layout.unimplemented` pref flipped in t464; it is inherited),
+maps to `ComputedStyle.color_scheme`, and reflects through `getComputedStyle` as `normal`/`light`/`dark`/
+`light dark`. **(2)** `Page::canvas_background()` returns the dark UA canvas (`rgb(18,18,18)`) when the
+root's used scheme is dark and no explicit background wins. **The trap:** the used scheme is dark only for
+a dark-ONLY page (`dark` listed, `light` not) — Chrome renders that dark regardless of the OS setting,
+while `light dark` defers to `prefers-color-scheme`. **Scope boundary:** only the canvas default is
+modelled (the void has no text, so darkening it cannot make content unreadable); UA control/scrollbar
+appearance and the default dark text color are deeper system-color adjustments not modelled, and dark pages
+set their own content colors in practice.

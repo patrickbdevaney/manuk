@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **241** | ticks 1–463 |
-| median tick cycle | **20m** | 240 intervals |
+| ticks landed | **242** | ticks 1–465 |
+| median tick cycle | **20m** | 241 intervals |
 | median, last 10 | **53m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.80** | 299.8h elapsed |
-| median verify wall | **60s** | 180 ticks |
-| wall trend | 39s → 62s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.80** | 300.6h elapsed |
+| median verify wall | **60s** | 181 ticks |
+| wall trend | 39s → 60s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **231**
+* **live gates**: 27 → **232**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**141 of 241 ticks** (59%) moved a
+**142 of 242 ticks** (59%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **141** capability ticks, median cycle **20m**
-* median diff per tick: **+216 / −34** lines across 9 files
+* **142** capability ticks, median cycle **20m**
+* median diff per tick: **+217 / −34** lines across 9 files
 
 ## Every tick
 
@@ -338,5 +338,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **460** | 2026-07-23 14:54 | 36m | capability | 4m | +232/−16 | 227 | 81 | 56.0% · | custom-element `attributeChangedCallback` fires on a LIVE setAttribute (2026-07-23) |
 | **461** | 2026-07-23 15:51 | 57m | capability | 62s | +390/−161 | 229 | 81 | 56.0% · | clipboard.read() returns a copied IMAGE (paste-a-screenshot) (2026-07-23) |
 | **463** | 2026-07-23 16:52 | 61m | capability | 60s | +276/−56 | 231 | 81 | 56.0% · | document.execCommand('copy'/'selectAll'), the legacy copy-button path (2026-07-23) |
+| **465** | 2026-07-23 17:39 | 46m | capability | 60s | +367/−88 | 232 | 81 | 56.0% · | `color-scheme` reaches getComputedStyle AND darkens the canvas default (2026-07-23) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

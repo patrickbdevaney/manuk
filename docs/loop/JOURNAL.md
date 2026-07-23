@@ -18804,3 +18804,70 @@ module-graph, scroll-driven animations, SharedWorker) or measurement runs (test2
 adjacent CSS computed-value bricks still open in the same low-risk `layout.unimplemented`-ungated vein now
 that parsing is on: `color-scheme`, `object-fit` via Stylo clone (currently MinimalCascade), `contain`.
 L-marquees unchanged: MEDIA H.264-High, IndexedDB (redb/heed), contenteditable EDITING subsystem.
+
+## Tick 465 — `color-scheme` reaches getComputedStyle AND darkens the canvas default (2026-07-23)
+
+CONTINUES the low-risk `layout.unimplemented`-ungated CSS computed-value vein opened at t464 (the pref
+flip is already banked, so no NEW pref surface this tick) — but with a REAL PAINT tooth, not
+reflection-only. `color-scheme` was the NEXT-VEIN candidate named in t464's journal.
+
+PROBED (RED-proven, both teeth): `getComputedStyle(el).colorScheme` was `undefined`, AND a dark-only page
+(`<html style="color-scheme: dark">`) with no explicit background painted its content on a dark box
+floating in a WHITE void below the fold — `canvas_background()` hard-returned `Rgba::WHITE`. This is the
+exact "dark all the way down" failure the function's own comment describes, just triggered by the SCHEME
+instead of an explicit `body { background }`.
+
+FIX (capability — 4 files):
+- `lib.rs` — `ColorScheme{Normal,Light,Dark,LightDark}` enum (+ `is_dark()`: dark-only → used dark,
+  `light dark` defers to the preference which defaults light) + `ComputedStyle.color_scheme` field
+  (inherited) + default Normal.
+- `stylo_map.rs` — collapse Stylo's `clone_color_scheme().bits` (LIGHT/DARK/ONLY bitflags) to the four
+  cases beside `user_select`.
+- `dom_bindings.rs` — serialize `colorScheme` ("normal"/"light"/"dark"/"light dark") + route
+  `color-scheme` through `getPropertyValue`.
+- `page/src/lib.rs canvas_background()` — when the root's used scheme is dark AND no explicit html/body
+  background wins, return the dark UA canvas (`rgb(18,18,18)`, ~Chrome's dark `Canvas` system color)
+  instead of white. Explicit background still checked first.
+
+GATE: G_COLOR_SCHEME (page, TWO tests). (1) `color_scheme_reaches_cssom` — `:root{color-scheme:light dark}`
+inherits to a child (`root:light dark`), `dark`/`light` per-element, `getPropertyValue('color-scheme')`.
+RED-proven by flipping the pref off → all `normal`. (2) `dark_color_scheme_paints_a_dark_canvas` — a
+`color-scheme:dark` page paints a void pixel <60 on each channel; a PLAIN control page stays white (>200),
+proving the branch is scheme-gated not unconditional. RED-proven by disabling the `dark_scheme` branch →
+dark page paints rgb(255,255,255). Neighbors green (no regression): g_iframe (canvas-bg propagation),
+g_computed_style, g_get_property_value, g_cssom_enumeration, g_user_select, g_view_transition.
+
+SCOPE BOUNDARY (honest): this models the CANVAS default (the void), the most visible effect + the void has
+no text so it cannot make content unreadable. `color-scheme` also flips UA form-control/scrollbar
+appearance and the default TEXT color under dark — those are deeper system-color used-value adjustments
+NOT modelled here; pages declaring dark almost always set their own text/control colors. Bar 2 exactness
+(the precise dark value) is deferred — the gate asserts "dark", not the exact Chrome pixel.
+
+TICK SHAPE: capability (color-scheme computed value + dark canvas default; +1 gate, 2 tests). GATES +1.
+CONSTELLATION: flips the `doc`/dark-mode `color-scheme` concern → works|gated. WIKI: css-cascade.md —
+extend the user-select/`layout.unimplemented` subsection with the color-scheme paint effect.
+NEXT VEIN NOTE: the `layout.unimplemented` vein's remaining CLEAN atoms are thinning — `contain`/
+`content-visibility` intersect layout (Taffy, riskier), `mask-*` intersect paint. The honest next moves are
+the ROADMAP-ANCHOR named ledger items (WebAuthn, password-vault UX, bidi reorder, animation timeline,
+form-widget painting) or the FID-SWEEP jarring-invariant fixes. L-marquees unchanged: MEDIA H.264-High,
+IndexedDB (redb/heed), contenteditable EDITING subsystem.
+
+### Tick 465 self-audit (cadence, ticks 455→465) + WALL-PARK note (harness-owned)
+Self-audit run t465: ALL browser/methodology checks green (49-defect ledger, cluster registry 392,
+pattern ledger 433 rows moves-with-engine, journal no-gaps, enforcement mechanical). The SINGLE failing
+item is the verify wall: receipt reads `seconds:588` but `build_seconds:36` (warm) + `unattributed:588`
+— i.e. NOT compute, it is ramdisk-flush/observer-contention stall (per [wall-ramdisk-incremental-flush] /
+[wall-vs-hygiene-cron-race]), harness-owned, NOT a browser-capability gap I fix. LAST_AUDIT_TICK bumped
+to 465. t465 (G_COLOR_SCHEME, GATES 232 vs mark 231, RED-proven, neighbors green) is COMPLETE in-tree;
+parked on the wall false-RED, lands on the next warm quiet re-run (box now load 0.52), exactly as t458/
+t463/t464 did this session.
+
+UPDATE (fresh direct verify.sh on the quiet box, load ~0.55): **VERIFY: all gates green** — every gate
+INCLUDING the new G_COLOR_SCHEME passes on this exact tree. But the wall measured `gate 600s · build 35s ·
+total 635s`: the BUILD is warm (35s), the 600s is GATE RUNTIME under sustained memory pressure (swap 99%
+→ mem-guard caps CARGO_BUILD_JOBS=8/32 and gate parallelism drags). That is the harness-owned wall
+condition ([wall-ramdisk-incremental-flush]/[wall-false-red-shell-rebuild]), NOT compute and NOT a t465
+regression — the tick is correct and green. Per [harness-is-observer-owned] I do not touch mem-guard/swap/
+cgroups. t465 stays parked in-tree; it lands on a warm re-run once the box has capacity for a sub-245s
+gate wall (observer relieves the memory pressure, or a genuinely idle slot). Not re-baselining the WALL
+mark (per [wall-mark-min-lock-rebaseline] / [three-ticks-parked-wall-blocked]).

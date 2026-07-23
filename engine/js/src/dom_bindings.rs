@@ -667,6 +667,14 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         manuk_css::UserSelect::None => "none",
         manuk_css::UserSelect::All => "all",
     };
+    // `color-scheme` resolved value — `getComputedStyle(el).colorScheme`. A page reads it back to
+    // decide whether to swap in a dark logo / theme asset.
+    let color_scheme = match cs.color_scheme {
+        manuk_css::ColorScheme::Normal => "normal",
+        manuk_css::ColorScheme::Light => "light",
+        manuk_css::ColorScheme::Dark => "dark",
+        manuk_css::ColorScheme::LightDark => "light dark",
+    };
     let white_space = match cs.white_space {
         WhiteSpace::Normal => "normal",
         WhiteSpace::NoWrap => "nowrap",
@@ -799,7 +807,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
     format!(
         "({{color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
           fontFamily:{}, lineHeight:{}, textAlign:{}, display:{}, position:{}, overflow:{}, overflowX:{}, overflowY:{}, \
-          visibility:{}, whiteSpace:{}, pointerEvents:{}, userSelect:{}, webkitUserSelect:{}, opacity:{}, \
+          visibility:{}, whiteSpace:{}, pointerEvents:{}, userSelect:{}, webkitUserSelect:{}, colorScheme:{}, opacity:{}, \
           width:{}, height:{}, marginTop:{}, marginRight:{}, marginBottom:{}, marginLeft:{}, \
           paddingTop:{}, paddingRight:{}, paddingBottom:{}, paddingLeft:{}, \
           top:{}, right:{}, bottom:{}, left:{}, zIndex:{}, transform:{}, \
@@ -814,6 +822,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
           'line-height':'lineHeight','text-align':'textAlign','white-space':'whiteSpace',\
           'pointer-events':'pointerEvents','user-select':'userSelect',\
           '-webkit-user-select':'userSelect','-moz-user-select':'userSelect',\
+          'color-scheme':'colorScheme',\
           'margin-top':'marginTop',\
           'margin-right':'marginRight','margin-bottom':'marginBottom','margin-left':'marginLeft',\
           'padding-top':'paddingTop','padding-right':'paddingRight','padding-bottom':'paddingBottom',\
@@ -849,6 +858,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         q(pointer_events),
         q(user_select),
         q(user_select),
+        q(color_scheme),
         q(&opacity),
         q(&dim_css(&cs.width)),
         q(&dim_css(&cs.height)),

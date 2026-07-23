@@ -181,6 +181,33 @@ pub enum UserSelect {
     All,
 }
 
+/// `color-scheme` (inherited) — which system-appearance the element opts into. A page that declares
+/// `color-scheme: dark` (or a `<meta name="color-scheme" content="dark">`) is telling the UA to
+/// render its *default* surfaces dark: form controls, scrollbars, and — the case this engine
+/// models — the **canvas background** behind content shorter than the viewport. Without it a
+/// dark-only page paints its content on a correct dark box floating in a WHITE void. Stylo's servo
+/// build parses it only with `layout.unimplemented` on (see `cascade_via_stylo`). We resolve the
+/// keyword set to the four cases that decide the canvas default; `LightDark` (both listed) defers to
+/// the user preference, which defaults light.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ColorScheme {
+    #[default]
+    Normal,
+    Light,
+    Dark,
+    /// Both `light` and `dark` listed — used scheme follows the user's `prefers-color-scheme`.
+    LightDark,
+}
+
+impl ColorScheme {
+    /// The *used* scheme is dark only when the page supports dark and NOT light — a dark-only page
+    /// is rendered dark regardless of the OS preference (Chrome's behaviour). A `light dark` page
+    /// defers to the preference, which defaults light here, so it is not treated as dark.
+    pub fn is_dark(self) -> bool {
+        matches!(self, ColorScheme::Dark)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextAlign {
     Left,
@@ -779,6 +806,9 @@ pub struct ComputedStyle {
     /// `user-select` — the computed selectability keyword, resolved so `getComputedStyle` reflects
     /// it. See [`UserSelect`].
     pub user_select: UserSelect,
+    /// `color-scheme` (inherited) — decides the dark/light canvas default and reflects through
+    /// `getComputedStyle`. See [`ColorScheme`].
+    pub color_scheme: ColorScheme,
     /// `field-sizing: content` (Baseline June 2026) — the form control sizes from its CONTENT,
     /// so the UA's fixed-size presentational hints (`<textarea cols>` above all) must stand down
     /// and let intrinsic sizing run. `false` = `fixed`, the initial value.
@@ -942,6 +972,7 @@ impl ComputedStyle {
             visibility: Visibility::Visible,
             pointer_events: PointerEvents::Auto,
             user_select: UserSelect::Auto,
+            color_scheme: ColorScheme::Normal,
             field_sizing_content: false,
             line_height_normal: true,
             mask_image: None,
