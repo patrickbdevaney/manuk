@@ -3729,3 +3729,16 @@ ms-since-midnight + a 1970 `Date`; `type=month` → a month index. Setters write
 `null` where it does not apply (number/range).
 **The trap:** doing this in local time drifts a date by a day across a timezone; the spec mandates UTC for
 exactly that reason.
+
+## progress.position + output.value (tick 444)
+
+**The class of the web this unlocks:** progress bars whose JS reads the completion fraction
+(`progress.position` for an upload/download/step indicator) and `<output>`-based calculators / live form
+results that read and set `output.value`.
+**(1)** `progress.position` was `undefined`; it now returns `value/max` in `[0,1]` (or `-1` when
+indeterminate — no `value` attribute).
+**(2)** `output.value` returned `""` (a dead expando); it now IS the element's displayed text content, read
+and settable (`output.value = total` updates what the user sees).
+**The trap:** `output.value` is the same bug class as `textarea.value` (t440) — a control whose value is its
+text content, not a `value` attribute; reading the attribute returns blank and assignment silently fails to
+render.

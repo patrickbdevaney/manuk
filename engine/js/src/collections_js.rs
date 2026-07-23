@@ -906,6 +906,22 @@ pub const COLLECTIONS_JS: &str = r#"
     });
     EP.stepUp = function (n) { stepBy(this, n === undefined ? 1 : (n | 0)); };
     EP.stepDown = function (n) { stepBy(this, -(n === undefined ? 1 : (n | 0))); };
+    // `progress.position` — the completion fraction a progress bar's script reads (value/max in [0,1]),
+    // or -1 when the bar is INDETERMINATE (no `value` attribute). It was `undefined`, so a script driving
+    // an upload/download bar off `position` got nothing.
+    Object.defineProperty(EP, 'position', {
+      configurable: true, enumerable: false,
+      get: function () {
+        if (this.tagName !== 'PROGRESS') return undefined;
+        if (!this.hasAttribute('value')) return -1; // indeterminate
+        var max = numAttr(this, 'max');
+        if (max === null || max <= 0) max = 1; // default max is 1
+        var val = numAttr(this, 'value');
+        if (val === null || val < 0) val = 0;
+        if (val > max) val = max;
+        return val / max;
+      },
+    });
   }
 
   // ── `element.form` — the FORM OWNER of a form-associated element.

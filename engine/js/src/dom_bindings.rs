@@ -3490,6 +3490,15 @@ unsafe fn el_get_value(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> boo
             {
                 return option_value(dom, n);
             }
+            // `<output>`'s value IS its text content (the displayed result) — was `""` (a dead expando),
+            // so a calculator that reads back `output.value` after computing got nothing.
+            if (*dom)
+                .element(n)
+                .map(|e| e.name == "output")
+                .unwrap_or(false)
+            {
+                return (*dom).text_content(n);
+            }
             // `<input>` reads its `value` attribute; `<textarea>` reads its text content until dirtied.
             text_control_value(dom, n)
         })
@@ -3716,6 +3725,20 @@ unsafe fn el_set_value(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool
                 .map(|i| i as i32)
                 .unwrap_or(-1);
             set_selected_index(dom, node, idx);
+        } else if (*dom)
+            .element(node)
+            .map(|e| e.name == "output")
+            .unwrap_or(false)
+        {
+            // `<output>`'s value IS its displayed text content — set it by replacing the children with a
+            // single text node (the spec's "value mode"), so `output.value = result` actually shows.
+            let kids: Vec<NodeId> = (*dom).children(node).collect();
+            for &k in &kids {
+                (*dom).detach(k);
+            }
+            let text = (*dom).create_text(v);
+            (*dom).append_child(node, text);
+            record_mutation(cx, dom, "childList", node, None, None, &[text], &kids);
         } else {
             (*dom).set_attr(node, "value", v);
         }

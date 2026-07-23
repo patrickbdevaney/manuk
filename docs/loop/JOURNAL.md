@@ -18048,3 +18048,32 @@ KNOWN REMAINING: `type=week` (ISO week arithmetic) and `datetime-local` valueAsN
 TICK SHAPE: capability (input.valueAsDate get/set + valueAsNumber for date/time/month; +1 gate). GATES +1.
 CONSTELLATION: date/time typed input values (valueAsDate/valueAsNumber) unknown→gated (G_VALUE_AS_DATE).
 WIKI: dom-semantics.md — input.valueAsDate + valueAsNumber for date/time/month inputs (UTC).
+
+## Tick 444 — progress.position + output.value (2026-07-23)
+
+HYPOTHESIS (form/display-control probe sweep; validation API + <dialog> API both RE-PROBED fully working —
+stale-pessimistic again, no tick). A <progress>/<meter>/<output> probe found two real gaps: progress.position
+undefined and output.value returning "" (a dead expando that left the text content untouched on assignment).
+
+FIX (capability):
+- `engine/js/src/collections_js.rs`: `progress.position` getter (guarded to PROGRESS) = value/max clamped to
+  [0,1], or -1 when INDETERMINATE (no `value` attribute); undefined on a non-progress. Every upload/download
+  bar reading `position` got nothing before.
+- `engine/js/src/dom_bindings.rs`: `output.value` — same bug class as textarea.value (t440). An <output>'s
+  value IS its displayed text content. el_get_value now returns text_content for output; el_set_value
+  replaces the children with a single text node (the spec's "value mode") and records the mutation, so
+  `output.value = result` on a calculator both shows and reads back. Was "" / a dead expando.
+
+GATE: G_PROGRESS_OUTPUT_VALUE (`progress_position_and_output_value`) — 5 claims: position 0.15, -1
+indeterminate, undefined on a div, output.value reads its content, output.value= updates the content.
+RED-proven (probe: pPos undefined / oVal ""). manuk-page green; g_form / g_textarea_value / g_select_write /
+g_option_text / g_value_as_number / g_value_as_date / g_formdata_iterators / g_set_range_text all still green
+(no regression on the shared value path).
+
+RE-PROBED WORKING (stale-pessimistic, no tick): Constraint Validation API (validity/valueMissing/
+patternMismatch/typeMismatch/checkValidity/setCustomValidity/validationMessage/willValidate — all correct,
+G_FORM) and the <dialog> API (show/showModal/close/returnValue/open + close event — all correct).
+
+TICK SHAPE: capability (progress.position getter + output.value get/set via the native value path; +1 gate). GATES +1.
+CONSTELLATION: progress.position + output.value unknown→gated (G_PROGRESS_OUTPUT_VALUE).
+WIKI: dom-semantics.md — progress.position (value/max, -1 indeterminate) + output.value is its text content.

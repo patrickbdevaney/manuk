@@ -1344,3 +1344,13 @@ reformat back to the control's string. ALL arithmetic is UTC (a date control has
 `type=date` round-trips regardless of host timezone. `valueAsDate` is `null` on number/range/datetime-local
 (does not apply). Gate `G_VALUE_AS_DATE`. Follow-on: `type=week` (ISO week) and `datetime-local`
 valueAsNumber, left unbuilt.
+
+## progress.position + output.value (tick 444)
+
+Two display-control values that were missing. `progress.position` (added in `collections_js.rs`, guarded to
+PROGRESS) is the completion fraction `value/max` clamped to `[0,1]`, or `-1` when the bar is INDETERMINATE
+(no `value` attribute) — a script driving an upload/download bar off `position` got `undefined`. `output.value`
+(fixed in `dom_bindings.rs` `el_get_value`/`el_set_value`, same class as textarea.value at t440) IS the
+`<output>`'s displayed text content: the getter returns the text content, the setter replaces the children
+with a text node (the spec's "value mode"), so `output.value = result` on a calculator both shows and reads
+back. Previously it returned `""` and assignment was a dead expando. Gate `G_PROGRESS_OUTPUT_VALUE`.
