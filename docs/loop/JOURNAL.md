@@ -17221,3 +17221,27 @@ TICK SHAPE: measurement (unknown→gated capability pin; +0 engine, the probe IS
 files (assertion added to the existing G_PROBE_CAPABILITIES).
 CONSTELLATION: Intl unknown→works (i18n number/date formatting, ICU-backed).
 WIKI: none — measurement/pin tick; the probe file + CONSTELLATION.tsv are the durable record.
+
+## Tick 419 — Element.checkVisibility(): measure-and-pin (2026-07-22)
+
+HYPOTHESIS (measurement vein, same as t418/Intl): `Element.checkVisibility()` was carried UNKNOWN —
+absent from the capability probe and the constellation — yet `dom_bindings.rs` already has a REAL
+`el_check_visibility` (not a stub): it walks the ancestor chain for `display:none`, rejects
+disconnected nodes, and folds in `visibility:hidden`/`opacity:0` under the `visibilityProperty`/
+`opacityProperty` option flags, all backed by the real computed styles. It is the render-visibility
+check every UI library reinvents (scroll-into-view guards, lazy-mount checks, a11y "is it on screen").
+
+MEASURED: `checkvisibility:yes`. Four behavioral assertions, each RED-provable: a shown element → true,
+a `display:none` element → false, a `visibility:hidden` element → true by default and → false under
+`{visibilityProperty:true}`. A stub (always-true or always-false) cannot pass all four.
+
+FIX (measurement/pin tick, no engine change): added three probe elements (shown / display:none /
+visibility:hidden) + a `checkvisibility` probe to `g_probe_capabilities.rs`, pinned
+`checkvisibility:yes`, recorded the constellation row (unknown→gated). RED-proven: flipping the
+display:none assertion to expect `true` makes the probe report `checkvisibility:no` and the gate fails
+on the missing pin (demonstrated, then reverted).
+
+TICK SHAPE: measurement (unknown→gated capability pin). GATES +0 (assertion added to the existing
+G_PROBE_CAPABILITIES).
+CONSTELLATION: Element.checkVisibility unknown→works (render-visibility query, real ancestor walk).
+WIKI: none — measurement/pin tick; the probe file + CONSTELLATION.tsv are the durable record.

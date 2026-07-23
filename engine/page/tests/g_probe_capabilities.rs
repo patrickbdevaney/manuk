@@ -52,6 +52,7 @@ const HTML: &str = r##"<!doctype html>
   <div><textarea id="fsref" cols="40">ok</textarea><textarea id="fs" cols="40">ok</textarea></div>
   <div id="attrbox" data-w="120px">attr</div>
   <div id="sda">scroll driven</div>
+  <div id="cvon">shown</div><div id="cvoff" style="display:none">hidden</div><div id="cvvis" style="visibility:hidden">invisible</div>
   <video id="vidmuted" muted></video><video id="vidloud"></video>
   <div id="out">-</div>
   <script>
@@ -233,6 +234,19 @@ const HTML: &str = r##"<!doctype html>
       return us === '1,234.5' && de === '1.234,5' && mon === 'January';
     });
 
+    // ── Element.checkVisibility(): the "is it actually rendered?" test every UI library reinvents
+    // (scroll-into-view guards, lazy-mount checks, a11y "is it on screen"). Behaviorally RED-proven:
+    // a shown element is true, a display:none element is false, and `{visibilityProperty:true}` folds
+    // in visibility:hidden — a stub that always-returns cannot pass all four assertions.
+    probe('checkvisibility', function () {
+      var on = $('cvon'), off = $('cvoff'), vis = $('cvvis');
+      if (!on || typeof on.checkVisibility !== 'function') { return false; }
+      return on.checkVisibility() === true &&
+             off.checkVisibility() === false &&
+             vis.checkVisibility() === true &&
+             vis.checkVisibility({ visibilityProperty: true }) === false;
+    });
+
     // ── Drag and drop: the event surface pages actually bind to.
     probe('dragdrop', function () {
       return typeof DataTransfer === 'function' && 'draggable' in document.createElement('div') &&
@@ -317,4 +331,9 @@ const PINNED: &[&str] = &[
     // stakes: every app showing a localized price/date/number depends on it. Was carried UNKNOWN
     // (unprobed, unlisted); measured working, not assumed.
     "intl:yes",
+    // tick 419 — Element.checkVisibility(): the render-visibility check UI libraries reinvent. Real,
+    // not a stub — it walks the ancestor chain for display:none, rejects disconnected nodes, and folds
+    // in visibility:hidden under {visibilityProperty:true}. The probe RED-proves all four behaviors, so
+    // a stub (always-true or always-false) cannot pass. Was carried UNKNOWN (unprobed, unlisted).
+    "checkvisibility:yes",
 ];
