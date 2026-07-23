@@ -823,12 +823,43 @@ pub const COLLECTIONS_JS: &str = r#"
     if (hh > 23 || mm > 59 || ss > 59) return null;
     return ((hh * 60 + mm) * 60 + ss) * 1000 + ms;
   }
+  function parseDateTimeLocal(s) { // YYYY-MM-DDTHH:MM[:SS[.mmm]] → UTC ms (local time read AS-IF UTC), or NaN
+    var m = /^(\d{4,})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/.exec(s || '');
+    if (!m) return NaN;
+    var y = +m[1], mo = +m[2], d = +m[3], hh = +m[4], mm = +m[5],
+      ss = m[6] ? +m[6] : 0, ms = m[7] ? +(m[7] + '00').slice(0, 3) : 0;
+    if (mo < 1 || mo > 12 || d < 1 || d > 31 || hh > 23 || mm > 59 || ss > 59) return NaN;
+    return Date.UTC(y, mo - 1, d, hh, mm, ss, ms);
+  }
+  function parseWeek(s) { // YYYY-Www → [isoYear, week] or null
+    var m = /^(\d{4,})-W(\d{2})$/.exec(s || '');
+    if (!m) return null;
+    var w = +m[2];
+    return (w >= 1 && w <= 53) ? [+m[1], w] : null;
+  }
+  // ISO 8601 week arithmetic (weeks start Monday; week 1 contains the year's first Thursday / Jan 4).
+  function isoWeekStartMs(y, w) { // UTC ms of the Monday 00:00 that starts week `w` of ISO year `y`
+    var jan4 = Date.UTC(y, 0, 4);
+    var jan4Day = new Date(jan4).getUTCDay() || 7; // Mon=1..Sun=7
+    var week1Mon = jan4 - (jan4Day - 1) * 86400000;
+    return week1Mon + (w - 1) * 7 * 86400000;
+  }
+  function isoWeekOf(dt) { // Date → [isoYear, week] of the ISO week containing dt (UTC)
+    var d = new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()));
+    var dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum); // step to the Thursday of this week — its year is the ISO year
+    var yearStart = Date.UTC(d.getUTCFullYear(), 0, 1);
+    var weekNo = Math.ceil(((d.getTime() - yearStart) / 86400000 + 1) / 7);
+    return [d.getUTCFullYear(), weekNo];
+  }
   function typedNumber(el) {
     var t = inputType(el);
     if (t === 'number' || t === 'range') return inputNumber(el);
     if (t === 'date') { var d = parseDate(el.value); return d ? Date.UTC(d[0], d[1] - 1, d[2]) : NaN; }
     if (t === 'month') { var mo = parseMonth(el.value); return mo ? (mo[0] - 1970) * 12 + (mo[1] - 1) : NaN; }
     if (t === 'time') { var ms = parseTime(el.value); return ms === null ? NaN : ms; }
+    if (t === 'datetime-local') { return parseDateTimeLocal(el.value); } // UTC ms of the local datetime
+    if (t === 'week') { var wk = parseWeek(el.value); return wk ? isoWeekStartMs(wk[0], wk[1]) : NaN; }
     return NaN;
   }
   function typedDate(el) {
@@ -836,7 +867,8 @@ pub const COLLECTIONS_JS: &str = r#"
     if (t === 'date') { var d = parseDate(el.value); return d ? new Date(Date.UTC(d[0], d[1] - 1, d[2])) : null; }
     if (t === 'month') { var mo = parseMonth(el.value); return mo ? new Date(Date.UTC(mo[0], mo[1] - 1, 1)) : null; }
     if (t === 'time') { var ms = parseTime(el.value); return ms === null ? null : new Date(ms); }
-    return null; // number/range/datetime-local: valueAsDate does not apply
+    if (t === 'week') { var wk = parseWeek(el.value); return wk ? new Date(isoWeekStartMs(wk[0], wk[1])) : null; }
+    return null; // number/range/datetime-local: valueAsDate does not apply (datetime-local carries valueAsNumber only)
   }
   function formatTyped(t, dt) {
     if (dt === null || dt === undefined || isNaN(+dt)) return '';
@@ -848,6 +880,14 @@ pub const COLLECTIONS_JS: &str = r#"
       if (dt.getUTCMilliseconds()) s += '.' + pad(dt.getUTCMilliseconds(), 3);
       return s;
     }
+    if (t === 'datetime-local') {
+      var s = pad(dt.getUTCFullYear(), 4) + '-' + pad(dt.getUTCMonth() + 1, 2) + '-' + pad(dt.getUTCDate(), 2) +
+        'T' + pad(dt.getUTCHours(), 2) + ':' + pad(dt.getUTCMinutes(), 2);
+      if (dt.getUTCSeconds() || dt.getUTCMilliseconds()) s += ':' + pad(dt.getUTCSeconds(), 2);
+      if (dt.getUTCMilliseconds()) s += '.' + pad(dt.getUTCMilliseconds(), 3);
+      return s;
+    }
+    if (t === 'week') { var wk = isoWeekOf(dt); return pad(wk[0], 4) + '-W' + pad(wk[1], 2); }
     return '';
   }
   function numAttr(el, name) {
@@ -885,7 +925,7 @@ pub const COLLECTIONS_JS: &str = r#"
         var n = Number(v);
         if (t === 'number' || t === 'range') { this.value = isFinite(n) ? String(n) : ''; return; }
         // A date/time type takes the number as the same epoch the getter produced; reformat it back.
-        if (t === 'date' || t === 'month' || t === 'time') {
+        if (t === 'date' || t === 'month' || t === 'time' || t === 'datetime-local' || t === 'week') {
           this.value = isFinite(n) ? formatTyped(t, t === 'month' ? new Date(Date.UTC(1970, n, 1)) : new Date(n)) : '';
         }
       },
@@ -900,7 +940,7 @@ pub const COLLECTIONS_JS: &str = r#"
       },
       set: function (d) {
         var t = inputType(this);
-        if (t !== 'date' && t !== 'month' && t !== 'time') return;
+        if (t !== 'date' && t !== 'month' && t !== 'time' && t !== 'week') return;
         this.value = (d === null || d === undefined) ? '' : formatTyped(t, d);
       },
     });

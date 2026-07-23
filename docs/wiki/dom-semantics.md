@@ -1362,3 +1362,16 @@ Completing tick 439's `.text` accessor: `<a>.text` (link label), `<script>.text`
 untouched. The `EP.text` getter/setter (`collections_js.rs`) now returns/sets the RAW text content
 (whitespace preserved) for A/SCRIPT/TITLE, keeps `<option>.text` whitespace-collapsed, and preserves the
 ordinary `div.text = x` expando on any other element. Gate `G_ELEMENT_TEXT`.
+
+## datetime-local + week typed values (tick 446)
+
+Closing the follow-on tick 443 named as unbuilt. `<input type="datetime-local">` and `<input type="week">`
+returned `null` from `valueAsNumber`/`valueAsDate` and their setters were silent no-ops, so scheduling/booking
+forms that compute a duration from `valueAsNumber` or seed a picker via `valueAsNumber = ms` got nothing.
+Added in `collections_js.rs` over the existing typed-value helpers: `datetime-local` → `valueAsNumber` is the
+UTC ms of the local datetime (the control has no timezone, so the local `YYYY-MM-DDTHH:MM` is read AS-IF UTC),
+`valueAsDate` stays `null` (does not apply). `week` → `valueAsNumber` is the UTC ms of the Monday 00:00 that
+starts the ISO week, `valueAsDate` is that Monday as a `Date`, and the setters run ISO-8601 week arithmetic
+(weeks start Monday; week 1 holds the year's first Thursday / Jan 4) — `isoWeekStartMs(y,w)` for the forward
+direction, `isoWeekOf(date)` for the reverse. All UTC, so a round-trip is host-timezone-independent. Gate
+`G_DATETIME_WEEK_VALUE`. This completes the typed-input value surface begun at ticks 442/443.

@@ -3754,3 +3754,18 @@ render.
 — one accessor, tag-dispatched.
 **The trap:** `<script>.text` is how a page reads an inline JSON-LD or config block; returning `undefined`
 means `JSON.parse(script.text)` throws and the whole feature (structured data, config-driven UI) dies.
+
+## datetime-local + week typed values (tick 446)
+
+**The class of the web this unlocks:** scheduling / booking / admin forms that drive a
+`<input type="datetime-local">` or `<input type="week">` numerically — reading `valueAsNumber` to compute a
+duration or a min/max window, or writing `valueAsNumber = ms` / `valueAsDate = d` to seed the control from a
+Date. Both types returned `null` and their setters were no-ops, so the picker stayed empty and any duration
+math produced `NaN`.
+**(1)** `datetime-local` → `valueAsNumber` is the UTC ms of the local datetime (no timezone; read AS-IF UTC);
+`valueAsDate` stays `null` (does not apply), matching Chrome.
+**(2)** `week` → `valueAsNumber`/`valueAsDate` run ISO-8601 week arithmetic (weeks start Monday; week 1 holds
+Jan 4), so `2020-W03` ↔ Monday 2020-01-13 round-trips regardless of host timezone.
+**The trap:** these were the two epoch-arithmetic follow-ons ticks 442/443 explicitly left unbuilt — a typed
+surface that looks complete (number/range/date/month/time all work) but silently drops the two calendar
+types most forms use for appointments.

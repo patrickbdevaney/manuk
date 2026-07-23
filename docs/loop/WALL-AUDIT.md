@@ -186,3 +186,18 @@ every time (verified repeatedly this session: t421/423/425 each banked 57-61s af
 480-500s reading). The admissible levers (nextest, runtime-sharing, section parallelism) remain in
 scripts/ (observer-owned, already named). Wall stays lean when warm; coverage grew by 11 gates. Mark
 untouched.
+
+## Audit #9 — tick 446 (wall 60s warm)
+
+FINDING: warm wall held at 60s — same shape as #5-#8 (57-68s band) across the form-controls value vein
+(ticks 438-446: select/option write API, element.form, table DOM, textarea/output/progress values,
+valueAsNumber/valueAsDate, .text, and this tick's datetime-local/week). Breakdown this run: T 22s crate
+tests (37%), P 14s parity floors (23%), G6 6s, G1 4s, F/F4/B ~1-2s each. Each new gate rode the parallel
+launch as a single small fixture (one #[test] per binary, t354 rule) — ~0 marginal wall despite ~8 gates
+added this window.
+
+NO TRIM: same conclusion as #5-#8. T (crate tests) and P (perf floors, deliberately serial — a benchmark
+sharing the box is not a benchmark) are legitimate coverage, not bloat. The admissible rigor-preserving
+levers (cargo-nextest runtime-sharing to reclaim the ~1.5s SpiderMonkey-startup tax per JS gate, section
+parallelism) all live in scripts/ (observer-owned, already named in prior audits). Wall stays lean when
+warm; coverage grew this window with no wall cost. Mark untouched.

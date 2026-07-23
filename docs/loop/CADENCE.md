@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **229** | ticks 1–445 |
-| median tick cycle | **19m** | 228 intervals |
-| median, last 10 | **29m** | 10 intervals |
+| ticks landed | **230** | ticks 1–446 |
+| median tick cycle | **19m** | 229 intervals |
+| median, last 10 | **30m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.78** | 291.0h elapsed |
-| median verify wall | **60s** | 168 ticks |
+| **ticks per hour** | **0.79** | 291.4h elapsed |
+| median verify wall | **60s** | 169 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **212**
+* **live gates**: 27 → **213**
 * **✅ rows in the capability ledger**: 144 → **328**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**129 of 229 ticks** (56%) moved a
+**130 of 230 ticks** (57%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **129** capability ticks, median cycle **19m**
-* median diff per tick: **+215 / −34** lines across 8 files
+* **130** capability ticks, median cycle **19m**
+* median diff per tick: **+214 / −34** lines across 8 files
 
 ## Every tick
 
@@ -326,5 +326,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **442** | 2026-07-23 06:29 | 23m | capability | 61s | +226/−36 | 210 | 81 | 56.0% · | input.valueAsNumber + stepUp/stepDown for numeric inputs (2026-07-23) |
 | **444** | 2026-07-23 07:05 | 36m | capability | 63s | +182/−34 | 211 | 81 | 56.0% · | progress.position + output.value (2026-07-23) |
 | **445** | 2026-07-23 08:02 | 57m | capability | 63s | +150/−44 | 212 | 81 | 56.0% · | the .text property for a/script/title (2026-07-23) |
+| **446** | 2026-07-23 08:29 | 27m | capability | 60s | +213/−38 | 213 | 81 | 56.0% · | datetime-local + week typed values (2026-07-23) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

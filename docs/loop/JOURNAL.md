@@ -18097,3 +18097,30 @@ manuk-page green; g_option_text / g_collections / g_form_owner all still green.
 TICK SHAPE: capability (a.text/script.text/title.text raw-text-content get/set; +1 gate). GATES +1.
 CONSTELLATION: .text for a/script/title unknown→gated (G_ELEMENT_TEXT).
 WIKI: dom-semantics.md — the .text property for a/script/title (raw text content, settable).
+
+## Tick 446 — datetime-local + week typed values (2026-07-23)
+
+HYPOTHESIS (the explicit follow-on tick 443 named UNBUILT): `<input type="datetime-local">` and
+`<input type="week">` should carry `valueAsNumber`/`valueAsDate` like the other typed inputs, but were left
+out of ticks 442/443. RED probe: dtl.valueAsNumber `null`, dtl setter a no-op; wk.valueAsNumber/valueAsDate
+`null`, wk setter a no-op — every scheduling/booking form reading a duration off `valueAsNumber` or seeding a
+picker via `valueAsNumber = ms` got nothing (silent-fail / dead-setter class).
+
+FIX (capability, engine/js/src/collections_js.rs — extends the t442/443 typed-value helpers):
+- `datetime-local`: `valueAsNumber` = UTC ms of the local datetime (no timezone → `YYYY-MM-DDTHH:MM` read
+  AS-IF UTC via new `parseDateTimeLocal`); `valueAsDate` stays `null` (does not apply, per spec); the
+  `valueAsNumber` setter formats the ms back to the datetime-local string.
+- `week`: `valueAsNumber` = UTC ms of the Monday 00:00 that starts the ISO week (`isoWeekStartMs`),
+  `valueAsDate` = that Monday as a `Date`, and both setters run ISO-8601 week arithmetic (`isoWeekOf` for the
+  reverse; weeks start Monday, week 1 holds the year's first Thursday / Jan 4). All UTC → host-TZ-independent.
+
+GATE: G_DATETIME_WEEK_VALUE (`datetime_local_and_week_typed_values`) — 6 claims: dtl valueAsNumber
+1579095000000, dtl valueAsDate null, dtl setter → "2021-06-01T10:00", wk valueAsNumber 1578873600000, wk
+valueAsDate "2020-01-13", wk valueAsDate setter → "2021-W01". RED-proven (probe: all null / setters no-op).
+manuk-page green; g_value_as_number (t442) / g_value_as_date (t443) / g_progress_output_value / g_element_text
+/ g_option_text all still green (no regression on the shared typedDate/formatTyped path).
+
+TICK SHAPE: capability (datetime-local + week valueAsNumber/valueAsDate get+set, ISO-week arithmetic; +1 gate).
+GATES +1. CONSTELLATION: datetime-local/week typed values unknown→gated (G_DATETIME_WEEK_VALUE). This CLOSES
+the typed-input value surface (number/range/date/month/time/datetime-local/week all covered).
+WIKI: dom-semantics.md — datetime-local + week typed values (UTC / ISO-8601 week arithmetic).
