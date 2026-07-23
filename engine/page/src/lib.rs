@@ -5226,12 +5226,15 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> bool {
-        // An `inert` element cannot receive focus — Tab skips it and `el.focus()` is a no-op — so the
-        // page behind an open `<dialog>.showModal()` stays untabbable. Refuse before touching the DOM
-        // state so a focus request aimed at neutralised UI changes nothing (moving focus AWAY, i.e.
-        // `None`, is always allowed).
+        // A control that cannot be interacted with cannot receive focus either — Tab skips it and
+        // `el.focus()` is a no-op — so no `:focus` styling ever lands on it. Two sources, both refused
+        // here (before touching DOM state; moving focus AWAY, i.e. `None`, is always allowed):
+        //   * `inert` (and its subtree) — the page behind an open `<dialog>.showModal()` stays
+        //     untabbable, so keyboard focus cannot escape the modal into neutralised UI.
+        //   * a `disabled` form control (its own attribute, or inherited from `<fieldset disabled>`) —
+        //     a greyed-out button is not a tab stop.
         if let Some(n) = node {
-            if self.is_inert(n) {
+            if self.is_inert(n) || self.is_disabled(n) {
                 return false;
             }
         }

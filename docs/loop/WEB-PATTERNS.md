@@ -3852,3 +3852,16 @@ funnel through — now refuses a focus request whose target is inside an `inert`
 **The trap:** the fix belongs at the shared `set_focus` sink, not at each caller — putting it in the
 shell's Tab handler would leave the agent's focus grounding and the JS `el.focus()` path still leaking.
 One chokepoint, one guard.
+
+## A disabled form control is not a tab stop (tick 452)
+
+**The class of the web this unlocks (forms + keyboard a11y):** every form with a disabled submit button
+or a `<fieldset disabled>` section. A disabled control is not focusable — Tab must skip it and
+`el.focus()` must be a no-op — or a keyboard user (and an agent driving via Tab) snags on greyed-out
+controls and `:focus` visibly styles them. `set_focus` checked `inert` (tick 451) but not `disabled`.
+**(1)** The focusability guard at the shared `set_focus` sink is now `is_inert(n) || is_disabled(n)`.
+**(2)** `is_disabled` already covered inherited disabledness (`<fieldset disabled>`), so the bulk-disable
+idiom is handled for free.
+**The trap:** the click/activation path already refused disabled controls, which made it *look* handled —
+but focus is a separate sink, and a control you cannot click yet can Tab-focus is still broken. Each sink
+that grants interaction needs the focusability check.

@@ -18317,3 +18317,30 @@ WIKI: interaction-surface.md — inert also removes its subtree from the tab ord
 NEXT VEIN NOTE: the inert story is now hit-test + reflection + focus. The remaining inert edge is text
 SELECTION suppression (thin — needs the user-drag selection geometry that's unmodelled, same wall as
 `user-select`). The richer pivots remain the Tier-1 subsystems (media JOIN / contenteditable+IME).
+
+## Tick 452 — a `disabled` form control cannot receive focus (2026-07-23)
+
+FOLLOW-ON to tick 451 (same `set_focus` sink, the sibling focusability rule). Tick 451 taught set_focus
+to refuse `inert` targets; but a `disabled` control could still be focused — Tab landed on a greyed-out
+button and `:focus` styled it (an a11y + visual bug on every form).
+
+PROBED: the engine ALREADY has `is_disabled(node)` (own `disabled` attr OR an ancestor
+`<fieldset disabled>` — the idiomatic bulk-disable), used in the click/activation/label paths, but
+`set_focus` never consulted it. RED-proven below.
+
+FIX (capability — 1 file, 1 clause): `set_focus`'s focusability guard now refuses
+`is_inert(n) || is_disabled(n)` (was inert-only). One added clause, reusing the existing helper; no
+signature change.
+
+GATE: G_DISABLED_FOCUS (page, `disabled_control_cannot_receive_focus`) — an ENABLED control focuses
+(`:focus` applies, returns true); a directly-`disabled` control is refused; a control inside
+`<fieldset disabled>` is refused too (inherited disabledness). RED-proven by neutering the disabled
+clause → focus takes. Sibling gates green: g_disabled_inert, g_click_activation, g_label_click,
+g_active_pseudo, g_inert_focus, g_focus.
+
+TICK SHAPE: capability (disabled blocks focus on the shared set_focus sink; +1 gate). GATES +1.
+CONSTELLATION: disabled-focusability closed (activation was already gated; focus was the hole).
+WIKI: interaction-surface.md — a disabled control is not a tab stop.
+NEXT VEIN NOTE: the set_focus focusability surface is now complete for the two non-focusable classes
+(inert + disabled). Remaining interaction edges are thinner (user-select selection geometry, unmodelled).
+The richer pivots remain the Tier-1 subsystems (media JOIN / contenteditable+IME) per PHASE0-BOUNDED-REMAINDER.

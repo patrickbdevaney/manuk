@@ -233,3 +233,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 448	a7e4016	1784813171	2026-07-23T09:26:11-04:00	2361	capability	532	13	302	38	215	81	3896	6960	0	328	31	pointer-events: none is transparent to hit-testing (2026-07-23)
 449	719f7ef	1784816855	2026-07-23T10:27:35-04:00	3684	capability	62	11	304	40	218	81	3896	6960	0	328	31	pointer-events: none transparent to the AGENT's a11y hit-test (2026-07-23)
 451	50e4302	1784818364	2026-07-23T10:52:44-04:00	1509	capability	239	9	204	34	219	81	3896	6960	0	328	31	the HTML `inert` attribute also blocks focus (2026-07-23)
+452	0802ec9	1784819714	2026-07-23T11:15:14-04:00	1350	capability	58	9	188	39	220	81	3896	6960	0	328	31	a `disabled` form control cannot receive focus (2026-07-23)

@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **234** | ticks 1–451 |
-| median tick cycle | **19m** | 233 intervals |
-| median, last 10 | **34m** | 10 intervals |
+| ticks landed | **235** | ticks 1–452 |
+| median tick cycle | **19m** | 234 intervals |
+| median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.79** | 293.8h elapsed |
-| median verify wall | **60s** | 173 ticks |
-| wall trend | 39s → 4m — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.80** | 294.2h elapsed |
+| median verify wall | **60s** | 174 ticks |
+| wall trend | 39s → 62s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **219**
+* **live gates**: 27 → **220**
 * **✅ rows in the capability ledger**: 144 → **328**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**134 of 234 ticks** (57%) moved a
+**135 of 235 ticks** (57%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **134** capability ticks, median cycle **19m**
+* **135** capability ticks, median cycle **19m**
 * median diff per tick: **+215 / −34** lines across 9 files
 
 ## Every tick
@@ -331,5 +331,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **448** | 2026-07-23 09:26 | 39m | capability | 9m | +302/−38 | 215 | 81 | 56.0% · | pointer-events: none is transparent to hit-testing (2026-07-23) |
 | **449** | 2026-07-23 10:27 | 61m | capability | 62s | +304/−40 | 218 | 81 | 56.0% · | pointer-events: none transparent to the AGENT's a11y hit-test (2026-07-23) |
 | **451** | 2026-07-23 10:52 | 25m | capability | 4m | +204/−34 | 219 | 81 | 56.0% · | the HTML `inert` attribute also blocks focus (2026-07-23) |
+| **452** | 2026-07-23 11:15 | 22m | capability | 58s | +188/−39 | 220 | 81 | 56.0% · | a `disabled` form control cannot receive focus (2026-07-23) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

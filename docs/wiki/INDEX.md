@@ -498,6 +498,7 @@
   - L2182 · pointer-events: none is transparent to the AGENT's hit-test too (tick 449)
   - L2208 · The HTML inert attribute — reflection + transparent to the agent's hit-test (tick 450)
   - L2238 · The HTML inert attribute also blocks focus (tick 451)
+  - L2253 · A disabled form control cannot receive focus (tick 452)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -917,4 +918,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-832 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+833 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -2249,3 +2249,14 @@ DOM state) when the target is inert. Moving focus away (`None`) is always allowe
 does not get stuck. Gated by `G_INERT_FOCUS`: a non-inert control focuses (`:focus` applies), a control
 inside `<div inert>` is refused (`:focus` does not apply) — RED-proven by removing the refusal.
 [[css-cascade]]
+
+## A `disabled` form control cannot receive focus (tick 452)
+
+The same `set_focus` sink tick 451 taught to refuse `inert` now also refuses a `disabled` control: Tab
+skips it and `el.focus()` is a no-op, so no `:focus` styling lands on a greyed-out button. The engine
+already knew disabledness — `is_disabled(node)` checks the element's own `disabled` attribute *or* an
+ancestor `<fieldset disabled>` (the idiomatic way to disable a whole form section) — and the
+click/activation/label paths consulted it; only `set_focus` did not. The guard is now
+`is_inert(n) || is_disabled(n)`. Gated by `G_DISABLED_FOCUS`: an enabled control focuses, a directly
+`disabled` one is refused, and a control inside `<fieldset disabled>` is refused too — RED-proven by
+removing the disabled clause. [[css-cascade]]
