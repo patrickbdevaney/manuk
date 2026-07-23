@@ -628,6 +628,11 @@ pub fn cascade_via_stylo_sized(
             // to decide where a scroll lands.
             cs.scroll_snap_type = m.scroll_snap_type;
             cs.scroll_snap_align = m.scroll_snap_align;
+            // `scrollbar-width`/`scrollbar-color` recovered from MinimalCascade: both are
+            // `engine="gecko"` in stylo 0.19 and never reach the servo build's computed values, so the
+            // CSSOM would otherwise report `undefined` for the scrollbar-theming a dark-mode page sets.
+            cs.scrollbar_width = m.scrollbar_width;
+            cs.scrollbar_color = m.scrollbar_color;
             cs.word_break = m.word_break;
             // `direction` likewise: the bidi base level decides ORDER, and Stylo's servo build
             // does not surface it in a form we consume, so the shipping path would otherwise

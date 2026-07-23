@@ -243,3 +243,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 465	a5f5c24	1784844157	2026-07-23T18:02:37-04:00	4188	capability	69	9	164	34	233	81	3896	6960	0	329	31	`color-scheme` reaches getComputedStyle AND darkens the canvas default (2026-07-23)
 467	5b8627f	1784845899	2026-07-23T18:31:39-04:00	1742	capability	63	8	234	5	234	81	3896	6960	0	329	31	exclusive `<details name>` accordions: one panel open at a time (2026-07-23)
 468	b8cd06c	1784848203	2026-07-23T19:10:03-04:00	2304	capability	58	9	272	6	235	81	3896	6960	0	329	31	script-set `details.open` fires `toggle` + enforces the accordion group (2026-07-23)
+469	ff465da	1784850641	2026-07-23T19:50:41-04:00	2438	capability	69	13	317	36	236	81	3896	6960	0	329	31	`scrollbar-color`/`scrollbar-width` reach getComputedStyle via MinimalCascade recovery (2026-07-23)

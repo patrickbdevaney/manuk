@@ -208,6 +208,42 @@ impl ColorScheme {
     }
 }
 
+/// `scrollbar-width` (CSS Scrollbars, Baseline 2024) — how much room a classic scrollbar takes.
+/// Dark-mode and compact UIs set `scrollbar-width: thin` on scroll containers; `none` hides the
+/// scrollbar entirely (a custom overlay draws its own). It is `engine="gecko"` in stylo 0.19 (absent
+/// from the servo build), so it is recovered from [`MinimalCascade`] like `-webkit-line-clamp`. We
+/// resolve the COMPUTED keyword so `getComputedStyle(el).scrollbarWidth` reflects the stylesheet; the
+/// visible-scrollbar geometry is a paint concern this engine does not model.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ScrollbarWidth {
+    #[default]
+    Auto,
+    Thin,
+    None,
+}
+
+/// `scrollbar-color` (CSS Scrollbars, Baseline 2024) — the thumb/track colours a page themes its
+/// scrollbars with (`scrollbar-color: #888 #222` on a dark UI). `auto` is the UA default. It is
+/// `engine="gecko"` in stylo 0.19 (absent from the servo build), so it is recovered from
+/// [`MinimalCascade`]. We resolve the two colours to rgba so `getComputedStyle(el).scrollbarColor`
+/// reports what the stylesheet set, the value dark-mode themers feature-detect; painting the scrollbar
+/// itself is out of scope, like `user-select`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ScrollbarColor {
+    Auto,
+    /// `<color>{2}` — thumb (first) then track (second).
+    Colors {
+        thumb: Rgba,
+        track: Rgba,
+    },
+}
+
+impl Default for ScrollbarColor {
+    fn default() -> Self {
+        ScrollbarColor::Auto
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextAlign {
     Left,
@@ -809,6 +845,12 @@ pub struct ComputedStyle {
     /// `color-scheme` (inherited) — decides the dark/light canvas default and reflects through
     /// `getComputedStyle`. See [`ColorScheme`].
     pub color_scheme: ColorScheme,
+    /// `scrollbar-width` — the computed thin/none/auto keyword, resolved so `getComputedStyle`
+    /// reflects it. See [`ScrollbarWidth`].
+    pub scrollbar_width: ScrollbarWidth,
+    /// `scrollbar-color` (inherited) — the computed thumb/track colours, resolved to absolute rgba
+    /// so `getComputedStyle` reflects them. See [`ScrollbarColor`].
+    pub scrollbar_color: ScrollbarColor,
     /// `field-sizing: content` (Baseline June 2026) — the form control sizes from its CONTENT,
     /// so the UA's fixed-size presentational hints (`<textarea cols>` above all) must stand down
     /// and let intrinsic sizing run. `false` = `fixed`, the initial value.
@@ -973,6 +1015,8 @@ impl ComputedStyle {
             pointer_events: PointerEvents::Auto,
             user_select: UserSelect::Auto,
             color_scheme: ColorScheme::Normal,
+            scrollbar_width: ScrollbarWidth::Auto,
+            scrollbar_color: ScrollbarColor::Auto,
             field_sizing_content: false,
             line_height_normal: true,
             mask_image: None,
@@ -3595,6 +3639,50 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "capitalize" => TextTransform::Capitalize,
                 _ => TextTransform::None,
             }
+        }
+        // `scrollbar-width`/`scrollbar-color` are `engine="gecko"` in stylo 0.19 (dropped from the
+        // servo build entirely, like `-webkit-line-clamp`), so they are recovered here and merged in
+        // `stylo_engine`. We resolve only the COMPUTED value the CSSOM reports; painting a themed
+        // scrollbar is out of scope.
+        "scrollbar-width" => {
+            s.scrollbar_width = match v.trim().to_ascii_lowercase().as_str() {
+                "thin" => ScrollbarWidth::Thin,
+                "none" => ScrollbarWidth::None,
+                _ => ScrollbarWidth::Auto,
+            }
+        }
+        "scrollbar-color" => {
+            // `auto` | `<thumb-color> <track-color>`. Split at the first space at paren depth 0 so the
+            // commas/spaces inside `rgb(…)` do not fool the token boundary; a malformed pair → `auto`.
+            let t = v.trim();
+            s.scrollbar_color = if t.eq_ignore_ascii_case("auto") {
+                ScrollbarColor::Auto
+            } else {
+                let mut depth = 0i32;
+                let mut split = None;
+                for (i, c) in t.char_indices() {
+                    match c {
+                        '(' => depth += 1,
+                        ')' => depth -= 1,
+                        c if c.is_whitespace() && depth == 0 => {
+                            split = Some(i);
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+                split
+                    .map(|i| (t[..i].trim(), t[i..].trim()))
+                    .and_then(
+                        |(a, b)| match (values::parse_color(a), values::parse_color(b)) {
+                            (Some(thumb), Some(track)) => {
+                                Some(ScrollbarColor::Colors { thumb, track })
+                            }
+                            _ => None,
+                        },
+                    )
+                    .unwrap_or(ScrollbarColor::Auto)
+            };
         }
         // `overflow-wrap` and its legacy alias `word-wrap` map to the same computed value.
         "overflow-wrap" | "word-wrap" => {

@@ -895,3 +895,29 @@ engine's `stylo_map` color path ALREADY resolves to the black/white companion th
 (the same call `background-color` uses at line 268). So no new resolution code — the value lands as
 `rgb(255,255,255)` / `rgb(0,0,0)` in `getComputedStyle`. The lesson repeats: re-probe a `?`-unknown before
 building it — `contrast-color()` was carried as unknown and worked end-to-end behind one pref.
+
+### `scrollbar-color`/`scrollbar-width` are `engine="gecko"` — recovered from MinimalCascade, NOT a pref flip (tick 469)
+
+The CSS Scrollbars-1 theming pair (Baseline 2024) — `scrollbar-width: auto|thin|none` and
+`scrollbar-color: auto | <thumb> <track>` — looks like the same cheap Option-1 pref-flip win as
+`user-select`/`color-scheme` (all three carried `servo_pref = "layout.unimplemented"` in a stray vendored
+`stylo/` tree). **It is not, and the vendored tree is a decoy.** Manuk builds against the *crates.io*
+`stylo 0.19`, whose `longhands.toml` marks BOTH properties `engine = "gecko"`. `data.py`'s
+`declare_longhand` does `if engine and self.engine != engine: return`, so the servo build never generates
+them at all — `cv.clone_scrollbar_width()` / `clone_scrollbar_color()` simply do not exist as methods, and
+no pref can bring them back. This is the same wall `-webkit-line-clamp` hits.
+
+So the fix follows the `-webkit-line-clamp` precedent exactly: parse the two properties in `MinimalCascade`
+(`engine/css/src/lib.rs`) — `scrollbar-width` is a keyword; `scrollbar-color` splits at the first
+paren-depth-0 space (so the commas/spaces inside `rgb(…)` do not fool the token boundary) and parses each
+side with `values::parse_color`, falling back to `auto` on a malformed pair — then merge
+`cs.scrollbar_width`/`cs.scrollbar_color` from `m` in the `stylo_engine` recovery loop, right beside
+`scroll_snap_*`. `getComputedStyle` serializes both (`scrollbarWidth`, `scrollbarColor` as
+`<thumb> <track>` rgb strings) plus their dash-case `getPropertyValue` routes. Scope, stated honestly like
+`user-select`: this resolves the COMPUTED VALUE the CSSOM reports (what dark-mode themers feature-detect);
+painting a themed scrollbar is a paint concern the engine does not model. RED proof: delete the two merge
+lines and every element reads `auto`.
+
+The lesson: **confirm which Stylo source actually compiles before assuming a `servo_pref` gate.** A
+property gated by `servo_pref` reaches the servo build (pref-flippable); a property gated by
+`engine = "gecko"` never does (MinimalCascade-recover it).

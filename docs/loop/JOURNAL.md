@@ -18993,3 +18993,45 @@ re-baselining the WALL mark (189s) per [wall-mark-min-lock-rebaseline]. **The wo
 tick — the next invocation should re-run ./scripts/tick.sh (message: /tmp/tick468.msg content, re-create
 it), NOT `git checkout -- .`.** Uncommitted set: engine/js/src/reflect_js.rs + g_details_open_idl.rs +
 wiki/web-patterns/journal/constellation(+3 unknowns)/surface-audit #20.
+
+## Tick 469 — `scrollbar-color`/`scrollbar-width` reach getComputedStyle via MinimalCascade recovery (2026-07-23)
+
+A fresh surface-audit #20 `?`-unknown (adjacent to nothing I'd built; a doc-class Baseline-2024 CSS pair).
+`scrollbar-width: auto|thin|none` and `scrollbar-color: auto | <thumb> <track>` are how dark-mode / compact
+UIs theme their scroll containers (`scrollbar-color: #888 #222`), and custom-scrollbar libraries
+feature-detect the resolved value through `getComputedStyle(el).scrollbarColor` to decide whether to draw
+their own overlay. Both were `undefined` on the CSSOM.
+
+THE DECOY: this looked like the cheap Option-1 pref-flip win of t464/t465 (user-select/color-scheme) — a
+stray vendored `stylo/` tree marks both properties `servo_pref = "layout.unimplemented"` (already flipped
+on). But manuk builds against the CRATES.IO `stylo 0.19`, whose `longhands.toml` marks BOTH
+`engine = "gecko"`. `data.py`'s `declare_longhand` early-returns for the wrong engine, so the servo build
+NEVER generates them — `cv.clone_scrollbar_width()` does not exist and no pref flip helps. Confirmed by
+grepping the generated `properties.rs` (0 `scrollbar_width`, 9 `clone_user_select`). Same wall
+`-webkit-line-clamp` hits.
+
+MECHANISM: the `-webkit-line-clamp` precedent exactly. Parse both in `MinimalCascade`
+(`engine/css/src/lib.rs`) — `scrollbar-width` a keyword; `scrollbar-color` split at the first
+paren-depth-0 space (so `rgb(…)`'s internal commas/spaces don't fool the token boundary), each side through
+`values::parse_color`, malformed pair → `auto` — then merge `cs.scrollbar_width`/`cs.scrollbar_color` from
+`m` in the `stylo_engine` recovery loop beside `scroll_snap_*`. `getComputedStyle` serializes both
+(`scrollbarWidth`; `scrollbarColor` as `<thumb> <track>` rgb strings) plus dash-case `getPropertyValue`
+routes and the STD name list. NOT mapped in `stylo_map` (the mapping I first wrote there did not compile —
+the methods are absent). Scope stated honestly like user-select: resolves the COMPUTED VALUE the CSSOM
+reports; painting a themed scrollbar is out of scope.
+
+GATE: G_SCROLLBAR_THEME (page) — `scrollbar-width: none/thin` and `scrollbar-color: #888 #222` /
+`rgb(255,0,0) rgb(0,0,255)` reach `getComputedStyle` (`.scrollbarWidth`, `.scrollbarColor`, and
+`getPropertyValue`), `auto` unset. RED-proven by deleting the two merge lines → every value collapses to
+`auto`. Neighbors green: g_user_select, g_color_scheme, g_computed_style, g_get_property_value. Pre-existing
+UNRELATED failure noted: `manuk-css` `supports_condition_answers_from_the_real_parser` fails on clean HEAD
+too (view-transition-name became stylo-@supports-known) — not in the verify gate, not caused here.
+
+TICK SHAPE: capability (scrollbar-theming computed values via MinimalCascade recovery; +1 gate). GATES +1.
+CONSTELLATION: flips the doc-class `? scrollbar-color / scrollbar-width` unknown → works|gated.
+WIKI: css-cascade.md — new subsection after the contrast-color note.
+NEXT VEIN NOTE: the MinimalCascade-recovery path (for `engine="gecko"` props stylo drops) is the honest
+route once the `layout.unimplemented` pref-flip vein runs out — user-select/color-scheme were the last
+cheap servo_pref wins; scrollbar-* needed recovery. Remaining surface-audit #20 unknowns: `::details-content`
+(pseudo-element box), `@starting-style` (entry-transition; needs the transition machinery). Bigger honest
+moves unchanged: MEDIA H.264-High, IndexedDB (redb/heed), contenteditable EDITING subsystem.

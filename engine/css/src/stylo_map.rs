@@ -374,6 +374,10 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         };
     }
 
+    // `scrollbar-width`/`scrollbar-color` are `engine="gecko"` in stylo 0.19 (absent from the servo
+    // build), so — like `-webkit-line-clamp` — they are recovered from `MinimalCascade` and merged in
+    // `stylo_engine`, not mapped here.
+
     // Display.
     s.display = map_display(cv.clone_display());
 

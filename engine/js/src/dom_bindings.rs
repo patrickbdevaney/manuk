@@ -675,6 +675,21 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         manuk_css::ColorScheme::Dark => "dark",
         manuk_css::ColorScheme::LightDark => "light dark",
     };
+    // `scrollbar-width` / `scrollbar-color` resolved values — `getComputedStyle(el).scrollbarWidth` /
+    // `.scrollbarColor`. Dark-mode theming code reads these back to decide whether to draw a custom
+    // overlay scrollbar; before this they were `undefined`.
+    let scrollbar_width = match cs.scrollbar_width {
+        manuk_css::ScrollbarWidth::Auto => "auto",
+        manuk_css::ScrollbarWidth::Thin => "thin",
+        manuk_css::ScrollbarWidth::None => "none",
+    };
+    let scrollbar_color = match cs.scrollbar_color {
+        manuk_css::ScrollbarColor::Auto => "auto".to_string(),
+        // Chrome serializes the pair as `<thumb> <track>`, each a resolved rgb()/rgba() colour.
+        manuk_css::ScrollbarColor::Colors { thumb, track } => {
+            format!("{} {}", rgba_css(&thumb), rgba_css(&track))
+        }
+    };
     let white_space = match cs.white_space {
         WhiteSpace::Normal => "normal",
         WhiteSpace::NoWrap => "nowrap",
@@ -754,6 +769,8 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
             "visibility",
             "white-space",
             "pointer-events",
+            "scrollbar-width",
+            "scrollbar-color",
             "opacity",
             "width",
             "height",
@@ -807,7 +824,8 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
     format!(
         "({{color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
           fontFamily:{}, lineHeight:{}, textAlign:{}, display:{}, position:{}, overflow:{}, overflowX:{}, overflowY:{}, \
-          visibility:{}, whiteSpace:{}, pointerEvents:{}, userSelect:{}, webkitUserSelect:{}, colorScheme:{}, opacity:{}, \
+          visibility:{}, whiteSpace:{}, pointerEvents:{}, userSelect:{}, webkitUserSelect:{}, colorScheme:{}, \
+          scrollbarWidth:{}, scrollbarColor:{}, opacity:{}, \
           width:{}, height:{}, marginTop:{}, marginRight:{}, marginBottom:{}, marginLeft:{}, \
           paddingTop:{}, paddingRight:{}, paddingBottom:{}, paddingLeft:{}, \
           top:{}, right:{}, bottom:{}, left:{}, zIndex:{}, transform:{}, \
@@ -823,6 +841,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
           'pointer-events':'pointerEvents','user-select':'userSelect',\
           '-webkit-user-select':'userSelect','-moz-user-select':'userSelect',\
           'color-scheme':'colorScheme',\
+          'scrollbar-width':'scrollbarWidth','scrollbar-color':'scrollbarColor',\
           'margin-top':'marginTop',\
           'margin-right':'marginRight','margin-bottom':'marginBottom','margin-left':'marginLeft',\
           'padding-top':'paddingTop','padding-right':'paddingRight','padding-bottom':'paddingBottom',\
@@ -859,6 +878,8 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         q(user_select),
         q(user_select),
         q(color_scheme),
+        q(scrollbar_width),
+        q(&scrollbar_color),
         q(&opacity),
         q(&dim_css(&cs.width)),
         q(&dim_css(&cs.height)),

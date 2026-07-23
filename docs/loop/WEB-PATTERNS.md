@@ -4084,3 +4084,15 @@ on the script path too, matching the click path (tick 467). **The trap:** the ho
 `<details>.open` — `<dialog>.open` (driven by show()/close(), not the IDL boolean) and every other
 reflected attribute must stay side-effect-free, or the change becomes a regression in the spec-critical
 reflection machinery it lives in.
+
+## Dark-mode scrollbar theming reports its computed value (tick 469)
+
+**The class of the web this unlocks (dark-UI dashboards, editors, docs sidebars):** a dark-themed page sets
+`scrollbar-color: #888 #222` / `scrollbar-width: thin` on its scroll containers so the OS scrollbar does
+not sit bright-on-dark, and a custom-scrollbar library reads `getComputedStyle(el).scrollbarColor` back to
+decide whether to skip its own overlay. Both were `undefined`, so the feature-detect always fell through.
+Now the resolved value is reported (thumb/track as `rgb()` pair, `getPropertyValue` too). **The trap:** these
+two are `engine="gecko"` in the crates.io Stylo the browser actually compiles — no `layout.unimplemented`
+pref flip can surface them (a vendored `stylo/` tree that marks them pref-gated is a decoy), so they must be
+MinimalCascade-recovered like `-webkit-line-clamp`, not mapped from Stylo's computed values. Scope is the
+computed value only; painting a themed scrollbar is out of scope.
