@@ -2560,6 +2560,52 @@ const PRELUDE: &str = r#"
       // `document.getSelection()` is the same object as `window.getSelection()` per spec.
       if (typeof document.getSelection !== 'function') { document.getSelection = globalThis.getSelection; }
 
+      // `document.execCommand` — the LEGACY editing/clipboard command API. Deprecated, but still the
+      // DOMINANT "copy to clipboard" implementation on the web: countless sites and pre-2020 libraries
+      // (clipboard.js and its clones) select a hidden <textarea> and call `document.execCommand('copy')`,
+      // often as the fallback when the async Clipboard API is unavailable. Absent, that call was a
+      // `TypeError: document.execCommand is not a function` that took the copy handler — and whatever ran
+      // after it — down. We honour the commands that need NO editable DOM mutation: `copy` (copy the
+      // current selection to the clipboard, synchronously, through the same host bridge as
+      // `navigator.clipboard.writeText`) and `selectAll` (select the document / focused editable).
+      // `cut` and every FORMATTING command (bold/italic/insertText/…) are the contenteditable EDITING
+      // subsystem — they mutate editable content, which is a separate later brick — so they honestly
+      // return `false`, and `queryCommandSupported` says so, so a page feature-detects the truth instead
+      // of believing a lie.
+      if (typeof document.execCommand !== 'function') {
+        var __EXEC_SUPPORTED = { copy: 1, selectall: 1 };
+        document.execCommand = function (cmd) {
+          cmd = String(cmd || '').toLowerCase();
+          if (cmd === 'copy') {
+            var text = '';
+            try { text = String(globalThis.getSelection().toString() || ''); } catch (e) {}
+            if (!text) { return false; }
+            var nav = globalThis.navigator;
+            if (nav && nav.clipboard && typeof nav.clipboard.writeText === 'function') {
+              nav.clipboard.writeText(text); // synchronously queues the host write; the Promise is ignored
+              return true;
+            }
+            if (typeof globalThis.__clipboardWrite === 'function') {
+              globalThis.__clipboardText = text; globalThis.__clipboardWrite(text); return true;
+            }
+            return false;
+          }
+          if (cmd === 'selectall') {
+            try {
+              var ae = document.activeElement;
+              var target = (ae && ae.isContentEditable) ? ae : document.body;
+              globalThis.getSelection().selectAllChildren(target);
+              return true;
+            } catch (e) { return false; }
+          }
+          return false; // every other command is the editing subsystem — honestly not built
+        };
+        document.queryCommandSupported = function (cmd) {
+          return !!__EXEC_SUPPORTED[String(cmd || '').toLowerCase()];
+        };
+        document.queryCommandEnabled = document.queryCommandSupported;
+      }
+
       // ── **The interface surface.** Every name here is one a bundle may *reference* — in an
       //    `instanceof`, a `typeof`, a prototype patch — and **a referenced name that does not exist is a
       //    `ReferenceError`, not a `false`.**

@@ -3992,3 +3992,18 @@ a JS string is UTF-16 and raw bytes are not valid text. **The trap:** a write pa
 Promise is indistinguishable from one that did the work — the silent-success failure mode. The gate asserts
 the exact bytes reached the host queue, not merely that write() resolved. Follow-on: the shell round-trip to
 a real OS clipboard.
+
+## The legacy copy button (tick 463)
+
+**The class of the web this unlocks (copy-to-clipboard buttons everywhere):** the dominant copy-button
+implementation on the web — select a node (often a hidden `<textarea>` or a code block), then
+`document.execCommand('copy')`. clipboard.js and its clones, and countless hand-rolled buttons, use it —
+usually as the FALLBACK when `navigator.clipboard` is unavailable. `document.execCommand` was absent, so the
+call was a `TypeError` that took the copy handler down.
+**(1)** `execCommand('copy')` copies `getSelection().toString()` synchronously through the same host bridge
+as `navigator.clipboard.writeText`; `selectAll` selects the document; `queryCommandSupported` reports them.
+**(2)** Honest scope: `cut` and formatting commands (bold/italic/insertText) mutate editable content — the
+contenteditable EDITING subsystem — so they return `false`, and a page feature-detects the truth. **The
+trap:** execCommand returns a synchronous boolean, NOT a Promise — routing `copy` through the async
+Clipboard API's Promise would make the return value meaningless; it must queue the host write synchronously
+and return `true`.

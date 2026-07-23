@@ -18713,3 +18713,45 @@ NEXT VEIN NOTE: the clipboard binary bridge is complete on the ENGINE side (read
 remaining follow-on is the SHELL round-trip to a real OS clipboard (arboard image formats — cross-crate,
 host-owned). Bounded partials still open: full configurable Sanitizer (allow/block lists), playbackRate
 (media, not in wall). L-marquees unchanged: MEDIA H.264-High, IndexedDB (redb/heed), contenteditable EDITING.
+
+## Tick 463 — document.execCommand('copy'/'selectAll'), the legacy copy-button path (2026-07-23)
+
+CONTINUES the clipboard/selection cluster (fresh context from t461/t462) with a clean STANDALONE brick —
+NOT the rich-editing subsystem the anchor names as in-progress. `document.execCommand` was entirely absent.
+
+PROBED (RED-proven): `document.execCommand` was undefined, so the dominant copy-to-clipboard implementation
+on the web — `getSelection().selectAllChildren(node); document.execCommand('copy')` (clipboard.js + every
+hand-rolled "copy" button, usually the fallback when the async Clipboard API is unavailable) — threw
+`TypeError: document.execCommand is not a function` and took the copy handler (and whatever ran after) down.
+
+FIX (capability — 1 file, event_loop.rs prelude, after the getSelection shim): a `document.execCommand`
+that honours the commands needing NO editable DOM mutation — `copy` (copies `getSelection().toString()`
+SYNCHRONOUSLY through the same host bridge as `navigator.clipboard.writeText`; execCommand returns a
+boolean, not a Promise) and `selectAll` (`selectAllChildren` over the document or focused editable) —
+plus `queryCommandSupported`/`queryCommandEnabled` reporting exactly those. `cut` and every FORMATTING
+command (bold/italic/insertText/…) mutate editable content = the contenteditable EDITING subsystem (a
+separate brick), so they honestly return `false`. Reuses the real Selection (t328) + the clipboard write
+bridge (t179/t287).
+
+GATE: G_EXEC_COMMAND_COPY (page, `document_exec_command_copy_is_the_legacy_copy_button_path`) — teeth:
+`copy:true` + the SELECTED TEXT reaches the host clipboard queue (checked in Rust via
+`manuk_js::take_clipboard_writes()`), `qs-copy`/`qs-sel` true, `qs-bold`/`bold`/`cut` false (honest scope),
+`selAll` leaves a non-empty selection. RED-proven by removing the shim → execCommand throws, handler dies,
+`#out` never updates. Siblings green: g_selection, g_text_selection, g_clipboard_read, g_clipboard_image,
+g_contenteditable_query.
+
+TICK SHAPE: capability (document.execCommand copy/selectAll — the legacy copy-button path; +1 gate). GATES
++1. CONSTELLATION: new row (document.execCommand legacy, gated). WIKI: interaction-surface.md — new
+subsection after the clipboard-write section.
+NEXT VEIN NOTE: the FORMATTING/editing execCommand path (bold/italic/insertText + caret + editable DOM
+mutation) IS the rich-editing subsystem the ROADMAP-ANCHOR names as in-progress (10-20 ticks, decompose-
+first) — do NOT rush it as an atomic tick. The clipboard/selection cluster is now well-covered (read/write
+text+image, execCommand copy/selectAll). L-marquees unchanged.
+
+### Tick 463 WALL-PARK note (harness-owned, not fixed here)
+t463 is COMPLETE + green in-tree (G_EXEC_COMMAND_COPY passes, RED-proven, siblings green) but tick.sh's
+ratchet refuses on a WALL 550s>245s receipt measured under SUSTAINED observer browser contention (Chrome
+~60% + Firefox — the tri-oracle sweep; load spiked to 7). Not our regression: my warm re-run on a quiet
+box earlier this session banked 60-69s. Parked the complete WIP in-tree; it lands by itself on the next
+warm re-run once the observer sweep quiets, per [wall-warm-rerun-lands-ticks] / [three-ticks-parked-wall-blocked]
+(t458 was parked-then-landed the exact same way at the start of this very session).

@@ -972,3 +972,56 @@ work list; the fidelity certificate remains the exit. The loop-direction correct
 #22, now executed — is the pivot OFF the bounded selector/interaction vein and ONTO a Tier-1 subsystem.
 
 **Next check due: tick 463.**
+
+## Check #24 — tick 463
+
+**Horizon:** Phase 0 — daily-driver rendering parity + the agentic surface (CONSTITUTION.MD **Part VII**,
+components 1 & 2). **Gate:** the FIDELITY-SCORING-REDESIGN.md certificate (≥0.75 placement fidelity on
+≥95% of the corpus + ≥0.70 per top-20 category), NOT a WPT percentage. Anchor: PHASE0-ROADMAP-ANCHOR.md
+(the observer's verified 85-150-tick bound from t460).
+
+**Gate or scoreboard?** Gate. Window 456-463 executed the Check #23 pivot — OFF the mined-out
+selector/interaction vein — but chose the **DAILY-DRIVER COMPLETENESS** face of Phase-0 (CO-#1 items D/E/F)
+over the two big Tier-1 subsystems, because both marquees (media H.264-High, contenteditable EDITING) are
+explicitly decompose-first / NON-atomic and the anchor prices them as 7-20-tick efforts. Each tick RED-proved
+a VISIBLY-broken class first: **456/457** contenteditable query+selector agreement (the rich-editing entry,
+per the anchor), **458** completeness identity (deviceMemory + canonical platform — the LinkedIn/Cloudflare
+degraded-path tell), **459** `select.options.length` live accessor (the clear-the-dropdown idiom; 4th
+dead-expando-getter-snapshot instance), **460** custom-element `attributeChangedCallback` on live
+setAttribute (reactive web components froze at boot), **461/462** clipboard image read+write
+(paste-a-screenshot / copy-image — both binary directions), **463** `document.execCommand('copy')` (the
+legacy copy-button path). Not conformance edges — each is a class of real site that silently misbehaved.
+
+**Is the loop still pointed at the frontier?** Yes, but the ATOMIC daily-driver vein is now visibly
+thinning. The measure-first re-probe kept paying its rent (the recurring stale-doc lesson held HARD: probing
+the 10 constellation `?` unknowns + DAILY-DRIVER-EDGES "missing" rows found details / createObjectURL /
+scroll-anchor / conic-gradients / canvas-fillText / visibilityState ALL already built). What remains among
+the `?` unknowns is NON-atomic residue: `ic`/`ric` + `ch`/`ex` are the StubFontMetrics subsystem,
+`contrast-color()`/`user-select` are Stylo servo-pref fences, ESM module-graph is a subsystem, per-element
+`zoom` is layout-math (against the "avoid the CSS-layout tail" steer). The genuine remaining frontier is the
+anchor's named build items — every one a 2-20-tick SUBSYSTEM (rich-editing, WebGL, WebAuthn, vault, bidi,
+animation-timeline, widgets, effects, MathML, multicol, print) — none an atomic tick. **The steer:** the
+next context takes ONE of those as a decompose-first subsystem, or runs the FID-SWEEP exit instrument; do
+NOT keep force-fitting subsystem bricks into atomic ticks past the point the clean vein is dry.
+
+**Is the agentic surface (component #2) served?** Yes, indirectly this window — clipboard read/write and
+execCommand copy are the agent's ability to move data in/out of a page, and `attributeChangedCallback`/
+`select.options` liveness are queryable/actuable control state. Less component-2-dense than window 448-454
+(which was hit-test/focus-grounding); this window leaned component-1 (completeness so real logged-in apps
+take their normal path, not the degraded/"unknown client" one). I3 held — every fix landed page-observable
+with its RED-proven gate.
+
+**Any invariant bent?** No. Bar 0 held — every tick 458-463 additive and RED-proven both ways, sibling
+suites green each landing. I2 intact — no dependency forked; the one borrow-shaped decision (base64 for the
+clipboard binary bridge) reused the existing `b64`/`atob` transport rather than adding a crate. THE RATCHET
+honored — nothing traded. The wall recurred as the session's main friction: the G_INTERACT tab-timing gate
+false-REDs under the observer's tri-oracle sweep contention (Chrome+Firefox, load 6-7), costing t461 three
+tick.sh retries and parking t463 complete-in-tree until a lull; the mark was NOT retuned (standing recipe:
+warm re-run on a quiet slot). Harness-owned; reported, not fixed.
+
+**PART VI / VII correction.** None to the four-component v1 scope. PHASE0-ROADMAP-ANCHOR.md is the new
+authoritative bound + ledger (supersedes the free-standing BOUNDED-REMAINDER list); the fidelity certificate
+remains the exit. The only correction is tempo: acknowledge the atomic-completeness vein is drying and stop
+mining it a tick or two past dry — pivot to a decompose-first subsystem or the exit instrument.
+
+**Next check due: tick 471.**

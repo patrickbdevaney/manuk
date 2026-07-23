@@ -589,6 +589,24 @@ proves one image part is queued with the right MIME and the EXACT Blob bytes (RE
 `write()` to drop non-text parts). **Honest follow-on:** the shell round-trip to a real OS clipboard
 (`arboard` image formats) — the engine seam is done, the host consumer is not yet wired.
 
+## `document.execCommand('copy')` — the legacy copy-button path (tick 463)
+
+`document.execCommand` was absent, so the single most common copy-to-clipboard implementation on the web
+— select a node's text, then `document.execCommand('copy')` (clipboard.js and every hand-rolled "copy"
+button, usually as the fallback when the async Clipboard API is unavailable) — threw
+`TypeError: document.execCommand is not a function` and took the handler down.
+
+The shim honours the commands that need NO editable DOM mutation: `copy` reads
+`getSelection().toString()` and copies it **synchronously** through the same host bridge as
+`navigator.clipboard.writeText` (execCommand returns a boolean, not a Promise); `selectAll` runs
+`selectAllChildren` over the document (or the focused editable). `queryCommandSupported` /
+`queryCommandEnabled` report exactly those two. `cut` and every FORMATTING command (bold/italic/
+insertText/…) mutate editable content — the contenteditable EDITING subsystem, a separate brick — so
+they honestly return `false`, and a page that feature-detects via `queryCommandSupported` takes its
+correct branch rather than believing a lie. Gate `G_EXEC_COMMAND_COPY` proves `copy`/`selectAll` succeed
+and the copied text reaches the host clipboard queue, while `bold`/`cut`/`queryCommandSupported('bold')`
+return `false` (RED-proven by removing the shim — the call throws and the handler dies).
+
 ## `keyup` fires on key release — the settled-value half of the keyboard trio (tick 180)
 
 A large slice of the web — jQuery-era search boxes, character counters, keyboard-shortcut-release
