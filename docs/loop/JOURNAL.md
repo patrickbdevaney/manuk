@@ -18416,3 +18416,30 @@ a genuine gap but is NOT atomic: crates.io Stylo gates it behind `servo_pref="la
 (~65 props), and `./stylo` is a reference checkout nothing builds — so it needs either a blast-radius pref
 flip or a manuk-side supplement, weighed in a fresh context. The richer pivots remain the Tier-1
 subsystems (media JOIN / contenteditable+IME) per PHASE0-BOUNDED-REMAINDER.
+
+## Tick 455 — governance: self-audit + Constitution Check #23 (the pivot off the selector vein) (2026-07-23)
+
+CADENCE tick — both due at 455: self-audit (LAST 445, every 10) and Constitution Check (LAST 447, every 8).
+No engine change; this tick banks the honest map (the third ratchet face) and records the loop-direction
+correction that Checks #21/#22 twice flagged.
+
+SELF-AUDIT: ran `./scripts/self-audit.sh` — GREEN ("methodology and reality agree"): Tier-0 intact, every
+gate declares how to break it, 49-entry process-defect ledger each naming a closing mechanism, enforcement
+mechanical (pre-commit hook, generated STATUS, receipt), journal gapless, 432-row pattern ledger moving with
+the engine. LAST_AUDIT_TICK bumped 445 → 455.
+
+CONSTITUTION CHECK #23 (docs/loop/CONSTITUTION-CHECK.md, canonical header `## Check #23 — tick 455`):
+window 448-454 was one coherent interaction/focus/form-state SELECTOR vein (pointer-events → inert →
+disabled-focus → :disabled fieldset → :read-only), each RED-proven, each a VII.1 visibly-broken class, each
+component-#2-dense (hit-test transparency, focus grounding, actuable-state querying). VERDICT: gate not
+scoreboard; Bar 0 held; I2/I3 intact; ratchet honored (t454's cold 561s wall was contention, re-banked warm
+80s, mark not retuned). The two-engines-disagree selector thread is CLOSED (`:open`/`:disabled`/`:read-only`
+agree). THE PIVOT, now executed not just recorded: off the bounded selector/interaction vein (mined out;
+marginal site-coverage per tick low; remaining edges conformance-only or shell-spanning) and ONTO a Tier-1
+JARRING subsystem per PHASE0-BOUNDED-REMAINDER — media playback JOIN → YouTube (marquee) or contenteditable
++IME — each needing a fresh decompose-before-starting context.
+
+TICK SHAPE: governance (self-audit GREEN + Constitution Check #23; map/instrument fidelity, zero engine
+change, zero WPT flip). CONSTELLATION: unchanged. Next constitution check due 463; self-audit due 465;
+surface audit due 458.
+WIKI: none — governance tick, no capability to document.

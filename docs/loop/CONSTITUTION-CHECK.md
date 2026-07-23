@@ -919,3 +919,56 @@ recorded above: the bounded value-accessor vein has paid out most of what it hol
 pivot to a Tier-1 subsystem or the fidelity instrument.
 
 **Next check due: tick 455.**
+
+## Check #23 — tick 455
+
+**Horizon:** Phase 0 — daily-driver rendering parity + the agentic surface (CONSTITUTION.MD **Part VII**,
+components 1 & 2: "reliably renders and runs the representative real internet," plus an agent driving the
+DOM/a11y tree as first-class queryable+actuable state). **Gate:** the FIDELITY-SCORING-REDESIGN.md
+certificate (≥0.75 placement fidelity on ≥95% of the corpus + ≥0.70 per top-20 category), NOT a WPT
+percentage. Work list: PHASE0-BOUNDED-REMAINDER.md.
+
+**Gate or scoreboard?** Gate. Window 448-454 ran one coherent vein — **the interaction / focusability /
+form-state SELECTOR surface an agent and every non-framework page drive**, each RED-proving a silent-fail
+before touching code: **448/449** pointer-events:none transparent to both the JS elementFromPoint and the
+agent a11y hit-test, **450** the HTML `inert` attribute (reflection + subtree-walk into the a11y hittable
+path), **451** inert blocks focus, **452** disabled blocks focus (shared `set_focus` sink), **453**
+`:disabled`/`:enabled` honour `<fieldset disabled>` in BOTH selector engines, **454** `:read-only`/
+`:read-write` match in the querySelector engine agreeing with the cascade. Each fixed a VISIBLY-broken
+class per VII.1 — a modal focus-trap defeated, a greyed control that Tab-focuses, a bulk-disabled section
+rendered un-greyed, a form library that queries the wrong fields — not a conformance edge.
+
+**Is the loop still pointed at the frontier?** At the vein's edge — and this check formalizes the PIVOT
+that Checks #21/#22 twice flagged. The two-engines-disagree SELECTOR thread is now closed for the
+static-resolvable form pseudos (`:open` t429, `:disabled` t453, `:read-only`/`:read-write` t454 all agree
+across cascade + querySelector), and the interaction/focus vein (inert/disabled/pointer-events) is
+mined out. The measure-first re-probe kept paying (t454 found the cascade half already worked; only the
+querySelector half was broken) but the marginal site-coverage per tick is now low and the remaining edges
+are conformance-only (display:none focus) or shell-spanning (autofocus is a two-model split between
+`set_focus` and the shell's `focused_input`, not atomic). **The steer, now acted on, not just recorded:**
+the next context pivots to a **Tier-1 JARRING subsystem** per PHASE0-BOUNDED-REMAINDER — media playback
+JOIN → YouTube (items 1+2, the marquee), or contenteditable+IME (item 3+4) — each needing a
+decompose-before-starting context rather than a rushed atomic tick. `user-select` the PROPERTY is a real
+remaining `?` but is NOT atomic (crates.io Stylo fences it behind `servo_pref="layout.unimplemented"`,
+~65 props; the `./stylo` checkout builds nothing) — a blast-radius pref flip or a manuk-side supplement,
+weighed fresh.
+
+**Is the agentic surface (component #2) served?** Directly, and this window was among the most component-2
+-dense in recent memory: pointer-events/inert hit-test transparency (t448/449/450) is literally the agent's
+occlusion-aware hit_test seeing what a user's cursor would; `set_focus` refusing inert/disabled targets
+(t451/452) is the agent's focus-grounding path; `:read-only`/`:read-write`/`:disabled` querying is the
+queryable state an agent reads to know which controls are actuable. Every fix landed page-observable with
+its gate; I3 held.
+
+**Any invariant bent?** No. Bar 0 held — every tick 448-454 additive and RED-proven both ways, sibling
+suites green each landing (css/selector/focus/pointer/inert gates). I2 intact — no dependency forked; all
+work is our own selector engines + page focus sink against the specs' own algorithms; the cascade side of
+each pseudo was ALREADY Stylo's (we only taught the querySelector engine to agree). THE RATCHET honored —
+nothing traded; t454's cold 561s wall was pure contention (observer oracle load + relink), re-banked to a
+warm 80s green receipt on a quiet slot, mark NOT retuned (the standing wall recipe, unchanged since #20).
+
+**PART VI / VII correction.** None to the four-component v1 scope. PHASE0-BOUNDED-REMAINDER.md remains the
+work list; the fidelity certificate remains the exit. The loop-direction correction — flagged in #21 and
+#22, now executed — is the pivot OFF the bounded selector/interaction vein and ONTO a Tier-1 subsystem.
+
+**Next check due: tick 463.**
