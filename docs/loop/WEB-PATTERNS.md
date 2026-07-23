@@ -3742,3 +3742,15 @@ and settable (`output.value = total` updates what the user sees).
 **The trap:** `output.value` is the same bug class as `textarea.value` (t440) — a control whose value is its
 text content, not a `value` attribute; reading the attribute returns blank and assignment silently fails to
 render.
+
+## the .text property for a/script/title (tick 445)
+
+**The class of the web this unlocks:** code that reads `<a>.text` (link label without markup),
+`<script>.text` (inline JSON-LD / config / template source, e.g. `JSON.parse(script.text)`), or
+`<title>.text` (page title) — and code that sets them.
+**(1)** These were dead expandos (`undefined`); `.text` now returns/sets the RAW text content for
+`<a>`/`<script>`/`<title>`.
+**(2)** `<option>.text` stays whitespace-collapsed (tick 439) and a plain element keeps its `.text` expando
+— one accessor, tag-dispatched.
+**The trap:** `<script>.text` is how a page reads an inline JSON-LD or config block; returning `undefined`
+means `JSON.parse(script.text)` throws and the whole feature (structured data, config-driven UI) dies.

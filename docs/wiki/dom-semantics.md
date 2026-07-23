@@ -1354,3 +1354,11 @@ PROGRESS) is the completion fraction `value/max` clamped to `[0,1]`, or `-1` whe
 `<output>`'s displayed text content: the getter returns the text content, the setter replaces the children
 with a text node (the spec's "value mode"), so `output.value = result` on a calculator both shows and reads
 back. Previously it returned `""` and assignment was a dead expando. Gate `G_PROGRESS_OUTPUT_VALUE`.
+
+## the .text property for a/script/title (tick 445)
+
+Completing tick 439's `.text` accessor: `<a>.text` (link label), `<script>.text` (inline script source) and
+`<title>.text` (page title) were dead expandos returning `undefined`, with assignment leaving the content
+untouched. The `EP.text` getter/setter (`collections_js.rs`) now returns/sets the RAW text content
+(whitespace preserved) for A/SCRIPT/TITLE, keeps `<option>.text` whitespace-collapsed, and preserves the
+ordinary `div.text = x` expando on any other element. Gate `G_ELEMENT_TEXT`.

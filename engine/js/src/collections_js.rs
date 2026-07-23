@@ -1027,21 +1027,27 @@ pub const COLLECTIONS_JS: &str = r#"
         return origRemove.apply(this, arguments);
       };
     }
-    // `option.text` — the option's LABEL as the user sees it: the concatenated text content with ASCII
-    // whitespace runs collapsed and trimmed (spec). Reading `select.options[i].text` is the single most
-    // common way a page recovers the chosen label, and it was `undefined` (a plain expando). The setter
-    // replaces the text content. Defined narrowly for `<option>`; on any other element the getter is
-    // `undefined` and the setter preserves the ordinary expando (`div.text = x`) by materialising an own
-    // data property, so nothing that assigned `.text` to a non-option regresses.
+    // `.text` — a small family of elements expose their text content under `.text`, and all were dead
+    // expandos. `<option>.text` is the LABEL with ASCII-whitespace runs collapsed and trimmed (the single
+    // most common way a page recovers the chosen option). `<a>.text`, `<script>.text` and `<title>.text`
+    // are the RAW text content (link label / inline script source / page title) — read AND settable. On any
+    // OTHER element the getter is `undefined` and the setter preserves the ordinary expando (`div.text = x`)
+    // by materialising an own data property, so nothing that assigned `.text` to a plain element regresses.
+    var RAW_TEXT_TAGS = { A: 1, SCRIPT: 1, TITLE: 1 };
     Object.defineProperty(EP, 'text', {
       configurable: true, enumerable: false,
       get: function () {
-        if (this.tagName !== 'OPTION') return undefined;
-        var s = this.textContent || '';
-        return s.replace(/[ \t\n\f\r]+/g, ' ').replace(/^ | $/g, '');
+        var t = this.tagName;
+        if (t === 'OPTION') {
+          var s = this.textContent || '';
+          return s.replace(/[ \t\n\f\r]+/g, ' ').replace(/^ | $/g, '');
+        }
+        if (RAW_TEXT_TAGS[t]) return this.textContent || '';
+        return undefined;
       },
       set: function (v) {
-        if (this.tagName === 'OPTION') { this.textContent = v == null ? '' : String(v); return; }
+        var t = this.tagName;
+        if (t === 'OPTION' || RAW_TEXT_TAGS[t]) { this.textContent = v == null ? '' : String(v); return; }
         Object.defineProperty(this, 'text', { value: v, writable: true, enumerable: true, configurable: true });
       },
     });

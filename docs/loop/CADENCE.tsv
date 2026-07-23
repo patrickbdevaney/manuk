@@ -227,3 +227,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 441	93bf4dd	1784801220	2026-07-23T06:07:00-04:00	3076	capability	61	9	207	34	209	81	3896	6960	0	328	31	select.length is the option count and resizes the list (2026-07-23)
 442	a21f80a	1784802580	2026-07-23T06:29:40-04:00	1360	capability	61	9	226	36	210	81	3896	6960	0	328	31	input.valueAsNumber + stepUp/stepDown for numeric inputs (2026-07-23)
 444	98327c1	1784804720	2026-07-23T07:05:20-04:00	2140	capability	63	10	182	34	211	81	3896	6960	0	328	31	progress.position + output.value (2026-07-23)
+445	98b11d8	1784808144	2026-07-23T08:02:24-04:00	3424	capability	63	9	150	44	212	81	3896	6960	0	328	31	the .text property for a/script/title (2026-07-23)

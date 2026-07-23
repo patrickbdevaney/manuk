@@ -18077,3 +18077,23 @@ G_FORM) and the <dialog> API (show/showModal/close/returnValue/open + close even
 TICK SHAPE: capability (progress.position getter + output.value get/set via the native value path; +1 gate). GATES +1.
 CONSTELLATION: progress.position + output.value unknown→gated (G_PROGRESS_OUTPUT_VALUE).
 WIKI: dom-semantics.md — progress.position (value/max, -1 indeterminate) + output.value is its text content.
+
+## Tick 445 — the .text property for a/script/title (2026-07-23)
+
+HYPOTHESIS (completing tick 439's `.text` accessor, which handled only `<option>`): `<a>.text`,
+`<script>.text`, `<title>.text` should all be their text content but were carried as dead expandos. RED
+probe: all three `undefined`, and assignment left the content untouched (a plain expando).
+
+FIX (capability, engine/js/src/collections_js.rs — extends the t439 EP.text accessor): the getter now
+returns the RAW text content (whitespace preserved) for A/SCRIPT/TITLE, keeps `<option>.text` whitespace-
+collapsed, and returns undefined for any other tag; the setter replaces the text content for
+option/a/script/title and preserves the ordinary `div.text = x` expando elsewhere. `<script>.text` is how a
+page reads an inline JSON-LD / config block (`JSON.parse(script.text)`); it was returning undefined.
+
+GATE: G_ELEMENT_TEXT (`element_text_property_for_a_script_title`) — 6 claims: a/script/title raw text,
+option stays collapsed, setter replaces content, div expando preserved. RED-proven (probe: all undefined).
+manuk-page green; g_option_text / g_collections / g_form_owner all still green.
+
+TICK SHAPE: capability (a.text/script.text/title.text raw-text-content get/set; +1 gate). GATES +1.
+CONSTELLATION: .text for a/script/title unknown→gated (G_ELEMENT_TEXT).
+WIKI: dom-semantics.md — the .text property for a/script/title (raw text content, settable).

@@ -294,6 +294,7 @@
   - L1326 · input.valueAsNumber + stepUp/stepDown for numeric inputs (tick 442)
   - L1337 · input.valueAsDate + valueAsNumber for date/time/month inputs (tick 443)
   - L1348 · progress.position + output.value (tick 444)
+  - L1358 · the .text property for a/script/title (tick 445)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -910,4 +911,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-825 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+826 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
