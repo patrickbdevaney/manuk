@@ -17538,3 +17538,35 @@ load to 5-6.7 (atop the ~6.5h observer crawl) and a timing/spawn-sensitive shell
 verify swallows the test name so it can't be pinpointed. Wall itself is warm (60-72s). Harness/infra is
 observer-owned (no scripts/ edits). Holding tick 427 ready (.git/tick427-ready.msg); will land on a
 verify run that catches a genuinely quiet window. Not a real regression — standalone proof is green.
+
+## Tick 428 — surface audit #16 + Temporal measure-and-pin (2026-07-22)
+
+CADENCE: surface audit due at 428 (#15 was t418). Scanned the web (Baseline 2026 digests, web.dev) AND
+reconciled the EMPIRICAL surface probed across the 420-427 binary-seam vein — a truer audit than release
+notes because it measures what actually works.
+
+DISCOVERY (measure-and-pin, the observer's highest-yield class): **Temporal** (Chrome 144 / Baseline
+2026, the modern Date replacement) was carried NOWHERE on the map, yet SpiderMonkey ships it in the
+verified build. MEASURED `temporal:yes`, added a probe to G_PROBE_CAPABILITIES, pinned it. RED-proven by
+calendar arithmetic a stub cannot fake: 2020-01-15 + 40 days = 2020-02-24 (Jan has 31 days), ISO
+dayOfWeek 3 (Wednesday), a 25-hour Duration totals 25 hours, PlainTime 10:30 + 45 min = 11:15. Also
+measured working (SpiderMonkey built-ins, unlisted, not each pinned): RegExp.escape, Float16Array,
+Error.isError, Uint8Array.fromBase64, Promise.try, Map.groupBy, Iterator helpers, `display: inline flex`.
+
+MAP-WIDENERS ADDED (unknown rows, to force future probes): `:open` pseudo-class (MEASURED absent —
+details[open] matches by attribute but `el.matches(':open')` is false), `form.elements` collection
+(absent — the whole form-serialization surface), `CSSStyleDeclaration.item/.length`, custom-element
+`attributeChangedCallback` on a live setAttribute (partial — the L-sized reactions subsystem),
+`contrast-color()`. EXCLUDED with reason: Service Worker modules (XL, out of v1), Document PiP (shell),
+Trusted Types (Phase-2 security seam), Map.getOrInsert (a SM built-in we cannot add — I2).
+
+FIX (measurement/pin tick, the probe IS the gate): added the `temporal` probe + `temporal:yes` pin to
+G_PROBE_CAPABILITIES; wrote SURFACE-AUDIT.md Audit #16; added six constellation rows. RED-proven:
+forcing the probe's date-arithmetic expectation to an impossible value flips the report to temporal:no
+and the gate fails on the missing pin (demonstrated, then reverted).
+
+TICK SHAPE: measurement (surface audit + Temporal unknown→gated pin; +0 new gate files — the assertion
+rides G_PROBE_CAPABILITIES). GATES +0.
+CONSTELLATION: Temporal nowhere→gated; +5 unknown map-wideners (:open, form.elements,
+CSSStyleDeclaration.item, custom-element-attr, contrast-color).
+WIKI: none — measurement/pin tick; SURFACE-AUDIT.md + CONSTELLATION.tsv are the durable record.

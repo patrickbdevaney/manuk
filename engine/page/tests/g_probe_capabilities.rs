@@ -247,6 +247,19 @@ const HTML: &str = r##"<!doctype html>
              vis.checkVisibility({ visibilityProperty: true }) === false;
     });
 
+    // ── Temporal (Chrome 144 / Baseline 2026): the modern date/time API replacing the `Date`
+    // footguns. SpiderMonkey ships it in the verified build. RED-proven by CALENDAR ARITHMETIC a stub
+    // cannot fake: 2020-01-15 + 40 days = 2020-02-24 (Jan has 31 days), that date is a Wednesday
+    // (ISO dayOfWeek 3), a 25-hour Duration totals 25 hours, and PlainTime 10:30 + 45 min = 11:15.
+    probe('temporal', function () {
+      if (typeof Temporal === 'undefined') { return false; }
+      var d = Temporal.PlainDate.from('2020-01-15');
+      return d.add({ days: 40 }).toString() === '2020-02-24' &&
+             d.dayOfWeek === 3 &&
+             Temporal.Duration.from({ hours: 25 }).total({ unit: 'hours' }) === 25 &&
+             Temporal.PlainTime.from('10:30').add({ minutes: 45 }).toString() === '11:15:00';
+    });
+
     // ── Drag and drop: the event surface pages actually bind to.
     probe('dragdrop', function () {
       return typeof DataTransfer === 'function' && 'draggable' in document.createElement('div') &&
@@ -336,4 +349,9 @@ const PINNED: &[&str] = &[
     // in visibility:hidden under {visibilityProperty:true}. The probe RED-proves all four behaviors, so
     // a stub (always-true or always-false) cannot pass. Was carried UNKNOWN (unprobed, unlisted).
     "checkvisibility:yes",
+    // tick 428 (surface audit #16) — Temporal (Chrome 144 / Baseline 2026): the modern date/time API.
+    // SpiderMonkey ships it in the verified build; the probe RED-proves it with calendar arithmetic a
+    // stub cannot fabricate (2020-01-15 + 40d = 2020-02-24, ISO dayOfWeek 3, a 25h Duration totals 25h,
+    // PlainTime 10:30 + 45m = 11:15). Was carried nowhere on the map; measured working, not assumed.
+    "temporal:yes",
 ];

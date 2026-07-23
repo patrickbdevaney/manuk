@@ -663,3 +663,67 @@ the map and was already working. The stale-pessimistic rule pays a seventh time.
 
 Ladybird reference point unchanged as a north star: ~97.8% test262, ~2M WPT subtests — test262 stays
 our biggest never-run unknown (row present). LAST_SURFACE_AUDIT 407→418; next due 428.
+
+## Audit #16 — tick 428 (2026-07-22)
+
+Cadence-driven (due at 428; #15 was tick 418). Source searched THIS pass (web, not memory):
+[web.dev New to the web platform / Baseline 2026 digests](https://web.dev/blog/web-platform-01-2026 ·
+https://web.dev/baseline/2026 · https://web.dev/blog/baseline-digest-jan-2026 ·
+https://dev.to/homayounmmdy/new-features-added-to-the-web-platform-in-may-2026-5b7a).
+Also reconciled the EMPIRICAL surface probed across ticks 420-427 (the binary-seam vein), which is a
+truer surface audit than release notes — it measures what actually works vs. what is claimed.
+
+### The external frame — what changed since #15
+
+Baseline-2026 signal (Chrome 144 / Firefox 147 era): **Temporal** (date/time), **Service Worker
+modules**, **Map.getOrInsert/getOrInsertComputed**, **CSS Anchor Positioning** (Firefox 147),
+**display multi-keyword** (`inline flex`), **`:open` pseudo-class**, **contrast-color()**, **Trusted
+Types**, **Document Picture-in-Picture**.
+
+Reconciled + MEASURED against the actual engine (a probe, not an assumption):
+* **Temporal** — MEASURED `temporal:yes` and PINNED (G_PROBE_CAPABILITIES). SpiderMonkey ships it in the
+  verified build; calendar arithmetic RED-proves it (2020-01-15 + 40d = 2020-02-24, dayOfWeek 3, 25h
+  Duration = 25h, PlainTime 10:30+45m = 11:15). Was carried NOWHERE on the map — the discovery this pass.
+* **Also measured WORKING** (SpiderMonkey built-ins, unlisted): `RegExp.escape`, `Float16Array`,
+  `Error.isError`, `Uint8Array.fromBase64`, `Promise.try`, `Map.groupBy`, `Iterator` helpers, `display:
+  inline flex` parse. Not each pinned (the probe would balloon); noted here as the stale-pessimistic rule
+  paying again — the JS surface is far ahead of the map.
+* **Anchor Positioning** — already `anchorpos:no` (G_PROBE_CAPABILITIES). On map; vendor signal doesn't
+  change it (a layout subsystem, not v1-bounded).
+* **Service Worker modules** — SW runtime is a known XL out-of-v1 gap; the `type:'module'` refinement
+  rides on top of it. Excluded, consistent with prior audits.
+* **contrast-color() / Trusted Types / Document Picture-in-Picture** — not on the map. Trusted Types is a
+  SECURITY seam (Phase-2, per CONSTITUTION Part-VII layering); PiP is a window-management shell feature;
+  contrast-color() is a bounded CSS color function. Added `:open` and contrast-color as unknown rows.
+
+### ADDED (the map-wideners — the point of the audit)
+
+* **`:open` pseudo-class (CSS)** → `unknown`. MEASURED absent (`details[open]` matches by ATTRIBUTE, but
+  `el.matches(':open')` is false). Styles `details`/`dialog`/`select`/`<details>` open state — a real,
+  bounded CSS-selector gap.
+* **`form.elements` HTMLFormControlsCollection** → `unknown`. MEASURED absent this session — `form.elements`
+  is `undefined` and named access (`form.a`) fails, though `new FormData(form)` works. Every form library
+  and serializer enumerates via `form.elements`. Bounded-ish (indexed + named access collection).
+* **`CSSStyleDeclaration.item(i)` / `.length`** → `unknown`. MEASURED absent (indexed iteration over an
+  inline style declaration throws). Low-value but on the map now.
+* **custom-element `attributeChangedCallback` on a LIVE setAttribute** → `unknown` (partial). MEASURED:
+  the callback fires for attrs PRESENT at upgrade, but a later `setAttribute` does not trigger it, and
+  `connectedCallback` fires via the mutation microtask (async, not spec-synchronous). The L-sized
+  custom-element reactions subsystem.
+* **`contrast-color()` (CSS)** → `unknown`. Baseline-2026 color function; not on the map.
+
+### MEASURED-and-PINNED this window
+
+`temporal:yes` (see above). Plus the eight binary-seam CAPABILITY ticks 420-427 each flipped a
+constellation row unknown/works→gated (getAllRecords, structuredClone-binary, Blob-binary,
+canvas-ImageData, TextDecoder-encodings, template.content, live-searchParams, computed-CSS-vars).
+
+### EXCLUDED (with reason)
+
+* Service Worker runtime + SW modules — XL, out of v1 (rendering/agentic scope), consistent with #12-#15.
+* Document Picture-in-Picture — window-management shell feature, not a rendering capability the corpus sees.
+* Trusted Types — a Phase-2 SECURITY seam (structural DOM-XSS defense); noted, not added as a render row.
+* Map.getOrInsert — a SpiderMonkey built-in not yet in the verified build; we cannot add SM built-ins
+  (I2: never patch the engine's internals), so it is a bump-tracked item, not agent work.
+
+LAST_SURFACE_AUDIT 418→428; next due 438.
