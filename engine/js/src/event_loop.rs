@@ -3929,7 +3929,30 @@ const PRELUDE: &str = r#"
           }
           return new Uint8Array(out);
         };
-        globalThis.TextDecoder = function TextDecoder(){ this.encoding = 'utf-8'; this.__tail = null; };
+        // The `label` used to be IGNORED — every TextDecoder decoded UTF-8, so `new
+        // TextDecoder('latin1')` or `'utf-16le'` returned mojibake on the legacy/Windows and UTF-16
+        // content that is still all over the web (Windows-authored CSV/HTML, `.decode()` of a
+        // non-UTF-8 response, binary protocols that frame text as UTF-16). Now the label is normalised
+        // to one of the encodings we implement; an unknown label falls back to UTF-8 (lenient rather
+        // than the spec's RangeError, so nothing that limped before newly throws).
+        globalThis.TextDecoder = function TextDecoder(label, options){
+          var norm = String(label == null ? 'utf-8' : label).trim().toLowerCase();
+          var enc;
+          if (norm === 'utf-8' || norm === 'utf8' || norm === 'unicode-1-1-utf-8' || norm === '') { enc = 'utf-8'; }
+          else if (norm === 'utf-16' || norm === 'utf-16le' || norm === 'ucs-2' || norm === 'unicode' || norm === 'csunicode') { enc = 'utf-16le'; }
+          else if (norm === 'utf-16be' || norm === 'unicodefffe') { enc = 'utf-16be'; }
+          else if (norm === 'latin1' || norm === 'iso-8859-1' || norm === 'iso8859-1' || norm === 'iso88591'
+                   || norm === 'l1' || norm === 'latin-1' || norm === 'cp819' || norm === 'ibm819'
+                   || norm === 'iso-ir-100' || norm === 'windows-1252' || norm === 'cp1252' || norm === 'x-cp1252'
+                   || norm === 'ansi_x3.4-1968' || norm === 'ascii' || norm === 'us-ascii') { enc = 'windows-1252'; }
+          else { enc = 'utf-8'; } // unsupported label → decode as UTF-8 (strictly more capable than the old ignore)
+          // The `encoding` attribute reports the canonical name (utf-16le collapses the utf-16/ucs-2 aliases).
+          this.encoding = (enc === 'windows-1252') ? 'windows-1252' : enc;
+          this.__enc = enc;
+          this.__tail = null;
+          this.fatal = !!(options && options.fatal);
+          this.ignoreBOM = !!(options && options.ignoreBOM);
+        };
         // `decode(chunk, {stream: true})` — **the streaming contract, and it is not optional.**
         // A network chunk boundary lands wherever the wire put it, which is routinely in the MIDDLE
         // of a multi-byte character: "café" split after 0xC3 leaves a lead byte with no continuation.
@@ -3948,6 +3971,38 @@ const PRELUDE: &str = r#"
           }
           this.__tail = null;
           var end = b.length;
+          var enc = this.__enc || 'utf-8';
+
+          // ── windows-1252 (the latin1/iso-8859-1 family): one byte per character, no partial
+          // sequences, so streaming needs nothing held back. 0x00-0x7F and 0xA0-0xFF map straight to
+          // the code point equal to the byte; 0x80-0x9F are the CP1252 punctuation/symbol block (€ ' " —
+          // … ™ etc.), the difference that makes it windows-1252 and not raw latin1.
+          if (enc === 'windows-1252') {
+            var hi = [0x20AC,0x81,0x201A,0x192,0x201E,0x2026,0x2020,0x2021,0x2C6,0x2030,0x160,0x2039,0x152,0x8D,0x17D,0x8F,
+                      0x90,0x2018,0x2019,0x201C,0x201D,0x2022,0x2013,0x2014,0x2DC,0x2122,0x161,0x203A,0x153,0x9D,0x17E,0x178];
+            var s1 = '';
+            for (var j = 0; j < end; j++) {
+              var by = b[j];
+              s1 += String.fromCharCode((by >= 0x80 && by <= 0x9F) ? hi[by - 0x80] : by);
+            }
+            return s1;
+          }
+
+          // ── UTF-16 (LE or BE): two bytes per code unit. Surrogate PAIRS are already the JS string's
+          // native form, so each 16-bit unit is emitted as-is. A trailing ODD byte under {stream:true}
+          // is an incomplete unit — hold it for the next call.
+          if (enc === 'utf-16le' || enc === 'utf-16be') {
+            var le = (enc === 'utf-16le');
+            if (streaming && (end & 1)) { this.__tail = new Uint8Array(b.subarray(end - 1, end)); end -= 1; }
+            var s2 = '';
+            for (var k = 0; k + 1 < end; k += 2) {
+              var unit = le ? (b[k] | (b[k + 1] << 8)) : ((b[k] << 8) | b[k + 1]);
+              s2 += String.fromCharCode(unit);
+            }
+            return s2;
+          }
+
+          // ── UTF-8 (default). Hold an incomplete trailing multi-byte sequence under {stream:true}.
           if (streaming) {
             // Walk back over the trailing continuation bytes (10xxxxxx) to the lead byte. If that
             // sequence is short of the length its lead byte announces, it is incomplete — hold it.

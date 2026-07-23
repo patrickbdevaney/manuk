@@ -1110,3 +1110,22 @@ write half. Two facts shape it:
 `ImageData is not defined` and killed the pipeline on line one; `get`/`createImageData` now return real
 instances of it. **Honest limit:** `createImageBitmap` from an `ImageData`/`Blob` source still rejects
 (no decode-to-pixels path); this tick is the CPU-side pixel buffer, not a GPU upload.
+
+## TextDecoder honours its label (windows-1252 + utf-16), not UTF-8-for-everything (tick 424)
+
+There are TWO decoding paths and they are not the same. The HTTP layer decodes a response BODY with
+`encoding_rs` (the full legacy set: Shift_JIS, GBK, …). The JS `TextDecoder` object (event_loop.rs) is
+what a script calls directly on bytes it already holds — and until tick 424 it ignored its `label` and
+always decoded UTF-8. The fix normalises the label in the constructor to `__enc` and branches `decode()`:
+
+- **windows-1252** — the `latin1`/`iso-8859-1`/`windows-1252` alias family. A single-byte map: 0x00-0x7F
+  and 0xA0-0xFF are the code point equal to the byte; 0x80-0x9F are the CP1252 symbol block (`€ ' " — …
+  ™`), which is what makes it windows-1252 rather than raw Latin-1. No streaming state (one byte/char).
+- **utf-16le / utf-16be** — two bytes per code unit, emitted as-is (surrogate pairs are already the JS
+  string's native form); a trailing odd byte is held under `{stream:true}`.
+- **utf-8** (default) — unchanged, including the incomplete-trailing-sequence hold for `{stream:true}`.
+
+**Honest limits:** the full legacy CJK set (Shift_JIS/GBK/EUC-KR/Big5) is NOT in the JS decoder — those
+still only decode correctly through the HTTP-layer `encoding_rs` path; an unknown label falls back to
+UTF-8 (lenient) instead of the spec's `RangeError`, so nothing that previously limped newly throws;
+`fatal`/`ignoreBOM` are stored but BOM stripping is not yet applied.

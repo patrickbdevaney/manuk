@@ -545,6 +545,7 @@
   - L1060 · document.currentScript — a thread-local, set per classic evaluation (tick 404)
   - L1071 · structuredClone preserves binary types — the plain-object degrade is silent corruption (tick 421)
   - L1091 · putImageData is a raw pixel blit, ImageData is the buffer libraries build (tick 423)
+  - L1114 · TextDecoder honours its label (windows-1252 + utf-16), not UTF-8-for-everything (tick 424)
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -891,4 +892,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-806 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+807 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

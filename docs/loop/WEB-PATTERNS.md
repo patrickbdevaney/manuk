@@ -3444,3 +3444,17 @@ every draw op) — a raw blit of the source rectangle. Implement it as a direct 
 **The trap:** a canvas with a working `getImageData` LOOKS like it has pixel access — the read half
 passes every probe — while the write half is a `function(){}` stub that discards silently. A round-trip
 gate (put then get and compare) is the only thing that catches it.
+
+## TextDecoder must honour its label, not decode everything as UTF-8 (tick 424)
+
+**The class of the web this unlocks:** every page that reads NON-UTF-8 bytes through the JS TextDecoder
+API — a Windows-authored windows-1252 CSV or HTML file dropped into an editor, a `fetch(...).arrayBuffer()`
+that a script decodes with the response's declared charset, a binary protocol (some WebSocket framings,
+older APIs) that carries text as UTF-16. The shim ignored the `label` and always decoded UTF-8, so a
+single byte over 0x7F came back as `Ã©`-shaped mojibake, silently.
+**(1)** `new TextDecoder(label)` MUST honour the label. windows-1252 (the `latin1`/`iso-8859-1` family)
+is a single-byte encoding whose 0x80-0x9F block is punctuation (€, curly quotes, — …), not the C1
+controls raw Latin-1 puts there; utf-16le/be are two bytes per unit and endianness matters.
+**The trap:** UTF-8 is a superset of ASCII, so a label-ignoring decoder LOOKS correct on every English
+test string and only corrupts once a byte exceeds 0x7F — which is exactly the accented/CJK/symbol content
+the non-UTF-8 encoding existed to carry. Test a byte over 0x7F, or the bug hides.

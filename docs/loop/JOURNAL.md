@@ -17389,3 +17389,32 @@ pressure was momentarily lower (21:23), so the ceiling is real and the tick is s
 observer-owned (no scripts/ edits, no swap-cycle from the agent). Holding tick 423 in the tree, ready to
 land via `./scripts/tick.sh .git/tick423-ready.msg` on a warm re-run once the crawl finishes / swap
 eases. Not re-baselining the WALL mark.
+
+## Tick 424 — TextDecoder honours its encoding label (2026-07-22)
+
+HYPOTHESIS (probe-a-works-capability vein): a binary-seam probe (DataView, TextDecoder, crypto.subtle,
+base64) found DataView/TextEncoder/base64/SHA/HMAC all correct, but `new TextDecoder('latin1')` and
+`'utf-16le'` returning mojibake. Root cause: the JS `TextDecoder` shim (event_loop.rs) IGNORED its
+`label` argument — `this.encoding = 'utf-8'` hardcoded — and always ran the UTF-8 path. This is DISTINCT
+from the HTTP-layer legacy decoding (encoding_rs, G_IFRAME row): apps that call `new TextDecoder(label)`
+directly on bytes — Windows-authored windows-1252 CSV/HTML, a `.decode()` of a non-UTF-8 fetch body, a
+binary protocol framing text as UTF-16 — got silent mojibake wherever a byte exceeded 0x7F.
+
+FIX (capability, JS-shim only): the constructor now normalises the label to one of the encodings we
+implement and stores `__enc`; `decode()` branches on it. windows-1252 (the latin1/iso-8859-1 family) is
+a single-byte map with the 0x80-0x9F CP1252 punctuation block (€, curly quotes, —, …, ™) that raw
+Latin-1 lacks; utf-16le/be read two bytes per code unit honouring endianness (and hold an odd trailing
+byte under `{stream:true}`). UTF-8 (default) is unchanged, including its existing multi-byte streaming
+hold. An unknown label falls back to UTF-8 — lenient rather than the spec's RangeError, so nothing that
+limped before newly throws (recorded as the honest limit).
+
+GATE: G_TEXTDECODER_ENCODINGS (`textdecoder_honours_its_encoding_label`) — eight claims on the decoded
+string per label (latin1, iso-8859-1, the cp1252 block, utf-16le, utf-16be), the canonical `.encoding`
+attribute, and that UTF-8 default + `{stream:true}` hold are unchanged. RED-proven: forcing `enc` back to
+`'utf-8'` (the old label-ignore) turns latin1/cp1252/utf-16 into mojibake and the gate fails on
+`latin1:éèÿ`. manuk-page green; g_fetch_stream/g_fetch_stream_incremental/g_transform/g_blob_stream/
+g_writable_transform_streams all still green (no streaming regression).
+
+TICK SHAPE: capability (TextDecoder label handling: windows-1252 + utf-16 LE/BE; +1 gate). GATES +1.
+CONSTELLATION: TextDecoder non-UTF-8 labels unknown→gated (G_TEXTDECODER_ENCODINGS).
+WIKI: js-engine.md — "TextDecoder honours its label (windows-1252 + utf-16), not UTF-8-for-everything".
