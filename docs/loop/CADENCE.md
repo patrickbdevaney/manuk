@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **218** | ticks 1–432 |
-| median tick cycle | **19m** | 217 intervals |
-| median, last 10 | **36m** | 10 intervals |
+| ticks landed | **219** | ticks 1–433 |
+| median tick cycle | **19m** | 218 intervals |
+| median, last 10 | **40m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.76** | 284.7h elapsed |
-| median verify wall | **59s** | 157 ticks |
-| wall trend | 39s → 62s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.76** | 285.4h elapsed |
+| median verify wall | **59s** | 158 ticks |
+| wall trend | 39s → 60s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **199**
+* **live gates**: 27 → **200**
 * **✅ rows in the capability ledger**: 144 → **328**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**118 of 218 ticks** (54%) moved a
+**119 of 219 ticks** (54%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **118** capability ticks, median cycle **19m**
+* **119** capability ticks, median cycle **19m**
 * median diff per tick: **+214 / −34** lines across 8 files
 
 ## Every tick
@@ -315,5 +315,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **430** | 2026-07-23 00:40 | 40m | capability | 9m | +135/−3 | 197 | 81 | 56.0% · | event.getModifierState(key) reads the modifier flags (2026-07-22) |
 | **431** | 2026-07-23 01:11 | 31m | capability | 62s | +247/−35 | 198 | 81 | 56.0% · | element.scrollTo / scrollBy / scroll (2026-07-23) |
 | **432** | 2026-07-23 01:42 | 32m | capability | 60s | +284/−40 | 199 | 81 | 56.0% · | CSSStyleDeclaration is array-like and carries !important (2026-07-23) |
+| **433** | 2026-07-23 02:25 | 43m | capability | 59s | +379/−52 | 200 | 81 | 56.0% · | form.elements is a live HTMLFormControlsCollection (2026-07-23) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

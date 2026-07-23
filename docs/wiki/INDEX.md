@@ -265,23 +265,24 @@
   - L673 · DOM validation errors must be REAL DOMExceptions, not decorated Errors (tick 127, +420 dom)
   - L713 · Node.lookupPrefix and the DocumentType namespace-lookup surface (tick 128, +20 dom)
   - L743 · HTMLCollection is a WebIDL legacy platform object, not a plain indexed proxy (tick 129)
-  - L785 · DOMStringMap (dataset) and NamedNodeMap (attributes) enumerate their names (tick 130)
-  - L806 · HTMLCollection iterable surface + numeric namedItem (tick 131)
-  - L824 · getElementsByClassName splits on ASCII whitespace, not Unicode (tick 132)
-  - L845 · A document from DOMImplementation is a REAL Document (tick 134)
-  - L885 · The CharacterData abstract base interface (tick 133)
-  - L902 · createDocumentType name validation + per-document .implementation (tick 135)
-  - L935 · CharacterData offsets are unsigned long = ToUint32, not clamp-to-0 (tick 136)
-  - L969 · <details>/<summary> — the disclosure widget is entirely the UA's job (tick 216)
-  - L1001 · The bug underneath it — remove_attr never marked the tree dirty
-  - L1018 · A missing property is not neutral — it picks a side, and document.hidden picked the wrong one
-  - L1044 · Whose fact is it? The host owns visibility, the same way it owns the lifecycle
-  - L1056 · Two answers to the same question must agree — permissions.query vs Notification.permission
-  - L1085 · The Sanitizer API — Element.setHTML / setHTMLUnsafe (tick 288)
-  - L1109 · The teeth G_SANITIZER uses
-  - L1121 · Element.checkVisibility() — is it actually rendered? (tick 291)
-  - L1138 · The teeth G_CHECK_VISIBILITY uses
-  - L1148 · <template>.content is the parser's fragment, not the element's direct children (tick 425)
+  - L785 · form.elements is a live HTMLFormControlsCollection, and a radio group is a RadioNodeList (tick 433)
+  - L818 · DOMStringMap (dataset) and NamedNodeMap (attributes) enumerate their names (tick 130)
+  - L839 · HTMLCollection iterable surface + numeric namedItem (tick 131)
+  - L857 · getElementsByClassName splits on ASCII whitespace, not Unicode (tick 132)
+  - L878 · A document from DOMImplementation is a REAL Document (tick 134)
+  - L918 · The CharacterData abstract base interface (tick 133)
+  - L935 · createDocumentType name validation + per-document .implementation (tick 135)
+  - L968 · CharacterData offsets are unsigned long = ToUint32, not clamp-to-0 (tick 136)
+  - L1002 · <details>/<summary> — the disclosure widget is entirely the UA's job (tick 216)
+  - L1034 · The bug underneath it — remove_attr never marked the tree dirty
+  - L1051 · A missing property is not neutral — it picks a side, and document.hidden picked the wrong one
+  - L1077 · Whose fact is it? The host owns visibility, the same way it owns the lifecycle
+  - L1089 · Two answers to the same question must agree — permissions.query vs Notification.permission
+  - L1118 · The Sanitizer API — Element.setHTML / setHTMLUnsafe (tick 288)
+  - L1142 · The teeth G_SANITIZER uses
+  - L1154 · Element.checkVisibility() — is it actually rendered? (tick 291)
+  - L1171 · The teeth G_CHECK_VISIBILITY uses
+  - L1181 · <template>.content is the parser's fragment, not the element's direct children (tick 425)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -898,4 +899,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-813 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+814 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -782,6 +782,39 @@ regressions. Gate `g_collection_named_props` (proven red on the committed proxy)
 `NamedNodeMap` (`.attributes`) and `DOMStringMap` (`.dataset`) is the same shape on **different** objects —
 still 0/5 and 0/3, a separate follow-on tick. [[js-engine]]
 
+## `form.elements` is a live `HTMLFormControlsCollection`, and a radio group is a `RadioNodeList` (tick 433)
+
+`form.elements` was `undefined` **entirely** — not incomplete, absent. Every form-serialization and
+validation library opens with `for (var i = 0; i < form.elements.length; i++)` or reaches for
+`form.elements['field']`, and both threw `can't access property … form.elements is undefined`. It carried
+in the constellation as an UNKNOWN; a RED probe pinned it.
+
+It is a legacy platform object like [[dom-semantics]]'s `HTMLCollection`, but with **two form-specific rules
+a plain collection gets wrong**, which is why it has its own builder in `collections_js` rather than reusing
+`live()`:
+
+- **Members are the LISTED controls** in tree order — `button` / `fieldset` / `input` / `object` / `output`
+  / `select` / `textarea` — **minus `input[type=image]`** (an image button the collection omits). Not every
+  descendant, and not the form itself.
+- **The named getter returns a `RadioNodeList` when >1 control shares a name** — a radio group. That list's
+  `.value` **reads** the checked radio's value and **writing** it selects the matching radio. Skip this and
+  `form.elements.plan.value` silently returns the *first* radio, not the *selected* one — the single most
+  common way form code reads a choice.
+
+Indexed access, `.length`, `.item(i)`, `.namedItem(name)` and named access by `name` (HTML ns) then `id`
+all resolve against that control list. `HTMLFormControlsCollection` and `RadioNodeList` are exposed on
+`globalThis` so `instanceof` checks pass.
+
+**Why NOT through `live()`.** `live()` is the hot `childNodes`/`children` proxy, and its own note records
+that enriching its traps once surfaced a **cross-file UAF** on the shared-batch-runtime heap (see the
+tick-129 heap-churn trap above). `form.elements` gets a **self-contained** builder so that path stays
+byte-for-byte untouched.
+
+**KNOWN LIMIT (honest).** Association is by **subtree** — a control the form contains — not the `form=`
+attribute reassociating a control that lives elsewhere in the document. That is the ~99% case; `form=`
+reassociation is a separate follow-on. Gate `g_form_elements` (13 claims, proven red — pre-impl probe
+printed `type:undefined`). [[js-engine]]
+
 ## `DOMStringMap` (`dataset`) and `NamedNodeMap` (`attributes`) enumerate their names (tick 130)
 
 The same legacy-platform-object gap as [[dom-semantics]]'s tick-129 `HTMLCollection`, on two more proxy-backed

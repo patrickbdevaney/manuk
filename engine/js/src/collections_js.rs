@@ -335,5 +335,152 @@ pub const COLLECTIONS_JS: &str = r#"
 
   // `querySelectorAll` returns a STATIC NodeList — and that is the spec, not an oversight. Code relies on
   // it not moving under a loop, which is exactly why it exists alongside the live ones. Left alone.
+
+  // ── `form.elements` — the HTMLFormControlsCollection, and the RadioNodeList a radio group needs.
+  //
+  // `form.elements` was `undefined` ENTIRELY: `for (var i=0;i<form.elements.length;i++)` — the shape
+  // every form-serialization and validation library uses — threw `can't access property "length",
+  // form.elements is undefined`, and `form.elements['fieldname']` / `.namedItem('fieldname')` were the
+  // same throw. It is a legacy platform object like `HTMLCollection`, but with two differences that
+  // matter and are the reason it gets its own builder rather than routing through `live()` (which is the
+  // hot childNodes/children proxy — deliberately left untouched, see the UAF note above):
+  //   * its members are the LISTED elements in tree order — button / fieldset / input (EXCEPT
+  //     `type=image`, which is a submit button the collection omits) / object / output / select /
+  //     textarea — not every descendant.
+  //   * its NAMED getter returns a `RadioNodeList` (not a single element) when more than one control
+  //     shares a name. That is exactly a radio group: `form.elements['plan']` must yield a list whose
+  //     `.value` is the CHECKED radio's value, or code that reads `form.elements.plan.value` silently
+  //     gets the first radio instead of the selected one.
+  //
+  // KNOWN LIMIT, stated honestly: association is by SUBTREE (a control the form contains), not by the
+  // `form=` attribute reassociating a control that lives elsewhere in the document. That is the ~99%
+  // case; the reassociation edge is a separate follow-on.
+  function HTMLFormControlsCollection() {}
+  function RadioNodeList() {}
+  globalThis.HTMLFormControlsCollection = HTMLFormControlsCollection;
+  globalThis.RadioNodeList = RadioNodeList;
+
+  function isRadio(el) {
+    return el.tagName === 'INPUT' && (el.getAttribute('type') || '').toLowerCase() === 'radio';
+  }
+  // The form's (or fieldset's) listed controls, in tree order, minus image inputs.
+  function listedControls(form) {
+    var all = form.querySelectorAll('button,fieldset,input,object,output,select,textarea'), out = [];
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (el.tagName === 'INPUT' && (el.getAttribute('type') || '').toLowerCase() === 'image') continue;
+      out.push(el);
+    }
+    return out;
+  }
+
+  // A RadioNodeList over `compute()` (the same-named controls). `.value` reads/writes the checked radio.
+  function radioNodeList(compute) {
+    var target = Object.create(RadioNodeList.prototype);
+    function get(k) {
+      var a = compute();
+      if (k === 'length') return a.length;
+      if (k === Symbol.iterator) return function () { return compute()[Symbol.iterator](); };
+      if (k === 'item') return function (i) { i = i | 0; return (i >= 0 && i < a.length) ? a[i] : null; };
+      if (k === 'value') {
+        for (var i = 0; i < a.length; i++) { if (isRadio(a[i]) && a[i].checked) return a[i].value; }
+        return '';
+      }
+      if (isIndex(k)) return (+k < a.length) ? a[+k] : undefined;
+      return undefined;
+    }
+    return new Proxy(target, {
+      get: function (t, k) { var v = get(k); return v === undefined ? t[k] : v; },
+      set: function (t, k, v) {
+        if (k === 'value') {
+          var a = compute(), s = String(v);
+          for (var i = 0; i < a.length; i++) { if (isRadio(a[i]) && a[i].value === s) a[i].checked = true; }
+          return true;
+        }
+        t[k] = v; return true;
+      },
+      has: function (t, k) {
+        if (k === 'length' || k === 'value' || k === 'item' || k === Symbol.iterator) return true;
+        if (isIndex(k)) return +k < compute().length;
+        return k in t;
+      },
+    });
+  }
+
+  // The controls collection for one form/fieldset. Named lookup by `name` (HTML ns) then `id`; a single
+  // match returns the element, multiple returns a RadioNodeList (HTMLFormControlsCollection §named).
+  function controlsCollection(form) {
+    var target = Object.create(HTMLFormControlsCollection.prototype);
+    function compute() { return listedControls(form); }
+    function matches(key) {
+      if (key == null) return [];
+      key = String(key); if (key === '') return [];
+      var a = compute(), out = [];
+      for (var i = 0; i < a.length; i++) {
+        var el = a[i];
+        if (!el.getAttribute) continue;
+        if (el.namespaceURI === HTML_NS && el.getAttribute('name') === key) { out.push(el); continue; }
+        if (el.getAttribute('id') === key) out.push(el);
+      }
+      return out;
+    }
+    function named(key) {
+      var m = matches(key);
+      if (m.length === 0) return null;
+      if (m.length === 1) return m[0];
+      return radioNodeList(function () { return matches(key); });
+    }
+    var methods = {
+      item: function (i) { var a = compute(); i = i | 0; return (i >= 0 && i < a.length) ? a[i] : null; },
+      namedItem: function (n) { return named(n); },
+    };
+    return new Proxy(target, {
+      get: function (t, k) {
+        if (k === 'length') return compute().length;
+        if (k === Symbol.iterator) return function () { return compute()[Symbol.iterator](); };
+        if (isIndex(k)) { var a = compute(); return (+k < a.length) ? a[+k] : undefined; }
+        if (methods[k]) return methods[k];
+        if (typeof k === 'string' && hasOwn(t, k)) return t[k];
+        if (typeof k === 'string' && k !== 'constructor') { var nm = named(k); if (nm) return nm; }
+        return t[k];
+      },
+      has: function (t, k) {
+        if (k === 'length' || k === Symbol.iterator || methods[k]) return true;
+        if (isIndex(k)) return +k < compute().length;
+        if (typeof k === 'string' && hasOwn(t, k)) return true;
+        if (typeof k === 'string' && matches(k).length) return true;
+        return k in t;
+      },
+      ownKeys: function (t) {
+        var a = compute(), keys = [], seen = Object.create(null), names = [];
+        for (var i = 0; i < a.length; i++) keys.push(String(i));
+        for (var j = 0; j < a.length; j++) {
+          var el = a[j]; if (!el.getAttribute) continue;
+          var id = el.getAttribute('id'); if (id && !seen[id]) { seen[id] = 1; names.push(id); }
+          if (el.namespaceURI === HTML_NS) { var nm = el.getAttribute('name'); if (nm && !seen[nm]) { seen[nm] = 1; names.push(nm); } }
+        }
+        for (var n = 0; n < names.length; n++) { if (keys.indexOf(names[n]) === -1) keys.push(names[n]); }
+        return keys;
+      },
+      getOwnPropertyDescriptor: function (t, k) {
+        if (isIndex(k)) { var a = compute(); if (+k < a.length) return { value: a[+k], writable: false, enumerable: true, configurable: true }; }
+        if (typeof k === 'string' && matches(k).length) return { value: named(k), writable: false, enumerable: false, configurable: true };
+        return Reflect.getOwnPropertyDescriptor(t, k);
+      },
+    });
+  }
+
+  // The accessor lives on the shared element prototype with a tag guard — the same device the form
+  // methods (`requestSubmit`, `checkValidity`) already use, since forms have no distinct reflector
+  // prototype here. A non-form element reads `undefined`, exactly as it has no such property.
+  if (EP) {
+    Object.defineProperty(EP, 'elements', {
+      configurable: true,
+      enumerable: false,
+      get: function () {
+        return (this.tagName === 'FORM' || this.tagName === 'FIELDSET') ? controlsCollection(this) : undefined;
+      },
+    });
+  }
 })();
 "#;

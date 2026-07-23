@@ -17713,3 +17713,45 @@ g_css_supports / g_transform / g_iframe_rerender / g_hydration / g_silent_fail a
 TICK SHAPE: capability (CSSStyleDeclaration item/length/indexed/getPropertyPriority + !important; +1 gate). GATES +1.
 CONSTELLATION: CSSStyleDeclaration array-like + priority unknown→gated (G_CSSOM_ENUMERATION).
 WIKI: css-cascade.md — CSSStyleDeclaration is array-like (length/item/indexed) and separates value from !important priority.
+
+## Tick 433 — form.elements is a live HTMLFormControlsCollection (2026-07-23)
+
+HYPOTHESIS (probe-a-remaining-DOM-surface vein, the ore memory flagged after t432's CSSStyleDeclaration.item):
+`form.elements` was carried as an UNKNOWN in the constellation and is the surface every form-serialization
+and validation library reaches for first. A RED probe (Page::load of a form with named inputs, a radio
+group, and an image button) confirmed it was `undefined` ENTIRELY: `typeof f.elements === 'undefined'`,
+`f.elements.length` threw `can't access property "length", form.elements is undefined`, and
+`f.elements['field']` / `.namedItem('field')` were the same throw. So `for (i=0;i<form.elements.length;i++)`
+— the canonical serialization loop — and `form.elements.plan.value` (read the selected radio) both died.
+
+FIX (capability, our own shim in engine/js/src/collections_js.rs — the live-collections IIFE):
+- Added a SELF-CONTAINED `HTMLFormControlsCollection` builder + a `RadioNodeList`, deliberately NOT
+  routing through the shared `live()` proxy (that is the hot childNodes/children path, and its own comment
+  records that enriching its traps once surfaced a cross-file UAF — left byte-for-byte untouched).
+- `form.elements` (accessor on the shared element prototype, tag-guarded to FORM/FIELDSET exactly like the
+  existing requestSubmit/checkValidity form methods) returns the listed controls in tree order
+  (button/fieldset/input/object/output/select/textarea) MINUS `input[type=image]`, with indexed access,
+  `.length`, `.item(i)`, `.namedItem(name)`, and named access by `name` (HTML ns) then `id`.
+- The named getter returns a `RadioNodeList` when >1 control shares a name (a radio group); its `.value`
+  READS the checked radio's value and WRITING it selects the matching radio — so `form.elements.plan.value`
+  is the selected option, not the first radio. globalThis.HTMLFormControlsCollection / RadioNodeList exposed
+  so `instanceof` checks pass.
+- KNOWN LIMIT (stated in-code, honest): association is by SUBTREE, not the `form=` reassociation attribute
+  (the ~99% case; reassociation is a separate follow-on).
+
+GATE: G_FORM_ELEMENTS (`form_elements_is_a_controls_collection_with_named_access`) — 13 claims: type:object,
+len:8 (9 controls minus the image input), indexed idx0/item1, namedItem, named-by-name, named-by-id, the
+RadioNodeList (instanceof / length / checked-value read / .value write selects), image-input omitted, and
+HTMLFormControlsCollection instanceof. RED-proven: the pre-impl probe printed `type:undefined` and all
+named lookups `ERR: form.elements is undefined`. manuk-page green; g_collections / g_collection_named_props /
+g_collection_iterator_indices / g_doc_collections all still green (the shared live() proxy was not touched).
+
+TICK SHAPE: capability (form.elements HTMLFormControlsCollection + RadioNodeList named access; +1 gate). GATES +1.
+CONSTELLATION: form.elements named access unknown→gated (G_FORM_ELEMENTS).
+WIKI: dom-semantics.md — form.elements is a live HTMLFormControlsCollection; a same-named radio group is a RadioNodeList whose .value is the checked radio.
+
+WALL NOTE (tick 433): verify.sh T-section `manuk-shell` run false-REDs under swap-97% memory pressure —
+the shell suite passes standalone (70+2 in 10.8s, load 1.34) AND passes 3× earlier in the SAME verify run
+(G_TEARDOWN/G_RUNTIME_COUNT/affordances all "shell suite green"), only the final T-section re-run flakes.
+My change touches engine/js + a page test only; the shell compiled and passed with it. Harness/infra
+(observer-owned: the log itself printed "swap is 97% full — swapoff -a && swapon -a"). Landing via warm re-run.

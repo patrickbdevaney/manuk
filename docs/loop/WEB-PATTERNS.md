@@ -3561,3 +3561,21 @@ Computed style's `getPropertyPriority` always returns `''` — a computed value 
 **The trap:** `getPropertyValue`/`setProperty` (the map half) passing makes the declaration look done,
 while the array half every serializer uses is absent — and reusing the parse/write helpers for priority
 (strip on read, append on write) keeps `cssText` as the single source of truth instead of a shadow flag.
+
+## form.elements is a live HTMLFormControlsCollection with named access (tick 433)
+
+**The class of the web this unlocks:** every form-serialization and validation library, and every page
+that reads a control by name off its form. `form.elements` was `undefined` ENTIRELY, so the canonical
+`for (i=0;i<form.elements.length;i++)` loop and `form.elements['field']` / `.namedItem('field')` all threw
+`can't access property … form.elements is undefined` — the first line most form code runs.
+**(1)** Its members are the LISTED controls in tree order — button/fieldset/input/object/output/select/
+textarea — MINUS `input[type=image]` (a submit button the collection omits). Indexed access, `.length`,
+`.item(i)`, `.namedItem(name)`, and named access by `name` (HTML ns) then `id` all resolve against them.
+**(2)** The named getter returns a **`RadioNodeList`** when >1 control shares a name — a radio group — and
+that list's `.value` READS the checked radio's value and WRITING it selects the matching radio. Return a
+single element there and `form.elements.plan.value` silently yields the FIRST radio, not the selected one.
+**The trap:** a plain HTMLCollection reused for `form.elements` looks done — until a radio group is read
+through it, or an image button appears as a phantom control. It gets a self-contained builder rather than
+routing through the hot `live()` childNodes proxy, whose own note records that enriching its traps once
+surfaced a cross-file UAF. KNOWN LIMIT (honest): association is by SUBTREE, not the `form=` attribute
+reassociating a control elsewhere in the document (the ~99% case; `form=` is a follow-on).
