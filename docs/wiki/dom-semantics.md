@@ -1322,3 +1322,14 @@ truncates (removing trailing options from their own parents, so an option inside
 or grows (appending bare `<option>` elements). CharacterData.length stays read-only (the setter no-ops off a
 select). Gate `G_SELECT_LENGTH`. Note: `select.options.length = n` (the same idiom via the collection) still
 needs a persistent HTMLOptionsCollection object — pinned unknown in the tick-438 surface audit.
+
+## input.valueAsNumber + stepUp/stepDown for numeric inputs (tick 442)
+
+Every numeric spinner, range slider and quantity stepper reads/writes the NUMBER behind the control, not
+its string. `input.valueAsNumber` was `undefined` and `stepUp`/`stepDown` threw (not a function), so a
+"+"/"−" quantity button or a `valueAsNumber = total` assignment did nothing. Added in `collections_js.rs`
+over the existing `.value` accessor: `valueAsNumber` (get parses the value as a Number — NaN for empty/
+invalid; set writes `String(n)`, or `""` for non-finite) for `type=number`/`type=range`; `NaN` for other
+input types, `undefined` on non-inputs. `stepUp(n=1)`/`stepDown(n=1)` add/subtract `n × step` (step
+defaults to 1) and clamp to `min`/`max`, trimming float fuzz. Gate `G_VALUE_AS_NUMBER`. Follow-on:
+`valueAsDate` + date/time typed values (epoch arithmetic), left unbuilt.

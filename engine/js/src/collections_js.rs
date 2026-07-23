@@ -779,6 +779,63 @@ pub const COLLECTIONS_JS: &str = r#"
     EP.deleteCaption = function () { return deleteFirstSection(this, 'CAPTION'); };
   }
 
+  // ── Typed numeric input values — `input.valueAsNumber` (get/set) + `stepUp`/`stepDown`.
+  //
+  // Every numeric spinner, range slider, quantity stepper and form-validation library reads/writes the
+  // NUMBER behind a control, not its string: `input.valueAsNumber` was `undefined` and `stepUp`/`stepDown`
+  // threw (not a function), so a "+"/"−" quantity button or a `valueAsNumber = total` assignment did
+  // nothing. This covers `type=number` and `type=range` (the two that carry a live number in the value);
+  // date/time typed values are a separate, epoch-arithmetic follow-on.
+  function numericInputType(el) {
+    if (!el || el.tagName !== 'INPUT') return null;
+    var t = (el.getAttribute('type') || 'text').toLowerCase();
+    return (t === 'number' || t === 'range') ? t : null;
+  }
+  function inputNumber(el) {
+    var v = el.value;
+    if (v === '' || v == null) return NaN;
+    var n = Number(v);
+    return n; // Number('') is 0, but we already excluded '' — an invalid string gives NaN, as the spec wants
+  }
+  function numAttr(el, name) {
+    var a = el.getAttribute(name);
+    if (a === null || a === undefined || a === '') return null;
+    var n = Number(a);
+    return isFinite(n) ? n : null;
+  }
+  function stepBy(el, n) {
+    var type = numericInputType(el);
+    if (!type) return; // stepUp/stepDown only apply to stepped controls
+    var step = numAttr(el, 'step');
+    if (step === null || step <= 0) step = 1; // default step is 1 for number and range
+    var min = numAttr(el, 'min');
+    var max = numAttr(el, 'max');
+    var cur = inputNumber(el);
+    if (isNaN(cur)) cur = min !== null ? min : 0; // an empty control steps from its min (or 0)
+    var next = cur + n * step;
+    if (min !== null && next < min) next = min;
+    if (max !== null && next > max) next = max;
+    // Trim floating-point fuzz from repeated additions (0.1 + 0.2 …) without disturbing integers.
+    next = Math.round(next * 1e6) / 1e6;
+    el.value = String(next);
+  }
+  if (EP) {
+    Object.defineProperty(EP, 'valueAsNumber', {
+      configurable: true, enumerable: false,
+      get: function () {
+        if (this.tagName !== 'INPUT') return undefined;
+        return numericInputType(this) ? inputNumber(this) : NaN;
+      },
+      set: function (v) {
+        if (!numericInputType(this)) return; // unsupported types: ignore (spec throws; we no-op safely)
+        var n = Number(v);
+        this.value = isFinite(n) ? String(n) : '';
+      },
+    });
+    EP.stepUp = function (n) { stepBy(this, n === undefined ? 1 : (n | 0)); };
+    EP.stepDown = function (n) { stepBy(this, -(n === undefined ? 1 : (n | 0))); };
+  }
+
   // ── `element.form` — the FORM OWNER of a form-associated element.
   //
   // `input.form` was `undefined`, so every form library that groups controls by their owning form

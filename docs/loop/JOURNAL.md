@@ -17995,3 +17995,30 @@ KNOWN REMAINING: `select.options.length = n` (same idiom via the collection) sti
 TICK SHAPE: capability (select.length getter dispatch + truncate/extend setter; +1 gate). GATES +1.
 CONSTELLATION: select.length option-count + resize unknown→gated (G_SELECT_LENGTH).
 WIKI: dom-semantics.md — select.length is the option count and resizes the list (CharacterData.length overload preserved).
+
+## Tick 442 — input.valueAsNumber + stepUp/stepDown for numeric inputs (2026-07-23)
+
+HYPOTHESIS (left the DOM-collection vein per Check #21's steer for a different form surface — typed input
+values). RED probe: the whole typed-numeric surface was absent — `input.valueAsNumber` undefined,
+`stepUp`/`stepDown` not functions, the `valueAsNumber=` setter a no-op. Every numeric spinner, range
+slider and quantity stepper reads/writes the NUMBER behind the control, not its string.
+
+FIX (capability, engine/js/src/collections_js.rs — pure numeric logic over the existing `.value` accessor):
+- `input.valueAsNumber` getter — for `type=number`/`type=range` parses `this.value` as a Number (NaN for
+  empty/invalid); `NaN` for other input types; `undefined` on a non-input. Setter writes `String(n)` (or
+  `""` for non-finite).
+- `stepUp(n=1)` / `stepDown(n=1)` — add/subtract `n × step` (step defaults to 1; only apply to number/
+  range), clamp to `min`/`max`, and trim float fuzz (round to 1e-6) so repeated 0.1-steps stay clean. An
+  empty control steps from its min (or 0).
+
+GATE: G_VALUE_AS_NUMBER (`value_as_number_and_step_up_down`) — 8 claims: getter, stepUp/stepDown deltas,
+setter round-trip, max clamp (range), min clamp (number), unsupported-type→NaN, non-input→undefined.
+RED-proven (probe: valueAsNumber undefined / stepUp not a function). manuk-page green; g_collections /
+g_form / g_form_owner / g_select_write / g_select_length / g_textarea_value / g_option_text all still green.
+
+KNOWN REMAINING: `valueAsDate` + `valueAsNumber` for date/time/month/week inputs (epoch arithmetic) — a
+separate follow-on, not built.
+
+TICK SHAPE: capability (input.valueAsNumber get/set + stepUp/stepDown with min/max clamp; +1 gate). GATES +1.
+CONSTELLATION: typed numeric input values (valueAsNumber/stepUp/stepDown) unknown→gated (G_VALUE_AS_NUMBER).
+WIKI: dom-semantics.md — input.valueAsNumber + stepUp/stepDown for numeric inputs.

@@ -3703,3 +3703,17 @@ dispatches on the tag.
 **The trap:** the same idiom via the collection (`select.options.length = n`) still no-ops because the
 native `options` getter returns a fresh Array — settable-length needs a persistent HTMLOptionsCollection
 (pinned unknown). `select.length = n` is the one that now works.
+
+## input.valueAsNumber + stepUp/stepDown (tick 442)
+
+**The class of the web this unlocks:** numeric-form widgets — quantity steppers ("+"/"−" buttons on a
+cart), range sliders that read `valueAsNumber`, price/measurement inputs, and form-validation libraries
+that compare the numeric value against min/max.
+**(1)** `input.valueAsNumber` (get/set) was `undefined`; it now parses/writes the number behind a
+`type=number`/`type=range` control (NaN for empty/invalid; NaN for unsupported types; undefined on a
+non-input).
+**(2)** `stepUp(n)`/`stepDown(n)` threw; they now add/subtract `n × step` (default step 1) and clamp to
+`min`/`max`.
+**The trap:** the value behind a numeric input is a STRING in the `value` attribute — reading it as a
+number and stepping it correctly (default step, min/max clamp, float-fuzz trim) is what every stepper
+needs, and all of it was absent.

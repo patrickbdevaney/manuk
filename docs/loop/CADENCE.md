@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **226** | ticks 1–441 |
 | median tick cycle | **19m** | 225 intervals |
-| median, last 10 | **29m** | 10 intervals |
+| median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.78** | 288.7h elapsed |
+| **ticks per hour** | **0.78** | 289.1h elapsed |
 | median verify wall | **59s** | 165 ticks |
 | wall trend | 39s → 58s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,7 +27,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **208**
+* **live gates**: 27 → **209**
 * **✅ rows in the capability ledger**: 144 → **328**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
@@ -322,6 +322,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **437** | 2026-07-23 04:18 | 54m | capability | 60s | +268/−34 | 205 | 81 | 56.0% · | element.form resolves the form owner (2026-07-23) |
 | **439** | 2026-07-23 04:42 | 25m | capability | 58s | +305/−38 | 206 | 81 | 56.0% · | option.text + the Option() constructor's defaultSelected argument (2026-07-23) |
 | **440** | 2026-07-23 05:15 | 33m | capability | 58s | +193/−47 | 207 | 81 | 56.0% · | textarea.value is its text content, not a value attribute (2026-07-23) |
-| **441** | 2026-07-23 05:42 | 27m | capability | 60s | +186/−41 | 208 | 81 | 56.0% · | select.length is the option count and resizes the list (2026-07-23) |
+| **441** | 2026-07-23 06:07 | 51m | capability | 61s | +207/−34 | 209 | 81 | 56.0% · | select.length is the option count and resizes the list (2026-07-23) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
