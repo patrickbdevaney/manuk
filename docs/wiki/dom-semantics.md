@@ -833,6 +833,25 @@ through the hot childNodes `live()` path is exactly the heap perturbation the ti
 cross-file UAF. It is a plain frozen array-like with `NodeList.prototype`, `.length`, `.item`, `forEach`
 and an iterator. Gate `g_label_association` (8 claims, proven red by disabling the getters). [[js-engine]]
 
+## The `<table>` DOM: `table.rows` is a live HTMLCollection in LOGICAL order (tick 435)
+
+The whole `<table>` read surface was `undefined`. `table.rows` and `tr.cells` are how a data-grid /
+sortable-table widget and every "what row/column is this cell" accessibility walk read a table.
+
+- **`table.rows`** — a live HTMLCollection in **logical** order: **thead rows, then tbody + direct
+  `<tr>` rows (tree order), then tfoot rows**. This is NOT document order, and the difference is
+  load-bearing: the HTML spec lets `<tfoot>` be authored *before* `<tbody>`, so a document-order reading
+  numbers the footer as a body row. `thead`/`tbody`/`tfoot.rows` is that section's own rows.
+- **`table.tBodies`** (HTMLCollection), **`table.tHead`** / **`table.tFoot`** (the first such section or
+  null), **`tr.cells`** (the `td`/`th` children).
+- **`tr.rowIndex`** = index in `table.rows`; **`tr.sectionRowIndex`** = index within the row's section (a
+  direct `<tr>` child of `<table>` is indexed within the implicit tbody); **`td.cellIndex`** = index in
+  `tr.cells`. Each is `-1` when unparented and `undefined` on the wrong tag.
+
+Collections reuse the existing `live(…, HTMLCollection)` factory (the `getElementsByTagName` path), never
+the heap-sensitive `childNodes` NodeList path (tick-129 note). Gate `g_table_dom` (12 claims, proven red;
+the fixture writes `<tfoot>` before `<tbody>` so document order fails). [[js-engine]]
+
 ## `DOMStringMap` (`dataset`) and `NamedNodeMap` (`attributes`) enumerate their names (tick 130)
 
 The same legacy-platform-object gap as [[dom-semantics]]'s tick-129 `HTMLCollection`, on two more proxy-backed

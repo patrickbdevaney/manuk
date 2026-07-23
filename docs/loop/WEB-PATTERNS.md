@@ -3596,3 +3596,19 @@ no control.
 **The trap:** returning the first `<label for=id>` alone misses both the second label and the containment
 form; and treating a hidden input as labelable makes `<label for=hidden>` falsely claim it. It uses a
 STATIC NodeList, not the hot `live()` childNodes proxy, whose heap sensitivity is documented for tick 129.
+
+## The <table> DOM: table.rows/tr.cells and row/cell indices (tick 435)
+
+**The class of the web this unlocks:** every data-grid, sortable-table and spreadsheet-lite widget that
+reads or renumbers a table through the DOM, and every accessibility walk that reports "row R, column C".
+The whole read surface (`table.rows`, `table.tBodies`, `table.tHead`/`tFoot`, `tr.cells`, `tr.rowIndex`,
+`tr.sectionRowIndex`, `td.cellIndex`) was `undefined`.
+**(1)** `table.rows` is a LIVE HTMLCollection in **logical** order — thead rows, then tbody + direct
+`<tr>` rows in tree order, then tfoot rows — NOT document order. A sort widget that reads document order
+mis-numbers any table whose `<tfoot>` is authored before its `<tbody>` (a common pattern, since the spec
+lets the footer precede the body in source).
+**(2)** `rowIndex` is the index in `table.rows`; `sectionRowIndex` is the index within the row's own
+section; `cellIndex` is the index in `tr.cells`. Each is -1 when the element is unparented.
+**The trap:** returning rows in document order looks right on the common `<thead><tbody><tfoot>` source
+and is silently wrong on the reordered one — which is exactly why the gate authors the fixture with the
+footer first. Collections reuse the existing HTMLCollection live() path, never the childNodes NodeList one.

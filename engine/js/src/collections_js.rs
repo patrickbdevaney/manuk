@@ -544,5 +544,115 @@ pub const COLLECTIONS_JS: &str = r#"
       get: function () { return this.tagName === 'LABEL' ? labelControl(this) : undefined; },
     });
   }
+
+  // ── The `<table>` DOM: `table.rows`/`tBodies`/`tHead`/`tFoot`, section `.rows`, `tr.cells`,
+  //    `tr.rowIndex`/`sectionRowIndex`, `td.cellIndex`.
+  //
+  // The whole read surface was `undefined` — `table.rows` and `tr.cells` are how a data-grid library, a
+  // sortable-table widget, and every accessibility "what row/column is this cell in" walk read a table,
+  // and `rowIndex`/`cellIndex` are the coordinates they report. `table.rows` is NOT document order: it is
+  // **thead rows, then tbody + direct `<tr>` rows in tree order, then tfoot rows** — a sort widget that
+  // reads document order silently mis-numbers a table whose `<tfoot>` is written before its `<tbody>`.
+  function childRowsOf(section) {
+    var out = [], c = section.children;
+    for (var i = 0; i < c.length; i++) { if (c[i].tagName === 'TR') out.push(c[i]); }
+    return out;
+  }
+  function tableRows(table) {
+    var head = [], body = [], foot = [], c = table.children;
+    for (var i = 0; i < c.length; i++) {
+      var ch = c[i], tn = ch.tagName;
+      if (tn === 'THEAD') { head = head.concat(childRowsOf(ch)); }
+      else if (tn === 'TFOOT') { foot = foot.concat(childRowsOf(ch)); }
+      else if (tn === 'TBODY') { body = body.concat(childRowsOf(ch)); }
+      else if (tn === 'TR') { body.push(ch); }
+    }
+    return head.concat(body, foot);
+  }
+  function rowCells(tr) {
+    var out = [], c = tr.children;
+    for (var i = 0; i < c.length; i++) { var tn = c[i].tagName; if (tn === 'TD' || tn === 'TH') out.push(c[i]); }
+    return out;
+  }
+  function ancestorTag(el, tag) {
+    for (var p = el.parentNode; p; p = p.parentNode) { if (p.tagName === tag) return p; }
+    return null;
+  }
+  function firstChildTag(el, tag) {
+    var c = el.children;
+    for (var i = 0; i < c.length; i++) { if (c[i].tagName === tag) return c[i]; }
+    return null;
+  }
+  if (EP) {
+    Object.defineProperty(EP, 'rows', {
+      configurable: true, enumerable: false,
+      get: function () {
+        var t = this.tagName, self = this;
+        if (t === 'TABLE') { return live(function () { return tableRows(self); }, HTMLCollection); }
+        if (t === 'THEAD' || t === 'TBODY' || t === 'TFOOT') { return live(function () { return childRowsOf(self); }, HTMLCollection); }
+        return undefined;
+      },
+    });
+    Object.defineProperty(EP, 'tBodies', {
+      configurable: true, enumerable: false,
+      get: function () {
+        if (this.tagName !== 'TABLE') return undefined;
+        var self = this;
+        return live(function () {
+          var out = [], c = self.children;
+          for (var i = 0; i < c.length; i++) { if (c[i].tagName === 'TBODY') out.push(c[i]); }
+          return out;
+        }, HTMLCollection);
+      },
+    });
+    Object.defineProperty(EP, 'tHead', {
+      configurable: true, enumerable: false,
+      get: function () { return this.tagName === 'TABLE' ? firstChildTag(this, 'THEAD') : undefined; },
+    });
+    Object.defineProperty(EP, 'tFoot', {
+      configurable: true, enumerable: false,
+      get: function () { return this.tagName === 'TABLE' ? firstChildTag(this, 'TFOOT') : undefined; },
+    });
+    Object.defineProperty(EP, 'cells', {
+      configurable: true, enumerable: false,
+      get: function () { var self = this; return this.tagName === 'TR' ? live(function () { return rowCells(self); }, HTMLCollection) : undefined; },
+    });
+    Object.defineProperty(EP, 'rowIndex', {
+      configurable: true, enumerable: false,
+      get: function () {
+        if (this.tagName !== 'TR') return undefined;
+        var table = ancestorTag(this, 'TABLE');
+        if (!table) return -1;
+        var rows = tableRows(table);
+        for (var i = 0; i < rows.length; i++) { if (rows[i] === this) return i; }
+        return -1;
+      },
+    });
+    Object.defineProperty(EP, 'sectionRowIndex', {
+      configurable: true, enumerable: false,
+      get: function () {
+        if (this.tagName !== 'TR') return undefined;
+        var section = this.parentNode;
+        if (!section) return -1;
+        var st = section.tagName;
+        // A `<tr>` that is a direct child of `<table>` belongs to the implicit tbody — its siblings are
+        // the table's direct `<tr>` children, which `childRowsOf` returns for a TABLE just as for a section.
+        var rows = (st === 'THEAD' || st === 'TBODY' || st === 'TFOOT' || st === 'TABLE') ? childRowsOf(section) : [];
+        for (var i = 0; i < rows.length; i++) { if (rows[i] === this) return i; }
+        return -1;
+      },
+    });
+    Object.defineProperty(EP, 'cellIndex', {
+      configurable: true, enumerable: false,
+      get: function () {
+        if (this.tagName !== 'TD' && this.tagName !== 'TH') return undefined;
+        var tr = this.parentNode;
+        if (!tr || tr.tagName !== 'TR') return -1;
+        var cells = rowCells(tr);
+        for (var i = 0; i < cells.length; i++) { if (cells[i] === this) return i; }
+        return -1;
+      },
+    });
+  }
 })();
 "#;

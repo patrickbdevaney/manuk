@@ -17782,3 +17782,36 @@ g_doc_collections all still green (the shared live() proxy untouched).
 TICK SHAPE: capability (control.labels + label.control label association; +1 gate). GATES +1.
 CONSTELLATION: label⇄control association unknown→gated (G_LABEL_ASSOCIATION).
 WIKI: dom-semantics.md — control.labels (a static NodeList) and label.control link a form field to its <label>s.
+
+## Tick 435 — the <table> DOM: table.rows/tr.cells + row/cell indices (2026-07-23)
+
+HYPOTHESIS (same probe-a-remaining-DOM-surface vein as t433/t434): the whole <table> read API was
+carried unmeasured. A grep + RED probe found it entirely absent — `table.rows`, `table.tBodies`,
+`table.tHead` all `undefined`, and `tr.cells`/`rowIndex`/`cellIndex` all threw. Every data-grid /
+sortable-table widget and every "what row/column is this cell" a11y walk reads a table through exactly
+this surface.
+
+FIX (capability, engine/js/src/collections_js.rs — the live-collections IIFE, alongside form.elements/labels):
+- `table.rows` — a LIVE HTMLCollection in LOGICAL order: thead rows, then tbody + direct-<tr> rows in
+  tree order, then tfoot rows (NOT document order — a table with <tfoot> before <tbody> mis-numbers under
+  a document-order reading). `thead/tbody/tfoot.rows` = that section's own rows.
+- `table.tBodies` (HTMLCollection), `table.tHead` / `table.tFoot` (first section or null), `tr.cells`
+  (HTMLCollection of td/th).
+- `tr.rowIndex` (index in table.rows), `tr.sectionRowIndex` (index within its section — a direct-<tr>
+  child of <table> is indexed within the implicit tbody), `td/th.cellIndex` (index in tr.cells). Each is
+  -1 when unparented, undefined on the wrong tag.
+Collections reuse the existing live(…, HTMLCollection) factory (the getElementsByTagName path, NOT the
+heap-sensitive NodeList/childNodes path).
+
+GATE: G_TABLE_DOM (`table_rows_and_cells_expose_logical_order_and_indices`) — 12 claims incl. the
+tfoot-written-before-tbody ordering proof (footIsLast/footRowIndex:3). RED-proven (pre-impl probe:
+rows:undef/tbodies:undef/cells:ERR). manuk-page green; g_form_elements / g_label_association /
+g_collections / g_collection_named_props all still green.
+
+TICK SHAPE: capability (table.rows/tBodies/tHead/tFoot + section.rows + tr.cells/rowIndex/sectionRowIndex + cellIndex; +1 gate). GATES +1.
+CONSTELLATION: <table> DOM read API unknown→gated (G_TABLE_DOM).
+WIKI: dom-semantics.md — table.rows is a live HTMLCollection in LOGICAL (thead/tbody/tfoot) order; tr.cells/rowIndex/sectionRowIndex/cellIndex.
+
+SELF-AUDIT (tick 435, cadence): ./scripts/self-audit.sh → "methodology and reality agree" (all green —
+miner, gate-red-proofs, process-defect ledger 49, enforcement hooks, journal continuity, pattern ledger
+432 rows moving with the engine). LAST_AUDIT_TICK advanced 425→435.
