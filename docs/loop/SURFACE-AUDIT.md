@@ -727,3 +727,62 @@ canvas-ImageData, TextDecoder-encodings, template.content, live-searchParams, co
   (I2: never patch the engine's internals), so it is a bump-tracked item, not agent work.
 
 LAST_SURFACE_AUDIT 418→428; next due 438.
+
+## Audit #17 — tick 438 (2026-07-23)
+
+**Sources.** web.dev Baseline 2026 + the May/April/March 2026 monthly digests
+(https://web.dev/baseline/2026, https://web.dev/blog/web-platform-05-2026); MDN Baseline glossary. Plus
+this window's own RED probes (the strongest source: MEASURED on the shipping tree), ticks 429-439.
+
+**The frontier is well-mapped — the external check found no order-of-magnitude blind spot.** Every CSS
+feature the Baseline-2026 digests flagged was already on the map or already gated: `contrast-color()`
+(unknown row 180), `:open` (GATED t429, row 170), CSS units widely-available (Stylo). The one genuinely
+off-map external signal is the **view-transition pseudo-classes** (`:active-view-transition`,
+`:active-view-transition-type()`) — added as `unknown`. View Transitions themselves are gated (t308); these
+are a bounded selector refinement on top.
+
+### RECONCILED (stale unknown → gated — the map catching up to our own landed ticks)
+
+* **`CSSStyleDeclaration.item(i) / .length`** (row 178) was the t428-audit `unknown`. Tick 432 GATED it
+  (`G_CSSOM_ENUMERATION`, row 181 — inline + computed `.item`/`.length`/indexed getter + `!important`
+  round-trip). Corrected to `gated`. This is the audit's job: memory (row 178) had gone stale from our own
+  landed work (row 181), and only a reconcile pass catches it.
+
+### ADDED — the DOM-write vein, measured-and-gated this window (map-wideners, ticks 435-439)
+
+The form/collections/select DOM was carried largely UNMEASURED at the granularity a real widget hits. Five
+rows added, all `gated`, all RED-proven this window:
+
+* **`<table>` DOM read/write API** (`G_TABLE_DOM`/`G_TABLE_WRITE`, t435-436) — `table.rows` live in LOGICAL
+  order, `tr.cells`/`rowIndex`/`cellIndex`, and `insertRow`/`insertCell`/section+caption builders. Was
+  entirely `undefined`/throwing before.
+* **`element.form`** (`G_FORM_OWNER`, t437) — the form-owner every form library reads; was `undefined`
+  incl. the `form=` reassociation case, and it silently broke `ElementInternals.form`.
+* **`<select>` write API** (`G_SELECT_WRITE`, t438) — `select.add()` was `undefined` and — the ugly one —
+  `select.remove(0)` DETACHED THE WHOLE SELECT (fell through to `ChildNode.remove`). A corruption bug
+  dressed as a working method.
+* **`option.text` + `Option()` defaultSelected** (`G_OPTION_TEXT`, t439) — `option.text` (the canonical
+  chosen-label read) was `undefined`; the constructor ignored `defaultSelected`.
+
+### ADDED — genuine unknowns (the point of the audit: a bigger, uglier map)
+
+* **`select.options.length` setter (truncation)** → `unknown`. MEASURED no-op this session — the classic
+  `select.options.length = 0` "clear the dropdown" idiom does not truncate, because the native `options`
+  getter returns a fresh Array and a length write does not persist. Bounded; lower value than add/remove
+  (already gated t438), so pinned not built.
+* **view-transition pseudo-classes** (`:active-view-transition` / `-type()`) → `unknown`. External signal;
+  not yet measured here.
+
+### EXCLUDED (with reason)
+
+* Service Worker runtime, Document Picture-in-Picture, Trusted Types, WebGL, WebRTC — unchanged from prior
+  audits (XL out-of-v1 subsystems, or Phase-2 security seams).
+* SpiderMonkey built-ins ahead of the map (per audit #16) — not agent-editable (I2: never patch engine
+  internals); bump-tracked, not audit rows.
+
+**What we had been wrong about this pass:** row 178 said `CSSStyleDeclaration.item` was an open `unknown`
+when we had gated it six ticks earlier (t432). The map lied stale-PESSIMISTIC again — the recurring failure
+mode this instrument exists to catch. No stale-OPTIMISTIC lie found this pass (nothing marked works/gated
+that measured absent).
+
+LAST_SURFACE_AUDIT 428→438; next due 448.

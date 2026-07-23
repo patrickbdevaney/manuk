@@ -3660,3 +3660,16 @@ overload, and `div.remove()` is untouched. `select.options.namedItem`/`add`/`rem
 **The trap:** a naive `EP.remove` override to fix `select.remove(index)` would break `div.remove()` for
 EVERY element — the fix must delegate to the native `ChildNode.remove` on every path except
 `select.remove(<index>)`, preserving the spec's overload.
+
+## option.text + Option() defaultSelected (tick 439)
+
+**The class of the web this unlocks:** every page that reads the LABEL of a chosen `<select>` option
+(`select.options[select.selectedIndex].text` — the canonical way to get the human-readable choice) and
+every `new Option(label, value, true)` that builds a pre-selected option in JS.
+**(1)** `option.text` was `undefined` (a plain expando). It now returns the option's text content with
+ASCII-whitespace runs collapsed and trimmed (spec), and is settable (replaces the content).
+**(2)** `new Option(text, value, defaultSelected)` ignored its 3rd argument; it now sets the `selected`
+attribute when `defaultSelected` is truthy, so the constructed option is selected as authored.
+**The trap:** putting `text` on the element prototype must not eat the ordinary `div.text = x` expando —
+the getter is `undefined` for non-options and the setter materialises a normal own property there, so no
+non-option `.text` assignment regresses.

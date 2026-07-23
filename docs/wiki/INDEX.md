@@ -288,6 +288,7 @@
   - L1240 · The teeth G_CHECK_VISIBILITY uses
   - L1250 · <template>.content is the parser's fragment, not the element's direct children (tick 425)
   - L1267 · The <select> write API — add / remove(index) + HTMLOptionsCollection (tick 438)
+  - L1283 · option.text + the Option() constructor's defaultSelected argument (tick 439)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -904,4 +905,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-819 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+820 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

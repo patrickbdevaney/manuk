@@ -882,6 +882,24 @@ pub const COLLECTIONS_JS: &str = r#"
         return origRemove.apply(this, arguments);
       };
     }
+    // `option.text` — the option's LABEL as the user sees it: the concatenated text content with ASCII
+    // whitespace runs collapsed and trimmed (spec). Reading `select.options[i].text` is the single most
+    // common way a page recovers the chosen label, and it was `undefined` (a plain expando). The setter
+    // replaces the text content. Defined narrowly for `<option>`; on any other element the getter is
+    // `undefined` and the setter preserves the ordinary expando (`div.text = x`) by materialising an own
+    // data property, so nothing that assigned `.text` to a non-option regresses.
+    Object.defineProperty(EP, 'text', {
+      configurable: true, enumerable: false,
+      get: function () {
+        if (this.tagName !== 'OPTION') return undefined;
+        var s = this.textContent || '';
+        return s.replace(/[ \t\n\f\r]+/g, ' ').replace(/^ | $/g, '');
+      },
+      set: function (v) {
+        if (this.tagName === 'OPTION') { this.textContent = v == null ? '' : String(v); return; }
+        Object.defineProperty(this, 'text', { value: v, writable: true, enumerable: true, configurable: true });
+      },
+    });
     // Decorate the native `options` array with the HTMLOptionsCollection write methods.
     var optsProto = ownerOf(EP, 'options');
     if (optsProto) {

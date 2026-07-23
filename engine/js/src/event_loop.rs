@@ -1752,10 +1752,15 @@ const PRELUDE: &str = r#"
         };
       }
       if (typeof globalThis.Option === 'undefined') {
-        globalThis.Option = function Option(text, value) {
+        globalThis.Option = function Option(text, value, defaultSelected) {
           var el = document.createElement('option');
           if (text !== undefined) { el.textContent = String(text); }
           if (value !== undefined) { el.setAttribute('value', String(value)); }
+          // The 3rd argument is `defaultSelected` — it reflects the `selected` content attribute (which is
+          // what `.selected` reads for an option that has not yet been dirtied in a rendered select). The
+          // 4th `selected` (selectedness) argument agrees with it in every non-pathological call, so the
+          // attribute captures both: `new Option('t','v',true)` comes back selected, as it must.
+          if (defaultSelected) { el.setAttribute('selected', ''); }
           return el;
         };
       }

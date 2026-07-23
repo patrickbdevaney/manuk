@@ -1279,3 +1279,18 @@ the element prototype (only `select.remove(<index>)` diverts to option removal; 
 and argument-less `select.remove()` — still routes to the native `ChildNode.remove`), and the
 HTMLOptionsCollection methods `namedItem`/`add`/`remove` hung on the array the native `options` getter
 returns. `div.add` stays `undefined` (Chrome parity). Gate `G_SELECT_WRITE`.
+
+## option.text + the Option() constructor's defaultSelected argument (tick 439)
+
+`option.text` — how a page reads the LABEL of the chosen option (`select.options[select.selectedIndex].text`)
+— was `undefined` (a plain expando; assigning to it left the text content untouched). Fixed in
+`engine/js/src/collections_js.rs`: the getter returns the option's text content with ASCII-whitespace runs
+collapsed and trimmed (spec), the setter replaces the text content. It is defined narrowly for `<option>`;
+on any other element the getter is `undefined` and the setter materialises an ordinary own data property,
+so `div.text = x` expandos do not regress.
+
+`new Option(text, value, defaultSelected)` (`engine/js/src/event_loop.rs`) ignored its 3rd argument, so a
+constructed pre-selected option came back unselected. The constructor now sets the `selected` content
+attribute when `defaultSelected` is truthy — which is what `.selected` reads for an option not yet dirtied
+in a rendered select, so `new Option('t','v',true)` comes back selected AND defaultSelected. Gate
+`G_OPTION_TEXT`.

@@ -17898,3 +17898,35 @@ g_form_owner / g_table_dom / g_table_write / g_collections / g_element_internals
 TICK SHAPE: capability (select.add + select.remove(index) corruption fix + options.namedItem/add/remove; +1 gate). GATES +1.
 CONSTELLATION: <select> DOM write API unknown→gated (G_SELECT_WRITE).
 WIKI: dom-semantics.md — the <select> write API (remove(index) removes the option, not the select; the overload is preserved).
+
+## Tick 439 — option.text + the Option() constructor's defaultSelected argument (2026-07-23)
+
+HYPOTHESIS (follow-on to t438's select write API, same select/options vein): t438's probe surfaced two
+residual select gaps. A sharpened RED probe confirmed: `option.text` was `undefined` — assigning to it
+(`o.text='x'`) created a plain expando and left the text content untouched, so every page reading the
+chosen label via `select.options[i].text` got nothing. And `new Option(text, value, defaultSelected)`
+IGNORED its 3rd argument (probe: `ctorDefSel:undefined/val/null/false/false`), so a constructed
+pre-selected option came back unselected.
+
+FIX (capability):
+- `engine/js/src/collections_js.rs`: `option.text` getter returns the option's text content with ASCII-
+  whitespace runs collapsed and trimmed (spec: `"  Hello   World  "` → `"Hello World"`); the setter
+  replaces the content. Defined NARROWLY for `<option>` — on any other element the getter is `undefined`
+  and the setter materialises an ordinary own data property, so `div.text = x` expandos do not regress
+  (the delicate part: an unguarded prototype accessor would eat every non-option `.text` assignment).
+- `engine/js/src/event_loop.rs`: the `Option` constructor now takes `defaultSelected` (arg 3) and sets the
+  `selected` content attribute when truthy — which is what `.selected` reads for an option not yet dirtied
+  in a rendered select, so `new Option('t','v',true)` comes back selected AND defaultSelected. The
+  pathological arg3≠arg4 (defaultSelected true / selectedness false on a DETACHED option) is not modelled
+  — the dirty-selectedness flag has no representation yet — and is deliberately NOT gated (honest failure,
+  no worse than before, and vanishingly rare in the wild).
+
+GATE: G_OPTION_TEXT (`option_text_and_constructor_default_selected`) — 6 claims incl. the whitespace
+collapse, the setter, the constructor defaultSelected, value-falls-back-to-text, and the non-option
+`div.text` expando must-not-break invariant. RED-proven (probe: getText undefined / ctor defaultSelected
+ignored). manuk-page green; g_select_write / g_form_owner / g_collections / g_reflect / g_global_reflect
+all still green.
+
+TICK SHAPE: capability (option.text getter/setter + Option() defaultSelected arg; +1 gate). GATES +1.
+CONSTELLATION: option.text + Option() defaultSelected unknown→gated (G_OPTION_TEXT).
+WIKI: dom-semantics.md — option.text (collapsed/trimmed, settable) + the Option() defaultSelected argument.

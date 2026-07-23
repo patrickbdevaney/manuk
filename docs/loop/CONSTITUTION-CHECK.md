@@ -813,3 +813,57 @@ in JOURNAL + memory; harness/infra is observer-owned (no scripts/ edits, no swap
 remains the work list and the fidelity certificate remains the exit.
 
 **Next check due: tick 439.**
+
+## Check #21 — tick 439
+
+**Horizon:** Phase 0 — daily-driver rendering parity + the agentic surface (CONSTITUTION.MD **Part VII**,
+components 1 & 2: "reliably renders and runs the representative real internet," and an agent that drives the
+DOM/a11y tree as first-class queryable state). **Gate:** the FIDELITY-SCORING-REDESIGN.md certificate
+(≥0.75 placement fidelity on ≥95% of the corpus + ≥0.70 per top-20 category), NOT a WPT percentage. Work
+list: PHASE0-BOUNDED-REMAINDER.md.
+
+**Gate or scoreboard?** Gate. Window 432-439 ran a single coherent vein — the **legacy DOM-collection /
+form-object surface every non-framework page still uses**, built as live platform objects in
+`collections_js.rs`: **432** CSSOM array-like + `!important` round-trip, **433** `form.elements`
+(HTMLFormControlsCollection + RadioNodeList), **434** `control.labels`/`label.control`, **435** the
+`<table>` READ DOM (`table.rows` in logical order, `tr.cells`/indices), **436** the `<table>` WRITE DOM
+(`insertRow`/`insertCell`/section builders), **437** `element.form` (the form owner), **438** the `<select>`
+WRITE API, **439** `option.text` + `Option()` defaultSelected. Each fixed a VISIBLY-broken class per VII.1:
+a form library that can't enumerate controls, a data-grid that can't read or build rows, a control that
+can't find its form, a dropdown builder whose `select.add` threw — and t438's marquee, `select.remove(0)`
+**silently DETACHING THE WHOLE SELECT** (a data-corruption bug dressed as a working method). These are
+app-web table stakes, not the CSS-layout tail.
+
+**Is the loop still pointed at the frontier?** Yes, with a caveat now worth stating. The measure-first
+discipline (Process Rule 2) kept paying — every tick RED-proved the exact silent-fail before touching code,
+and the read-side of each surface (options/selectedIndex/datalist.options/fieldset.elements) was found
+ALREADY WORKING, so effort went only to the genuine write-side gaps. BUT: the clean-bounded DOM-collection
+vein is now deep-mined. After the select/option follow-ons the remaining probed ore is thin —
+`select.options.length` setter (a real HTMLOptionsCollection object), custom-element reactions (an L-sized
+subsystem, not an atomic tick). The marquee frontier is unchanged and still bigger than anything in this
+vein: the **Tier-1 JARRING subsystems** (YouTube-plays media JOIN, contenteditable+IME, software WebGL) per
+PHASE0-BOUNDED-REMAINDER. The vein was correct to mine (real corruption bugs, cheap, high site-coverage) —
+but the next context should weigh a JARRING subsystem against yet more collection follow-ons.
+
+**Is the agentic surface (component #2) served?** Yes — directly. `form.elements`, `element.form`,
+`table.rows`/`cells`, `select.add/remove`, `option.text` ARE the queryable+actuable DOM state an agent
+reads and writes to drive a form or a data grid. Every fix landed page-observable with its gate; I3 held
+(the semantic model — the collections, the form-owner graph, the option label — lands in lockstep with the
+capability).
+
+**Any invariant bent?** No. Bar 0 held — every tick 432-439 additive and RED-proven, sibling suites green
+each time (form/collections/table/element-internals/reflect/CSSOM). I2 intact — no dependency forked; all
+work is our own shims against the specs' own algorithms. THE RATCHET honored — nothing traded; t438's
+`remove` override was written specifically to NOT regress `div.remove()` (gated as a must-not-break
+invariant). **The one honest scar, unchanged from Check #20:** the flaky shell `tab_operations_stay_far_
+under_one_frame` timing gate still false-REDs ~half of verify runs under the observer's concurrent
+`manuk-wpt`/chrome oracle load (box at load ~4); each landing took 2-4 quiet-window verify retries. The
+mark is NOT retuned — the same tree lands at 58-69s when a run catches a quiet slot. Harness/infra is
+observer-owned (no scripts/ edits).
+
+**PART VI / VII correction.** None. The four-component v1 scope is intact; PHASE0-BOUNDED-REMAINDER.md
+remains the work list and the fidelity certificate remains the exit. Steer for the next context recorded
+above: consider a Tier-1 JARRING subsystem over further DOM-collection follow-ons — the bounded vein has
+given most of what it holds.
+
+**Next check due: tick 447.**

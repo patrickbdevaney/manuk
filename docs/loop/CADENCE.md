@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **223** | ticks 1–437 |
-| median tick cycle | **19m** | 222 intervals |
-| median, last 10 | **31m** | 10 intervals |
+| ticks landed | **224** | ticks 1–439 |
+| median tick cycle | **19m** | 223 intervals |
+| median, last 10 | **28m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.77** | 287.3h elapsed |
-| median verify wall | **60s** | 162 ticks |
+| **ticks per hour** | **0.78** | 287.7h elapsed |
+| median verify wall | **59s** | 163 ticks |
 | wall trend | 39s → 60s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **205**
+* **live gates**: 27 → **206**
 * **✅ rows in the capability ledger**: 144 → **328**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**123 of 223 ticks** (55%) moved a
+**124 of 224 ticks** (55%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **123** capability ticks, median cycle **19m**
-* median diff per tick: **+215 / −34** lines across 8 files
+* **124** capability ticks, median cycle **19m**
+* median diff per tick: **+216 / −34** lines across 8 files
 
 ## Every tick
 
@@ -320,5 +320,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **435** | 2026-07-23 03:05 | 22m | capability | 57s | +304/−52 | 202 | 81 | 56.0% · | the <table> DOM: table.rows/tr.cells + row/cell indices (2026-07-23) |
 | **436** | 2026-07-23 03:24 | 19m | capability | 60s | +311/−51 | 203 | 81 | 56.0% · | the <table> WRITE API: insertRow/deleteRow/insertCell + sections (2026-07-23) |
 | **437** | 2026-07-23 04:18 | 54m | capability | 60s | +268/−34 | 205 | 81 | 56.0% · | element.form resolves the form owner (2026-07-23) |
+| **439** | 2026-07-23 04:42 | 25m | capability | 58s | +305/−38 | 206 | 81 | 56.0% · | option.text + the Option() constructor's defaultSelected argument (2026-07-23) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
