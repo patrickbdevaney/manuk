@@ -18556,3 +18556,48 @@ STALE 13:19 receipt (tree 3655e8c/t456, load1 4.31); my run's `.git/manuk-wall-s
 (<245). The real warm wall is fine — the block lifts by itself once a fresh green sub-245 receipt is banked
 (status-update reads the most-recent receipt at tick.sh:131, refuses before verify.sh:140 ever runs). Parked
 the complete t458 WIP in-tree and re-run tick.sh on a quieter box, per [wall-warm-rerun-lands-ticks].
+
+## Tick 459 — `select.options.length = n` resizes the LIVE dropdown (the collection clear-idiom) (2026-07-23)
+
+PIVOT off the identity vein (t458) onto the constellation `?` UNKNOWNS — the lever board's cheapest CO-#1
+yield ("? outranks X"). Probed the 10 unknown rows and picked the one that is BOTH a bounded atomic fix AND
+daily-driver-critical: `select.options.length` (truncation), constellation row 188, pinned no-op by the
+tick-438 surface audit. The other unknowns are non-atomic (`user-select` = Stylo servo-pref fence; ESM
+import-graph = subsystem) or lower-value.
+
+PROBED (RED-proven): `select.options` hands back a fresh Array decorated in `collections_js.rs` with the
+HTMLOptionsCollection methods (`namedItem`/`add`/`remove`, t438), but its `.length` was a plain Array length.
+The ubiquitous non-framework "clear the dropdown before repopulating" idiom `sel.options.length = 0;` (country/
+dependent pickers, "add another" rows) truncated the throwaway SNAPSHOT the getter had just returned and left
+the DOM untouched — the `<option>`s stayed, the next `sel.options` read them back, and the "cleared" list
+showed every stale row under the freshly-added ones. A dead expando (same bug class as `option.text`/
+`select.length` before them). `select.length = 0` (the element form) was already fixed t441; only the
+collection form via `.options` was open.
+
+FIX (capability — 1 file, `collections_js.rs` `decorateOptions`): wrap the decorated array in a `Proxy` whose
+`length` get returns the LIVE option count (`select.length`) and whose `length =` routes to the already-correct
+native `select.length` setter (`el_set_select_length`: truncate removes trailing options from their own
+parents — an option may sit in an `<optgroup>`; grow appends bare `<option>`s). Everything else — indexed
+access, iteration, `namedItem`/`add`/`remove`, and the Array methods pages call on the snapshot — passes
+straight through to the array target, so `Array.isArray(sel.options)` / `instanceof Array` / spread all still
+hold (a Proxy over an array is seen as an array by all three). Reuses proven, gated native truncation — zero
+new codec/DOM logic.
+
+GATE: G_OPTIONS_LENGTH (page, `options_collection_length_setter_resizes_the_live_dropdown`) — five teeth:
+`clear` (`sel.options.length = 0` empties the DOM AND a fresh `sel.options.length` reads 0), `grow`
+(`= 3` on a 1-option select appends two bare options), `repopulate` (clear-then-`add` rebuilds from empty,
+not stacked on stale rows), `readLive`. RED-proven by unwrapping the Proxy (return the bare decorated Array)
+→ the assignment hits the snapshot only, DOM keeps all three options, `clear` reads 3. Siblings green:
+g_select_options, g_select_length, g_select_write, g_option_text, g_select_actuation, g_selection,
+g_collections, g_collection_iterator_indices, g_collection_named_props, g_form_elements, g_form_owner,
+g_doc_collections, g_form; manuk-js crate suite green.
+
+TICK SHAPE: capability (`select.options.length` is a live writable accessor — the collection clear-idiom;
++1 gate). GATES +1. CONSTELLATION: row 188 `unknown → gated`. WIKI: dom-semantics.md — new subsection after
+the t441 select.length section (whose open-note is now closed).
+NEXT VEIN NOTE: constellation still carries 9 `?` unknowns after this. Cheap next probes (measure-and-pin,
+many may already work): `navigator.cpuPerformance` (identity-like), custom-element `attributeChangedCallback`
+on live setAttribute, `contrast-color()`/CSS `ic`/`ric` units. NON-atomic (skip for a rushed tick):
+`user-select` (Stylo servo-pref fence), ESM module-graph (subsystem). The L-sized Tier-1 marquees remain
+MEDIA H.264-High (decode backend, decompose-first), IndexedDB (borrow redb/heed), and the contenteditable
+EDITING path (execCommand/beforeinput, needs a caret+Selection decompose).

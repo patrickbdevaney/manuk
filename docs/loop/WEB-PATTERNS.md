@@ -3929,3 +3929,20 @@ backs `:read-write`/`:read-only` in both the querySelector engine and the live S
 agree; `contenteditable=false` islands correctly revert to `:read-only`.
 **The trap:** the fourth two-engines-disagree pseudo (`:open`/`:disabled`/`:read-only`/contenteditable) — a
 pseudo-class fixed in the JS/query engine still lies in the cascade until both change together.
+
+## The dropdown that clears itself before repopulating (tick 459)
+
+**The class of the web this unlocks (JS-driven dependent/cascading dropdowns):** every non-framework page that
+rebuilds a `<select>` from data — country/state/city pickers, "choose a plan then choose a tier" cascades,
+timezone lists, "add another row" forms — using the canonical clear-then-fill idiom
+`sel.options.length = 0; for (…) sel.add(new Option(…))`. The `.length = 0` was a dead expando: it truncated
+the throwaway snapshot Array `select.options` returns and left the real `<option>`s in the DOM, so the
+"cleared" dropdown showed every stale row *under* the freshly-added ones — a visibly duplicated, wrong list.
+**(1)** `select.options` is now a Proxy over the decorated array whose `length` get is the LIVE option count
+and whose `length =` routes to the proven native `select.length` setter (truncate trailing options from their
+own parents / grow with bare `<option>`s). **(2)** Indexed access, iteration, `namedItem`/`add`/`remove` and
+Array methods pass through unchanged, so `Array.isArray(sel.options)` / `instanceof Array` / spread still hold.
+**The trap:** the same dead-expando bug class as `option.text`/`select.length` — a getter that hands back a
+fresh snapshot makes every write to that snapshot a silent no-op; the fix is to make the collection LIVE, not
+to make the write louder. Closes the collection form of the clear-idiom (the element form `select.length = 0`
+landed t441).

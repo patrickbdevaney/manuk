@@ -1042,7 +1042,27 @@ pub const COLLECTIONS_JS: &str = r#"
       index = index | 0;
       if (index >= 0 && index < arr.length) { var o = arr[index]; o.parentNode.removeChild(o); }
     };
-    return arr;
+    // The `.length` SETTER — the old-school "clear the dropdown" idiom `select.options.length = 0`
+    // (and the resize `= n`). On a bare Array this truncated the SNAPSHOT the getter had just handed
+    // back and left the DOM untouched — a dead expando: the `<option>`s stayed, and the very next
+    // `select.options` read them right back. HTMLOptionsCollection.length is a LIVE, writable accessor
+    // over the select's option list, so wrap the (decorated) array in a Proxy whose `length` reads the
+    // live option count and whose `length =` routes to the already-correct native `select.length`
+    // setter (`el_set_select_length`: truncate removes trailing options from their own parents, grow
+    // appends bare `<option>`s). Everything else — indexed access, iteration, `namedItem`/`add`/
+    // `remove`, and the Array methods pages call on the snapshot — passes straight through to `arr`,
+    // so no existing use regresses; `Array.isArray`/`instanceof Array`/spread all see the array target.
+    return new Proxy(arr, {
+      get: function (t, k) {
+        if (k === 'length') return select.length; // live option count, not the frozen snapshot's
+        return t[k];
+      },
+      set: function (t, k, v) {
+        if (k === 'length') { select.length = v; return true; } // truncate/grow the LIVE DOM
+        t[k] = v;
+        return true;
+      },
+    });
   }
   if (EP) {
     // `select.add(element[, before])` — only selects have it (a `<div>.add` stays undefined, as in Chrome).

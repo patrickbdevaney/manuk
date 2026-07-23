@@ -1320,8 +1320,33 @@ resize) did nothing. Fixed in `dom_bindings.rs`: `length` now dispatches on the 
 `select_options(...).len()`, every other node keeps the CharacterData length — and gains a setter that
 truncates (removing trailing options from their own parents, so an option inside an `<optgroup>` is handled)
 or grows (appending bare `<option>` elements). CharacterData.length stays read-only (the setter no-ops off a
-select). Gate `G_SELECT_LENGTH`. Note: `select.options.length = n` (the same idiom via the collection) still
-needs a persistent HTMLOptionsCollection object — pinned unknown in the tick-438 surface audit.
+select). Gate `G_SELECT_LENGTH`. (`select.options.length = n` — the same idiom via the collection — was
+closed in tick 459, below.)
+
+## select.options.length is a LIVE writable accessor — the collection clear-idiom (tick 459)
+
+The tick-438 surface audit pinned `select.options.length = 0` as a MEASURED no-op, and tick 441 fixed only
+the `select.length` form. `select.options` hands back a fresh Array decorated (in `collections_js.rs`) with
+the HTMLOptionsCollection methods, but its `.length` was a plain Array length: the ubiquitous non-framework
+"clear the dropdown before repopulating" idiom —
+
+```js
+sel.options.length = 0;                     // country/dependent picker: clear
+for (const c of countries) sel.add(new Option(c.name, c.code));
+```
+
+— truncated the throwaway SNAPSHOT the getter had just returned and left the DOM untouched. The `<option>`s
+stayed, the next `sel.options` read them back, and the "cleared" list showed every stale row under the fresh
+ones. A dead expando (the same bug class as `option.text`/`select.length` before them).
+
+Fixed in `engine/js/src/collections_js.rs` `decorateOptions`: the decorated array is now wrapped in a
+`Proxy` whose `length` get returns the LIVE option count (`select.length`) and whose `length =` routes to
+the already-correct native `select.length` setter (`el_set_select_length`: truncate removes trailing options
+from their own parents, grow appends bare `<option>`s). Everything else — indexed access, iteration,
+`namedItem`/`add`/`remove`, and the Array methods pages call on the snapshot — passes straight through to the
+array target, so `Array.isArray(sel.options)` / `instanceof Array` / spread all still hold and no existing
+use regresses. Gate `G_OPTIONS_LENGTH` (RED-proven by unwrapping the Proxy → the assignment hits the
+snapshot only and the DOM keeps all three options).
 
 ## input.valueAsNumber + stepUp/stepDown for numeric inputs (tick 442)
 

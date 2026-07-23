@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **238** | ticks 1–458 |
 | median tick cycle | **19m** | 237 intervals |
-| median, last 10 | **40m** | 10 intervals |
+| median, last 10 | **44m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.80** | 296.8h elapsed |
+| **ticks per hour** | **0.80** | 297.3h elapsed |
 | median verify wall | **60s** | 177 ticks |
 | wall trend | 39s → 69s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,7 +27,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **225**
+* **live gates**: 27 → **226**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **138** capability ticks, median cycle **19m**
-* median diff per tick: **+216 / −34** lines across 9 files
+* median diff per tick: **+215 / −34** lines across 9 files
 
 ## Every tick
 
@@ -334,6 +334,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **452** | 2026-07-23 11:51 | 59m | capability | 72s | +240/−38 | 221 | 81 | 56.0% · | a `disabled` form control cannot receive focus (2026-07-23) |
 | **454** | 2026-07-23 12:31 | 41m | capability | 70s | +116/−35 | 222 | 81 | 56.0% · | `:read-only`/`:read-write` match in the querySelector engine (BOTH engines agree) (2026-07 |
 | **456** | 2026-07-23 13:19 | 48m | capability | 60s | +240/−40 | 224 | 81 | 56.0% · | contenteditable QUERY surface: contentEditable / isContentEditable / designMode (2026-07-2 |
-| **458** | 2026-07-23 13:52 | 33m | capability | 69s | +314/−65 | 225 | 81 | 56.0% · | completeness identity: `navigator.deviceMemory` + canonical `navigator.platform` (2026-07- |
+| **458** | 2026-07-23 14:18 | 59m | capability | 69s | +208/−13 | 226 | 81 | 56.0% · | completeness identity: `navigator.deviceMemory` + canonical `navigator.platform` (2026-07- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

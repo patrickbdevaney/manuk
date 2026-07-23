@@ -291,12 +291,13 @@
   - L1283 · option.text + the Option() constructor's defaultSelected argument (tick 439)
   - L1298 · textarea.value is its text content, not a value attribute (tick 440)
   - L1314 · select.length is the option count and resizes the list (tick 441)
-  - L1326 · input.valueAsNumber + stepUp/stepDown for numeric inputs (tick 442)
-  - L1337 · input.valueAsDate + valueAsNumber for date/time/month inputs (tick 443)
-  - L1348 · progress.position + output.value (tick 444)
-  - L1358 · the .text property for a/script/title (tick 445)
-  - L1366 · datetime-local + week typed values (tick 446)
-  - L1379 · <a>/<area> URL-decomposition setters (tick 447)
+  - L1326 · select.options.length is a LIVE writable accessor — the collection clear-idiom (tick 459)
+  - L1351 · input.valueAsNumber + stepUp/stepDown for numeric inputs (tick 442)
+  - L1362 · input.valueAsDate + valueAsNumber for date/time/month inputs (tick 443)
+  - L1373 · progress.position + output.value (tick 444)
+  - L1383 · the .text property for a/script/title (tick 445)
+  - L1391 · datetime-local + week typed values (tick 446)
+  - L1404 · <a>/<area> URL-decomposition setters (tick 447)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -924,4 +925,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-839 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+840 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
