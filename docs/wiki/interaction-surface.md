@@ -2135,3 +2135,19 @@ writes with `setData` on `dragstart` is the id the target reads with `getData` o
 handoff. Returns `false` iff a handler `preventDefault()`-ed the drop. Gated by `g_drag_reorder`
 (G_DRAG_REORDER), RED-proven by neutering the dragstart dispatch (the handoff then returns `''`).
 [[js-engine]]
+
+## scrollTo/scrollBy reuse the scrollTop/scrollLeft setters (clamp + snap) (tick 431)
+
+`element.scrollTop = n` was the only programmatic-scroll path; the ergonomic methods the ecosystem calls
+— `scrollTo(x, y)`, `scrollTo({ left, top, behavior })`, its `scroll()` alias, and the relative
+`scrollBy(...)` — were absent, so `el.scrollTo is not a function` threw and a scroll-to-top / chat-pin /
+carousel control silently no-op'd. Tick 431 added them as JS shims on `__elProto` (next to `animate` /
+`setPointerCapture`), each parsing the `(x, y)` pair OR the `{ left, top }` object (a partial object
+touches only its axis) and then assigning `this.scrollLeft` / `this.scrollTop`.
+
+The key decision: they DELEGATE to the native `scrollLeft`/`scrollTop` setters (`el_set_scroll_axis`)
+rather than reimplement the scroll math. So they inherit, for free, the setter's CLAMP to the scrollable
+range (`el.scrollTo(0, 1e9)` lands at the real maximum) and its scroll-snap alignment, and the mirror the
+getters read is updated so `el.scrollTo(0, 100); el.scrollTop` reads the snapped value on the same line —
+agreeing with Chrome. `behavior: 'smooth'` is accepted and ignored: with no compositor timeline the
+engine jumps to the correct final position, a conforming fallback. [[box-layout]]

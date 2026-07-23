@@ -17638,3 +17638,44 @@ swap-cycle from the agent, per the harness-ownership rule). Every landing is blo
 recovers (crawl finishes or swap is cycled). Retrying is futile while the floor is breached. Tick 430 (and
 the productive vein) resume the moment the box is quiet. Session landed 420-429 (ten ticks) + Constitution
 Check #19 + Self-Audit 425 + Wall Audit #8 + Surface Audit #16 — all cadence current.
+
+## Tick 431 — element.scrollTo / scrollBy / scroll (2026-07-23)
+
+HYPOTHESIS (probe-a-works-capability vein, Selection/scroll/perf surface): a probe found that surface
+remarkably complete (Range, Selection, performance.mark/measure, PerformanceObserver, clipboard,
+sendBeacon, userAgentData, DOMRect) EXCEPT `element.scrollTo`/`scrollBy` — `scrollTo:n`/`scrollBy:n`
+(scrollIntoView and scrollHeight work, and `element.scrollTop = n` works). So `el.scrollTo is not a
+function` threw and every programmatic-scroll control (scroll-to-top, chat pin-to-bottom
+`el.scrollTo(0, el.scrollHeight)`, virtualised-list jump, carousel prev/next) silently did nothing.
+
+FIX (capability, JS-shim on the element prototype): added `__elProto.scrollTo`, `scroll` (its legacy
+alias), and `scrollBy` next to the existing `__elProto.animate`/`setPointerCapture`. They accept both the
+`(x, y)` number pair and the `{ left, top, behavior }` options object (a partial object touches only its
+axis), and REUSE the native `scrollLeft`/`scrollTop` setters — so they inherit the setters' clamping (to
+the scrollable range) and scroll-snap for free, and a same-line read agrees with Chrome. `behavior:
+'smooth'` is accepted and ignored (we jump — a conforming fallback for an engine with no compositor
+timeline; the final position is correct).
+
+GATE: G_ELEMENT_SCROLL_TO (`element_scroll_to_and_by_move_the_container`) — six claims read the scroll
+position back: scrollTo(x,y), the {left,top} form, a partial options object (one axis), scrollBy
+(relative), behavior:'smooth' (correct final position), and a huge target clamping to the maximum.
+RED-proven: neutralizing the `__elProto.scrollTo` block makes the methods undefined and the script throws
+(→ "-"). manuk-page green; g_scroll/g_scroll_snap/g_scroll_snap_horizontal/g_scroll_anchor all still green.
+
+TICK SHAPE: capability (element.scrollTo/scrollBy/scroll; +1 gate). GATES +1.
+CONSTELLATION: element.scrollTo/scrollBy unknown→gated (G_ELEMENT_SCROLL_TO).
+WIKI: interaction-surface.md — "scrollTo/scrollBy reuse the scrollTop/scrollLeft setters (clamp + snap)".
+
+BLOCKER UPDATE (tick 431, 2026-07-23 ~01:10): tick 431 (element.scrollTo/scrollBy/scroll) is complete,
+green, RED-proven (its ratchet WALL passes at 62s, GATES +1, 6 scroll gates green), and staged at
+.git/tick431-ready.msg — BUT could not land after 3 tick.sh attempts, all blocked by the same
+environmental shell-timing flake (`tab::g_interact::tab_operations_stay_far_under_one_frame`, a
+relative per-tab-cost jitter guard) that now false-REDs nearly every verify under the observer's ~8.5h
+oracle crawl + 95% swap. tick.sh double-verifies (ratchet + final status), so each run needs TWO clean
+shell-test passes, which the degraded box rarely gives. This is a HARD, observer-owned landing block on
+ALL ticks, not a defect in 431 or 430 (both additive, RED-proven, standalone-green). Constitution Check
+#20 (tick 431) is written and STATUS updated. HOLDING 431 staged; it lands the moment the box is quiet
+(crawl finishes / swap cycled — observer infra). Session total this invocation: ticks 420-430 LANDED
+(eleven), + Constitution #19/#20, Self-Audit 425, Wall Audit #8, Surface Audit #16 — all cadence current;
+tick 431 staged-ready. The productive clean-bounded capability vein is now largely mined; remaining gaps
+(form.elements named access, custom-element reactions) are subsystems needing dedicated decomposition.

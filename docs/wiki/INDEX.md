@@ -477,6 +477,7 @@
   - L2058 · IME composition — CJK / accented text arrives as a burst, not a keystroke (G_IME_COMPOSITION)
   - L2097 · :active — the last dynamic pseudo-class, fed end-to-end (G_ACTIVE_PSEUDO)
   - L2127 · Drag-and-drop editor half (tick 346)
+  - L2139 · scrollTo/scrollBy reuse the scrollTop/scrollLeft setters (clamp + snap) (tick 431)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -896,4 +897,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-811 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+812 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -763,3 +763,53 @@ quiet window and lands, mark not retuned.
 remains the work list and the fidelity certificate remains the exit.
 
 **Next check due: tick 431.**
+
+## Check #20 — tick 431
+
+**Horizon:** Phase 0 — the FULL daily-driver checklist ("runs almost every website"), the v1 north
+star of CONSTITUTION.MD **Part VII**. **Gate:** the FIDELITY-SCORING-REDESIGN.md certificate (≥0.75
+structural/placement fidelity on ≥95% of the corpus + ≥0.70 per top-20 category), NOT a WPT
+percentage. Authoritative work list: PHASE0-BOUNDED-REMAINDER.md.
+
+**Gate or scoreboard?** Gate. Window 424-431 continued and then broadened the 420-427 vein: **probe a
+capability the map marks "works" (or untested) for a HIDDEN corruption / stub / wrong-storage / snapshot
+/ two-engines-disagree bug, RED-prove the exact silent-fail, fix it.** **424** TextDecoder honoured its
+label (windows-1252 + utf-16, distinct from the HTTP encoding_rs path), **425** parsed `<template>
+.content` held its children (the accessor read the wrong storage field), **426** `url.searchParams` went
+live (a dead snapshot silently fetched the original URL), **427** computed CSS custom properties reached
+getComputedStyle (design tokens), **428** surface audit #16 + Temporal measure-and-pin, **429** `:open`
+in the querySelector engine (the STYLE cascade already had it — two-engines split), **430** `event
+.getModifierState` (keyboard-shortcut libs), **431** `element.scrollTo`/`scrollBy` (programmatic scroll).
+Each fixed a VISIBLY-broken class per VII.1 — silent binary corruption, mojibake, a framework rendering
+nothing, an un-paginating URL, a blank theme, a dead shortcut, a no-op scroll — not a conformance edge.
+
+**Is the loop still pointed at the frontier?** Yes. These are app-web table stakes (uploads, image
+processing, theming, forms, disclosure widgets, shortcuts, scrolling), not the CSS-layout tail. The
+measure-first discipline (Process Rule 2) kept paying: broad behavioral probes found ~40 modern APIs
+ALREADY working (Temporal, the whole crypto/encoding/event surface) and isolated the ~11 real gaps to
+fix, so zero effort was spent rebuilding what worked. The clean-bounded vein is now largely MINED — the
+remaining probed gaps are subsystems (form.elements named access, custom-element reactions) that need a
+decompose-before-starting context, not an atomic tick. The marquee frontier is unchanged: the Tier-1
+JARRING subsystems (YouTube-plays media JOIN, contenteditable, software WebGL) per PHASE0-BOUNDED-REMAINDER.
+
+**Is the agentic surface (component #2) being served?** Held. The driving seams
+(dispatch_click/key/composition, set_active/focus, and now scrollTo which routes through the same
+PENDING_ELEM_SCROLLS host channel) are untouched/un-rotted; every fix lands page-observable with its gate.
+I3 served — the semantic surface (getComputedStyle custom props, the selector engine, the event surface)
+stayed in lockstep.
+
+**Any invariant bent?** No. Bar 0 held — every landed tick (424-430) additive and RED-proven, related
+regression suites green each time (blob/form/fetch/xhr, canvas, dom/html crates, url, event, scroll,
+css). I2 intact — no dependency forked; fixes are in our own shims/selector-engine/CSSOM plumbing against
+the specs' own algorithms; the `:open` cascade side was ALREADY Stylo's (we only taught the second
+engine). THE RATCHET honored — nothing traded. **The one honest scar:** the wall/landing tax turned
+severe this window — an observer oracle crawl (~8.5h, nice-19) + swap 90-99% degraded the box below the
+shell's `tab_operations_stay_far_under_one_frame` timing floor (a jitter-sensitive relative-cost guard),
+so it false-RED'd nearly every verify and t427/t430 each took ~5 quiet-window retries to land. Documented
+in JOURNAL + memory; harness/infra is observer-owned (no scripts/ edits, no swap-cycle). Not a regression
+— the mark was not retuned; the SAME tree lands at 57-73s on a quiet box.
+
+**PART VI / VII correction.** None. The four-component v1 scope is intact; PHASE0-BOUNDED-REMAINDER.md
+remains the work list and the fidelity certificate remains the exit.
+
+**Next check due: tick 439.**

@@ -3530,3 +3530,17 @@ maps the standard key names onto the boolean flags; a plain `Event`/`CustomEvent
 **The trap:** the flags (`e.ctrlKey`) worked, so direct reads passed while the spec accessor every
 library actually uses was missing — and a throw inside a keydown handler takes the entire keymap down,
 not just one shortcut.
+
+## element.scrollTo/scrollBy scroll the container, not just scrollTop= (tick 431)
+
+**The class of the web this unlocks:** every programmatic scroll — a "scroll to top" button, a chat pane
+pinning to the bottom (`el.scrollTo(0, el.scrollHeight)`), a virtualised list jumping to an index, a
+carousel's prev/next, `el.scrollTo({ top, behavior: 'smooth' })`. Assigning `el.scrollTop` worked, but
+the methods every framework and helper actually call were missing, so `el.scrollTo is not a function`
+threw and the control silently did nothing.
+**(1)** `scrollTo(x, y)` / `scrollTo({ left, top, behavior })` (and its `scroll()` alias) and the relative
+`scrollBy(...)` are the ergonomic scroll API. They should REUSE the `scrollTop`/`scrollLeft` setters so
+they inherit clamping and scroll-snap — reimplementing the scroll math in the method would drift.
+**The trap:** `scrollTop = n` passing makes scrolling look done, while the method form the ecosystem uses
+is absent — and a throw inside a click handler kills the whole interaction. And `behavior: 'smooth'` must
+be ACCEPTED (ignored is fine — jump to the correct position) not rejected, or the option throws.

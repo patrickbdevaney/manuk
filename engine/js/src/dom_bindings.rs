@@ -11442,6 +11442,36 @@ const WINDOW_PRELUDE: &str = r#"
         // element (the honest limit). What it does honestly is retain the captured pointer id per
         // element — so `hasPointerCapture(id)` reflects the truth and `got`/`lostpointercapture` fire —
         // which is what stops the throw and lets the drag handler set up and tear down correctly.
+        // `element.scrollTo(x, y)` / `scrollTo({left, top, behavior})` and the relative `scrollBy(...)`.
+        // Ubiquitous: a "scroll to top" button, a chat pane auto-scrolling to the bottom
+        // (`el.scrollTo(0, el.scrollHeight)`), a virtualised list jumping to an index, a carousel's
+        // prev/next. Absent, `el.scrollTo is not a function` threw and the control did nothing. These
+        // reuse the native `scrollLeft`/`scrollTop` setters, which already CLAMP to the scrollable range
+        // and SNAP to scroll-snap points, so scrollTo and a same-line read agree with Chrome. The
+        // `behavior: 'smooth'` option is accepted and ignored — we jump to the target, a conforming
+        // fallback for an engine with no compositor timeline (the position is correct, just not animated).
+        if (__elProto && typeof __elProto.scrollTo !== 'function') {
+            var __scrollArgs = function (a, b) {
+                // (x, y) number pair OR a { left, top } options object. Missing axis → undefined (the
+                // caller leaves that axis untouched).
+                if (a !== null && typeof a === 'object') {
+                    return { left: a.left, top: a.top };
+                }
+                return { left: a, top: b };
+            };
+            __elProto.scrollTo = function (a, b) {
+                var o = __scrollArgs(a, b);
+                if (o.left !== undefined) { this.scrollLeft = o.left; }
+                if (o.top !== undefined) { this.scrollTop = o.top; }
+            };
+            __elProto.scroll = __elProto.scrollTo; // `scroll()` is a legacy alias of `scrollTo()`.
+            __elProto.scrollBy = function (a, b) {
+                var o = __scrollArgs(a, b);
+                if (o.left !== undefined) { this.scrollLeft = this.scrollLeft + (o.left || 0); }
+                if (o.top !== undefined) { this.scrollTop = this.scrollTop + (o.top || 0); }
+            };
+        }
+
         if (__elProto && typeof __elProto.setPointerCapture !== 'function') {
             var __ptrCaptures = (typeof WeakMap === 'function') ? new WeakMap() : null;
             var __firePointerEvt = function (el, type, pointerId) {
