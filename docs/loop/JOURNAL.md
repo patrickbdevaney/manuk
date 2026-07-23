@@ -18344,3 +18344,36 @@ WIKI: interaction-surface.md — a disabled control is not a tab stop.
 NEXT VEIN NOTE: the set_focus focusability surface is now complete for the two non-focusable classes
 (inert + disabled). Remaining interaction edges are thinner (user-select selection geometry, unmodelled).
 The richer pivots remain the Tier-1 subsystems (media JOIN / contenteditable+IME) per PHASE0-BOUNDED-REMAINDER.
+
+## Tick 453 — `:disabled`/`:enabled` honour `<fieldset disabled>` inheritance, in BOTH engines (2026-07-23)
+
+VEIN: the "two-engines-disagree" + fieldset-inheritance thread that t452 opened. t452 taught the FOCUS
+path that a control inside `<fieldset disabled>` is disabled; this closes the matching gap in the SELECTOR
+engines so styling and querying agree.
+
+PROBED: both `:disabled` matchers checked the element's OWN `disabled` attribute only —
+`engine/css/src/lib.rs` `pseudo_matches` (the querySelector engine) and `engine/css/src/stylo_dom.rs`
+(the live Stylo cascade matcher). A control inside `<fieldset disabled>` (the idiomatic bulk-disable of a
+form section) was NOT returned by `querySelector(':disabled')` AND was NOT styled by `input:disabled {…}`
+— it rendered un-greyed. RED-proven below.
+
+FIX (capability — 2 files, 1 shared helper): new `pub(crate) fn is_disabled_control(dom, node)` in
+engine/css/src/lib.rs — a disableable form control (input/select/textarea/button/fieldset/optgroup/option)
+with its own `disabled` attr OR an ancestor `<fieldset disabled>`. Mirrors the focus path's
+`Page::is_disabled`, so cascade / querySelector / focusability now use the SAME rule. Wired into both:
+`Pseudo::Disabled`/`Pseudo::Enabled` (lib.rs) and `P::Disabled`/`P::Enabled` (stylo_dom.rs, via
+`crate::is_disabled_control`). (The first-`<legend>` exception is a niche edge left unmodelled, matching
+is_disabled.)
+
+GATE: G_DISABLED_PSEUDO (page, `disabled_pseudo_honours_fieldset_inheritance`) — tests BOTH engines:
+`querySelector(':disabled')` includes the fieldset-disabled + own-disabled controls not the enabled one;
+`:enabled` the inverse; the cascade `input:disabled{width:300px}` styles the fieldset-disabled control.
+RED-proven by reverting both matchers to own-attr-only (`:disabled` returned only ["own"]). Sibling gates
+green: manuk-css (27), g_disabled_focus, g_selector, g_active_pseudo, g_disabled_inert, g_open_pseudo.
+
+TICK SHAPE: capability (`:disabled`/`:enabled` fieldset inheritance in the cascade + querySelector; +1
+gate). GATES +1. CONSTELLATION: form-styling of bulk-disabled sections closed.
+WIKI: interaction-surface.md — :disabled follows <fieldset disabled> in both engines.
+NEXT VEIN NOTE: the fieldset-disabled inheritance now agrees across focus (t452), querySelector, and
+cascade (t453). The consistent rule could extend to `:read-only`/`:read-write` and `optgroup disabled →
+option` if a probe shows those matchers also own-attr-only. Richer pivots remain the Tier-1 subsystems.

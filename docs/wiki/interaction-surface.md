@@ -2260,3 +2260,18 @@ click/activation/label paths consulted it; only `set_focus` did not. The guard i
 `is_inert(n) || is_disabled(n)`. Gated by `G_DISABLED_FOCUS`: an enabled control focuses, a directly
 `disabled` one is refused, and a control inside `<fieldset disabled>` is refused too — RED-proven by
 removing the disabled clause. [[css-cascade]]
+
+## `:disabled`/`:enabled` follow `<fieldset disabled>` inheritance, in both engines (tick 453)
+
+A form control is `:disabled` when it has its own `disabled` attribute OR sits inside a
+`<fieldset disabled>` (the idiomatic bulk-disable of a form section). Both selector matchers checked only
+the element's own attribute: the querySelector engine (`pseudo_matches` in `engine/css/src/lib.rs`) and
+the live Stylo cascade matcher (`engine/css/src/stylo_dom.rs`). So a fieldset-disabled control was neither
+returned by `querySelector(':disabled')` nor styled by `input:disabled { … }` — it rendered un-greyed,
+the opposite of what the page meant. A single `is_disabled_control(dom, node)` (own attribute or an
+ancestor `<fieldset disabled>` — the same rule the focus path's `Page::is_disabled` uses) now backs both
+`:disabled`/`:enabled` in both engines, so the cascade, querySelector, and focusability agree. This is the
+recurring two-engines-disagree shape: the STYLE cascade and the querySelector engine are separate matchers,
+and a pseudo-class fixed in one lies in the other. Gated by `G_DISABLED_PSEUDO`, which asserts both the
+querySelector result sets and the cascade's applied width — RED-proven by reverting both matchers.
+[[css-cascade]]

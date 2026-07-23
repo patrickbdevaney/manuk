@@ -1338,6 +1338,39 @@ fn element_sibling_position(dom: &Dom, node: NodeId) -> (usize, usize) {
     (index.max(1), total.max(1))
 }
 
+/// Whether `node` is a form control that is *actually* disabled — by its own `disabled` attribute OR by
+/// an ancestor `<fieldset disabled>` (the idiomatic bulk-disable of a whole form section). This is what
+/// `:disabled` matches and the negation of what `:enabled` matches. The same rule the focus path uses
+/// (`Page::is_disabled`), so the live cascade, `querySelector`, and focusability all agree — an
+/// `input:disabled { opacity:.5 }` rule now greys out a control disabled via its fieldset, not just one
+/// with its own attribute. (The first-`<legend>` exception — controls in a disabled fieldset's first
+/// legend stay enabled — is a niche edge we do not model, matching `is_disabled`.)
+pub(crate) fn is_disabled_control(dom: &Dom, node: NodeId) -> bool {
+    let Some(el) = dom.element(node) else {
+        return false;
+    };
+    if !matches!(
+        el.name.as_str(),
+        "input" | "select" | "textarea" | "button" | "fieldset" | "optgroup" | "option"
+    ) {
+        return false;
+    }
+    if el.attr("disabled").is_some() {
+        return true;
+    }
+    let mut cur = dom.parent(node);
+    while let Some(n) = cur {
+        if dom
+            .element(n)
+            .is_some_and(|e| e.name == "fieldset" && e.attr("disabled").is_some())
+        {
+            return true;
+        }
+        cur = dom.parent(n);
+    }
+    false
+}
+
 fn pseudo_matches(p: &Pseudo, dom: &Dom, node: NodeId) -> bool {
     let el = match dom.element(node) {
         Some(e) => e,
@@ -1378,13 +1411,13 @@ fn pseudo_matches(p: &Pseudo, dom: &Dom, node: NodeId) -> bool {
             dom.is_element(c) || matches!(dom.data(c), NodeData::Text(t) if !t.trim().is_empty())
         }),
         Pseudo::Checked => el.attr("checked").is_some() || el.attr("selected").is_some(),
-        Pseudo::Disabled => el.attr("disabled").is_some(),
+        Pseudo::Disabled => is_disabled_control(dom, node),
         Pseudo::Open => el.attr("open").is_some(),
         Pseudo::Enabled => {
             matches!(
                 el.name.as_str(),
                 "input" | "button" | "select" | "textarea" | "option"
-            ) && el.attr("disabled").is_none()
+            ) && !is_disabled_control(dom, node)
         }
         Pseudo::Required => el.attr("required").is_some(),
         Pseudo::Muted => {

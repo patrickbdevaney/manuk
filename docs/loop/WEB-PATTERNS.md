@@ -3865,3 +3865,17 @@ idiom is handled for free.
 **The trap:** the click/activation path already refused disabled controls, which made it *look* handled —
 but focus is a separate sink, and a control you cannot click yet can Tab-focus is still broken. Each sink
 that grants interaction needs the focusability check.
+
+## Bulk-disabled form sections style correctly (tick 453)
+
+**The class of the web this unlocks (forms):** any form that disables a whole section with
+`<fieldset disabled>` — a checkout step, a settings panel gated behind a toggle, a wizard's future steps.
+The `input:disabled { opacity:.5 }` / greyed styling every design system ships depends on `:disabled`
+matching controls disabled *via their fieldset*, not just ones with their own attribute. Both matchers
+(the live Stylo cascade AND the querySelector engine) were own-attribute-only, so a bulk-disabled section
+rendered as if fully enabled and `querySelector(':disabled')` missed its controls.
+**(1)** One shared `is_disabled_control` (own attr or ancestor `<fieldset disabled>`) backs `:disabled`/
+`:enabled` in both engines.
+**(2)** Same rule as the focus path (`is_disabled`), so styling, querying, and focusability agree.
+**The trap:** it is the two-engines-disagree shape again — the cascade matcher and the querySelector
+engine are separate code, and fixing a pseudo-class in one leaves the other lying. Both had to change.

@@ -356,8 +356,14 @@ mod selector_impl {
                     "option" => has("selected"),
                     _ => false,
                 },
-                P::Disabled => is_form_control(tag) && has("disabled"),
-                P::Enabled => is_form_control(tag) && !has("disabled"),
+                // `:disabled` follows the control's *actual* disabledness — its own `disabled`
+                // attribute OR an ancestor `<fieldset disabled>` (bulk-disable) — so the cascade
+                // agrees with querySelector and the focus path. Was own-attribute-only, which left a
+                // fieldset-disabled control un-greyed by `input:disabled { … }`.
+                P::Disabled => crate::is_disabled_control(self.dom, self.node),
+                P::Enabled => {
+                    is_form_control(tag) && !crate::is_disabled_control(self.dom, self.node)
+                }
                 P::Required => is_form_control(tag) && has("required"),
                 P::Optional => is_form_control(tag) && !has("required"),
                 P::ReadOnly => has("readonly") || !is_editable(tag),
