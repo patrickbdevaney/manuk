@@ -3879,3 +3879,22 @@ rendered as if fully enabled and `querySelector(':disabled')` missed its control
 **(2)** Same rule as the focus path (`is_disabled`), so styling, querying, and focusability agree.
 **The trap:** it is the two-engines-disagree shape again — the cascade matcher and the querySelector
 engine are separate code, and fixing a pseudo-class in one leaves the other lying. Both had to change.
+
+## Editable vs. locked fields are queryable, not just styleable (tick 454)
+
+**The class of the web this unlocks (forms):** any form that reads mutability with a selector — a
+validation library calling `querySelectorAll('input:read-write')` to find the fields it should validate,
+a form-serializer skipping `:read-only` inputs, a design system's `input:read-only { background:#eee }`
+paired with JS that enumerates the same set. An `<input>`/`<textarea>` without a `readonly` attribute is
+`:read-write`; a readonly control — and every non-editable element — is `:read-only`. The live Stylo
+cascade already styled both, but the querySelector engine dropped them: `:read-only` was an unknown pseudo
+(the whole selector discarded) and `:read-write` never matched. So the CSS greyed the locked field while
+`querySelectorAll('input:read-write')` returned nothing — the script and the stylesheet disagreed about
+which fields are editable.
+**(1)** Two new `Pseudo` variants match in the querySelector engine, mirroring the cascade's rule exactly
+(own `readonly` attr + input/textarea tag).
+**(2)** `contenteditable` making an arbitrary element `:read-write` is unmodelled on BOTH sides, so the
+engines never diverge.
+**The trap:** the two-engines-disagree shape a third time (`:open` t429, `:disabled` t453, `:read-only`
+t454) — the cascade matcher and the querySelector engine are separate code; a pseudo-class working in one
+is not working in the browser.

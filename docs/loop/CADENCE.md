@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **235** | ticks 1–452 |
-| median tick cycle | **19m** | 234 intervals |
-| median, last 10 | **38m** | 10 intervals |
+| ticks landed | **236** | ticks 1–454 |
+| median tick cycle | **19m** | 235 intervals |
+| median, last 10 | **36m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.79** | 294.8h elapsed |
-| median verify wall | **60s** | 174 ticks |
-| wall trend | 39s → 72s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.80** | 295.4h elapsed |
+| median verify wall | **60s** | 175 ticks |
+| wall trend | 39s → 4m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **221**
+* **live gates**: 27 → **222**
 * **✅ rows in the capability ledger**: 144 → **328**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**135 of 235 ticks** (57%) moved a
+**136 of 236 ticks** (58%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **135** capability ticks, median cycle **19m**
-* median diff per tick: **+215 / −34** lines across 9 files
+* **136** capability ticks, median cycle **19m**
+* median diff per tick: **+216 / −34** lines across 9 files
 
 ## Every tick
 
@@ -332,5 +332,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **449** | 2026-07-23 10:27 | 61m | capability | 62s | +304/−40 | 218 | 81 | 56.0% · | pointer-events: none transparent to the AGENT's a11y hit-test (2026-07-23) |
 | **451** | 2026-07-23 10:52 | 25m | capability | 4m | +204/−34 | 219 | 81 | 56.0% · | the HTML `inert` attribute also blocks focus (2026-07-23) |
 | **452** | 2026-07-23 11:51 | 59m | capability | 72s | +240/−38 | 221 | 81 | 56.0% · | a `disabled` form control cannot receive focus (2026-07-23) |
+| **454** | 2026-07-23 12:26 | 36m | capability | 9m | +230/−35 | 222 | 81 | 56.0% · | `:read-only`/`:read-write` match in the querySelector engine (BOTH engines agree) (2026-07 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

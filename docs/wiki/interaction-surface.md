@@ -2275,3 +2275,18 @@ recurring two-engines-disagree shape: the STYLE cascade and the querySelector en
 and a pseudo-class fixed in one lies in the other. Gated by `G_DISABLED_PSEUDO`, which asserts both the
 querySelector result sets and the cascade's applied width — RED-proven by reverting both matchers.
 [[css-cascade]]
+
+## `:read-only`/`:read-write` agree across cascade + querySelector (tick 454)
+
+The mutability pseudo-classes, and the same two-engines-disagree shape as `:disabled` (t453). An
+`<input>`/`<textarea>` WITHOUT a `readonly` attribute is `:read-write`; a readonly control — and every
+non-editable element (a `<p>`, a `<div>`) — is `:read-only`. The live Stylo cascade already resolved both
+(`engine/css/src/stylo_dom.rs`, `P::ReadOnly`/`P::ReadWrite`), so `input:read-only { … }` rendered — but
+the querySelector engine (`pseudo_matches` in `engine/css/src/lib.rs`) dropped them: `:read-only` fell to
+the unknown-pseudo `_ => return None` (the whole selector discarded), and `:read-write` was
+`Pseudo::NeverStatic` (never matched). So `querySelectorAll('input:read-write')` (enumerate editable
+fields) returned nothing while the CSS styled them correctly. Two new `Pseudo` variants now mirror
+`stylo_dom` exactly — `:read-only` = a `readonly` input/textarea OR any non-editable element; `:read-write`
+= an input/textarea without `readonly` — so cascade and querySelector agree. The `contenteditable`-makes-
+`:read-write` edge is unmodelled on BOTH sides (kept identical so the engines never diverge). Gated by
+`G_READONLY_PSEUDO`, RED-proven by reverting `parse_pseudo`. [[css-cascade]]

@@ -18377,3 +18377,42 @@ WIKI: interaction-surface.md — :disabled follows <fieldset disabled> in both e
 NEXT VEIN NOTE: the fieldset-disabled inheritance now agrees across focus (t452), querySelector, and
 cascade (t453). The consistent rule could extend to `:read-only`/`:read-write` and `optgroup disabled →
 option` if a probe shows those matchers also own-attr-only. Richer pivots remain the Tier-1 subsystems.
+
+## Tick 454 — `:read-only`/`:read-write` match in the querySelector engine (BOTH engines agree) (2026-07-23)
+
+VEIN: the two-engines-disagree + form-mutability thread. t453 closed `:disabled` fieldset-inheritance
+across both selector engines; this closes the matching `:read-only`/`:read-write` split — flagged as the
+next-vein extension in t453's own NEXT VEIN NOTE, and picked because the constellation still carried
+`user-select`/mutability styling as `?`. RE-PROBED first (Process Rule 2): the live Stylo CASCADE already
+resolves both (`stylo_dom.rs` `P::ReadOnly`/`P::ReadWrite`), so `input:read-only { … }` renders — but the
+querySelector engine did NOT.
+
+PROBED (RED-proven): in `engine/css/src/lib.rs` `parse_pseudo`, `:read-only` fell through to
+`_ => return None` (the WHOLE selector discarded → `querySelector(':read-only')` matched nothing), and
+`:read-write` was mapped to `Pseudo::NeverStatic` (never matched). So a form library doing
+`querySelectorAll('input:read-write')` (enumerate editable fields) or `':read-only'` (find locked ones)
+got the wrong answer while the CSS styled them correctly — the exact class t453 fixed for `:disabled`.
+
+FIX (capability — 1 file): two new `Pseudo` variants `ReadOnly`/`ReadWrite`; `parse_pseudo` maps
+`read-only`/`read-write` to them (removed `read-write` from the NeverStatic list); `pseudo_matches` arms
+mirror `stylo_dom` EXACTLY — `:read-only` = a `readonly` input/textarea OR any non-editable element;
+`:read-write` = an input/textarea without `readonly`. The `contenteditable`-makes-`:read-write` edge is
+left unmodelled ON BOTH SIDES (same as stylo_dom), so cascade and querySelector never disagree. The
+enum's `pseudo_matches` is exhaustive (no catch-all), so the compiler enforced the new arms.
+
+GATE: G_READONLY_PSEUDO (page, `readonly_pseudo_matches_in_query_selector`) — `:read-write` matches the
+plain input + textarea, not the readonly input or the `<p>`; `:read-only` matches the readonly input + the
+`<p>`, not the editable ones; `input:read-write` is exactly the one editable input; plus the cascade
+`input:read-only{width:300px}` styles the readonly input not the editable one (engines agree). RED-proven
+by reverting `parse_pseudo` → `rw`/`ro` collapse while the cascade `styled` claim stays green.
+
+TICK SHAPE: capability (`:read-only`/`:read-write` in querySelector, agreeing with the cascade; +1 gate).
+GATES +1. CONSTELLATION: form-mutability querying closed; pins the mutability-pseudo half of the
+`user-select`/form-state `?`.
+WIKI: interaction-surface.md — :read-only/:read-write agree across cascade + querySelector.
+NEXT VEIN NOTE: the two-engines-disagree selector thread (`:open` t429, `:disabled` t453, `:read-only`
+t454) is now essentially closed for the static-resolvable form pseudos. `user-select` the PROPERTY remains
+a genuine gap but is NOT atomic: crates.io Stylo gates it behind `servo_pref="layout.unimplemented"`
+(~65 props), and `./stylo` is a reference checkout nothing builds — so it needs either a blast-radius pref
+flip or a manuk-side supplement, weighed in a fresh context. The richer pivots remain the Tier-1
+subsystems (media JOIN / contenteditable+IME) per PHASE0-BOUNDED-REMAINDER.

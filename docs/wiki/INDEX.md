@@ -500,6 +500,7 @@
   - L2238 · The HTML inert attribute also blocks focus (tick 451)
   - L2253 · A disabled form control cannot receive focus (tick 452)
   - L2264 · :disabled/:enabled follow <fieldset disabled> inheritance, in both engines (tick 453)
+  - L2279 · :read-only/:read-write agree across cascade + querySelector (tick 454)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -919,4 +920,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-834 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+835 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

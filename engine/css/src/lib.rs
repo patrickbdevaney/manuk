@@ -1197,6 +1197,17 @@ enum Pseudo {
     Disabled,
     Enabled,
     Required,
+    /// `:read-only` / `:read-write` — the mutability pseudo-classes. An `<input>`/`<textarea>` WITHOUT
+    /// a `readonly` attribute is `:read-write`; everything else (a readonly control, and every
+    /// non-editable element like a `<p>` or `<div>`) is `:read-only`. The shipping STYLE cascade already
+    /// resolves both (Stylo's `NonTSPseudoClass::ReadOnly`/`ReadWrite`), so `input:read-only { … }`
+    /// renders; this makes the querySelector/`matches` engine agree, so a form library that does
+    /// `querySelectorAll('input:read-write')` finds the editable fields. The rule mirrors `stylo_dom`
+    /// exactly (own `readonly` attribute + input/textarea tag). `contenteditable` making an arbitrary
+    /// element `:read-write` is not tracked in either engine — the one unmodelled edge, kept identical
+    /// on both sides so cascade and querySelector never disagree.
+    ReadOnly,
+    ReadWrite,
     /// `:muted` — a media element (`<video>`/`<audio>`) that is muted. We match the `muted` content
     /// attribute (initial mute state); the live `.muted` IDL property is not tracked here, exactly as
     /// [`Pseudo::Checked`] matches the `checked` attribute and not the runtime property. querySelector
@@ -1420,6 +1431,14 @@ fn pseudo_matches(p: &Pseudo, dom: &Dom, node: NodeId) -> bool {
             ) && !is_disabled_control(dom, node)
         }
         Pseudo::Required => el.attr("required").is_some(),
+        // Mirror `stylo_dom.rs` so the two engines agree: `:read-only` is a readonly input/textarea OR
+        // any non-editable element; `:read-write` is an input/textarea without `readonly`.
+        Pseudo::ReadOnly => {
+            el.attr("readonly").is_some() || !matches!(el.name.as_str(), "input" | "textarea")
+        }
+        Pseudo::ReadWrite => {
+            el.attr("readonly").is_none() && matches!(el.name.as_str(), "input" | "textarea")
+        }
         Pseudo::Muted => {
             matches!(el.name.as_str(), "video" | "audio") && el.attr("muted").is_some()
         }
@@ -2644,6 +2663,8 @@ fn parse_pseudo(name: &str, arg: Option<&str>) -> Option<Pseudo> {
         "open" => Pseudo::Open,
         "enabled" => Pseudo::Enabled,
         "required" => Pseudo::Required,
+        "read-only" => Pseudo::ReadOnly,
+        "read-write" => Pseudo::ReadWrite,
         "muted" => Pseudo::Muted,
         "link" | "any-link" => Pseudo::Link,
         // Pseudo-ELEMENTS. `::before`/`::after` are legal with one colon too (CSS2 syntax), and
@@ -2653,7 +2674,7 @@ fn parse_pseudo(name: &str, arg: Option<&str>) -> Option<Pseudo> {
         // Dynamic / state pseudos we can't evaluate in a static render → never match, so a
         // rule gated on them just doesn't apply (rather than dropping the whole rule).
         "hover" | "focus" | "active" | "visited" | "target" | "focus-within" | "focus-visible"
-        | "read-write" | "placeholder-shown" | "autofill" => Pseudo::NeverStatic,
+        | "placeholder-shown" | "autofill" => Pseudo::NeverStatic,
         "nth-child" => {
             let (a, b) = parse_nth(arg?)?;
             Pseudo::NthChild(a, b)
