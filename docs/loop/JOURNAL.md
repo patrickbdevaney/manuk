@@ -18124,3 +18124,37 @@ TICK SHAPE: capability (datetime-local + week valueAsNumber/valueAsDate get+set,
 GATES +1. CONSTELLATION: datetime-local/week typed values unknown→gated (G_DATETIME_WEEK_VALUE). This CLOSES
 the typed-input value surface (number/range/date/month/time/datetime-local/week all covered).
 WIKI: dom-semantics.md — datetime-local + week typed values (UTC / ISO-8601 week arithmetic).
+
+## Tick 447 — <a>/<area> URL-decomposition setters (2026-07-23)
+
+HYPOTHESIS (the write-side of a surface whose read-side has long worked): the anchor URL getters
+(a.protocol/hostname/port/host/pathname/search/hash/origin) work, but a probe found every SETTER a silent
+no-op — `link.search='?z=9'`, `a.hash='#top'`, `a.pathname=`, `a.hostname=`, `a.protocol=`, `a.port=` all
+left `a.href` unchanged. So every analytics tag that appends a UTM param via `link.search = …` and every
+in-page nav that does `a.hash = '#' + id` silently changed nothing (dead-setter class). RED probe: all six
+setters no-op; `a.search='q=1'` then read back stayed `?x=1`.
+
+FIX (capability, engine/js/src/dom_bindings.rs): the URL-decomposition props were registered with `None`
+setters. Added `anchor_url_set` + `apply_url_part`: the assignment re-parses the element's resolved href
+(DOC_URL base + the real `url` crate, same parser the net stack uses), mutates the one component
+(set_scheme/set_host/set_port/set_path/set_query/set_fragment), and writes the re-serialised URL back to the
+`href` attribute — so the getter and any later navigation see it. A `?`-less/`#`-less value is normalised;
+`host` splits a trailing numeric port. Tag-guarded to `<a>`/`<area>` so a plain element can never grow a
+spurious href; `origin` stays read-only.
+
+GATE: G_ANCHOR_URL_SETTERS (`anchor_url_component_setters`) — 8 claims: search/hash/pathname/hostname/
+protocol/port each rewrite only their component of href, a ?-less search normalises to `?q=1` on read-back,
+and the setter works on `<area>`. RED-proven (probe: all setters no-op). manuk-page green; g_document_location
+/ g_url_searchparams_live / g_urlsearchparams_complete / g_urlpattern / g_globals all still green (no
+regression on the URL path).
+
+RE-PROBED WORKING (stale-pessimistic, no tick): dataset/DOMStringMap, classList (toggle-force/replace),
+insertAdjacentHTML/Element/Text, before/after/replaceWith/prepend/append/replaceChildren, toggleAttribute/
+getAttributeNames/hasAttributes, closest/matches, cloneNode(deep), splitText/wholeText/normalize, the full
+Intl surface (NumberFormat/DateTimeFormat/RelativeTimeFormat/Collator/PluralRules/ListFormat/Segmenter),
+URL/URLSearchParams, CSS.supports, matchMedia, and every anchor GETTER — all already correct.
+
+TICK SHAPE: capability (a/area URL-component setters re-serialise href via the url crate; +1 gate). GATES +1.
+Also: Constitution Check #22 (tick 447; cadence) + Wall-time Audit #9 (tick 446; wall lean at 60s, no trim).
+CONSTELLATION: anchor URL-decomposition setters unknown→gated (G_ANCHOR_URL_SETTERS).
+WIKI: dom-semantics.md — <a>/<area> URL-decomposition setters (re-serialise href via the url crate).

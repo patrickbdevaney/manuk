@@ -867,3 +867,55 @@ above: consider a Tier-1 JARRING subsystem over further DOM-collection follow-on
 given most of what it holds.
 
 **Next check due: tick 447.**
+
+## Check #22 — tick 447
+
+**Horizon:** Phase 0 — daily-driver rendering parity + the agentic surface (CONSTITUTION.MD **Part VII**,
+components 1 & 2: "reliably renders and runs the representative real internet," plus an agent driving the
+DOM/a11y tree as first-class queryable+actuable state). **Gate:** the FIDELITY-SCORING-REDESIGN.md
+certificate (≥0.75 placement fidelity on ≥95% of the corpus + ≥0.70 per top-20 category), NOT a WPT
+percentage. Work list: PHASE0-BOUNDED-REMAINDER.md.
+
+**Gate or scoreboard?** Gate. Window 440-447 continued to close **the JS-facing read/write value surface of
+the DOM that every non-framework page and hand-written handler depends on** — the same VII.1 "visibly-broken
+class" discipline: **440** textarea.value, **441** select.length, **442** valueAsNumber/stepUp/stepDown,
+**443** valueAsDate for date/month/time, **444** progress.position + output.value, **445** `.text` for
+a/script/title, **446** datetime-local + week typed values (closing the typed-input surface), **447**
+`<a>`/`<area>` URL-decomposition SETTERS (`link.search=`/`a.hash=` were silent no-ops — the canonical
+analytics-tag and in-page-nav idioms changed nothing). Each RED-proved a silent-fail/dead-setter before
+touching code; each is app-web table stakes, not the CSS-layout tail.
+
+**Is the loop still pointed at the frontier?** Yes — but Check #21's caveat is now firm and must steer the
+NEXT context. The bounded "silent-fail on a near-done value/URL accessor" vein has been mined hard for ~15
+ticks (432-447) and is genuinely thinning: t446/t447 were the last two documented follow-ons (the typed-input
+tail and the anchor write-side). The measure-first re-probe kept catching stale-pessimism — this window alone
+found dataset, classList variants, insertAdjacent*/before/after/replaceWith/prepend/append/replaceChildren,
+toggleAttribute/getAttributeNames, closest/matches, splitText/wholeText, the FULL Intl surface, URL/
+URLSearchParams, and every anchor GETTER **already working** — so real effort went only to genuine gaps. That
+same probe density is now the signal the vein is near-exhausted: four consecutive probe batches this session
+returned all-green before one (anchor setters) hit RED. **The steer for the next context is unchanged from #21
+and now more urgent: weigh a Tier-1 JARRING subsystem (media playback JOIN → YouTube plays / contenteditable+
+IME / software-WebGL) or the FIDELITY-INSTRUMENT REBUILD (the actual exit gate, agent-editable manuk-wpt Rust)
+over yet another bounded value-accessor follow-on.** The bounded vein still has a few teeth (custom-element
+reactions is L-sized, not atomic) but the marginal site-coverage per tick is falling.
+
+**Is the agentic surface (component #2) served?** Directly. `a.search=`/`a.hash=`/`a.pathname=` ARE how an
+agent (or the page's own script) rewrites a link's target before following it — queryable AND actuable URL
+state, landing page-observable in lockstep with its gate (I3 held). datetime-local/week valueAsNumber is the
+same for typed form state.
+
+**Any invariant bent?** No. Bar 0 held — every tick 440-447 additive and RED-proven, sibling suites green each
+time. I2 intact (our own shims against the specs' own algorithms + the real `url` crate for anchor setters —
+no forked dependency). THE RATCHET honored — the anchor setter is tag-guarded to `<a>`/`<area>` so it can
+never grow a spurious `href` on a plain element (a must-not-regress written into the fix). **The one honest
+scar, unchanged:** the flaky shell timing gates (affordance/G_TEARDOWN/G_RUNTIME_COUNT/G_INTERACT) still
+false-RED under the observer's concurrent oracle load + swap-98%; t446 took 3 verify retries to catch a quiet
+slot. The mark is NOT retuned — the same tree lands at 60s warm. Harness/infra is observer-owned (no scripts/
+edits).
+
+**PART VI / VII correction.** None to the four-component v1 scope. PHASE0-BOUNDED-REMAINDER.md remains the
+work list; the fidelity certificate remains the exit. The correction that IS due is a loop-direction one,
+recorded above: the bounded value-accessor vein has paid out most of what it holds and the next context should
+pivot to a Tier-1 subsystem or the fidelity instrument.
+
+**Next check due: tick 455.**

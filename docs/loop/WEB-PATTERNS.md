@@ -3769,3 +3769,16 @@ Jan 4), so `2020-W03` ↔ Monday 2020-01-13 round-trips regardless of host timez
 **The trap:** these were the two epoch-arithmetic follow-ons ticks 442/443 explicitly left unbuilt — a typed
 surface that looks complete (number/range/date/month/time all work) but silently drops the two calendar
 types most forms use for appointments.
+
+## <a>/<area> URL-decomposition setters (tick 447)
+
+**The class of the web this unlocks:** analytics/consent tags and SPA navigation code that mutate a link's
+target in place — `link.search = '?utm_source=x'`, `a.hash = '#' + sectionId`, `a.pathname = newPath`,
+`a.hostname = cdnHost`. Reading these components already worked; writing them was a silent no-op, so the
+UTM param never attached and the in-page anchor never moved.
+**(1)** Each setter re-serialises only its own component of `href` via the real `url` crate (the parser the
+net stack uses), so the getter and any subsequent navigation see the change.
+**(2)** Works on `<area>` too; `origin` stays read-only; the write is tag-guarded so a plain element never
+grows a spurious `href`.
+**The trap:** the read-side working made this look done — a getter that returns the right `search` while the
+matching setter throws the value away is the dead-setter class (cf. textarea.value t440, output.value t444).

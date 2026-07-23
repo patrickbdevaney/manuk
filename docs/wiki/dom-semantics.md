@@ -1375,3 +1375,17 @@ starts the ISO week, `valueAsDate` is that Monday as a `Date`, and the setters r
 (weeks start Monday; week 1 holds the year's first Thursday / Jan 4) — `isoWeekStartMs(y,w)` for the forward
 direction, `isoWeekOf(date)` for the reverse. All UTC, so a round-trip is host-timezone-independent. Gate
 `G_DATETIME_WEEK_VALUE`. This completes the typed-input value surface begun at ticks 442/443.
+
+## <a>/<area> URL-decomposition setters (tick 447)
+
+The write-side of the URL-decomposition IDL. The getters (`a.protocol`/`hostname`/`port`/`host`/`pathname`/
+`search`/`hash`/`origin`) had worked since the mdbook TOC fix, but every SETTER was registered with a `None`
+setter in `dom_bindings.rs` — a silent no-op. So `link.search = '?utm=x'` (the canonical analytics-tag idiom)
+and `a.hash = '#' + id` (in-page nav) changed nothing and `a.href` never moved. Added `anchor_url_set` +
+`apply_url_part`: the assignment re-parses the element's resolved href (DOC_URL base joined via the real `url`
+crate — the same parser the network stack uses, so it can't disagree with what gets fetched), mutates the one
+component (`set_scheme`/`set_host`/`set_port`/`set_path`/`set_query`/`set_fragment`), and writes the
+re-serialised URL back to the `href` attribute. A `?`-less value to `search` and a `#`-less value to `hash`
+are normalised; `host` splits a trailing numeric port into hostname+port. Tag-guarded to `<a>`/`<area>` so a
+plain element can never grow a spurious `href`; `origin` stays read-only (no setter). Gate
+`G_ANCHOR_URL_SETTERS`.

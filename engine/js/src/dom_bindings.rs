@@ -1969,13 +1969,13 @@ unsafe fn define_members(
         prop_guarded!(prop, c"htmlFor", el_get_html_for, Some(el_set_html_for));
         // CSSOM + the DOM ergonomics every framework and hand-written handler depends on.
         // URL decomposition — a link is the web's canonical URL object.
-        prop_guarded!(prop, c"protocol", el_get_protocol, None);
-        prop_guarded!(prop, c"hostname", el_get_hostname, None);
-        prop_guarded!(prop, c"port", el_get_port, None);
-        prop_guarded!(prop, c"host", el_get_host, None);
-        prop_guarded!(prop, c"pathname", el_get_pathname, None);
-        prop_guarded!(prop, c"search", el_get_search, None);
-        prop_guarded!(prop, c"hash", el_get_hash, None);
+        prop_guarded!(prop, c"protocol", el_get_protocol, Some(el_set_protocol));
+        prop_guarded!(prop, c"hostname", el_get_hostname, Some(el_set_hostname));
+        prop_guarded!(prop, c"port", el_get_port, Some(el_set_port));
+        prop_guarded!(prop, c"host", el_get_host, Some(el_set_host));
+        prop_guarded!(prop, c"pathname", el_get_pathname, Some(el_set_pathname));
+        prop_guarded!(prop, c"search", el_get_search, Some(el_set_search));
+        prop_guarded!(prop, c"hash", el_get_hash, Some(el_set_hash));
         prop_guarded!(prop, c"origin", el_get_origin, None);
         // Element metrics.
         prop_guarded!(prop, c"offsetLeft", el_get_offset_left, None);
@@ -7429,6 +7429,105 @@ url_part!(el_get_pathname, "pathname");
 url_part!(el_get_search, "search");
 url_part!(el_get_hash, "hash");
 url_part!(el_get_origin, "origin");
+
+/// The **write** side of the URL decomposition IDL — `a.search = '?q=1'`, `a.hash = '#top'`,
+/// `a.pathname = '/x'`, `a.hostname`/`a.host`/`a.port`/`a.protocol`. These were all no-ops, so every
+/// analytics tag that appends a UTM param via `link.search = …`, and every in-page nav that does
+/// `a.hash = '#' + id`, silently changed nothing. The assignment re-parses the element's resolved
+/// href, mutates the one component with the same `url` crate the network stack uses, and writes the
+/// re-serialised URL back to the `href` attribute — so the getter (and any subsequent navigation)
+/// sees the change. Restricted to `<a>`/`<area>` (per spec these IDL attrs live only there); `origin`
+/// stays read-only.
+fn apply_url_part(u: &mut url::Url, part: &str, val: &str) -> bool {
+    match part {
+        "protocol" => {
+            let scheme = val.strip_suffix(':').unwrap_or(val);
+            u.set_scheme(scheme).is_ok()
+        }
+        "hostname" => u.set_host(Some(val)).is_ok(),
+        "host" => {
+            // host = hostname[:port]. `set_host` takes only the hostname, so split a trailing numeric port.
+            let (h, p) = match val.rsplit_once(':') {
+                Some((h, p)) if !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()) => {
+                    (h, Some(p))
+                }
+                _ => (val, None),
+            };
+            if u.set_host(Some(h)).is_err() {
+                return false;
+            }
+            if let Some(ps) = p {
+                if let Ok(pn) = ps.parse::<u16>() {
+                    let _ = u.set_port(Some(pn));
+                }
+            }
+            true
+        }
+        "port" => {
+            if val.is_empty() {
+                u.set_port(None).is_ok()
+            } else {
+                match val.parse::<u16>() {
+                    Ok(pn) => u.set_port(Some(pn)).is_ok(),
+                    Err(_) => false,
+                }
+            }
+        }
+        "pathname" => {
+            u.set_path(val);
+            true
+        }
+        "search" => {
+            let q = val.strip_prefix('?').unwrap_or(val);
+            u.set_query(if q.is_empty() { None } else { Some(q) });
+            true
+        }
+        "hash" => {
+            let f = val.strip_prefix('#').unwrap_or(val);
+            u.set_fragment(if f.is_empty() { None } else { Some(f) });
+            true
+        }
+        _ => false,
+    }
+}
+unsafe fn anchor_url_set(cx: *mut RawJSContext, vp: *mut Value, argc: u32, part: &str) -> bool {
+    let val = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    if let Some((dom, node)) = this_node(vp) {
+        // Only anchors/areas carry the URL-decomposition IDL; never grow an `href` on a plain element.
+        if matches!((*dom).tag_name(node), Some("a") | Some("area")) {
+            let raw = (*dom)
+                .element(node)
+                .and_then(|e| e.attr("href"))
+                .unwrap_or("")
+                .to_string();
+            let base = DOC_URL.with(|u| u.borrow().clone());
+            let parsed = url::Url::parse(&base)
+                .and_then(|b| b.join(&raw))
+                .or_else(|_| url::Url::parse(&raw));
+            if let Ok(mut u) = parsed {
+                if apply_url_part(&mut u, part, &val) {
+                    (*dom).set_attr(node, "href", u.to_string());
+                }
+            }
+        }
+    }
+    *vp = UndefinedValue();
+    true
+}
+macro_rules! url_part_set {
+    ($f:ident, $p:literal) => {
+        unsafe extern "C" fn $f(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+            anchor_url_set(cx, vp, argc, $p)
+        }
+    };
+}
+url_part_set!(el_set_protocol, "protocol");
+url_part_set!(el_set_hostname, "hostname");
+url_part_set!(el_set_port, "port");
+url_part_set!(el_set_host, "host");
+url_part_set!(el_set_pathname, "pathname");
+url_part_set!(el_set_search, "search");
+url_part_set!(el_set_hash, "hash");
 
 /// CSSOM-View **`offsetParent`**: the ancestor `offsetTop`/`offsetLeft` are measured against. This
 /// is the fact those two properties are *relative to*, and without it they are meaningless — every
