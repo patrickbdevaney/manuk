@@ -209,3 +209,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 416	6ef0b99	1784765884	2026-07-22T20:18:04-04:00	3199	capability	71	10	330	35	187	81	3896	6960	0	328	31	text-indent: apply the first-line inline-start indent (image-replacement + prose) (2026-07-22)
 418	718c651	1784767420	2026-07-22T20:43:40-04:00	1536	measurement	55	6	78	33	187	81	3896	6960	0	328	31	Intl: measure-and-pin the i18n formatting capability (2026-07-22)
 419	a644209	1784768495	2026-07-22T21:01:35-04:00	1075	measurement	66	10	266	45	188	81	3896	6960	0	328	31	Element.checkVisibility(): measure-and-pin (2026-07-22)
+421	6a1a7b9	1784769996	2026-07-22T21:26:36-04:00	1501	capability	61	10	221	35	189	81	3896	6960	0	328	31	structuredClone: preserve BINARY types, not degrade them (2026-07-22)

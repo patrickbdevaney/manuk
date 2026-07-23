@@ -11885,6 +11885,25 @@ const WINDOW_PRELUDE: &str = r#"
                     else if (x instanceof Date) { out = new Date(x.getTime()); seen.set(x, out); }
                     else if (x instanceof Map) { out = new Map(); seen.set(x, out); x.forEach(function (val, k) { out.set(walk(k), walk(val)); }); }
                     else if (x instanceof Set) { out = new Set(); seen.set(x, out); x.forEach(function (val) { out.add(walk(val)); }); }
+                    // BINARY DATA must survive the clone with its TYPE, not degrade to a plain object.
+                    // A Uint8Array (or any typed-array view, DataView, or ArrayBuffer) falling into the
+                    // object branch below comes back as `{0:.., 1:.., length:..}` — the bytes look present
+                    // but every byte-oriented consumer (a WASM loader, a crypto call, `postMessage` of a
+                    // transferable, an IndexedDB write) reads garbage, silently. So clone the buffer and
+                    // re-view it the same way. The `seen` map keyed on the ArrayBuffer preserves the case
+                    // two views SHARE one buffer: both re-view the single cloned buffer, as the spec requires.
+                    else if (x instanceof ArrayBuffer) { out = x.slice(0); seen.set(x, out); }
+                    else if (ArrayBuffer.isView(x) && x.buffer instanceof ArrayBuffer) {
+                        var buf = walk(x.buffer);
+                        // Typed arrays take an element COUNT (`x.length`); a DataView takes a byte length.
+                        out = (typeof x.length === 'number' && x.BYTES_PER_ELEMENT)
+                            ? new x.constructor(buf, x.byteOffset, x.length)
+                            : new x.constructor(buf, x.byteOffset, x.byteLength);
+                        seen.set(x, out);
+                    }
+                    // A RegExp round-trips as source + flags — a plain-object copy loses both the pattern
+                    // and `lastIndex`-bearing type, so `.test()` on the clone throws "not a function".
+                    else if (x instanceof RegExp) { out = new RegExp(x.source, x.flags); seen.set(x, out); }
                     else { out = {}; seen.set(x, out); for (var k in x) if (Object.prototype.hasOwnProperty.call(x, k)) out[k] = walk(x[k]); }
                     return out;
                 };

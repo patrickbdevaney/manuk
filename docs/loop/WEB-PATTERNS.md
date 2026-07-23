@@ -3400,3 +3400,18 @@ point — the caller must not have to re-join `getAll` against `getAllKeys`.
 **The trap:** a `getAll` stand-in wearing the `getAllRecords` name passes every store-side probe
 (where `key === primaryKey` anyway) and only lies on an INDEX, where `key !== primaryKey` — so the
 gate proves the split on an index, not the easy store case.
+
+## structuredClone preserves binary types, or the copy is silent corruption (tick 421)
+
+**The class of the web this unlocks:** anything that deep-copies or messages BINARY data — a Web Worker
+receiving a Uint8Array of decoded audio/image bytes over postMessage (Manuk routes messaging through the
+same shim), a state library structured-cloning a store that holds an ArrayBuffer, a WASM host copying a
+typed-array view, a crypto.subtle caller. The old shim cloned arrays/Date/Map/Set/cycles but degraded a
+typed array to a plain `{0:.., 1:.., length:..}` object — the bytes were present but the TYPE was gone,
+so `clone instanceof Uint8Array` was false and every byte read was garbage.
+**(1)** A structured clone is TYPE-preserving: a Uint8Array clones to a Uint8Array, an ArrayBuffer to an
+INDEPENDENT ArrayBuffer, a DataView to a DataView, a RegExp to a RegExp — and two views SHARING one
+buffer clone to two views over ONE cloned buffer (buffer identity survives).
+**The trap:** a typed array is `typeof x === 'object'` and not an Array/Date/Map/Set, so the generic
+object-copy branch silently swallows it — the copy has the right keys and the wrong type, which is the
+one failure mode worse than a throw because it looks like it worked.

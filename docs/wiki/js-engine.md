@@ -1067,3 +1067,23 @@ run_one_script carries the NodeId; all three execution loops (blocking, deferred
 run_scripts) participate. G_CURRENT_SCRIPT asserts per-script identity (each of two scripts
 sees ITSELF), attribute readability (okta's .hasAttribute call), and module-null. Third named
 error from the t401 instrument converted to a capability.
+
+## structuredClone preserves binary types — the plain-object degrade is silent corruption (tick 421)
+
+`structuredClone` is a host shim (`g.structuredClone`, dom_bindings.rs), not a SpiderMonkey built-in,
+and `postMessage` serializes through it (event_loop.rs). It walks the graph with a `seen` map so cycles
+are legal (unlike JSON), and clones arrays, `Date`, `Map`, `Set` and plain objects. The gap it closed
+at tick 421: **binary data.** A typed array is `typeof === 'object'` and not any of those, so it fell
+into the generic object-copy branch and returned `{0:.., 1:.., length:..}` — right keys, wrong type,
+zero errors. Every byte-oriented consumer (WASM loader, `crypto.subtle`, a `postMessage`d transferable)
+then read garbage.
+
+The fix adds, before the object fallback: `ArrayBuffer` → `slice(0)` (an independent copy); any
+`ArrayBuffer.isView` (typed array or DataView) → clone the backing buffer **through the same `walk`**
+and re-view it (`new x.constructor(buf, byteOffset, len)`), so two views SHARING one buffer clone to two
+views over ONE buffer — the `seen` map keyed on the ArrayBuffer is what preserves that identity, exactly
+as the structured-clone spec requires; and `RegExp` → `new RegExp(source, flags)`. Typed arrays take an
+element COUNT (`x.length`), a DataView a byte length — distinguished by `BYTES_PER_ELEMENT`.
+**Honest limit:** `Blob`/`File`/`SharedArrayBuffer` are still not cloned (SAB is cross-origin-isolated
+only; Blob/File match the IndexedDB encoding's known gap), and transfer-list transfer (vs copy) is not
+modelled.

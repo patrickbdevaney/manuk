@@ -17276,3 +17276,44 @@ TICK SHAPE: capability (IndexedDB getAllRecords on store+index; +1 gate). GATES 
 CONSTELLATION: IndexedDB getAllRecords() unknown→works (G_INDEXEDDB_GETALLRECORDS).
 WIKI: storage.md — "`getAllRecords(options)` returns full records in one call, on the store AND an
 index" (the key==primaryKey vs key!=primaryKey split; reuses the existing ordered views).
+
+## Tick 421 — structuredClone: preserve BINARY types, not degrade them (2026-07-22)
+
+HYPOTHESIS (measure-a-batch, then FIX the corruption vein): a throwaway probe of ~15 modern JS/DOM
+built-ins found nearly all already working (Promise.withResolvers, Object.groupBy, Array.fromAsync,
+String.isWellFormed, Array.at/findLast/toSorted, Object.hasOwn, AbortSignal.timeout/any, Iterator
+helpers — all SpiderMonkey built-ins), EXCEPT `structuredClone(Uint8Array)` which reported `n`.
+structuredClone is a host shim here (not a SM built-in), and it handled arrays/Date/Map/Set/cycles but
+a typed array fell into the plain-object branch and came back as `{0:.., 1:.., length:..}` — the bytes
+looked present, but the TYPE was gone, so every byte-oriented consumer (a WASM loader, crypto.subtle, a
+`postMessage`d transferable — event_loop.rs routes messaging through this same shim) then read garbage,
+silently. The exact silent-corruption shape Part 22.1 refuses.
+
+FIX (capability, JS-shim only, no engine/native change): added four branches to the `walk` in
+`g.structuredClone` (dom_bindings.rs): `ArrayBuffer` → `slice(0)` (independent copy); any
+`ArrayBuffer.isView` (typed array / DataView) → clone the backing buffer through `walk` and re-view it
+with `new x.constructor(buf, byteOffset, len)` — the `seen` map keyed on the ArrayBuffer preserves the
+spec's shared-buffer case (two views over one buffer clone to two views over ONE cloned buffer);
+`RegExp` → `new RegExp(source, flags)`. Typed arrays take an element COUNT (`x.length`), a DataView a
+byte length — the branch distinguishes them by `BYTES_PER_ELEMENT`.
+
+GATE: G_STRUCTURED_CLONE_BINARY (`structured_clone_preserves_binary_and_regexp_types`) — six claims on
+observable type+value survival: Uint8Array bytes+type, ArrayBuffer independence (mutate clone → original
+untouched), Float64Array element type, shared-buffer identity (write through one view shows in the
+other), DataView value, RegExp `.test()` + flags. RED-proven: neutralizing the ArrayBuffer/isView
+branches (back to the plain-object copy) drops the whole result to `-` — the cloned RegExp loses `.test`
+and the script throws — and the gate fails on the missing `u8:true/...`. manuk-page test green 0.27s.
+
+TICK SHAPE: capability (structuredClone binary-type preservation; +1 gate). GATES +1.
+CONSTELLATION: structuredClone works→gated (G_STRUCTURED_CLONE_BINARY) — was works-but-lossy.
+WIKI: js-engine.md — "structuredClone preserves binary types (the plain-object degrade is silent
+corruption)".
+
+WALL NOTE (tick 421, 2026-07-22 ~21:20): tick 421 is complete, green, RED-proven — the gate passes and
+every capability/constellation check is +1. It is wall-blocked ONLY: verify banks 500s (build 22s,
+unattributed 478s) against the 245s ceiling. Cause is environmental, not the tick — a JS-shim edit
+cannot add 478s of gate runtime. Box state at bank: swap 92% full (thrashing the memory-heavy F1/F2
+latency + large-page parity benchmarks) and a ~5h observer oracle crawl (nice-19 manuk-wpt PID 4022447)
+competing. Harness/infra is observer-owned (no scripts/ or swap-cycle from the agent). Holding tick 421
+in the tree; will land on a warm re-run once the box quiets (load<1.3 / swap relieved), per the
+wall-warm-rerun recipe. Not re-baselining the WALL mark.
