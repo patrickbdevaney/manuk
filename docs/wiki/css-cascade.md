@@ -826,3 +826,14 @@ The plumbing is three hops, all additive:
 are skipped — only unregistered `--vars` (the overwhelming common case) are exposed; and the link is
 one-way (reading), so `el.style.setProperty('--x', …)` updates the inline declaration but does not
 re-cascade into a later `getComputedStyle` read within the same synchronous turn.
+
+## `:open` is taught to BOTH selector engines (tick 429)
+
+There are two selector matchers and they must agree. The CSS cascade (Stylo) already knew `:open` via
+`NonTSPseudoClass::Open` (stylo_dom.rs — matches the `open` content attribute), so `details:open { … }`
+rendered. The querySelector/`matches`/`closest` engine (`manuk_css`, its own `Pseudo` enum) did not, so
+`querySelectorAll('details:open')` returned nothing. Tick 429 added `Pseudo::Open` there — the enum
+variant, the `pseudo_matches` arm (`el.attr("open").is_some()`, matching the attribute exactly as
+`:checked` matches `checked` and `:muted` matches `muted`, not a runtime property), and the `"open" =>
+Pseudo::Open` parser mapping. **Honest limit:** `<select>`'s open state is UI-only (no `open` attribute),
+so it is out of reach here — the same runtime-property fence `:checked` documents. [[dom-semantics]]

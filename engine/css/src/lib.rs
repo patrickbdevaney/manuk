@@ -1186,6 +1186,13 @@ enum Pseudo {
     /// only: the *servo* Stylo build has no `Muted` variant in `NonTSPseudoClass` (it is gecko-only),
     /// so `video:muted { … }` cannot cascade without vendoring Stylo — the same fence as `:has()`.
     Muted,
+    /// `:open` (Baseline 2026) — a `<details>`/`<dialog>` in its open state, matched via the `open`
+    /// content attribute (as [`Pseudo::Checked`] matches `checked`). The shipping STYLE cascade already
+    /// handles `:open` (Stylo's `NonTSPseudoClass::Open`), so `details:open { … }` renders; this makes
+    /// the querySelector/`matches` engine agree, so a disclosure-widget library that does
+    /// `querySelectorAll('details:open')` finds the open ones. (`<select>`'s open state is UI-only, not
+    /// an attribute, so it is out of reach here — same fence as `:checked`'s runtime-property gap.)
+    Open,
     Link,
     /// `:not(<compound>)` — a single inner compound (no combinators).
     Not(Box<Compound>),
@@ -1355,6 +1362,7 @@ fn pseudo_matches(p: &Pseudo, dom: &Dom, node: NodeId) -> bool {
         }),
         Pseudo::Checked => el.attr("checked").is_some() || el.attr("selected").is_some(),
         Pseudo::Disabled => el.attr("disabled").is_some(),
+        Pseudo::Open => el.attr("open").is_some(),
         Pseudo::Enabled => {
             matches!(
                 el.name.as_str(),
@@ -2583,6 +2591,7 @@ fn parse_pseudo(name: &str, arg: Option<&str>) -> Option<Pseudo> {
         "empty" => Pseudo::Empty,
         "checked" => Pseudo::Checked,
         "disabled" => Pseudo::Disabled,
+        "open" => Pseudo::Open,
         "enabled" => Pseudo::Enabled,
         "required" => Pseudo::Required,
         "muted" => Pseudo::Muted,

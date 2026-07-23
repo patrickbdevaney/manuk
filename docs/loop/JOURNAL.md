@@ -17570,3 +17570,28 @@ rides G_PROBE_CAPABILITIES). GATES +0.
 CONSTELLATION: Temporal nowhere→gated; +5 unknown map-wideners (:open, form.elements,
 CSSStyleDeclaration.item, custom-element-attr, contrast-color).
 WIKI: none — measurement/pin tick; SURFACE-AUDIT.md + CONSTELLATION.tsv are the durable record.
+
+## Tick 429 — :open pseudo-class in the querySelector/matches engine (2026-07-22)
+
+HYPOTHESIS (map-widener from surface audit #16): `:open` (Baseline 2026) was measured absent last tick —
+`el.matches(':open')` false. But the STYLE cascade already handles it (Stylo `NonTSPseudoClass::Open`,
+stylo_dom.rs:387 `has("open")`), so `details:open { … }` renders. The gap is the SEPARATE querySelector/
+matches selector engine (manuk_css, backs querySelectorAll/matches/closest), which didn't know `:open` —
+so `document.querySelectorAll('details:open')` returned nothing and a disclosure-widget/a11y helper
+enumerating open panels found none, silently. The classic two-selector-engines split.
+
+FIX (capability, css selector engine): added `Pseudo::Open` — the enum variant, the `pseudo_matches` arm
+(`el.attr("open").is_some()`, mirroring `:checked`/`:disabled` matching the content attribute, not a
+runtime property), and the parser mapping (`"open" => Pseudo::Open`). Three points, matching the existing
+pseudo-class pattern.
+
+GATE: G_OPEN_PSEUDO (`open_pseudo_matches_open_disclosure_widgets`) — five claims: an open <details>
+matches, a closed one doesn't, an open <dialog> matches, querySelectorAll('details:open') returns only
+the open ones in order, and querySelector finds the first. RED-proven: removing the parser mapping makes
+`:open` match nothing (d1:false, qsa empty). manuk-page green; manuk-css (27) + g_traversal + g_dom_impl
+all still green.
+
+TICK SHAPE: capability (:open in the querySelector/matches engine; +1 gate). GATES +1.
+CONSTELLATION: :open pseudo-class unknown→gated (G_OPEN_PSEUDO).
+WIKI: none new — mirrors the documented :checked/:muted two-engine pattern; the gate doc-comment +
+CONSTELLATION.tsv are the record.

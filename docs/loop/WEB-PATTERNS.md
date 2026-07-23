@@ -3502,3 +3502,18 @@ value — custom properties inherit, so a `--brand` set on `:root` is readable o
 silently omits them — and the omission is invisible until a page actually reads a token, which is exactly
 what a themed site does on every component. The engine (Stylo) already computed them; only the plumbing
 to the CSSOM object was missing.
+
+## :open must match in the querySelector engine, not only the style cascade (tick 429)
+
+**The class of the web this unlocks:** disclosure-widget and accessibility code that ENUMERATES open
+panels — `document.querySelectorAll('details:open')` to close the others (accordion "only one open"),
+an a11y audit that finds open dialogs, a component that reacts to `el.matches(':open')`. The style
+cascade already styled `details:open`, so the visual side looked done — but the JS selector engine is
+separate, so `querySelectorAll('details:open')` returned nothing and the accordion logic silently
+no-op'd.
+**(1)** A browser has TWO selector matchers: the CSS cascade (Stylo here) and the querySelector/matches/
+closest engine. A pseudo-class must be taught to BOTH or they disagree — the cascade paints it, the
+script can't find it.
+**The trap:** testing `:open` only by whether `details:open {color}` renders passes while
+`matches(':open')` is still false. Test the JS engine (querySelectorAll/matches) explicitly, or the
+half that scripts depend on stays broken.
