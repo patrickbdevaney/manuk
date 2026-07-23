@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **226** | ticks 1–441 |
-| median tick cycle | **19m** | 225 intervals |
-| median, last 10 | **31m** | 10 intervals |
+| ticks landed | **227** | ticks 1–442 |
+| median tick cycle | **19m** | 226 intervals |
+| median, last 10 | **28m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.78** | 289.1h elapsed |
-| median verify wall | **59s** | 165 ticks |
-| wall trend | 39s → 58s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.78** | 289.4h elapsed |
+| median verify wall | **60s** | 166 ticks |
+| wall trend | 39s → 61s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **209**
+* **live gates**: 27 → **210**
 * **✅ rows in the capability ledger**: 144 → **328**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**126 of 226 ticks** (56%) moved a
+**127 of 227 ticks** (56%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **126** capability ticks, median cycle **19m**
+* **127** capability ticks, median cycle **19m**
 * median diff per tick: **+215 / −34** lines across 8 files
 
 ## Every tick
@@ -323,5 +323,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **439** | 2026-07-23 04:42 | 25m | capability | 58s | +305/−38 | 206 | 81 | 56.0% · | option.text + the Option() constructor's defaultSelected argument (2026-07-23) |
 | **440** | 2026-07-23 05:15 | 33m | capability | 58s | +193/−47 | 207 | 81 | 56.0% · | textarea.value is its text content, not a value attribute (2026-07-23) |
 | **441** | 2026-07-23 06:07 | 51m | capability | 61s | +207/−34 | 209 | 81 | 56.0% · | select.length is the option count and resizes the list (2026-07-23) |
+| **442** | 2026-07-23 06:29 | 23m | capability | 61s | +226/−36 | 210 | 81 | 56.0% · | input.valueAsNumber + stepUp/stepDown for numeric inputs (2026-07-23) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

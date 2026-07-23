@@ -797,6 +797,59 @@ pub const COLLECTIONS_JS: &str = r#"
     var n = Number(v);
     return n; // Number('') is 0, but we already excluded '' — an invalid string gives NaN, as the spec wants
   }
+  // ── Date/time typed values — every date picker reads `input.valueAsDate` / `valueAsNumber` for a real
+  // Date / epoch and writes `valueAsDate = d` to set the control. All arithmetic is UTC (a date control
+  // has no timezone, per spec), so a `type=date` round-trips regardless of the host timezone.
+  function inputType(el) {
+    return (el && el.tagName === 'INPUT') ? (el.getAttribute('type') || 'text').toLowerCase() : null;
+  }
+  function pad(n, w) { n = '' + n; while (n.length < w) n = '0' + n; return n; }
+  function parseDate(s) { // YYYY-MM-DD → [y,m,d] (1-based month), or null
+    var m = /^(\d{4,})-(\d{2})-(\d{2})$/.exec(s || '');
+    if (!m) return null;
+    var y = +m[1], mo = +m[2], d = +m[3];
+    return (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) ? [y, mo, d] : null;
+  }
+  function parseMonth(s) { // YYYY-MM → [y,m]
+    var m = /^(\d{4,})-(\d{2})$/.exec(s || '');
+    if (!m) return null;
+    var mo = +m[2];
+    return (mo >= 1 && mo <= 12) ? [+m[1], mo] : null;
+  }
+  function parseTime(s) { // HH:MM[:SS[.mmm]] → ms since midnight, or null
+    var m = /^(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/.exec(s || '');
+    if (!m) return null;
+    var hh = +m[1], mm = +m[2], ss = m[3] ? +m[3] : 0, ms = m[4] ? +(m[4] + '00').slice(0, 3) : 0;
+    if (hh > 23 || mm > 59 || ss > 59) return null;
+    return ((hh * 60 + mm) * 60 + ss) * 1000 + ms;
+  }
+  function typedNumber(el) {
+    var t = inputType(el);
+    if (t === 'number' || t === 'range') return inputNumber(el);
+    if (t === 'date') { var d = parseDate(el.value); return d ? Date.UTC(d[0], d[1] - 1, d[2]) : NaN; }
+    if (t === 'month') { var mo = parseMonth(el.value); return mo ? (mo[0] - 1970) * 12 + (mo[1] - 1) : NaN; }
+    if (t === 'time') { var ms = parseTime(el.value); return ms === null ? NaN : ms; }
+    return NaN;
+  }
+  function typedDate(el) {
+    var t = inputType(el);
+    if (t === 'date') { var d = parseDate(el.value); return d ? new Date(Date.UTC(d[0], d[1] - 1, d[2])) : null; }
+    if (t === 'month') { var mo = parseMonth(el.value); return mo ? new Date(Date.UTC(mo[0], mo[1] - 1, 1)) : null; }
+    if (t === 'time') { var ms = parseTime(el.value); return ms === null ? null : new Date(ms); }
+    return null; // number/range/datetime-local: valueAsDate does not apply
+  }
+  function formatTyped(t, dt) {
+    if (dt === null || dt === undefined || isNaN(+dt)) return '';
+    if (t === 'date') return pad(dt.getUTCFullYear(), 4) + '-' + pad(dt.getUTCMonth() + 1, 2) + '-' + pad(dt.getUTCDate(), 2);
+    if (t === 'month') return pad(dt.getUTCFullYear(), 4) + '-' + pad(dt.getUTCMonth() + 1, 2);
+    if (t === 'time') {
+      var s = pad(dt.getUTCHours(), 2) + ':' + pad(dt.getUTCMinutes(), 2);
+      if (dt.getUTCSeconds() || dt.getUTCMilliseconds()) s += ':' + pad(dt.getUTCSeconds(), 2);
+      if (dt.getUTCMilliseconds()) s += '.' + pad(dt.getUTCMilliseconds(), 3);
+      return s;
+    }
+    return '';
+  }
   function numAttr(el, name) {
     var a = el.getAttribute(name);
     if (a === null || a === undefined || a === '') return null;
@@ -824,12 +877,31 @@ pub const COLLECTIONS_JS: &str = r#"
       configurable: true, enumerable: false,
       get: function () {
         if (this.tagName !== 'INPUT') return undefined;
-        return numericInputType(this) ? inputNumber(this) : NaN;
+        return typedNumber(this);
       },
       set: function (v) {
-        if (!numericInputType(this)) return; // unsupported types: ignore (spec throws; we no-op safely)
+        var t = inputType(this);
+        if (!t) return;
         var n = Number(v);
-        this.value = isFinite(n) ? String(n) : '';
+        if (t === 'number' || t === 'range') { this.value = isFinite(n) ? String(n) : ''; return; }
+        // A date/time type takes the number as the same epoch the getter produced; reformat it back.
+        if (t === 'date' || t === 'month' || t === 'time') {
+          this.value = isFinite(n) ? formatTyped(t, t === 'month' ? new Date(Date.UTC(1970, n, 1)) : new Date(n)) : '';
+        }
+      },
+    });
+    // `input.valueAsDate` — the Date behind a date/time control (null when empty/invalid or N/A); the
+    // setter writes the control's string from a Date (or clears it for null).
+    Object.defineProperty(EP, 'valueAsDate', {
+      configurable: true, enumerable: false,
+      get: function () {
+        if (this.tagName !== 'INPUT') return undefined;
+        return typedDate(this);
+      },
+      set: function (d) {
+        var t = inputType(this);
+        if (t !== 'date' && t !== 'month' && t !== 'time') return;
+        this.value = (d === null || d === undefined) ? '' : formatTyped(t, d);
       },
     });
     EP.stepUp = function (n) { stepBy(this, n === undefined ? 1 : (n | 0)); };

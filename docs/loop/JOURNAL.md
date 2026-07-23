@@ -18022,3 +18022,29 @@ separate follow-on, not built.
 TICK SHAPE: capability (input.valueAsNumber get/set + stepUp/stepDown with min/max clamp; +1 gate). GATES +1.
 CONSTELLATION: typed numeric input values (valueAsNumber/stepUp/stepDown) unknown→gated (G_VALUE_AS_NUMBER).
 WIKI: dom-semantics.md — input.valueAsNumber + stepUp/stepDown for numeric inputs.
+
+## Tick 443 — input.valueAsDate + valueAsNumber for date/time/month inputs (2026-07-23)
+
+HYPOTHESIS (follow-on completing t442's typed-value surface — t442 built number/range, noted date/time as
+the follow-on). RED probe (from t442): `date.valueAsNumber` undefined, `valueAsDate` undefined for every
+date-family type. Every date picker reads valueAsDate/valueAsNumber and sets the control via valueAsDate=d.
+
+FIX (capability, engine/js/src/collections_js.rs): extended the typed-value block with UTC date/time math:
+- `valueAsNumber` getter now dispatches via `typedNumber`: date → Date.UTC epoch ms, month → month index
+  ((y-1970)*12+(m-1)), time → ms since midnight; number/range unchanged; NaN otherwise.
+- `valueAsDate` getter (`typedDate`): date → UTC-midnight Date, month → UTC-midnight-of-the-1st, time →
+  1970-01-01 + the time; null for number/range/datetime-local (does not apply) or a non-input → undefined.
+- Setters reformat back (`formatTyped`): valueAsDate=d and valueAsNumber=n both write the control's string
+  in UTC. ALL arithmetic is UTC (a date control has no timezone, per spec) so a type=date round-trips
+  regardless of the host timezone — the classic local-time-drifts-a-day bug is structurally avoided.
+
+GATE: G_VALUE_AS_DATE (`value_as_date_for_date_time_month_inputs`) — 9 claims: date valueAsDate ISO + epoch,
+valueAsDate/valueAsNumber setters (date), time ms + 1970-Date, month index + setter, and number→null.
+RED-proven (probe: valueAsDate/valueAsNumber undefined for date types). manuk-page green; g_value_as_number
+(t442) / g_collections / g_form_owner / g_select_write all still green.
+
+KNOWN REMAINING: `type=week` (ISO week arithmetic) and `datetime-local` valueAsNumber — a niche follow-on.
+
+TICK SHAPE: capability (input.valueAsDate get/set + valueAsNumber for date/time/month; +1 gate). GATES +1.
+CONSTELLATION: date/time typed input values (valueAsDate/valueAsNumber) unknown→gated (G_VALUE_AS_DATE).
+WIKI: dom-semantics.md — input.valueAsDate + valueAsNumber for date/time/month inputs (UTC).

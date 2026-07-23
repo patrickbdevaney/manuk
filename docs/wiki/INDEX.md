@@ -292,6 +292,7 @@
   - L1298 · textarea.value is its text content, not a value attribute (tick 440)
   - L1314 · select.length is the option count and resizes the list (tick 441)
   - L1326 · input.valueAsNumber + stepUp/stepDown for numeric inputs (tick 442)
+  - L1337 · input.valueAsDate + valueAsNumber for date/time/month inputs (tick 443)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -908,4 +909,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-823 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+824 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

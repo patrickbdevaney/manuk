@@ -1333,3 +1333,14 @@ invalid; set writes `String(n)`, or `""` for non-finite) for `type=number`/`type
 input types, `undefined` on non-inputs. `stepUp(n=1)`/`stepDown(n=1)` add/subtract `n × step` (step
 defaults to 1) and clamp to `min`/`max`, trimming float fuzz. Gate `G_VALUE_AS_NUMBER`. Follow-on:
 `valueAsDate` + date/time typed values (epoch arithmetic), left unbuilt.
+
+## input.valueAsDate + valueAsNumber for date/time/month inputs (tick 443)
+
+Completing tick 442's typed-value surface: every date picker reads `input.valueAsDate` for a real `Date`
+(and `valueAsNumber` for the epoch) and writes `valueAsDate = d` to set the control; both were absent for
+date-family types. Added in `collections_js.rs`: `type=date` → `valueAsDate` is UTC midnight, `valueAsNumber`
+the epoch ms; `type=time` → ms since midnight + a 1970-01-01 Date; `type=month` → a month index. Setters
+reformat back to the control's string. ALL arithmetic is UTC (a date control has no timezone, per spec) so a
+`type=date` round-trips regardless of host timezone. `valueAsDate` is `null` on number/range/datetime-local
+(does not apply). Gate `G_VALUE_AS_DATE`. Follow-on: `type=week` (ISO week) and `datetime-local`
+valueAsNumber, left unbuilt.

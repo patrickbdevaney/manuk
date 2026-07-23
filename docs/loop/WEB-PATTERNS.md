@@ -3717,3 +3717,15 @@ non-input).
 **The trap:** the value behind a numeric input is a STRING in the `value` attribute — reading it as a
 number and stepping it correctly (default step, min/max clamp, float-fuzz trim) is what every stepper
 needs, and all of it was absent.
+
+## input.valueAsDate + valueAsNumber for date inputs (tick 443)
+
+**The class of the web this unlocks:** date/time pickers and range widgets — a `<input type="date">` whose
+JS reads `valueAsDate` to get a `Date`, compares two dates via `valueAsNumber`, or sets the control from a
+`Date` object (calendar widgets, booking/scheduling forms, date-range filters).
+**(1)** `type=date` → `valueAsDate` is the UTC-midnight `Date`, `valueAsNumber` the epoch ms; `type=time` →
+ms-since-midnight + a 1970 `Date`; `type=month` → a month index. Setters write the control's string back.
+**(2)** All arithmetic is UTC so a `type=date` round-trips regardless of the host timezone; `valueAsDate` is
+`null` where it does not apply (number/range).
+**The trap:** doing this in local time drifts a date by a day across a timezone; the spec mandates UTC for
+exactly that reason.
