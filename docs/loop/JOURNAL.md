@@ -17839,3 +17839,28 @@ createCaption-first-child. RED-proven (probe: all undefined). manuk-page green; 
 TICK SHAPE: capability (table insertRow/deleteRow/insertCell/deleteCell + createTHead/TFoot/TBody/Caption + deletes; +1 gate). GATES +1.
 CONSTELLATION: <table> DOM write API unknown→gated (G_TABLE_WRITE).
 WIKI: dom-semantics.md — the <table> write API (insertRow/insertCell materialise a tbody, OOB is IndexSizeError).
+
+## Tick 437 — element.form resolves the form owner (2026-07-23)
+
+HYPOTHESIS (same collections/form-DOM vein; a select-manipulation probe surfaced it): `input.form` — the
+FORM OWNER every form library reads to group controls (`input.form === thisForm`) and every framework
+reads to find where to submit — was `undefined`, including the `form=` REASSOCIATION case (a control
+outside the <form> that names it by id). This ALSO silently broke ElementInternals.form (it delegates to
+`host.form`).
+
+FIX (capability, engine/js/src/collections_js.rs — reuses ownerDoc/ancestorTag helpers from t435-436):
+- `element.form` getter (tag-guarded) on form-associated elements (input/select/textarea/button/fieldset/
+  object/output): the owner is doc.getElementById(form= attr) IFF that is a <form> (a non-form id → null,
+  NOT the ancestor, per spec), else the nearest ancestor <form>.
+- `<option>.form` = its <select>'s owner; `<label>.form` = its labeled control's owner (via t434's
+  `.control`); a non-form-associated element (<div>) has no such property (undefined).
+- Fixes ElementInternals.form for free (its `host.form` now resolves).
+
+GATE: G_FORM_OWNER (`element_form_resolves_the_form_owner`) — 8 claims: ancestor form, form= from outside,
+form=→non-form→null, orphan→null, select/option/label delegation, div→undefined. RED-proven (probe:
+input.form undefined). manuk-page green; g_form_elements / g_label_association / g_element_internals all
+still green (the last now genuinely exercises a working host.form).
+
+TICK SHAPE: capability (element.form form-owner resolution + option/label delegation; +1 gate). GATES +1.
+CONSTELLATION: element.form owner association unknown→gated (G_FORM_OWNER).
+WIKI: dom-semantics.md — element.form resolves the form owner (form= to a non-form yields null, not the ancestor).

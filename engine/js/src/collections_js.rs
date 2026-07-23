@@ -778,5 +778,40 @@ pub const COLLECTIONS_JS: &str = r#"
     EP.deleteTFoot = function () { return deleteFirstSection(this, 'TFOOT'); };
     EP.deleteCaption = function () { return deleteFirstSection(this, 'CAPTION'); };
   }
+
+  // ── `element.form` — the FORM OWNER of a form-associated element.
+  //
+  // `input.form` was `undefined`, so every form library that groups controls by their owning form
+  // (`input.form === thisForm`), and every framework that reads `el.form` to find where to submit, got
+  // nothing — including the `form=` REASSOCIATION case, where a control lives OUTSIDE the `<form>` and
+  // names it by id. This also silently broke `ElementInternals.form`, which delegates to `host.form`.
+  //
+  // The owner is: if the element carries a `form=` attribute, the element with that id **iff it is a
+  // `<form>`** (an id pointing at a non-form yields NO owner, per spec — not the nearest ancestor); else
+  // the nearest ancestor `<form>`. An `<option>` reports its `<select>`'s owner; a `<label>` reports its
+  // labeled control's owner.
+  var FORM_ASSOCIATED = { INPUT: 1, SELECT: 1, TEXTAREA: 1, BUTTON: 1, FIELDSET: 1, OBJECT: 1, OUTPUT: 1 };
+  function formOwner(el) {
+    var fa = el.getAttribute ? el.getAttribute('form') : null;
+    if (fa !== null && fa !== undefined) {
+      var doc = ownerDoc(el);
+      var f = (doc && doc.getElementById) ? doc.getElementById(fa) : null;
+      return (f && f.tagName === 'FORM') ? f : null;
+    }
+    return ancestorTag(el, 'FORM');
+  }
+  if (EP) {
+    Object.defineProperty(EP, 'form', {
+      configurable: true,
+      enumerable: false,
+      get: function () {
+        var t = this.tagName;
+        if (FORM_ASSOCIATED[t]) { return formOwner(this); }
+        if (t === 'OPTION') { var sel = ancestorTag(this, 'SELECT'); return sel ? formOwner(sel) : null; }
+        if (t === 'LABEL') { var c = this.control; return c ? formOwner(c) : null; }
+        return undefined; // not a form-associated element — no such property
+      },
+    });
+  }
 })();
 "#;

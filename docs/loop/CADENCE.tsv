@@ -221,3 +221,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 434	052c163	1784789022	2026-07-23T02:43:42-04:00	1082	capability	61	10	244	51	201	81	3896	6960	0	328	31	control.labels + label.control link a form field to its <label> (2026-07-23)
 435	c2fc620	1784790330	2026-07-23T03:05:30-04:00	1308	capability	57	10	304	52	202	81	3896	6960	0	328	31	the <table> DOM: table.rows/tr.cells + row/cell indices (2026-07-23)
 436	5c765d2	1784791459	2026-07-23T03:24:19-04:00	1129	capability	60	10	311	51	203	81	3896	6960	0	328	31	the <table> WRITE API: insertRow/deleteRow/insertCell + sections (2026-07-23)
+437	42e3801	1784792971	2026-07-23T03:49:31-04:00	1512	capability	58	10	207	51	204	81	3896	6960	0	328	31	element.form resolves the form owner (2026-07-23)

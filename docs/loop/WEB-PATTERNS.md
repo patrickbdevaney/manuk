@@ -3627,3 +3627,19 @@ index is an **IndexSizeError** (a THROW, never a clamp), and inserting a row int
 **The trap:** clamping an out-of-range index looks friendlier but silently corrupts a widget that inserts
 at a computed position and catches the throw; and appending a bare `<tr>` to an empty `<table>` produces a
 row with no section, which then does not appear in `table.rows` (t435's logical-order reader).
+
+## element.form resolves the form owner (tick 437)
+
+**The class of the web this unlocks:** every form library that groups controls by their owning form
+(`input.form === thisForm`), every framework that reads `el.form` to decide where a control submits, and
+`ElementInternals.form` for form-associated custom elements. `input.form` was `undefined` — including the
+`form=` reassociation case.
+**(1)** The owner is: if the element carries a `form=` attribute, the element with that id **iff it is a
+`<form>`** — an id pointing at a non-form yields NULL (per spec), NOT the nearest ancestor; otherwise the
+nearest ancestor `<form>`. This is what lets a control live OUTSIDE its form (a common layout escape) and
+still belong to it.
+**(2)** An `<option>` reports its `<select>`'s owner; a `<label>` reports its labeled control's owner; a
+non-form-associated element (`<div>`) has no such property at all.
+**The trap:** falling back to the ancestor form when `form=` names a non-form is the intuitive-but-wrong
+behaviour — the spec makes a dangling `form=` yield null, because the author explicitly opted the control
+OUT of its ancestor and into a form that does not exist.

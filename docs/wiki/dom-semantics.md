@@ -870,6 +870,20 @@ methods) was `undefined`, so a grid/spreadsheet widget that builds a table throu
 
 Gate `g_table_write` (10 claims, proven red — all methods undefined pre-impl). [[js-engine]]
 
+## `element.form` resolves the form owner (tick 437)
+
+`input.form` was `undefined`, so a form library grouping controls by their owner (`input.form === thisForm`)
+got nothing — and it silently broke `ElementInternals.form`, which delegates to `host.form`.
+
+The owner is computed, not stored: **if the element has a `form=` attribute, the element with that id iff
+it is a `<form>`** — an id pointing at a *non-form* yields `null` (NOT the ancestor, per spec: the author
+explicitly opted the control out of its ancestor into a form that here does not exist); **otherwise the
+nearest ancestor `<form>`**. This is exactly what lets a control live *outside* its form and still belong
+to it (`form="loginForm"` on an input in a modal). An `<option>` reports its `<select>`'s owner; a
+`<label>` reports its labeled control's owner (via tick-434 `.control`); a non-form-associated element has
+no such property. Defined on form-associated tags (input/select/textarea/button/fieldset/object/output).
+Gate `g_form_owner` (8 claims, proven red). [[js-engine]]
+
 ## `DOMStringMap` (`dataset`) and `NamedNodeMap` (`attributes`) enumerate their names (tick 130)
 
 The same legacy-platform-object gap as [[dom-semantics]]'s tick-129 `HTMLCollection`, on two more proxy-backed
