@@ -1310,3 +1310,15 @@ returns the `value` attribute IF present (our dirty-value store, written by `el_
 else the element's text content; for an input it returns the `value` attribute. Gate `G_TEXTAREA_VALUE`.
 Remaining: `textarea.defaultValue` (still `undefined` — the text-content default, separate from the reflect
 table's input.defaultValue) and `form.reset()` restoring a textarea to its content default.
+
+## select.length is the option count and resizes the list (tick 441)
+
+`select.length` returned `0` — the `length` property was wired to `el_char_length` (the CharacterData text
+length, `0` for a non-text node), and the correct `el_get_select_length` was dead code. So the option count
+was invisible and the classic `select.length = 0` "clear the dropdown" idiom (and `select.length = n`
+resize) did nothing. Fixed in `dom_bindings.rs`: `length` now dispatches on the tag — a `<select>` reports
+`select_options(...).len()`, every other node keeps the CharacterData length — and gains a setter that
+truncates (removing trailing options from their own parents, so an option inside an `<optgroup>` is handled)
+or grows (appending bare `<option>` elements). CharacterData.length stays read-only (the setter no-ops off a
+select). Gate `G_SELECT_LENGTH`. Note: `select.options.length = n` (the same idiom via the collection) still
+needs a persistent HTMLOptionsCollection object — pinned unknown in the tick-438 surface audit.

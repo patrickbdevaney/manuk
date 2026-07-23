@@ -17964,3 +17964,34 @@ data-default-value rather than restoring its content default.
 TICK SHAPE: capability (textarea.value/text_value_len/setRangeText read the true value via text_control_value; +1 gate). GATES +1.
 CONSTELLATION: textarea.value text-content source unknown→gated (G_TEXTAREA_VALUE).
 WIKI: dom-semantics.md — textarea.value is its text content (not a value attribute); the shared text_control_value helper.
+
+## Tick 441 — select.length is the option count and resizes the list (2026-07-23)
+
+HYPOTHESIS (follow-on to t438's select write API + the t438 surface audit which pinned the options.length
+setter as unknown): probed `select.length` get/set. RED probe: `select.length` returned 0 (should be the
+option count) and `select.length = n` did nothing.
+
+ROOT CAUSE: the `length` property (dom_bindings.rs:1745) was wired to `el_char_length` — the CharacterData
+text length, which is 0 for a non-text node — with NO setter. The correct `el_get_select_length` existed
+but was DEAD CODE (never wired). So `select.length` read 0 and the classic `select.length = 0` "clear the
+dropdown" idiom (and `select.length = n` resize) were both inert.
+
+FIX (capability, engine/js/src/dom_bindings.rs): `length` now dispatches on the tag via a new `el_length`
+getter — a `<select>` reports `select_options(...).len()`, every other node falls through to
+`el_char_length` — and gains a setter `el_set_select_length` that truncates (removing trailing options from
+their OWN parents, so an option nested in an `<optgroup>` is handled) or grows (appending bare `<option>`
+elements to the select). CharacterData.length stays read-only (the setter no-ops off a non-select).
+
+GATE: G_SELECT_LENGTH (`select_length_counts_and_resizes_options`) — 4 claims: option count (incl. an
+option inside an optgroup), truncate to 1, grow back to 3, and the CharacterData.length-preserved
+regression guard. RED-proven (probe: lenGet:0 / setter inert). manuk-page green; g_select_write /
+g_option_text / g_textarea_value / g_range / g_set_range_text / g_characterdata_iface / g_chardata /
+g_split_text all still green.
+
+KNOWN REMAINING: `select.options.length = n` (same idiom via the collection) still no-ops — the native
+`options` getter returns a fresh Array; a settable length needs a persistent HTMLOptionsCollection object
+(pinned unknown in the t438 surface audit).
+
+TICK SHAPE: capability (select.length getter dispatch + truncate/extend setter; +1 gate). GATES +1.
+CONSTELLATION: select.length option-count + resize unknown→gated (G_SELECT_LENGTH).
+WIKI: dom-semantics.md — select.length is the option count and resizes the list (CharacterData.length overload preserved).

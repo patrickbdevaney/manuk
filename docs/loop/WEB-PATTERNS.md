@@ -3689,3 +3689,17 @@ current value in the `value` attribute, which the helper prefers over the text c
 **The trap:** reading `attr("value")` for both control types looks uniform but silently returns empty for
 every textarea — a whole control type reads blank, and the corruption compounds through setRangeText and
 form submission.
+
+## select.length counts and resizes the options (tick 441)
+
+**The class of the web this unlocks:** the `select.length = 0` "clear the dropdown then repopulate" idiom —
+a dependent/cascading select (country → state → city) rebuilds its option list this way, as does any widget
+that reloads options from fetched data.
+**(1)** `select.length` returned `0` (it was reading the CharacterData text length of a non-text node). It
+now reports the option count; `select.length = n` truncates (removing trailing options) or grows (appending
+`<option>` elements).
+**(2)** CharacterData `.length` (text node length) is unchanged — the `length` property is overloaded and
+dispatches on the tag.
+**The trap:** the same idiom via the collection (`select.options.length = n`) still no-ops because the
+native `options` getter returns a fresh Array — settable-length needs a persistent HTMLOptionsCollection
+(pinned unknown). `select.length = n` is the one that now works.

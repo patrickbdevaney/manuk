@@ -290,6 +290,7 @@
   - L1267 · The <select> write API — add / remove(index) + HTMLOptionsCollection (tick 438)
   - L1283 · option.text + the Option() constructor's defaultSelected argument (tick 439)
   - L1298 · textarea.value is its text content, not a value attribute (tick 440)
+  - L1314 · select.length is the option count and resizes the list (tick 441)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -906,4 +907,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-821 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+822 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

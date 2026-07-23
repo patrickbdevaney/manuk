@@ -1742,7 +1742,9 @@ unsafe fn define_members(
         def_guarded!(def, c"getAttributeNames", el_get_attribute_names, 0);
         prop_guarded!(prop, c"data", el_get_char_data, Some(el_set_char_data));
         // CharacterData — the whole interface, in UTF-16 code units, throwing IndexSizeError.
-        prop_guarded!(prop, c"length", el_char_length, None);
+        // `length` is overloaded: on a `<select>` it is the OPTION COUNT (settable — truncates/extends
+        // the list), on CharacterData the text length (read-only). `el_length` dispatches on the tag.
+        prop_guarded!(prop, c"length", el_length, Some(el_set_select_length));
         def_guarded!(def, c"substringData", el_substring_data, 2);
         def_guarded!(def, c"appendData", el_append_data, 1);
         def_guarded!(def, c"insertData", el_insert_data, 2);
@@ -3594,12 +3596,43 @@ unsafe fn el_set_selected_index(cx: *mut RawJSContext, argc: u32, vp: *mut Value
     true
 }
 
-/// `select.length` — how many options.
-unsafe fn el_get_select_length(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
-    let n = this_node(vp)
-        .map(|(dom, n)| select_options(dom, n).len())
-        .unwrap_or(0);
-    *vp = Int32Value(n as i32);
+/// `length` getter — dispatches on the tag: a `<select>` reports its OPTION COUNT (was returning 0, the
+/// CharacterData length of a non-text node — so `select.length` and the `select.length = 0` clear-idiom
+/// were both dead); every other node keeps the CharacterData text length.
+unsafe fn el_length(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        if is_select(dom, node) {
+            *vp = Int32Value(select_options(dom, node).len() as i32);
+            return true;
+        }
+    }
+    el_char_length(cx, argc, vp)
+}
+
+/// `select.length = n` setter — the "clear/resize the dropdown" idiom (`select.length = 0`). Truncating
+/// removes trailing options from their own parents (an option may sit inside an `<optgroup>`); growing
+/// appends bare `<option>` elements to the select. A no-op on any non-select (CharacterData.length is
+/// read-only).
+unsafe fn el_set_select_length(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        if is_select(dom, node) {
+            let target = arg_u32(cx, vp, argc, 0).unwrap_or(0) as usize;
+            let opts = select_options(dom, node);
+            if target < opts.len() {
+                for &opt in &opts[target..] {
+                    if let Some(parent) = (*dom).parent(opt) {
+                        (*dom).remove_child(parent, opt);
+                    }
+                }
+            } else {
+                for _ in opts.len()..target {
+                    let opt = (*dom).create_element("option");
+                    (*dom).append_child(node, opt);
+                }
+            }
+        }
+    }
+    *vp = UndefinedValue();
     true
 }
 
