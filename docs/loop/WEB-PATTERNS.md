@@ -3800,3 +3800,20 @@ through to the element behind. Because the property inherits, a descendant that 
 **The trap:** the getComputedStyle gap looked like the whole bug, but the load-bearing defect was behavioral —
 hit-testing ignored the property. And the property-list growth exposed a latent CSSOM enumeration-count bug
 (a hardcoded `.length` one short of the final custom property).
+
+## pointer-events: none is transparent to the agent's hit-test (tick 449)
+
+**The class of the web this unlocks (agentic):** the same `pointer-events:none` overlays tick 448 fixed for
+scripted clicks — gradient scrims, toasts, drag-ghosts, shimmers — but now for the AGENT'S OWN click
+grounding. An agent (or the shell's click-by-coordinate) resolves a target through the accessibility tree's
+`hit_test`, a different path from JS `elementFromPoint`. That path was occlusion-only, so a decorative
+overlay on a high stacking layer intercepted the agent's click and it actuated the wrong element — exactly
+the failure component #2 exists to prevent.
+**(1)** `A11yNode.hittable` is now `false` for a `pointer-events:none` element (fed from the live computed
+styles via `Page::non_hittable_nodes()`, mirroring `invisible_nodes()`); the node stays in the tree for a
+screen reader but `hit_test` passes through it to the control behind.
+**(2)** Default `hittable = true` and the fix is scoped to the two live builders, so no other a11y consumer
+changes; a normal node stays hittable (no over-marking).
+**The trap:** it is a SEPARATE code path from the JS fix — the same property, two hit-test implementations,
+and fixing one leaves the other lying. `pointer-events:none` must NOT be treated like `visibility:hidden`
+(which omits the node entirely): the element is still perceivable, so it is announced but not a target.

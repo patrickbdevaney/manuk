@@ -495,6 +495,7 @@
   - L2127 · Drag-and-drop editor half (tick 346)
   - L2139 · scrollTo/scrollBy reuse the scrollTop/scrollLeft setters (clamp + snap) (tick 431)
   - L2155 · pointer-events: none is transparent to hit-testing (tick 448)
+  - L2182 · pointer-events: none is transparent to the AGENT's hit-test too (tick 449)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -914,4 +915,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-829 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+830 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

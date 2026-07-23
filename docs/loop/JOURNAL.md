@@ -18197,3 +18197,46 @@ WIKI: interaction-surface.md — pointer-events: none is transparent to hit-test
 NEXT VEIN NOTE: `user-select` is the sibling unknown still open, but its behavioral effect (suppress selection)
 needs USER mouse-drag selection geometry which is unmodelled (see CONSTELLATION line 18) — its only testable
 surface today is getComputedStyle honesty (thinner). The richer pivot targets remain the Tier-1 subsystems.
+
+## Tick 449 — pointer-events: none transparent to the AGENT's a11y hit-test (2026-07-23)
+
+FOLLOW-ON to tick 448 (same defect class, DIFFERENT code path — the agentic half). Tick 448 fixed the JS
+`elementFromPoint` path; but the agent grounds a coordinate click through the accessibility tree's
+`manuk_a11y::A11yNode::hit_test`, which was still occlusion-only. A `pointer-events:none` overlay on a high
+stacking layer intercepted the agent's click → it actuated the wrong element (component #2 failure).
+
+HYPOTHESIS: the a11y hit_test ignores pointer-events. RED-proven two ways (below).
+
+FIX (capability — 2 files):
+- engine/a11y/src/lib.rs: A11yNode gains `hittable: bool` (default true). hit_test skips `!hittable`
+  candidates. New `build_tree_full` / `build_tree_full_with_focus` carry a `non_hittable: &HashSet<NodeId>`
+  set threaded through `build_children`; each child literal sets `hittable = !non_hittable.contains(&child)`.
+  The plain builders (build_tree_with_visibility/_focus_and_visibility) pass an empty set → no behavior
+  change for non-live callers. A pointer-events:none node STAYS in the tree (screen-reader announced) but
+  drops from hit-testing — deliberately NOT the visibility:hidden treatment (which omits the node).
+- engine/page/src/lib.rs: new `non_hittable_nodes()` (mirror of invisible_nodes) filters
+  ComputedStyle.pointer_events == None; a11y_tree/a11y_tree_with_focus feed it to the full builders.
+
+GATES (two axes, both RED-proven):
+- a11y unit test `hit_test_passes_through_a_pointer_events_none_overlay` — mirrors the occlusion test's
+  geometry (a high-z overlay that, when hittable, WINS — that sibling test is the RED reference) and flips
+  only `hittable`; asserts the click lands on the button behind.
+- G_POINTER_EVENTS_A11Y (page, `pointer_events_none_is_transparent_to_the_agent_hit_test`) — end-to-end
+  over a real page: the pointer-events:none roled node is present but hittable==false, a normal node stays
+  hittable==true (no over-marking), hit_test over the overlap returns the button behind. RED-PROVEN by
+  neutering the `!n.hittable` skip → hit returns the overlay, assert_ne fires.
+Sibling gates green: manuk-a11y (16), g_pointer_events (t448), g_a11y_state, g_a11y_roles, g_mouse_actuation,
+g_disabled_inert. No other callers of the changed builders (grepped all crates).
+
+TICK SHAPE: capability (a11y hit_test honors pointer-events via a hittable flag fed from live computed
+styles; +1 gate). GATES +1. CONSTELLATION: pointer-events row extended (a11y half completed).
+WIKI: interaction-surface.md — pointer-events: none is transparent to the AGENT's hit-test too.
+
+### Tick 449 landing note (wall/contention — harness-owned)
+Tick 449 code is complete+correct: manuk-a11y 16 / manuk-agent 126 / manuk-shell 70 all pass IN ISOLATION,
+G_POINTER_EVENTS_A11Y RED-proven. Two wall snags, both harness-side: (1) my a11y struct field first broke 4
+A11yNode literals in the `agent/` crate (outside my engine/-scoped grep) — the wall's "manuk-agent no verdict"
+was a REAL compile error, now fixed (lesson: grep the WHOLE repo for struct-literal breakage). (2) manuk-shell's
+`tab_operations_stay_far_under_one_frame` (G_INTERACT scaling gate, last<=first*4+300us) false-REDs under the
+verify's parallel load + the observer's live FID-SWEEP; it passes 3/3 in isolation. Landing on a quiet box per
+the documented recipe.

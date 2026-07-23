@@ -70,6 +70,7 @@ fn prune_node(node: &A11yNode, kw: &[String]) -> Option<A11yNode> {
             name: node.name.clone(),
             bbox: node.bbox,
             z: node.z,
+            hittable: node.hittable,
             state: Default::default(),
             children: pruned_children,
         })
@@ -225,6 +226,7 @@ mod tests {
             name: name.to_string(),
             bbox,
             z: 0,
+            hittable: true,
             state: Default::default(),
             children,
         }

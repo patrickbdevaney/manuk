@@ -5282,11 +5282,12 @@ impl Page {
             .collect();
         // Pass the effective z-index per node so hit-testing is occlusion-aware (a
         // high-`z` overlay wins a click over content beneath it).
-        manuk_a11y::build_tree_with_visibility(
+        manuk_a11y::build_tree_full(
             &self.dom,
             &rects,
             &self.z_index_map(),
             &self.invisible_nodes(),
+            &self.non_hittable_nodes(),
         )
     }
 
@@ -5313,12 +5314,13 @@ impl Page {
                 )
             })
             .collect();
-        manuk_a11y::build_tree_with_focus_and_visibility(
+        manuk_a11y::build_tree_full_with_focus(
             &self.dom,
             &rects,
             &self.z_index_map(),
             focused,
             &self.invisible_nodes(),
+            &self.non_hittable_nodes(),
         )
     }
 
@@ -5589,6 +5591,17 @@ impl Page {
         self.styles
             .iter()
             .filter(|(_, s)| s.visibility != manuk_css::Visibility::Visible)
+            .map(|(n, _)| *n)
+            .collect()
+    }
+
+    /// Nodes whose computed `pointer-events` is `none` — they stay in the a11y tree (a screen reader
+    /// announces them) but are dropped from coordinate hit-testing, so an agent grounding a click does
+    /// not land on a decorative `pointer-events:none` overlay. Mirrors [`Self::invisible_nodes`].
+    fn non_hittable_nodes(&self) -> std::collections::HashSet<manuk_dom::NodeId> {
+        self.styles
+            .iter()
+            .filter(|(_, s)| s.pointer_events == manuk_css::PointerEvents::None)
             .map(|(n, _)| *n)
             .collect()
     }

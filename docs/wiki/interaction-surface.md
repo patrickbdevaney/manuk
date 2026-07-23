@@ -2178,3 +2178,29 @@ gate also pins the no-over-correction claim (a *normal* overlay still wins its h
 in the same edit: `computed_style_js` hardcoded its `.length` as `49 + customs` against a 49-entry name
 list; growing the list to 50 exposed that the CSSOM enumeration loop (`for i<length`) had been one short of
 the final custom property — the count is now derived correctly. [[css-cascade]]
+
+## pointer-events: none is transparent to the AGENT's hit-test too (tick 449)
+
+Tick 448 fixed the JS `elementFromPoint` path. But the agent grounds a coordinate click through a
+*different* path — the accessibility tree's `hit_test` (`manuk_a11y::A11yNode::hit_test`), which is how
+an agent confirms what it is about to click ([[js-engine]] component #2). That path was still
+occlusion-only: a `pointer-events:none` overlay with a high stacking layer sat over a real control and
+`hit_test` returned the overlay, so an agent (or the shell's click-by-coordinate) actuated the wrong
+element.
+
+`A11yNode` now carries a `hittable: bool`. It is `false` for a `pointer-events:none` element, which stays
+in the tree (a screen reader still announces it — pointer-events is not visibility) but is skipped in
+`hit_test`, so the point passes through to whatever is behind. The value is set only by the live builder
+that holds the computed styles: `Page::a11y_tree`/`a11y_tree_with_focus` now feed
+`Page::non_hittable_nodes()` (the mirror of the existing `invisible_nodes()`, filtering
+`ComputedStyle.pointer_events == None`) into `build_tree_full`/`build_tree_full_with_focus`. The plain
+builders default `hittable = true`, so nothing changes for callers that do not supply the set. Because
+`pointer-events` inherits, the computed value on each node already reflects the overlay→subtree cascade,
+so a descendant that re-enables with `pointer-events:auto` stays hittable — no extra tree-walk.
+
+Gated on two axes. The a11y-crate unit test `hit_test_passes_through_a_pointer_events_none_overlay` mirrors
+the occlusion test's geometry (a high-`z` overlay that, when *hittable*, wins) and flips only `hittable`,
+so it RED-proves the skip in isolation. The page gate `G_POINTER_EVENTS_A11Y` proves the live wiring
+end-to-end: over a real page it asserts the `pointer-events:none` roled node is present but `hittable ==
+false`, a normal node stays `hittable == true` (no over-marking), and `hit_test` over the overlap returns
+the button behind the overlay — RED-proven by neutering the skip (the overlay then wins). [[css-cascade]]

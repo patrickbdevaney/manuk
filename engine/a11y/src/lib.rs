@@ -333,6 +333,12 @@ pub struct A11yNode {
     /// a higher-`z` box on top wins a click even if a lower-`z` box also contains the point.
     /// `0` for the common non-positioned case (then hit-testing falls back to deepest-wins).
     pub z: i32,
+    /// Whether this node is a hit-test target. `false` for a `pointer-events: none` element — it
+    /// stays in the tree (a screen reader still announces it) but coordinate hit-testing passes
+    /// THROUGH it to whatever is behind, so an agent grounding a click by coordinate does not land on
+    /// a decorative overlay. Default `true`; only the live builder that holds the computed styles can
+    /// set it, since `pointer-events` is a style, not a DOM attribute.
+    pub hittable: bool,
     /// Interaction state — checked, expanded, selected, disabled, value. **This is what lets an
     /// agent confirm its own action.** See [`A11yState`].
     pub state: A11yState,
@@ -658,6 +664,11 @@ impl A11yNode {
         // node wins, and since `iter()` is pre-order "deeper" is "seen later" (`<=`).
         let mut best: Option<&A11yNode> = None;
         for n in self.iter() {
+            // `pointer-events: none` — transparent to hit-testing; the point passes through to the
+            // element behind, so a decorative overlay never steals an agent's coordinate click.
+            if !n.hittable {
+                continue;
+            }
             let Some(b) = n.bbox else { continue };
             if !(x >= b.x && x < b.right() && y >= b.y && y < b.bottom()) {
                 continue;
@@ -1026,15 +1037,29 @@ pub fn build_tree_with_visibility(
     z_index: &ZIndex,
     invisible: &HashSet<NodeId>,
 ) -> A11yNode {
+    build_tree_full(dom, rects, z_index, invisible, &HashSet::new())
+}
+
+/// [`build_tree_with_visibility`] + the set of `pointer-events: none` nodes (which stay in the tree
+/// but are dropped from hit-testing). The live page path — which holds the computed styles — uses
+/// this; the plain builders pass an empty set.
+pub fn build_tree_full(
+    dom: &Dom,
+    rects: &HashMap<NodeId, Rect>,
+    z_index: &ZIndex,
+    invisible: &HashSet<NodeId>,
+    non_hittable: &HashSet<NodeId>,
+) -> A11yNode {
     let index = id_index(dom);
     let root = dom.root();
-    let children = build_children(dom, root, &index, rects, z_index, invisible);
+    let children = build_children(dom, root, &index, rects, z_index, invisible, non_hittable);
     A11yNode {
         node: root,
         role: Role::Document,
         name: String::new(),
         bbox: None,
         z: 0,
+        hittable: true,
         state: A11yState::default(),
         children,
     }
@@ -1061,7 +1086,20 @@ pub fn build_tree_with_focus_and_visibility(
     focused: Option<NodeId>,
     invisible: &HashSet<NodeId>,
 ) -> A11yNode {
-    let mut tree = build_tree_with_visibility(dom, rects, z_index, invisible);
+    build_tree_full_with_focus(dom, rects, z_index, focused, invisible, &HashSet::new())
+}
+
+/// [`build_tree_with_focus_and_visibility`] + the `pointer-events: none` set — what a live page uses
+/// for the agent's focus-aware, occlusion-aware, pointer-events-honest hit-test tree.
+pub fn build_tree_full_with_focus(
+    dom: &Dom,
+    rects: &HashMap<NodeId, Rect>,
+    z_index: &ZIndex,
+    focused: Option<NodeId>,
+    invisible: &HashSet<NodeId>,
+    non_hittable: &HashSet<NodeId>,
+) -> A11yNode {
+    let mut tree = build_tree_full(dom, rects, z_index, invisible, non_hittable);
     if let Some(f) = focused {
         mark_focused(&mut tree, f);
     }
@@ -1084,6 +1122,7 @@ fn build_children(
     rects: &HashMap<NodeId, Rect>,
     z_index: &ZIndex,
     invisible: &HashSet<NodeId>,
+    non_hittable: &HashSet<NodeId>,
 ) -> Vec<A11yNode> {
     let mut out = Vec::new();
     // N3/N4 — the FLAT tree: a shadow host exposes its shadow content, and a `<slot>`
@@ -1100,13 +1139,29 @@ fn build_children(
         // shown, and is in Chrome's accessibility tree. Pruning the subtree here would delete it.
         // (`display:none` and `hidden`/`aria-hidden` above are not undoable, so those do prune.)
         if invisible.contains(&child) {
-            out.extend(build_children(dom, child, index, rects, z_index, invisible));
+            out.extend(build_children(
+                dom,
+                child,
+                index,
+                rects,
+                z_index,
+                invisible,
+                non_hittable,
+            ));
             continue;
         }
         // The tree root already *is* the document; `<html>` must not nest a second
         // `document` node inside it. Reparent its children instead.
         if dom.element(child).is_some_and(|e| e.name == "html") {
-            out.extend(build_children(dom, child, index, rects, z_index, invisible));
+            out.extend(build_children(
+                dom,
+                child,
+                index,
+                rects,
+                z_index,
+                invisible,
+                non_hittable,
+            ));
             continue;
         }
         match role_of(dom, child) {
@@ -1119,12 +1174,30 @@ fn build_children(
                     name,
                     bbox: rects.get(&child).copied(),
                     z: z_index.get(&child).copied().unwrap_or(0),
+                    // `pointer-events: none` — the node is announced but is not a hit target.
+                    hittable: !non_hittable.contains(&child),
                     state,
-                    children: build_children(dom, child, index, rects, z_index, invisible),
+                    children: build_children(
+                        dom,
+                        child,
+                        index,
+                        rects,
+                        z_index,
+                        invisible,
+                        non_hittable,
+                    ),
                 });
             }
             // presentational: drop the node, keep (reparent) its children
-            None => out.extend(build_children(dom, child, index, rects, z_index, invisible)),
+            None => out.extend(build_children(
+                dom,
+                child,
+                index,
+                rects,
+                z_index,
+                invisible,
+                non_hittable,
+            )),
         }
     }
     out
@@ -1141,6 +1214,7 @@ mod tests {
             name: name.to_string(),
             bbox: None,
             z: 0,
+            hittable: true,
             state: A11yState::default(),
             children: vec![],
         }
@@ -1161,6 +1235,7 @@ mod tests {
                 height: 20.0,
             }),
             z: 0,
+            hittable: true,
             state: A11yState::default(),
             children: vec![],
         };
@@ -1175,6 +1250,7 @@ mod tests {
                 height: 200.0,
             }),
             z: 10,
+            hittable: true,
             state: A11yState::default(),
             children: vec![],
         };
@@ -1184,10 +1260,61 @@ mod tests {
             name: String::new(),
             bbox: None,
             z: 0,
+            hittable: true,
             state: A11yState::default(),
             children: vec![button, overlay],
         };
         assert_eq!(root.hit_test(20.0, 15.0).map(|n| n.node), Some(NodeId(2)));
+    }
+
+    #[test]
+    fn hit_test_passes_through_a_pointer_events_none_overlay() {
+        // A high-`z` overlay covers a button — but the overlay is `pointer-events: none` (hittable
+        // false), so a coordinate click passes THROUGH it to the button behind. Without the `hittable`
+        // skip this returns the overlay (NodeId 2) — the occlusion test above proves that is what a
+        // *hittable* overlay does — so this is the RED-prover for the pointer-events fix.
+        let button = A11yNode {
+            node: NodeId(1),
+            role: Role::Button,
+            name: "Buy".into(),
+            bbox: Some(Rect {
+                x: 10.0,
+                y: 10.0,
+                width: 40.0,
+                height: 20.0,
+            }),
+            z: 0,
+            hittable: true,
+            state: A11yState::default(),
+            children: vec![],
+        };
+        let ghost = A11yNode {
+            node: NodeId(2),
+            role: Role::Generic,
+            name: "scrim".into(),
+            bbox: Some(Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 200.0,
+                height: 200.0,
+            }),
+            z: 10,
+            hittable: false, // pointer-events: none
+            state: A11yState::default(),
+            children: vec![],
+        };
+        let root = A11yNode {
+            node: NodeId(0),
+            role: Role::Document,
+            name: String::new(),
+            bbox: None,
+            z: 0,
+            hittable: true,
+            state: A11yState::default(),
+            children: vec![button, ghost],
+        };
+        // The click lands on the button behind the ghost, not the ghost.
+        assert_eq!(root.hit_test(20.0, 15.0).map(|n| n.node), Some(NodeId(1)));
     }
 
     #[test]
@@ -1198,6 +1325,7 @@ mod tests {
             name: String::new(),
             bbox: None,
             z: 0,
+            hittable: true,
             state: A11yState::default(),
             children: vec![leaf(Role::Link, "Sign in"), leaf(Role::Button, "Menu")],
         };
@@ -1207,6 +1335,7 @@ mod tests {
             name: String::new(),
             bbox: None,
             z: 0,
+            hittable: true,
             state: A11yState::default(),
             children: vec![leaf(Role::Button, "Menu"), leaf(Role::Button, "Sign out")],
         };

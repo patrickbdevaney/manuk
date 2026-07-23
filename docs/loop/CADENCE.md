@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **232** | ticks 1–448 |
-| median tick cycle | **19m** | 231 intervals |
-| median, last 10 | **34m** | 10 intervals |
+| ticks landed | **233** | ticks 1–449 |
+| median tick cycle | **19m** | 232 intervals |
+| median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.79** | 292.4h elapsed |
-| median verify wall | **60s** | 171 ticks |
+| **ticks per hour** | **0.79** | 292.9h elapsed |
+| median verify wall | **60s** | 172 ticks |
 | wall trend | 39s → 61s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **215**
+* **live gates**: 27 → **216**
 * **✅ rows in the capability ledger**: 144 → **328**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**132 of 232 ticks** (57%) moved a
+**133 of 233 ticks** (57%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **132** capability ticks, median cycle **19m**
-* median diff per tick: **+215 / −34** lines across 8 files
+* **133** capability ticks, median cycle **19m**
+* median diff per tick: **+215 / −34** lines across 9 files
 
 ## Every tick
 
@@ -329,5 +329,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **446** | 2026-07-23 08:29 | 27m | capability | 60s | +213/−38 | 213 | 81 | 56.0% · | datetime-local + week typed values (2026-07-23) |
 | **447** | 2026-07-23 08:46 | 17m | capability | 61s | +322/−42 | 214 | 81 | 56.0% · | <a>/<area> URL-decomposition setters (2026-07-23) |
 | **448** | 2026-07-23 09:26 | 39m | capability | 9m | +302/−38 | 215 | 81 | 56.0% · | pointer-events: none is transparent to hit-testing (2026-07-23) |
+| **449** | 2026-07-23 09:56 | 30m | capability | 58s | +353/−43 | 216 | 81 | 56.0% · | pointer-events: none transparent to the AGENT's a11y hit-test (2026-07-23) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
