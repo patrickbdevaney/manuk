@@ -17930,3 +17930,37 @@ all still green.
 TICK SHAPE: capability (option.text getter/setter + Option() defaultSelected arg; +1 gate). GATES +1.
 CONSTELLATION: option.text + Option() defaultSelected unknown→gated (G_OPTION_TEXT).
 WIKI: dom-semantics.md — option.text (collapsed/trimmed, settable) + the Option() defaultSelected argument.
+
+## Tick 440 — textarea.value is its text content, not a value attribute (2026-07-23)
+
+HYPOTHESIS (left the DOM-collection vein per Check #21's steer; probed the text-INPUT actuation surface —
+input selection/editing, used by autocomplete, input masks, and agent typing). A RED probe found the input
+selection API (selectionStart/End, setSelectionRange, select, setRangeText 4-arg) ALL already working — but
+a textarea probe surfaced a fundamental corruption bug: `<textarea>abcdef</textarea>.value` returned `""`.
+
+ROOT CAUSE: every text-control value path in dom_bindings.rs (`el_get_value`, `text_value_len`,
+`el_set_range_text`) read the `value` ATTRIBUTE unconditionally. Correct for `<input>`, WRONG for
+`<textarea>` — a textarea's raw value is its child TEXT CONTENT (until dirtied), it has no value attribute.
+So a server-rendered pre-filled textarea (edit-comment/bio/post — the entire "edit existing content" web)
+read an empty field, and `setRangeText` on it (sharing the broken source) replaced the WHOLE value instead
+of the selection: setSelectionRange(1,3)+setRangeText('XY') on 'abcdef' gave 'XY', not 'aXYdef'.
+
+FIX (capability, engine/js/src/dom_bindings.rs): one `text_control_value(dom, node)` helper that all three
+paths now share — for a textarea it returns the `value` attribute IF present (our dirty-value store, written
+by el_set_value/el_set_range_text) else the element's text content; for an input it returns the `value`
+attribute. So a pristine textarea reads its content, a dirtied one reads what was set, and the selection
+length + setRangeText splice both operate on the true value.
+
+GATE: G_TEXTAREA_VALUE (`textarea_value_is_text_content_and_setrangetext_splices`) — 6 claims incl. value==
+content, whitespace/newline preservation, dirty-after-set, the setRangeText splice ('aXYdef' not 'XY'), and
+the input-unaffected regression guard. RED-proven (probe: taValue:"" / splice replaced whole value).
+manuk-page green; g_form / g_formdata_iterators / g_form_elements / g_range / g_file_input /
+g_select_write / g_option_text all still green (no regression on the shared value path).
+
+KNOWN REMAINING (noted, not gated): `textarea.defaultValue` is still `undefined` (the text-content default,
+distinct from the reflect table's input.defaultValue), and `form.reset()` sets a textarea's value attr to
+data-default-value rather than restoring its content default.
+
+TICK SHAPE: capability (textarea.value/text_value_len/setRangeText read the true value via text_control_value; +1 gate). GATES +1.
+CONSTELLATION: textarea.value text-content source unknown→gated (G_TEXTAREA_VALUE).
+WIKI: dom-semantics.md — textarea.value is its text content (not a value attribute); the shared text_control_value helper.

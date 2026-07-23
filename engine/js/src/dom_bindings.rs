@@ -3488,11 +3488,8 @@ unsafe fn el_get_value(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> boo
             {
                 return option_value(dom, n);
             }
-            (*dom)
-                .element(n)
-                .and_then(|e| e.attr("value"))
-                .map(str::to_owned)
-                .unwrap_or_default()
+            // `<input>` reads its `value` attribute; `<textarea>` reads its text content until dirtied.
+            text_control_value(dom, n)
         })
         .unwrap_or_default();
     return_string(cx, vp, &v);
@@ -3694,13 +3691,35 @@ unsafe fn el_set_value(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool
     true
 }
 
-/// The text-control value length in UTF-16 code units (what the selection API counts in).
-unsafe fn text_value_len(dom: *mut Dom, node: NodeId) -> u32 {
+/// The current value of a text control — the ONE source of truth every value/selection path must read.
+///
+/// For an `<input>` the value lives in the `value` attribute. For a `<textarea>` it does NOT: the raw
+/// value is the element's TEXT CONTENT (`<textarea>abc</textarea>` has value `"abc"`), until the user or a
+/// script dirties it — at which point we store the dirty value in the `value` attribute (see `el_set_value`
+/// / `el_set_range_text`). Reading `attr("value")` unconditionally — which every path here used to do —
+/// returned `""` for a server-rendered pre-filled textarea, so editing an existing comment/bio/post read
+/// an empty field and `setRangeText` on it replaced the whole value instead of the selection.
+unsafe fn text_control_value(dom: *mut Dom, node: NodeId) -> String {
+    let is_textarea = (*dom)
+        .element(node)
+        .map(|e| e.name == "textarea")
+        .unwrap_or(false);
+    if is_textarea {
+        if let Some(v) = (*dom).element(node).and_then(|e| e.attr("value")) {
+            return v.to_owned(); // dirtied by a prior set — the attribute is our dirty-value store
+        }
+        return (*dom).text_content(node); // pristine — the value is the child text content
+    }
     (*dom)
         .element(node)
         .and_then(|e| e.attr("value"))
-        .map(|v| v.encode_utf16().count() as u32)
-        .unwrap_or(0)
+        .map(str::to_owned)
+        .unwrap_or_default()
+}
+
+/// The text-control value length in UTF-16 code units (what the selection API counts in).
+unsafe fn text_value_len(dom: *mut Dom, node: NodeId) -> u32 {
+    text_control_value(dom, node).encode_utf16().count() as u32
 }
 
 /// `input.selectionStart` / `input.selectionEnd` getter — the stored selection offset, or the end of
@@ -3810,11 +3829,7 @@ unsafe fn el_select(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool 
 unsafe fn el_set_range_text(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let repl = arg_string(cx, vp, argc, 0).unwrap_or_default();
-        let value = (*dom)
-            .element(node)
-            .and_then(|e| e.attr("value"))
-            .map(str::to_owned)
-            .unwrap_or_default();
+        let value = text_control_value(dom, node);
         let units: Vec<u16> = value.encode_utf16().collect();
         let len = units.len() as u32;
         // Default range is the current selection (or the caret at end if none set).

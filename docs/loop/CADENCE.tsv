@@ -223,3 +223,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 436	5c765d2	1784791459	2026-07-23T03:24:19-04:00	1129	capability	60	10	311	51	203	81	3896	6960	0	328	31	the <table> WRITE API: insertRow/deleteRow/insertCell + sections (2026-07-23)
 437	b5ce062	1784794700	2026-07-23T04:18:20-04:00	3241	capability	60	9	268	34	205	81	3896	6960	0	328	31	element.form resolves the form owner (2026-07-23)
 439	580e42e	1784796172	2026-07-23T04:42:52-04:00	1472	capability	58	13	305	38	206	81	3896	6960	0	328	31	option.text + the Option() constructor's defaultSelected argument (2026-07-23)
+440	d58446a	1784798144	2026-07-23T05:15:44-04:00	1972	capability	58	9	193	47	207	81	3896	6960	0	328	31	textarea.value is its text content, not a value attribute (2026-07-23)

@@ -1294,3 +1294,19 @@ constructed pre-selected option came back unselected. The constructor now sets t
 attribute when `defaultSelected` is truthy — which is what `.selected` reads for an option not yet dirtied
 in a rendered select, so `new Option('t','v',true)` comes back selected AND defaultSelected. Gate
 `G_OPTION_TEXT`.
+
+## textarea.value is its text content, not a value attribute (tick 440)
+
+`<textarea>abcdef</textarea>.value` returned `""`. Every text-control value path in `dom_bindings.rs`
+(`el_get_value`, `text_value_len`, `el_set_range_text`) read the `value` ATTRIBUTE unconditionally — correct
+for `<input>`, wrong for `<textarea>`, whose raw value is the child TEXT CONTENT until the user or a script
+dirties it. So a server-rendered pre-filled textarea (edit-comment / edit-bio / edit-post — the whole
+"editing existing content" web) read an empty field, and `setRangeText` on it replaced the entire value
+instead of the selected range (`setSelectionRange(1,3)` + `setRangeText('XY')` on `"abcdef"` gave `"XY"`,
+not `"aXYdef"`).
+
+Fixed with a single `text_control_value(dom, node)` helper that all three paths now share: for a textarea it
+returns the `value` attribute IF present (our dirty-value store, written by `el_set_value`/`el_set_range_text`)
+else the element's text content; for an input it returns the `value` attribute. Gate `G_TEXTAREA_VALUE`.
+Remaining: `textarea.defaultValue` (still `undefined` — the text-content default, separate from the reflect
+table's input.defaultValue) and `form.reset()` restoring a textarea to its content default.

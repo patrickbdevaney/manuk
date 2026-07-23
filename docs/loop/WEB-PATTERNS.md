@@ -3673,3 +3673,19 @@ attribute when `defaultSelected` is truthy, so the constructed option is selecte
 **The trap:** putting `text` on the element prototype must not eat the ordinary `div.text = x` expando —
 the getter is `undefined` for non-options and the setter materialises a normal own property there, so no
 non-option `.text` assignment regresses.
+
+## textarea.value reads the text content (tick 440)
+
+**The class of the web this unlocks:** the entire "edit existing content" web — every server-rendered form
+with a pre-filled `<textarea>` (edit a comment, a bio, a post, a description, a config blob). Reading
+`textarea.value` returned `""`, so the field looked empty to JS, dirty-checks fired wrong, and re-submitting
+wiped the content. It also corrupted insert-at-cursor editors: `setRangeText` shared the same broken value
+source and replaced the whole field instead of the selection.
+**(1)** A `<textarea>`'s raw value is its child TEXT CONTENT (until dirtied), NOT a `value` attribute — the
+three value/selection paths (`el_get_value`, `text_value_len`, `el_set_range_text`) now read it through one
+`text_control_value` helper.
+**(2)** `<input>` is unchanged (its value really is the `value` attribute); a dirtied textarea stores its
+current value in the `value` attribute, which the helper prefers over the text content.
+**The trap:** reading `attr("value")` for both control types looks uniform but silently returns empty for
+every textarea — a whole control type reads blank, and the corruption compounds through setRangeText and
+form submission.
