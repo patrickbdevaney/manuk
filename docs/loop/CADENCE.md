@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **208** | ticks 1–416 |
-| median tick cycle | **18m** | 207 intervals |
+| ticks landed | **209** | ticks 1–418 |
+| median tick cycle | **18m** | 208 intervals |
 | median, last 10 | **22m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.74** | 279.2h elapsed |
-| median verify wall | **59s** | 147 ticks |
-| wall trend | 39s → 61s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.74** | 279.6h elapsed |
+| median verify wall | **59s** | 148 ticks |
+| wall trend | 39s → 71s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **328**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**111 of 208 ticks** (53%) moved a
+**111 of 209 ticks** (53%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **111** capability ticks, median cycle **18m**
-* median diff per tick: **+210 / −34** lines across 8 files
+* median diff per tick: **+209 / −34** lines across 8 files
 
 ## Every tick
 
@@ -305,5 +305,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **413** | 2026-07-22 19:07 | 31m | capability | 58s | +167/−36 | 187 | 81 | 56.0% · | white-space: pre-wrap PRESERVES spaces (it shared pre-line's collapse path) (2026-07-22) |
 | **415** | 2026-07-22 19:24 | 17m | governance | 61s | +109/−35 | 187 | 81 | 56.0% · | cadence: self-audit + Constitution Check #18 (2026-07-22) |
 | **416** | 2026-07-22 20:18 | 53m | capability | 71s | +330/−35 | 187 | 81 | 56.0% · | text-indent: apply the first-line inline-start indent (image-replacement + prose) (2026-07 |
+| **418** | 2026-07-22 20:38 | 20m | measurement | 79s | +136/−34 | 187 | 81 | 56.0% · | Intl: measure-and-pin the i18n formatting capability (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

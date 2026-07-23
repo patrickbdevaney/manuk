@@ -220,6 +220,19 @@ const HTML: &str = r##"<!doctype html>
     // would prevent this very probe from executing. It needs an external-script harness and a real
     // response header, so it stays `unknown` rather than being given a verdict this file cannot earn.
 
+    // ── Intl (locale-aware number/date formatting). The verified build is `mozjs/intl`, so
+    // SpiderMonkey carries ICU. The de-DE assertion is the RED-prover: only real ICU locale data
+    // yields `1.234,5` (dot thousands, comma decimal) — a stub, or a `noicu` build, cannot fake it.
+    // This underpins every app that shows a localized price, date or number (i18n is table stakes).
+    probe('intl', function () {
+      if (typeof Intl !== 'object') { return false; }
+      var us = new Intl.NumberFormat('en-US').format(1234.5);
+      var de = new Intl.NumberFormat('de-DE').format(1234.5);
+      var mon = new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' })
+                  .format(new Date(Date.UTC(2020, 0, 15)));
+      return us === '1,234.5' && de === '1.234,5' && mon === 'January';
+    });
+
     // ── Drag and drop: the event surface pages actually bind to.
     probe('dragdrop', function () {
       return typeof DataTransfer === 'function' && 'draggable' in document.createElement('div') &&
@@ -297,4 +310,11 @@ const PINNED: &[&str] = &[
     // the presentational-hints pass so it can veto the UA cols-width hint; the probe measures the
     // reference textarea keeping its cols width AND the field-sized one hugging content.
     "fieldsizing:yes",
+    // tick 418 — Intl (locale-aware number/date formatting): SpiderMonkey carries full ICU in the
+    // verified `mozjs/intl` build, so `Intl.NumberFormat`/`DateTimeFormat` are real, not stubs. The
+    // probe's de-DE assertion (`1.234,5`) is the RED-prover — only genuine ICU locale data produces
+    // it — so this pin also guards against a silent regression to a `noicu` build. i18n is table
+    // stakes: every app showing a localized price/date/number depends on it. Was carried UNKNOWN
+    // (unprobed, unlisted); measured working, not assumed.
+    "intl:yes",
 ];

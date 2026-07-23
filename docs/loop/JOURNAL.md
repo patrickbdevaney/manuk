@@ -17194,3 +17194,30 @@ block (not inline) children unhandled; true old-flexbox `-webkit-box` child layo
 TICK SHAPE: capability (-webkit-line-clamp multi-line truncation; +2 gates). GATES +2.
 CONSTELLATION: CSS -webkit-line-clamp missing→works (N-line clamp + ellipsis; card/excerpt idiom).
 WIKI: text-layout.md — "-webkit-line-clamp caps a block at N lines with a trailing …".
+
+## Tick 418 — Intl: measure-and-pin the i18n formatting capability (2026-07-22)
+
+HYPOTHESIS (measurement vein — the observer's highest-yield class: t225/226/359 found WebAssembly,
+CJK, media queries, WasmGC ALL already working while carried as unknown): `Intl` was carried UNKNOWN
+— it appeared nowhere in the JS bindings, the capability probe, or the constellation. But `Intl` is a
+SpiderMonkey built-in (embedder-unwired), and the verified build is `--features stylo,spidermonkey`
+which pulls `mozjs/intl` (full ICU). So the odds were it already worked — locale-aware number/date/
+currency formatting, table stakes for any app that shows a localized price or date.
+
+MEASURED: `intl:yes`. `Intl.NumberFormat('en-US').format(1234.5)` = `1,234.5`,
+`Intl.NumberFormat('de-DE').format(1234.5)` = `1.234,5`, `Intl.DateTimeFormat('en-US',{month:'long'})`
+→ `January`. The de-DE assertion is the RED-prover: dot-thousands / comma-decimal is only producible
+from REAL ICU locale data — a stub or a `noicu` build cannot fake it, so this also guards against a
+silent regression to the ICU-trimmed build.
+
+FIX (measurement/pin tick, no engine change): added an `intl` probe to `g_probe_capabilities.rs` and
+pinned `intl:yes` in the gate's PINNED list; recorded the row in `CONSTELLATION.tsv` (unknown→gated).
+RED-proven: forcing the probe's de-DE expectation to an impossible value flips the report to `intl:no`
+and the gate fails on the missing `intl:yes` (demonstrated, then reverted). The probe run also
+reconfirms the measured-ABSENT set (multicol, textwrapbalance, webcodecs, subgrid, anchorpos,
+scrolldriven, jspi…) — honest verdicts, not blanks.
+
+TICK SHAPE: measurement (unknown→gated capability pin; +0 engine, the probe IS the gate). GATES +0 new
+files (assertion added to the existing G_PROBE_CAPABILITIES).
+CONSTELLATION: Intl unknown→works (i18n number/date formatting, ICU-backed).
+WIKI: none — measurement/pin tick; the probe file + CONSTELLATION.tsv are the durable record.

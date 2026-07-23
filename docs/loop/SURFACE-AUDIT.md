@@ -613,3 +613,53 @@ cannot produce:
 
 No stale-pessimistic finds this pass (the t402-404 gates are hours old). LAST_SURFACE_AUDIT
 397→407; next due 417.
+
+## Audit #15 — tick 418 (2026-07-22)
+
+Cadence-driven (due at 417; #14 was tick 407). Sources searched THIS pass (not from memory):
+[Interop 2026 README + selection-process](https://github.com/web-platform-tests/interop/blob/main/2026/README.md ·
+https://github.com/web-platform-tests/interop/blob/main/2026/selection-process.md),
+[web.dev/blog/interop-2026](https://web.dev/blog/interop-2026),
+[WebKit Interop 2026](https://webkit.org/blog/17818/announcing-interop-2026/),
+[Mozilla Hacks launch](https://hacks.mozilla.org/2026/02/launching-interop-2026/);
+[Ladybird June-2026 newsletter](https://ladybird.org/newsletter/2026-06-30/) +
+[downloads/history/sandboxing coverage](https://piunikaweb.com/2026/07/06/ladybird-browser-downloads-history-sandboxing/).
+
+### The external frame — what changed since #14
+
+Interop 2026 is now stated as **twenty** focus areas (#14 said 19). The sharpest new signal is the
+named **20%-of-score cluster**: *advanced `attr()`* + *`getAllRecords()` for IndexedDB* + *WebTransport*
++ *JSPI* (JS Promise Integration for Wasm). Plus a **web-compatibility** focus area bundling *ESM module
+loading*, *scroll-vs-animation event timing*, and *`user-select`*.
+
+Reconciled against CONSTELLATION.tsv:
+* **advanced `attr()`** — already row 96 (`attrfn:no`, measured). On map.
+* **WebTransport** — already row 100 (missing, HTTP/3, deliberately out of V1-SCOPE). On map; the
+  vendor signal does NOT change the scope call (no QUIC/HTTP-3 stack in v1).
+* **JSPI** — already measured by G_PROBE_CAPABILITIES (`jspi:no`). On map.
+* **scroll-vs-animation event timing** — covered by the scroll-driven-animations row (`scrolldriven:no`).
+
+### ADDED (the map-wideners — the point of the audit)
+
+* **`user-select` (CSS)** → constellation `unknown`. ZERO hits in engine/css — it was NOT on the map at
+  all, yet `user-select:none` is on nearly every button/toolbar/drag-handle on the web. Bounded future
+  work (does the selection engine honor `none`/`all`?). This is the genuine discovery this pass.
+* **IndexedDB `getAllRecords()`** → `unknown`. IDB is on the map; this specific 20%-weight Interop
+  method is a bounded add-on to the existing surface.
+* **ESM module-graph loading (import/export resolution)** → `unknown`. PARTIAL today — engine/page runs
+  `type=module` as a deferred script (lib.rs:1384/1448) but the static import-graph resolve/link/eval
+  order is unmeasured. Added to force a probe.
+
+### MEASURED-and-PINNED this window (not a phantom pass)
+
+Tick 418 also pinned **`intl:yes`** (Intl + full ICU) — a capability that had been carried nowhere on
+the map and was already working. The stale-pessimistic rule pays a seventh time.
+
+### EXCLUDED (with reason)
+
+* WebRTC (row 67) and WebTransport (row 100) — no RTC/QUIC stack in v1; consistent with #12–#14.
+* Ladybird's June-2026 process-isolation / GPU-sandbox / downloads work — architecture + shell, not a
+  rendering capability our corpus can see; the downloads/history/session shell is already v1-scoped.
+
+Ladybird reference point unchanged as a north star: ~97.8% test262, ~2M WPT subtests — test262 stays
+our biggest never-run unknown (row present). LAST_SURFACE_AUDIT 407→418; next due 428.
