@@ -218,3 +218,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 431	1ef930a	1784783479	2026-07-23T01:11:19-04:00	1856	capability	62	11	247	35	198	81	3896	6960	0	328	31	element.scrollTo / scrollBy / scroll (2026-07-23)
 432	9244f20	1784785375	2026-07-23T01:42:55-04:00	1896	capability	60	10	284	40	199	81	3896	6960	0	328	31	CSSStyleDeclaration is array-like and carries !important (2026-07-23)
 433	ef2c391	1784787940	2026-07-23T02:25:40-04:00	2565	capability	59	10	379	52	200	81	3896	6960	0	328	31	form.elements is a live HTMLFormControlsCollection (2026-07-23)
+434	052c163	1784789022	2026-07-23T02:43:42-04:00	1082	capability	61	10	244	51	201	81	3896	6960	0	328	31	control.labels + label.control link a form field to its <label> (2026-07-23)

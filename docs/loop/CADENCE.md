@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **219** | ticks 1–433 |
-| median tick cycle | **19m** | 218 intervals |
+| ticks landed | **220** | ticks 1–434 |
+| median tick cycle | **19m** | 219 intervals |
 | median, last 10 | **40m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.76** | 285.4h elapsed |
-| median verify wall | **59s** | 158 ticks |
+| **ticks per hour** | **0.77** | 285.7h elapsed |
+| median verify wall | **59s** | 159 ticks |
 | wall trend | 39s → 60s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **200**
+* **live gates**: 27 → **201**
 * **✅ rows in the capability ledger**: 144 → **328**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**119 of 219 ticks** (54%) moved a
+**120 of 220 ticks** (55%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **119** capability ticks, median cycle **19m**
+* **120** capability ticks, median cycle **19m**
 * median diff per tick: **+214 / −34** lines across 8 files
 
 ## Every tick
@@ -316,5 +316,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **431** | 2026-07-23 01:11 | 31m | capability | 62s | +247/−35 | 198 | 81 | 56.0% · | element.scrollTo / scrollBy / scroll (2026-07-23) |
 | **432** | 2026-07-23 01:42 | 32m | capability | 60s | +284/−40 | 199 | 81 | 56.0% · | CSSStyleDeclaration is array-like and carries !important (2026-07-23) |
 | **433** | 2026-07-23 02:25 | 43m | capability | 59s | +379/−52 | 200 | 81 | 56.0% · | form.elements is a live HTMLFormControlsCollection (2026-07-23) |
+| **434** | 2026-07-23 02:43 | 18m | capability | 61s | +244/−51 | 201 | 81 | 56.0% · | control.labels + label.control link a form field to its <label> (2026-07-23) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

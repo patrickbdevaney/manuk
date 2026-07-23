@@ -3579,3 +3579,20 @@ through it, or an image button appears as a phantom control. It gets a self-cont
 routing through the hot `live()` childNodes proxy, whose own note records that enriching its traps once
 surfaced a cross-file UAF. KNOWN LIMIT (honest): association is by SUBTREE, not the `form=` attribute
 reassociating a control elsewhere in the document (the ~99% case; `form=` is a follow-on).
+
+## control.labels and label.control link a form field to its <label> (tick 434)
+
+**The class of the web this unlocks:** every accessibility helper and form library that reads the text
+NAMING a control, and every "click the label to focus the field" behaviour. Both `input.labels` and
+`label.control` were `undefined`, so `input.labels[0].textContent` (the accessible-name walk) threw and a
+`<label for=x>` had no live link to its control.
+**(1)** `label.control` resolves the `for=` attribute to its target IF that target is labelable, else the
+FIRST labelable DESCENDANT (`<label><input></label>` with no `for=`). Labelable = button / input (NOT
+hidden) / meter / output / progress / select / textarea.
+**(2)** `control.labels` is a NodeList (recomputed per read, static within a read) of every `<label>` whose
+`.control` resolves back to this element, in tree order — a control can carry more than one label. A hidden
+input is non-labelable, so its `.labels` is `null` (not an empty list), and a `<label for=hidden>` claims
+no control.
+**The trap:** returning the first `<label for=id>` alone misses both the second label and the containment
+form; and treating a hidden input as labelable makes `<label for=hidden>` falsely claim it. It uses a
+STATIC NodeList, not the hot `live()` childNodes proxy, whose heap sensitivity is documented for tick 129.

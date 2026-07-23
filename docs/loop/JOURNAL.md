@@ -17755,3 +17755,30 @@ the shell suite passes standalone (70+2 in 10.8s, load 1.34) AND passes 3× earl
 (G_TEARDOWN/G_RUNTIME_COUNT/affordances all "shell suite green"), only the final T-section re-run flakes.
 My change touches engine/js + a page test only; the shell compiled and passed with it. Harness/infra
 (observer-owned: the log itself printed "swap is 97% full — swapoff -a && swapon -a"). Landing via warm re-run.
+
+## Tick 434 — control.labels + label.control link a form field to its <label> (2026-07-23)
+
+HYPOTHESIS (same probe-a-remaining-DOM-surface vein as t433's form.elements): the label⇄control
+association was carried unmeasured. A grep found `labels` with ZERO hits in engine/js — so `input.labels`
+(the NodeList of associated labels, how every a11y helper reads a control's accessible name) and
+`label.control` (the inverse) were both `undefined`. RED-proven: disabling the getters makes the gate's
+script throw at `email.labels[0]` and the output stays "-".
+
+FIX (capability, engine/js/src/collections_js.rs — the live-collections IIFE, alongside form.elements):
+- `label.control` (getter, LABEL-tag-guarded): the `for=` target IF it is labelable, else the FIRST
+  labelable DESCENDANT (`<label><input></label>`). Labelable = button/input(not hidden)/meter/output/
+  progress/select/textarea.
+- `element.labels` (getter on the shared element prototype): a STATIC NodeList — deliberately NOT routed
+  through the hot live() childNodes proxy (documented heap sensitivity) — of every `<label>` whose
+  `.control` resolves to this element, in tree order (a control can have >1 label). A hidden input is
+  non-labelable so its `.labels` is `null` (HTMLInputElement contract); a non-form element has no such
+  property (undefined).
+
+GATE: G_LABEL_ASSOCIATION (`labels_and_control_link_a_form_field_to_its_label`) — 8 claims: control-by-for,
+control-by-descendant, labels-is-NodeList, labels-len-2, labels-tree-order-text, labels.item, hidden-input-
+labels-null, label-for-hidden-claims-nothing. manuk-page green; g_form_elements / g_collections /
+g_doc_collections all still green (the shared live() proxy untouched).
+
+TICK SHAPE: capability (control.labels + label.control label association; +1 gate). GATES +1.
+CONSTELLATION: label⇄control association unknown→gated (G_LABEL_ASSOCIATION).
+WIKI: dom-semantics.md — control.labels (a static NodeList) and label.control link a form field to its <label>s.

@@ -482,5 +482,67 @@ pub const COLLECTIONS_JS: &str = r#"
       },
     });
   }
+
+  // ── `control.labels` and `label.control` — the label⇄control association a11y needs.
+  //
+  // Both were `undefined`. `input.labels` is how every accessibility helper and form library finds the
+  // text that names a control (`input.labels[0].textContent`), and `label.control` is the inverse. A
+  // `<label for=x>` with no live `.control`, and an `<input>` with no `.labels`, means a screen-reader
+  // shim or a "focus the field when its label is clicked" handler has nothing to walk.
+  var LABELABLE = { BUTTON: 1, INPUT: 1, METER: 1, OUTPUT: 1, PROGRESS: 1, SELECT: 1, TEXTAREA: 1 };
+  function isLabelable(el) {
+    if (!el || !LABELABLE[el.tagName]) return false;
+    // A hidden input is NOT labelable (HTML §labelable elements).
+    if (el.tagName === 'INPUT' && (el.getAttribute('type') || '').toLowerCase() === 'hidden') return false;
+    return true;
+  }
+  // `label.control`: the `for=` target if it is labelable, else the FIRST labelable descendant.
+  function labelControl(label) {
+    var f = label.getAttribute ? label.getAttribute('for') : null;
+    if (f !== null && f !== undefined) {
+      var doc = label.ownerDocument || (typeof document !== 'undefined' ? document : null);
+      var t = doc && doc.getElementById ? doc.getElementById(f) : null;
+      return (t && isLabelable(t)) ? t : null;
+    }
+    var desc = label.querySelectorAll ? label.querySelectorAll('button,input,meter,output,progress,select,textarea') : [];
+    for (var i = 0; i < desc.length; i++) { if (isLabelable(desc[i])) return desc[i]; }
+    return null;
+  }
+  // The labels associated with `el`, in tree order: every `<label>` whose `.control` resolves to `el`.
+  function labelsFor(el) {
+    var doc = el.ownerDocument || (typeof document !== 'undefined' ? document : null);
+    var all = (doc && doc.getElementsByTagName) ? doc.getElementsByTagName('label') : [];
+    var out = [];
+    for (var i = 0; i < all.length; i++) { if (labelControl(all[i]) === el) out.push(all[i]); }
+    return out;
+  }
+  // A STATIC NodeList — deliberately NOT routed through `live()` (the hot childNodes proxy whose heap
+  // sensitivity is documented above); `.labels` is read far too rarely to earn a proxy per access.
+  function staticNodeList(arr) {
+    var nl = Object.create(NodeList.prototype);
+    for (var i = 0; i < arr.length; i++) { nl[i] = arr[i]; }
+    Object.defineProperty(nl, 'length', { value: arr.length, enumerable: false, configurable: true });
+    nl.item = function (i) { i = i | 0; return (i >= 0 && i < arr.length) ? arr[i] : null; };
+    nl.forEach = function (fn, t) { for (var j = 0; j < arr.length; j++) { fn.call(t, arr[j], j, this); } };
+    nl[Symbol.iterator] = function () { return arr[Symbol.iterator](); };
+    return nl;
+  }
+  if (EP) {
+    Object.defineProperty(EP, 'labels', {
+      configurable: true,
+      enumerable: false,
+      get: function () {
+        if (isLabelable(this)) { return staticNodeList(labelsFor(this)); }
+        // A labelable-in-general element that is currently non-labelable (a hidden input) → null,
+        // per HTMLInputElement.labels. Everything else simply has no such property.
+        return (this.tagName === 'INPUT') ? null : undefined;
+      },
+    });
+    Object.defineProperty(EP, 'control', {
+      configurable: true,
+      enumerable: false,
+      get: function () { return this.tagName === 'LABEL' ? labelControl(this) : undefined; },
+    });
+  }
 })();
 "#;

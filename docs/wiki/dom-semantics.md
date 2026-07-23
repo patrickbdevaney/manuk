@@ -815,6 +815,24 @@ attribute reassociating a control that lives elsewhere in the document. That is 
 reassociation is a separate follow-on. Gate `g_form_elements` (13 claims, proven red — pre-impl probe
 printed `type:undefined`). [[js-engine]]
 
+## `control.labels` and `label.control` link a form field to its `<label>`s (tick 434)
+
+Both were `undefined`. `input.labels` is the NodeList an accessibility helper reads to find the text that
+**names** a control (`input.labels[0].textContent`); `label.control` is the inverse a "focus the field
+when its label is clicked" handler walks. A control with neither is invisible to both.
+
+- **`label.control`** = the `for=` target **if that target is labelable**, else the **first labelable
+  descendant** (`<label><input></label>` with no `for=`). Labelable = `button` / `input` (NOT
+  `type=hidden`) / `meter` / `output` / `progress` / `select` / `textarea`.
+- **`element.labels`** = a **static** NodeList of every `<label>` whose `.control` resolves back to this
+  element, in tree order — a control can carry more than one label. A hidden input is non-labelable, so
+  its `.labels` is `null` (the `HTMLInputElement` contract), and a `<label for=hidden>` claims nothing.
+
+**Why STATIC, not `live()`.** `.labels` is read far too rarely to earn a per-access proxy, and routing it
+through the hot childNodes `live()` path is exactly the heap perturbation the tick-129 note warns causes a
+cross-file UAF. It is a plain frozen array-like with `NodeList.prototype`, `.length`, `.item`, `forEach`
+and an iterator. Gate `g_label_association` (8 claims, proven red by disabling the getters). [[js-engine]]
+
 ## `DOMStringMap` (`dataset`) and `NamedNodeMap` (`attributes`) enumerate their names (tick 130)
 
 The same legacy-platform-object gap as [[dom-semantics]]'s tick-129 `HTMLCollection`, on two more proxy-backed
