@@ -813,5 +813,90 @@ pub const COLLECTIONS_JS: &str = r#"
       },
     });
   }
+
+  // ── The `<select>` WRITE API — add/remove options, the way every non-framework dropdown builder does.
+  //
+  // Two silent wrongs, both in the everyday JS-driven `<select>` population path (country pickers,
+  // dependent/cascading dropdowns, "add another" rows):
+  //   * `select.add()` was `undefined` — so the primary method for inserting an option threw.
+  //   * `select.remove(0)` DETACHED THE WHOLE SELECT. With no own `remove(index)`, the call fell through
+  //     to the inherited `ChildNode.remove()`, which ignores the argument and tears the control out of the
+  //     form. `sel.remove(0)` means "remove option 0", not "delete the select" — this was data corruption
+  //     dressed as a working method.
+  //
+  // The spec overloads `remove`: `select.remove(index)` removes `options[index]`; `select.remove()` with
+  // no argument keeps the legacy `ChildNode.remove` (detach-self) behaviour. We must preserve that for
+  // every OTHER element, so the wrapper delegates to the original `remove` on the no-index path.
+  function selectAdd(select, element, before) {
+    if (before === undefined || before === null) { select.appendChild(element); return; }
+    if (typeof before === 'number') {
+      var opts = select.options, b = before | 0;
+      if (b >= 0 && b < opts.length) { var ref = opts[b]; ref.parentNode.insertBefore(element, ref); }
+      else { select.appendChild(element); }
+      return;
+    }
+    // `before` is an element: insert immediately before it, in its OWN parent (which may be an
+    // `<optgroup>` inside the select) — but only if it actually lives inside this select; otherwise append.
+    var p = before;
+    while (p && p !== select) { p = p.parentNode; }
+    if (p === select && before.parentNode) { before.parentNode.insertBefore(element, before); }
+    else { select.appendChild(element); }
+  }
+  // `HTMLOptionsCollection` methods, hung on the (fresh) array the native `options` getter returns.
+  function decorateOptions(select, arr) {
+    if (!arr) return arr;
+    arr.namedItem = function (name) {
+      for (var i = 0; i < arr.length; i++) {
+        var o = arr[i];
+        if (o.id === name || (o.getAttribute && o.getAttribute('name') === name)) return o;
+      }
+      return null;
+    };
+    arr.add = function (element, before) { selectAdd(select, element, before); };
+    arr.remove = function (index) {
+      index = index | 0;
+      if (index >= 0 && index < arr.length) { var o = arr[index]; o.parentNode.removeChild(o); }
+    };
+    return arr;
+  }
+  if (EP) {
+    // `select.add(element[, before])` — only selects have it (a `<div>.add` stays undefined, as in Chrome).
+    Object.defineProperty(EP, 'add', {
+      configurable: true, enumerable: false,
+      get: function () {
+        if (this.tagName !== 'SELECT') return undefined;
+        var self = this;
+        return function (element, before) { selectAdd(self, element, before); };
+      },
+    });
+    // Override `remove` for the whole element prototype, but delegate to the original for every case
+    // except `select.remove(<index>)` — so `div.remove()` / `select.remove()` still detach the node.
+    var origRemove = EP.remove;
+    if (typeof origRemove === 'function') {
+      EP.remove = function (index) {
+        if (this.tagName === 'SELECT' && arguments.length > 0 && index !== undefined && index !== null) {
+          var i = index | 0, opts = this.options;
+          if (i >= 0 && i < opts.length) { var o = opts[i]; o.parentNode.removeChild(o); }
+          return undefined;
+        }
+        return origRemove.apply(this, arguments);
+      };
+    }
+    // Decorate the native `options` array with the HTMLOptionsCollection write methods.
+    var optsProto = ownerOf(EP, 'options');
+    if (optsProto) {
+      var od = Object.getOwnPropertyDescriptor(optsProto, 'options');
+      if (od && typeof od.get === 'function') {
+        var origOptions = od.get;
+        Object.defineProperty(optsProto, 'options', {
+          configurable: true, enumerable: od.enumerable,
+          get: function () {
+            var el = this, arr = origOptions.call(el);
+            return (el.tagName === 'SELECT' && arr) ? decorateOptions(el, arr) : arr;
+          },
+        });
+      }
+    }
+  }
 })();
 "#;

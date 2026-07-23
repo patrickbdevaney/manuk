@@ -3643,3 +3643,20 @@ non-form-associated element (`<div>`) has no such property at all.
 **The trap:** falling back to the ancestor form when `form=` names a non-form is the intuitive-but-wrong
 behaviour — the spec makes a dangling `form=` yield null, because the author explicitly opted the control
 OUT of its ancestor and into a form that does not exist.
+
+## the <select> write API — add / remove(index) + options collection (tick 438)
+
+**The class of the web this unlocks:** every JS-driven `<select>` that populates or edits its own options
+at runtime — country/region pickers, dependent/cascading dropdowns, "add another row" forms, and any
+widget that builds a `<select>` from fetched data. The READ side already worked; the WRITE side was
+silently wrong two ways.
+**(1)** `select.add(element[, before])` was `undefined` — the primary insertion method threw. `before` is
+null/omitted → append, a number → insert before `options[n]` (append if out of range), or an element →
+insert before it in its own parent (which may be an `<optgroup>`).
+**(2)** `select.remove(0)` DETACHED THE WHOLE SELECT: with no own `remove(index)` the call fell through to
+the inherited `ChildNode.remove()`, which ignores the argument and tore the control out of its `<form>`.
+`remove(index)` now removes `options[index]`; `remove()` with no argument keeps the legacy detach-self
+overload, and `div.remove()` is untouched. `select.options.namedItem`/`add`/`remove` are also present now.
+**The trap:** a naive `EP.remove` override to fix `select.remove(index)` would break `div.remove()` for
+EVERY element — the fix must delegate to the native `ChildNode.remove` on every path except
+`select.remove(<index>)`, preserving the spec's overload.

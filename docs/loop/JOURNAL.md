@@ -17864,3 +17864,37 @@ still green (the last now genuinely exercises a working host.form).
 TICK SHAPE: capability (element.form form-owner resolution + option/label delegation; +1 gate). GATES +1.
 CONSTELLATION: element.form owner association unknown→gated (G_FORM_OWNER).
 WIKI: dom-semantics.md — element.form resolves the form owner (form= to a non-form yields null, not the ancestor).
+
+## Tick 438 — the <select> WRITE API: add/remove(index) + HTMLOptionsCollection (2026-07-23)
+
+HYPOTHESIS (same collections/form-DOM vein as t433-437; t437's journal noted "a select-manipulation
+probe surfaced" the form gap — so the select WRITE surface was suspect). A RED probe confirmed: the
+read side (options/selectedOptions/selectedIndex/value/datalist.options/fieldset.elements/option.index)
+ALL already work, but the write side was silently wrong two ways:
+- `select.add()` was `undefined` — the primary option-insertion method threw.
+- `select.remove(0)` DETACHED THE WHOLE SELECT (probe: afterRemove:3/DETACHED/o0) — with no own
+  `remove(index)`, the call fell through to the inherited `ChildNode.remove()`, which ignores the arg and
+  tore the control out of its <form>. This is data corruption dressed as a working method — every JS
+  dropdown builder (country pickers, dependent/cascading selects, "add another" rows) hits it.
+Also missing: `options.namedItem` / `options.add`.
+
+FIX (capability, engine/js/src/collections_js.rs — the live-collections shim, alongside t435-437's
+table/form DOM; reuses ownerOf helper):
+- `select.add(element[, before])` — getter-guarded to SELECT (a <div>.add stays undefined, Chrome parity);
+  before = null/omitted → append, a number → insertBefore options[n] (append if OOB), an element →
+  insertBefore it in its OWN parent (may be an <optgroup>) iff it lives inside the select, else append.
+- `remove` override on the element prototype that DELEGATES to the original `ChildNode.remove` for every
+  case EXCEPT `select.remove(<index>)` — so `div.remove()` and argument-less `select.remove()` still
+  detach the node (the spec's remove(index)/remove() overload). This is the delicate part: a naive
+  EP.remove override would break `div.remove()` for all elements.
+- HTMLOptionsCollection `namedItem`/`add`/`remove` hung on the (fresh) array the native `options` getter
+  returns, via a wrap of the native `options` accessor (decorate only when tagName==='SELECT').
+
+GATE: G_SELECT_WRITE (`select_add_remove_and_options_collection_write`) — 8 claims incl. the two
+must-not-break invariants (selfDetach:detached for arg-less select.remove(), divRemove:gone for a plain
+element). RED-proven (pre-impl probe: add undefined / remove detached the select). manuk-page green;
+g_form_owner / g_table_dom / g_table_write / g_collections / g_element_internals all still green.
+
+TICK SHAPE: capability (select.add + select.remove(index) corruption fix + options.namedItem/add/remove; +1 gate). GATES +1.
+CONSTELLATION: <select> DOM write API unknown→gated (G_SELECT_WRITE).
+WIKI: dom-semantics.md — the <select> write API (remove(index) removes the option, not the select; the overload is preserved).

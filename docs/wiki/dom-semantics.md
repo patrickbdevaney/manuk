@@ -1263,3 +1263,19 @@ Svelte, Solid, Vue's compiled output) instantiated nothing, silently. The access
 land as direct children) still works and now caches into the same field. Declarative shadow DOM already
 aims `set_template_contents` at the shadow root, so `.content` returning `template_contents` stays
 consistent with that path.
+
+## The `<select>` write API — `add` / `remove(index)` + HTMLOptionsCollection (tick 438)
+
+`select.options` (read) already worked, but the WRITE side was silently wrong. `select.add()` was
+`undefined`, and — worse — `select.remove(0)` DETACHED THE WHOLE SELECT: `HTMLSelectElement` had no own
+`remove(index)`, so the call fell through to the inherited `ChildNode.remove()`, which ignores its
+argument and tore the control out of its `<form>`. The spec overloads `remove`: `select.remove(index)`
+removes `options[index]`; `select.remove()` with no argument keeps the legacy detach-self behaviour.
+
+Fixed in `engine/js/src/collections_js.rs` (the live-collections shim, alongside form.elements / the
+`<table>` write API): `select.add(element[, before])` (before = null/omitted → append, a number → insert
+before `options[n]`, an element → insert before it in its own parent), a delegating `remove` override on
+the element prototype (only `select.remove(<index>)` diverts to option removal; every other element —
+and argument-less `select.remove()` — still routes to the native `ChildNode.remove`), and the
+HTMLOptionsCollection methods `namedItem`/`add`/`remove` hung on the array the native `options` getter
+returns. `div.add` stays `undefined` (Chrome parity). Gate `G_SELECT_WRITE`.

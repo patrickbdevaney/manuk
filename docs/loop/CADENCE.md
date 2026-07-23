@@ -13,11 +13,11 @@
 |---|---|---|
 | ticks landed | **223** | ticks 1–437 |
 | median tick cycle | **19m** | 222 intervals |
-| median, last 10 | **28m** | 10 intervals |
+| median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.77** | 286.8h elapsed |
-| median verify wall | **59s** | 162 ticks |
-| wall trend | 39s → 58s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.77** | 287.3h elapsed |
+| median verify wall | **60s** | 162 ticks |
+| wall trend | 39s → 60s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,7 +27,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **204**
+* **live gates**: 27 → **205**
 * **✅ rows in the capability ledger**: 144 → **328**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
@@ -319,6 +319,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **434** | 2026-07-23 02:43 | 18m | capability | 61s | +244/−51 | 201 | 81 | 56.0% · | control.labels + label.control link a form field to its <label> (2026-07-23) |
 | **435** | 2026-07-23 03:05 | 22m | capability | 57s | +304/−52 | 202 | 81 | 56.0% · | the <table> DOM: table.rows/tr.cells + row/cell indices (2026-07-23) |
 | **436** | 2026-07-23 03:24 | 19m | capability | 60s | +311/−51 | 203 | 81 | 56.0% · | the <table> WRITE API: insertRow/deleteRow/insertCell + sections (2026-07-23) |
-| **437** | 2026-07-23 03:49 | 25m | capability | 58s | +207/−51 | 204 | 81 | 56.0% · | element.form resolves the form owner (2026-07-23) |
+| **437** | 2026-07-23 04:18 | 54m | capability | 60s | +268/−34 | 205 | 81 | 56.0% · | element.form resolves the form owner (2026-07-23) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
