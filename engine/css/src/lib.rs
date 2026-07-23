@@ -864,6 +864,11 @@ pub struct ComputedStyle {
     pub grid_template_areas: Vec<GridAreaRect>,
     /// Item: the named area this element is placed into (via `grid-area: name`).
     pub grid_area: Option<String>,
+    /// Computed CSS **custom properties** (`--foo`) resolved through the cascade, as `(name, value)`
+    /// where `name` includes the leading `--`. This is what `getComputedStyle(el).getPropertyValue(
+    /// '--foo')` returns — the design-token read every theming system, chart library and CSS-in-JS
+    /// runtime does. Empty when the element defines/inherits no custom properties.
+    pub custom_properties: Vec<(String, String)>,
 }
 
 impl ComputedStyle {
@@ -966,6 +971,7 @@ impl ComputedStyle {
             grid_row: (GridLine::Auto, GridLine::Auto),
             grid_template_areas: Vec::new(),
             grid_area: None,
+            custom_properties: Vec::new(),
         }
     }
 

@@ -17497,3 +17497,44 @@ g_fetch_stream/g_navigation_api/g_response_json all still green.
 TICK SHAPE: capability (live url.searchParams + iterable init; +1 gate). GATES +1.
 CONSTELLATION: live url.searchParams + iterable init unknown→gated (G_URL_SEARCHPARAMS_LIVE).
 WIKI: networking.md — "url.searchParams is live; its constructor takes any iterable of pairs".
+
+## Tick 427 — computed CSS custom properties via getComputedStyle (2026-07-22)
+
+HYPOTHESIS (probe-a-works-capability vein, CSSOM surface): a probe of style/CSSOM APIs found most
+correct (style.setProperty/cssText/removeProperty, CSS.supports/escape, matchMedia) but
+`getComputedStyle(el).getPropertyValue('--my-var')` returned '' — computed CSS custom properties were
+absent. This is the design-token read every theming system, chart library (`--color-primary` off
+`:root`) and CSS-in-JS/design-system runtime does; empty meant the theme read came back blank and the
+component fell back to a hardcoded default or drew nothing.
+
+ROOT CAUSE: the computed-style JS object (`computed_style_js`) exposes only a FIXED longhand map, and
+`ComputedStyle` carried no custom properties at all — even though Stylo (the shipping cascade) already
+resolves, inherits and `var()`-expands them.
+
+FIX (capability, plumbing across css + js): (1) `ComputedStyle` gets a `custom_properties: Vec<(String,
+String)>` field. (2) `to_computed_style` reads `cv.custom_properties()` (Stylo's
+`ComputedCustomProperties`), walks it with `property_at(i)`, and for each universal (unregistered) value
+pushes `("--name", value.as_universal().css)`. (3) `computed_style_js` emits a `__custom` object literal
+and `getPropertyValue` short-circuits to it for any name starting with `--`. Inheritance (a `:root`
+`--brand` read on a deep descendant) falls out of Stylo's cascade for free.
+
+GATE: G_COMPUTED_CUSTOM_PROPERTIES (`getcomputedstyle_returns_custom_property_values`) — six claims:
+element-local var, `:root` var read on the element, inheritance to a child, a second var, a missing var
+returning '' (total function), and a normal longhand (`color`) still resolving. RED-proven: not pushing
+the custom properties turns every var read to '' while `missing`/`color` stay green — pinpointing the
+plumbing. manuk-page green; manuk-css (27) + g_computed_style + g_overflow_cssom all still green.
+
+TICK SHAPE: capability (computed CSS custom properties via getComputedStyle; +1 gate). GATES +1.
+CONSTELLATION: computed CSS custom properties unknown→gated (G_COMPUTED_CUSTOM_PROPERTIES).
+WIKI: css-cascade.md — "computed custom properties reach getComputedStyle from Stylo".
+
+WALL/FLAKE NOTE (tick 427, 2026-07-22 ~23:40): tick 427 complete, green, RED-proven (computed CSS custom
+properties via getComputedStyle; GATES 194→195, CONST:app +1, css crate + g_computed_style green). Now
+blocked by a HARNESS FLAKE, not the tick: verify's crate-test section reports `manuk-shell tests FAILED`
+while the shell suite passes standalone (70+2, both default and stylo,spidermonkey features, run 3×) and
+all shell GATE suites (affordances 70, teardown, runtime-count) pass INSIDE the same verify. This is the
+documented "shell false-RED under parallel-build/contention race" — verify's own 8-job launch spikes
+load to 5-6.7 (atop the ~6.5h observer crawl) and a timing/spawn-sensitive shell crate test false-fails;
+verify swallows the test name so it can't be pinpointed. Wall itself is warm (60-72s). Harness/infra is
+observer-owned (no scripts/ edits). Holding tick 427 ready (.git/tick427-ready.msg); will land on a
+verify run that catches a genuinely quiet window. Not a real regression — standalone proof is green.

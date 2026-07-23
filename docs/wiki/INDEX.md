@@ -201,6 +201,7 @@
   - L725 · Container queries (tick 379): the sized re-pass and the source supplement
   - L771 · field-sizing: content — a recovered property that must beat the hints (tick 388)
   - L787 · text-align: start/end are LOGICAL — resolve them against direction, or the RTL web left-aligns (tick 414)
+  - L807 · Computed custom properties reach getComputedStyle from Stylo (tick 427)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -894,4 +895,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-809 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+810 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

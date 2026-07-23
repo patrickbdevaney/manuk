@@ -721,8 +721,9 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
           justifyContent:{}, alignItems:{}, alignSelf:{}, flexDirection:{}, flexWrap:{}, \
           flexGrow:{}, flexShrink:{}, flexBasis:{}, rowGap:{}, columnGap:{}, \
           boxSizing:{}, minWidth:{}, maxWidth:{}, minHeight:{}, maxHeight:{}, \
-          scrollSnapType:{}, scrollSnapAlign:{}, \
+          scrollSnapType:{}, scrollSnapAlign:{}, __custom:{}, \
           getPropertyValue:function(p){{\
+          if(p.charCodeAt(0)===45&&p.charCodeAt(1)===45){{var cvv=this.__custom[p];return cvv===undefined?'':String(cvv);}}\
           var m={{'background-color':'backgroundColor','font-size':'fontSize',\
           'font-weight':'fontWeight','font-style':'fontStyle','font-family':'fontFamily',\
           'line-height':'lineHeight','text-align':'textAlign','white-space':'whiteSpace',\
@@ -802,6 +803,22 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
             manuk_css::ScrollSnapAlign::End => "end",
             manuk_css::ScrollSnapAlign::None => "none",
         }),
+        // `__custom` — the computed CSS custom properties (`--foo`), as a JS object literal keyed by the
+        // full `--name`. `getPropertyValue` short-circuits to it for any name starting with `--`, so
+        // `getComputedStyle(el).getPropertyValue('--foo')` returns the cascaded/var()-expanded value.
+        {
+            let mut obj = String::from("{");
+            for (i, (name, val)) in cs.custom_properties.iter().enumerate() {
+                if i > 0 {
+                    obj.push(',');
+                }
+                obj.push_str(&js_string_literal(name));
+                obj.push(':');
+                obj.push_str(&js_string_literal(val));
+            }
+            obj.push('}');
+            obj
+        },
     )
 }
 

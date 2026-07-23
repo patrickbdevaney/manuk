@@ -705,6 +705,25 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         }
     };
 
+    // Computed CSS custom properties (`--foo`). Stylo has already resolved the cascade and expanded
+    // `var()`, so this is the value `getComputedStyle(el).getPropertyValue('--foo')` must return.
+    // `property_at` walks the inherited then non-inherited maps; a `None` value is a
+    // guaranteed-invalid registered property, skipped. Unregistered custom properties (the common
+    // case — `--foo: 42px` with no `@property`) carry their CSS text in the universal variant.
+    {
+        let cp = cv.custom_properties();
+        let mut i = 0usize;
+        while let Some((name, value)) = cp.property_at(i) {
+            if let Some(v) = value {
+                if let Some(var) = v.as_universal() {
+                    s.custom_properties
+                        .push((format!("--{}", name), var.css.trim().to_string()));
+                }
+            }
+            i += 1;
+        }
+    }
+
     s
 }
 

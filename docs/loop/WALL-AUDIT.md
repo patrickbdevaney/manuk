@@ -167,3 +167,22 @@ NO TRIM: same conclusion as #5/#6 — the admissible levers (nextest, runtime-sh
 parallelism) live in scripts/ (observer-owned, already named). Agent-side discipline held: three
 new gates cost ~0 marginal wall (parallel launch, small fixtures, no new runtime per assertion
 beyond the one-test-per-binary rule). Wall stays lean; coverage grew again.
+
+## Audit #8 — tick 426 (wall 57s warm)
+
+FINDING: warm wall held (57-66s band, same shape as #5/#6/#7) across the busiest coverage window yet —
+window 416-427 added ELEVEN new page gates (text-indent/line-clamp, then the binary-seam vein: Intl,
+checkVisibility, IndexedDB getAllRecords, structuredClone-binary, Blob-binary, canvas ImageData,
+TextDecoder encodings, template.content, live url.searchParams, computed custom properties). Warm
+breakdown unchanged: T ~21s crate tests, P ~14s parity, G6 ~14s, B ~2-31s build (varies with which
+crate changed — dom/lib.rs and stylo_map.rs touches this window rebuilt wider than a JS-shim tick, but
+still <35s), F ~2s. Each new gate is a small fixture, one #[test] per binary (t354 rule), riding the
+parallel gate launch — ~0 marginal wall.
+
+NO TRIM: same conclusion as #5-#7. The persistent ~480-520s COLD readings this window are NOT gate
+bloat — they are environmental contention (an observer oracle crawl running ~6h at nice-19 + swap
+95-99% thrashing the memory-heavy P/F benchmarks). The SAME tree warms to 57-66s on a quiet re-run
+every time (verified repeatedly this session: t421/423/425 each banked 57-61s after a contended
+480-500s reading). The admissible levers (nextest, runtime-sharing, section parallelism) remain in
+scripts/ (observer-owned, already named). Wall stays lean when warm; coverage grew by 11 gates. Mark
+untouched.

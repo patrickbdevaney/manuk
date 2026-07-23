@@ -3488,3 +3488,17 @@ FormData, a Map, another URLSearchParams — not only a literal array.
 and only fails once something MUTATES it and then reads the URL back — which is exactly what "build a URL"
 means. And `Array.isArray` looks like "handle the sequence form" but silently excludes every other
 iterable of pairs.
+
+## Computed CSS custom properties reach getComputedStyle (tick 427)
+
+**The class of the web this unlocks:** every runtime that reads a design token — a chart library pulling
+`getComputedStyle(document.documentElement).getPropertyValue('--color-primary')`, a component that reads
+`--gap` to size a canvas, and the CSS-in-JS / design-system runtimes (many read computed `--vars` to
+bridge CSS and JS). The computed-style object exposed only the fixed longhand map, so every `--x` read
+came back `''`, the token was "missing", and the component fell to a hardcoded default or drew nothing.
+**(1)** `getComputedStyle(el).getPropertyValue('--x')` returns the CASCADED, inherited, `var()`-expanded
+value — custom properties inherit, so a `--brand` set on `:root` is readable on any descendant.
+**The trap:** custom properties are not longhands, so a getComputedStyle built from a fixed property map
+silently omits them — and the omission is invisible until a page actually reads a token, which is exactly
+what a themed site does on every component. The engine (Stylo) already computed them; only the plumbing
+to the CSSOM object was missing.

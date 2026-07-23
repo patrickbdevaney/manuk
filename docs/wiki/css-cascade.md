@@ -803,3 +803,26 @@ The resolution runs for every node (even those with no MinimalCascade entry). Ga
 default reads `Left`). Residue: `justify`'s last-line alignment does not yet follow direction; the
 pure-MinimalCascade fallback path parses `start`/`end` but does not resolve them (it is not the shipping
 cascade).
+
+## Computed custom properties reach getComputedStyle from Stylo (tick 427)
+
+CSS custom properties (`--brand`, `--gap`) are resolved by the SHIPPING cascade (Stylo), which inherits
+them and expands `var()` — but until tick 427 none of that reached the CSSOM: `getComputedStyle(el)
+.getPropertyValue('--x')` returned `''` because the computed-style JS object (`computed_style_js`) is
+built from a FIXED longhand map and `ComputedStyle` carried no custom-property field.
+
+The plumbing is three hops, all additive:
+
+- `ComputedStyle.custom_properties: Vec<(String, String)>` (name includes the leading `--`).
+- `to_computed_style` reads Stylo's `cv.custom_properties()` (`ComputedCustomProperties`), iterates it
+  with `property_at(i)` across the inherited then non-inherited maps, and takes each UNIVERSAL
+  (unregistered) value's `.css` string (`value.as_universal()`). This is where the cascade's inheritance
+  and `var()` expansion have already happened, so a `:root { --brand }` is present on every descendant's
+  computed values for free.
+- `computed_style_js` emits a `__custom` object literal, and `getPropertyValue` short-circuits to it for
+  any name starting with `--` (before the camelCase longhand lookup).
+
+**Honest limits:** registered custom properties (`@property`, which are non-universal computed values)
+are skipped — only unregistered `--vars` (the overwhelming common case) are exposed; and the link is
+one-way (reading), so `el.style.setProperty('--x', …)` updates the inline declaration but does not
+re-cascade into a later `getComputedStyle` read within the same synchronous turn.

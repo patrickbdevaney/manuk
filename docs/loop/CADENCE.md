@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **213** | ticks 1–425 |
-| median tick cycle | **19m** | 212 intervals |
-| median, last 10 | **28m** | 10 intervals |
+| ticks landed | **214** | ticks 1–427 |
+| median tick cycle | **19m** | 213 intervals |
+| median, last 10 | **35m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.75** | 282.1h elapsed |
-| median verify wall | **59s** | 152 ticks |
+| **ticks per hour** | **0.75** | 282.8h elapsed |
+| median verify wall | **59s** | 153 ticks |
 | wall trend | 39s → 57s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **194**
+* **live gates**: 27 → **195**
 * **✅ rows in the capability ledger**: 144 → **328**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**114 of 213 ticks** (54%) moved a
+**115 of 214 ticks** (54%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **114** capability ticks, median cycle **19m**
-* median diff per tick: **+213 / −34** lines across 8 files
+* **115** capability ticks, median cycle **19m**
+* median diff per tick: **+214 / −34** lines across 8 files
 
 ## Every tick
 
@@ -310,5 +310,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **421** | 2026-07-22 21:41 | 40m | capability | 57s | +216/−36 | 190 | 81 | 56.0% · | structuredClone: preserve BINARY types, not degrade them (2026-07-22) |
 | **423** | 2026-07-22 22:24 | 43m | capability | 57s | +222/−34 | 192 | 81 | 56.0% · | canvas ImageData + putImageData: move real pixels, not no-op (2026-07-22) |
 | **425** | 2026-07-22 23:08 | 44m | capability | 57s | +226/−37 | 194 | 81 | 56.0% · | <template>.content holds the parsed children, not an empty fragment (2026-07-22) |
+| **427** | 2026-07-22 23:49 | 41m | capability | 60s | +240/−36 | 195 | 81 | 56.0% · | computed CSS custom properties via getComputedStyle (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
