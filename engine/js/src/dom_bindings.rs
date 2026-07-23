@@ -8085,7 +8085,24 @@ pub unsafe fn install(
         2,
         0,
     );
-    let platform = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
+    // Legacy `navigator.platform`. Real browsers do NOT report the raw lowercase `os arch` here —
+    // they report a canonical, capitalised token that UA-sniffers exact-match against: Linux desktops
+    // say `"Linux x86_64"`, every Mac (Intel or ARM) says `"MacIntel"`, every Windows (even 64-bit)
+    // says `"Win32"`. The old value `"linux x86_64"` (lowercase `l`) is what pushed LinkedIn and
+    // Cloudflare-gated consoles onto their degraded/"unknown client" path — a page testing
+    // `navigator.platform === 'Linux x86_64'` or `/^Linux/` saw a miss. Same Axis-F posture as the UA
+    // string: report what we ACTUALLY are (Linux x86_64), just in the spec/browser-canonical casing.
+    let platform = match std::env::consts::OS {
+        "macos" => "MacIntel".to_string(),
+        "windows" => "Win32".to_string(),
+        "linux" => format!("Linux {}", std::env::consts::ARCH),
+        other => format!(
+            "{}{} {}",
+            other[..1].to_uppercase(),
+            &other[1..],
+            std::env::consts::ARCH
+        ),
+    };
     // Honest, self-consistent inputs for `navigator.userAgentData` (the User-Agent Client Hints
     // surface). Same Axis-F posture as `honest_user_agent`: report what we ACTUALLY are, never a
     // competitor's brand. The full version is our own package version; the major is what the
@@ -12491,6 +12508,15 @@ const WINDOW_PRELUDE: &str = r#"
             // the code that runs before anything else.
             vendor: "Google Inc.", vendorSub: "", productSub: "20030107",
             maxTouchPoints: 0, hardwareConcurrency: 4, webdriver: false,
+            // `navigator.deviceMemory` — the Device Memory API's last missing low-entropy Client Hint.
+            // Adaptive-loading bundles branch on `if (navigator.deviceMemory < 4)` to pick image quality
+            // and whether to hydrate eagerly; on `undefined` that comparison is silently `false` (the
+            // wrong branch) and `navigator.deviceMemory.toFixed()` throws. Bot detectors also cross-check
+            // it against the UA-CH surface, so its ABSENCE while `userAgentData` is present is itself an
+            // inconsistency tell. The spec deliberately QUANTISES this to a small privacy-preserving set
+            // {0.25,0.5,1,2,4,8} capped at 8 — every real desktop Chrome reports `8`, which is honest at
+            // the granularity the spec allows and self-consistent with a desktop `hardwareConcurrency`.
+            deviceMemory: 8,
             // `cookieEnabled` is now TRUE, because it IS: we have a real per-origin cookie jar. Saying
             // `false` invites a page to take its no-cookie path, which is a different site.
         };

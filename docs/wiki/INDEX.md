@@ -749,34 +749,35 @@
   - L909 · Why it must return the honest boolean, and send for real
   - L924 · navigator.userAgentData — the Client Hints surface, honest and self-consistent (tick 286)
   - L942 · The two teeth G_USERAGENTDATA uses, that a stub cannot grow
-  - L954 · URL.canParse / URL.parse — validate a URL without try/catch (tick 289)
-  - L969 · The teeth G_URL_STATIC uses
-  - L977 · AbortSignal.any — compound cancellation, and the timeout that actually fires (tick 290)
-  - L997 · The teeth G_ABORTSIGNAL_ANY uses
-  - L1005 · navigator.locks — the Web Locks API, real serialisation (tick 292)
-  - L1029 · The teeth G_WEB_LOCKS uses
-  - L1036 · URLPattern — matching URLs by shape (tick 297)
-  - L1055 · The teeth G_URLPATTERN uses
-  - L1062 · WritableStream + TransformStream — the streams that were inert names (tick 298)
-  - L1081 · The teeth G_WRITABLE_TRANSFORM_STREAMS uses
-  - L1088 · TextDecoderStream / TextEncoderStream — streaming text codecs (tick 299)
-  - L1099 · The teeth G_TEXT_CODEC_STREAMS uses
-  - L1106 · Blob.stream() — a real byte stream, not null (tick 300)
-  - L1113 · The teeth G_BLOB_STREAM uses
-  - L1119 · Response.json() — the one-call JSON response (tick 301)
-  - L1127 · The teeth G_RESPONSE_JSON uses
-  - L1133 · URLSearchParams — sort() and value-aware has/delete (tick 304)
-  - L1144 · The teeth G_URLSEARCHPARAMS_COMPLETE uses
-  - L1150 · FormData.keys() / values() — the field iterators (tick 305)
-  - L1157 · The teeth G_FORMDATA_ITERATORS uses
-  - L1162 · crypto.subtle HMAC — sign/verify webhook signatures & HS256 JWTs (tick 306)
-  - L1178 · The teeth G_CRYPTO_HMAC uses
-  - L1184 · crypto.subtle.deriveBits — HKDF key derivation (tick 307)
-  - L1196 · The teeth G_CRYPTO_HKDF uses
-  - L1202 · HTTP conditional revalidation (tick 345)
-  - L1218 · HTTP Expires header freshness (tick 347)
-  - L1229 · HTTP Age header — CDN-aged freshness accounting (tick 348)
-  - L1237 · url.searchParams is live; its constructor takes any iterable of pairs (tick 426)
+  - L954 · navigator.deviceMemory + a canonical navigator.platform — the last two identity gaps (tick 458)
+  - L978 · URL.canParse / URL.parse — validate a URL without try/catch (tick 289)
+  - L993 · The teeth G_URL_STATIC uses
+  - L1001 · AbortSignal.any — compound cancellation, and the timeout that actually fires (tick 290)
+  - L1021 · The teeth G_ABORTSIGNAL_ANY uses
+  - L1029 · navigator.locks — the Web Locks API, real serialisation (tick 292)
+  - L1053 · The teeth G_WEB_LOCKS uses
+  - L1060 · URLPattern — matching URLs by shape (tick 297)
+  - L1079 · The teeth G_URLPATTERN uses
+  - L1086 · WritableStream + TransformStream — the streams that were inert names (tick 298)
+  - L1105 · The teeth G_WRITABLE_TRANSFORM_STREAMS uses
+  - L1112 · TextDecoderStream / TextEncoderStream — streaming text codecs (tick 299)
+  - L1123 · The teeth G_TEXT_CODEC_STREAMS uses
+  - L1130 · Blob.stream() — a real byte stream, not null (tick 300)
+  - L1137 · The teeth G_BLOB_STREAM uses
+  - L1143 · Response.json() — the one-call JSON response (tick 301)
+  - L1151 · The teeth G_RESPONSE_JSON uses
+  - L1157 · URLSearchParams — sort() and value-aware has/delete (tick 304)
+  - L1168 · The teeth G_URLSEARCHPARAMS_COMPLETE uses
+  - L1174 · FormData.keys() / values() — the field iterators (tick 305)
+  - L1181 · The teeth G_FORMDATA_ITERATORS uses
+  - L1186 · crypto.subtle HMAC — sign/verify webhook signatures & HS256 JWTs (tick 306)
+  - L1202 · The teeth G_CRYPTO_HMAC uses
+  - L1208 · crypto.subtle.deriveBits — HKDF key derivation (tick 307)
+  - L1220 · The teeth G_CRYPTO_HKDF uses
+  - L1226 · HTTP conditional revalidation (tick 345)
+  - L1242 · HTTP Expires header freshness (tick 347)
+  - L1253 · HTTP Age header — CDN-aged freshness accounting (tick 348)
+  - L1261 · url.searchParams is live; its constructor takes any iterable of pairs (tick 426)
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -923,4 +924,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-838 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+839 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

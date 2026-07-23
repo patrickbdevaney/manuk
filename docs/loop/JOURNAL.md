@@ -18514,3 +18514,45 @@ NEXT VEIN NOTE: contenteditable now has query (t456) + selector-agreement (t457)
 EDITING path (execCommand/beforeinput/keystroke→DOM mutation on the host, via dispatch_key/dispatch_composition)
 — L-sized, needs a caret + Selection-in-editable decompose pass before starting. Media High-profile H.264 is
 the alternate Tier-1 marquee (needs a new decode backend, not atomic).
+
+## Tick 458 — completeness identity: `navigator.deviceMemory` + canonical `navigator.platform` (2026-07-23)
+
+PIVOT off the contenteditable/selector vein (Const-Check #23) onto the COMPLETENESS-IDENTITY cluster the
+lever board carries as CO-#1 item (4) and DAILY-DRIVER-EDGES lists as the LinkedIn/banks/Cloudflare-console
+degraded-path fix. Re-probed the whole cluster FIRST (the recurring stale-doc lesson): `visibilityState`
+(t-earlier), `permissions.query` (dom_bindings 12994), `userAgentData` (t286) are ALL already built — the
+docs were stale. The genuinely-remaining gaps were exactly the two EDGES flagged open: `deviceMemory`
+absent, and `navigator.platform` non-canonical.
+
+PROBED (RED-proven): `navigator.deviceMemory` read `undefined` — adaptive-loading `if (deviceMemory < 4)`
+silently takes the wrong branch and `deviceMemory.toFixed()` throws; and a detector cross-checking it vs the
+present `userAgentData` reads the absence as an inconsistency. `navigator.platform` was the raw lowercase
+`format!("{} {}", OS, ARCH)` = `"linux x86_64"` — real Chrome/Firefox report the canonical capitalised
+`"Linux x86_64"` (`"MacIntel"`/`"Win32"` on the other OSes), so `platform === 'Linux x86_64'` and `/^Linux/`
+UA-sniffs MISSED, the exact LinkedIn degraded-path tell.
+
+FIX (capability — 1 file, dom_bindings.rs prelude): (1) added `deviceMemory: 8` to the navigator literal —
+the spec-quantised {0.25,0.5,1,2,4,8}-capped-at-8 desktop value every real Chrome reports, self-consistent
+with `hardwareConcurrency:4` and honest at the granularity the spec allows. (2) replaced the raw platform
+format with a canonical OS→token match: `linux`→`"Linux <arch>"`, `macos`→`"MacIntel"`, `windows`→`"Win32"`
+— report what we ARE (Linux x86_64) in the browser-canonical casing (Axis F), never a competitor brand.
+
+GATE: G_DEVICE_IDENTITY (page, `navigator_device_memory_and_canonical_platform_close_the_identity_surface`)
+— three teeth: `dm-quantised` (value ∈ the spec set, not arbitrary), `plat-canonical` (platform's first char
+uppercase — exactly the lowercase-`l` bug), `plat-consistent` (legacy platform starts with the UA-CH family
+token so the two identity surfaces agree on the OS). RED-proven by reverting BOTH changes → `dm-present:false
+dm-quantised:false plat-canonical:false plat-consistent:false`. Siblings green: g_useragentdata, g_globals,
+g_network_info.
+
+TICK SHAPE: capability (completeness identity — deviceMemory + canonical platform; +1 gate). GATES +1.
+CONSTELLATION: closes the completeness-identity EDGE (DAILY-DRIVER-EDGES row now `works`); UA-string policy
+is the only residual identity decision. WIKI: networking.md — new subsection under the userAgentData section.
+NEXT VEIN NOTE: identity surface is now canonical + self-consistent end to end. Remaining daily-driver CO-#1
+items: MEDIA/YouTube High-profile H.264 (needs a decode backend, decompose-first, not atomic), IndexedDB
+(borrow redb/heed, L), the contenteditable EDITING path (execCommand/beforeinput, L, needs a caret+Selection
+decompose), and the cheap constellation `?` unknowns (`user-select` is NOT atomic — Stylo servo-pref fence).
+WALL-BLOCKER (observer-owned, not fixed here): tick.sh's ratchet refused on WALL 266s>245s, but that is a
+STALE 13:19 receipt (tree 3655e8c/t456, load1 4.31); my run's `.git/manuk-wall-sections` totals 30+174+3+0=207s
+(<245). The real warm wall is fine — the block lifts by itself once a fresh green sub-245 receipt is banked
+(status-update reads the most-recent receipt at tick.sh:131, refuses before verify.sh:140 ever runs). Parked
+the complete t458 WIP in-tree and re-run tick.sh on a quieter box, per [wall-warm-rerun-lands-ticks].

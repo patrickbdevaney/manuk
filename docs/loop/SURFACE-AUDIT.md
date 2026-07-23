@@ -842,3 +842,62 @@ Interop 2026" scan walks right past. No stale-OPTIMISTIC lie found (visibilitySt
 userAgentData were probed and confirmed already-gated — stale-PESSIMISTIC on the pivot list, not the map).
 
 LAST_SURFACE_AUDIT 438→448; next due 458.
+
+## Audit #19 — tick 458 (2026-07-23)
+
+**Sources (searched, not from memory):**
+* Interop 2026 focus areas — re-confirmed via the WPT interop repo README + web.dev's Interop 2026 post
+  (https://web.dev/blog/interop-2026) and the Mozilla/WebKit launch posts. The set is UNCHANGED from
+  audit #18: `:open`, `popover="hint"`, ESM module loading, scroll/animation event timing,
+  unprefixing `-webkit-user-select`, WebTransport (HTTP/3), cross-document view transitions, plus the
+  CSS interop set already mapped.
+* Baseline 2026 monthly digests (https://web.dev/baseline/2026, web.dev/blog/baseline-digest-*-2026) —
+  the NEW-in-2026 items: `:active-view-transition` (Jan), the **`ric` unit** (Jan, root-relative
+  ideographic — and its sibling `ic`), **Zstandard `zstd` Content-Encoding** (Feb), plus vaguer CSS/API
+  batches in Apr/May.
+* Ladybird 2026 newsletters (https://ladybird.org/newsletter/2026-06-30/) — WPT 2,078,912 subtests,
+  test262 imported upstream (53,207 subtests, 97.8% pass). Recent Ladybird adds: downloads, history,
+  sandboxing — all already on our map or scoped.
+
+**RECONCILE result — the map is CURRENT against Interop 2026 and near-current against Baseline 2026.**
+Spot-checks:
+* `:active-view-transition` / `:active-view-transition-type()` → already row (audit #17), `unknown`.
+* `user-select` (unprefix focus area) → already row (audit #15), `unknown` — carried, see below.
+* `popover="hint"` → the popover row is already `gated` (G_POPOVER: detect/reflect auto|manual|null/
+  showPopover/beforetoggle+toggle). `hint` is a bounded VALUE-refinement of a gated capability, not a
+  new class — noted as residue on that row, not a new row.
+* ESM module loading → carried as the app-class `?` (memory: import-graph is a subsystem, not atomic).
+
+### ADDED — genuine unknowns (the point of the audit)
+
+* **`ic` / `ric` font-metric CSS units** (Baseline Newly Available Jan 2026) → new `unknown` row in the
+  doc class. A NEW font-relative length unit is exactly the blind spot a "what's new in Interop" scan
+  walks past (it is a Baseline item, not an Interop focus area) — the same shape as the `pointer-events`
+  miss in audit #18 and the `ric` sibling of the existing ch/ex font-metric lever. Zero evidence either
+  resolves through the cascade here; added unmeasured, to be probed.
+
+### THIS TICK'S CAPABILITY (context, not an audit find)
+
+* Completeness identity closed: `navigator.deviceMemory` (was absent) + canonical `navigator.platform`
+  (`"linux x86_64"`→`"Linux x86_64"`), `G_DEVICE_IDENTITY`. The `visibilityState`/`permissions.query`/
+  `userAgentData` cluster was re-probed and confirmed already-built (stale-PESSIMISTIC on the pivot
+  list, not the map) — the recurring lesson, again.
+
+### STILL OPEN / EXCLUDED (with reason)
+
+* **`user-select` (CSS)** — remains `unknown`; its load-bearing effect (suppress selection) needs USER
+  mouse-drag selection geometry (unmodelled), and crates.io Stylo fences the property behind a
+  `servo_pref` (the `./stylo` checkout builds nothing) — a blast-radius pref flip or a manuk-side
+  supplement, not atomic. Carried, unchanged.
+* **`zstd` Content-Encoding** (new Baseline Feb 2026) — a documented **v1-scope deferral** (lever board
+  SKIP list: HTTP/3/QUIC, zstd, coalescing). Recorded here for map honesty; NOT added as a
+  constellation row because the deferral is already written down and stable. gzip/brotli cover the wire
+  today.
+* Service Worker runtime, WebGL, WebRTC, WebTransport, JSPI, scroll-driven animations, JPEG XL —
+  unchanged from prior audits (subsystems or below the ROI line).
+
+**What we had been wrong about this pass:** the `ic`/`ric` ideographic units — a brand-new Baseline
+length unit — were invisible to the map. No stale-OPTIMISTIC lie found (nothing marked works/gated that
+measured absent; the identity cluster was stale-PESSIMISTIC and is now measured/closed).
+
+LAST_SURFACE_AUDIT 448→458; next due 468.

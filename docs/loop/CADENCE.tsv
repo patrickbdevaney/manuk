@@ -236,3 +236,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 452	f14cb43	1784821877	2026-07-23T11:51:17-04:00	3513	capability	72	10	240	38	221	81	3896	6960	0	328	31	a `disabled` form control cannot receive focus (2026-07-23)
 454	8258fb7	1784824314	2026-07-23T12:31:54-04:00	2437	capability	70	5	116	35	222	81	3896	6960	0	328	31	`:read-only`/`:read-write` match in the querySelector engine (BOTH engines agree) (2026-07-23)
 456	30f301b	1784827191	2026-07-23T13:19:51-04:00	2877	capability	60	10	240	40	224	81	3896	6960	0	328	31	contenteditable QUERY surface: contentEditable / isContentEditable / designMode (2026-07-23)
+458	6dd9fcb	1784829155	2026-07-23T13:52:35-04:00	1964	capability	69	12	314	65	225	81	3896	6960	0	329	31	completeness identity: `navigator.deviceMemory` + canonical `navigator.platform` (2026-07-23)

@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **237** | ticks 1–456 |
-| median tick cycle | **19m** | 236 intervals |
+| ticks landed | **238** | ticks 1–458 |
+| median tick cycle | **19m** | 237 intervals |
 | median, last 10 | **40m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.80** | 296.3h elapsed |
-| median verify wall | **60s** | 176 ticks |
-| wall trend | 39s → 70s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.80** | 296.8h elapsed |
+| median verify wall | **60s** | 177 ticks |
+| wall trend | 39s → 69s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **224**
-* **✅ rows in the capability ledger**: 144 → **328**
+* **live gates**: 27 → **225**
+* **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**137 of 237 ticks** (58%) moved a
+**138 of 238 ticks** (58%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **137** capability ticks, median cycle **19m**
-* median diff per tick: **+215 / −34** lines across 9 files
+* **138** capability ticks, median cycle **19m**
+* median diff per tick: **+216 / −34** lines across 9 files
 
 ## Every tick
 
@@ -334,5 +334,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **452** | 2026-07-23 11:51 | 59m | capability | 72s | +240/−38 | 221 | 81 | 56.0% · | a `disabled` form control cannot receive focus (2026-07-23) |
 | **454** | 2026-07-23 12:31 | 41m | capability | 70s | +116/−35 | 222 | 81 | 56.0% · | `:read-only`/`:read-write` match in the querySelector engine (BOTH engines agree) (2026-07 |
 | **456** | 2026-07-23 13:19 | 48m | capability | 60s | +240/−40 | 224 | 81 | 56.0% · | contenteditable QUERY surface: contentEditable / isContentEditable / designMode (2026-07-2 |
+| **458** | 2026-07-23 13:52 | 33m | capability | 69s | +314/−65 | 225 | 81 | 56.0% · | completeness identity: `navigator.deviceMemory` + canonical `navigator.platform` (2026-07- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -951,6 +951,30 @@ the `consistent` claim. Both were demonstrated to go red before the tick landed.
 or device model), and the high-entropy values are static (no per-request entropy budget or user-permission
 gating — every hint resolves).
 
+### `navigator.deviceMemory` + a canonical `navigator.platform` — the last two identity gaps (tick 458)
+
+Two small legacy facts that sat next to the modern CH surface and pushed real logged-in apps (LinkedIn,
+Cloudflare-gated consoles) onto their degraded / "unknown client" path:
+
+- **`navigator.deviceMemory` was absent.** Adaptive-loading bundles branch on `if (navigator.deviceMemory
+  < 4)` to pick image quality and eager-vs-lazy hydration; on `undefined` that comparison is silently
+  `false` — the *wrong* branch — and `navigator.deviceMemory.toFixed()` throws. A detector also
+  cross-checks it against the UA-CH surface, so its absence *while `userAgentData` is present* is itself
+  an inconsistency tell. The Device Memory spec deliberately **quantises** the value to a small
+  privacy-preserving set `{0.25,0.5,1,2,4,8}` capped at 8; we report `8`, which every real desktop Chrome
+  reports and which is self-consistent with a desktop `hardwareConcurrency`.
+- **`navigator.platform` was the raw lowercase `"linux x86_64"`.** Real browsers do not report `os arch`
+  here — they report a canonical capitalised token that UA-sniffers *exact-match*: Linux says
+  `"Linux x86_64"`, every Mac (Intel or ARM) says `"MacIntel"`, every Windows (even 64-bit) says
+  `"Win32"`. A page testing `navigator.platform === 'Linux x86_64'` or `/^Linux/` saw a miss on the
+  lowercase `l`. This is the same Axis-F posture as everything else here — report what we *are* (Linux
+  x86_64), just in the casing the platform and every real browser use.
+
+`G_DEVICE_IDENTITY` has three teeth, each RED-proven by reverting the fix: `dm-quantised` (the value is
+one of the spec's allowed numbers, not arbitrary), `plat-canonical` (the platform token's first character
+is uppercase — exactly the lowercase-`l` bug), and `plat-consistent` (the legacy platform string begins
+with the UA-CH platform family, so the two identity surfaces cannot disagree about which OS we are).
+
 ## `URL.canParse` / `URL.parse` — validate a URL without try/catch (tick 289)
 
 The `URL` constructor throws on an invalid input, so the old way to *test* a URL was
