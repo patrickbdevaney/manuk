@@ -1099,6 +1099,109 @@ fn apply_text_overflow_ellipsis(
     *frags = out;
 }
 
+/// `-webkit-line-clamp: N` — keep the first `n` line boxes of a block, drop the rest, and force an
+/// ellipsis onto line `n`. Unlike single-line `text-overflow`, the ellipsis is **unconditional** here:
+/// content genuinely continued past line `n` (that is why there are extra lines to drop), so `…` always
+/// belongs. `frags` are absolute-positioned; lines share a `line_top`. Returns the clamped content
+/// height (bottom of line `n`, relative to `cy`) when a clamp actually happened, or `None` when the
+/// block already has `n` lines or fewer — the common case, so a `-webkit-line-clamp` selector on a short
+/// paragraph changes nothing at all.
+fn apply_line_clamp(
+    frags: &mut Vec<TextFragment>,
+    cx: f32,
+    cw: f32,
+    cy: f32,
+    n: usize,
+    fonts: &FontContext,
+) -> Option<f32> {
+    if frags.is_empty() || n == 0 || cw <= 0.0 {
+        return None;
+    }
+    // Distinct line tops, ascending.
+    let mut tops: Vec<f32> = Vec::new();
+    for f in frags.iter() {
+        if !tops.iter().any(|&t| (t - f.line_top).abs() < 0.5) {
+            tops.push(f.line_top);
+        }
+    }
+    tops.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    if tops.len() <= n {
+        return None; // fewer lines than the limit — untouched
+    }
+    let keep_top = tops[n - 1]; // last kept line's top
+    let drop_top = tops[n]; // first dropped line's top = bottom of line n
+
+    let clip_right = cx + cw;
+    let base_style = frags[0].style;
+    let ell = "\u{2026}";
+    let ell_w = fonts.measure(ell, base_style.font_key, base_style.font_size);
+    let cutoff = clip_right - ell_w;
+
+    let mut out: Vec<TextFragment> = Vec::with_capacity(frags.len() + 1);
+    // Ellipsis anchor + the vertical/style/owner it inherits from the last kept run on line n.
+    let mut ell_x = cx;
+    let mut ell_style = base_style;
+    let mut ell_ca = frags[0].content_ascent;
+    let mut ell_ch = frags[0].content_height;
+    let mut baseline = frags[0].baseline;
+    let mut node = frags[0].node;
+    for f in frags.drain(..) {
+        if f.line_top < keep_top - 0.5 {
+            out.push(f); // a line above line n — kept verbatim
+            continue;
+        }
+        if f.line_top > keep_top + 0.5 {
+            continue; // a dropped line — skip (defensive; retain already excludes most)
+        }
+        // On line n: inherit the run's vertical metrics for the ellipsis.
+        baseline = f.baseline;
+        ell_ca = f.content_ascent;
+        ell_ch = f.content_height;
+        if f.x + f.width <= cutoff {
+            // Fits before the cutoff: keep it, advance the ellipsis anchor to its end.
+            ell_x = f.x + f.width;
+            ell_style = f.style;
+            node = f.node;
+            out.push(f);
+        } else if f.x < cutoff {
+            // Straddles the cutoff: truncate to the budget, keep the prefix, anchor the ellipsis.
+            let budget = (cutoff - f.x).max(0.0);
+            let (prefix, pw) = truncate_to_width(&f.text, &f.style, budget, fonts);
+            ell_x = f.x + pw;
+            ell_style = f.style;
+            node = f.node;
+            if !prefix.is_empty() {
+                out.push(TextFragment {
+                    x: f.x,
+                    line_top: f.line_top,
+                    baseline: f.baseline,
+                    width: pw,
+                    text: prefix,
+                    style: f.style,
+                    node: f.node,
+                    content_ascent: f.content_ascent,
+                    content_height: f.content_height,
+                });
+            }
+            // Everything after this on line n starts past the cutoff — skipped by the loop.
+        }
+        // else: starts past the cutoff — clipped; the ellipsis stays at the last anchor.
+    }
+    out.push(TextFragment {
+        x: ell_x,
+        line_top: keep_top,
+        baseline,
+        width: ell_w,
+        text: ell.to_string(),
+        style: ell_style,
+        node,
+        content_ascent: ell_ca,
+        content_height: ell_ch,
+    });
+    *frags = out;
+    Some(drop_top - cy)
+}
+
 fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
     let key = FontKey {
         family: fonts.resolve_family(&cs.font_family),
@@ -2247,7 +2350,7 @@ impl Ctx<'_> {
             // `text-indent` on the block establishing this IFC applies to its first line box;
             // percentages resolve against the container width.
             let text_indent = bcs.text_indent.resolve(cw, 0.0);
-            let (mut frags, atomics, h) =
+            let (mut frags, atomics, mut h) =
                 self.layout_inline(items, cx, cy, cw, align, text_indent, floats);
             // `text-overflow: ellipsis` truncates a clipped, non-wrapping single line with `…`. Only
             // fires on a box that clips (`overflow` ≠ visible) and doesn't wrap (`nowrap`/`pre`); a
@@ -2257,6 +2360,19 @@ impl Ctx<'_> {
                 && matches!(bcs.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre)
             {
                 apply_text_overflow_ellipsis(&mut frags, cx, cw, self.fonts);
+            }
+            // `-webkit-line-clamp: N` caps the box at N lines with a trailing `…`. It rides the same
+            // clip guard as the idiom (`overflow` hidden on the vertical axis); with `line_clamp` unset
+            // this branch never runs, so an unclamped page is byte-identical. The clamp shrinks the box
+            // to N lines, so `h` (returned as the box height, and used for sibling flow) follows.
+            if let Some(n) = bcs.line_clamp {
+                if !matches!(bcs.overflow_y, manuk_css::Overflow::Visible) {
+                    if let Some(clamped_h) =
+                        apply_line_clamp(&mut frags, cx, cw, cy, n as usize, self.fonts)
+                    {
+                        h = clamped_h;
+                    }
+                }
             }
             if atomics.is_empty() {
                 return (BoxContent::Inline(frags), h);
@@ -6650,6 +6766,73 @@ mod tests {
             "text-indent:-9999px must push the first line off-screen, min_x={min_x}"
         );
     }
+
+    /// `-webkit-line-clamp: N` caps a block at N line boxes and ends line N with `…` — the card /
+    /// product / article-excerpt truncation idiom on nearly every content site. RED, run: delete the
+    /// `apply_line_clamp` call in the block-inline path — the clamped `<div>` keeps ALL its wrapped
+    /// lines and no ellipsis appears.
+    #[test]
+    fn line_clamp_caps_lines_and_appends_ellipsis() {
+        let long =
+            "the quick brown fox jumps over the lazy dog again and again and again and yet again";
+        let collect = |html: &str| -> (std::collections::BTreeSet<i32>, Vec<String>) {
+            let (_dom, root) = layout_html(html, "body{margin:0}div{margin:0}", 120.0);
+            let mut tops = std::collections::BTreeSet::new();
+            let mut texts = Vec::new();
+            root.walk(&mut |b| {
+                if let BoxContent::Inline(fs) = &b.content {
+                    for f in fs {
+                        tops.insert(f.line_top as i32);
+                        texts.push(f.text.clone());
+                    }
+                }
+            });
+            (tops, texts)
+        };
+
+        // Control: unclamped, the paragraph wraps to more than two lines and has no ellipsis.
+        let (ctrl_tops, ctrl_texts) = collect(&format!(
+            "<body><div style='overflow:hidden'>{long}</div></body>"
+        ));
+        assert!(
+            ctrl_tops.len() > 2,
+            "control must wrap past two lines, got {}",
+            ctrl_tops.len()
+        );
+        assert!(
+            !ctrl_texts.iter().any(|t| t.contains('\u{2026}')),
+            "control must not have an ellipsis"
+        );
+
+        // Clamped to 2: exactly two line boxes, and line 2 ends with `…`.
+        let (tops, texts) = collect(&format!(
+            "<body><div style='-webkit-line-clamp:2;overflow:hidden'>{long}</div></body>"
+        ));
+        assert_eq!(
+            tops.len(),
+            2,
+            "line-clamp:2 must leave exactly two line boxes, got {}",
+            tops.len()
+        );
+        assert!(
+            texts
+                .last()
+                .map(|t| t.contains('\u{2026}'))
+                .unwrap_or(false),
+            "the clamped line must end with an ellipsis, texts={texts:?}"
+        );
+
+        // A block already SHORTER than the clamp is untouched (no ellipsis, no line loss).
+        let (short_tops, short_texts) = collect(
+            "<body><div style='-webkit-line-clamp:5;overflow:hidden'>short line</div></body>",
+        );
+        assert_eq!(short_tops.len(), 1, "short block stays one line");
+        assert!(
+            !short_texts.iter().any(|t| t.contains('\u{2026}')),
+            "a block under the clamp gets no ellipsis"
+        );
+    }
+
     /// Regression (found by A/B against Chromium on Wikipedia): an **icon button** — `inline-flex`,
     /// `justify-content:center`, a `max-width`, one small icon — must hug its icon, not fill its
     /// container.

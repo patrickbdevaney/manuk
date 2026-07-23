@@ -712,6 +712,11 @@ pub struct ComputedStyle {
     pub white_space: WhiteSpace,
     /// `text-overflow` — `ellipsis` truncates clipped single-line inline content with `…`.
     pub text_overflow: TextOverflow,
+    /// `-webkit-line-clamp: <n>` — cap a block at N line boxes, dropping the rest and appending `…`
+    /// to line N. The container half of the ubiquitous card/product/article-excerpt truncation idiom
+    /// (`display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:N; overflow:hidden`).
+    /// `None` = unclamped (initial); a non-inherited box property, so it never leaks to descendants.
+    pub line_clamp: Option<u16>,
     /// `scroll-snap-type` on a scroll container; `scroll-snap-align` on its children.
     pub scroll_snap_type: ScrollSnapAxis,
     pub scroll_snap_align: ScrollSnapAlign,
@@ -878,6 +883,7 @@ impl ComputedStyle {
             text_indent: Dim::Px(0.0),
             white_space: WhiteSpace::Normal,
             text_overflow: TextOverflow::Clip,
+            line_clamp: None,
             scroll_snap_type: ScrollSnapAxis::None,
             scroll_snap_align: ScrollSnapAlign::None,
             text_transform: TextTransform::None,
@@ -3379,6 +3385,17 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             } else {
                 TextOverflow::Clip
             }
+        }
+        "-webkit-line-clamp" | "line-clamp" => {
+            // `<integer>` (≥1) clamps to that many lines; `none`/`0`/garbage → unclamped. The full
+            // `line-clamp` shorthand also carries `<block-ellipsis>`/`continue`, but the authored form
+            // on the web is overwhelmingly a bare integer, which is all layout consumes.
+            let t = v.trim();
+            s.line_clamp = if t.eq_ignore_ascii_case("none") {
+                None
+            } else {
+                t.parse::<u16>().ok().filter(|&n| n >= 1)
+            };
         }
         "scroll-snap-type" => {
             // `x mandatory` / `y proximity` / `both mandatory` / `none`. The axis is the first

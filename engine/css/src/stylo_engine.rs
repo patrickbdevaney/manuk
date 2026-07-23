@@ -599,6 +599,10 @@ pub fn cascade_via_stylo_sized(
             // `text-overflow` recovered from MinimalCascade so the shipping path truncates clipped
             // single-line titles/labels with `…` (Stylo's servo build models it as a two-value enum).
             cs.text_overflow = m.text_overflow;
+            // `-webkit-line-clamp` recovered from MinimalCascade: it is `engine="gecko"` in stylo
+            // 0.19, so the servo build never parses it — without this the shipping path shows every
+            // line of a clamped card/excerpt instead of N + `…`.
+            cs.line_clamp = m.line_clamp;
             // `overflow-wrap`/`word-wrap` and `word-break` recovered from MinimalCascade so the
             // shipping path also breaks long unbreakable tokens (a URL in a narrow column) instead
             // of letting them overflow. Stylo's servo build models these as keyword enums we don't
@@ -1772,6 +1776,31 @@ mod tests {
             map[&id("b")].text_indent,
             Dim::Px(-9999.0),
             "the image-replacement −9999px indent maps"
+        );
+    }
+
+    /// `-webkit-line-clamp` reaches the SHIPPING cascade via the MinimalCascade recovery merge —
+    /// stylo 0.19 gates the property to `engine="gecko"`, so the servo build never parses it and the
+    /// field would stay `None` (every line of a clamped card/excerpt shown) without the recovery line.
+    ///
+    /// RED, run: delete `cs.line_clamp = m.line_clamp;` in the merge loop. The assertion reads `None`.
+    #[test]
+    fn line_clamp_recovers_through_the_stylo_cascade() {
+        let dom = manuk_html::parse(
+            r#"<div id="a" style="-webkit-line-clamp:3;overflow:hidden">x</div><div id="b">y</div>"#,
+        );
+        let sheet = Stylesheet::parse("");
+        let map = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 800.0, 600.0);
+        let id = |v: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(v))
+                .unwrap()
+        };
+        assert_eq!(map[&id("a")].line_clamp, Some(3), "line-clamp:3 recovers");
+        assert_eq!(
+            map[&id("b")].line_clamp,
+            None,
+            "unset stays None (not inherited)"
         );
     }
 

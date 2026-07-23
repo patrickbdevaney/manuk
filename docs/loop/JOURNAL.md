@@ -17157,3 +17157,40 @@ form-control text pass indent 0.
 TICK SHAPE: capability (text-indent first-line application; +1 gate). GATES +1.
 CONSTELLATION: CSS text-indent missing→works (first-line form; image-replacement idiom).
 WIKI: text-layout.md — "text-indent shifts the FIRST line box only; negative/100% is the image-replacement hack".
+
+## Tick 417 — -webkit-line-clamp: cap a block at N lines with a trailing … (2026-07-22)
+
+HYPOTHESIS (winning vein, JARRING side): `-webkit-line-clamp` is UNIMPLEMENTED — it appears NOWHERE
+in the engine. It is the container half of the truncation idiom on nearly every content site
+(`display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:N; overflow:hidden`), so every
+clamped card/product/article-excerpt showed ALL its wrapped lines — a two-line teaser rendering as a
+wall of text, blowing out card grids and feeds.
+
+RE-PROBE FIRST (the rule paid three times this session): object-fit/object-position ALREADY work
+(recovered from MinimalCascade in the shipping merge); logical props (margin-inline…) ALREADY work
+(Stylo folds them to physical before stylo_map reads clone_margin_left); `-webkit-box` display is
+`engine="gecko"` in stylo 0.19 so the servo build DROPS the declaration and the container just keeps
+its UA default. That last fact is the lucky break: a `<div>` carrying the idiom stays a **block** and
+flows text normally — no `-webkit-box` formatting context is needed for the real single-text-run case,
+so the whole feature reduces to a post-layout truncation of the block's line boxes.
+
+FIX: `-webkit-line-clamp` is ALSO `engine="gecko"`, so — like object-fit/text-overflow/visibility — it
+is parsed in MinimalCascade into a new non-inherited `line_clamp: Option<u16>` and recovered into the
+shipping cascade through the existing MinimalCascade merge loop. In the block-with-inline-children
+layout path, `apply_line_clamp` groups fragments by their shared `line_top`, keeps the first N lines,
+drops the rest, and UNCONDITIONALLY forces an ellipsis onto line N (content genuinely continued past
+it — that is why there were extra lines — unlike single-line `text-overflow`, which only fires on an
+actual overflow). The clamped box height (bottom of line N) is returned as `h`, so siblings below
+reflow up. Guarded by `overflow-y ≠ visible` (the idiom always sets overflow:hidden) AND by `line_clamp`
+being set — an unclamped page never enters the branch, so it is byte-identical (zero regression by
+construction).
+
+Gate: line_clamp_caps_lines_and_appends_ellipsis (layout, RED-proven: the same block goes 6 lines → 2
+lines + `…` when the clamp call is removed) + line_clamp_recovers_through_the_stylo_cascade (RED-proven:
+delete the merge line → field reads None). manuk-layout 88/88, manuk-css 41/41 (stylo). Residue: the
+`line-clamp` shorthand's `<block-ellipsis>`/`continue` ignored (bare integer only); clamped blocks with
+block (not inline) children unhandled; true old-flexbox `-webkit-box` child layout out of scope.
+
+TICK SHAPE: capability (-webkit-line-clamp multi-line truncation; +2 gates). GATES +2.
+CONSTELLATION: CSS -webkit-line-clamp missing→works (N-line clamp + ellipsis; card/excerpt idiom).
+WIKI: text-layout.md — "-webkit-line-clamp caps a block at N lines with a trailing …".

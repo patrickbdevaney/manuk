@@ -816,3 +816,29 @@ every existing line box is **byte-identical** — the path is inert until an aut
 `text_indent_offsets_the_first_line_only` (layout) + `text_indent_maps_through_the_stylo_cascade`
 (cascade). Residue: the `hanging`/`each_line` keywords are accepted-and-ignored; anonymous mixed
 block+inline runs (which already hardcode `align:left`) and form-control text pass indent 0.
+
+## `-webkit-line-clamp: N` caps a block at N lines with a trailing `…` (tick 417)
+
+The container half of the truncation idiom on nearly every card / product tile / article excerpt:
+`display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:N; overflow:hidden`. stylo 0.19
+gates `-webkit-line-clamp` to `engine="gecko"`, so the servo build never parses it — and `display:
+-webkit-box` is likewise gecko-only, so a `<div>` carrying the idiom simply stays a **block** (its UA
+default) and flows its text as normal block content. That is the lucky break: no `-webkit-box`
+formatting context is needed for the real-world single-text-run case, so the whole feature reduces to a
+post-layout truncation of the block's line boxes.
+
+`line_clamp: Option<u16>` is a **non-inherited** box property (so it never leaks to descendants),
+parsed in MinimalCascade and recovered into the shipping cascade through the same MinimalCascade merge
+that carries `object-fit`/`text-overflow`/`visibility` (all of them gecko-modelled types stylo won't
+surface). In the block-with-inline-children layout path, after the line boxes are built,
+`apply_line_clamp` groups fragments by their shared `line_top`, keeps the first N lines, drops the rest,
+and **unconditionally** forces an ellipsis onto line N — unconditional because content genuinely
+continued past it (that is why there were extra lines), unlike single-line `text-overflow` which only
+fires on an actual overflow. The clamped box height (bottom of line N) is returned as `h`, so siblings
+below reflow up. Guarded by `overflow-y ≠ visible` (the idiom always sets `overflow:hidden`) and by
+`line_clamp` being set at all — an unclamped page never enters the branch, so it is byte-identical.
+Gated by `line_clamp_caps_lines_and_appends_ellipsis` (layout, RED-proven: 6 lines → 2 + `…`) and
+`line_clamp_recovers_through_the_stylo_cascade` (shipping-path recovery). Residue: the `line-clamp`
+shorthand's `<block-ellipsis>`/`continue` parts are ignored (bare integer only); a clamped block whose
+children are themselves blocks (not the common all-inline excerpt) is not handled; true old-flexbox
+`-webkit-box` child layout is out of scope.
