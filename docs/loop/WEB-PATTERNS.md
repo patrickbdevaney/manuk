@@ -3914,3 +3914,17 @@ mutation), which is a separate later brick and still absent. Detection is correc
 **The trap:** a reflection-only brick of a subsystem is only honest if it does NOT imply the rest works — the
 gate asserts reflection + inheritance, never "editing works," and the journal names the editing path as the
 next brick. Brick 1 of the Tier-1 rich-editing subsystem, the pivot off the mined-out selector/interaction vein.
+
+## Editor hosts match :read-write and get styled (tick 457)
+
+**The class of the web this unlocks (messaging + docs + forums):** any rich-editor UI that styles or queries
+its editable region by mutability — `[contenteditable]` comment boxes, Gmail-compose / Notion-class hosts,
+and design systems whose `:read-write`/`:read-only` rules or `querySelectorAll(':read-write')` calls target
+editable content. A `<div contenteditable>` was styled by `:read-only` rules and missed by `:read-write`
+ones (both engines checked input/textarea only), disagreeing with the `el.isContentEditable` t456 landed.
+**(1)** A shared `is_contenteditable` (walk ancestors for the attribute, nearest explicit state wins) now
+backs `:read-write`/`:read-only` in both the querySelector engine and the live Stylo cascade.
+**(2)** `:read-only` is the exact complement of `:read-write`, so the two pseudos + `isContentEditable` all
+agree; `contenteditable=false` islands correctly revert to `:read-only`.
+**The trap:** the fourth two-engines-disagree pseudo (`:open`/`:disabled`/`:read-only`/contenteditable) — a
+pseudo-class fixed in the JS/query engine still lies in the cascade until both change together.

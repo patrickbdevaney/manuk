@@ -366,8 +366,16 @@ mod selector_impl {
                 }
                 P::Required => is_form_control(tag) && has("required"),
                 P::Optional => is_form_control(tag) && !has("required"),
-                P::ReadOnly => has("readonly") || !is_editable(tag),
-                P::ReadWrite => !has("readonly") && is_editable(tag),
+                // `:read-write` = an editable input/textarea OR a `contenteditable` host (t456's
+                // editability, now visible to the cascade); `:read-only` is its exact complement.
+                P::ReadWrite => {
+                    (is_editable(tag) && !has("readonly"))
+                        || crate::is_contenteditable(self.dom, self.node)
+                }
+                P::ReadOnly => {
+                    !((is_editable(tag) && !has("readonly"))
+                        || crate::is_contenteditable(self.dom, self.node))
+                }
                 // A link is an <a>/<area>/<link> WITH an href. Without one it is an anchor, not a
                 // link, and `a:link` must not style it.
                 P::Link | P::AnyLink => matches!(tag, "a" | "area" | "link") && has("href"),

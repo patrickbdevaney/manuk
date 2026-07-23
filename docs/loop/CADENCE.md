@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **237** | ticks 1–456 |
 | median tick cycle | **19m** | 236 intervals |
-| median, last 10 | **38m** | 10 intervals |
+| median, last 10 | **40m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.80** | 295.9h elapsed |
+| **ticks per hour** | **0.80** | 296.3h elapsed |
 | median verify wall | **60s** | 176 ticks |
 | wall trend | 39s → 70s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,7 +27,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **223**
+* **live gates**: 27 → **224**
 * **✅ rows in the capability ledger**: 144 → **328**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
@@ -333,6 +333,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **451** | 2026-07-23 10:52 | 25m | capability | 4m | +204/−34 | 219 | 81 | 56.0% · | the HTML `inert` attribute also blocks focus (2026-07-23) |
 | **452** | 2026-07-23 11:51 | 59m | capability | 72s | +240/−38 | 221 | 81 | 56.0% · | a `disabled` form control cannot receive focus (2026-07-23) |
 | **454** | 2026-07-23 12:31 | 41m | capability | 70s | +116/−35 | 222 | 81 | 56.0% · | `:read-only`/`:read-write` match in the querySelector engine (BOTH engines agree) (2026-07 |
-| **456** | 2026-07-23 12:57 | 26m | capability | 59s | +272/−34 | 223 | 81 | 56.0% · | contenteditable QUERY surface: contentEditable / isContentEditable / designMode (2026-07-2 |
+| **456** | 2026-07-23 13:19 | 48m | capability | 60s | +240/−40 | 224 | 81 | 56.0% · | contenteditable QUERY surface: contentEditable / isContentEditable / designMode (2026-07-2 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

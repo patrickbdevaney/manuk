@@ -18478,3 +18478,39 @@ italic at minimum) + `beforeinput`/`input` events + keystroke→DOM-text mutatio
 through the existing dispatch_key/dispatch_composition seams; and `:read-write` honouring contenteditable
 (the edge left unmodelled in t454, now that the state is computable). Each is its own atomic brick — the
 editing path needs a decompose pass (caret model + Selection-in-editable) before starting.
+
+## Tick 457 — `:read-write`/`:read-only` honour contenteditable, in BOTH engines (2026-07-23)
+
+CONTINUES the contenteditable pivot (brick 1.5): t454 matched `:read-only`/`:read-write` for inputs/
+textareas and EXPLICITLY left the contenteditable edge unmodelled on both engines; t456 defined
+`isContentEditable`. Now that editability is computable, this closes that edge so styling/querying agree
+with it. The two-engines-disagree pattern, fourth time (`:open`/`:disabled`/`:read-only`/now contenteditable).
+
+PROBED (RED-proven): both `:read-write`/`:read-only` matchers checked input/textarea only —
+`engine/css/src/lib.rs` `pseudo_matches` and `engine/css/src/stylo_dom.rs`. A `<div contenteditable>` (a
+rich-editor host: Gmail compose, Notion, comment boxes) was styled by `:read-only` rules and MISSED by
+`:read-write` ones, disagreeing with `el.isContentEditable` — so `div:read-write{…}` editor styling didn't
+apply and `querySelectorAll(':read-write')` missed the editable regions.
+
+FIX (capability — 2 files, 1 shared helper): new `pub(crate) fn is_contenteditable(dom, node)` in lib.rs —
+walk self→ancestors for the `contenteditable` attribute, nearest EXPLICIT state wins (''/true/plaintext-only
+⇒ editable, false ⇒ not, inherit/absent/unknown walks up), mirroring the t456 JS shim (minus designMode, a
+JS runtime property the cascade cannot see — the one unmodelled edge). `:read-write` = editable input/textarea
+OR is_contenteditable; `:read-only` = its exact complement. Wired into `Pseudo::ReadWrite`/`ReadOnly`
+(lib.rs) and `P::ReadWrite`/`ReadOnly` (stylo_dom.rs). The complement formulation is exactly equivalent to
+the old input/textarea-only rule when no contenteditable is present (verified algebraically + t454 gate green).
+
+GATE: G_CONTENTEDITABLE_PSEUDO (page, `contenteditable_drives_read_write_read_only`) — tests BOTH engines:
+`:read-write` matches the contenteditable host + a plain child (inheritance) not a `contenteditable=false`
+island or an outside div; `:read-only` the exact complement; the cascade `div:read-write{width:250px}` styles
+the host not the outside div. RED-proven by reverting both arms to input/textarea-only (`:read-write` → []).
+Siblings green: manuk-css (41), g_readonly_pseudo, g_contenteditable_query, g_disabled_pseudo, g_selector,
+g_active_pseudo, g_open_pseudo.
+
+TICK SHAPE: capability (`:read-write`/`:read-only` honour contenteditable in both selector engines; +1 gate).
+GATES +1. CONSTELLATION: contenteditable row extended (query surface t456 + mutability-pseudo agreement t457).
+WIKI: interaction-surface.md — the t454 open edge is now closed.
+NEXT VEIN NOTE: contenteditable now has query (t456) + selector-agreement (t457). The remaining brick is the
+EDITING path (execCommand/beforeinput/keystroke→DOM mutation on the host, via dispatch_key/dispatch_composition)
+— L-sized, needs a caret + Selection-in-editable decompose pass before starting. Media High-profile H.264 is
+the alternate Tier-1 marquee (needs a new decode backend, not atomic).

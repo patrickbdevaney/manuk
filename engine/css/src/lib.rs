@@ -1382,6 +1382,32 @@ pub(crate) fn is_disabled_control(dom: &Dom, node: NodeId) -> bool {
     false
 }
 
+/// Is `node` editable via `contenteditable`? Walks self → ancestors: the nearest element with an
+/// EXPLICIT contenteditable state wins — `""`/`true`/`plaintext-only` ⇒ editable, `false` ⇒ not; the
+/// attribute absent or `inherit`/unknown keeps walking up. Mirrors the JS `isContentEditable` shim
+/// (`event_loop.rs`, tick 456), minus `document.designMode` — a JS runtime property the cascade cannot
+/// see (the one unmodelled edge, and a rare one). This is what makes `:read-write`/`:read-only` agree
+/// with `el.isContentEditable`: a `<div contenteditable>` is `:read-write`, not `:read-only`.
+pub(crate) fn is_contenteditable(dom: &Dom, node: NodeId) -> bool {
+    let mut cur = Some(node);
+    while let Some(n) = cur {
+        if let Some(el) = dom.element(n) {
+            if let Some(v) = el.attr("contenteditable") {
+                let v = v.trim().to_ascii_lowercase();
+                if v.is_empty() || v == "true" || v == "plaintext-only" {
+                    return true;
+                }
+                if v == "false" {
+                    return false;
+                }
+                // `inherit` or an invalid value → not an explicit state; keep walking up.
+            }
+        }
+        cur = dom.parent(n);
+    }
+    false
+}
+
 fn pseudo_matches(p: &Pseudo, dom: &Dom, node: NodeId) -> bool {
     let el = match dom.element(node) {
         Some(e) => e,
@@ -1433,12 +1459,14 @@ fn pseudo_matches(p: &Pseudo, dom: &Dom, node: NodeId) -> bool {
         Pseudo::Required => el.attr("required").is_some(),
         // Mirror `stylo_dom.rs` so the two engines agree: `:read-only` is a readonly input/textarea OR
         // any non-editable element; `:read-write` is an input/textarea without `readonly`.
-        Pseudo::ReadOnly => {
-            el.attr("readonly").is_some() || !matches!(el.name.as_str(), "input" | "textarea")
-        }
+        // `:read-write` = an editable input/textarea, OR a `contenteditable` host (t456's editability,
+        // now visible to the cascade). `:read-only` is its exact complement — a plain <div> is
+        // `:read-only`, a `<div contenteditable>` is `:read-write`.
         Pseudo::ReadWrite => {
-            el.attr("readonly").is_none() && matches!(el.name.as_str(), "input" | "textarea")
+            (matches!(el.name.as_str(), "input" | "textarea") && el.attr("readonly").is_none())
+                || is_contenteditable(dom, node)
         }
+        Pseudo::ReadOnly => !pseudo_matches(&Pseudo::ReadWrite, dom, node),
         Pseudo::Muted => {
             matches!(el.name.as_str(), "video" | "audio") && el.attr("muted").is_some()
         }

@@ -2313,3 +2313,17 @@ making an arbitrary element `:read-write` UNMODELLED on both selector engines (k
 diverge). Now that `isContentEditable` is computable (t456), `:read-write` honouring a contenteditable host
 is a bounded follow-on — but it must land in BOTH engines (pseudo_matches + stylo_dom) at once, and the
 cascade side needs the CSS engine to see the contenteditable inheritance the JS shim computes.
+
+## `:read-write`/`:read-only` honour contenteditable (tick 457) — the t454 edge closed
+
+t454 left `contenteditable`-makes-`:read-write` unmodelled on both selector engines; t456 defined
+`isContentEditable`; this closes the edge. A shared `is_contenteditable(dom, node)` in
+`engine/css/src/lib.rs` (walk self→ancestors for the `contenteditable` attribute, nearest explicit
+''/true/plaintext-only ⇒ editable, false ⇒ not, inherit/absent walks up — mirroring the t456 JS shim, minus
+`document.designMode` which the cascade cannot see) now backs `:read-write`/`:read-only` in BOTH
+`pseudo_matches` and `stylo_dom.rs`. `:read-write` = editable input/textarea OR contenteditable host;
+`:read-only` = the exact complement (equivalent to the old input/textarea-only rule when no contenteditable
+is present). So a `<div contenteditable>` is `:read-write`, a plain child inside it inherits it, and a
+`contenteditable=false` island is `:read-only` — agreeing with `el.isContentEditable`. Gated by
+G_CONTENTEDITABLE_PSEUDO. The two-engines-disagree shape a fourth time (`:open`/`:disabled`/`:read-only`/
+contenteditable). [[css-cascade]]
