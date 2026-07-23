@@ -513,6 +513,7 @@
   - L2350 · The contenteditable editability query surface (tick 456)
   - L2365 · :read-only/:read-write and contenteditable — the open edge
   - L2373 · :read-write/:read-only honour contenteditable (tick 457) — the t454 edge closed
+  - L2387 · Exclusive <details name> accordions — the platform FAQ, one panel open at a time (tick 467)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -933,4 +934,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-848 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+849 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

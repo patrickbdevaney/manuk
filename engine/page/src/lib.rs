@@ -4092,6 +4092,49 @@ impl Page {
                     self.dom.remove_attr(details, "open");
                 } else {
                     self.dom.set_attr(details, "open", "");
+                    // **EXCLUSIVE ACCORDION (`<details name>`).** A named group holds at most one
+                    // open panel: opening this one closes every OTHER open `<details>` that shares
+                    // its non-empty `name`. This is the platform FAQ/docs accordion (Baseline 2024)
+                    // and, like the summary toggle itself, ships with no page script — without it a
+                    // named group expands into a wall of every section at once. Scoped strictly BY
+                    // NAME: an empty name is not a group, and a different name is a different group.
+                    let group = self
+                        .dom
+                        .element(details)
+                        .and_then(|e| e.attr("name"))
+                        .filter(|n| !n.is_empty())
+                        .map(str::to_string);
+                    if let Some(name) = group {
+                        let peers: Vec<manuk_dom::NodeId> = self
+                            .dom
+                            .descendants(self.dom.root())
+                            .filter(|&o| o != details)
+                            .filter(|&o| {
+                                self.dom.element(o).is_some_and(|e| {
+                                    e.name == "details"
+                                        && e.attr("name") == Some(name.as_str())
+                                        && e.attr("open").is_some()
+                                })
+                            })
+                            .collect();
+                        for peer in peers {
+                            self.dom.remove_attr(peer, "open");
+                            // The spec fires `toggle` on each panel exclusivity auto-closes, so a
+                            // lazy-loaded section learns it was collapsed.
+                            if let Some(ctx) = self.js.as_ref() {
+                                if let Err(e) = manuk_js::dispatch_event(
+                                    ctx,
+                                    &mut self.dom,
+                                    peer,
+                                    "toggle",
+                                    &rects,
+                                    &self.styles,
+                                ) {
+                                    tracing::warn!("accordion toggle dispatch: {e}");
+                                }
+                            }
+                        }
+                    }
                 }
                 // `toggle` is the event the spec fires and the one a page listens for to lazy-load
                 // the section's contents. Dispatched after the attribute changes, so a handler

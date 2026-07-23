@@ -2383,3 +2383,28 @@ is present). So a `<div contenteditable>` is `:read-write`, a plain child inside
 `contenteditable=false` island is `:read-only` — agreeing with `el.isContentEditable`. Gated by
 G_CONTENTEDITABLE_PSEUDO. The two-engines-disagree shape a fourth time (`:open`/`:disabled`/`:read-only`/
 contenteditable). [[css-cascade]]
+
+## Exclusive `<details name>` accordions — the platform FAQ, one panel open at a time (tick 467)
+
+`<details>` already toggled on a summary click and fired the `toggle` event (`g_details`). What was
+missing is the **group**: HTML's `name` attribute turns a set of disclosures into an *exclusive
+accordion* (Baseline 2024) — give several `<details>` the same `name` and the browser guarantees **at
+most one is open at a time**. It is the FAQ page, the docs sidebar, GitHub's stacked settings panels,
+every "only one section expanded" UI — and, exactly like the summary toggle, it ships with **no page
+script**. Without it a named group behaves like a pile of independent disclosures: clicking a second
+summary opens it while leaving the first open, so a five-item FAQ sits fully expanded — the same "wall
+of everything at once" the plain `<details>` gate exists to prevent, one level up.
+
+MECHANISM: in the summary-click activation path (`engine/page/src/lib.rs`, `dispatch_click`), the
+moment a `<details>` transitions closed→open, if it carries a **non-empty** `name` the engine collects
+every OTHER `<details>` in the document sharing that name that is currently `open`, removes their `open`
+attribute, and dispatches `toggle` on each — so a lazy-loaded panel learns it was collapsed. It reuses
+the same `descendants(root)` + name-match shape as radio-group exclusivity (a radio is a group, not a
+toggle — the direct analogue). Scoped **strictly by name**: an empty name is not a group (each
+independent), and a different name is a different group (untouched) — the invariant that separates this
+from the cheap-wrong fix of "close all other open details".
+
+Gated by `G_DETAILS_ACCORDION`: opening `#b` (`name="faq"`) auto-closes its open same-name sibling `#a`
+and fires exactly one `toggle` on `#a`; opening `#c` (`name="other"`) leaves `#b` open. RED-proven —
+without the exclusivity pass `#a` stays open when `#b` opens. Neighbors green: `g_details`,
+`g_open_pseudo`, `g_a11y_state`, `g_mouse_actuation`.

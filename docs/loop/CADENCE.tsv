@@ -241,3 +241,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 461	c21b6d9	1784836296	2026-07-23T15:51:36-04:00	3432	capability	62	9	390	161	229	81	3896	6960	0	329	31	clipboard.read() returns a copied IMAGE (paste-a-screenshot) (2026-07-23)
 463	bdcda5f	1784839969	2026-07-23T16:52:49-04:00	3673	capability	60	10	276	56	231	81	3896	6960	0	329	31	document.execCommand('copy'/'selectAll'), the legacy copy-button path (2026-07-23)
 465	a5f5c24	1784844157	2026-07-23T18:02:37-04:00	4188	capability	69	9	164	34	233	81	3896	6960	0	329	31	`color-scheme` reaches getComputedStyle AND darkens the canvas default (2026-07-23)
+467	5b8627f	1784845899	2026-07-23T18:31:39-04:00	1742	capability	63	8	234	5	234	81	3896	6960	0	329	31	exclusive `<details name>` accordions: one panel open at a time (2026-07-23)

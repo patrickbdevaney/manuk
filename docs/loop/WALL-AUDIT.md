@@ -201,3 +201,18 @@ sharing the box is not a benchmark) are legitimate coverage, not bloat. The admi
 levers (cargo-nextest runtime-sharing to reclaim the ~1.5s SpiderMonkey-startup tax per JS gate, section
 parallelism) all live in scripts/ (observer-owned, already named in prior audits). Wall stays lean when
 warm; coverage grew this window with no wall cost. Mark untouched.
+
+## Audit #10 — tick 467 (wall 63s warm)
+
+FINDING: warm wall held at 63s — squarely in the #5-#9 band (57-68s) across the CSSOM pref-flip vein
+(ticks 458-466: deviceMemory/platform, select.options.length, custom-element callbacks, clipboard
+image read/write, execCommand copy, user-select, color-scheme, contrast-color) and this tick's
+`<details name>` exclusive accordion. Breakdown this run: T 22s crate tests (35%), P 14s perf floors
+(22%), G6 8s (13%), G1 4s (6%), F/B ~1-2s. The new G_DETAILS_ACCORDION rode the parallel launch as a
+single small page fixture (one #[test], the t354 rule) — ~0 marginal wall.
+
+NO TRIM: same conclusion as #5-#9. T (crate tests) and P (perf floors, deliberately serial) are
+legitimate coverage, not bloat. The admissible rigor-preserving levers (cargo-nextest runtime-sharing
+to reclaim the ~1.5s SpiderMonkey-startup tax per JS gate, section parallelism) all live in scripts/
+(observer-owned, already named in prior audits — I do not touch them). Wall stays lean when warm;
+coverage grew this window with no wall cost. Mark untouched.

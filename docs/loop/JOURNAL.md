@@ -18908,3 +18908,35 @@ under swap-94% + mem-guard 8/32-core, NOT compute, NOT a regression ([wall-ramdi
 verify re-built the workspace TWICE mid-run, the flush-under-compiler race). Same park→warm-re-run land
 pattern as t465 earlier this session (which took 3-4 verify cycles for the box to free a sub-245s window,
 then landed at 60s). Not re-baselining the WALL mark. Lands on the next quiet slot.
+
+## Tick 467 — exclusive `<details name>` accordions: one panel open at a time (2026-07-23)
+
+A bounded-gap re-probe of the disclosure widget. `<details>`/`<summary>` already toggled on a summary
+click and dispatched the `toggle` event (`g_details`, earlier tick), and DAILY-DRIVER-EDGES row 55 was
+stale on that. What was genuinely missing is the GROUP: HTML's `name` attribute makes a set of
+disclosures an EXCLUSIVE accordion (Baseline 2024) — at most one open at a time. Give several `<details>`
+the same `name` and opening one must auto-close whichever same-name sibling was open. FAQ pages, docs
+sidebars, GitHub's stacked settings panels — all ship this with NO page script. Confirmed absent: only
+radio-button activation consulted the `name` attribute; the details toggle path just flipped `open` on
+the clicked element.
+
+MECHANISM: in `dispatch_click`'s summary-activation branch (`engine/page/src/lib.rs`), the moment a
+`<details>` goes closed→open, if it carries a NON-EMPTY `name` the engine collects every OTHER open
+`<details>` in the document sharing that name, removes their `open` attribute, and dispatches `toggle` on
+each (so a lazy-loaded panel learns it collapsed). Reuses the same `descendants(root)` + name-match shape
+as radio-group exclusivity — the direct analogue (a radio is a group, not a toggle). Scoped STRICTLY by
+name: empty name = not a group, different name = different group (untouched).
+
+GATE: G_DETAILS_ACCORDION (page, `opening_a_named_details_closes_its_group_siblings_but_not_other_groups`)
+— opening `#b` (name="faq") auto-closes its open same-name sibling `#a` and fires exactly one `toggle` on
+`#a`; opening `#c` (name="other") leaves `#b` open. RED-proven: without the exclusivity pass, `#a` stays
+open when `#b` opens (panicked at the exclusivity assertion). Neighbors green: g_details, g_open_pseudo,
+g_a11y_state, g_mouse_actuation. VERIFY: all gates green (gate 63s · build 1s · total 64s, warm quiet box).
+
+TICK SHAPE: capability (exclusive-accordion grouping in the click-activation path; +1 gate). GATES +1.
+CONSTELLATION: app-class "only one section open" UI now works. WIKI: interaction-surface.md — new section
+after the contenteditable-pseudo note. WEB-PATTERNS: FAQ/docs/settings accordions.
+NEXT VEIN NOTE: the bounded-gap re-probe vein (a near-done feature's ONE dropped variant) is still live —
+`<details>` had the toggle but not the group. Similar candidates: `<dialog>` light-dismiss / `::backdrop`,
+form `<datalist>` autocomplete, `<output>` name-form association. Bigger honest moves unchanged: MEDIA
+H.264-High, IndexedDB (redb/heed), contenteditable EDITING subsystem, FID-SWEEP jarring invariants.

@@ -4059,3 +4059,15 @@ resolves for both `color` and `background-color` (any color property), and `getC
 resolved rgb. **The trap:** the function computes to a deferred `ContrastColor` variant, NOT an absolute
 color at computed time — it works only because the used-value resolution path was already wired; a naive
 `clone_*` that skipped resolution would have serialized `contrast-color(...)` back as a string.
+
+## Exclusive accordions open one panel at a time (tick 467)
+
+**The class of the web this unlocks (FAQ / docs-sidebar / settings-panel UIs):** `<details name="group">`
+is HTML's exclusive accordion (Baseline 2024) — several disclosures sharing a `name` are guaranteed at
+most one open at a time, with no page script. `<details>` already toggled on a summary click, but the
+grouping was absent: a named FAQ opened every section a user clicked and never collapsed the previous one,
+so a multi-item accordion sat fully expanded — the same "wall of everything at once" the plain-details fix
+prevents, one level up. Now, when a `<details>` goes closed→open, if it carries a non-empty `name` the
+engine closes every other open same-name `<details>` and fires `toggle` on each. **The trap:** exclusivity
+is scoped strictly BY NAME — an empty name is not a group and a different name is a different group; closing
+"all other open details" regardless of name would break any page with two independent accordions.
