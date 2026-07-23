@@ -5595,15 +5595,43 @@ impl Page {
             .collect()
     }
 
-    /// Nodes whose computed `pointer-events` is `none` — they stay in the a11y tree (a screen reader
-    /// announces them) but are dropped from coordinate hit-testing, so an agent grounding a click does
-    /// not land on a decorative `pointer-events:none` overlay. Mirrors [`Self::invisible_nodes`].
+    /// Nodes dropped from coordinate hit-testing — an agent grounding a click does not land on them —
+    /// while they stay in the a11y tree (a screen reader still announces them). Two sources:
+    ///
+    ///   * computed `pointer-events: none` (a decorative overlay/scrim). This inherits through the
+    ///     *cascade*, so the computed value on each node already reflects the overlay→subtree
+    ///     inheritance and a per-node read is sufficient.
+    ///   * the HTML `inert` content attribute (what `<dialog>.showModal()` sets on the rest of the
+    ///     page to neutralise it). `inert` inherits down the *DOM subtree*, not the cascade — an
+    ///     element with `inert` makes itself AND every descendant non-interactive — so it needs a
+    ///     subtree walk, not a per-node style read.
+    ///
+    /// Mirrors [`Self::invisible_nodes`].
     fn non_hittable_nodes(&self) -> std::collections::HashSet<manuk_dom::NodeId> {
-        self.styles
+        let mut set: std::collections::HashSet<manuk_dom::NodeId> = self
+            .styles
             .iter()
             .filter(|(_, s)| s.pointer_events == manuk_css::PointerEvents::None)
             .map(|(n, _)| *n)
-            .collect()
+            .collect();
+        // Walk the DOM; once inside an `inert` element, every descendant is inert too (the attribute
+        // does not need to repeat on children). A descendant cannot escape inertness here — the
+        // top-layer/modal-dialog escape is a niche the common modal-backdrop case does not need.
+        let mut stack = vec![(self.dom.root(), false)];
+        while let Some((node, inherited)) = stack.pop() {
+            let is_inert = inherited
+                || self
+                    .dom
+                    .element(node)
+                    .is_some_and(|e| e.attr("inert").is_some());
+            if is_inert {
+                set.insert(node);
+            }
+            for c in self.dom.children(node) {
+                stack.push((c, is_inert));
+            }
+        }
+        set
     }
 
     fn z_index_map(&self) -> HashMap<manuk_dom::NodeId, i32> {

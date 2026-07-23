@@ -18240,3 +18240,50 @@ was a REAL compile error, now fixed (lesson: grep the WHOLE repo for struct-lite
 `tab_operations_stay_far_under_one_frame` (G_INTERACT scaling gate, last<=first*4+300us) false-REDs under the
 verify's parallel load + the observer's live FID-SWEEP; it passes 3/3 in isolation. Landing on a quiet box per
 the documented recipe.
+
+## Tick 450 — the HTML `inert` attribute: reflection + transparent to the agent's hit-test (2026-07-23)
+
+VEIN: continues the pointer-events arc (t448/t449) into its closest sibling — a DIFFERENT mechanism
+(HTML attribute, not a CSS property; inherits down the DOM subtree, not the cascade) with the SAME
+component-#2 defect shape. Per Const-Check #22 the bounded value-accessor vein is exhausted; the
+interaction/hit-test surface is the live vein. `inert` is what `<dialog>.showModal()` and every
+hand-rolled modal set on the rest of the page to neutralise it.
+
+PROBED FIRST (Process Rule 2): grepped the WHOLE repo — every "inert" hit is the English word
+(disabled controls, inert wrappers), ZERO handling of the HTML `inert` attribute. Genuinely absent,
+not stale-pessimistic.
+
+HYPOTHESIS: `inert` does nothing — `el.inert` is undefined, and an agent can click a button behind an
+open modal. RED-proven BOTH ways (below).
+
+FIX (capability — 3 files, reuses the t448/t449 machinery):
+- engine/js/src/reflect_table.rs: added `{"n":"inert","t":"boolean"}` to the global `"*"` reflection
+  row (inert is an HTMLElement IDL attr). The generic boolean-reflection mechanism (tick 111) gives
+  every element the getter/setter for free — no new code, just the spec's one table entry.
+- engine/page/src/lib.rs: `non_hittable_nodes()` now ALSO walks the DOM subtree and unions in every
+  node under an element carrying the `inert` attribute. Unlike `pointer-events` (cascade-inherited,
+  per-node style read), `inert` inherits down the DOM subtree, so it needs the walk. The union feeds
+  the SAME a11y builder t449 wired, which marks each `hittable=false` (nodes stay in the tree — still
+  announced — but drop from coordinate hit-testing). NOT fed to the JS elementFromPoint path (t448):
+  per spec `inert` does not change `document.elementFromPoint`, only event/interaction targeting.
+- (a11y builder + hit_test unchanged — the `hittable` flag from t449 is reused as-is.)
+
+GATES (two axes, both RED-proven):
+- G_INERT (page, `inert_idl_attribute_reflects`): `el.inert` is false (not undefined) when unset, true
+  when the attribute is present, `el.inert=true` ADDS the content attribute, `el.inert=false` removes
+  it. RED-proven by removing the table row → `offInit:undefined setAttr:no clear:no`.
+- G_INERT_A11Y (page, `inert_is_transparent_to_the_agent_hit_test`): a button inside `<div inert>` is
+  present but hittable==false; a sibling button OUTSIDE the inert container stays hittable==true (no
+  over-marking — the subtree walk stops at the container's descendants); hit_test over the inert button
+  does NOT return it. RED-proven by neutering the inert branch → hittable==true, assert fires.
+Sibling gates green: g_pointer_events (t448), g_pointer_events_a11y (t449), g_reflect, g_global_reflect,
+g_a11y_roles, g_a11y_state, manuk-a11y (16). No struct signatures changed (t449 lesson) — repo-wide
+grep clean, only the non_hittable_nodes() body grew.
+
+TICK SHAPE: capability (inert reflection + inert-subtree hit-test transparency on the agentic surface;
++2 gates). GATES +2. CONSTELLATION: `inert` (HTML) unknown→gated (G_INERT / G_INERT_A11Y).
+WIKI: interaction-surface.md — `inert` neutralises a subtree for the agent's hit-test + reflects boolean.
+NEXT VEIN NOTE: the interaction/hit-test vein still has teeth adjacent to this — `inert` should ALSO
+block FOCUS (tab order) and text SELECTION; both are bounded follow-ons on this same surface. `user-select`
+remains the thin sibling (getComputedStyle-only, no scripted behavioral RED). The richer pivots remain the
+Tier-1 subsystems (media JOIN / contenteditable+IME) per PHASE0-BOUNDED-REMAINDER.

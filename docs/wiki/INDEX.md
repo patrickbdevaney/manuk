@@ -496,6 +496,7 @@
   - L2139 · scrollTo/scrollBy reuse the scrollTop/scrollLeft setters (clamp + snap) (tick 431)
   - L2155 · pointer-events: none is transparent to hit-testing (tick 448)
   - L2182 · pointer-events: none is transparent to the AGENT's hit-test too (tick 449)
+  - L2208 · The HTML inert attribute — reflection + transparent to the agent's hit-test (tick 450)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -915,4 +916,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-830 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+831 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

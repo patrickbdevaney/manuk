@@ -3817,3 +3817,23 @@ changes; a normal node stays hittable (no over-marking).
 **The trap:** it is a SEPARATE code path from the JS fix — the same property, two hit-test implementations,
 and fixing one leaves the other lying. `pointer-events:none` must NOT be treated like `visibility:hidden`
 (which omits the node entirely): the element is still perceivable, so it is announced but not a target.
+
+## The HTML `inert` attribute neutralises a subtree for the agent (tick 450)
+
+**The class of the web this unlocks (agentic + reflection):** the modal-dialog backdrop. When a site opens
+a modal — `<dialog>.showModal()`, or a library that sets `document.body.inert = true` around an overlay —
+the rest of the page must become non-interactive: a user (and an AGENT) must not be able to click a button
+behind the modal. `inert` was entirely unhandled, so an agent grounding a coordinate click through the
+accessibility tree's `hit_test` actuated neutralised UI behind an open dialog — the exact component-#2
+failure a modal exists to prevent — and `el.inert` read `undefined`, misleading any feature-detect.
+**(1)** `el.inert` now reflects as a boolean (a one-row addition to the global `"*"` reflection table; the
+generic mechanism from tick 111 supplies the getter/setter): `false` when unset (never `undefined`), `true`
+when present, and assigning it adds/removes the content attribute.
+**(2)** `Page::non_hittable_nodes()` now walks the DOM subtree and unions in every node under an `inert`
+element, feeding the same `build_tree_full` path tick 449 wired, so each is marked `hittable = false` — in
+the tree (announced) but skipped in `hit_test`.
+**The trap:** `inert` looks like a sibling of `pointer-events:none` but the mechanism is different in two
+ways that decide the implementation — it is an HTML ATTRIBUTE (reflection, not cascade) and it inherits
+down the DOM SUBTREE (a tree walk, not a per-node computed-style read). And unlike `pointer-events`, `inert`
+must NOT be fed to the JS `elementFromPoint` path: per spec it changes interaction targeting, not the
+geometric CSSOM-View hit-test.

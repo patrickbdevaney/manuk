@@ -2204,3 +2204,33 @@ so it RED-proves the skip in isolation. The page gate `G_POINTER_EVENTS_A11Y` pr
 end-to-end: over a real page it asserts the `pointer-events:none` roled node is present but `hittable ==
 false`, a normal node stays `hittable == true` (no over-marking), and `hit_test` over the overlap returns
 the button behind the overlay — RED-proven by neutering the skip (the overlay then wins). [[css-cascade]]
+
+## The HTML `inert` attribute — reflection + transparent to the agent's hit-test (tick 450)
+
+`inert` is the HTML content attribute a modal uses to neutralise the rest of the page:
+`<dialog>.showModal()` (and every hand-rolled modal) marks the backdrop content `inert` so it stays
+visible and announced but receives no interaction. It was entirely unhandled — `el.inert` read
+`undefined`, and an agent could ground a click on a button *behind* an open modal ([[js-engine]]
+component #2). This is the closest sibling to the pointer-events arc (tick 448/449) but a *different*
+mechanism, and the difference is the whole implementation:
+
+- **`inert` is an HTML attribute, not a CSS property.** Reflection is one row —
+  `{"n":"inert","t":"boolean"}` in the global `"*"` reflection table (`reflect_table.rs`). The generic
+  boolean-reflection mechanism (tick 111) then gives every element the getter/setter: `el.inert` is
+  `false` when unset (never `undefined` — a `'inert' in el` polyfill and an `if (el.inert)` branch both
+  depend on that), `true` when present, and `el.inert = true` *adds* the content attribute.
+- **`inert` inherits down the DOM subtree, not the cascade.** `pointer-events` inherits through the
+  cascade, so each node's computed value already carries it and `non_hittable_nodes()` is a per-node
+  style read. `inert` sits on ONE container and neutralises every descendant, so `non_hittable_nodes()`
+  now *also* walks the DOM: once inside an `inert` element every descendant is added to the set. That
+  set feeds the SAME `build_tree_full` path tick 449 wired, marking each `hittable = false`.
+- **`inert` does NOT change `document.elementFromPoint`.** Per spec, inert affects event/interaction
+  targeting, not the geometric CSSOM-View hit-test API — so the inert set is fed only to the a11y
+  `hit_test` (the agent's path), never to the JS `elementFromPoint` path that tick 448 fixed.
+
+Gated on two axes, both RED-proven. `G_INERT` (page) asserts the reflection round-trip (unset→false,
+present→true, set→attribute added, clear→attribute removed) — RED by removing the table row
+(`offInit:undefined`). `G_INERT_A11Y` (page) asserts a control inside `<div inert>` is present but
+`hittable == false`, a sibling outside stays `hittable == true` (no over-marking), and `hit_test` over
+the inert control does not return it — RED by neutering the inert branch in the subtree walk.
+[[css-cascade]]
