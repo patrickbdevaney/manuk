@@ -3977,3 +3977,18 @@ bytes are not valid text, so the same `b64`/`data:`-URL transport is reused. **T
 clipboard must NOT invent a `text/plain` item — a ClipboardItem is keyed only by the types it holds, and a
 paste handler that finds a phantom text type takes the wrong branch. Follow-on: the WRITE direction + the
 shell round-trip to the real OS clipboard.
+
+## Copy an image to the clipboard (tick 462)
+
+**The class of the web this unlocks (copy-image / copy-chart buttons):** every page that copies a
+generated image to the OS clipboard — a "copy chart" button (`canvas.toBlob` → `ClipboardItem` →
+`clipboard.write`), "copy image" in an editor/gallery, a QR/diagram export. `clipboard.write()` honoured
+`text/plain` only, so an image `ClipboardItem` resolved successfully while the picture was silently
+dropped — the write "worked" and copied nothing.
+**(1)** `write()` now reads an image Blob's bytes, base64s them (`btoa`) and queues `(mime, bytes)` for the
+host via `__clipboardWriteImage`/`take_pending_clipboard_image_writes()`; text and image parts of one item
+both go through (`Promise.all`). **(2)** Symmetric to the READ side (t461): base64 is the transport because
+a JS string is UTF-16 and raw bytes are not valid text. **The trap:** a write path that resolves its
+Promise is indistinguishable from one that did the work — the silent-success failure mode. The gate asserts
+the exact bytes reached the host queue, not merely that write() resolved. Follow-on: the shell round-trip to
+a real OS clipboard.

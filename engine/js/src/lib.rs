@@ -576,6 +576,19 @@ pub fn set_host_clipboard_image(mime: String, bytes: Vec<u8>) {
 #[cfg(not(feature = "_sm"))]
 pub fn set_host_clipboard_image(_mime: String, _bytes: Vec<u8>) {}
 
+/// Drain the image parts a page passed to `navigator.clipboard.write()` since the last call, each
+/// `(mime, bytes)`. The host puts them on the real OS clipboard — the WRITE half of the binary
+/// bridge (copy-image-to-clipboard). Empty without the JS feature.
+#[cfg(feature = "_sm")]
+pub fn take_pending_clipboard_image_writes() -> Vec<(String, Vec<u8>)> {
+    dom_bindings::take_pending_clipboard_image_writes()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn take_pending_clipboard_image_writes() -> Vec<(String, Vec<u8>)> {
+    Vec::new()
+}
+
 /// Allocate the next process-unique window id (for ordinary, non-`window.open` tabs), shared
 /// with the id space `window.open` draws from. `0` without the JS feature (unused there).
 #[cfg(feature = "_sm")]

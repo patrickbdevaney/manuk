@@ -573,8 +573,21 @@ item, and `getType('text/plain')` on it rejects.
 handling and only text comes back). `blob-size`/`blob-type` — the Blob is `image/png` of the right byte
 length, not a text wrapper of the base64. `bytes` — the Blob's first bytes are the PNG signature the
 host seeded (`0x89 'P' 'N' 'G'`), proving the actual bytes survived the base64 round-trip. RED-proven by
-disabling the image read. **Honest follow-on:** the WRITE direction (`clipboard.write` of an image →
-binary host queue) and the shell round-trip to the real OS clipboard.
+disabling the image read. The WRITE direction landed the next tick, below.
+
+## `navigator.clipboard.write()` — copy an image to the OS clipboard (tick 462)
+
+The write half was symmetric-but-incomplete: `write([ClipboardItem({'image/png': blob})])` — the
+"copy chart"/"copy image" path (`canvas.toBlob` → `ClipboardItem` → `write`) — resolved successfully
+while silently DROPPING the image, so nothing reached the OS clipboard. This wires the binary WRITE
+direction, the mirror of tick 461: `write()` reads the image Blob's bytes, `btoa`s them (base64,
+because raw bytes are not valid UTF-16 text) and hands `"<mime>;base64,<data>"` to the native
+`__clipboardWriteImage`, which `b64_decode`s them (a hand-rolled inverse of `b64`) and queues
+`(mime, bytes)`; the host drains it via `manuk_js::take_pending_clipboard_image_writes()`. Text and
+image parts of the same `ClipboardItem` both go through (`Promise.all`). Gate `G_CLIPBOARD_IMAGE_WRITE`
+proves one image part is queued with the right MIME and the EXACT Blob bytes (RED-proven by reverting
+`write()` to drop non-text parts). **Honest follow-on:** the shell round-trip to a real OS clipboard
+(`arboard` image formats) — the engine seam is done, the host consumer is not yet wired.
 
 ## `keyup` fires on key release — the settled-value half of the keyboard trio (tick 180)
 

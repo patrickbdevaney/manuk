@@ -361,153 +361,154 @@
   - L543 · The teeth G_CLIPBOARD_READ uses
   - L553 · navigator.clipboard.read() — paste-a-screenshot returns a real image Blob (tick 461)
   - L570 · The teeth G_CLIPBOARD_IMAGE uses
-  - L579 · keyup fires on key release — the settled-value half of the keyboard trio (tick 180)
-  - L599 · A11y node STATES — the agent can confirm its own action (tick 199)
-  - L653 · Click ACTIVATION behaviour — the checkbox actually ticks (tick 208)
-  - L685 · <label> forwards its click to the control (tick 209)
-  - L712 · A disabled control is inert — and a script-free form still works (tick 210)
-  - L747 · Clicking "Sign in" submits the form (tick 211)
-  - L779 · The submitter reaches the server — "Save" vs "Delete" (tick 212)
-  - L811 · Cross-window messaging: e.origin is the security boundary (tick 231)
-  - L827 · Window identity must be seeded BEFORE a document's scripts run
-  - L839 · Two live pages in one process
-  - L844 · Clicking into a frame: by point, not by node (tick 233)
-  - L857 · A dirty-bit guard cannot see a child's own script round
-  - L868 · Body background does not reach the frame's canvas
-  - L875 · File upload: the interaction with no door, and the encoder nobody fed (tick 247)
-  - L886 · The bytes were dropped one layer ABOVE the code that knew how to send them
-  - L904 · Installing a getter with no Element binding to hang it on
-  - L917 · The fourth dead-end wire in six ticks
-  - L925 · The dropzone: a handler that threw, and an opt-in that looks like ceremony (tick 248)
-  - L937 · Why the whole sequence, not just the interesting event
-  - L955 · A gate over a sequential handler chain has coarser resolution
-  - L963 · Mouse actuation (tick 251): the sequence, the verdict, and a ledger that was wrong about itself
-  - L968 · The ledger nominated a phantom as its own top priority
-  - L984 · A double-click is a sequence, not an event
-  - L1001 · A right-click's return value IS the capability
-  - L1010 · A harness Bar-0 that was not an engine Bar-0
-  - L1024 · The pointer sequence (tick 252): the menu that opens on mousedown
-  - L1033 · buttons is a mask, button is an index, and they coincide enough to hide the bug
-  - L1043 · A label presses down once, on the element under the pointer
-  - L1050 · preventDefault() on mousedown is not a click-cancel
-  - L1061 · The select that submitted correctly and read as empty (tick 253)
-  - L1071 · "Nothing selected" vs "nothing selected yet"
-  - L1082 · Two more traps, both confirmed by probe
-  - L1090 · input then change — and React only hears the first
-  - L1102 · s.options[i] (tick 254): when the empty answer throws too
-  - L1112 · The divergence class, reproduced by me in a day
-  - L1121 · option.index counts across optgroups
-  - L1131 · Scroll snap — the carousel stops on a slide (tick 266)
-  - L1138 · One transformation at one chokepoint
-  - L1154 · Three decisions
-  - L1170 · Property plumbing: recovered from MinimalCascade
-  - L1178 · The probe that came back green
-  - L1187 · Residue — the bigger half is still open
-  - L1196 · Horizontal rows: white-space: nowrap around atomic inlines (tick 267)
-  - L1212 · The mechanism
-  - L1231 · The failure was not "it doesn't scroll"
-  - L1240 · What this unblocked for free
-  - L1247 · The control is the load-bearing assertion
-  - L1256 · visibility:hidden must not be hit-testable (tick 272)
-  - L1269 · Why the a11y tree is the right place to fix it
-  - L1280 · visibility is the one hiding mechanism a descendant can UNDO
-  - L1294 · How it was found
-  - L1301 · <input>/<textarea> text selection — setSelectionRange / select (tick 302)
-  - L1314 · The teeth G_TEXT_SELECTION uses
-  - L1324 · setRangeText — replace text through the selection (tick 303)
-  - L1334 · The teeth G_SET_RANGE_TEXT uses
-  - L1340 · document.startViewTransition — the transition-wrapped update must run (tick 308)
-  - L1348 · The failure without it is silent and total
-  - L1356 · The honest implementation is the spec's own skip path
-  - L1374 · The teeth G_VIEW_TRANSITION uses
-  - L1382 · window.navigation — the Navigation API intercepts SPA routing (tick 309)
-  - L1390 · The failure without it is a silent dead router
-  - L1399 · Implemented as a shim OVER the proven History/Location plumbing
-  - L1417 · The teeth G_NAVIGATION_API uses
-  - L1426 · element.animate — the Web Animations API fast-forwards to its end state (tick 310)
-  - L1433 · The failure without it is a dead interaction
-  - L1439 · No compositor timeline, so it fast-forwards — honestly
-  - L1457 · The install-site gotcha (the one that cost three probes)
-  - L1467 · The teeth G_WEB_ANIMATIONS uses
-  - L1474 · navigator.geolocation — honest denial, not a TypeError (tick 311)
-  - L1480 · The failure without it is a dead handler
-  - L1487 · No location provider, so it denies — self-consistently
-  - L1502 · The teeth G_GEOLOCATION uses
-  - L1511 · navigator.mediaSession — retained media control state, not an inert stub (tick 312)
-  - L1517 · The failure without it is a dead player
-  - L1524 · Retain everything; the OS wiring is the follow-on
-  - L1542 · The teeth G_MEDIA_SESSION uses
-  - L1550 · window.visualViewport — the visual viewport equals the layout viewport (tick 313)
-  - L1556 · The failure without it is a dead layout
-  - L1562 · No zoom, so it mirrors the layout viewport
-  - L1574 · The teeth G_VISUAL_VIEWPORT uses
-  - L1581 · navigator.connection — honest adaptive-loading signals (tick 314)
-  - L1587 · The failure without it is a dead loader
-  - L1593 · Honest defaults, not a fabrication that costs the user
-  - L1602 · The teeth G_NETWORK_INFO uses
-  - L1609 · navigator.storage — truthful quota and durable persistence (tick 315)
-  - L1616 · A capability we HAVE, so the answers are truthful
-  - L1631 · The teeth G_STORAGE_MANAGER uses
-  - L1637 · speechSynthesis — present, but honestly mute (tick 316)
-  - L1644 · No TTS engine, so it reports "cannot speak" — it does not pretend
-  - L1658 · The teeth G_SPEECH_SYNTHESIS uses
-  - L1665 · navigator.wakeLock — grant a real sentinel, OS enforcement is the follow-on (tick 317)
-  - L1672 · Host owns the sleep timer, so grant and retain — do not reject
-  - L1682 · The teeth G_WAKE_LOCK uses
-  - L1689 · attachInternals() — form-associated custom elements upgrade (tick 318)
-  - L1697 · A real internals that retains state, on the live element prototype
-  - L1713 · The teeth G_ELEMENT_INTERNALS uses
-  - L1720 · Pointer capture — setPointerCapture keeps a drag tracking (tick 319)
-  - L1727 · Retain the capture, fire the events; live re-routing is the follow-on
-  - L1736 · The teeth G_POINTER_CAPTURE uses
-  - L1743 · Path2D — a reusable, declared-once path (incl. SVG path-data strings) (tick 320)
-  - L1751 · Three ways to build one, all producing the same op stream
-  - L1761 · The consumer side: ctx.fill(path) / ctx.stroke(path)
-  - L1770 · The teeth G_PATH2D uses
-  - L1778 · createImageBitmap — a drawable bitmap from an element/canvas, no new decode path (tick 321)
-  - L1788 · What it produces
-  - L1799 · The honest limit
-  - L1805 · The teeth G_CREATE_IMAGE_BITMAP uses
-  - L1813 · Canvas gradients — real linear/radial shaders, not a flat last-stop approximation (tick 322)
-  - L1821 · The split, following the canvas division of labour
-  - L1830 · The Rust side (canvas.rs), and the transform subtlety
-  - L1839 · The honest limits
-  - L1845 · The teeth G_CANVAS_GRADIENT uses
-  - L1854 · Canvas patterns — createPattern tiles a source image across the fill (tick 323)
-  - L1860 · Reusing the drawImage registry — no new decode
-  - L1870 · Repetition and the transform
-  - L1876 · Honest limits
-  - L1882 · The teeth G_CANVAS_PATTERN uses
-  - L1890 · Canvas conic gradients — createConicGradient sweeps colour by angle (tick 324)
-  - L1896 · One branch in the existing plumbing
-  - L1910 · The teeth G_CANVAS_CONIC uses
-  - L1919 · A11y widget roles — the agent can name the controls web apps build (tick 325)
-  - L1929 · Additive role plumbing, no new state path
-  - L1946 · The teeth G_A11Y_ROLES uses
-  - L1956 · Re-pin (tick 326): four "partial" cells were stale — the capability shipped, the record lagged
-  - L1984 · Selection API — a real, persistent, directional window.getSelection() (tick 328)
-  - L1992 · Backed by the real Range, not a second model
-  - L2003 · Direction is the one thing a Range wrapper gets wrong
-  - L2012 · Honest limit
-  - L2018 · The teeth G_SELECTION uses
-  - L2028 · Fullscreen API — element.requestFullscreen() as a DOM state machine (tick 330)
-  - L2035 · What is modelled, and why that is the honest whole
-  - L2045 · Why this is NOT the canvas-stub shape
-  - L2058 · Cookie attribute enforcement — the flags hold across the JS↔wire boundary (tick 331)
-  - L2083 · IME composition — CJK / accented text arrives as a burst, not a keystroke (G_IME_COMPOSITION)
-  - L2122 · :active — the last dynamic pseudo-class, fed end-to-end (G_ACTIVE_PSEUDO)
-  - L2152 · Drag-and-drop editor half (tick 346)
-  - L2164 · scrollTo/scrollBy reuse the scrollTop/scrollLeft setters (clamp + snap) (tick 431)
-  - L2180 · pointer-events: none is transparent to hit-testing (tick 448)
-  - L2207 · pointer-events: none is transparent to the AGENT's hit-test too (tick 449)
-  - L2233 · The HTML inert attribute — reflection + transparent to the agent's hit-test (tick 450)
-  - L2263 · The HTML inert attribute also blocks focus (tick 451)
-  - L2278 · A disabled form control cannot receive focus (tick 452)
-  - L2289 · :disabled/:enabled follow <fieldset disabled> inheritance, in both engines (tick 453)
-  - L2304 · :read-only/:read-write agree across cascade + querySelector (tick 454)
-  - L2319 · The contenteditable editability query surface (tick 456)
-  - L2334 · :read-only/:read-write and contenteditable — the open edge
-  - L2342 · :read-write/:read-only honour contenteditable (tick 457) — the t454 edge closed
+  - L578 · navigator.clipboard.write() — copy an image to the OS clipboard (tick 462)
+  - L592 · keyup fires on key release — the settled-value half of the keyboard trio (tick 180)
+  - L612 · A11y node STATES — the agent can confirm its own action (tick 199)
+  - L666 · Click ACTIVATION behaviour — the checkbox actually ticks (tick 208)
+  - L698 · <label> forwards its click to the control (tick 209)
+  - L725 · A disabled control is inert — and a script-free form still works (tick 210)
+  - L760 · Clicking "Sign in" submits the form (tick 211)
+  - L792 · The submitter reaches the server — "Save" vs "Delete" (tick 212)
+  - L824 · Cross-window messaging: e.origin is the security boundary (tick 231)
+  - L840 · Window identity must be seeded BEFORE a document's scripts run
+  - L852 · Two live pages in one process
+  - L857 · Clicking into a frame: by point, not by node (tick 233)
+  - L870 · A dirty-bit guard cannot see a child's own script round
+  - L881 · Body background does not reach the frame's canvas
+  - L888 · File upload: the interaction with no door, and the encoder nobody fed (tick 247)
+  - L899 · The bytes were dropped one layer ABOVE the code that knew how to send them
+  - L917 · Installing a getter with no Element binding to hang it on
+  - L930 · The fourth dead-end wire in six ticks
+  - L938 · The dropzone: a handler that threw, and an opt-in that looks like ceremony (tick 248)
+  - L950 · Why the whole sequence, not just the interesting event
+  - L968 · A gate over a sequential handler chain has coarser resolution
+  - L976 · Mouse actuation (tick 251): the sequence, the verdict, and a ledger that was wrong about itself
+  - L981 · The ledger nominated a phantom as its own top priority
+  - L997 · A double-click is a sequence, not an event
+  - L1014 · A right-click's return value IS the capability
+  - L1023 · A harness Bar-0 that was not an engine Bar-0
+  - L1037 · The pointer sequence (tick 252): the menu that opens on mousedown
+  - L1046 · buttons is a mask, button is an index, and they coincide enough to hide the bug
+  - L1056 · A label presses down once, on the element under the pointer
+  - L1063 · preventDefault() on mousedown is not a click-cancel
+  - L1074 · The select that submitted correctly and read as empty (tick 253)
+  - L1084 · "Nothing selected" vs "nothing selected yet"
+  - L1095 · Two more traps, both confirmed by probe
+  - L1103 · input then change — and React only hears the first
+  - L1115 · s.options[i] (tick 254): when the empty answer throws too
+  - L1125 · The divergence class, reproduced by me in a day
+  - L1134 · option.index counts across optgroups
+  - L1144 · Scroll snap — the carousel stops on a slide (tick 266)
+  - L1151 · One transformation at one chokepoint
+  - L1167 · Three decisions
+  - L1183 · Property plumbing: recovered from MinimalCascade
+  - L1191 · The probe that came back green
+  - L1200 · Residue — the bigger half is still open
+  - L1209 · Horizontal rows: white-space: nowrap around atomic inlines (tick 267)
+  - L1225 · The mechanism
+  - L1244 · The failure was not "it doesn't scroll"
+  - L1253 · What this unblocked for free
+  - L1260 · The control is the load-bearing assertion
+  - L1269 · visibility:hidden must not be hit-testable (tick 272)
+  - L1282 · Why the a11y tree is the right place to fix it
+  - L1293 · visibility is the one hiding mechanism a descendant can UNDO
+  - L1307 · How it was found
+  - L1314 · <input>/<textarea> text selection — setSelectionRange / select (tick 302)
+  - L1327 · The teeth G_TEXT_SELECTION uses
+  - L1337 · setRangeText — replace text through the selection (tick 303)
+  - L1347 · The teeth G_SET_RANGE_TEXT uses
+  - L1353 · document.startViewTransition — the transition-wrapped update must run (tick 308)
+  - L1361 · The failure without it is silent and total
+  - L1369 · The honest implementation is the spec's own skip path
+  - L1387 · The teeth G_VIEW_TRANSITION uses
+  - L1395 · window.navigation — the Navigation API intercepts SPA routing (tick 309)
+  - L1403 · The failure without it is a silent dead router
+  - L1412 · Implemented as a shim OVER the proven History/Location plumbing
+  - L1430 · The teeth G_NAVIGATION_API uses
+  - L1439 · element.animate — the Web Animations API fast-forwards to its end state (tick 310)
+  - L1446 · The failure without it is a dead interaction
+  - L1452 · No compositor timeline, so it fast-forwards — honestly
+  - L1470 · The install-site gotcha (the one that cost three probes)
+  - L1480 · The teeth G_WEB_ANIMATIONS uses
+  - L1487 · navigator.geolocation — honest denial, not a TypeError (tick 311)
+  - L1493 · The failure without it is a dead handler
+  - L1500 · No location provider, so it denies — self-consistently
+  - L1515 · The teeth G_GEOLOCATION uses
+  - L1524 · navigator.mediaSession — retained media control state, not an inert stub (tick 312)
+  - L1530 · The failure without it is a dead player
+  - L1537 · Retain everything; the OS wiring is the follow-on
+  - L1555 · The teeth G_MEDIA_SESSION uses
+  - L1563 · window.visualViewport — the visual viewport equals the layout viewport (tick 313)
+  - L1569 · The failure without it is a dead layout
+  - L1575 · No zoom, so it mirrors the layout viewport
+  - L1587 · The teeth G_VISUAL_VIEWPORT uses
+  - L1594 · navigator.connection — honest adaptive-loading signals (tick 314)
+  - L1600 · The failure without it is a dead loader
+  - L1606 · Honest defaults, not a fabrication that costs the user
+  - L1615 · The teeth G_NETWORK_INFO uses
+  - L1622 · navigator.storage — truthful quota and durable persistence (tick 315)
+  - L1629 · A capability we HAVE, so the answers are truthful
+  - L1644 · The teeth G_STORAGE_MANAGER uses
+  - L1650 · speechSynthesis — present, but honestly mute (tick 316)
+  - L1657 · No TTS engine, so it reports "cannot speak" — it does not pretend
+  - L1671 · The teeth G_SPEECH_SYNTHESIS uses
+  - L1678 · navigator.wakeLock — grant a real sentinel, OS enforcement is the follow-on (tick 317)
+  - L1685 · Host owns the sleep timer, so grant and retain — do not reject
+  - L1695 · The teeth G_WAKE_LOCK uses
+  - L1702 · attachInternals() — form-associated custom elements upgrade (tick 318)
+  - L1710 · A real internals that retains state, on the live element prototype
+  - L1726 · The teeth G_ELEMENT_INTERNALS uses
+  - L1733 · Pointer capture — setPointerCapture keeps a drag tracking (tick 319)
+  - L1740 · Retain the capture, fire the events; live re-routing is the follow-on
+  - L1749 · The teeth G_POINTER_CAPTURE uses
+  - L1756 · Path2D — a reusable, declared-once path (incl. SVG path-data strings) (tick 320)
+  - L1764 · Three ways to build one, all producing the same op stream
+  - L1774 · The consumer side: ctx.fill(path) / ctx.stroke(path)
+  - L1783 · The teeth G_PATH2D uses
+  - L1791 · createImageBitmap — a drawable bitmap from an element/canvas, no new decode path (tick 321)
+  - L1801 · What it produces
+  - L1812 · The honest limit
+  - L1818 · The teeth G_CREATE_IMAGE_BITMAP uses
+  - L1826 · Canvas gradients — real linear/radial shaders, not a flat last-stop approximation (tick 322)
+  - L1834 · The split, following the canvas division of labour
+  - L1843 · The Rust side (canvas.rs), and the transform subtlety
+  - L1852 · The honest limits
+  - L1858 · The teeth G_CANVAS_GRADIENT uses
+  - L1867 · Canvas patterns — createPattern tiles a source image across the fill (tick 323)
+  - L1873 · Reusing the drawImage registry — no new decode
+  - L1883 · Repetition and the transform
+  - L1889 · Honest limits
+  - L1895 · The teeth G_CANVAS_PATTERN uses
+  - L1903 · Canvas conic gradients — createConicGradient sweeps colour by angle (tick 324)
+  - L1909 · One branch in the existing plumbing
+  - L1923 · The teeth G_CANVAS_CONIC uses
+  - L1932 · A11y widget roles — the agent can name the controls web apps build (tick 325)
+  - L1942 · Additive role plumbing, no new state path
+  - L1959 · The teeth G_A11Y_ROLES uses
+  - L1969 · Re-pin (tick 326): four "partial" cells were stale — the capability shipped, the record lagged
+  - L1997 · Selection API — a real, persistent, directional window.getSelection() (tick 328)
+  - L2005 · Backed by the real Range, not a second model
+  - L2016 · Direction is the one thing a Range wrapper gets wrong
+  - L2025 · Honest limit
+  - L2031 · The teeth G_SELECTION uses
+  - L2041 · Fullscreen API — element.requestFullscreen() as a DOM state machine (tick 330)
+  - L2048 · What is modelled, and why that is the honest whole
+  - L2058 · Why this is NOT the canvas-stub shape
+  - L2071 · Cookie attribute enforcement — the flags hold across the JS↔wire boundary (tick 331)
+  - L2096 · IME composition — CJK / accented text arrives as a burst, not a keystroke (G_IME_COMPOSITION)
+  - L2135 · :active — the last dynamic pseudo-class, fed end-to-end (G_ACTIVE_PSEUDO)
+  - L2165 · Drag-and-drop editor half (tick 346)
+  - L2177 · scrollTo/scrollBy reuse the scrollTop/scrollLeft setters (clamp + snap) (tick 431)
+  - L2193 · pointer-events: none is transparent to hit-testing (tick 448)
+  - L2220 · pointer-events: none is transparent to the AGENT's hit-test too (tick 449)
+  - L2246 · The HTML inert attribute — reflection + transparent to the agent's hit-test (tick 450)
+  - L2276 · The HTML inert attribute also blocks focus (tick 451)
+  - L2291 · A disabled form control cannot receive focus (tick 452)
+  - L2302 · :disabled/:enabled follow <fieldset disabled> inheritance, in both engines (tick 453)
+  - L2317 · :read-only/:read-write agree across cascade + querySelector (tick 454)
+  - L2332 · The contenteditable editability query surface (tick 456)
+  - L2347 · :read-only/:read-write and contenteditable — the open edge
+  - L2355 · :read-write/:read-only honour contenteditable (tick 457) — the t454 edge closed
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -928,4 +929,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-843 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+844 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

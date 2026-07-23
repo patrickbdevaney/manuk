@@ -18681,3 +18681,35 @@ parallel to the text write queue) + the shell round-trip to the real OS clipboar
 (needs a binary `take_pending_clipboard_writes` sibling and shell wiring — cross-crate, a fresh context).
 Bounded partials still open: playbackRate (media, not in wall), the full configurable Sanitizer. L-sized
 marquees unchanged: MEDIA H.264-High, IndexedDB (redb/heed), contenteditable EDITING path.
+
+## Tick 462 — clipboard.write() copies an IMAGE to the OS clipboard (2026-07-23)
+
+Completes t461's own noted follow-on: the binary WRITE direction of the clipboard, symmetric to the
+READ landed in t461. Fresh context, engine-only.
+
+PROBED (RED-proven): tick 287's `clipboard.write([ClipboardItem])` honoured `text/plain` only — an image
+part (`canvas.toBlob → new ClipboardItem({'image/png': blob}) → write`, the "copy chart"/"copy image"
+path) was silently DROPPED and the write resolved anyway, so nothing reached the OS clipboard.
+
+FIX (capability — 2 files): (1) dom_bindings.rs: a `PENDING_CLIPBOARD_IMAGE` queue + `take_pending_
+clipboard_image_writes()`, a hand-rolled `b64_decode` (inverse of the existing `b64` encoder), and a
+`__clipboardWriteImage("<mime>;base64,<data>")` host_fn that decodes and queues `(mime, bytes)`.
+(2) The JS `clipboard.write()` now iterates the ClipboardItem's types: for an `image/*` part it reads the
+Blob's bytes (`__blobText` binary string), `btoa`s them and calls `__clipboardWriteImage`; the text part
+still routes to `writeText`; both settle via `Promise.all`. lib.rs exposes the drain (with the `_sm`-off
+`Vec::new()` variant). base64 transport because a JS string is UTF-16 and raw bytes are not valid text —
+the same reason t461's read used it.
+
+GATE: G_CLIPBOARD_IMAGE_WRITE (page, `navigator_clipboard_write_copies_an_image_to_the_host`) — `queued`
+(exactly one image part queued after write), `mime` (image/png), `bytes` (the EXACT PNG-signature bytes
+the page put in the Blob round-trip Blob→btoa→base64→host→b64_decode). RED-proven by reverting write() to
+drop non-text parts → empty queue. Siblings green: g_clipboard_image, g_clipboard_read, g_blob_binary.
+Headless (`_sm`-off) manuk-js + manuk-shell both still compile (additive lib.rs API).
+
+TICK SHAPE: capability (clipboard.write() image parts — copy-image-to-clipboard; +1 gate). GATES +1.
+CONSTELLATION: row 138 gate list extended (both directions now gated). WIKI: interaction-surface.md — new
+subsection after the t461 read section.
+NEXT VEIN NOTE: the clipboard binary bridge is complete on the ENGINE side (read+write); the honest
+remaining follow-on is the SHELL round-trip to a real OS clipboard (arboard image formats — cross-crate,
+host-owned). Bounded partials still open: full configurable Sanitizer (allow/block lists), playbackRate
+(media, not in wall). L-marquees unchanged: MEDIA H.264-High, IndexedDB (redb/heed), contenteditable EDITING.

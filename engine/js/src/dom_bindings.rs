@@ -3142,6 +3142,36 @@ fn b64(bytes: &[u8]) -> String {
     out
 }
 
+/// Decode a standard-alphabet base64 string back to bytes — the inverse of [`b64`]. Non-alphabet
+/// characters (whitespace, the `=` padding) are ignored, so it is forgiving of what a JS `btoa`
+/// produces. Used by the clipboard WRITE bridge, which ships image bytes JS→host as base64 (a JS
+/// string is UTF-16 and raw bytes are not valid text).
+fn b64_decode(s: &str) -> Vec<u8> {
+    let val = |c: u8| -> Option<u8> {
+        match c {
+            b'A'..=b'Z' => Some(c - b'A'),
+            b'a'..=b'z' => Some(c - b'a' + 26),
+            b'0'..=b'9' => Some(c - b'0' + 52),
+            b'+' => Some(62),
+            b'/' => Some(63),
+            _ => None,
+        }
+    };
+    let mut out = Vec::with_capacity(s.len() / 4 * 3);
+    let mut acc = 0u32;
+    let mut bits = 0u8;
+    for &c in s.as_bytes() {
+        let Some(v) = val(c) else { continue };
+        acc = (acc << 6) | v as u32;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+        }
+    }
+    out
+}
+
 // ── ELEMENT SCROLLING. `scrollTop` was not missing; it LIED.
 //
 // Reading it gave `undefined`. Writing it created a plain JS own-property that scrolled nothing — so a
@@ -8040,6 +8070,14 @@ pub unsafe fn install(
     JS_DefineFunction(
         &mut wrap_cx(cx),
         global.handle(),
+        c"__clipboardWriteImage".as_ptr(),
+        host_fn!(clipboard_write_image),
+        1,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
         c"__historyPush".as_ptr(),
         host_fn!(history_push),
         3,
@@ -12833,18 +12871,32 @@ const WINDOW_PRELUDE: &str = r#"
                     return Promise.resolve(items);
                 },
                 write: function (items) {
-                    // `write([ClipboardItem])` — the rich-write path. We honour the text/plain part
-                    // (all a text OS-clipboard bridge can carry) and resolve; non-text parts are
-                    // accepted without error, matching a browser that simply holds no listener for them.
+                    // `write([ClipboardItem])` — the rich-write path. Honour the text/plain part (a text
+                    // OS-clipboard) AND image parts: copy-a-chart / copy-a-cropped-screenshot / copy the
+                    // rendered canvas queue their bytes for the host to put on the real OS clipboard.
                     var self = this;
                     if (!items || !items.length) { return Promise.resolve(); }
                     var it = items[0];
-                    if (it && it.types && it.types.indexOf('text/plain') >= 0) {
-                        return it.getType('text/plain').then(function (b) {
-                            return self.writeText(b && b.__blobText !== undefined ? b.__blobText : '');
-                        });
+                    var types = (it && it.types) || [];
+                    var proms = [];
+                    for (var i = 0; i < types.length; i++) {
+                        var t = types[i];
+                        if (t.indexOf('image/') === 0 && typeof g.__clipboardWriteImage === 'function') {
+                            proms.push(it.getType(t).then((function (mime) {
+                                return function (blob) {
+                                    var bin = (blob && blob.__blobText !== undefined) ? String(blob.__blobText) : '';
+                                    var b64 = (typeof g.btoa === 'function') ? g.btoa(bin) : '';
+                                    g.__clipboardWriteImage(mime + ';base64,' + b64);
+                                };
+                            })(t)));
+                        }
                     }
-                    return Promise.resolve();
+                    if (types.indexOf('text/plain') >= 0) {
+                        proms.push(it.getType('text/plain').then(function (b) {
+                            return self.writeText(b && b.__blobText !== undefined ? b.__blobText : '');
+                        }));
+                    }
+                    return Promise.all(proms);
                 }
             };
         }
@@ -13914,6 +13966,11 @@ thread_local! {
     /// (AI chat, an issue tracker, a rich editor) receives the real image the user copied elsewhere.
     static HOST_CLIPBOARD_IMAGE: std::cell::RefCell<Option<(String, Vec<u8>)>> =
         const { std::cell::RefCell::new(None) };
+    /// `navigator.clipboard.write()` IMAGE parts since the last drain, `(mime, bytes)`, oldest first —
+    /// the WRITE half of the binary bridge (copy a generated chart / cropped screenshot / rendered
+    /// canvas to the OS clipboard). The host drains this and puts the bytes on the real OS clipboard.
+    static PENDING_CLIPBOARD_IMAGE: std::cell::RefCell<Vec<(String, Vec<u8>)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
     /// MSE byte-streams published since the last drain: `(node_id, full accumulated bytes)`.
     /// `__msePublish` pushes one entry per settled `appendBuffer` whose SourceBuffer demuxed a
     /// video track — the FULL stream each time, not a delta, because an fMP4 decoder needs the
@@ -13953,6 +14010,12 @@ pub fn take_pending_window_opens() -> Vec<(u64, String)> {
 /// each to the OS clipboard; the last one wins, as a real clipboard holds a single value.
 pub fn take_pending_clipboard_writes() -> Vec<String> {
     PENDING_CLIPBOARD.with(|q| std::mem::take(&mut *q.borrow_mut()))
+}
+
+/// `navigator.clipboard.write()` IMAGE parts since the last drain, `(mime, bytes)`, oldest first. The
+/// host puts each on the real OS clipboard (the WRITE half of the binary bridge — copy-image-to-clipboard).
+pub fn take_pending_clipboard_image_writes() -> Vec<(String, Vec<u8>)> {
+    PENDING_CLIPBOARD_IMAGE.with(|q| std::mem::take(&mut *q.borrow_mut()))
 }
 
 /// Seed the OS-clipboard text the page is allowed to READ (`navigator.clipboard.readText()`/`read()`).
@@ -14042,6 +14105,22 @@ unsafe fn clipboard_read_image(cx: *mut RawJSContext, _argc: u32, vp: *mut Value
             .unwrap_or_default()
     });
     return_string(cx, vp, &out);
+    true
+}
+
+/// `__clipboardWriteImage("<mime>;base64,<data>")` — queue an image `navigator.clipboard.write()` part
+/// for the host to put on the real OS clipboard. The JS side base64-encodes the Blob's bytes (a JS
+/// string is UTF-16 and raw bytes are not valid text); here they are decoded back to raw bytes.
+unsafe fn clipboard_write_image(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let payload = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    if let Some(ci) = payload.find(";base64,") {
+        let mime = payload[..ci].to_string();
+        let bytes = b64_decode(&payload[ci + 8..]);
+        if !mime.is_empty() && !bytes.is_empty() {
+            PENDING_CLIPBOARD_IMAGE.with(|q| q.borrow_mut().push((mime, bytes)));
+        }
+    }
+    *vp = UndefinedValue();
     true
 }
 
