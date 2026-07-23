@@ -208,3 +208,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 415	362a4bf	1784762685	2026-07-22T19:24:45-04:00	1032	governance	61	5	109	35	187	81	3896	6960	0	326	31	cadence: self-audit + Constitution Check #18 (2026-07-22)
 416	6ef0b99	1784765884	2026-07-22T20:18:04-04:00	3199	capability	71	10	330	35	187	81	3896	6960	0	328	31	text-indent: apply the first-line inline-start indent (image-replacement + prose) (2026-07-22)
 418	718c651	1784767420	2026-07-22T20:43:40-04:00	1536	measurement	55	6	78	33	187	81	3896	6960	0	328	31	Intl: measure-and-pin the i18n formatting capability (2026-07-22)
+419	a644209	1784768495	2026-07-22T21:01:35-04:00	1075	measurement	66	10	266	45	188	81	3896	6960	0	328	31	Element.checkVisibility(): measure-and-pin (2026-07-22)

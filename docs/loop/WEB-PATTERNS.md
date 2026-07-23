@@ -3385,3 +3385,18 @@ evaluation is the honest shape.
 **The trap:** a hardcoded null LOOKS spec-shaped (it is the right answer for modules and
 callbacks) and passes every after-the-fact probe — the lie is only visible DURING execution,
 which is exactly when chunk loaders read it.
+
+## getAllRecords() returns keyed records in one request (tick 420)
+
+**The class of the web this unlocks:** every offline-first app that pages a keyed range and needs
+BOTH the record and its key back — Dexie 4's `getAllRecords`-backed bulk reads, the `idb` helper's
+range queries, the Firebase/Cognito offline persistence layers, and any Interop-2026-targeting app
+built against the new IDB surface. Before this, an index range query that wanted key+value cost two
+requests (`getAll` + `getAllKeys`) zipped by hand; a library that reached for the one-call form found
+`store.getAllRecords === undefined` and threw inside its own promise — the app "just doesn't load".
+**(1)** A record is `{ key, primaryKey, value }`: on a STORE `key === primaryKey`, on an INDEX they
+DIFFER (`key` = index key, `primaryKey` = store key). Returning the pair already zipped is the whole
+point — the caller must not have to re-join `getAll` against `getAllKeys`.
+**The trap:** a `getAll` stand-in wearing the `getAllRecords` name passes every store-side probe
+(where `key === primaryKey` anyway) and only lies on an INDEX, where `key !== primaryKey` — so the
+gate proves the split on an index, not the easy store case.

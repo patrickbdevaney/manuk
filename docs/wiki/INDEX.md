@@ -787,16 +787,17 @@
   - L40 · Why idb is a serde envelope and not redb
   - L50 · Key encoding carries the spec's TYPE ORDER, or getAll lies (tick 278)
   - L61 · Indexes must PERSIST across a reopen, so their metadata cannot live in the shim (tick 329)
-  - L84 · IndexedDB stores STRUCTURED CLONES — JSON.stringify is a silent type change
-  - L95 · Async shape is a CORRECTNESS property, not politeness (tick 278)
-  - L115 · abort() must roll back, and a vacuous rollback test will tell you it does (tick 278)
-  - L132 · A quota that is never enforced is not a quota
-  - L142 · The Cache API — caches (tick 279)
-  - L153 · Bodies are stored as bytes, not as text
-  - L165 · Entries are a list, not a map
-  - L176 · Response and Request became constructible
-  - L185 · A miss resolves undefined — it does not reject
-  - L192 · Honest limits
+  - L84 · getAllRecords(options) returns full records in one call, on the store AND an index (tick 420)
+  - L101 · IndexedDB stores STRUCTURED CLONES — JSON.stringify is a silent type change
+  - L112 · Async shape is a CORRECTNESS property, not politeness (tick 278)
+  - L132 · abort() must roll back, and a vacuous rollback test will tell you it does (tick 278)
+  - L149 · A quota that is never enforced is not a quota
+  - L159 · The Cache API — caches (tick 279)
+  - L170 · Bodies are stored as bytes, not as text
+  - L182 · Entries are a list, not a map
+  - L193 · Response and Request became constructible
+  - L202 · A miss resolves undefined — it does not reject
+  - L209 · Honest limits
 
 ## TEXT AND LAYOUT — fonts, shaping, measurement
 `docs/wiki/text-layout.md`
@@ -887,4 +888,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-802 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+803 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

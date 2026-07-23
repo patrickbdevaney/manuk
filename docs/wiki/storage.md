@@ -81,6 +81,23 @@ index enforces on `put` by scanning for another record with the same index key b
 so a violation leaves nothing behind. **Honest limit:** a compound (array) keyPath round-trips as its
 JSON text through the store's single `key_path` string; there is no locale collation.
 
+## `getAllRecords(options)` returns full records in one call, on the store AND an index (tick 420)
+
+The Interop-2026 addition (`G_INDEXEDDB_GETALLRECORDS`). The old idiom for "read a keyed page WITH its
+keys" was two requests — `getAll()` for values, `getAllKeys()` for keys — zipped client-side.
+`getAllRecords(options)` returns them already zipped: an array of `{ key, primaryKey, value }` records,
+honoring `{ query, count, direction }`. On an **object store** the index key *is* the primary key, so
+`key === primaryKey`. On an **index** they differ — `key` is the index key (the value property),
+`primaryKey` is the store key — which is exactly the split a cursor exposes, now materialized in one
+array. That `key !== primaryKey` difference is the gate's RED-prover: a `getAll` stand-in wearing the
+name would report `key === primaryKey` on the index and the gate goes red.
+
+It reuses the existing ordered views rather than adding machinery: the store reads `readAll()` (already
+store-key ordered), an index reads `view()`/`matching()` (ascending by *index key then primary key*).
+`direction: 'prev'`/`'prevunique'` reverse; `'nextunique'`/`'prevunique'` first keep one record per
+distinct index key — the smallest primary key, which is the first occurrence in the ascending order —
+so unique-direction dedup and cursor order can never disagree.
+
 ## IndexedDB stores STRUCTURED CLONES — `JSON.stringify` is a silent type change
 
 `JSON.stringify` turns a `Date` into a string and a `Uint8Array` into an object with numeric keys. The

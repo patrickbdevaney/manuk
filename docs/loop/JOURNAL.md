@@ -17245,3 +17245,34 @@ TICK SHAPE: measurement (unknown→gated capability pin). GATES +0 (assertion ad
 G_PROBE_CAPABILITIES).
 CONSTELLATION: Element.checkVisibility unknown→works (render-visibility query, real ancestor walk).
 WIKI: none — measurement/pin tick; the probe file + CONSTELLATION.tsv are the durable record.
+
+## Tick 420 — IndexedDB getAllRecords(): full records in one call (2026-07-22)
+
+HYPOTHESIS (bounded add-on to a mature, working subsystem — the CO-#1 "probe the unknowns / Interop
+2026 20%-weight set" vein): `IndexedDB getAllRecords()` was carried UNKNOWN (surface audit #15, tick
+418). IDB itself is a real, persistent, ordered secondary-key store here (G_INDEXEDDB / G_INDEXEDDB_
+INDEX), but this specific Interop-2026 method — `getAllRecords(options)` on both `IDBObjectStore` and
+`IDBIndex` — was absent. It collapses the old two-call idiom (`getAll` for values + `getAllKeys` for
+keys + a client-side zip) into one request returning `{ key, primaryKey, value }` records. Dexie 4,
+`idb`, and the Firebase/Cognito offline layers reach for it wherever they page a keyed range; its
+absence is the silent-degrade shape — `store.getAllRecords` is `undefined`, `undefined(...)` throws
+inside the SDK's own promise, the app "just doesn't load".
+
+FIX (capability, JS-shim only — no engine/native change): added `getAllRecords(options)` to the store
+shim and the index shim in `dom_bindings.rs`. Store: `readAll()` is already store-key ordered, so
+`key == primaryKey` and 'prev' just reverses. Index: `view()`/`matching()` are ascending by (index
+key, primary key), so `key` = index key, `primaryKey` = store key, and 'nextunique'/'prevunique' keep
+one record per distinct index key (smallest primary key = first ascending occurrence) before reversing.
+Both honor `{ query, count, direction }`.
+
+GATE: G_INDEXEDDB_GETALLRECORDS (`getallrecords_returns_full_records_on_store_and_index`) — seven
+claims on OBSERVABLE record shape/order across store and index, incl. `{query}`, `{count}`,
+`{direction:'prev'}`, and `{direction:'nextunique'}` dedup. RED-proven: mapping the index record's
+`key` to the primary key (a `getAll` stand-in) flips `idx:20/2/20,...` and the gate fails — the
+`key !== primaryKey` split on the index is exactly what proves this is `getAllRecords`, not `getAll`
+wearing its name. manuk-page test green in 0.27s.
+
+TICK SHAPE: capability (IndexedDB getAllRecords on store+index; +1 gate). GATES +1.
+CONSTELLATION: IndexedDB getAllRecords() unknown→works (G_INDEXEDDB_GETALLRECORDS).
+WIKI: storage.md — "`getAllRecords(options)` returns full records in one call, on the store AND an
+index" (the key==primaryKey vs key!=primaryKey split; reuses the existing ordered views).

@@ -10248,6 +10248,26 @@ const WINDOW_PRELUDE: &str = r#"
                     },
                     getAll: function () { return tx.__enqueue(function () { return readAll().map(function (r) { return r.value; }); }); },
                     getAllKeys: function () { return tx.__enqueue(function () { return readAll().map(function (r) { return r.key; }); }); },
+                    // `getAllRecords(options)` (Interop 2026) returns full `{ key, primaryKey, value }`
+                    // records in ONE call — the query that used to cost `getAll` + `getAllKeys` and a
+                    // client-side zip. For a store the index key IS the primary key, so `key` equals
+                    // `primaryKey`. Honors `{ query, count, direction }`; `readAll` is already in store-key
+                    // order, so 'prev'/'prevunique' just reverse it (store keys are unique — nothing to dedup).
+                    getAllRecords: function (options) {
+                        return tx.__enqueue(function () {
+                            options = options || {};
+                            var dir = options.direction || 'next';
+                            var rows = readAll();
+                            if (options.query !== undefined && options.query !== null) {
+                                rows = rows.filter(function (r) { return keyMatches(options.query, r.key); });
+                            }
+                            if (dir === 'prev' || dir === 'prevunique') { rows.reverse(); }
+                            if (options.count !== undefined && options.count !== null && Number(options.count) > 0) {
+                                rows = rows.slice(0, Number(options.count));
+                            }
+                            return rows.map(function (r) { return { key: r.key, primaryKey: r.key, value: r.value }; });
+                        });
+                    },
                     count: function () { return tx.__enqueue(function () { return readAll().length; }); },
                     openCursor: function (range, dir) {
                         // The cursor's walk runs through `tx.__enqueue` on EVERY step, including
@@ -10324,6 +10344,32 @@ const WINDOW_PRELUDE: &str = r#"
                         getKey: function (q) { return tx.__enqueue(function () { var v = matching(q); return v.length ? v[0].key : undefined; }); },
                         getAll: function (q) { return tx.__enqueue(function () { return matching(q).map(function (r) { return r.value; }); }); },
                         getAllKeys: function (q) { return tx.__enqueue(function () { return matching(q).map(function (r) { return r.key; }); }); },
+                        // `getAllRecords(options)` (Interop 2026) over an index: `key` is the INDEX key and
+                        // `primaryKey` the STORE key — the pair a cursor exposes, but materialized in one
+                        // call. `view()`/`matching()` are ascending by (index key, primary key); 'nextunique'/
+                        // 'prevunique' keep one record per distinct index key (the smallest primary key, which
+                        // is the first occurrence in the ascending order), then 'prev*' reverses.
+                        getAllRecords: function (options) {
+                            return tx.__enqueue(function () {
+                                options = options || {};
+                                var dir = options.direction || 'next';
+                                var rows = (options.query === undefined || options.query === null) ? view() : matching(options.query);
+                                if (dir === 'nextunique' || dir === 'prevunique') {
+                                    var seen = {}, uniq = [];
+                                    for (var u = 0; u < rows.length; u++) {
+                                        var ek = encKey(rows[u].ikey);
+                                        if (Object.prototype.hasOwnProperty.call(seen, ek)) { continue; }
+                                        seen[ek] = 1; uniq.push(rows[u]);
+                                    }
+                                    rows = uniq;
+                                }
+                                if (dir === 'prev' || dir === 'prevunique') { rows.reverse(); }
+                                if (options.count !== undefined && options.count !== null && Number(options.count) > 0) {
+                                    rows = rows.slice(0, Number(options.count));
+                                }
+                                return rows.map(function (r) { return { key: r.ikey, primaryKey: r.key, value: r.value }; });
+                            });
+                        },
                         count: function (q) { return tx.__enqueue(function () { return matching(q).length; }); },
                         openCursor: function (range, dir) { return idxCursor(range, dir, true); },
                         openKeyCursor: function (range, dir) { return idxCursor(range, dir, false); }
