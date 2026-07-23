@@ -216,3 +216,22 @@ There is no `Vary: *` handling beyond declining to match, and `ignoreVary` is no
 **The Service Worker is still absent.** What tick 279 built is its *store*; what remains is
 registration, lifecycle and `fetch` interception. The constellation row was split rather than
 flipped, because one row cannot honestly say "half of this works".
+
+## A Blob holds BYTES, not String(part) — binary parts and readAsArrayBuffer (tick 422)
+
+The `Blob`/`File` shim (event_loop.rs) stores a blob's contents in `__blobText`. The name is historical:
+it is a **binary string** (one character per byte, 0-255), which is why `arrayBuffer()`, `size`,
+`slice()`, `stream()` and `FileReader` all read it via `charCodeAt(i) & 0xff`. The constructor bug fixed
+at tick 422: a part that was an `ArrayBuffer`, a typed-array view, or a `DataView` went through
+`String(p)` — so `new Blob([new Uint8Array([1,2,3])])` stored the text `"1,2,3"` (size 5, wrong bytes).
+`new Blob([bytes], {type})` is the most common way binary data enters the platform (decoded media, file
+uploads, `canvas.toBlob`, object URLs), so this was silent corruption at a high-traffic seam.
+
+The fix converts binary parts to their raw bytes (a typed-array view uses `byteOffset`/`byteLength`, so a
+`subarray` contributes only its window), and leaves STRING parts exactly as before — the several
+consumers that read `__blobText` as text (fetch request body, FormData multipart, XHR `send`, clipboard,
+`text()`) are unchanged, which the regression suite confirms. It also un-stubbed
+`FileReader.readAsArrayBuffer`, previously a `new ArrayBuffer(0)` that dropped every byte.
+**Honest limit:** `__blobText` is a UTF-16 JS string used as a byte container, so a code unit above 0xFF
+would still truncate under `& 0xff`; string parts are not UTF-8 re-encoded (so `size` of a multibyte
+TEXT part is its char count, the pre-existing behaviour, not its UTF-8 byte length).

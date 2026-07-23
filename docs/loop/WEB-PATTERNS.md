@@ -3415,3 +3415,18 @@ buffer clone to two views over ONE cloned buffer (buffer identity survives).
 **The trap:** a typed array is `typeof x === 'object'` and not an Array/Date/Map/Set, so the generic
 object-copy branch silently swallows it — the copy has the right keys and the wrong type, which is the
 one failure mode worse than a throw because it looks like it worked.
+
+## A Blob holds bytes, not String(part) (tick 422)
+
+**The class of the web this unlocks:** anything that makes a Blob out of BINARY data — a decoded image
+or audio buffer wrapped for an object URL, a file-upload body assembled from a Uint8Array, `canvas.toBlob`,
+a Blob posted as a `fetch` body, a drag-and-drop file read through `FileReader`. The shim stored parts
+as a UTF-16 string via `String(p)`, so `new Blob([new Uint8Array([1,2,3])])` held the text `"1,2,3"` —
+size 5, the wrong bytes — and every binary consumer downstream read garbage.
+**(1)** A Blob is a byte sequence. A binary part (ArrayBuffer / typed-array view / DataView) contributes
+its RAW BYTES; a typed-array view contributes only its own window of the buffer (`byteOffset`/
+`byteLength`), not the whole backing store.
+**The trap:** `String(typedArray)` is `"1,2,3"` and `String(arrayBuffer)` is `"[object ArrayBuffer]"` —
+both look like "we handled it", both are silent corruption. And the neighbouring stub was worse:
+`FileReader.readAsArrayBuffer` returned `new ArrayBuffer(0)`, an empty buffer that throws no error and
+loses every byte.

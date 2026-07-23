@@ -17317,3 +17317,32 @@ latency + large-page parity benchmarks) and a ~5h observer oracle crawl (nice-19
 competing. Harness/infra is observer-owned (no scripts/ or swap-cycle from the agent). Holding tick 421
 in the tree; will land on a warm re-run once the box quiets (load<1.3 / swap relieved), per the
 wall-warm-rerun recipe. Not re-baselining the WALL mark.
+
+## Tick 422 — Blob from binary parts holds bytes, not String(part) (2026-07-22)
+
+HYPOTHESIS (probe an existing "works" capability for hidden corruption — same vein as t421): an async
+probe of Blob/crypto/FileReader found `new Blob([new Uint8Array([1,2,3])]).arrayBuffer()` returning 5
+bytes, not 3. Root cause: the Blob shim (event_loop.rs) stored every part as a UTF-16 string via
+`String(p)`, so a typed-array part became the literal text `"1,2,3"` — wrong size, wrong bytes. Blob
+built from binary is ubiquitous: `new Blob([bytes],{type:'image/png'})`, decoded media buffers, file
+upload bodies, `canvas.toBlob`, `URL.createObjectURL` sources, fetch request bodies. Same silent
+binary-corruption shape as the t421 structuredClone gap.
+
+FIX (capability, JS-shim only): in the Blob constructor, a part that is an `ArrayBuffer`, a typed-array
+VIEW, or a `DataView` now contributes its RAW BYTES as a binary string (one char per byte, 0-255) —
+`arrayBuffer`/`size`/`slice`/`stream`/`readAs*` already read `__blobText` that way. STRING parts keep
+their exact prior char-per-char behaviour, so the fetch-body / FormData-multipart / XHR-send / clipboard
+/ text() consumers that read `__blobText` are untouched (verified: 9 related gates still green). Also
+un-stubbed `FileReader.readAsArrayBuffer`, which returned `new ArrayBuffer(0)` — every reader of a
+File/Blob's bytes (upload preview, WASM/image decode from a drop) got an empty buffer.
+
+GATE: G_BLOB_BINARY (`blob_holds_binary_bytes_not_stringified_parts`) — nine claims: Uint8Array
+size+bytes, ArrayBuffer size, subarray-view window, mixed string+binary concat order,
+readAsArrayBuffer real bytes, and a string-blob-unchanged claim (proves no text-path regression).
+RED-proven: forcing binary parts back through `String(p)` fails on `u8size:3` (yields 5). manuk-page
+green 0.26s; g_blob_stream/g_blob_url/g_clipboard_read/g_drop_upload/g_file_input/g_formdata_iterators/
+g_form/g_response_json/g_xhr_progress all still green.
+
+TICK SHAPE: capability (Blob binary-part byte fidelity + readAsArrayBuffer; +1 gate). GATES +1.
+CONSTELLATION: Blob from binary parts unknown→gated (G_BLOB_BINARY).
+WIKI: storage.md — "a Blob holds BYTES, not String(part) — binary parts and readAsArrayBuffer".

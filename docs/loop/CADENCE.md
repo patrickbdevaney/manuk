@@ -15,9 +15,9 @@
 | median tick cycle | **18m** | 210 intervals |
 | median, last 10 | **23m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.75** | 280.4h elapsed |
+| **ticks per hour** | **0.75** | 280.6h elapsed |
 | median verify wall | **59s** | 150 ticks |
-| wall trend | 39s → 61s — getting slower ⚠️ | first 3 vs last 3 |
+| wall trend | 39s → 57s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,7 +27,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **189**
+* **live gates**: 27 → **190**
 * **✅ rows in the capability ledger**: 144 → **328**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
@@ -307,6 +307,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **416** | 2026-07-22 20:18 | 53m | capability | 71s | +330/−35 | 187 | 81 | 56.0% · | text-indent: apply the first-line inline-start indent (image-replacement + prose) (2026-07 |
 | **418** | 2026-07-22 20:43 | 26m | measurement | 55s | +78/−33 | 187 | 81 | 56.0% · | Intl: measure-and-pin the i18n formatting capability (2026-07-22) |
 | **419** | 2026-07-22 21:01 | 18m | measurement | 66s | +266/−45 | 188 | 81 | 56.0% · | Element.checkVisibility(): measure-and-pin (2026-07-22) |
-| **421** | 2026-07-22 21:26 | 25m | capability | 61s | +221/−35 | 189 | 81 | 56.0% · | structuredClone: preserve BINARY types, not degrade them (2026-07-22) |
+| **421** | 2026-07-22 21:41 | 40m | capability | 57s | +216/−36 | 190 | 81 | 56.0% · | structuredClone: preserve BINARY types, not degrade them (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

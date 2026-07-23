@@ -799,6 +799,7 @@
   - L193 · Response and Request became constructible
   - L202 · A miss resolves undefined — it does not reject
   - L209 · Honest limits
+  - L220 · A Blob holds BYTES, not String(part) — binary parts and readAsArrayBuffer (tick 422)
 
 ## TEXT AND LAYOUT — fonts, shaping, measurement
 `docs/wiki/text-layout.md`
@@ -889,4 +890,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-804 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+805 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

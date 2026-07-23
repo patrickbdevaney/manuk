@@ -1586,7 +1586,20 @@ const PRELUDE: &str = r#"
           var text = '';
           for (var i = 0; i < parts.length; i++) {
             var p = parts[i];
-            text += (p && p.__blobText !== undefined) ? p.__blobText : String(p);
+            // A BINARY part (ArrayBuffer / typed-array view / DataView) is its raw BYTES, not a string.
+            // `String(new Uint8Array([1,2,3]))` is `"1,2,3"` (5 chars) — so a Blob built from decoded
+            // image/audio bytes, a file upload, or `canvas.toBlob` silently held the wrong data and the
+            // wrong `size`. Represent bytes as a binary string (one char per byte, 0-255): `arrayBuffer`,
+            // `size`, `slice`, `stream` and `readAs*` all already read `__blobText` that way, and STRING
+            // parts keep their exact prior char-per-char behaviour (no change to text-blob consumers).
+            if (p && p.__blobText !== undefined) { text += p.__blobText; }        // nested Blob/File
+            else if (p instanceof ArrayBuffer) {
+              var ua = new Uint8Array(p);
+              for (var j = 0; j < ua.length; j++) { text += String.fromCharCode(ua[j]); }
+            } else if (ArrayBuffer.isView(p) && p.buffer instanceof ArrayBuffer) {
+              var uv = new Uint8Array(p.buffer, p.byteOffset, p.byteLength);
+              for (var k = 0; k < uv.length; k++) { text += String.fromCharCode(uv[k]); }
+            } else { text += String(p); }
           }
           this.__blobText = text;
           this.size = text.length;
@@ -1653,7 +1666,15 @@ const PRELUDE: &str = r#"
           var t = (b && b.__blobText) || '';
           this.__done('data:' + ((b && b.type) || 'application/octet-stream') + ';base64,' + btoa(t));
         };
-        FRp.readAsArrayBuffer = function (b) { this.__done(new ArrayBuffer(0)); };
+        FRp.readAsArrayBuffer = function (b) {
+          // Was a `new ArrayBuffer(0)` stub — every reader of a File/Blob's bytes (an upload preview,
+          // a WASM/image decoder fed from a drop, `FileReader` polyfills) got an EMPTY buffer. Read the
+          // blob's binary string into a real byte buffer, matching `Blob.prototype.arrayBuffer`.
+          var s = (b && b.__blobText !== undefined) ? String(b.__blobText) : '';
+          var buf = new ArrayBuffer(s.length), v = new Uint8Array(buf);
+          for (var i = 0; i < s.length; i++) { v[i] = s.charCodeAt(i) & 0xff; }
+          this.__done(buf);
+        };
         FRp.abort = function () { this.readyState = 2; };
       }
 
