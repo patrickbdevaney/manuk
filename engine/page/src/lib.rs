@@ -5226,6 +5226,15 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> bool {
+        // An `inert` element cannot receive focus — Tab skips it and `el.focus()` is a no-op — so the
+        // page behind an open `<dialog>.showModal()` stays untabbable. Refuse before touching the DOM
+        // state so a focus request aimed at neutralised UI changes nothing (moving focus AWAY, i.e.
+        // `None`, is always allowed).
+        if let Some(n) = node {
+            if self.is_inert(n) {
+                return false;
+            }
+        }
         if !self.dom.set_focused(node, from_keyboard) {
             return false;
         }
@@ -5632,6 +5641,25 @@ impl Page {
             }
         }
         set
+    }
+
+    /// Whether `node` is inside (or itself carries) an `inert` subtree — an ancestor walk, the single-
+    /// node counterpart to [`Self::non_hittable_nodes`]'s top-down set. Used to refuse focus: an inert
+    /// element cannot receive focus (the page behind an open modal is not tabbable and `el.focus()` on
+    /// it is a no-op).
+    fn is_inert(&self, node: manuk_dom::NodeId) -> bool {
+        let mut cur = Some(node);
+        while let Some(n) = cur {
+            if self
+                .dom
+                .element(n)
+                .is_some_and(|e| e.attr("inert").is_some())
+            {
+                return true;
+            }
+            cur = self.dom.parent(n);
+        }
+        false
     }
 
     fn z_index_map(&self) -> HashMap<manuk_dom::NodeId, i32> {

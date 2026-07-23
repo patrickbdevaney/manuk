@@ -2234,3 +2234,18 @@ present→true, set→attribute added, clear→attribute removed) — RED by rem
 `hittable == false`, a sibling outside stays `hittable == true` (no over-marking), and `hit_test` over
 the inert control does not return it — RED by neutering the inert branch in the subtree walk.
 [[css-cascade]]
+
+## The HTML `inert` attribute also blocks focus (tick 451)
+
+Tick 450 gave `inert` its hit-test transparency and boolean reflection; this closes the third leg the
+modal-backdrop needs — focus. An `inert` element (and its subtree) is out of the tab order and
+`el.focus()` on it is a no-op, so keyboard focus cannot escape an open `<dialog>.showModal()` into the
+neutralised page behind it. `Page::set_focus` is the single sink every focus path funnels through (the
+shell's Tab handling, the agent's focus grounding, the JS `el.focus()` request queue), and neither it
+nor `Dom::set_focused` consulted focusability. It now calls `is_inert(node)` — the single-node
+ancestor-walk counterpart to `non_hittable_nodes()`'s top-down set (walk `dom.parent` upward, true if
+any ancestor carries the `inert` attribute) — and refuses the request (`return false`, before touching
+DOM state) when the target is inert. Moving focus away (`None`) is always allowed, so a modal closing
+does not get stuck. Gated by `G_INERT_FOCUS`: a non-inert control focuses (`:focus` applies), a control
+inside `<div inert>` is refused (`:focus` does not apply) — RED-proven by removing the refusal.
+[[css-cascade]]

@@ -18287,3 +18287,33 @@ NEXT VEIN NOTE: the interaction/hit-test vein still has teeth adjacent to this �
 block FOCUS (tab order) and text SELECTION; both are bounded follow-ons on this same surface. `user-select`
 remains the thin sibling (getComputedStyle-only, no scripted behavioral RED). The richer pivots remain the
 Tier-1 subsystems (media JOIN / contenteditable+IME) per PHASE0-BOUNDED-REMAINDER.
+
+## Tick 451 — the HTML `inert` attribute also blocks focus (2026-07-23)
+
+FOLLOW-ON to tick 450 (same attribute, the sibling interaction the modal-backdrop story still needed).
+Tick 450 made `inert` transparent to hit-testing and reflectable; but an `inert` element could still
+RECEIVE FOCUS — Tab (or `el.focus()`) into the page behind an open `<dialog>.showModal()` reached
+neutralised UI, defeating the focus-trap every modal relies on.
+
+PROBED: `Page::set_focus` (the single sink every focus path funnels through — shell Tab, agent focus
+grounding, JS `el.focus()` queue) and `Dom::set_focused` do NO focusability check; nothing consulted
+`inert`. RED-proven below.
+
+FIX (capability — 1 file, 1 helper + 1 guard):
+- engine/page/src/lib.rs: new `is_inert(node)` — the single-node ancestor-walk counterpart to t450's
+  top-down `non_hittable_nodes()` set (walks `dom.parent` up, true if any ancestor carries `inert`).
+  `set_focus` now refuses (`return false`, before touching DOM state) any focus request whose target
+  `is_inert`. Moving focus AWAY (`None`) is always allowed. No signature change; no other caller of
+  set_focus/set_focused touched.
+
+GATE: G_INERT_FOCUS (page, `inert_element_cannot_receive_focus`) — a control OUTSIDE the inert
+container focuses normally (`:focus` applies, returns true); a control INSIDE `<div inert>` is refused
+(returns false, `:focus` does NOT apply). RED-proven by neutering the refusal → focus takes, assert
+fires. Sibling gates green: g_inert, g_inert_a11y (t450), g_focus, g_pointer_events_a11y.
+
+TICK SHAPE: capability (inert blocks focus on the shared set_focus sink; +1 gate). GATES +1.
+CONSTELLATION: `inert` row extended (focus half completed — hit-test t450, reflection t450, focus t451).
+WIKI: interaction-surface.md — inert also removes its subtree from the tab order.
+NEXT VEIN NOTE: the inert story is now hit-test + reflection + focus. The remaining inert edge is text
+SELECTION suppression (thin — needs the user-drag selection geometry that's unmodelled, same wall as
+`user-select`). The richer pivots remain the Tier-1 subsystems (media JOIN / contenteditable+IME).

@@ -3837,3 +3837,18 @@ ways that decide the implementation — it is an HTML ATTRIBUTE (reflection, not
 down the DOM SUBTREE (a tree walk, not a per-node computed-style read). And unlike `pointer-events`, `inert`
 must NOT be fed to the JS `elementFromPoint` path: per spec it changes interaction targeting, not the
 geometric CSSOM-View hit-test.
+
+## The HTML `inert` attribute blocks focus — the modal focus-trap (tick 451)
+
+**The class of the web this unlocks (agentic + keyboard a11y):** the modal focus-trap. Tick 450 stopped
+an agent *clicking* through to the page behind an open modal; this stops focus *tabbing* through. Every
+`<dialog>.showModal()` and every modal library depends on the backdrop being untabbable — otherwise a
+keyboard user (or an agent driving via Tab / `el.focus()`) walks straight out of the dialog into the
+neutralised page. `inert` did not affect focus at all, so the trap leaked.
+**(1)** `Page::set_focus` — the single sink the shell, the agent, and the JS `el.focus()` queue all
+funnel through — now refuses a focus request whose target is inside an `inert` subtree
+(`is_inert(node)`, an ancestor walk), before any DOM state changes.
+**(2)** Moving focus AWAY (`None`) is always allowed, so closing the modal is never blocked.
+**The trap:** the fix belongs at the shared `set_focus` sink, not at each caller — putting it in the
+shell's Tab handler would leave the agent's focus grounding and the JS `el.focus()` path still leaking.
+One chokepoint, one guard.
