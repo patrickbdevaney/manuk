@@ -164,6 +164,23 @@ pub enum PointerEvents {
     None,
 }
 
+/// `user-select` — whether the user can select an element's text, and how a click-drag grows the
+/// selection. Toolbars, buttons, drag-handles and code-copy widgets set `user-select: none`
+/// ubiquitously so a double-click drag on the chrome does not select label text; editors set
+/// `user-select: all` on atomic tokens. Stylo's servo build parses it only once
+/// `layout.unimplemented` is flipped (see `cascade_via_stylo`); its four values are the full set.
+/// We resolve the COMPUTED value so `getComputedStyle(el).userSelect` reads correctly (the CSSOM
+/// value feature-detection reads back); the *geometry* of a user mouse-drag selection remains a
+/// layout/hit-test concern we do not model, exactly like the note on `Selection` in the JS layer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum UserSelect {
+    #[default]
+    Auto,
+    Text,
+    None,
+    All,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextAlign {
     Left,
@@ -759,6 +776,9 @@ pub struct ComputedStyle {
     /// `pointer-events` (inherited). `None` = transparent to hit-testing (`elementFromPoint`/click
     /// dispatch pass through). See [`PointerEvents`].
     pub pointer_events: PointerEvents,
+    /// `user-select` — the computed selectability keyword, resolved so `getComputedStyle` reflects
+    /// it. See [`UserSelect`].
+    pub user_select: UserSelect,
     /// `field-sizing: content` (Baseline June 2026) — the form control sizes from its CONTENT,
     /// so the UA's fixed-size presentational hints (`<textarea cols>` above all) must stand down
     /// and let intrinsic sizing run. `false` = `fixed`, the initial value.
@@ -921,6 +941,7 @@ impl ComputedStyle {
             border_radius: 0.0,
             visibility: Visibility::Visible,
             pointer_events: PointerEvents::Auto,
+            user_select: UserSelect::Auto,
             field_sizing_content: false,
             line_height_normal: true,
             mask_image: None,

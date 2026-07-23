@@ -316,6 +316,13 @@ pub fn cascade_via_stylo_sized(
     // time unless this pref is on (the `@container` RULE parses regardless — which is how tick
     // 371's probe saw parse alive while the property silently vanished).
     stylo_static_prefs::set_pref!("layout.container-queries.enabled", true);
+    // `user-select` (and its `-moz-`/`-webkit-` prefixes) is gated behind Stylo's shared
+    // `layout.unimplemented` servo_pref — off by default, so the servo build drops it at parse and
+    // every element's computed value stays `auto`. Flip it on so the property cascades and
+    // `getComputedStyle(el).userSelect` reflects it. The pref gates PARSING only; we consume a fixed
+    // set of computed values via explicit `clone_*` calls (user_select is the sole addition from this
+    // set), so enabling the other properties it also ungates changes nothing we read.
+    stylo_static_prefs::set_pref!("layout.unimplemented", true);
     // **The parser's verdict, read off the `Dom` it already handed us.** Everything below that used to
     // say `QuirksMode::NoQuirks` unconditionally now says `qm`. Stylo already implements the quirks
     // themselves (unitless lengths, case-insensitive id/class matching, the `<font size>` table) — this
@@ -1633,6 +1640,7 @@ pub fn supports_condition(condition: &str) -> bool {
     // cascade path made this function's verdict order-dependent).
     stylo_static_prefs::set_pref!("layout.grid.enabled", true);
     stylo_static_prefs::set_pref!("layout.container-queries.enabled", true);
+    stylo_static_prefs::set_pref!("layout.unimplemented", true);
 
     // `CSS.supports(cond)` takes a <supports-condition>, but every browser also accepts a bare
     // declaration (`CSS.supports('display: flex')`). Wrap only when the caller did not, and leave

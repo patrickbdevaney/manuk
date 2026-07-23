@@ -658,6 +658,15 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         manuk_css::PointerEvents::Auto => "auto",
         manuk_css::PointerEvents::None => "none",
     };
+    // `user-select` resolved value — `getComputedStyle(el).userSelect` (and the `webkitUserSelect`
+    // alias Chrome also exposes). A toolbar that reads it back to decide whether its label is
+    // draggable saw `undefined` before this.
+    let user_select = match cs.user_select {
+        manuk_css::UserSelect::Auto => "auto",
+        manuk_css::UserSelect::Text => "text",
+        manuk_css::UserSelect::None => "none",
+        manuk_css::UserSelect::All => "all",
+    };
     let white_space = match cs.white_space {
         WhiteSpace::Normal => "normal",
         WhiteSpace::NoWrap => "nowrap",
@@ -790,7 +799,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
     format!(
         "({{color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
           fontFamily:{}, lineHeight:{}, textAlign:{}, display:{}, position:{}, overflow:{}, overflowX:{}, overflowY:{}, \
-          visibility:{}, whiteSpace:{}, pointerEvents:{}, opacity:{}, \
+          visibility:{}, whiteSpace:{}, pointerEvents:{}, userSelect:{}, webkitUserSelect:{}, opacity:{}, \
           width:{}, height:{}, marginTop:{}, marginRight:{}, marginBottom:{}, marginLeft:{}, \
           paddingTop:{}, paddingRight:{}, paddingBottom:{}, paddingLeft:{}, \
           top:{}, right:{}, bottom:{}, left:{}, zIndex:{}, transform:{}, \
@@ -803,7 +812,8 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
           var m={{'background-color':'backgroundColor','font-size':'fontSize',\
           'font-weight':'fontWeight','font-style':'fontStyle','font-family':'fontFamily',\
           'line-height':'lineHeight','text-align':'textAlign','white-space':'whiteSpace',\
-          'pointer-events':'pointerEvents',\
+          'pointer-events':'pointerEvents','user-select':'userSelect',\
+          '-webkit-user-select':'userSelect','-moz-user-select':'userSelect',\
           'margin-top':'marginTop',\
           'margin-right':'marginRight','margin-bottom':'marginBottom','margin-left':'marginLeft',\
           'padding-top':'paddingTop','padding-right':'paddingRight','padding-bottom':'paddingBottom',\
@@ -837,6 +847,8 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         q(visibility),
         q(white_space),
         q(pointer_events),
+        q(user_select),
+        q(user_select),
         q(&opacity),
         q(&dim_css(&cs.width)),
         q(&dim_css(&cs.height)),

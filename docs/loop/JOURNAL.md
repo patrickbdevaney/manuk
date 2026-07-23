@@ -18755,3 +18755,52 @@ ratchet refuses on a WALL 550s>245s receipt measured under SUSTAINED observer br
 box earlier this session banked 60-69s. Parked the complete WIP in-tree; it lands by itself on the next
 warm re-run once the observer sweep quiets, per [wall-warm-rerun-lands-ticks] / [three-ticks-parked-wall-blocked]
 (t458 was parked-then-landed the exact same way at the start of this very session).
+
+## Tick 464 — `user-select` computed value reaches getComputedStyle (2026-07-23)
+
+PIVOT off the clipboard/selection JS-prelude cluster onto an adjacent CASCADE brick, chosen from the
+constellation `?`-unknowns (`? outranks ✗`): `user-select` was marked unknown in the `app` class
+("ubiquitous — user-select:none on buttons/toolbars/handles"). RE-PROBED first per the standing rule:
+grep of the whole engine returned ZERO — genuinely absent, not stale-pessimistic. So building it is
+legitimate.
+
+PROBED (RED-proven): `getComputedStyle(el).userSelect` was `undefined`. Root cause is a Stylo servo-build
+gate: `user-select` (and `-moz-`/`-webkit-`) carries `servo_pref = "layout.unimplemented"` (OFF by
+default), so the property was dropped AT PARSE and every element computed `auto`. Toolbars/editors/
+code-copy widgets that read the value back to decide whether to run their own selection-suppression
+fallback saw nothing.
+
+FIX (capability — 4 files, the exact `pointer_events` pattern, NO second cascade):
+- `stylo_engine.rs` — flip `set_pref!("layout.unimplemented", true)` at cascade init AND in
+  `supports_condition` (so `CSS.supports` agrees), a sanctioned Option-1 pref flip like
+  `layout.grid.enabled`. The pref is SHARED by ~35 props but gates PARSING only; we consume a fixed set
+  via explicit `clone_*` (user_select is the sole addition — the other ~34, incl. object-fit/text-overflow,
+  are read from MinimalCascade `m`, never Stylo's clone), so ungating them changes nothing we read.
+- `lib.rs` — `UserSelect{Auto,Text,None,All}` enum + `ComputedStyle.user_select` field + default.
+- `stylo_map.rs` — map `cv.clone_user_select()` beside `pointer_events`.
+- `dom_bindings.rs` — serialize `userSelect` + the `webkitUserSelect` alias Chrome also exposes; route
+  `user-select`/`-webkit-user-select`/`-moz-user-select` through `getPropertyValue`.
+
+SCOPE BOUNDARY (honest): this resolves the COMPUTED VALUE the CSSOM reports — the geometry of a user
+mouse-drag selection honouring `user-select` is a layout/hit-test concern the engine does not model, the
+same boundary the `Selection` shim already documents. Not a reflection-only stub: an inert stub returns a
+constant regardless of the stylesheet; this reads the actual cascaded keyword (inline, stylesheet rule,
+and prefix-aliased), RED-proven.
+
+GATE: G_USER_SELECT (page, `user_select_computed_value_reflects_the_cascade`) — teeth: inline
+`user-select:none`→`none`, stylesheet `.txt{user-select:text}`→`text`, `-webkit-user-select:all`→`all`
+(+ `webkitUserSelect` alias), unset→`auto`, and `getPropertyValue('user-select')` /
+`getPropertyValue('-webkit-user-select')` both serve the keyword. RED-proven by flipping the pref to
+`false` → EVERY element reads `auto` ("none:auto all:auto txt:auto …"), the stylesheet no longer reaches
+computed style. Neighbors green (no regression from the pref flip): g_computed_style, g_get_property_value,
+g_css_supports, g_cssom_enumeration, g_display_contents, g_media_conditional, g_supports_layer,
+g_css_nesting, g_capability.
+
+TICK SHAPE: capability (user-select computed value — CSSOM reflection of a ubiquitous UI property; +1
+gate). GATES +1. CONSTELLATION: flips the `app`-class `? user-select` unknown → works|gated. WIKI:
+css-cascade.md — new subsection under the `layout.grid.enabled` pref note.
+NEXT VEIN NOTE: the remaining constellation `?`-unknowns are mostly NON-atomic subsystems (ESM
+module-graph, scroll-driven animations, SharedWorker) or measurement runs (test262, 100-tab RSS). Bounded
+adjacent CSS computed-value bricks still open in the same low-risk `layout.unimplemented`-ungated vein now
+that parsing is on: `color-scheme`, `object-fit` via Stylo clone (currently MinimalCascade), `contain`.
+L-marquees unchanged: MEDIA H.264-High, IndexedDB (redb/heed), contenteditable EDITING subsystem.

@@ -154,56 +154,57 @@
   - L67 · <body>'s background propagates to the CANVAS
   - L73 · visibility and opacity interact with animation
   - L81 · Stylo's grid_enabled() reads layout.grid.enabled, which is OFF by default under servo
-  - L87 · Skipping @supports renders the FALLBACK branch of every progressively-enhanced site
-  - L101 · @media is a rule CONTAINER — a cascade that only matches top-level CssRule::Style applies zero responsive rules at ANY width
-  - L110 · match_non_ts_pseudo_class returning false for everything freezes the entire no-JS-menu web SHUT
-  - L122 · :muted is querySelector-only, and that is a *build* fence (tick 344)
-  - L134 · Stylo's COMPUTED values are not its RESOLVED values — border-width and outline-width are traps
-  - L148 · Presentational hints are still load-bearing, and Stylo will NOT synthesize them
-  - L159 · Icons on the modern web are an empty element with a background-color shaped by a mask-image
-  - L163 · inline-flex is a distinct display value, not block-level flex
-  - L169 · A background-image is a DECORATION; an <img> is a REPLACED ELEMENT whose bitmap IS the box
-  - L178 · An unmodelled pseudo-element silently mis-styles its SUBJECT
-  - L185 · content: attr(name) drew an EMPTY box until the extraction loop stopped keeping only strings
-  - L205 · The display divergence number is ~25% representational NOISE
-  - L216 · MinimalCascade's deficits are architectural, and a hybrid front-end matcher was REJECTED
-  - L233 · var() and @media evaluation effectively exist ONLY inside full Stylo
-  - L241 · grid-template-areas was entirely unparsed — and BOTH underlying engines already supported it
-  - L247 · Stylo's DOM trait wall is 126+ methods and compiles only as ONE indivisible unit
-  - L259 · Full-page zoom scales ABSOLUTE lengths only
-  - L267 · Selector identifiers decode CSS escapes — take_ident used to stop at the backslash (tick 137)
-  - L294 · Quirks mode: the verdict travels ON the Dom, not through signatures (tick 242)
-  - L315 · Stylo already implements the quirks — we were only failing to tell it which mode we were in
-  - L328 · Reporting and rendering are ONE capability
-  - L337 · LimitedQuirks folds to false, deliberately
-  - L345 · Gate note
-  - L353 · The half-fix trap: a custom rule index must be keyed the way it is queried (tick 243)
-  - L373 · :hover is a cascade INPUT, and the two relayout paths each miss it differently
-  - L386 · :hover matches ANCESTORS, and that half is the mechanism
-  - L399 · The trap: neither existing relayout recascades a state change, and they fail oppositely
-  - L419 · The general form, worth carrying past this pseudo-class
-  - L430 · Focus was a DEAD-END WIRE, and :focus / :focus-within / :focus-visible are three questions
-  - L449 · They are not one feature with three names
-  - L468 · The two cascades drifted again — UA block margins (tick 268)
-  - L488 · Where it was
-  - L501 · The numbers were measured, not recalled
-  - L512 · The rule that makes it a fix rather than a trade
-  - L528 · @media was skipped, and it took a dozen properties with it (tick 273)
-  - L535 · The bug and the test that covered it were about disjoint property sets
-  - L566 · What it cost
-  - L581 · The fix, and why it evaluates at cascade time
-  - L602 · Still skipped: @supports and @layer
-  - L609 · One evaluator for @media and matchMedia (tick 275)
-  - L637 · @supports / @layer, and answering a capability question honestly (tick 276)
-  - L670 · CSS.supports() — one question must not have two answers (tick 282)
-  - L689 · The fix is a different door to the same evaluator
-  - L710 · Two things measured and pinned
-  - L725 · Container queries (tick 379): the sized re-pass and the source supplement
-  - L771 · field-sizing: content — a recovered property that must beat the hints (tick 388)
-  - L787 · text-align: start/end are LOGICAL — resolve them against direction, or the RTL web left-aligns (tick 414)
-  - L807 · Computed custom properties reach getComputedStyle from Stylo (tick 427)
-  - L830 · :open is taught to BOTH selector engines (tick 429)
-  - L841 · CSSStyleDeclaration: array-like + !important priority (tick 432)
+  - L87 · user-select is behind the SHARED layout.unimplemented pref, not a per-property one (tick 464)
+  - L104 · Skipping @supports renders the FALLBACK branch of every progressively-enhanced site
+  - L118 · @media is a rule CONTAINER — a cascade that only matches top-level CssRule::Style applies zero responsive rules at ANY width
+  - L127 · match_non_ts_pseudo_class returning false for everything freezes the entire no-JS-menu web SHUT
+  - L139 · :muted is querySelector-only, and that is a *build* fence (tick 344)
+  - L151 · Stylo's COMPUTED values are not its RESOLVED values — border-width and outline-width are traps
+  - L165 · Presentational hints are still load-bearing, and Stylo will NOT synthesize them
+  - L176 · Icons on the modern web are an empty element with a background-color shaped by a mask-image
+  - L180 · inline-flex is a distinct display value, not block-level flex
+  - L186 · A background-image is a DECORATION; an <img> is a REPLACED ELEMENT whose bitmap IS the box
+  - L195 · An unmodelled pseudo-element silently mis-styles its SUBJECT
+  - L202 · content: attr(name) drew an EMPTY box until the extraction loop stopped keeping only strings
+  - L222 · The display divergence number is ~25% representational NOISE
+  - L233 · MinimalCascade's deficits are architectural, and a hybrid front-end matcher was REJECTED
+  - L250 · var() and @media evaluation effectively exist ONLY inside full Stylo
+  - L258 · grid-template-areas was entirely unparsed — and BOTH underlying engines already supported it
+  - L264 · Stylo's DOM trait wall is 126+ methods and compiles only as ONE indivisible unit
+  - L276 · Full-page zoom scales ABSOLUTE lengths only
+  - L284 · Selector identifiers decode CSS escapes — take_ident used to stop at the backslash (tick 137)
+  - L311 · Quirks mode: the verdict travels ON the Dom, not through signatures (tick 242)
+  - L332 · Stylo already implements the quirks — we were only failing to tell it which mode we were in
+  - L345 · Reporting and rendering are ONE capability
+  - L354 · LimitedQuirks folds to false, deliberately
+  - L362 · Gate note
+  - L370 · The half-fix trap: a custom rule index must be keyed the way it is queried (tick 243)
+  - L390 · :hover is a cascade INPUT, and the two relayout paths each miss it differently
+  - L403 · :hover matches ANCESTORS, and that half is the mechanism
+  - L416 · The trap: neither existing relayout recascades a state change, and they fail oppositely
+  - L436 · The general form, worth carrying past this pseudo-class
+  - L447 · Focus was a DEAD-END WIRE, and :focus / :focus-within / :focus-visible are three questions
+  - L466 · They are not one feature with three names
+  - L485 · The two cascades drifted again — UA block margins (tick 268)
+  - L505 · Where it was
+  - L518 · The numbers were measured, not recalled
+  - L529 · The rule that makes it a fix rather than a trade
+  - L545 · @media was skipped, and it took a dozen properties with it (tick 273)
+  - L552 · The bug and the test that covered it were about disjoint property sets
+  - L583 · What it cost
+  - L598 · The fix, and why it evaluates at cascade time
+  - L619 · Still skipped: @supports and @layer
+  - L626 · One evaluator for @media and matchMedia (tick 275)
+  - L654 · @supports / @layer, and answering a capability question honestly (tick 276)
+  - L687 · CSS.supports() — one question must not have two answers (tick 282)
+  - L706 · The fix is a different door to the same evaluator
+  - L727 · Two things measured and pinned
+  - L742 · Container queries (tick 379): the sized re-pass and the source supplement
+  - L788 · field-sizing: content — a recovered property that must beat the hints (tick 388)
+  - L804 · text-align: start/end are LOGICAL — resolve them against direction, or the RTL web left-aligns (tick 414)
+  - L824 · Computed custom properties reach getComputedStyle from Stylo (tick 427)
+  - L847 · :open is taught to BOTH selector engines (tick 429)
+  - L858 · CSSStyleDeclaration: array-like + !important priority (tick 432)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -930,4 +931,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-845 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+846 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

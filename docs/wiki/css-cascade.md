@@ -84,6 +84,23 @@ With the pref unset, **`display: grid` is silently dropped AT PARSE TIME** — t
 computed style, so grid pages auto-place in DOM source order and look catastrophically wrong **with no
 error anywhere**. Flip it at cascade init via `stylo_static_prefs::set_pref!`.
 
+### `user-select` is behind the SHARED `layout.unimplemented` pref, not a per-property one (tick 464)
+
+`user-select` (and its `-moz-`/`-webkit-` prefixes) carries `servo_pref = "layout.unimplemented"` in
+Stylo 0.19's `longhands.toml` — the SAME pref ~35 other properties share. Off by default, so the servo
+build drops `user-select` at parse and every element's computed value stays `auto`; `getComputedStyle(el)
+.userSelect` was `undefined`. There is no `user-select`-specific pref, so the Option-1 fix flips
+`layout.unimplemented` on — which ungates the whole set. That is SAFE here because **the pref gates
+PARSING only, and we consume a fixed set of computed values via explicit `cv.clone_*()` calls**
+(`user_select` is the sole addition; the other ~34 ungated properties — `object-fit`, `text-overflow`,
+`content-visibility`, `contain`, `counter-*`, `mask-*`, … — are read, where we use them at all, from
+MinimalCascade's `m`, never from Stylo's clone). Enabling their parse changes nothing we read; the parity
+and CSSOM gates confirmed no regression. The keyword maps in `stylo_map.rs` beside `pointer_events` (the
+identical two-cascade-free pattern) and serializes in `getComputedStyle` as `userSelect` + the
+`webkitUserSelect` alias Chrome also exposes. Scope boundary, stated: this resolves the COMPUTED VALUE the
+CSSOM reports; the geometry of a user mouse-drag selection honouring `user-select` is a layout/hit-test
+concern the engine does not model — the same boundary the `Selection` shim documents.
+
 ## Skipping `@supports` renders the FALLBACK branch of every progressively-enhanced site
 
 The modern idiom is `.thing { display: none } @supports (display: grid) { .thing { display: block } }` —

@@ -4007,3 +4007,22 @@ contenteditable EDITING subsystem — so they return `false`, and a page feature
 trap:** execCommand returns a synchronous boolean, NOT a Promise — routing `copy` through the async
 Clipboard API's Promise would make the return value meaningless; it must queue the host write synchronously
 and return `true`.
+
+## Toolbars and editors detect their own selectability (tick 464)
+
+**The class of the web this unlocks (UI chrome that suppresses text selection):** `user-select: none` is on
+nearly every toolbar, button, tab strip, drag-handle and code-copy widget so a stray double-click-drag on
+the chrome does not select label text; rich editors set `user-select: all` on atomic tokens. Feature-
+detection and selection-management libraries read the value back through the CSSOM to decide whether to run
+their own selection-suppression fallback — and that read returned `undefined`, sending them down the
+polyfill path (or throwing on `getComputedStyle(el).userSelect.indexOf(...)`).
+**(1)** `user-select` now cascades: Stylo's servo build gates it behind the shared `layout.unimplemented`
+pref (off by default → dropped at parse → every element computed `auto`); flipping that pref on lets it
+parse, and the computed keyword maps onto `ComputedStyle.user_select` beside `pointer_events`.
+**(2)** `getComputedStyle(el).userSelect` (plus the `webkitUserSelect` alias Chrome exposes) and
+`getPropertyValue('user-select')`/`'-webkit-user-select'` now resolve `none`/`text`/`all`/`auto` from the
+stylesheet, inline style and `-webkit-`/`-moz-` prefixes. **The trap:** the pref is SHARED by ~35
+properties, so there is no per-property flip — flipping it is safe only because it gates PARSING and we
+consume a fixed set of computed values via explicit `clone_*` calls. **Scope boundary:** this resolves the
+COMPUTED VALUE; the geometry of a user mouse-drag selection honouring `user-select` is a layout/hit-test
+concern not modelled — the same boundary the `Selection` shim documents.
