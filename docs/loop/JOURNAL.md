@@ -20309,3 +20309,40 @@ SpiderMonkey startup; narrower per-gate build scope; caching) is entirely in scr
 is OBSERVER-OWNED per the loop scope — so it is noted for the observer, not actioned agent-side. No gate
 dropped, no floor widened. Set LAST_WALL_AUDIT 487→507. FINDING: wall already lean; no agent-actionable
 bloat. (This is the "an audit that finds the wall lean is a fine result — say so" case.)
+
+## Tick 508 — SURFACE-AUDIT #24: map clean vs Interop 2026; +4 Baseline gaps (lh/rlh the standout) (2026-07-24)
+
+The due surface audit (cadence 10; last 498) — the instrument that leaves the loop's own frame and
+checks the MAP against the world, by web search, not memory. Searched Interop 2026 (the authoritative
+web-platform-tests README) + the Baseline May 2026 digest + caniuse/MDN signals; sources logged in
+docs/loop/SURFACE-AUDIT.md #24.
+
+FINDING — the map is remarkably clean against Interop 2026: all 20 focus areas are ALREADY on the map
+WITH a verdict (container-style-queries, anchor-positioning, attr(), contrast-color() gated, zoom,
+custom-highlights, dialogs+popovers, fetch-uploads+ranges gated, IndexedDB incl. getAllRecords WORKING
+[t420, 20% of the Interop score], JSPI, media-pseudo, Navigation-API, scoped-registries, scroll-driven,
+scroll-snap, shape(), view-transitions, web-compat, WebRTC out-of-scope, WebTransport measured-absent
+HTTP/3-gated). No Interop phantom — prior audits #1-#23 did their job.
+
+WHAT THE MAP WAS MISSING — 4 genuine Baseline-2026 gaps ADDED as `unknown` (from the digest, not
+Interop): **CSS lh/rlh line-height units** (Baseline Widely Available — the STANDOUT: a direct sibling
+of the ch/ex/cap font-relative units built t499-502, zero hits in engine/css, bounded and likely
+resolvable off the same length seam → the next atomic lever if one is wanted); **:user-invalid/:user-
+valid** (interaction-state form pseudos, may be gecko-gated here); **ToggleEvent.source** (the toggle-
+event invoker property); **image-rendering** (pixelated/crisp-edges scaling). Constellation 194→198
+caps, unknown 3→7 — a bigger map is a good tick and the MEASURED count-mark (190) is unmoved.
+
+WHAT WE HAD BEEN WRONG ABOUT: the font-relative-unit family was treated as CLOSED after ch/ex/cap
+(Const-Check #29) — but lh/rlh are a Baseline-Widely-Available sibling that was never on the map at all.
+The lever is one unit wider than recorded.
+
+Also folded in the WALL-TIME AUDIT that came due at 507 (cadence 20, last 487): ran wall-audit.sh,
+recorded ledger entry #12 in WALL-AUDIT.md — wall 65s warm, LEAN (ceiling 245), NO TRIM (the only
+admissible levers are scripts/-owned = observer's). LAST_WALL_AUDIT 487→507, LAST_SURFACE_AUDIT 498→508
+(both derive from their ledger `## Audit #N — tick M` headers; STATUS hand-set to clear pre-flight).
+
+TICK SHAPE: surface-audit + wall-audit (cadence measurement; +4 unknown cells, no engine code, MEASURED
+count unmoved, nothing regresses — instrument-fidelity face up). WIKI: none — findings live in
+SURFACE-AUDIT.md #24 + WALL-AUDIT.md #12 + CONSTELLATION.tsv. NEXT: lh/rlh is the fresh bounded atomic
+lever (probe+build off the ch/ex/cap seam); else the PHASE0-BOUNDED-REMAINDER subsystems. Self-audit
+next 515; surface next 518; wall next 527; Const-Check next 511.

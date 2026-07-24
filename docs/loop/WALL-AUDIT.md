@@ -235,3 +235,17 @@ is observer-owned — and the observer landed exactly one of them THIS window (c
 "fix(harness): don't bank a wall measured under high load + un-poison LAST_WALL_TIME"), which directly
 addresses the poisoned-663s banking that blocked this tick's first pre-flight. Coverage grew +1 gate this
 window (t486 G_USER_ACTIVATION, 252→253) with ~0 marginal warm wall. Mark untouched (189, ceiling 245).
+
+## Audit #12 — tick 507 (wall 65s warm)
+
+FINDING: the wall is LEAN. Total 65s against the 245s ceiling / ~57-68s standing warm band — squarely
+in range, measured on a warm quiet-enough box (not a contended reading like #11's poisoned 663s).
+Section breakdown: T 23s (35%), P 14s (22%), G6 8s (12%), G1 4s (6%), F 2s, everything else ≤1s. T
+(crate tests) and P (parity vs headless Chrome) are the two biggest and are legitimate coverage, not
+bloat — the same conclusion as #5-#11.
+
+NO TRIM. The only admissible rigor-preserving levers (cargo-nextest runtime-sharing to reclaim the
+~1.5s SpiderMonkey-startup tax per JS gate; section parallelism; narrower per-gate build scope) ALL
+live in scripts/verify.sh, which is OBSERVER-OWNED per the loop scope — noted for the observer, never
+actioned agent-side, exactly as prior audits recorded. Coverage grew this window (t506 esmmodule:yes
+pinned in G_PROBE_CAPABILITIES) with ~0 marginal warm wall. Mark untouched (189, ceiling 245).

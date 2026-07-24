@@ -271,4 +271,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 503	ecf3276	1784897403	2026-07-24T08:50:03-04:00	858	constitution-check	67	4	91	6	263	81	3896	6960	0	329	31	CONSTITUTION-CHECK #29: the named ch/ex frontier was DELIVERED (2026-07-24)
 504	22c7c16	1784897623	2026-07-24T08:53:43-04:00	220	measurement	67	2	30	3	263	81	3896	6960	0	329	31	PROBE: resolve 4 stale-unknown constellation cells (UNKNOWN 8→4) (2026-07-24)
 506	f1b3320	1784898307	2026-07-24T09:05:07-04:00	684	measurement	67	4	60	3	263	81	3896	6960	0	329	31	PROBE: ESM modules run (self-contained half GATED); import-graph seam pinned (2026-07-24)
-507	f491250	1784899419	2026-07-24T09:23:39-04:00	1112	decompose-first	67	3	90	2	263	81	3896	6960	0	329	31	DECOMPOSE-FIRST: the ESM import-graph subsystem, seam + brick plan (2026-07-24)
+507	e8ad259	1784899889	2026-07-24T09:31:29-04:00	1582	decompose-first	67	5	99	4	263	81	3896	6960	0	329	31	DECOMPOSE-FIRST: the ESM import-graph subsystem, seam + brick plan (2026-07-24)

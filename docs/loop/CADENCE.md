@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **273** | ticks 1–507 |
 | median tick cycle | **21m** | 272 intervals |
-| median, last 10 | **17m** | 10 intervals |
+| median, last 10 | **21m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.86** | 316.3h elapsed |
+| **ticks per hour** | **0.86** | 316.5h elapsed |
 | median verify wall | **61s** | 212 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -369,6 +369,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **503** | 2026-07-24 08:50 | 14m | constitution-check | 67s | +91/−6 | 263 | 81 | 56.0% · | CONSTITUTION-CHECK #29: the named ch/ex frontier was DELIVERED (2026-07-24) |
 | **504** | 2026-07-24 08:53 | 4m | measurement | 67s | +30/−3 | 263 | 81 | 56.0% · | PROBE: resolve 4 stale-unknown constellation cells (UNKNOWN 8→4) (2026-07-24) |
 | **506** | 2026-07-24 09:05 | 11m | measurement | 67s | +60/−3 | 263 | 81 | 56.0% · | PROBE: ESM modules run (self-contained half GATED); import-graph seam pinned (2026-07-24) |
-| **507** | 2026-07-24 09:23 | 19m | decompose-first | 67s | +90/−2 | 263 | 81 | 56.0% · | DECOMPOSE-FIRST: the ESM import-graph subsystem, seam + brick plan (2026-07-24) |
+| **507** | 2026-07-24 09:31 | 26m | decompose-first | 67s | +99/−4 | 263 | 81 | 56.0% · | DECOMPOSE-FIRST: the ESM import-graph subsystem, seam + brick plan (2026-07-24) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

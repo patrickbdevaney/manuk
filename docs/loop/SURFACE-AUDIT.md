@@ -1098,3 +1098,43 @@ Check #28): the sized subsystems in PHASE0-BOUNDED-REMAINDER.md, led by ch/ex re
 surface work, which is now measured-exhausted.
 
 LAST_SURFACE_AUDIT 488→498; next due 508.
+
+## Audit #24 — tick 508 (2026-07-24)
+
+SOURCES (searched the web, not memory — the platform moved past the training data):
+* Interop 2026 focus areas — the authoritative list: https://github.com/web-platform-tests/interop/blob/main/2026/README.md (WebKit https://webkit.org/blog/17818/announcing-interop-2026/ , web.dev https://web.dev/blog/interop-2026 , Mozilla https://hacks.mozilla.org/2026/02/launching-interop-2026/ )
+* Baseline May 2026 monthly digest: https://web.dev/blog/baseline-digest-may-2026 (+ Baseline 2026 https://web.dev/baseline/2026 )
+* IndexedDB getAllRecords / WebTransport signals: https://caniuse.com/wf-getallrecords , https://developer.mozilla.org/en-US/docs/Web/API/IDBIndex/getAllRecords
+
+RECONCILED against CONSTELLATION.tsv. **The map is remarkably clean against Interop 2026** — all 20
+focus areas are ALREADY on the map WITH a verdict: container-style-queries (97), anchor-positioning
+(anchorpos:no), attr() (99), contrast-color() (182 gated), zoom (99), custom-highlights (highlights:no),
+dialogs+popovers (gated + :open works t488), fetch-uploads+ranges (102 gated), IndexedDB + getAllRecords
+(36/37/168 — getAllRecords WORKS, gated t420, and it carries 20% of the Interop score), JSPI (jspi:no),
+media-pseudo (105), Navigation-API (navigationapi:yes), scoped-custom-registries (scopedregistry:no),
+scroll-driven-anim (scrolldriven:no), scroll-snap (scrollsnap:yes), shape() (99), view-transitions
+(93/189), web-compat (106), WebRTC (70 out-of-scope), WebTransport (103 measured-absent, HTTP/3-gated —
+a deliberate V1-SCOPE deferral). Investigation areas likewise covered: JPEG XL (101), WebVTT (captions
+gated), a11y (a11y tree), mobile (out of scope). No Interop phantom.
+
+WHAT THE MAP WAS MISSING — 4 genuine Baseline-2026 gaps ADDED as `unknown` (the digest, not Interop,
+surfaced them; a bigger uglier map is a good tick):
+* **CSS `lh`/`rlh` line-height units** (Baseline Widely Available May 2026) — the STANDOUT: a direct
+  sibling of the ch/ex/cap font-relative units just built (t499-502), zero hits in engine/css. `lh`
+  resolves against the element line-height, `rlh` against the root's. Bounded, likely resolvable off
+  the same length-resolution seam. This is the next atomic lever if one is wanted.
+* **`:user-invalid`/`:user-valid`** (Baseline May 2026) — :invalid/:valid are built, but these gate on
+  user-interaction state (turn red only after the user leaves the field), which every real validated
+  form wants. May be a gecko-gated NonTSPseudoClass here.
+* **`ToggleEvent.source`** (Baseline Newly Available May 2026) — the invoking element on the toggle/
+  beforetoggle event (command-invoker wiring); the events already fire, the property is new.
+* **`image-rendering`** (Baseline Newly Available May 2026) — pixelated/crisp-edges scaling filter;
+  pixel-art/QR/retro sites blur without it.
+
+WHAT WE HAD BEEN WRONG ABOUT: the map treated the font-relative-unit family as CLOSED after ch/ex/cap
+(t499-502) — but `lh`/`rlh` are a Baseline-Widely-Available sibling that was never on the map at all.
+The font-metric lever is one unit wider than Const-Check #29 recorded. Otherwise the standing finding
+holds and is now triply-confirmed: atomic surface work is measured-near-exhausted; the honest frontier
+is the PHASE0-BOUNDED-REMAINDER subsystems — with `lh`/`rlh` as a fresh bounded exception.
+
+LAST_SURFACE_AUDIT 498→508; next due 518.
