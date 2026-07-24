@@ -1442,3 +1442,16 @@ follows `src`. Read-only (getter only, so assignment is ignored) and installed o
 IMG-guarded — instances chain through `HTMLElement.prototype`, not the per-tag `HTMLImageElement.prototype`
 (which a probe confirmed is *not* in an instance's chain, matching the own-property reflector design), so a
 non-image element reads `undefined`. Gate `G_IMG_CURRENT_SRC`. [[js-engine]]
+
+## `document.activeElement` defaults to `<body>`, not `null` (tick 494)
+
+`doc_get_active_element` returned `null` whenever the `ACTIVE_ELEMENT` thread-local was empty (nothing
+focused). But `document.activeElement` is read on every interaction by focus-trap libraries, modals and
+keyboard handlers, and they assume a real element: `document.activeElement.blur()`, `.tagName`, `=== el`. A
+null is a `TypeError` the moment any of those runs — the opposite of graceful. The spec (and Chrome) return
+the **body element** for a loaded document, so the getter now falls back to `find_first_in(root, "body")`
+(document-correct via `root`, so a created document reads its own body) and to `null` only if there is no
+body. It is safe for the engine's own focus logic because every in-engine reader gates on `ae &&
+ae.isContentEditable`, and `body.isContentEditable` is false — so a body fallback and a null take the exact
+same branch (the contenteditable execCommand host-resolution paths were the ones to check). Focus tracking
+still wins: `.focus()` moves `activeElement` to the focused element. Gate `G_ACTIVE_ELEMENT_BODY_DEFAULT`.

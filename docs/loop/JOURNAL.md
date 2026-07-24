@@ -19861,3 +19861,27 @@ URL we actually load, honestly". NEXT: srcset/`<picture>` bitmap candidate selec
 (would make currentSrc match Chrome's pick and is a real responsive-images capability), but it is a
 layout-coupled selection subsystem, not atomic. ch/ex font-metrics (Const-Check #27) remains the top lever.
 Self-audit next 495; surface-audit next 498; Const-Check next 495.
+
+## Tick 494 — `document.activeElement` defaults to `<body>`, not `null` (2026-07-24)
+
+A probe-then-build off the current-state property batch. MEASURED FIRST: with nothing focused,
+`document.activeElement` returned `null`. Per spec (and Chrome) it is the BODY element for a loaded HTML
+document, and a null activeElement crashes the ubiquitous `document.activeElement.blur()` / `.tagName` /
+`=== someEl` idioms that focus-trap libraries, widgets and keyboard handlers run on every interaction.
+
+FIX: `doc_get_active_element` now falls back to this document's `<body>` (via `find_first_in(root,"body")`,
+document-correct so a created document reads its own) when the ACTIVE_ELEMENT thread-local is None, and to
+`null` only if there is no body. SAFE for the internal focus logic: every in-engine reader gates on
+`ae && ae.isContentEditable`, and `body.isContentEditable` is false, so a body fallback takes the identical
+branch a null did (verified — contenteditable typing/query/delete gates green).
+
+RED-proven (pre-fix probe: `activeElement:NULL`). New gate G_ACTIVE_ELEMENT_BODY_DEFAULT: activeElement is
+`document.body` (not null) with nothing focused, AND still moves to a focused input on `.focus()` (the body
+default is a fallback, not a replacement for focus tracking). Neighbors g_focus/g_disabled_focus/
+g_inert_focus/g_contenteditable_* green. Bar 0 held; zero new dep; ~6-line native getter change.
+
+TICK SHAPE: capability (+1 gate, nothing regresses). WIKI: dom-semantics.md — "activeElement defaults to
+<body>". Also measured this batch: img.complete/naturalWidth/decode MISSING (an image-lifecycle mini-subsystem,
+timing-coupled — not atomic), style.sheet/link.sheet MISSING (the known CSSOM .sheet subsystem, ~944 WPT),
+document.currentScript/scrollingElement PRESENT+correct. NEXT: ch/ex font-metrics (Const-Check #27) remains
+the top lever. Self-audit next 495; surface-audit next 498; Const-Check next 495.

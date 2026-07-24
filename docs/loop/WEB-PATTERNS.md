@@ -4359,3 +4359,14 @@ srcset/`<picture>` bitmap selection yet), so currentSrc now honestly returns the
 `currentSrc = src` inside `<picture>` would be a lie in a browser that picks a `<source>`; here it is truthful
 precisely because we load `src`, and it will track the chosen candidate for free once srcset selection lands.
 Read-only and IMG-scoped, so a non-image element reads `undefined`.
+
+## `document.activeElement` defaults to `<body>`, never null (tick 494)
+
+**The class of the web this unlocks (focus-trap libraries, modals, keyboard handlers, editors — anything
+that reads the focused element, which is nearly every interactive widget):** `document.activeElement` is read
+constantly, and callers assume it is a real element — `document.activeElement.blur()` to dismiss focus,
+`document.activeElement.tagName` to branch, `document.activeElement === el` to test. It was returning `null`
+when nothing was focused, so all three crashed or misfired. It now defaults to the `<body>` element (the spec
+default for a loaded document, what Chrome returns), and still moves to a real element on `.focus()`. **The
+trap:** null is not a graceful "nothing focused" signal — it is a `TypeError` the moment any of those idioms
+runs, so a page that dismisses focus on Escape threw instead.

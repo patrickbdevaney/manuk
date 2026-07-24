@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **262** | ticks 1–492 |
-| median tick cycle | **21m** | 261 intervals |
+| ticks landed | **263** | ticks 1–494 |
+| median tick cycle | **21m** | 262 intervals |
 | median, last 10 | **25m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.83** | 312.9h elapsed |
-| median verify wall | **60s** | 201 ticks |
+| **ticks per hour** | **0.84** | 313.3h elapsed |
+| median verify wall | **60s** | 202 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **257**
+* **live gates**: 27 → **258**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**159 of 262 ticks** (61%) moved a
+**160 of 263 ticks** (61%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **159** capability ticks, median cycle **21m**
-* median diff per tick: **+224 / −34** lines across 9 files
+* **160** capability ticks, median cycle **21m**
+* median diff per tick: **+222 / −34** lines across 9 files
 
 ## Every tick
 
@@ -359,5 +359,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **489** | 2026-07-24 05:16 | 17m | capability | 67s | +226/−81 | 255 | 81 | 56.0% · | the global `hidden` attribute renders NOTHING (measured missing, now collapsed) (2026-07-2 |
 | **491** | 2026-07-24 05:38 | 22m | capability | 67s | +94/−34 | 256 | 81 | 56.0% · | `dialog.requestClose()`: close with a veto (2026-07-24) |
 | **492** | 2026-07-24 05:58 | 20m | measurement | 67s | +189/−33 | 257 | 81 | 56.0% · | MEASUREMENT: the DOM-method / CSS-property surface vein is mined out too (2026-07-24) |
+| **494** | 2026-07-24 06:20 | 22m | capability | 67s | +156/−36 | 258 | 81 | 56.0% · | `document.activeElement` defaults to `<body>`, not `null` (2026-07-24) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

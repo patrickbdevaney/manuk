@@ -308,6 +308,7 @@
   - L1403 · datetime-local + week typed values (tick 446)
   - L1416 · <a>/<area> URL-decomposition setters (tick 447)
   - L1430 · <img>.currentSrc reports the URL we actually load, honestly (tick 493)
+  - L1446 · document.activeElement defaults to <body>, not null (tick 494)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -959,4 +960,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-874 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+875 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

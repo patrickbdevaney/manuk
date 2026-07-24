@@ -261,3 +261,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 489	91830d3	1784884613	2026-07-24T05:16:53-04:00	994	capability	67	9	226	81	255	81	3896	6960	0	329	31	the global `hidden` attribute renders NOTHING (measured missing, now collapsed) (2026-07-24)
 491	0c25231	1784885913	2026-07-24T05:38:33-04:00	1300	capability	67	7	94	34	256	81	3896	6960	0	329	31	`dialog.requestClose()`: close with a veto (2026-07-24)
 492	eed104c	1784887093	2026-07-24T05:58:13-04:00	1180	measurement	67	9	189	33	257	81	3896	6960	0	329	31	MEASUREMENT: the DOM-method / CSS-property surface vein is mined out too (2026-07-24)
+494	3b66779	1784888434	2026-07-24T06:20:34-04:00	1341	capability	67	9	156	36	258	81	3896	6960	0	329	31	`document.activeElement` defaults to `<body>`, not `null` (2026-07-24)

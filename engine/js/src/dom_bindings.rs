@@ -7258,9 +7258,19 @@ unsafe fn el_blur(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
 
 /// `document.activeElement`.
 unsafe fn doc_get_active_element(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
-    match (this_node(vp), ACTIVE_ELEMENT.with(|c| c.get())) {
-        (Some((dom, _)), Some(n)) => return_node_or_null(cx, vp, dom, Some(n)),
-        _ => *vp = NullValue(),
+    match this_node(vp) {
+        Some((dom, root)) => {
+            // A focused element wins. Otherwise the spec default is the BODY element, not `null` —
+            // Chrome returns `<body>` when nothing is focused, and pages assume it (`document
+            // .activeElement.blur()`, `document.activeElement.tagName`, `=== someEl` comparisons all
+            // crash or misfire on a null). Fall back to this document's `<body>` (document-correct via
+            // `root`, so a created document reads its own), and only to `null` if there is no body.
+            let node = ACTIVE_ELEMENT
+                .with(|c| c.get())
+                .or_else(|| (*dom).find_first_in(root, "body"));
+            return_node_or_null(cx, vp, dom, node);
+        }
+        None => *vp = NullValue(),
     }
     true
 }
