@@ -318,6 +318,32 @@ const HTML: &str = r##"<!doctype html>
       var w = $('lhbox').getBoundingClientRect().width;
       return Math.abs(w - 100) < 2;
     });
+
+    // ── :user-invalid / :user-valid (Baseline May 2026): the interaction-state form pseudos (turn red
+    // only AFTER the user touches+leaves a field, unlike :invalid which fires on load). Measured at the
+    // selector-parse level via CSS.supports(selector()) — matching needs real user interaction this
+    // probe cannot drive. A gecko-only NonTSPseudoClass parse-fails here (same fence as :has()/:playing).
+    probe('userinvalid', function () {
+      return CSS.supports('selector(:user-invalid)') && CSS.supports('selector(:user-valid)');
+    });
+
+    // ── ToggleEvent.source (Baseline Newly Available May 2026): the invoking element on the
+    // toggle/beforetoggle event (popover/dialog command-invoker wiring). The events already fire here;
+    // this is the new property. Constructor + own-shape check, wrapped (ToggleEvent may be absent).
+    probe('togglesource', function () {
+      if (typeof ToggleEvent !== 'function') { return false; }
+      try { return 'source' in new ToggleEvent('toggle'); }
+      catch (e) { return 'source' in ToggleEvent.prototype; }
+    });
+
+    // ── image-rendering (Baseline Newly Available May 2026): the scaling-filter keyword
+    // (pixelated/crisp-edges) that keeps pixel-art/QR/retro images crisp instead of bilinear-blurred.
+    // Parse-level via CSS.supports; a bogus keyword discriminates a rubber-stamp.
+    probe('imagerendering', function () {
+      return CSS.supports('image-rendering', 'pixelated') &&
+             CSS.supports('image-rendering', 'crisp-edges') &&
+             !CSS.supports('image-rendering', 'floops-not-a-value');
+    });
   </script>
 
   <!-- ES-module capability, measured from INSIDE a real `<script type=module>`. Modules are deferred,
@@ -432,6 +458,16 @@ const PINNED: &[&str] = &[
     // unparsed unit ~800px; only exactly-100 passes. `rlh` is the root-relative sibling on the same
     // Stylo line-height-relative length path (differs only by self-vs-root line-height).
     "lhunit:yes",
+    // tick 510 — :user-invalid / :user-valid PARSE (selector-recognized; NOT gecko-gated, unlike the
+    // :playing fence). `CSS.supports('selector(:user-invalid)')` → yes, so a form's feature-detect
+    // branches correctly. Interaction-state MATCHING (turn red only after touch+blur) needs real user
+    // input this static probe cannot drive — so the cell is `partial`; this pins only the parse half.
+    "userinvalid:yes",
+    // tick 510 — image-rendering parses + VALIDATES its values (pixelated/crisp-edges accepted, a bogus
+    // keyword rejected — not a rubber-stamp). @supports answers honestly for pixel-art/QR feature-
+    // detects. Whether the PAINTER honors pixelated (nearest-neighbor vs bilinear) is untested → cell
+    // `partial`; this pins the parse/@supports half.
+    "imagerendering:yes",
     // tick 506 — ES modules run (the self-contained half). Measured from INSIDE a real
     // `<script type=module>`: it COMPILES + LINKS + EVALUATEs and `import.meta.url` is a non-empty
     // string — the exact hook whose absence silently killed every Vite/Rollup/esbuild bundle (they

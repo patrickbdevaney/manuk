@@ -20373,3 +20373,32 @@ regresses — capability + instrument-fidelity faces up). WIKI: none — finding
 ToggleEvent.source, image-rendering) are the next cheap probes; then the PHASE0-BOUNDED-REMAINDER
 subsystems (ESM import-graph B1, MSE playback-join). Self-audit next 515; surface next 518; wall next
 527; Const-Check next 511.
+
+## Tick 510 — PROBE: resolve the last 3 audit-#24 unknowns (:user-invalid parses, image-rendering parses, ToggleEvent.source absent) (2026-07-24)
+
+Batched the three remaining audit-#24 unknowns into one probe tick (the t504 pattern), and two of three
+came back positive — the stale-PESSIMISTIC rule paying yet again on freshly-added cells:
+
+1. **:user-invalid / :user-valid** (197) unknown→**partial**: `userinvalid:yes` — CSS.supports(
+   'selector(:user-invalid)') && (':user-valid') → yes. This servo Stylo does NOT gecko-gate the
+   selector (the :playing fence feared in audit #24 does not apply here), so a form's feature-detect
+   branches correctly. The interaction-state MATCHING (red only after touch+blur) needs real user input
+   the static probe can't drive, and Stylo may parse-accept without match logic (the ::details-content
+   shape) → partial, parse-half pinned.
+2. **image-rendering** (199) unknown→**partial**: `imagerendering:yes` — parses AND validates
+   (pixelated/crisp-edges accepted, a bogus keyword rejected, so not a rubber-stamp). @supports answers
+   honestly. Whether the PAINTER switches to nearest-neighbor is untested → partial (its absence is a
+   minor blur on pixel-art/QR, not a broken page).
+3. **ToggleEvent.source** (198) unknown→**missing**: `togglesource:no` — a constructed ToggleEvent has
+   no `source`; the toggle/beforetoggle events fire but the invoker-source property is not exposed.
+
+Net for the whole session's probe arc: constellation UNKNOWN 8→3 net (t504 −4, t506 −1, t508 +4 from
+audit #24, t509 −1, t510 −3). The remaining 3 unknowns (100-tab RSS benchmark, test262, hidden=until-
+found) are benchmark-runs or subsystems — no cheap probes left. Two new capabilities pinned this tick
+(userinvalid, imagerendering); no engine/ source; Bar 0 held; nothing regresses.
+
+TICK SHAPE: measurement + gate (2 unknown→partial, 1 unknown→missing, 2 pins; no engine code, nothing
+regresses). WIKI: none — findings live in CONSTELLATION.tsv + the gate doc comments. NEXT: cheap probe
+vein is now genuinely exhausted (3 remaining unknowns are all non-atomic); the frontier is the
+PHASE0-BOUNDED-REMAINDER subsystems (ESM import-graph B1, MSE playback-join). Const-Check due next 511
+(will re-read direction). Self-audit next 515; surface next 518.

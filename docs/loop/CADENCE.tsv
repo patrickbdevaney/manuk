@@ -273,3 +273,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 506	f1b3320	1784898307	2026-07-24T09:05:07-04:00	684	measurement	67	4	60	3	263	81	3896	6960	0	329	31	PROBE: ESM modules run (self-contained half GATED); import-graph seam pinned (2026-07-24)
 507	e8ad259	1784899889	2026-07-24T09:31:29-04:00	1582	decompose-first	67	5	99	4	263	81	3896	6960	0	329	31	DECOMPOSE-FIRST: the ESM import-graph subsystem, seam + brick plan (2026-07-24)
 509	7887c9b	1784900485	2026-07-24T09:41:25-04:00	596	measurement	67	4	49	3	263	81	3896	6960	0	329	31	PROBE: CSS `lh` unit already resolves (audit #24's "next lever" was already built) (2026-07-24)
+510	8322c56	1784900830	2026-07-24T09:47:10-04:00	345	measurement	67	4	70	5	263	81	3896	6960	0	329	31	PROBE: resolve the last 3 audit-#24 unknowns (:user-invalid parses, image-rendering parses, ToggleEvent.source absent) (2026-07-24)
