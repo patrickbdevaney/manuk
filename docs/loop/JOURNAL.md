@@ -19602,3 +19602,60 @@ tab-timing measurement into a false failure even on an otherwise-idle box. CONFI
 absolute tab-op times stay «16ms. Per the mandate this is a harness problem the observer handles — WIP left
 intact (do NOT checkout, it is a complete tick), will land on a warm+quiet retry once the observer reaps the
 leaked Chrome. [[three-ticks-parked-wall-blocked]] [[wall-warm-rerun-lands-ticks]]
+
+## Tick 485 — navigator.credentials + window.PublicKeyCredential: the passkey feature-detect surface (2026-07-24)
+
+PIVOT off the contenteditable EDITING vein (Const-Check #26: clean wrap/insert bricks SATURATED; the
+divergent tail — Enter→insertParagraph, toggle-off — needs a Chrome oracle) onto ANCHOR's next ledger item.
+Re-probed the PHASE0-BOUNDED-REMAINDER Tier-1 list and confirmed the "stale-pessimistic" rule yet again:
+item 8 cookie-attribute enforcement (SameSite/HttpOnly/Secure) is ALREADY built + gated (g_cookie_attributes
++ storage.rs unit tests), item 5 IndexedDB indexes (createIndex/IDBKeyRange/store.index/openCursor) ALREADY
+built (dom_bindings.rs), Fullscreen API ALREADY built. The one genuine unbuilt Tier-1 item is #6
+WebAuthn/passkeys — and it is exactly the sanctioned pivot target.
+
+THE GAP (measured, not assumed): `navigator.credentials` and `window.PublicKeyCredential` were absent (grep:
+the only `credentials` hit was fetch's init option). A passkey-first login page runs
+`navigator.credentials.get({publicKey}).then(use).catch(showPasswordForm)` — with the object absent, the
+`.get(...)` is a SYNCHRONOUS TypeError thrown before any promise exists, so the page's `.catch` (bound to the
+promise it expected) never runs, sign-in dies uncaught, and the user is stranded on a dead login screen.
+
+MECHANISM: a prelude IIFE next to `navigator.serviceWorker` (event_loop.rs). We have NO authenticator, and the
+honest way to report that is a present-but-degrading surface, not absence. `window.PublicKeyCredential` =
+constructor (`new` throws "Illegal constructor") with static `isUserVerifyingPlatformAuthenticatorAvailable()`
++ `isConditionalMediationAvailable()` both resolving `false`. `navigator.credentials.get`/`create` with a
+`publicKey` member REJECT with a `NotAllowedError` DOMException (the "no credential / cancelled" signal that
+routes onto the password fallback); a no-publicKey request resolves `null`; `store`/`preventSilentAccess`
+resolve quietly. `navigator.credentials = …` in a try/catch for a frozen navigator. Zero new dep. The seam is
+the honest rejection — two `Promise.reject(noAuth())` lines a future authenticator replaces.
+
+GATE: G_WEBAUTHN_SURFACE (page) — 12 claims: PublicKeyCredential is a function, credentials present, get/create
+are functions, get returns a promise, isUVPAA/isConditionalMediation resolve false, get/create({publicKey})
+reject NotAllowedError, no-publicKey resolves null, store/preventSilentAccess resolve. RED-proven by disabling
+the surface block (via a snapshot toggle, restored): `pkc:false creds:false THREW:TypeError` — the original
+synchronous hard-wall reproduced exactly. Neighbors untouched (pure-additive prelude block).
+
+TICK SHAPE: capability (Tier-1 JARRING item 6, first brick — passkey detection + graceful degradation; +1
+gate). GATES +1.
+CONSTELLATION: identity/login — passkey-first sites no longer hard-wall; they reach their password fallback.
+WIKI: networking.md — new "passkey feature-detect surface" section (login/identity, next to the OAuth flow).
+WEB-PATTERNS: sign-in-with-a-passkey-and-fall-back-to-a-password.
+AGENTIC: an agent driving a passkey-gated login now reaches the password/TOTP fallback path instead of a
+dead screen.
+
+NEXT VEIN NOTE: this is the DETECTION half of WebAuthn (item 6, M 3-6). The rest — a real authenticator that
+mints assertions (create/get resolving a PublicKeyCredential with an attestation/assertion) — is the
+vault/passkey subsystem and needs a credential store + user-verification UX; it replaces the two Promise.reject
+lines. Also still ahead on ANCHOR's ledger: password vault autofill (item 7), bidi full reordering (item 9).
+Self-audit due 485 → DO IT (this is 485); surface-audit next 488; Const-Check next 487.
+
+### Tick 485 — landing RETRY (harness flake: manuk-shell under build-load contention, 2026-07-24)
+Tick 485 (WebAuthn surface, above) is COMPLETE + RED-proven — g_webauthn_surface green in isolation and the
+FIRST verify passed (wall 65s green, ratchet holds). The FINAL wall re-measure verify ("status + the wall,
+ONCE on the final tree") FAILED on G3 affordance + G_TEARDOWN — i.e. the whole `manuk-shell` suite flaked,
+the same leaked-4-day-Chrome + build-load contention that parked ticks 480/484 (load spiked to 8+ during the
+re-measure's own parallel build; the sub-16ms tab-timing/teardown assertions false-fail under that jitter). My
+change touches ONLY engine/js prelude (navigator.credentials + PublicKeyCredential, pure-additive) — it has
+zero path to a manuk-shell tab-timing or teardown test, so this is environmental, not a regression. WIP left
+intact (do NOT checkout). Retry: re-run ./scripts/tick.sh /tmp/tick485.msg on a WARM build + QUIET box
+(load1<0.6) — the build is now warm, so the re-run's verify is fast and low-load, exactly how 484 landed.
+[[three-ticks-parked-wall-blocked]] [[wall-warm-rerun-lands-ticks]] [[wall-false-red-shell-rebuild]]

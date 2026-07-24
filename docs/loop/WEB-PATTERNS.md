@@ -4279,3 +4279,15 @@ remaining editing commands (insertParagraph, formatting toggle-off) are browser-
 honestly without measuring Chrome. It shares one helper with bold/italic (`__wrapSelectionFormat`,
 generalised to set attributes + carry event data), so the anchor inherits the exact selection-wrap +
 node-splitting the bold path already proved — one code path, three toolbar buttons.
+
+## Sign in with a passkey, and fall back to a password when there is none (tick 485)
+
+**The class of the web this unlocks (every passkey-first login: banks, GitHub, Microsoft, Apple, Okta):**
+`navigator.credentials` + `window.PublicKeyCredential` now exist, so a login page's
+`navigator.credentials.get({publicKey}).then(useAssertion).catch(showPasswordForm)` reaches its
+`.catch` and reveals the password/TOTP fallback instead of dying on a synchronous `TypeError` the promise
+`.catch` never saw. **The trap:** the failure was NOT a thrown error the page could handle — it was that a
+MISSING `navigator.credentials` throws *before the promise exists*, so the page's own error handling is
+bypassed and the user is stranded on a dead login screen. The honest surface (no authenticator →
+`isUserVerifyingPlatformAuthenticatorAvailable()` false, `get`/`create` reject `NotAllowedError`) is
+DETECTION + graceful degradation, not WebAuthn; a real authenticator is the vault/passkey subsystem ahead.

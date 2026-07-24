@@ -2460,6 +2460,61 @@ const PRELUDE: &str = r#"
         })();
       }
 
+      // **`window.PublicKeyCredential` + `navigator.credentials`** — the passkey (WebAuthn) feature-detect
+      // surface. We have NO authenticator (no platform TPM binding, no roaming key), and that is the honest
+      // state to report — but reporting it by being ABSENT is the failure this fixes. A passkey login page
+      // runs `navigator.credentials.get({publicKey})` inside a click handler; when `navigator.credentials`
+      // is missing that is a SYNCHRONOUS `TypeError` ("navigator.credentials is undefined"), which the
+      // page's `.catch()` — attached to the promise it expected, not to the call — never sees, so sign-in
+      // dies with an uncaught error and NO fallback. With the surface present the call returns a promise
+      // that REJECTS with a `NotAllowedError` DOMException — exactly what a real browser yields when the
+      // user has no credential or dismisses the prompt — and the page's existing catch path shows its
+      // password / TOTP fallback. `PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()` and
+      // `isConditionalMediationAvailable()` resolve to `false`, so a site that asks first simply never
+      // offers the platform-passkey button. This is DETECTION + graceful degradation, NOT a WebAuthn
+      // implementation: minting a real assertion needs an authenticator, which is the vault/passkey
+      // subsystem still ahead. The seam is the honest rejection — a decoder-style registry that lets a
+      // future authenticator resolve instead would replace exactly the two `Promise.reject` lines below.
+      (function () {
+        var G = globalThis;
+        if (typeof G.PublicKeyCredential === 'undefined') {
+          // A real browser exposes PublicKeyCredential as a constructor whose `new` throws
+          // "Illegal constructor" — sites feature-detect it by truthiness, never by constructing it.
+          var PKC = function PublicKeyCredential() { throw new TypeError('Illegal constructor'); };
+          PKC.isUserVerifyingPlatformAuthenticatorAvailable = function () { return Promise.resolve(false); };
+          PKC.isConditionalMediationAvailable = function () { return Promise.resolve(false); };
+          G.PublicKeyCredential = PKC;
+        }
+        if (typeof G.navigator === 'object' && G.navigator &&
+            typeof G.navigator.credentials === 'undefined') {
+          var noAuth = function () {
+            // The spec resolution when no credential is available and the ceremony cannot complete —
+            // the same DOMException a browser throws when the user cancels the platform prompt.
+            try { return new DOMException('The operation either timed out or was not allowed.', 'NotAllowedError'); }
+            catch (e) { var er = new Error('The operation either timed out or was not allowed.'); er.name = 'NotAllowedError'; return er; }
+          };
+          var creds = {
+            // `create({publicKey})` (registration) and `get({publicKey})` (assertion) both need an
+            // authenticator we do not have → NotAllowedError, the "no passkey / cancelled" signal a
+            // site branches on to reveal its password fallback. A password/federated request with no
+            // publicKey member resolves to `null` (no stored credential), which is NOT an error.
+            create: function (options) {
+              if (options && options.publicKey) { return Promise.reject(noAuth()); }
+              return Promise.resolve(null);
+            },
+            get: function (options) {
+              if (options && options.publicKey) { return Promise.reject(noAuth()); }
+              return Promise.resolve(null);
+            },
+            // `store`/`preventSilentAccess` complete quietly — a page saving a password credential and a
+            // page logging out both expect a resolved promise, never a throw.
+            store: function (cred) { return Promise.resolve(cred || null); },
+            preventSilentAccess: function () { return Promise.resolve(); }
+          };
+          try { G.navigator.credentials = creds; } catch (e) { /* frozen navigator */ }
+        }
+      })();
+
       // `window.getSelection()` — editors and "copy link" widgets call it unconditionally.
       //
       // The old stub returned a FRESH inert object on every call: `rangeCount` was 0 forever, every

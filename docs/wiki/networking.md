@@ -1278,3 +1278,36 @@ and, composing with t345, still revalidatable iff a validator was present. [[js-
 **Honest limit:** the reverse link is not wired — assigning `url.search = '…'` or `url.href = '…'` does
 NOT rebuild `searchParams` (the components are plain copied values, not accessors); only the
 `searchParams → url` direction is live.
+
+## The passkey feature-detect surface exists and DEGRADES gracefully (tick 485)
+
+`navigator.credentials` and `window.PublicKeyCredential` did not exist. A growing wall of login pages —
+banks, GitHub, Microsoft, Apple, any passkey-first site — runs, inside a sign-in click handler,
+`navigator.credentials.get({publicKey}).then(useAssertion).catch(showPasswordForm)`. When
+`navigator.credentials` is `undefined`, the `.get(...)` is a **synchronous `TypeError`**, thrown before any
+promise exists — so the `.catch()` the page attached (to the promise it expected back) never runs, the whole
+ceremony dies with an uncaught error, and the page never reaches `showPasswordForm`. The user is stranded on
+a login screen that does nothing. That is a hard wall, not a degraded experience — exactly the silent-failure
+shape of every absent-API story in this project.
+
+**Mechanism (prelude, `event_loop.rs`, next to `navigator.serviceWorker`).** We have NO authenticator — no
+platform TPM binding, no roaming key — and the honest way to report that is not by being absent. So:
+`window.PublicKeyCredential` is a constructor (whose `new` throws "Illegal constructor", like a browser) with
+static `isUserVerifyingPlatformAuthenticatorAvailable()` and `isConditionalMediationAvailable()` both
+resolving `false` (a site that asks first never offers the passkey button). `navigator.credentials.get`/
+`create` with a `publicKey` member return a promise that **rejects with a `NotAllowedError` DOMException** —
+the exact "no credential / user cancelled" signal a real browser yields, which routes the page onto its
+password/TOTP fallback. A password/federated request (no `publicKey`) resolves to `null` (a missing stored
+credential is not an error); `store`/`preventSilentAccess` resolve quietly. Augmented via
+`navigator.credentials = …` in a try/catch for a frozen navigator, matching the serviceWorker path.
+
+**The seam is the honest rejection.** This is DETECTION + graceful degradation, NOT WebAuthn: minting a real
+assertion needs an authenticator (the vault/passkey subsystem still ahead, per PHASE0-BOUNDED-REMAINDER item
+6). A future authenticator would replace exactly the two `Promise.reject(noAuth())` lines — a decoder-style
+seam, not a hardcoded no.
+
+GATE: G_WEBAUTHN_SURFACE (page) — `typeof PublicKeyCredential === 'function'`, `navigator.credentials`
+present, `isUVPAA()`/`isConditionalMediationAvailable()` resolve `false`, `get`/`create({publicKey})` REJECT
+(return a rejected promise, not a synchronous throw) with `NotAllowedError`, a no-publicKey request resolves
+`null`, `store`/`preventSilentAccess` resolve. RED-proven by disabling the surface block →
+`pkc:false creds:false THREW:TypeError` (the original synchronous hard-wall reproduced exactly).

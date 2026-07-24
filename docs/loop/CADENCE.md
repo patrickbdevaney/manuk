@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **256** | ticks 1–484 |
-| median tick cycle | **21m** | 255 intervals |
-| median, last 10 | **35m** | 10 intervals |
+| ticks landed | **257** | ticks 1–485 |
+| median tick cycle | **21m** | 256 intervals |
+| median, last 10 | **30m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.82** | 309.8h elapsed |
-| median verify wall | **60s** | 195 ticks |
-| wall trend | 39s → 64s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.83** | 310.2h elapsed |
+| median verify wall | **60s** | 196 ticks |
+| wall trend | 39s → 65s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **251**
+* **live gates**: 27 → **252**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**156 of 256 ticks** (61%) moved a
+**157 of 257 ticks** (61%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **156** capability ticks, median cycle **21m**
-* median diff per tick: **+224 / −34** lines across 9 files
+* **157** capability ticks, median cycle **21m**
+* median diff per tick: **+226 / −34** lines across 9 files
 
 ## Every tick
 
@@ -353,5 +353,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **482** | 2026-07-24 01:50 | 25m | capability | 64s | +212/−37 | 249 | 81 | 56.0% · | document.queryCommandState('bold'|'italic') reports the selection's format (2026-07-24) |
 | **483** | 2026-07-24 02:14 | 24m | capability | 64s | +237/−34 | 250 | 81 | 56.0% · | execCommand('insertHTML', false, html) parses a fragment and inserts it at the caret (2026 |
 | **484** | 2026-07-24 02:50 | 36m | capability | 10m | +235/−38 | 251 | 81 | 56.0% · | execCommand('createLink', false, url) wraps the selection in <a href> (2026-07-24) |
+| **485** | 2026-07-24 03:14 | 24m | capability | 65s | +310/−35 | 252 | 81 | 56.0% · | navigator.credentials + window.PublicKeyCredential: the passkey feature-detect surface (20 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
