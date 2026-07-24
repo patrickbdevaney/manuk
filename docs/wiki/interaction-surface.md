@@ -2761,3 +2761,41 @@ GATE: G_EXEC_CREATE_LINK (page) — select "this" in `<div contenteditable>see t
 `createLink('https://ex.com/')` → `see <a href="https://ex.com/">this</a> now`, events `bi/in:insertLink`,
 `beforeinput.data` === URL, `queryCommandSupported` true; a veto editable stays unchanged. RED-proven by
 disabling the branch.
+
+## navigator.userActivation — the gesture-gated capability signal (tick 486)
+
+The read-half complement to the gesture surface. A large, growing class of gesture-gated features —
+autoplay-with-sound, `requestFullscreen`, `window.open` popups, `navigator.clipboard.write`, Web Share,
+`PaymentRequest.show` — is guarded by sites reading `navigator.userActivation.isActive` *inside a click
+handler* to decide whether the gated call will be honoured, and `.hasBeenActive` to know whether the user has
+interacted at all. The object was ABSENT, so `navigator.userActivation.isActive` was a synchronous `TypeError`
+(property read on `undefined`) thrown out of the handler: the gated action never ran, and because it threw
+rather than returned falsy, the site's `else` fallback never ran either — a dead button.
+
+A hardcoded `false` would be WORSE than the crash: a site testing `isActive` inside its own click handler would
+take the "no gesture" branch during a real click. So the two booleans reflect REAL state, owned by the one path
+every event goes through (`__dispatchEvent`):
+
+* `hasBeenActive` — STICKY: `false` until the first real gesture, `true` forever after.
+* `isActive` — TRANSIENT: `true` only while a real engine-originated gesture is being dispatched; `false` at
+  load and `false` again once the handler returns.
+
+**The discriminator is a private `__actgesture` marker, NOT `isTrusted`.** The engine dispatches mouse/key
+gestures as *supplied event objects* (to carry detail/coords/modifiers), so they read `isTrusted===false`
+exactly like a page's own `el.click()` — the two are indistinguishable by trust alone. Since a page-synthetic
+click must grant NOTHING (spec), the engine stamps `__actgesture:1` onto the events it synthesises from real
+host input (the mouse-dispatch and key-dispatch sites), and the activation bracket keys off that. It brackets
+only activation-triggering types (click, mousedown/up, pointerdown/up, touchend, keydown/up), saving/restoring
+the prior transient value so nested gesture dispatch does not clear the outer one. Zero new dependency; the
+surface is spec-shaped live getters over `g.__ua`.
+
+**Agentic angle.** An agent driving a page through `dispatch_click` now trips the same activation state a real
+user's gesture would, so gesture-gated actions (play a video, open a share sheet) the agent initiates are
+honoured rather than silently gated off — the interaction surface's write-half now produces the read-half
+signal pages check.
+
+GATE: G_USER_ACTIVATION (page) — at load `navigator.userActivation` is a present object reading
+`active:false sticky:false` (no throw); a page-synthetic `el.click()` grants nothing; a real host-dispatched
+click handler reads `active:true sticky:true`; after the gesture `isActive` returns to false while
+`hasBeenActive` stays true. RED-proven three ways: remove the surface (load throws), disable the bracket
+(`#during` false), or gate the bracket on plain dispatch instead of the marker (`#synth` leaks true).

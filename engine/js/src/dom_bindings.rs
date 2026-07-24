@@ -8677,7 +8677,7 @@ impl PageContext {
         // them. `Shift`/`Alt` alone still produce text (capitals, AltGr characters).
         let script = format!(
             "(function(){{\
-               var proceed=__dispatchEvent({nid}, {{type:{ty}, key:{key}, code:{key}, keyCode:{kc}, which:{kc}, ctrlKey:{ctrl}, shiftKey:{shift}, altKey:{alt}, metaKey:{meta}, bubbles:true, cancelable:true}});\
+               var proceed=__dispatchEvent({nid}, {{type:{ty}, key:{key}, code:{key}, keyCode:{kc}, which:{kc}, ctrlKey:{ctrl}, shiftKey:{shift}, altKey:{alt}, metaKey:{meta}, bubbles:true, cancelable:true, __actgesture:1}});\
                if(proceed!==false && {ty}==='keydown'){{\
                  var k={key};\
                  var chord=({ctrl}||{meta});\
@@ -9038,7 +9038,7 @@ impl PageContext {
         }
         let script = format!(
             "__dispatchEvent({}, {{type:{}, detail:{detail}, button:{button}, buttons:{buttons}, \
-             bubbles:true, cancelable:true}})",
+             bubbles:true, cancelable:true, __actgesture:1}})",
             node.0,
             js_string_literal(ty),
         );
@@ -9975,6 +9975,25 @@ const LISTENER_PRELUDE: &str = r#"
         if (ev.bubbles === undefined) ev.bubbles = true;
         if (ev.cancelable === undefined) ev.cancelable = true;
         if (ev.isTrusted === undefined) ev.isTrusted = !supplied;
+        // ── USER ACTIVATION (navigator.userActivation) ──────────────────────────────────────────
+        // A real activation-triggering gesture grants user activation for the duration of its
+        // dispatch: `isActive` (transient) is true while a real click/key/pointer gesture's handlers
+        // run, and `hasBeenActive` (sticky) latches true on the first such gesture and stays. The
+        // discriminator is `ev.__actgesture` — a private marker the ENGINE stamps onto the events it
+        // synthesises from real host input (mouse/key/pointer). It is NOT `ev.isTrusted`: the engine
+        // dispatches those gestures as supplied objects (to carry detail/coords/modifiers), so they
+        // read `isTrusted===false` exactly like a page's `el.click()` — the two are indistinguishable
+        // by trust alone, and a page-synthetic click must grant NOTHING. Nested gesture dispatch saves
+        // and restores the prior transient value so an inner gesture does not clear the outer. The set
+        // is here (once `type` is known) and the restore is at the single return below; the only earlier
+        // exit is the InvalidStateError throw above, which precedes this and so never leaks the flag.
+        var __uaState = globalThis.__ua || (globalThis.__ua = { active: false, sticky: false });
+        var __uaActivates = !!ev.__actgesture && (
+            type === 'click' || type === 'mousedown' || type === 'mouseup' ||
+            type === 'pointerdown' || type === 'pointerup' || type === 'touchend' ||
+            type === 'keydown' || type === 'keyup');
+        var __uaPrevActive = __uaState.active;
+        if (__uaActivates) { __uaState.active = true; __uaState.sticky = true; }
         ev.defaultPrevented = false;
         ev._stop = false;
         ev._stopImmediate = false;
@@ -10010,6 +10029,7 @@ const LISTENER_PRELUDE: &str = r#"
         ev.eventPhase = 3;
         if (ev.bubbles) for (var i = 1; i < path.length; i++) invoke(path[i], 'b');
         if (supplied) ev.__dispatchFlag = false;   // clear: the event may be dispatched again later
+        if (__uaActivates) __uaState.active = __uaPrevActive;   // transient activation ends with the dispatch
         return !ev.defaultPrevented;
     };
 "#;
@@ -12764,6 +12784,40 @@ const WINDOW_PRELUDE: &str = r#"
                 },
                 dispatchEvent: function () { return true; }
             };
+        }
+        // `navigator.userActivation` — the User Activation API (the `UserActivation` interface). A
+        // large and growing class of gesture-gated features — autoplay-with-sound, `requestFullscreen`,
+        // `window.open` popups, `navigator.clipboard.write`, Web Share, `PaymentRequest.show` — is
+        // guarded by sites reading `navigator.userActivation.isActive` INSIDE a click handler to decide
+        // whether the gated call will be honoured (and reading `.hasBeenActive` to know whether the user
+        // has interacted at all yet). With the object absent, `navigator.userActivation.isActive` is a
+        // SYNCHRONOUS TypeError (a property read on `undefined`) thrown out of the handler: the gated
+        // action never runs, and because it threw rather than rejected, the site's guarded fallback does
+        // not fire either. Present-and-honest is the fix — the two booleans reflect the REAL gesture
+        // state, which lives on `g.__ua` and is flipped by `__dispatchEvent` (the single path every
+        // trusted event goes through):
+        //   * `hasBeenActive` — STICKY: `false` until the first trusted gesture, then `true` forever.
+        //   * `isActive` — TRANSIENT: `true` only while a trusted activation-triggering event (click,
+        //     mousedown/up, pointerdown/up, touchend, keydown/up) is being dispatched — exactly the
+        //     moment a real browser would honour a gesture-gated call. Outside a handler it is `false`,
+        //     so a load-time probe correctly reads "no gesture yet" rather than lying in either
+        //     direction. Synthetic events the page dispatches (`el.click()`, `dispatchEvent`) are
+        //     untrusted and grant NOTHING, matching the spec. Exposed here as spec-shaped live getters;
+        //     the state is owned by `__dispatchEvent`.
+        if (g.navigator && !g.navigator.userActivation) {
+            g.__ua = g.__ua || { active: false, sticky: false };
+            try {
+                var __uaObj = {};
+                Object.defineProperty(__uaObj, 'isActive', {
+                    enumerable: true, configurable: true,
+                    get: function () { return !!(g.__ua && g.__ua.active); }
+                });
+                Object.defineProperty(__uaObj, 'hasBeenActive', {
+                    enumerable: true, configurable: true,
+                    get: function () { return !!(g.__ua && g.__ua.sticky); }
+                });
+                g.navigator.userActivation = __uaObj;
+            } catch (e) { /* frozen navigator */ }
         }
         // `navigator.storage` — the StorageManager API. Offline-first apps and PWAs (Google Docs/Photos
         // offline, editors, note apps) call `navigator.storage.estimate()` before caching to check they

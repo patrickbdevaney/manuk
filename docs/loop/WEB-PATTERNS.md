@@ -4291,3 +4291,18 @@ MISSING `navigator.credentials` throws *before the promise exists*, so the page'
 bypassed and the user is stranded on a dead login screen. The honest surface (no authenticator →
 `isUserVerifyingPlatformAuthenticatorAvailable()` false, `get`/`create` reject `NotAllowedError`) is
 DETECTION + graceful degradation, not WebAuthn; a real authenticator is the vault/passkey subsystem ahead.
+
+## Check `navigator.userActivation.isActive` before a gesture-gated action (tick 486)
+
+**The class of the web this unlocks (any site gating autoplay-with-sound, requestFullscreen, popups,
+clipboard.write, Web Share, PaymentRequest behind a user gesture):** `navigator.userActivation` now exists and
+tracks REAL gesture state, so a click handler's `if (navigator.userActivation.isActive) video.play(); else
+showPlayButton();` takes the right branch instead of dying. Inside a real host-dispatched click it reads
+`isActive:true` (transient) and `hasBeenActive:true` (sticky); at load and after the handler returns,
+`isActive` is false. **The trap:** the object was ABSENT, so the read was a synchronous `TypeError` before any
+branch — the `else` fallback never ran either, leaving a dead button; AND a hardcoded `false` would be worse
+than the crash, taking the "no gesture" branch during a real click. The discriminator is a private
+`__actgesture` marker the engine stamps on the mouse/key events it synthesises — NOT `isTrusted`, because
+engine gestures carry a supplied object and read `isTrusted===false` exactly like a page's own `el.click()`,
+which must grant nothing. Agentic bonus: an agent's `dispatch_click` now trips the same activation a real user
+would, so gesture-gated actions the agent initiates are honoured.
