@@ -21142,3 +21142,31 @@ NEXT: all cadences now current (self-audit 534, surface 538, const 535, wall 547
 capability PIVOT per Check #32 is unblocked: fidelity-instrument rebuild (CO-#1 exit gate, decompose-
 first) OR test262 (measurement) OR a bounded probe of the just-added unknowns (Promise.withResolvers /
 Set methods likely already work → cheap pins; rVFC / scheduler more likely real builds).
+
+## Tick 529 — MEASURE+PIN: Promise.withResolvers + Set methods (Baseline 2024, already present) (2026-07-24)
+
+Actioning Surface Audit #26 (t528): two of the four unknowns it added were flagged "likely already
+works via SpiderMonkey" (the stale-pessimistic rule). Measured the guess — it held — and PINNED both:
+unknown → gated, each now with a demonstrated way to go red.
+
+WHAT WAS MEASURED (no engine source changed — both are already in vendored SpiderMonkey):
+- Promise.withResolvers() returns a real {promise, resolve, reject} triple (pwr:true) — the deferred
+  pattern modern async libs/frameworks build on.
+- Set methods: union/intersection/difference/isSubsetOf all present (int:2, uni:4, diff:1, sub:true) —
+  set algebra without hand-rolled loops.
+
+New gate g_js_baseline_2024 asserts all 5 values; it is inherently RED-provable — the try/catch → 'absent'
+path plus the specific-value asserts mean the gate fails the moment either feature is absent (a
+SpiderMonkey downgrade, or the guess having been wrong). This re-raises the measured% the surface audit
+temporarily lowered by adding the unknowns (discovery then measurement, both banked).
+
+TICK SHAPE: measure-and-pin (instrument fidelity — 2 constellation caps unknown→gated; new gate
+g_js_baseline_2024 E2E, inherently RED-provable via the absent-path; NO engine source changed, both
+features already in SpiderMonkey; Bar 0 held — pure measurement). WIKI: none — measurement tick, no
+engine change (gate lives in engine/page/tests/, not engine/*/src/). No [no-pattern] (no engine
+capability src touched — the capability already existed).
+
+NEXT: 2 surface-audit unknowns remain (requestVideoFrameCallback — media-element frame callback, more
+likely a real build; scheduler.postTask/yield — may need a real priority queue). Otherwise the Check #32
+pivot stands (fidelity-instrument rebuild / test262). Self-audit next 534; surface next 538; const 535;
+wall 547.
