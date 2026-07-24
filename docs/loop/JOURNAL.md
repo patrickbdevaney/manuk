@@ -20210,3 +20210,30 @@ TICK SHAPE: measurement (constellation flips + 4 sentinel probes; no engine code
 nothing regresses). WIKI: none — findings live in CONSTELLATION.tsv. NEXT: the remaining board
 frontier is subsystems (MSE playback-join / ESM module-graph / intrinsic sizing), decompose-first each
 per the const-check. Self-audit next 505; surface next 508; Const-Check next 511.
+
+## Tick 505 — SELF-AUDIT: methodology and reality agree (2026-07-24)
+
+The due self-audit (cadence every 10; last 495). Ran ./scripts/self-audit.sh — prescribed-vs-built
+across every axis came back GREEN:
+
+- Tier 0 (Part 21): verify wall 75s ≤ 300s; oracle crawl frame 265 sites (≥200).
+- Falsifiability (Part 33): scripts/falsify.sh present; every listed gate declares how to go red (or
+  is self-proving, e.g. G_CONTAIN). The gates are mutation-tested against themselves.
+- Process defects: ledger present (49 recorded), each naming the closing MECHANISM not just a lesson.
+- Enforcement (Part 28): tick-shape cross-checked against the 392-cluster registry; self-audit cadence
+  enforced by the hook not memory; STATUS.md generated not hand-narrated; pre-commit hook wired+exec.
+- Journal (Part 7): entries present for the last 5 ticks, no gaps.
+- Pattern ledger: 433 rows, moves with the engine, coverage marked as crawl-corrected judgement.
+- Part 22 runtime health: duplicate-work audit journaled.
+
+Verdict: "methodology and reality agree." No drift, no missing enforcement, no falsifiability gap. The
+one carry-forward is the observer-owned advisory that the fidelity SWEEP is 192h old (a capability tick
+must measure THIS tree) — noted, not actionable agent-side (scripts/ + the sweep are observer-owned).
+
+Set LAST_AUDIT_TICK 495→505 by hand (status-update copies the field forward from STATUS.md rather than
+recomputing it — the documented gotcha; leaving it stale would false-block the next tick's pre-flight).
+
+TICK SHAPE: self-audit (cadence measurement; no engine code, no gate change, nothing regresses).
+WIKI: none — the audit is a scripts/self-audit.sh run; its verdict lives here. NEXT: back to the
+PHASE0-BOUNDED-REMAINDER frontier (MSE playback-join / ESM module-graph / intrinsic sizing),
+decompose-first. Self-audit next 515; surface next 508; Const-Check next 511.
