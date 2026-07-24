@@ -20167,3 +20167,46 @@ regresses). WIKI: none — the check lives in CONSTITUTION-CHECK.md. LAST_CONSTI
 due 511. NEXT: pivot off font-metrics to the remaining PHASE0-BOUNDED-REMAINDER subsystems (intrinsic
 sizing / MSE playback-join / ESM module-graph), decompose-first each. Self-audit next 505; surface next
 508.
+
+## Tick 504 — PROBE: resolve 4 stale-unknown constellation cells (UNKNOWN 8→4) (2026-07-24)
+
+The board's cheapest lever again ("? outranks ✗"), and the disciplined move after the const-check
+told the loop to pivot off the (now-closed) font-metrics vein: before building any of the remaining
+Baseline unknowns, MEASURE them. Four cells the constellation carried as `unknown` were re-probed and
+RESOLVED — this time all four came back ABSENT (measured-missing beats an unexamined guess, and each
+runtime probe is now a permanent regression sentinel that flips to a pin the day the feature lands).
+
+Added four probes to G_PROBE_CAPABILITIES (behavioural, never presence — the file's whole rule):
+
+1. **content-visibility / contain-intrinsic-size** (194) unknown→**missing**: `CSS.supports(
+   'content-visibility','auto')` → **no** (`contentvis:no`). A DECOY corrected: the property's
+   computed-value type `T` survives in the generated properties.rs (an Animate impl references it),
+   which read like support — but there is no `"content-visibility"` name string and no parse fn, so
+   the longhand is gecko-gated (same fence as scrollbar-width / -webkit-line-clamp). `contain-
+   intrinsic-size` likewise absent (`containintrinsic:no`). The value-validation discriminator
+   (`!CSS.supports('content-visibility','floops')`) makes the probe fail on a stubbed always-true
+   CSS.supports too. Recovering it is a layout subsystem, not atomic; `:auto`'s absence is visually
+   SAFE (we render all content = correct output, no perf skip).
+2. **@starting-style** (192) unknown→**missing** (build evidence): zero occurrences in properties.rs
+   → the at-rule is `engine="gecko"` and dropped. At-rules have no clean CSS.supports sentinel, so
+   recorded from build evidence like JPEG XL — no runtime probe. Recovering it is a source-supplement
+   subsystem à la @container (t379).
+3. **view-transition pseudo-classes** (189) unknown→**missing**: `CSS.supports(
+   'selector(:active-view-transition)')` → **no** (`vtpseudo:no`) — this build's selector parser has
+   no such NonTSPseudoClass (gecko-only, like :has()/:playing). The transitions THEMSELVES are gated
+   (t308); only these type-scoped selector pseudos are absent.
+4. **navigator.cpuPerformance** (164) unknown→**missing**: `typeof navigator.cpuPerformance` →
+   undefined (`cpuperf:no`). Chrome-152-only, not Baseline; low v1 weight.
+
+MEASURED unknown 8→4 (the remaining four — 100-tab RSS budget, test262, ESM module-graph, hidden=
+until-found — are benchmark-runs or subsystems, not cheap probes). No engine/ source touched; the
+gate's PINNED list is unchanged (nothing measured true). The ratchet's INSTRUMENT-FIDELITY face moves
+up (evidence replaces guesses) and three permanent sentinels were planted; Bar 0 held; nothing
+regresses. Standing rule reconfirmed with the inverse of last time: t501 found things already BUILT
+(stale-pessimistic); t504 found a properties.rs artifact that looked BUILT but was not — measure, do
+not infer from the generated table alone.
+
+TICK SHAPE: measurement (constellation flips + 4 sentinel probes; no engine code, no PINNED change,
+nothing regresses). WIKI: none — findings live in CONSTELLATION.tsv. NEXT: the remaining board
+frontier is subsystems (MSE playback-join / ESM module-graph / intrinsic sizing), decompose-first each
+per the const-check. Self-audit next 505; surface next 508; Const-Check next 511.

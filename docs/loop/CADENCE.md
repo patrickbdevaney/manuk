@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **269** | ticks 1–502 |
-| median tick cycle | **22m** | 268 intervals |
+| ticks landed | **270** | ticks 1–503 |
+| median tick cycle | **21m** | 269 intervals |
 | median, last 10 | **22m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.85** | 315.5h elapsed |
-| median verify wall | **60s** | 208 ticks |
+| **ticks per hour** | **0.85** | 315.8h elapsed |
+| median verify wall | **60s** | 209 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**165 of 269 ticks** (61%) moved a
+**165 of 270 ticks** (61%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **165** capability ticks, median cycle **22m**
+* **165** capability ticks, median cycle **21m**
 * median diff per tick: **+222 / −34** lines across 9 files
 
 ## Every tick
@@ -366,5 +366,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **499** | 2026-07-24 07:43 | 32m | capability | 67s | +259/−38 | 261 | 81 | 56.0% · | the `ch` unit resolves to the font's REAL `0`-advance (2026-07-24) |
 | **500** | 2026-07-24 08:10 | 27m | capability | 67s | +65/−36 | 262 | 81 | 56.0% · | the `ex` unit is the face's real x-height (OS/2 sxHeight), not 0.5em (2026-07-24) |
 | **502** | 2026-07-24 08:35 | 26m | capability | 67s | +97/−33 | 263 | 81 | 56.0% · | the `cap` unit is the face's real cap-height (was collapsing to 0px) (2026-07-24) |
+| **503** | 2026-07-24 08:50 | 14m | constitution-check | 67s | +91/−6 | 263 | 81 | 56.0% · | CONSTITUTION-CHECK #29: the named ch/ex frontier was DELIVERED (2026-07-24) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

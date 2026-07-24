@@ -265,6 +265,48 @@ const HTML: &str = r##"<!doctype html>
       return typeof DataTransfer === 'function' && 'draggable' in document.createElement('div') &&
              'ondragstart' in document.createElement('div');
     });
+
+    // ── content-visibility (Baseline 2025). Measured at the PARSE/@supports level, which is the
+    // level a page feature-detects at: the property is compiled into this Stylo build, so
+    // `@supports (content-visibility: auto)` and `CSS.supports()` answer YES honestly, and a
+    // feature-detect that branches on it branches correctly. The `auto` case is visually SAFE here
+    // even without the optimization — we render the content instead of skipping the off-screen part,
+    // which is strictly MORE work, never wrong output. The off-screen render-SKIP optimization and
+    // the `hidden` subtree collapse are layout work and are NOT claimed by this probe.
+    //
+    // RED-proven by a value-validation discriminator: a rubber-stamp that says yes to everything also
+    // says yes to `content-visibility: floops-not-a-value`, which MUST be no. So this fails both on an
+    // engine that dropped the property from the build (all three keywords go no) and on one that
+    // stubbed CSS.supports to always-true (the nonsense value goes yes).
+    probe('contentvis', function () {
+      return CSS.supports('content-visibility', 'auto') &&
+             CSS.supports('content-visibility', 'hidden') &&
+             CSS.supports('content-visibility', 'visible') &&
+             !CSS.supports('content-visibility', 'floops-not-a-value');
+    });
+
+    // ── contain-intrinsic-size: the size-RESERVATION half of content-visibility (reserves an
+    // intrinsic height for skipped subtrees so the scrollbar does not jump). Measured absent — the
+    // property is `engine="gecko"` in this servo Stylo build (zero occurrences in the generated
+    // properties), so `@supports` honestly says no. Recorded, not asserted true.
+    probe('containintrinsic', function () {
+      return CSS.supports('contain-intrinsic-size', '200px');
+    });
+
+    // ── view-transition pseudo-classes (:active-view-transition / -type()): styling DURING a View
+    // Transition by transition type (Baseline 2026). Measured via the `selector()` @supports form,
+    // which asks whether this build's selector parser even knows the pseudo — no async transition to
+    // drive. A gecko-only NonTSPseudoClass would parse-fail here, same fence as `:has()`/`:playing`.
+    probe('vtpseudo', function () {
+      return CSS.supports('selector(:active-view-transition)');
+    });
+
+    // ── navigator.cpuPerformance (Chrome 152 CPU Performance API): scheduler-aware sites may branch
+    // on it. A plain data accessor, nothing to drive, so a presence check is the whole test. Chrome-
+    // only and not Baseline; measured here to pin the cell rather than carry it as an unmeasured guess.
+    probe('cpuperf', function () {
+      return typeof navigator !== 'undefined' && typeof navigator.cpuPerformance !== 'undefined';
+    });
   </script>
 </body></html>"##;
 
