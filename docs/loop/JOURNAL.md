@@ -19317,3 +19317,46 @@ vs Enter→insertParagraph (browser-divergent block split), and Ctrl+X/C/V→cut
 execCommand halves all exist: copy t463, cut t476, insertText t471; wiring keydown Ctrl+X to __deleteAtCaret's
 cut path is now a bounded follow-on). insertFromPaste (paste-event trigger) + cross-block boundary merge
 remain. Const-Check #25 landed t471 (next 479); self-audit landed t475 (next 485); surface-audit due 478.
+
+## Tick 478 — Ctrl+X cuts / Ctrl+C copies the selection (keyboard clipboard routing) + surface audit #21 (2026-07-23)
+
+Brick 8 of the contenteditable EDITING subsystem, built directly ON t477's modifier substrate: the DEFAULT
+keyboard action for the two clipboard chords. Before it, pressing Ctrl+X in any editor did nothing — the
+chord was suppressed from TYPING (t477) but never routed to the cut/copy machinery, so keyboard cut/copy
+(the way most users actually cut/copy) was dead even though the execCommand halves both existed (copy t463,
+cut t476).
+
+MECHANISM: in `dispatch_key`'s default-action block (engine/js/src/dom_bindings.rs), an `else if(chord &&
+execCommand)` arm routes `Ctrl/Cmd+X`→`execCommand('cut')` and `Ctrl/Cmd+C`→`execCommand('copy')` — reusing
+those paths, which already enforce editable-only cut + the host clipboard write. Guarded on a NON-empty
+selection (an empty Ctrl+C must not clobber the clipboard). A page that handles the chord itself keeps
+ownership: its keydown `preventDefault()` sets `proceed===false`, and the whole default block is already
+gated on `proceed!==false`. Ctrl+V→paste is deliberately NOT routed (needs `insertFromPaste`, unbuilt). Zero
+new dep.
+
+GATE: G_KEY_SHORTCUT_CLIPBOARD (page) — select "World" in `<div contenteditable>Hello World</div>` + Ctrl+X
+→ editable left "Hello ", "World" on the host clipboard queue; then select "Hello" + Ctrl+C → "Hello" on the
+clipboard, DOM unchanged; a second editable whose keydown `preventDefault()`s Ctrl+X keeps "Keep". RED-proven
+by disabling the cut-routing arm. Neighbors green: g_key_modifiers, g_exec_cut, g_exec_command_copy,
+g_contenteditable_typing/delete, g_ime_composition.
+
+TICK SHAPE: capability (contenteditable EDITING brick 8/N — keyboard clipboard routing; +1 gate). GATES +1.
+CONSTELLATION: rich-editing — keyboard cut/copy now works (the modifier substrate paying off one tick later).
+WIKI: interaction-surface.md — new section after the t477 modifier note.
+WEB-PATTERNS: cut-and-copy-with-the-keyboard-ctrl-x-ctrl-c.
+AGENTIC: the agent can now cut/copy via keyboard chords, not just the execCommand API.
+
+SURFACE AUDIT #21 (cadence, folded in — due t478): searched Interop 2026 (github README, the authoritative
+20 focus areas) + Baseline 2025 (web.dev). RECONCILED: every Interop-2026 focus area already maps to an
+existing constellation row (well-maintained by audits #17-20); no stale-OPTIMISTIC lie. ADDED two genuine
+Baseline-2025 unknowns invisible to the map: `content-visibility`/`contain-intrinsic-size` (off-screen
+render-skip + reserved intrinsic height — a page relying on it computes a different total height than Chrome,
+a placement divergence the fidelity sweep sees) and `hidden=until-found`+`beforematch` (find-in-page reveals
+collapsed content — the modern accordion/read-more idiom, adjacent to <details> + find-in-page). Excluded
+`writing-mode: sideways-*` (vertical-text subsystem) with reason. LAST_SURFACE_AUDIT 468→478 (set in
+STATUS.md); next due 488. Full entry: docs/loop/SURFACE-AUDIT.md Audit #21.
+
+NEXT VEIN NOTE: Ctrl+V→paste needs `insertFromPaste` (a paste-event trigger + clipboard READ, landed t461) —
+the next bounded editing brick. Then Shift+Enter→insertLineBreak vs Enter→insertParagraph (browser-divergent
+block split — the modifier state to distinguish them now EXISTS), cross-block boundary merge, formatting-
+command wrapping. Const-Check #26 DUE t479 (next tick); self-audit due 485; surface-audit done t478 (next 488).

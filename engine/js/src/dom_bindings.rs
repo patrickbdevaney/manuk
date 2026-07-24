@@ -8688,6 +8688,17 @@ impl PageContext {
                    for(var n=t;n;n=n.parentNode){{ if(n.nodeType===1 && n.isContentEditable){{ host=n; break; }} }}\
                    if(host){{ try{{ if(printable){{ __insertTextAtCaret(host, k, 'insertText'); }} else {{ __deleteAtCaret(host, k==='Delete'); }} }}catch(e){{}} }}\
                  }}\
+                 else if(chord && typeof document.execCommand==='function'){{\
+                   /* The default browser action for the clipboard chords: Ctrl/Cmd+X cuts the selection, */\
+                   /* Ctrl/Cmd+C copies it — routed straight through the execCommand cut/copy paths (copy */\
+                   /* t463, cut t476), which already enforce editable-only cut + clipboard-write. Only on a */\
+                   /* NON-empty selection (an empty Ctrl+C must not clobber the clipboard). The page owns */\
+                   /* the chord if its keydown handler preventDefault()-ed it (proceed===false, above). */\
+                   var lk=(typeof k==='string')?k.toLowerCase():'';\
+                   var hassel=!!(globalThis.getSelection && String(globalThis.getSelection())!=='');\
+                   if(hassel && lk==='x'){{ try{{ document.execCommand('cut'); }}catch(e){{}} }}\
+                   else if(hassel && lk==='c'){{ try{{ document.execCommand('copy'); }}catch(e){{}} }}\
+                 }}\
                }}\
                return proceed;\
              }})()",

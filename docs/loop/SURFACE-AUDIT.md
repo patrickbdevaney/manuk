@@ -956,3 +956,61 @@ CSS features, one of them directly adjacent to the details work I shipped this v
 to the map. No stale-OPTIMISTIC lie found (nothing marked works/gated measured absent).
 
 LAST_SURFACE_AUDIT 458→468; next due 478.
+
+## Audit #21 — tick 478 (2026-07-23)
+
+**Sources (searched live, not from memory):**
+* github.com/web-platform-tests/interop/blob/main/2026/README.md — the AUTHORITATIVE Interop 2026 list:
+  20 focus areas (container style queries, CSS anchor positioning, `attr()`, `contrast-color()`, CSS zoom,
+  custom highlights, dialogs+popovers, fetch uploads+ranges, IndexedDB `getAllRecords()`, JSPI for Wasm,
+  media pseudo-classes, Navigation API, scoped custom element registries, scroll-driven animations, scroll
+  snap, CSS `shape()`, view transitions, web-compat, WebRTC, WebTransport) + 4 investigations (accessibility
+  testing, JPEG XL, mobile testing, WebVTT).
+* web.dev/baseline/2025 + digests — Baseline Newly Available 2025: popover, `content-visibility` (Sep 2025),
+  `hidden=until-found` + `beforematch`, `::marker` styling, `writing-mode: sideways-rl/lr`, LCP/INP metrics.
+
+**RECONCILED — the map is FRESH; every Interop-2026 focus area maps to an existing row.** Cross-checked all
+20: container/style queries (doc, gated t379 — style() queries a noted residue), anchor positioning (doc,
+missing t230), `attr()`/`zoom`/`shape()`/`contrast-color()` (doc — contrast-color WORKS t466), custom
+highlights (doc, missing t225), dialogs+popovers (both gated), fetch uploads+ranges (platform, gated t228),
+IndexedDB + `getAllRecords()` (both gated, t278/t420), JSPI (app, missing t230 — wasm core works), media
+pseudo-classes (media, partial t344), Navigation API (app, gated t309), scoped custom element registries
+(app, missing t225), scroll-driven animations (app, missing t230), scroll snap (gated), view transitions +
+cross-document (app, gated t308 + partial t372/373), WebRTC (platform, out-of-scope), WebTransport (platform,
+missing). Investigations: a11y tree (gated), JPEG XL (doc, measured-absent t237), WebVTT (media, gated
+t257-259). No stale-OPTIMISTIC lie found (nothing marked works/gated is actually absent).
+
+### ADDED — genuine unknowns (the point of the audit)
+
+* **`content-visibility` / `contain-intrinsic-size`** (Baseline Sep 2025) → new doc `unknown`. `content-visibility:
+  auto` skips rendering off-screen subtrees (long docs/feeds use it heavily for scroll perf) and pairs with
+  `contain-intrinsic-size` to reserve a placeholder box so scroll height + scrollbar stay stable. Absent from
+  the map entirely — a page that relies on it for its intrinsic height would compute a different total page
+  height than Chrome (a placement divergence the fidelity sweep would see, not just a perf gap).
+* **`hidden=until-found` + `beforematch` event** (Baseline 2025) → new doc `unknown`. Content hidden with
+  `hidden="until-found"` is collapsed but find-in-page (and a URL fragment) can REVEAL it, firing `beforematch`
+  first. The modern accordion/"read more"/collapsible-FAQ idiom — directly adjacent to the `<details>` (t467/8)
+  and find-in-page (partial) work. Absent from the map.
+
+### STILL OPEN / EXCLUDED (with reason)
+
+* **`writing-mode: sideways-rl/sideways-lr`** (Baseline 2025) — NOT added as its own row: vertical/sideways
+  text is a layout SUBSYSTEM (the map already implies horizontal-only), not a bounded gap; recorded here as a
+  candidate for a future vertical-writing-modes pass, not a single-tick row.
+* **`::marker` styling** — folded under existing list-glyph work; not a new row.
+* Service Worker runtime, WebGL, WebRTC, WebTransport, scroll-driven animations, JPEG XL — unchanged
+  (subsystems, v1-scope deferrals, or below the ROI line). `@starting-style` + `::details-content` (added #20)
+  remain `unknown`; `scrollbar-color` (added #20) LANDED gated at t469.
+
+### THIS WINDOW'S CAPABILITY (context, not an audit find)
+
+* contenteditable EDITING subsystem advanced: t476 `execCommand('cut')` (G_EXEC_CUT), t477 KeyModifiers
+  plumbing (G_KEY_MODIFIERS — the dispatched KeyboardEvent now carries ctrlKey/shiftKey/altKey/metaKey, so
+  Cmd/Ctrl+K command palettes + Shift+Enter composers work), t478 Ctrl+X→cut / Ctrl+C→copy keyboard routing
+  (G_KEY_SHORTCUT_CLIPBOARD) — built ON the modifier substrate.
+
+**What we had been wrong about this pass:** two Baseline-2025 features — `content-visibility` (a heavily-used
+scroll-perf + intrinsic-height primitive) and `hidden=until-found`/`beforematch` (the modern reveal-on-find
+collapsible) — were invisible to the map.
+
+LAST_SURFACE_AUDIT 468→478; next due 488.

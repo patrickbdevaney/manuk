@@ -2632,3 +2632,21 @@ a `Cmd+K` handler's `preventDefault()` makes `dispatch_key_mods` return `false`;
 contenteditable>Hi</div>` inserts nothing (stays "Hi"); a plain `x` still inserts ("Hix"). RED-proven by
 dropping the modifier props + chord guard → the Cmd+K handler never sees `metaKey`. This modifier substrate
 unblocks the remaining editing bricks (Shift+Enter vs Enter, Ctrl+X/C/V → cut/copy/paste routing).
+
+## Ctrl+X cuts / Ctrl+C copies the selection — keyboard clipboard routing (tick 478)
+
+With modifier state on the dispatched KeyboardEvent (t477), the browser DEFAULT action for the clipboard
+chords can run. Before this, pressing Ctrl+X in an editor did nothing — the chord was suppressed from typing
+but never routed, so keyboard cut/copy (how most users cut/copy) was dead despite both execCommand halves
+existing (copy t463, cut t476).
+
+**Mechanism.** In `dispatch_key`'s default-action block, an `else if(chord && execCommand)` arm routes
+`Ctrl/Cmd+X`→`execCommand('cut')` and `Ctrl/Cmd+C`→`execCommand('copy')`, reusing those paths (which enforce
+editable-only cut + the host clipboard write). Guarded on a NON-empty selection (an empty Ctrl+C must not
+clobber the clipboard). A page that handles the chord keeps ownership — its keydown `preventDefault()` sets
+`proceed===false` and the whole default block is gated on `proceed!==false`. `Ctrl+V`→paste is NOT routed
+(needs `insertFromPaste`, unbuilt).
+
+GATE: G_KEY_SHORTCUT_CLIPBOARD (page) — select "World" in `<div contenteditable>Hello World</div>` + Ctrl+X →
+"Hello " with "World" on the clipboard queue; select "Hello" + Ctrl+C → "Hello" copied, DOM unchanged; a
+veto editable that `preventDefault()`s Ctrl+X keeps its text. RED-proven by disabling the cut-routing arm.

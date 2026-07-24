@@ -4193,3 +4193,15 @@ metadata for the handler — the DEFAULT editing action must read it too, or a `
 contenteditable inserts its letter as text (a chord is a shortcut, not typing). Ctrl/Meta held → no text;
 Shift/Alt alone → still text (capitals, AltGr). The full Ctrl+X/C/V → cut/copy/paste routing (the execCommand
 halves all exist) and Shift+Enter/Enter paragraph split are follow-on bricks this substrate enables.
+
+## Cut and copy with the keyboard (Ctrl+X / Ctrl+C) (tick 478)
+
+**The class of the web this unlocks (keyboard cut/copy in every editor, comment box and text field):** the
+default browser action for the clipboard chords now runs — `Ctrl/Cmd+X` cuts the selection, `Ctrl/Cmd+C`
+copies it — routed through the existing execCommand cut/copy machinery. Before this the chord was suppressed
+from typing (t477) but never routed anywhere, so a keyboard cut/copy silently did nothing even though the
+toolbar-button equivalents worked. **The trap:** this is a DEFAULT action, so it must yield to a page that
+claims the chord — an editor with its own clipboard handler calls `preventDefault()` on the keydown, and the
+default cut/copy must then NOT run (or it double-acts). And an empty Ctrl+C must be a no-op, not a
+clipboard-clobbering write of "". `Ctrl+V`→paste waits on `insertFromPaste` (a paste-event trigger) — the
+next brick.
