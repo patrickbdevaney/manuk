@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **268** | ticks 1–500 |
 | median tick cycle | **21m** | 267 intervals |
-| median, last 10 | **21m** | 10 intervals |
+| median, last 10 | **22m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.85** | 315.0h elapsed |
+| **ticks per hour** | **0.85** | 315.1h elapsed |
 | median verify wall | **60s** | 207 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -364,6 +364,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **496** | 2026-07-24 07:03 | 16m | capability | 67s | +140/−32 | 260 | 81 | 56.0% · | `document.hasFocus()` answers, tied to the tab-in-front signal (2026-07-24) |
 | **497** | 2026-07-24 07:11 | 8m | capability | 67s | +104/−33 | 260 | 81 | 56.0% · | `<textarea>.textLength`: the character-counter number (2026-07-24) |
 | **499** | 2026-07-24 07:43 | 32m | capability | 67s | +259/−38 | 261 | 81 | 56.0% · | the `ch` unit resolves to the font's REAL `0`-advance (2026-07-24) |
-| **500** | 2026-07-24 08:03 | 20m | capability | 67s | +168/−34 | 262 | 81 | 56.0% · | the `ex` unit is the face's real x-height (OS/2 sxHeight), not 0.5em (2026-07-24) |
+| **500** | 2026-07-24 08:10 | 27m | capability | 67s | +65/−36 | 262 | 81 | 56.0% · | the `ex` unit is the face's real x-height (OS/2 sxHeight), not 0.5em (2026-07-24) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -20090,3 +20090,31 @@ TICK SHAPE: capability (+1 gate, nothing regresses). WIKI: text-layout.md — "T
 face's real x-height". NEXT: `cap`/`ic` units off the same swash Metrics (bounded), then thread the
 page's own FontContext for webfont-exact ch/ex. Self-audit next 505; surface-audit next 508;
 Const-Check next 503.
+
+## Tick 501 — PROBE: resolve 4 stale-unknown constellation cells (UNKNOWN 12→8) (2026-07-24)
+
+The board's cheapest lever ("? outranks ✗ — probing an unknown is a legitimate tick"). Four cells the
+constellation carried as `unknown` were re-probed and RESOLVED with evidence — three had gone stale
+straight from our OWN landed ticks (the documented failure mode):
+
+1. **user-select (CSS)** unknown→**gated**: `g_user_select` (G_USER_SELECT) PASSES — getComputedStyle
+   .userSelect reflects the cascade (built tick 464). Cell was stale.
+2. **contrast-color() (CSS)** unknown→**gated**: `g_contrast_color` (G_CONTRAST_COLOR) PASSES —
+   contrast-color(<color>) resolves to its legible black/white companion (built tick 466). Cell was stale.
+3. **CSS ic unit** unknown→**partial**: live probe — `width:10ic` → 160px at 16px = the spec 1em
+   fallback, correct for a non-CJK face (no ideographic glyph). So ic parses + resolves via fallback;
+   real ideographic advance for a CJK face (fillable off the tick-499 font-metrics seam, though ic≈1em≈
+   its own fallback → not a clean gate) stays unmeasured → partial.
+4. **::details-content pseudo** unknown→**partial**: recognized by Stylo (surface-audit #23, tick 498) —
+   the selector parses/matches; full open-panel content-visibility styling is a servo-drop → partial.
+
+MEASURED 182→186 of 194 (unknown 12→8: doc 3, app 3, cross 2). No engine source touched — a pure
+measurement tick; nothing regresses (the ratchet's MEASURED face moves UP). Standing rule reconfirmed
+for the Nth time: constellation runs stale-PESSIMISTIC, re-probe before building — user-select and
+contrast-color were BOTH already built and gated while the map said "nobody has ever looked."
+
+TICK SHAPE: measurement (constellation flips; no gate change, no engine code, nothing regresses).
+WIKI: none — a measurement tick; findings live in CONSTELLATION.tsv. NEXT unknowns worth a probe:
+ESM module-graph (known GAP, t485 — multi-tick), navigator.cpuPerformance (Chrome-only, low weight),
+test262 + 100-tab RSS (the two measurement-run exit items). Self-audit next 505; surface next 508;
+Const-Check next 503.
