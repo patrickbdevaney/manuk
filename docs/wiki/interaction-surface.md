@@ -2456,3 +2456,46 @@ GATE: G_DETAILS_BEFORETOGGLE (page) — a real summary click and a scripted `el.
 the `name="faq"` accordion auto-close of a sibling) both log `beforetoggle` STRICTLY before that element's
 `toggle`. RED-proven by stripping the beforetoggle dispatches → the log holds `t:` with no preceding `bt:`.
 Neighbors green: g_details, g_details_accordion, g_details_open_idl, g_popover.
+
+## `document.execCommand('insertText')` — the first contenteditable EDITING brick (tick 471)
+
+The editability QUERY surface (t456: `el.isContentEditable`, `document.designMode`; t457: `:read-write`/
+`:read-only`) let a rich editor MOUNT on a `<div contenteditable>`, but the EDITING half was honestly
+absent: `insertText` and every content-mutating command returned `false`. This lands the most fundamental
+editing primitive — "insert text at the caret" — the path an "insert emoji/snippet" toolbar button, a
+paste-as-plaintext handler, and (later) the default typed-character action all funnel through. Every rich
+editor (ProseMirror, Slate, Lexical, Draft) keys its model and undo stack on the `beforeinput`/`input`
+(`inputType:'insertText'`) pair this fires.
+
+**Mechanism.** An additive branch inside the existing `document.execCommand` shim (`event_loop.rs`), built
+ENTIRELY on already-won substrate — no new Rust, no new dependency:
+
+1. **Editing host** = the nearest editable *element* ancestor of the Selection's anchor (walk `parentNode`
+   until `nodeType===1 && isContentEditable`); failing that (no selection yet) the focused editable, then
+   designMode's `<body>`. No host ⇒ return `false`.
+2. **`beforeinput`** (`new Event`, `bubbles:true, cancelable:true`, `inputType:'insertText'`, `data`) is
+   dispatched on the host via `el.dispatchEvent`. If a handler `preventDefault()`s it (`bi.defaultPrevented`),
+   the command still ran (returns `true`) but the DOM is left untouched and `input` NEVER fires — the spec's
+   cancelable-beforeinput contract an editor uses to run its own model instead of the browser default.
+3. **Mutation** at the caret: reuse the live `Selection._r` Range when the anchor is inside the host
+   (deleting any non-collapsed selection first via `deleteContents`), else a fresh caret at the host's end
+   (`createRange`+`selectNodeContents`+`collapse(false)`). If the caret sits in a text node, merge with
+   `insertData(offset, text)` so the editable keeps ONE text run; otherwise `createTextNode`+`insertNode`.
+   The selection is re-collapsed after the inserted text via `Selection.__set`.
+4. **`input`** (`cancelable:false`, same `inputType`/`data`) is dispatched — post-facto, the value already
+   changed, exactly as UI Events has it.
+
+`queryCommandSupported('insertText')` now reports `true`; the remaining formatting commands (`bold`/`italic`)
+and `cut`/multi-node deletion stay `false` and query-false — honest scope, a page feature-detects the truth.
+
+GATE: G_EXEC_INSERT_TEXT (page) — a caret after "Hello" + `execCommand('insertText', false, ' World')` →
+returns `true`, host text becomes "Hello World", and the log is `bi:insertText: World|in:insertText: World`
+(beforeinput STRICTLY before input, right payload); a second editable whose `beforeinput` handler
+`preventDefault()`s leaves its text "Keep" and never fires `input` (`vlog:bi`). RED-proven by neutralizing
+the `inserttext` branch → `ret:false`, text unchanged. Neighbors green: g_exec_command_copy,
+g_contenteditable_query, g_contenteditable_pseudo, g_ime_composition, g_selection, g_range, g_set_range_text.
+
+**Follow-on bricks (atomic, same substrate):** default typed-character action (`dispatch_key` printable →
+this path) so a contenteditable accepts keystrokes; `insertParagraph` (Enter → block split);
+`deleteContentBackward` (Backspace); `insertFromPaste` plaintext. Formatting-command wrapping is a later,
+larger brick.

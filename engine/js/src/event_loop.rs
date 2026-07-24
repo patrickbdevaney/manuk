@@ -2568,12 +2568,14 @@ const PRELUDE: &str = r#"
       // after it — down. We honour the commands that need NO editable DOM mutation: `copy` (copy the
       // current selection to the clipboard, synchronously, through the same host bridge as
       // `navigator.clipboard.writeText`) and `selectAll` (select the document / focused editable).
-      // `cut` and every FORMATTING command (bold/italic/insertText/…) are the contenteditable EDITING
-      // subsystem — they mutate editable content, which is a separate later brick — so they honestly
+      // `insertText` is the FIRST brick of the contenteditable EDITING subsystem — it inserts text at
+      // the caret inside an editing host and fires the `beforeinput`/`input` (`inputType:'insertText'`)
+      // pair every rich editor keys its model + undo stack on. The remaining FORMATTING commands
+      // (bold/italic/…) and `cut` still mutate editable content in ways not yet built — they honestly
       // return `false`, and `queryCommandSupported` says so, so a page feature-detects the truth instead
       // of believing a lie.
       if (typeof document.execCommand !== 'function') {
-        var __EXEC_SUPPORTED = { copy: 1, selectall: 1 };
+        var __EXEC_SUPPORTED = { copy: 1, selectall: 1, inserttext: 1 };
         document.execCommand = function (cmd) {
           cmd = String(cmd || '').toLowerCase();
           if (cmd === 'copy') {
@@ -2595,6 +2597,66 @@ const PRELUDE: &str = r#"
               var ae = document.activeElement;
               var target = (ae && ae.isContentEditable) ? ae : document.body;
               globalThis.getSelection().selectAllChildren(target);
+              return true;
+            } catch (e) { return false; }
+          }
+          if (cmd === 'inserttext') {
+            // The editing primitive: insert `value` at the caret inside the editing host, firing the
+            // `beforeinput`→(mutate)→`input` pair, `inputType:'insertText'`. A page/editor that vetoes
+            // the insert does it by cancelling `beforeinput` (the only cancelable step); on a veto the
+            // DOM is left untouched and `input` never fires, per the UI Events spec. This is the path
+            // an "insert emoji/snippet" toolbar button, a paste-as-plaintext handler, and the default
+            // typed-character action all funnel through.
+            var text = arguments.length > 2 && arguments[2] != null ? String(arguments[2]) : '';
+            try {
+              var sel = globalThis.getSelection();
+              var anchor = (sel && sel._r) ? sel._r.startContainer : null;
+              // The editing host = the nearest editable element ancestor of the caret; failing that
+              // (no selection yet) the focused editable, then designMode's <body>.
+              var host = null, anchorInHost = false;
+              for (var n = anchor; n; n = n.parentNode) {
+                if (n.nodeType === 1 && n.isContentEditable) { host = n; anchorInHost = true; break; }
+              }
+              if (!host) {
+                var ae = document.activeElement;
+                if (ae && ae.isContentEditable) { host = ae; }
+                else if (document.designMode === 'on') { host = document.body; }
+              }
+              if (!host) { return false; }
+
+              var bi = new Event('beforeinput', { bubbles: true, cancelable: true });
+              bi.inputType = 'insertText'; bi.data = text;
+              host.dispatchEvent(bi);
+              if (bi.defaultPrevented) { return true; } // ran, but the insert was vetoed — no mutation
+
+              // Resolve a caret: a live selection inside the host (replacing any non-collapsed
+              // selection), else a fresh caret at the host's end.
+              var r;
+              if (anchorInHost && sel && sel._r) {
+                r = sel._r;
+                if (!r.collapsed) { r.deleteContents(); }
+              } else {
+                r = document.createRange();
+                r.selectNodeContents(host);
+                r.collapse(false);
+              }
+              var sc = r.startContainer, so = r.startOffset;
+              if (sc && sc.nodeType === 3) {
+                // Merge into the existing text node so the editable keeps one text run, not a shard.
+                sc.insertData(so, text);
+                r.setStart(sc, so + text.length); r.collapse(true);
+              } else {
+                var tn = document.createTextNode(text);
+                r.insertNode(tn);
+                r.setStartAfter(tn); r.collapse(true);
+              }
+              if (sel && sel.__set) {
+                sel.__set(r.startContainer, r.startOffset, r.startContainer, r.startOffset);
+              }
+
+              var inp = new Event('input', { bubbles: true, cancelable: false });
+              inp.inputType = 'insertText'; inp.data = text;
+              host.dispatchEvent(inp);
               return true;
             } catch (e) { return false; }
           }

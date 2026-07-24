@@ -4108,3 +4108,18 @@ fired and the section revealed its skeleton. Now `beforetoggle` fires immediatel
 summary click and a scripted `el.open = true` (including accordion auto-close). **The trap:** details'
 `beforetoggle` is NON-cancelable (unlike popover's) — a page that tries to `preventDefault()` it to block the
 open is relying on behavior no browser gives; the toggle proceeds regardless.
+
+## Insert text into a rich-text editor at the caret (tick 471)
+
+**The class of the web this unlocks (comment boxes, Notion/Google-Docs-style editors, any
+`contenteditable` surface):** a rich editor mounts on a `<div contenteditable>` (it already detected the
+host via `isContentEditable`, t456) and then puts text into it — an "insert emoji", "insert snippet", or
+paste-as-plaintext button calls `document.execCommand('insertText', false, str)`, and the framework
+(ProseMirror/Slate/Lexical/Draft) listens for the `beforeinput`/`input` (`inputType:'insertText'`) pair to
+sync its own document model and undo stack. Before this, `insertText` returned `false` and nothing happened:
+the editable box merely *looked* editable. Now the text is inserted at the caret (merged into the existing
+text run), and the cancelable `beforeinput` → mutate → `input` sequence fires. **The trap:** a cancelled
+`beforeinput` is not a no-op you can ignore — it is how a framework editor VETOES the browser's default
+insertion so it can perform its own; on veto the DOM must be left untouched and `input` must NOT fire.
+Formatting commands (`bold`/`italic`) and multi-node deletion are still honestly `false` +
+`queryCommandSupported`-false — a page feature-detects the truth rather than getting a silent lie.

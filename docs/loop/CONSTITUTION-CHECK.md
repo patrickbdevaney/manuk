@@ -1025,3 +1025,50 @@ remains the exit. The only correction is tempo: acknowledge the atomic-completen
 mining it a tick or two past dry — pivot to a decompose-first subsystem or the exit instrument.
 
 **Next check due: tick 471.**
+
+---
+
+## Check #25 — tick 471
+
+**Horizon:** Phase 0 — daily-driver rendering parity + the agentic surface (CONSTITUTION.MD **Part VII**,
+components 1 & 2). **Gate:** the FIDELITY-SCORING-REDESIGN.md certificate (≥0.75 placement fidelity on
+≥95% of the corpus + ≥0.70 per top-20 category), NOT a WPT percentage. Anchor: PHASE0-ROADMAP-ANCHOR.md.
+
+**Gate or scoreboard?** Gate. Ticks 464-470 confirmed the Check #24 diagnosis to the letter — the atomic
+vein was NOT merely thinning, it dried: 464-466 mined the last cheap Stylo `servo_pref` CSS computed-value
+flips (user-select / color-scheme / contrast-color), 469 already had to fall back to `MinimalCascade`
+RECOVERY for scrollbar-color/width (no pref helps a `engine="gecko"` prop), and 467/468/470 spent three
+ticks bringing the `<details>` disclosure surface to genuine COMPLETENESS (accordion exclusivity, script-set
+`.open`, `beforetoggle`-before-`toggle` on both paths). All real classes, all RED-proven — but unmistakably
+the "a tick or two past dry" tempo #24 warned against. **Tick 471 executes the #24 steer:** it takes ONE of
+the anchor's decompose-first subsystems — **contenteditable EDITING** — and lands its FIRST atomic brick:
+`document.execCommand('insertText', …)` actually inserts text at the caret inside the editing host and fires
+the `beforeinput`→(mutate DOM)→`input` (`inputType:'insertText'`) pair, with a cancelled `beforeinput`
+vetoing the insert (no mutation, no `input`). Built ENTIRELY on the already-won substrate (Selection/Range,
+`insertData`, `new Event`+`dispatchEvent`, the `isContentEditable` query surface from t456) — I2's "publish,
+do not rebuild" — so the brick is small even though the subsystem is 7-20 ticks.
+
+**Is the loop still pointed at the frontier?** Yes — and now correctly OFF the atomic-completeness treadmill
+and ONTO a marquee subsystem, which is exactly what #23 and #24 both prescribed. The right follow-on bricks
+are pre-identified and each is atomic against this same substrate: the DEFAULT typed-character action
+(`dispatch_key` printable → insertText path) so a plain contenteditable accepts keystrokes; `insertParagraph`
+(Enter → block split); `deleteContentBackward` (Backspace); `insertFromPaste` plaintext. Formatting
+(`bold`/`italic` → wrapping `<b>`/`<i>`) and multi-node selection deletion are later, larger bricks —
+honestly still `false` and `queryCommandSupported`-false, so a page feature-detects the truth.
+
+**Is the agentic surface (component #2) served?** Directly. `insertText` is the mechanism by which the AGENT
+(not just a page script) will fill an editable region — the write half of "observe control state AND change
+it." It complements the existing typed-value path for form controls (`dispatch_composition` writes `.value`);
+this writes the DOM of a contenteditable, the class of editor `.value` cannot reach. I3 held — page-observable
+(DOM text + fired events), RED-proven both ways.
+
+**Any invariant bent?** No. Bar 0 held — additive branch inside the existing `execCommand` shim, no signature
+or storage change; the seven neighbor gates (exec_command_copy, contenteditable query/pseudo, ime_composition,
+selection, range, set_range_text) stay green. I2 intact — ZERO new dependencies; reused Selection/Range/
+CharacterData wholesale. THE RATCHET honored — nothing traded.
+
+**PART VI / VII correction.** None. The four-component v1 scope and the fidelity-certificate exit stand. The
+only tempo note: the subsystem pivot is now genuinely underway — keep landing contenteditable-EDITING bricks
+against the shared substrate rather than reverting to atomic-completeness scavenging.
+
+**Next check due: tick 479.**

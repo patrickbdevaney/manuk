@@ -19070,3 +19070,43 @@ bounded but cross-cutting tick, not folded here). The cheap CSS pref-flip vein i
 MinimalCascade recovery); surface-audit #20 residue (`::details-content` box-tree, `@starting-style`
 transitions) is subsystem-scope. Bigger honest moves: MEDIA H.264-High, IndexedDB (redb/heed),
 contenteditable EDITING.
+
+## Tick 471 — `execCommand('insertText')`: the first contenteditable EDITING brick (2026-07-23)
+
+Executes the Check #24/#25 steer — OFF the now-dry atomic-completeness vein (464-470 mined the last cheap
+Stylo pref-flips + brought `<details>` to full completeness), ONTO a decompose-first SUBSYSTEM. Takes
+contenteditable EDITING (t456 built its QUERY surface, t457 its selectors; the EDITING path was the named
+"separate later brick") and lands its first atomic brick. Before this, a `<div contenteditable>` MOUNTED a
+rich editor but could not accept a single inserted character: `insertText` — the primitive an "insert
+emoji/snippet" button, a paste-as-plaintext handler, and the default typed key all funnel through — honestly
+returned `false`.
+
+MECHANISM: an additive branch in the existing `document.execCommand` shim (`engine/js/src/event_loop.rs`),
+built ENTIRELY on already-won substrate — ZERO new Rust, ZERO new dependency (I2 "publish, do not rebuild").
+Editing host = nearest editable *element* ancestor of the Selection anchor (`parentNode` walk to
+`nodeType===1 && isContentEditable`), else the focused editable, else designMode `<body>`; no host ⇒ false.
+Fire `beforeinput` (`new Event`, cancelable, `inputType:'insertText'`, `data`) via `el.dispatchEvent`; a
+`preventDefault()` (`defaultPrevented`) VETOES — command returns true but DOM untouched and `input` never
+fires (the spec's cancelable-beforeinput contract editors run their own model on). Mutate at the caret:
+reuse live `Selection._r` when the anchor is in-host (deleting a non-collapsed selection first), else a fresh
+caret at host end (`createRange`+`selectNodeContents`+`collapse(false)`); merge into a text node with
+`insertData` (keeps one text run) or `createTextNode`+`insertNode`; re-collapse via `Selection.__set`. Then
+fire `input` (not cancelable). `queryCommandSupported('insertText')` now true; `bold`/`italic`/`cut` stay
+false + query-false (honest scope).
+
+GATE: G_EXEC_INSERT_TEXT (page) — caret after "Hello" + `execCommand('insertText', false, ' World')` returns
+true, host text → "Hello World", log `bi:insertText: World|in:insertText: World` (beforeinput STRICTLY before
+input); a second editable whose beforeinput handler `preventDefault()`s stays "Keep" and never fires input
+(`vlog:bi`). RED-proven by neutralizing the `inserttext` branch → `ret:false`, text unchanged. Neighbors
+green: g_exec_command_copy, g_contenteditable_query, g_contenteditable_pseudo, g_ime_composition, g_selection,
+g_range, g_set_range_text.
+
+TICK SHAPE: capability (contenteditable EDITING subsystem, brick 1 of N; +1 gate). GATES +1.
+CONSTELLATION: advances the rich-editing row from query-only toward `works` (insertText path).
+WIKI: interaction-surface.md — new section after the t470 beforetoggle note.
+AGENTIC: this is the AGENT's write-into-an-editable mechanism (the write half of observe+change), reaching
+the editor class `.value` (form-control path) cannot.
+NEXT VEIN NOTE: same-substrate atomic follow-ons — default typed-character action (`dispatch_key` printable →
+insertText), `insertParagraph` (Enter/block-split), `deleteContentBackward` (Backspace), `insertFromPaste`
+plaintext. Formatting-command wrapping (`bold`→`<b>`) + multi-node selection deletion are later larger bricks.
+Constitution Check #25 landed this tick (next due 479).
