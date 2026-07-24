@@ -569,6 +569,17 @@ The JS-visible playback model is now complete: **forward clock (521) + seek (522
 the trio every video analytics/resume/scrub feature reads. What remains is the shell frame-loop driver
 (GUI integration) and codec breadth (the CUT line).
 
+### M6b-durationchange — the element hears its length (tick 524)
+
+A MediaSource-fed `<video>` learns its duration from `mediaSource.duration = N` (the live/DVR API) or
+a demuxed `moov` (VOD), and the element's `duration` getter reflected it — but SILENTLY. No
+`durationchange` fired, so a player bound to it (to size its scrub bar, compute "% watched", enable
+seeking once the length is known) never woke up. `MediaSource.prototype.__fireDurationChange` dispatches
+it on the attached element, called from BOTH the `duration` setter (only when the value actually
+changes — NaN→N counts, N→N does not) and the demux path (`ms.__duration = info.duration`), so however
+the length arrives the page hears it once. Gated `g_media_durationchange`; RED: drop the
+`__fireDurationChange()` call and the element never hears the length it now reports.
+
 ## M7 — captions (tick 255), and a probe that verified the TEST
 
 `VttTrack::parse` + `active_at(t)`, in `manuk_media::vtt`. **Not feature-gated** — a caption file is

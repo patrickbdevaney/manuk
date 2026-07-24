@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **287** | ticks 1–523 |
-| median tick cycle | **22m** | 286 intervals |
-| median, last 10 | **30m** | 10 intervals |
+| ticks landed | **288** | ticks 1–524 |
+| median tick cycle | **22m** | 287 intervals |
+| median, last 10 | **28m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.89** | 322.9h elapsed |
-| median verify wall | **61s** | 226 ticks |
+| **ticks per hour** | **0.89** | 323.3h elapsed |
+| median verify wall | **61s** | 227 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **271**
+* **live gates**: 27 → **272**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**165 of 287 ticks** (57%) moved a
+**165 of 288 ticks** (57%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -384,5 +384,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **521** | 2026-07-24 15:10 | 31m | subsystem | 67s | +494/−109 | 269 | 81 | 56.0% · | BUILD BRICK: `<video>` playback clock — timeupdate/ended fire, currentTime advances (2026- |
 | **522** | 2026-07-24 15:30 | 20m | subsystem | 67s | +407/−113 | 270 | 81 | 56.0% · | BUILD BRICK: writing `<video>.currentTime` is a real seek (2026-07-24) |
 | **523** | 2026-07-24 16:00 | 29m | subsystem | 67s | +314/−110 | 271 | 81 | 56.0% · | BUILD BRICK: `<video>.played` — the union of actually-watched spans (2026-07-24) |
+| **524** | 2026-07-24 16:18 | 19m | build | 67s | +265/−107 | 272 | 81 | 56.0% · | BUILD BRICK: `<video>` fires `durationchange` when the MSE length is known (2026-07-24) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

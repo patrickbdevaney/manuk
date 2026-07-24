@@ -4496,3 +4496,11 @@ inserts the just-played span into a sorted, non-overlapping list, MERGING adjace
 (`played` is a union, not an envelope), and seeking back into a gap and playing merges the spans down. This
 completes the JS-visible playback model — forward clock (521) + seek (522) + played (523). Gate
 `g_media_played`; RED: drop the `__addPlayed` calls and every range collapses to empty.
+
+**`<video>` fires `durationchange` when the MSE timeline length becomes known (tick 524)** — so a player
+(hls.js/dash.js/shaka and hand-rolled ones) sizes its scrub bar, computes "% watched", and enables seeking
+the moment the length arrives. `mediaSource.duration = N` (live/DVR) or a demuxed moov (VOD) set the
+length, and the element's `duration` getter reflected it — but silently, so a `durationchange` listener
+never woke. Now `MediaSource.__fireDurationChange` dispatches it on the attached element from both the
+setter (on real change only — NaN→N fires, N→N does not) and the demux path. Gate `g_media_durationchange`;
+RED: drop the dispatch and dc stays 0.

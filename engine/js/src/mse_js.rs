@@ -254,7 +254,10 @@ pub const MSE_JS: &str = r#"
     // but only when it actually carries a duration: a bare media segment reports 0, and writing
     // that over a known duration would truncate the timeline the player is seeking within.
     var ms = this.__parent;
-    if (ms && info.duration > 0 && !(ms.__duration > 0)) { ms.__duration = info.duration; }
+    if (ms && info.duration > 0 && !(ms.__duration > 0)) {
+      ms.__duration = info.duration;
+      ms.__fireDurationChange();   // a demuxed moov just gave the timeline its length
+    }
     // ── The playback JOIN (tick 349). This SourceBuffer's accumulated stream is the ONLY copy of
     // the media — the element's src is a blob: URL no fetch can serve — so every settled append
     // that demuxed a video track hands the FULL stream to the host, which decodes it and drives
@@ -327,11 +330,24 @@ pub const MSE_JS: &str = r#"
             throw fail('a SourceBuffer is still updating', 'InvalidStateError');
           }
         }
+        var old = self.__duration;
         self.__duration = v;
+        if (v !== old) { self.__fireDurationChange(); }   // NaN!==number is true, so first set fires
       }
     });
   }
   target(MediaSource.prototype);
+
+  // `durationchange` on the ELEMENT, the moment the timeline length becomes known — the event a
+  // player binds to size its scrub bar and enable seeking. Fired from BOTH the `duration` setter
+  // (the explicit API) and the demux path (a `moov` that carries a duration), so however the length
+  // arrives, the page hears it once. No element yet (an unattached MediaSource) = no one to tell.
+  MediaSource.prototype.__fireDurationChange = function () {
+    var el = this.__element;
+    if (el && el.dispatchEvent) {
+      try { el.dispatchEvent(new g.Event('durationchange')); } catch (e) {}
+    }
+  };
 
   MediaSource.prototype.__setReadyState = function (state) {
     if (this.__readyState === state) { return; }

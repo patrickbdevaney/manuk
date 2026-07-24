@@ -20983,3 +20983,30 @@ XL: (a) the shell frame loop calling __mediaAdvance/consuming currentTime props 
 risk), (b) codec breadth / WebM-VP9 (CUT line, no Rust VP9 decoder). PIVOT candidates per board: fidelity
 instrument rebuild (CO-#1, agent-editable, THE exit gate) or test262 (measurement, permitted). Self-audit
 next 525; surface next 528; const next 527; wall next 527.
+
+## Tick 524 — BUILD BRICK: `<video>` fires `durationchange` when the MSE length is known (2026-07-24)
+
+A small additive completion of the media event model. A MediaSource-fed `<video>` learns its duration
+from `mediaSource.duration = N` (live/DVR) or a demuxed moov (VOD), and the element's `duration` getter
+reflected it — but SILENTLY: no `durationchange` fired, so a player bound to it (to size its scrub bar,
+compute % watched, enable seeking once the length is known) never woke up.
+
+WHAT LANDED (engine/js/src/mse_js.rs): `MediaSource.prototype.__fireDurationChange` dispatches
+`durationchange` on the attached element, called from BOTH the `duration` setter (only on real change —
+NaN→N counts via NaN!==number, N→N is a no-op) and the demux path (`ms.__duration = info.duration`), so
+however the length arrives the page hears it once. No element attached = no one to tell.
+
+RED-PROVEN (real E2E, no network): new gate g_media_durationchange builds <video> + MSE, asserts
+NaN-before (nan:true), `ms.duration=12` → video.duration=12 + durationchange once (set:12,dc:1), same
+value → no event (same:dc:1), new value 15 → fires again (again:15,dc:2). Neuter the setter's
+__fireDurationChange call → dc:0 → RED. g_media_buffered still GREEN.
+
+TICK SHAPE: build brick (1 capability — durationchange on the element when the MSE timeline length
+becomes known, from both setter + demux paths; new gate g_media_durationchange E2E, RED-proven;
+change-not-every-write is spec-shaped; Bar 0 held — purely additive, a new event on an existing state
+change). WIKI: docs/wiki/media-pipeline.md — new M6b-durationchange subsection. WEB-PATTERNS.md updated
+(scrub-bar-sizing / %-watched class). NOT [no-pattern] (engine/js/src touched).
+
+NEXT: media JS-surface is now saturated (clock/seek/played/durationchange). Frontier is XL (shell
+frame-loop driver + WebM/VP9 CUT line). PIVOT: fidelity instrument rebuild (CO-#1 exit gate) or test262.
+Self-audit next 525 (DUE next tick); surface next 528; const next 527; wall next 527.
