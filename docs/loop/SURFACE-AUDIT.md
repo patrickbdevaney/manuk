@@ -1015,7 +1015,7 @@ collapsible) — were invisible to the map.
 
 LAST_SURFACE_AUDIT 468→478; next due 488.
 
-## Surface Audit #21 — tick 488 (2026-07-24)
+## Audit #22 — tick 488 (2026-07-24)
 
 SOURCES (web-checked, not memory): Interop 2026 focus areas (web-platform-tests/interop 2026/README;
 hacks.mozilla.org/2026/02/launching-interop-2026; webkit.org/blog/17818; web.dev/blog/interop-2026 —
