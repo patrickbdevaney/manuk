@@ -842,3 +842,35 @@ Gated by `line_clamp_caps_lines_and_appends_ellipsis` (layout, RED-proven: 6 lin
 shorthand's `<block-ellipsis>`/`continue` parts are ignored (bare integer only); a clamped block whose
 children are themselves blocks (not the common all-inline excerpt) is not handled; true old-flexbox
 `-webkit-box` child layout is out of scope.
+
+## The `ch` unit is the font's real `0`-advance, not the `0.5em` fallback (tick 499)
+
+`ch` is *the advance of the `0` glyph*. In the shipping Stylo cascade the `Device`'s
+`FontMetricsProvider` (`StubFontMetrics` in `stylo_engine.rs`) returned `FontMetrics::default()` —
+every field `None` — so Stylo took the spec's *"impossible to determine"* branch
+(`zero_advance_measure_or_default`) and used `ch = 0.5em`. Meanwhile layout laid the text into the box
+with the font's **true** advance from the shaper (a monospace `0` is ~`0.6em`), so a `width:10ch` box
+came out `80px` at `16px` while its ten monospace chars measured `~96px` and overflowed. `max-width:65ch`
+— the readable-column idiom on essentially every article — was ~17% too narrow everywhere.
+
+**Fix (a css↔text seam, not a constant).** A constant `0.6em` cannot be trusted to the pixel: the test
+`line-break-ch-unit` and every `Nch` box require `N` chars to occupy *exactly* `N·ch`, which only holds
+if the metric is the SAME number the shaper places glyphs with. So `manuk-text` exposes
+`zero_advance_px(families, bold, italic, size_px)` — it resolves the family exactly as
+`layout::text_style`'s `FontKey` does (`resolve_family` + `weight≥600` + `italic`) and returns
+`measure("0", key, size)` off a **thread-local** `FontContext` (system-font scan paid once per thread,
+then a `measure_cache` hit). `query_font_metrics` extracts the family list from the Stylo `Font`
+(mirroring `stylo_map`'s `font-family` extraction), calls it, and returns
+`zero_advance_measure: Some(len)`. `manuk-css` gains an **optional, `--features stylo`-gated**
+dependency on `manuk-text` (workspace-internal; `manuk-text` does not depend on `manuk-css`, so no
+cycle; no new external crate — I2 holds).
+
+**Scope / honesty.** Only `zero_advance_measure` is filled; `x_height`/`cap_height`/`ic_width` stay
+`None`, so `ex = 0.5em`, `cap = ascent`, `ic = 1em` are unchanged — `ex` real metrics are a bounded
+follow-up, and nothing that worked before changes. The thread-local context carries **system + generic
+faces only**, not the page's `@font-face` registrations: `ch` is exact for generic/installed families
+(the gate + `line-break-ch-unit` use `monospace`), and an unregistered webfont name falls through the
+generics to a real fallback-font advance — closer to Chrome (which uses the fallback's `0` when the
+webfont is absent) than the old flat `0.5em`, never a regression. Threading the page's own
+`FontContext` in (for webfont-exact `ch`) is the next step. Gated by `g_ch_unit` (RED-proven: stub gives
+`box:80 ref:96 eq:false real:false`; fix gives `box:96 ref:96 eq:true real:true`).

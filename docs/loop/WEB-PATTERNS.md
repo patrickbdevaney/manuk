@@ -4389,3 +4389,15 @@ composers, bio/description fields with a `maxlength`):** a counter reads `textar
 keystroke to render "120 / 280". It was `undefined`, so the counter showed "undefined / 280" or NaN-ed its
 maths. It now returns `value.length` (the control's live text), read-only and textarea-only. Small, but it is
 the exact number the UI puts on screen.
+
+## `ch` unit = the font's real `0`-advance (tick 499)
+
+**The class of the web this unlocks (every readable-text column and every monospace layout — `max-width:65ch`
+articles/blogs/docs, code blocks and terminals sized in `ch`, form fields with a `size`-in-`ch` width, ASCII
+tables):** the `ch` unit was resolving to the spec's `0.5em` *"cannot determine"* fallback while the text laid
+into the box used the font's true advance (monospace `0` ≈ `0.6em`), so every `Nch` box was ~17% too narrow
+and its content overflowed — the classic "the article column is squeezed and the last word wraps" look.
+`ch` now measures the `0` glyph through the SAME shaper layout places text with, so `Nch` is exactly `N`
+monospace chars and a `65ch` column matches Chrome. `ex`/`cap`/`ic` still use their spec fallbacks (bounded
+follow-up); webfont-exact `ch` (page-context threading) is next. **The trap:** a constant `0.6em` looks right
+but can't guarantee `N chars fit in N ch` to the pixel — only measuring through the real shaper does.

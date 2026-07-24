@@ -3216,6 +3216,7 @@ dependencies = [
  "euclid",
  "manuk-dom",
  "manuk-html",
+ "manuk-text",
  "selectors",
  "smallvec",
  "stylo",

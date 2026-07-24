@@ -81,7 +81,19 @@ impl StyleEngine for StyloEngine {
     }
 }
 
-/// A no-op font-metrics provider — enough to build a `Device`.
+/// The font-metrics provider Stylo queries when resolving font-relative units.
+///
+/// The one metric it answers with a real number is **`zero_advance_measure`** — the advance
+/// of the `0` glyph, which is the definition of the CSS `ch` unit. Left as
+/// `FontMetrics::default()` (all `None`), Stylo falls back to the spec's `ch = 0.5em`
+/// (`FontMetrics::zero_advance_measure_or_default`), so every `width: Nch` box came out
+/// `N * 0.5em` while the text laid into it used the font's REAL advance (monospace `0` ≈
+/// `0.6em`): the box was ~17% too narrow and monospace columns / `max-width: 65ch`
+/// article measures overflowed. We resolve the family exactly as `layout::text_style` does
+/// and measure `0` through the same shaper (`manuk_text::zero_advance_px`), so the metric and
+/// the glyphs can never disagree. `x_height`/`cap_height`/`ic_width` stay `None` for now —
+/// their spec fallbacks (`ex = 0.5em`, `cap = ascent`, `ic = 1em`) are unchanged, so `ex`
+/// is a bounded follow-up and nothing regresses.
 #[derive(Debug)]
 struct StubFontMetrics;
 
@@ -89,11 +101,40 @@ impl FontMetricsProvider for StubFontMetrics {
     fn query_font_metrics(
         &self,
         _vertical: bool,
-        _font: &Font,
-        _base_size: CSSPixelLength,
+        font: &Font,
+        base_size: CSSPixelLength,
         _flags: stylo::values::specified::font::QueryFontMetricsFlags,
     ) -> FontMetrics {
-        FontMetrics::default()
+        // Family list, in author order, mapped to the plain names the text layer resolves —
+        // the SAME extraction `stylo_map` uses when it maps `font-family` onto ComputedStyle.
+        use stylo::values::computed::font::SingleFontFamily;
+        let mut families: Vec<String> = Vec::new();
+        for f in font.font_family.families.list.iter() {
+            match f {
+                SingleFontFamily::FamilyName(n) => families.push(n.name.to_string()),
+                SingleFontFamily::Generic(g) => families.push(
+                    match g {
+                        GenericFontFamily::Serif => "serif",
+                        GenericFontFamily::SansSerif => "sans-serif",
+                        GenericFontFamily::Monospace => "monospace",
+                        GenericFontFamily::Cursive => "cursive",
+                        GenericFontFamily::Fantasy => "fantasy",
+                        GenericFontFamily::SystemUi => "system-ui",
+                        _ => "sans-serif",
+                    }
+                    .to_string(),
+                ),
+            }
+        }
+        // Bold/italic mirror `layout::text_style`'s FontKey so the resolved face matches.
+        let bold = font.font_weight.value() >= 600.0;
+        let italic = font.font_style != stylo::values::computed::font::FontStyle::NORMAL;
+        let zero = manuk_text::zero_advance_px(&families, bold, italic, base_size.px());
+
+        FontMetrics {
+            zero_advance_measure: Some(Length::new(zero)),
+            ..FontMetrics::default()
+        }
     }
     fn base_size_for_generic(&self, _generic: GenericFontFamily) -> Length {
         Length::new(16.0)

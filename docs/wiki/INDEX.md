@@ -934,6 +934,7 @@
   - L778 · white-space: pre-wrap PRESERVES spaces; pre-line COLLAPSES them — they shared one path (tick 413)
   - L797 · text-indent shifts the FIRST line box only — and it powers image replacement (tick 416)
   - L820 · -webkit-line-clamp: N caps a block at N lines with a trailing … (tick 417)
+  - L846 · The ch unit is the font's real 0-advance, not the 0.5em fallback (tick 499)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -961,4 +962,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-876 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+877 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

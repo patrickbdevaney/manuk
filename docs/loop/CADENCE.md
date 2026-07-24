@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **266** | ticks 1–497 |
-| median tick cycle | **21m** | 265 intervals |
+| ticks landed | **267** | ticks 1–499 |
+| median tick cycle | **21m** | 266 intervals |
 | median, last 10 | **22m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.84** | 314.1h elapsed |
-| median verify wall | **60s** | 205 ticks |
+| **ticks per hour** | **0.85** | 314.7h elapsed |
+| median verify wall | **60s** | 206 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **260**
+* **live gates**: 27 → **261**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**162 of 266 ticks** (61%) moved a
+**163 of 267 ticks** (61%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **162** capability ticks, median cycle **21m**
+* **163** capability ticks, median cycle **21m**
 * median diff per tick: **+222 / −34** lines across 9 files
 
 ## Every tick
@@ -363,5 +363,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **495** | 2026-07-24 06:47 | 27m | measurement | 67s | +161/−33 | 259 | 81 | 56.0% · | SELF-AUDIT (cadence, ticks 485→494) (2026-07-24) |
 | **496** | 2026-07-24 07:03 | 16m | capability | 67s | +140/−32 | 260 | 81 | 56.0% · | `document.hasFocus()` answers, tied to the tab-in-front signal (2026-07-24) |
 | **497** | 2026-07-24 07:11 | 8m | capability | 67s | +104/−33 | 260 | 81 | 56.0% · | `<textarea>.textLength`: the character-counter number (2026-07-24) |
+| **499** | 2026-07-24 07:43 | 32m | capability | 67s | +259/−38 | 261 | 81 | 56.0% · | the `ch` unit resolves to the font's REAL `0`-advance (2026-07-24) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

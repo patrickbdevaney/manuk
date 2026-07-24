@@ -20032,3 +20032,38 @@ eighth-plus "re-probe before building." The honest frontier is unchanged and now
 TICK SHAPE: surface-audit (measurement; no gate change, nothing regresses; no engine code touched). WIKI: none
 (findings live in SURFACE-AUDIT.md). LAST_SURFACE_AUDIT 488→498; next due 508. Self-audit next 505; Const-Check
 next 503.
+
+## Tick 499 — the `ch` unit resolves to the font's REAL `0`-advance (2026-07-24)
+
+The ch/ex font-metrics subsystem (Const-Check #28's named frontier, PHASE0-BOUNDED-REMAINDER #23),
+opened with its **decomposition-first bounded step: `ch` only, generics exact.** MEASURED the exact
+failure before building: `StubFontMetrics::query_font_metrics` in stylo_engine.rs returned
+`FontMetrics::default()` (all `None`), so Stylo used the spec fallback `ch = 0.5em`. A `width:10ch` box
+at 16px monospace computed to `80px` while the ten `0`s laid into it measured `96px` and overflowed;
+`max-width:65ch` (the readable-column idiom on ~every article) was ~17% too narrow everywhere.
+
+FIX — a real css↔text seam, not a constant (a constant can't match to the pixel, which the `Nch == N
+chars` invariant requires). `manuk-text` now exposes `zero_advance_px(families,bold,italic,size)` =
+`measure("0", key, size)` off a thread-local `FontContext`, resolving the family EXACTLY as
+`layout::text_style`'s `FontKey` (resolve_family + weight≥600 + italic) so the metric and the glyphs
+can never disagree. `query_font_metrics` extracts the family list from the Stylo `Font` (mirroring
+stylo_map's font-family extraction) and returns `zero_advance_measure: Some(len)`. `manuk-css` gains an
+optional, `--features stylo`-gated dep on `manuk-text` (workspace-internal; text does NOT depend on css
+→ no cycle; NO new external crate → I2 holds).
+
+SCOPE/HONESTY: only `zero_advance_measure` is filled; `x_height`/`cap_height`/`ic_width` stay `None`
+(ex=0.5em, cap=ascent, ic=1em unchanged) — `ex` real metrics are the bounded follow-up, nothing
+regresses. The thread-local ctx carries system+generic faces only (not the page's `@font-face` regs):
+`ch` is exact for generic/installed families; an unregistered webfont name falls through generics to a
+real fallback advance — closer to Chrome (fallback `0` when webfont absent) than flat `0.5em`, never a
+regression. Threading the page's own FontContext for webfont-exact `ch` is next.
+
+RED-proven: neutering the provider back to `FontMetrics::default()` gave `box:80 ref:96 eq:false
+real:false` → G_CH_UNIT fails; fix gives `box:96 ref:96 eq:true real:true`. New gate G_CH_UNIT: a
+`10ch` monospace box equals a span of ten `0`s AND clears the 80px `0.5em` fallback. Neighbors
+g_width_stretch/g_client_rects green. Bar 0 held; zero new external dep.
+
+TICK SHAPE: capability (+1 gate, nothing regresses). WIKI: text-layout.md — "The `ch` unit is the
+font's real `0`-advance". NEXT: `ex` real metrics (measure the `x` glyph box height off the same seam)
+is the immediate bounded follow-up; then thread the page FontContext for webfont-exact `ch`. Self-audit
+next 505; surface-audit next 508; Const-Check next 503.

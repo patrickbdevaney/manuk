@@ -892,6 +892,39 @@ impl Default for FontContext {
     }
 }
 
+thread_local! {
+    /// A process-lazy, per-thread [`FontContext`] used **only** for CSS unit metrics
+    /// (the `ch` unit's `0`-glyph advance). Building a `FontContext` scans the system
+    /// font database, so it is kept off the hot path behind this thread-local: the first
+    /// `ch` query on a thread pays the scan once, every later query is a `measure_cache`
+    /// hit. It carries only system + generic faces — it is **not** the page's context and
+    /// has no `@font-face` webfont registrations, which is why [`zero_advance_px`] is
+    /// exact for generic/installed families and falls back through the generics for an
+    /// unregistered webfont name (the same answer Chrome gives when the webfont is absent).
+    static METRICS_CTX: FontContext = FontContext::new();
+}
+
+/// The advance width, in px, of the `0` (ZERO) glyph for the font that `families` /
+/// `bold` / `italic` resolve to at `size_px` — i.e. the value of the CSS **`ch`** unit.
+///
+/// This is measured through the SAME shaper (`FontContext::measure`) that layout uses to
+/// place text, so `N` characters of a monospace run occupy exactly `N * zero_advance_px`
+/// and a `width: Nch` box comes out identical to the text it is sized for — which is the
+/// whole point of `ch` and what a constant `0.5em`/`0.6em` approximation can never
+/// guarantee to the pixel. Resolution mirrors `layout::text_style`'s `FontKey`
+/// construction (`resolve_family` + `weight >= 600` + `italic`) so the metric and the
+/// glyphs never disagree.
+pub fn zero_advance_px(families: &[String], bold: bool, italic: bool, size_px: f32) -> f32 {
+    METRICS_CTX.with(|ctx| {
+        let key = FontKey {
+            family: ctx.resolve_family(families),
+            bold,
+            italic,
+        };
+        ctx.measure("0", key, size_px)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
