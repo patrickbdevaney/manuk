@@ -4460,3 +4460,18 @@ fails there, exactly as before). The page pre-fetch mirrors the same resolution 
 too. Gate `g_esm_import_map` drives both forms end-to-end over localhost; RED = empty map → bare specifier
 unresolved → the app does not render. Residue: import-map `scopes` (per-path overrides) not yet honoured;
 dynamic `import()` still separate.
+
+**A `<video>` has a running clock — `timeupdate`/`ended` fire, `currentTime` advances (tick 521)** — so a
+progress bar tracks, a `% watched` analytics beacon sends, a synchronized transcript scrolls, an
+ad-cue/chapter marker triggers, and a playlist advances to the next track on `ended`. `play()` used to flip
+`paused` and stop; `currentTime` sat at 0 and the two most-bound media events never fired. Now `play()`
+fires `play`→`playing`, `el.__advance(delta)` (in `__manukMedia`) moves `currentTime` by `delta ×
+playbackRate` and fires `timeupdate` per step, reaching a finite `duration` clamps and fires a final
+`timeupdate` then `ended` (not `pause` — the spec routes end-of-media to `ended`), a `loop` clip wraps to 0,
+and `play()` after `ended` replays from 0. `volume`/`muted`/`playbackRate` setters fire
+`volumechange`/`ratechange`. The clock is HOST-DRIVEN through one entry point,
+`__mediaAdvance(nodeId, elapsedSeconds)` (the shell's frame loop, holding the audio/wall clock, calls it) —
+a self-pumping `setTimeout` would spin forever on the muted `autoplay loop` background clip. Gate
+`g_media_playback_clock` drives that exact seam; RED = neuter `__advance` → clock frozen at 0. Residue: the
+shell frame loop does not yet call the seam (GUI driver = next integration); `seeking`/`seeked` on a
+`currentTime` write are a separate scrub brick.

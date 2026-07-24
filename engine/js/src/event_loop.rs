@@ -3324,7 +3324,14 @@ const PRELUDE: &str = r#"
           get: function(){ return paused; },
           set: function(v){ paused = !!v; }
         });
-        ro('ended', false);
+        // `ended` is a REAL flag now, not a frozen `false`. The playback clock (`__advance`
+        // below) sets it when `currentTime` reaches `duration`, and `play()` clears it on
+        // replay — every playlist/autoplay-next handler binds `ended`, and a value stuck at
+        // `false` is a queue that never advances to the next track.
+        el.__ended = false;
+        Object.defineProperty(el, 'ended', {
+          configurable: true, get: function () { return el.__ended; }
+        });
         ro('seeking', false);
 
         // ── The three members a MediaSource makes LIVE.
@@ -3377,6 +3384,15 @@ const PRELUDE: &str = r#"
                 live[name] = coerce(v);
                 if (typeof __mediaProp === 'function' && el.__nodeId != null) {
                   __mediaProp(String(el.__nodeId), name, Number(live[name]));
+                }
+                // The change events every player's slider/rate-menu binds to repaint its
+                // control. `playbackRate` fires `ratechange`; `volume` AND `muted` both fire
+                // `volumechange` (the spec routes them to the same event).
+                if (el.dispatchEvent) {
+                  try {
+                    el.dispatchEvent(new globalThis.Event(
+                      name === 'playbackRate' ? 'ratechange' : 'volumechange'));
+                  } catch (e) {}
                 }
               }
             });
@@ -3513,11 +3529,73 @@ const PRELUDE: &str = r#"
         // awaits this promise lands in its own catch branch while the video plays behind it.
         // Resolves, and flips `paused` — the property every player reads back to paint its button.
         el.play = function() {
+          // Replaying from the end restarts at 0 (HTML §"If playback has ended... seek to 0").
+          if (el.__ended) { el.__ended = false; el.__currentTime = 0; }
+          var wasPaused = el.paused;
           el.paused = false;
+          // `play` announces intent; `playing` announces that playback is actually running.
+          // Both fire only on the paused→playing edge, because a player that calls play() on an
+          // already-running element must not see a second pair.
+          if (wasPaused && el.dispatchEvent) {
+            el.dispatchEvent(new globalThis.Event('play'));
+            el.dispatchEvent(new globalThis.Event('playing'));
+          }
           return Promise.resolve();
         };
-        el.pause = function() { el.paused = true; };
+        el.pause = function() {
+          if (!el.paused) {
+            el.paused = true;
+            if (el.dispatchEvent) { el.dispatchEvent(new globalThis.Event('pause')); }
+          }
+        };
         el.load  = function() {};
+
+        // ── THE PLAYBACK CLOCK — `currentTime` advances, `timeupdate`/`ended` fire.
+        //
+        // `play()` above flips `paused` but nothing moved the clock: `currentTime` sat at 0, so
+        // `timeupdate` (the single most-bound media event — progress bars, "% watched" analytics,
+        // synchronized transcripts, ad-insertion points, chapter markers all listen on it) never
+        // fired, and `ended` (playlist advance, autoplay-next, loop restart) never arrived. A
+        // `<video autoplay>` looked like it was playing and reported a frozen timeline.
+        //
+        // **The clock is HOST-DRIVEN, not self-pumping, and that is deliberate.** The audio device
+        // clock is the master when there is an audio track and the wall clock otherwise (MEDIA.md
+        // trap #9); both live in the shell, which owns the real frame timer and a bounded render
+        // budget. A self-rescheduling `setTimeout` pump would spin forever on the commonest web
+        // video of all — the muted `autoplay loop` background clip — because `loop` has no natural
+        // stop. So the host calls `__mediaAdvance(nodeId, elapsedSeconds)` each frame with the real
+        // elapsed time, and this element only moves when told. In headless tests the gate is the
+        // host, driving the same entry point.
+        el.__advance = function (delta) {
+          delta = Number(delta);
+          if (!isFinite(delta) || delta <= 0) { return; }
+          if (el.paused || el.__ended) { return; }
+          var rate = Number(el.playbackRate); if (!(rate > 0)) { rate = 1; }
+          var t = el.__currentTime + delta * rate;
+          var dur = Number(el.duration);
+          var known = isFinite(dur) && dur > 0;
+          if (known && t >= dur) {
+            if (el.loop) {
+              // Wrap to the start and keep running — a looping clip never ends.
+              el.__currentTime = 0;
+              if (el.__syncTextTracks) { el.__syncTextTracks(); }
+              if (el.dispatchEvent) { el.dispatchEvent(new globalThis.Event('timeupdate')); }
+              return;
+            }
+            el.__currentTime = dur;
+            el.paused = true;      // the property, NOT pause(): `ended` fires, `pause` must not
+            el.__ended = true;
+            if (el.__syncTextTracks) { el.__syncTextTracks(); }
+            if (el.dispatchEvent) {
+              el.dispatchEvent(new globalThis.Event('timeupdate'));
+              el.dispatchEvent(new globalThis.Event('ended'));
+            }
+            return;
+          }
+          el.__currentTime = t;               // private: the caption sync is called explicitly below
+          if (el.__syncTextTracks) { el.__syncTextTracks(); }
+          if (el.dispatchEvent) { el.dispatchEvent(new globalThis.Event('timeupdate')); }
+        };
         // ── TEXT TRACKS — a REAL TextTrack, because this is the API captions actually arrive
         //    through on streaming sites.
         //
@@ -3796,6 +3874,20 @@ const PRELUDE: &str = r#"
           return Promise.reject(new DOMException('picture-in-picture is not supported', 'NotSupportedError'));
         };
         return el;
+      };
+
+      // ── `__mediaAdvance(nodeId, elapsedSeconds)` — the ONE host entry into the playback clock.
+      //
+      // The shell's frame loop (which holds the real audio/wall clock) calls this per frame with
+      // the seconds elapsed since the last; it looks the element up by node id and drives its
+      // `__advance`. A single, node-addressed entry point (mirroring `__mediaProp`/`__msePublish`)
+      // so the host and the headless gate exercise byte-for-byte the same path. A node that is not
+      // a reflected media element, or has never been through `__manukMedia`, is a silent no-op —
+      // the host must never crash on a stale id.
+      globalThis.__mediaAdvance = function (nodeId, elapsedSeconds) {
+        var map = globalThis.__nodes;
+        var el = map && map[nodeId];
+        if (el && typeof el.__advance === 'function') { el.__advance(elapsedSeconds); }
       };
 
       // NO BRIDGES ANY MORE — and removing them is not tidying, it is required.

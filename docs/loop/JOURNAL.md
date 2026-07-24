@@ -20848,3 +20848,59 @@ NEXT: ESM is now static-graph + import-map complete on both paths. Remaining ESM
 ticks): import-map `scopes`; dynamic `import()` (separate lazy hook). Otherwise PIVOT per the board — media
 playback-join (biggest capability GAP) or test262 (highest-value unmeasured JS-conformance). Self-audit
 next 525; surface next 528; const next 527; wall next 527.
+
+## Tick 521 — BUILD BRICK: `<video>` playback clock — timeupdate/ended fire, currentTime advances (2026-07-24)
+
+Obeying the board pivot off the just-finished ESM subsystem (t512-520) toward the biggest capability
+GAP (MEDIA). Re-probed the Tier-1 bounded list FIRST (rule 2, stale-pessimistic): IndexedDB indexes
+(createIndex/IDBKeyRange/cursor/getAllRecords), cookie attribute enforcement (SameSite-subresource/
+HttpOnly/__Host-, gated g_cookie_attributes), U-1 fetch req body+headers, WebAuthn — ALL already
+built/gated on disk. The bounded-remainder doc (tick 328) is stale; the atomic+bounded vein is
+genuinely mined out, confirming const-check #30/#31. Media is the frontier and it is XL, so I took the
+one bounded, headlessly-gateable media brick the wiki itself named as residue: **M6b-element — the
+JS-visible playback clock.**
+
+WHAT WAS BROKEN: the media element surface was mature (play() resolved, canPlayType honest, captions
+rendered) but the CLOCK was dead. play() flipped `paused` and stopped — `currentTime` sat at 0, so
+`timeupdate` (the single most-bound media event: progress bars, %-watched analytics beacons,
+synchronized transcripts, ad-cue/chapter markers) never fired, and `ended` (playlist advance,
+autoplay-next, non-loop stop) never arrived. A `<video autoplay>` looked like it was playing over a
+frozen 0:00 timeline.
+
+WHAT LANDED (engine/js/src/event_loop.rs, in `__manukMedia` + one new global):
+1. **`el.__advance(delta)`** — advances `currentTime` by `delta × playbackRate`, fires `timeupdate`,
+   re-syncs the caption timeline (same `__syncTextTracks` M7c drives). On a finite `duration`: clamps,
+   sets `ended`/`paused`, fires a final `timeupdate` then `ended` — NOT `pause` (spec routes
+   end-of-media to `ended`). A `loop` clip wraps to 0 and keeps running.
+2. **`play()`/`pause()`** fire the edge events (`play`→`playing`, `pause`); `play()` after `ended`
+   restarts at 0 (HTML "seek to 0 if playback has ended"). `ended` is a real backed flag now, not a
+   frozen `false`.
+3. **`volume`/`muted`/`playbackRate` setters** fire `volumechange`/`ratechange`.
+4. **`__mediaAdvance(nodeId, elapsedSeconds)`** — the ONE host entry (mirrors `__msePublish`/
+   `__mediaProp`), node-addressed. The clock is HOST-DRIVEN, not self-pumping: the shell frame loop
+   (which owns the audio/wall clock + a bounded render budget) calls it per frame. A self-rescheduling
+   setTimeout pump would spin FOREVER on the muted `autoplay loop` background clip (commonest web
+   video, `loop` has no natural stop) — which is exactly why position must come from outside. The
+   in-crate Transport (t249/250, audio MASTER, sync SNAPS) is the shell-side source that feeds it.
+
+RED-PROVEN (real E2E, no network): new gate `g_media_playback_clock` builds a `<video>`, attaches a
+MediaSource with `duration=9`, then drives `__mediaAdvance` through the exact host entry point (the
+headless test IS the host): asserts play→playing edge, currentTime advancing (t4:4), clamp-and-ended
+at duration (t:9.00 / ended:true,1 / pausedEnd:true / nopause:true), timeupdate per step (tu:true),
+no-op-past-end (afterEnd:9.00), replay-from-0 (replay:0.00,false), rate-scaling (2s@2x⇒4s,
+rate:1,4.00). Neuter `el.__advance` to a no-op → t4:0 / t:0.00 / ended:false,0 / tu:false → RED, exactly
+the pre-tick dead clock. All other media/MSE gates untouched.
+
+TICK SHAPE: subsystem build brick (1 capability — the JS-visible playback clock: timeupdate/ended/
+playing/pause/ratechange + host-driven currentTime advance; new gate g_media_playback_clock E2E,
+RED-proven; the play→playing/ended/loop/replay/rate model is spec-shaped; Bar 0 held — the clock is
+inert until the host drives it, and a stale id is a silent no-op). WIKI: docs/wiki/media-pipeline.md
+(new M6b-element section — the JS-visible clock, the host-driven seam, why not self-pumping).
+WEB-PATTERNS.md updated (video progress/analytics/playlist class widened). NOT [no-pattern]
+(engine/js/src touched).
+
+NEXT: media frontier remains XL — the shell frame loop should call `__mediaAdvance` per frame (GUI
+driver, home = wherever Transport ticks; the seam is proven, this wires it) — then codec breadth /
+WebM-VP9 is the CUT line (no Rust VP9 decoder; AV1+H.264 covers the practical web). Or test262
+(measurement, now permitted after this build brick). seeking/seeked on a currentTime write = separate
+scrub brick. Self-audit next 525; surface next 528; const next 527; wall next 527.

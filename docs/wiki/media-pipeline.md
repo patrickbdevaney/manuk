@@ -498,6 +498,41 @@ Residue: still no device. `AudioClock` is fed by whoever owns the `cpal` stream,
 yet — decoded PCM correctness is gateable headlessly, audible playback is not. And the `<video>`
 element's JS surface still answers the pre-decode era's honest NO (M6b-element, unbuilt).
 
+## M6b-element — the JS-visible playback clock (tick 521): `timeupdate`/`ended` fire
+
+The in-crate `Transport` (M6/M6b) tracks position, playing and ended; the element's JS surface did
+not see any of it. `play()` flipped `paused` and stopped there, so `currentTime` sat at 0 and the two
+most-bound media events on the web — `timeupdate` and `ended` — never fired. A `<video autoplay>`
+looked like it was playing and reported a frozen 0:00 timeline; every progress bar, `% watched`
+analytics beacon, synchronized transcript, ad-cue point and chapter marker (all bound to
+`timeupdate`) was dead, and every playlist / autoplay-next handler (bound to `ended`) was stuck on
+track one. This tick wires the JS-visible clock:
+
+- **`el.__advance(delta)`** (in `__manukMedia`, `engine/js/src/event_loop.rs`) advances
+  `currentTime` by `delta × playbackRate`, fires `timeupdate`, and re-syncs the caption timeline
+  (the same `__syncTextTracks` M7c drives). On reaching a finite `duration` it clamps, sets
+  `ended`/`paused` and fires a final `timeupdate` then `ended` — *not* `pause` (the spec routes
+  end-of-media to `ended`). A `loop` clip wraps to 0 and keeps running.
+- **`play()`/`pause()`** now fire the edge events (`play`→`playing`, `pause`); `play()` after `ended`
+  restarts at 0 (HTML "seek to 0 if playback has ended"). The `volume`/`muted`/`playbackRate` live
+  setters fire `volumechange`/`ratechange`.
+- **The clock is HOST-DRIVEN, not self-pumping.** `__mediaAdvance(nodeId, elapsedSeconds)` is the one
+  entry point (mirroring `__msePublish`/`__mediaProp`); the shell's frame loop — which holds the
+  `AudioClock`/wall clock and a bounded render budget — calls it each frame. A self-rescheduling
+  `setTimeout` pump would spin forever on the muted `autoplay loop` background clip (the commonest
+  web video, whose `loop` has no natural stop), which is exactly why the position must come from
+  outside. `Transport` (position/playing/ended) is the shell-side source that feeds it; the audio
+  device clock stays master per trap #9.
+
+Gated: `g_media_playback_clock` drives that exact entry point (the headless test *is* the host),
+asserting the play→playing edge, `currentTime` advancing, the clamp-and-`ended` at duration,
+`ended`-not-`pause`, rate-scaling (2× rate ⇒ 2× advance) and replay-from-0. RED: neuter `__advance`
+to a no-op and `currentTime` stays 0, `timeupdate`/`ended` never fire.
+
+**Residue:** the shell frame loop does not yet call `__mediaAdvance` (the seam is proven end-to-end;
+its GUI driver is the next integration, home = wherever `Transport` ticks per frame). `seeking`/
+`seeked` on a `currentTime` write are still unfired (a separate scrub-path brick).
+
 ## M7 — captions (tick 255), and a probe that verified the TEST
 
 `VttTrack::parse` + `active_at(t)`, in `manuk_media::vtt`. **Not feature-gated** — a caption file is
