@@ -21010,3 +21010,39 @@ change). WIKI: docs/wiki/media-pipeline.md — new M6b-durationchange subsection
 NEXT: media JS-surface is now saturated (clock/seek/played/durationchange). Frontier is XL (shell
 frame-loop driver + WebM/VP9 CUT line). PIVOT: fidelity instrument rebuild (CO-#1 exit gate) or test262.
 Self-audit next 525 (DUE next tick); surface next 528; const next 527; wall next 527.
+
+## Tick 525 — SELF-AUDIT #(cadence): methodology-vs-built clean except the observer-owned wall (2026-07-24)
+
+Self-audit cadence (due at 515+10=525). Ran ./scripts/self-audit.sh @ tick 524. Result: the whole
+prescribed-vs-built matrix is GREEN — every gate declares how to break it, the process-defect ledger
+(49) and cluster registry (392) are current, journal has no gaps, WEB-PATTERNS (433 rows) moves with
+the engine, enforcement is mechanical (hook-blocked cadence, generated STATUS), Part-22 duplicate-work
+audit journaled. LAST_AUDIT_TICK bumped 515→524.
+
+ONE flagged item, and it is OUT OF MY SCOPE: "verify wall 693s EXCEEDS the 300s target — Part 21.2
+item 1 regressed (mold/lld, cargo-nextest, workspace-hack, risk-based gate scheduling)." Every remedy
+named is BUILD/HARNESS tooling — linker choice, test runner, gate scheduling — i.e. scripts/ and the
+verify harness, which per V1-SCOPE + the loop charter are DONE and OWNED BY THE OBSERVER. The agent
+builds engine/ browser capability only and must not edit/optimize scripts/ or the wall (see
+[[harness-is-observer-owned]], [[wall-warm-rerun-lands-ticks]]). Noted here, not acted on. The wall is
+also not a capability regression (THE RATCHET held every tick this session); it is build latency, the
+observer's axis.
+
+DIRECTION REASSESSMENT (the audit's real value now): the media JS-visible surface is SATURATED this
+session — playback clock (521), seek (522), played (523), durationchange (524) — the trio+ every video
+analytics/scrub/resume/timeline feature reads. The media FRONTIER is now genuinely XL and blocked on
+non-bounded work: (a) the shell frame-loop DRIVER calling __mediaAdvance / consuming currentTime props
+(GUI, false-RED risk), (b) codec breadth / WebM-VP9 (the CUT line — no usable Rust VP9 decoder). And the
+atomic + bounded-capability vein is confirmed mined out (IndexedDB/cookies/fetch-body/WebAuthn all
+already built; PHASE0-BOUNDED-REMAINDER.md is stale). So the next non-media frontier is a deliberate
+PIVOT: the board's CO-#1 fidelity instrument rebuild (agent-editable manuk-wpt Rust probe per
+FIDELITY-SCORING-REDESIGN.md — THE Phase-0 exit gate, but a subsystem that LIES if half-built, needs a
+decompose session), or test262 (measurement, permitted after 4 build bricks), or a bounded probe of the
+2 buildable remaining unknowns (name-only container queries; hidden=until-found reveal is shell-side).
+
+TICK SHAPE: self-audit (docs-only cadence — self-audit.sh ran clean bar the observer-owned wall;
+LAST_AUDIT_TICK 515→524; NO engine source changed; the wall proves nothing regressed). WIKI: none —
+audit cadence tick, no engine change. No [no-pattern] needed (no engine/{js,css,...}/src touched).
+
+NEXT: 526 pivots per the reassessment above (fidelity-instrument decompose / test262 / name-only-CQ
+probe). Self-audit next 534; surface next 528; const next 527; wall next 527.
