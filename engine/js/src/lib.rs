@@ -241,6 +241,27 @@ pub fn esm_registry_gc_selftest() -> bool {
     }
 }
 
+/// **ESM import-graph B2 resolve-hook self-check** — a two-module graph (`import { v } from './b.js'`)
+/// links, evaluates, and the root sees the imported binding, proving the resolve hook resolves a
+/// relative specifier against the importer's own url and returns the registered module. Driven through
+/// [`with_runtime`] so the runtime is PARKED for a clean exit (`G_CLEAN_EXIT`). Gated by
+/// `g_esm_import_graph`; the real check lives in [`dom_bindings::esm_import_graph_selftest_in_realm`].
+pub fn esm_import_graph_selftest() -> bool {
+    #[cfg(feature = "_sm")]
+    {
+        with_runtime(|rt| {
+            let cx = unsafe { rt.cx().raw_cx() };
+            Ok(unsafe { dom_bindings::esm_import_graph_selftest_in_realm(cx) })
+        })
+        .unwrap_or(false)
+    }
+    #[cfg(not(feature = "_sm"))]
+    {
+        // No JS engine ⇒ no import-graph loader ⇒ N/A, not a failure (mirrors `esm_registry_gc_selftest`).
+        true
+    }
+}
+
 #[cfg(feature = "_sm")]
 pub fn run_document_scripts(
     dom: &mut manuk_dom::Dom,

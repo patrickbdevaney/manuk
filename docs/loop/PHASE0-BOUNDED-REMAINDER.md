@@ -135,16 +135,34 @@ resolves. The GAP is `module_resolve_hook` (engine/js/src/dom_bindings.rs:9489),
   forced `JS_GC` with its private round-tripping. RED-proven (neuter `SetModulePrivate` → red). Driven
   through `with_runtime` so exit stays clean (G_CLEAN_EXIT). **hazard #1 (rooting) + #2 (per-module URL)
   both retired.**
-- **B2 — resolve hook: fetch+compile+cache+return.** Rewrite `module_resolve_hook`: resolve specifier
-  against the referencing module's private URL → check registry (return cached, handles cycles) →
-  `manuk_net::get` → `CompileModule` → insert into registry BEFORE returning → return the handle. Fetch
-  failure → null (link fails gracefully, as today). Gate `g_esm_import_graph`: a two-file inline fixture
-  (`import {v} from './b.js'; export const r = v+1` where `b.js` exports `v`) links, evaluates, and the
-  root sees the imported binding. RED-provable: revert the hook to null → link fails → `r` undefined.
-- **B3 — external `<script type=module src=...>` graphs** (B2 covers inline roots; this extends to a
-  fetched root module) + **bare-specifier honesty** (`import 'react'` has no resolver here — return null
-  with a recorded, non-crashing failure, not a guess). Gate: an external module root with a relative
-  import graph renders; a bare specifier fails loud-but-safe.
+- **B2 — resolve hook: resolve + registry lookup.** ✅ **LANDED tick 513.** Rewrote
+  `module_resolve_hook` (was `ptr::null_mut()`): read specifier (`GetModuleRequestSpecifier`) → base url
+  = the *referencing* module's private (`DOC_URL` fallback) → `url::Url::parse(base).join(specifier)` →
+  return `esm_registry_get(resolved)` (null on miss/bad-url — graceful `ModuleLink` failure, never a
+  crash; a bare specifier fails loud-but-safe here as B3 intends). **SCOPE CORRECTION vs the original
+  plan:** the fetch+compile step does NOT belong in this sync hook — `ModuleLink` runs synchronously on
+  the JS thread and this engine has NO synchronous network (see `event_loop.rs` `importScripts`: "we
+  have no synchronous network", so worker imports are pre-fetched on the async side and the sync path
+  consumes a source map). So B2 is the SYNC half — resolution + memoized lookup, which is what makes a
+  *populated* graph link+evaluate with cross-module bindings and cycles (the registry returns the SAME
+  `*mut JSObject` per url, so `a↔b` re-enters the existing record). Populating the registry from a
+  fetched graph moves to B3 (the async pre-fetch pass), matching the `importScripts` precedent. Gate
+  `g_esm_import_graph` (`esm_import_graph_selftest`): seeds `export const v = 41;` into the registry,
+  compiles a root doing `import {v} from './esm-graph-dep.js'` against its OWN private, links+evaluates,
+  asserts `globalThis.__esm_graph_r === 42`. RED-proven: revert the hook to null → `ModuleLink` fails
+  ("Module resolve hook" returns nothing) → global never written → red (verified this tick). B1 gate
+  still green (self-contained path unchanged).
+- **B3 — the async pre-fetch pass that POPULATES the registry** (the half B2's scope-correction moved
+  here) + external `<script type=module src=...>` roots + **bare-specifier honesty**. On the async page
+  path (where fetch is natural, like the `importScripts` pre-scan): for each module script, walk its
+  requested modules (`GetRequestedModules` — now needed, since the sync hook can't fetch), resolve each
+  specifier against the referencing url, `manuk_net::fetch` → `CompileModule` → `set_module_private_url`
+  → `esm_registry_insert` BEFORE recursing (cycle-safe), recursing into each fetched module's own
+  imports; then `run_module` links the root and B2's hook resolves every specifier from the now-populated
+  registry. Wire `esm_registry_clear` into page teardown (same tick as the first real insert). Bare
+  specifier (`import 'react'`) has no resolver — record a non-crashing failure, not a guess. Gate: an
+  inline root with a real relative import graph renders end-to-end (fetch→compile→link→evaluate); a bare
+  specifier fails loud-but-safe.
 
 **Bound:** B1 S (1-2), B2 M (2-4, the rooting is the cost), B3 S-M (1-2). Total ≈ 4-8 ticks — below the
 roadmap's original "L (subsystem)" once the sync-fetch + hook-driven-recursion shortcuts are used.

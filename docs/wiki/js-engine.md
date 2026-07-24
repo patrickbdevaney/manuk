@@ -165,6 +165,29 @@ a full `JS_GC`, and reads it back through the registry with its private intact �
 untraced-`Heap` registry goes red (collected or dangling) exactly there. Same lesson as `DOC_REFLECTOR`:
 **keep the handle in a structure the GC traces; never a bare `Cell`/`HashMap` value.**
 
+**The resolve hook is the SYNC half, and it must NOT fetch — because this engine has no synchronous
+network (tick 513, ESM import-graph B2).** SpiderMonkey calls `module_resolve_hook` once per `import`
+during `ModuleLink`, which runs synchronously on the JS thread. The obvious design — "fetch+compile the
+module right here" — is wrong for the same reason `importScripts` is pre-scanned rather than fetched
+on-demand: there is no blocking `fetch` in this engine (`manuk_net::fetch` is async; the page and workers
+pre-fetch on the async side and the sync path consumes a source/module map). So B2's hook does exactly
+three synchronous things and nothing else: read the specifier (`GetModuleRequestSpecifier`), take the
+base URL from the **referencing module's private** (the per-module URL B1 threaded — so a relative
+`./b.js` resolves against the *importer*, not the document; `DOC_URL` fallback), `url::Url::parse(base)
+.join(specifier)`, and return `esm_registry_get(resolved)`. A miss or a bad URL returns null → a graceful
+`ModuleLink` failure (the same shape as the old always-null hook, never a crash), which is also how a bare
+specifier (`import 'react'`) fails loud-but-safe until a resolver exists. **This is what makes a
+*populated* graph work:** the registry returning the SAME `*mut JSObject` per URL is the memoization
+SpiderMonkey's own graph walk needs — cross-module bindings resolve and a cycle `a↔b` re-enters the
+existing module record instead of looping. **Populating** the registry from a fetched graph is deliberately
+NOT here; it is the async pre-fetch pass (B3), mirroring `importScripts`. Gate `g_esm_import_graph`
+(`esm_import_graph_selftest`) seeds a dep module into the registry, compiles a root that imports it across
+a relative specifier, links+evaluates, and asserts the imported binding reached the root
+(`globalThis.__esm_graph_r === 42`); revert the hook to null and it goes red at `ModuleLink`. One catch
+proven the same tick: the resolve+metadata hooks are per-**runtime**, installed by `run_scripts` on the
+page path — a self-test that boots its own global must re-`SetModuleResolveHook`, or `ModuleLink` reports
+*"Module resolve hook not set"* and never reaches the hook under test.
+
 ## An unhandled promise rejection is where every framework's failure goes to die
 
 **Every modern framework renders inside an `async` function**, so a throw during render is a *rejected

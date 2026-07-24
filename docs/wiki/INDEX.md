@@ -552,66 +552,66 @@
   - L107 · Missing JSAutoRealm compiles fine and SIGSEGVs at runtime
   - L116 · import.meta needs an embedder module-metadata hook, and its absence killed every Vite app
   - L138 · A raw *mut JSObject cached across a GC boundary is a use-after-free, not an optimisation
-  - L168 · An unhandled promise rejection is where every framework's failure goes to die
-  - L180 · Custom-element upgrade has four traps, and each hides the next
-  - L192 · Svelte 5 lifts accessors off Node.prototype — so reflectors need a prototype bridge
-  - L203 · Symbol.hasInstance answers framework instanceof checks without a real prototype chain
-  - L213 · libc::_exit() to dodge a shutdown crash is a data-loss bug in disguise
-  - L222 · A panic that travels through SpiderMonkey's C++ frames does not unwind — it ABORTS
-  - L228 · A runaway task loop needs a hard drain ceiling — and the ceiling must assert the page RENDERED
-  - L236 · The SpiderMonkey-vs-V8 "capability gap" is mostly a myth. The real gap is ONE API family.
-  - L247 · Lean JS engines (QuickJS, Hermes, JerryScript) are ruled out by the BAR, not by taste
-  - L255 · The SpiderMonkey modification boundary exists because of ADVERSARIAL-FUZZING CALENDAR TIME
-  - L265 · Two SpiderMonkey contexts in one test binary segfault nondeterministically
-  - L271 · catch_unwind AROUND an extern "C" fn does NOTHING. The catch must be INSIDE it.
-  - L302 · Shutting SpiderMonkey down — and the rule that makes teardown work
-  - L319 · The workaround that wasn't
-  - L326 · The ordering trap (this is the part worth remembering)
-  - L346 · The shape that works
-  - L373 · DOM reflectors: the prototype chain, and the two bugs hiding in "it works"
-  - L400 · The shape now
-  - L415 · Two traps worth knowing
-  - L427 · The stated limit
-  - L435 · And it moved WPT not at all
-  - L440 · <canvas> 2D — from a stub that drew nothing to a real rasterizer
-  - L452 · How it reaches the screen — with no new machinery
-  - L463 · Where the state lives, and why it is split
-  - L474 · Done, and honestly not done
-  - L487 · The bug that hurt most, and it was not the rasterizer
-  - L500 · Reflecting a NUMBER attribute: four rules the naive getter gets wrong (tick 117)
-  - L534 · dispatchEvent validity, and the native seam that swallowed the throw (tick 118)
-  - L557 · A node id is unique only WITHIN its arena — so a reflector must resolve against its OWN document
-  - L584 · A per-arena identity cache must not CLOBBER the shared __nodes — it breaks event dispatch silently
-  - L597 · Mass reflector access + the reflection layer can overflow the C stack, and SpiderMonkey won't catch it
-  - L631 · A reused SpiderMonkey runtime across many pages SIGSEGVs — a cross-file reflector/rooting UAF (open Bar-0)
-  - L652 · A second, DETERMINISTIC C-stack overflow (html/semantics) — NATIVE recursion, not the stack-quota class
-  - L685 · Web Crypto entropy: crypto.getRandomValues / randomUUID (tick 160)
-  - L717 · HTML Constraint Validation, on the shared prototype (tick 161)
-  - L742 · crypto.subtle.digest — async surface over a sync host hash (tick 162)
-  - L767 · Forced synchronous reflow — the read path lays out before it answers (tick 213)
-  - L818 · Web Workers — running a script in a scope that must NOT be the page's (tick 280)
-  - L825 · The scope is a deny-list over a with, not an allow-list
-  - L854 · The clone is taken at POST time
-  - L867 · Loading, and what is honestly out of reach
-  - L885 · Service Workers — the third side of a capability built over three ticks (tick 281)
-  - L895 · The lifecycle IS the capability
-  - L909 · Interception, and the recursion that hangs
-  - L932 · Why the worker internals are published on one object
-  - L943 · Blob object-URLs carry real bytes — canvas.toBlob + blob: fetch (tick 284)
-  - L950 · canvas.toBlob decodes the one raster toDataURL already produced
-  - L962 · blob: resolves in fetch against the one object-URL registry
-  - L990 · scheduler.postTask — priority-ordered main-thread work (tick 293)
-  - L1004 · The teeth G_SCHEDULER_POSTTASK uses
-  - L1011 · DOMMatrix — 2D affine transform math (tick 294)
-  - L1028 · DOMPoint — the geometry point that pairs with DOMMatrix (tick 295)
-  - L1040 · DOMQuad — four points, the enclosing box (tick 296)
-  - L1050 · Error.stackTraceLimit — the property is a shim, the behavior is an honest no (tick 400)
-  - L1061 · document.location is window.location — and the alias must be an accessor (tick 402)
-  - L1079 · getPropertyValue is total — a string for every input (tick 403)
-  - L1089 · document.currentScript — a thread-local, set per classic evaluation (tick 404)
-  - L1100 · structuredClone preserves binary types — the plain-object degrade is silent corruption (tick 421)
-  - L1120 · putImageData is a raw pixel blit, ImageData is the buffer libraries build (tick 423)
-  - L1143 · TextDecoder honours its label (windows-1252 + utf-16), not UTF-8-for-everything (tick 424)
+  - L191 · An unhandled promise rejection is where every framework's failure goes to die
+  - L203 · Custom-element upgrade has four traps, and each hides the next
+  - L215 · Svelte 5 lifts accessors off Node.prototype — so reflectors need a prototype bridge
+  - L226 · Symbol.hasInstance answers framework instanceof checks without a real prototype chain
+  - L236 · libc::_exit() to dodge a shutdown crash is a data-loss bug in disguise
+  - L245 · A panic that travels through SpiderMonkey's C++ frames does not unwind — it ABORTS
+  - L251 · A runaway task loop needs a hard drain ceiling — and the ceiling must assert the page RENDERED
+  - L259 · The SpiderMonkey-vs-V8 "capability gap" is mostly a myth. The real gap is ONE API family.
+  - L270 · Lean JS engines (QuickJS, Hermes, JerryScript) are ruled out by the BAR, not by taste
+  - L278 · The SpiderMonkey modification boundary exists because of ADVERSARIAL-FUZZING CALENDAR TIME
+  - L288 · Two SpiderMonkey contexts in one test binary segfault nondeterministically
+  - L294 · catch_unwind AROUND an extern "C" fn does NOTHING. The catch must be INSIDE it.
+  - L325 · Shutting SpiderMonkey down — and the rule that makes teardown work
+  - L342 · The workaround that wasn't
+  - L349 · The ordering trap (this is the part worth remembering)
+  - L369 · The shape that works
+  - L396 · DOM reflectors: the prototype chain, and the two bugs hiding in "it works"
+  - L423 · The shape now
+  - L438 · Two traps worth knowing
+  - L450 · The stated limit
+  - L458 · And it moved WPT not at all
+  - L463 · <canvas> 2D — from a stub that drew nothing to a real rasterizer
+  - L475 · How it reaches the screen — with no new machinery
+  - L486 · Where the state lives, and why it is split
+  - L497 · Done, and honestly not done
+  - L510 · The bug that hurt most, and it was not the rasterizer
+  - L523 · Reflecting a NUMBER attribute: four rules the naive getter gets wrong (tick 117)
+  - L557 · dispatchEvent validity, and the native seam that swallowed the throw (tick 118)
+  - L580 · A node id is unique only WITHIN its arena — so a reflector must resolve against its OWN document
+  - L607 · A per-arena identity cache must not CLOBBER the shared __nodes — it breaks event dispatch silently
+  - L620 · Mass reflector access + the reflection layer can overflow the C stack, and SpiderMonkey won't catch it
+  - L654 · A reused SpiderMonkey runtime across many pages SIGSEGVs — a cross-file reflector/rooting UAF (open Bar-0)
+  - L675 · A second, DETERMINISTIC C-stack overflow (html/semantics) — NATIVE recursion, not the stack-quota class
+  - L708 · Web Crypto entropy: crypto.getRandomValues / randomUUID (tick 160)
+  - L740 · HTML Constraint Validation, on the shared prototype (tick 161)
+  - L765 · crypto.subtle.digest — async surface over a sync host hash (tick 162)
+  - L790 · Forced synchronous reflow — the read path lays out before it answers (tick 213)
+  - L841 · Web Workers — running a script in a scope that must NOT be the page's (tick 280)
+  - L848 · The scope is a deny-list over a with, not an allow-list
+  - L877 · The clone is taken at POST time
+  - L890 · Loading, and what is honestly out of reach
+  - L908 · Service Workers — the third side of a capability built over three ticks (tick 281)
+  - L918 · The lifecycle IS the capability
+  - L932 · Interception, and the recursion that hangs
+  - L955 · Why the worker internals are published on one object
+  - L966 · Blob object-URLs carry real bytes — canvas.toBlob + blob: fetch (tick 284)
+  - L973 · canvas.toBlob decodes the one raster toDataURL already produced
+  - L985 · blob: resolves in fetch against the one object-URL registry
+  - L1013 · scheduler.postTask — priority-ordered main-thread work (tick 293)
+  - L1027 · The teeth G_SCHEDULER_POSTTASK uses
+  - L1034 · DOMMatrix — 2D affine transform math (tick 294)
+  - L1051 · DOMPoint — the geometry point that pairs with DOMMatrix (tick 295)
+  - L1063 · DOMQuad — four points, the enclosing box (tick 296)
+  - L1073 · Error.stackTraceLimit — the property is a shim, the behavior is an honest no (tick 400)
+  - L1084 · document.location is window.location — and the alias must be an accessor (tick 402)
+  - L1102 · getPropertyValue is total — a string for every input (tick 403)
+  - L1112 · document.currentScript — a thread-local, set per classic evaluation (tick 404)
+  - L1123 · structuredClone preserves binary types — the plain-object degrade is silent corruption (tick 421)
+  - L1143 · putImageData is a raw pixel blit, ImageData is the buffer libraries build (tick 423)
+  - L1166 · TextDecoder honours its label (windows-1252 + utf-16), not UTF-8-for-everything (tick 424)
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`

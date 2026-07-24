@@ -20473,3 +20473,48 @@ registry (return cached, handles cycles) → `manuk_net::get` (sync fetch alread
 handle; wire `esm_registry_clear` into page teardown (same tick as the first insert). Gate
 `g_esm_import_graph`: a two-file inline fixture links + evaluates + the root sees the imported binding.
 Self-audit next 515; surface next 518; wall next 527; const-check next 519.
+
+## Tick 513 — BUILD BRICK: ESM import-graph B2 — resolve hook (resolve + registry lookup) (2026-07-24)
+
+Per Const-Check #30's ruling (the measurement arc is CLOSED; the next capability tick MUST be a
+subsystem build brick) and following B1 (tick 512), landed **ESM import-graph B2** — the resolve hook
+that consumes B1's rooted registry. `module_resolve_hook` was `ptr::null_mut()`, so every
+`import {x} from './y.js'` failed at `ModuleLink` and only import-free modules ran (the whole modern
+`type=module` app web died there).
+
+WHAT LANDED (engine/js/src/dom_bindings.rs + lib.rs):
+1. **`module_resolve_hook` rewritten** to three synchronous steps: read the specifier
+   (`GetModuleRequestSpecifier`) → base URL = the *referencing* module's private (the per-module URL B1
+   threaded; `DOC_URL` fallback) → `url::Url::parse(base).join(specifier)` → return
+   `esm_registry_get(resolved)`. Miss / bad-URL → null (graceful `ModuleLink` failure, same shape as the
+   old always-null hook — never a crash; a bare `import 'react'` fails loud-but-safe here).
+2. **Gate `engine/page/tests/g_esm_import_graph.rs`** (`esm_import_graph_selftest`): seeds
+   `export const v = 41;` into the registry under its resolved url, compiles a root doing
+   `import { v } from './esm-graph-dep.js'` against its OWN private, links + evaluates, asserts
+   `globalThis.__esm_graph_r === 42`. The hook fires 3× (link + evaluate phases), all cache-hits →
+   proves the memoization that makes cycles `a↔b` terminate.
+
+SCOPE CORRECTION vs the original B2 plan (recorded in PHASE0-BOUNDED-REMAINDER.md §169 + wiki
+js-engine.md): the plan said "fetch+compile in the hook". That is WRONG for this engine — `ModuleLink`
+is synchronous on the JS thread and there is NO synchronous network (event_loop.rs `importScripts`: "we
+have no synchronous network"; workers pre-fetch async and the sync path consumes a source map). So B2 is
+the SYNC half — resolution + memoized lookup, which is what makes a *populated* graph link+evaluate with
+cross-module bindings and cycles. Populating the registry from a fetched graph moves to B3 (the async
+pre-fetch pass), matching the `importScripts` precedent.
+
+RED-PROVEN this tick (not just argued): reverted the hook to `ptr::null_mut()`, rebuilt → `ModuleLink`
+fails → the global is never written → gate RED (0 passed); restored → GREEN (1 passed). B1 gate
+(`g_esm_module_registry`) still green = the self-contained-module path is unchanged. One catch proven and
+documented: the resolve/metadata hooks are per-RUNTIME (installed by `run_scripts` on the page path), so
+a self-test booting its own global must re-`SetModuleResolveHook` or `ModuleLink` reports "Module resolve
+hook not set" and never reaches the hook under test.
+
+TICK SHAPE: subsystem build brick (1 real capability — the import-graph resolve/link path; 1 new gate;
+existing esmmodule + B1 registry gates hold; nothing regresses; Bar 0 held). WIKI: docs/wiki/js-engine.md
+(the ESM section — B2 subsection added). [no-pattern] — the class (Vite/Rollup import-graph apps) is NOT
+unlocked until B3 populates the registry from real fetches; B2 is the sync consumer half, no real page
+loads a graph yet. NEXT: **B3** — the async pre-fetch pass that POPULATES the registry (walk
+`GetRequestedModules`, resolve+fetch+compile+`set_module_private_url`+insert BEFORE recursing, cycle-safe),
+external `<script type=module src=...>` roots, bare-specifier honesty; wire `esm_registry_clear` into page
+teardown at the first real insert. Gate: an inline root with a real relative import graph renders
+end-to-end. Self-audit next 515; surface next 518; const-check next 519; wall next 527.

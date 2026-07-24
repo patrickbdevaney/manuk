@@ -9512,6 +9512,129 @@ pub unsafe fn esm_registry_gc_selftest_in_realm(cx: *mut RawJSContext) -> bool {
     }
 }
 
+/// **ESM import-graph B2 resolve-hook self-check** — a two-module graph LINKS, EVALUATES, and the root
+/// module sees a binding imported across a *relative* specifier.
+///
+/// Seeds a dependency module (`export const v = 41;`) into the registry under its resolved url —
+/// exactly what the async pre-fetch pass (B3) will do for a fetched graph — then compiles a root module
+/// that does `import { v } from './esm-graph-dep.js'` against its OWN private url, `ModuleLink`s the
+/// root (SpiderMonkey calls [`module_resolve_hook`], which resolves the relative specifier against the
+/// root's private → the dep's url → the seeded module) and `ModuleEvaluate`s it. The root's top level
+/// writes `v + 1` to a global; a `42` read back proves the cross-module binding resolved through the
+/// hook and the real SpiderMonkey graph walk.
+///
+/// RED-provable: revert `module_resolve_hook` to `ptr::null_mut()` → the resolve returns null →
+/// `ModuleLink` fails → the global is never written → `false`. Also red if the specifier resolves to
+/// the wrong url (base threaded from `DOC_URL` instead of the module private → the seeded url is never
+/// hit). Returns `false` rather than panicking so the gate reports RED cleanly.
+///
+/// # Safety
+/// `cx` must be a live SpiderMonkey context for the current thread with no realm entered. Drive it via
+/// [`crate::esm_import_graph_selftest`], which runs it inside a PARKED runtime for a clean exit.
+pub unsafe fn esm_import_graph_selftest_in_realm(cx: *mut RawJSContext) -> bool {
+    use mozjs::jsapi::{CompileModule, ModuleEvaluate, ModuleLink};
+    // A relative import in the root MUST resolve against the ROOT's private, not the doc url — so the
+    // dep's registry key is the join of BASE and the relative specifier the root writes.
+    const BASE: &str = "https://example.test/esm-graph-root.js";
+    const DEP: &str = "https://example.test/esm-graph-dep.js";
+    {
+        let options = RealmOptions::default();
+        let mut cxw = wrap_cx(cx);
+        rooted!(in(cx) let global = JS_NewGlobalObject(
+            &mut cxw,
+            &SIMPLE_GLOBAL_CLASS,
+            ptr::null_mut(),
+            OnNewGlobalHookOption::FireOnNewGlobalHook,
+            &*options,
+        ));
+        if global.get().is_null() {
+            return false;
+        }
+        let _ar = mozjs::jsapi::JSAutoRealm::new(cx, global.get());
+        // The resolve+metadata hooks are per-RUNTIME and installed by `run_scripts` on the page path;
+        // this self-test boots its own global, so register them here too or `ModuleLink` reports
+        // "Module resolve hook not set" and never reaches the hook under test.
+        mozjs::jsapi::SetModuleResolveHook(
+            mozjs::jsapi::JS_GetRuntime(cx),
+            Some(module_resolve_hook),
+        );
+        mozjs::jsapi::SetModuleMetadataHook(
+            mozjs::jsapi::JS_GetRuntime(cx),
+            Some(module_metadata_hook),
+        );
+
+        let ok = (|| {
+            // The DEPENDENCY: compile it, stash its own private url, and register it under that url —
+            // the exact three steps the async pre-fetch pass performs per fetched module. Do NOT link
+            // it here; `ModuleLink` on the root instantiates the whole graph through the resolve hook.
+            let dep = {
+                let opts =
+                    CompileOptionsWrapper::new(&wrap_cx(cx), c"esm-graph-dep.js".to_owned(), 1);
+                let utf16: Vec<u16> = "export const v = 41;".encode_utf16().collect();
+                let mut src = mozjs::rust::transform_u16_to_source_text(&utf16);
+                CompileModule(cx, opts.ptr, &mut src)
+            };
+            if dep.is_null() {
+                return false;
+            }
+            rooted!(in(cx) let dep_r = dep);
+            set_module_private_url(cx, dep_r.handle().get(), DEP);
+            esm_registry_insert(DEP, dep_r.handle().get());
+
+            // The ROOT imports across a RELATIVE specifier, which is what forces the hook to use the
+            // root's private (BASE) rather than any per-document slot to find the dep.
+            let root = {
+                let opts =
+                    CompileOptionsWrapper::new(&wrap_cx(cx), c"esm-graph-root.js".to_owned(), 1);
+                let code = "import { v } from './esm-graph-dep.js'; \
+                            globalThis.__esm_graph_r = v + 1;";
+                let utf16: Vec<u16> = code.encode_utf16().collect();
+                let mut src = mozjs::rust::transform_u16_to_source_text(&utf16);
+                CompileModule(cx, opts.ptr, &mut src)
+            };
+            if root.is_null() {
+                return false;
+            }
+            rooted!(in(cx) let root_r = root);
+            set_module_private_url(cx, root_r.handle().get(), BASE);
+            esm_registry_insert(BASE, root_r.handle().get());
+
+            // Link the ROOT: SpiderMonkey walks the graph, calling the resolve hook for './esm-graph-
+            // dep.js' → BASE-relative → DEP → the seeded module. Then evaluate: the dep runs first
+            // (binding `v`), then the root's top level writes `v + 1` to the global.
+            if !ModuleLink(cx, root_r.handle().into()) {
+                return false;
+            }
+            rooted!(in(cx) let mut rval = UndefinedValue());
+            if !ModuleEvaluate(cx, root_r.handle().into(), rval.handle_mut().into()) {
+                return false;
+            }
+
+            rooted!(in(cx) let mut out = UndefinedValue());
+            let name = c"__esm_graph_r";
+            if !mozjs::jsapi::JS_GetProperty(
+                cx,
+                global.handle().into(),
+                name.as_ptr(),
+                out.handle_mut().into(),
+            ) {
+                return false;
+            }
+            let v = out.get();
+            let n = if v.is_int32() {
+                v.to_int32() as f64
+            } else if v.is_double() {
+                v.to_double()
+            } else {
+                return false;
+            };
+            n == 42.0
+        })();
+        esm_registry_clear();
+        ok
+    }
+}
+
 unsafe fn run_module(cx: *mut RawJSContext, source: &str) -> bool {
     use mozjs::jsapi::{CompileModule, ModuleEvaluate, ModuleLink};
     let opts = CompileOptionsWrapper::new(&wrap_cx(cx), c"module.js".to_owned(), 1);
@@ -9657,12 +9780,72 @@ unsafe extern "C" fn module_metadata_hook(
     )
 }
 
+/// ES-module resolve hook (B2). SpiderMonkey calls this once per `import` during `ModuleLink`, and it
+/// must return the *already-compiled* module the specifier names, or null to fail the link.
+///
+/// **This is the SYNC half of the import-graph loader, and it does exactly what `importScripts` does
+/// for workers: it resolves against a registry the async side pre-populated, because this hook cannot
+/// go to the network.** SpiderMonkey drives it during `ModuleLink`, which runs synchronously on the JS
+/// thread; there is no synchronous fetch in this engine (see the `importScripts` note in
+/// `event_loop.rs`), so a module must already be compiled and in [`ESM_MODULE_REGISTRY`] by the time
+/// its importer links. Populating the registry from a fetched graph is the async pre-fetch pass (B3);
+/// what B2 lands is the resolution + lookup that makes a populated graph actually LINK and EVALUATE,
+/// with cross-module bindings and cycles working through SpiderMonkey's own graph walk.
+///
+/// Three steps, each failing to null (a graceful `ModuleLink` failure, the same shape as the old
+/// always-null hook — never a crash):
+/// 1. the specifier off the request object (`GetModuleRequestSpecifier`);
+/// 2. the base url = the *referencing* module's private (its own resolved url, stashed by
+///    [`set_module_private_url`]); a relative `./b.js` resolves against the importer, not the document,
+///    which is the whole reason B1 threaded a per-module private. Falls back to `DOC_URL` for a
+///    referencing module with no string private;
+/// 3. join specifier↦base to the resolved url, and return `esm_registry_get(resolved)`. A registry hit
+///    returns the SAME `*mut JSObject` for a url every time it is asked, which is precisely what makes
+///    a cycle (`a.js`↔`b.js`) re-enter the existing module record instead of looping — the registry is
+///    the memoization SpiderMonkey's graph walk needs.
 unsafe extern "C" fn module_resolve_hook(
-    _cx: *mut RawJSContext,
-    _referencing: mozjs::jsapi::JS::Handle<mozjs::jsapi::Value>,
-    _request: mozjs::jsapi::JS::Handle<*mut JSObject>,
+    cx: *mut RawJSContext,
+    referencing: mozjs::jsapi::JS::Handle<mozjs::jsapi::Value>,
+    request: mozjs::jsapi::JS::Handle<*mut JSObject>,
 ) -> *mut JSObject {
-    ptr::null_mut()
+    // 1. The import specifier, as written in source (`'./b.js'`, `'https://x/y.js'`, `'react'`).
+    let spec_jsstr = mozjs::jsapi::GetModuleRequestSpecifier(cx, request);
+    if spec_jsstr.is_null() {
+        return ptr::null_mut();
+    }
+    let specifier = {
+        rooted!(in(cx) let sv = mozjs::jsval::StringValue(&*spec_jsstr));
+        let mut c = wrap_cx(cx);
+        match String::safe_from_jsval(&mut c, sv.handle(), ()) {
+            Ok(ConversionResult::Success(s)) => s,
+            _ => return ptr::null_mut(),
+        }
+    };
+    // 2. The base url is the referencing module's OWN resolved url (its private), so a relative
+    //    specifier resolves against the importer. A referencing module with no/empty string private
+    //    (e.g. a stringless private) falls back to the document url — the same fallback the metadata
+    //    hook uses, so the two never disagree about a root module's base.
+    let base = {
+        rooted!(in(cx) let pv = referencing.get());
+        if pv.get().is_string() {
+            let mut c = wrap_cx(cx);
+            match String::safe_from_jsval(&mut c, pv.handle(), ()) {
+                Ok(ConversionResult::Success(ref s)) if !s.is_empty() => s.clone(),
+                _ => DOC_URL.with(|u| u.borrow().clone()),
+            }
+        } else {
+            DOC_URL.with(|u| u.borrow().clone())
+        }
+    };
+    // 3. Resolve the specifier against the base url and return the registered module for it. A bare
+    //    specifier (`'react'`) has no base-relative resolution here and fails to null loud-but-safe —
+    //    exactly as B3 documents (no bare-specifier resolver in this engine, no guess). An unpopulated
+    //    url also returns null: the module was never fetched/compiled, so the link fails gracefully.
+    let resolved = match url::Url::parse(&base).and_then(|b| b.join(&specifier)) {
+        Ok(u) => u.to_string(),
+        Err(_) => return ptr::null_mut(),
+    };
+    esm_registry_get(&resolved)
 }
 
 /// The inline JavaScript sources of a document, in tree order. Skips `src=` scripts and
