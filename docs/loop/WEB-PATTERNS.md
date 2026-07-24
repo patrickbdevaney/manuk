@@ -4158,3 +4158,15 @@ they are the complete caret-delete pair every text field needs. Fires `beforeinp
 (`inputType:'deleteContentForward'`) through the same shared primitive, honoring the veto and the no-op
 (a Delete at the end of the text removes nothing and fires no `input`, so an editor's model is not desynced
 by a phantom event). Cross-block forward merge is a later brick; the in-line case is what lands.
+
+## Insert a hard line break in a rich editor (tick 475)
+
+**The class of the web this unlocks (code-snippet editors, plaintext composers, "insert line break"
+toolbar buttons):** `execCommand('insertLineBreak')` drops a `<br>` at the caret — the soft-newline
+primitive. Before it, the command returned `false` and the editor's line-break button did nothing. Now a
+`<br>` is inserted (splitting the current text run) and `beforeinput`→`input` fire with
+`inputType:'insertLineBreak'`. **The trap:** the `<br>` is structural — it must NOT change the editable's
+textContent (a break is not a character), and a framework editor that `preventDefault()`s the `beforeinput`
+must get no `<br>` so it can insert its own. Full Enter-key paragraph behavior (`insertParagraph`, which
+splits the containing block and is browser-divergent — Chrome `<div>`, Firefox `<br>`) is a later brick that
+also needs keyboard modifier state; this lands only the programmatic line break.

@@ -2567,3 +2567,23 @@ GATE: G_CONTENTEDITABLE_DELETE_FORWARD (page) — caret at the START of "Hello",
 "Keep". RED-proven by dropping the `Delete` route. Neighbors green: g_contenteditable_delete (the Backspace
 gate, unchanged after the refactor), g_contenteditable_typing, g_exec_insert_text, g_ime_composition,
 g_selection.
+
+## execCommand('insertLineBreak') inserts a <br> at the caret (tick 475)
+
+The line-break member of the contenteditable EDITING family (insertText t471, Backspace/Delete t473/t474).
+A `<pre>`-style editor or an "insert line break" toolbar button calls `execCommand('insertLineBreak')`;
+before this it returned `false`.
+
+**Mechanism.** A `globalThis.__insertLineBreakAtCaret(host)` helper mirroring `__insertTextAtCaret`'s
+caret-resolution + veto contract, but inserting a `document.createElement('br')` via `Range.insertNode`
+(which splits the current text run if the caret sits inside one) rather than text, then re-collapsing the
+caret after the `<br>`; fires `beforeinput`→`input` (`inputType:'insertLineBreak'`). The `execCommand`
+`insertlinebreak` branch finds the editing host (same walk as `insertText`) and calls it;
+`insertlinebreak` is added to `__EXEC_SUPPORTED`. `insertParagraph` (block splitting) stays honestly
+`false` + query-false — a separate, larger brick.
+
+GATE: G_EXEC_INSERT_LINE_BREAK (page) — caret between "A" and "B", `execCommand('insertLineBreak')` → one
+`<br>` in the editable (`brs=1`), textContent still "AB" (the break is structural), events
+`bi/in:insertLineBreak`; a veto editable gets no `<br>` (`vbrs=0`); `insertParagraph` returns `false`.
+RED-proven by neutralizing the branch. Neighbors green: g_exec_insert_text, g_exec_command_copy,
+g_contenteditable_typing, g_contenteditable_delete, g_contenteditable_delete_forward.

@@ -2690,8 +2690,47 @@ const PRELUDE: &str = r#"
         };
       }
 
+      // Insert a hard LINE BREAK (`<br>`) at the caret inside editing `host`, firing
+      // `beforeinput`→(mutate)→`input` with `inputType:'insertLineBreak'` — the soft newline a
+      // `<pre>`-style editor / an "insert line break" toolbar button produces (and the eventual
+      // Shift+Enter default). Same caret-resolution + veto contract as `__insertTextAtCaret`; it inserts a
+      // `<br>` element rather than text, splitting the current text run if the caret sits inside one.
+      if (typeof globalThis.__insertLineBreakAtCaret !== 'function') {
+        globalThis.__insertLineBreakAtCaret = function (host) {
+          if (!host) { return false; }
+          var bi = new Event('beforeinput', { bubbles: true, cancelable: true });
+          bi.inputType = 'insertLineBreak'; bi.data = null;
+          host.dispatchEvent(bi);
+          if (bi.defaultPrevented) { return true; } // ran, but the break was vetoed
+
+          var sel = globalThis.getSelection();
+          var anchor = (sel && sel._r) ? sel._r.startContainer : null;
+          var inHost = false;
+          for (var a = anchor; a; a = a.parentNode) { if (a === host) { inHost = true; break; } }
+          var r;
+          if (inHost && sel && sel._r) {
+            r = sel._r;
+            if (!r.collapsed) { r.deleteContents(); }
+          } else {
+            r = document.createRange();
+            r.selectNodeContents(host);
+            r.collapse(false);
+          }
+          var br = document.createElement('br');
+          r.insertNode(br);
+          r.setStartAfter(br); r.collapse(true);
+          if (sel && sel.__set) {
+            sel.__set(r.startContainer, r.startOffset, r.startContainer, r.startOffset);
+          }
+          var inp = new Event('input', { bubbles: true, cancelable: false });
+          inp.inputType = 'insertLineBreak'; inp.data = null;
+          host.dispatchEvent(inp);
+          return true;
+        };
+      }
+
       if (typeof document.execCommand !== 'function') {
-        var __EXEC_SUPPORTED = { copy: 1, selectall: 1, inserttext: 1 };
+        var __EXEC_SUPPORTED = { copy: 1, selectall: 1, inserttext: 1, insertlinebreak: 1 };
         document.execCommand = function (cmd) {
           cmd = String(cmd || '').toLowerCase();
           if (cmd === 'copy') {
@@ -2740,6 +2779,24 @@ const PRELUDE: &str = r#"
               }
               if (!host) { return false; }
               return globalThis.__insertTextAtCaret(host, text, 'insertText');
+            } catch (e) { return false; }
+          }
+          if (cmd === 'insertlinebreak') {
+            // Insert a `<br>` at the caret — the `execCommand` entry to `__insertLineBreakAtCaret`.
+            try {
+              var lsel = globalThis.getSelection();
+              var lanchor = (lsel && lsel._r) ? lsel._r.startContainer : null;
+              var lhost = null;
+              for (var ln = lanchor; ln; ln = ln.parentNode) {
+                if (ln.nodeType === 1 && ln.isContentEditable) { lhost = ln; break; }
+              }
+              if (!lhost) {
+                var lae = document.activeElement;
+                if (lae && lae.isContentEditable) { lhost = lae; }
+                else if (document.designMode === 'on') { lhost = document.body; }
+              }
+              if (!lhost) { return false; }
+              return globalThis.__insertLineBreakAtCaret(lhost);
             } catch (e) { return false; }
           }
           return false; // every other command is the editing subsystem — honestly not built

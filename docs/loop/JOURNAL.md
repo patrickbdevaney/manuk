@@ -19211,3 +19211,33 @@ design) Enter → insertParagraph/insertLineBreak (browser-divergent + needs mod
 modifier-state plumbing (so Ctrl+letter shortcuts don't insert), and cross-block boundary merge for
 Backspace/Delete. Formatting-command wrapping (`bold`→<b>) is a later larger brick. Const-Check #25 landed
 t471 (next due 479).
+
+## Tick 475 — execCommand('insertLineBreak') inserts a <br> at the caret in a contenteditable (2026-07-23)
+
+Brick 5 of the contenteditable EDITING subsystem — the line-break member of the execCommand editing family
+(insertText t471, Backspace/Delete t473/t474). Before it, `execCommand('insertLineBreak')` returned false;
+a `<pre>`-style editor or an "insert line break" toolbar button did nothing.
+
+MECHANISM: a `globalThis.__insertLineBreakAtCaret(host)` helper (engine/js/src/event_loop.rs) mirroring
+`__insertTextAtCaret`'s caret-resolution + veto contract, but inserting a `document.createElement('br')` via
+`Range.insertNode` (splits the current text run if the caret is inside one), re-collapsing the caret after
+the `<br>`, and firing `beforeinput`→`input` (`inputType:'insertLineBreak'`). The execCommand `insertlinebreak`
+branch finds the editing host (same walk as insertText) and calls it; `insertlinebreak` added to
+`__EXEC_SUPPORTED`. `insertParagraph` (block splitting) stays honestly false + query-false. Zero new dep.
+
+GATE: G_EXEC_INSERT_LINE_BREAK (page) — caret between "A"/"B", `execCommand('insertLineBreak')` → one `<br>`
+(`brs=1`), textContent still "AB", events `bi/in:insertLineBreak`; a veto editable gets none (`vbrs=0`);
+`insertParagraph` returns false. RED-proven by neutralizing the branch. Neighbors green: g_exec_insert_text,
+g_exec_command_copy, g_contenteditable_typing, g_contenteditable_delete, g_contenteditable_delete_forward.
+
+TICK SHAPE: capability (contenteditable EDITING brick 5/N; +1 gate). GATES +1.
+CONSTELLATION: rich-editing — the execCommand editing family now covers insertText + insertLineBreak.
+WIKI: interaction-surface.md — new section after the t474 Delete note.
+WEB-PATTERNS: insert-a-hard-line-break-in-a-rich-editor.
+NEXT VEIN NOTE: BIGGER remaining bricks need design/infra — Enter→insertParagraph (browser-divergent
+block-split + needs Shift+Enter distinction hence dispatch_key MODIFIER-STATE plumbing, a cross-cutting Rust
+signature change), `insertFromPaste` plaintext (needs a paste-event trigger; clipboard read landed t461),
+cross-block boundary merge for Backspace/Delete. Formatting-command wrapping (`bold`→<b>) is a later larger
+brick. The clean ADDITIVE-execCommand + dispatch_key-arm vein is now largely mined; the next editing bricks
+are the harder cross-cutting ones. Const-Check #25 landed t471 (next due 479). WALL: ~20-30min/tick under
+swap-99%; deep-quiet (load<0.9) verify.sh needed to clear the stale-wall preflight false-RED.
