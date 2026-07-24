@@ -318,8 +318,19 @@ SHELL_OUT=$(_out shell); SHELL_FAILED=$(printf '%s' "$SHELL_OUT" | grep -c 'test
 # distrust a RED.
 if [ "$SHELL_FAILED" -ne 0 ]; then
   wait 2>/dev/null || true
-  SHELL_OUT=$(cargo test -q -p manuk-shell -- --nocapture 2>&1)
-  SHELL_FAILED=$(printf '%s' "$SHELL_OUT" | grep -c 'test result: FAILED')
+  # ONE serial retry wasn't enough (observer, tick 513): the timing-ratio test still false-RED'd when
+  # the box hadn't settled by retry time, and the agent burned ~33min of full-wall re-run thrash on a
+  # single tick. Retry up to 3x, each time first waiting (capped ~60s) for load1 to fall below 2.5, and
+  # break on the first clean pass. A REAL regression still fails all three — this only absorbs the
+  # self-induced parallel-launch contention, it does not weaken the gate.
+  for _shell_try in 1 2 3; do
+    for _s in 1 2 3 4 5 6; do
+      _l10=$(awk '{printf "%d",$1*10}' /proc/loadavg 2>/dev/null); [ "${_l10:-99}" -lt 25 ] && break; sleep 10
+    done
+    SHELL_OUT=$(cargo test -q -p manuk-shell -- --nocapture 2>&1)
+    SHELL_FAILED=$(printf '%s' "$SHELL_OUT" | grep -c 'test result: FAILED')
+    [ "$SHELL_FAILED" -eq 0 ] && break
+  done
 fi
 AFF=$(printf '%s' "$SHELL_OUT" | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ "$SHELL_FAILED" -eq 0 ] && [ -n "$AFF" ]; then ok "affordances (full shell suite green): $AFF"; else bad "affordance gate failed — a control may be dead, or another manuk-shell test regressed"; fi
