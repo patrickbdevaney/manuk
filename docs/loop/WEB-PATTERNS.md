@@ -4253,3 +4253,17 @@ wires this to `selectionchange` and calls it CONSTANTLY, so a missing method is 
 "referenced-name-that-doesn't-exist is a crash" class). It must exist and answer honestly; and unlike the
 write it must work with a COLLAPSED caret (buttons light up as you arrow through styled text), so it cannot
 borrow the write path's non-collapsed guard.
+
+## Insert a rich HTML snippet at the caret (tick 483)
+
+**The class of the web this unlocks (rich editors + the rich-paste foundation):**
+`document.execCommand('insertHTML', false, html)` now parses an HTML fragment and inserts it at the caret,
+firing a vetoable `beforeinput`→`input` pair (`inputType:insertHTML`) — the path an editor's "insert
+merge-tag / emoji-as-image / paste-with-formatting" button funnels through, and the substrate the eventual
+rich (text/html) paste builds on (Ctrl+V today is plain-text only, t480). **The trap:** insertHTML is the
+UNAMBIGUOUS sibling of the two editing bricks that are NOT — Enter→insertParagraph (Chrome `<div>` vs FF
+`<br>`) and formatting toggle-off both need a real Chrome oracle to land correctly, but insertHTML's result is
+exactly the parsed fragment at the caret, so it can land atomically now. It reuses `createContextualFragment`
++ `insertNode` rather than a bespoke parser, inheriting the same fragment-parsing the DOM already ships; the
+one sharp edge is caret placement — capture the fragment's `lastChild` BEFORE `insertNode` empties the
+fragment, or the caret has nothing to anchor after.

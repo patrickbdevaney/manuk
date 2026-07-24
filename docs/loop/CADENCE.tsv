@@ -253,3 +253,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 478	6ac175b	1784866636	2026-07-24T00:17:16-04:00	3437	capability	219	10	266	36	246	81	3896	6960	0	329	31	Ctrl+X cuts / Ctrl+C copies the selection (keyboard clipboard routing) + surface audit #21 (2026-07-23)
 480	a38d638	1784870728	2026-07-24T01:25:28-04:00	4092	capability	62	9	269	35	248	81	3896	6960	0	329	31	Ctrl+V pastes clipboard text at the caret in a contenteditable (2026-07-24)
 482	2cb1606	1784872228	2026-07-24T01:50:28-04:00	1500	capability	64	9	212	37	249	81	3896	6960	0	329	31	document.queryCommandState('bold'|'italic') reports the selection's format (2026-07-24)
+483	b1a8d2b	1784873695	2026-07-24T02:14:55-04:00	1467	capability	64	9	237	34	250	81	3896	6960	0	329	31	execCommand('insertHTML', false, html) parses a fragment and inserts it at the caret (2026-07-24)

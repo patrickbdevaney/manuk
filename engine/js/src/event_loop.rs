@@ -2769,7 +2769,7 @@ const PRELUDE: &str = r#"
       }
 
       if (typeof document.execCommand !== 'function') {
-        var __EXEC_SUPPORTED = { copy: 1, cut: 1, selectall: 1, inserttext: 1, insertlinebreak: 1, bold: 1, italic: 1 };
+        var __EXEC_SUPPORTED = { copy: 1, cut: 1, selectall: 1, inserttext: 1, insertlinebreak: 1, inserthtml: 1, bold: 1, italic: 1 };
         document.execCommand = function (cmd) {
           cmd = String(cmd || '').toLowerCase();
           if (cmd === 'copy') {
@@ -2862,6 +2862,52 @@ const PRELUDE: &str = r#"
               }
               if (!lhost) { return false; }
               return globalThis.__insertLineBreakAtCaret(lhost);
+            } catch (e) { return false; }
+          }
+          if (cmd === 'inserthtml') {
+            // Insert an HTML FRAGMENT at the caret (replacing any non-collapsed selection), firing the
+            // `beforeinput`→(mutate)→`input` pair with `inputType:'insertHTML'`. Unlike insertText this
+            // parses markup: an editor's "insert snippet / rich paste / merge tag" path funnels through it,
+            // and the DOM result is UNAMBIGUOUS (exactly the parsed fragment at the caret) — no
+            // browser-divergent block heuristic. A cancelled `beforeinput` vetoes with no mutation.
+            var html = arguments.length > 2 && arguments[2] != null ? String(arguments[2]) : '';
+            try {
+              var hsel = globalThis.getSelection();
+              var hanchor = (hsel && hsel._r) ? hsel._r.startContainer : null;
+              var hhost = null;
+              for (var hn = hanchor; hn; hn = hn.parentNode) {
+                if (hn.nodeType === 1 && hn.isContentEditable) { hhost = hn; break; }
+              }
+              if (!hhost) {
+                var hae = document.activeElement;
+                if (hae && hae.isContentEditable) { hhost = hae; }
+                else if (document.designMode === 'on') { hhost = document.body; }
+              }
+              if (!hhost) { return false; }
+              var hbi = new Event('beforeinput', { bubbles: true, cancelable: true });
+              hbi.inputType = 'insertHTML'; hbi.data = html;
+              hhost.dispatchEvent(hbi);
+              if (hbi.defaultPrevented) { return true; } // vetoed — no mutation, no input
+              var hin = false;
+              for (var ha = hanchor; ha; ha = ha.parentNode) { if (ha === hhost) { hin = true; break; } }
+              var hr;
+              if (hin && hsel && hsel._r) {
+                hr = hsel._r;
+                if (!hr.collapsed) { hr.deleteContents(); }
+              } else {
+                hr = document.createRange();
+                hr.selectNodeContents(hhost);
+                hr.collapse(false);
+              }
+              var frag = hr.createContextualFragment(html);
+              var hlast = frag.lastChild;      // capture BEFORE insertNode empties the fragment
+              hr.insertNode(frag);
+              if (hlast) { hr.setStartAfter(hlast); hr.collapse(true); }
+              if (hsel && hsel.__set) { hsel.__set(hr.startContainer, hr.startOffset, hr.startContainer, hr.startOffset); }
+              var hinp = new Event('input', { bubbles: true, cancelable: false });
+              hinp.inputType = 'insertHTML'; hinp.data = html;
+              hhost.dispatchEvent(hinp);
+              return true;
             } catch (e) { return false; }
           }
           if (cmd === 'bold' || cmd === 'italic') {

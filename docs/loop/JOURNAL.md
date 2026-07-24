@@ -19518,3 +19518,36 @@ t481's ability to CHANGE it.
 NEXT VEIN NOTE: the formatting write-tail remains (collapsed-caret typing-style + toggle-OFF/unbold), then
 Enter→insertParagraph (browser-divergent block split), cross-block boundary merge for Backspace/Delete, rich
 (HTML) paste. Self-audit due 485; surface-audit next 488; Const-Check next 487.
+
+## Tick 483 — execCommand('insertHTML', false, html) parses a fragment and inserts it at the caret (2026-07-24)
+
+Brick 13 of the contenteditable EDITING subsystem. Unlike insertText (t471, plain text) this parses MARKUP —
+the path an editor's "insert snippet / merge-tag / rich paste" button funnels through, and the foundation for
+the eventual rich (text/html) paste. Chosen over the browser-DIVERGENT bricks (Enter→insertParagraph block
+split, formatting toggle-off) precisely because its DOM result is UNAMBIGUOUS — exactly the parsed fragment at
+the caret — so it needs no Chrome oracle to get right. Built on the already-won
+`Range.createContextualFragment` + `insertNode` substrate; zero new dep.
+
+MECHANISM: an `inserthtml` branch in the execCommand shim (engine/js/src/event_loop.rs) mirroring the
+insert-family veto contract: resolve the editing host (selection-anchor ancestor, else focused editable, else
+designMode body); fire a CANCELABLE `beforeinput` (`inputType:'insertHTML'`, data=html); on veto leave the DOM
+untouched and fire no `input`; else resolve the caret (live selection in the host, replacing a non-collapsed
+run via deleteContents, else host end), `createContextualFragment(html)` the range, capture the fragment's
+lastChild BEFORE `insertNode` empties it, insert, place the caret after the inserted content, fire `input`.
+Adds `inserthtml` to `__EXEC_SUPPORTED` so `queryCommandSupported` reports true.
+
+GATE: G_EXEC_INSERT_HTML (page) — caret between "a"/"b" in `<div contenteditable>ab</div>` →
+`execCommand('insertHTML', false, '<b>X</b><i>Y</i>')` → `innerHTML` `a<b>X</b><i>Y</i>b`, events
+`bi/in:insertHTML`; `queryCommandSupported('insertHTML')` true; a veto editable whose `beforeinput`
+`preventDefault()`s stays "keep". RED-proven by disabling the branch (html stays "ab", evs empty). Neighbors
+green: g_exec_format_bold, g_query_command_state, g_exec_insert_line_break.
+
+TICK SHAPE: capability (contenteditable EDITING brick 13/N — HTML-fragment insert; +1 gate). GATES +1.
+CONSTELLATION: rich-editing — an editor can now insert a parsed HTML fragment at the caret (insertHTML).
+WIKI: interaction-surface.md — appended to the t482 queryCommandState note.
+WEB-PATTERNS: insert-a-rich-html-snippet-at-the-caret.
+AGENTIC: the agent can now insert structured (HTML) content into an editable region, not just plain text.
+
+NEXT VEIN NOTE: rich (text/html) PASTE can now build on insertHTML (Ctrl+V currently plain-text only); still
+ahead — Enter→insertParagraph (browser-divergent block split, needs a Chrome oracle), formatting toggle-off/
+typing-style, cross-block Backspace/Delete merge. Self-audit due 485; surface-audit next 488; Const-Check 487.

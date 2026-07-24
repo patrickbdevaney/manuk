@@ -2725,3 +2725,21 @@ editable doesn't leak in.
 GATE: G_QUERY_COMMAND_STATE (page) — caret inside a bolded `<b>` → `queryCommandState('bold')` true; caret in
 plain text → false; caret inside an italic `<i>` → `queryCommandState('italic')` true; the method is a
 function (no TypeError). RED-proven by making it always return false.
+
+## execCommand('insertHTML', false, html) inserts a parsed fragment (tick 483)
+
+Unlike `insertText` (t471, plain text) this parses MARKUP — the path an editor's "insert snippet / merge-tag /
+rich paste" button funnels through, and the foundation for the eventual rich (text/html) paste. Chosen over
+the browser-divergent bricks (Enter→insertParagraph, formatting toggle-off) because its DOM result is
+UNAMBIGUOUS — exactly the parsed fragment at the caret — so it needs no Chrome oracle. Built on the already-won
+`Range.createContextualFragment` + `insertNode`; zero new dep.
+
+**Mechanism.** An `inserthtml` branch in the execCommand shim, mirroring the insert-family veto contract:
+resolve the editing host; fire a CANCELABLE `beforeinput` (`inputType:'insertHTML'`); on veto leave the DOM
+untouched and fire no `input`; else resolve the caret (live selection in host, replacing a non-collapsed run,
+else host end), `createContextualFragment(html)`, capture the fragment's lastChild BEFORE `insertNode` empties
+it, insert, place the caret after the inserted content, fire `input`. Adds `inserthtml` to `__EXEC_SUPPORTED`.
+
+GATE: G_EXEC_INSERT_HTML (page) — caret between "a"/"b" in `<div contenteditable>ab</div>` →
+`insertHTML('<b>X</b><i>Y</i>')` → `a<b>X</b><i>Y</i>b`, events `bi/in:insertHTML`, `queryCommandSupported`
+true; a veto editable stays unchanged. RED-proven by disabling the branch.

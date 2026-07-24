@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **254** | ticks 1–482 |
-| median tick cycle | **21m** | 253 intervals |
-| median, last 10 | **37m** | 10 intervals |
+| ticks landed | **255** | ticks 1–483 |
+| median tick cycle | **21m** | 254 intervals |
+| median, last 10 | **30m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.82** | 308.8h elapsed |
-| median verify wall | **60s** | 193 ticks |
+| **ticks per hour** | **0.82** | 309.2h elapsed |
+| median verify wall | **60s** | 194 ticks |
 | wall trend | 39s → 64s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **249**
+* **live gates**: 27 → **250**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**154 of 254 ticks** (61%) moved a
+**155 of 255 ticks** (61%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **154** capability ticks, median cycle **21m**
+* **155** capability ticks, median cycle **21m**
 * median diff per tick: **+222 / −34** lines across 9 files
 
 ## Every tick
@@ -351,5 +351,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **478** | 2026-07-24 00:17 | 57m | capability | 4m | +266/−36 | 246 | 81 | 56.0% · | Ctrl+X cuts / Ctrl+C copies the selection (keyboard clipboard routing) + surface audit #21 |
 | **480** | 2026-07-24 01:25 | 68m | capability | 62s | +269/−35 | 248 | 81 | 56.0% · | Ctrl+V pastes clipboard text at the caret in a contenteditable (2026-07-24) |
 | **482** | 2026-07-24 01:50 | 25m | capability | 64s | +212/−37 | 249 | 81 | 56.0% · | document.queryCommandState('bold'|'italic') reports the selection's format (2026-07-24) |
+| **483** | 2026-07-24 02:14 | 24m | capability | 64s | +237/−34 | 250 | 81 | 56.0% · | execCommand('insertHTML', false, html) parses a fragment and inserts it at the caret (2026 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
