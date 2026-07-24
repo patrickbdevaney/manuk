@@ -33,7 +33,14 @@ _RES=$(grep -oP '^result:\s*\K\w+' .git/manuk-verify-receipt 2>/dev/null || echo
 # ratchet refuse every later tick against a number the box, not the code, produced. The receipt
 # stamps disk_pct at measure time; absent stamp (old receipts) → 0 → banks as before.
 _DISK=$(grep -oP '^disk_pct:\s*\K[0-9]+' .git/manuk-verify-receipt 2>/dev/null || echo 0)
-if [ "$_RES" = "green" ] && [ "${_DISK:-0}" -lt 93 ]; then
+# ── AND ONLY FROM A RUN MEASURED UNDER LOW LOAD (observer, tick 486). The gate phase runs ~25
+# test binaries in parallel; when tick.sh's own gate phase spikes load1 past ~3, gate RUNTIME
+# balloons ~10x (65s quiet -> 550-663s contended) with ZERO code change — a bistable wall. Banking
+# the contended number poisons LAST_WALL_TIME, and the next tick's ratchet preflight then refuses
+# it (663 > ceiling) and forces a quiet re-qualify, ~doubling tick times. The receipt stamps load1;
+# skip banking when it's high and KEEP the previous (real, warm) value. load1*10 avoids bash-float.
+_LOAD10=$(grep -oP '^load1:\s*\K[0-9.]+' .git/manuk-verify-receipt 2>/dev/null | awk '{printf "%d", $1*10}')
+if [ "$_RES" = "green" ] && [ "${_DISK:-0}" -lt 93 ] && [ "${_LOAD10:-0}" -lt 30 ]; then
   WALL=$(grep -oP '^seconds:\s*\K[0-9]+' .git/manuk-verify-receipt 2>/dev/null || echo "?")
 else
   WALL=$(grep -oP '^LAST_WALL_TIME:\s*\K[0-9]+' STATUS.md 2>/dev/null || echo "?")
