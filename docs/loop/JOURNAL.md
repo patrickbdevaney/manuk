@@ -21332,3 +21332,27 @@ Layer-2-into-G1 note). No [no-pattern] (no engine capability src touched).
 NEXT: brick 4 — enrich the G1 producer to emit tag+display (key into `Seen`) so the remaining three Layer-2
 invariants (overlap / reading-order / collapsed-target) reuse the oracle's functions directly; OR root-cause
 clustering (§3b) across a sweep. Cadences: self-audit 534 (DUE NEXT tick); surface 538; const 535; wall 547.
+
+## Tick 534 — CADENCE: self-audit #N (clean — methodology and reality agree) (2026-07-24)
+
+Self-audit due at tick 534 (last 524, cadence 10 — the pre-commit hook BLOCKS past it). Ran
+./scripts/self-audit.sh: it diffs what the methodology prescribes against what actually exists on disk
+and fails loudly on anything prescribed-but-not-executed. Result: **all green — "methodology and reality
+agree."** No drift, no prescribed-but-missing mechanism. Highlights: 49-entry process-defect ledger (each
+naming the closing MECHANISM not just a lesson), 392-cluster registry as the priority ledger, tick-shape
+cross-checked against the registry, self-audit cadence hook-enforced, STATUS.md generated-not-narrated,
+gate receipt + pre-commit wired, journal present for the last 5 ticks, 433-row pattern ledger moving with
+the engine, duplicate-work audit journaled.
+
+No engine change; this is a governance/cadence tick that resets the self-audit clock. The fidelity-rebuild
+frontier (brick 4 — producer enrichment to `Seen` for the remaining 3 Layer-2 invariants) is unblocked and
+resumes next tick.
+
+TICK SHAPE: cadence self-audit (governance — self-audit.sh ran clean; LAST_AUDIT_TICK reset to 534; NO
+engine source changed; the wall proves nothing regressed). WIKI: none — cadence audit tick, no engine
+change (self-audit findings, if any, would drive engine ticks; there were none). No [no-pattern] needed
+(no engine/{js,css,...}/src touched).
+
+NEXT: brick 4 — enrich the G1 producer to emit tag+display (key into `Seen`) so `jarring_overlap`/
+`jarring_reading_order`/`jarring_collapsed_target` reuse the oracle fns directly. Cadences after this:
+self-audit 544; surface 538; const 535 (DUE next); wall 547.

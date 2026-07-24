@@ -295,3 +295,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 530	e4af28e	1784932316	2026-07-24T18:31:56-04:00	3008	measure-and-pin	67	7	284	66	274	81	3896	6960	0	329	31	MEASURE+PIN: scheduler.postTask/yield (functional, not a stub) (2026-07-24)
 532	48cdcd3	1784934023	2026-07-24T19:00:23-04:00	1707	instrument-fidelity	67	9	418	158	274	81	3896	6960	0	329	31	FIDELITY REBUILD brick 2: selector-path producer wires SHAPE into the G1 gate (2026-07-24)
 533	13d764e	1784934689	2026-07-24T19:11:29-04:00	666	instrument-fidelity	67	8	201	70	274	81	3896	6960	0	329	31	FIDELITY REBUILD brick 3: horizontal-overflow jarring invariant in the G1 probe (2026-07-24)
+534	8002d00	1784935018	2026-07-24T19:16:58-04:00	329	cadence	67	4	58	33	274	81	3896	6960	0	329	31	CADENCE: self-audit #N (clean — methodology and reality agree) (2026-07-24)
