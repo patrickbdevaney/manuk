@@ -133,10 +133,16 @@ impl FontMetricsProvider for StubFontMetrics {
         let zero = manuk_text::zero_advance_px(&families, bold, italic, px);
         // `ex`: the face's real x-height (OS/2 sxHeight), or `None` → Stylo keeps `ex = 0.5em`.
         let x_height = manuk_text::x_height_px(&families, bold, italic, px).map(Length::new);
+        // `cap`: the face's real cap-height (OS/2 sCapHeight). Its fallback is `ascent`, which this
+        // provider never set — so `cap` resolved to 0px and any `cap`-sized box COLLAPSED. Filling
+        // it fixes that; `None` still leaves the (now equally-unset) ascent fallback for a face that
+        // declares no cap-height.
+        let cap_height = manuk_text::cap_height_px(&families, bold, italic, px).map(Length::new);
 
         FontMetrics {
             zero_advance_measure: Some(Length::new(zero)),
             x_height,
+            cap_height,
             ..FontMetrics::default()
         }
     }

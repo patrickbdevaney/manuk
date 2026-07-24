@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **268** | ticks 1–500 |
-| median tick cycle | **21m** | 267 intervals |
+| ticks landed | **269** | ticks 1–502 |
+| median tick cycle | **22m** | 268 intervals |
 | median, last 10 | **22m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.85** | 315.1h elapsed |
-| median verify wall | **60s** | 207 ticks |
+| **ticks per hour** | **0.85** | 315.5h elapsed |
+| median verify wall | **60s** | 208 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **262**
+* **live gates**: 27 → **263**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**164 of 268 ticks** (61%) moved a
+**165 of 269 ticks** (61%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **164** capability ticks, median cycle **21m**
+* **165** capability ticks, median cycle **22m**
 * median diff per tick: **+222 / −34** lines across 9 files
 
 ## Every tick
@@ -365,5 +365,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **497** | 2026-07-24 07:11 | 8m | capability | 67s | +104/−33 | 260 | 81 | 56.0% · | `<textarea>.textLength`: the character-counter number (2026-07-24) |
 | **499** | 2026-07-24 07:43 | 32m | capability | 67s | +259/−38 | 261 | 81 | 56.0% · | the `ch` unit resolves to the font's REAL `0`-advance (2026-07-24) |
 | **500** | 2026-07-24 08:10 | 27m | capability | 67s | +65/−36 | 262 | 81 | 56.0% · | the `ex` unit is the face's real x-height (OS/2 sxHeight), not 0.5em (2026-07-24) |
+| **502** | 2026-07-24 08:32 | 23m | capability | 67s | +174/−33 | 263 | 81 | 56.0% · | the `cap` unit is the face's real cap-height (was collapsing to 0px) (2026-07-24) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

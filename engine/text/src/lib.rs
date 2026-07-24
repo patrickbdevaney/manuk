@@ -611,6 +611,18 @@ impl FontContext {
         (xh > 0.0).then_some(xh)
     }
 
+    /// The **cap-height** in px for `key` at `size` — the OS/2 `sCapHeight` of the resolved
+    /// primary face, scaled to the font size. This is the CSS **`cap`** unit, read from the same
+    /// face the shaper draws with (swash's `Metrics.cap_height`). `None` when no face resolves or
+    /// the face declares no cap-height (leaving Stylo's `cap = ascent` fallback).
+    pub fn cap_height(&self, key: FontKey, size: f32) -> Option<f32> {
+        let fid = self.primary_face(key)?;
+        let fd = self.face(fid)?;
+        let font = swash::FontRef::from_index(&fd.data, fd.index as usize)?;
+        let ch = font.metrics(&[]).scale(size).cap_height;
+        (ch > 0.0).then_some(ch)
+    }
+
     /// The installed fallback faces, discovered once (lazy).
     fn fallback_faces(&self) -> Vec<FaceId> {
         if let Some(fbs) = self.fallbacks.borrow().as_ref() {
@@ -950,6 +962,21 @@ pub fn x_height_px(families: &[String], bold: bool, italic: bool, size_px: f32) 
             italic,
         };
         ctx.x_height(key, size_px)
+    })
+}
+
+/// The cap-height in px (CSS **`cap`** unit) for the font `families`/`bold`/`italic` resolve to
+/// at `size_px`, read off the shared metrics context. `None` leaves Stylo's `cap = ascent`
+/// fallback — which, until this fix supplied a real cap-height, was `0` (the provider never set
+/// `ascent`), so a `cap`-sized box collapsed to nothing.
+pub fn cap_height_px(families: &[String], bold: bool, italic: bool, size_px: f32) -> Option<f32> {
+    METRICS_CTX.with(|ctx| {
+        let key = FontKey {
+            family: ctx.resolve_family(families),
+            bold,
+            italic,
+        };
+        ctx.cap_height(key, size_px)
     })
 }
 

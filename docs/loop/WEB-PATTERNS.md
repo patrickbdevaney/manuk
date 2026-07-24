@@ -4410,3 +4410,14 @@ fallback while real faces have an x-height slightly over half an em, so `ex`-siz
 percent short — invisible on one element, cumulative down a column. `ex` now reads the face's OS/2
 `sxHeight` (the value Chrome uses) off the same face the text is drawn with. Completes the `ch`+`ex`
 font-relative pair from tick 499. `cap`/`ic` remain their spec fallbacks (bounded follow-up).
+
+## `cap` unit = the face's real cap-height (was 0px) (tick 502)
+
+**The class of the web this unlocks (anything sized in `cap` — cap-height-aligned headings, drop caps,
+and icon/badge sizing that matches capital letters):** the `cap` unit resolved to **0px** (its fallback
+is `ascent`, which the provider left at 0), so a `cap`-sized box vanished entirely — a harder failure
+than the `ch`/`ex` under-sizing. `cap` now reads the face's OS/2 `sCapHeight` (Chrome's source) off the
+same face the text is drawn with. Completes the real font-relative units `ch`+`ex`+`cap`; `ic` stays its
+spec `1em` fallback (correct, and not cleanly gate-able). **The trap:** a `None` metric here didn't fall
+back to something reasonable — it fell back to an unset `ascent` of 0, turning a missing measurement into
+a collapsed box.

@@ -888,3 +888,18 @@ nothing regresses. `cap_height`/`ic_width` stay `None` (both freely available fr
 `Metrics` — `cap` and `ic` units are the bounded next step). Gated by `g_ex_unit` (RED-proven: stub
 gives `ex100:800`; fix lands ~`832`, pinned to `(810,900)` so a wrong metric — cap-height ~1150,
 a whole em 1600 — fails instead of passing).
+
+## The `cap` unit is the face's real cap-height — it used to collapse to 0px (tick 502)
+
+Third unit on the tick-499 `manuk-css`↔`manuk-text` metrics seam, and the one that was most broken.
+`cap` is the cap-height (height of a flat-topped capital). Stylo's fallback for a `None` `cap_height` is
+the font's **ascent** — but the provider never set `ascent` either (it defaulted to `0`), so `cap`
+resolved to **0px** and any `cap`-sized box collapsed to nothing (worse than `ch`/`ex`, which at least
+had a `0.5em` fallback). `manuk-text::cap_height_px` reads the face's OS/2 `sCapHeight` via
+`swash::FontRef::metrics(&[]).scale(size).cap_height` (the value Chrome uses); the provider returns
+`cap_height: Some(len)`. `None` (a face with no declared cap-height) still leaves the ascent fallback.
+`ascent`/`ic_width` remain unset — `ic` (ideographic advance) is intentionally not filled: it is ≈`1em`
+for any face, so it cannot cleanly diverge from its own `1em` fallback and would make a non-falsifiable
+gate. Gated by `g_cap_unit` (RED-proven: stub gives `cap100:0`; fix lands ~`1150`, pinned to
+`(900,1600)` so a wrong/larger metric fails). This closes the *clean* font-relative-unit work (`ch`,
+`ex`, `cap` real; `ic` measured-and-pinned as fallback-correct in `CONSTELLATION.tsv` tick 501).

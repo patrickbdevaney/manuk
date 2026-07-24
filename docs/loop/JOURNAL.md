@@ -20118,3 +20118,32 @@ WIKI: none — a measurement tick; findings live in CONSTELLATION.tsv. NEXT unkn
 ESM module-graph (known GAP, t485 — multi-tick), navigator.cpuPerformance (Chrome-only, low weight),
 test262 + 100-tab RSS (the two measurement-run exit items). Self-audit next 505; surface next 508;
 Const-Check next 503.
+
+## Tick 502 — the `cap` unit is the face's real cap-height (was collapsing to 0px) (2026-07-24)
+
+Third and last CLEAN unit on the tick-499 font-metrics seam, and the most broken one. PROBED FIRST:
+`width:100cap` → `cap100:0` — the `cap` unit resolved to 0px, so any `cap`-sized box COLLAPSED. Root
+cause: Stylo's fallback for a `None` `cap_height` is the font ascent, but the provider never set
+`ascent` (defaulted 0) → cap = 0. Harder than the ch/ex 0.5em-fallback bugs ("gone", not "slightly
+wrong").
+
+FIX: `manuk-text::cap_height_px` reads OS/2 `sCapHeight` via
+`swash::FontRef::metrics(&[]).scale(size).cap_height` (Chrome's value) off the same face the shaper
+draws with; provider returns `cap_height: Some(len)`. `None` still leaves the ascent fallback. Zero new
+dep (swash already in manuk-text). Deliberately did NOT fill `ic_width`: `ic` (ideographic advance) is
+≈1em for any face so it can't cleanly diverge from its own 1em fallback → a non-falsifiable gate (pinned
+measured-partial in CONSTELLATION.tsv t501 instead).
+
+RED-proven: forcing `cap_height=None` gives `cap100:0 nonzero:false` → G_CAP_UNIT fails; fix lands ~1150,
+pinned to (900,1600) so a wrong/larger metric fails. New gate G_CAP_UNIT. Neighbors g_ch_unit/g_ex_unit/
+g_width_stretch green. Bar 0 held.
+
+This CLOSES the clean font-relative-unit work: ch (t499) + ex (t500) + cap (t502) all real; ic pinned
+fallback-correct (t501). Remaining on the seam is the hard, non-atomic follow-up only: threading the
+page's own FontContext for webfont-exact ch/ex/cap (the thread-local metrics ctx carries system+generic
+faces, not @font-face regs).
+
+TICK SHAPE: capability (+1 gate, fixes a 0px collapse, nothing regresses). WIKI: text-layout.md — "The
+`cap` unit is the face's real cap-height". NEXT: pivot off font-metrics — the remaining board levers are
+subsystems (intrinsic sizing / MSE join / Shadow DOM / ESM) or below-ROI. Self-audit next 505;
+surface-audit next 508; Const-Check next 503.

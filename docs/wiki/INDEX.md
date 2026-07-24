@@ -936,6 +936,7 @@
   - L820 · -webkit-line-clamp: N caps a block at N lines with a trailing … (tick 417)
   - L846 · The ch unit is the font's real 0-advance, not the 0.5em fallback (tick 499)
   - L878 · The ex unit is the face's real x-height (OS/2 sxHeight), not 0.5em (tick 500)
+  - L892 · The cap unit is the face's real cap-height — it used to collapse to 0px (tick 502)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -963,4 +964,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-878 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+879 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
