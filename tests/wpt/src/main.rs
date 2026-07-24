@@ -435,14 +435,18 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                 // element against Manuk's, keyed by SELECTOR-PATH (tick 532: replaced `[id]` keys,
                 // which 39% of the corpus lacks and which carry no `/`-ancestry for SHAPE). A missing
                 // sidebar is a MISSING BOX; the pixel score averages it away, this does not.
-                if let Ok(cboxes) = manuk_wpt::chrome::capture_boxes_all_paths(url, vw, vh) {
+                if let Ok(cseen) = manuk_wpt::chrome::capture_seen_all_paths(url, vw, vh) {
                     let dom = page.dom();
                     let rects = page.root_box.node_rects(dom);
-                    // The SAME path Chromium's probe computes — the shared free functions, so the
-                    // exit gate keys pages exactly as the differential oracle does. Skip the
-                    // structural tags Chrome's probe also skips, and skip non-rendered boxes so both
-                    // sides only carry what actually painted (SHAPE scores the intersection anyway).
-                    let mut mboxes: std::collections::HashMap<String, [i64; 4]> =
+                    let styles = page.styles_map();
+                    // Manuk side as `oracle::Seen` (tag + display + box), keyed by the SAME selector-
+                    // path Chromium's probe computes (the shared free functions, so the exit gate keys
+                    // pages exactly as the differential oracle does). Since tick 537 (brick 4b) the
+                    // producer carries tag+display, so the G1 exit gate scores placement AND the four
+                    // jarring invariants through the oracle's OWN functions — no Box4 mirror in between.
+                    // Skip the structural tags Chrome's probe also skips, and skip non-rendered boxes so
+                    // both sides only carry what actually painted (SHAPE scores the intersection anyway).
+                    let mut mseen: std::collections::HashMap<String, manuk_wpt::oracle::Seen> =
                         std::collections::HashMap::new();
                     for n in dom.descendants(dom.root()) {
                         if !dom.is_element(n) {
@@ -469,26 +473,33 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                             continue;
                         }
                         if let Some(path) = path_of(dom, n) {
-                            mboxes.insert(
+                            let display = styles
+                                .get(&n)
+                                .map(|s| css_display_name(s.display))
+                                .unwrap_or("none")
+                                .to_string();
+                            mseen.insert(
                                 path,
-                                [
-                                    r.x.round() as i64,
-                                    r.y.round() as i64,
-                                    r.width.round() as i64,
-                                    r.height.round() as i64,
-                                ],
+                                manuk_wpt::oracle::Seen {
+                                    tag: tag.to_string(),
+                                    display,
+                                    rect: [
+                                        r.x.round() as i64,
+                                        r.y.round() as i64,
+                                        r.width.round() as i64,
+                                        r.height.round() as i64,
+                                    ],
+                                },
                             );
                         }
                     }
-                    let cmap: std::collections::HashMap<String, [i64; 4]> = cboxes
-                        .iter()
-                        .map(|(k, v)| {
-                            (
-                                k.clone(),
-                                [v[0] as i64, v[1] as i64, v[2] as i64, v[3] as i64],
-                            )
-                        })
-                        .collect();
+                    // Rect-only Box4 views for the placement scorers (SHAPE / coverage / first-
+                    // divergence still take bare box maps); the jarring invariants below read the
+                    // `Seen` maps directly.
+                    let cmap: std::collections::HashMap<String, [i64; 4]> =
+                        cseen.iter().map(|(k, v)| (k.clone(), v.rect)).collect();
+                    let mboxes: std::collections::HashMap<String, [i64; 4]> =
+                        mseen.iter().map(|(k, v)| (k.clone(), v.rect)).collect();
                     let (sc, missing, misplaced, probed, missing_ids) =
                         manuk_wpt::fidelity::compare_structure_detail(&cmap, &mboxes, 8);
                     // Which elements are missing? A coverage number is only actionable if it names
@@ -556,12 +567,14 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                         shape * 100.0,
                         within * 100.0
                     );
-                    // Layer-2 JARRING invariant #1 — horizontal overflow (FIDELITY-SCORING-REDESIGN.md
-                    // §2). SHAPE forgives a constant offset; this catches the different, highly-perceived
-                    // failure of content spilling past the viewport (a box we alone push past `vw` that
-                    // Chrome keeps inside). Shares ONE definition with the oracle via `h_overflow_boxes`.
+                    // Layer-2 JARRING invariants (FIDELITY-SCORING-REDESIGN.md §2) — the actual Phase-0
+                    // bar SHAPE cannot see. Since brick 4b the G1 producer carries `oracle::Seen`, so all
+                    // four call the oracle's OWN functions directly (no Box4 mirror re-deriving the tag) —
+                    // the exit gate and the differential crawl can never drift on what "jarring" means.
+                    //
+                    // #1 horizontal overflow: a box we alone push past `vw` that Chrome keeps inside.
                     let (hover, hover_ex) =
-                        manuk_wpt::oracle::h_overflow_boxes(&cmap, &mboxes, vw as i64, 8);
+                        manuk_wpt::oracle::jarring_h_overflow(&cseen, &mseen, vw as i64, 8);
                     if hover > 0 {
                         eprintln!(
                             "  H-OVERFLOW: {hover} element(s) escape the {vw}px viewport (Chrome keeps them in)  e.g. {}",
@@ -573,12 +586,52 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                                 .join("; ")
                         );
                     }
-                    // Layer-2 JARRING invariant #2 — collapsed interactive target (the box-dump half of
-                    // hittability, §2). A control an interactive tag names, that Chrome renders with a
-                    // real clickable box but Manuk collapses to <2px on an axis — a dead button. Shares
-                    // the invariant with the oracle via `collapsed_target_boxes` (tag from the path key).
+                    // #2 sibling overlap — the #1 "broken page" perception (text on text, control under a
+                    // banner): siblings Chrome renders disjoint but we render colliding. Now wired into the
+                    // exit gate (needed `Seen`'s sibling grouping, which the Box4 producer could not carry).
+                    let (overlap, ov_skip, ov_ex) =
+                        manuk_wpt::oracle::jarring_overlap(&cseen, &mseen, 8);
+                    if overlap > 0 {
+                        eprintln!(
+                            "  OVERLAP: {overlap} sibling pair(s) collide that Chrome keeps apart{}  e.g. {}",
+                            if ov_skip > 0 {
+                                format!(" ({ov_skip} large group(s) unscanned)")
+                            } else {
+                                String::new()
+                            },
+                            ov_ex
+                                .iter()
+                                .take(2)
+                                .map(|s| s.as_str())
+                                .collect::<Vec<_>>()
+                                .join("; ")
+                        );
+                    }
+                    // #3 reading-order inversion — a float/abspos/grid item we alone pull out of sequence,
+                    // which SHAPE and overlap both miss (well-shaped, disjoint, yet read swapped).
+                    let (rinv, rinv_skip, rinv_ex) =
+                        manuk_wpt::oracle::jarring_reading_order(&cseen, &mseen, 8);
+                    if rinv > 0 {
+                        eprintln!(
+                            "  READING-ORDER: {rinv} sibling pair(s) read out of sequence vs Chrome{}  e.g. {}",
+                            if rinv_skip > 0 {
+                                format!(" ({rinv_skip} large group(s) unscanned)")
+                            } else {
+                                String::new()
+                            },
+                            rinv_ex
+                                .iter()
+                                .take(2)
+                                .map(|s| s.as_str())
+                                .collect::<Vec<_>>()
+                                .join("; ")
+                        );
+                    }
+                    // #4 collapsed interactive target (the box-dump half of hittability): a control an
+                    // interactive tag names, that Chrome renders with a real clickable box but Manuk
+                    // collapses to <2px on an axis — a dead button. Reads `Seen.tag`, no key-parse mirror.
                     let (dead, dead_ex) =
-                        manuk_wpt::oracle::collapsed_target_boxes(&cmap, &mboxes, 2);
+                        manuk_wpt::oracle::jarring_collapsed_target(&cseen, &mseen, 2);
                     if dead > 0 {
                         eprintln!(
                             "  DEAD-TARGET: {dead} interactive control(s) collapsed below hit size (Chrome gives them area)  e.g. {}",

@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **299** | ticks 1–536 |
 | median tick cycle | **21m** | 298 intervals |
-| median, last 10 | **14m** | 10 intervals |
+| median, last 10 | **17m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.91** | 326.6h elapsed |
+| **ticks per hour** | **0.91** | 326.9h elapsed |
 | median verify wall | **62s** | 238 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -395,6 +395,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **533** | 2026-07-24 19:11 | 11m | instrument-fidelity | 67s | +201/−70 | 274 | 81 | 56.0% · | FIDELITY REBUILD brick 3: horizontal-overflow jarring invariant in the G1 probe (2026-07-2 |
 | **534** | 2026-07-24 19:16 | 5m | cadence | 67s | +58/−33 | 274 | 81 | 56.0% · | CADENCE: self-audit #N (clean — methodology and reality agree) (2026-07-24) |
 | **535** | 2026-07-24 19:23 | 7m | cadence | 67s | +106/−33 | 274 | 81 | 56.0% · | CADENCE: Constitution Check #33 (fidelity-rebuild arc is on-frontier) (2026-07-24) |
-| **536** | 2026-07-24 19:39 | 16m | instrument-fidelity | 67s | +229/−69 | 274 | 81 | 56.0% · | FIDELITY REBUILD brick 4a: collapsed-interactive-target invariant in the G1 probe (2026-07 |
+| **536** | 2026-07-24 19:56 | 33m | instrument-fidelity | 67s | +320/−204 | 274 | 81 | 56.0% · | FIDELITY REBUILD brick 4a: collapsed-interactive-target invariant in the G1 probe (2026-07 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

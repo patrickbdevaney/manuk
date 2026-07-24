@@ -297,4 +297,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 533	13d764e	1784934689	2026-07-24T19:11:29-04:00	666	instrument-fidelity	67	8	201	70	274	81	3896	6960	0	329	31	FIDELITY REBUILD brick 3: horizontal-overflow jarring invariant in the G1 probe (2026-07-24)
 534	8002d00	1784935018	2026-07-24T19:16:58-04:00	329	cadence	67	4	58	33	274	81	3896	6960	0	329	31	CADENCE: self-audit #N (clean — methodology and reality agree) (2026-07-24)
 535	65c9171	1784935434	2026-07-24T19:23:54-04:00	416	cadence	67	5	106	33	274	81	3896	6960	0	329	31	CADENCE: Constitution Check #33 (fidelity-rebuild arc is on-frontier) (2026-07-24)
-536	8f21334a	1784936399	2026-07-24T19:39:59-04:00	965	instrument-fidelity	67	8	229	69	274	81	3896	6960	0	329	31	FIDELITY REBUILD brick 4a: collapsed-interactive-target invariant in the G1 probe (2026-07-24)
+536	5c659334	1784937407	2026-07-24T19:56:47-04:00	1973	instrument-fidelity	67	9	320	204	274	81	3896	6960	0	329	31	FIDELITY REBUILD brick 4a: collapsed-interactive-target invariant in the G1 probe (2026-07-24)

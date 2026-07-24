@@ -52,11 +52,18 @@ var pre=document.createElement('pre');pre.id='__PARITY__';
 pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})();
 </script>"#;
 
-/// **Structural probe, selector-path keyed** (the fidelity redesign §3a producer). Same rendered-box
-/// data as `PROBE_ALL_IDS_JS`, but keys every element by its selector-PATH
-/// (`tag.SIG:nth-child(n)/…` from the root) instead of its `id`, so `fidelity::shape_stats` has real
-/// `/`-ancestry to subtract a constant page offset against. Modern React/Tailwind pages barely use
-/// ids (39% of the corpus was unmeasurable on `[id]` keys); a path is present on every element.
+/// **Structural probe, selector-path keyed** (the fidelity redesign §3a producer). Keys every element
+/// by its selector-PATH (`tag.SIG:nth-child(n)/…` from the root) instead of its `id`, so
+/// `fidelity::shape_stats` has real `/`-ancestry to subtract a constant page offset against. Modern
+/// React/Tailwind pages barely use ids (39% of the corpus was unmeasurable on `[id]` keys); a path is
+/// present on every element.
+///
+/// Since tick 537 (brick 4b) each entry is a **`Seen`-shaped 6-tuple** `[tag, display, x, y, w, h]`
+/// — the SAME shape as the differential `oracle_probe` — not the bare 4-tuple box it emitted before.
+/// The extra tag+display let the G1 fidelity probe carry `oracle::Seen` maps and call the four jarring
+/// invariants (`jarring_h_overflow`/`jarring_overlap`/`jarring_reading_order`/`jarring_collapsed_target`)
+/// DIRECTLY, instead of through Box4 mirror cores that had to re-derive the tag from the key. One
+/// definition of every invariant, shared by the oracle and the exit gate.
 ///
 /// The `fnv`/`sigOf`/`pathOf` here are a BYTE-IDENTICAL contract with the oracle probe's `pathOf`
 /// (above) and with `path_of`/`sig_of` in main.rs: fnv-1a over UTF-16 code units (`charCodeAt`), the
@@ -75,7 +82,7 @@ for(var k=0;k<lim;k++){var e=all[k];var t=e.tagName.toLowerCase();
   if(t==='script'||t==='style'||t==='head'||t==='meta'||t==='link'||t==='base'||t==='title'||t==='noscript'||t==='template'||t==='html')continue;
   var r=e.getBoundingClientRect();
   if(r.width===0&&r.height===0)continue;   // not rendered: don't demand Manuk render it either
-  out[pathOf(e)]=[Math.round(r.x+window.scrollX),Math.round(r.y+window.scrollY),Math.round(r.width),Math.round(r.height)];}
+  out[pathOf(e)]=[t,getComputedStyle(e).display,Math.round(r.x+window.scrollX),Math.round(r.y+window.scrollY),Math.round(r.width),Math.round(r.height)];}
 var pre=document.createElement('pre');pre.id='__PARITY__';
 pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})();
 </script>"#;
@@ -357,11 +364,19 @@ pub fn capture_boxes_all_ids(url: &str, vw: u32, vh: u32) -> Result<HashMap<Stri
     parse_probe_json(&String::from_utf8_lossy(&out.stdout))
 }
 
-/// Capture Chrome's box for every rendered element of a LIVE url, keyed by SELECTOR-PATH — the
-/// fidelity redesign's Layer-1 (SHAPE) producer. The path-keyed sibling of `capture_boxes_all_ids`:
-/// `fidelity::shape_stats` needs `/`-ancestry to cancel a constant page offset, which `[id]` keys
-/// (no `/`) never carry. Same fetch → `<base>` → `--dump-dom` flow, only the injected probe differs.
-pub fn capture_boxes_all_paths(url: &str, vw: u32, vh: u32) -> Result<HashMap<String, Box4>> {
+/// Capture Chrome's `Seen` (tag + display + box) for every rendered element of a LIVE url, keyed by
+/// SELECTOR-PATH — the fidelity redesign's Layer-1 (SHAPE) + Layer-2 (jarring) producer. The path-keyed
+/// sibling of `capture_boxes_all_ids`: `fidelity::shape_stats` needs `/`-ancestry to cancel a constant
+/// page offset, which `[id]` keys (no `/`) never carry, and the jarring invariants need the tag/display
+/// the `Seen` shape carries. Same fetch → `<base>` → `--dump-dom` flow, only the injected probe differs.
+///
+/// Returns `oracle::Seen` maps so the G1 fidelity probe scores placement AND the four jarring invariants
+/// through the SAME oracle functions the differential crawl uses — no Box4 mirror in between (brick 4b).
+pub fn capture_seen_all_paths(
+    url: &str,
+    vw: u32,
+    vh: u32,
+) -> Result<HashMap<String, crate::oracle::Seen>> {
     let chrome = chrome_bin().ok_or_else(|| anyhow!("no Chrome/Chromium found"))?;
     let html = ureq_get(url)?;
     let base = format!("<base href=\"{url}\">");
@@ -386,7 +401,7 @@ pub fn capture_boxes_all_paths(url: &str, vw: u32, vh: u32) -> Result<HashMap<St
             String::from_utf8_lossy(&out.stderr).trim()
         );
     }
-    parse_probe_json(&String::from_utf8_lossy(&out.stdout))
+    parse_seen_probe_json(&String::from_utf8_lossy(&out.stdout))
 }
 
 /// Minimal blocking GET (the harness already links reqwest-free; use curl for zero new deps).
@@ -580,6 +595,62 @@ fn parse_probe_json(dumped_dom: &str) -> Result<HashMap<String, Box4>> {
     Ok(map)
 }
 
+/// Pull the `#__PARITY__` JSON out of a dumped DOM and parse it as `Seen` entries — the enriched
+/// path producer (brick 4b) whose values are the 6-tuple `[tag, display, x, y, w, h]`, the same shape
+/// `oracle_probe` emits. Reuses our own HTML parser so entity-escaping is handled correctly. Skips any
+/// entry that is not a well-formed 6-tuple rather than failing the whole page.
+fn parse_seen_probe_json(dumped_dom: &str) -> Result<HashMap<String, crate::oracle::Seen>> {
+    use crate::oracle::Seen;
+    let dom = manuk_html::parse(dumped_dom);
+    let mut json = None;
+    for n in dom.descendants(dom.root()) {
+        if let Some(el) = dom.element(n) {
+            if el.id() == Some("__PARITY__") {
+                json = Some(dom.text_content(n));
+                break;
+            }
+        }
+    }
+    let json = json.ok_or_else(|| {
+        anyhow!("no __PARITY__ probe output in dumped DOM (did Chrome run the script?)")
+    })?;
+    let raw: HashMap<String, serde_json::Value> = serde_json::from_str(json.trim())
+        .with_context(|| format!("parsing seen probe JSON: {json}"))?;
+    let mut map = HashMap::new();
+    for (id, v) in raw {
+        let Some(a) = v.as_array() else { continue };
+        if a.len() != 6 {
+            continue;
+        }
+        let (Some(tag), Some(display)) = (a[0].as_str(), a[1].as_str()) else {
+            continue;
+        };
+        let mut rect = [0i64; 4];
+        let mut ok = true;
+        for (i, slot) in rect.iter_mut().enumerate() {
+            match a[i + 2].as_i64() {
+                Some(x) => *slot = x,
+                None => {
+                    ok = false;
+                    break;
+                }
+            }
+        }
+        if !ok {
+            continue;
+        }
+        map.insert(
+            id,
+            Seen {
+                tag: tag.to_string(),
+                display: display.to_string(),
+                rect,
+            },
+        );
+    }
+    Ok(map)
+}
+
 /// A deterministic short tag for a temp filename (FNV-1a of the HTML) — no clock, no RNG.
 fn stable_tag(html: &str) -> String {
     let mut h: u64 = 0xcbf29ce484222325;
@@ -607,5 +678,27 @@ mod tests {
         let boxes = parse_probe_json(dom).unwrap();
         assert_eq!(boxes["p-a"], [30, 0, 100, 40]);
         assert_eq!(boxes["p-b"], [0, 40, 60, 20]);
+    }
+
+    #[test]
+    fn parse_seen_probe_json_reads_tag_display_and_box() {
+        // The enriched path producer (brick 4b) emits `[tag, display, x, y, w, h]` — the SAME 6-tuple
+        // as the differential `oracle_probe`. Prove the tag and display survive the round-trip, not
+        // just the box (a Box4-only parse would silently drop them and the jarring invariants that
+        // read `Seen.tag` — collapsed-target — would misfire).
+        let dom = r#"<html><body><pre id="__PARITY__">{"button.abc:nth-child(2)":["button","flex",30,0,100,40],"div:nth-child(1)/p:nth-child(3)":["p","block",0,40,60,20]}</pre></body></html>"#;
+        let seen = parse_seen_probe_json(dom).unwrap();
+        let b = &seen["button.abc:nth-child(2)"];
+        assert_eq!(b.tag, "button");
+        assert_eq!(b.display, "flex");
+        assert_eq!(b.rect, [30, 0, 100, 40]);
+        let p = &seen["div:nth-child(1)/p:nth-child(3)"];
+        assert_eq!(p.tag, "p");
+        assert_eq!(p.display, "block");
+        assert_eq!(p.rect, [0, 40, 60, 20]);
+        // A malformed entry (a bare 4-tuple from a stale probe) is skipped, never mis-parsed as a Seen.
+        let bad =
+            r#"<html><body><pre id="__PARITY__">{"x:nth-child(1)":[1,2,3,4]}</pre></body></html>"#;
+        assert!(parse_seen_probe_json(bad).unwrap().is_empty());
     }
 }

@@ -219,10 +219,22 @@ test keys elements in the old `tag[n]` form with no `.`/`:` to split, so a key-p
 — the mirror is obviated once the producer emits `Seen`. RED-proven (drop the `hittable(c)` guard → a
 both-engines-collapsed control counts, 1→2).
 
-The remaining two invariants (sibling overlap, reading-order inversion) need the sibling-group machinery on
-`Seen` maps, so the enabling next brick is a producer enrichment — emit tag+display, key into `Seen` — after
-which they reuse the oracle's functions directly and the h-overflow/collapsed-target mirrors collapse into
-direct oracle calls. Then root-cause clustering (§3b), then the coverage→SHAPE gate-floor flip.
+**Tick 537 (brick 4b) enriched the G1 producer to `Seen` and wired the last two Layer-2 invariants.** The
+path producer now emits the SAME 6-tuple `[tag, display, x, y, w, h]` the differential `oracle_probe` emits
+(`chrome::capture_seen_all_paths` + `parse_seen_probe_json`; `PROBE_ALL_PATHS_JS` adds `getComputedStyle(e).display`),
+and the Manuk side builds `oracle::Seen` with display from `page.styles_map()`. So the G1 exit gate now carries
+`Seen` maps and calls **all four** jarring invariants — `jarring_h_overflow`, `jarring_overlap`,
+`jarring_reading_order`, `jarring_collapsed_target` — **directly** on the oracle's own functions; the rect-only
+Box4 view is derived cheaply for the placement scorers (SHAPE/coverage/first-divergence still take bare box maps).
+This collapses the `collapsed_target_boxes<K>` mirror entirely (deleted, along with its test — the `Seen` version's
+test covers the invariant) and obviates the tag-from-key parse; `h_overflow_boxes<K>` stays only as
+`jarring_h_overflow`'s internal delegate. The two newly-wired invariants (overlap, reading-order) were previously
+uncomputable in G1 because the Box4 producer carried no sibling grouping through `Seen`. RED-provable gate for the
+enrichment (`chrome::tests::parse_seen_probe_json_reads_tag_display_and_box`): swapping the tag/display parse indices
+flips the tag assertion red, and a bare 4-tuple entry is skipped rather than mis-parsed. **Decompose-first boundary
+kept:** the gate FLOOR still gates on structural COVERAGE — the coverage→SHAPE flip still awaits a recalibrating sweep.
+
+The remaining fidelity work is root-cause clustering (§3b), then the coverage→SHAPE gate-floor flip.
 
 **Layer 2 — jarring invariants (SHAPE cannot see these).** SHAPE forgives a constant offset because a user
 does not perceive one; but a box shaped *correctly relative to an over-wide parent* can still spill off the

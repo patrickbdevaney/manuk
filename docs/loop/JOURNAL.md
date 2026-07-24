@@ -21423,3 +21423,50 @@ NEXT: brick 4b — enrich the G1 producer to `Seen` (tag+display) so `jarring_ov
 reuse the oracle fns directly (then this mirror + the h-overflow one collapse into direct oracle calls).
 Then §3b root-cause clustering; then the coverage→SHAPE gate-floor flip after a recalibrating sweep.
 Cadences: self-audit 544; surface 538 (DUE); const 543; wall 547.
+
+## Tick 537 — FIDELITY REBUILD brick 4b: G1 producer enriched to `Seen`; all four jarring invariants wired direct (2026-07-24)
+
+The Check-#33 / CO-#1 fidelity-instrument rebuild. Brick 4a landed the second Layer-2 invariant via a Box4
+MIRROR because the G1 producer carried only rect maps. This brick removes the mirrors at the root: the G1
+selector-path producer now emits the SAME `Seen`-shaped 6-tuple `[tag, display, x,y,w,h]` the differential
+`oracle_probe` emits, so the exit gate carries `oracle::Seen` maps and calls the oracle's OWN jarring
+functions DIRECTLY — no re-implementation in between. This also WIRES the last two Layer-2 invariants
+(sibling overlap, reading-order inversion) into G1, which the Box4 producer literally could not compute
+(they need the sibling grouping `Seen` carries).
+
+WHAT LANDED:
+- chrome.rs: `PROBE_ALL_PATHS_JS` now emits `[t, getComputedStyle(e).display, x,y,w,h]` (was the bare
+  4-tuple box). `capture_boxes_all_paths` → `capture_seen_all_paths(url,vw,vh) -> HashMap<String,Seen>`,
+  parsing via a new `parse_seen_probe_json` (skips any entry that is not a well-formed 6-tuple rather than
+  failing the page — a stale 4-tuple is dropped, never mis-parsed).
+- main.rs G1: builds `mseen: HashMap<String,Seen>` (tag from `dom.tag_name`, display from
+  `page.styles_map()`+`css_display_name`, same as the oracle's Manuk side), derives cheap rect-only Box4
+  views (`cmap`/`mboxes`) for the placement scorers (SHAPE/coverage/first-divergence still take bare box
+  maps), and calls `jarring_h_overflow` / `jarring_overlap` / `jarring_reading_order` /
+  `jarring_collapsed_target` DIRECTLY on the `Seen` maps. G1 now prints OVERLAP and READING-ORDER lines
+  (with unscanned-large-group counts) alongside H-OVERFLOW and DEAD-TARGET.
+- oracle.rs: deleted the `collapsed_target_boxes<K>` Box4 mirror + its test — the invariant is covered by
+  the `Seen` version's test (`jarring_collapsed_target_blames_only_controls_chrome_gives_area`), which is
+  now what G1 uses. `h_overflow_boxes<K>` STAYS (it is `jarring_h_overflow`'s internal delegate, one
+  definition for both the oracle and G1).
+
+GATE (chrome::tests::parse_seen_probe_json_reads_tag_display_and_box, RED-proven): asserts tag+display+box
+survive the round-trip and a bare 4-tuple entry is skipped. RED-PROVE: swapping the tag/display parse
+indices flips the tag assertion (`left: "flex", right: "button"`); restored, 23 lib tests green (net unchanged
+— one mirror test removed, one producer test added). Bin + tests compile clean (only the pre-existing
+`scroll_y` warning).
+
+HONEST BOUNDARY: all four Layer-2 jarring invariants are now computed by G1 through ONE definition shared with
+the differential oracle — the exit gate and the crawl can never drift on what "jarring" means. Gate FLOOR still
+gates on COVERAGE; the coverage→SHAPE flip still awaits a broad path-keyed recalibrating sweep (the number is
+claimed later). No engine capability src touched — measurement harness only; Bar 0 held.
+
+TICK SHAPE: instrument-fidelity brick (fidelity-rebuild CO-#1, brick 4b of N — producer enriched to `Seen`,
+all four jarring invariants wired direct on the oracle fns, two Box4 mirrors collapsed; new RED-provable
+producer gate; NO engine capability src changed — measurement harness only; Bar 0 held). WIKI:
+conformance-and-oracles.md (the tick-537 brick-4b paragraph: enriched producer + direct four-invariant wiring
++ mirror deletion). No [no-pattern] (no engine capability src touched).
+
+NEXT: §3b root-cause clustering (group failures by first-divergence signature + offset, report DISTINCT
+CAUSES not sites); then the coverage→SHAPE gate-floor flip after a recalibrating path-keyed sweep.
+Cadences: self-audit 544; surface 538 (DUE next tick); const 543; wall 547.
