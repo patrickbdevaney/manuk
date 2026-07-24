@@ -20904,3 +20904,46 @@ driver, home = wherever Transport ticks; the seam is proven, this wires it) — 
 WebM-VP9 is the CUT line (no Rust VP9 decoder; AV1+H.264 covers the practical web). Or test262
 (measurement, now permitted after this build brick). seeking/seeked on a currentTime write = separate
 scrub brick. Self-audit next 525; surface next 528; const next 527; wall next 527.
+
+## Tick 522 — BUILD BRICK: writing `<video>.currentTime` is a real seek (2026-07-24)
+
+Continuing the media CO-#1 with full context from t521. Tick 521 gave the element a forward clock;
+this tick makes a `currentTime` WRITE the seek algorithm — the write behind every scrub-bar drag,
+chapter jump and "resume where you left off". Before: the setter stored the number, synced captions,
+told no one — no `seeking`, no `seeked`, no reposition, no clamp, so a scrub to 9999 on a 30s clip left
+the clock where the media has no frames and a player bound to `seeked` waited forever.
+
+WHAT LANDED:
+- **engine/js/src/event_loop.rs (`__manukMedia`)**: the `currentTime` setter is now the seek path — a
+  write to a NEW position raises `seeking`, clamps into `[0, duration]` (past-end→end, negative→0),
+  moves the clock, publishes the position to the host via `__mediaProp(nodeId,"currentTime",n)`,
+  re-syncs captions, then fires `seeked`+`timeupdate`. A same-position write is NOT a seek (players
+  re-assign currentTime every frame — an event per frame is a storm over a still clock). A backward
+  seek after `ended` clears `ended` (rewatch from the end). `seeking` is a real backed flag now (was a
+  frozen `false`); `seekable` is the live `[0, duration]` span; `fastSeek(t)` shares the path.
+- **engine/js/src/dom_bindings.rs (`media_prop`)**: the live-write allow-list gained `"currentTime"`
+  alongside muted/volume/playbackRate — a seek is as much a live media-IDL write as a volume change,
+  and this is how the position reaches the host decoder (`take_media_props`).
+
+RED-PROVEN (real E2E, no network): new gate `g_media_seek` builds a `<video>` + MediaSource
+duration=10, asserts through the public surface: seekable=[0,10]; a write moves the clock; a
+same-position write fires nothing (noop:1); clamp hi (100→10.00) and lo (-5→0.00); fastSeek(3);
+seek:4,4 (four seeks, paired); backseek-after-ended clears ended (endclear:true,false,4.00);
+seekf:5,5. AND the host seam Rust-side: `page.take_media_props()` must contain a `currentTime` entry
+whose final value is the backseek (4.0) — proving the seek is not a JS-only illusion. Neuter the
+`seeking` dispatch → seek:0,4 → RED; the clamp and the allow-list each have their own RED path.
+g_media_playback_clock still GREEN (the private `__advance` set bypasses the seek events, so the
+forward clock is untouched).
+
+TICK SHAPE: subsystem build brick (1 capability — currentTime-write-as-seek: seeking/seeked + clamp +
+seekable + fastSeek + host-seam publish; new gate g_media_seek E2E, RED-proven; the same-position
+guard and ended-clear are spec-shaped; Bar 0 held — a seek is bounded/clamped, an over-scrub is safe).
+WIKI: docs/wiki/media-pipeline.md — new M6b-seek subsection (the seek algorithm, the host live-write
+channel, clamp/seekable/fastSeek). WEB-PATTERNS.md updated (scrub/chapter/resume class). NOT
+[no-pattern] (engine/js + engine/dom_bindings src touched).
+
+NEXT: media frontier still XL. The forward clock (t521) + seek (t522) are the JS-visible playback
+model; the shell frame loop calling __mediaAdvance/consuming currentTime props is the GUI driver
+(next integration). Then codec breadth / WebM-VP9 is the CUT line. Or test262 (measurement, permitted).
+`played` TimeRanges union is a small follow-up. Self-audit next 525; surface next 528; const next 527;
+wall next 527.

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **285** | ticks 1–521 |
-| median tick cycle | **22m** | 284 intervals |
-| median, last 10 | **33m** | 10 intervals |
+| ticks landed | **286** | ticks 1–522 |
+| median tick cycle | **22m** | 285 intervals |
+| median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.88** | 322.1h elapsed |
-| median verify wall | **61s** | 224 ticks |
+| **ticks per hour** | **0.88** | 322.5h elapsed |
+| median verify wall | **61s** | 225 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **269**
+* **live gates**: 27 → **270**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**165 of 285 ticks** (58%) moved a
+**165 of 286 ticks** (58%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -382,5 +382,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **519** | 2026-07-24 14:09 | 5m | constitution | 67s | +122/−33 | 267 | 81 | 56.0% · | CONSTITUTION-CHECK #31: the loop obeyed #30 and unlocked a class (gate, not scoreboard) (2 |
 | **520** | 2026-07-24 14:39 | 31m | subsystem | 67s | +525/−127 | 268 | 81 | 56.0% · | BUILD BRICK: ESM import maps — bare specifiers resolve (CDN no-bundler apps boot) (2026-07 |
 | **521** | 2026-07-24 15:10 | 31m | subsystem | 67s | +494/−109 | 269 | 81 | 56.0% · | BUILD BRICK: `<video>` playback clock — timeupdate/ended fire, currentTime advances (2026- |
+| **522** | 2026-07-24 15:30 | 20m | subsystem | 67s | +407/−113 | 270 | 81 | 56.0% · | BUILD BRICK: writing `<video>.currentTime` is a real seek (2026-07-24) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

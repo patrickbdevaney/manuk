@@ -3332,7 +3332,13 @@ const PRELUDE: &str = r#"
         Object.defineProperty(el, 'ended', {
           configurable: true, get: function () { return el.__ended; }
         });
-        ro('seeking', false);
+        // `seeking` is a REAL flag now (tick 522): the `currentTime` setter raises it for the
+        // duration of a seek. A player's scrub UI reads it to show the buffering spinner while the
+        // new position loads.
+        el.__seeking = false;
+        Object.defineProperty(el, 'seeking', {
+          configurable: true, get: function () { return el.__seeking; }
+        });
 
         // ── The three members a MediaSource makes LIVE.
         //
@@ -3356,7 +3362,14 @@ const PRELUDE: &str = r#"
           return sbs.length ? sbs[0].buffered : new globalThis.TimeRanges([]);
         });
         ro('played',    { length: 0, start: function(){ return 0; }, end: function(){ return 0; } });
-        ro('seekable',  { length: 0, start: function(){ return 0; }, end: function(){ return 0; } });
+        // `seekable` is the extent a scrub bar lets you jump within. Once a finite duration is
+        // known (tick 522) it is the whole `[0, duration]` span — a single range, which is what a
+        // fully-buffered progressive video reports; before that, honestly empty.
+        live('seekable', function () {
+          var dur = Number(el.duration);
+          if (isFinite(dur) && dur > 0) { return new globalThis.TimeRanges([[0, dur]]); }
+          return { length: 0, start: function(){ return 0; }, end: function(){ return 0; } };
+        });
         // `textTracks` is the live list the player enumerates to find the language the user picked.
         live('textTracks', function () {
           var list = el.__textTracks || [];
@@ -3416,10 +3429,38 @@ const PRELUDE: &str = r#"
           get: function () { return el.__currentTime; },
           set: function (v) {
             var n = Number(v);
-            el.__currentTime = isFinite(n) ? n : 0;
+            if (!isFinite(n)) { n = 0; }
+            // Clamp into the seekable range: past the end lands on the end, negative on 0. A scrub
+            // to 9999 on a 30s clip must not leave the clock in a place the media has no frames for.
+            if (n < 0) { n = 0; }
+            var dur = Number(el.duration);
+            if (isFinite(dur) && dur > 0 && n > dur) { n = dur; }
+            // A write to the SAME position is not a seek — players re-assign `currentTime` every
+            // frame, and firing seeking/seeked on each would be a storm of events over a still clock.
+            if (n === el.__currentTime) { return; }
+            // ── THE SEEK (tick 522). `seeking` → reposition → `seeked`, the sequence every scrub
+            // bar, chapter jump and resume-position write drives. A seek that lands before the end
+            // clears `ended`, so the element is playable again from the new point.
+            if (el.__ended && n < el.__currentTime) { el.__ended = false; }
+            el.__seeking = true;
+            if (el.dispatchEvent) { el.dispatchEvent(new globalThis.Event('seeking')); }
+            el.__currentTime = n;
+            // Tell the host to reposition its decoder (the same live-write channel volume/rate use).
+            if (typeof __mediaProp === 'function' && el.__nodeId != null) {
+              __mediaProp(String(el.__nodeId), 'currentTime', n);
+            }
             if (el.__syncTextTracks) { el.__syncTextTracks(); }
+            el.__seeking = false;
+            if (el.dispatchEvent) {
+              el.dispatchEvent(new globalThis.Event('seeked'));
+              el.dispatchEvent(new globalThis.Event('timeupdate'));
+            }
           }
         });
+        // `fastSeek(t)` is the approximate seek (jump to the nearest keyframe, no exact-frame
+        // wait). Here it shares the seek path — the distinction is a decoder optimisation, not a
+        // JS-visible difference, and a player calling it must not throw.
+        el.fastSeek = function (t) { el.currentTime = Number(t); };
         el.autoplay = el.autoplay || false; el.loop = el.loop || false;
         el.__ms = null;
 

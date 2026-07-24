@@ -2999,7 +2999,14 @@ unsafe fn media_prop(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let value = arg_f64(cx, vp, argc, 2).unwrap_or(f64::NAN);
     if node != 0
         && value.is_finite()
-        && matches!(name.as_str(), "muted" | "volume" | "playbackRate")
+        && matches!(
+            name.as_str(),
+            // `currentTime` joins the live-write channel (tick 522): a `video.currentTime = 30`
+            // is a SEEK the host must reposition the decoder for — a scrub bar, a chapter jump, a
+            // "resume where you left off" all execute exactly this write, and it is as much a live
+            // media-IDL property as volume/rate. The host drains it oldest-first, last-write-wins.
+            "muted" | "volume" | "playbackRate" | "currentTime"
+        )
     {
         PENDING_MEDIA_PROPS.with(|q| q.borrow_mut().push((node, name, value)));
     }

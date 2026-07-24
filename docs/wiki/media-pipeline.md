@@ -530,8 +530,27 @@ asserting the play→playing edge, `currentTime` advancing, the clamp-and-`ended
 to a no-op and `currentTime` stays 0, `timeupdate`/`ended` never fire.
 
 **Residue:** the shell frame loop does not yet call `__mediaAdvance` (the seam is proven end-to-end;
-its GUI driver is the next integration, home = wherever `Transport` ticks per frame). `seeking`/
-`seeked` on a `currentTime` write are still unfired (a separate scrub-path brick).
+its GUI driver is the next integration, home = wherever `Transport` ticks per frame).
+
+### M6b-seek — writing `currentTime` is a real seek (tick 522)
+
+The clock could only move forward, host-driven. A `video.currentTime = 30` — the write behind every
+scrub-bar drag, chapter jump and "resume where you left off" — stored the number and told no one: no
+`seeking`, no `seeked`, no reposition, no clamp. This tick makes the `currentTime` setter the seek
+algorithm: a write to a NEW position raises `seeking`, moves the clock, publishes the position to the
+host on the **same live-write channel volume/rate use** (`__mediaProp(nodeId,"currentTime",n)` — the
+allow-list in `dom_bindings.rs::media_prop` gained `"currentTime"`), re-syncs captions, then fires
+`seeked`+`timeupdate`. The position **clamps** into `[0, duration]` (a scrub to 9999 lands on the end,
+not on empty media); a write to the *same* position is not a seek (players re-assign every frame — an
+event per frame would be a storm over a still clock); a backward seek after `ended` clears `ended`
+(the element is playable again from there). `seekable` is now the live `[0, duration]` span a scrub
+bar jumps within, and `fastSeek(t)` shares the path (approximate-seek is a decoder optimisation, not a
+JS-visible difference). Gated `g_media_seek`: JS-visible events + clamp via `#out`, and the host seam
+Rust-side via `take_media_props` (the final backseek to 4 must be in the drained queue). RED: drop the
+`seeking`/`seeked` dispatch, or the clamp, or `"currentTime"` from the allow-list.
+
+**Residue:** `seeked` fires synchronously (our host already holds the frames; the spec's async
+data-wait is a decoder detail); `played` TimeRanges is still empty (needs the played-ranges union).
 
 ## M7 — captions (tick 255), and a probe that verified the TEST
 

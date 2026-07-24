@@ -4475,3 +4475,15 @@ a self-pumping `setTimeout` would spin forever on the muted `autoplay loop` back
 `g_media_playback_clock` drives that exact seam; RED = neuter `__advance` → clock frozen at 0. Residue: the
 shell frame loop does not yet call the seam (GUI driver = next integration); `seeking`/`seeked` on a
 `currentTime` write are a separate scrub brick.
+
+**Writing `<video>.currentTime` is a real seek — scrub bars, chapter jumps, resume-position work (tick
+522)** — so dragging a scrub bar, clicking a chapter marker, or a "resume where you left off" that sets
+`currentTime` fires `seeking`→`seeked` (a player hides its buffering spinner on `seeked`), moves the clock,
+and repositions the host decoder. The `currentTime` setter is now the seek algorithm: a write to a NEW
+position raises `seeking`, clamps into `[0, duration]` (a scrub past the end lands on the end, not on empty
+media), publishes the position to the host on the same live-write channel volume/rate use
+(`__mediaProp(nodeId,"currentTime",n)`), then fires `seeked`+`timeupdate`; a same-position write is not a
+seek (no per-frame event storm); a backward seek after `ended` clears `ended` (rewatch from the end).
+`seekable` reports the live `[0, duration]` span, and `fastSeek(t)` shares the path. Gate `g_media_seek`
+asserts the JS events + clamp AND the host seam (`take_media_props` must contain the final seek). RED: drop
+the seeking/seeked dispatch, the clamp, or `"currentTime"` from the `media_prop` allow-list.
