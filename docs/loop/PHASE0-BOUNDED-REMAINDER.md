@@ -125,10 +125,16 @@ resolves. The GAP is `module_resolve_hook` (engine/js/src/dom_bindings.rs:9489),
   NO `GetRequestedModules` pre-scan is needed (it is not currently wired, and this avoids needing it).
 
 **Brick sequence (each independently landable; gate names proposed):**
-- **B1 — module registry + rooting harness.** A GC-safe rooted `HashMap<resolved_url, Heap<*mut
-  JSObject>>` keyed by resolved specifier, plus `SetModulePrivate(module, url_string)` on every compiled
-  module (root inline module included). No behavior change yet. Gate: a module's private round-trips its
-  URL. (This is the brick that de-risks #1 — land it alone.)
+- **B1 — module registry + rooting harness.** ✅ **LANDED tick 512.** The GC-safe rooted registry
+  (`ESM_MODULE_REGISTRY` thread-local of `RootedTraceableBox<Heap<*mut JSObject>>`, keyed by resolved
+  url; `esm_registry_insert/get/clear` in `dom_bindings.rs`) — empty until B2 populates it, but its
+  rooting proven in isolation. Plus `set_module_private_url` → `SetModulePrivate` on every compiled
+  module (root inline included), and `module_metadata_hook` now sources `import.meta.url` from the
+  module's OWN private (DOC_URL fallback) — the per-module URL thread B2 extends. Gate
+  `g_esm_module_registry` (`esm_registry_gc_selftest`): a module held ONLY by the registry survives a
+  forced `JS_GC` with its private round-tripping. RED-proven (neuter `SetModulePrivate` → red). Driven
+  through `with_runtime` so exit stays clean (G_CLEAN_EXIT). **hazard #1 (rooting) + #2 (per-module URL)
+  both retired.**
 - **B2 — resolve hook: fetch+compile+cache+return.** Rewrite `module_resolve_hook`: resolve specifier
   against the referencing module's private URL → check registry (return cached, handles cycles) →
   `manuk_net::get` → `CompileModule` → insert into registry BEFORE returning → return the handle. Fetch

@@ -218,6 +218,29 @@ pub fn shutdown() {
     }
 }
 
+/// **ESM import-graph B1 rooting-harness self-check** — proves a module held only by the module
+/// registry survives a full compacting GC with its private (resolved url) intact. Driven through
+/// [`with_runtime`] so the runtime is PARKED and the process exits cleanly (`G_CLEAN_EXIT`) instead
+/// of segfaulting at exit. Gated by `g_esm_module_registry`; the real check lives in
+/// [`dom_bindings::esm_registry_gc_selftest_in_realm`].
+pub fn esm_registry_gc_selftest() -> bool {
+    #[cfg(feature = "_sm")]
+    {
+        with_runtime(|rt| {
+            let cx = unsafe { rt.cx().raw_cx() };
+            Ok(unsafe { dom_bindings::esm_registry_gc_selftest_in_realm(cx) })
+        })
+        .unwrap_or(false)
+    }
+    #[cfg(not(feature = "_sm"))]
+    {
+        // No JS engine in this build ⇒ no ES-module registry exists to root ⇒ the property is N/A, not
+        // a failure (mirrors `canvas_bitmaps` / `publish_image_source`). The wall runs this WITH
+        // `spidermonkey`, where it is fully RED-provable.
+        true
+    }
+}
+
 #[cfg(feature = "_sm")]
 pub fn run_document_scripts(
     dom: &mut manuk_dom::Dom,

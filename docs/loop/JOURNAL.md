@@ -20430,3 +20430,46 @@ TICK SHAPE: constitution-check (direction measurement; no engine code, no gate c
 regresses). WIKI: none — the check lives in CONSTITUTION-CHECK.md. LAST_CONSTITUTION_CHECK 503→511; next
 due 519. NEXT: a subsystem build brick (ESM import-graph B1), per this check's ruling. Self-audit next
 515; surface next 518; wall next 527.
+
+## Tick 512 — BUILD BRICK: ESM import-graph B1 — module rooting harness + per-module private URL (2026-07-24)
+
+Per Const-Check #30's ruling (the 7-tick measurement arc is CLOSED; the next capability tick MUST be
+a subsystem build brick), landed **ESM import-graph B1** — the decomposition's de-risk-first brick
+(PHASE0-BOUNDED-REMAINDER.md §169). B1 solves the ONE sharp edge of the multi-module resolve subsystem
+in isolation, before B2's resolve hook depends on it: the specifier→module cache must hold `*mut
+JSObject` handles alive AND relocatable across a compacting GC (the "raw pointer outlives a GC" UAF
+class this repo keeps flagging).
+
+WHAT LANDED (engine/js/src/dom_bindings.rs + spidermonkey.rs):
+1. **Per-module private URL.** `run_module` now calls `SetModulePrivate(module, StringValue(url))` on
+   every compiled module via the new `set_module_private_url` helper (root inline module's base = the
+   doc URL; the helper is the SAME one B2 will call on each fetched module with its OWN resolved url).
+2. **`import.meta.url` sourced from the module's private.** `module_metadata_hook` now reads the
+   `private_value` it is handed (stringify → url) instead of the one-per-document `DOC_URL` slot, with a
+   `DOC_URL` safety fallback. For the root module the answer is unchanged (still the doc URL, still
+   non-empty → `esmmodule:yes`), but the SOURCE is now the module itself — the correct mechanism for a
+   fetched graph module's own `import.meta.url` in B2.
+3. **The GC-safe module registry primitive + API** (`ESM_MODULE_REGISTRY` thread-local of
+   `RootedTraceableBox<Heap<*mut JSObject>>`, keyed by resolved url; `esm_registry_insert/get/clear`).
+   Empty until B2 populates it. The value type is the crux: `Heap` gives the store/post-write barrier;
+   the `RootedTraceableBox` heap-pins it (rehash can't invalidate the store-buffer slot) AND registers
+   it with mozjs's `RootedTraceableSet`, which the runtime's already-installed extra-GC-roots tracer
+   marks + relocates every collection.
+
+GATE (RED-provable, in the wall): `engine/page/tests/g_esm_module_registry.rs` →
+`esm_registry_gc_selftest()` compiles a module, sets its private to a url that is NOT the doc url
+(so the metadata fallback can't fake a pass), registers it, DROPS every stack root, forces
+`JS_GC(…API)`, reads it back THROUGH the registry and asserts the private round-trips. RED two ways:
+revert `set_module_private_url` → private undefined → fails; make the registry hold a bare pointer /
+untraced `Heap` → the module is collected/moved across the GC → read fails or faults. The existing
+`esmmodule:yes` page gate still green = no regression on the self-contained-module path.
+
+TICK SHAPE: subsystem build brick (2 real capabilities — per-module private + registry primitive; 1
+new gate; existing esmmodule gate holds; nothing regresses; Bar 0 held). WIKI: mechanism captured in
+the gate + registry doc-comments and PHASE0-BOUNDED-REMAINDER.md. NEXT: **B2** — rewrite
+`module_resolve_hook` to resolve a specifier against the referencing module's private url → check the
+registry (return cached, handles cycles) → `manuk_net::get` (sync fetch already exists) → `CompileModule`
+→ `set_module_private_url` with the resolved url → INSERT into registry BEFORE returning → return the
+handle; wire `esm_registry_clear` into page teardown (same tick as the first insert). Gate
+`g_esm_import_graph`: a two-file inline fixture links + evaluates + the root sees the imported binding.
+Self-audit next 515; surface next 518; wall next 527; const-check next 519.

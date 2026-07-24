@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **275** | ticks 1–510 |
-| median tick cycle | **21m** | 274 intervals |
-| median, last 10 | **13m** | 10 intervals |
+| ticks landed | **276** | ticks 1–511 |
+| median tick cycle | **21m** | 275 intervals |
+| median, last 10 | **20m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.86** | 316.8h elapsed |
-| median verify wall | **61s** | 214 ticks |
+| **ticks per hour** | **0.87** | 317.4h elapsed |
+| median verify wall | **61s** | 215 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **263**
+* **live gates**: 27 → **264**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**165 of 275 ticks** (60%) moved a
+**165 of 276 ticks** (60%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **165** capability ticks, median cycle **21m**
-* median diff per tick: **+216 / −34** lines across 9 files
+* median diff per tick: **+217 / −34** lines across 9 files
 
 ## Every tick
 
@@ -372,5 +372,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **507** | 2026-07-24 09:31 | 26m | decompose-first | 67s | +99/−4 | 263 | 81 | 56.0% · | DECOMPOSE-FIRST: the ESM import-graph subsystem, seam + brick plan (2026-07-24) |
 | **509** | 2026-07-24 09:41 | 10m | measurement | 67s | +49/−3 | 263 | 81 | 56.0% · | PROBE: CSS `lh` unit already resolves (audit #24's "next lever" was already built) (2026-0 |
 | **510** | 2026-07-24 09:50 | 9m | measurement | 67s | +66/−3 | 263 | 81 | 56.0% · | PROBE: resolve the last 3 audit-#24 unknowns (:user-invalid parses, image-rendering parses |
+| **511** | 2026-07-24 10:29 | 39m | constitution-check | 67s | +373/−73 | 264 | 81 | 56.0% · | CONSTITUTION-CHECK #30: the 7-tick measurement arc was right, but the next tick MUST build |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

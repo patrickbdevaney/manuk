@@ -9385,6 +9385,133 @@ impl PageContext {
 /// Compile + link + evaluate `source` as an ES module in the current realm. Returns false
 /// if any stage fails. A module with imports that the resolve hook can't satisfy fails at
 /// link; self-contained modules (no imports, `export`, `import.meta`, top-level await) run.
+thread_local! {
+    /// **The ES-module registry — resolved-url → the compiled module object, GC-rooted.**
+    ///
+    /// Empty until the import-graph resolve hook (B2) populates it; landed here alone so the one hard
+    /// part — keeping a `*mut JSObject` module handle alive AND *relocatable* across a compacting GC —
+    /// is solved and proven ([`esm_registry_gc_selftest`]) before any import resolution depends on it.
+    ///
+    /// `RootedTraceableBox<Heap<*mut JSObject>>` is the only correct value type, and both halves
+    /// matter. `Heap` carries the store/post-write barrier — a bare `*mut JSObject` in a `HashMap` is a
+    /// use-after-free the instant a moving GC relocates the module (the exact "raw pointer outlives a
+    /// GC" hazard this repo keeps flagging). And the `RootedTraceableBox` (a) heap-pins the `Heap` so a
+    /// rehash cannot invalidate its store-buffer slot, and (b) registers it with mozjs's
+    /// `RootedTraceableSet`, which the runtime's extra-GC-roots tracer marks and *updates* on every
+    /// collection. Cleared on page teardown ([`esm_registry_clear`]) so a root never outlives its realm.
+    static ESM_MODULE_REGISTRY: std::cell::RefCell<
+        std::collections::HashMap<String, RootedTraceableBox<Heap<*mut JSObject>>>,
+    > = std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// Root `module` under its resolved `url` for the page's JS lifetime. Re-inserting the same url
+/// replaces (and unroots) the prior entry — the cache is keyed by resolved url, so a cycle
+/// (`a`→`b`→`a`) that re-requests `a` must find the SAME module, not compile a second one.
+pub fn esm_registry_insert(url: &str, module: *mut JSObject) {
+    ESM_MODULE_REGISTRY.with(|r| {
+        let boxed = RootedTraceableBox::new(Heap::default());
+        boxed.set(module);
+        r.borrow_mut().insert(url.to_string(), boxed);
+    });
+}
+
+/// The module previously registered for `url`, or null. The pointer is live only while the registry
+/// still holds it (i.e. before [`esm_registry_clear`]) — do not stash it past a navigation.
+pub fn esm_registry_get(url: &str) -> *mut JSObject {
+    ESM_MODULE_REGISTRY.with(|r| {
+        r.borrow()
+            .get(url)
+            .map(|b| b.get())
+            .unwrap_or(std::ptr::null_mut())
+    })
+}
+
+/// Drop every rooted module handle. **Must run on page teardown / before a new navigation** — a
+/// `RootedTraceableBox` roots for the process's life otherwise, pinning a dead realm's modules.
+pub fn esm_registry_clear() {
+    ESM_MODULE_REGISTRY.with(|r| r.borrow_mut().clear());
+}
+
+/// **B1 rooting-harness self-check — the RED-provable proof the registry survives a GC.**
+///
+/// Compiles a trivial self-contained module, stashes a url as its private, registers it, drops every
+/// stack root, forces a full compacting GC, then reads the module back *through the registry* and
+/// asserts its private still round-trips the url. This exercises the exact property the import-graph
+/// resolve hook (B2) will depend on and nothing else does yet: that a module held ONLY by the registry
+/// is neither collected nor left dangling by a moving GC.
+///
+/// RED-provable two ways: revert `set_module_private_url` → the private is undefined → the round-trip
+/// fails; make the registry hold a bare `*mut JSObject` instead of `RootedTraceableBox<Heap<…>>` →
+/// after `JS_GC` the handle names freed/moved memory → the read fails or faults. Returns `false`
+/// rather than panicking on any internal failure so the gate reports RED cleanly.
+///
+/// # Safety
+/// `cx` must be a live SpiderMonkey context for the current thread with no realm entered. Drive it
+/// via [`crate::esm_registry_gc_selftest`], which runs it inside a PARKED runtime so the process still
+/// exits cleanly (`G_CLEAN_EXIT`) — booting a bare `Runtime` here and dropping it would leave
+/// `JS_ShutDown` uncalled and segfault at exit.
+pub unsafe fn esm_registry_gc_selftest_in_realm(cx: *mut RawJSContext) -> bool {
+    use mozjs::jsapi::{CompileModule, JS_GC};
+    const URL: &str = "https://example.test/esm-selftest-mod-a.js";
+    {
+        let options = RealmOptions::default();
+        let mut cxw = wrap_cx(cx);
+        rooted!(in(cx) let global = JS_NewGlobalObject(
+            &mut cxw,
+            &SIMPLE_GLOBAL_CLASS,
+            ptr::null_mut(),
+            OnNewGlobalHookOption::FireOnNewGlobalHook,
+            &*options,
+        ));
+        if global.get().is_null() {
+            return false;
+        }
+        let _ar = mozjs::jsapi::JSAutoRealm::new(cx, global.get());
+
+        // `DOC_URL` is irrelevant here — we set the private explicitly to a URL that is NOT the doc
+        // url, so the fallback path in the metadata hook could not accidentally produce a pass.
+        let ok = {
+            let opts = CompileOptionsWrapper::new(&wrap_cx(cx), c"esm-selftest.js".to_owned(), 1);
+            let utf16: Vec<u16> = "export const x = 1;".encode_utf16().collect();
+            let mut src = mozjs::rust::transform_u16_to_source_text(&utf16);
+            let module = CompileModule(cx, opts.ptr, &mut src);
+            if module.is_null() {
+                false
+            } else {
+                {
+                    rooted!(in(cx) let m = module);
+                    set_module_private_url(cx, m.handle().get(), URL);
+                    esm_registry_insert(URL, m.handle().get());
+                    // `m` (the only stack root) is dropped at the end of this block — from here the
+                    // registry is the SOLE thing keeping the module alive.
+                }
+                // Force a full, non-incremental collection. An untraced or bare-pointer registry
+                // entry would be reclaimed or invalidated across this call.
+                JS_GC(cx, mozjs::jsapi::JS::GCReason::API);
+
+                let back = esm_registry_get(URL);
+                if back.is_null() {
+                    false
+                } else {
+                    rooted!(in(cx) let mut pv = UndefinedValue());
+                    mozjs::glue::JS_GetModulePrivate(back, pv.handle_mut().into());
+                    if pv.get().is_string() {
+                        let mut c = wrap_cx(cx);
+                        matches!(
+                            String::safe_from_jsval(&mut c, pv.handle(), ()),
+                            Ok(ConversionResult::Success(ref s)) if s == URL
+                        )
+                    } else {
+                        false
+                    }
+                }
+            }
+        };
+        esm_registry_clear();
+        ok
+    }
+}
+
 unsafe fn run_module(cx: *mut RawJSContext, source: &str) -> bool {
     use mozjs::jsapi::{CompileModule, ModuleEvaluate, ModuleLink};
     let opts = CompileOptionsWrapper::new(&wrap_cx(cx), c"module.js".to_owned(), 1);
@@ -9395,11 +9522,40 @@ unsafe fn run_module(cx: *mut RawJSContext, source: &str) -> bool {
         return false;
     }
     rooted!(in(cx) let mod_obj = module);
+    // Stash this module's own base URL as its SpiderMonkey private, so `module_metadata_hook` can give
+    // `import.meta.url` the module's OWN url rather than the single `DOC_URL` thread-local. A root
+    // inline `<script type=module>`'s base IS the document url; a *fetched* module's base is its own
+    // url — which is exactly why the answer must live on the module, not in one per-document slot. This
+    // is the per-module URL thread the import-graph resolve hook (B2) extends: every fetched module
+    // gets this same private set to its resolved url. SpiderMonkey traces the private off the module
+    // object, so the JS string stored here is rooted for the module's life.
+    set_module_private_url(
+        cx,
+        mod_obj.handle().get(),
+        &DOC_URL.with(|u| u.borrow().clone()),
+    );
     if !ModuleLink(cx, mod_obj.handle().into()) {
         return false;
     }
     rooted!(in(cx) let mut rval = UndefinedValue());
     ModuleEvaluate(cx, mod_obj.handle().into(), rval.handle_mut().into())
+}
+
+/// Stash `url` as `module`'s SpiderMonkey private. The read side is [`module_metadata_hook`], which
+/// returns it as `import.meta.url`. Factored out of [`run_module`] because the import-graph resolve
+/// hook (B2) sets the same private on every fetched module, each with its OWN resolved url — one
+/// mechanism, so the root module and a graph module cannot disagree about where their url comes from.
+unsafe fn set_module_private_url(cx: *mut RawJSContext, module: *mut JSObject, url: &str) {
+    let s = match std::ffi::CString::new(url) {
+        Ok(s) => s,
+        Err(_) => return, // an interior NUL in a URL — nothing to stash, leave the private undefined
+    };
+    rooted!(in(cx) let js_str = mozjs::jsapi::JS_NewStringCopyZ(cx, s.as_ptr()));
+    if js_str.get().is_null() {
+        return;
+    }
+    let val = mozjs::jsval::StringValue(&*js_str.get());
+    mozjs::jsapi::SetModulePrivate(module, &val);
 }
 
 /// ES-module resolve hook. Self-contained modules only for now: imports resolve to null,
@@ -9460,15 +9616,30 @@ unsafe extern "C" fn promise_rejection_tracker(
 
 unsafe extern "C" fn module_metadata_hook(
     cx: *mut RawJSContext,
-    _private_value: mozjs::jsapi::JS::Handle<mozjs::jsapi::Value>,
+    private_value: mozjs::jsapi::JS::Handle<mozjs::jsapi::Value>,
     meta_object: mozjs::jsapi::JS::Handle<*mut JSObject>,
 ) -> bool {
     // `import.meta.url` — the property bundlers actually read (for asset URLs, worker construction,
-    // and `import.meta.env` shims). The document's own URL is the correct answer for a classic
-    // page-level module.
-    // The document's URL — already stashed by `install` for `document.URL` / `window.location`, and
-    // exactly what `import.meta.url` should resolve to for a page-level module.
-    let url = DOC_URL.with(|u| u.borrow().clone());
+    // and `import.meta.env` shims). The right answer is the *referencing module's OWN* base url, which
+    // `run_module` / the resolve hook (B2) stashed as the module's private at compile time. For the
+    // page's root inline module the private equals the document url (unchanged behaviour); for a
+    // fetched graph module it is that module's resolved url — which is why the source must be the
+    // module's private, not the one-per-document `DOC_URL` slot that only ever knows the top document.
+    let url = {
+        rooted!(in(cx) let pv = private_value.get());
+        if pv.get().is_string() {
+            let mut c = wrap_cx(cx);
+            match String::safe_from_jsval(&mut c, pv.handle(), ()) {
+                Ok(ConversionResult::Success(ref s)) if !s.is_empty() => s.clone(),
+                // A private that is a string but empty/unstringifiable falls back to the document url.
+                _ => DOC_URL.with(|u| u.borrow().clone()),
+            }
+        } else {
+            // A module with no private (should not occur — every compile stashes one) keeps working
+            // against the document url rather than reporting an empty `import.meta.url`.
+            DOC_URL.with(|u| u.borrow().clone())
+        }
+    };
     rooted!(in(cx) let mut val = UndefinedValue());
     let s = std::ffi::CString::new(url).unwrap_or_default();
     let js_str = mozjs::jsapi::JS_NewStringCopyZ(cx, s.as_ptr());

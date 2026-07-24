@@ -122,6 +122,19 @@ all emit `import.meta.url` unconditionally**, whether the app uses it or not —
 callback made **every bundler-produced app on the internet** fail silently, mounting an empty
 `<div id="root">` and throwing zero visible exceptions.
 
+**`import.meta.url` must be sourced PER-MODULE, not from the document (tick 512, ESM import-graph B1).**
+The first cut of the metadata hook returned the one-per-document `DOC_URL` thread-local — correct only
+because the sole module was the page's root inline `<script type=module>`, whose base *is* the document
+URL. A real import graph breaks that: a fetched `./b.js` evaluating `import.meta.url` must get **`b.js`'s
+own resolved URL**, not the top document's. The fix is the mechanism the spec already implies — stash each
+module's base URL as its **SpiderMonkey private** at compile time (`SetModulePrivate`, via
+`set_module_private_url`), and have the metadata hook read the `private_value` it is *handed* (the
+referencing module's private) rather than a global. SpiderMonkey traces the private off the module object,
+so a JS string parked there is rooted for the module's life; the hook keeps a `DOC_URL` fallback so a
+private-less module never reports an empty URL. This is the per-module URL thread the resolve hook (B2)
+extends: every fetched module gets the same private set to *its* resolved URL. RED-provable via the
+`esm_registry_gc_selftest` round-trip — neuter `SetModulePrivate` and the private reads back `undefined`.
+
 ## A raw `*mut JSObject` cached across a GC boundary is a use-after-free, not an optimisation
 
 `DOC_REFLECTOR` was a `Cell<*mut JSObject>` — an unrooted bare pointer into the JS heap. Nothing kept the
@@ -135,6 +148,22 @@ The correct discipline (keep the reflector in a JS-side structure the GC traces 
 
 > The regression test has to **allocate 60,000 objects to force a collection**. *A test that does not
 > allocate cannot see this bug at all* — which is why it survived several ticks.
+
+**The ES-module registry is where this exact hazard reappears — and B1's whole job was to solve it once
+(tick 512).** The import-graph resolve hook (B2) must cache `specifier → module` and return the *same*
+module object every time a specifier is re-requested (the spec requires it; it is also how cycles
+`a→b→a` terminate). That cache holds `*mut JSObject` module handles across `ModuleLink` **and across a
+compacting GC** — precisely the "raw pointer outlives a GC" trap above, except a compacting collector
+also *moves* the handle, so even a still-live module is at a stale address. The correct value type,
+proven in isolation before any resolution depends on it, is
+**`RootedTraceableBox<Heap<*mut JSObject>>`**, and both halves are load-bearing: `Heap` carries the
+store/post-write barrier a bare pointer lacks, and the `RootedTraceableBox` (a) heap-pins the `Heap` so a
+`HashMap` rehash cannot invalidate its store-buffer slot, and (b) registers it with mozjs's
+`RootedTraceableSet`, which the runtime's already-installed extra-GC-roots tracer marks **and relocates**
+every collection. The `esm_registry_gc_selftest` gate registers a module, drops every stack root, forces
+a full `JS_GC`, and reads it back through the registry with its private intact — a bare-pointer or
+untraced-`Heap` registry goes red (collected or dangling) exactly there. Same lesson as `DOC_REFLECTOR`:
+**keep the handle in a structure the GC traces; never a bare `Cell`/`HashMap` value.**
 
 ## An unhandled promise rejection is where every framework's failure goes to die
 
