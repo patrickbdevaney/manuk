@@ -1255,3 +1255,38 @@ Tempo note: the font-metrics lever named across Checks #27–28 is now closed; t
 subsystem list, decompose-first each time.
 
 **Next check due: tick 511.**
+
+## Check #30 — tick 511
+
+The due constitution re-read (cadence every 8; last 503). Re-read CONSTITUTION.MD Part VII against the
+loop's actual direction over ticks 504-510 — a 7-tick, ALL-measurement arc (2 probe batches resolving
+unknowns, 1 self-audit, 1 ESM decompose-first, 1 surface-audit, 1 lh probe, 1 final probe batch) with
+ZERO capability BUILDS. That pattern is exactly what a drift-check must interrogate, so this check does.
+
+**Is that drift? No — but it is at its limit, and the next tick must be a BUILD.** The measurement arc
+was the correct response to a MEASURED fact: the atomic-capability vein is exhausted. This session
+verified ~15 features the board/map called missing or unknown were ALREADY built+gated (fillText,
+Fullscreen, cookie-attributes, userAgentData, visibilityState, getAllRecords, lh unit, :user-invalid
+parse, image-rendering parse) or are genuine multi-tick SUBSYSTEMS (content-visibility layout, ESM
+import-graph, MSE playback-join). When no atomic capability remains, resolving the stale-pessimistic
+unknown backlog with evidence (instrument fidelity — a first-class ratchet face) and decompose-first-ing
+the subsystems IS frontier work, and it served Part VII component 1 by making the map tell the truth
+about what "reliably renders the real internet" already covers. Net: constellation UNKNOWN 8→3, 2 real
+capabilities newly GATED (esmmodule, lhunit), the map VALIDATED clean against Interop 2026, the ESM
+subsystem decomposed to landable bricks, all four cadences (self/surface/wall/const) current.
+
+**The hazard now named: the INVERSE of the documented measurement-bias.** The board once warned ~85% of
+ticks went to visible capability and 0 to seams; this window is the mirror — 100% measurement, 0 builds.
+Continuing to measure would become measurement-AVOIDANCE of the hard subsystem work. So the ruling: the
+cheap-probe vein is CLOSED (the 3 remaining unknowns — 100-tab RSS, test262, hidden=until-found — are
+benchmark-runs/subsystems, not probes), and the next capability tick MUST be a subsystem BUILD BRICK —
+ESM import-graph B1 (the decomposition is ready, GC-rooting hazard flagged) or MSE playback-join — on a
+fresh quiet box, not another probe.
+
+**Any invariant bent?** No. Bar 0 held all 7 ticks; every gated capability was RED-proven (behavioural
+probes with a demonstrated wrong-output); nothing regressed; the MEASURED count-mark only rose or held.
+THE RATCHET held against ~6 manuk-shell/G_INTERACT false-REDs this window (all re-run on the quiet box,
+NEVER re-baselined). Zero drift toward deferred scope — no WPT-grinding, no security research, no later-
+species work. Part VII four-component scope stands; no correction.
+
+**Next check due: tick 519.**

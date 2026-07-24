@@ -20402,3 +20402,31 @@ regresses). WIKI: none — findings live in CONSTELLATION.tsv + the gate doc com
 vein is now genuinely exhausted (3 remaining unknowns are all non-atomic); the frontier is the
 PHASE0-BOUNDED-REMAINDER subsystems (ESM import-graph B1, MSE playback-join). Const-Check due next 511
 (will re-read direction). Self-audit next 515; surface next 518.
+
+## Tick 511 — CONSTITUTION-CHECK #30: the 7-tick measurement arc was right, but the next tick MUST build (2026-07-24)
+
+The due constitution re-read (cadence 8; last 503). Re-read CONSTITUTION.MD Part VII against ticks
+504-510 — a 7-tick ALL-measurement arc with ZERO capability builds — and logged Check #30.
+
+FINDING: not drift, but at its limit. The arc was the correct response to a MEASURED fact — the atomic-
+capability vein is exhausted (this session verified ~15 board/map "missing/unknown" features were
+ALREADY built+gated or are genuine subsystems). Resolving the stale-pessimistic unknown backlog with
+evidence (instrument fidelity) + decompose-first-ing the subsystems IS Part VII component-1 frontier
+work when no atomic capability remains: it made the map tell the truth about what already "reliably
+renders the real internet." Net UNKNOWN 8→3, 2 real capabilities gated (esmmodule, lhunit), map
+validated clean vs Interop 2026, ESM decomposed, all four cadences current.
+
+THE RULING: the cheap-probe vein is now CLOSED (the 3 remaining unknowns are benchmark/subsystem, not
+probes). The INVERSE of the documented measurement-bias now threatens — 100% measurement, 0 builds — so
+continuing to probe would become measurement-AVOIDANCE of the hard subsystem work. The next capability
+tick MUST be a subsystem BUILD BRICK: ESM import-graph B1 (decomposition ready, GC-rooting hazard
+flagged in PHASE0-BOUNDED-REMAINDER.md) or MSE playback-join — on a fresh quiet box.
+
+No invariant bent: Bar 0 held all 7 ticks, every gate RED-proven, nothing regressed, the RATCHET held
+against ~6 manuk-shell false-REDs (re-run on quiet box, never re-baselined), zero deferred-scope drift.
+Part VII four-component scope stands.
+
+TICK SHAPE: constitution-check (direction measurement; no engine code, no gate change, nothing
+regresses). WIKI: none — the check lives in CONSTITUTION-CHECK.md. LAST_CONSTITUTION_CHECK 503→511; next
+due 519. NEXT: a subsystem build brick (ESM import-graph B1), per this check's ruling. Self-audit next
+515; surface next 518; wall next 527.
