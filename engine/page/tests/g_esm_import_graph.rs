@@ -21,8 +21,14 @@
 //!
 //! ONE `#[test]` per SpiderMonkey-booting gate binary (multiple runtime inits in one process segv).
 
+/// ONE `#[test]` per SpiderMonkey-booting gate binary — two would boot a runtime on two test threads
+/// and segv. B2 (a pre-seeded graph links) and B3 (the loader POPULATES the graph itself off a root's
+/// `import`s, cycle-safe) share this test, run sequentially on one thread (they reuse the parked
+/// per-thread runtime), each asserted independently so a failure names which half went red.
 #[test]
-fn esm_import_graph_links_and_binds() {
+fn esm_import_graph_links_binds_and_populates() {
+    // B2 — a pre-seeded two-module graph links, evaluates, and the root sees the imported binding,
+    // proving `module_resolve_hook` resolves a relative specifier against the importer's own url.
     assert!(
         manuk_js::esm_import_graph_selftest(),
         "a two-module ES import graph must link, evaluate, and let the root module see a binding \
@@ -30,5 +36,16 @@ fn esm_import_graph_links_and_binds() {
          against the importer's own url and returns the registered module. Red means the resolve hook \
          returned null (import graphs still fail at ModuleLink) or resolved the specifier against the \
          wrong base — the exact gap B2 exists to close."
+    );
+
+    // B3 — the graph-POPULATION walk discovers + fetches + registers a three-module graph off the
+    // root's `import`s, terminating an `a ↔ b` cycle by insert-before-recurse.
+    assert!(
+        manuk_js::esm_graph_load_selftest(),
+        "a three-module ES import graph with an a↔b cycle must be fetched + compiled + registered by \
+         the population walk, then link, evaluate, and let the root see a binding computed across the \
+         whole graph (total = 41). Red means esm_load_graph did not walk the root's imports to populate \
+         the registry, or the cycle back-edge re-fetched instead of hitting the registry — the exact \
+         gap B3 exists to close before the async page path (B3b) can wire the real fetcher."
     );
 }

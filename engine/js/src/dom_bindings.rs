@@ -9635,6 +9635,241 @@ pub unsafe fn esm_import_graph_selftest_in_realm(cx: *mut RawJSContext) -> bool 
     }
 }
 
+/// **ESM import-graph B3 graph-loader self-check** — a THREE-module graph with a CYCLE loads through
+/// [`esm_load_graph`] driven by an in-memory fetcher, then links + evaluates with cross-module bindings.
+///
+/// The graph: a root imports `total` from `./a.js`; `a.js` imports a function from `./b.js`; `b.js`
+/// imports a function back from `./a.js` (the `a ↔ b` cycle). Only exported *function declarations*
+/// cross the cycle (hoisted + initialised during instantiation, so reading them at another module's top
+/// level is safe even mid-cycle — a `const` would hit the temporal dead zone). The fetcher is a fixed
+/// map, so NO network is touched; what is proven is the WALK: it discovers `a.js` and `b.js` off the
+/// root's `import`s, fetches + compiles + registers each, and terminates the cycle via
+/// insert-before-recurse (the back-edge `b.js` → `a.js` is a registry hit, not an infinite re-fetch).
+///
+/// RED-provable: neuter the fetcher (return `None`, or skip the [`esm_load_graph`] call entirely) → the
+/// dependencies never land in the registry → `ModuleLink` cannot resolve `./a.js` → the global is never
+/// written → `false`. That is exactly the gap B3 closes: without the population walk, B2's resolve hook
+/// has an empty registry to look in and every multi-file graph dies at link. (Reverting insert-before-
+/// recurse instead makes the `a ↔ b` cycle recurse unboundedly — the depth cap turns that into a clean
+/// `false` rather than a stack overflow.)
+///
+/// # Safety
+/// `cx` must be a live SpiderMonkey context for the current thread with no realm entered. Drive it via
+/// [`crate::esm_graph_load_selftest`], which runs it inside a PARKED runtime for a clean exit.
+pub unsafe fn esm_graph_load_selftest_in_realm(cx: *mut RawJSContext) -> bool {
+    use mozjs::jsapi::{CompileModule, ModuleEvaluate, ModuleLink};
+    const ROOT: &str = "https://example.test/esm-g3-root.js";
+    const A: &str = "https://example.test/esm-g3-a.js";
+    const B: &str = "https://example.test/esm-g3-b.js";
+    {
+        let options = RealmOptions::default();
+        let mut cxw = wrap_cx(cx);
+        rooted!(in(cx) let global = JS_NewGlobalObject(
+            &mut cxw,
+            &SIMPLE_GLOBAL_CLASS,
+            ptr::null_mut(),
+            OnNewGlobalHookOption::FireOnNewGlobalHook,
+            &*options,
+        ));
+        if global.get().is_null() {
+            return false;
+        }
+        let _ar = mozjs::jsapi::JSAutoRealm::new(cx, global.get());
+        // Per-RUNTIME hooks — a self-test global must re-register them or `ModuleLink` never reaches the
+        // resolve hook under test (same catch B2's self-test documents).
+        mozjs::jsapi::SetModuleResolveHook(
+            mozjs::jsapi::JS_GetRuntime(cx),
+            Some(module_resolve_hook),
+        );
+        mozjs::jsapi::SetModuleMetadataHook(
+            mozjs::jsapi::JS_GetRuntime(cx),
+            Some(module_metadata_hook),
+        );
+
+        // The in-memory graph. Function exports cross the `a ↔ b` cycle (hoisted, so no TDZ).
+        let fetch = |resolved: &str| -> Option<String> {
+            match resolved {
+                A => Some(
+                    "import { fromB } from './esm-g3-b.js'; \
+                     export function fromA() { return 1; } \
+                     export const total = 40 + fromB();"
+                        .to_string(),
+                ),
+                B => Some(
+                    "import { fromA } from './esm-g3-a.js'; \
+                     export function fromB() { return 1; } \
+                     globalThis.__esm_g3_cycle = (typeof fromA === 'function');"
+                        .to_string(),
+                ),
+                _ => None,
+            }
+        };
+
+        let ok = (|| {
+            // Compile + register the ROOT, then walk its graph — exactly the run_module → esm_load_graph
+            // order the real page path (B3b) will use.
+            let root = {
+                let opts =
+                    CompileOptionsWrapper::new(&wrap_cx(cx), c"esm-g3-root.js".to_owned(), 1);
+                let code = "import { total } from './esm-g3-a.js'; \
+                            globalThis.__esm_g3 = total;";
+                let utf16: Vec<u16> = code.encode_utf16().collect();
+                let mut src = mozjs::rust::transform_u16_to_source_text(&utf16);
+                CompileModule(cx, opts.ptr, &mut src)
+            };
+            if root.is_null() {
+                return false;
+            }
+            rooted!(in(cx) let root_r = root);
+            set_module_private_url(cx, root_r.handle().get(), ROOT);
+            esm_registry_insert(ROOT, root_r.handle().get());
+
+            // THE WALK: discovers a.js off the root, b.js off a.js, and terminates the b→a back-edge.
+            if !esm_load_graph(cx, ROOT, root_r.handle().into(), &fetch, 0) {
+                return false;
+            }
+
+            if !ModuleLink(cx, root_r.handle().into()) {
+                return false;
+            }
+            rooted!(in(cx) let mut rval = UndefinedValue());
+            if !ModuleEvaluate(cx, root_r.handle().into(), rval.handle_mut().into()) {
+                return false;
+            }
+
+            // total = 40 + fromB() = 41, and the cycle back-edge saw fromA as a function.
+            rooted!(in(cx) let mut out = UndefinedValue());
+            let name = c"__esm_g3";
+            if !mozjs::jsapi::JS_GetProperty(
+                cx,
+                global.handle().into(),
+                name.as_ptr(),
+                out.handle_mut().into(),
+            ) {
+                return false;
+            }
+            let v = out.get();
+            let n = if v.is_int32() {
+                v.to_int32() as f64
+            } else if v.is_double() {
+                v.to_double()
+            } else {
+                return false;
+            };
+            if n != 41.0 {
+                return false;
+            }
+            // The cycle back-edge (b.js reading a.js's function export mid-cycle) resolved to a function.
+            rooted!(in(cx) let mut cyc = UndefinedValue());
+            let cname = c"__esm_g3_cycle";
+            if !mozjs::jsapi::JS_GetProperty(
+                cx,
+                global.handle().into(),
+                cname.as_ptr(),
+                cyc.handle_mut().into(),
+            ) {
+                return false;
+            }
+            cyc.get().is_boolean() && cyc.get().to_boolean()
+        })();
+        esm_registry_clear();
+        ok
+    }
+}
+
+/// **ESM import-graph B3 — the graph-population walk.** Given a *compiled, registered* root module and
+/// its resolved url, fetch + compile + register every module reachable through its `import`s, so that
+/// by the time [`module_resolve_hook`] runs during `ModuleLink` every specifier already resolves to a
+/// registered module. This is the loader half B2's resolve hook consumes.
+///
+/// The `fetch` seam returns a module's source for a resolved url (or `None` for a miss). It is injected
+/// rather than calling `manuk_net` directly for one hard reason: `ModuleLink` is synchronous on the JS
+/// thread, but the render path runs *inside* the tokio runtime, so a `block_on` here would panic
+/// ("runtime within a runtime"). The real page path (B3b) will therefore pre-fetch the graph
+/// asynchronously — exactly as `fetch_external_scripts` does for classic scripts — and pass a fetcher
+/// that reads from that pre-fetched map, mirroring how `importScripts` consumes pre-fetched worker
+/// sources. Keeping the fetch injectable is also what makes this walk hermetically testable
+/// ([`esm_graph_load_selftest_in_realm`]).
+///
+/// **Cycle-safe by INSERT-BEFORE-RECURSE.** A dependency is registered *before* the walk recurses into
+/// it, so a back-edge (`a.js` → `b.js` → `a.js`) finds `a.js` already in the registry and stops instead
+/// of re-fetching forever. `esm_registry_get` returning the SAME `*mut JSObject` for a url is the
+/// memoization SpiderMonkey's own graph walk relies on to terminate a cycle; this walk relies on it too.
+///
+/// Failure policy matches the resolve hook: an unresolvable specifier (a bare `'react'` with no
+/// base-relative form) or a fetch miss is SKIPPED, not fatal — the module simply never lands in the
+/// registry and its importer fails gracefully at `ModuleLink` (loud-but-safe, never a crash). A depth
+/// cap backstops a pathologically deep (or, absent the cycle guard, cyclic) graph.
+///
+/// # Safety
+/// `cx` must be a live context in an entered realm; `module` must be rooted by the caller for the
+/// duration of the call (the root is rooted by [`run_module`]/the self-test, each dependency by the
+/// registry insert + the local root before the recursive call).
+unsafe fn esm_load_graph(
+    cx: *mut RawJSContext,
+    url: &str,
+    module: mozjs::jsapi::JS::Handle<*mut JSObject>,
+    fetch: &dyn Fn(&str) -> Option<String>,
+    depth: u32,
+) -> bool {
+    use mozjs::jsapi::{CompileModule, GetRequestedModuleSpecifier, GetRequestedModulesCount};
+    // Backstop: a graph this deep is either malicious or a cycle guard that failed. Stop cleanly rather
+    // than overflow the stack (the insert-before-recurse guard below is the PRIMARY cycle defence; this
+    // only catches a genuinely unbounded chain).
+    if depth > 256 {
+        return false;
+    }
+    let count = GetRequestedModulesCount(cx, module);
+    for i in 0..count {
+        // The specifier as written in the dependency's source (`'./b.js'`, `'https://x/y.js'`).
+        let spec_jsstr = GetRequestedModuleSpecifier(cx, module, i);
+        if spec_jsstr.is_null() {
+            continue;
+        }
+        let specifier = {
+            rooted!(in(cx) let sv = mozjs::jsval::StringValue(&*spec_jsstr));
+            let mut c = wrap_cx(cx);
+            match String::safe_from_jsval(&mut c, sv.handle(), ()) {
+                Ok(ConversionResult::Success(s)) => s,
+                _ => continue,
+            }
+        };
+        // Resolve against THIS module's own url, so `./b.js` is relative to the importer. A bare
+        // specifier has no base-relative resolution here → skip (link fails at that import, loud-but-safe).
+        let resolved = match url::Url::parse(url).and_then(|b| b.join(&specifier)) {
+            Ok(u) => u.to_string(),
+            Err(_) => continue,
+        };
+        // Cycle guard + memoization: already fetched ⇒ do not fetch/compile/recurse again. This is the
+        // single line that makes `a ↔ b` terminate.
+        if !esm_registry_get(&resolved).is_null() {
+            continue;
+        }
+        // Fetch + compile the dependency. A miss is non-fatal: the importer will fail at ModuleLink.
+        let source = match fetch(&resolved) {
+            Some(s) => s,
+            None => continue,
+        };
+        let dep = {
+            let opts = CompileOptionsWrapper::new(&wrap_cx(cx), c"esm-dep.js".to_owned(), 1);
+            let utf16: Vec<u16> = source.encode_utf16().collect();
+            let mut src = mozjs::rust::transform_u16_to_source_text(&utf16);
+            CompileModule(cx, opts.ptr, &mut src)
+        };
+        if dep.is_null() {
+            continue;
+        }
+        rooted!(in(cx) let dep_r = dep);
+        set_module_private_url(cx, dep_r.handle().get(), &resolved);
+        // INSERT BEFORE RECURSE — the registry now holds `resolved`, so a back-edge to it is a cache hit.
+        esm_registry_insert(&resolved, dep_r.handle().get());
+        if !esm_load_graph(cx, &resolved, dep_r.handle().into(), fetch, depth + 1) {
+            return false;
+        }
+    }
+    true
+}
+
 unsafe fn run_module(cx: *mut RawJSContext, source: &str) -> bool {
     use mozjs::jsapi::{CompileModule, ModuleEvaluate, ModuleLink};
     let opts = CompileOptionsWrapper::new(&wrap_cx(cx), c"module.js".to_owned(), 1);

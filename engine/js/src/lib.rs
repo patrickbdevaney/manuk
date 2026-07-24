@@ -262,6 +262,27 @@ pub fn esm_import_graph_selftest() -> bool {
     }
 }
 
+/// **ESM import-graph B3 graph-loader self-check** — a three-module graph with an `a ↔ b` cycle is
+/// discovered + fetched + registered by the population walk, then links, evaluates, and the root sees a
+/// binding computed across the whole graph. Proves [`dom_bindings::esm_load_graph`] populates the
+/// registry off a root module's `import`s (the loader half B2's resolve hook consumes) and terminates
+/// the cycle via insert-before-recurse. Driven through [`with_runtime`] for a clean PARKED exit
+/// (`G_CLEAN_EXIT`). Gated by `g_esm_import_graph`.
+pub fn esm_graph_load_selftest() -> bool {
+    #[cfg(feature = "_sm")]
+    {
+        with_runtime(|rt| {
+            let cx = unsafe { rt.cx().raw_cx() };
+            Ok(unsafe { dom_bindings::esm_graph_load_selftest_in_realm(cx) })
+        })
+        .unwrap_or(false)
+    }
+    #[cfg(not(feature = "_sm"))]
+    {
+        true
+    }
+}
+
 #[cfg(feature = "_sm")]
 pub fn run_document_scripts(
     dom: &mut manuk_dom::Dom,

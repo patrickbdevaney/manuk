@@ -188,6 +188,34 @@ proven the same tick: the resolve+metadata hooks are per-**runtime**, installed 
 page path — a self-test that boots its own global must re-`SetModuleResolveHook`, or `ModuleLink` reports
 *"Module resolve hook not set"* and never reaches the hook under test.
 
+**B3 is the population WALK that fills the registry the resolve hook reads (tick 514, ESM import-graph
+B3).** B2's hook is only ever as good as what is already in the registry; on an empty registry every
+`import` resolves to null and the graph dies at `ModuleLink`. `esm_load_graph(cx, url, module, fetch,
+depth)` is the loader that fills it: given a *compiled, registered* root, it walks
+`GetRequestedModulesCount` / `GetRequestedModuleSpecifier`, resolves each specifier against **that
+module's own url** (so `./b.js` is relative to the importer), and for each not-yet-registered dependency
+fetches its source through an **injected `fetch` seam**, compiles it, stashes its private url, inserts it,
+and recurses. Two invariants make it correct: (1) **insert BEFORE recurse** — the dependency is in the
+registry before the walk descends into it, so a back-edge (`a.js`→`b.js`→`a.js`) is a registry hit and
+the cycle terminates instead of re-fetching forever (a depth cap backstops the pathological case); (2)
+**a miss is skipped, never fatal** — an unresolvable bare specifier or a fetch miss simply never lands,
+and its importer fails gracefully at `ModuleLink` (loud-but-safe), exactly like the resolve hook.
+
+The `fetch` seam is injected, not a direct `manuk_net` call, for a hard reason: `ModuleLink` is
+synchronous on the JS thread, but the render path runs **inside** the tokio runtime, so a `block_on`
+inside the link would panic *"cannot start a runtime from within a runtime"*. So the real page path (B3b)
+must **pre-fetch the whole graph asynchronously** — the way `fetch_external_scripts` pre-fetches classic
+scripts — and hand `esm_load_graph` a fetcher that reads from that pre-fetched map, mirroring how
+`importScripts` consumes pre-fetched worker sources. Keeping `fetch` injectable is also what makes the
+walk hermetically testable with zero network. Gate `g_esm_import_graph` (`esm_graph_load_selftest`, run
+in the SAME `#[test]` as B2 — two SpiderMonkey-booting tests in one binary segv) loads a three-module
+graph with an `a ↔ b` cycle through an in-memory fetcher, links+evaluates, and asserts a binding computed
+across the whole graph reached the root (`total === 41`) plus that the cycle back-edge saw a function
+export mid-cycle; neuter the walk and it goes red at `ModuleLink`. Only exported **function
+declarations** cross the cycle in the fixture — they are hoisted and initialised during instantiation, so
+reading them at another module's top level is safe mid-cycle where a `const` would hit the temporal dead
+zone.
+
 ## An unhandled promise rejection is where every framework's failure goes to die
 
 **Every modern framework renders inside an `async` function**, so a throw during render is a *rejected

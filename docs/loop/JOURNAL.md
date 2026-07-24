@@ -20518,3 +20518,54 @@ loads a graph yet. NEXT: **B3** — the async pre-fetch pass that POPULATES the 
 external `<script type=module src=...>` roots, bare-specifier honesty; wire `esm_registry_clear` into page
 teardown at the first real insert. Gate: an inline root with a real relative import graph renders
 end-to-end. Self-audit next 515; surface next 518; const-check next 519; wall next 527.
+
+## Tick 514 — BUILD BRICK: ESM import-graph B3 — the graph-population walk (2026-07-24)
+
+Following B2 (tick 513, the resolve hook), landed **ESM import-graph B3** — the loader that POPULATES
+the registry B2's resolve hook reads. B2's hook is only ever as good as what is already in the registry;
+on an empty registry every `import` resolves to null and a multi-file graph dies at `ModuleLink`. B3 is
+the walk that fills it.
+
+WHAT LANDED (engine/js/src/dom_bindings.rs + lib.rs):
+1. **`esm_load_graph(cx, url, module, fetch, depth)`** — given a *compiled, registered* root module, walk
+   `GetRequestedModulesCount` / `GetRequestedModuleSpecifier`, resolve each specifier against THAT
+   module's own url (relative `./b.js` is relative to the importer), and for each not-yet-registered dep
+   fetch its source via an **injected `fetch` seam** → compile → `set_module_private_url` → insert →
+   recurse. Two invariants: **insert BEFORE recurse** (a back-edge `a↔b` is a registry hit → the cycle
+   terminates, not re-fetches forever; a depth-256 cap backstops the pathological case), and **a miss is
+   skipped, never fatal** (unresolvable bare specifier / fetch miss → the importer fails gracefully at
+   `ModuleLink`, loud-but-safe — same policy as the resolve hook).
+2. **Gate `g_esm_import_graph` extended** (`esm_graph_load_selftest`, run in the SAME `#[test]` as B2 —
+   two SpiderMonkey-booting tests in one binary segv): loads a THREE-module graph with an `a↔b` cycle
+   through an in-memory fetcher, links+evaluates, asserts a binding computed across the whole graph
+   reached the root (`__esm_g3 === 41`) plus the cycle back-edge saw a function export mid-cycle. Only
+   exported FUNCTION declarations cross the cycle (hoisted + initialised during instantiation → safe
+   mid-cycle; a `const` would hit the TDZ).
+
+WHY INJECTED FETCH (not a direct manuk_net call): `ModuleLink` is synchronous on the JS thread, but the
+render path runs INSIDE the tokio runtime (page/lib.rs `.await`s throughout; `fetch_external_scripts` is
+awaited), so a `block_on` inside the link would panic "cannot start a runtime from within a runtime".
+So B3b (the real page path) must PRE-FETCH the graph asynchronously — the way `fetch_external_scripts`
+pre-fetches classic scripts — and hand `esm_load_graph` a fetcher over that pre-fetched map, mirroring how
+`importScripts` consumes pre-fetched worker sources. This tick de-risks the sharp edge (the cycle-safe
+recursive walk through SpiderMonkey's own `GetRequestedModules` API) in isolation, exactly as B1 de-risked
+GC-rooting before B2 depended on it.
+
+RED-PROVEN (not just argued): neutered `esm_load_graph` to skip the walk (`return true` before the
+`GetRequestedModulesCount` loop), rebuilt → the deps never land in the registry → `ModuleLink` cannot
+resolve `./esm-g3-a.js` → the B3 assert (gate line 43) fails while the B2 assert (line 30) still passes;
+restored → GREEN (1 passed). B1 (`g_esm_module_registry`) + B2 both still green = no regression.
+
+TICK SHAPE: subsystem build brick (1 capability — the import-graph population walk; extends the existing
+gate with a 2nd assert in the same test; B1 registry + B2 resolve gates hold; nothing regresses; Bar 0
+held). WIKI: docs/wiki/js-engine.md (the ESM section — B3 subsection: the population walk, insert-before-
+recurse cycle-safety, and why the fetch seam is injected). [no-pattern] — the class (Vite/Rollup
+import-graph apps) is NOT unlocked until B3b wires the real async pre-fetch on the page path; B3 is the
+proven loader core, no real page loads a graph yet.
+
+NEXT: **B3b** — the async pre-fetch pass on the PAGE path: before `run_scripts`, walk each inline
+`<script type=module>` root's graph asynchronously (resolve+`manuk_net::fetch`+compile into a map keyed by
+resolved url), then drive `esm_load_graph` with a fetcher over that map, then link+evaluate; add external
+`<script type=module src=...>` roots; wire `esm_registry_clear` into page teardown. Gate: a real inline
+root with a relative import graph renders end-to-end. Self-audit next 515; surface next 518; const-check
+next 519; wall next 527.
