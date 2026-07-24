@@ -1387,3 +1387,49 @@ unknowns (name-only container queries; the `<dialog>` ToggleEvent.source / comma
 Do NOT resume mining atomic members — the vein is out.
 
 **Next check due: tick 535.**
+
+## Check #33 — tick 535
+
+Re-read CONSTITUTION.MD Part VII (V1 scope) + the RATCHET's three faces (capability / performance /
+**instrument fidelity**). Since #32 the loop did exactly what #32 steered: opened the deliberate PIVOT to
+the **fidelity-instrument rebuild** (board CO-#1, THE Phase-0 EXIT gate) as a decompose-first arc, after
+finishing the Surface-Audit-#26 reconciliation. Window 528-534: **528** surface audit #26, **529/530**
+measure+pin (Promise.withResolvers / Set methods / scheduler.postTask — all already in SpiderMonkey, now
+gated; rVFC measured-missing), then the rebuild bricks — **531** SHAPE primitive, **532** selector-path
+producer wires SHAPE into the G1 report (the enabling §3a fix — 39% of the corpus was unmeasurable on `[id]`
+keys), **533** the first Layer-2 jarring invariant (horizontal overflow) in the G1 probe, **534** self-audit
+(clean).
+
+**Gate or scoreboard?** GATE — and this window builds the gate's own INSTRUMENT, which is the third RATCHET
+face, not the scoreboard. VII.1's TEST for component #1 is *"reliably renders the representative real
+internet, NOT a WPT percentage"* — so the instrument that certifies exactly that outranks flipping subtests
+(the #30/#32 ranking, unchanged). Zero WPT-chasing, zero encoding tail; each brick moved the exit
+instrument's honesty (SHAPE replaces the misleading absolute PLACEMENT that charged one 23px offset N times;
+path keys unlock the React/Tailwind majority; h-overflow is the first of §2's five jarring invariants — "the
+actual Phase-0 bar").
+
+**North star intact?** Yes. This is pure instrument-fidelity work bought WITHOUT degrading capability or
+performance (every brick additive + RED-proven, the RED edit reverted byte-for-byte; the wall stayed green).
+Decompose-first discipline held: brick 1 landed SHAPE as a tested primitive but left it UNWIRED and SAID SO
+(a half-built instrument LIES — the #30 lesson); brick 2 wired it only once the producer emitted real
+ancestry; the gate FLOOR still gates on COVERAGE and the flip to SHAPE is explicitly deferred to a
+recalibrating sweep. "The primitive is proven now, the number is claimed later" every brick.
+
+**Any invariant bent?** No. **I2** (never patch deps) — all work is in the agent-editable manuk-wpt harness
+(chrome.rs / fidelity.rs / oracle.rs / main.rs); nothing vendored patched, no engine capability src touched.
+**I1** (crate structure) untouched. **ONE-DEFINITION discipline honored**: the Manuk `sig_of`/`path_of` were
+extracted from the oracle's local closures into shared free functions used by BOTH the oracle and the G1
+probe, and `jarring_h_overflow` was refactored to delegate to a shared `h_overflow_boxes` core — so the exit
+gate and the oracle can never drift on what a key or an invariant means. **Bar 0 held**; the recurring
+`manuk-shell tests FAILED` false-RED struck once more (t532, under the gate-phase load spike, teardown+all
+gates green) and landed on a WARM re-run, mark NEVER retuned, scripts/ NEVER touched. t533 came in at a slow
+247s but PASSED — a slow-but-green wall lands; not a false-RED, not re-baselined.
+
+**PART VI / VII correction.** None. The four-component v1 scope is intact; the fidelity certificate remains
+the exit. **STEER (unchanged from #32, now mid-execution):** continue the rebuild decompose-first — brick 4
+is the producer enrichment (emit tag+display, key into `Seen`) that unlocks the remaining three Layer-2
+invariants (overlap / reading-order / collapsed-target) to reuse the oracle fns directly; then root-cause
+clustering (§3b); then the gate-floor flip (coverage→SHAPE) once a broad path-keyed sweep recalibrates the
+0.75 bar. Do NOT resume mining atomic members (vein confirmed out at #32) and do NOT grind the CSS-layout tail.
+
+**Next check due: tick 543.**

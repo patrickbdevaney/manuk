@@ -21356,3 +21356,29 @@ change (self-audit findings, if any, would drive engine ticks; there were none).
 NEXT: brick 4 — enrich the G1 producer to emit tag+display (key into `Seen`) so `jarring_overlap`/
 `jarring_reading_order`/`jarring_collapsed_target` reuse the oracle fns directly. Cadences after this:
 self-audit 544; surface 538; const 535 (DUE next); wall 547.
+
+## Tick 535 — CADENCE: Constitution Check #33 (fidelity-rebuild arc is on-frontier) (2026-07-24)
+
+Constitution check due at tick 535 (last 527, cadence 8 — the hook BLOCKS past it). Re-read
+CONSTITUTION.MD Part VII + the RATCHET's three faces and wrote Check #33 (docs/loop/CONSTITUTION-CHECK.md):
+the window since #32 (528-534) executed #32's steer exactly — the deliberate PIVOT to the fidelity-
+instrument rebuild (board CO-#1, THE Phase-0 EXIT gate), decompose-first. Bricks 1-3 (SHAPE primitive →
+selector-path producer wiring SHAPE into G1 → first Layer-2 h-overflow invariant) + measure/pin (529-530)
++ two audits (528 surface, 534 self). Verdict: GATE not scoreboard — this builds the gate's own instrument
+(the third RATCHET face); VII.1 says component #1's bar is "renders the representative real internet, NOT a
+WPT %", so the certifying instrument outranks subtest flips. North star intact, no invariant bent
+(ONE-DEFINITION discipline honored — shared `path_of`/`sig_of` + `h_overflow_boxes` core; I2 untouched, all
+work in the agent-editable manuk-wpt harness; Bar 0 held). STEER unchanged: continue the rebuild
+decompose-first (brick 4 = producer enrichment to `Seen`, then §3b clustering, then the coverage→SHAPE
+gate-floor flip after a recalibrating sweep).
+
+No engine change; governance/cadence tick that resets the constitution clock (LAST_CONSTITUTION_CHECK → 535).
+
+TICK SHAPE: cadence constitution-check (governance — Check #33 written with the canonical
+`## Check #33 — tick 535` header so status-update derives LAST_CONSTITUTION_CHECK; NO engine source
+changed; the wall proves nothing regressed). WIKI: none — cadence governance tick, no engine change.
+No [no-pattern] needed (no engine/{js,css,...}/src touched).
+
+NEXT: brick 4 — enrich the G1 producer to emit `[tag, display, x,y,w,h]` and key into `Seen` on both
+engine sides so `jarring_overlap`/`jarring_reading_order`/`jarring_collapsed_target` reuse the oracle fns
+directly. Cadences: self-audit 544; surface 538 (DUE soon); const 543; wall 547.

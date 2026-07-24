@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **297** | ticks 1–534 |
-| median tick cycle | **21m** | 296 intervals |
-| median, last 10 | **16m** | 10 intervals |
+| ticks landed | **298** | ticks 1–535 |
+| median tick cycle | **21m** | 297 intervals |
+| median, last 10 | **12m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.91** | 326.2h elapsed |
-| median verify wall | **62s** | 236 ticks |
+| **ticks per hour** | **0.91** | 326.3h elapsed |
+| median verify wall | **62s** | 237 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**165 of 297 ticks** (56%) moved a
+**165 of 298 ticks** (55%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **165** capability ticks, median cycle **21m**
-* median diff per tick: **+222 / −34** lines across 9 files
+* median diff per tick: **+220 / −34** lines across 9 files
 
 ## Every tick
 
@@ -394,5 +394,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **532** | 2026-07-24 19:00 | 28m | instrument-fidelity | 67s | +418/−158 | 274 | 81 | 56.0% · | FIDELITY REBUILD brick 2: selector-path producer wires SHAPE into the G1 gate (2026-07-24) |
 | **533** | 2026-07-24 19:11 | 11m | instrument-fidelity | 67s | +201/−70 | 274 | 81 | 56.0% · | FIDELITY REBUILD brick 3: horizontal-overflow jarring invariant in the G1 probe (2026-07-2 |
 | **534** | 2026-07-24 19:16 | 5m | cadence | 67s | +58/−33 | 274 | 81 | 56.0% · | CADENCE: self-audit #N (clean — methodology and reality agree) (2026-07-24) |
+| **535** | 2026-07-24 19:23 | 7m | cadence | 67s | +106/−33 | 274 | 81 | 56.0% · | CADENCE: Constitution Check #33 (fidelity-rebuild arc is on-frontier) (2026-07-24) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
