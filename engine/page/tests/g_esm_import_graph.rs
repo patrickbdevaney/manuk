@@ -48,4 +48,17 @@ fn esm_import_graph_links_binds_and_populates() {
          the registry, or the cycle back-edge re-fetched instead of hitting the registry — the exact \
          gap B3 exists to close before the async page path (B3b) can wire the real fetcher."
     );
+
+    // B3b — the REAL page module runner (`run_module`, the function `run_scripts` calls for every
+    // `<script type=module>`) consumes the pre-fetched source map the async page pass seeds, drives the
+    // population walk over it, links + evaluates a relative import, and clears the registry per-root.
+    assert!(
+        manuk_js::esm_page_module_graph_selftest(),
+        "the page-path module runner must consume the pre-fetched module-graph source map: given a \
+         seeded dependency (`export const answer = 7;`) and a root inline module that imports `answer` \
+         from './esm-page-dep.js', run_module must fetch-from-map + compile + \
+         register the dep, link, evaluate, and let the imported binding reach a global (42 = 7*6). Red \
+         means run_module never drove esm_load_graph over MODULE_GRAPH_SOURCES — so a real page's inline \
+         module graph still dies at ModuleLink against an empty registry, the exact gap B3b closes."
+    );
 }

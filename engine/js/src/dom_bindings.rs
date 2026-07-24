@@ -85,6 +85,15 @@ thread_local! {
     /// The document's URL — the origin `document.cookie` reads and writes against.
     static DOC_URL: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
 
+    /// **The pre-fetched ES-module graph, resolved-url → source (B3b).** `ModuleLink` is synchronous
+    /// on the JS thread and there is no synchronous network here, so the whole import graph a
+    /// `<script type=module>` reaches must be fetched *before* scripts run — the async pre-fetch pass
+    /// on the page path fills this map, and [`run_module`] hands it to [`esm_load_graph`] as the
+    /// injected fetcher (the seam B3 was written against). Empty ⇒ no page populated it ⇒ `run_module`
+    /// behaves exactly as it did before the graph loader existed (self-contained modules only).
+    static MODULE_GRAPH_SOURCES: std::cell::RefCell<std::collections::HashMap<String, String>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+
     /// **The** live `Dom` for the current re-entry into JS.
     ///
     /// Every reflector used to cache its own `*mut Dom` in a reserved slot. That pointer is stale
@@ -9432,6 +9441,23 @@ pub fn esm_registry_clear() {
     ESM_MODULE_REGISTRY.with(|r| r.borrow_mut().clear());
 }
 
+/// **Seed the pre-fetched ES-module graph the page-path module runner consumes (B3b).** The async
+/// pre-fetch pass on the page path walks each `<script type=module>` root's `import`s, fetches the
+/// whole transitive graph (there is no synchronous network on the JS thread, so it cannot happen
+/// inside `ModuleLink`), and hands the resolved-url → source map here *before* scripts run. Replacing
+/// the whole map per navigation is deliberate — a stale source for one document must never resolve an
+/// `import` in the next. Empty map ⇒ [`run_module`] runs modules exactly as it did before the graph
+/// loader existed.
+pub fn set_module_graph_sources(sources: std::collections::HashMap<String, String>) {
+    MODULE_GRAPH_SOURCES.with(|m| *m.borrow_mut() = sources);
+}
+
+/// Drop the pre-fetched module-graph sources. Pairs with [`esm_registry_clear`] on page teardown /
+/// navigation so one document's graph can never feed the next's `import`s.
+pub fn clear_module_graph_sources() {
+    MODULE_GRAPH_SOURCES.with(|m| m.borrow_mut().clear());
+}
+
 /// **B1 rooting-harness self-check — the RED-provable proof the registry survives a GC.**
 ///
 /// Compiles a trivial self-contained module, stashes a url as its private, registers it, drops every
@@ -9777,6 +9803,100 @@ pub unsafe fn esm_graph_load_selftest_in_realm(cx: *mut RawJSContext) -> bool {
     }
 }
 
+/// **ESM import-graph B3b — the PAGE-PATH module runner drives the population walk over a pre-fetched
+/// source map.** B3 proved [`esm_load_graph`] populates a registry off a root's `import`s; B3b proves
+/// the *real* page entry point — [`run_module`], the function `run_scripts` calls for every
+/// `<script type=module>` — actually consumes the pre-fetched graph the async page pass seeds into
+/// [`MODULE_GRAPH_SOURCES`], links it, evaluates it, and clears the registry so nothing outlives the
+/// call.
+///
+/// This is the wiring the whole B3b step exists to close: the async pre-fetch fills the map, but until
+/// `run_module` reads it, a real inline module that imports a relative graph still dies at `ModuleLink`
+/// with an empty registry. Here the graph is a single relative dep so the test isolates exactly the new
+/// consumption seam (the recursive walk + cycle-safety already have their own coverage in B3).
+///
+/// Seeds `DOC_URL` (the base a root inline module resolves its imports against) and one dependency's
+/// source into the map, runs a root `import { answer } from './esm-page-dep.js'; …` through the real
+/// `run_module`, and asserts the imported binding reached a global (`42 = 7 * 6`).
+///
+/// RED-provable: delete the `esm_load_graph` call from `run_module` (or the map lookup) → the dep never
+/// registers → `module_resolve_hook` returns null → `ModuleLink` fails → the global is never written →
+/// `run_module` returns false and the read is not 42. Also red if the base is threaded from somewhere
+/// other than the module's own `DOC_URL` (the relative specifier resolves to the wrong url → map miss).
+///
+/// Runs inside a PARKED runtime ([`crate::esm_page_module_graph_selftest`]) for a clean exit.
+pub unsafe fn esm_page_module_graph_selftest_in_realm(cx: *mut RawJSContext) -> bool {
+    const BASE: &str = "https://example.test/esm-page-index.html";
+    const DEP: &str = "https://example.test/esm-page-dep.js";
+    {
+        let options = RealmOptions::default();
+        let mut cxw = wrap_cx(cx);
+        rooted!(in(cx) let global = JS_NewGlobalObject(
+            &mut cxw,
+            &SIMPLE_GLOBAL_CLASS,
+            ptr::null_mut(),
+            OnNewGlobalHookOption::FireOnNewGlobalHook,
+            &*options,
+        ));
+        if global.get().is_null() {
+            return false;
+        }
+        let _ar = mozjs::jsapi::JSAutoRealm::new(cx, global.get());
+        // Per-RUNTIME hooks — a self-test global must re-register them or `ModuleLink` never reaches
+        // the resolve hook (same catch the B2/B3 self-tests document).
+        mozjs::jsapi::SetModuleResolveHook(
+            mozjs::jsapi::JS_GetRuntime(cx),
+            Some(module_resolve_hook),
+        );
+        mozjs::jsapi::SetModuleMetadataHook(
+            mozjs::jsapi::JS_GetRuntime(cx),
+            Some(module_metadata_hook),
+        );
+
+        // The state the async page pass would have produced: the document base + the pre-fetched dep.
+        DOC_URL.with(|u| *u.borrow_mut() = BASE.to_string());
+        let mut sources = std::collections::HashMap::new();
+        sources.insert(DEP.to_string(), "export const answer = 7;".to_string());
+        set_module_graph_sources(sources);
+
+        // THE PAGE PATH: the exact function `run_scripts` calls for a `<script type=module>`.
+        let ran = run_module(
+            cx,
+            "import { answer } from './esm-page-dep.js'; globalThis.__esm_page = answer * 6;",
+        );
+
+        let ok = ran && {
+            rooted!(in(cx) let mut out = UndefinedValue());
+            let name = c"__esm_page";
+            if mozjs::jsapi::JS_GetProperty(
+                cx,
+                global.handle().into(),
+                name.as_ptr(),
+                out.handle_mut().into(),
+            ) {
+                let v = out.get();
+                let n = if v.is_int32() {
+                    v.to_int32() as f64
+                } else if v.is_double() {
+                    v.to_double()
+                } else {
+                    f64::NAN
+                };
+                n == 42.0
+            } else {
+                false
+            }
+        };
+
+        // `run_module` clears the registry per-root; wipe the seeded map + base so nothing leaks into a
+        // later self-test on this reused parked runtime.
+        clear_module_graph_sources();
+        esm_registry_clear();
+        DOC_URL.with(|u| u.borrow_mut().clear());
+        ok
+    }
+}
+
 /// **ESM import-graph B3 — the graph-population walk.** Given a *compiled, registered* root module and
 /// its resolved url, fetch + compile + register every module reachable through its `import`s, so that
 /// by the time [`module_resolve_hook`] runs during `ModuleLink` every specifier already resolves to a
@@ -9887,16 +10007,41 @@ unsafe fn run_module(cx: *mut RawJSContext, source: &str) -> bool {
     // is the per-module URL thread the import-graph resolve hook (B2) extends: every fetched module
     // gets this same private set to its resolved url. SpiderMonkey traces the private off the module
     // object, so the JS string stored here is rooted for the module's life.
-    set_module_private_url(
-        cx,
-        mod_obj.handle().get(),
-        &DOC_URL.with(|u| u.borrow().clone()),
-    );
-    if !ModuleLink(cx, mod_obj.handle().into()) {
-        return false;
+    let base = DOC_URL.with(|u| u.borrow().clone());
+    set_module_private_url(cx, mod_obj.handle().get(), &base);
+    // **B3b — drive the import-graph population walk over the pre-fetched source map.** A root inline
+    // `<script type=module>` may `import` a relative graph; the async pre-fetch pass seeded every
+    // reachable module's source into `MODULE_GRAPH_SOURCES` before we got here (there is no
+    // synchronous network on the JS thread — pre-fetching is the only way, mirroring `importScripts`).
+    // Walk the root's `import`s to fetch-from-map + compile + register the whole graph, so that when
+    // `ModuleLink` calls `module_resolve_hook` per specifier, every url already resolves. Empty map ⇒
+    // this is a no-op and a self-contained module links exactly as before.
+    let have_graph = MODULE_GRAPH_SOURCES.with(|m| !m.borrow().is_empty());
+    if have_graph {
+        let fetch = |u: &str| MODULE_GRAPH_SOURCES.with(|m| m.borrow().get(u).cloned());
+        // A miss inside the walk is non-fatal (the importer fails loud-but-safe at `ModuleLink`), so
+        // the return is advisory — link is the real arbiter of whether the graph resolved.
+        esm_load_graph(cx, &base, mod_obj.handle().into(), &fetch, 0);
     }
-    rooted!(in(cx) let mut rval = UndefinedValue());
-    ModuleEvaluate(cx, mod_obj.handle().into(), rval.handle_mut().into())
+    let linked = ModuleLink(cx, mod_obj.handle().into());
+    let evaluated = if linked {
+        rooted!(in(cx) let mut rval = UndefinedValue());
+        ModuleEvaluate(cx, mod_obj.handle().into(), rval.handle_mut().into())
+    } else {
+        false
+    };
+    // **Clear this root's subgraph the instant it is linked + evaluated.** The registry roots each
+    // dependency across the async gap between fetch and link; once `ModuleLink` runs, SpiderMonkey's
+    // own module records keep the linked graph alive through the (still-rooted) root, so the registry
+    // roots are no longer load-bearing. Dropping them here means the registry never outlives the
+    // `run_module` call — nothing survives to pin a dead realm's modules after a navigation, which is
+    // the exact GC-safety contract B1 was built to honour, satisfied by construction rather than by a
+    // teardown hook that a new code path could forget to call. (Two roots sharing a dep re-compile it;
+    // correct, and rare enough not to trade the lifetime guarantee for.)
+    if have_graph {
+        esm_registry_clear();
+    }
+    evaluated
 }
 
 /// Stash `url` as `module`'s SpiderMonkey private. The read side is [`module_metadata_hook`], which

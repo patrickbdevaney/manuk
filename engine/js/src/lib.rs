@@ -283,6 +283,27 @@ pub fn esm_graph_load_selftest() -> bool {
     }
 }
 
+/// **ESM import-graph B3b page-path self-check** — the real page module runner ([`run_module`], the
+/// function `run_scripts` calls for a `<script type=module>`) consumes a pre-fetched module-graph
+/// source map, links + evaluates a relative import, and clears the registry so nothing outlives the
+/// call. Proves the page-path *consumption* seam the async pre-fetch pass fills. Driven through
+/// [`with_runtime`] for a clean PARKED exit (`G_CLEAN_EXIT`). Gated by `g_esm_import_graph`.
+pub fn esm_page_module_graph_selftest() -> bool {
+    #[cfg(feature = "_sm")]
+    {
+        with_runtime(|rt| {
+            let cx = unsafe { rt.cx().raw_cx() };
+            Ok(unsafe { dom_bindings::esm_page_module_graph_selftest_in_realm(cx) })
+        })
+        .unwrap_or(false)
+    }
+    #[cfg(not(feature = "_sm"))]
+    {
+        // No JS engine ⇒ no page module runner ⇒ N/A, not a failure (mirrors the B1–B3 self-checks).
+        true
+    }
+}
+
 #[cfg(feature = "_sm")]
 pub fn run_document_scripts(
     dom: &mut manuk_dom::Dom,

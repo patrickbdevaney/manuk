@@ -216,6 +216,29 @@ declarations** cross the cycle in the fixture — they are hoisted and initialis
 reading them at another module's top level is safe mid-cycle where a `const` would hit the temporal dead
 zone.
 
+**B3b wires the population walk into the REAL page module runner, and clears the registry per-root
+(tick 515, ESM import-graph B3b).** B3 proved `esm_load_graph` fills a registry off an in-memory fetcher;
+B3b makes the actual page entry point use it. `run_module` — the function `run_scripts` calls for every
+`<script type=module>` — now, after compiling the root and stashing its private url, reads the
+per-document `MODULE_GRAPH_SOURCES` map (resolved-url → source, seeded by the async pre-fetch pass) and
+drives `esm_load_graph` over it *before* `ModuleLink`, so every `import` the root reaches is already in
+the registry when the resolve hook fires. An empty map is a no-op: a self-contained module links exactly
+as it did before the loader existed. The pre-fetched sources cannot be fetched inside the link (the
+`block_on`-in-`ModuleLink` panic above), so the async page pass fills the map first — B3b lands only the
+*consumption* half; the producer (the async scanner + graph fetch) is B3b-ii.
+
+The registry is cleared **at the end of each `run_module` call**, not on a page-teardown hook. Once
+`ModuleLink` has run, SpiderMonkey's own module records keep the linked graph alive through the
+still-rooted root object, so the registry's `RootedTraceableBox` roots are no longer load-bearing —
+dropping them there means the registry never outlives the call. That is the B1 GC-safety contract (a
+root must never outlive its realm) satisfied *by construction* rather than by a teardown hook a future
+navigation path could forget to call; the only cost is that two roots sharing a dependency re-compile it,
+which is correct and rare. Gate: `esm_page_module_graph_selftest` seeds one dependency
+(`export const answer = 7;`) plus a root that imports it, runs the **real** `run_module`, and asserts the
+imported binding reached a global (`42 === 7 * 6`); delete the `esm_load_graph` call from `run_module` and
+only that assert goes red at `ModuleLink` (B2/B3, which drive the walk directly, still pass) — proving the
+gate watches the page-path seam specifically.
+
 ## An unhandled promise rejection is where every framework's failure goes to die
 
 **Every modern framework renders inside an `async` function**, so a throw during render is a *rejected

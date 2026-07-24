@@ -277,3 +277,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 511	9fe0d0b	1784903370	2026-07-24T10:29:30-04:00	2342	constitution-check	67	8	373	73	264	81	3896	6960	0	329	31	CONSTITUTION-CHECK #30: the 7-tick measurement arc was right, but the next tick MUST build (2026-07-24)
 513	33d2ba5	1784906417	2026-07-24T11:20:17-04:00	3047	subsystem	67	10	431	106	265	81	3896	6960	0	329	31	BUILD BRICK: ESM import-graph B2 — resolve hook (resolve + registry lookup) (2026-07-24)
 514	3a8711e	1784909746	2026-07-24T12:15:46-04:00	3329	subsystem	67	9	446	93	265	81	3896	6960	0	329	31	BUILD BRICK: ESM import-graph B3 — the graph-population walk (2026-07-24)
+515	ede92ae	1784911941	2026-07-24T12:52:21-04:00	2195	subsystem	67	9	363	102	265	81	3896	6960	0	329	31	BUILD BRICK: ESM import-graph B3b-i — page-path runner consumes the pre-fetched graph (2026-07-24)

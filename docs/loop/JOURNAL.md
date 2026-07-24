@@ -20519,6 +20519,64 @@ external `<script type=module src=...>` roots, bare-specifier honesty; wire `esm
 teardown at the first real insert. Gate: an inline root with a real relative import graph renders
 end-to-end. Self-audit next 515; surface next 518; const-check next 519; wall next 527.
 
+## Tick 515 — BUILD BRICK: ESM import-graph B3b-i — page-path runner consumes the pre-fetched graph (2026-07-24)
+
+Following B3 (tick 514, the population walk over an injected fetcher), landed **ESM import-graph B3b-i** —
+the wiring that makes the REAL page module runner drive that walk. B3 proved `esm_load_graph` fills the
+registry off an in-memory fetcher, but nothing on the page path called it yet: `run_module` (the function
+`run_scripts` calls for every `<script type=module>`) still linked only self-contained modules, so a real
+inline module with a relative `import` died at `ModuleLink` against an empty registry. B3b-i closes the
+*consumption* seam.
+
+WHAT LANDED (engine/js/src/dom_bindings.rs + lib.rs):
+1. **`MODULE_GRAPH_SOURCES` thread-local** (resolved-url → source) + pub `set_module_graph_sources` /
+   `clear_module_graph_sources`. The async page pre-fetch pass (B3b-ii, next) fills this map before
+   scripts run; there is no synchronous network on the JS thread, so pre-fetching is the only way to feed
+   a synchronous `ModuleLink` — the same reason `importScripts` consumes pre-fetched worker sources.
+2. **`run_module` now drives the walk**: after compiling the root and stashing its private url, if the
+   map is non-empty it hands `esm_load_graph` a fetcher reading from the map and walks the graph BEFORE
+   `ModuleLink`, so every `import` resolves when the resolve hook fires. Empty map ⇒ exact prior behaviour
+   (self-contained modules only) ⇒ nothing regresses.
+3. **Registry cleared at the end of each `run_module` call**, not on a teardown hook. Once `ModuleLink`
+   runs, SpiderMonkey's module records keep the linked graph alive through the still-rooted root object,
+   so the registry's `RootedTraceableBox` roots are no longer load-bearing — dropping them there means the
+   registry never outlives the call. That satisfies the B1 GC-safety contract (a root must never outlive
+   its realm) BY CONSTRUCTION rather than via a teardown hook a future navigation path could forget. Cost:
+   two roots sharing a dep re-compile it — correct, and rare.
+
+WHY SPLIT B3b: the journal's B3b was "async pre-fetch + page wiring + external roots + teardown" — too
+much for one atomic brick. The novel/risky half (the one the block_on-in-ModuleLink panic made sharp) is
+the *consumption* wiring in `run_module` + the GC-lifetime discipline; that is this tick, gated
+deterministically with zero network. The *producer* — the async source-scanner + graph fetch wired into
+`load_async` so real pages fill the map — is B3b-ii, additive plumbing (a miss is loud-but-safe, never a
+crash), landing next.
+
+RED-PROVEN (not just argued): replaced the `esm_load_graph` call in `run_module` with `let _ = &fetch;`,
+rebuilt → the dep never registers → `module_resolve_hook` returns null → `ModuleLink` fails → the global
+is never written → ONLY the new B3b assert (gate line 55) goes red while the B2 and B3 asserts (which
+drive the walk directly, not through `run_module`) still pass; restored → GREEN (1 passed). That the same
+`#[test]`'s earlier asserts stay green while the last one flips proves the gate watches the page-path seam
+specifically.
+
+TICK SHAPE: subsystem build brick (1 capability — the page module runner now consumes a pre-fetched import
+graph; extends `g_esm_import_graph` with a 4th assert in the same test; B1 registry + B2 resolve + B3 walk
+gates hold; nothing regresses; Bar 0 held). WIKI: docs/wiki/js-engine.md (ESM section — B3b subsection:
+the consumption seam + the per-call registry-clear GC discipline). [no-pattern] — the class (Vite/Rollup
+import-graph apps) is NOT unlocked until B3b-ii's async pre-fetch fills the map on the real page path; this
+tick is the proven consumption half, no real page loads a graph yet.
+
+NEXT: **B3b-ii** — the async producer on the page path: a static-import source scanner + an async
+recursive graph pre-fetch (`manuk_net::fetch`, visited-set + depth cap, mirroring `fetch_external_scripts`)
+wired into `load_async` after `fetch_external_scripts`, calling `set_module_graph_sources` before scripts
+run. Then external `<script type=module src>` roots (already inlined by `fetch_external_scripts`) and the
+`prepare_prefetched`/`from_prefetched` off-thread path (stash the map in `Prefetched`, set it on the UI
+thread). Gate: a real inline root with a relative import graph renders end-to-end.
+
+SELF-AUDIT ran this tick (due at 515): `./scripts/self-audit.sh` GREEN — methodology and reality agree
+(wall ≤300s, oracle 265 sites, every gate declares its RED, process-defect ledger current, journal has no
+gaps). `LAST_AUDIT_TICK` bumped 505→515. Self-audit next 525; surface next 518; const-check next 519;
+wall next 527.
+
 ## Tick 514 — BUILD BRICK: ESM import-graph B3 — the graph-population walk (2026-07-24)
 
 Following B2 (tick 513, the resolve hook), landed **ESM import-graph B3** — the loader that POPULATES
