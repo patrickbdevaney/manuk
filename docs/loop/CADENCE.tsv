@@ -248,3 +248,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 472	82efe31	1784855930	2026-07-23T21:18:50-04:00	2467	capability	59	10	281	41	240	81	3896	6960	0	329	31	a printable key typed into a contenteditable inserts the character (2026-07-23)
 474	9451e1a	1784857188	2026-07-23T21:39:48-04:00	1258	capability	60	10	246	60	241	81	3896	6960	0	329	31	the Delete key removes the grapheme after the caret in a contenteditable (2026-07-23)
 475	aaf0b1a	1784858753	2026-07-23T22:05:53-04:00	1565	capability	71	9	252	36	242	81	3896	6960	0	329	31	execCommand('insertLineBreak') inserts a <br> at the caret in a contenteditable (2026-07-23)
+476	b5a1133	1784861155	2026-07-23T22:45:55-04:00	2402	capability	62	9	231	37	243	81	3896	6960	0	329	31	execCommand('cut') copies the selection to the clipboard and removes it (2026-07-23)

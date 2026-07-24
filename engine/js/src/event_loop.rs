@@ -2632,9 +2632,11 @@ const PRELUDE: &str = r#"
       // as a browser leaves a no-op Backspace/Delete. Cross-node boundary deletion (merging an adjacent
       // block) is a later, larger brick — this handles collapsed-caret-in-a-text-run and delete-selection.
       if (typeof globalThis.__deleteAtCaret !== 'function') {
-        globalThis.__deleteAtCaret = function (host, forward) {
+        globalThis.__deleteAtCaret = function (host, forward, inputTypeOverride) {
           if (!host) { return false; }
-          var inputType = forward ? 'deleteContentForward' : 'deleteContentBackward';
+          // `inputTypeOverride` lets `cut` reuse this scaffold with `inputType:'deleteByCut'`; Backspace/
+          // Delete pass none and get the default backward/forward delete inputType.
+          var inputType = inputTypeOverride || (forward ? 'deleteContentForward' : 'deleteContentBackward');
           var bi = new Event('beforeinput', { bubbles: true, cancelable: true });
           bi.inputType = inputType; bi.data = null;
           host.dispatchEvent(bi);
@@ -2730,7 +2732,7 @@ const PRELUDE: &str = r#"
       }
 
       if (typeof document.execCommand !== 'function') {
-        var __EXEC_SUPPORTED = { copy: 1, selectall: 1, inserttext: 1, insertlinebreak: 1 };
+        var __EXEC_SUPPORTED = { copy: 1, cut: 1, selectall: 1, inserttext: 1, insertlinebreak: 1 };
         document.execCommand = function (cmd) {
           cmd = String(cmd || '').toLowerCase();
           if (cmd === 'copy') {
@@ -2746,6 +2748,32 @@ const PRELUDE: &str = r#"
               globalThis.__clipboardText = text; globalThis.__clipboardWrite(text); return true;
             }
             return false;
+          }
+          if (cmd === 'cut') {
+            // Cut = copy the selection to the clipboard (same host bridge as `copy`), then delete it,
+            // firing `beforeinput`→`input` with `inputType:'deleteByCut'`. It REQUIRES a non-collapsed
+            // selection inside an editing host: a cut with nothing selected, or a selection in a
+            // non-editable region (you cannot remove text you cannot edit), is a no-op returning `false`,
+            // honestly. On a vetoed `beforeinput` the text was already copied but not removed.
+            try {
+              var xsel = globalThis.getSelection();
+              var xtext = String((xsel && xsel.toString()) || '');
+              if (!xtext) { return false; }
+              var xanchor = (xsel && xsel._r) ? xsel._r.startContainer : null;
+              var xhost = null;
+              for (var xn = xanchor; xn; xn = xn.parentNode) {
+                if (xn.nodeType === 1 && xn.isContentEditable) { xhost = xn; break; }
+              }
+              if (!xhost) { return false; } // selection not in an editable — cannot cut
+              var xnav = globalThis.navigator;
+              if (xnav && xnav.clipboard && typeof xnav.clipboard.writeText === 'function') {
+                xnav.clipboard.writeText(xtext);
+              } else if (typeof globalThis.__clipboardWrite === 'function') {
+                globalThis.__clipboardText = xtext; globalThis.__clipboardWrite(xtext);
+              } else { return false; } // no clipboard sink — do not silently drop the cut
+              globalThis.__deleteAtCaret(xhost, false, 'deleteByCut');
+              return true;
+            } catch (e) { return false; }
           }
           if (cmd === 'selectall') {
             try {

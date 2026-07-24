@@ -522,6 +522,7 @@
   - L2530 · Backspace deletes the grapheme before the caret in a contenteditable (tick 473)
   - L2555 · The Delete key removes the grapheme after the caret in a contenteditable (tick 474)
   - L2571 · execCommand('insertLineBreak') inserts a <br> at the caret (tick 475)
+  - L2591 · execCommand('cut') copies the selection to the clipboard and removes it (tick 476)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -942,4 +943,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-857 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+858 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

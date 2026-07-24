@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **249** | ticks 1–475 |
-| median tick cycle | **20m** | 248 intervals |
-| median, last 10 | **40m** | 10 intervals |
+| ticks landed | **250** | ticks 1–476 |
+| median tick cycle | **20m** | 249 intervals |
+| median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.81** | 305.0h elapsed |
-| median verify wall | **60s** | 188 ticks |
-| wall trend | 39s → 60s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.81** | 305.7h elapsed |
+| median verify wall | **60s** | 189 ticks |
+| wall trend | 39s → 62s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **242**
+* **live gates**: 27 → **243**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**149 of 249 ticks** (60%) moved a
+**150 of 250 ticks** (60%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **149** capability ticks, median cycle **20m**
+* **150** capability ticks, median cycle **20m**
 * median diff per tick: **+222 / −34** lines across 9 files
 
 ## Every tick
@@ -346,5 +346,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **472** | 2026-07-23 21:18 | 41m | capability | 59s | +281/−41 | 240 | 81 | 56.0% · | a printable key typed into a contenteditable inserts the character (2026-07-23) |
 | **474** | 2026-07-23 21:39 | 21m | capability | 60s | +246/−60 | 241 | 81 | 56.0% · | the Delete key removes the grapheme after the caret in a contenteditable (2026-07-23) |
 | **475** | 2026-07-23 22:05 | 26m | capability | 71s | +252/−36 | 242 | 81 | 56.0% · | execCommand('insertLineBreak') inserts a <br> at the caret in a contenteditable (2026-07-2 |
+| **476** | 2026-07-23 22:45 | 40m | capability | 62s | +231/−37 | 243 | 81 | 56.0% · | execCommand('cut') copies the selection to the clipboard and removes it (2026-07-23) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

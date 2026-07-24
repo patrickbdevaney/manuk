@@ -4170,3 +4170,14 @@ textContent (a break is not a character), and a framework editor that `preventDe
 must get no `<br>` so it can insert its own. Full Enter-key paragraph behavior (`insertParagraph`, which
 splits the containing block and is browser-divergent — Chrome `<div>`, Firefox `<br>`) is a later brick that
 also needs keyboard modifier state; this lands only the programmatic line break.
+
+## Cut selected text in a rich editor (Ctrl+X) (tick 476)
+
+**The class of the web this unlocks (every editor/comment box where a user cuts text):**
+`execCommand('cut')` now copies the selection to the clipboard AND removes it from a contenteditable,
+firing `beforeinput`→`input` (`inputType:'deleteByCut'`) — the "cut" toolbar button and the clipboard.js
+cut fallback were dead before (returned `false`). **The trap:** cut is not just a delete — it must put the
+text on the clipboard FIRST (a cut that deletes without copying loses the user's data), and it must refuse
+(`false`) when the selection is not in an editable region, because you cannot remove text you cannot edit.
+The fuller clipboard-`cut`-event model (a page cancelling the whole cut, custom clipboard payloads) is a
+later brick.

@@ -19241,3 +19241,36 @@ cross-block boundary merge for Backspace/Delete. Formatting-command wrapping (`b
 brick. The clean ADDITIVE-execCommand + dispatch_key-arm vein is now largely mined; the next editing bricks
 are the harder cross-cutting ones. Const-Check #25 landed t471 (next due 479). WALL: ~20-30min/tick under
 swap-99%; deep-quiet (load<0.9) verify.sh needed to clear the stale-wall preflight false-RED.
+
+## Tick 476 — execCommand('cut') copies the selection to the clipboard and removes it (2026-07-23)
+
+Brick 6 of the contenteditable EDITING subsystem — flips the honest `cut:false` now that both halves exist
+(copy landed t463, delete t473/t474). Cut = copy the selection to the host clipboard + remove it, firing
+`beforeinput`→`input` (`inputType:'deleteByCut'`).
+
+MECHANISM: the execCommand `cut` branch (engine/js/src/event_loop.rs) reads `getSelection().toString()`
+(empty → false), finds the editing host from the selection anchor (nearest `isContentEditable`; none → false,
+a non-editable selection can't be cut), copies via `navigator.clipboard.writeText`/`__clipboardWrite`, then
+deletes through `__deleteAtCaret(host, false, 'deleteByCut')` — the shared delete scaffold given a new
+optional `inputTypeOverride` param so cut reports `deleteByCut` (Backspace/Delete pass none → default). `cut`
+added to `__EXEC_SUPPORTED`. Vetoed beforeinput → copied-but-not-removed (honest simplification; the full
+clipboard-cut-event is later). Zero new dep.
+
+GATE: G_EXEC_CUT (page) — select "World" in "Hello World", `execCommand('cut')` → true, editable left
+"Hello ", events `bi/in:deleteByCut`, "World" on the host clipboard queue (Rust `take_clipboard_writes`); a
+cut from a non-editable `<pre>` returns false. RED-proven by neutralizing the branch. Neighbors green:
+g_exec_command_copy (its `<pre>` cut still false — unchanged), g_contenteditable_delete/_forward (shared
+helper behavior unchanged), g_exec_insert_text, g_exec_insert_line_break, g_contenteditable_typing.
+
+TICK SHAPE: capability (contenteditable EDITING brick 6/N; +1 gate). GATES +1.
+CONSTELLATION: rich-editing — the execCommand editing family now covers copy/cut/insertText/insertLineBreak.
+WIKI: interaction-surface.md — new section after the t475 insertLineBreak note.
+WEB-PATTERNS: cut-selected-text-in-a-rich-editor.
+AGENTIC: the agent can now cut (move-out) text from an editable region, not just copy/insert/delete.
+NEXT VEIN NOTE: the clean additive-execCommand + dispatch_key-arm vein is now MINED OUT (insertText, typed
+key, Backspace, Delete, insertLineBreak, cut all landed). Remaining editing bricks are the harder cross-
+cutting ones: Enter→insertParagraph (browser-divergent block-split, needs modifier state), dispatch_key
+MODIFIER-STATE plumbing (Rust signature + all callers — so Ctrl+X/C/V shortcuts route to cut/copy/paste and
+Ctrl+letter doesn't insert), `insertFromPaste` (paste-event trigger + clipboard read t461), the full
+clipboard cut/copy/paste EVENTS, cross-block boundary merge. These want fresh context + design, not an atomic
+tick. Const-Check #25 landed t471 (next 479); self-audit landed t475 (next 485); surface-audit due 478.

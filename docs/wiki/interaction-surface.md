@@ -2587,3 +2587,25 @@ GATE: G_EXEC_INSERT_LINE_BREAK (page) — caret between "A" and "B", `execComman
 `bi/in:insertLineBreak`; a veto editable gets no `<br>` (`vbrs=0`); `insertParagraph` returns `false`.
 RED-proven by neutralizing the branch. Neighbors green: g_exec_insert_text, g_exec_command_copy,
 g_contenteditable_typing, g_contenteditable_delete, g_contenteditable_delete_forward.
+
+## execCommand('cut') copies the selection to the clipboard and removes it (tick 476)
+
+Cut (Ctrl+X / a "cut" toolbar button) was honestly `false` — the deletion half wasn't built. Now that a
+contenteditable can delete (t473/t474), cut is real: copy the selected text to the host clipboard (the same
+bridge `copy` uses), then remove it, firing `beforeinput`→`input` (`inputType:'deleteByCut'`).
+
+**Mechanism.** The execCommand `cut` branch: read `getSelection().toString()`; if empty → `false`. Find the
+editing host from the selection anchor (nearest `isContentEditable` element); if none (a selection in a
+non-editable region) → `false` (you cannot remove text you cannot edit). Copy the text via
+`navigator.clipboard.writeText` / `__clipboardWrite`, then delete the selection through
+`__deleteAtCaret(host, false, 'deleteByCut')` — the same delete scaffold Backspace/Delete use, now taking an
+optional `inputTypeOverride` so cut reports `deleteByCut`. `cut` added to `__EXEC_SUPPORTED`. On a vetoed
+`beforeinput` the text was already copied but not removed (honest simplification — the fuller `cut` clipboard
+event is a later brick).
+
+GATE: G_EXEC_CUT (page) — select "World" in "Hello World" and `execCommand('cut')` → returns `true`, the
+editable is left "Hello ", events `bi/in:deleteByCut`, and "World" reached the host clipboard queue (checked
+in Rust); a cut whose selection is in a non-editable `<pre>` returns `false`. RED-proven by neutralizing the
+branch. Neighbors green: g_exec_command_copy (its cut, from a non-editable `<pre>`, still `false`),
+g_contenteditable_delete/_forward (the shared `__deleteAtCaret`, unchanged behavior), g_exec_insert_text,
+g_exec_insert_line_break, g_contenteditable_typing.
