@@ -4401,3 +4401,12 @@ and its content overflowed — the classic "the article column is squeezed and t
 monospace chars and a `65ch` column matches Chrome. `ex`/`cap`/`ic` still use their spec fallbacks (bounded
 follow-up); webfont-exact `ch` (page-context threading) is next. **The trap:** a constant `0.6em` looks right
 but can't guarantee `N chars fit in N ch` to the pixel — only measuring through the real shaper does.
+
+## `ex` unit = the face's real x-height (tick 500)
+
+**The class of the web this unlocks (anything sized in `ex` — icon/glyph columns, vertical rhythm and
+drop-cap sizing, form-control heights, and CSS that aligns to the x-height):** `ex` was the spec `0.5em`
+fallback while real faces have an x-height slightly over half an em, so `ex`-sized boxes came out a few
+percent short — invisible on one element, cumulative down a column. `ex` now reads the face's OS/2
+`sxHeight` (the value Chrome uses) off the same face the text is drawn with. Completes the `ch`+`ex`
+font-relative pair from tick 499. `cap`/`ic` remain their spec fallbacks (bounded follow-up).

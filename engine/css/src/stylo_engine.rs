@@ -129,10 +129,14 @@ impl FontMetricsProvider for StubFontMetrics {
         // Bold/italic mirror `layout::text_style`'s FontKey so the resolved face matches.
         let bold = font.font_weight.value() >= 600.0;
         let italic = font.font_style != stylo::values::computed::font::FontStyle::NORMAL;
-        let zero = manuk_text::zero_advance_px(&families, bold, italic, base_size.px());
+        let px = base_size.px();
+        let zero = manuk_text::zero_advance_px(&families, bold, italic, px);
+        // `ex`: the face's real x-height (OS/2 sxHeight), or `None` → Stylo keeps `ex = 0.5em`.
+        let x_height = manuk_text::x_height_px(&families, bold, italic, px).map(Length::new);
 
         FontMetrics {
             zero_advance_measure: Some(Length::new(zero)),
+            x_height,
             ..FontMetrics::default()
         }
     }

@@ -20067,3 +20067,26 @@ TICK SHAPE: capability (+1 gate, nothing regresses). WIKI: text-layout.md — "T
 font's real `0`-advance". NEXT: `ex` real metrics (measure the `x` glyph box height off the same seam)
 is the immediate bounded follow-up; then thread the page FontContext for webfont-exact `ch`. Self-audit
 next 505; surface-audit next 508; Const-Check next 503.
+
+## Tick 500 — the `ex` unit is the face's real x-height (OS/2 sxHeight), not 0.5em (2026-07-24)
+
+The sibling of tick 499's `ch` fix, on the same manuk-css↔manuk-text seam — completes the font-relative
+`ch`+`ex` pair. MEASURED: `StubFontMetrics` returned `x_height: None`, so Stylo used the spec `ex =
+0.5em`. Real faces have x-height slightly over half an em (DejaVu/Liberation sans ≈ 0.52em), so an
+`ex`-sized box was a few percent too short — cumulative in a form or an icon column sized in `ex`.
+
+FIX: `manuk-text::x_height_px` reads the face's OS/2 `sxHeight` via
+`swash::FontRef::metrics(&[]).scale(size).x_height` (the same design-unit value Chrome uses) off the
+same primary face the shaper draws with. Provider returns `x_height: Some(len)`; `None` (face declares
+no x-height, or family unresolved) leaves the spec 0.5em fallback → nothing regresses. `cap_height`/
+`ic_width` stay `None` (both free from the same swash `Metrics` — `cap`/`ic` units are the bounded next
+step). Zero new dep (swash already in manuk-text; the manuk-text↔manuk-css seam landed t499).
+
+RED-proven: forcing `x_height = None` gives `ex100:800 real:false` → G_EX_UNIT fails; fix lands ~832,
+pinned to (810,900) so a WRONG metric (cap-height ~1150, a whole em 1600) fails instead of passing.
+New gate G_EX_UNIT. Neighbors g_ch_unit/g_width_stretch/g_client_rects green. Bar 0 held.
+
+TICK SHAPE: capability (+1 gate, nothing regresses). WIKI: text-layout.md — "The `ex` unit is the
+face's real x-height". NEXT: `cap`/`ic` units off the same swash Metrics (bounded), then thread the
+page's own FontContext for webfont-exact ch/ex. Self-audit next 505; surface-audit next 508;
+Const-Check next 503.

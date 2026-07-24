@@ -598,6 +598,19 @@ impl FontContext {
         self.faces.borrow().get(id as usize).cloned()
     }
 
+    /// The **x-height** in px for `key` at `size` — the OS/2 `sxHeight` of the resolved
+    /// primary face, scaled to the font size. This is the CSS **`ex`** unit, and it is read
+    /// from the SAME face the shaper lays glyphs with (via swash's `Metrics`, the design-unit
+    /// value Chrome also uses), so `ex` and the rendered lowercase text agree. `None` when no
+    /// face resolves or the face declares no x-height (leaving the spec `0.5em` fallback).
+    pub fn x_height(&self, key: FontKey, size: f32) -> Option<f32> {
+        let fid = self.primary_face(key)?;
+        let fd = self.face(fid)?;
+        let font = swash::FontRef::from_index(&fd.data, fd.index as usize)?;
+        let xh = font.metrics(&[]).scale(size).x_height;
+        (xh > 0.0).then_some(xh)
+    }
+
     /// The installed fallback faces, discovered once (lazy).
     fn fallback_faces(&self) -> Vec<FaceId> {
         if let Some(fbs) = self.fallbacks.borrow().as_ref() {
@@ -922,6 +935,21 @@ pub fn zero_advance_px(families: &[String], bold: bool, italic: bool, size_px: f
             italic,
         };
         ctx.measure("0", key, size_px)
+    })
+}
+
+/// The x-height in px (CSS **`ex`** unit) for the font `families`/`bold`/`italic` resolve to
+/// at `size_px`, read off the shared metrics context (see [`zero_advance_px`]). `None` leaves
+/// Stylo's spec `ex = 0.5em` fallback in place — the honest answer for a face that declares no
+/// x-height or a family that does not resolve.
+pub fn x_height_px(families: &[String], bold: bool, italic: bool, size_px: f32) -> Option<f32> {
+    METRICS_CTX.with(|ctx| {
+        let key = FontKey {
+            family: ctx.resolve_family(families),
+            bold,
+            italic,
+        };
+        ctx.x_height(key, size_px)
     })
 }
 

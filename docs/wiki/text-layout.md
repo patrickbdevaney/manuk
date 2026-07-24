@@ -874,3 +874,17 @@ generics to a real fallback-font advance — closer to Chrome (which uses the fa
 webfont is absent) than the old flat `0.5em`, never a regression. Threading the page's own
 `FontContext` in (for webfont-exact `ch`) is the next step. Gated by `g_ch_unit` (RED-proven: stub gives
 `box:80 ref:96 eq:false real:false`; fix gives `box:96 ref:96 eq:true real:true`).
+
+## The `ex` unit is the face's real x-height (OS/2 sxHeight), not `0.5em` (tick 500)
+
+The sibling of the `ch` fix (tick 499), on the same `manuk-css`↔`manuk-text` seam. `StubFontMetrics`
+returned `x_height: None`, so Stylo used the spec `ex = 0.5em`. Real faces sit slightly over half an em
+(DejaVu/Liberation sans ≈ `0.52em`), so `ex`-sized boxes were a few percent too short — cumulative in a
+form or an icon column sized in `ex`. `manuk-text::x_height_px` reads the face's **OS/2 `sxHeight`** via
+`swash::FontRef::metrics(&[]).scale(size).x_height` — the same design-unit value Chrome uses — off the
+same primary face the shaper draws with, and the provider returns `x_height: Some(len)`. `None` (a face
+with no declared x-height, or an unresolved family) leaves the spec `0.5em` fallback untouched, so
+nothing regresses. `cap_height`/`ic_width` stay `None` (both freely available from the same swash
+`Metrics` — `cap` and `ic` units are the bounded next step). Gated by `g_ex_unit` (RED-proven: stub
+gives `ex100:800`; fix lands ~`832`, pinned to `(810,900)` so a wrong metric — cap-height ~1150,
+a whole em 1600 — fails instead of passing).
