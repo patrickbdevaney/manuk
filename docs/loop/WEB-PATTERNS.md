@@ -4381,3 +4381,11 @@ for animation loops). It now returns the tab-in-front state the shell already ow
 `visibilityState`/`document.hidden`), so it is honest for the dominant foreground-vs-backgrounded case and can
 never contradict `document.hidden`. **The trap:** a hardcoded `true` would keep a backgrounded tab "focused"
 and defeat the very battery/CPU savings the check exists for — tying it to real visibility avoids that.
+
+## `<textarea>.textLength` — the character-counter number (tick 497)
+
+**The class of the web this unlocks (every textarea with a live character counter — comment boxes, tweet
+composers, bio/description fields with a `maxlength`):** a counter reads `textarea.textLength` on each
+keystroke to render "120 / 280". It was `undefined`, so the counter showed "undefined / 280" or NaN-ed its
+maths. It now returns `value.length` (the control's live text), read-only and textarea-only. Small, but it is
+the exact number the UI puts on screen.

@@ -4789,6 +4789,21 @@ const PRELUDE: &str = r#"
           }
         });
       }
+      // `<textarea>.textLength` — the read-only code-unit length of the control's value, the number a
+      // "120 / 280 characters" counter reads on every keystroke. It was undefined (a counter reading it
+      // got `undefined`, then rendered "undefined / 280" or NaN'd its maths). It is exactly `value.length`
+      // — `this.value` already returns a `<textarea>`'s current text — so no new state, and TEXTAREA-guarded
+      // (the property is HTMLTextAreaElement-only; a non-textarea reads `undefined`). Read-only getter.
+      if (__HP && !Object.getOwnPropertyDescriptor(__HP, 'textLength')) {
+        Object.defineProperty(__HP, 'textLength', {
+          configurable: true,
+          get: function() {
+            if (!this || this.tagName !== 'TEXTAREA') { return undefined; }
+            var v = this.value;
+            return v == null ? 0 : String(v).length;
+          }
+        });
+      }
       if (__HP && typeof __HP.checkValidity === 'undefined') {
         var __isFormControl = function(el) {
           var t = el && el.tagName;

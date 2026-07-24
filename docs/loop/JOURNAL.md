@@ -19983,3 +19983,26 @@ TICK SHAPE: capability (+1 gate, nothing regresses). WIKI: interaction-surface.m
 tied to the tab-in-front signal". NEXT: textarea.textLength is the remaining trivial bounded getter;
 ch/ex font-metrics (Const-Check #28) remains the top subsystem lever. Self-audit next 505; surface-audit
 next 498; Const-Check next 503.
+
+## Tick 497 — `<textarea>.textLength`: the character-counter number (2026-07-24)
+
+The last clean atomic brick of the form-state getter vein. MEASURED: `textarea.textLength` undefined — a
+"120 / 280 characters" counter reads it on every keystroke and got `undefined` (rendering "undefined / 280"
+or NaN-ing arithmetic against `maxlength`). It is exactly `value.length` (`textarea.value` already returns
+the control's live text), so no new state.
+
+FIX: a read-only getter on `__protoHTMLElement` (TEXTAREA-guarded) returning `String(this.value).length`,
+0 for null. Read-only (assignment ignored), textarea-only (an `<input>` has `value` but no `textLength`, so
+it reads `undefined`) — same __HP + tag-guard shape as t493 currentSrc.
+
+RED-proven (pre-fix probe: textLength:undefined). New gate G_TEXTAREA_TEXT_LENGTH: equals the initial value
+length, tracks a script `value =` assignment (live, not a snapshot), read-only, `undefined` on an `<input>`.
+Neighbors g_textarea_value/g_get_property_value/g_progress_output_value green. Bar 0 held; zero new dep;
+~10 lines prelude JS.
+
+TICK SHAPE: capability (+1 gate, nothing regresses). WIKI: none [forced] — a one-line read-only getter whose
+mechanism (the `__HP` tag-guarded read-only accessor) is already documented for currentSrc in dom-semantics.md
+(tick 493); there is no new mechanism to capture. This exhausts the
+clean atomic getter vein probed this session (13 batches: scroll/observers/getSelection/DataTransfer/
+Drag+Animation+TransitionEvent all already built). NEXT: ch/ex font-metrics (Const-Check #28) remains the top
+subsystem lever. Self-audit next 505; surface-audit next 498; Const-Check next 503.
