@@ -1054,3 +1054,47 @@ the standing rule holds harder than ever: RE-PROBE before ranking or building an
 Also newly visible: the `content-visibility` gap is a PLACEMENT (page-height) divergence, not merely perf.
 
 LAST_SURFACE_AUDIT 478→488; next due 498.
+
+## Audit #23 — tick 498 (2026-07-24)
+
+SOURCES (web-checked, not memory): Interop 2026 focus areas (web.dev/blog/interop-2026; css-tricks.com/interop-2026)
+and Baseline monthly digests Feb–May 2026 (web.dev/blog/baseline-digest-{feb,mar,apr,may}-2026; web.dev/baseline/2026).
+The Interop-2026 focus set is unchanged from Audit #22 (annual set): Anchor Positioning, View Transitions,
+`<dialog>`, Popover API improvements, animation timelines, advanced `attr()`, `:open`, `shape()`. Baseline
+newly-available since #22: `font-family: math` (Mar 2026, MathML math-font rendering); `contrast-color()`
+(WORKS here, t466); assorted May-2026 CSS/event/API additions.
+
+RESOLVED BY PROBE (measured this tick via `CSS.supports`/live cascade, not guessed):
+* **`::details-content` pseudo-element → RECOGNIZED** (map unknown since Audit #20). `CSS.supports('selector(::details-content)')`
+  → true: Stylo parses the selector. Unknown→partial — the selector matches; whether it drives the disclosure
+  panel's `content-visibility` (the full Baseline-2025 behavior) is unverified and gated on content-visibility,
+  which is a servo-drop (below).
+* **advanced typed `attr()` → MISSING.** `CSS.supports('width','attr(data-w px)')` → false. The typed `attr()`
+  for non-`content` properties (Interop-2026 focus) is unrecognized. A subsystem, not a bounded tick.
+* **`:active-view-transition` → MISSING.** `CSS.supports('selector(:active-view-transition)')` → false. View
+  Transitions themselves are gated (t308); this Baseline-2026 pseudo is not.
+* **`shape()` → MISSING**, **`anchor-name` → MISSING**, **`field-sizing:content` → MISSING** (reconfirms the
+  Audit-#22 / t492 findings; all servo-drops or subsystems — Stylo's build does not carry the properties).
+* **`popover="hint"` → not specially handled** (`CSS.supports('(popover: hint)')` → false); the popover base is
+  gated, the hint variant is an addition on the same top-layer machinery.
+
+RECONCILED FROM THIS SESSION'S PROBES (ticks 489–497, folded into the map): the clean ATOMIC JS-surface /
+DOM-method / current-state-getter vein is MINED OUT. NEWLY BUILT this window (unknown/absent → gated): global
+`[hidden]` collapse, `inputMode`/`enterKeyHint` reflection, `dialog.requestClose()`, `img.currentSrc`,
+`document.activeElement`→`<body>`, `document.hasFocus()`, `textarea.textLength`. CONFIRMED PRESENT+correct
+(stale-pessimistic again): the full form-constraint-validation surface, scroll methods, MutationObserver/
+IntersectionObserver, getSelection, DataTransfer/DragEvent/Animation+TransitionEvent. CONFIRMED SUBSYSTEMS
+(not bounded): CSS Typed OM, Custom Highlight API, `Element.getHTML()` (shadow-serializer), `img.complete`/
+`naturalWidth` (image-lifecycle), CSSOM `.sheet` (~944 WPT), the servo-drop CSS-property class.
+
+ADDED as `unknown` (Baseline-2026, absent from the map): **`font-family: math`** (Mar-2026, MathML math-font
+selection) — doc-class, but MathML is below the ROI cut line (ENGINEERING.MD Domain D); recorded measured-absent-
+by-policy, not a build target.
+
+WHAT WE HAD BEEN WRONG ABOUT: `::details-content` — a map unknown since Audit #20 — is at least selector-recognized
+by Stylo, the eighth-plus "modern feature partially/already there." The standing rule holds: RE-PROBE before
+ranking or building anything the map calls missing. The honest frontier is unchanged and doubly-confirmed (Const-
+Check #28): the sized subsystems in PHASE0-BOUNDED-REMAINDER.md, led by ch/ex real font metrics — NOT more atomic
+surface work, which is now measured-exhausted.
+
+LAST_SURFACE_AUDIT 488→498; next due 508.

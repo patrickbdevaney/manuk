@@ -264,3 +264,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 494	3b66779	1784888434	2026-07-24T06:20:34-04:00	1341	capability	67	9	156	36	258	81	3896	6960	0	329	31	`document.activeElement` defaults to `<body>`, not `null` (2026-07-24)
 495	5e6bcef	1784890061	2026-07-24T06:47:41-04:00	1627	measurement	67	9	161	33	259	81	3896	6960	0	329	31	SELF-AUDIT (cadence, ticks 485→494) (2026-07-24)
 496	1003187	1784891005	2026-07-24T07:03:25-04:00	944	capability	67	7	140	32	260	81	3896	6960	0	329	31	`document.hasFocus()` answers, tied to the tab-in-front signal (2026-07-24)
+497	b33cc7f	1784891465	2026-07-24T07:11:05-04:00	460	capability	67	5	104	33	260	81	3896	6960	0	329	31	`<textarea>.textLength`: the character-counter number (2026-07-24)

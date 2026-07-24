@@ -20006,3 +20006,29 @@ mechanism (the `__HP` tag-guarded read-only accessor) is already documented for 
 clean atomic getter vein probed this session (13 batches: scroll/observers/getSelection/DataTransfer/
 Drag+Animation+TransitionEvent all already built). NEXT: ch/ex font-metrics (Const-Check #28) remains the top
 subsystem lever. Self-audit next 505; surface-audit next 498; Const-Check next 503.
+
+## Tick 498 — SURFACE AUDIT #23: web-checked the map, probed the Interop-2026 unknowns (2026-07-24)
+
+The due surface-audit (cadence every 10; last 488). Web-checked Interop-2026 focus areas + Baseline Feb–May
+2026 digests (sources in SURFACE-AUDIT.md #23), reconciled against the map, and RESOLVED the remaining
+CSS/pseudo unknowns by live probe rather than guessing.
+
+RESOLVED BY PROBE: (1) `::details-content` pseudo-element — a map unknown since Audit #20 — is RECOGNIZED by
+Stylo (`CSS.supports('selector(::details-content)')` → true; unknown→partial, full content-visibility behavior
+gated on that servo-drop). (2) advanced typed `attr()`, `:active-view-transition`, `shape()`, `anchor-name`,
+`field-sizing:content` all CONFIRMED MISSING (servo-drops/subsystems — reconfirming t492). (3) `popover="hint"`
+not specially handled.
+
+RECONCILED this session's ticks 489–497 into the map: the clean ATOMIC vein is MINED OUT; newly-built
+(unknown→gated) [hidden]/inputMode/enterKeyHint/requestClose/currentSrc/activeElement/hasFocus/textLength;
+confirmed-present forms/scroll/observers/events; confirmed-subsystems Typed-OM/Highlight/getHTML/img.complete/
+.sheet/servo-drop-CSS. ADDED unknown: `font-family: math` (Mar-2026 Baseline, MathML — below the ROI cut line,
+recorded measured-absent-by-policy).
+
+STANDING RULE held again: `::details-content` was selector-recognized though the map called it unknown — the
+eighth-plus "re-probe before building." The honest frontier is unchanged and now triply-confirmed (Const-Check
+#28 + this audit): the sized subsystems in PHASE0-BOUNDED-REMAINDER.md, led by ch/ex real font metrics.
+
+TICK SHAPE: surface-audit (measurement; no gate change, nothing regresses; no engine code touched). WIKI: none
+(findings live in SURFACE-AUDIT.md). LAST_SURFACE_AUDIT 488→498; next due 508. Self-audit next 505; Const-Check
+next 503.
