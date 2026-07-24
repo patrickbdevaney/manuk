@@ -4323,3 +4323,16 @@ to serve. `hidden="until-found"` is the spec exception and is deliberately LEFT 
 `content-visibility: hidden` (collapsed-but-findable), unsupported here yet, so collapsing it would hide
 content a user could never reveal on find. Rule kept in two-cascade lockstep (stylo_engine.rs +
 apply_ua_defaults).
+
+## `inputMode` / `enterKeyHint` reflect as global HTMLElement attributes (tick 490)
+
+**The class of the web this unlocks (every mobile form and custom `contenteditable` field that steers the
+on-screen keyboard):** `<input inputmode="numeric">` brings up a digit pad, `enterkeyhint="search"`
+relabels the Enter key — and scripts read/write these through the IDL properties `el.inputMode` /
+`el.enterKeyHint` to switch keyboard modes dynamically. Both read `undefined` before: the rows existed in
+the reflection table but were keyed under a tag name `"undefinedelement"` that matches no element, instead
+of the `"*"` global bucket that applies to every element. **The trap:** the row was *present*, so a
+presence check would have passed — but it reached nothing, so `input.inputMode` was `undefined` and
+`el.inputMode = 'tel'` no-opped. Fix is data-only (move both rows into `"*"`); the generic enum mechanism
+then gives spec behaviour for free — absent/invalid → `""`, valid keyword round-trips through the lowercase
+content attribute. Global, so it works on a `<div>` too, as the spec requires.

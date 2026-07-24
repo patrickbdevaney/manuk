@@ -19755,3 +19755,30 @@ attribute needed its OWN rule". NEXT: `content-visibility`/`contain-intrinsic-si
 audit-#21 candidate but it is a Stylo servo-DROP (unrecognized property, not a pref-flip) so it is a
 subsystem, not atomic; the ch/ex font-metrics subsystem (Const-Check #27) remains the top capability
 lever. Self-audit next 495; surface-audit next 498; Const-Check next 495.
+
+## Tick 490 — `inputMode`/`enterKeyHint` reflected on NOTHING: keyed to a tag named "undefinedelement" (2026-07-24)
+
+A probe-then-build off the constellation-unknowns lane. MEASURED FIRST: `input.inputMode` and
+`el.enterKeyHint` both read `undefined` — the properties did not exist on any element. Root cause found by
+reading `reflect_table.rs`: both rows WERE present, but keyed under a bogus tag name `"undefinedelement"`
+(a string that matches no element) instead of the `"*"` global bucket the reflection mechanism applies to
+every element. So `descFor(tag)` never found them for any real tag. These are `HTMLElement` GLOBAL IDL
+attributes — the on-screen-keyboard steer (`inputmode="numeric"` → digit pad, `enterkeyhint="search"` →
+relabelled Enter key) that every serious mobile form and `contenteditable` field sets — exactly the class
+the `"*"`-bucket fix (t95-era, +18k) was created for, one layer subtler.
+
+FIX: move both rows out of `"undefinedelement"` into `"*"`. The generic enum machinery in `reflect_js.rs`
+then handles everything spec-correctly with zero new mechanism — RED-proven: `im:numeric ekh:go
+bareim:EMPTY ekhGlobal:string attr:tel back:tel bad:EMPTY`, i.e. present valid reflects, absent
+limited-enum → `""`, exists on a plain `<div>` (global), property-set writes the lowercase content
+attribute and round-trips, invalid value → `""` (limited to only known values). New gate
+G_INPUTMODE_REFLECT proves all seven. Neighbor g_global_reflect still green. Bar 0 held; zero new dep;
+data-only table fix (no mechanism change).
+
+TICK SHAPE: capability (+1 gate, nothing regresses). WIKI: dom-semantics.md — the "undefinedelement"
+mis-key under the existing global-reflection section. Also measured this batch and pinned already-present:
+`datalist`/`template`/`noscript` collapse (display:none, correct); `text-wrap`/`field-sizing` MISSING but
+layout-algorithm subsystems (not atomic); `togglePopover` present; `text-align:end`→`right` correct for
+LTR. NEXT: `dialog.requestClose`, `input.showPicker` are bounded method gaps; ch/ex font-metrics subsystem
+(Const-Check #27) remains the top capability lever. Self-audit next 495; surface-audit next 498;
+Const-Check next 495.

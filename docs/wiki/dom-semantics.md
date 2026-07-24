@@ -435,6 +435,18 @@ tick-95 mass-reflector Bar-0 did NOT trip at 10 global accessors — the remaini
 whole-tree access) stays crash-gated on the stack-quota fix, but a large crash-free chunk was reachable
 without it. [[js-engine]]
 
+### `enterKeyHint`/`inputMode` were keyed under a tag named `"undefinedelement"` — a global that reached NO element (tick 490)
+
+The same defect, one layer subtler. `inputMode` and `enterKeyHint` ARE in `reflect_table.rs` — but under
+the key `"undefinedelement"`, a tag name that matches nothing, instead of the `"*"` global bucket the
+mechanism applies to every element. So `descFor` never found them for any real tag, `input.inputMode` read
+`undefined`, and `el.inputMode = 'tel'` no-opped. They are `HTMLElement` globals (the on-screen-keyboard
+steer every mobile form and `contenteditable` field sets), so the fix is to move both rows into `"*"`. The
+generic enum machinery then does the rest, spec-correctly: absent → `""`, invalid → `""` (limited to only
+known values), a valid keyword round-trips through the lowercase content attribute. The lesson from the
+`"*"` grind repeats — a global attribute keyed to a *specific* tag (here a nonexistent one) reaches nothing;
+verify the bucket, not just the presence of the row. [[js-engine]]
+
 ## A getter-only attribute fallback silently drops the setter — and double-defining a native one CRASHES
 
 html/dom's `got "test-valueOf"` cluster was reflection *value* correctness: `el.lang` returned the
