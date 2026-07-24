@@ -270,3 +270,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 502	81dba2c	1784896545	2026-07-24T08:35:45-04:00	1545	capability	67	5	97	33	263	81	3896	6960	0	329	31	the `cap` unit is the face's real cap-height (was collapsing to 0px) (2026-07-24)
 503	ecf3276	1784897403	2026-07-24T08:50:03-04:00	858	constitution-check	67	4	91	6	263	81	3896	6960	0	329	31	CONSTITUTION-CHECK #29: the named ch/ex frontier was DELIVERED (2026-07-24)
 504	22c7c16	1784897623	2026-07-24T08:53:43-04:00	220	measurement	67	2	30	3	263	81	3896	6960	0	329	31	PROBE: resolve 4 stale-unknown constellation cells (UNKNOWN 8→4) (2026-07-24)
+506	f1b3320	1784898307	2026-07-24T09:05:07-04:00	684	measurement	67	4	60	3	263	81	3896	6960	0	329	31	PROBE: ESM modules run (self-contained half GATED); import-graph seam pinned (2026-07-24)

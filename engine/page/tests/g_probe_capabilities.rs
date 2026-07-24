@@ -308,6 +308,23 @@ const HTML: &str = r##"<!doctype html>
       return typeof navigator !== 'undefined' && typeof navigator.cpuPerformance !== 'undefined';
     });
   </script>
+
+  <!-- ES-module capability, measured from INSIDE a real `<script type=module>`. Modules are deferred,
+       so this runs AFTER the classic probe above and globalThis.R already exists to push into. This is
+       the surface that "killed every Vite app on the internet" until import.meta.url resolved: a module
+       must COMPILE + LINK + EVALUATE and expose a string import.meta.url. Self-contained modules (no
+       cross-module imports) are the measured-working half pinned here. The multi-module import GRAPH is
+       the recorded GAP — module_resolve_hook (dom_bindings.rs) returns a null pointer, so an
+       `import {x} from './y.js'` fails at ModuleLink; a pre-fetched synchronous module registry keyed by
+       resolved specifier is the follow-on subsystem, not this tick. RED-provable: break run_module or
+       the metadata hook and esmmodule goes no. -->
+  <script type="module">
+    try {
+      var ok = (typeof import.meta === 'object' && import.meta !== null &&
+                typeof import.meta.url === 'string' && import.meta.url.length > 0);
+      if (globalThis.R) { globalThis.R.push('esmmodule:' + (ok ? 'yes' : 'no')); }
+    } catch (e) { try { if (globalThis.R) { globalThis.R.push('esmmodule:no'); } } catch (_e) {} }
+  </script>
 </body></html>"##;
 
 #[test]
@@ -396,4 +413,12 @@ const PINNED: &[&str] = &[
     // stub cannot fabricate (2020-01-15 + 40d = 2020-02-24, ISO dayOfWeek 3, a 25h Duration totals 25h,
     // PlainTime 10:30 + 45m = 11:15). Was carried nowhere on the map; measured working, not assumed.
     "temporal:yes",
+    // tick 506 — ES modules run (the self-contained half). Measured from INSIDE a real
+    // `<script type=module>`: it COMPILES + LINKS + EVALUATEs and `import.meta.url` is a non-empty
+    // string — the exact hook whose absence silently killed every Vite/Rollup/esbuild bundle (they
+    // all emit `import.meta.url` unconditionally). RED-provable: break `run_module` or the metadata
+    // hook and this goes no. The multi-module import GRAPH is a SEPARATE, still-absent capability
+    // (module_resolve_hook returns null → `import from './y.js'` fails at ModuleLink) — recorded as
+    // the gap on CONSTELLATION cell 169, a pre-fetched sync module registry is its follow-on subsystem.
+    "esmmodule:yes",
 ];

@@ -20237,3 +20237,35 @@ TICK SHAPE: self-audit (cadence measurement; no engine code, no gate change, not
 WIKI: none — the audit is a scripts/self-audit.sh run; its verdict lives here. NEXT: back to the
 PHASE0-BOUNDED-REMAINDER frontier (MSE playback-join / ESM module-graph / intrinsic sizing),
 decompose-first. Self-audit next 515; surface next 508; Const-Check next 511.
+
+## Tick 506 — PROBE: ESM modules run (self-contained half GATED); import-graph seam pinned (2026-07-24)
+
+Continuing the probe track onto the single most notable remaining unknown — cell 169, ESM module-graph
+loading, a named Interop 2026 gap and the "NEXT GAP" flagged since t485. RE-PROBED before any build,
+and it split cleanly into a measured-working half and a precisely-located subsystem.
+
+MEASURED from INSIDE a real `<script type=module>` added to G_PROBE_CAPABILITIES (deferred, so it runs
+after the classic probe and pushes into the same result collector): `esmmodule:yes` — a module
+COMPILES + LINKS + EVALUATEs and `import.meta.url` is a non-empty string. That is the exact hook whose
+absence silently killed every Vite/Rollup/esbuild bundle (they emit `import.meta.url` unconditionally);
+it is real here (run_module + module_metadata_hook, dom_bindings.rs) but was UNGATED until now. Pinned
+`esmmodule:yes` — RED-provable by breaking run_module or the metadata hook.
+
+THE GAP, now located exactly for the follow-on: `module_resolve_hook` returns a null pointer, so an
+`import {x} from './y.js'` fails at ModuleLink and only self-contained modules run. SpiderMonkey's
+resolve hook is SYNCHRONOUS, so an import GRAPH needs the imports statically scanned
+(GetRequestedModules), fetched relative to the module URL recursively, compiled + registered in a
+specifier→module map BEFORE ModuleLink, then the hook returns from that map. Async-fetch + registry +
+recursion = a multi-tick subsystem, not atomic. Cell 169 unknown→partial with that seam written down —
+real decompose-first value banked for whoever builds it.
+
+Net across this session's probe work: constellation UNKNOWN 8→3 (t504 pinned 4 absences; t506 pins one
+capability + one located gap). Remaining 3 unknowns (100-tab RSS benchmark, test262, hidden=until-found)
+are benchmark-runs or subsystems. No engine/ source touched; +1 pinned capability (esmmodule:yes);
+Bar 0 held; nothing regresses (the ratchet's capability + instrument-fidelity faces both move up).
+
+TICK SHAPE: measurement + gate (one new pinned capability, one unknown→partial with a located seam; no
+engine code, nothing regresses). WIKI: none — the ESM seam is captured in the CONSTELLATION.tsv note and
+the gate's own doc comment. NEXT: the frontier is now genuinely subsystems only (ESM import-graph / MSE
+playback-join / contenteditable editing / intrinsic sizing), each to be decomposed before starting.
+Self-audit next 515; surface next 508; Const-Check next 511.
