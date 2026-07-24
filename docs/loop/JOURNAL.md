@@ -19719,3 +19719,39 @@ WIKI: none (audit findings live in SURFACE-AUDIT.md). NEXT: the ch/ex font-metri
 scoped in Const-Check #27 / t487) remains the top capability lever; `content-visibility` and
 `hidden=until-found` collapse are newly-measured bounded candidates. Self-audit next 495; surface-audit next
 498; Const-Check next 495.
+
+## Tick 489 — the global `hidden` attribute renders NOTHING (measured missing, now collapsed) (2026-07-24)
+
+A probe-then-build off surface-audit #21's newly-measured candidates. MEASURED FIRST (throwaway gate,
+`--features stylo,spidermonkey`): `<div hidden>` reported `display:block` — the global boolean `hidden`
+attribute was never in the UA sheet. Only `input[type=hidden] { display:none }` (the *value* on a
+specific control) existed; the *global* attribute — valid on every element and one of the most common
+visibility toggles on the web (tab panels, initial-collapsed accordions, feature-detect fallbacks,
+`el.hidden = false` show/hide) — had no rule, so every "hidden until a script shows it" panel painted its
+contents permanently, the same class of bug as a closed `<dialog>`/`<details>`/`[popover]` rendering
+inline.
+
+FIX: the spec rule `[hidden]:not([hidden="until-found"]) { display: none }` added to BOTH cascades in
+lockstep — `stylo_engine.rs` (the live Stylo UA sheet) and `apply_ua_defaults` in `css/src/lib.rs` (the
+`until-found`-excepting `el.attr("hidden")` check) — because two cascades disagreeing about whether an
+element renders is the `<source>` bug again. The `until-found` value is deliberately LEFT VISIBLE: the
+spec renders it with `content-visibility: hidden` (collapsed-but-findable), which we do not support yet,
+so collapsing it would hide content a user could never reveal on find — the honest first brick leaves it
+alone rather than falsely collapse it (surface-audit #21 flagged `hidden=until-found` as PARTIAL; this
+tick does the plain-`hidden` half and honours the exception).
+
+RED-proven: pre-fix probe `plain:block`; post-fix `plain:none uf:block revealed:block shown:block`. New
+gate G_HIDDEN_ATTRIBUTE proves all four — plain collapses, until-found stays visible, `el.hidden = false`
+re-renders via restyle (the toggle is undoable), a normal sibling is unaffected. Neighbor gates green
+(g_global_reflect, g_attrs, g_details, g_display_contents, g_client_rects, g_selector). Bar 0 held; zero
+new dep; additive UA rule only.
+
+HARNESS NOTE (not mine to fix): `manuk-css` lib test `supports_condition_answers_from_the_real_parser`
+(`view-transition-name: foo`) FAILS on a clean tree (confirmed via `git stash`) — pre-existing, unrelated
+to this tick.
+
+TICK SHAPE: capability (+1 gate, nothing regresses). WIKI: css-cascade.md — "The global `hidden`
+attribute needed its OWN rule". NEXT: `content-visibility`/`contain-intrinsic-size` is the remaining
+audit-#21 candidate but it is a Stylo servo-DROP (unrecognized property, not a pref-flip) so it is a
+subsystem, not atomic; the ch/ex font-metrics subsystem (Const-Check #27) remains the top capability
+lever. Self-audit next 495; surface-audit next 498; Const-Check next 495.

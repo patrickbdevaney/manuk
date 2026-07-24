@@ -186,6 +186,16 @@ input[type=submit], input[type=reset], input[type=button], button {
   text-align: center;
 }
 input[type=hidden] { display: none; }
+/* `hidden` global attribute — https://html.spec.whatwg.org/#hidden-elements. An element carrying the
+   boolean `hidden` attribute is NOT rendered. This is one of the most common visibility toggles on
+   the whole web: feature-detect fallbacks, tab panels, initial-collapsed accordions, `el.hidden =
+   false` show/hide. Without this rule `<div hidden>` reported `display:block` and painted its
+   contents into the page (measured — the plain global attribute was never in the sheet; only the
+   `input[type=hidden]` value was). The `:not([hidden="until-found"])` exception matches the spec:
+   `until-found` is rendered with `content-visibility: hidden` (findable-but-collapsed), which we do
+   not yet support — so we leave it visible rather than falsely collapse content we cannot later
+   reveal on find. Keep in lockstep with `apply_ua_defaults` in css/src/lib.rs. */
+[hidden]:not([hidden="until-found"]) { display: none; }
 /* `<dialog>` — a CLOSED dialog is not rendered. Without this rule a dialog is just a block, so
    every modal's contents (the confirm-delete copy, the cookie-consent form, the command palette)
    were painted into the middle of the page before anyone opened it. Chrome's html.css has the same

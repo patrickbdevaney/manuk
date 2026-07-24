@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **258** | ticks 1–487 |
-| median tick cycle | **21m** | 257 intervals |
+| ticks landed | **259** | ticks 1–488 |
+| median tick cycle | **21m** | 258 intervals |
 | median, last 10 | **38m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.82** | 311.5h elapsed |
-| median verify wall | **60s** | 197 ticks |
-| wall trend | 39s → 68s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.83** | 312.0h elapsed |
+| median verify wall | **60s** | 198 ticks |
+| wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **253**
+* **live gates**: 27 → **254**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**157 of 258 ticks** (61%) moved a
+**157 of 259 ticks** (61%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **157** capability ticks, median cycle **21m**
-* median diff per tick: **+224 / −34** lines across 9 files
+* median diff per tick: **+226 / −34** lines across 9 files
 
 ## Every tick
 
@@ -355,5 +355,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **484** | 2026-07-24 02:50 | 36m | capability | 10m | +235/−38 | 251 | 81 | 56.0% · | execCommand('createLink', false, url) wraps the selection in <a href> (2026-07-24) |
 | **485** | 2026-07-24 03:49 | 59m | capability | 68s | +258/−34 | 253 | 81 | 56.0% · | navigator.credentials + window.PublicKeyCredential: the passkey feature-detect surface (20 |
 | **487** | 2026-07-24 04:35 | 46m | measurement | 67s | +98/−32 | 253 | 81 | 56.0% · | MEASUREMENT: JS-surface vein mined out + ch/ex font-metrics subsystem scoped (Const-Check  |
+| **488** | 2026-07-24 05:00 | 25m | surface-audit | 67s | +255/−77 | 254 | 81 | 56.0% · | SURFACE AUDIT #21: web-checked the map, probed 3 unknowns (2026-07-24) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

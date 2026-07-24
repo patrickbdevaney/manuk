@@ -199,6 +199,26 @@ Mapping it to block-level flex makes **every icon button fill its container.** B
 three or four values that decide whether a control **shrink-wraps**, a missing `inline-flex` looks like a
 layout-algorithm bug rather than a missing enum variant.
 
+## The global `hidden` attribute needed its OWN rule — `input[type=hidden]` never covered it (tick 489)
+
+`<div hidden>` reported `display: block` and painted its contents. The UA sheet only carried
+`input[type=hidden] { display: none }` — the *value* on a specific control — while the **global boolean
+`hidden` attribute** (valid on every element, and one of the most common visibility toggles on the web:
+tab panels, initial-collapsed accordions, feature-detect fallbacks, `el.hidden = false` show/hide) had
+no rule at all. Measured, not assumed: a probe showed `plain:block` before, `plain:none` after.
+
+The spec rule (`#hidden-elements`) is `[hidden]:not([hidden="until-found"]) { display: none }`. The
+`until-found` exception matters and is deliberately preserved as **visible**: the spec renders that value
+with `content-visibility: hidden` (collapsed-but-findable), which we do not support yet — so collapsing
+it to `display:none` would hide content a user could never reveal on find. Leaving it visible is the
+honest first brick; falsely collapsing it would be a capability we cannot back up.
+
+Same **two-cascade lockstep** as `<dialog>`/`[popover]`: the rule lives in `stylo_engine.rs` (the live
+Stylo sheet) *and* in `apply_ua_defaults` (`css/src/lib.rs`), because a page whose two cascades disagree
+about whether an element renders is the `<source>` bug again. And it must be *undoable*: `el.hidden =
+false` removes the attribute, the cascade re-runs on the mutation, `[hidden]` stops matching, and the
+element comes back — a rule that could not be reversed would break every toggle it exists to serve.
+
 ## A `background-image` is a DECORATION; an `<img>` is a REPLACED ELEMENT whose bitmap IS the box
 
 Storing both in the same `node → decoded image` map made the **replaced-element blit** (which stretches the

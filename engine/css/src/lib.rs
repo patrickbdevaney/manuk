@@ -3278,6 +3278,18 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
             None
         };
     }
+    // `hidden` global attribute — https://html.spec.whatwg.org/#hidden-elements. Any element carrying
+    // the boolean `hidden` attribute is NOT rendered. Attribute-keyed, not tag-keyed, because `hidden`
+    // is global. The `until-found` value is the one exception: the spec renders it with
+    // `content-visibility: hidden` (collapsed but findable), which we do not support yet, so we leave
+    // it visible rather than falsely collapse content we could not later reveal. Keep in lockstep with
+    // the `[hidden]:not([hidden="until-found"])` rule in stylo_engine.rs.
+    if el
+        .attr("hidden")
+        .is_some_and(|v| !v.eq_ignore_ascii_case("until-found"))
+    {
+        s.display = None;
+    }
     // Form-control default appearance (UA stylesheet): a bordered, padded box. A text input
     // gets a default width; buttons hug their label. This is what makes fields visible.
     if matches!(tag, "input" | "button" | "textarea" | "select") {

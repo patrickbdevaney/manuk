@@ -4306,3 +4306,20 @@ than the crash, taking the "no gesture" branch during a real click. The discrimi
 engine gestures carry a supplied object and read `isTrusted===false` exactly like a page's own `el.click()`,
 which must grant nothing. Agentic bonus: an agent's `dispatch_click` now trips the same activation a real user
 would, so gesture-gated actions the agent initiates are honoured.
+
+## The global `hidden` attribute collapses the element (tick 489)
+
+**The class of the web this unlocks (any site that ships markup pre-hidden and reveals it with script —
+tab panels, initial-collapsed accordions/FAQs, `<template>`-free "hidden until needed" fragments,
+feature-detect fallbacks, and the ubiquitous `el.hidden = false` / `toggleAttribute('hidden')` toggle):**
+`<div hidden>` now computes `display: none` instead of `block`. Before, only `input[type=hidden]` (the
+*value* on one control) was in the UA sheet; the **global boolean `hidden` attribute** — valid on every
+element and one of the most common visibility toggles on the web — had no rule, so every panel authored
+hidden-until-shown painted its contents permanently into the page (the same failure shape as a closed
+`<dialog>`/`<details>`/`[popover]` rendering inline). **The trap:** it is a *live* toggle, not a static
+rule — `el.hidden = false` removes the attribute, the cascade re-runs on the mutation, `[hidden]` stops
+matching and the element returns; a collapse that could not be undone would break every toggle it exists
+to serve. `hidden="until-found"` is the spec exception and is deliberately LEFT VISIBLE: it renders with
+`content-visibility: hidden` (collapsed-but-findable), unsupported here yet, so collapsing it would hide
+content a user could never reveal on find. Rule kept in two-cascade lockstep (stylo_engine.rs +
+apply_ua_defaults).

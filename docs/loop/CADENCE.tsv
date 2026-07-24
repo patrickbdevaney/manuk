@@ -257,3 +257,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 484	eff3c37	1784875829	2026-07-24T02:50:29-04:00	2134	capability	586	9	235	38	251	81	3896	6960	0	329	31	execCommand('createLink', false, url) wraps the selection in <a href> (2026-07-24)
 485	cc03a54	1784879377	2026-07-24T03:49:37-04:00	3548	capability	68	8	258	34	253	81	3896	6960	0	329	31	navigator.credentials + window.PublicKeyCredential: the passkey feature-detect surface (2026-07-24)
 487	ed3d6ea	1784882108	2026-07-24T04:35:08-04:00	2731	measurement	67	5	98	32	253	81	3896	6960	0	329	31	MEASUREMENT: JS-surface vein mined out + ch/ex font-metrics subsystem scoped (Const-Check #27) (2026-07-24)
+488	68c919c	1784883619	2026-07-24T05:00:19-04:00	1511	surface-audit	67	10	255	77	254	81	3896	6960	0	329	31	SURFACE AUDIT #21: web-checked the map, probed 3 unknowns (2026-07-24)
