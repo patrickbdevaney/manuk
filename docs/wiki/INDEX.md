@@ -145,6 +145,7 @@
   - L688 · BUILD SPEC — selector-path keying: the class signature that stops silent mispairing (tick 399)
   - L719 · LANDED (tick 401) — the keying is live, and the predictions held
   - L737 · JS-platform-surface probe sweep — vein mined out (tick 487)
+  - L755 · The DOM-method / CSS-property surface vein is mined out too — one level deeper than t487 (tick 492)
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -957,4 +958,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-872 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+873 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

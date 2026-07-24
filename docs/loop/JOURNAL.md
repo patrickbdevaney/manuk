@@ -19807,3 +19807,31 @@ close() with a veto". NEXT bounded method gaps still open: `input.showPicker` (n
 NotAllowedError candidate), `Element.getHTML()` (shadow-root serializer). ch/ex font-metrics subsystem
 (Const-Check #27) remains the top capability lever. Self-audit next 495; surface-audit next 498; Const-Check
 next 495.
+
+## Tick 492 — MEASUREMENT: the DOM-method / CSS-property surface vein is mined out too (2026-07-24)
+
+Following the three bounded bricks landed this session (t489 `[hidden]` collapse, t490 `inputMode`/
+`enterKeyHint` mis-key, t491 `dialog.requestClose`), a second probe sweep confirmed the atomic vein is
+exhausted at the DOM-method and CSS-property layers as well — one level deeper than t487's JS-platform finding.
+
+MEASURED PRESENT + correct (the stale-pessimistic rule pays again): checkVisibility, getAnimations, moveBefore,
+setHTMLUnsafe, replaceChildren/append, togglePopover, form.requestSubmit, dialog.close/showModal, and the FULL
+form-constraint-validation surface (stepUp/stepDown correct arithmetic, valueAsNumber, validity.valueMissing/
+typeMismatch, checkValidity/reportValidity/setCustomValidity). datalist/template/noscript collapse; text-align:end
+→right (correct LTR).
+
+MEASURED ABSENT but each a SUBSYSTEM, not a brick: CSS Typed OM (computedStyleMap, CSS.px/number); Custom
+Highlight API (Highlight, CSS.highlights); Element.getHTML() (shadow-serializer — naive innerHTML is a subtle
+lie since attachShadow is real); showPicker (no picker UI); and CSS accent-color/touch-action/overscroll-behavior/
+text-decoration-thickness/text-underline-offset/text-wrap — confirmed servo-DROPS (absent from built
+stylo/out/properties.rs; the @container source-supplement trick does NOT rescue a dropped property).
+
+NEW FLAG: field-sizing is marked gated (t388) but on the LIVE Stylo path getComputedStyle is empty and
+CSS.supports('field-sizing','content')=false — the t388 recovery was MinimalCascade-only and does not hold on
+the shipping cascade (two-cascades trap). Flagged in CONSTELLATION.tsv for a re-probe of what G_PROBE_CAPABILITIES
+actually exercises.
+
+TICK SHAPE: measurement (no gate change; nothing regresses; no engine code touched). WIKI:
+conformance-and-oracles.md — "The DOM-method / CSS-property surface vein is mined out too". NEXT: the frontier is
+the named subsystems (ch/ex font metrics per Const-Check #27, media codecs, fidelity-instrument rebuild), each
+decomposed before starting. Self-audit next 495; surface-audit next 498; Const-Check next 495.

@@ -15,7 +15,7 @@
 | median tick cycle | **21m** | 260 intervals |
 | median, last 10 | **30m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.83** | 312.5h elapsed |
+| **ticks per hour** | **0.83** | 312.6h elapsed |
 | median verify wall | **60s** | 200 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -357,6 +357,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **487** | 2026-07-24 04:35 | 46m | measurement | 67s | +98/−32 | 253 | 81 | 56.0% · | MEASUREMENT: JS-surface vein mined out + ch/ex font-metrics subsystem scoped (Const-Check  |
 | **488** | 2026-07-24 05:00 | 25m | surface-audit | 67s | +255/−77 | 254 | 81 | 56.0% · | SURFACE AUDIT #21: web-checked the map, probed 3 unknowns (2026-07-24) |
 | **489** | 2026-07-24 05:16 | 17m | capability | 67s | +226/−81 | 255 | 81 | 56.0% · | the global `hidden` attribute renders NOTHING (measured missing, now collapsed) (2026-07-2 |
-| **491** | 2026-07-24 05:31 | 15m | capability | 67s | +196/−38 | 256 | 81 | 56.0% · | `dialog.requestClose()`: close with a veto (2026-07-24) |
+| **491** | 2026-07-24 05:38 | 22m | capability | 67s | +94/−34 | 256 | 81 | 56.0% · | `dialog.requestClose()`: close with a veto (2026-07-24) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -752,6 +752,36 @@ without registered-custom-property cascade integration reads as "typed custom pr
 while silently not applying `initialValue` — worse than absent). So the honest next frontier is the sized
 SUBSYSTEMS in PHASE0-BOUNDED-REMAINDER.md, not more surface probing.
 
+## The DOM-method / CSS-property surface vein is mined out too — one level deeper than t487 (tick 492)
+
+After ticks 489–491 mined the last clean bounded bricks from this vein (`[hidden]` collapse, the
+`inputMode`/`enterKeyHint` mis-key, `dialog.requestClose`), a second probe sweep confirmed the vein is
+exhausted at the DOM-method and CSS-property layers as well. **Present and correct** (probe before building —
+the stale-pessimistic rule pays again): `checkVisibility`, `getAnimations`, `moveBefore`, `setHTMLUnsafe`,
+`replaceChildren`/`append`, `togglePopover`, `form.requestSubmit`, `dialog.close`/`showModal`, and the whole
+**form-constraint-validation surface** (`stepUp`/`stepDown`→correct arithmetic, `valueAsNumber`, `validity`
+with `valueMissing`/`typeMismatch`, `checkValidity`/`reportValidity`/`setCustomValidity`). Also correct:
+`datalist`/`template`/`noscript` collapse to `display:none`; `text-align:end`→`right` (correct for LTR).
+
+**What's left is not atomic.** The still-absent items each need a subsystem, not a brick:
+- **CSS Typed OM** (`computedStyleMap`, `CSS.px`/`CSS.number`, `attributeStyleMap`) — a whole numeric-value API.
+- **Custom Highlight API** (`Highlight`, `CSS.highlights`) — range styling machinery.
+- **`Element.getHTML()`** — looks like `innerHTML`, but shadow DOM is real here (`attachShadow` works), so a
+  naive `getHTML = innerHTML` is a *subtle lie* the moment a caller passes `{serializableShadowRoots:true}`; a
+  correct impl is a shadow-serializer.
+- **`showPicker()`** — no picker UI to show; honest form is a `NotAllowedError`-without-activation stub, weak value.
+- **CSS `accent-color` / `touch-action` / `overscroll-behavior` / `text-decoration-thickness` /
+  `text-underline-offset` / `text-wrap`** — measured **servo-DROPS**: absent from the built
+  `stylo/out/properties.rs`, so Stylo's own parser cannot see them. The `@container` source-supplement trick
+  does NOT rescue a dropped *property* (only dropped *at-rules* and whole declaration blocks, which Stylo's
+  public parsers still accept) — reviving these means patching the Stylo build, a subsystem.
+
+**One flag worth a re-probe:** `field-sizing` is marked `gated` (t388) but on the LIVE Stylo path
+`getComputedStyle('field-sizing')` is empty and `CSS.supports('field-sizing','content')` is false — the t388
+recovery was MinimalCascade-only and does not hold on the shipping cascade (the two-cascades trap again). The
+next frontier remains the named subsystems (ch/ex font metrics, media codecs, the fidelity-instrument rebuild),
+each decomposed before starting — not more surface probing.
+
 **Next lever located: ch/ex real font metrics (Tier-2 item 23).** `engine/css/src/stylo_engine.rs`
 `StubFontMetrics::query_font_metrics` returns `FontMetrics::default()`, so `1ch = 1ex = 0.5em` for every font
 (measured: monospace-10ch == serif-10ch == 10ex == 80px at 16px — a monospace `Nch` code block or terminal is
