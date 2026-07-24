@@ -2705,6 +2705,23 @@ second editable → `execCommand('italic')` → `<i>make me italic</i>`; `queryC
 editable whose `beforeinput` `preventDefault()`s stays unwrapped. RED-proven by disabling the branch.
 
 **The honest bounded gap.** This WRAPS. A collapsed caret (which in a browser arms a "typing style" so the next
-keystroke is bold) and the toggle-OFF of already-bold text (a true toggle, plus `queryCommandState` for toolbar
-button state) are the larger follow-on brick — declared, not silently half-done. `execCommand('bold')` on a
-collapsed caret returns `false` here.
+keystroke is bold) and the toggle-OFF of already-bold text (a true toggle) are the larger follow-on brick —
+declared, not silently half-done. `execCommand('bold')` on a collapsed caret returns `false` here.
+
+## document.queryCommandState('bold'|'italic') reads the format back (tick 482)
+
+The read-back half of the formatting brick (the `execCommand('bold')` wrap landed t481). A rich-text editor
+calls `queryCommandState('bold')` on every `selectionchange` to render its Bold/Italic toolbar button
+pressed-or-not. Before this the method did not exist — the call was a `TypeError` that took the toolbar's
+render path down. t481 WRITES the format; t482 READS it back so the button stays in sync. Zero new dep.
+
+**Mechanism.** `document.queryCommandState(cmd)` for `bold`/`italic` (every other command returns false):
+walk from the selection anchor up through ancestors, return true on the first `<b>`/`<strong>` (bold) or
+`<i>`/`<em>` (italic) — mirroring what `execCommand('bold')` produces. It works with a COLLAPSED caret (that
+is how a button lights up as the caret moves through bold text), so it does NOT share the write path's
+non-collapsed requirement; the walk stops at the editing-host boundary so page chrome in a `<b>` outside the
+editable doesn't leak in.
+
+GATE: G_QUERY_COMMAND_STATE (page) — caret inside a bolded `<b>` → `queryCommandState('bold')` true; caret in
+plain text → false; caret inside an italic `<i>` → `queryCommandState('italic')` true; the method is a
+function (no TypeError). RED-proven by making it always return false.

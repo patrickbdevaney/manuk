@@ -2887,6 +2887,34 @@ const PRELUDE: &str = r#"
           return !!__EXEC_SUPPORTED[String(cmd || '').toLowerCase()];
         };
         document.queryCommandEnabled = document.queryCommandSupported;
+        // `queryCommandState('bold'|'italic')` — the toolbar's read-back: is the CURRENT selection (or
+        // caret) already bold/italic, so the Bold/Italic button should render pressed? A rich-text editor
+        // calls this on every `selectionchange` to keep its toolbar in sync, and a missing method is a
+        // `TypeError` that takes the toolbar's render path down (the aljazeera "referenced name that does
+        // not exist" lesson). It works with a COLLAPSED caret too — that is how a button lights up as the
+        // caret moves through already-bold text — so it does NOT share the write path's non-collapsed
+        // requirement. This mirrors what `execCommand('bold')` PRODUCES: a `<b>`/`<strong>` (bold) or
+        // `<i>`/`<em>` (italic) ancestor of the selection anchor, inside an editing host.
+        document.queryCommandState = function (cmd) {
+          cmd = String(cmd || '').toLowerCase();
+          if (cmd !== 'bold' && cmd !== 'italic') { return false; }
+          try {
+            var sel = globalThis.getSelection();
+            var n = (sel && sel._r) ? sel._r.startContainer : null;
+            var bold = { B: 1, STRONG: 1 };
+            var ital = { I: 1, EM: 1 };
+            var want = cmd === 'bold' ? bold : ital;
+            var sawEditable = false;
+            for (var x = n; x && x !== document.documentElement; x = x.parentNode) {
+              if (x.nodeType !== 1) { continue; }
+              if (x.isContentEditable) { sawEditable = true; }
+              if (want[(x.nodeName || '').toUpperCase()]) { return true; }
+              // Do not count formatting that lives OUTSIDE the editable host (page chrome in a <b>).
+              if (sawEditable && !x.isContentEditable) { break; }
+            }
+          } catch (e) {}
+          return false;
+        };
       }
 
       // ── **The interface surface.** Every name here is one a bundle may *reference* — in an

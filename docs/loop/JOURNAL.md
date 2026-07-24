@@ -19485,3 +19485,36 @@ NEXT VEIN NOTE: remaining editing bricks — collapsed-caret typing-style + togg
 `queryCommandState` (the formatting tail this brick declared), Enter→insertParagraph (browser-divergent block
 split), cross-block boundary merge for Backspace/Delete, rich (HTML) paste vs the current plain-text paste.
 Self-audit due 485; surface-audit next 488; Const-Check next 487.
+
+## Tick 482 — document.queryCommandState('bold'|'italic') reports the selection's format (2026-07-24)
+
+Brick 12 of the contenteditable EDITING subsystem — the READ-BACK half of the formatting brick (the
+`execCommand('bold')` wrap landed t481). A rich-text editor calls `queryCommandState('bold')` on every
+`selectionchange` to render its Bold/Italic toolbar button pressed-or-not; before this the method did not
+exist, so the call was a `TypeError` that took the toolbar's render path down (the aljazeera "a referenced
+name that does not exist is a crash, not a false" lesson). It complements t481: t481 WRITES the format, t482
+READS it back so the button stays in sync. Zero new dep.
+
+MECHANISM: `document.queryCommandState = function(cmd)` (engine/js/src/event_loop.rs) for `bold`/`italic`
+(every other command returns false, honestly): walk from the selection anchor up through ancestors, return
+true on the first `<b>`/`<strong>` (bold) or `<i>`/`<em>` (italic) — mirroring exactly what
+`execCommand('bold')` PRODUCES. It works with a COLLAPSED caret (that is how a button lights up as the caret
+moves through bold text), so it does NOT share the write path's non-collapsed requirement. The walk stops at
+the editing-host boundary so page chrome wrapped in a `<b>` outside the editable doesn't leak in.
+
+GATE: G_QUERY_COMMAND_STATE (page) — bold "world" in `<div contenteditable>hello world</div>`, caret inside
+the resulting `<b>` → `queryCommandState('bold')` true; caret in the plain "hello " run → false; italic
+editable, caret inside the `<i>` → `queryCommandState('italic')` true; `typeof queryCommandState==='function'`.
+RED-proven by making the method always return false (`inBold:false`). Neighbors green: g_exec_format_bold,
+g_contenteditable_typing.
+
+TICK SHAPE: capability (contenteditable EDITING brick 12/N — formatting read-back; +1 gate). GATES +1.
+CONSTELLATION: rich-editing — a rich-text toolbar can now read back Bold/Italic button state (queryCommandState).
+WIKI: interaction-surface.md — appended to the t481 execCommand('bold') note.
+WEB-PATTERNS: toolbar-button-shows-active-bold-italic-state.
+AGENTIC: the agent can now READ whether a selection is bold/italic (observe formatting state), complementing
+t481's ability to CHANGE it.
+
+NEXT VEIN NOTE: the formatting write-tail remains (collapsed-caret typing-style + toggle-OFF/unbold), then
+Enter→insertParagraph (browser-divergent block split), cross-block boundary merge for Backspace/Delete, rich
+(HTML) paste. Self-audit due 485; surface-audit next 488; Const-Check next 487.

@@ -4241,3 +4241,15 @@ is a TOGGLE (unwrap), not a second wrap. Landing only the wrap and returning `fa
 honest brick; the typing-style/toggle/`queryCommandState` state machine is the declared follow-on. It reuses the
 Selection/Range substrate (`extractContents`/`insertNode`) rather than a bespoke formatter, so it inherits the
 same node-splitting the cut/delete path uses.
+
+## Toolbar button shows active bold/italic state (tick 482)
+
+**The class of the web this unlocks (every rich-text toolbar's button highlighting):**
+`document.queryCommandState('bold')` / `('italic')` now reports whether the current selection/caret is inside
+a `<b>`/`<strong>` or `<i>`/`<em>`, so a WYSIWYG editor's Bold/Italic button renders pressed when the caret is
+in bold text — the read-back complement of the `execCommand('bold')` write (t481). **The trap:** a rich editor
+wires this to `selectionchange` and calls it CONSTANTLY, so a missing method is not a silent false — it is a
+`TypeError` thrown on every caret move that takes the toolbar's whole render path down (the aljazeera
+"referenced-name-that-doesn't-exist is a crash" class). It must exist and answer honestly; and unlike the
+write it must work with a COLLAPSED caret (buttons light up as you arrow through styled text), so it cannot
+borrow the write path's non-collapsed guard.
