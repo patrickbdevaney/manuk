@@ -4096,3 +4096,15 @@ two are `engine="gecko"` in the crates.io Stylo the browser actually compiles �
 pref flip can surface them (a vendored `stylo/` tree that marks them pref-gated is a decoy), so they must be
 MinimalCascade-recovered like `-webkit-line-clamp`, not mapped from Stylo's computed values. Scope is the
 computed value only; painting a themed scrollbar is out of scope.
+
+## Lazy-load a disclosure just before it renders (tick 470)
+
+**The class of the web this unlocks (docs sites, GitHub folded diffs, FAQ accordions with deferred content):**
+a page defers a `<details>` section's heavy DOM until it is about to open, wiring
+`el.addEventListener('beforetoggle', () => hydrateSection())` so the content is built the instant before the
+panel becomes visible — not on page load (wasteful) and not on `toggle` (one frame late, the empty panel
+flashes first). `<details>` had `toggle` on both actuation paths but no `beforetoggle`, so this hook never
+fired and the section revealed its skeleton. Now `beforetoggle` fires immediately before `toggle` on both a
+summary click and a scripted `el.open = true` (including accordion auto-close). **The trap:** details'
+`beforetoggle` is NON-cancelable (unlike popover's) — a page that tries to `preventDefault()` it to block the
+open is relying on behavior no browser gives; the toggle proceeds regardless.

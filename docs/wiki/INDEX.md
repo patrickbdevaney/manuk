@@ -516,6 +516,7 @@
   - L2373 · :read-write/:read-only honour contenteditable (tick 457) — the t454 edge closed
   - L2387 · Exclusive <details name> accordions — the platform FAQ, one panel open at a time (tick 467)
   - L2412 · Script-set <details>.open fires toggle + honours the group (tick 468)
+  - L2438 · <details> fires beforetoggle before toggle on both paths (tick 470)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -936,4 +937,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-851 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+852 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -289,11 +289,15 @@ pub const REFLECT_JS: &str = r#"
                     var sib = all[j];
                     if (sib !== this && sib.getAttribute('name') === nm && sib.hasAttribute('open')) {
                       sib.removeAttribute('open');
+                      // `beforetoggle` then `toggle` — same pair the summary-click path fires, so a
+                      // lazy-load hook fires before the panel renders. Non-cancelable for <details>.
+                      try { sib.dispatchEvent(new Event('beforetoggle', { bubbles: false, cancelable: false })); } catch (e) {}
                       try { sib.dispatchEvent(new Event('toggle', { bubbles: false, cancelable: false })); } catch (e) {}
                     }
                   }
                 }
               }
+              try { this.dispatchEvent(new Event('beforetoggle', { bubbles: false, cancelable: false })); } catch (e) {}
               try { this.dispatchEvent(new Event('toggle', { bubbles: false, cancelable: false })); } catch (e) {}
             }
           }

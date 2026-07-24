@@ -2434,3 +2434,25 @@ fires `toggle` on both; an unnamed details opened by script disturbs no group. A
 state (attribute + toggle log) because `eval_for_test` does not re-lay-out — `g_details_accordion` already
 proves layout follows the attribute. RED-proven by gating the side-effect off (silent flip). Neighbors
 green incl. the reflection machinery: g_reflect, g_global_reflect, g_reflect_numeric, g_ce_attr_changed.
+
+## `<details>` fires `beforetoggle` before `toggle` on both paths (tick 470)
+
+The companion event the platform fires JUST BEFORE the disclosure panel renders — the hook a page uses to
+lazy-load a section's DOM before it becomes visible (the same role `beforetoggle` already plays for
+`popover`, `g_popover`). t467/t468 gave `<details>` its `toggle` on both actuation paths but left
+`beforetoggle` absent, so a handler wired to it never ran and the section revealed its skeleton.
+
+**Mechanism.** At every `<details>` state change — the summary-click path (Rust `Page::dispatch_click`, the
+main toggle + each accordion auto-close) and the script `el.open` path (the `reflect_js` IDL-setter hook) —
+`beforetoggle` is now dispatched immediately before `toggle`. It is **stateless** (matching this engine's
+existing `toggle`) and **non-cancelable** for `<details>` — unlike popover's, whose `beforetoggle` is
+cancelable-on-open; details' cancel has no spec effect, so it is a pure notification. Both fire after the
+`open` attribute already flipped (as the existing `toggle` does) but before the relayout that renders the
+panel, so the fire-before-render ordering that beforetoggle exists for holds. Adding `oldState`/`newState`
+is a logged follow-on: the details `toggle` is itself stateless today, so a stateful `beforetoggle` would
+have to upgrade both, on both dispatch mechanisms (Rust bare-event vs JS `new Event`), at once.
+
+GATE: G_DETAILS_BEFORETOGGLE (page) — a real summary click and a scripted `el.open = true` (each including
+the `name="faq"` accordion auto-close of a sibling) both log `beforetoggle` STRICTLY before that element's
+`toggle`. RED-proven by stripping the beforetoggle dispatches → the log holds `t:` with no preceding `bt:`.
+Neighbors green: g_details, g_details_accordion, g_details_open_idl, g_popover.

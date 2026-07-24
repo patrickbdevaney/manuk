@@ -19035,3 +19035,38 @@ route once the `layout.unimplemented` pref-flip vein runs out — user-select/co
 cheap servo_pref wins; scrollbar-* needed recovery. Remaining surface-audit #20 unknowns: `::details-content`
 (pseudo-element box), `@starting-style` (entry-transition; needs the transition machinery). Bigger honest
 moves unchanged: MEDIA H.264-High, IndexedDB (redb/heed), contenteditable EDITING subsystem.
+
+## Tick 470 — `<details>` fires `beforetoggle` before `toggle` on both actuation paths (2026-07-23)
+
+The disclosure event surface's last missing piece, completing the t467/t468 arc. `<details>` had `toggle`
+on both the summary-CLICK path (t467, Rust) and the script `el.open` path (t468, reflect_js hook), but not
+`beforetoggle` — the event the platform fires JUST BEFORE the panel renders, the hook a page listens for to
+lazy-load a section's DOM before it becomes visible (exactly the role `beforetoggle` already plays for
+popover, g_popover). Without it a handler wired to beforetoggle never ran and the section revealed empty.
+
+MECHANISM: at every `<details>` state change, dispatch `beforetoggle` immediately before `toggle`. Click
+path (`Page::dispatch_click`, engine/page/src/lib.rs): the main toggle and each accordion auto-close now
+loop `for ev in ["beforetoggle", "toggle"]`. Script path (reflect_js.rs t468 hook): a
+`dispatchEvent(new Event('beforetoggle', {cancelable:false}))` before each toggle, for the element and each
+auto-closed same-name sibling. STATELESS (matching this engine's existing `toggle`) and NON-CANCELABLE for
+`<details>` — unlike popover's cancelable-on-open beforetoggle; details' cancel has no spec effect, so it is
+a pure notification. Both fire after the `open` attribute flips (as `toggle` already does) but before the
+relayout that renders the panel — so the fire-before-render ordering beforetoggle exists for holds.
+
+GATE: G_DETAILS_BEFORETOGGLE (page) — a real summary click AND a scripted `el.open = true` (each including
+the name="faq" accordion auto-close of a sibling) both log `beforetoggle` STRICTLY before that element's
+`toggle` (click log `bt:a t:a bt:b t:b`; script log `bt:b t:b bt:a t:a`). RED-proven by stripping the
+beforetoggle dispatches → the log holds `t:` with no preceding `bt:`, first assertion panics. Neighbors
+green: g_details, g_details_accordion, g_details_open_idl, g_popover.
+
+TICK SHAPE: capability (beforetoggle on both details actuation paths; +1 gate). GATES +1.
+CONSTELLATION: no new row — completeness on the already-`gated` details/disclosure surface (the toggle rows).
+WIKI: interaction-surface.md — new section after the t468 script-set details.open note.
+WEB-PATTERNS: lazy-load-a-disclosure-before-render.
+NEXT VEIN NOTE: `<details>` is now COMPLETE — click+script actuation, toggle+beforetoggle, name-exclusivity.
+Logged follow-on: oldState/newState on the details toggle/beforetoggle pair (both are stateless today; a
+stateful upgrade must touch both the Rust bare-event dispatch and the JS `new Event` path at once — a
+bounded but cross-cutting tick, not folded here). The cheap CSS pref-flip vein is EXHAUSTED (t469 needed
+MinimalCascade recovery); surface-audit #20 residue (`::details-content` box-tree, `@starting-style`
+transitions) is subsystem-scope. Bigger honest moves: MEDIA H.264-High, IndexedDB (redb/heed),
+contenteditable EDITING.

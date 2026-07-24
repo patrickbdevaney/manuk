@@ -4119,36 +4119,44 @@ impl Page {
                             .collect();
                         for peer in peers {
                             self.dom.remove_attr(peer, "open");
-                            // The spec fires `toggle` on each panel exclusivity auto-closes, so a
-                            // lazy-loaded section learns it was collapsed.
+                            // The spec fires `beforetoggle` then `toggle` on each panel exclusivity
+                            // auto-closes, so a lazy-loaded section learns it was collapsed. Both are
+                            // stateless here (matching this engine's `toggle`) and `beforetoggle` is
+                            // non-cancelable for `<details>` — its use is the fire-before-render hook.
                             if let Some(ctx) = self.js.as_ref() {
-                                if let Err(e) = manuk_js::dispatch_event(
-                                    ctx,
-                                    &mut self.dom,
-                                    peer,
-                                    "toggle",
-                                    &rects,
-                                    &self.styles,
-                                ) {
-                                    tracing::warn!("accordion toggle dispatch: {e}");
+                                for ev in ["beforetoggle", "toggle"] {
+                                    if let Err(e) = manuk_js::dispatch_event(
+                                        ctx,
+                                        &mut self.dom,
+                                        peer,
+                                        ev,
+                                        &rects,
+                                        &self.styles,
+                                    ) {
+                                        tracing::warn!("accordion {ev} dispatch: {e}");
+                                    }
                                 }
                             }
                         }
                     }
                 }
-                // `toggle` is the event the spec fires and the one a page listens for to lazy-load
-                // the section's contents. Dispatched after the attribute changes, so a handler
-                // reading `details.open` sees the new state.
+                // `beforetoggle` then `toggle` — the two events the spec fires when the disclosure
+                // state changes. A page listens for `beforetoggle` to prepare (lazy-load) BEFORE the
+                // panel renders (relayout happens after this dispatch) and `toggle` to react after.
+                // Dispatched after the attribute changes, so a handler reading `details.open` sees the
+                // new state; `beforetoggle` is non-cancelable for `<details>` (unlike popover's).
                 if let Some(ctx) = self.js.as_ref() {
-                    if let Err(e) = manuk_js::dispatch_event(
-                        ctx,
-                        &mut self.dom,
-                        details,
-                        "toggle",
-                        &rects,
-                        &self.styles,
-                    ) {
-                        tracing::warn!("toggle dispatch: {e}");
+                    for ev in ["beforetoggle", "toggle"] {
+                        if let Err(e) = manuk_js::dispatch_event(
+                            ctx,
+                            &mut self.dom,
+                            details,
+                            ev,
+                            &rects,
+                            &self.styles,
+                        ) {
+                            tracing::warn!("{ev} dispatch: {e}");
+                        }
                     }
                 }
             }

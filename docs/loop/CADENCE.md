@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **245** | ticks 1–469 |
 | median tick cycle | **20m** | 244 intervals |
-| median, last 10 | **44m** | 10 intervals |
+| median, last 10 | **53m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.81** | 302.8h elapsed |
+| **ticks per hour** | **0.80** | 303.2h elapsed |
 | median verify wall | **60s** | 184 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,7 +27,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **236**
+* **live gates**: 27 → **237**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
@@ -341,6 +341,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **465** | 2026-07-23 18:02 | 70m | capability | 69s | +164/−34 | 233 | 81 | 56.0% · | `color-scheme` reaches getComputedStyle AND darkens the canvas default (2026-07-23) |
 | **467** | 2026-07-23 18:31 | 29m | capability | 63s | +234/−5 | 234 | 81 | 56.0% · | exclusive `<details name>` accordions: one panel open at a time (2026-07-23) |
 | **468** | 2026-07-23 19:10 | 38m | capability | 58s | +272/−6 | 235 | 81 | 56.0% · | script-set `details.open` fires `toggle` + enforces the accordion group (2026-07-23) |
-| **469** | 2026-07-23 19:50 | 41m | capability | 69s | +317/−36 | 236 | 81 | 56.0% · | `scrollbar-color`/`scrollbar-width` reach getComputedStyle via MinimalCascade recovery (20 |
+| **469** | 2026-07-23 20:15 | 65m | capability | 63s | +231/−57 | 237 | 81 | 56.0% · | `scrollbar-color`/`scrollbar-width` reach getComputedStyle via MinimalCascade recovery (20 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
