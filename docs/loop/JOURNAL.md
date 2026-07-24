@@ -21293,3 +21293,42 @@ NEXT: brick 3 — root-cause clustering (§3b): group SHAPE failures by their FI
 board reports DISTINCT CAUSES not failing sites (the oracle already has `cluster`; port likewise). Then the
 gate-floor flip (coverage → SHAPE) once a broad path-keyed sweep recalibrates the 0.75 bar. Cadences: self-audit
 534; surface 538; const 535; wall 547.
+
+## Tick 533 — FIDELITY REBUILD brick 3: horizontal-overflow jarring invariant in the G1 probe (2026-07-24)
+
+Continuing the Check-#32 pivot / board CO-#1 (fidelity-instrument rebuild). Bricks 1-2 (t531/532) gave the
+G1 fidelity probe Layer-1 SHAPE on selector-path keys. This brick starts Layer-2 — the JARRING INVARIANTS
+that FIDELITY-SCORING-REDESIGN.md §2 calls "the actual Phase-0 bar" (SHAPE forgives a constant offset; these
+catch the different, highly-perceived breakage). First invariant, because it is rect-only and needs no
+producer-format change: **horizontal overflow** — a box Manuk alone pushes past the viewport while Chrome
+keeps it inside.
+
+WHAT LANDED:
+- **One definition, both callers**: refactored `oracle::jarring_h_overflow` (which took `Seen` maps) to
+  delegate to a new `oracle::h_overflow_boxes<K>` core on `HashMap<K,[i64;4]>` maps — generic over the key
+  borrow so the oracle (`&str` from `Seen`) and the G1 probe (owned `String` keys, Box4 maps) score overflow
+  through the SAME logic. The invariant never reads tag/display, so the rect-only core loses nothing.
+- **Wired into G1** (main.rs): after the SHAPE line, `h_overflow_boxes(&cmap, &mboxes, vw, 8)` prints
+  `H-OVERFLOW: N element(s) escape the Wpx viewport` with up to 2 examples. Now that brick 2 made both engine
+  sides emit oracle-compatible path keys, the invariant drops straight in.
+
+GATE (oracle::tests, RED-proven): `h_overflow_boxes_scores_the_g1_box_maps_identically` runs the same three
+cases as the existing `Seen` test (our-alone spill counts; both-engines-wide does NOT; within-tol does NOT) on
+Box4 maps. RED-PROVE: dropping the `edge(c) <= vw+tol` guard makes the both-engines-wide case count, flipping
+BOTH the Box4 test and the delegated `Seen` test 1→2 — proving the guard (blame only OUR spill) is genuinely
+tested and that the refactor kept one definition. Restored, all 22 lib + 2 bin tests green.
+
+HONEST BOUNDARY: three Layer-2 invariants remain for the G1 probe — sibling overlap, reading-order inversion,
+collapsed interactive target. Overlap/reading-order need the sibling-group + display machinery (the oracle has
+them on `Seen` maps); porting each is its own brick because the G1 producer carries Box4, not `Seen` — a
+producer enrichment (emit tag+display, key into `Seen`) is the natural enabling step for all three at once,
+scoped as a decompose-first brick rather than smuggled here. Gate FLOOR still on COVERAGE (unchanged).
+
+TICK SHAPE: instrument-fidelity brick (fidelity-rebuild CO-#1, brick 3 of N — first Layer-2 jarring invariant
+in the G1 probe via a shared box-only core; new RED-provable gate; NO engine capability src changed — measurement
+harness only; Bar 0 held). WIKI: conformance-and-oracles.md (the h_overflow_boxes one-definition core + the
+Layer-2-into-G1 note). No [no-pattern] (no engine capability src touched).
+
+NEXT: brick 4 — enrich the G1 producer to emit tag+display (key into `Seen`) so the remaining three Layer-2
+invariants (overlap / reading-order / collapsed-target) reuse the oracle's functions directly; OR root-cause
+clustering (§3b) across a sweep. Cadences: self-audit 534 (DUE NEXT tick); surface 538; const 535; wall 547.

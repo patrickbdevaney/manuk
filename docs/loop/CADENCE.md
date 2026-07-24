@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **295** | ticks 1–532 |
-| median tick cycle | **22m** | 294 intervals |
-| median, last 10 | **21m** | 10 intervals |
+| ticks landed | **296** | ticks 1–533 |
+| median tick cycle | **22m** | 295 intervals |
+| median, last 10 | **20m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.90** | 326.0h elapsed |
-| median verify wall | **61s** | 234 ticks |
+| **ticks per hour** | **0.90** | 326.1h elapsed |
+| median verify wall | **61s** | 235 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**165 of 295 ticks** (56%) moved a
+**165 of 296 ticks** (56%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -392,5 +392,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **529** | 2026-07-24 17:41 | 12m | measure-and-pin | 67s | +152/−34 | 274 | 81 | 56.0% · | MEASURE+PIN: Promise.withResolvers + Set methods (Baseline 2024, already present) (2026-07 |
 | **530** | 2026-07-24 18:31 | 50m | measure-and-pin | 67s | +284/−66 | 274 | 81 | 56.0% · | MEASURE+PIN: scheduler.postTask/yield (functional, not a stub) (2026-07-24) |
 | **532** | 2026-07-24 19:00 | 28m | instrument-fidelity | 67s | +418/−158 | 274 | 81 | 56.0% · | FIDELITY REBUILD brick 2: selector-path producer wires SHAPE into the G1 gate (2026-07-24) |
+| **533** | 2026-07-24 19:11 | 11m | instrument-fidelity | 67s | +201/−70 | 274 | 81 | 56.0% · | FIDELITY REBUILD brick 3: horizontal-overflow jarring invariant in the G1 probe (2026-07-2 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

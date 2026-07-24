@@ -344,19 +344,41 @@ pub fn jarring_h_overflow(
     vw: i64,
     tol: i64,
 ) -> (usize, Vec<String>) {
+    // Delegate to the box-only core so the oracle and the G1 fidelity probe (which carries Box4 maps,
+    // not `Seen`) score horizontal overflow through ONE definition — the same one-definition discipline
+    // SHAPE uses. Cheap rect-only views; the invariant never reads tag/display.
+    let cb: HashMap<&str, [i64; 4]> = chrome.iter().map(|(k, v)| (k.as_str(), v.rect)).collect();
+    let mb: HashMap<&str, [i64; 4]> = manuk.iter().map(|(k, v)| (k.as_str(), v.rect)).collect();
+    h_overflow_boxes(&cb, &mb, vw, tol)
+}
+
+/// The rect-only core of the horizontal-overflow invariant, generic over the key's borrow so both the
+/// oracle (`&str` from `Seen` maps) and the G1 fidelity probe (owned `String` keys) call the SAME
+/// logic. An element counts only when **Manuk** pushes its right edge past `vw + tol` while **Chrome**
+/// renders the *same* element inside the viewport — attributing the spill to us, never to a page that
+/// legitimately scrolls sideways. Returns `(ours_only, up-to-3 examples)`.
+pub fn h_overflow_boxes<K>(
+    chrome: &HashMap<K, [i64; 4]>,
+    manuk: &HashMap<K, [i64; 4]>,
+    vw: i64,
+    tol: i64,
+) -> (usize, Vec<String>)
+where
+    K: std::hash::Hash + Eq + std::fmt::Display,
+{
     let edge = |b: &[i64; 4]| b[0] + b[2]; // x + width
     let mut count = 0usize;
     let mut examples: Vec<String> = Vec::new();
     for (id, m) in manuk {
-        if edge(&m.rect) <= vw + tol {
+        if edge(m) <= vw + tol {
             continue; // within our own viewport — not overflowing
         }
         // Only OUR fault: Chrome must render the SAME element AND keep it inside the viewport.
         match chrome.get(id) {
-            Some(c) if edge(&c.rect) <= vw + tol => {
+            Some(c) if edge(c) <= vw + tol => {
                 count += 1;
                 if examples.len() < 3 {
-                    examples.push(format!("{id} → right {} > vw {vw}", edge(&m.rect)));
+                    examples.push(format!("{id} → right {} > vw {vw}", edge(m)));
                 }
             }
             _ => {}
@@ -801,6 +823,48 @@ mod tests {
             examples[0].starts_with("body[0]/div[0]"),
             "the example names the offending element, got {examples:?}"
         );
+    }
+
+    /// **The Box4 core the G1 fidelity probe calls (tick 532), RED-proven.** Same three cases as the
+    /// `Seen` test above, on `HashMap<String,[i64;4]>` maps — the shape the fidelity probe carries.
+    /// Proves ONE definition scores identically for both callers. RED-PROVE: dropping the
+    /// `edge(c) <= vw + tol` guard would let the both-engines-wide case (b) count, flipping 1 → 2.
+    #[test]
+    fn h_overflow_boxes_scores_the_g1_box_maps_identically() {
+        let (vw, tol) = (1200, 8);
+        let mut chrome: HashMap<String, [i64; 4]> = HashMap::new();
+        let mut manuk: HashMap<String, [i64; 4]> = HashMap::new();
+        // (a) OUR fault: Chrome fits, Manuk spills.
+        chrome.insert(
+            "body:nth-child(2)/div:nth-child(1)".into(),
+            [0, 0, 1200, 50],
+        );
+        manuk.insert(
+            "body:nth-child(2)/div:nth-child(1)".into(),
+            [0, 0, 1400, 50],
+        );
+        // (b) The SITE is wide: both spill — not our bug.
+        chrome.insert(
+            "body:nth-child(2)/div:nth-child(2)".into(),
+            [0, 60, 2000, 50],
+        );
+        manuk.insert(
+            "body:nth-child(2)/div:nth-child(2)".into(),
+            [0, 60, 2000, 50],
+        );
+        // (c) Within tolerance.
+        chrome.insert(
+            "body:nth-child(2)/div:nth-child(3)".into(),
+            [0, 120, 1200, 50],
+        );
+        manuk.insert(
+            "body:nth-child(2)/div:nth-child(3)".into(),
+            [0, 120, 1205, 50],
+        );
+
+        let (count, examples) = h_overflow_boxes(&chrome, &manuk, vw, tol);
+        assert_eq!(count, 1, "only our-alone spill counts");
+        assert!(examples[0].starts_with("body:nth-child(2)/div:nth-child(1)"));
     }
 
     /// **The sibling-overlap jarring invariant, and its RED proof.** Two siblings Chrome keeps

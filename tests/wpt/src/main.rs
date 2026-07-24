@@ -556,6 +556,23 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                         shape * 100.0,
                         within * 100.0
                     );
+                    // Layer-2 JARRING invariant #1 — horizontal overflow (FIDELITY-SCORING-REDESIGN.md
+                    // §2). SHAPE forgives a constant offset; this catches the different, highly-perceived
+                    // failure of content spilling past the viewport (a box we alone push past `vw` that
+                    // Chrome keeps inside). Shares ONE definition with the oracle via `h_overflow_boxes`.
+                    let (hover, hover_ex) =
+                        manuk_wpt::oracle::h_overflow_boxes(&cmap, &mboxes, vw as i64, 8);
+                    if hover > 0 {
+                        eprintln!(
+                            "  H-OVERFLOW: {hover} element(s) escape the {vw}px viewport (Chrome keeps them in)  e.g. {}",
+                            hover_ex
+                                .iter()
+                                .take(2)
+                                .map(|s| s.as_str())
+                                .collect::<Vec<_>>()
+                                .join("; ")
+                        );
+                    }
                 }
                 rows.push(f);
             }

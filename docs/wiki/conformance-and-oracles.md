@@ -201,7 +201,17 @@ report's Layer-1 number (`Fidelity.shape`, `MEAN SHAPE`); absolute placement sta
 RED-provable producer gate (`path_key_tests`): `join("/")`→`join("_")` fails the `/`-ancestry assertion, and
 `sig_of` is cross-checked against an independent fnv1a-32 reference. **Decompose-first boundary kept:** the
 gate FLOOR still gates on structural COVERAGE — flipping it to SHAPE awaits a broad path-keyed sweep to
-recalibrate the 0.75 bar honestly (the number is claimed later). Next brick: root-cause clustering (§3b).
+recalibrate the 0.75 bar honestly (the number is claimed later).
+
+**Tick 533 started Layer-2 (the jarring invariants — §2's "actual Phase-0 bar") in the G1 probe: horizontal
+overflow first**, because it is rect-only and needs no producer change. `oracle::jarring_h_overflow` (on `Seen`
+maps) was refactored to delegate to a new generic `oracle::h_overflow_boxes<K>` on `HashMap<K,[i64;4]>`, so the
+oracle and the G1 probe (Box4 keys) score overflow through ONE definition — the same discipline SHAPE uses. G1
+now prints `H-OVERFLOW: N escape the viewport` after SHAPE. RED-proven: dropping the `edge(c) <= vw+tol` guard
+flips both the Box4 and the delegated `Seen` test 1→2 (the "blame only OUR spill" guard is genuinely tested).
+The remaining three invariants (overlap / reading-order / collapsed-target) need the sibling-group + display
+machinery, so the enabling next brick is a producer enrichment — emit tag+display, key into `Seen` — after
+which all three reuse the oracle's functions directly. Then root-cause clustering (§3b).
 
 **Layer 2 — jarring invariants (SHAPE cannot see these).** SHAPE forgives a constant offset because a user
 does not perceive one; but a box shaped *correctly relative to an over-wide parent* can still spill off the
