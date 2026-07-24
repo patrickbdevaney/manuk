@@ -432,27 +432,52 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                 eprintln!("  side-by-side: {}", side.display());
 
                 // STRUCTURAL half — the honest number. Compare Chrome's box for every rendered
-                // `[id]` element against Manuk's. A missing sidebar is a MISSING BOX; the pixel
-                // score averages it away, this does not.
-                if let Ok(cboxes) = manuk_wpt::chrome::capture_boxes_all_ids(url, vw, vh) {
-                    let rects = page.root_box.node_rects(page.dom());
+                // element against Manuk's, keyed by SELECTOR-PATH (tick 532: replaced `[id]` keys,
+                // which 39% of the corpus lacks and which carry no `/`-ancestry for SHAPE). A missing
+                // sidebar is a MISSING BOX; the pixel score averages it away, this does not.
+                if let Ok(cboxes) = manuk_wpt::chrome::capture_boxes_all_paths(url, vw, vh) {
+                    let dom = page.dom();
+                    let rects = page.root_box.node_rects(dom);
+                    // The SAME path Chromium's probe computes — the shared free functions, so the
+                    // exit gate keys pages exactly as the differential oracle does. Skip the
+                    // structural tags Chrome's probe also skips, and skip non-rendered boxes so both
+                    // sides only carry what actually painted (SHAPE scores the intersection anyway).
                     let mut mboxes: std::collections::HashMap<String, [i64; 4]> =
                         std::collections::HashMap::new();
-                    for n in page.dom().descendants(page.dom().root()) {
-                        if let Some(id) = page.dom().element(n).and_then(|e| e.attr("id")) {
-                            if let Some(r) = rects.get(&n) {
-                                if r.width > 0.0 || r.height > 0.0 {
-                                    mboxes.insert(
-                                        id.to_string(),
-                                        [
-                                            r.x.round() as i64,
-                                            r.y.round() as i64,
-                                            r.width.round() as i64,
-                                            r.height.round() as i64,
-                                        ],
-                                    );
-                                }
-                            }
+                    for n in dom.descendants(dom.root()) {
+                        if !dom.is_element(n) {
+                            continue;
+                        }
+                        let Some(tag) = dom.tag_name(n) else { continue };
+                        if matches!(
+                            tag,
+                            "script"
+                                | "style"
+                                | "head"
+                                | "meta"
+                                | "link"
+                                | "base"
+                                | "title"
+                                | "noscript"
+                                | "template"
+                                | "html"
+                        ) {
+                            continue;
+                        }
+                        let Some(r) = rects.get(&n) else { continue };
+                        if r.width <= 0.0 && r.height <= 0.0 {
+                            continue;
+                        }
+                        if let Some(path) = path_of(dom, n) {
+                            mboxes.insert(
+                                path,
+                                [
+                                    r.x.round() as i64,
+                                    r.y.round() as i64,
+                                    r.width.round() as i64,
+                                    r.height.round() as i64,
+                                ],
+                            );
                         }
                     }
                     let cmap: std::collections::HashMap<String, [i64; 4]> = cboxes
@@ -468,20 +493,19 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                         manuk_wpt::fidelity::compare_structure_detail(&cmap, &mboxes, 8);
                     // Which elements are missing? A coverage number is only actionable if it names
                     // the culprits — and 1,402 missing elements are a handful of CLASS bugs, not
-                    // 1,402 bugs. Print the tag of each missing id so the class is visible.
+                    // 1,402 bugs. The key IS a selector-path, so the missing element's tag is the
+                    // tag of its LAST component (after the final '/', before its `.SIG`/`:nth-child`)
+                    // — no DOM lookup needed, and it works even though the key is no longer an `id`.
                     if !missing_ids.is_empty() {
                         let mut by_tag: std::collections::BTreeMap<String, usize> =
                             std::collections::BTreeMap::new();
                         for id in &missing_ids {
-                            let tag = page
-                                .dom()
-                                .descendants(page.dom().root())
-                                .find(|&n| {
-                                    page.dom().element(n).and_then(|e| e.attr("id"))
-                                        == Some(id.as_str())
-                                })
-                                .and_then(|n| page.dom().tag_name(n))
-                                .unwrap_or("(not-in-dom)")
+                            let leaf = id.rsplit('/').next().unwrap_or(id.as_str());
+                            let tag = leaf
+                                .split(['.', ':'])
+                                .next()
+                                .filter(|s| !s.is_empty())
+                                .unwrap_or("(unknown)")
                                 .to_string();
                             *by_tag.entry(tag).or_default() += 1;
                         }
@@ -512,16 +536,24 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                     f.missing = missing;
                     f.misplaced = misplaced;
                     f.probed = probed;
-                    eprintln!("  structural: {:.1}% ({probed} ids, {missing} missing, {misplaced} misplaced)", sc * 100.0);
+                    eprintln!("  structural: {:.1}% ({probed} paths, {missing} missing, {misplaced} misplaced)", sc * 100.0);
                     if let Some((last_ok, _, first_bad, dy)) =
                         manuk_wpt::fidelity::first_divergence(&cmap, &mboxes, 60)
                     {
                         eprintln!("  FIRST DIVERGENCE: after #{last_ok}, element #{first_bad} is off by dy={dy}");
                     }
+                    // Layer-1 SHAPE (parent-relative) — the redesign's primary placement number,
+                    // now that the producer emits `/`-keyed paths with real ancestry. It replaces
+                    // the old absolute PLACEMENT line, which charged one constant offset N times.
+                    // `placement_stats` (absolute) is kept as a Layer-3 diagnostic only.
+                    let (shape, shape_n) = manuk_wpt::fidelity::shape_stats(&cmap, &mboxes, 8);
+                    f.shape = Some(shape);
                     let (dx, dy, dw, dh, within) =
                         manuk_wpt::fidelity::placement_stats(&cmap, &mboxes, 8);
                     eprintln!(
-                        "  PLACEMENT: {:.1}% within 8px | median offset dx={dx} dy={dy} dw={dw} dh={dh}",
+                        "  SHAPE: {:.1}% within 8px vs shared ancestor ({shape_n} scored)  |  \
+                         [diag] absolute PLACEMENT {:.1}% (median dx={dx} dy={dy} dw={dw} dh={dh})",
+                        shape * 100.0,
                         within * 100.0
                     );
                 }
@@ -1592,65 +1624,15 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
         let rects = page.root_box.node_rects(page.dom());
         let styles = page.styles_map();
         let dom = page.dom();
-        // The SAME path Chromium's probe computes — selector-path keying (tick 399 spec):
-        // `tag.SIG:nth-child(N)`, N 1-based over ALL element siblings, SIG = fnv1a-32 over the
-        // ASCII-lowercased SORTED deduped class list joined with '.'; classless elements emit
-        // `tag:nth-child(N)`. The class signature is the identity change that matters: a
+        // Selector-path keying (tick 399 spec) — via the shared free functions `path_of`/`sig_of`
+        // (defined next to `fnv`). The class signature is the identity change that matters: a
         // positional counterpart with a different class list now FAILS the key lookup and books
         // as missing+extra (tree drift, which it is) instead of minting a phantom style diff
         // between two unrelated elements (tick 395: okta's 316 "display diffs" were exactly this).
-        // This mirrors the JS `sigOf`/`pathOf` in chrome.rs BYTE-IDENTICALLY — the hash runs over
-        // UTF-16 code units (encode_utf16) because that is what charCodeAt yields. And it keeps
-        // the part that is easy to get wrong: an element whose parent is not an element (i.e.
-        // `<html>`) contributes NO component, because `e.parentElement` is null there and the JS
-        // loop never runs for it. Emitting a root component on our side once shifted every key by
-        // one level and reported `<html>` MISSING on every site, with total confidence. Two
-        // engines agreeing on a naming scheme is a precondition for the diff meaning anything.
-        let sig_of = |n: manuk_dom::NodeId| -> String {
-            let Some(cls) = dom.element(n).and_then(|e| e.attr("class")) else {
-                return String::new();
-            };
-            let mut toks: Vec<String> = cls
-                .split_ascii_whitespace()
-                .map(|t| t.to_ascii_lowercase())
-                .collect();
-            if toks.is_empty() {
-                return String::new();
-            }
-            toks.sort();
-            toks.dedup();
-            let joined = toks.join(".");
-            let mut h: u32 = 0x811c9dc5;
-            for u in joined.encode_utf16() {
-                h ^= u32::from(u);
-                h = h.wrapping_mul(0x0100_0193);
-            }
-            format!(".{h:08x}")
-        };
-        let path_of = |n: manuk_dom::NodeId| -> Option<String> {
-            let mut parts: Vec<String> = Vec::new();
-            let mut cur = n;
-            loop {
-                let Some(parent) = dom.parent(cur) else { break };
-                if !dom.is_element(parent) {
-                    break;
-                }
-                let tag = dom.tag_name(cur)?;
-                let mut i = 1usize;
-                for sib in dom.children(parent) {
-                    if sib == cur {
-                        break;
-                    }
-                    if dom.is_element(sib) {
-                        i += 1;
-                    }
-                }
-                parts.push(format!("{tag}{}:nth-child({i})", sig_of(cur)));
-                cur = parent;
-            }
-            parts.reverse();
-            Some(parts.join("/"))
-        };
+        // This mirrors the JS `sigOf`/`pathOf` in chrome.rs BYTE-IDENTICALLY, and — since tick 532 —
+        // the G1 fidelity probe uses the SAME two functions, so the oracle and the exit gate can
+        // never drift apart on what a key means. Two engines agreeing on a naming scheme is a
+        // precondition for the diff meaning anything.
         let manuk: HashMap<String, Seen> = dom
             .descendants(dom.root())
             .filter(|&n| dom.is_element(n))
@@ -1671,7 +1653,7 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
                 ) {
                     return None;
                 }
-                let id = path_of(n)?;
+                let id = path_of(dom, n)?;
                 let display = styles
                     .get(&n)
                     .map(|s| css_display_name(s.display))
@@ -1832,6 +1814,65 @@ fn fnv(s: &str) -> u64 {
         h = h.wrapping_mul(0x100000001b3);
     }
     h
+}
+
+/// Selector-path keying — ONE Rust definition, shared by the differential oracle (`run_oracle_cmd`)
+/// AND the G1 fidelity probe (`run_fidelity_cmd`). `sig_of` is the class SIGNATURE: fnv1a-32 over the
+/// ASCII-lowercased SORTED deduped class list joined with '.'; a classless element emits the empty
+/// string. The hash runs over **UTF-16 code units** (`encode_utf16`) because that is what the JS
+/// `charCodeAt` yields — this mirrors `sigOf` in chrome.rs BYTE-IDENTICALLY, which is a precondition
+/// for the diff meaning anything (a signature computed two ways is two different keys).
+fn sig_of(dom: &manuk_dom::Dom, n: manuk_dom::NodeId) -> String {
+    let Some(cls) = dom.element(n).and_then(|e| e.attr("class")) else {
+        return String::new();
+    };
+    let mut toks: Vec<String> = cls
+        .split_ascii_whitespace()
+        .map(|t| t.to_ascii_lowercase())
+        .collect();
+    if toks.is_empty() {
+        return String::new();
+    }
+    toks.sort();
+    toks.dedup();
+    let joined = toks.join(".");
+    let mut h: u32 = 0x811c9dc5;
+    for u in joined.encode_utf16() {
+        h ^= u32::from(u);
+        h = h.wrapping_mul(0x0100_0193);
+    }
+    format!(".{h:08x}")
+}
+
+/// `tag.SIG:nth-child(N)/…` from the root — N 1-based over ALL element siblings — mirroring the JS
+/// `pathOf` in chrome.rs. An element whose parent is NOT an element (i.e. `<html>`, whose parent is
+/// the document) contributes NO component, because the JS `e.parentElement` is null there and its
+/// loop never runs for it. Emitting a root component on our side once shifted every key by one level
+/// and reported `<html>` MISSING on every site, with total confidence — so this asymmetry is load-
+/// bearing, not an oversight.
+fn path_of(dom: &manuk_dom::Dom, n: manuk_dom::NodeId) -> Option<String> {
+    let mut parts: Vec<String> = Vec::new();
+    let mut cur = n;
+    loop {
+        let Some(parent) = dom.parent(cur) else { break };
+        if !dom.is_element(parent) {
+            break;
+        }
+        let tag = dom.tag_name(cur)?;
+        let mut i = 1usize;
+        for sib in dom.children(parent) {
+            if sib == cur {
+                break;
+            }
+            if dom.is_element(sib) {
+                i += 1;
+            }
+        }
+        parts.push(format!("{tag}{}:nth-child({i})", sig_of(dom, cur)));
+        cur = parent;
+    }
+    parts.reverse();
+    Some(parts.join("/"))
 }
 
 /// **The merge — where the crawl becomes the ledger.**
@@ -2536,4 +2577,80 @@ fn diag(rel: String, fonts: &manuk_text::FontContext) {
             None => println!("\nNO DIAG — the eval itself did not run (no JS context?)\n"),
         }
     });
+}
+
+#[cfg(test)]
+mod path_key_tests {
+    //! Brick 2 of the fidelity-instrument rebuild (tick 532): the SELECTOR-PATH producer that the
+    //! G1 SHAPE gate needs. These pin the two invariants a `/`-keyed producer must hold, each with a
+    //! demonstrated way to go red — the same discipline the `shape_stats` gate (fidelity.rs) already
+    //! honours for the SCORER. Without a slash-keyed key, `shape_stats::common_frame` finds no shared
+    //! ancestor and silently degrades to absolute placement (the misleading 4.5% the redesign exists
+    //! to kill), so "the key carries `/`-ancestry" is the load-bearing property, not a nicety.
+    use super::{path_of, sig_of};
+
+    // Independent fnv1a-32 over UTF-16 code units — the byte-identical contract with chrome.rs's JS
+    // `sigOf`. Written separately from `sig_of` so the assertion is a real cross-check, not a
+    // tautology: two implementations of the hash must agree, or the oracle and the exit gate would
+    // key the same page differently and compare strangers.
+    fn ref_sig(classes: &[&str]) -> String {
+        let mut toks: Vec<String> = classes.iter().map(|c| c.to_ascii_lowercase()).collect();
+        toks.sort();
+        toks.dedup();
+        let joined = toks.join(".");
+        let mut h: u32 = 0x811c9dc5;
+        for u in joined.encode_utf16() {
+            h ^= u32::from(u);
+            h = h.wrapping_mul(0x0100_0193);
+        }
+        format!(".{h:08x}")
+    }
+
+    fn find_tag(d: &manuk_dom::Dom, tag: &str) -> Vec<manuk_dom::NodeId> {
+        d.descendants(d.root())
+            .filter(|&n| d.is_element(n) && d.tag_name(n) == Some(tag))
+            .collect()
+    }
+
+    #[test]
+    fn path_is_slash_keyed_and_excludes_html() {
+        let d = manuk_html::parse(
+            r#"<html><body><div class="b a"><span>x</span><span>y</span></div></body></html>"#,
+        );
+        let div = find_tag(&d, "div")[0];
+        let spans = find_tag(&d, "span");
+        let pdiv = path_of(&d, div).unwrap();
+        // Brick-2 CORE: the key carries `/`-ancestry (SHAPE cannot cancel a page offset without it)
+        // and never a root `html` term (the off-by-one-level bug the comment warns about).
+        assert!(pdiv.contains('/'), "path must be slash-keyed, got {pdiv}");
+        assert!(
+            !pdiv.split('/').any(|c| c.starts_with("html")),
+            "html must not appear as a component: {pdiv}"
+        );
+        // `body` is nth-child(2): the parser inserts an implicit `<head>` as html's first element
+        // child, and nth-child counts ALL element siblings — exactly as Chrome's `pathOf` does via
+        // `previousElementSibling` (head is counted positionally though it is never emitted as a key).
+        assert_eq!(
+            pdiv,
+            format!("body:nth-child(2)/div{}:nth-child(1)", ref_sig(&["a", "b"]))
+        );
+        // nth-child counts element siblings 1-based; a classless element emits NO `.SIG` component.
+        let p2 = path_of(&d, spans[1]).unwrap();
+        assert!(p2.ends_with("/span:nth-child(2)"), "got {p2}");
+    }
+
+    #[test]
+    fn sig_is_order_and_dup_independent_and_matches_the_js_hash() {
+        let d = manuk_html::parse(
+            r#"<html><body><i class="  z   a a "></i><i class="a z"></i><p>x</p></body></html>"#,
+        );
+        let is = find_tag(&d, "i");
+        // Class order and duplicates must not change the signature (the sorted-deduped contract).
+        assert_eq!(sig_of(&d, is[0]), sig_of(&d, is[1]));
+        // And it must equal the independent reference hash — the JS/Rust byte-identical contract.
+        assert_eq!(sig_of(&d, is[0]), ref_sig(&["a", "z"]));
+        // A classless element has the empty signature (so its key is `p:nth-child(N)`, no dot).
+        let p = find_tag(&d, "p")[0];
+        assert_eq!(sig_of(&d, p), "");
+    }
 }

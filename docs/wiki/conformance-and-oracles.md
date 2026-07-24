@@ -188,10 +188,20 @@ via `rfind('/')`, x/y subtracted against that shared frame, w/h left absolute, o
 whole instrument (no divergent second implementation). It is landed as a **tested primitive with a RED-provable gate**
 (`fidelity::shape_tests`: a uniform-offset fixture scores it once at the origin, a genuinely misshapen leaf still
 fails, coverage misses are not SHAPE misses; reverting the parent-subtraction to absolute flips the offset test red)
-— but it is **not yet wired into the live G1 report**, because the G1 producer still emits `[id]` keys (no `/`
-ancestry), against which `shape_stats` would silently degrade to absolute and *lie*. The enabling next brick is the
-**selector-path producer** (redesign §3a) on both engine sides; only once G1 emits `tag.SIG:nth-child(n)/…` keys does
-SHAPE replace `placement_stats` as the gate. Decompose-first: the primitive is proven now, the number is claimed later.
+**Tick 532 built the enabling brick and WIRED SHAPE in: the selector-path producer** (redesign §3a) on both
+engine sides. The G1 producer previously emitted `[id]` keys (no `/`-ancestry), against which `shape_stats`
+silently degraded to absolute and *lied*; 39% of the corpus has too few ids to probe at all. Now the Chrome
+side (`chrome::capture_boxes_all_paths` + `PROBE_ALL_PATHS_JS`) and the Manuk side both key every rendered
+element by `tag.SIG:nth-child(n)/…` from the root. **One definition of the key:** the Manuk `sig_of`/`path_of`
+were extracted from the oracle's local closures into shared free functions used by BOTH the oracle and the G1
+probe, and the JS `fnv`/`sigOf`/`pathOf` is a byte-identical contract (UTF-16 `charCodeAt` hash, `<html>`
+excluded because its parent is not an element — emitting a root term once shifted every key a level and
+reported `<html>` MISSING everywhere). `shape_stats` now replaces the absolute `placement_stats` as the G1
+report's Layer-1 number (`Fidelity.shape`, `MEAN SHAPE`); absolute placement stays only as a Layer-3 `[diag]`.
+RED-provable producer gate (`path_key_tests`): `join("/")`→`join("_")` fails the `/`-ancestry assertion, and
+`sig_of` is cross-checked against an independent fnv1a-32 reference. **Decompose-first boundary kept:** the
+gate FLOOR still gates on structural COVERAGE — flipping it to SHAPE awaits a broad path-keyed sweep to
+recalibrate the 0.75 bar honestly (the number is claimed later). Next brick: root-cause clustering (§3b).
 
 **Layer 2 — jarring invariants (SHAPE cannot see these).** SHAPE forgives a constant offset because a user
 does not perceive one; but a box shaped *correctly relative to an over-wide parent* can still spill off the

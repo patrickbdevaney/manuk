@@ -21242,3 +21242,54 @@ yet, by design — decompose-first; Bar 0 held — pure additive test-side scori
 NEXT: brick 2 — selector-path producer (`/`-keyed boxes) on both engine sides, so shape_stats can be wired into
 the G1 report and swap out placement_stats; then root-cause clustering (§3b) and the Layer-2 jarring invariants
 (already in the oracle — port likewise). Self-audit 534; surface 538; const 535; wall 547.
+
+## Tick 532 — FIDELITY REBUILD brick 2: selector-path producer wires SHAPE into the G1 gate (2026-07-24)
+
+Continuing the Check-#32 pivot (fidelity-instrument rebuild, the CO-#1 Phase-0 EXIT gate). Tick 531
+landed `fidelity::shape_stats` as a proven PRIMITIVE but left it UNWIRED, because the G1 producer still
+emitted `[id]` keys (no `/`-ancestry), against which `shape_stats::common_frame` finds no shared ancestor
+and silently degrades to absolute placement — the exact misleading 4.5% the redesign exists to kill. This
+brick builds the enabling fix (FIDELITY-SCORING-REDESIGN.md §3a): the SELECTOR-PATH producer on BOTH engine
+sides, then wires SHAPE in.
+
+WHAT LANDED:
+- **Chrome side** (chrome.rs): `PROBE_ALL_PATHS_JS` + `capture_boxes_all_paths(url,vw,vh)` — the path-keyed
+  sibling of `capture_boxes_all_ids`. Keys every rendered element by `tag.SIG:nth-child(n)/…` from the root
+  via `fnv`/`sigOf`/`pathOf` copied BYTE-IDENTICALLY from the oracle probe (same UTF-16 `charCodeAt` hash,
+  same whitespace split, same sort/dedup, same html-excluded root rule).
+- **Manuk side** (main.rs): extracted the oracle's `sig_of`/`path_of` local closures into shared free
+  functions next to `fnv` — ONE Rust definition now used by BOTH the differential oracle (`run_oracle_cmd`)
+  and the G1 fidelity probe, so the exit gate and the oracle can never drift on what a key means.
+- **Wired** (main.rs G1 flow): the Manuk box map is now built with `path_of` (filtering the same structural
+  tags Chrome's probe skips), the Chrome side via `capture_boxes_all_paths`, and `shape_stats` replaces the
+  absolute `placement_stats` as the reported Layer-1 number (`SHAPE: N% vs shared ancestor`); absolute
+  PLACEMENT is retained only as a Layer-3 `[diag]`. `Fidelity` gains a `shape: Option<f64>` field; `report`
+  prints MEAN SHAPE. The MISSING-by-tag reporter now parses the tag from the path key's leaf (no DOM `id`
+  lookup — which would never match a path key).
+
+GATE (path_key_tests, 2 cases, RED-proven): (1) `path_of` emits a `/`-keyed key that NEVER contains an
+`html` component and counts nth-child over ALL element siblings 1-based (`body` is nth-child(2) because the
+implicit `<head>` precedes it — exactly what Chrome's `previousElementSibling` counts); (2) `sig_of` is class
+order/dup independent AND equals an INDEPENDENT fnv1a-32 reference (the JS/Rust byte-identical contract, a
+real cross-check not a tautology). RED-PROVE: changing `path_of`'s `join("/")` → `join("_")` (drop slash
+keying) fails case (1)'s `contains('/')` assertion — so the load-bearing `/`-ancestry property is genuinely
+tested. Restored, both green; the 4 existing shape_tests + oracle shape test stay green. The test also caught
+my own wrong expectation (`body:nth-child(1)`) — the producer was right about the implicit head, I was wrong.
+
+HONEST BOUNDARY: the gate FLOOR still gates on structural COVERAGE (`report`'s `floor`), unchanged — SHAPE is
+now the reported/printed Layer-1 number replacing the misleading absolute PLACEMENT, but flipping the gate's
+FLOOR target from coverage to SHAPE needs a broad sweep to recalibrate the 0.75 bar honestly (the number is
+claimed LATER, decompose-first). The G1 command runs against LIVE URLs (needs Chrome + network) so it is not
+in the verify wall; the RED-provable surface this brick adds is the unit-tested producer + scorer wiring.
+
+TICK SHAPE: instrument-fidelity brick (fidelity-rebuild CO-#1, brick 2 of N — selector-path producer on both
+engine sides + SHAPE wired into the G1 report, replacing absolute placement; new RED-provable producer gate in
+agent-editable manuk-wpt code; NO engine capability src changed — this is measurement/instrument code; Bar 0
+held — pure additive test-harness scoring, no engine behavior touched). WIKI: conformance-and-oracles.md
+(the selector-path producer + one-definition-of-keying paragraph). No [no-pattern] (no engine capability src
+touched).
+
+NEXT: brick 3 — root-cause clustering (§3b): group SHAPE failures by their FIRST-DIVERGENCE signature so the
+board reports DISTINCT CAUSES not failing sites (the oracle already has `cluster`; port likewise). Then the
+gate-floor flip (coverage → SHAPE) once a broad path-keyed sweep recalibrates the 0.75 bar. Cadences: self-audit
+534; surface 538; const 535; wall 547.

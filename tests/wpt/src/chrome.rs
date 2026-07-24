@@ -52,6 +52,34 @@ var pre=document.createElement('pre');pre.id='__PARITY__';
 pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})();
 </script>"#;
 
+/// **Structural probe, selector-path keyed** (the fidelity redesign §3a producer). Same rendered-box
+/// data as `PROBE_ALL_IDS_JS`, but keys every element by its selector-PATH
+/// (`tag.SIG:nth-child(n)/…` from the root) instead of its `id`, so `fidelity::shape_stats` has real
+/// `/`-ancestry to subtract a constant page offset against. Modern React/Tailwind pages barely use
+/// ids (39% of the corpus was unmeasurable on `[id]` keys); a path is present on every element.
+///
+/// The `fnv`/`sigOf`/`pathOf` here are a BYTE-IDENTICAL contract with the oracle probe's `pathOf`
+/// (above) and with `path_of`/`sig_of` in main.rs: fnv-1a over UTF-16 code units (`charCodeAt`), the
+/// same `[ \t\n\f\r]+` whitespace split, the same ASCII-lowercase + sort + dedup of the class list,
+/// and — the easy-to-get-wrong part — an element whose parent is not an element (i.e. `<html>`)
+/// contributes NO component, because `e.parentElement` is null there. A path built two different
+/// ways is two different keys, and the diff would then compare strangers.
+const PROBE_ALL_PATHS_JS: &str = r#"<script>
+(function(){var out={};
+function fnv(str){var h=0x811c9dc5;for(var i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return h>>>0;}
+function sigOf(e){var cls=e.getAttribute('class');if(!cls)return '';var toks=cls.split(/[ \t\n\f\r]+/),a=[];for(var i=0;i<toks.length;i++){if(toks[i])a.push(toks[i].replace(/[A-Z]/g,function(c){return c.toLowerCase();}));}if(!a.length)return '';a.sort();var u=[];for(var j=0;j<a.length;j++){if(j===0||a[j]!==a[j-1])u.push(a[j]);}return '.'+('0000000'+fnv(u.join('.')).toString(16)).slice(-8);}
+function pathOf(e){var p=[];while(e&&e.nodeType===1&&e.parentElement){var i=1,s=e;while((s=s.previousElementSibling))i++;p.unshift(e.tagName.toLowerCase()+sigOf(e)+':nth-child('+i+')');e=e.parentElement;}return p.join('/');}
+var all=document.querySelectorAll('*');
+var lim=Math.min(all.length,6000);
+for(var k=0;k<lim;k++){var e=all[k];var t=e.tagName.toLowerCase();
+  if(t==='script'||t==='style'||t==='head'||t==='meta'||t==='link'||t==='base'||t==='title'||t==='noscript'||t==='template'||t==='html')continue;
+  var r=e.getBoundingClientRect();
+  if(r.width===0&&r.height===0)continue;   // not rendered: don't demand Manuk render it either
+  out[pathOf(e)]=[Math.round(r.x+window.scrollX),Math.round(r.y+window.scrollY),Math.round(r.width),Math.round(r.height)];}
+var pre=document.createElement('pre');pre.id='__PARITY__';
+pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})();
+</script>"#;
+
 /// **The oracle's Chromium half.** Render an *already-fetched snapshot* and report every `[id]`
 /// element's tag, computed `display`, and box.
 ///
@@ -319,6 +347,38 @@ pub fn capture_boxes_all_ids(url: &str, vw: u32, vh: u32) -> Result<HashMap<Stri
     let out = cmd
         .output()
         .context("chrome --dump-dom (structural probe)")?;
+    let _ = std::fs::remove_file(&tmp);
+    if !out.status.success() {
+        bail!(
+            "chrome --dump-dom failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    parse_probe_json(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Capture Chrome's box for every rendered element of a LIVE url, keyed by SELECTOR-PATH — the
+/// fidelity redesign's Layer-1 (SHAPE) producer. The path-keyed sibling of `capture_boxes_all_ids`:
+/// `fidelity::shape_stats` needs `/`-ancestry to cancel a constant page offset, which `[id]` keys
+/// (no `/`) never carry. Same fetch → `<base>` → `--dump-dom` flow, only the injected probe differs.
+pub fn capture_boxes_all_paths(url: &str, vw: u32, vh: u32) -> Result<HashMap<String, Box4>> {
+    let chrome = chrome_bin().ok_or_else(|| anyhow!("no Chrome/Chromium found"))?;
+    let html = ureq_get(url)?;
+    let base = format!("<base href=\"{url}\">");
+    let doc = if let Some(i) = html.find("<head>") {
+        let (a, b) = html.split_at(i + 6);
+        format!("{a}{base}{b}{PROBE_ALL_PATHS_JS}")
+    } else {
+        format!("{base}{html}{PROBE_ALL_PATHS_JS}")
+    };
+    let tmp = std::env::temp_dir().join(format!("manuk-shape-{}.html", stable_tag(&doc)));
+    std::fs::write(&tmp, &doc)?;
+    let mut cmd = Command::new(&chrome);
+    cmd.args(base_flags(vw, vh))
+        .arg("--virtual-time-budget=6000")
+        .arg("--dump-dom")
+        .arg(format!("file://{}", tmp.display()));
+    let out = cmd.output().context("chrome --dump-dom (shape probe)")?;
     let _ = std::fs::remove_file(&tmp);
     if !out.status.success() {
         bail!(

@@ -35,6 +35,11 @@ pub struct Fidelity {
     /// **Structural COVERAGE**: of the elements Chrome renders, what fraction does Manuk render at
     /// all? This is the honest number — a missing region cannot hide in it. `None` if unprobed.
     pub structure: Option<f64>,
+    /// **Layer-1 SHAPE** (parent-relative placement, `shape_stats`): of the elements BOTH engines
+    /// render, what fraction sits in the right place *relative to its nearest shared ancestor*. This
+    /// is the redesign's primary placement number — it cancels a constant page offset that the old
+    /// absolute `placement_stats` charged N times. `None` if unprobed. (tick 532)
+    pub shape: Option<f64>,
     /// Elements Chrome renders that Manuk does **not** produce a box for at all.
     pub missing: usize,
     /// Elements both render, but Manuk places/sizes wrongly (beyond tolerance).
@@ -107,6 +112,7 @@ pub fn compare(manuk: &Path, chrome: &Path, name: &str) -> Result<Fidelity> {
         differing,
         total,
         structure: None,
+        shape: None,
         missing: 0,
         misplaced: 0,
         probed: 0,
@@ -405,6 +411,12 @@ pub fn report(rows: &[Fidelity], floor: f64) -> bool {
     } else {
         Some(structs.iter().sum::<f64>() / structs.len() as f64)
     };
+    let shapes: Vec<f64> = rows.iter().filter_map(|r| r.shape).collect();
+    let mean_shape = if shapes.is_empty() {
+        None
+    } else {
+        Some(shapes.iter().sum::<f64>() / shapes.len() as f64)
+    };
     println!("\nMEAN VISUAL:    {:.1}%", mean_v * 100.0);
     if let Some(ms) = mean_s {
         println!(
@@ -413,6 +425,15 @@ pub fn report(rows: &[Fidelity], floor: f64) -> bool {
              \t\t\tcannot hide in this the way it hides in a pixel score.",
             ms * 100.0,
             floor * 100.0
+        );
+    }
+    if let Some(msh) = mean_shape {
+        println!(
+            "MEAN SHAPE:     {:.1}%   <-- LAYER-1 (parent-relative): of elements BOTH render, the\n\
+             \t\t\tfraction placed right vs their nearest SHARED ancestor. Unlike\n\
+             \t\t\tthe old absolute placement, a constant page offset cancels here —\n\
+             \t\t\tone root cause counts once (FIDELITY-SCORING-REDESIGN.md Layer 1).",
+            msh * 100.0
         );
     }
     println!(
