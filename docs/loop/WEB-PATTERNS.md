@@ -4370,3 +4370,14 @@ when nothing was focused, so all three crashed or misfired. It now defaults to t
 default for a loaded document, what Chrome returns), and still moves to a real element on `.focus()`. **The
 trap:** null is not a graceful "nothing focused" signal — it is a `TypeError` the moment any of those idioms
 runs, so a page that dismisses focus on Escape threw instead.
+
+## `document.hasFocus()` — is the user looking at this tab (tick 496)
+
+**The class of the web this unlocks (idle-detection, analytics heartbeats, presence indicators, and "pause
+the video/carousel/animation when the tab is not in front" logic — on a large fraction of media and app
+sites):** scripts call `document.hasFocus()` to decide whether to keep doing work. It was absent — a
+synchronous `TypeError` that killed the handler (the same failure the missing `document.hidden` once caused
+for animation loops). It now returns the tab-in-front state the shell already owns (the fact behind
+`visibilityState`/`document.hidden`), so it is honest for the dominant foreground-vs-backgrounded case and can
+never contradict `document.hidden`. **The trap:** a hardcoded `true` would keep a backgrounded tab "focused"
+and defeat the very battery/CPU savings the check exists for — tying it to real visibility avoids that.

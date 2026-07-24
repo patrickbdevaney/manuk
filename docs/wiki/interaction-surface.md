@@ -2799,3 +2799,15 @@ GATE: G_USER_ACTIVATION (page) — at load `navigator.userActivation` is a prese
 click handler reads `active:true sticky:true`; after the gesture `isActive` returns to false while
 `hasBeenActive` stays true. RED-proven three ways: remove the surface (load throws), disable the bracket
 (`#during` false), or gate the bracket on plain dispatch instead of the marker (`#synth` leaks true).
+
+## `document.hasFocus()` — tied to the tab-in-front signal, never a second focus state (tick 496)
+
+`document.hasFocus()` — "is the user looking at this document right now?" — is called by idle-detection,
+analytics heartbeats, "pause the video/carousel when the tab is backgrounded" logic and presence indicators.
+It was absent, and an absent method is a synchronous `TypeError` that takes the whole handler down (the same
+failure class a missing `document.hidden` has for animation loops). This engine does not model system window
+focus separately from tab foregrounding, so rather than invent a second focus state — or hardcode a `true`
+that lies the moment the tab is backgrounded — `hasFocus()` returns `g.__visibility === 'visible'`, the exact
+tab-in-front fact that already backs `visibilityState`/`document.hidden`. The invariant that buys is that
+`hasFocus()` and `!document.hidden` can never contradict each other: foreground/visible → focused,
+backgrounded/hidden → not, and a `visibilitychange` flip moves both together. Gate `G_DOCUMENT_HAS_FOCUS`.

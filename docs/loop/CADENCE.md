@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **264** | ticks 1–495 |
 | median tick cycle | **21m** | 263 intervals |
-| median, last 10 | **23m** | 10 intervals |
+| median, last 10 | **25m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.84** | 313.5h elapsed |
+| **ticks per hour** | **0.84** | 313.7h elapsed |
 | median verify wall | **60s** | 203 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,7 +27,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **258**
+* **live gates**: 27 → **259**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
@@ -360,6 +360,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **491** | 2026-07-24 05:38 | 22m | capability | 67s | +94/−34 | 256 | 81 | 56.0% · | `dialog.requestClose()`: close with a veto (2026-07-24) |
 | **492** | 2026-07-24 05:58 | 20m | measurement | 67s | +189/−33 | 257 | 81 | 56.0% · | MEASUREMENT: the DOM-method / CSS-property surface vein is mined out too (2026-07-24) |
 | **494** | 2026-07-24 06:20 | 22m | capability | 67s | +156/−36 | 258 | 81 | 56.0% · | `document.activeElement` defaults to `<body>`, not `null` (2026-07-24) |
-| **495** | 2026-07-24 06:31 | 11m | measurement | 67s | +149/−34 | 258 | 81 | 56.0% · | SELF-AUDIT (cadence, ticks 485→494) (2026-07-24) |
+| **495** | 2026-07-24 06:47 | 27m | measurement | 67s | +161/−33 | 259 | 81 | 56.0% · | SELF-AUDIT (cadence, ticks 485→494) (2026-07-24) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

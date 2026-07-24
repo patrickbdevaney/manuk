@@ -19958,3 +19958,28 @@ held; I2 intact (zero new deps all window). LAST_CONSTITUTION_CHECK → 495; nex
 
 TICK SHAPE: self-audit + constitution-check (docs-only; no gate change; nothing regresses). WIKI: none (both
 audits live in their ledgers).
+
+## Tick 496 — `document.hasFocus()` answers, tied to the tab-in-front signal (2026-07-24)
+
+A probe-then-build off the form-state/document-state getter batch. MEASURED FIRST: `document.hasFocus`
+undefined (also confirmed present+correct in the batch: selectionStart/setSelectionRange/setRangeText,
+validationMessage, select.selectedOptions/selectedIndex, visibilityState; still-missing bounded: textarea
+.textLength). `document.hasFocus()` is called by idle-detection, analytics heartbeats and "pause when the
+tab is backgrounded" logic — absent, it was a synchronous TypeError that took the handler down (same class
+as a missing document.hidden).
+
+FIX: `document.hasFocus = function(){ return g.__visibility === 'visible'; }` added right after the page
+-visibility block in dom_bindings.rs. We do not model system window focus separately from tab foregrounding,
+so hasFocus is tied to the SAME shell-owned tab-in-front fact that backs visibilityState/document.hidden —
+not a second focus state, not a hardcoded `true` that would lie when backgrounded. The invariant: hasFocus()
+and `!document.hidden` can never contradict, and a visibilitychange flip moves both together.
+
+RED-proven (pre-fix probe: hasFocus:undefined → call is a TypeError aborting the script). New gate
+G_DOCUMENT_HAS_FOCUS: exists + returns true when visible, equals `!document.hidden`, flips to false on
+`__setVisibility('hidden')` and back on 'visible'. Neighbors g_visibility/g_focus/g_check_visibility green.
+Bar 0 held; zero new dep; ~6 lines prelude JS on already-won visibility substrate.
+
+TICK SHAPE: capability (+1 gate, nothing regresses). WIKI: interaction-surface.md — "document.hasFocus()
+tied to the tab-in-front signal". NEXT: textarea.textLength is the remaining trivial bounded getter;
+ch/ex font-metrics (Const-Check #28) remains the top subsystem lever. Self-audit next 505; surface-audit
+next 498; Const-Check next 503.

@@ -10345,6 +10345,20 @@ const WINDOW_PRELUDE: &str = r#"
                 try { document.onvisibilitychange(ev); } catch (e) {}
             }
         };
+        // `document.hasFocus()` — "is the user looking at this document right now?" Idle-detection,
+        // analytics heartbeats, "pause the carousel/video when the tab is not in front", and
+        // presence indicators all call it, and an ABSENT method is a synchronous TypeError that takes
+        // the whole handler down (the same failure class as a missing `visibilityState`). We do not
+        // model system window focus separately from tab foregrounding, so the honest signal is the one
+        // the shell already owns: the tab-in-front state behind `visibilityState`. Foreground/visible →
+        // focused; backgrounded/hidden → not. This ties `hasFocus()` to the SAME fact as
+        // `document.hidden` so the two can never contradict each other, rather than inventing a second
+        // focus state or hardcoding a `true` that lies the moment the tab is backgrounded.
+        if (typeof document.hasFocus !== 'function') {
+            try {
+                document.hasFocus = function () { return g.__visibility === 'visible'; };
+            } catch (e) {}
+        }
 
         // ---- Web Storage -------------------------------------------------------------------
         // The web FEATURE-DETECTS this and grades the browser on it. MediaWiki's startup script
