@@ -20627,3 +20627,60 @@ resolved url), then drive `esm_load_graph` with a fetcher over that map, then li
 `<script type=module src=...>` roots; wire `esm_registry_clear` into page teardown. Gate: a real inline
 root with a relative import graph renders end-to-end. Self-audit next 515; surface next 518; const-check
 next 519; wall next 527.
+
+## Tick 516 — BUILD BRICK: ESM import-graph B3b-ii — the async PRODUCER on the page path (2026-07-24)
+
+Following B3b-i (tick 515, the consumer: `run_module` drives `esm_load_graph` over `MODULE_GRAPH_SOURCES`),
+landed **ESM import-graph B3b-ii** — the async pre-fetch pass that actually FILLS that map on the real
+page path. B3b-i proved the runner consumes a seeded map, but nothing seeded it, so a real inline
+`<script type=module>` importing a relative graph still died at `ModuleLink` against an empty registry.
+B3b-ii closes the PRODUCER seam.
+
+WHAT LANDED (engine/page/src/lib.rs + engine/js/src/lib.rs):
+1. **`scan_static_import_specifiers(src)`** — a lightweight TEXTUAL pre-scan pulling the specifier out of
+   every static `import … from 'm'` / `import 'm'` (bare side-effect) / `export … from 'm'` / `export *
+   from 'm'`. It skips comments, string bodies, dynamic `import(` (resolved lazily at runtime, not part of
+   the static graph) and `import.meta`. Deliberately a SUPERSET-or-miss heuristic, NOT a parser: it only
+   decides what to FETCH — `esm_load_graph` remains the authoritative walk (reads SpiderMonkey's real
+   `GetRequestedModuleSpecifier` post-compile), so an over-match fetches a URL nothing imports (harmless)
+   and a miss leaves a dep out of the map where its importer fails loud-but-safe at `ModuleLink`.
+2. **`prefetch_module_graph(dom, base)`** (async) — collects each inline `<script type=module>` root's
+   source (external `type=module src` already inlined by `fetch_external_scripts`), BFS-walks its static
+   imports resolving each specifier against its importer's URL with the SAME `Url::join` the resolve hook
+   uses, fetches each not-yet-seen module off the UI thread with `manuk_net::fetch`, scans ITS imports and
+   recurses. Visited set = the map's keys (the diamond/cycle guard); a 512-node cap backstops adversarial
+   graphs (the loader's own depth-256 guard sits behind it).
+3. **Wired into `load_async`**: compute the map after `fetch_external_scripts`, hand it to
+   `manuk_js::set_module_graph_sources` IMMEDIATELY before `run_deferred_scripts` (no `.await` between, so
+   both stay on the JS thread that reads the thread-local), and `clear_module_graph_sources` the instant
+   that pass returns — one document's graph can never resolve the next's imports. Added the two thin
+   `manuk_js` re-export wrappers (both cfg variants) mirroring `set_scroll_geometry`.
+
+RED-PROVEN (real E2E, not argued): new gate `g_esm_page_graph` stands up a localhost origin serving a
+TWO-LEVEL graph (inline root → `/esm-a.js` → `/esm-b.js`, the transitive dep proving the recursion), loads
+it through the REAL `Page::load_async`, and asserts the cross-graph binding `answer` (six*7 = 42) reached
+`#out`. Neuter `prefetch_module_graph` to return an empty map (env-gated during the proof) → `#out` stays
+`-` because `ModuleLink` can't resolve `./esm-a.js`; restored → GREEN (1 passed). A `#[cfg(test)]` unit
+test pins the scanner's edge cases directly (every import/export-from form, minified no-space adjacency,
+and the comment/string/dynamic-import/`import.meta` non-matches).
+
+WHAT IS LIVE, HONESTLY: the pre-fetch runs on the `load_async` path — the streaming/headless/agent render
+path (`fetch_streaming_page` → `load_async`), so the AGENTIC surface resolves module graphs today. The
+interactive shell GUI navigates through `prefetch_document`/`from_prefetched` (the off-thread DEBT-1 path),
+which does NOT yet stash the map — so a human browsing a native-ESM site in the window still won't get the
+graph. Hence [no-pattern]: the class (native-ESM / Vite-dev / import-map-free module apps) is proven and
+live on ONE entry point, not universally unlocked.
+
+TICK SHAPE: subsystem build brick (1 capability — the async module-graph producer on the page path;
+new gate `g_esm_page_graph` E2E over localhost + a scanner unit test; B1/B2/B3/B3b-i gates hold; nothing
+regresses; Bar 0 held — a fetch miss is loud-but-safe, never a crash). WIKI: docs/wiki/js-engine.md (ESM
+section — B3b-ii subsection: the textual scanner, the BFS producer, why the scanner is superset-or-miss,
+and exactly which entry point is live vs not). [no-pattern] — see WHAT IS LIVE above; the class flips only
+when the `from_prefetched` path is wired next.
+
+NEXT: **B3b-iii** — wire the producer into the INTERACTIVE-SHELL path: compute the graph in
+`prepare_prefetched` (already async, off-thread, has the dom), carry the resolved-url → source map on
+`Prefetched` (it is `Send` — a plain `HashMap<String,String>`), and seed it via `set_module_graph_sources`
+before the shell's deferred pass in `from_prefetched`/`gui.rs`. THAT tick flips the pattern (real
+interactive browsing of a native-ESM site). Gate: drive the prefetched path E2E, same two-level graph.
+Self-audit next 525; surface next 518; const-check next 519; wall next 527.

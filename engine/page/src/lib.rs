@@ -1444,7 +1444,22 @@ impl Page {
             let authorized: Vec<NodeId> = Vec::new();
             set_pending_csp_with_authorized(csp, authorized);
         }
+        // **Pre-fetch the ES-module import graph off the UI thread, before any module runs (B3b).** An
+        // inline `<script type=module>` may `import` a relative graph of sibling modules; `ModuleLink`
+        // (below, inside `run_deferred_scripts`) is synchronous with no network, so the whole reachable
+        // graph must be in hand first — exactly the reason `fetch_external_scripts` above pre-fetches
+        // classic `<script src>`. The resolved-url → source map is handed to the JS layer just before the
+        // deferred pass; `run_module` drives the population walk over it so every `import` resolves. A
+        // page with no module imports yields an empty map ⇒ modules link self-contained, as before.
+        #[cfg(feature = "spidermonkey")]
+        let module_graph_sources = prefetch_module_graph(&dom, final_url).await;
         let mut page = Page::from_dom(dom, final_url, fonts, viewport_width);
+        // Seed the pre-fetched graph for the deferred pass, then drop it the instant that pass returns so
+        // one document's modules can never resolve the next document's imports. No `.await` sits between
+        // the seed and the run, so both stay on this thread — the map is a thread-local the module runner
+        // reads synchronously.
+        #[cfg(feature = "spidermonkey")]
+        manuk_js::set_module_graph_sources(module_graph_sources);
         // **Both passes, back to back** — see `load`. `from_dom` runs only the scripts that block first
         // paint; the deferred ones (`defer`, `async`, `type=module`) run here.
         //
@@ -1456,6 +1471,8 @@ impl Page {
         // must still run all the scripts.** There is exactly one caller allowed to split them, and it is
         // the shell, because it is the only one with a human waiting.
         page.run_deferred_scripts(fonts, viewport_width);
+        #[cfg(feature = "spidermonkey")]
+        manuk_js::clear_module_graph_sources();
         // Parsing is done and the deferred scripts have executed — that IS DOMContentLoaded.
         page.fire_lifecycle("DOMContentLoaded");
         // **Subframes load BEFORE `load` fires** — `load` waits for subframes (HTML spec), and a page's
@@ -6249,6 +6266,189 @@ async fn fetch_external_scripts(
     authorized
 }
 
+/// **Scan JS source for the specifiers of its STATIC `import` / `export … from` statements (B3b).**
+///
+/// The page-path module-graph pre-fetch needs to know *what a module imports* before any JS runs, so it
+/// can fetch the whole transitive graph up front (there is no synchronous network on the JS thread — the
+/// authoritative walk in `esm_load_graph` reads a *pre-fetched* map). SpiderMonkey gives the exact
+/// specifiers only *after* a module is compiled, and compiling needs the JS engine on the UI thread —
+/// so this is a lightweight textual pre-scan whose only job is to seed the fetch. It is deliberately a
+/// SUPERSET-or-miss heuristic, not a parser: an over-match fetches a URL nothing imports (harmless), and
+/// a miss means that dependency is absent from the map and its importer fails loud-but-safe at
+/// `ModuleLink` — the same failure policy `esm_load_graph` already documents. `esm_load_graph` remains
+/// the source of truth for which modules are actually linked; this only decides what gets fetched.
+///
+/// Matches the specifier string of `import x from 'm'`, `import {a} from 'm'`, `import * as n from 'm'`,
+/// `import 'm'` (side-effect), and `export … from 'm'` / `export * from 'm'`. Skips comments and string
+/// bodies so a `from`/`import` inside them is not mistaken for a keyword, and skips `import(` (a dynamic
+/// import — resolved lazily at runtime, not part of the static graph) and `import.meta`.
+fn scan_static_import_specifiers(src: &str) -> Vec<String> {
+    let b = src.as_bytes();
+    let n = b.len();
+    let mut i = 0usize;
+    let mut out = Vec::new();
+    // The last significant token in code context: an identifier word, or a single punctuation byte. A
+    // specifier is captured when this is exactly `from` (any import/export … from) or `import` (a bare
+    // side-effect import). Tracking it — rather than the string alone — is what keeps `{`, `}`, `,`, `*`
+    // between `import` and `from` from masquerading as the keyword, and what makes `import(` and
+    // `import.meta` not fire the bare-import rule (the `(` / `.` becomes the previous token instead).
+    let mut prev = String::new();
+    while i < n {
+        let c = b[i];
+        if c.is_ascii_whitespace() {
+            i += 1;
+            continue;
+        }
+        // Comments — skipped so a `//`/`/* */` `from` is never read as a keyword.
+        if c == b'/' && i + 1 < n && b[i + 1] == b'/' {
+            i += 2;
+            while i < n && b[i] != b'\n' {
+                i += 1;
+            }
+            continue;
+        }
+        if c == b'/' && i + 1 < n && b[i + 1] == b'*' {
+            i += 2;
+            while i + 1 < n && !(b[i] == b'*' && b[i + 1] == b'/') {
+                i += 1;
+            }
+            i = (i + 2).min(n);
+            continue;
+        }
+        // String literal — capture its body; a `'`/`"` body that directly follows `from` or `import`
+        // is a specifier. Backtick strings are consumed but never captured (a static specifier is a
+        // plain string literal, never a template).
+        if c == b'\'' || c == b'"' || c == b'`' {
+            let quote = c;
+            i += 1;
+            let mut content: Vec<u8> = Vec::new();
+            while i < n {
+                let d = b[i];
+                if d == b'\\' && i + 1 < n {
+                    content.push(b[i + 1]);
+                    i += 2;
+                    continue;
+                }
+                if d == quote {
+                    i += 1;
+                    break;
+                }
+                content.push(d);
+                i += 1;
+            }
+            if (quote == b'\'' || quote == b'"') && (prev == "from" || prev == "import") {
+                let s = String::from_utf8_lossy(&content).trim().to_string();
+                if !s.is_empty() {
+                    out.push(s);
+                }
+            }
+            prev.clear();
+            continue;
+        }
+        // Identifier / keyword.
+        if c == b'_' || c == b'$' || c.is_ascii_alphabetic() {
+            let s = i;
+            i += 1;
+            while i < n && (b[i] == b'_' || b[i] == b'$' || b[i].is_ascii_alphanumeric()) {
+                i += 1;
+            }
+            prev = String::from_utf8_lossy(&b[s..i]).to_string();
+            continue;
+        }
+        // Punctuation. `import(` is a dynamic import — clear so the bare-import rule cannot fire on the
+        // string inside. Any other single byte becomes the previous token.
+        if c == b'(' && prev == "import" {
+            prev.clear();
+        } else {
+            prev = (c as char).to_string();
+        }
+        i += 1;
+    }
+    out
+}
+
+/// **Pre-fetch the whole static-import graph of a document's inline `<script type=module>` roots (B3b).**
+///
+/// Walks each module root's static `import`s (via [`scan_static_import_specifiers`]), resolving every
+/// specifier against its importer's URL exactly as `esm_load_graph` does (`Url::join`), fetching each
+/// not-yet-seen module off the UI thread with `manuk_net::fetch`, and recursing into *its* imports —
+/// a breadth-first walk with a visited set (the diamond/cycle guard) and a hard node cap. Returns the
+/// resolved-url → source map `manuk_js::set_module_graph_sources` seeds so the synchronous `ModuleLink`
+/// finds every dependency already fetched.
+///
+/// Failure is loud-but-safe, matching the loader: a fetch miss (404, dead host, bare specifier that
+/// resolves to nothing real) is logged and skipped — the module never enters the map and its importer
+/// fails at `ModuleLink`, never a crash. External `<script type=module src>` roots are already inlined
+/// by [`fetch_external_scripts`] before this runs, so their source is visible here as text content.
+#[cfg(feature = "spidermonkey")]
+async fn prefetch_module_graph(dom: &Dom, base: &str) -> HashMap<String, String> {
+    let mut sources: HashMap<String, String> = HashMap::new();
+    let base_url = match Url::parse(base) {
+        Ok(u) => u,
+        Err(_) => return sources,
+    };
+    // The roots' import specifiers, each paired with the importer URL to resolve it against (the
+    // document URL, since an inline module resolves its relative imports against the document).
+    let mut queue: std::collections::VecDeque<(Url, String)> = std::collections::VecDeque::new();
+    for node in dom.descendants(dom.root()) {
+        if dom.tag_name(node) != Some("script") {
+            continue;
+        }
+        let is_module = dom
+            .element(node)
+            .and_then(|e| e.attr("type"))
+            .map(|t| t.eq_ignore_ascii_case("module"))
+            .unwrap_or(false);
+        if !is_module {
+            continue;
+        }
+        let src = dom.text_content(node);
+        if src.trim().is_empty() {
+            continue;
+        }
+        for spec in scan_static_import_specifiers(&src) {
+            queue.push_back((base_url.clone(), spec));
+        }
+    }
+    if queue.is_empty() {
+        return sources;
+    }
+    // BFS. The visited set is `sources`' keys: a URL is inserted the moment its source lands, so a
+    // diamond (two importers, one dep) fetches once and a cycle terminates. The cap backstops a
+    // pathological or adversarial graph — the loader has its own depth-256 guard behind this.
+    let mut fetched_count = 0usize;
+    while let Some((importer, specifier)) = queue.pop_front() {
+        // Resolve against the importer's own URL — `./b.js` is relative to the module that imports it,
+        // identical to the loader's resolution so the pre-fetched key matches the resolve-hook lookup.
+        let resolved = match importer.join(&specifier) {
+            Ok(u) => u,
+            Err(_) => continue,
+        };
+        let key = resolved.as_str().to_string();
+        if sources.contains_key(&key) {
+            continue;
+        }
+        if fetched_count >= 512 {
+            tracing::warn!(
+                "module graph pre-fetch hit the 512-module cap — linking with what arrived"
+            );
+            break;
+        }
+        fetched_count += 1;
+        match manuk_net::fetch(&key).await {
+            Ok(r) => {
+                let text = r.decoded_text();
+                for spec in scan_static_import_specifiers(&text) {
+                    queue.push_back((resolved.clone(), spec));
+                }
+                sources.insert(key, text);
+            }
+            Err(e) => tracing::info!(url = %key, "module graph pre-fetch miss: {e}"),
+        }
+    }
+    sources
+}
+
 /// **DEBT-1 (RELIABILITY).** Everything a page needs from the network, fetched **off the UI
 /// thread** and handed over as plain data.
 ///
@@ -7962,6 +8162,57 @@ mod js_interactive_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn static_import_scanner_finds_specifiers_and_skips_the_rest() {
+        // Every static import/export-from form yields its specifier…
+        let src = r#"
+            import a from './a.js';
+            import { b } from "./b.js";
+            import * as c from './c.js';
+            import d, { e } from './d.js';
+            import './side-effect.js';
+            export { x } from './x.js';
+            export * from './y.js';
+            export * as ns from './z.js';
+        "#;
+        let got = scan_static_import_specifiers(src);
+        for want in [
+            "./a.js",
+            "./b.js",
+            "./c.js",
+            "./d.js",
+            "./side-effect.js",
+            "./x.js",
+            "./y.js",
+            "./z.js",
+        ] {
+            assert!(got.contains(&want.to_string()), "missing {want} in {got:?}");
+        }
+
+        // …minified (no spaces) still resolves via the `from`/`import` adjacency…
+        assert_eq!(
+            scan_static_import_specifiers(r#"import{a}from"./m.js";import"./s.js""#),
+            vec!["./m.js".to_string(), "./s.js".to_string()]
+        );
+
+        // …and the non-import forms are NOT mistaken for specifiers: a `from`/`import` inside a comment
+        // or string, a dynamic `import(...)` (resolved lazily, not part of the static graph), and
+        // `import.meta` all yield nothing.
+        assert!(
+            scan_static_import_specifiers(
+                r#"
+                // import x from './comment.js';
+                /* import y from './block.js'; */
+                const s = "import z from './string.js'";
+                const p = import('./dynamic.js');
+                const u = import.meta.url;
+                "#
+            )
+            .is_empty(),
+            "comments, strings, dynamic import() and import.meta must not be scanned as static imports"
+        );
+    }
 
     #[test]
     fn sticky_header_pins_on_scroll_and_releases_at_bottom() {

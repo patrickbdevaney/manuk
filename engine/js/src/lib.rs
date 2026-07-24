@@ -389,6 +389,30 @@ pub fn set_snap_candidates(c: std::collections::HashMap<manuk_dom::NodeId, (Vec<
 pub fn set_snap_candidates(_c: std::collections::HashMap<manuk_dom::NodeId, (Vec<f32>, Vec<f32>)>) {
 }
 
+/// **Seed the pre-fetched ES-module graph the page module runner consumes (B3b).** The page path
+/// pre-fetches every module a `<script type=module>` reaches through its static `import`s (there is no
+/// synchronous network on the JS thread, so the whole graph must be fetched *before* scripts run) and
+/// hands the resolved-url → source map here; `run_module` then drives the population walk over it so an
+/// inline module's relative `import` resolves at `ModuleLink`. Empty map ⇒ self-contained modules only,
+/// exactly as before. Pairs with [`clear_module_graph_sources`] so one document's graph never feeds the
+/// next's imports.
+#[cfg(feature = "_sm")]
+pub fn set_module_graph_sources(sources: std::collections::HashMap<String, String>) {
+    dom_bindings::set_module_graph_sources(sources);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_module_graph_sources(_sources: std::collections::HashMap<String, String>) {}
+
+/// Drop the pre-fetched module-graph sources after a page's deferred scripts have run.
+#[cfg(feature = "_sm")]
+pub fn clear_module_graph_sources() {
+    dom_bindings::clear_module_graph_sources();
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn clear_module_graph_sources() {}
+
 /// A host callback that lays the document out synchronously — see [`set_reflow_hook`].
 #[cfg(feature = "_sm")]
 pub type ReflowFn = dom_bindings::ReflowFn;

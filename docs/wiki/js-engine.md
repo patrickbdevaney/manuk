@@ -239,6 +239,42 @@ imported binding reached a global (`42 === 7 * 6`); delete the `esm_load_graph` 
 only that assert goes red at `ModuleLink` (B2/B3, which drive the walk directly, still pass) — proving the
 gate watches the page-path seam specifically.
 
+**B3b-ii is the async PRODUCER that fills `MODULE_GRAPH_SOURCES` on the real page path (tick 516, ESM
+import-graph B3b-ii).** B3b-i built the consumer; nothing filled the map, so a real inline
+`<script type=module>` importing a relative graph still died at `ModuleLink`. The producer lives in
+`manuk-page`'s `load_async`, right after `fetch_external_scripts` (which has already inlined any external
+`type=module src`), and it does two things: `scan_static_import_specifiers` — a lightweight **textual**
+pre-scan of each module root's source that pulls the specifier out of every static `import … from 'm'` /
+`import 'm'` / `export … from 'm'` (skipping comments, string bodies, dynamic `import(` and
+`import.meta`) — and `prefetch_module_graph`, a breadth-first walk that resolves each specifier against
+its importer's URL with the **same `Url::join`** the resolve hook uses, fetches each not-yet-seen module
+off the UI thread with `manuk_net::fetch`, scans *its* imports, and recurses (a visited set = the map's
+keys is the diamond/cycle guard; a 512-node cap backstops adversarial graphs). The resolved-url → source
+map is handed to `manuk_js::set_module_graph_sources` **immediately before** `run_deferred_scripts` (no
+`.await` between, so both stay on the JS thread that reads the thread-local) and dropped with
+`clear_module_graph_sources` the instant that pass returns — one document's graph can never resolve the
+next's imports.
+
+Two deliberate design choices. **The scanner is a superset-or-miss heuristic, not a parser**, and that is
+sound because it only decides what to *fetch*: `esm_load_graph` remains the authoritative walk (it reads
+SpiderMonkey's real `GetRequestedModuleSpecifier` after compiling), so an over-match fetches a URL nothing
+imports (harmless) and a miss leaves that dependency out of the map, where its importer fails loud-but-safe
+at `ModuleLink` — never a crash. **The producer resolution mirrors the loader's exactly** (`Url::join`
+against the importer), so a key the pre-fetch stores is the key the resolve hook later looks up. Gate
+`g_esm_page_graph` stands up a localhost origin serving a **two-level** graph (inline root →
+`/esm-a.js` → `/esm-b.js`, the transitive dep proving recursion), loads it through the real
+`Page::load_async`, and asserts the cross-graph binding `answer` (42) reached a DOM node; neuter
+`prefetch_module_graph` to return an empty map and `#out` stays `-` (`ModuleLink` can't resolve
+`./esm-a.js`). A unit test pins the scanner's edge cases (minified, comment/string/dynamic-import skip)
+directly. **What is live and what is not:** the pre-fetch runs on the `load_async` path — the
+streaming/headless/agent render path (`fetch_streaming_page` → `load_async`), so the *agentic* surface
+resolves module graphs today. The interactive shell GUI navigates through
+`prefetch_document`/`from_prefetched` (the off-thread DEBT-1 path), which does **not** yet stash the map —
+that wiring (compute the graph in `prepare_prefetched`, carry it on `Prefetched`, seed it before the
+shell's deferred pass) is the next brick, and until it lands a human browsing a native-ESM site in the
+window still won't get the graph. Hence the class is proven and live on one entry point, not universally
+unlocked.
+
 ## An unhandled promise rejection is where every framework's failure goes to die
 
 **Every modern framework renders inside an `async` function**, so a throw during render is a *rejected
