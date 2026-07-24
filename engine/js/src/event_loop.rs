@@ -2731,8 +2731,45 @@ const PRELUDE: &str = r#"
         };
       }
 
+      // Wrap the current NON-COLLAPSED selection inside editing `host` in an inline formatting element
+      // (`<b>` for bold, `<i>` for italic), firing `beforeinput`→(mutate)→`input` with
+      // `inputType:'formatBold'`/`'formatItalic'` — the write half of a rich-text toolbar's Bold/Italic
+      // button (Gmail compose, Slack, comment editors). Same veto contract as the insert helpers: a
+      // cancelled `beforeinput` leaves the DOM untouched and fires no `input`. It REQUIRES a non-collapsed
+      // selection in the host — a collapsed caret would, in a browser, arm a "typing style" so the NEXT
+      // keystroke is bold; that stateful toggle, and the un-format of already-bold text (a true toggle),
+      // are the larger follow-on brick. This wraps, honestly, and `queryCommandSupported` says so.
+      if (typeof globalThis.__wrapSelectionFormat !== 'function') {
+        globalThis.__wrapSelectionFormat = function (host, tag, inputType) {
+          if (!host) { return false; }
+          var sel = globalThis.getSelection();
+          var r = sel && sel._r;
+          if (!r || r.collapsed) { return false; }        // nothing selected — no wrap this brick
+          var anchor = r.startContainer;
+          var inHost = false;
+          for (var a = anchor; a; a = a.parentNode) { if (a === host) { inHost = true; break; } }
+          if (!inHost) { return false; }                  // selection not in this editable
+          var bi = new Event('beforeinput', { bubbles: true, cancelable: true });
+          bi.inputType = inputType; bi.data = null;
+          host.dispatchEvent(bi);
+          if (bi.defaultPrevented) { return true; }       // ran, but the format was vetoed — no mutation
+          var frag = r.extractContents();
+          var wrap = document.createElement(tag);
+          wrap.appendChild(frag);
+          r.insertNode(wrap);
+          // Leave the newly-formatted run selected, exactly as a browser does after a Bold/Italic click.
+          var nr = document.createRange();
+          nr.selectNodeContents(wrap);
+          if (sel.__set) { sel.__set(nr.startContainer, nr.startOffset, nr.endContainer, nr.endOffset); }
+          var inp = new Event('input', { bubbles: true, cancelable: false });
+          inp.inputType = inputType; inp.data = null;
+          host.dispatchEvent(inp);
+          return true;
+        };
+      }
+
       if (typeof document.execCommand !== 'function') {
-        var __EXEC_SUPPORTED = { copy: 1, cut: 1, selectall: 1, inserttext: 1, insertlinebreak: 1 };
+        var __EXEC_SUPPORTED = { copy: 1, cut: 1, selectall: 1, inserttext: 1, insertlinebreak: 1, bold: 1, italic: 1 };
         document.execCommand = function (cmd) {
           cmd = String(cmd || '').toLowerCase();
           if (cmd === 'copy') {
@@ -2825,6 +2862,23 @@ const PRELUDE: &str = r#"
               }
               if (!lhost) { return false; }
               return globalThis.__insertLineBreakAtCaret(lhost);
+            } catch (e) { return false; }
+          }
+          if (cmd === 'bold' || cmd === 'italic') {
+            // Wrap the selection in <b>/<i>, firing beforeinput/input (formatBold/formatItalic). The host
+            // is the editable ancestor of the SELECTION anchor (formatting needs a selection, not just a
+            // focused field), so a selection outside any editable, or a collapsed caret, returns false.
+            try {
+              var fsel = globalThis.getSelection();
+              var fanchor = (fsel && fsel._r) ? fsel._r.startContainer : null;
+              var fhost = null;
+              for (var fn = fanchor; fn; fn = fn.parentNode) {
+                if (fn.nodeType === 1 && fn.isContentEditable) { fhost = fn; break; }
+              }
+              if (!fhost) { return false; }
+              var ftag = cmd === 'bold' ? 'b' : 'i';
+              var ftype = cmd === 'bold' ? 'formatBold' : 'formatItalic';
+              return globalThis.__wrapSelectionFormat(fhost, ftag, ftype);
             } catch (e) { return false; }
           }
           return false; // every other command is the editing subsystem — honestly not built

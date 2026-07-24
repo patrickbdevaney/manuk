@@ -19443,3 +19443,45 @@ reaped the hung crawl (Chrome 19→8, MemAvailable restored); the next window re
 (load 1.10) and the shell suite came back green (70 passed, worst tab op 0.6ms « 16ms). Tick 480 landed on
 that warm re-run — the mark was never retuned, and the tick touched only `dom_bindings.rs`, never
 `shell/src/tab.rs`, confirming the failure was pure contention, not a regression. [[three-ticks-parked-wall-blocked]] [[wall-warm-rerun-lands-ticks]]
+
+## Tick 481 — execCommand('bold'|'italic') wraps the selection in <b>/<i> (2026-07-24)
+
+Brick 11 of the contenteditable EDITING subsystem — the first FORMATTING brick, the write half of a rich-text
+toolbar's Bold/Italic button (Gmail compose, Slack, comment editors, Notion inline styling). Before it, every
+`execCommand` past insertText/insertLineBreak/cut/copy returned `false` and `queryCommandSupported('bold')`
+was false, so a page feature-detected the truth. It is built ENTIRELY on the already-won Selection/Range
+substrate (`extractContents`/`insertNode`/`setBaseAndExtent`) — I2 "publish, do not rebuild" — so the brick is
+small even though rich-text formatting as a whole is a large subsystem. Zero new dep.
+
+MECHANISM: a `__wrapSelectionFormat(host, tag, inputType)` helper (engine/js/src/event_loop.rs) mirroring the
+insert/delete helpers' veto contract: require a NON-COLLAPSED selection inside the editing host; fire a
+CANCELABLE `beforeinput` (`inputType:'formatBold'`/`'formatItalic'`); on veto leave the DOM untouched and fire
+no `input`; else `extractContents()` the selected range, wrap the fragment in a fresh `<b>`/`<i>`,
+`insertNode` it back, re-select the formatted run (as a browser leaves it), and fire `input`. The
+`execCommand` shim gains a `bold`/`italic` branch that resolves the host as the editable ancestor of the
+SELECTION anchor (formatting needs a selection, not just a focused field) and adds `bold`/`italic` to
+`__EXEC_SUPPORTED` so `queryCommandSupported` reports true.
+
+HONEST BOUNDED GAP (documented in-code + wiki): this WRAPS. A collapsed caret (which in a browser arms a
+"typing style" so the next keystroke is bold) and the toggle-OFF of already-bold text (a true toggle, plus
+`queryCommandState`) are the larger follow-on brick — declared, not silently half-done. `execCommand('bold')`
+on a collapsed caret returns `false` here.
+
+GATE: G_EXEC_FORMAT_BOLD (page) — in `<div contenteditable>hello world</div>` select "world" (text offset
+6..11 via `setBaseAndExtent`) → `execCommand('bold')` makes `innerHTML` `hello <b>world</b>` (textContent
+unchanged), events `bi/in:formatBold`; a second editable selected-all → `execCommand('italic')` gives
+`<i>make me italic</i>`; `queryCommandSupported('bold'&&'italic')`===true; a third editable whose `beforeinput`
+`preventDefault()`s stays "leave me" (vetoed, no wrap). RED-proven by disabling the `bold`/`italic` branch
+(html stays `hello world`, evs empty). Neighbors green: g_exec_insert_line_break, g_key_paste,
+g_contenteditable_typing, g_shift_enter_line_break.
+
+TICK SHAPE: capability (contenteditable EDITING brick 11/N — selection formatting; +1 gate). GATES +1.
+CONSTELLATION: rich-editing — a rich-text toolbar's Bold/Italic now wraps the selection in <b>/<i>, vetoable.
+WIKI: interaction-surface.md — new section after the t480 Ctrl+V paste note.
+WEB-PATTERNS: bold-the-selected-text-with-a-toolbar-button.
+AGENTIC: the agent can now apply bold/italic formatting to a selected run in an editable region.
+
+NEXT VEIN NOTE: remaining editing bricks — collapsed-caret typing-style + toggle-OFF (unbold already-bold) +
+`queryCommandState` (the formatting tail this brick declared), Enter→insertParagraph (browser-divergent block
+split), cross-block boundary merge for Backspace/Delete, rich (HTML) paste vs the current plain-text paste.
+Self-audit due 485; surface-audit next 488; Const-Check next 487.

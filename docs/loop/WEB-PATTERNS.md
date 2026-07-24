@@ -4227,3 +4227,17 @@ SANITIZE or transform the incoming content (strip formatting, block scripts, con
 event must fire FIRST and be cancelable, and a `preventDefault()` must suppress the default insert entirely
 (or the editor gets the text twice — once its way, once ours). Rich (HTML) paste and the full DataTransfer
 (`getData('text/html')`, files) are later bricks; this lands plain-text paste with a vetoable event.
+
+## Bold the selected text with a toolbar button (tick 481)
+
+**The class of the web this unlocks (every rich-text toolbar):** `execCommand('bold')` / `('italic')` now wraps
+the current selection in `<b>` / `<i>`, firing a vetoable `beforeinput`→`input` pair
+(`inputType:formatBold`/`formatItalic`) and reporting `queryCommandSupported` true — the write half of the
+Bold/Italic button in Gmail compose, Slack, GitHub/Reddit comment editors, and countless CMS WYSIWYG boxes.
+Before this every command past insert/cut/copy returned `false`. **The trap:** formatting is TWO shapes and only
+one is safe to land as a bounded brick — a NON-COLLAPSED selection has an unambiguous result (wrap it), but a
+COLLAPSED caret arms a stateful "typing style" for the next keystroke, and re-running bold on already-bold text
+is a TOGGLE (unwrap), not a second wrap. Landing only the wrap and returning `false` on a collapsed caret is the
+honest brick; the typing-style/toggle/`queryCommandState` state machine is the declared follow-on. It reuses the
+Selection/Range substrate (`extractContents`/`insertNode`) rather than a bespoke formatter, so it inherits the
+same node-splitting the cut/delete path uses.

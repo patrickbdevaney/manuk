@@ -2683,3 +2683,28 @@ GATE: G_KEY_PASTE (page) — seed clipboard "PASTED", caret between "X"/"Y", Ctr
 `getData('text/plain')`==="PASTED", editable becomes "XPASTEDY", events `bi/in:insertFromPaste`; a paste
 handler that `preventDefault()`s blocks the insert. RED-proven by disabling the Ctrl+V arm. Rich (HTML) paste
 and the full DataTransfer surface are later bricks — this is plain-text paste.
+
+## execCommand('bold'|'italic') wraps the selection in <b>/<i> (tick 481)
+
+The first FORMATTING brick — the write half of a rich-text toolbar's Bold/Italic button (Gmail compose, Slack,
+comment editors, Notion inline styling). Before it, every `execCommand` past insertText/insertLineBreak/cut/copy
+returned `false` and `queryCommandSupported('bold')` was false. Built entirely on the already-won
+Selection/Range substrate (`extractContents`/`insertNode`/`setBaseAndExtent`); zero new dep.
+
+**Mechanism.** A `__wrapSelectionFormat(host, tag, inputType)` helper mirroring the insert/delete helpers' veto
+contract: require a NON-COLLAPSED selection inside the editing host; fire a CANCELABLE `beforeinput`
+(`inputType:'formatBold'`/`'formatItalic'`); on veto leave the DOM untouched and fire no `input`; else
+`extractContents()` the selected range, wrap the fragment in a fresh `<b>`/`<i>`, `insertNode` it back,
+re-select the formatted run, fire `input`. The `execCommand` shim's `bold`/`italic` branch resolves the host as
+the editable ancestor of the SELECTION anchor (formatting needs a selection, not just a focused field) and adds
+`bold`/`italic` to `__EXEC_SUPPORTED` so `queryCommandSupported` reports true.
+
+GATE: G_EXEC_FORMAT_BOLD (page) — select "world" in `<div contenteditable>hello world</div>` →
+`execCommand('bold')` → `innerHTML` `hello <b>world</b>` (textContent unchanged), events `bi/in:formatBold`; a
+second editable → `execCommand('italic')` → `<i>make me italic</i>`; `queryCommandSupported` true; a veto
+editable whose `beforeinput` `preventDefault()`s stays unwrapped. RED-proven by disabling the branch.
+
+**The honest bounded gap.** This WRAPS. A collapsed caret (which in a browser arms a "typing style" so the next
+keystroke is bold) and the toggle-OFF of already-bold text (a true toggle, plus `queryCommandState` for toolbar
+button state) are the larger follow-on brick — declared, not silently half-done. `execCommand('bold')` on a
+collapsed caret returns `false` here.
