@@ -1290,3 +1290,54 @@ NEVER re-baselined). Zero drift toward deferred scope — no WPT-grinding, no se
 species work. Part VII four-component scope stands; no correction.
 
 **Next check due: tick 519.**
+
+## Check #31 — tick 519
+
+The due constitution re-read (cadence every 8; last #30 at 511). Re-read CONSTITUTION.MD Parts I/VI/VII
+against the loop's direction over ticks 511-518.
+
+**HORIZON: H0 / v1 (Part VII). GATE: "reliably renders and runs the representative real internet"
+(usage-weighted, real-sites-moved — GUI + headless) + a complete agentic surface. Explicitly NOT a WPT %.**
+
+**Gate or scoreboard? GATE — decisively, and exactly as #30 ordered.** Check #30 ruled "the next capability
+tick MUST be a subsystem BUILD BRICK — ESM import-graph B1." The loop did precisely that: t512 B1 (GC-rooted
+registry + import.meta.url), t513 B2 (resolve hook), t514 B3 (population walk), t515 B3b-i (page runner
+consumer), t516 B3b-ii (async producer on load_async), t517 B3b-iii (shell producer + unify seam). The
+result is a CLASS UNLOCK, not a scoreboard bump: a real multi-file `import {x} from './y.js'` graph now
+resolves on BOTH real page paths — the GUI window (prefetch_document→from_prefetched) and the
+headless/AGENT path (fetch_streaming_page→load_async). That serves Part VII component 1 (native-ESM /
+Vite-dev / no-bundler apps are a large usage-weighted slice of the modern web — real-sites-moved, not a
+subtest count) AND component 2 (the agent renders through the same load_async path, so it too resolves
+graphs). t518 (surface audit #25) then reconciled the map: constellation `ESM module-graph loading`
+partial→gated, and confirmed the map is otherwise strikingly clean against Interop 2026 (every focus area
+already has a verdict).
+
+**Orient's north star intact?** Yes — usage-weighted breadth, not tail. `type=module` import graphs are
+ubiquitous (every Vite/Rollup/esbuild output); this is the opposite of the encoding-tail trap VI.3 warns
+against. No big-but-tail number crept to the top.
+
+**Any invariant bent?** No. I1 (crate structure) untouched. I2 (never patch deps) — nothing vendored was
+patched; all ESM work is in our own manuk-js/manuk-page. I3 (semantic model in lockstep) — the loader is a
+mechanism whose JS-visible behaviour (imports resolve → modules evaluate → DOM mutates) IS the semantic
+exposure, gated behaviourally (g_esm_page_graph/g_esm_prefetched_graph, both RED-proven); no rendered
+construct went un-exposed. I4 (Pareto) — high-usage class. Bar 0 held every tick (a fetch miss is
+loud-but-safe, never a crash). No drift toward deferred scope (no per-origin isolation, no later-species
+work, no 83%-WPT grind). THE RATCHET held against the recurring manuk-shell false-RED (cold-build load
+spike; re-run on the quiet box lands it — NEVER re-baselined; harness-owned).
+
+**PART VI correction (recorded here, per the #28-30 pattern — not by editing the tick-86 document):** VI.2's
+"genuinely not done" frame is now one subsystem lighter — ESM import-graph loading is DONE. The standing
+ground truth from #30 holds and sharpens: the atomic-capability vein is exhausted and the frontier is the
+PHASE0-BOUNDED-REMAINDER subsystems; one of them (ESM import graphs) has now landed end-to-end. The
+remaining bounded-remainder mass is the real blocker to the Part-VII component-1 gate.
+
+**STEER: 520 MUST BUILD — no third consecutive meta tick.** 518 (surface) and 519 (const) are the two
+cadence-meta ticks; the #30 discipline ("the next tick MUST build, not another probe") applies again.
+Closest-to-gate candidates, re-run the board to pick: (a) the biggest remaining capability GAP — media
+playback-join (Part VII component 1; a decompose-first subsystem per MEDIA.md, the #30 pattern), or (b) a
+bounded ESM follow-up that widens the just-unlocked class — import maps (bare-specifier resolution unlocks
+CDN-pinned no-bundler apps) or dynamic `import()` (the lazy hook). test262 is high-value but it is
+MEASUREMENT (instrument fidelity) — valuable, yet after two meta ticks the loop must BUILD, so test262 is
+sequenced behind the next build brick, not ahead of it.
+
+**Next check due: tick 527.**

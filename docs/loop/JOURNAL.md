@@ -20769,3 +20769,40 @@ frontier is the bounded-remainder subsystems (one just landed). Candidates per b
 (biggest gap), test262 harness (highest-value unmeasured, cheap since we embed SpiderMonkey), or the ESM
 follow-ups (import maps / dynamic import()). Const-check next 519 (DUE next tick); self-audit next 525;
 surface next 528; wall next 527.
+
+## Tick 519 — CONSTITUTION-CHECK #31: the loop obeyed #30 and unlocked a class (gate, not scoreboard) (2026-07-24)
+
+Constitution check came due (cadence every 8; last #30 at 511). Re-read CONSTITUTION.MD Parts I/VI/VII
+against ticks 511-518. HORIZON = H0/v1 (Part VII); GATE = "reliably renders the representative real
+internet" (usage-weighted, GUI+headless) + a complete agentic surface, NOT a WPT %.
+
+GATE OR SCOREBOARD? Gate, decisively — and exactly as #30 ordered. Check #30 ruled "the next capability
+tick MUST be a subsystem BUILD BRICK — ESM import-graph B1." The loop did precisely that (t512 B1 → t513
+B2 → t514 B3 → t515 B3b-i → t516 B3b-ii → t517 B3b-iii), landing a CLASS UNLOCK: a real multi-file
+`import {x} from './y.js'` graph now resolves on BOTH real page paths — the GUI window
+(prefetch_document→from_prefetched) AND the headless/AGENT path (fetch_streaming_page→load_async). Serves
+Part VII component 1 (native-ESM/Vite apps = large usage-weighted slice, real-sites-moved) AND component 2
+(the agent renders through the same load_async path). t518 reconciled the map (constellation ESM
+partial→gated; map otherwise clean vs Interop 2026).
+
+INVARIANTS: none bent. I2 no dep patched (all in our manuk-js/manuk-page); I3 the loader's JS-visible
+behaviour IS the semantic exposure, gated behaviourally + RED-proven; I4 high-usage class; Bar 0 held
+(fetch miss loud-but-safe). RATCHET held against the recurring cold-build manuk-shell false-RED (re-run on
+the quiet box lands it; harness-owned; NEVER re-baselined).
+
+PART VI correction (recorded in CONSTITUTION-CHECK.md per the #28-30 pattern, not by editing the tick-86
+doc): VI.2 is one subsystem lighter — ESM import-graph loading DONE. Frontier = the remaining
+PHASE0-BOUNDED-REMAINDER subsystems.
+
+STEER: 520 MUST BUILD — 518 (surface) + 519 (const) are the two cadence-meta ticks; no third consecutive
+meta tick (the #30 discipline). Closest-to-gate candidates (re-run board to pick): media playback-join
+(biggest capability GAP, decompose-first per MEDIA.md) OR a bounded ESM follow-up (import maps for
+bare-specifier resolution → CDN-pinned no-bundler apps; or dynamic import()). test262 is high-value but
+MEASUREMENT — sequenced behind the next build brick, not ahead of it.
+
+TICK SHAPE: constitution check (docs-only — CONSTITUTION-CHECK.md Check #31 + STATUS
+LAST_CONSTITUTION_CHECK 511→519; NO engine source changed; wall proves nothing regressed). WIKI: none —
+const-check tick, no engine change. No [no-pattern] needed (no engine/{js,css,layout,paint,dom,html,text}
+/src touched).
+
+NEXT: 520 builds (see STEER). Self-audit next 525; surface next 528; const next 527; wall next 527.
