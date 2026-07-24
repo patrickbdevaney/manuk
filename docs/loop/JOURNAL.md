@@ -20346,3 +20346,30 @@ count unmoved, nothing regresses — instrument-fidelity face up). WIKI: none �
 SURFACE-AUDIT.md #24 + WALL-AUDIT.md #12 + CONSTELLATION.tsv. NEXT: lh/rlh is the fresh bounded atomic
 lever (probe+build off the ch/ex/cap seam); else the PHASE0-BOUNDED-REMAINDER subsystems. Self-audit
 next 515; surface next 518; wall next 527; Const-Check next 511.
+
+## Tick 509 — PROBE: CSS `lh` unit already resolves (audit #24's "next lever" was already built) (2026-07-24)
+
+RE-PROBE-BEFORE-BUILDING, and it paid immediately: the surface audit (#24, tick 508) named CSS
+`lh`/`rlh` line-height units as "the next atomic lever" — a sibling of the ch/ex/cap font-metric units
+(t499-502) with zero hits in engine/css. Before spending an engine build wiring it off the font-metrics
+seam, I measured it. It ALREADY WORKS.
+
+BEHAVIOURAL probe added to G_PROBE_CAPABILITIES: `#lhbox { line-height:20px; width:5lh }` measures
+EXACTLY 100px (`lhunit:yes`, pinned). So `lh` both parses in this servo Stylo build AND resolves
+against the element's used line-height — with NO wiring, unlike ch (which needed the manuk-text
+font-metrics seam). The reason is structural: `lh` is not a font metric, it is the line-height, which
+Stylo already has in hand at length-resolution time; the "zero engine/css hits" signal was misleading
+because it resolves inside vendored Stylo, not our supplement. RED-prover: a 1em fallback would read
+80px, an unparsed unit ~800px; only exactly-100 passes. `rlh` is the root-relative sibling on the
+identical Stylo path (self-vs-root line-height), not separately geometry-tested.
+
+Cell 196 unknown→works. The stale-PESSIMISTIC rule pays for the Nth time — a capability the map called
+unknown one tick ago is already real and now gated. No engine/ source touched; +1 pinned capability
+(lhunit:yes); constellation unknown 7→6; Bar 0 held; nothing regresses.
+
+TICK SHAPE: measurement + gate (one new pinned capability, one unknown→works; no engine code, nothing
+regresses — capability + instrument-fidelity faces up). WIKI: none — findings live in CONSTELLATION.tsv
++ the gate doc comment. NEXT: the remaining audit-#24 unknowns (:user-invalid/:user-valid,
+ToggleEvent.source, image-rendering) are the next cheap probes; then the PHASE0-BOUNDED-REMAINDER
+subsystems (ESM import-graph B1, MSE playback-join). Self-audit next 515; surface next 518; wall next
+527; Const-Check next 511.

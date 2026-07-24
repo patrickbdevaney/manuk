@@ -52,6 +52,7 @@ const HTML: &str = r##"<!doctype html>
   <div><textarea id="fsref" cols="40">ok</textarea><textarea id="fs" cols="40">ok</textarea></div>
   <div id="attrbox" data-w="120px">attr</div>
   <div id="sda">scroll driven</div>
+  <div id="lhbox" style="line-height:20px; width:5lh">lh</div>
   <div id="cvon">shown</div><div id="cvoff" style="display:none">hidden</div><div id="cvvis" style="visibility:hidden">invisible</div>
   <video id="vidmuted" muted></video><video id="vidloud"></video>
   <div id="out">-</div>
@@ -307,6 +308,16 @@ const HTML: &str = r##"<!doctype html>
     probe('cpuperf', function () {
       return typeof navigator !== 'undefined' && typeof navigator.cpuPerformance !== 'undefined';
     });
+
+    // ── CSS `lh` line-height unit (Baseline Widely Available May 2026), sibling of ch/ex/cap.
+    // BEHAVIOURAL, not parse-only: #lhbox has `line-height:20px; width:5lh`, so a correctly-wired `lh`
+    // resolves the block width to 5×20 = 100px. A fallback (unit parsed but treated as 1em=16px, the
+    // ch-unit-0.5em bug's shape) yields 80px; an unparsed unit drops the declaration and the block
+    // fills its 800px container. Only exactly-100 passes, so this fails on all three wrong outcomes.
+    probe('lhunit', function () {
+      var w = $('lhbox').getBoundingClientRect().width;
+      return Math.abs(w - 100) < 2;
+    });
   </script>
 
   <!-- ES-module capability, measured from INSIDE a real `<script type=module>`. Modules are deferred,
@@ -413,6 +424,14 @@ const PINNED: &[&str] = &[
     // stub cannot fabricate (2020-01-15 + 40d = 2020-02-24, ISO dayOfWeek 3, a 25h Duration totals 25h,
     // PlainTime 10:30 + 45m = 11:15). Was carried nowhere on the map; measured working, not assumed.
     "temporal:yes",
+    // tick 509 — CSS `lh` line-height unit (Baseline Widely Available May 2026): ALREADY RESOLVES,
+    // exactly (the stale-pessimistic rule pays again — surface audit #24 added it UNKNOWN a tick
+    // earlier). `width:5lh` with `line-height:20px` measures 100px — the unit both PARSES in this
+    // Stylo build and resolves against the element's used line-height, needing zero wiring (unlike
+    // ch, which needed the font-metrics seam). Behavioural RED-prover: a fallback would be 80px, an
+    // unparsed unit ~800px; only exactly-100 passes. `rlh` is the root-relative sibling on the same
+    // Stylo line-height-relative length path (differs only by self-vs-root line-height).
+    "lhunit:yes",
     // tick 506 — ES modules run (the self-contained half). Measured from INSIDE a real
     // `<script type=module>`: it COMPILES + LINKS + EVALUATEs and `import.meta.url` is a non-empty
     // string — the exact hook whose absence silently killed every Vite/Rollup/esbuild bundle (they
