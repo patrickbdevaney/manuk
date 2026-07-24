@@ -3651,11 +3651,17 @@ impl App {
             return;
         };
         let width = self.viewport.width;
+        let mods = manuk_page::KeyModifiers {
+            ctrl: self.modifiers.control_key(),
+            shift: self.modifiers.shift_key(),
+            alt: self.modifiers.alt_key(),
+            meta: self.modifiers.super_key(),
+        };
         let fired = self
             .page
             .as_mut()
             .map(|p| {
-                p.dispatch_key(node, "keyup", &kname, &self.fonts, width);
+                p.dispatch_key_mods(node, "keyup", &kname, mods, &self.fonts, width);
             })
             .is_some();
         if fired {
@@ -3798,10 +3804,18 @@ impl App {
             // eating ArrowDown — the browser default (submit / edit / blur) must NOT run.
             if let Some(kname) = key_name_for_dispatch(key) {
                 let width = self.viewport.width;
+                let mods = manuk_page::KeyModifiers {
+                    ctrl,
+                    shift,
+                    alt,
+                    meta: self.modifiers.super_key(),
+                };
                 let prevented = self
                     .page
                     .as_mut()
-                    .map(|p| !p.dispatch_key(node, "keydown", &kname, &self.fonts, width))
+                    .map(|p| {
+                        !p.dispatch_key_mods(node, "keydown", &kname, mods, &self.fonts, width)
+                    })
                     .unwrap_or(false);
                 if prevented {
                     self.rerender();

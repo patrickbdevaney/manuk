@@ -8649,6 +8649,7 @@ impl PageContext {
         ty: &str,
         key: &str,
         key_code: u32,
+        mods: crate::KeyModifiers,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
         styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
     ) -> Result<bool, String> {
@@ -8661,22 +8662,26 @@ impl PageContext {
             let _ = new_reflector(raw_cx, dom as *mut Dom, node);
         }
         // A real KeyboardEvent-shaped object: `key` (modern) + `keyCode`/`which` (legacy) — the two
-        // ways handlers read the pressed key — plus bubbles/cancelable so delegation + preventDefault
-        // work. `__dispatchEvent` fills in target/currentTarget/preventDefault/etc.
+        // ways handlers read the pressed key — plus the four modifier flags (`ctrlKey`/`shiftKey`/
+        // `altKey`/`metaKey`, which a command palette reads: `if (e.metaKey && e.key==='k')`) and
+        // bubbles/cancelable so delegation + preventDefault work. `__dispatchEvent` fills in
+        // target/currentTarget/preventDefault/etc. and preserves the literal's own props onto the event.
         // Dispatch the KeyboardEvent, then run the **default editing action** for a keydown that no
         // handler cancelled, aimed at an editing host: a printable key (a single-grapheme `key`) inserts
         // that character at the caret (`__insertTextAtCaret`, the same path `execCommand('insertText')`
         // uses), and `Backspace`/`Delete` remove the grapheme before/after the caret (`__deleteAtCaret`) —
         // so a plain `<div contenteditable>` responds to real typing AND editing.
-        // SCOPE: this is contenteditable only (form-control `.value` typing is a separate path); and
-        // because `dispatch_key` surfaces no modifier state yet, an UNHANDLED modifier+letter (e.g. a
-        // page that ignores Ctrl+B) still inserts the letter — modifier plumbing is a later brick.
+        // SCOPE: this is contenteditable only (form-control `.value` typing is a separate path). A
+        // shortcut CHORD (`ctrlKey`/`metaKey` held — Ctrl+B, Cmd+K) does NOT insert its letter: browsers
+        // treat those as shortcuts, not text, so the page's own handler (or the browser default) owns
+        // them. `Shift`/`Alt` alone still produce text (capitals, AltGr characters).
         let script = format!(
             "(function(){{\
-               var proceed=__dispatchEvent({nid}, {{type:{ty}, key:{key}, code:{key}, keyCode:{kc}, which:{kc}, bubbles:true, cancelable:true}});\
+               var proceed=__dispatchEvent({nid}, {{type:{ty}, key:{key}, code:{key}, keyCode:{kc}, which:{kc}, ctrlKey:{ctrl}, shiftKey:{shift}, altKey:{alt}, metaKey:{meta}, bubbles:true, cancelable:true}});\
                if(proceed!==false && {ty}==='keydown'){{\
                  var k={key};\
-                 var printable=(typeof k==='string' && Array.from(k).length===1);\
+                 var chord=({ctrl}||{meta});\
+                 var printable=(!chord && typeof k==='string' && Array.from(k).length===1);\
                  var del=(k==='Backspace' || k==='Delete');\
                  if((printable && typeof globalThis.__insertTextAtCaret==='function') || (del && typeof globalThis.__deleteAtCaret==='function')){{\
                    var host=null, t=(globalThis.__nodes && __nodes[{nid}])||null;\
@@ -8690,6 +8695,10 @@ impl PageContext {
             ty = js_string_literal(ty),
             key = js_string_literal(key),
             kc = key_code,
+            ctrl = mods.ctrl,
+            shift = mods.shift,
+            alt = mods.alt,
+            meta = mods.meta,
         );
         rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
         let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"dispatch_key.js".to_owned(), 1);

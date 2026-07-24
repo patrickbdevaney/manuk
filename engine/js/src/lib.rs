@@ -1100,6 +1100,20 @@ pub fn dispatch_event(
     Ok(true)
 }
 
+/// The four `KeyboardEvent` modifier flags (`ctrlKey`/`shiftKey`/`altKey`/`metaKey`) carried by a
+/// dispatched key. Threaded through [`dispatch_key`] so page handlers can read them — a command
+/// palette (`if (e.metaKey && e.key === 'k')`, the Cmd/Ctrl+K in Slack/Notion/Linear/GitHub), a
+/// composer that inserts a newline only on `Shift+Enter` — and so the default editing action does
+/// NOT insert a stray character when a shortcut chord (Ctrl+B, Cmd+K) is held. `Default` = no
+/// modifiers, which is what every existing caller of the plain [`dispatch_key`] gets.
+#[derive(Clone, Copy, Default, Debug)]
+pub struct KeyModifiers {
+    pub ctrl: bool,
+    pub shift: bool,
+    pub alt: bool,
+    pub meta: bool,
+}
+
 /// Dispatch a `keydown`/`keyup` keyboard event carrying `key` + `key_code` to `node`. Returns
 /// `false` iff a handler called `preventDefault()`. See [`PageContext::dispatch_key`].
 #[cfg(feature = "_sm")]
@@ -1111,11 +1125,12 @@ pub fn dispatch_key(
     ty: &str,
     key: &str,
     key_code: u32,
+    mods: KeyModifiers,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<bool, JsError> {
     with_runtime(|rt| {
-        ctx.dispatch_key(rt, dom, node, ty, key, key_code, layout, styles)
+        ctx.dispatch_key(rt, dom, node, ty, key, key_code, mods, layout, styles)
             .map_err(|message| JsError { message })
     })
 }
@@ -1129,6 +1144,7 @@ pub fn dispatch_key(
     _ty: &str,
     _key: &str,
     _key_code: u32,
+    _mods: KeyModifiers,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<bool, JsError> {

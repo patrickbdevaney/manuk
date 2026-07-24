@@ -2609,3 +2609,26 @@ in Rust); a cut whose selection is in a non-editable `<pre>` returns `false`. RE
 branch. Neighbors green: g_exec_command_copy (its cut, from a non-editable `<pre>`, still `false`),
 g_contenteditable_delete/_forward (the shared `__deleteAtCaret`, unchanged behavior), g_exec_insert_text,
 g_exec_insert_line_break, g_contenteditable_typing.
+
+## A dispatched KeyboardEvent carries ctrlKey/shiftKey/altKey/metaKey (tick 477)
+
+`dispatch_key` built a KeyboardEvent with `key`/`keyCode`/`which` but NO modifier flags, so
+`e.ctrlKey`/`e.shiftKey`/`e.altKey`/`e.metaKey` all read `undefined` (falsy). Two classes were dead: page
+keyboard SHORTCUTS (the Cmd/Ctrl+K command palette in Slack/Notion/Linear/GitHub — `if (e.metaKey &&
+e.key==='k')`; a composer that newlines only on `Shift+Enter`), and editing correctness (a chord aimed at a
+contenteditable — `Ctrl+B`, `Cmd+K` — inserted its letter as text).
+
+**Mechanism.** A `manuk_js::KeyModifiers { ctrl, shift, alt, meta }` (Copy+Default) threads through
+`manuk_js::dispatch_key` → `PageContext::dispatch_key`. The event literal gains
+`ctrlKey/shiftKey/altKey/metaKey` (preserved onto the event by `__dispatchEvent`, same as `keyCode`), and the
+printable-key default action is guarded by `chord=(ctrl||meta)` — a chord no longer types (Ctrl/Meta+letter is
+a shortcut, not text) while Shift/Alt alone still produce text (capitals, AltGr). The public 5-arg
+`Page::dispatch_key(node,ty,key,fonts,vw)` stays stable (delegates with `KeyModifiers::default()`); a new 6-arg
+`Page::dispatch_key_mods` carries the flags, and the GUI's keydown/keyup sites pass real `self.modifiers`
+(super→meta). Re-exported as `manuk_page::KeyModifiers`.
+
+GATE: G_KEY_MODIFIERS (page) — `Ctrl+Shift+K` → a handler reads `ctrl:true|shift:true|alt:false|meta:false`;
+a `Cmd+K` handler's `preventDefault()` makes `dispatch_key_mods` return `false`; `Ctrl+b` into `<div
+contenteditable>Hi</div>` inserts nothing (stays "Hi"); a plain `x` still inserts ("Hix"). RED-proven by
+dropping the modifier props + chord guard → the Cmd+K handler never sees `metaKey`. This modifier substrate
+unblocks the remaining editing bricks (Shift+Enter vs Enter, Ctrl+X/C/V → cut/copy/paste routing).

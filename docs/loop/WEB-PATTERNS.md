@@ -4181,3 +4181,15 @@ text on the clipboard FIRST (a cut that deletes without copying loses the user's
 (`false`) when the selection is not in an editable region, because you cannot remove text you cannot edit.
 The fuller clipboard-`cut`-event model (a page cancelling the whole cut, custom clipboard payloads) is a
 later brick.
+
+## Trigger a keyboard shortcut with a modifier chord (Cmd/Ctrl+K) (tick 477)
+
+**The class of the web this unlocks (every app with a keyboard shortcut or command palette):** a dispatched
+`KeyboardEvent` now carries `ctrlKey`/`shiftKey`/`altKey`/`metaKey`, so a page handler that gates on a
+modifier — `if (e.metaKey && e.key==='k')` (the Cmd/Ctrl+K command palette in Slack/Notion/Linear/GitHub), a
+composer inserting a newline only on `Shift+Enter` — actually fires. Before this the flags were all
+`undefined`, so every modifier-gated shortcut was silently dead. **The trap:** the modifier state is not just
+metadata for the handler — the DEFAULT editing action must read it too, or a `Ctrl+B`/`Cmd+K` chord typed at a
+contenteditable inserts its letter as text (a chord is a shortcut, not typing). Ctrl/Meta held → no text;
+Shift/Alt alone → still text (capitals, AltGr). The full Ctrl+X/C/V → cut/copy/paste routing (the execCommand
+halves all exist) and Shift+Enter/Enter paragraph split are follow-on bricks this substrate enables.

@@ -12,6 +12,7 @@ pub use manuk_dom::history;
 /// One step of a streaming response — see [`Page::deliver_fetch_stream`]. Re-exported so the shell
 /// can drive the streaming path without depending on `manuk-js` directly.
 pub use manuk_js::FetchStreamEvent;
+pub use manuk_js::KeyModifiers;
 /// What a page's WebSocket asked for, and what happened to it — see [`Page::take_ws_ops`] and
 /// [`Page::deliver_ws_event`]. Re-exported so the shell can drive sockets without depending on
 /// `manuk-js` directly.
@@ -3208,12 +3209,37 @@ impl Page {
     /// key (i.e. no handler called `preventDefault`). This is how a page intercepts a key — a chat
     /// composer whose `onKeyDown` calls `preventDefault()` on Enter so it sends the message instead
     /// of submitting the form; a combobox swallowing ArrowDown. `key_code` (the legacy `keyCode`) is
-    /// derived from `key`. No JS context → always `true` (perform the default).
+    /// derived from `key`. No JS context → always `true` (perform the default). This is the
+    /// no-modifier form; use [`Page::dispatch_key_mods`] to carry Ctrl/Shift/Alt/Meta.
     pub fn dispatch_key(
         &mut self,
         node: manuk_dom::NodeId,
         ty: &str,
         key: &str,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        self.dispatch_key_mods(
+            node,
+            ty,
+            key,
+            KeyModifiers::default(),
+            fonts,
+            viewport_width,
+        )
+    }
+
+    /// Like [`Page::dispatch_key`] but carrying the four `KeyboardEvent` modifier flags. The
+    /// dispatched event exposes `ctrlKey`/`shiftKey`/`altKey`/`metaKey` — so a page's keyboard-shortcut
+    /// handler (`if (e.metaKey && e.key === 'k')`, the Cmd/Ctrl+K command palette in Slack/Notion/
+    /// Linear/GitHub; a composer inserting a newline only on `Shift+Enter`) fires — and a shortcut
+    /// CHORD (`ctrl`/`meta` held) does NOT insert a stray character into a contenteditable.
+    pub fn dispatch_key_mods(
+        &mut self,
+        node: manuk_dom::NodeId,
+        ty: &str,
+        key: &str,
+        mods: KeyModifiers,
         fonts: &FontContext,
         viewport_width: f32,
     ) -> bool {
@@ -3235,6 +3261,7 @@ impl Page {
                 ty,
                 key,
                 key_code_for(key),
+                mods,
                 &rects,
                 &self.styles,
             ) {
@@ -3252,7 +3279,7 @@ impl Page {
         }
         #[cfg(not(feature = "spidermonkey"))]
         {
-            let _ = (node, ty, key, fonts, viewport_width);
+            let _ = (node, ty, key, mods, fonts, viewport_width);
             true
         }
     }

@@ -19274,3 +19274,46 @@ MODIFIER-STATE plumbing (Rust signature + all callers — so Ctrl+X/C/V shortcut
 Ctrl+letter doesn't insert), `insertFromPaste` (paste-event trigger + clipboard read t461), the full
 clipboard cut/copy/paste EVENTS, cross-block boundary merge. These want fresh context + design, not an atomic
 tick. Const-Check #25 landed t471 (next 479); self-audit landed t475 (next 485); surface-audit due 478.
+
+## Tick 477 — a dispatched KeyboardEvent carries ctrlKey/shiftKey/altKey/metaKey (2026-07-23)
+
+Brick 7 of the contenteditable EDITING subsystem, and the FOUNDATIONAL cross-cutting one my notes kept
+deferring for "fresh context": `dispatch_key` modifier-state plumbing. Before it, `Page::dispatch_key`
+built a KeyboardEvent with `key`/`keyCode`/`which` but NO modifier flags — so `e.ctrlKey`/`e.metaKey`/
+`e.shiftKey`/`e.altKey` all read `undefined` (falsy) on every dispatched key. Two whole classes were dead:
+(1) page keyboard SHORTCUTS — the Cmd/Ctrl+K command palette that Slack, Notion, Linear and GitHub all
+bind (`if (e.metaKey && e.key==='k')`), a composer that inserts a newline only on `Shift+Enter`; and
+(2) editing correctness — a modifier CHORD aimed at a contenteditable (`Ctrl+B`, `Cmd+K`) inserted its
+letter as text, because the default editing action ignored modifiers.
+
+MECHANISM: a new `pub struct manuk_js::KeyModifiers { ctrl, shift, alt, meta }` (Copy+Default) threaded
+through `manuk_js::dispatch_key` → `PageContext::dispatch_key` (engine/js/src/{lib,dom_bindings}.rs). The
+KeyboardEvent literal gains `ctrlKey/shiftKey/altKey/metaKey` (preserved onto the event by `__dispatchEvent`,
+the same mechanism `keyCode` rides), and the printable-key default action is guarded by
+`chord=(ctrl||meta)` — a chord no longer types (browsers treat Ctrl/Meta+letter as a shortcut, not text),
+while Shift/Alt alone still produce text (capitals, AltGr). ATOMICITY: the public 5-arg
+`Page::dispatch_key(node,ty,key,fonts,vw)` stays stable and delegates with `KeyModifiers::default()`, so all
+~15 existing gate callers and both GUI call sites compile unchanged; a new 6-arg `Page::dispatch_key_mods`
+carries the flags. The GUI's two dispatch sites (keydown/keyup, shell/src/gui.rs) now pass real
+`self.modifiers` state (ctrl/shift/alt/super→meta). `KeyModifiers` re-exported as `manuk_page::KeyModifiers`.
+Zero new dep.
+
+GATE: G_KEY_MODIFIERS (page) — a keydown handler reading the four flags off `Ctrl+Shift+K` sees
+`ctrl:true|shift:true|alt:false|meta:false`; a `Cmd+K` handler's `preventDefault()` propagates back as
+`dispatch_key_mods → false`; `Ctrl+b` typed into `<div contenteditable>Hi</div>` inserts NOTHING (stays
+"Hi"); a plain `x` still inserts ("Hix"). RED-proven by dropping the event-literal modifier props + the
+chord guard → the Cmd+K handler never sees `metaKey`, dispatch returns true, the assert fails. Neighbors
+green: g_contenteditable_typing/delete/delete_forward, g_exec_cut, g_exec_insert_text, g_ime_composition
+(all ride the unchanged 5-arg path); manuk-shell builds (gui.rs modifier wiring).
+
+TICK SHAPE: capability (contenteditable EDITING brick 7/N — modifier-state plumbing; +1 gate). GATES +1.
+CONSTELLATION: rich-editing + keyboard-shortcuts — a page's Cmd/Ctrl+K palette and Shift+Enter composer now
+receive the modifier state they gate on; a shortcut chord no longer types a stray char into an editable.
+WIKI: interaction-surface.md — new section after the t476 cut note.
+WEB-PATTERNS: trigger-a-keyboard-shortcut-with-a-modifier-chord.
+AGENTIC: the agent can now dispatch modifier chords (Ctrl/Cmd/Shift/Alt + key) that pages actually react to.
+NEXT VEIN NOTE: the modifier substrate now unblocks the remaining editing bricks — Shift+Enter→insertLineBreak
+vs Enter→insertParagraph (browser-divergent block split), and Ctrl+X/C/V→cut/copy/paste routing (the
+execCommand halves all exist: copy t463, cut t476, insertText t471; wiring keydown Ctrl+X to __deleteAtCaret's
+cut path is now a bounded follow-on). insertFromPaste (paste-event trigger) + cross-block boundary merge
+remain. Const-Check #25 landed t471 (next 479); self-audit landed t475 (next 485); surface-audit due 478.

@@ -523,6 +523,7 @@
   - L2555 · The Delete key removes the grapheme after the caret in a contenteditable (tick 474)
   - L2571 · execCommand('insertLineBreak') inserts a <br> at the caret (tick 475)
   - L2591 · execCommand('cut') copies the selection to the clipboard and removes it (tick 476)
+  - L2613 · A dispatched KeyboardEvent carries ctrlKey/shiftKey/altKey/metaKey (tick 477)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -943,4 +944,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-858 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+859 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
