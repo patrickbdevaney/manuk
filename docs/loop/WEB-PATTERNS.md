@@ -4446,5 +4446,17 @@ synchronous on the JS thread and there is no blocking network here, so the whole
 pre-fetched BEFORE any module runs — the scanner is a superset-or-miss heuristic that only decides what to
 fetch, while `esm_load_graph` (reading SpiderMonkey's real `GetRequestedModuleSpecifier`) stays the
 authoritative walk, so an over-fetch is harmless and a miss fails one import loud-but-safe, never a crash.
-Residue: bare specifiers (`import 'react'`) still need an import-map resolver; dynamic `import()` uses a
-separate lazy hook.
+Residue: dynamic `import()` uses a separate lazy hook (still unresolved).
+
+**Bare specifiers resolve through a `<script type=importmap>` (tick 520)** — so a CDN-pinned no-bundler app
+(`import {h} from 'preact'` with `{"imports":{"preact":"https://esm.sh/preact"}}`) boots. The page parses
+the import map's flat `imports` object (`extract_import_map`, serde_json), carries it on `Page`/`Prefetched`
+beside the graph sources, and seeds it into the JS layer (`IMPORT_MAP`) for the module pass. One
+`resolve_module_specifier` now governs BOTH the resolve hook and the graph walk: a relative specifier
+resolves against its importer, a BARE specifier (not `./ ../ /`, not a URL) is looked up in the map — exact
+key first, then the longest trailing-slash PREFIX key (`"utils/"` maps `utils/num.js`) — and its target
+resolved against the DOCUMENT url; an unmapped bare specifier returns null (loud-but-safe, `ModuleLink`
+fails there, exactly as before). The page pre-fetch mirrors the same resolution so mapped urls are fetched
+too. Gate `g_esm_import_map` drives both forms end-to-end over localhost; RED = empty map → bare specifier
+unresolved → the app does not render. Residue: import-map `scopes` (per-path overrides) not yet honoured;
+dynamic `import()` still separate.

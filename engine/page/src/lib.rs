@@ -1007,6 +1007,11 @@ pub struct Page {
     /// blocking→paint→deferred gap and is seeded on whichever thread runs the scripts. Empty ⇒ modules
     /// link self-contained, exactly as before the loader existed.
     module_graph_sources: std::collections::HashMap<String, String>,
+    /// **The document's import map (tick 520)** — bare specifier → raw target, parsed from a
+    /// `<script type=importmap>`. Seeded into the JS layer alongside [`Self::module_graph_sources`] by
+    /// `run_deferred_scripts` so `import 'react'` resolves through it. Empty ⇒ bare specifiers fail
+    /// loud-but-safe, exactly as before.
+    import_map: std::collections::HashMap<String, String>,
     zoom: f32,
     /// Decoded raster images keyed by their `<img>` node, painted into each element's box.
     images: std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
@@ -1459,13 +1464,16 @@ impl Page {
         // deferred pass; `run_module` drives the population walk over it so every `import` resolves. A
         // page with no module imports yields an empty map ⇒ modules link self-contained, as before.
         #[cfg(feature = "spidermonkey")]
-        let module_graph_sources = prefetch_module_graph(&dom, final_url).await;
+        let import_map = extract_import_map(&dom);
+        #[cfg(feature = "spidermonkey")]
+        let module_graph_sources = prefetch_module_graph(&dom, final_url, &import_map).await;
         let mut page = Page::from_dom(dom, final_url, fonts, viewport_width);
-        // Carry the pre-fetched graph onto the page; `run_deferred_scripts` seeds it into the JS layer
-        // and clears it after the module pass (the same seam the shell's `from_prefetched` path uses).
+        // Carry the pre-fetched graph + import map onto the page; `run_deferred_scripts` seeds them into
+        // the JS layer and clears them after the module pass (the same seam the shell path uses).
         #[cfg(feature = "spidermonkey")]
         {
             page.module_graph_sources = module_graph_sources;
+            page.import_map = import_map;
         }
         // **Both passes, back to back** — see `load`. `from_dom` runs only the scripts that block first
         // paint; the deferred ones (`defer`, `async`, `type=module`) run here.
@@ -1830,6 +1838,9 @@ impl Page {
         // pre-fetch pass carried onto the page, exactly like the scroll/snap geometry above. Empty ⇒
         // no-op. Cleared right after the pass so one document's graph can never resolve the next's.
         manuk_js::set_module_graph_sources(self.module_graph_sources.clone());
+        // The import map rides alongside the graph sources (tick 520) — the resolve hook consults it for
+        // bare `import 'react'` specifiers during the same module pass.
+        manuk_js::set_import_map(self.import_map.clone());
         // Before the scripts run, not after: a script that draws an image on its first tick must find
         // the pixels already there, or the draw silently no-ops and the canvas stays blank.
         self.publish_image_sources();
@@ -1843,6 +1854,7 @@ impl Page {
             }
         };
         manuk_js::clear_module_graph_sources();
+        manuk_js::clear_import_map();
         self.drain_canvases();
         self.drain_element_scrolls();
         if ran > 0 {
@@ -3731,6 +3743,7 @@ impl Page {
             images,
             masks,
             module_graph_sources,
+            import_map,
         } = pre;
         // Seeded before construction, because `from_dom` runs the document's blocking scripts and
         // the policy has to be in force by then — not after.
@@ -3740,6 +3753,7 @@ impl Page {
         // may call much later, after paint — seeds it for the module (deferred) pass. This is the shell
         // path's half of B3b; `load_async` sets the same field on the streaming/agent path.
         page.module_graph_sources = module_graph_sources;
+        page.import_map = import_map;
         if !css.is_empty() {
             page.apply_stylesheets(&css, fonts, viewport_width);
         }
@@ -3909,6 +3923,7 @@ impl Page {
             // Empty by default; the async pre-fetch pass on the caller's path sets this before the
             // deferred (module) scripts run (`load_async`, `from_prefetched_inner`).
             module_graph_sources: std::collections::HashMap::new(),
+            import_map: std::collections::HashMap::new(),
             zoom: 1.0,
             // The inline images decoded above already have their natural size in `styles`; carrying
             // them here is what lets them PAINT as well as lay out.
@@ -6387,21 +6402,104 @@ fn scan_static_import_specifiers(src: &str) -> Vec<String> {
     out
 }
 
+/// **Parse the document's import map from its `<script type=importmap>` (tick 520).** Returns the flat
+/// `imports` object (bare specifier → raw target) — the standard form CDN-pinned no-bundler apps use
+/// (`{"imports":{"react":"https://esm.sh/react"}}`). Per spec the FIRST import map wins and must precede
+/// module loads, so only the first is read; malformed JSON yields an empty map (loud-but-safe). `scopes`
+/// (per-path overrides) are not yet honoured — a bounded follow-up; the flat `imports` covers the common
+/// case.
+#[cfg(feature = "spidermonkey")]
+fn extract_import_map(dom: &Dom) -> HashMap<String, String> {
+    let mut out = HashMap::new();
+    for node in dom.descendants(dom.root()) {
+        if dom.tag_name(node) != Some("script") {
+            continue;
+        }
+        let is_importmap = dom
+            .element(node)
+            .and_then(|e| e.attr("type"))
+            .map(|t| t.eq_ignore_ascii_case("importmap"))
+            .unwrap_or(false);
+        if !is_importmap {
+            continue;
+        }
+        let text = dom.text_content(node);
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+            if let Some(imports) = v.get("imports").and_then(|i| i.as_object()) {
+                for (k, val) in imports {
+                    if let Some(s) = val.as_str() {
+                        out.insert(k.clone(), s.to_string());
+                    }
+                }
+            }
+        } else {
+            tracing::info!("<script type=importmap> JSON did not parse — bare specifiers unmapped");
+        }
+        break; // the first import map wins
+    }
+    out
+}
+
+/// Look a bare specifier up in an import map — exact key, then the longest trailing-slash PREFIX key.
+/// Mirrors the JS-side `import_map_lookup` so the page pre-fetch and the link-time resolve hook agree.
+#[cfg(feature = "spidermonkey")]
+fn import_map_lookup_page(map: &HashMap<String, String>, spec: &str) -> Option<String> {
+    if let Some(t) = map.get(spec) {
+        return Some(t.clone());
+    }
+    let mut best: Option<(&String, &String)> = None;
+    for (k, v) in map {
+        if k.ends_with('/') && spec.starts_with(k.as_str()) {
+            if best.map_or(true, |(bk, _)| k.len() > bk.len()) {
+                best = Some((k, v));
+            }
+        }
+    }
+    best.map(|(k, v)| format!("{v}{}", &spec[k.len()..]))
+}
+
+/// Resolve a module specifier the way the JS `resolve_module_specifier` does, so the url pre-fetched is
+/// the url the resolve hook later looks up: a relative specifier against its `importer`, a BARE specifier
+/// through the import map against `doc_base`. `None` for a bare specifier with no mapping (skip — the
+/// importer fails at `ModuleLink`, loud-but-safe).
+#[cfg(feature = "spidermonkey")]
+fn resolve_page_specifier(
+    importer: &Url,
+    doc_base: &Url,
+    spec: &str,
+    import_map: &HashMap<String, String>,
+) -> Option<Url> {
+    let bare = !(spec.starts_with('/') || spec.starts_with("./") || spec.starts_with("../"))
+        && Url::parse(spec).is_err();
+    if bare {
+        let target = import_map_lookup_page(import_map, spec)?;
+        return doc_base
+            .join(&target)
+            .ok()
+            .or_else(|| Url::parse(&target).ok());
+    }
+    importer.join(spec).ok()
+}
+
 /// **Pre-fetch the whole static-import graph of a document's inline `<script type=module>` roots (B3b).**
 ///
 /// Walks each module root's static `import`s (via [`scan_static_import_specifiers`]), resolving every
-/// specifier against its importer's URL exactly as `esm_load_graph` does (`Url::join`), fetching each
-/// not-yet-seen module off the UI thread with `manuk_net::fetch`, and recursing into *its* imports —
-/// a breadth-first walk with a visited set (the diamond/cycle guard) and a hard node cap. Returns the
-/// resolved-url → source map `manuk_js::set_module_graph_sources` seeds so the synchronous `ModuleLink`
-/// finds every dependency already fetched.
+/// specifier the way the loader does (a relative specifier against its importer, a BARE specifier through
+/// the `import_map` against the document url — tick 520), fetching each not-yet-seen module off the UI
+/// thread with `manuk_net::fetch`, and recursing into *its* imports — a breadth-first walk with a visited
+/// set (the diamond/cycle guard) and a hard node cap. Returns the resolved-url → source map
+/// `manuk_js::set_module_graph_sources` seeds so the synchronous `ModuleLink` finds every dependency.
 ///
 /// Failure is loud-but-safe, matching the loader: a fetch miss (404, dead host, bare specifier that
 /// resolves to nothing real) is logged and skipped — the module never enters the map and its importer
 /// fails at `ModuleLink`, never a crash. External `<script type=module src>` roots are already inlined
 /// by [`fetch_external_scripts`] before this runs, so their source is visible here as text content.
 #[cfg(feature = "spidermonkey")]
-async fn prefetch_module_graph(dom: &Dom, base: &str) -> HashMap<String, String> {
+async fn prefetch_module_graph(
+    dom: &Dom,
+    base: &str,
+    import_map: &HashMap<String, String>,
+) -> HashMap<String, String> {
     let mut sources: HashMap<String, String> = HashMap::new();
     let base_url = match Url::parse(base) {
         Ok(u) => u,
@@ -6438,11 +6536,11 @@ async fn prefetch_module_graph(dom: &Dom, base: &str) -> HashMap<String, String>
     // pathological or adversarial graph — the loader has its own depth-256 guard behind this.
     let mut fetched_count = 0usize;
     while let Some((importer, specifier)) = queue.pop_front() {
-        // Resolve against the importer's own URL — `./b.js` is relative to the module that imports it,
-        // identical to the loader's resolution so the pre-fetched key matches the resolve-hook lookup.
-        let resolved = match importer.join(&specifier) {
-            Ok(u) => u,
-            Err(_) => continue,
+        // Resolve like the loader: `./b.js` against the importer, a bare `react` through the import map
+        // against the document url — so the pre-fetched key matches the resolve-hook lookup exactly.
+        let resolved = match resolve_page_specifier(&importer, &base_url, &specifier, import_map) {
+            Some(u) => u,
+            None => continue,
         };
         let key = resolved.as_str().to_string();
         if sources.contains_key(&key) {
@@ -6510,6 +6608,10 @@ pub struct Prefetched {
     /// this; the map rides on the page (`Page::module_graph_sources`) and is seeded into the JS layer at
     /// the moment the deferred pass runs. Empty ⇒ no module imports ⇒ modules link self-contained.
     pub module_graph_sources: HashMap<String, String>,
+    /// **The document's import map (tick 520)** — bare specifier → raw target from `<script
+    /// type=importmap>`. Parsed off-thread with the graph and carried onto the page the same way, so the
+    /// resolve hook resolves `import 'react'` at link. Empty ⇒ bare specifiers fail loud-but-safe.
+    pub import_map: HashMap<String, String>,
 }
 
 /// Fetch a document **and all of its subresources** off-thread (DEBT-1). The returned
@@ -6585,11 +6687,17 @@ async fn prepare_prefetched(html: String, final_url: String, mut csp: Csp) -> Re
     #[cfg(not(feature = "spidermonkey"))]
     let csp_authorized_scripts: Vec<NodeId> = Vec::new();
 
-    // **The ES-module import graph (B3b-iii)** — pre-fetched off-thread here, on the DEBT-1 path the
-    // shell actually navigates with, exactly as `load_async` does for the streaming/agent path. The
-    // external `type=module src` roots were just inlined above, so every root's source is visible.
+    // **The ES-module import graph (B3b-iii) + import map (tick 520)** — pre-fetched off-thread here, on
+    // the DEBT-1 path the shell actually navigates with, exactly as `load_async` does for the
+    // streaming/agent path. The external `type=module src` roots were just inlined above, so every root's
+    // source is visible; the import map (bare-specifier resolution) is parsed from `<script type=importmap>`
+    // and feeds the graph pre-fetch so mapped urls are fetched too.
     #[cfg(feature = "spidermonkey")]
-    let module_graph_sources = prefetch_module_graph(&dom, &final_url).await;
+    let import_map = extract_import_map(&dom);
+    #[cfg(not(feature = "spidermonkey"))]
+    let import_map: HashMap<String, String> = HashMap::new();
+    #[cfg(feature = "spidermonkey")]
+    let module_graph_sources = prefetch_module_graph(&dom, &final_url, &import_map).await;
     #[cfg(not(feature = "spidermonkey"))]
     let module_graph_sources: HashMap<String, String> = HashMap::new();
 
@@ -6661,6 +6769,7 @@ async fn prepare_prefetched(html: String, final_url: String, mut csp: Csp) -> Re
         images,
         masks,
         module_graph_sources,
+        import_map,
     })))
 }
 

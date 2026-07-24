@@ -94,6 +94,16 @@ thread_local! {
     static MODULE_GRAPH_SOURCES: std::cell::RefCell<std::collections::HashMap<String, String>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
 
+    /// **The document's import map — bare specifier → raw target (tick 520).** A `<script type=importmap>`
+    /// declares how bare specifiers (`import 'react'`) resolve, since this engine has no built-in
+    /// resolver: without the map a bare specifier fails at `ModuleLink` (loud-but-safe). The page parses
+    /// the map's JSON `imports` object and seeds it here before scripts run — both the resolve hook and
+    /// the graph walk consult it (via [`resolve_module_specifier`]) so a bare specifier resolves to the
+    /// same url at pre-fetch and at link. Targets resolve against the DOCUMENT url; a relative specifier
+    /// (`./x`) never touches this map. Empty ⇒ bare specifiers fail exactly as before.
+    static IMPORT_MAP: std::cell::RefCell<std::collections::HashMap<String, String>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+
     /// **The** live `Dom` for the current re-entry into JS.
     ///
     /// Every reflector used to cache its own `*mut Dom` in a reserved slot. That pointer is stale
@@ -9458,6 +9468,75 @@ pub fn clear_module_graph_sources() {
     MODULE_GRAPH_SOURCES.with(|m| m.borrow_mut().clear());
 }
 
+/// **Seed the document's import map — bare specifier → raw target (tick 520).** The page parses a
+/// `<script type=importmap>`'s `imports` object and seeds it before scripts run; [`module_resolve_hook`]
+/// and [`esm_load_graph`] then resolve bare specifiers through it. Replaced whole per navigation.
+pub fn set_import_map(map: std::collections::HashMap<String, String>) {
+    IMPORT_MAP.with(|m| *m.borrow_mut() = map);
+}
+
+/// Drop the import map. Pairs with [`clear_module_graph_sources`] so one document's map cannot resolve
+/// the next's bare specifiers.
+pub fn clear_import_map() {
+    IMPORT_MAP.with(|m| m.borrow_mut().clear());
+}
+
+/// **Is `spec` a BARE module specifier** — one with no built-in resolution, that must go through the
+/// import map? Per the spec, a specifier that starts with `/`, `./` or `../` is relative, and one that
+/// parses as an absolute URL (has a scheme) is a URL; anything else (`react`, `lodash/fp`) is bare.
+fn is_bare_specifier(spec: &str) -> bool {
+    if spec.starts_with('/') || spec.starts_with("./") || spec.starts_with("../") {
+        return false;
+    }
+    url::Url::parse(spec).is_err()
+}
+
+/// **Look a bare specifier up in an import map** — exact key first, then the longest matching
+/// trailing-slash PREFIX key (`"lodash/": "https://cdn/lodash/"` maps `lodash/fp` → `…/fp`), the two
+/// standard import-map forms. Returns the raw (possibly relative) target.
+fn import_map_lookup(
+    map: &std::collections::HashMap<String, String>,
+    spec: &str,
+) -> Option<String> {
+    if let Some(t) = map.get(spec) {
+        return Some(t.clone());
+    }
+    let mut best: Option<(&String, &String)> = None;
+    for (k, v) in map {
+        if k.ends_with('/') && spec.starts_with(k.as_str()) {
+            if best.map_or(true, |(bk, _)| k.len() > bk.len()) {
+                best = Some((k, v));
+            }
+        }
+    }
+    best.map(|(k, v)| format!("{v}{}", &spec[k.len()..]))
+}
+
+/// **Resolve a module specifier the way BOTH the resolve hook and the graph walk must (tick 520)** — so
+/// the url stored during pre-fetch is the url looked up at link. `base` is the importer's own url, which
+/// a RELATIVE specifier (`./b.js`) resolves against. A BARE specifier (`react`) is looked up in the
+/// import map and its target resolved against the DOCUMENT url (import-map targets are document-relative,
+/// not importer-relative); a bare specifier with no mapping returns `None` (loud-but-safe — the link
+/// fails there, exactly as it did before any import-map support). Returns the resolved absolute url.
+fn resolve_module_specifier(base: &str, specifier: &str) -> Option<String> {
+    if is_bare_specifier(specifier) {
+        let target = IMPORT_MAP.with(|m| import_map_lookup(&m.borrow(), specifier))?;
+        // The mapped target may be absolute (`https://cdn/react.js`) or document-relative (`./vendor/
+        // react.js`). Resolve against the document url; if that fails (target already absolute with a
+        // scheme `join` treats as replacement, which is correct), fall back to parsing it directly.
+        let doc = DOC_URL.with(|u| u.borrow().clone());
+        return url::Url::parse(&doc)
+            .and_then(|b| b.join(&target))
+            .ok()
+            .map(|u| u.to_string())
+            .or_else(|| url::Url::parse(&target).ok().map(|u| u.to_string()));
+    }
+    url::Url::parse(base)
+        .and_then(|b| b.join(specifier))
+        .ok()
+        .map(|u| u.to_string())
+}
+
 /// **B1 rooting-harness self-check — the RED-provable proof the registry survives a GC.**
 ///
 /// Compiles a trivial self-contained module, stashes a url as its private, registers it, drops every
@@ -9954,11 +10033,12 @@ unsafe fn esm_load_graph(
                 _ => continue,
             }
         };
-        // Resolve against THIS module's own url, so `./b.js` is relative to the importer. A bare
-        // specifier has no base-relative resolution here → skip (link fails at that import, loud-but-safe).
-        let resolved = match url::Url::parse(url).and_then(|b| b.join(&specifier)) {
-            Ok(u) => u.to_string(),
-            Err(_) => continue,
+        // Resolve against THIS module's own url, so `./b.js` is relative to the importer; a BARE
+        // specifier resolves through the import map (tick 520) against the document url. Unresolvable
+        // (bare + unmapped) → skip (link fails at that import, loud-but-safe).
+        let resolved = match resolve_module_specifier(url, &specifier) {
+            Some(u) => u,
+            None => continue,
         };
         // Cycle guard + memoization: already fetched ⇒ do not fetch/compile/recurse again. This is the
         // single line that makes `a ↔ b` terminate.
@@ -10217,13 +10297,14 @@ unsafe extern "C" fn module_resolve_hook(
             DOC_URL.with(|u| u.borrow().clone())
         }
     };
-    // 3. Resolve the specifier against the base url and return the registered module for it. A bare
-    //    specifier (`'react'`) has no base-relative resolution here and fails to null loud-but-safe —
-    //    exactly as B3 documents (no bare-specifier resolver in this engine, no guess). An unpopulated
-    //    url also returns null: the module was never fetched/compiled, so the link fails gracefully.
-    let resolved = match url::Url::parse(&base).and_then(|b| b.join(&specifier)) {
-        Ok(u) => u.to_string(),
-        Err(_) => return ptr::null_mut(),
+    // 3. Resolve the specifier and return the registered module for it. A relative specifier resolves
+    //    against `base` (the importer); a BARE specifier (`'react'`) resolves through the import map
+    //    (tick 520) against the document url, or fails to null loud-but-safe if unmapped — no guess. An
+    //    unpopulated url also returns null: the module was never fetched/compiled, so the link fails
+    //    gracefully.
+    let resolved = match resolve_module_specifier(&base, &specifier) {
+        Some(u) => u,
+        None => return ptr::null_mut(),
     };
     esm_registry_get(&resolved)
 }

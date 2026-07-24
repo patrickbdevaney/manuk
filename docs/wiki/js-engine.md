@@ -288,8 +288,27 @@ points now flow through one seam. Gate `g_esm_prefetched_graph` drives the exact
 two-level graph and asserts `answer` (42) reached the DOM; drop the `page.module_graph_sources =
 module_graph_sources` carry in `from_prefetched_inner` and it goes red (`#out` stays `-` — the map was gone
 by the deferred pass). **With both paths live the class is genuinely unlocked** — native-ESM / no-bundler /
-Vite-dev import-graph apps render in the agent AND in the window. Residue: bare specifiers still need an
-import-map resolver; dynamic `import()` uses its own lazy hook.
+Vite-dev import-graph apps render in the agent AND in the window. Residue: dynamic `import()` uses its own
+lazy hook.
+
+**Bare specifiers resolve through an import map, and ONE resolver governs both paths (tick 520).** A bare
+specifier (`import 'react'` — not `./ ../ /`, not a URL) has no built-in resolution here, so before this it
+failed at `ModuleLink`; that is exactly how a CDN-pinned no-bundler app (`import {h} from 'preact'` mapped
+to `https://esm.sh/preact`) fails to boot. A `<script type=importmap>` closes it. The page parses the map's
+flat `imports` object (`extract_import_map`, serde_json — the FIRST map wins, malformed JSON → empty →
+loud-but-safe) and carries it on `Page.import_map` / `Prefetched.import_map` beside the graph sources,
+seeding it into the JS-layer `IMPORT_MAP` thread-local in `run_deferred_scripts`. The key move is a single
+`resolve_module_specifier(base, spec)` that BOTH `module_resolve_hook` and `esm_load_graph` now call, so
+pre-fetch and link never disagree: a relative specifier resolves against `base` (the importer), a bare
+specifier is looked up in the map — **exact key first, then the longest trailing-slash PREFIX key**
+(`"utils/"` maps `utils/num.js` → its target + `num.js`), the two standard import-map forms — and its
+target resolved against the DOCUMENT url (import-map targets are document-relative, not importer-relative);
+an unmapped bare specifier returns null (the link fails there, unchanged). The page-side `prefetch_module_
+graph` mirrors the identical resolution (`resolve_page_specifier`) so the mapped urls get fetched. Gate
+`g_esm_import_map` serves a document whose importmap declares both an exact key (`greeter`) and a prefix
+key (`utils/`), drives it through `load_async`, and asserts `hi:42` (greet() + six*7) reaches the DOM;
+neuter `extract_import_map` to empty and it goes red (`#out` stays `-`). Residue: import-map `scopes`
+(per-path overrides) not yet honoured — a bounded follow-up; the flat `imports` covers the common case.
 
 ## An unhandled promise rejection is where every framework's failure goes to die
 

@@ -3360,6 +3360,7 @@ dependencies = [
  "manuk-paint",
  "manuk-text",
  "resvg",
+ "serde_json",
  "tokio",
  "tokio-tungstenite",
  "tracing",

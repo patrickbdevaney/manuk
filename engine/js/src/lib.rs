@@ -413,6 +413,26 @@ pub fn clear_module_graph_sources() {
 #[cfg(not(feature = "_sm"))]
 pub fn clear_module_graph_sources() {}
 
+/// **Seed the document's import map (tick 520)** — bare specifier → raw target, parsed by the page from a
+/// `<script type=importmap>`. The module resolve hook + graph walk resolve bare `import 'react'`
+/// specifiers through it. Seeded before the deferred (module) pass, next to the module-graph sources.
+#[cfg(feature = "_sm")]
+pub fn set_import_map(map: std::collections::HashMap<String, String>) {
+    dom_bindings::set_import_map(map);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_import_map(_map: std::collections::HashMap<String, String>) {}
+
+/// Drop the import map after the deferred pass so one document's map cannot resolve the next's specifiers.
+#[cfg(feature = "_sm")]
+pub fn clear_import_map() {
+    dom_bindings::clear_import_map();
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn clear_import_map() {}
+
 /// A host callback that lays the document out synchronously — see [`set_reflow_hook`].
 #[cfg(feature = "_sm")]
 pub type ReflowFn = dom_bindings::ReflowFn;

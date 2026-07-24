@@ -20806,3 +20806,45 @@ const-check tick, no engine change. No [no-pattern] needed (no engine/{js,css,la
 /src touched).
 
 NEXT: 520 builds (see STEER). Self-audit next 525; surface next 528; const next 527; wall next 527.
+
+## Tick 520 — BUILD BRICK: ESM import maps — bare specifiers resolve (CDN no-bundler apps boot) (2026-07-24)
+
+Obeying Const-Check #31's steer ("520 MUST BUILD — no third meta tick; a bounded ESM follow-up is
+closest-to-gate"), landed **ESM import maps**. The import-graph subsystem (t512-517) resolved RELATIVE
+specifiers; a BARE specifier (`import 'react'`) had no resolution and died at ModuleLink — exactly how a
+CDN-pinned no-bundler app (`import {h} from 'preact'` mapped to `https://esm.sh/preact`) fails to boot.
+This closes that gap.
+
+WHAT LANDED (engine/js/src/dom_bindings.rs + lib.rs, engine/page/src/lib.rs + Cargo.toml):
+1. **`IMPORT_MAP` thread-local + set/clear + manuk_js wrappers** (mirrors MODULE_GRAPH_SOURCES).
+2. **ONE resolver governs BOTH the resolve hook and the graph walk** — `resolve_module_specifier(base,
+   spec)`, called by `module_resolve_hook` AND `esm_load_graph`, so pre-fetch and link never disagree. A
+   relative specifier resolves against `base` (the importer); a BARE specifier (not `./ ../ /`, not a URL)
+   is looked up in the map (exact key, then longest trailing-slash PREFIX key — `"utils/"` maps
+   `utils/num.js`) and its target resolved against the DOCUMENT url; unmapped bare → null (loud-but-safe,
+   link fails there, unchanged).
+3. **Page side**: `extract_import_map` (serde_json, first map wins, malformed→empty) parses `<script
+   type=importmap>`'s flat `imports`; carried on `Page.import_map`/`Prefetched.import_map` beside the graph
+   sources; seeded into the JS layer in `run_deferred_scripts`. `prefetch_module_graph` mirrors the
+   resolution (`resolve_page_specifier`) so mapped urls get fetched. Both real page paths (load_async +
+   from_prefetched) via the unified seam.
+
+RED-PROVEN (real E2E): new gate `g_esm_import_map` serves a document whose importmap declares BOTH forms —
+an exact key (`greeter` → ./lib/greeter.js) and a prefix key (`utils/` → ./lib/utils/, so `utils/num.js` →
+./lib/utils/num.js) — drives it through `load_async`, asserts `hi:42` (greet() + six*7) reaches #out.
+Neuter `extract_import_map` to empty → bare specifiers unresolved → #out stays `-`; restored → GREEN. The
+whole ESM regression set (g_esm_import_graph, g_esm_page_graph, g_esm_prefetched_graph) still GREEN —
+routing relative specifiers through the same resolver changed nothing for them (its else-branch is the old
+Url::join).
+
+TICK SHAPE: subsystem build brick (1 capability — bare-specifier resolution via import maps on both page
+paths; new gate g_esm_import_map E2E over localhost, both exact + prefix forms; the 3 prior ESM gates hold;
+nothing regresses; Bar 0 held — unmapped bare is loud-but-safe). WIKI: docs/wiki/js-engine.md (ESM section —
+the import-map subsection: the single shared resolver, exact-then-prefix lookup, document-relative targets).
+WEB-PATTERNS.md updated — the class widened: CDN-pinned no-bundler / import-map apps now boot. NOT
+[no-pattern].
+
+NEXT: ESM is now static-graph + import-map complete on both paths. Remaining ESM residue (bounded, own
+ticks): import-map `scopes`; dynamic `import()` (separate lazy hook). Otherwise PIVOT per the board — media
+playback-join (biggest capability GAP) or test262 (highest-value unmeasured JS-conformance). Self-audit
+next 525; surface next 528; const next 527; wall next 527.
