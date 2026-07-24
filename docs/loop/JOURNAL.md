@@ -19110,3 +19110,41 @@ NEXT VEIN NOTE: same-substrate atomic follow-ons — default typed-character act
 insertText), `insertParagraph` (Enter/block-split), `deleteContentBackward` (Backspace), `insertFromPaste`
 plaintext. Formatting-command wrapping (`bold`→`<b>`) + multi-node selection deletion are later larger bricks.
 Constitution Check #25 landed this tick (next due 479).
+
+## Tick 472 — a printable key typed into a contenteditable inserts the character (2026-07-23)
+
+Brick 2 of the contenteditable EDITING subsystem, the natural complement to t471. t471 landed the
+PROGRAMMATIC insert (`execCommand('insertText')`); this lands the path a real user or the AGENT uses — a
+keystroke. Before it, `dispatch_key` fired the `KeyboardEvent` and stopped: a `<div contenteditable>` ran
+the page's handlers and then did nothing, the pressed character never appeared — the box looked editable
+but was inert to typing.
+
+MECHANISM: factor t471's insert-at-caret logic into a global `__insertTextAtCaret(host, text, inputType)`
+helper (fire cancelable beforeinput → mutate DOM at caret via Selection/Range/`insertData` → fire
+non-cancelable input; cancelled beforeinput vetoes). Both `execCommand('insertText')` and the new default
+action call it — the two typing paths can't drift. In `dispatch_key` (`engine/js/src/dom_bindings.rs`), after
+the KeyboardEvent dispatch: iff `ty==='keydown'`, not cancelled (`proceed!==false`), `key` is a single
+grapheme (`Array.from(key).length===1` — excludes Enter/Tab/arrows, counts astral chars as one), and the
+target is inside an editing host (parentNode walk to nearest `isContentEditable`), call the helper with the
+key. Scope stated honestly: contenteditable ONLY (form-control `.value` typing is a separate path); no
+modifier state on dispatch_key yet, so an UNHANDLED modifier+letter still inserts — modifier plumbing (widen
+the signature + callers) is a later brick; in practice an editor's shortcut handler preventDefaults the
+keydown, which the `proceed!==false` guard honors.
+
+GATE: G_CONTENTEDITABLE_TYPING (page) — caret after "Hi", keydown/keyup of `X` → DOM "HiX", log
+`bi:insertText:X|in:insertText:X`; a following `Enter` inserts nothing (one pair only); a second editable
+whose keydown handler `preventDefault()`s stays "Keep". RED-proven by neutralizing the default-action block
+→ key fires, nothing inserts. Neighbors green: g_exec_insert_text (shared helper unchanged behavior),
+g_exec_command_copy, g_ime_composition, g_contenteditable_query, g_selection, g_range.
+
+TICK SHAPE: capability (contenteditable EDITING brick 2/N; +1 gate). GATES +1.
+CONSTELLATION: advances rich-editing — a contenteditable now accepts real keyboard input.
+WIKI: interaction-surface.md — new section after the t471 insertText note.
+WEB-PATTERNS: type-into-a-rich-text-editor-with-the-keyboard.
+AGENTIC: this is the AGENT typing into an editable region (the write half of observe+change), now via the
+keystroke channel, not just execCommand.
+NEXT VEIN NOTE: same-substrate atomic follow-ons remain — `insertParagraph` (Enter → block split) /
+`insertLineBreak` (Shift+Enter → <br>), `deleteContentBackward` (Backspace → remove grapheme at caret),
+`insertFromPaste` plaintext, and (bigger) modifier-state plumbing into dispatch_key so shortcuts don't
+insert. Formatting-command wrapping (`bold`→<b>) + multi-node selection deletion are later larger bricks.
+Constitution Check #25 was landed t471 (next due 479).

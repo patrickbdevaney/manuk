@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **246** | ticks 1–470 |
-| median tick cycle | **20m** | 245 intervals |
-| median, last 10 | **53m** | 10 intervals |
+| ticks landed | **247** | ticks 1–472 |
+| median tick cycle | **20m** | 246 intervals |
+| median, last 10 | **48m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.81** | 303.6h elapsed |
-| median verify wall | **60s** | 185 ticks |
+| **ticks per hour** | **0.81** | 304.0h elapsed |
+| median verify wall | **60s** | 186 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **238**
+* **live gates**: 27 → **239**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**146 of 246 ticks** (59%) moved a
+**147 of 247 ticks** (60%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **146** capability ticks, median cycle **20m**
-* median diff per tick: **+220 / −34** lines across 9 files
+* **147** capability ticks, median cycle **20m**
+* median diff per tick: **+222 / −34** lines across 9 files
 
 ## Every tick
 
@@ -343,5 +343,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **468** | 2026-07-23 19:10 | 38m | capability | 58s | +272/−6 | 235 | 81 | 56.0% · | script-set `details.open` fires `toggle` + enforces the accordion group (2026-07-23) |
 | **469** | 2026-07-23 20:15 | 65m | capability | 63s | +231/−57 | 237 | 81 | 56.0% · | `scrollbar-color`/`scrollbar-width` reach getComputedStyle via MinimalCascade recovery (20 |
 | **470** | 2026-07-23 20:37 | 23m | capability | 70s | +341/−38 | 238 | 81 | 56.0% · | `<details>` fires `beforetoggle` before `toggle` on both actuation paths (2026-07-23) |
+| **472** | 2026-07-23 21:04 | 26m | capability | 63s | +296/−76 | 239 | 81 | 56.0% · | a printable key typed into a contenteditable inserts the character (2026-07-23) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

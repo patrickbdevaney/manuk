@@ -2574,6 +2574,55 @@ const PRELUDE: &str = r#"
       // (bold/italic/…) and `cut` still mutate editable content in ways not yet built — they honestly
       // return `false`, and `queryCommandSupported` says so, so a page feature-detects the truth instead
       // of believing a lie.
+      // The shared EDITING primitive: insert `text` at the caret inside editing `host`, firing the
+      // `beforeinput`→(mutate)→`input` pair with `inputType`. Both `execCommand('insertText')` and the
+      // default typed-character action (a printable keydown into a contenteditable) funnel through it,
+      // so the two paths cannot drift. A cancelled `beforeinput` VETOES: the DOM is left untouched and
+      // `input` never fires (the spec contract a framework editor runs its own model on). Returns
+      // whether the command "ran" (true even on a veto — it ran, the insert was declined).
+      if (typeof globalThis.__insertTextAtCaret !== 'function') {
+        globalThis.__insertTextAtCaret = function (host, text, inputType) {
+          if (!host) { return false; }
+          text = String(text == null ? '' : text);
+          inputType = inputType || 'insertText';
+          var bi = new Event('beforeinput', { bubbles: true, cancelable: true });
+          bi.inputType = inputType; bi.data = text;
+          host.dispatchEvent(bi);
+          if (bi.defaultPrevented) { return true; } // ran, but the insert was vetoed — no mutation
+
+          // Caret: a live selection inside the host (replacing any non-collapsed run), else host end.
+          var sel = globalThis.getSelection();
+          var anchor = (sel && sel._r) ? sel._r.startContainer : null;
+          var inHost = false;
+          for (var a = anchor; a; a = a.parentNode) { if (a === host) { inHost = true; break; } }
+          var r;
+          if (inHost && sel && sel._r) {
+            r = sel._r;
+            if (!r.collapsed) { r.deleteContents(); }
+          } else {
+            r = document.createRange();
+            r.selectNodeContents(host);
+            r.collapse(false);
+          }
+          var sc = r.startContainer, so = r.startOffset;
+          if (sc && sc.nodeType === 3) {
+            sc.insertData(so, text);                       // merge into the existing text run
+            r.setStart(sc, so + text.length); r.collapse(true);
+          } else {
+            var tn = document.createTextNode(text);
+            r.insertNode(tn);
+            r.setStartAfter(tn); r.collapse(true);
+          }
+          if (sel && sel.__set) {
+            sel.__set(r.startContainer, r.startOffset, r.startContainer, r.startOffset);
+          }
+          var inp = new Event('input', { bubbles: true, cancelable: false });
+          inp.inputType = inputType; inp.data = text;
+          host.dispatchEvent(inp);
+          return true;
+        };
+      }
+
       if (typeof document.execCommand !== 'function') {
         var __EXEC_SUPPORTED = { copy: 1, selectall: 1, inserttext: 1 };
         document.execCommand = function (cmd) {
@@ -2613,9 +2662,9 @@ const PRELUDE: &str = r#"
               var anchor = (sel && sel._r) ? sel._r.startContainer : null;
               // The editing host = the nearest editable element ancestor of the caret; failing that
               // (no selection yet) the focused editable, then designMode's <body>.
-              var host = null, anchorInHost = false;
+              var host = null;
               for (var n = anchor; n; n = n.parentNode) {
-                if (n.nodeType === 1 && n.isContentEditable) { host = n; anchorInHost = true; break; }
+                if (n.nodeType === 1 && n.isContentEditable) { host = n; break; }
               }
               if (!host) {
                 var ae = document.activeElement;
@@ -2623,41 +2672,7 @@ const PRELUDE: &str = r#"
                 else if (document.designMode === 'on') { host = document.body; }
               }
               if (!host) { return false; }
-
-              var bi = new Event('beforeinput', { bubbles: true, cancelable: true });
-              bi.inputType = 'insertText'; bi.data = text;
-              host.dispatchEvent(bi);
-              if (bi.defaultPrevented) { return true; } // ran, but the insert was vetoed — no mutation
-
-              // Resolve a caret: a live selection inside the host (replacing any non-collapsed
-              // selection), else a fresh caret at the host's end.
-              var r;
-              if (anchorInHost && sel && sel._r) {
-                r = sel._r;
-                if (!r.collapsed) { r.deleteContents(); }
-              } else {
-                r = document.createRange();
-                r.selectNodeContents(host);
-                r.collapse(false);
-              }
-              var sc = r.startContainer, so = r.startOffset;
-              if (sc && sc.nodeType === 3) {
-                // Merge into the existing text node so the editable keeps one text run, not a shard.
-                sc.insertData(so, text);
-                r.setStart(sc, so + text.length); r.collapse(true);
-              } else {
-                var tn = document.createTextNode(text);
-                r.insertNode(tn);
-                r.setStartAfter(tn); r.collapse(true);
-              }
-              if (sel && sel.__set) {
-                sel.__set(r.startContainer, r.startOffset, r.startContainer, r.startOffset);
-              }
-
-              var inp = new Event('input', { bubbles: true, cancelable: false });
-              inp.inputType = 'insertText'; inp.data = text;
-              host.dispatchEvent(inp);
-              return true;
+              return globalThis.__insertTextAtCaret(host, text, 'insertText');
             } catch (e) { return false; }
           }
           return false; // every other command is the editing subsystem — honestly not built

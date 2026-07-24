@@ -8663,12 +8663,29 @@ impl PageContext {
         // A real KeyboardEvent-shaped object: `key` (modern) + `keyCode`/`which` (legacy) — the two
         // ways handlers read the pressed key — plus bubbles/cancelable so delegation + preventDefault
         // work. `__dispatchEvent` fills in target/currentTarget/preventDefault/etc.
+        // Dispatch the KeyboardEvent, then run the **default typed-character action**: a printable
+        // keydown (a single-character `key`) that no handler cancelled, aimed at an editing host,
+        // inserts that character at the caret — the same `__insertTextAtCaret` path
+        // `execCommand('insertText')` uses, so a plain `<div contenteditable>` responds to real typing.
+        // SCOPE: this is contenteditable only (form-control `.value` typing is a separate path); and
+        // because `dispatch_key` surfaces no modifier state yet, an UNHANDLED modifier+letter (e.g. a
+        // page that ignores Ctrl+B) still inserts the letter — modifier plumbing is a later brick.
         let script = format!(
-            "__dispatchEvent({}, {{type:{}, key:{}, code:{}, keyCode:{kc}, which:{kc}, bubbles:true, cancelable:true}})",
-            node.0,
-            js_string_literal(ty),
-            js_string_literal(key),
-            js_string_literal(key),
+            "(function(){{\
+               var proceed=__dispatchEvent({nid}, {{type:{ty}, key:{key}, code:{key}, keyCode:{kc}, which:{kc}, bubbles:true, cancelable:true}});\
+               if(proceed!==false && {ty}==='keydown' && typeof globalThis.__insertTextAtCaret==='function'){{\
+                 var k={key};\
+                 if(typeof k==='string' && Array.from(k).length===1){{\
+                   var host=null, t=(globalThis.__nodes && __nodes[{nid}])||null;\
+                   for(var n=t;n;n=n.parentNode){{ if(n.nodeType===1 && n.isContentEditable){{ host=n; break; }} }}\
+                   if(host){{ try{{ __insertTextAtCaret(host, k, 'insertText'); }}catch(e){{}} }}\
+                 }}\
+               }}\
+               return proceed;\
+             }})()",
+            nid = node.0,
+            ty = js_string_literal(ty),
+            key = js_string_literal(key),
             kc = key_code,
         );
         rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());

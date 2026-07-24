@@ -4123,3 +4123,17 @@ text run), and the cancelable `beforeinput` → mutate → `input` sequence fire
 insertion so it can perform its own; on veto the DOM must be left untouched and `input` must NOT fire.
 Formatting commands (`bold`/`italic`) and multi-node deletion are still honestly `false` +
 `queryCommandSupported`-false — a page feature-detects the truth rather than getting a silent lie.
+
+## Type into a rich-text editor / comment box with the keyboard (tick 472)
+
+**The class of the web this unlocks (comment boxes, chat composers, Notion/Docs-style editors — any
+`contenteditable` a user types into):** the editor mounted (`isContentEditable`, t456) and could take a
+programmatic insert (`execCommand('insertText')`, t471), but a person pressing a key saw nothing happen —
+`dispatch_key` fired the `keydown` and stopped, so the character never entered the DOM. Now a printable
+keydown that no handler cancelled inserts the pressed character at the caret and fires `beforeinput`→`input`
+(`inputType:'insertText'`), through the SAME primitive `execCommand('insertText')` uses. **The trap:** a
+framework editor (ProseMirror/Lexical) suppresses this by `preventDefault()`-ing the keydown and running its
+own model — so the default action must honor that cancel (no insert when `proceed===false`), and it must NOT
+fire for non-character keys (`Enter`/arrows/`Backspace` — those are separate editing intents, later bricks).
+Known honest gap: with no modifier state on `dispatch_key` yet, an UNHANDLED Ctrl/Meta+letter still inserts
+the letter; a real editor's shortcut handler prevents the keydown, which is what suppresses it in practice.

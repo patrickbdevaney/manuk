@@ -2499,3 +2499,30 @@ g_contenteditable_query, g_contenteditable_pseudo, g_ime_composition, g_selectio
 this path) so a contenteditable accepts keystrokes; `insertParagraph` (Enter → block split);
 `deleteContentBackward` (Backspace); `insertFromPaste` plaintext. Formatting-command wrapping is a later,
 larger brick.
+
+## Typing a printable key into a contenteditable inserts the character (tick 472)
+
+Tick 471 gave `contenteditable` the PROGRAMMATIC insert (`execCommand('insertText')`); this gives it the
+one a real user or the agent uses — a keystroke. Before it, `dispatch_key` fired the `KeyboardEvent` and
+stopped: the editable ran the page's handlers and then did nothing, the pressed character never appeared.
+
+**Mechanism.** The insert-at-caret logic from t471 is factored into a global `__insertTextAtCaret(host,
+text, inputType)` helper (fire cancelable `beforeinput` → mutate DOM at the caret via Selection/Range/
+`insertData` → fire non-cancelable `input`; a cancelled `beforeinput` vetoes). Both `execCommand('insertText')`
+and the new default action call it, so the two typing paths cannot drift. In `dispatch_key` (`dom_bindings.rs`),
+after the `KeyboardEvent` dispatch: iff `ty==='keydown'`, the event was NOT cancelled (`proceed!==false`),
+the `key` is a single Unicode grapheme (`Array.from(key).length===1` — excludes `Enter`/`Tab`/arrows AND
+correctly counts an astral char as one), and the target is inside an editing host (walk `parentNode` to the
+nearest `isContentEditable` element), call `__insertTextAtCaret(host, key, 'insertText')`.
+
+**Scope, stated honestly.** contenteditable ONLY — form-control `.value` typing is a separate path.
+`dispatch_key` surfaces no modifier state yet, so an UNHANDLED modifier+letter (a page that ignores Ctrl+B)
+still inserts the letter; modifier plumbing (widening the `dispatch_key` signature + its callers) is a later
+brick. In practice an editor's shortcut handler `preventDefault()`s the keydown, which suppresses the insert
+via the `proceed!==false` guard — the same cancelable-keydown contract this relies on.
+
+GATE: G_CONTENTEDITABLE_TYPING (page) — caret after "Hi", `keydown`/`keyup` of `X` → DOM becomes "HiX" and
+logs `bi:insertText:X|in:insertText:X`; a following `Enter` inserts nothing (one event pair only); a second
+editable whose `keydown` handler `preventDefault()`s stays "Keep". RED-proven by neutralizing the
+default-action block → the key fires but nothing inserts. Neighbors green: g_exec_insert_text (the shared
+helper), g_exec_command_copy, g_ime_composition, g_contenteditable_query, g_selection, g_range.
