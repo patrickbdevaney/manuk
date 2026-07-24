@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **291** | ticks 1–527 |
-| median tick cycle | **22m** | 290 intervals |
-| median, last 10 | **19m** | 10 intervals |
+| ticks landed | **292** | ticks 1–528 |
+| median tick cycle | **22m** | 291 intervals |
+| median, last 10 | **21m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.89** | 324.1h elapsed |
-| median verify wall | **61s** | 230 ticks |
+| **ticks per hour** | **0.90** | 324.4h elapsed |
+| median verify wall | **61s** | 231 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**165 of 291 ticks** (57%) moved a
+**165 of 292 ticks** (57%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -388,5 +388,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **525** | 2026-07-24 16:31 | 12m | self-audit | 67s | +70/−33 | 272 | 81 | 56.0% · | SELF-AUDIT #(cadence): methodology-vs-built clean except the observer-owned wall (2026-07- |
 | **526** | 2026-07-24 16:56 | 26m | build | 67s | +219/−49 | 273 | 81 | 56.0% · | BUILD BRICK: popover ToggleEvent.source names the invoker (2026-07-24) |
 | **527** | 2026-07-24 17:07 | 11m | cadence | 67s | +137/−34 | 273 | 81 | 56.0% · | CADENCE: Constitution-Check #32 + Wall-Audit (both due) (2026-07-24) |
+| **528** | 2026-07-24 17:29 | 22m | surface | 67s | +98/−33 | 273 | 81 | 56.0% · | SURFACE AUDIT #26: the media neighbourhood the arc revealed (2026-07-24) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

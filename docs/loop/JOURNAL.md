@@ -21114,3 +21114,31 @@ cadence tick, no engine change. No [no-pattern] needed (no engine/{js,css,...}/s
 NEXT: 528 is surface-audit (DUE). Then the deliberate capability pivot per Check #32 (fidelity-instrument
 decompose / test262 / name-only-CQ probe). Self-audit next 534; surface DUE 528; const next 535; wall
 next 547.
+
+## Tick 528 — SURFACE AUDIT #26: the media neighbourhood the arc revealed (2026-07-24)
+
+Surface-audit cadence (due 518+10=528). Checked web.dev Baseline (2024-2026) + Interop 2026 against
+CONSTELLATION.tsv, with attention to the media surface just built (t521-527).
+
+CONFIRMED already gated (stale-pessimistic rule again): Media Session API, field-sizing:content, computed
+custom properties, @property. ADDED 4 as `unknown` (the GOOD map growth — the invariant is MEASURED, not
+unknown): (1) requestVideoFrameCallback (media — frame-accurate <video>, the sibling of the clock/seek
+surface just built), (2) Promise.withResolvers (JS, Baseline 2024, likely already works), (3) Set methods
+union/intersection/difference (JS, Baseline 2024, likely works), (4) scheduler.postTask/yield (may be
+genuinely absent — needs a real priority queue).
+
+WHAT WE HAD BEEN WRONG ABOUT: nothing large — the map is healthy post-media-arc. The blind spot closed is
+the MEDIA NEIGHBOURHOOD: having built the <video> event/property surface, the map did not name rVFC, the
+frame-callback sibling a real advanced player uses ALONGSIDE exactly those events. Building a subsystem is
+itself a map-discovery act; the audit is where that gets recorded, not lost. RE-RANK: none of the 4
+outranks the standing frontier — the Check #32 pivot (fidelity-instrument rebuild / test262) stands.
+
+TICK SHAPE: surface audit (docs-only cadence — surface-audit.sh ran; 4 caps added unknown, 4 confirmed
+gated; CONSTELLATION.tsv + SURFACE-AUDIT.md + LAST_SURFACE_AUDIT updated; NO engine source changed; the
+wall proves nothing regressed). WIKI: none — audit cadence tick, no engine change. No [no-pattern] needed
+(no engine/{js,css,...}/src touched).
+
+NEXT: all cadences now current (self-audit 534, surface 538, const 535, wall 547). The deliberate
+capability PIVOT per Check #32 is unblocked: fidelity-instrument rebuild (CO-#1 exit gate, decompose-
+first) OR test262 (measurement) OR a bounded probe of the just-added unknowns (Promise.withResolvers /
+Set methods likely already work → cheap pins; rVFC / scheduler more likely real builds).

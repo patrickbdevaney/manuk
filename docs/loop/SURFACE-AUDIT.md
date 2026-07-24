@@ -1185,3 +1185,35 @@ STANDING FINDING HOLDS: atomic surface work is measured-near-exhausted; the hone
 PHASE0-BOUNDED-REMAINDER subsystems, one of which (ESM import graphs) just landed. next due 528.
 
 LAST_SURFACE_AUDIT 508→518; next due 528.
+
+## Audit #26 — tick 528 (2026-07-24)
+
+SOURCES: web.dev Baseline (2024-2026), Interop 2026 focus areas, MDN — checked against
+docs/loop/CONSTELLATION.tsv, with special attention to the media surface just built (t521-527).
+
+ALREADY ON THE MAP + GATED (checked, no action): Media Session API (navigator.mediaSession — OS/lock-
+screen controls), field-sizing:content (auto-grow textarea), computed CSS custom properties, @property/
+registered custom properties. The stale-pessimistic rule again: several recent-Baseline features are
+already built and gated.
+
+ADDED (world names them, our map did not — now `unknown`, which is the GOOD kind of map growth; the
+invariant is MEASURED, not unknown):
+1. **requestVideoFrameCallback** (media) — frame-accurate `<video>`; the callback-per-presented-frame
+   API frame-synced overlays and web video editors bind. Directly adjacent to the t521-524 playback
+   model, which is exactly why the audit caught it now: building a surface reveals its neighbours.
+2. **Promise.withResolvers** (app/JS) — Baseline 2024; likely already works via SpiderMonkey, unmeasured.
+3. **Set methods** (union/intersection/difference/isSubsetOf) (app/JS) — Baseline 2024; likely works,
+   unmeasured.
+4. **scheduler.postTask / scheduler.yield** (app) — Baseline 2024/2025; may be genuinely absent (needs a
+   real priority queue, not a setTimeout alias) — framework schedulers feature-detect it.
+
+WHAT WE HAD BEEN WRONG ABOUT: nothing large — the map is in good shape post-media-arc (every Interop-2026
+focus area already has a verdict, as Audit #25 also found). The blind spot this audit closes is the
+MEDIA NEIGHBOURHOOD: having just built the `<video>` clock/seek/played/durationchange surface, the map
+did not name rVFC — the sibling frame-callback API — which a real advanced player uses alongside exactly
+the events we built. Building a subsystem is itself a map-discovery act, and the audit is where that gets
+recorded rather than lost.
+
+RE-RANK: none of the 4 is larger than the standing frontier (the fidelity-instrument rebuild / media XL
+work). They are bounded probes/small builds for a later tick; the Check #32 pivot (fidelity instrument or
+test262) stands. LAST_SURFACE_AUDIT set to 528.
