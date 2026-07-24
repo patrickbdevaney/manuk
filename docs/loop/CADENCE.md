@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **281** | ticks 1–517 |
-| median tick cycle | **22m** | 280 intervals |
+| ticks landed | **282** | ticks 1–518 |
+| median tick cycle | **22m** | 281 intervals |
 | median, last 10 | **32m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.87** | 320.9h elapsed |
-| median verify wall | **61s** | 220 ticks |
+| **ticks per hour** | **0.88** | 321.0h elapsed |
+| median verify wall | **61s** | 221 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**165 of 281 ticks** (59%) moved a
+**165 of 282 ticks** (59%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -378,5 +378,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **515** | 2026-07-24 12:52 | 37m | subsystem | 67s | +363/−102 | 265 | 81 | 56.0% · | BUILD BRICK: ESM import-graph B3b-i — page-path runner consumes the pre-fetched graph (202 |
 | **516** | 2026-07-24 13:28 | 36m | subsystem | 67s | +575/−92 | 266 | 81 | 56.0% · | BUILD BRICK: ESM import-graph B3b-ii — the async PRODUCER on the page path (2026-07-24) |
 | **517** | 2026-07-24 13:55 | 27m | subsystem | 67s | +351/−107 | 267 | 81 | 56.0% · | BUILD BRICK: ESM import-graph B3b-iii — the SHELL path + unify the seed seam (2026-07-24) |
+| **518** | 2026-07-24 14:03 | 8m | surface | 67s | +123/−34 | 267 | 81 | 56.0% · | SURFACE AUDIT #25: reconcile ESM (partial→gated), the map is clean vs Interop 2026 (2026-0 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -20729,3 +20729,43 @@ ticks, not blocking): (a) import maps — resolve bare specifiers (`import 'reac
 apps work; (b) dynamic `import()` — wire the lazy dynamic-import hook (currently unresolved). Otherwise
 PIVOT per the board (re-run lever-board next tick): media/YouTube, canvas fillText, or the 35 constellation
 probes. Self-audit next 525; surface next 518 (DUE next tick); const-check next 519; wall next 527.
+
+## Tick 518 — SURFACE AUDIT #25: reconcile ESM (partial→gated), the map is clean vs Interop 2026 (2026-07-24)
+
+The surface audit came due (every 10 ticks; last #24 at 508). Left the frame: web-searched Interop 2026
+(20 focus areas + 4 investigations — WebKit/web.dev/Igalia/Mozilla/wpt), Baseline 2026 digests, and
+Ladybird's 2026 progress (independent engine, WPT + test262). Reconciled against CONSTELLATION.tsv.
+
+HEADLINE = a capability RECONCILIATION, the reason the audit fell where it did: **ESM module-graph
+loading moved `partial` → `gated`.** t506's probe named the multi-module `import` GRAPH as THE GAP; the
+work I landed this same session (t512-517, B1→B3b-iii) BUILT it on both real page paths, gated by
+g_esm_page_graph + g_esm_prefetched_graph. The instrument working exactly as designed: probe names the
+seam → bricks fill it → audit reconciles. This is one of the PHASE0-BOUNDED-REMAINDER subsystems closing.
+
+THE MAP IS REMARKABLY CLEAN vs Interop 2026 — nearly every 2026 focus area is already on the map WITH a
+verdict (the stale-pessimistic rule again): anchor-positioning (missing), advanced/typed attr() (partial —
+correctly still open, a ~20%-score item), IndexedDB getAllRecords() (WORKS/gated t420, another 20%-score
+item), JSPI (missing), WebTransport (measured-absent, HTTP/3 V1-deferral), View Transitions (gated +
+cross-doc partial + :active-view-transition missing), container style-queries (gated), test262 (standing
+unknown — Ladybird now 97.8% of 53,207, reconfirming it as the highest-value unmeasured JS-conformance
+item since we embed SpiderMonkey). No Interop phantom.
+
+ADDED 1 genuine gap as `unknown`: **name-only container queries** (`@container name { }`, Baseline Newly
+Available May 2026) — our @container supplement parses CONDITIONS; a name-only (empty-condition) query may
+pass or be dropped. Bounded probe.
+
+WHAT I WAS WRONG ABOUT (caught before commit): a first pass ADDED `IndexedDB getAllRecords()` as a new
+unknown — then the audit-#24 cross-check showed it already `works`/gated (t420). Removed the duplicate. A
+stale-pessimistic ADD is as much drift as a stale-optimistic row: grep the map (incl. near-synonyms)
+BEFORE adding. Lesson re-lived, not just recited.
+
+TICK SHAPE: surface audit (docs-only — CONSTELLATION.tsv reconcile [1 row partial→gated, 1 new unknown, 1
+duplicate removed] + SURFACE-AUDIT.md Audit #25 + STATUS LAST_SURFACE_AUDIT 508→518; NO engine source
+changed; the wall proves nothing regressed). WIKI: none — surface-audit tick, no engine change. No
+[no-pattern] needed (no engine/{js,css,layout,paint,dom,html,text}/src touched).
+
+NEXT: re-run lever-board. Standing finding holds — atomic surface work is measured-near-exhausted; the
+frontier is the bounded-remainder subsystems (one just landed). Candidates per board: media/YouTube
+(biggest gap), test262 harness (highest-value unmeasured, cheap since we embed SpiderMonkey), or the ESM
+follow-ups (import maps / dynamic import()). Const-check next 519 (DUE next tick); self-audit next 525;
+surface next 528; wall next 527.

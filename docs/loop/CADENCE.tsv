@@ -280,3 +280,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 515	ede92ae	1784911941	2026-07-24T12:52:21-04:00	2195	subsystem	67	9	363	102	265	81	3896	6960	0	329	31	BUILD BRICK: ESM import-graph B3b-i — page-path runner consumes the pre-fetched graph (2026-07-24)
 516	300cd1a	1784914092	2026-07-24T13:28:12-04:00	2151	subsystem	67	9	575	92	266	81	3896	6960	0	329	31	BUILD BRICK: ESM import-graph B3b-ii — the async PRODUCER on the page path (2026-07-24)
 517	3fe117e	1784915734	2026-07-24T13:55:34-04:00	1642	subsystem	67	9	351	107	267	81	3896	6960	0	329	31	BUILD BRICK: ESM import-graph B3b-iii — the SHELL path + unify the seed seam (2026-07-24)
+518	abebcfe	1784916221	2026-07-24T14:03:41-04:00	487	surface	67	6	123	34	267	81	3896	6960	0	329	31	SURFACE AUDIT #25: reconcile ESM (partial→gated), the map is clean vs Interop 2026 (2026-07-24)

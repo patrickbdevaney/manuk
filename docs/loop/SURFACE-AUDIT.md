@@ -1138,3 +1138,50 @@ holds and is now triply-confirmed: atomic surface work is measured-near-exhauste
 is the PHASE0-BOUNDED-REMAINDER subsystems — with `lh`/`rlh` as a fresh bounded exception.
 
 LAST_SURFACE_AUDIT 498→508; next due 518.
+
+## Audit #25 — tick 518 (2026-07-24)
+
+SOURCES (searched the web, not memory):
+* Interop 2026 focus areas (20 areas + 4 investigations): https://webkit.org/blog/17818/announcing-interop-2026/ , https://web.dev/blog/interop-2026 , https://www.igalia.com/news/interop-2026.html , https://github.com/web-platform-tests/interop/blob/main/2026/README.md
+* Baseline 2026 digests: https://web.dev/blog/baseline-digest-may-2026 , https://web.dev/blog/baseline-digest-jan-2026 , https://web.dev/baseline/2026
+* Ladybird 2026 progress (independent engine, WPT + test262): https://ladybird.org/newsletter/2026-04-30/ , https://ladybird.org/newsletter/2026-06-30/
+
+RECONCILED against CONSTELLATION.tsv. **The headline is a capability reconciliation, not a discovery.**
+The one row that moved is the reason this audit fell where it did:
+* **ESM module-graph loading — `partial` → `gated`.** t506's probe named the multi-module `import` GRAPH
+  as THE GAP ("module_resolve_hook returns null, only self-contained modules run"). That gap is now
+  BUILT and gated on BOTH real page paths, across ticks 512-517 (B1 registry → B2 resolve hook → B3
+  population walk → B3b-i consumer → B3b-ii load_async producer → B3b-iii shell producer). Gates
+  g_esm_page_graph + g_esm_prefetched_graph. The class (native-ESM / Vite-dev / no-bundler import-graph
+  apps) is genuinely unlocked in the agent AND the window. This is one of the PHASE0-BOUNDED-REMAINDER
+  subsystems closing — exactly the frontier audit #24 named.
+
+**The map remains remarkably clean against Interop 2026 / Baseline 2026** — nearly every 2026 focus area
+is ALREADY on the map WITH a verdict (the stale-pessimistic rule, again): anchor-positioning (98 missing),
+advanced attr() (99 partial — the Level-5 typed form, a 2026 ~20%-score item, correctly still open),
+IndexedDB getAllRecords() (168 WORKS/gated t420 — one of the 20%-score items, already done), JSPI (96
+missing), WebTransport (103 measured-absent, HTTP/3-gated V1 deferral), View Transitions (92 gated / 93
+cross-doc partial / 189 :active-view-transition missing), container style-queries (97), test262 (a
+standing unknown — Ladybird now passes 52,045/53,207 = 97.8%, reconfirming it as the highest-value
+unmeasured JS-conformance item since we embed SpiderMonkey). ric already tracked (ic/ric row). No
+Interop phantom.
+
+WHAT THE MAP WAS MISSING — 1 genuine gap ADDED as `unknown`:
+* **name-only container queries** (`@container name { }`, Baseline Newly Available May 2026) — our
+  @container supplement (t379) parses CONDITIONS; a name-ONLY query (empty condition) may pass through or
+  be dropped. Bounded probe, added unknown.
+
+WHAT WE HAD BEEN WRONG ABOUT (two things, both instructive):
+1. The **ESM row was stale-pessimistic in the OTHER direction from usual** — not "marked missing but
+   actually built," but "marked partial and NOW built by the work the probe scoped." The probe that
+   pinned the gap (t506) directly enabled the subsystem that closed it (t512-517). The instrument working
+   as designed: probe names the seam, bricks fill it, audit reconciles.
+2. A first pass ADDED `IndexedDB getAllRecords()` as a new `unknown` — then the cross-check against
+   audit #24 caught it already `works`/gated (t420). Removed the duplicate before commit. The lesson
+   stands (audit #24 said it, this audit re-lived it): **grep the map for the capability, including
+   near-synonyms, before adding it** — a stale-pessimistic ADD is as much drift as a stale-optimistic row.
+
+STANDING FINDING HOLDS: atomic surface work is measured-near-exhausted; the honest frontier is the
+PHASE0-BOUNDED-REMAINDER subsystems, one of which (ESM import graphs) just landed. next due 528.
+
+LAST_SURFACE_AUDIT 508→518; next due 528.
