@@ -550,7 +550,24 @@ Rust-side via `take_media_props` (the final backseek to 4 must be in the drained
 `seeking`/`seeked` dispatch, or the clamp, or `"currentTime"` from the allow-list.
 
 **Residue:** `seeked` fires synchronously (our host already holds the frames; the spec's async
-data-wait is a decoder detail); `played` TimeRanges is still empty (needs the played-ranges union).
+data-wait is a decoder detail).
+
+### M6b-played — `played` is the union of watched spans (tick 523)
+
+`played` — distinct from `buffered` (fetched) and `seekable` (jump-to-able) — is the union of the
+time spans the clock has ACTUALLY advanced through, and it was a frozen empty TimeRanges. That zero is
+the ground truth behind watch-progress analytics ("you've watched 80%"), the "continue watching"
+resume marker, and per-segment engagement heatmaps. `el.__addPlayed(a, b)` (called from the three
+`__advance` branches — normal, loop-wrap tail, end) inserts the just-played `[from, new]` span into a
+sorted, non-overlapping list, MERGING any range it touches or overlaps (playing 0→5 is one span, not
+five one-second ranges; adjacency counts). A seek does not play, so skipping the middle and playing
+elsewhere leaves a genuine hole — `played` is a union, not an envelope — and seeking back into a gap
+and playing merges the spans down. Read as a live TimeRanges. Gated `g_media_played` (grow → merge →
+gap → merge-down); RED: drop the `__addPlayed` calls and every range collapses to empty.
+
+The JS-visible playback model is now complete: **forward clock (521) + seek (522) + played (523)** —
+the trio every video analytics/resume/scrub feature reads. What remains is the shell frame-loop driver
+(GUI integration) and codec breadth (the CUT line).
 
 ## M7 — captions (tick 255), and a probe that verified the TEST
 

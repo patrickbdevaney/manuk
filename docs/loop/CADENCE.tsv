@@ -285,3 +285,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 520	485e2a3	1784918395	2026-07-24T14:39:55-04:00	1845	subsystem	67	14	525	127	268	81	3896	6960	0	329	31	BUILD BRICK: ESM import maps — bare specifiers resolve (CDN no-bundler apps boot) (2026-07-24)
 521	99b0309	1784920234	2026-07-24T15:10:34-04:00	1839	subsystem	67	10	494	109	269	81	3896	6960	0	329	31	BUILD BRICK: `<video>` playback clock — timeupdate/ended fire, currentTime advances (2026-07-24)
 522	54b9ef5	1784921435	2026-07-24T15:30:35-04:00	1201	subsystem	67	11	407	113	270	81	3896	6960	0	329	31	BUILD BRICK: writing `<video>.currentTime` is a real seek (2026-07-24)
+523	299e48d	1784923201	2026-07-24T16:00:01-04:00	1766	subsystem	67	10	314	110	271	81	3896	6960	0	329	31	BUILD BRICK: `<video>.played` — the union of actually-watched spans (2026-07-24)

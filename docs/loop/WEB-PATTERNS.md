@@ -4487,3 +4487,12 @@ seek (no per-frame event storm); a backward seek after `ended` clears `ended` (r
 `seekable` reports the live `[0, duration]` span, and `fastSeek(t)` shares the path. Gate `g_media_seek`
 asserts the JS events + clamp AND the host seam (`take_media_props` must contain the final seek). RED: drop
 the seeking/seeked dispatch, the clamp, or `"currentTime"` from the `media_prop` allow-list.
+
+**`<video>.played` is the union of actually-watched spans (tick 523)** — so watch-progress analytics
+("you've watched 80%"), the "continue watching" resume marker, and per-segment engagement heatmaps read a
+real TimeRanges instead of a frozen empty one. As the playback clock advances, `__addPlayed(from, new)`
+inserts the just-played span into a sorted, non-overlapping list, MERGING adjacent/overlapping ranges
+(playing 0→5 is ONE span, not five); a seek does not play, so skipping the middle leaves a genuine hole
+(`played` is a union, not an envelope), and seeking back into a gap and playing merges the spans down. This
+completes the JS-visible playback model — forward clock (521) + seek (522) + played (523). Gate
+`g_media_played`; RED: drop the `__addPlayed` calls and every range collapses to empty.

@@ -3361,7 +3361,27 @@ const PRELUDE: &str = r#"
           var sbs = el.__ms.sourceBuffers;
           return sbs.length ? sbs[0].buffered : new globalThis.TimeRanges([]);
         });
-        ro('played',    { length: 0, start: function(){ return 0; }, end: function(){ return 0; } });
+        // `played` is the union of the spans the clock has ACTUALLY advanced through — distinct
+        // from `buffered` (what has been fetched) and `seekable` (what may be jumped to). It is the
+        // ground truth behind watch-progress analytics ("you've watched 80%"), the "continue
+        // watching" resume marker, and engagement heatmaps. Accumulated by `__addPlayed` as the
+        // playback clock (tick 521) advances, and read as a live TimeRanges (tick 523).
+        el.__played = [];
+        // Insert [a, b] into the sorted, non-overlapping played list, merging any range it touches
+        // or overlaps (adjacency counts — playing [0,5] then [5,8] is one span [0,8], not two).
+        el.__addPlayed = function (a, b) {
+          if (!(b > a)) { return; }
+          var r = el.__played, out = [], i = 0, n = r.length;
+          while (i < n && r[i][1] < a) { out.push(r[i]); i++; }
+          while (i < n && r[i][0] <= b) { a = Math.min(a, r[i][0]); b = Math.max(b, r[i][1]); i++; }
+          out.push([a, b]);
+          while (i < n) { out.push(r[i]); i++; }
+          el.__played = out;
+        };
+        live('played', function () {
+          return el.__played.length ? new globalThis.TimeRanges(el.__played)
+                                    : { length: 0, start: function(){ return 0; }, end: function(){ return 0; } };
+        });
         // `seekable` is the extent a scrub bar lets you jump within. Once a finite duration is
         // known (tick 522) it is the whole `[0, duration]` span — a single range, which is what a
         // fully-buffered progressive video reports; before that, honestly empty.
@@ -3612,17 +3632,20 @@ const PRELUDE: &str = r#"
           if (!isFinite(delta) || delta <= 0) { return; }
           if (el.paused || el.__ended) { return; }
           var rate = Number(el.playbackRate); if (!(rate > 0)) { rate = 1; }
-          var t = el.__currentTime + delta * rate;
+          var from = el.__currentTime;        // the span [from, new] is what just got PLAYED
+          var t = from + delta * rate;
           var dur = Number(el.duration);
           var known = isFinite(dur) && dur > 0;
           if (known && t >= dur) {
             if (el.loop) {
               // Wrap to the start and keep running — a looping clip never ends.
+              el.__addPlayed(from, dur);       // the tail up to the end was played before the wrap
               el.__currentTime = 0;
               if (el.__syncTextTracks) { el.__syncTextTracks(); }
               if (el.dispatchEvent) { el.dispatchEvent(new globalThis.Event('timeupdate')); }
               return;
             }
+            el.__addPlayed(from, dur);
             el.__currentTime = dur;
             el.paused = true;      // the property, NOT pause(): `ended` fires, `pause` must not
             el.__ended = true;
@@ -3633,6 +3656,7 @@ const PRELUDE: &str = r#"
             }
             return;
           }
+          el.__addPlayed(from, t);
           el.__currentTime = t;               // private: the caption sync is called explicitly below
           if (el.__syncTextTracks) { el.__syncTextTracks(); }
           if (el.dispatchEvent) { el.dispatchEvent(new globalThis.Event('timeupdate')); }

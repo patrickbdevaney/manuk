@@ -20947,3 +20947,39 @@ model; the shell frame loop calling __mediaAdvance/consuming currentTime props i
 (next integration). Then codec breadth / WebM-VP9 is the CUT line. Or test262 (measurement, permitted).
 `played` TimeRanges union is a small follow-up. Self-audit next 525; surface next 528; const next 527;
 wall next 527.
+
+## Tick 523 — BUILD BRICK: `<video>.played` — the union of actually-watched spans (2026-07-24)
+
+Completing the JS-visible playback model (clock 521 + seek 522 + THIS). `played` — distinct from
+`buffered` (fetched) and `seekable` (jump-to-able) — is the union of the spans the clock has ACTUALLY
+advanced through, and it was a frozen empty TimeRanges. That zero is the ground truth behind
+watch-progress analytics ("you've watched 80%"), the "continue watching" resume marker, and
+per-segment engagement heatmaps: a played that never grows is a progress bar that never fills.
+
+WHAT LANDED (engine/js/src/event_loop.rs, `__manukMedia`):
+- `el.__played` (sorted, non-overlapping [start,end] list) + `el.__addPlayed(a,b)` — inserts a span,
+  MERGING any range it touches or overlaps (adjacency counts: playing 0->5 is ONE span, not five
+  one-second ranges). `played` reads as a live TimeRanges.
+- Hooked into all three `__advance` branches: normal (addPlayed(from,t)), loop-wrap (addPlayed(from,
+  dur) for the tail before wrapping to 0), end (addPlayed(from,dur)). A SEEK does not play, so it adds
+  nothing — skipping the middle leaves a genuine hole (played is a union, not an envelope).
+
+RED-PROVEN (real E2E, no network): new gate g_media_played builds <video> + MSE duration=20, drives
+the clock: play 0->3 (p1:1:[0.00,3.00]), on to 5 (p2:1:[0.00,5.00] — MERGED, not two ranges), seek to
+8 + play to 9 (gap:2:[0.00,5.00][8.00,9.00] — a SECOND range, the union has a hole), seek back to 3 +
+play to 6 (merge:2:[0.00,6.00][8.00,9.00] — [0,5]+[3,6] merges, disjoint [8,9] stays). Neuter
+__addPlayed -> every range collapses to empty (p1:0:) -> RED. g_media_seek + g_media_playback_clock
+still GREEN.
+
+TICK SHAPE: subsystem build brick (1 capability — played TimeRanges union: accumulate-on-advance +
+merge + gap-aware; new gate g_media_played E2E, RED-proven; the merge/adjacency and seek-adds-nothing
+are spec-shaped; Bar 0 held — bounded list ops, no unbounded growth). WIKI: docs/wiki/media-pipeline.md
+— new M6b-played subsection (played vs buffered vs seekable, __addPlayed merge, the union-not-envelope
+property). WEB-PATTERNS.md updated (watch-progress/resume/heatmap class). NOT [no-pattern]
+(engine/js/src touched).
+
+NEXT: the JS-visible playback model (clock+seek+played) is COMPLETE. The media frontier is now genuinely
+XL: (a) the shell frame loop calling __mediaAdvance/consuming currentTime props (GUI driver, false-RED
+risk), (b) codec breadth / WebM-VP9 (CUT line, no Rust VP9 decoder). PIVOT candidates per board: fidelity
+instrument rebuild (CO-#1, agent-editable, THE exit gate) or test262 (measurement, permitted). Self-audit
+next 525; surface next 528; const next 527; wall next 527.
