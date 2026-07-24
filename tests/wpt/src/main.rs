@@ -573,6 +573,23 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                                 .join("; ")
                         );
                     }
+                    // Layer-2 JARRING invariant #2 — collapsed interactive target (the box-dump half of
+                    // hittability, §2). A control an interactive tag names, that Chrome renders with a
+                    // real clickable box but Manuk collapses to <2px on an axis — a dead button. Shares
+                    // the invariant with the oracle via `collapsed_target_boxes` (tag from the path key).
+                    let (dead, dead_ex) =
+                        manuk_wpt::oracle::collapsed_target_boxes(&cmap, &mboxes, 2);
+                    if dead > 0 {
+                        eprintln!(
+                            "  DEAD-TARGET: {dead} interactive control(s) collapsed below hit size (Chrome gives them area)  e.g. {}",
+                            dead_ex
+                                .iter()
+                                .take(2)
+                                .map(|s| s.as_str())
+                                .collect::<Vec<_>>()
+                                .join("; ")
+                        );
+                    }
                 }
                 rows.push(f);
             }

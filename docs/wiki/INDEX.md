@@ -112,40 +112,40 @@
   - L118 · THE SCORE GATES; THE EYEBALL DIAGNOSES — a pixel score is a poor proxy for correctness
   - L136 · Cluster by ROOT CAUSE, not by tag name — and rank by DISTINCT SITES
   - L154 · Score geometry PARENT-RELATIVE (SHAPE), never against the document origin (tick 335)
-  - L273 · Gates must run the SHIPPING configuration
-  - L282 · A gate that is never INVOKED is indistinguishable from a gate that passes (tick 239)
-  - L314 · A gate that CANNOT FAIL is a decoration — and they go vacuous SILENTLY
-  - L324 · MUTATION-TEST THE WALL — and then verify the mutation tester
-  - L349 · "The probe didn't say yes" is NOT "the probe said no"
-  - L362 · Corpus BREADTH, not verification throughput, surfaces class bugs
-  - L373 · Every number has a HARNESS, and the harness is part of the number
-  - L387 · Residual-bug estimation must use a REMOVAL model, because discovery is SERIAL
-  - L397 · Read Blink/Gecko for the ALGORITHM; never copy the CODE — and know what that buys
-  - L407 · Three gates that exist because green gates coexisted with real bugs
-  - L417 · THREE anchors of parity scope, and each sees what the others cannot
-  - L431 · The async CI lane is redundant verification you never wait on
-  - L439 · The pattern ledger, and why it is now executable
-  - L458 · The mechanism
-  - L471 · The gaps that are real (with receipts, tick 65)
-  - L483 · The cadence ledger — measuring the loop, not just the browser
-  - L503 · Backfilled from git, and what was deliberately left blank
-  - L517 · What it found on its first run, and it is strategic
-  - L539 · The one number it refuses to give
-  - L545 · A doubled event handler inflates the WPT count ~2× — the score can lie in your favor
-  - L560 · The batch-size crash class — heavy layout areas OOM a shared process
-  - L569 · The crash class is a real SIGSEGV UAF, not OOM — and ISOLATION-RETRY separates it from a per-page Bar 0
-  - L589 · A SECOND, distinct SIGSEGV: css-values/calc-size interpolate-size — a REAL per-page crash (survives isolation)
-  - L613 · Probing the constellation: unknown is a bug, not a state
-  - L631 · A probe must be behavioural, and in this engine that is not pedantry
-  - L641 · The probe gate is a ratchet, not a survey
-  - L649 · A probe whose claim cannot fail measures nothing (tick 230)
-  - L667 · Some capabilities cannot be probed from inside the page
-  - L675 · The oracle must know whether the engine actually styled the page (tick 383)
-  - L699 · Same-tag index paths misattribute TREE drift as STYLE drift (tick 395)
-  - L722 · BUILD SPEC — selector-path keying: the class signature that stops silent mispairing (tick 399)
-  - L753 · LANDED (tick 401) — the keying is live, and the predictions held
-  - L771 · JS-platform-surface probe sweep — vein mined out (tick 487)
-  - L789 · The DOM-method / CSS-property surface vein is mined out too — one level deeper than t487 (tick 492)
+  - L284 · Gates must run the SHIPPING configuration
+  - L293 · A gate that is never INVOKED is indistinguishable from a gate that passes (tick 239)
+  - L325 · A gate that CANNOT FAIL is a decoration — and they go vacuous SILENTLY
+  - L335 · MUTATION-TEST THE WALL — and then verify the mutation tester
+  - L360 · "The probe didn't say yes" is NOT "the probe said no"
+  - L373 · Corpus BREADTH, not verification throughput, surfaces class bugs
+  - L384 · Every number has a HARNESS, and the harness is part of the number
+  - L398 · Residual-bug estimation must use a REMOVAL model, because discovery is SERIAL
+  - L408 · Read Blink/Gecko for the ALGORITHM; never copy the CODE — and know what that buys
+  - L418 · Three gates that exist because green gates coexisted with real bugs
+  - L428 · THREE anchors of parity scope, and each sees what the others cannot
+  - L442 · The async CI lane is redundant verification you never wait on
+  - L450 · The pattern ledger, and why it is now executable
+  - L469 · The mechanism
+  - L482 · The gaps that are real (with receipts, tick 65)
+  - L494 · The cadence ledger — measuring the loop, not just the browser
+  - L514 · Backfilled from git, and what was deliberately left blank
+  - L528 · What it found on its first run, and it is strategic
+  - L550 · The one number it refuses to give
+  - L556 · A doubled event handler inflates the WPT count ~2× — the score can lie in your favor
+  - L571 · The batch-size crash class — heavy layout areas OOM a shared process
+  - L580 · The crash class is a real SIGSEGV UAF, not OOM — and ISOLATION-RETRY separates it from a per-page Bar 0
+  - L600 · A SECOND, distinct SIGSEGV: css-values/calc-size interpolate-size — a REAL per-page crash (survives isolation)
+  - L624 · Probing the constellation: unknown is a bug, not a state
+  - L642 · A probe must be behavioural, and in this engine that is not pedantry
+  - L652 · The probe gate is a ratchet, not a survey
+  - L660 · A probe whose claim cannot fail measures nothing (tick 230)
+  - L678 · Some capabilities cannot be probed from inside the page
+  - L686 · The oracle must know whether the engine actually styled the page (tick 383)
+  - L710 · Same-tag index paths misattribute TREE drift as STYLE drift (tick 395)
+  - L733 · BUILD SPEC — selector-path keying: the class signature that stops silent mispairing (tick 399)
+  - L764 · LANDED (tick 401) — the keying is live, and the predictions held
+  - L782 · JS-platform-surface probe sweep — vein mined out (tick 487)
+  - L800 · The DOM-method / CSS-property surface vein is mined out too — one level deeper than t487 (tick 492)
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`

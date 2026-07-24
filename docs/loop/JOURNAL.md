@@ -21382,3 +21382,44 @@ No [no-pattern] needed (no engine/{js,css,...}/src touched).
 NEXT: brick 4 — enrich the G1 producer to emit `[tag, display, x,y,w,h]` and key into `Seen` on both
 engine sides so `jarring_overlap`/`jarring_reading_order`/`jarring_collapsed_target` reuse the oracle fns
 directly. Cadences: self-audit 544; surface 538 (DUE soon); const 543; wall 547.
+
+## Tick 536 — FIDELITY REBUILD brick 4a: collapsed-interactive-target invariant in the G1 probe (2026-07-24)
+
+Continuing the Check-#33 / CO-#1 fidelity-instrument rebuild. Brick 3 put the first Layer-2 jarring
+invariant (h-overflow) in the G1 probe; this adds the second one that is computable WITHOUT the Seen-
+producer enrichment: the **collapsed interactive target** — the box-dump half of hittability
+(FIDELITY-SCORING-REDESIGN.md §2). A control an interactive tag names, that Chrome renders with a real
+clickable box but Manuk collapses to <2px on an axis — a dead button the user cannot click.
+
+WHAT LANDED:
+- `oracle::collapsed_target_boxes<K>` — a Box4 core mirroring `jarring_collapsed_target` (which reads
+  `Seen.tag`), with ONE forced difference: the interactive tag is read from the selector-path key's LEAF
+  (`button.SIG:nth-child(n)` → `button`), sound because the G1 producer builds keys with the same
+  `path_of` whose leaf IS the element tag. Deliberately NOT delegated back through
+  `jarring_collapsed_target`: that function's unit test keys elements in the old `tag[n]` form (no `.`/`:`
+  to split), so a key-parsing delegate would break it. When the producer is later enriched to emit `Seen`,
+  this mirror is obviated and G1 calls the oracle fn directly (recorded in-code).
+- main.rs G1: prints `DEAD-TARGET: N interactive control(s) collapsed` after the H-OVERFLOW line.
+
+GATE (oracle::tests::collapsed_target_boxes_reads_tag_from_path_key_leaf, RED-proven): three cases on real
+path keys — (a) a button Chrome gives area but we collapse to 0-height = OUR bug; (b) a non-interactive
+`<div>` we collapse = NOT counted (proves the leaf-tag parse gates on INTERACTIVE_TAGS); (c) a button
+collapsed in BOTH engines = NOT counted (the site's own doing). RED-PROVE: dropping the `hittable(c)` guard
+counts case (c), flipping 1→2. Restored, 23 lib + 2 bin tests green. (Also fixed a lifetime slip found in
+the same tick — the leaf-tag parse must be a nested `fn`, not a closure, for `&str` elision; RED→green
+before landing, per process rule 3.)
+
+HONEST BOUNDARY: two Layer-2 invariants remain (sibling overlap, reading-order inversion) and BOTH need the
+sibling-group + (for overlap, none; for the general port) display machinery on `Seen` maps — so the next
+brick is the producer enrichment (emit `[tag, display, x,y,w,h]`, key into `Seen`) that lets all remaining
+invariants reuse the oracle fns with no mirror. Gate FLOOR still on COVERAGE (unchanged).
+
+TICK SHAPE: instrument-fidelity brick (fidelity-rebuild CO-#1, brick 4a of N — second Layer-2 jarring
+invariant in the G1 probe via a Box4 mirror core; new RED-provable gate; NO engine capability src changed —
+measurement harness only; Bar 0 held). WIKI: conformance-and-oracles.md (the collapsed_target_boxes mirror +
+tag-from-key note appended to the Layer-2 paragraph). No [no-pattern] (no engine capability src touched).
+
+NEXT: brick 4b — enrich the G1 producer to `Seen` (tag+display) so `jarring_overlap`/`jarring_reading_order`
+reuse the oracle fns directly (then this mirror + the h-overflow one collapse into direct oracle calls).
+Then §3b root-cause clustering; then the coverage→SHAPE gate-floor flip after a recalibrating sweep.
+Cadences: self-audit 544; surface 538 (DUE); const 543; wall 547.

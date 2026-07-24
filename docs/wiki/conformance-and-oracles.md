@@ -209,9 +209,20 @@ maps) was refactored to delegate to a new generic `oracle::h_overflow_boxes<K>` 
 oracle and the G1 probe (Box4 keys) score overflow through ONE definition — the same discipline SHAPE uses. G1
 now prints `H-OVERFLOW: N escape the viewport` after SHAPE. RED-proven: dropping the `edge(c) <= vw+tol` guard
 flips both the Box4 and the delegated `Seen` test 1→2 (the "blame only OUR spill" guard is genuinely tested).
-The remaining three invariants (overlap / reading-order / collapsed-target) need the sibling-group + display
-machinery, so the enabling next brick is a producer enrichment — emit tag+display, key into `Seen` — after
-which all three reuse the oracle's functions directly. Then root-cause clustering (§3b).
+**Tick 536 added the second Layer-2 invariant — collapsed interactive target** (`oracle::collapsed_target_boxes`),
+the box-dump half of hittability: a control an interactive tag names, that Chrome renders clickable but Manuk
+collapses to <2px on an axis. Like h-overflow it needs no producer change — but where h-overflow was a clean
+delegate (the `Seen` version used only `.rect`), collapsed-target's `Seen` version reads `.tag`, so the Box4
+core reads the tag from the **path key's leaf** instead (`button.SIG:nth-child(n)`→`button`, sound because
+`path_of`'s leaf IS the tag). It is a deliberate MIRROR, not a delegate: `jarring_collapsed_target`'s unit
+test keys elements in the old `tag[n]` form with no `.`/`:` to split, so a key-parsing delegate would break it
+— the mirror is obviated once the producer emits `Seen`. RED-proven (drop the `hittable(c)` guard → a
+both-engines-collapsed control counts, 1→2).
+
+The remaining two invariants (sibling overlap, reading-order inversion) need the sibling-group machinery on
+`Seen` maps, so the enabling next brick is a producer enrichment — emit tag+display, key into `Seen` — after
+which they reuse the oracle's functions directly and the h-overflow/collapsed-target mirrors collapse into
+direct oracle calls. Then root-cause clustering (§3b), then the coverage→SHAPE gate-floor flip.
 
 **Layer 2 — jarring invariants (SHAPE cannot see these).** SHAPE forgives a constant offset because a user
 does not perceive one; but a box shaped *correctly relative to an over-wide parent* can still spill off the

@@ -388,6 +388,53 @@ where
     (count, examples)
 }
 
+/// The Box4 core of the collapsed-interactive-target invariant, for the G1 fidelity probe (which
+/// carries `HashMap<String,[i64;4]>` maps, not `Seen`). Mirrors [`jarring_collapsed_target`] exactly,
+/// with ONE difference forced by the map shape: the element's tag is read from the **selector-path
+/// key's leaf** (`tag.SIG:nth-child(n)` → `tag`) instead of a stored `Seen.tag` field. That is sound
+/// because the G1 producer builds its keys with the same `path_of` whose leaf component IS the
+/// element's tag — the tag is in the key by construction. Counts interactive-tagged controls that
+/// Chrome renders hittable (both axes ≥ `min_hit`) but Manuk collapses (either axis < `min_hit`).
+///
+/// NOTE: this is deliberately NOT wired back through `jarring_collapsed_target` — that function reads
+/// `Seen.tag` and its unit test keys elements in the old `tag[n]` form (no `.`/`:` to split), so
+/// delegating it to a key-parsing core would break it. When the G1 producer is later enriched to emit
+/// `Seen`, this mirror is obviated and G1 calls `jarring_collapsed_target` directly.
+pub fn collapsed_target_boxes<K>(
+    chrome: &HashMap<K, [i64; 4]>,
+    manuk: &HashMap<K, [i64; 4]>,
+    min_hit: i64,
+) -> (usize, Vec<String>)
+where
+    K: std::hash::Hash + Eq + AsRef<str> + std::fmt::Display,
+{
+    // The element tag = the leaf path component before its `.SIG`/`:nth-child` — the same parse the
+    // G1 MISSING-by-tag reporter uses. A nested `fn` (not a closure) so lifetime elision ties the
+    // returned `&str` to the input.
+    fn leaf_tag(k: &str) -> &str {
+        let leaf = k.rsplit('/').next().unwrap_or(k);
+        leaf.split(['.', ':']).next().unwrap_or(leaf)
+    }
+    let hittable = |r: &[i64; 4]| r[2] >= min_hit && r[3] >= min_hit;
+    let mut count = 0usize;
+    let mut examples: Vec<String> = Vec::new();
+    for (id, m) in manuk {
+        if !INTERACTIVE_TAGS.contains(&leaf_tag(id.as_ref())) {
+            continue;
+        }
+        let Some(c) = chrome.get(id) else { continue };
+        // Chrome gives it a clickable box; we collapse it. That collapse is ours.
+        if hittable(c) && !hittable(m) {
+            count += 1;
+            if examples.len() < 3 {
+                examples.push(format!("{id} ({}×{})", m[2], m[3]));
+            }
+        }
+    }
+    examples.sort();
+    (count, examples)
+}
+
 /// **Jarring invariant — sibling overlap (Layer 2 of FIDELITY-SCORING-REDESIGN.md).**
 ///
 /// The redesign names overlap the *#1* "broken page" perception: text on text, a control under a
@@ -865,6 +912,49 @@ mod tests {
         let (count, examples) = h_overflow_boxes(&chrome, &manuk, vw, tol);
         assert_eq!(count, 1, "only our-alone spill counts");
         assert!(examples[0].starts_with("body:nth-child(2)/div:nth-child(1)"));
+    }
+
+    /// **The G1 collapsed-target core, on real selector-path keys, RED-proven.** The tag is read from
+    /// the key LEAF (`button.SIG:nth-child(n)` → `button`), so this proves both the hittability logic
+    /// AND the key-tag parse. Cases: (a) a button Chrome gives area but we collapse to 0-height = OUR
+    /// bug; (b) a `<div>` (non-interactive tag) we collapse = NOT counted; (c) a button collapsed in
+    /// BOTH engines (the site's own doing) = NOT counted. RED-PROVE: dropping the `hittable(c)` guard
+    /// would count case (c) too, flipping 1 → 2.
+    #[test]
+    fn collapsed_target_boxes_reads_tag_from_path_key_leaf() {
+        let mut chrome: HashMap<String, [i64; 4]> = HashMap::new();
+        let mut manuk: HashMap<String, [i64; 4]> = HashMap::new();
+        // (a) OUR bug: Chrome renders a real button (100×30), we collapse its height to 0.
+        chrome.insert(
+            "body:nth-child(2)/button.a1b2c3d4:nth-child(1)".into(),
+            [0, 0, 100, 30],
+        );
+        manuk.insert(
+            "body:nth-child(2)/button.a1b2c3d4:nth-child(1)".into(),
+            [0, 0, 100, 0],
+        );
+        // (b) A non-interactive div we collapse — not a hit target, must NOT count.
+        chrome.insert(
+            "body:nth-child(2)/div:nth-child(2)".into(),
+            [0, 40, 100, 30],
+        );
+        manuk.insert("body:nth-child(2)/div:nth-child(2)".into(), [0, 40, 100, 0]);
+        // (c) A button the SITE collapses (0-height in BOTH engines) — not our bug.
+        chrome.insert(
+            "body:nth-child(2)/button:nth-child(3)".into(),
+            [0, 80, 100, 0],
+        );
+        manuk.insert(
+            "body:nth-child(2)/button:nth-child(3)".into(),
+            [0, 80, 100, 0],
+        );
+
+        let (count, examples) = collapsed_target_boxes(&chrome, &manuk, 2);
+        assert_eq!(count, 1, "only the control WE alone collapse counts");
+        assert!(
+            examples[0].starts_with("body:nth-child(2)/button.a1b2c3d4:nth-child(1)"),
+            "got {examples:?}"
+        );
     }
 
     /// **The sibling-overlap jarring invariant, and its RED proof.** Two siblings Chrome keeps
