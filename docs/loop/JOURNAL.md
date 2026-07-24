@@ -19660,6 +19660,41 @@ intact (do NOT checkout). Retry: re-run ./scripts/tick.sh /tmp/tick485.msg on a 
 (load1<0.6) — the build is now warm, so the re-run's verify is fast and low-load, exactly how 484 landed.
 [[three-ticks-parked-wall-blocked]] [[wall-warm-rerun-lands-ticks]] [[wall-false-red-shell-rebuild]]
 
+## Tick 486 — navigator.userActivation — the gesture-gated capability signal (2026-07-24)
+
+> **[BACKFILLED during the t495 self-audit — this entry was missing from JOURNAL.md although the tick landed
+> as commit `746c0bd`. Reconstructed verbatim from that commit's message, the authoritative source. The
+> journal→commit continuity gap is the finding; this restores it.]**
+
+PROBE→BUILD tick. Board CO-#1 (2) PROBE the constellation unknowns: batch-measured ~20 JS-platform surfaces
+and reconfirmed the stale-pessimistic rule (connection/scheduler.postTask/locks/permissions/wakeLock/storage/
+clipboard/CSS.supports/structuredClone/reportError ALL already built). Two genuine gaps surfaced:
+navigator.userActivation (undefined) and CSS.registerProperty (undefined; a Houdini subsystem, parked). Built
+the first.
+
+THE GAP (measured): navigator.userActivation was absent. A growing class of gesture-gated features
+(autoplay-with-sound, requestFullscreen, window.open popups, clipboard.write, Web Share, PaymentRequest.show)
+guards itself with `if (navigator.userActivation.isActive) doIt(); else fallback()` inside a click handler.
+With the object undefined, `.isActive` is a SYNCHRONOUS TypeError out of the handler — the gated action never
+runs AND the else-fallback never runs (it threw, not returned falsy) — a dead button. A hardcoded false would
+be WORSE: a site testing isActive inside its own click handler would take the "no gesture" branch during a
+real click.
+
+MECHANISM (dom_bindings.rs; zero new dep): live getters over `g.__ua`. hasBeenActive = STICKY (false until
+first real gesture, then true forever); isActive = TRANSIENT (true only while a real engine gesture is
+dispatched). State flipped in `__dispatchEvent` (the one path every event goes through), bracketed around the
+dispatch walk (set after type known, restore at the single return; save/restore for nesting). Discriminator is
+a private `__actgesture` marker the engine stamps on synthesised mouse/key events — NOT isTrusted (engine
+gestures carry a supplied object so they read isTrusted===false like a page's own el.click(), which must grant
+nothing).
+
+GATE: G_USER_ACTIVATION (page) — at load present reading active:false sticky:false (no throw); a page-synthetic
+el.click() grants nothing; a real host-dispatched click reads active:true sticky:true; after the gesture
+isActive returns false while hasBeenActive stays true. RED-proven three ways (surface removed → load throws;
+bracket disabled → #during false; marker-agnostic → #synth leaks true). 11 neighbor gates green. AGENTIC: an
+agent's dispatch_click now trips the same activation a real user's gesture would. TICK SHAPE: capability (+1
+gate). WIKI: interaction-surface.md — the userActivation section.
+
 ## Tick 487 — MEASUREMENT: JS-surface vein mined out + ch/ex font-metrics subsystem scoped (Const-Check #27) (2026-07-24)
 
 A measurement tick (the class the board flags highest-yield: t225/226/238). Two probe sweeps (~40 JS platform
@@ -19885,3 +19920,41 @@ TICK SHAPE: capability (+1 gate, nothing regresses). WIKI: dom-semantics.md — 
 timing-coupled — not atomic), style.sheet/link.sheet MISSING (the known CSSOM .sheet subsystem, ~944 WPT),
 document.currentScript/scrollingElement PRESENT+correct. NEXT: ch/ex font-metrics (Const-Check #27) remains
 the top lever. Self-audit next 495; surface-audit next 498; Const-Check next 495.
+
+## Tick 495 — SELF-AUDIT (cadence, ticks 485→494) (2026-07-24)
+
+Self-audit due every 10 (last 485). Reviewed the window 485→494 for browser/methodology drift.
+
+GREEN:
+- **Capability discipline.** Every capability tick banked a RED-proven gate: 485 G_WEBAUTHN_SURFACE, 486
+  G_USER_ACTIVATION, 489 G_HIDDEN_ATTRIBUTE, 490 G_INPUTMODE_REFLECT, 491 G_DIALOG_REQUEST_CLOSE, 493
+  G_IMG_CURRENT_SRC, 494 G_ACTIVE_ELEMENT_BODY_DEFAULT. The two measurement ticks (487, 492) and the surface
+  audit (488) are honestly labelled `TICK SHAPE: measurement`, no gate claimed.
+- **WEB-PATTERNS moves-with-engine.** Each capability tick this session (489/490/491/493/494) added a
+  matching pattern row naming the class of the web it unlocks — the ledger tracks the engine, not lagging it.
+- **No drift.** Zero single-site ticks, zero html/dom flip-grinding, zero CSS-layout-tail grinding. Every
+  brick was a daily-driver capability measured-missing-first (probe→build), obeying the board mandate.
+- **RATCHET honored.** Nothing regressed. Tick 494's first attempt went RED on `manuk-shell tests`; correctly
+  diagnosed as a FALSE-RED (direct `cargo test -p manuk-shell --release` = 72 green) under gate-load + an
+  observer mid-wall commit, NOT traded for the capability — the warm re-run landed clean.
+
+FINDING (remediated this tick):
+- **Journal continuity gap.** Tick 486 (navigator.userActivation) LANDED as commit `746c0bd` but its
+  `## Tick 486` section was ABSENT from JOURNAL.md — the journal jumped 485→487. The full content survived in
+  the commit message (the pre-commit journal check evidently passed at commit time, so the entry was lost to a
+  later edit, not never-written). BACKFILLED verbatim from `746c0bd` above, restoring 485→494 continuity. No
+  code affected; the tick itself was and is correct.
+
+LAST_AUDIT_TICK → 495. Next self-audit 505; surface-audit next 498.
+
+CONST-CHECK #28 (also due at 495 — coincident cadence, recorded in CONSTITUTION-CHECK.md). Verdict: no drift.
+Gate (not scoreboard): ticks 489-494 mined the last CLEAN ATOMIC bricks of the JS-surface/DOM-method/UA-render
+vein (hidden attr, inputMode/enterKeyHint mis-key, requestClose, img.currentSrc, activeElement→body), each a
+real daily-driver capability with a RED-proven gate. t492's second sweep pinned the inflection: the atomic
+vein is MINED OUT one level below t487 (DOM-method + CSS-property too — forms built; the CSS gaps are
+servo-drops; getHTML/Typed-OM/Highlight/.sheet are subsystems). Next frontier unchanged + doubly-confirmed:
+the sized subsystems in PHASE0-BOUNDED-REMAINDER.md, led by ch/ex font metrics (decompose-first). RATCHET
+held; I2 intact (zero new deps all window). LAST_CONSTITUTION_CHECK → 495; next Const-Check 503.
+
+TICK SHAPE: self-audit + constitution-check (docs-only; no gate change; nothing regresses). WIKI: none (both
+audits live in their ledgers).

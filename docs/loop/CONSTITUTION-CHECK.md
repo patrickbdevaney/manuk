@@ -1171,3 +1171,44 @@ ch/ex font metrics, the fidelity-instrument rebuild, media codec breadth, passwo
 each decomposed before starting. Pick one, plan it, mine it brick-by-brick against the shared substrate.
 
 **Next check due: tick 495.**
+
+## Check #28 — tick 495
+
+**Horizon:** Phase 0 — daily-driver rendering parity + the agentic surface (CONSTITUTION.MD **Part VII**,
+components 1 & 2). **Gate:** the FIDELITY-SCORING-REDESIGN.md certificate (≥0.75 placement fidelity on ≥95%
+of the corpus + ≥0.70 per top-20 category), NOT a WPT percentage. Anchor: PHASE0-BOUNDED-REMAINDER.md.
+
+**Gate or scoreboard?** Gate. Ticks 489-494 mined the last CLEAN ATOMIC bricks from the JS-surface /
+DOM-method / rendering-UA vein, each measured-missing-first (probe→build) and each a real daily-driver
+capability, not a WPT-flip: t489 the global `[hidden]` attribute (rendered as `display:block` — every
+script-toggled panel painted permanently); t490 `inputMode`/`enterKeyHint` (keyed to a nonexistent tag
+`"undefinedelement"` → reflected on nothing); t491 `dialog.requestClose()` (close-with-veto); t493
+`<img>.currentSrc` (the URL we actually load — read by lazy-load/lightbox/analytics on every image); t494
+`document.activeElement` defaulting to `<body>` not `null` (a null crashes the ubiquitous
+`activeElement.blur()` idiom). Two honest measurement ticks (487, 492) bracket them.
+
+**The inflection, measured not guessed.** t492's second sweep pinned it: the clean-bounded atomic vein is
+now MINED OUT one level below t487's JS-platform finding — at the DOM-method and CSS-property layers too.
+Form-constraint-validation is fully built; the CSS gaps (`accent-color`/`touch-action`/`overscroll-behavior`/
+`text-decoration-*`/`text-wrap`) are servo-DROPS (absent from the built `properties.rs`, and the @container
+source-supplement trick does not rescue a dropped *property*); `getHTML`/Typed-OM/Highlight/`img.complete`+
+`naturalWidth`/CSSOM-`.sheet` are each SUBSYSTEMS, not bricks. So the honest next frontier is unchanged from
+Check #27 and now doubly-confirmed: the sized subsystems in PHASE0-BOUNDED-REMAINDER.md, led by ch/ex real
+font metrics (the Send+Sync FontMetricsProvider threaded through `make_device` + an x-height query in
+manuk-text — decompose-before-starting, NOT a squeezed atomic tick).
+
+**Is the loop still pointed at the frontier?** Yes. Every tick this window moved a capability a real site
+depends on (the agentic surface too: t494's activeElement fallback keeps an agent's focus reads non-null).
+Zero drift — no single-site ticks, no html/dom flip-grinding, no CSS-layout-tail. The self-audit (this same
+tick) found and remediated one journal continuity gap (t486's entry was missing; backfilled from its commit).
+
+**Any invariant bent?** No. Bar 0 held every tick; each capability banked a RED-proven gate; I2 intact (zero
+new deps — every brick was prelude JS, a native getter, or a UA-sheet rule on already-won substrate). THE
+RATCHET held: t494's `manuk-shell` false-RED (a load-sensitive timing flake under observer cron-contention,
+proven green on a direct run) was NOT traded for the capability — re-run, not re-baseline.
+
+**PART VI / VII correction.** None. The four-component v1 scope and the fidelity-certificate exit stand. The
+only tempo note: the atomic surface lane is closed (measured twice now); the loop's remaining Phase-0 work is
+subsystem work, each decomposed before starting.
+
+**Next check due: tick 503.**

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **263** | ticks 1–494 |
-| median tick cycle | **21m** | 262 intervals |
-| median, last 10 | **25m** | 10 intervals |
+| ticks landed | **264** | ticks 1–495 |
+| median tick cycle | **21m** | 263 intervals |
+| median, last 10 | **23m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.84** | 313.3h elapsed |
-| median verify wall | **60s** | 202 ticks |
+| **ticks per hour** | **0.84** | 313.5h elapsed |
+| median verify wall | **60s** | 203 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**160 of 263 ticks** (61%) moved a
+**160 of 264 ticks** (61%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -360,5 +360,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **491** | 2026-07-24 05:38 | 22m | capability | 67s | +94/−34 | 256 | 81 | 56.0% · | `dialog.requestClose()`: close with a veto (2026-07-24) |
 | **492** | 2026-07-24 05:58 | 20m | measurement | 67s | +189/−33 | 257 | 81 | 56.0% · | MEASUREMENT: the DOM-method / CSS-property surface vein is mined out too (2026-07-24) |
 | **494** | 2026-07-24 06:20 | 22m | capability | 67s | +156/−36 | 258 | 81 | 56.0% · | `document.activeElement` defaults to `<body>`, not `null` (2026-07-24) |
+| **495** | 2026-07-24 06:31 | 11m | measurement | 67s | +149/−34 | 258 | 81 | 56.0% · | SELF-AUDIT (cadence, ticks 485→494) (2026-07-24) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
