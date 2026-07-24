@@ -89,6 +89,15 @@ at the right target.
   agent is live).
 - **Agent looping/confused**: read `agent-stream.sh`, find the false belief, correct it ON THE
   BOARD with evidence (the agent trusts the board over its own stale plan).
+- **Silently dead crons (2026-07-24)**: both the disk-hygiene AND loop-watchdog crontab entries
+  had been corrupted with backslash-escaped quotes (`bash -lc \'...\'`) — cron then ran
+  `bash -lc \'` and died with "unexpected EOF" every fire, so BOTH the disk reaper and the
+  supervisor-resurrection safety net were dead for hours (disk crept 40G→29G monotonically instead
+  of oscillating; a dead supervisor would NOT have been relaunched). Cause: a `crontab -l | … |
+  crontab -` round-trip double-escaped the quotes. CHECK EVERY FEW HOURS: `crontab -l | grep -c
+  "\\'"` must be **0**; `tail .git/manuk-hygiene.log` must show `now NNG free`, never
+  "unexpected EOF". FIX: sed the `\'` back to `'` on each affected line, validate every non-comment
+  line has even quote count, `crontab -`, then run each script once by hand to confirm exit 0.
 - **Disk pressure**: `scripts/disk-hygiene.sh` is cron'd; if >90%, reap provably-dead gate
   binaries (stems with no test source in tree or wip branches) or orphaned old-hash binaries via
   cargo's `--message-format=json` keep-list — but NEVER run reaper cargo while the agent builds.
