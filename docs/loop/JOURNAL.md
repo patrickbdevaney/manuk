@@ -19179,3 +19179,35 @@ NEXT VEIN NOTE: same-substrate atomic follow-ons remain — `insertParagraph`/`i
 Shift+Enter → block split / <br>), `deleteContentForward` (Delete key), `insertFromPaste` plaintext, and
 (bigger) dispatch_key modifier-state plumbing + cross-block boundary merge for Backspace. Formatting-command
 wrapping (`bold`→<b>) is a later larger brick. Constitution Check #25 landed t471 (next due 479).
+
+## Tick 474 — the Delete key removes the grapheme after the caret in a contenteditable (2026-07-23)
+
+Brick 4 of the contenteditable EDITING subsystem — the forward-delete partner to t473's Backspace, closing
+the caret-delete pair. Before it, a `Delete` keydown in a `<div contenteditable>` fired the KeyboardEvent
+and removed nothing.
+
+MECHANISM: generalise t473's `__deleteBackwardAtCaret` into `__deleteAtCaret(host, forward)`
+(engine/js/src/event_loop.rs). `forward===false` = Backspace (`deleteContentBackward`, delete BEFORE caret);
+`forward===true` = Delete (`deleteContentForward`, delete AFTER caret, caret stays put). Shared scaffold:
+cancelable beforeinput → if not vetoed, delete → non-cancelable input; non-collapsed selection →
+`deleteContents`; collapsed caret in a text node → `deleteData` of a whole code point (surrogate-pair aware,
+stepping the right direction); boundary (end for forward / start for backward, or element caret) → no-op, no
+input. `dispatch_key` (dom_bindings.rs) routes Backspace→`__deleteAtCaret(host,false)`,
+Delete→`__deleteAtCaret(host,true)`. contenteditable only; cross-block merge later.
+
+GATE: G_CONTENTEDITABLE_DELETE_FORWARD (page) — caret at START of "Hello", two Deletes → "llo" with two
+`bi/in:deleteContentForward` pairs; a Delete at end fires no input (`dcount=2`); a veto editable stays "Keep".
+RED-proven by dropping the Delete route. Neighbors green: g_contenteditable_delete (Backspace gate, unchanged
+after the generalisation refactor — re-verified), g_contenteditable_typing, g_exec_insert_text,
+g_ime_composition, g_selection.
+
+TICK SHAPE: capability (contenteditable EDITING brick 4/N; +1 gate). GATES +1.
+CONSTELLATION: rich-editing — a contenteditable now has the full caret-delete pair (Backspace + Delete).
+WIKI: interaction-surface.md — new section after the t473 Backspace note.
+WEB-PATTERNS: edit-text-in-a-rich-editor-forward-delete-with-delete.
+AGENTIC: the agent's editable-region control now includes forward deletion.
+NEXT VEIN NOTE: same-substrate atomic follow-ons remain — `insertFromPaste` plaintext; then (bigger, need
+design) Enter → insertParagraph/insertLineBreak (browser-divergent + needs modifier state), dispatch_key
+modifier-state plumbing (so Ctrl+letter shortcuts don't insert), and cross-block boundary merge for
+Backspace/Delete. Formatting-command wrapping (`bold`→<b>) is a later larger brick. Const-Check #25 landed
+t471 (next due 479).

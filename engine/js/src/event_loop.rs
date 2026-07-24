@@ -2623,18 +2623,20 @@ const PRELUDE: &str = r#"
         };
       }
 
-      // The DELETE counterpart to `__insertTextAtCaret`: remove one grapheme BEFORE the caret (or the
-      // current non-collapsed selection) inside editing `host`, firing `beforeinput`→(mutate)→`input`
-      // with `inputType:'deleteContentBackward'`. It is what Backspace does in a contenteditable. A
-      // cancelled `beforeinput` vetoes; when there is genuinely nothing to delete (caret at the very
-      // start / no caret in host) the DOM is untouched and `input` does not fire, exactly as a browser
-      // leaves a no-op Backspace. Cross-node boundary deletion (merging the previous block) is a later,
-      // larger brick — this handles the collapsed-caret-in-a-text-run and the delete-the-selection cases.
-      if (typeof globalThis.__deleteBackwardAtCaret !== 'function') {
-        globalThis.__deleteBackwardAtCaret = function (host) {
+      // The DELETE counterpart to `__insertTextAtCaret`: remove one grapheme adjacent to the caret (or
+      // the current non-collapsed selection) inside editing `host`, firing `beforeinput`→(mutate)→`input`.
+      // `forward===false` is Backspace (delete BEFORE the caret, `inputType:'deleteContentBackward'`);
+      // `forward===true` is the Delete key (delete AFTER the caret, `inputType:'deleteContentForward'`).
+      // A cancelled `beforeinput` vetoes; when there is genuinely nothing to delete (caret at the very
+      // start/end of the run, or no caret in host) the DOM is untouched and `input` does not fire, exactly
+      // as a browser leaves a no-op Backspace/Delete. Cross-node boundary deletion (merging an adjacent
+      // block) is a later, larger brick — this handles collapsed-caret-in-a-text-run and delete-selection.
+      if (typeof globalThis.__deleteAtCaret !== 'function') {
+        globalThis.__deleteAtCaret = function (host, forward) {
           if (!host) { return false; }
+          var inputType = forward ? 'deleteContentForward' : 'deleteContentBackward';
           var bi = new Event('beforeinput', { bubbles: true, cancelable: true });
-          bi.inputType = 'deleteContentBackward'; bi.data = null;
+          bi.inputType = inputType; bi.data = null;
           host.dispatchEvent(bi);
           if (bi.defaultPrevented) { return true; } // ran, but the delete was vetoed
 
@@ -2651,23 +2653,37 @@ const PRELUDE: &str = r#"
             deleted = true;
           } else {
             var sc = r.startContainer, so = r.startOffset;
-            if (sc && sc.nodeType === 3 && so > 0) {
-              // Delete a whole code point: back up over a low surrogate's leading high surrogate.
-              var n = 1, lo = sc.data.charCodeAt(so - 1);
-              if (so >= 2 && lo >= 0xDC00 && lo <= 0xDFFF) {
-                var hi = sc.data.charCodeAt(so - 2);
-                if (hi >= 0xD800 && hi <= 0xDBFF) { n = 2; }
+            if (sc && sc.nodeType === 3) {
+              var len = sc.data.length;
+              if (forward && so < len) {
+                // Delete a whole code point AFTER the caret; step over a leading high surrogate.
+                var n = 1, hi = sc.data.charCodeAt(so);
+                if (so + 1 < len && hi >= 0xD800 && hi <= 0xDBFF) {
+                  var lo2 = sc.data.charCodeAt(so + 1);
+                  if (lo2 >= 0xDC00 && lo2 <= 0xDFFF) { n = 2; }
+                }
+                sc.deleteData(so, n);
+                r.setStart(sc, so); r.collapse(true);          // caret stays put
+                if (sel.__set) { sel.__set(sc, so, sc, so); }
+                deleted = true;
+              } else if (!forward && so > 0) {
+                // Delete a whole code point BEFORE the caret; back up over a trailing low surrogate.
+                var m = 1, lo = sc.data.charCodeAt(so - 1);
+                if (so >= 2 && lo >= 0xDC00 && lo <= 0xDFFF) {
+                  var hi2 = sc.data.charCodeAt(so - 2);
+                  if (hi2 >= 0xD800 && hi2 <= 0xDBFF) { m = 2; }
+                }
+                sc.deleteData(so - m, m);
+                r.setStart(sc, so - m); r.collapse(true);
+                if (sel.__set) { sel.__set(sc, so - m, sc, so - m); }
+                deleted = true;
               }
-              sc.deleteData(so - n, n);
-              r.setStart(sc, so - n); r.collapse(true);
-              if (sel.__set) { sel.__set(sc, so - n, sc, so - n); }
-              deleted = true;
             }
             // caret at a text-node/element boundary — a no-op for this brick (cross-node merge is later)
           }
           if (deleted) {
             var inp = new Event('input', { bubbles: true, cancelable: false });
-            inp.inputType = 'deleteContentBackward'; inp.data = null;
+            inp.inputType = inputType; inp.data = null;
             host.dispatchEvent(inp);
           }
           return true;

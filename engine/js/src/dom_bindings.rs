@@ -8666,8 +8666,8 @@ impl PageContext {
         // Dispatch the KeyboardEvent, then run the **default editing action** for a keydown that no
         // handler cancelled, aimed at an editing host: a printable key (a single-grapheme `key`) inserts
         // that character at the caret (`__insertTextAtCaret`, the same path `execCommand('insertText')`
-        // uses), and `Backspace` deletes the grapheme before the caret (`__deleteBackwardAtCaret`) — so
-        // a plain `<div contenteditable>` responds to real typing AND editing.
+        // uses), and `Backspace`/`Delete` remove the grapheme before/after the caret (`__deleteAtCaret`) —
+        // so a plain `<div contenteditable>` responds to real typing AND editing.
         // SCOPE: this is contenteditable only (form-control `.value` typing is a separate path); and
         // because `dispatch_key` surfaces no modifier state yet, an UNHANDLED modifier+letter (e.g. a
         // page that ignores Ctrl+B) still inserts the letter — modifier plumbing is a later brick.
@@ -8677,11 +8677,11 @@ impl PageContext {
                if(proceed!==false && {ty}==='keydown'){{\
                  var k={key};\
                  var printable=(typeof k==='string' && Array.from(k).length===1);\
-                 var backspace=(k==='Backspace');\
-                 if((printable && typeof globalThis.__insertTextAtCaret==='function') || (backspace && typeof globalThis.__deleteBackwardAtCaret==='function')){{\
+                 var del=(k==='Backspace' || k==='Delete');\
+                 if((printable && typeof globalThis.__insertTextAtCaret==='function') || (del && typeof globalThis.__deleteAtCaret==='function')){{\
                    var host=null, t=(globalThis.__nodes && __nodes[{nid}])||null;\
                    for(var n=t;n;n=n.parentNode){{ if(n.nodeType===1 && n.isContentEditable){{ host=n; break; }} }}\
-                   if(host){{ try{{ if(printable){{ __insertTextAtCaret(host, k, 'insertText'); }} else {{ __deleteBackwardAtCaret(host); }} }}catch(e){{}} }}\
+                   if(host){{ try{{ if(printable){{ __insertTextAtCaret(host, k, 'insertText'); }} else {{ __deleteAtCaret(host, k==='Delete'); }} }}catch(e){{}} }}\
                  }}\
                }}\
                return proceed;\

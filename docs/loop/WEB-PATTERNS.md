@@ -4149,3 +4149,12 @@ no-op Backspace (caret already at the start, nothing to remove) must NOT fire `i
 listens for `input` and a spurious empty one desyncs it; and a framework editor that `preventDefault()`s the
 `beforeinput` must have its delete vetoed so it can run its own removal. Cross-block merge (Backspace at a
 block's start pulling it into the previous block) is a later brick — the common in-a-line case is what lands.
+
+## Edit text in a rich editor — forward-delete with the Delete key (tick 474)
+
+**The class of the web this unlocks (the same editors, now with the Delete key):** t473 gave a
+contenteditable Backspace; this gives it the Delete key — remove the character AFTER the caret. Together
+they are the complete caret-delete pair every text field needs. Fires `beforeinput`→`input`
+(`inputType:'deleteContentForward'`) through the same shared primitive, honoring the veto and the no-op
+(a Delete at the end of the text removes nothing and fires no `input`, so an editor's model is not desynced
+by a phantom event). Cross-block forward merge is a later brick; the in-line case is what lands.

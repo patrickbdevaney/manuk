@@ -2551,3 +2551,19 @@ GATE: G_CONTENTEDITABLE_DELETE (page) — caret after "Hello", two Backspaces �
 whose `beforeinput` handler `preventDefault()`s stays "Keep". RED-proven by neutralizing the Backspace arm.
 Neighbors green: g_contenteditable_typing, g_exec_insert_text, g_exec_command_copy, g_ime_composition,
 g_selection, g_range.
+
+## The Delete key removes the grapheme after the caret in a contenteditable (tick 474)
+
+The forward-delete partner to t473's Backspace, closing the caret-delete pair. The `__deleteBackwardAtCaret`
+helper is generalised to `__deleteAtCaret(host, forward)`: `forward===false` is Backspace
+(`deleteContentBackward`, delete before the caret), `forward===true` is the Delete key
+(`deleteContentForward`, delete after the caret and the caret stays put). Both share the beforeinput→mutate→
+input scaffold, the veto contract, the surrogate-pair-aware whole-code-point step, and the no-op-at-boundary
+rule (a Delete at the end of the run — or a Backspace at the start — touches nothing and fires no `input`).
+`dispatch_key` routes `Backspace`→`__deleteAtCaret(host,false)` and `Delete`→`__deleteAtCaret(host,true)`.
+
+GATE: G_CONTENTEDITABLE_DELETE_FORWARD (page) — caret at the START of "Hello", two Deletes → "llo" with two
+`bi/in:deleteContentForward` pairs; a Delete at the end fires no `input` (`dcount=2`); a veto editable stays
+"Keep". RED-proven by dropping the `Delete` route. Neighbors green: g_contenteditable_delete (the Backspace
+gate, unchanged after the refactor), g_contenteditable_typing, g_exec_insert_text, g_ime_composition,
+g_selection.

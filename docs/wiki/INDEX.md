@@ -520,6 +520,7 @@
   - L2460 · document.execCommand('insertText') — the first contenteditable EDITING brick (tick 471)
   - L2503 · Typing a printable key into a contenteditable inserts the character (tick 472)
   - L2530 · Backspace deletes the grapheme before the caret in a contenteditable (tick 473)
+  - L2555 · The Delete key removes the grapheme after the caret in a contenteditable (tick 474)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -940,4 +941,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-855 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+856 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
