@@ -8688,16 +8688,34 @@ impl PageContext {
                    for(var n=t;n;n=n.parentNode){{ if(n.nodeType===1 && n.isContentEditable){{ host=n; break; }} }}\
                    if(host){{ try{{ if(printable){{ __insertTextAtCaret(host, k, 'insertText'); }} else {{ __deleteAtCaret(host, k==='Delete'); }} }}catch(e){{}} }}\
                  }}\
-                 else if(chord && typeof document.execCommand==='function'){{\
+                 else if(chord){{\
                    /* The default browser action for the clipboard chords: Ctrl/Cmd+X cuts the selection, */\
-                   /* Ctrl/Cmd+C copies it — routed straight through the execCommand cut/copy paths (copy */\
-                   /* t463, cut t476), which already enforce editable-only cut + clipboard-write. Only on a */\
-                   /* NON-empty selection (an empty Ctrl+C must not clobber the clipboard). The page owns */\
-                   /* the chord if its keydown handler preventDefault()-ed it (proceed===false, above). */\
+                   /* Ctrl/Cmd+C copies it (routed through execCommand cut/copy — copy t463, cut t476, which */\
+                   /* enforce editable-only cut + clipboard-write; only on a NON-empty selection so an empty */\
+                   /* Ctrl+C cannot clobber the clipboard), Ctrl/Cmd+V pastes the clipboard text at the caret. */\
+                   /* The page owns the chord if its keydown handler preventDefault()-ed it (proceed above). */\
                    var lk=(typeof k==='string')?k.toLowerCase():'';\
                    var hassel=!!(globalThis.getSelection && String(globalThis.getSelection())!=='');\
-                   if(hassel && lk==='x'){{ try{{ document.execCommand('cut'); }}catch(e){{}} }}\
-                   else if(hassel && lk==='c'){{ try{{ document.execCommand('copy'); }}catch(e){{}} }}\
+                   if(hassel && lk==='x' && typeof document.execCommand==='function'){{ try{{ document.execCommand('cut'); }}catch(e){{}} }}\
+                   else if(hassel && lk==='c' && typeof document.execCommand==='function'){{ try{{ document.execCommand('copy'); }}catch(e){{}} }}\
+                   else if(lk==='v' && typeof globalThis.__insertTextAtCaret==='function'){{\
+                     /* Read the clipboard text synchronously (host OS text, else the last copied/cut text), */\
+                     /* find the editing host, fire a cancelable `paste` ClipboardEvent whose clipboardData */\
+                     /* exposes getData('text/plain') — so an editor that intercepts paste can veto — and if */\
+                     /* not prevented, insert at the caret with inputType 'insertFromPaste' (beforeinput→input). */\
+                     var ptext='';\
+                     try{{ ptext=(typeof globalThis.__clipboardRead==='function' ? String(globalThis.__clipboardRead()||'') : '') || String(globalThis.__clipboardText||''); }}catch(e){{}}\
+                     var phost=null, pt=(globalThis.__nodes && __nodes[{nid}])||null;\
+                     for(var pn=pt;pn;pn=pn.parentNode){{ if(pn.nodeType===1 && pn.isContentEditable){{ phost=pn; break; }} }}\
+                     if(phost && ptext!==''){{\
+                       try{{\
+                         var pev=new Event('paste', {{ bubbles:true, cancelable:true }});\
+                         pev.clipboardData={{ getData:function(tp){{ return (tp && String(tp).indexOf('text')>=0) ? ptext : ''; }}, types:['text/plain'] }};\
+                         phost.dispatchEvent(pev);\
+                         if(!pev.defaultPrevented){{ __insertTextAtCaret(phost, ptext, 'insertFromPaste'); }}\
+                       }}catch(e){{}}\
+                     }}\
+                   }}\
                  }}\
                  else if(k==='Enter' && {shift} && typeof globalThis.__insertLineBreakAtCaret==='function'){{\
                    /* Shift+Enter inserts a hard line break (<br>) at the caret — this is the UNAMBIGUOUS, */\

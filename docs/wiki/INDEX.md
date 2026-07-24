@@ -526,6 +526,7 @@
   - L2613 · A dispatched KeyboardEvent carries ctrlKey/shiftKey/altKey/metaKey (tick 477)
   - L2636 · Ctrl+X cuts / Ctrl+C copies the selection — keyboard clipboard routing (tick 478)
   - L2654 · Shift+Enter inserts a hard line break (<br>) in a contenteditable (tick 479)
+  - L2671 · Ctrl+V pastes clipboard text at the caret in a contenteditable (tick 480)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -946,4 +947,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-861 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+862 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

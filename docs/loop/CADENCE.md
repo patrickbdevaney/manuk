@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **252** | ticks 1–478 |
-| median tick cycle | **21m** | 251 intervals |
-| median, last 10 | **36m** | 10 intervals |
+| ticks landed | **253** | ticks 1–480 |
+| median tick cycle | **21m** | 252 intervals |
+| median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.82** | 307.2h elapsed |
-| median verify wall | **60s** | 191 ticks |
-| wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.82** | 308.1h elapsed |
+| median verify wall | **60s** | 192 ticks |
+| wall trend | 39s → 73s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **246**
+* **live gates**: 27 → **247**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**152 of 252 ticks** (60%) moved a
+**153 of 253 ticks** (60%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **152** capability ticks, median cycle **21m**
+* **153** capability ticks, median cycle **21m**
 * median diff per tick: **+222 / −34** lines across 9 files
 
 ## Every tick
@@ -349,5 +349,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **476** | 2026-07-23 22:45 | 40m | capability | 62s | +231/−37 | 243 | 81 | 56.0% · | execCommand('cut') copies the selection to the clipboard and removes it (2026-07-23) |
 | **477** | 2026-07-23 23:19 | 34m | capability | 67s | +339/−46 | 244 | 81 | 56.0% · | a dispatched KeyboardEvent carries ctrlKey/shiftKey/altKey/metaKey (2026-07-23) |
 | **478** | 2026-07-24 00:17 | 57m | capability | 4m | +266/−36 | 246 | 81 | 56.0% · | Ctrl+X cuts / Ctrl+C copies the selection (keyboard clipboard routing) + surface audit #21 |
+| **480** | 2026-07-24 01:06 | 49m | capability | 73s | +235/−41 | 247 | 81 | 56.0% · | Ctrl+V pastes clipboard text at the caret in a contenteditable (2026-07-24) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

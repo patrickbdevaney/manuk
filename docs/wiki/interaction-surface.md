@@ -2667,3 +2667,19 @@ Plain Enter (shift:false — what the 5-arg `dispatch_key` passes) hits no branc
 GATE: G_SHIFT_ENTER_LINE_BREAK (page) — caret between "A"/"B", Shift+Enter → one `<br>` (`brs=1`), events
 `bi/in:insertLineBreak`, textContent still "AB"; a following plain Enter adds no `<br>`. RED-proven by disabling
 the Shift+Enter branch. Enter→insertParagraph (the block split) is the harder divergent brick still ahead.
+
+## Ctrl+V pastes clipboard text at the caret in a contenteditable (tick 480)
+
+The read half of keyboard clipboard support (cut/copy t478), completing the Ctrl+X/C/V trio. Ties together the
+modifier substrate (t477), the synchronous clipboard read (t461), and the insertText caret path (t471).
+
+**Mechanism.** A `Ctrl/Cmd+V` arm inside `dispatch_key`'s chord branch: read the clipboard text synchronously
+(`__clipboardRead()` host text, else the last-copied `__clipboardText`), find the editing host, fire a
+CANCELABLE `paste` ClipboardEvent whose `clipboardData.getData('text/plain')` returns that text (so an editor
+sanitizing pasted content can veto), and if not prevented, insert at the caret via
+`__insertTextAtCaret(host, text, 'insertFromPaste')` (fires `beforeinput`→`input`).
+
+GATE: G_KEY_PASTE (page) — seed clipboard "PASTED", caret between "X"/"Y", Ctrl+V → paste handler sees
+`getData('text/plain')`==="PASTED", editable becomes "XPASTEDY", events `bi/in:insertFromPaste`; a paste
+handler that `preventDefault()`s blocks the insert. RED-proven by disabling the Ctrl+V arm. Rich (HTML) paste
+and the full DataTransfer surface are later bricks — this is plain-text paste.

@@ -4216,3 +4216,14 @@ carries the shift flag (t477). **The trap:** Enter handling is TWO different act
 land blindly — Shift+Enter → `<br>` is cross-browser identical, but PLAIN Enter → insertParagraph is a block
 split that Chrome and Firefox implement DIFFERENTLY (`<div>` vs `<br>`), so plain Enter must stay a no-op (the
 page's own composer handler owns it) rather than guess wrong. The block-split insertParagraph is a later brick.
+
+## Paste text into an editor with Ctrl+V (tick 480)
+
+**The class of the web this unlocks (pasting into every editor, comment box and chat composer):** Ctrl/Cmd+V
+now reads the clipboard text, fires a cancelable `paste` event, and inserts the text at the caret
+(`inputType:insertFromPaste`) — completing the keyboard clipboard trio (cut/copy landed t478). Before this,
+Ctrl+V did nothing. **The trap:** paste is not a blind insert — a real editor listens for the `paste` event to
+SANITIZE or transform the incoming content (strip formatting, block scripts, convert to its own model), so the
+event must fire FIRST and be cancelable, and a `preventDefault()` must suppress the default insert entirely
+(or the editor gets the text twice — once its way, once ours). Rich (HTML) paste and the full DataTransfer
+(`getData('text/html')`, files) are later bricks; this lands plain-text paste with a vetoable event.

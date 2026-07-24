@@ -19399,3 +19399,47 @@ clipboard READ t461), Enter→insertParagraph (browser-divergent block split —
 Shift-vs-plain now EXISTS, but the block-split itself is the work), cross-block boundary merge for
 Backspace/Delete, formatting-command wrapping (`bold`→<b>). Self-audit due 485; surface-audit done t478 (next
 488); Const-Check done t479 (next 487).
+
+## Tick 480 — Ctrl+V pastes clipboard text at the caret in a contenteditable (2026-07-24)
+
+Brick 10 of the contenteditable EDITING subsystem — the READ half of keyboard clipboard support (cut/copy
+landed t478), completing the Ctrl+X/C/V trio. Before it, Ctrl+V in an editor did nothing. It ties together
+three already-won pieces: the modifier substrate (t477), the synchronous clipboard read (t461), and the
+insertText caret path (t471).
+
+MECHANISM: a `Ctrl/Cmd+V` arm inside `dispatch_key`'s chord branch (engine/js/src/dom_bindings.rs): read the
+clipboard text synchronously (`__clipboardRead()` host text, else the last-copied `__clipboardText`), find the
+editing host, fire a CANCELABLE `paste` ClipboardEvent whose `clipboardData.getData('text/plain')` returns
+that text — so an editor that intercepts `paste` (Slack/Notion/Docs sanitizing pasted content) can veto — and
+if not prevented, insert at the caret via `__insertTextAtCaret(host, text, 'insertFromPaste')` (fires
+`beforeinput`→`input`). Zero new dep.
+
+GATE: G_KEY_PASTE (page) — seed the host clipboard "PASTED", caret between "X"/"Y" in `<div
+contenteditable>XY</div>`, Ctrl+V → the `paste` handler sees `getData('text/plain')`==="PASTED", the editable
+becomes "XPASTEDY", events `bi/in:insertFromPaste`; a second editable whose `paste` handler
+`preventDefault()`s keeps "Keep". RED-proven by disabling the Ctrl+V arm. Neighbors green:
+g_key_shortcut_clipboard, g_key_modifiers, g_shift_enter_line_break, g_contenteditable_typing,
+g_exec_insert_text.
+
+TICK SHAPE: capability (contenteditable EDITING brick 10/N — keyboard paste; +1 gate). GATES +1.
+CONSTELLATION: rich-editing — the Ctrl+X/C/V clipboard trio now works from the keyboard, with a vetoable
+`paste` event.
+WIKI: interaction-surface.md — new section after the t479 Shift+Enter note.
+WEB-PATTERNS: paste-text-into-an-editor-with-ctrl-v.
+AGENTIC: the agent can now paste text into an editable region via the Ctrl+V chord.
+
+NEXT VEIN NOTE: remaining editing bricks — Enter→insertParagraph (browser-divergent block split, the
+substrate to gate Shift-vs-plain exists), cross-block boundary merge for Backspace/Delete, formatting-command
+wrapping (`bold`→<b>), rich (HTML) paste vs the current plain-text paste. Self-audit due 485; surface-audit
+next 488; Const-Check next 487.
+
+### Tick 480 — parked, then LANDED (2026-07-24)
+Tick 480 (Ctrl+V paste, above) was COMPLETE + RED-proven but could not land for a window: tick.sh's internal
+verify false-RED'd on `✗ manuk-shell tests FAILED` (the `tab_operations_stay_far_under_one_frame` relative
+timing assertion) across several attempts. Root cause was OBSERVER-OWNED contention, not my code — a
+`manuk-wpt oracle` fidelity-rekey crawl (PID 4022447) had been HUNG for ~31h, leaking ~19 headless-Chrome
+procs that pinned swap and spiked the sub-16ms tab-timing measurement into a false failure. The observer
+reaped the hung crawl (Chrome 19→8, MemAvailable restored); the next window re-verified on a warm+quiet box
+(load 1.10) and the shell suite came back green (70 passed, worst tab op 0.6ms « 16ms). Tick 480 landed on
+that warm re-run — the mark was never retuned, and the tick touched only `dom_bindings.rs`, never
+`shell/src/tab.rs`, confirming the failure was pure contention, not a regression. [[three-ticks-parked-wall-blocked]] [[wall-warm-rerun-lands-ticks]]
