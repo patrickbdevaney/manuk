@@ -216,3 +216,22 @@ legitimate coverage, not bloat. The admissible rigor-preserving levers (cargo-ne
 to reclaim the ~1.5s SpiderMonkey-startup tax per JS gate, section parallelism) all live in scripts/
 (observer-owned, already named in prior audits — I do not touch them). Wall stays lean when warm;
 coverage grew this window with no wall cost. Mark untouched.
+
+## Audit #11 — tick 487 (wall 663s CONTENDED; warm quiet = 68s at t486 landing)
+
+FINDING: this audit fired on a CONTENDED reading, and the breakdown proves it rather than hiding it.
+Sections summed to ~305s (P 225s/34%, B 25s, T 23s, G3 12s, G6 8s, D 5s, G1 4s, F 2s) against a 663s
+total — i.e. ~358s UNACCOUNTED, the classic contention overhead. The tell is P: the parity section
+(72/72 vs headless Chrome) normally runs ~14s (audits #5-#10) and here blew to 225s — the headless-Chrome
+oracle was fighting the 9 leaked 5-DAY-OLD Chrome procs + an observer sweep for the box (load 15m-avg 2.99
+draining while this ran). The SAME tree warmed to 68s at the tick-486 landing an hour earlier (quiet box),
+squarely in the standing 57-68s warm band. So this is contention, not standing bloat.
+
+NO TRIM: same conclusion as #5-#10. P (parity, headless-Chrome oracle) and T (crate tests) are legitimate
+coverage — cutting either to buy seconds is the inadmissible trade this audit refuses by construction. The
+admissible rigor-preserving levers (cargo-nextest runtime-sharing to reclaim the ~1.5s SpiderMonkey-startup
+tax per JS gate; section parallelism; not banking a wall measured under load) ALL live in scripts/, which
+is observer-owned — and the observer landed exactly one of them THIS window (commit 0e4e7c9
+"fix(harness): don't bank a wall measured under high load + un-poison LAST_WALL_TIME"), which directly
+addresses the poisoned-663s banking that blocked this tick's first pre-flight. Coverage grew +1 gate this
+window (t486 G_USER_ACTIVATION, 252→253) with ~0 marginal warm wall. Mark untouched (189, ceiling 245).

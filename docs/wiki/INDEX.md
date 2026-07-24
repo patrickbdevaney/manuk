@@ -144,6 +144,7 @@
   - L665 · Same-tag index paths misattribute TREE drift as STYLE drift (tick 395)
   - L688 · BUILD SPEC — selector-path keying: the class signature that stops silent mispairing (tick 399)
   - L719 · LANDED (tick 401) — the keying is live, and the predictions held
+  - L737 · JS-platform-surface probe sweep — vein mined out (tick 487)
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -953,4 +954,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-868 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+869 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

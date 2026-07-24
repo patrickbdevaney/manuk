@@ -733,3 +733,29 @@ run-variance in our own render, not pairing), while MISSING rose to ~128 — the
 booking (our JS demonstrably fails to mount components there: named errors on the console).
 Baseline-reset rule is IN FORCE: no ledger number from before tick 401 is comparable to one
 after; re-crawl and re-rank before steering off any display-diff family.
+
+## JS-platform-surface probe sweep — vein mined out (tick 487)
+
+A measurement tick swept ~40 site-critical JS platform surfaces across two batches to find the next
+bounded probe→build (the pattern that landed t486 `navigator.userActivation`). The result is a boundary
+finding worth pinning: the **clean-bounded JS-platform-surface vein is MINED OUT.** Already-built and
+re-confirmed present (the seventh re-confirmation of the standing stale-PESSIMISTIC rule — probe before
+building anything marked missing): connection, scheduler.postTask/yield, locks, permissions, wakeLock,
+mediaSession, storage, clipboard, CSS.supports, structuredClone, reportError, queueMicrotask, sendBeacon,
+PerformanceObserver, crypto.randomUUID/getRandomValues, visualViewport, AbortSignal.timeout/any,
+ResizeObserver, IntersectionObserver, Object.hasOwn, Array.at, performance.*, matchMedia.addEventListener.
+The only JS surfaces still absent — navigator.share/canShare, vibrate, cpuPerformance, CSS.registerProperty —
+are either **honest-absent** (they match desktop-Linux Chrome and feature-detect cleanly; adding a
+present-but-always-rejecting `navigator.share` would create the same present-but-broken trap OPFS
+`getDirectory` is deliberately kept absent to avoid) or **present-but-inert traps** (`CSS.registerProperty`
+without registered-custom-property cascade integration reads as "typed custom props work" to a feature-detect
+while silently not applying `initialValue` — worse than absent). So the honest next frontier is the sized
+SUBSYSTEMS in PHASE0-BOUNDED-REMAINDER.md, not more surface probing.
+
+**Next lever located: ch/ex real font metrics (Tier-2 item 23).** `engine/css/src/stylo_engine.rs`
+`StubFontMetrics::query_font_metrics` returns `FontMetrics::default()`, so `1ch = 1ex = 0.5em` for every font
+(measured: monospace-10ch == serif-10ch == 10ex == 80px at 16px — a monospace `Nch` code block or terminal is
+~20% too narrow). This moves the REAL Phase-0 gate (placement fidelity) but is a 2-3 tick cross-crate
+subsystem: the provider lives in the `Device` Stylo shares across rayon parallel-cascade threads while manuk's
+`FontContext` is RefCell-based, so it needs a Send+Sync-safe metrics path (a thread-local/RefCell shortcut is
+unsound under concurrent cascade), and `ex` needs a new x-height query in manuk-text.

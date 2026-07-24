@@ -19659,3 +19659,38 @@ zero path to a manuk-shell tab-timing or teardown test, so this is environmental
 intact (do NOT checkout). Retry: re-run ./scripts/tick.sh /tmp/tick485.msg on a WARM build + QUIET box
 (load1<0.6) — the build is now warm, so the re-run's verify is fast and low-load, exactly how 484 landed.
 [[three-ticks-parked-wall-blocked]] [[wall-warm-rerun-lands-ticks]] [[wall-false-red-shell-rebuild]]
+
+## Tick 487 — MEASUREMENT: JS-surface vein mined out + ch/ex font-metrics subsystem scoped (Const-Check #27) (2026-07-24)
+
+A measurement tick (the class the board flags highest-yield: t225/226/238). Two probe sweeps (~40 JS platform
+surfaces) + a targeted ch/ex resolution probe, plus the DUE Constitution Check #27. No engine code change —
+the honest output is a boundary finding + a scoped next lever, not a forced capability.
+
+FINDING 1 — the clean-bounded JS-platform-surface vein is MINED OUT. Batch-probed ~40 surfaces; ALL common
+ones already built (connection, scheduler.postTask/yield, locks, permissions, wakeLock, mediaSession, storage,
+clipboard, CSS.supports, structuredClone, reportError, queueMicrotask, sendBeacon, PerformanceObserver,
+crypto.randomUUID/getRandomValues, visualViewport, AbortSignal.timeout/any, ResizeObserver,
+IntersectionObserver, Object.hasOwn, Array.at, performance.*, matchMedia.addEventListener) — the seventh
+re-confirmation of stale-pessimism. The only remaining JS gaps (navigator.share/canShare, vibrate,
+cpuPerformance, CSS.registerProperty) are either honest-absent (match desktop-Linux Chrome, feature-detect
+cleanly) or present-but-inert TRAPS (registerProperty w/o cascade integration is worse than absent). So the
+next frontier is the sized SUBSYSTEMS in PHASE0-BOUNDED-REMAINDER.md, not more surface probing.
+
+FINDING 2 — ch/ex real font metrics (Tier-2 item 23) confirmed a live STUB and fully scoped.
+`engine/css/src/stylo_engine.rs:88 StubFontMetrics::query_font_metrics` returns `FontMetrics::default()`, so
+1ch = 1ex = 0.5em for EVERY font (monospace `Nch` code blocks/terminals render ~20% too narrow; measured:
+mono-10ch == serif-10ch == 10ex == 80px at 16px). It moves the REAL Phase-0 gate (placement fidelity) but is
+correctly a 2-3 tick cross-crate subsystem, NOT an atomic tick: the FontMetricsProvider lives in the `Device`
+Stylo shares across RAYON PARALLEL-CASCADE threads, and manuk's `FontContext` is RefCell-based (single-thread),
+so the metrics path needs a Send+Sync-safe design (thread-safe metric query or a pre-cascade snapshot) — a
+thread-local/RefCell shortcut is UNSOUND under concurrent cascade. `ex` also needs a new x-height query in
+manuk-text (LineMetrics exposes only ascent/descent/line_gap). Documented so the next invocation starts it with
+a plan.
+
+CONST-CHECK #27 (due; anchors the loop to CONSTITUTION.MD Part VII). Verdict: no drift — the loop is pointed
+at the frontier, and this check SHARPENS the aim by closing the JS-surface lane (measured) and naming ch/ex as
+the next decompose-first subsystem. The RATCHET was honored by REFUSING to squeeze ch/ex into one atomic tick
+(that would trade parallel-cascade correctness for a tick line). Next Const-Check: tick 495.
+
+TICK SHAPE: measurement + constitution-check (no gate change; nothing regresses). WIKI: conformance-and-oracles.md
+— probe-sweep boundary finding + ch/ex stub location. Self-audit next 495; surface-audit next 488.

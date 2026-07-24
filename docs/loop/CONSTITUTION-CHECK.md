@@ -1118,3 +1118,56 @@ formatting-command wrapping) are the harder tail — keep mining them against th
 the subsystem saturates, the anchor's next ledger item (WebAuthn/vault/bidi/animations/…) is the pivot.
 
 **Next check due: tick 487.**
+
+## Check #27 — tick 487
+
+**Horizon:** Phase 0 — daily-driver rendering parity + the agentic surface (CONSTITUTION.MD **Part VII**,
+components 1 & 2). **Gate:** the FIDELITY-SCORING-REDESIGN.md certificate (≥0.75 placement fidelity on ≥95%
+of the corpus + ≥0.70 per top-20 category), NOT a WPT percentage. Anchor: PHASE0-BOUNDED-REMAINDER.md.
+
+**Gate or scoreboard?** Gate. Ticks 485-487 executed the Check #26 steer — off the saturated contenteditable
+vein onto ANCHOR's next ledger items. t485 WebAuthn detection surface (Tier-1 item 6, first brick). t486
+`navigator.userActivation` (a probe→build off the constellation-unknowns lane): gesture-gated features
+(autoplay/fullscreen/popup/clipboard) read `.isActive` inside a click handler — absent → synchronous TypeError
+→ dead button. Built as live getters over real gesture state flipped in `__dispatchEvent`, discriminated by a
+private `__actgesture` marker (NOT `isTrusted`, which engine gestures wrongly read false because they carry a
+supplied object). RED-proven three ways; +1 gate; every brick on already-won substrate, zero new dep (I2).
+
+**The inflection worth naming — a vein transition, measured not guessed.** t486/t487 batch-probed ~40 JS
+platform surfaces across two sweeps. The result is a HARD finding: the clean-bounded JS-surface vein is MINED
+OUT. Already-built (re-confirming stale-pessimism a seventh time): connection, scheduler.postTask/yield, locks,
+permissions, wakeLock, mediaSession, storage, clipboard, CSS.supports, structuredClone, reportError,
+queueMicrotask, sendBeacon, PerformanceObserver, crypto.randomUUID/getRandomValues, visualViewport,
+AbortSignal.timeout/any, ResizeObserver, IntersectionObserver, Object.hasOwn, Array.at, performance.*,
+matchMedia.addEventListener. The only remaining JS gaps — navigator.share/canShare, vibrate, cpuPerformance,
+CSS.registerProperty — are either honest-absent (matching desktop-Linux Chrome; feature-detect cleanly) or
+present-but-inert TRAPS (registerProperty without cascade integration is worse than absent). So the honest next
+frontier is NOT more surface probing; it is the sized SUBSYSTEMS in PHASE0-BOUNDED-REMAINDER.md.
+
+**Is the loop still pointed at the frontier?** Yes, and this check SHARPENS the aim. The measured next lever is
+Tier-2 item 23 (ch/ex real font metrics) — confirmed a live STUB this tick (`StubFontMetrics::query_font_metrics`
+returns `FontMetrics::default()`, so 1ch=1ex=0.5em for every font; monospace `Nch` code blocks/terminals render
+~20% too narrow). It moves the REAL gate (placement fidelity), but it is correctly a 2-3 tick cross-crate
+subsystem, NOT an atomic tick: the `FontMetricsProvider` lives in the `Device` that Stylo shares across rayon
+parallel-cascade threads, so the metrics oracle must be a `Send+Sync` handle threaded through every
+`make_device` site (a thread-local would silently return defaults on worker threads — a correctness bug), and
+`ex` additionally needs a new x-height query in manuk-text (LineMetrics exposes only ascent/descent/gap). This
+is exactly the "decompose before starting" class the anchor names; forcing it into one tick would trade
+correctness for a tick line, which the RATCHET refuses.
+
+**Is the agentic surface (component #2) served?** Yes, materially. t486's activation state is tripped by
+`dispatch_click`, so an agent driving a page now produces the same `navigator.userActivation` read-signal a real
+user's gesture would — gesture-gated actions the agent initiates (play, share, fullscreen) are honoured rather
+than silently gated off. The write-half (dispatch) now feeds the read-half (userActivation) pages check.
+
+**Any invariant bent?** No. Bar 0 held — additive prelude getters + a contained `__dispatchEvent` bracket
+(set-after-`type`, restore-at-single-return, save/restore for nesting); 11 neighbor gates green. THE RATCHET
+honored: this check REFUSES to open ch/ex as a squeezed atomic tick precisely to avoid a parallel-cascade
+correctness trade. I2 intact — zero new deps.
+
+**PART VI / VII correction.** None. The four-component v1 scope and the fidelity-certificate exit stand. Tempo
+note: the JS-surface probe lane is closed (measured, not assumed); the loop's next phase is subsystem work —
+ch/ex font metrics, the fidelity-instrument rebuild, media codec breadth, password-vault UX, bidi reordering —
+each decomposed before starting. Pick one, plan it, mine it brick-by-brick against the shared substrate.
+
+**Next check due: tick 495.**
