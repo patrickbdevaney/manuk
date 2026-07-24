@@ -249,3 +249,25 @@ NO TRIM. The only admissible rigor-preserving levers (cargo-nextest runtime-shar
 live in scripts/verify.sh, which is OBSERVER-OWNED per the loop scope — noted for the observer, never
 actioned agent-side, exactly as prior audits recorded. Coverage grew this window (t506 esmmodule:yes
 pinned in G_PROBE_CAPABILITIES) with ~0 marginal warm wall. Mark untouched (189, ceiling 245).
+
+## Audit #13 — tick 527 (wall 67s warm)
+
+Ran `./scripts/wall-audit.sh run`. The wall's warm cost is ~67s (STATUS LAST_WALL_TIME), well under the
+189s re-baselined mark / 245s ceiling; the 693s figures this session are the CONTENDED gate-phase-spike
+readings (the same `manuk-shell tests FAILED` false-RED cluster, 3× this session), not the warm number —
+poisoned by load, not by code, exactly the pattern Audit #11 recorded at t487.
+
+Against the four rigor-preserving axes: the wall is dominated by (a) the mozjs RELEASE link (~350MB, once
+per final-tree build) and (b) per-JS-gate SpiderMonkey runtime startup (~1.5s × N gates launched
+concurrently under CARGO_BUILD_JOBS). REDUNDANCY (could gates share one runtime binary — cargo-nextest),
+PARALLELISM (gate scheduling), CACHING (incrementals already in RAM), SCOPE (whole-workspace vs
+per-crate-test-binary builds) — every admissible lever the checklist names lands in **scripts/verify.sh +
+the Cargo/build config**, which per V1-SCOPE.md + the loop charter are DONE and OBSERVER-OWNED. The agent
+builds engine/ capability only and must not trim the wall.
+
+FINDING: **the wall is lean on the axes the agent may touch — there is nothing to trim without crossing
+into harness territory.** The standing gate-phase-spike false-RED (warm-re-run-landed each time this
+session) is a scheduling/isolation matter for the observer, recorded here as a data point, not acted on.
+The wall is a build-latency (observer) axis; it is NOT a capability regression — THE RATCHET held every
+tick this session. An audit that finds the wall already lean (on the agent's axes) is a fine result, and
+this is one.

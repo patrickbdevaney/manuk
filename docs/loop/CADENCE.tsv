@@ -289,3 +289,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 524	c046f03	1784924335	2026-07-24T16:18:55-04:00	1134	build	67	9	265	107	272	81	3896	6960	0	329	31	BUILD BRICK: `<video>` fires `durationchange` when the MSE length is known (2026-07-24)
 525	c3f388f	1784925066	2026-07-24T16:31:06-04:00	731	self-audit	67	4	70	33	272	81	3896	6960	0	329	31	SELF-AUDIT #(cadence): methodology-vs-built clean except the observer-owned wall (2026-07-24)
 526	ff2d50b	1784926600	2026-07-24T16:56:40-04:00	1534	build	67	10	219	49	273	81	3896	6960	0	329	31	BUILD BRICK: popover ToggleEvent.source names the invoker (2026-07-24)
+527	245601c	1784927275	2026-07-24T17:07:55-04:00	675	cadence	67	6	137	34	273	81	3896	6960	0	329	31	CADENCE: Constitution-Check #32 + Wall-Audit (both due) (2026-07-24)

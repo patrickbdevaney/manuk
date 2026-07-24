@@ -21080,3 +21080,37 @@ ToggleEvent.source paragraph. WEB-PATTERNS.md updated (menu/tooltip-anchor class
 NEXT: `<dialog>` toggle path carrying source is a command-invoker follow-up (residue). Otherwise the
 deliberate frontier pivot stands (fidelity instrument rebuild / test262 / name-only-CQ probe). Surface
 audit DUE at 528; const next 527; wall next 527; self-audit next 534.
+
+## Tick 527 — CADENCE: Constitution-Check #32 + Wall-Audit (both due) (2026-07-24)
+
+Two cadence obligations converged at 527: constitution-check (last 519 + 8) and wall-audit (last 507 +
+20). Handled both in one docs-only tick.
+
+CONSTITUTION-CHECK #32 (docs/loop/CONSTITUTION-CHECK.md): re-read Part VII + the RATCHET/north-star.
+Verdict: every tick since #31 was a GATE (media playback model t521-524 + ToggleEvent.source t526),
+usage-weighted breadth serving Part VII component 1 (real video sites), north star intact, no invariant
+bent, Bar 0 held. Recorded the honest boundary: the media JS-surface is SATURATED and the frontier
+beyond is XL/unbounded (shell driver + WebM/VP9 CUT line); the atomic+bounded vein is CONFIRMED mined
+out. STEER: pivot deliberately to the fidelity-instrument rebuild (CO-#1 exit gate, decompose-first) or
+test262 — do NOT resume atomic-member mining. Next check due 535.
+
+WALL-AUDIT (scripts/wall-audit.sh run): the wall's cost is dominated by the mozjs release link (~350MB)
+plus per-JS-gate SpiderMonkey runtime startup (~1.5s × N gates), exactly as the audit's own checklist
+names. Every admissible optimisation it prescribes — cargo-nextest (shared test binary), shared-runtime
+gate consolidation, narrower build scope, risk-based gate scheduling — is BUILD/HARNESS tooling living in
+scripts/verify.sh + the Cargo/build config, which per V1-SCOPE + the loop charter are DONE and
+OBSERVER-OWNED. The agent builds engine/ capability only and must not trim the wall. FINDING: nothing for
+the agent to trim without crossing into harness territory; the wall is a build-latency (observer) axis,
+NOT a capability regression — THE RATCHET held every tick this session. Consistent with the self-audit's
+same wall finding (t525). LAST_WALL_AUDIT bumped 507→527, LAST_CONSTITUTION_CHECK 519→527. (Also of note:
+the `manuk-shell tests FAILED` false-RED struck 3× this session under the gate-phase load spike — a
+harness flake, warm-re-run-landed each time; another data point for the observer's wall/scheduling work,
+recorded not acted on.)
+
+TICK SHAPE: cadence meta (docs-only — const-check #32 + wall-audit both ran; CONSTITUTION-CHECK.md +
+STATUS markers updated; NO engine source changed; the wall proves nothing regressed). WIKI: none —
+cadence tick, no engine change. No [no-pattern] needed (no engine/{js,css,...}/src touched).
+
+NEXT: 528 is surface-audit (DUE). Then the deliberate capability pivot per Check #32 (fidelity-instrument
+decompose / test262 / name-only-CQ probe). Self-audit next 534; surface DUE 528; const next 535; wall
+next 547.

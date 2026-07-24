@@ -1341,3 +1341,49 @@ MEASUREMENT (instrument fidelity) — valuable, yet after two meta ticks the loo
 sequenced behind the next build brick, not ahead of it.
 
 **Next check due: tick 527.**
+
+## Check #32 — tick 527
+
+Re-read CONSTITUTION.MD Part VII (V1 scope) and the RATCHET/north-star framing. Since #31 the loop
+landed a coherent **media playback-model arc** (t521 running clock + timeupdate/ended, t522
+currentTime-as-seek, t523 played-union, t524 durationchange), a **self-audit** (t525), and closed a real
+constellation "missing" row (**t526 ToggleEvent.source**, the popover invoker).
+
+**Gate or scoreboard?** GATE, every tick. Each landed as a qualitative capability step banked behind a
+gate proven to go RED (g_media_playback_clock / g_media_seek / g_media_played / g_media_durationchange /
+g_toggle_event_source), not a subtest-count bump. The media arc is the JS-visible half of Part VII
+component 1 (real video sites): `<video>` now has a running clock, a real seek, a watched-spans union
+and a durationchange — the exact event/property set every progress bar, %-watched beacon, scrub bar,
+transcript, autoplay-next and resume marker binds. This is usage-weighted breadth (ubiquitous on the
+video web), the opposite of the encoding-tail trap VI.3 warns against.
+
+**North star intact?** Yes. Capability MATCHED toward Chrome (the events/properties a player reads now
+exist and are honest); performance/stability EXCEEDED (Bar 0 held every tick — the clock is inert until
+the host drives it, a stale id is a silent no-op, a seek is clamped, over-scroll is safe; all additive,
+nothing regressed). No timing divergence introduced into the oracle.
+
+**Any invariant bent?** No. I1 (crate structure) untouched. I2 (never patch deps) — all work is in our
+own manuk-js/manuk-page; nothing vendored patched. I3 (semantic model in lockstep) — every mechanism's
+JS-visible behaviour IS the exposure, gated behaviourally and RED-proven. I4 (Pareto) — high-usage
+classes. THE RATCHET held against the recurring `manuk-shell tests FAILED` false-RED, which struck THREE
+times this session (t523/t525/t526, always under the gate-phase load spike, gate+parity+perf all green) —
+each landed on a WARM re-run on the quiet box, NEVER re-baselined, NEVER touched scripts/ (harness-owned,
+per the charter and the self-audit's wall finding).
+
+**The honest boundary, recorded (per the #28-31 pattern):** the media JS-surface is now SATURATED, and
+the media FRONTIER beyond it is genuinely XL and NOT bounded — (a) the shell frame-loop DRIVER calling
+`__mediaAdvance` (GUI, false-RED risk), (b) codec breadth / WebM-VP9 (the CUT line — no usable Rust VP9
+decoder; AV1+H.264 covers the practical web). And the atomic + bounded-capability vein is CONFIRMED mined
+out this session by re-probe (IndexedDB indexes / cookie attributes / fetch body+headers / WebAuthn all
+already built; PHASE0-BOUNDED-REMAINDER.md is stale). So VI.2's "genuinely not done" frame is another
+subsystem lighter.
+
+**STEER: the next capability frontier is a DELIBERATE PIVOT, not more small bricks.** The board's CO-#1 is
+the **fidelity instrument rebuild** (agent-editable manuk-wpt Rust probe per FIDELITY-SCORING-REDESIGN.md
+— THE Phase-0 EXIT gate, which now outranks another single-capability tick; but it is a subsystem that
+LIES if half-built, so it needs a decompose-first session, the #30 pattern). Sequenced alternatives:
+**test262** (measurement, permitted after this run of build bricks) or the two buildable remaining
+unknowns (name-only container queries; the `<dialog>` ToggleEvent.source / command-invoker follow-up).
+Do NOT resume mining atomic members — the vein is out.
+
+**Next check due: tick 535.**
