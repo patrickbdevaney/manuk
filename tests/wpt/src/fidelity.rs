@@ -260,6 +260,76 @@ pub fn placement_stats(
     )
 }
 
+/// **Layer 1 — SHAPE (parent-relative), the redesign's new primary gate**
+/// (`docs/loop/FIDELITY-SCORING-REDESIGN.md` §2). Score every element against **its parent's box**,
+/// not the document origin: `rel = (x - px, y - py, w, h)`. This is the metric that separates a
+/// genuinely-wrong box from a whole page shifted by a constant.
+///
+/// `placement_stats` above charges one root cause N times — a page shifted 23px at its header scores
+/// `PLACE(ok) 0%` because every downstream element inherits the same 23px, though the layout is
+/// otherwise correct and a user notices nothing. Under SHAPE that constant offset **cancels**: only
+/// the one element where the offset *originates* fails, so one root cause counts once.
+///
+/// **Keys are selector-paths** (`tag.SIG:nth-child(n)/…` from the root, the SAME convention the
+/// differential oracle uses in `oracle::diff_page`), so an ancestor's key is a prefix of its
+/// descendants'. Each element is scored against the **nearest ancestor present in BOTH maps** — the
+/// shared reference frame (`oracle::common_frame`): both engines measure the child against the *same*
+/// ancestor, so a constant offset in that ancestor drops out of the difference. Width/height are
+/// translation-invariant and stay absolute. A root-level element (no `/`, or no shared ancestor) has
+/// nothing to subtract, so its absolute box IS its shape — the offset is charged there, exactly once.
+///
+/// This is the fidelity-probe half of the SHAPE metric the oracle proved at tick 335; the redesign
+/// names this probe (the agent-editable `manuk-wpt` fidelity code) as the Phase-0 EXIT instrument,
+/// and SHAPE replacing `placement_stats` as its Layer-1 gate.
+///
+/// Returns `(within_tol_fraction, scored_count)`. Only elements BOTH engines rendered are scored.
+pub fn shape_stats(
+    chrome: &std::collections::HashMap<String, [i64; 4]>,
+    manuk: &std::collections::HashMap<String, [i64; 4]>,
+    tol: i64,
+) -> (f64, usize) {
+    // The nearest ancestor of `path` present in BOTH maps — the shared reference frame. Walks up by
+    // dropping the last `/component`; `None` at the root (no `/`) or when no ancestor is shared.
+    // Mirrors `oracle::common_frame` exactly so the instrument has ONE definition of SHAPE.
+    fn common_frame<'a>(
+        path: &str,
+        chrome: &'a std::collections::HashMap<String, [i64; 4]>,
+        manuk: &'a std::collections::HashMap<String, [i64; 4]>,
+    ) -> Option<([i64; 4], [i64; 4])> {
+        let mut p = path;
+        while let Some(cut) = p.rfind('/') {
+            p = &p[..cut];
+            if let (Some(c), Some(m)) = (chrome.get(p), manuk.get(p)) {
+                return Some((*c, *m));
+            }
+        }
+        None
+    }
+    let (mut within, mut n) = (0usize, 0usize);
+    for (path, c) in chrome {
+        let Some(m) = manuk.get(path) else { continue };
+        n += 1;
+        // Subtract each element's box from its shared frame's box (x,y only — w,h are invariant).
+        let (cr, mr) = match common_frame(path, chrome, manuk) {
+            Some((cf, mf)) => (
+                [c[0] - cf[0], c[1] - cf[1], c[2], c[3]],
+                [m[0] - mf[0], m[1] - mf[1], m[2], m[3]],
+            ),
+            None => (*c, *m),
+        };
+        let worst = (0..4).map(|i| (cr[i] - mr[i]).abs()).max().unwrap_or(0);
+        if worst <= tol {
+            within += 1;
+        }
+    }
+    let frac = if n == 0 {
+        1.0
+    } else {
+        within as f64 / n as f64
+    };
+    (frac, n)
+}
+
 /// **Where does the layout first diverge?** Sort every element both engines render by Chrome's `y`
 /// and walk down the page; report the first id whose vertical offset exceeds `jump`, plus the last
 /// id that was still in agreement. Downstream drift is almost always ONE upstream box with the
@@ -350,4 +420,98 @@ pub fn report(rows: &[Fidelity], floor: f64) -> bool {
          entirely absent sidebar moved it <1 point. THE SCORE GATES; THE EYEBALL DIAGNOSES.\n"
     );
     all_ok
+}
+
+#[cfg(test)]
+mod shape_tests {
+    use super::shape_stats;
+    use std::collections::HashMap;
+
+    // A realistic selector-path box tree modelling the microsoft.com artifact from the redesign:
+    // the page top matches Chrome, a taller-than-Chrome HEADER then pushes the whole content column
+    // down by `header_extra` px. That offset originates at ONE element (the content container) and
+    // every descendant inherits it — which is exactly the "one cause counted N times" trap.
+    //
+    // `bad_child` corrupts one leaf's HEIGHT instead — a genuine layout bug that no offset explains.
+    const KIDS: usize = 8;
+    fn tree(header_extra: i64, bad_child: bool) -> HashMap<String, [i64; 4]> {
+        let mut m = HashMap::new();
+        // Root + header positions match Chrome exactly (the page top is not shifted).
+        m.insert("html/body".to_string(), [0, 0, 1000, 3000]);
+        m.insert(
+            "html/body/header:nth-child(1)".to_string(),
+            [0, 0, 1000, 80 + header_extra], // Manuk's header is `header_extra` px too tall
+        );
+        // Content container: pushed down by the taller header → its box vs body is off by header_extra.
+        let content_y = 80 + header_extra;
+        m.insert(
+            "html/body/main:nth-child(2)".to_string(),
+            [0, content_y, 1000, 2000],
+        );
+        // Content's children: absolutely shifted by header_extra too, but their position RELATIVE to
+        // the content container is unchanged — so SHAPE cancels the offset for every one of them.
+        for k in 0..KIDS {
+            let ky = content_y + 100 + (k as i64) * 200;
+            let h = if bad_child && k == 0 { 999 } else { 150 };
+            m.insert(
+                format!("html/body/main:nth-child(2)/div:nth-child({})", k + 1),
+                [20, ky, 960, h],
+            );
+        }
+        m
+    }
+    const TOTAL: usize = 3 + KIDS; // body + header + main + KIDS
+
+    #[test]
+    fn constant_offset_charged_once_under_shape() {
+        let chrome = tree(0, false);
+        let manuk = tree(23, false); // header 23px too tall → content column shifted 23px
+        let (shape, n) = shape_stats(&chrome, &manuk, 8);
+        assert_eq!(n, TOTAL, "every element both engines rendered is scored");
+        // SHAPE charges the 23px exactly ONCE — at the content container where it originates. The
+        // header (its own height is wrong) also fails; its KIDS all cancel. So exactly 2 of 11 fail.
+        let failed = TOTAL - (shape * TOTAL as f64).round() as usize;
+        assert_eq!(
+            failed, 2,
+            "SHAPE must charge a constant offset at its ORIGIN only (header + content container), \
+             not once per inheriting descendant — got {failed} failures, shape {shape}"
+        );
+
+        // Contrast — absolute placement charges the SAME offset to the container AND all KIDS: the
+        // content container + 8 kids = 9 of 11 shifted, so placement collapses. This divergence is
+        // the whole point of the redesign; if shape_stats ignored parents the two would be equal.
+        let (_, mdy, _, _, place_frac) = super::placement_stats(&chrome, &manuk, 8);
+        assert_eq!(mdy, 23, "median absolute dy is the raw 23px offset");
+        assert!(
+            place_frac <= 2.0 / TOTAL as f64 + 1e-9,
+            "absolute placement must be dragged down by the offset it cannot cancel, got {place_frac}"
+        );
+    }
+
+    #[test]
+    fn a_genuinely_wrong_box_still_fails_shape() {
+        let chrome = tree(0, false);
+        let manuk = tree(0, true); // one leaf's height wrong by 849px — a REAL layout bug
+        let (shape, n) = shape_stats(&chrome, &manuk, 8);
+        assert_eq!(n, TOTAL);
+        let failed = TOTAL - (shape * TOTAL as f64).round() as usize;
+        assert_eq!(
+            failed, 1,
+            "SHAPE must NOT be blind to a real box error — the one bad leaf must fail, got shape {shape}"
+        );
+    }
+
+    #[test]
+    fn only_common_elements_scored() {
+        let chrome = tree(0, false);
+        let mut manuk = tree(0, false);
+        manuk.remove("html/body/main:nth-child(2)/div:nth-child(1)"); // Manuk dropped one leaf
+        let (shape, n) = shape_stats(&chrome, &manuk, 8);
+        assert_eq!(
+            n,
+            TOTAL - 1,
+            "a box only Chrome rendered is a COVERAGE miss, not a SHAPE miss"
+        );
+        assert!((shape - 1.0).abs() < f64::EPSILON);
+    }
 }

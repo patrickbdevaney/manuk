@@ -15,7 +15,7 @@
 | median tick cycle | **22m** | 293 intervals |
 | median, last 10 | **21m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.90** | 325.2h elapsed |
+| **ticks per hour** | **0.90** | 325.5h elapsed |
 | median verify wall | **61s** | 233 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **165** capability ticks, median cycle **22m**
-* median diff per tick: **+220 / −34** lines across 9 files
+* median diff per tick: **+222 / −34** lines across 9 files
 
 ## Every tick
 
@@ -390,6 +390,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **527** | 2026-07-24 17:07 | 11m | cadence | 67s | +137/−34 | 273 | 81 | 56.0% · | CADENCE: Constitution-Check #32 + Wall-Audit (both due) (2026-07-24) |
 | **528** | 2026-07-24 17:29 | 22m | surface | 67s | +98/−33 | 273 | 81 | 56.0% · | SURFACE AUDIT #26: the media neighbourhood the arc revealed (2026-07-24) |
 | **529** | 2026-07-24 17:41 | 12m | measure-and-pin | 67s | +152/−34 | 274 | 81 | 56.0% · | MEASURE+PIN: Promise.withResolvers + Set methods (Baseline 2024, already present) (2026-07 |
-| **530** | 2026-07-24 18:14 | 33m | measure-and-pin | 67s | +148/−95 | 274 | 81 | 56.0% · | MEASURE+PIN: scheduler.postTask/yield (functional, not a stub) (2026-07-24) |
+| **530** | 2026-07-24 18:31 | 50m | measure-and-pin | 67s | +284/−66 | 274 | 81 | 56.0% · | MEASURE+PIN: scheduler.postTask/yield (functional, not a stub) (2026-07-24) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

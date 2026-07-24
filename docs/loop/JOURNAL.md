@@ -21203,3 +21203,42 @@ NEXT: all 4 Surface Audit #26 unknowns now resolved (Promise.withResolvers+Set-m
 gated t529-530; rVFC measured-missing, a shell-adjacent build). The Check #32 capability PIVOT is the
 clean frontier: fidelity-instrument rebuild (CO-#1 exit gate, decompose-first) or test262 (measurement).
 Self-audit next 534; surface 538; const 535; wall 547.
+
+## Tick 531 — FIDELITY REBUILD brick 1: SHAPE scoring ported into the G1 fidelity probe (2026-07-24)
+
+Opening the Check-#32 pivot (fidelity-instrument rebuild, the CO-#1 Phase-0 EXIT gate) with its first
+DECOMPOSED, non-lying brick. The differential oracle (oracle.rs, the 265-site crawl) grew parent-relative
+SHAPE scoring at t335; but the **G1 fidelity gate / fidelity-sweep.sh probe** (fidelity.rs) — the code the
+redesign (docs/loop/FIDELITY-SCORING-REDESIGN.md) explicitly names as THE Phase-0 exit instrument — still
+scored `placement_stats` (absolute document position), the exact metric that produced the misleading
+PLACE(ok) 4.5% (one 23px header offset charged N times, once per inheriting descendant).
+
+WHAT LANDED: `fidelity::shape_stats(chrome, manuk, tol) -> (within_tol_frac, scored_count)` — Layer-1 SHAPE
+for the fidelity probe, with BYTE-IDENTICAL semantics to the proven `oracle::common_frame`: nearest ancestor
+present in BOTH maps via `rfind('/')`, x/y subtracted against that shared frame, w/h left absolute
+(translation-invariant), root/no-shared-ancestor falls back to absolute (offset charged there exactly once).
+One definition of SHAPE across the whole instrument — no divergent second implementation.
+
+GATE (fidelity::shape_tests, 3 cases, RED-proven): (1) a uniform 23px header-offset fixture (models the
+microsoft.com artifact) is charged EXACTLY ONCE at its origin under SHAPE (2 of 11 fail: the too-tall header +
+the content container; its 8 children all cancel) while absolute placement_stats collapses (9 of 11 shifted) —
+the two metrics provably diverge; (2) a genuinely misshapen leaf (height wrong 849px) still fails SHAPE (not
+blind); (3) a box only Chrome rendered is a COVERAGE miss, not a SHAPE miss. RED-PROVE: reverting the
+parent-subtraction in `common_frame` to absolute (`Some(*c)`) flips case (1) red (0.66 → the shift no longer
+cancels). Restored, all 3 green.
+
+HONEST BOUNDARY (decompose-first, the discipline the const-check demands so a half-built instrument does not
+LIE): shape_stats is landed as a tested PRIMITIVE only — it is NOT yet wired into the live G1 report, because
+the G1 producer still emits `[id]` keys (no `/` ancestry) against which shape_stats silently degrades to
+absolute. The enabling NEXT brick is the selector-path producer (redesign §3a) on both engine sides
+(capture_boxes_all_ids on the Chrome side + the Manuk box walk); only once G1 emits `tag.SIG:nth-child(n)/…`
+keys does SHAPE replace placement_stats as the gate. The primitive is proven NOW; the number is claimed LATER.
+
+TICK SHAPE: instrument-fidelity brick (fidelity-rebuild CO-#1, brick 1 of N — SHAPE primitive + RED-provable
+unit gate in agent-editable manuk-wpt code; NO engine capability src changed; NO live gate/report number moved
+yet, by design — decompose-first; Bar 0 held — pure additive test-side scoring). WIKI: conformance-and-oracles.md
+(SHAPE-in-the-fidelity-probe paragraph + the decompose boundary). No [no-pattern] (no engine capability src touched).
+
+NEXT: brick 2 — selector-path producer (`/`-keyed boxes) on both engine sides, so shape_stats can be wired into
+the G1 report and swap out placement_stats; then root-cause clustering (§3b) and the Layer-2 jarring invariants
+(already in the oracle — port likewise). Self-audit 534; surface 538; const 535; wall 547.

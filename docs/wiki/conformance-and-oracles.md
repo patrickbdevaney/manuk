@@ -179,6 +179,20 @@ misshapen box" fixture reports the two pure inheritors as bugs again
 > post-load-stability) are Layer 2; pixel diffing stays a diagnostic on a small corpus only.
 > (`docs/loop/FIDELITY-SCORING-REDESIGN.md`.)
 
+**The same SHAPE metric now lives in the fidelity probe, not only the oracle (tick 531).** The oracle
+(`oracle.rs`, the 265-site differential crawl) grew SHAPE at tick 335; the **G1 fidelity gate / `fidelity-sweep.sh`
+probe** (`fidelity.rs`) — the code the redesign explicitly names as the *Phase-0 EXIT instrument* — still scored
+`placement_stats` (absolute document position), the very metric that produced the misleading `PLACE(ok) 4.5%`.
+`fidelity::shape_stats` ports the primitive across with **byte-identical semantics**: nearest-ancestor-present-in-both
+via `rfind('/')`, x/y subtracted against that shared frame, w/h left absolute, one definition of SHAPE across the
+whole instrument (no divergent second implementation). It is landed as a **tested primitive with a RED-provable gate**
+(`fidelity::shape_tests`: a uniform-offset fixture scores it once at the origin, a genuinely misshapen leaf still
+fails, coverage misses are not SHAPE misses; reverting the parent-subtraction to absolute flips the offset test red)
+— but it is **not yet wired into the live G1 report**, because the G1 producer still emits `[id]` keys (no `/`
+ancestry), against which `shape_stats` would silently degrade to absolute and *lie*. The enabling next brick is the
+**selector-path producer** (redesign §3a) on both engine sides; only once G1 emits `tag.SIG:nth-child(n)/…` keys does
+SHAPE replace `placement_stats` as the gate. Decompose-first: the primitive is proven now, the number is claimed later.
+
 **Layer 2 — jarring invariants (SHAPE cannot see these).** SHAPE forgives a constant offset because a user
 does not perceive one; but a box shaped *correctly relative to an over-wide parent* can still spill off the
 viewport, and content cut off / an unexpected horizontal scrollbar is a top "this page is broken"
