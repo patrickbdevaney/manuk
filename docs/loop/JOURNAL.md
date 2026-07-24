@@ -20269,3 +20269,43 @@ engine code, nothing regresses). WIKI: none — the ESM seam is captured in the 
 the gate's own doc comment. NEXT: the frontier is now genuinely subsystems only (ESM import-graph / MSE
 playback-join / contenteditable editing / intrinsic sizing), each to be decomposed before starting.
 Self-audit next 515; surface next 508; Const-Check next 511.
+
+## Tick 507 — DECOMPOSE-FIRST: the ESM import-graph subsystem, seam + brick plan (2026-07-24)
+
+The const-check (#29) mandate is "decompose-first each" of the remaining PHASE0-BOUNDED-REMAINDER
+subsystems, and tick 506 just located the ESM import-graph seam exactly — the right moment to bank the
+decomposition while it is fresh, before it goes stale. This tick writes it into the authoritative work
+list (docs/loop/PHASE0-BOUNDED-REMAINDER.md, new "Subsystem decompositions" section).
+
+The finding that makes the decomposition worth writing NOW: the seam is more favorable than the
+roadmap's "L (subsystem)" label assumed. TWO shortcuts collapse the cost: (1) manuk_net::get is a
+SYNCHRONOUS blocking GET and the resolve hook is synchronous, so imports can be fetched+compiled inline
+with NO async plumbing; (2) SpiderMonkey calls module_resolve_hook once per import during ModuleLink and
+drives the recursion itself, so NO GetRequestedModules pre-scan is needed. Against that, the ONE real
+hazard is called out so nobody rushes it into a Bar-0: the specifier→module cache holds *mut JSObject
+across GC — the recurring "raw pointer outlives a GC" trap — and MUST use persistent rooting
+(Heap<*mut JSObject>), never a bare pointer in a thread-local. Per-module URL threading (SetModulePrivate
++ read-back off the referencing handle) and cycle handling (insert-before-recurse) are the other edges.
+
+Brick plan banked: B1 rooted module registry + SetModulePrivate URL round-trip (de-risks the GC hazard
+alone, no behavior change); B2 resolve hook fetch+compile+cache+return with a two-file g_esm_import_graph
+gate (RED-provable by reverting the hook to null); B3 external module roots + bare-specifier honest
+failure. Bound ≈ 4-8 ticks. This is NOT the build — it is the plan that makes each build brick atomic
+and Bar-0-safe.
+
+TICK SHAPE: decompose-first / planning (docs only; no engine code, no gate change, nothing regresses —
+the ratchet's instrument/planning-fidelity face moves up). WIKI: none — the plan lives in
+PHASE0-BOUNDED-REMAINDER.md. NEXT: tick 508 hits the surface-audit (last 498) + wall-audit (due 507)
+cadence; then the frontier is building B1 of this plan, or another subsystem's decomposition (MSE
+playback-join / contenteditable editing). Self-audit next 515; surface next 508; Const-Check next 511.
+
+## Tick 507b — WALL-TIME AUDIT (cadence, folded into 507): the wall is lean (2026-07-24)
+
+The wall-time audit came due at 507 (cadence 20, last 487) and its pre-flight check blocked the 507
+re-run, so it is folded in here. Ran ./scripts/wall-audit.sh run: total 65s against a 245s ceiling —
+lean. Cost breakdown: T 23s (35%), P 14s (22%), G6 8s (12%), G1 4s (6%), everything else ≤2s. The
+audit's own admissible-optimization list (nextest runtime-sharing so overlapping JS gates share one
+SpiderMonkey startup; narrower per-gate build scope; caching) is entirely in scripts/verify.sh, which
+is OBSERVER-OWNED per the loop scope — so it is noted for the observer, not actioned agent-side. No gate
+dropped, no floor widened. Set LAST_WALL_AUDIT 487→507. FINDING: wall already lean; no agent-actionable
+bloat. (This is the "an audit that finds the wall lean is a fine result — say so" case.)

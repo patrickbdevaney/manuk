@@ -95,3 +95,51 @@ After tick 324, the remainder is **not a long tail**. It is:
 Perception moves on **one threshold number + one marquee app**, not breadth claims. Ours:
 - Threshold: the Phase-0 exit certificate headline (shape fidelity on the top-1000).
 - Marquee: **YouTube plays** (Tier-1 items 1+2) — the single most legible "it's a real browser" proof.
+
+## Subsystem decompositions (decompose-first, per CONSTITUTION-CHECK #29)
+
+### ESM import-graph loading — the multi-module resolve (cell 169)
+
+**Measured state (tick 506):** the self-contained half WORKS and is gated (`esmmodule:yes` in
+G_PROBE_CAPABILITIES) — a `<script type=module>` compiles+links+evaluates and `import.meta.url`
+resolves. The GAP is `module_resolve_hook` (engine/js/src/dom_bindings.rs:9489), which returns
+`ptr::null_mut()`, so `import {x} from './y.js'` fails at `ModuleLink` and only import-free modules run.
+
+**Why it is NOT atomic (the hazards, so nobody rushes it into a Bar-0):**
+1. **GC rooting is the sharp edge.** The specifier→module cache must hold `*mut JSObject` module
+   handles across `ModuleLink` and across GC — the exact "raw pointer outlives a GC" class this repo
+   keeps flagging. It MUST use persistent roots (`Heap<*mut JSObject>` / a rooted registry), never a
+   bare `*mut JSObject` in a thread-local. Get this wrong and it is a UAF crash, not a wrong answer.
+2. **Per-module URL threading.** Relative specifiers resolve against the *referencing* module's URL,
+   not the doc URL. Each compiled module needs its resolved URL stashed via `SetModulePrivate`, and the
+   resolve hook must read it back off the `referencing` handle. The root inline module's base is the doc
+   URL (already in `DOC_URL`); a fetched module's base is its own URL.
+3. **Cycles.** `a.js`↔`b.js` is legal. The cache entry must be inserted BEFORE recursing into a
+   module's own imports, or a cycle re-enters forever.
+
+**The seam is favorable in two ways that de-risk the build:**
+- **Sync fetch already exists** — `manuk_net::get(url) -> Option<Response>` is a blocking GET, and the
+  page already does blocking subresource fetches during `Page::load`. The resolve hook is SYNCHRONOUS,
+  so it can fetch+compile inline; no async plumbing, no new fetch path.
+- **SpiderMonkey drives the recursion** — the hook is called once per import during `ModuleLink`, so
+  NO `GetRequestedModules` pre-scan is needed (it is not currently wired, and this avoids needing it).
+
+**Brick sequence (each independently landable; gate names proposed):**
+- **B1 — module registry + rooting harness.** A GC-safe rooted `HashMap<resolved_url, Heap<*mut
+  JSObject>>` keyed by resolved specifier, plus `SetModulePrivate(module, url_string)` on every compiled
+  module (root inline module included). No behavior change yet. Gate: a module's private round-trips its
+  URL. (This is the brick that de-risks #1 — land it alone.)
+- **B2 — resolve hook: fetch+compile+cache+return.** Rewrite `module_resolve_hook`: resolve specifier
+  against the referencing module's private URL → check registry (return cached, handles cycles) →
+  `manuk_net::get` → `CompileModule` → insert into registry BEFORE returning → return the handle. Fetch
+  failure → null (link fails gracefully, as today). Gate `g_esm_import_graph`: a two-file inline fixture
+  (`import {v} from './b.js'; export const r = v+1` where `b.js` exports `v`) links, evaluates, and the
+  root sees the imported binding. RED-provable: revert the hook to null → link fails → `r` undefined.
+- **B3 — external `<script type=module src=...>` graphs** (B2 covers inline roots; this extends to a
+  fetched root module) + **bare-specifier honesty** (`import 'react'` has no resolver here — return null
+  with a recorded, non-crashing failure, not a guess). Gate: an external module root with a relative
+  import graph renders; a bare specifier fails loud-but-safe.
+
+**Bound:** B1 S (1-2), B2 M (2-4, the rooting is the cost), B3 S-M (1-2). Total ≈ 4-8 ticks — below the
+roadmap's original "L (subsystem)" once the sync-fetch + hook-driven-recursion shortcuts are used.
+Unlocks: Vite/Rollup dev builds and any modern `type=module` app that ships a real import graph.
