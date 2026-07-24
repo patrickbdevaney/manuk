@@ -1000,6 +1000,13 @@ pub struct Page {
     /// Whether any element uses `position:sticky` — gates the per-frame sticky paint pass so
     /// non-sticky pages pay nothing.
     has_sticky: bool,
+    /// **The pre-fetched ES-module import graph (B3b)** — resolved-url → source for every module the
+    /// page's `<script type=module>` roots reach. Filled by the async pre-fetch pass (`load_async` /
+    /// `prepare_prefetched`) and seeded into the JS layer by [`run_deferred_scripts`] at the instant the
+    /// deferred (module) pass runs — kept ON the page, not in a thread-local, so it survives the shell's
+    /// blocking→paint→deferred gap and is seeded on whichever thread runs the scripts. Empty ⇒ modules
+    /// link self-contained, exactly as before the loader existed.
+    module_graph_sources: std::collections::HashMap<String, String>,
     zoom: f32,
     /// Decoded raster images keyed by their `<img>` node, painted into each element's box.
     images: std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
@@ -1454,12 +1461,12 @@ impl Page {
         #[cfg(feature = "spidermonkey")]
         let module_graph_sources = prefetch_module_graph(&dom, final_url).await;
         let mut page = Page::from_dom(dom, final_url, fonts, viewport_width);
-        // Seed the pre-fetched graph for the deferred pass, then drop it the instant that pass returns so
-        // one document's modules can never resolve the next document's imports. No `.await` sits between
-        // the seed and the run, so both stay on this thread — the map is a thread-local the module runner
-        // reads synchronously.
+        // Carry the pre-fetched graph onto the page; `run_deferred_scripts` seeds it into the JS layer
+        // and clears it after the module pass (the same seam the shell's `from_prefetched` path uses).
         #[cfg(feature = "spidermonkey")]
-        manuk_js::set_module_graph_sources(module_graph_sources);
+        {
+            page.module_graph_sources = module_graph_sources;
+        }
         // **Both passes, back to back** — see `load`. `from_dom` runs only the scripts that block first
         // paint; the deferred ones (`defer`, `async`, `type=module`) run here.
         //
@@ -1471,8 +1478,6 @@ impl Page {
         // must still run all the scripts.** There is exactly one caller allowed to split them, and it is
         // the shell, because it is the only one with a human waiting.
         page.run_deferred_scripts(fonts, viewport_width);
-        #[cfg(feature = "spidermonkey")]
-        manuk_js::clear_module_graph_sources();
         // Parsing is done and the deferred scripts have executed — that IS DOMContentLoaded.
         page.fire_lifecycle("DOMContentLoaded");
         // **Subframes load BEFORE `load` fires** — `load` waits for subframes (HTML spec), and a page's
@@ -1819,6 +1824,12 @@ impl Page {
             .collect();
         manuk_js::set_scroll_geometry(self.scroll_geometry_map());
         manuk_js::set_snap_candidates(self.snap_candidates_map());
+        // **Seed the pre-fetched ES-module import graph for THIS pass (B3b).** Modules are deferred, so
+        // this is where `run_module` runs them and where the graph source map must be in place — set
+        // here (a thread-local read synchronously by the module runner), from the map the async
+        // pre-fetch pass carried onto the page, exactly like the scroll/snap geometry above. Empty ⇒
+        // no-op. Cleared right after the pass so one document's graph can never resolve the next's.
+        manuk_js::set_module_graph_sources(self.module_graph_sources.clone());
         // Before the scripts run, not after: a script that draws an image on its first tick must find
         // the pixels already there, or the draw silently no-ops and the canvas stays blank.
         self.publish_image_sources();
@@ -1831,6 +1842,7 @@ impl Page {
                 0
             }
         };
+        manuk_js::clear_module_graph_sources();
         self.drain_canvases();
         self.drain_element_scrolls();
         if ran > 0 {
@@ -3718,11 +3730,16 @@ impl Page {
             css,
             images,
             masks,
+            module_graph_sources,
         } = pre;
         // Seeded before construction, because `from_dom` runs the document's blocking scripts and
         // the policy has to be in force by then — not after.
         set_pending_csp_with_authorized(csp, csp_authorized_scripts);
         let mut page = Page::from_dom(dom, &final_url, fonts, viewport_width);
+        // Carry the pre-fetched module graph onto the page so `run_deferred_scripts` — which the shell
+        // may call much later, after paint — seeds it for the module (deferred) pass. This is the shell
+        // path's half of B3b; `load_async` sets the same field on the streaming/agent path.
+        page.module_graph_sources = module_graph_sources;
         if !css.is_empty() {
             page.apply_stylesheets(&css, fonts, viewport_width);
         }
@@ -3889,6 +3906,9 @@ impl Page {
             styles,
             js,
             has_sticky,
+            // Empty by default; the async pre-fetch pass on the caller's path sets this before the
+            // deferred (module) scripts run (`load_async`, `from_prefetched_inner`).
+            module_graph_sources: std::collections::HashMap::new(),
             zoom: 1.0,
             // The inline images decoded above already have their natural size in `styles`; carrying
             // them here is what lets them PAINT as well as lay out.
@@ -6482,6 +6502,14 @@ pub struct Prefetched {
     /// raw `mask-image` url → decoded bitmap (icons). Keyed by URL, not node, because the
     /// off-thread prefetch has no cascade — the nodes are bound to it once styles exist.
     pub masks: HashMap<String, manuk_paint::DecodedImage>,
+    /// **The pre-fetched ES-module import graph (B3b-iii)** — resolved-url → source, for every module a
+    /// `<script type=module>` reaches through its static `import`s. Pre-fetched off-thread here so the
+    /// synchronous `ModuleLink` (which cannot touch the network) finds the whole graph already in hand.
+    /// Carried on `Prefetched` — not seeded into a thread-local off-thread — because the shell builds the
+    /// page and runs its deferred scripts on the UI thread, possibly on a different worker than fetched
+    /// this; the map rides on the page (`Page::module_graph_sources`) and is seeded into the JS layer at
+    /// the moment the deferred pass runs. Empty ⇒ no module imports ⇒ modules link self-contained.
+    pub module_graph_sources: HashMap<String, String>,
 }
 
 /// Fetch a document **and all of its subresources** off-thread (DEBT-1). The returned
@@ -6557,6 +6585,14 @@ async fn prepare_prefetched(html: String, final_url: String, mut csp: Csp) -> Re
     #[cfg(not(feature = "spidermonkey"))]
     let csp_authorized_scripts: Vec<NodeId> = Vec::new();
 
+    // **The ES-module import graph (B3b-iii)** — pre-fetched off-thread here, on the DEBT-1 path the
+    // shell actually navigates with, exactly as `load_async` does for the streaming/agent path. The
+    // external `type=module src` roots were just inlined above, so every root's source is visible.
+    #[cfg(feature = "spidermonkey")]
+    let module_graph_sources = prefetch_module_graph(&dom, &final_url).await;
+    #[cfg(not(feature = "spidermonkey"))]
+    let module_graph_sources: HashMap<String, String> = HashMap::new();
+
     // External stylesheets, concurrently.
     let mut seen = std::collections::HashSet::new();
     let ext: Vec<String> = collect_style_sources(&dom, &final_url)
@@ -6624,6 +6660,7 @@ async fn prepare_prefetched(html: String, final_url: String, mut csp: Csp) -> Re
         css,
         images,
         masks,
+        module_graph_sources,
     })))
 }
 

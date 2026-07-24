@@ -4421,3 +4421,30 @@ same face the text is drawn with. Completes the real font-relative units `ch`+`e
 spec `1em` fallback (correct, and not cleanly gate-able). **The trap:** a `None` metric here didn't fall
 back to something reasonable — it fell back to an unset `ascent` of 0, turning a missing measurement into
 a collapsed box.
+
+## ES-module import GRAPHS render on the real page paths (ticks 512-517)
+
+**The class of the web this unlocks (every native-ESM / no-bundler app and every Vite/Rollup DEV server):**
+an app whose entry `<script type=module>` does `import { App } from './app.js'` — and whose `./app.js`
+imports its own siblings, transitively — used to die at `ModuleLink` with *"module not found"*, so the app
+never mounted. A single self-contained module already worked (tick 32); a multi-FILE import graph did not.
+It now does, on BOTH real page paths: the streaming/headless/AGENT render path (`fetch_streaming_page` →
+`load_async`) and the INTERACTIVE SHELL path (`prefetch_document` → `from_prefetched` → deferred pass).
+
+The subsystem was built as rooting-safe bricks: B1 a GC-rooted module registry + per-module `import.meta.url`
+private (t512); B2 the synchronous `module_resolve_hook` that resolves a specifier against the importer's
+own URL and returns the registered module (t513); B3 the cycle-safe population walk `esm_load_graph`
+(insert-before-recurse, a miss is loud-but-safe) over an injected fetch seam (t514); B3b-i the page runner
+`run_module` driving that walk over a pre-fetched source map + per-root registry clear (t515); B3b-ii the
+async PRODUCER on `load_async` — a textual static-import scanner + a BFS graph pre-fetch (`manuk_net::fetch`,
+`Url::join` matching the resolve hook) that fills the map before scripts run (t516); B3b-iii the same
+producer on the shell's off-thread `prepare_prefetched` path, carried on `Prefetched` → `Page` →
+`run_deferred_scripts` so the graph survives the shell's blocking→paint→deferred gap (t517). Gates:
+`g_esm_import_graph` (loader core, in-memory), `g_esm_page_graph` (load_async, real localhost 2-level
+graph), `g_esm_prefetched_graph` (shell path, same graph across paint). **The trap:** `ModuleLink` is
+synchronous on the JS thread and there is no blocking network here, so the whole reachable graph must be
+pre-fetched BEFORE any module runs — the scanner is a superset-or-miss heuristic that only decides what to
+fetch, while `esm_load_graph` (reading SpiderMonkey's real `GetRequestedModuleSpecifier`) stays the
+authoritative walk, so an over-fetch is harmless and a miss fails one import loud-but-safe, never a crash.
+Residue: bare specifiers (`import 'react'`) still need an import-map resolver; dynamic `import()` uses a
+separate lazy hook.

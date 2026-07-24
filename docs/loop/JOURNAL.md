@@ -20684,3 +20684,48 @@ NEXT: **B3b-iii** — wire the producer into the INTERACTIVE-SHELL path: compute
 before the shell's deferred pass in `from_prefetched`/`gui.rs`. THAT tick flips the pattern (real
 interactive browsing of a native-ESM site). Gate: drive the prefetched path E2E, same two-level graph.
 Self-audit next 525; surface next 518; const-check next 519; wall next 527.
+
+## Tick 517 — BUILD BRICK: ESM import-graph B3b-iii — the SHELL path + unify the seed seam (2026-07-24)
+
+Following B3b-ii (tick 516, the async producer on `load_async`), landed **ESM import-graph B3b-iii** — the
+producer on the INTERACTIVE SHELL path, which finally UNLOCKS THE CLASS. B3b-ii ran the pre-fetch only on
+`load_async` (the streaming/agent path); the shell navigates through `prefetch_document` →
+`from_prefetched_blocking_only` → paint → `run_deferred_scripts` (an off-thread DEBT-1 path), which never
+saw the map — so a human browsing a native-ESM site in the window still got nothing. B3b-iii closes it AND
+unifies the two entry points onto one seam.
+
+WHAT LANDED (engine/page/src/lib.rs + two new gate files):
+1. **`Prefetched.module_graph_sources`** (new field) — `prepare_prefetched` (already async, off-thread,
+   holding the dom with external `type=module src` roots inlined) now calls `prefetch_module_graph` and
+   carries the resolved-url → source map on it, exactly as `load_async` does for the agent path.
+2. **`Page.module_graph_sources`** (new field) — the map rides onto the page in `from_prefetched_inner`,
+   so it SURVIVES the shell's blocking→paint→deferred gap (the shell runs its deferred pass much later,
+   possibly on a different worker thread — a thread-local set off-thread would be gone by then).
+3. **`run_deferred_scripts` now SEEDS the map from the page field** (and clears it after), next to
+   `set_scroll_geometry`/`set_snap_candidates` — the same publish-geometry-then-run pattern. `load_async`
+   was refactored to set the SAME page field instead of its own external `set_module_graph_sources` call,
+   so both paths flow through one seam. Only ONE `Page {` struct-literal (from_dom) + ONE `Prefetched {`
+   construct needed the new field — grepped the whole tree to be sure (struct-literal breakage is a
+   compile-error class).
+
+RED-PROVEN (real E2E, shell sequence): new gate `g_esm_prefetched_graph` drives the EXACT shell path
+(`prefetch_document` fetches the doc+subresources+graph off-thread → `from_prefetched_blocking_only` →
+`run_deferred_scripts`) over the same localhost TWO-LEVEL graph (inline root → /esm-a.js → /esm-b.js), and
+asserts `answer` (42) reached #out ACROSS the paint boundary. Neuter the `page.module_graph_sources =
+module_graph_sources` carry in `from_prefetched_inner` (env-gated during the proof) → #out stays `-` (the
+map was gone by the deferred pass); restored → GREEN. `g_esm_page_graph` (load_async, refactored to the
+page field) still GREEN = no regression on the agent path.
+
+TICK SHAPE: subsystem build brick — the CLASS-UNLOCK tick (1 capability: native-ESM import graphs resolve
+on the interactive shell path too, and the seed seam is unified on a page field; new gate
+`g_esm_prefetched_graph`; g_esm_page_graph + B1/B2/B3/B3b-i gates hold; nothing regresses; Bar 0 held).
+WIKI: docs/wiki/js-engine.md (ESM section — B3b-iii subsection: the shell-path carry + why the seam is a
+page field not a thread-local + the unification). WEB-PATTERNS.md updated — the class (native-ESM /
+no-bundler / Vite-dev import-graph apps) is now genuinely unlocked on BOTH real page paths, so this is NOT
+[no-pattern]: a multi-file `import` graph renders in the agent AND in the window.
+
+NEXT: the ESM import-graph subsystem is COMPLETE for static graphs on both paths. Bounded follow-ups (own
+ticks, not blocking): (a) import maps — resolve bare specifiers (`import 'react'`) so CDN-pinned no-bundler
+apps work; (b) dynamic `import()` — wire the lazy dynamic-import hook (currently unresolved). Otherwise
+PIVOT per the board (re-run lever-board next tick): media/YouTube, canvas fillText, or the 35 constellation
+probes. Self-audit next 525; surface next 518 (DUE next tick); const-check next 519; wall next 527.

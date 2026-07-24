@@ -266,14 +266,30 @@ against the importer), so a key the pre-fetch stores is the key the resolve hook
 `Page::load_async`, and asserts the cross-graph binding `answer` (42) reached a DOM node; neuter
 `prefetch_module_graph` to return an empty map and `#out` stays `-` (`ModuleLink` can't resolve
 `./esm-a.js`). A unit test pins the scanner's edge cases (minified, comment/string/dynamic-import skip)
-directly. **What is live and what is not:** the pre-fetch runs on the `load_async` path — the
-streaming/headless/agent render path (`fetch_streaming_page` → `load_async`), so the *agentic* surface
-resolves module graphs today. The interactive shell GUI navigates through
-`prefetch_document`/`from_prefetched` (the off-thread DEBT-1 path), which does **not** yet stash the map —
-that wiring (compute the graph in `prepare_prefetched`, carry it on `Prefetched`, seed it before the
-shell's deferred pass) is the next brick, and until it lands a human browsing a native-ESM site in the
-window still won't get the graph. Hence the class is proven and live on one entry point, not universally
-unlocked.
+directly. B3b-ii wires the producer into the `load_async` path — the streaming/headless/agent render path
+(`fetch_streaming_page` → `load_async`); B3b-iii (below) wires the interactive shell.
+
+**B3b-iii wires the producer into the SHELL path and unifies the seed seam on a page field (tick 517, ESM
+import-graph B3b-iii).** B3b-ii ran the pre-fetch only on `load_async`; the interactive shell navigates
+through `prefetch_document` → `from_prefetched_blocking_only` → (paint) → `run_deferred_scripts`, an
+off-thread DEBT-1 path that never saw the map — so a human browsing a native-ESM site in the window still
+got nothing. B3b-iii closes it. `prepare_prefetched` (already async, off-thread, holding the dom with its
+external `type=module src` roots inlined) now calls `prefetch_module_graph` and carries the resolved-url →
+source map on a new `Prefetched.module_graph_sources` field. The map then rides onto a new
+`Page.module_graph_sources` field in `from_prefetched_inner`, and `run_deferred_scripts` seeds it into the
+JS layer (and clears it after) right where it runs the deferred/module pass — next to `set_scroll_geometry`
+/ `set_snap_candidates`, the same publish-geometry-then-run pattern. **The seam is now a page field, not an
+external thread-local set**, which is the point: the shell runs its deferred pass much *later* than it
+built the page and possibly on a different worker thread, so the map has to survive on the page across the
+blocking→paint→deferred gap rather than sit in a thread-local set by whoever fetched it. `load_async` was
+refactored to set the same field instead of its own external `set_module_graph_sources` call, so both entry
+points now flow through one seam. Gate `g_esm_prefetched_graph` drives the exact shell sequence
+(`prefetch_document` → `from_prefetched_blocking_only` → `run_deferred_scripts`) over the same localhost
+two-level graph and asserts `answer` (42) reached the DOM; drop the `page.module_graph_sources =
+module_graph_sources` carry in `from_prefetched_inner` and it goes red (`#out` stays `-` — the map was gone
+by the deferred pass). **With both paths live the class is genuinely unlocked** — native-ESM / no-bundler /
+Vite-dev import-graph apps render in the agent AND in the window. Residue: bare specifiers still need an
+import-map resolver; dynamic `import()` uses its own lazy hook.
 
 ## An unhandled promise rejection is where every framework's failure goes to die
 
