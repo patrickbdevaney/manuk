@@ -4347,3 +4347,15 @@ already existed; this exposes that same veto path as the method libraries call. 
 not a graceful missing-feature — `dlg.requestClose()` threw a synchronous TypeError that took the click
 handler with it, so the button did nothing at all (the whole-dialog-surface failure mode again). Guards
 mirror `close()`: no-op without `open`, returnValue threads through, no throw on a closed dialog.
+
+## `<img>.currentSrc` — which image resource actually loaded (tick 493)
+
+**The class of the web this unlocks (lazy-load, lightbox, gallery and analytics libraries on essentially
+every image-heavy site):** scripts read `img.currentSrc` to learn which file an `<img>` is displaying — to
+avoid re-fetching one already shown, to build a full-size link from a thumbnail, or to log what loaded. It
+returned `undefined` (the property did not exist). This engine loads an `<img>`'s `src` directly (no
+srcset/`<picture>` bitmap selection yet), so currentSrc now honestly returns the resolved absolute `src` URL
+— the resource we actually load — and `''` before any source is selected. **The trap:** a naive
+`currentSrc = src` inside `<picture>` would be a lie in a browser that picks a `<source>`; here it is truthful
+precisely because we load `src`, and it will track the chosen candidate for free once srcset selection lands.
+Read-only and IMG-scoped, so a non-image element reads `undefined`.

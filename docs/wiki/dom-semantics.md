@@ -1426,3 +1426,19 @@ re-serialised URL back to the `href` attribute. A `?`-less value to `search` and
 are normalised; `host` splits a trailing numeric port into hostname+port. Tag-guarded to `<a>`/`<area>` so a
 plain element can never grow a spurious `href`; `origin` stays read-only (no setter). Gate
 `G_ANCHOR_URL_SETTERS`.
+
+## `<img>.currentSrc` reports the URL we actually load, honestly (tick 493)
+
+`currentSrc` — the read-only "which resource is this `<img>` displaying" URL that lazy-load, lightbox,
+gallery and analytics libraries read on every image — was absent (`'currentSrc' in img` was `false`), so
+those reads returned `undefined`. The engine loads an `<img>`'s **`src`** attribute directly and does not
+yet do srcset/`<picture>` candidate selection for the bitmap (`Page::pending_image_urls` reads `src` and
+nothing else), so the honest `currentSrc` is exactly the resolved `src`: the getter returns `this.src` (the
+url-type reflection already resolves it to absolute) when a non-empty `src` is present, and `''` otherwise —
+which is what the spec wants before a source is selected. Reporting our own loaded URL is truthful;
+diverging from Chrome's srcset pick is a *separate* responsive-images capability gap, not a `currentSrc`
+bug — the moment we add srcset selection, this getter tracks the chosen candidate for free because it
+follows `src`. Read-only (getter only, so assignment is ignored) and installed on `__protoHTMLElement`
+IMG-guarded — instances chain through `HTMLElement.prototype`, not the per-tag `HTMLImageElement.prototype`
+(which a probe confirmed is *not* in an instance's chain, matching the own-property reflector design), so a
+non-image element reads `undefined`. Gate `G_IMG_CURRENT_SRC`. [[js-engine]]

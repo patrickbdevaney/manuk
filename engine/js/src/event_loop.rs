@@ -4769,6 +4769,26 @@ const PRELUDE: &str = r#"
       // the members read the reflected content attributes (`required`/`pattern`/`type`/`min`/`max`/
       // `minLength`/`maxLength`, all live via G_REFLECT) plus the current `value`.
       var __HP = globalThis.__protoHTMLElement;
+      // `<img>.currentSrc` — the READ-ONLY URL of the image resource actually being displayed. Lazy-load,
+      // lightbox, gallery and analytics libraries read it constantly to learn WHICH file loaded (and to
+      // avoid re-fetching one already shown). It was absent — `'currentSrc' in img` was false — so those
+      // reads got `undefined`. This engine loads an `<img>`'s `src` attribute (it does not yet do
+      // srcset/`<picture>` candidate selection for the bitmap; see `pending_image_urls`), so the HONEST
+      // currentSrc is exactly the resolved `src`: `this.src` already returns the absolute URL, and the
+      // empty string when there is no source to select, which is what the spec wants before selection. It
+      // is read-only (getter only), lives on `HTMLElement.prototype` like the other cross-cutting members
+      // in this block (instances chain through `__HP`, not the per-tag interface prototypes), and is
+      // IMG-guarded so a non-image element reads `undefined` rather than a stray URL.
+      if (__HP && !Object.getOwnPropertyDescriptor(__HP, 'currentSrc')) {
+        Object.defineProperty(__HP, 'currentSrc', {
+          configurable: true,
+          get: function() {
+            if (!this || this.tagName !== 'IMG') { return undefined; }
+            var s = this.getAttribute && this.getAttribute('src');
+            return (s && s.trim()) ? this.src : '';
+          }
+        });
+      }
       if (__HP && typeof __HP.checkValidity === 'undefined') {
         var __isFormControl = function(el) {
           var t = el && el.tagName;

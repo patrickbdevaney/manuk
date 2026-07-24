@@ -19835,3 +19835,29 @@ TICK SHAPE: measurement (no gate change; nothing regresses; no engine code touch
 conformance-and-oracles.md — "The DOM-method / CSS-property surface vein is mined out too". NEXT: the frontier is
 the named subsystems (ch/ex font metrics per Const-Check #27, media codecs, fidelity-instrument rebuild), each
 decomposed before starting. Self-audit next 495; surface-audit next 498; Const-Check next 495.
+
+## Tick 493 — `<img>.currentSrc`: report the URL we actually load (2026-07-24)
+
+A probe-then-build off the responsive-images surface. MEASURED FIRST: `'currentSrc' in img` was false — the
+read-only property lazy-load/lightbox/gallery/analytics libraries read on every image returned `undefined`.
+Confirmed the engine loads an `<img>`'s `src` directly (pending_image_urls reads `src`, no srcset/`<picture>`
+bitmap candidate selection), so the honest currentSrc IS the resolved `src`.
+
+FIX: a read-only getter on `__protoHTMLElement` (IMG-guarded) returning `this.src` (already resolved to
+absolute by the url-type reflection) when a non-empty `src` is present, `''` otherwise. Placed on
+HTMLElement.prototype, not HTMLImageElement.prototype — a probe confirmed the per-tag interface prototype is
+NOT in an instance's chain (the own-property reflector design; instances chain through `__HP`, which is why
+the dialog methods live there too). Reporting our own loaded URL is truthful; diverging from Chrome's srcset
+pick is a separate responsive-images gap, and the getter tracks the chosen candidate for free once srcset
+selection lands (it follows `src`).
+
+RED-proven (pre-fix probe: `'currentSrc' in img` = false → `has:false`/`abs:undefined`). New gate
+G_IMG_CURRENT_SRC: exists on <img>, resolves a relative src to ABSOLUTE against the doc base, `''` with no
+src, read-only (assignment ignored), `undefined` on a non-image element. Neighbor image gates all green. Bar
+0 held; zero new dep; ~12 lines prelude JS.
+
+TICK SHAPE: capability (+1 gate, nothing regresses). WIKI: dom-semantics.md — "<img>.currentSrc reports the
+URL we actually load, honestly". NEXT: srcset/`<picture>` bitmap candidate selection is the natural follow-on
+(would make currentSrc match Chrome's pick and is a real responsive-images capability), but it is a
+layout-coupled selection subsystem, not atomic. ch/ex font-metrics (Const-Check #27) remains the top lever.
+Self-audit next 495; surface-audit next 498; Const-Check next 495.
