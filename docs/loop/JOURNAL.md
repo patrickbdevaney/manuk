@@ -19694,3 +19694,28 @@ the next decompose-first subsystem. The RATCHET was honored by REFUSING to squee
 
 TICK SHAPE: measurement + constitution-check (no gate change; nothing regresses). WIKI: conformance-and-oracles.md
 — probe-sweep boundary finding + ch/ex stub location. Self-audit next 495; surface-audit next 488.
+
+## Tick 488 — SURFACE AUDIT #21: web-checked the map, probed 3 unknowns (2026-07-24)
+
+The due surface-audit (cadence every 10; last 478). Web-checked Interop-2026 focus areas + Baseline-2026
+digests (sources in SURFACE-AUDIT.md #21), reconciled against the map, and RESOLVED three unknowns by live
+engine probe rather than guessing.
+
+RESOLVED: (1) `:open` pseudo-class — a headline Interop-2026 FOCUS AREA, absent from the map — ALREADY WORKS
+(Stylo matches `details:open`→1, `:open`→2 on a live probe). unknown→works; the seventh-plus stale-pessimistic
+"modern feature already built." (2) `content-visibility`/`contain-intrinsic-size` — CONFIRMED MISSING
+(getComputedStyle undefined/empty; unrecognized, candidate Stylo servo-drop) — and re-classified as a PLACEMENT
+(page-height) divergence, not just a perf gap. (3) `hidden="until-found"` — CONFIRMED PARTIAL: the attribute
+reflects but the element renders VISIBLE (should be collapsed-revealable) and `beforematch` is absent; a
+reveal-on-find collapsible shows its content prematurely (bounded first brick: a UA `[hidden="until-found"]`
+collapse rule).
+
+ADDED as unknowns (Interop-2026/Baseline-2026, absent from the map): advanced `attr()`, `popover="hint"`,
+`:active-view-transition`, Service Worker JS modules; flagged the Anchor-Positioning tension (Interop-2026
+elevates it above the constellation "niche-tail" cut line, but it stays a subsystem).
+
+TICK SHAPE: surface-audit (measurement; no gate change, nothing regresses). No engine code touched.
+WIKI: none (audit findings live in SURFACE-AUDIT.md). NEXT: the ch/ex font-metrics subsystem (Tier-2 item 23,
+scoped in Const-Check #27 / t487) remains the top capability lever; `content-visibility` and
+`hidden=until-found` collapse are newly-measured bounded candidates. Self-audit next 495; surface-audit next
+498; Const-Check next 495.

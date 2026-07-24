@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **258** | ticks 1–487 |
 | median tick cycle | **21m** | 257 intervals |
-| median, last 10 | **35m** | 10 intervals |
+| median, last 10 | **38m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.83** | 311.2h elapsed |
+| **ticks per hour** | **0.82** | 311.5h elapsed |
 | median verify wall | **60s** | 197 ticks |
 | wall trend | 39s → 68s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -354,6 +354,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **483** | 2026-07-24 02:14 | 24m | capability | 64s | +237/−34 | 250 | 81 | 56.0% · | execCommand('insertHTML', false, html) parses a fragment and inserts it at the caret (2026 |
 | **484** | 2026-07-24 02:50 | 36m | capability | 10m | +235/−38 | 251 | 81 | 56.0% · | execCommand('createLink', false, url) wraps the selection in <a href> (2026-07-24) |
 | **485** | 2026-07-24 03:49 | 59m | capability | 68s | +258/−34 | 253 | 81 | 56.0% · | navigator.credentials + window.PublicKeyCredential: the passkey feature-detect surface (20 |
-| **487** | 2026-07-24 04:18 | 29m | measurement | 67s | +167/−32 | 253 | 81 | 56.0% · | MEASUREMENT: JS-surface vein mined out + ch/ex font-metrics subsystem scoped (Const-Check  |
+| **487** | 2026-07-24 04:35 | 46m | measurement | 67s | +98/−32 | 253 | 81 | 56.0% · | MEASUREMENT: JS-surface vein mined out + ch/ex font-metrics subsystem scoped (Const-Check  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

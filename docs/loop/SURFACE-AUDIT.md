@@ -1014,3 +1014,43 @@ scroll-perf + intrinsic-height primitive) and `hidden=until-found`/`beforematch`
 collapsible) — were invisible to the map.
 
 LAST_SURFACE_AUDIT 468→478; next due 488.
+
+## Surface Audit #21 — tick 488 (2026-07-24)
+
+SOURCES (web-checked, not memory): Interop 2026 focus areas (web-platform-tests/interop 2026/README;
+hacks.mozilla.org/2026/02/launching-interop-2026; webkit.org/blog/17818; web.dev/blog/interop-2026 —
+20 focus + 4 investigation areas). Baseline 2026 digests (web.dev/baseline/2026; web.dev/blog/web-platform-01-2026;
+baseline-digest jan–may 2026). Interop-2026 headline set: **Anchor Positioning, advanced `attr()`,
+cross-document View Transitions, `:open` pseudo-class, `popover="hint"`, `shape()`, WebTransport/WebRTC.**
+Baseline-newly-available 2026: CSS Anchor Positioning (Jan, Firefox 147), `contrast-color()` (WORKS t466),
+`:active-view-transition` (Jan), Service Worker JS modules.
+
+RESOLVED BY PROBE (the point of the audit — measure, don't guess):
+* **`:open` pseudo-class → WORKS** (was not on the map; an Interop-2026 FOCUS AREA). Stylo already matches it:
+  `details:open` → 1 and `:open` → 2 (open `<details>` + open `<dialog>`) on a live probe. Flip: unknown→works.
+* **`content-visibility` / `contain-intrinsic-size` → CONFIRMED MISSING** (audit #20 unknown, now measured).
+  `getComputedStyle().contentVisibility` is `undefined` and `contain-intrinsic-size` serializes empty — the
+  properties are unrecognized (candidate Stylo servo-build drop, the engine="gecko" class; verify before
+  building). A long doc/feed relying on it for intrinsic height computes a different total page height than
+  Chrome — a PLACEMENT divergence the fidelity sweep sees, not just a perf gap.
+* **`hidden="until-found"` → CONFIRMED PARTIAL/BROKEN** (audit #20 unknown, now measured). The attribute
+  reflects (`getAttribute('hidden')` == "until-found") but the element RENDERS VISIBLE (offsetHeight 18 — it
+  should be collapsed-but-revealable), and `onbeforematch` is absent. A "read more"/collapsible-FAQ/reveal-on-
+  find idiom shows its collapsed content prematurely. Bounded first brick available: a UA rule collapsing
+  `[hidden="until-found"]` like boolean `[hidden]`; the full feature (find-in-page reveal + `beforematch`) is
+  larger.
+
+ADDED as `unknown` (Interop-2026 / Baseline-2026 features absent from the map):
+* **advanced `attr()`** (attr() typed, for non-`content` properties) — doc; Interop-2026 focus.
+* **`popover="hint"`** — app; popover base is gated, the hint variant is an addition.
+* **`:active-view-transition`** pseudo (Jan-2026 Baseline) — app; view transitions gated t308.
+* **Service Worker JS modules** (`type:'module'` SW) — app; SW runtime is a v1-scope deferral, note only.
+* CSS **Anchor Positioning** — already on the map as missing (t230); Interop-2026 ELEVATES it from the
+  constellation "niche-tail cut line #12" — flag the tension, still a subsystem, not a bounded tick.
+
+WHAT WE HAD BEEN WRONG ABOUT: `:open` — a headline Interop-2026 focus area — was invisible to the map yet
+ALREADY WORKS (Stylo supports it). That is the seventh-plus time a "modern/unknown" feature was already built;
+the standing rule holds harder than ever: RE-PROBE before ranking or building anything the map calls missing.
+Also newly visible: the `content-visibility` gap is a PLACEMENT (page-height) divergence, not merely perf.
+
+LAST_SURFACE_AUDIT 478→488; next due 498.
