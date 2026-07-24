@@ -56,8 +56,21 @@ that ordering against the real display list, and it goes red when the branch is 
 document, so it runs before the native submit path can treat the form as a GET. `formmethod` on the
 button overrides the form's `method`, per spec.
 
+### `requestClose()` is `close()` with a veto (tick 491)
+
+`dlg.requestClose([returnValue])` (Baseline 2025) is what a Close button and the ✕ should call instead of
+`close()`. The difference is one cancelable event: it fires a **cancelable `cancel`** first, so a "discard
+unsaved changes?" guard can `preventDefault()` and keep the dialog open; if nothing vetoes, it runs the
+normal close (which fires the non-cancelable `close`). It is the exact veto path Escape already used — Escape
+dispatches a cancelable `cancel` then `close()`s if not prevented — now exposed as a method. Guards mirror
+`close()`: no-op on a dialog without `open` (no `cancel`, no throw), and the returnValue argument threads
+through. Absent, `dlg.requestClose()` was a TypeError that took the click handler with it.
+
 ## Gates
 
+- `engine/page/tests/g_dialog_request_close.rs` — `requestClose()`: closes-when-unvetoed + `close` fires +
+  `cancel` is cancelable + returnValue threads through; a `preventDefault()` in `cancel` keeps it open; a
+  closed dialog is a silent no-op.
 - `engine/page/tests/g_dialog.rs` — the JS surface: 13 claims (branding, open/close, `returnValue`,
   the `close` event, `InvalidStateError` on re-`showModal()`, `form method=dialog`, Escape's
   cancelable `cancel`, and `show()` *not* joining the top layer).

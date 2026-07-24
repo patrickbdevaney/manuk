@@ -259,3 +259,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 487	ed3d6ea	1784882108	2026-07-24T04:35:08-04:00	2731	measurement	67	5	98	32	253	81	3896	6960	0	329	31	MEASUREMENT: JS-surface vein mined out + ch/ex font-metrics subsystem scoped (Const-Check #27) (2026-07-24)
 488	68c919c	1784883619	2026-07-24T05:00:19-04:00	1511	surface-audit	67	10	255	77	254	81	3896	6960	0	329	31	SURFACE AUDIT #21: web-checked the map, probed 3 unknowns (2026-07-24)
 489	91830d3	1784884613	2026-07-24T05:16:53-04:00	994	capability	67	9	226	81	255	81	3896	6960	0	329	31	the global `hidden` attribute renders NOTHING (measured missing, now collapsed) (2026-07-24)
+491	9619c85	1784885498	2026-07-24T05:31:38-04:00	885	capability	67	9	196	38	256	81	3896	6960	0	329	31	`dialog.requestClose()`: close with a veto (2026-07-24)

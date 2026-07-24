@@ -219,11 +219,12 @@
   - L33 · Why modality is an attribute (data-manuk-modal)
   - L42 · The top layer is one line at one choke point
   - L52 · <form method="dialog"> is markup, not script
-  - L59 · Gates
-  - L76 · The popover attribute API (tick 195)
-  - L99 · HTMLElement.prototype is not __protoHTMLElement
-  - L113 · Known gaps, deliberately not in this tick
-  - L127 · An unrelated bug this tick surfaced
+  - L59 · requestClose() is close() with a veto (tick 491)
+  - L69 · Gates
+  - L89 · The popover attribute API (tick 195)
+  - L112 · HTMLElement.prototype is not __protoHTMLElement
+  - L126 · Known gaps, deliberately not in this tick
+  - L140 · An unrelated bug this tick surfaced
 
 ## DOM SEMANTICS — spec behaviour, mutation, and tree edge cases
 `docs/wiki/dom-semantics.md`
@@ -956,4 +957,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-871 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+872 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

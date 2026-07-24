@@ -4894,6 +4894,20 @@ const PRELUDE: &str = r#"
           // by the time it fires the dialog is already closed.
           try { this.dispatchEvent(new Event('close', { bubbles: false, cancelable: false })); } catch (e) {}
         };
+        // `requestClose([returnValue])` — the "ask to close" variant of `close()` (Baseline 2025). It is
+        // what a Close button and the ✕ should call instead of `close()`: it fires a CANCELABLE `cancel`
+        // first, so a "discard unsaved changes?" guard can `preventDefault()` and veto the dismissal —
+        // exactly the hook Escape already runs through. If nothing vetoes, it closes normally (which fires
+        // the non-cancelable `close`). Without it a page calling `dlg.requestClose()` hit a TypeError that
+        // took the click handler with it, so the button did nothing at all.
+        __HP.requestClose = function(rv) {
+          if (!__isDialog(this) || !this.hasAttribute('open')) { return; }
+          if (rv !== undefined) { this.returnValue = rv; }
+          var ok = true;
+          try { ok = this.dispatchEvent(new Event('cancel', { bubbles: false, cancelable: true })); } catch (e) {}
+          if (ok === false) { return; }  // a `cancel` handler vetoed — leave the dialog open
+          this.close(rv);
+        };
         Object.defineProperty(__HP, 'returnValue', {
           configurable: true,
           get: function() { return this.__returnValue == null ? '' : this.__returnValue; },

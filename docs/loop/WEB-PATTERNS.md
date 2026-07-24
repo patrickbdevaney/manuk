@@ -4336,3 +4336,14 @@ presence check would have passed — but it reached nothing, so `input.inputMode
 `el.inputMode = 'tel'` no-opped. Fix is data-only (move both rows into `"*"`); the generic enum mechanism
 then gives spec behaviour for free — absent/invalid → `""`, valid keyword round-trips through the lowercase
 content attribute. Global, so it works on a `<div>` too, as the spec requires.
+
+## `dialog.requestClose()` — a dismiss that a guard can veto (tick 491)
+
+**The class of the web this unlocks (any dialog/modal component library whose Close button and ✕ call
+`requestClose()` — the pattern Chrome shipped as the recommended dismiss):** unlike `close()`, it fires a
+cancelable `cancel` event first, so a "you have unsaved changes — discard?" confirmation can
+`preventDefault()` and keep the dialog open. `<dialog>` show/showModal/close/returnValue and the Escape veto
+already existed; this exposes that same veto path as the method libraries call. **The trap:** absent, it was
+not a graceful missing-feature — `dlg.requestClose()` threw a synchronous TypeError that took the click
+handler with it, so the button did nothing at all (the whole-dialog-surface failure mode again). Guards
+mirror `close()`: no-op without `open`, returnValue threads through, no throw on a closed dialog.

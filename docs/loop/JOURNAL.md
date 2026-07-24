@@ -19782,3 +19782,28 @@ layout-algorithm subsystems (not atomic); `togglePopover` present; `text-align:e
 LTR. NEXT: `dialog.requestClose`, `input.showPicker` are bounded method gaps; ch/ex font-metrics subsystem
 (Const-Check #27) remains the top capability lever. Self-audit next 495; surface-audit next 498;
 Const-Check next 495.
+
+## Tick 491 — `dialog.requestClose()`: close with a veto (2026-07-24)
+
+A probe-then-build off the bounded-method gaps. MEASURED FIRST: `dialog.close`/`showModal`/`form.requestSubmit`/
+`moveBefore`/`setHTMLUnsafe` all present, but `requestClose`/`showPicker`/`getHTML` undefined. Picked
+`requestClose` — the cleanest, since the whole `<dialog>` surface (show/showModal/close/returnValue, the
+top-layer stacking, the Escape veto) already exists.
+
+`requestClose([returnValue])` (Baseline 2025) is `close()` with a veto: it fires a CANCELABLE `cancel` first
+so a "discard unsaved changes?" guard can `preventDefault()` and keep the dialog open, then closes normally
+if nothing vetoes. This is the exact path Escape already ran (dispatch cancelable `cancel` → `close()` if not
+prevented); the tick just exposes it as a method. Guards mirror `close()`: no-op on a dialog without `open`,
+returnValue threads through. Absent, `dlg.requestClose()` was a TypeError that took the click handler down —
+a component library's Close button did nothing.
+
+RED-proven (pre-fix probe: `requestClose:undefined` → the call is a TypeError that aborts the script).
+New gate G_DIALOG_REQUEST_CLOSE: closes-when-unvetoed + `close` fires + `cancel` cancelable + returnValue
+threads; a `preventDefault()` keeps it open; a closed dialog is a silent no-op. Neighbors g_dialog/
+g_dialog_render green. Bar 0 held; zero new dep; ~10 lines of prelude JS mirroring existing close().
+
+TICK SHAPE: capability (+1 gate, nothing regresses). WIKI: dialog-and-top-layer.md — "requestClose() is
+close() with a veto". NEXT bounded method gaps still open: `input.showPicker` (needs a picker UI — honest
+NotAllowedError candidate), `Element.getHTML()` (shadow-root serializer). ch/ex font-metrics subsystem
+(Const-Check #27) remains the top capability lever. Self-audit next 495; surface-audit next 498; Const-Check
+next 495.
