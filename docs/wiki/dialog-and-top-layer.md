@@ -102,7 +102,16 @@ Built on exactly the machinery tick 194 laid down, which is why it fits in one t
 - **`showPopover` / `hidePopover` / `togglePopover(force)`**, and `el.popover` reflecting
   `auto`/`manual`/`null` (`auto` is the enumerated attribute's invalid-value default).
 - **`beforetoggle` / `toggle`** with `oldState`/`newState`. `beforetoggle` is **cancelable**, which is
-  the veto hook; `toggle` is the after-the-fact notification.
+  the veto hook; `toggle` is the after-the-fact notification. As of **tick 526** they also carry
+  **`ToggleEvent.source`** (Baseline 2024) — the invoker that caused the toggle: the
+  `<button popovertarget>` for a declarative open, the `{source}` option for `showPopover({source})` /
+  `hidePopover({source})`, and `null` for a bare imperative call. It threads through `__popToggleEvent`'s
+  new `source` argument; `__popClick` passes the button (`{source: t}`), and `togglePopover` accepts
+  both `togglePopover(force)` and `togglePopover({force, source})`. A menu/tooltip framework reads it to
+  anchor and focus the popover on the control the user clicked — without it, one menu opened from three
+  buttons can't tell which fired. Gated `g_toggle_event_source` (imperative-with-source / bare-null /
+  declarative-button); RED: drop `ev.source`. Residue: the `<dialog>` toggle path does not yet carry
+  `source` (a separate command-invoker brick).
 - **`<button popovertarget="menu" popovertargetaction="show|hide|toggle">`** — declarative, no script.
   This is how the API is meant to be used and the reason it shipped.
 - **Light dismiss** — a click anywhere outside an open `auto` popover closes it, and so does Escape.

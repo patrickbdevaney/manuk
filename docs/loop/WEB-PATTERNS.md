@@ -4504,3 +4504,11 @@ length, and the element's `duration` getter reflected it — but silently, so a 
 never woke. Now `MediaSource.__fireDurationChange` dispatches it on the attached element from both the
 setter (on real change only — NaN→N fires, N→N does not) and the demux path. Gate `g_media_durationchange`;
 RED: drop the dispatch and dc stays 0.
+
+**A popover ToggleEvent names its invoker via `ToggleEvent.source` (tick 526)** — so a menu/tooltip
+framework that opens one popover from several `<button popovertarget>` controls knows WHICH button fired
+and anchors/focuses the popover on it. `beforetoggle`/`toggle` now carry `source`: the button for a
+declarative open, the `{source}` option for `showPopover({source})`/`hidePopover({source})`, `null` for a
+bare call. Threaded through `__popToggleEvent` + `__popClick` (`{source: t}`) + `togglePopover({force,
+source})`. Gate `g_toggle_event_source`; RED: drop `ev.source`. Residue: the `<dialog>` toggle path
+doesn't carry source yet (a command-invoker follow-up).

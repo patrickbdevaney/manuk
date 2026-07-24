@@ -223,9 +223,9 @@
   - L59 · requestClose() is close() with a veto (tick 491)
   - L69 · Gates
   - L89 · The popover attribute API (tick 195)
-  - L112 · HTMLElement.prototype is not __protoHTMLElement
-  - L126 · Known gaps, deliberately not in this tick
-  - L140 · An unrelated bug this tick surfaced
+  - L121 · HTMLElement.prototype is not __protoHTMLElement
+  - L135 · Known gaps, deliberately not in this tick
+  - L149 · An unrelated bug this tick surfaced
 
 ## DOM SEMANTICS — spec behaviour, mutation, and tree edge cases
 `docs/wiki/dom-semantics.md`

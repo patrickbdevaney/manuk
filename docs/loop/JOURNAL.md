@@ -21046,3 +21046,37 @@ audit cadence tick, no engine change. No [no-pattern] needed (no engine/{js,css,
 
 NEXT: 526 pivots per the reassessment above (fidelity-instrument decompose / test262 / name-only-CQ
 probe). Self-audit next 534; surface next 528; const next 527; wall next 527.
+
+## Tick 526 — BUILD BRICK: popover ToggleEvent.source names the invoker (2026-07-24)
+
+Pivoting off the saturated media surface to a bounded, ZERO-ratchet-risk (purely additive) capability
+that closes a real constellation "missing" row. `ToggleEvent.source` (Baseline 2024) is the element
+that caused a popover toggle — a menu/tooltip framework that opens ONE popover from three different
+`<button popovertarget>` controls reads it to know which button fired and anchor/focus the popover on
+it. It was absent (tick 510 probe: togglesource:no).
+
+WHAT LANDED (engine/js/src/event_loop.rs, popover block):
+- `__popToggleEvent(el,name,old,new,cancelable, source)` gained a `source` arg → `ev.source = source
+  || null`.
+- `showPopover(options)` / `hidePopover(options)` extract `{source}` (via `__popSource`) and pass it to
+  both the beforetoggle and toggle dispatches; a bare call carries null.
+- `togglePopover` accepts BOTH `togglePopover(force)` and `togglePopover({force, source})`.
+- `__popClick` (the declarative `<button popovertarget>` capturing handler) passes the invoker button
+  as `{source: t}` to show/hide/togglePopover.
+
+RED-PROVEN (real E2E, no network): new gate g_toggle_event_source — a `<button popovertarget="pop">` +
+`<div popover>`: imperative `showPopover({source:btn})` → toggle.source===btn (imp:true); bare
+`hidePopover()` → source===null (bare:true); declarative `btn.click()` routes through the capturing
+`__popClick` → toggle.source===btn (decl:true). Neuter `ev.source` → imp/decl/bare all flip → RED (the
+toggle mechanism itself, open1/open2, stays green — independent failure paths).
+
+TICK SHAPE: build brick (1 capability — ToggleEvent.source on popover toggle/beforetoggle for both the
+imperative {source} and declarative popovertarget paths; new gate g_toggle_event_source E2E,
+RED-proven; Bar 0 held — purely additive, a new event property defaulting null, no existing behaviour
+changed). WIKI: docs/wiki/dialog-and-top-layer.md — the popover events section gained the
+ToggleEvent.source paragraph. WEB-PATTERNS.md updated (menu/tooltip-anchor class). NOT [no-pattern]
+(engine/js/src touched).
+
+NEXT: `<dialog>` toggle path carrying source is a command-invoker follow-up (residue). Otherwise the
+deliberate frontier pivot stands (fidelity instrument rebuild / test262 / name-only-CQ probe). Surface
+audit DUE at 528; const next 527; wall next 527; self-audit next 534.

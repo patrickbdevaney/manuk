@@ -5163,17 +5163,28 @@ const PRELUDE: &str = r#"
         var __popOpen = function(el) { return el.hasAttribute('data-manuk-popover-open'); };
         // `beforetoggle` is cancelable on the way OPEN (a guard can veto); `toggle` is the
         // notification after the fact. Both carry oldState/newState, which is what handlers switch on.
-        var __popToggleEvent = function(el, name, oldState, newState, cancelable) {
+        var __popToggleEvent = function(el, name, oldState, newState, cancelable, source) {
           var ev;
           try { ev = new Event(name, { bubbles: false, cancelable: !!cancelable }); }
           catch (e) { return true; }
           ev.oldState = oldState;
           ev.newState = newState;
+          // `ToggleEvent.source` (Baseline 2024): the invoker element that caused the toggle — the
+          // `<button popovertarget>` for a declarative open, the `{source}` option for the
+          // imperative one, `null` for a bare `showPopover()`. A menu framework reads it to position
+          // and focus relative to the button that opened the popover.
+          ev.source = source || null;
           try { return el.dispatchEvent(ev); } catch (e) { return true; }
         };
-        __HP.showPopover = function() {
+        // The invoker travels as `showPopover({source})` / `hidePopover({source})`; a bare call or a
+        // boolean-only `togglePopover(force)` carries none.
+        var __popSource = function(opts) {
+          return (opts && typeof opts === 'object' && opts.source) ? opts.source : null;
+        };
+        __HP.showPopover = function(options) {
           if (__popType(this) === null || __popOpen(this)) { return; }
-          if (__popToggleEvent(this, 'beforetoggle', 'closed', 'open', true) === false) { return; }
+          var src = __popSource(options);
+          if (__popToggleEvent(this, 'beforetoggle', 'closed', 'open', true, src) === false) { return; }
           // An `auto` popover is exclusive with the other auto popovers: opening one closes the rest.
           // (Nesting — a submenu inside its parent menu — is residue; this is the flat common case.)
           if (__popType(this) === 'auto') {
@@ -5183,17 +5194,21 @@ const PRELUDE: &str = r#"
             }
           }
           this.setAttribute('data-manuk-popover-open', '');
-          __popToggleEvent(this, 'toggle', 'closed', 'open', false);
+          __popToggleEvent(this, 'toggle', 'closed', 'open', false, src);
         };
-        __HP.hidePopover = function() {
+        __HP.hidePopover = function(options) {
           if (__popType(this) === null || !__popOpen(this)) { return; }
-          if (__popToggleEvent(this, 'beforetoggle', 'open', 'closed', true) === false) { return; }
+          var src = __popSource(options);
+          if (__popToggleEvent(this, 'beforetoggle', 'open', 'closed', true, src) === false) { return; }
           this.removeAttribute('data-manuk-popover-open');
-          __popToggleEvent(this, 'toggle', 'open', 'closed', false);
+          __popToggleEvent(this, 'toggle', 'open', 'closed', false, src);
         };
         __HP.togglePopover = function(force) {
-          var want = (force === undefined) ? !__popOpen(this) : !!force;
-          if (want) { this.showPopover(); } else { this.hidePopover(); }
+          // `togglePopover(force)` OR `togglePopover({force, source})` — accept both shapes.
+          var opts = (force && typeof force === 'object') ? force : null;
+          var want = opts ? (opts.force === undefined ? !__popOpen(this) : !!opts.force)
+                          : (force === undefined ? !__popOpen(this) : !!force);
+          if (want) { this.showPopover(opts || undefined); } else { this.hidePopover(opts || undefined); }
           return __popOpen(this);
         };
         // `el.popover` reflects the attribute (`null` when absent) — feature detection reads exactly
@@ -5214,9 +5229,10 @@ const PRELUDE: &str = r#"
             var target = document.getElementById(t.getAttribute('popovertarget'));
             if (target) {
               var action = String(t.getAttribute('popovertargetaction') || 'toggle').toLowerCase();
-              if (action === 'show') { target.showPopover(); }
-              else if (action === 'hide') { target.hidePopover(); }
-              else { target.togglePopover(); }
+              // `t` is the invoker — it rides through as ToggleEvent.source.
+              if (action === 'show') { target.showPopover({ source: t }); }
+              else if (action === 'hide') { target.hidePopover({ source: t }); }
+              else { target.togglePopover({ source: t }); }
               return;   // the invoker's own click never light-dismisses the popover it just opened
             }
           }
