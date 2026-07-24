@@ -1212,3 +1212,46 @@ only tempo note: the atomic surface lane is closed (measured twice now); the loo
 subsystem work, each decomposed before starting.
 
 **Next check due: tick 503.**
+
+## Check #29 — tick 503
+
+**Horizon:** Phase 0 — daily-driver rendering parity + the agentic surface (CONSTITUTION.MD **Part VII**,
+components 1 & 2). **Gate:** the FIDELITY-SCORING-REDESIGN.md certificate (≥0.75 placement fidelity on ≥95%
+of the corpus + ≥0.70 per top-20 category), NOT a WPT percentage. Anchor: PHASE0-BOUNDED-REMAINDER.md.
+
+**Gate or scoreboard?** Gate. Check #28 named the frontier — "ch/ex real font metrics… decompose-before-
+starting, NOT a squeezed atomic tick" — and this window DELIVERED it: t499 `ch` (the `0`-glyph advance),
+t500 `ex` (OS/2 sxHeight), t502 `cap` (OS/2 sCapHeight, which had been resolving to **0px** — its fallback
+is ascent, which the provider left unset). All three are real daily-driver fidelity fixes: `ch` alone was
+under-sizing every `max-width:65ch` article column by ~17% and overflowing monospace layouts. t501 was a
+measurement tick that resolved 4 stale-unknown constellation cells with evidence (UNKNOWN 12→8).
+
+**The decomposition was LIGHTER than Check #28 forecast — and that is the finding.** #28 anticipated "a
+Send+Sync FontMetricsProvider threaded through `make_device`" — a signature-threading subsystem. The actual
+shape avoided all of it: a thread-local `FontContext` in manuk-text behind three free functions
+(`zero_advance_px`/`x_height_px`/`cap_height_px`) let the provider stay a trivial `Sync` unit struct that
+just calls them, so NO viewport/Device signature changed. The seam is one new workspace-internal, `--features
+stylo`-gated dep (manuk-css→manuk-text; no cycle, no new external crate → I2 intact). The lesson banked: a
+subsystem's honest size is only known after you find the seam — decompose-first surfaced a 3-brick tick, not
+the forecast multi-tick thread-through.
+
+**Is the loop still pointed at the frontier?** Yes, and it just cleared the #1 named lever. Zero drift — no
+single-site ticks, no html/dom flip-grinding, no CSS-layout-tail. `ic` was deliberately left at its `1em`
+spec fallback (correct, and not cleanly falsifiable — pinned measured-partial, not faked green). The
+remaining font-metrics work is the one hard, non-atomic follow-up: threading the page's own FontContext for
+webfont-exact units (the thread-local carries system+generic faces only). The next frontier moves to the
+other PHASE0-BOUNDED-REMAINDER subsystems (intrinsic sizing, MSE playback-join, ESM module-graph), each to
+be decomposed the same way before starting.
+
+**Any invariant bent?** No. Bar 0 held every tick; each capability banked a RED-proven gate (`ch` box:80→96,
+`ex` 800→~832, `cap` 0→~1150); nothing regressed (each unfilled metric kept its spec fallback). THE RATCHET
+held under pressure: EVERY engine tick this window first false-RED'd on the load-sensitive `manuk-shell` gate
+cluster (affordance/G_TEARDOWN/G_RUNTIME_COUNT/G_INTERACT — flaky under the prewarm load-tail, green on the
+quiet re-run) and NOT ONCE was that traded for the capability or the mark re-baselined — re-run on the quiet
+box, exactly as the standing rule requires.
+
+**PART VI / VII correction.** None. The four-component v1 scope and the fidelity-certificate exit stand.
+Tempo note: the font-metrics lever named across Checks #27–28 is now closed; the loop returns to the
+subsystem list, decompose-first each time.
+
+**Next check due: tick 511.**

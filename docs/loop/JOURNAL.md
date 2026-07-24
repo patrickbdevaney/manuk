@@ -20147,3 +20147,23 @@ TICK SHAPE: capability (+1 gate, fixes a 0px collapse, nothing regresses). WIKI:
 `cap` unit is the face's real cap-height". NEXT: pivot off font-metrics — the remaining board levers are
 subsystems (intrinsic sizing / MSE join / Shadow DOM / ESM) or below-ROI. Self-audit next 505;
 surface-audit next 508; Const-Check next 503.
+
+## Tick 503 — CONSTITUTION-CHECK #29: the named ch/ex frontier was DELIVERED (2026-07-24)
+
+The due constitution re-read (cadence every 8; last 495). Re-read CONSTITUTION.MD Part VII against the
+loop's actual direction and logged Check #29 in docs/loop/CONSTITUTION-CHECK.md.
+
+FINDING: Check #28 (t495) named the frontier — "ch/ex real font metrics, decompose-before-starting" —
+and ticks 499-502 delivered it (ch/ex/cap real via a manuk-text↔manuk-css swash seam; ic pinned
+fallback-correct t501). Key lesson banked: the decomposition was LIGHTER than #28 forecast — a
+thread-local FontContext behind free functions kept the provider a trivial Sync unit struct, so NO
+Device/make_device signature threading was needed. A subsystem's honest size is only known once the seam
+is found; decompose-first surfaced a 3-brick tick, not the forecast thread-through. Zero drift; every
+invariant held (Bar 0, RED-proven gates, I2 — one workspace-internal gated dep, no external crate). The
+RATCHET held against the recurring manuk-shell false-RED (re-run on the quiet box, never re-baselined).
+
+TICK SHAPE: constitution-check (measurement/direction; no gate change, no engine code, nothing
+regresses). WIKI: none — the check lives in CONSTITUTION-CHECK.md. LAST_CONSTITUTION_CHECK 495→503; next
+due 511. NEXT: pivot off font-metrics to the remaining PHASE0-BOUNDED-REMAINDER subsystems (intrinsic
+sizing / MSE playback-join / ESM module-graph), decompose-first each. Self-audit next 505; surface next
+508.

@@ -267,4 +267,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 497	b33cc7f	1784891465	2026-07-24T07:11:05-04:00	460	capability	67	5	104	33	260	81	3896	6960	0	329	31	`<textarea>.textLength`: the character-counter number (2026-07-24)
 499	0fc021d	1784893398	2026-07-24T07:43:18-04:00	1933	capability	67	12	259	38	261	81	3896	6960	0	329	31	the `ch` unit resolves to the font's REAL `0`-advance (2026-07-24)
 500	bfd080d	1784895000	2026-07-24T08:10:00-04:00	1602	capability	67	5	65	36	262	81	3896	6960	0	329	31	the `ex` unit is the face's real x-height (OS/2 sxHeight), not 0.5em (2026-07-24)
-502	158e03a	1784896369	2026-07-24T08:32:49-04:00	1369	capability	67	10	174	33	263	81	3896	6960	0	329	31	the `cap` unit is the face's real cap-height (was collapsing to 0px) (2026-07-24)
+502	81dba2c	1784896545	2026-07-24T08:35:45-04:00	1545	capability	67	5	97	33	263	81	3896	6960	0	329	31	the `cap` unit is the face's real cap-height (was collapsing to 0px) (2026-07-24)
