@@ -245,4 +245,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 468	b8cd06c	1784848203	2026-07-23T19:10:03-04:00	2304	capability	58	9	272	6	235	81	3896	6960	0	329	31	script-set `details.open` fires `toggle` + enforces the accordion group (2026-07-23)
 469	399f12f	1784852107	2026-07-23T20:15:07-04:00	3904	capability	63	10	231	57	237	81	3896	6960	0	329	31	`scrollbar-color`/`scrollbar-width` reach getComputedStyle via MinimalCascade recovery (2026-07-23)
 470	76f8cd0	1784853463	2026-07-23T20:37:43-04:00	1356	capability	70	10	341	38	238	81	3896	6960	0	329	31	`<details>` fires `beforetoggle` before `toggle` on both actuation paths (2026-07-23)
-472	e62d357	1784855041	2026-07-23T21:04:01-04:00	1578	capability	63	10	296	76	239	81	3896	6960	0	329	31	a printable key typed into a contenteditable inserts the character (2026-07-23)
+472	82efe31	1784855930	2026-07-23T21:18:50-04:00	2467	capability	59	10	281	41	240	81	3896	6960	0	329	31	a printable key typed into a contenteditable inserts the character (2026-07-23)

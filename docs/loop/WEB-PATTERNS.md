@@ -4137,3 +4137,15 @@ own model — so the default action must honor that cancel (no insert when `proc
 fire for non-character keys (`Enter`/arrows/`Backspace` — those are separate editing intents, later bricks).
 Known honest gap: with no modifier state on `dispatch_key` yet, an UNHANDLED Ctrl/Meta+letter still inserts
 the letter; a real editor's shortcut handler prevents the keydown, which is what suppresses it in practice.
+
+## Edit text in a rich editor — delete a character with Backspace (tick 473)
+
+**The class of the web this unlocks (every comment box / chat composer / contenteditable editor a user
+corrects a typo in):** typing worked (t472) but Backspace did nothing — you could write into the box but
+never fix a mistake, so it was still not a real editor. Now an uncancelled Backspace deletes the grapheme
+before the caret (or the current selection) and fires `beforeinput`→`input`
+(`inputType:'deleteContentBackward'`), the DELETE sibling of the shared insert primitive. **The trap:** a
+no-op Backspace (caret already at the start, nothing to remove) must NOT fire `input` — an editor's model
+listens for `input` and a spurious empty one desyncs it; and a framework editor that `preventDefault()`s the
+`beforeinput` must have its delete vetoed so it can run its own removal. Cross-block merge (Backspace at a
+block's start pulling it into the previous block) is a later brick — the common in-a-line case is what lands.

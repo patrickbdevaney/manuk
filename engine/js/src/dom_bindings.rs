@@ -8663,22 +8663,25 @@ impl PageContext {
         // A real KeyboardEvent-shaped object: `key` (modern) + `keyCode`/`which` (legacy) — the two
         // ways handlers read the pressed key — plus bubbles/cancelable so delegation + preventDefault
         // work. `__dispatchEvent` fills in target/currentTarget/preventDefault/etc.
-        // Dispatch the KeyboardEvent, then run the **default typed-character action**: a printable
-        // keydown (a single-character `key`) that no handler cancelled, aimed at an editing host,
-        // inserts that character at the caret — the same `__insertTextAtCaret` path
-        // `execCommand('insertText')` uses, so a plain `<div contenteditable>` responds to real typing.
+        // Dispatch the KeyboardEvent, then run the **default editing action** for a keydown that no
+        // handler cancelled, aimed at an editing host: a printable key (a single-grapheme `key`) inserts
+        // that character at the caret (`__insertTextAtCaret`, the same path `execCommand('insertText')`
+        // uses), and `Backspace` deletes the grapheme before the caret (`__deleteBackwardAtCaret`) — so
+        // a plain `<div contenteditable>` responds to real typing AND editing.
         // SCOPE: this is contenteditable only (form-control `.value` typing is a separate path); and
         // because `dispatch_key` surfaces no modifier state yet, an UNHANDLED modifier+letter (e.g. a
         // page that ignores Ctrl+B) still inserts the letter — modifier plumbing is a later brick.
         let script = format!(
             "(function(){{\
                var proceed=__dispatchEvent({nid}, {{type:{ty}, key:{key}, code:{key}, keyCode:{kc}, which:{kc}, bubbles:true, cancelable:true}});\
-               if(proceed!==false && {ty}==='keydown' && typeof globalThis.__insertTextAtCaret==='function'){{\
+               if(proceed!==false && {ty}==='keydown'){{\
                  var k={key};\
-                 if(typeof k==='string' && Array.from(k).length===1){{\
+                 var printable=(typeof k==='string' && Array.from(k).length===1);\
+                 var backspace=(k==='Backspace');\
+                 if((printable && typeof globalThis.__insertTextAtCaret==='function') || (backspace && typeof globalThis.__deleteBackwardAtCaret==='function')){{\
                    var host=null, t=(globalThis.__nodes && __nodes[{nid}])||null;\
                    for(var n=t;n;n=n.parentNode){{ if(n.nodeType===1 && n.isContentEditable){{ host=n; break; }} }}\
-                   if(host){{ try{{ __insertTextAtCaret(host, k, 'insertText'); }}catch(e){{}} }}\
+                   if(host){{ try{{ if(printable){{ __insertTextAtCaret(host, k, 'insertText'); }} else {{ __deleteBackwardAtCaret(host); }} }}catch(e){{}} }}\
                  }}\
                }}\
                return proceed;\

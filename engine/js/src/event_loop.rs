@@ -2623,6 +2623,57 @@ const PRELUDE: &str = r#"
         };
       }
 
+      // The DELETE counterpart to `__insertTextAtCaret`: remove one grapheme BEFORE the caret (or the
+      // current non-collapsed selection) inside editing `host`, firing `beforeinput`→(mutate)→`input`
+      // with `inputType:'deleteContentBackward'`. It is what Backspace does in a contenteditable. A
+      // cancelled `beforeinput` vetoes; when there is genuinely nothing to delete (caret at the very
+      // start / no caret in host) the DOM is untouched and `input` does not fire, exactly as a browser
+      // leaves a no-op Backspace. Cross-node boundary deletion (merging the previous block) is a later,
+      // larger brick — this handles the collapsed-caret-in-a-text-run and the delete-the-selection cases.
+      if (typeof globalThis.__deleteBackwardAtCaret !== 'function') {
+        globalThis.__deleteBackwardAtCaret = function (host) {
+          if (!host) { return false; }
+          var bi = new Event('beforeinput', { bubbles: true, cancelable: true });
+          bi.inputType = 'deleteContentBackward'; bi.data = null;
+          host.dispatchEvent(bi);
+          if (bi.defaultPrevented) { return true; } // ran, but the delete was vetoed
+
+          var sel = globalThis.getSelection();
+          var r = sel && sel._r;
+          var anchor = r ? r.startContainer : null;
+          var inHost = false;
+          for (var a = anchor; a; a = a.parentNode) { if (a === host) { inHost = true; break; } }
+          if (!inHost || !r) { return true; } // no caret in host — nothing to delete, no `input`
+
+          var deleted = false;
+          if (!r.collapsed) {
+            r.deleteContents();
+            deleted = true;
+          } else {
+            var sc = r.startContainer, so = r.startOffset;
+            if (sc && sc.nodeType === 3 && so > 0) {
+              // Delete a whole code point: back up over a low surrogate's leading high surrogate.
+              var n = 1, lo = sc.data.charCodeAt(so - 1);
+              if (so >= 2 && lo >= 0xDC00 && lo <= 0xDFFF) {
+                var hi = sc.data.charCodeAt(so - 2);
+                if (hi >= 0xD800 && hi <= 0xDBFF) { n = 2; }
+              }
+              sc.deleteData(so - n, n);
+              r.setStart(sc, so - n); r.collapse(true);
+              if (sel.__set) { sel.__set(sc, so - n, sc, so - n); }
+              deleted = true;
+            }
+            // caret at a text-node/element boundary — a no-op for this brick (cross-node merge is later)
+          }
+          if (deleted) {
+            var inp = new Event('input', { bubbles: true, cancelable: false });
+            inp.inputType = 'deleteContentBackward'; inp.data = null;
+            host.dispatchEvent(inp);
+          }
+          return true;
+        };
+      }
+
       if (typeof document.execCommand !== 'function') {
         var __EXEC_SUPPORTED = { copy: 1, selectall: 1, inserttext: 1 };
         document.execCommand = function (cmd) {

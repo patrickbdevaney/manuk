@@ -19148,3 +19148,34 @@ NEXT VEIN NOTE: same-substrate atomic follow-ons remain — `insertParagraph` (E
 `insertFromPaste` plaintext, and (bigger) modifier-state plumbing into dispatch_key so shortcuts don't
 insert. Formatting-command wrapping (`bold`→<b>) + multi-node selection deletion are later larger bricks.
 Constitution Check #25 was landed t471 (next due 479).
+
+## Tick 473 — Backspace deletes the grapheme before the caret in a contenteditable (2026-07-23)
+
+Brick 3 of the contenteditable EDITING subsystem — the DELETE counterpart to t472's typed-character action,
+completing the type-and-delete loop. Before it, a `Backspace` keydown in a `<div contenteditable>` fired the
+KeyboardEvent and shrank nothing; you could write but never correct — still not a real editor.
+
+MECHANISM: a shared `globalThis.__deleteBackwardAtCaret(host)` helper (engine/js/src/event_loop.rs), sibling
+to `__insertTextAtCaret`: fire cancelable beforeinput (`inputType:'deleteContentBackward'`) → if not vetoed,
+delete → fire non-cancelable input. Delete: non-collapsed selection in host → `deleteContents()`; else caret
+in a text node at offset>0 → `deleteData(off-n, n)` with n backing up over a low surrogate's leading high
+surrogate (delete a whole code point, not half an astral char), then re-collapse. Genuinely-nothing-to-delete
+(offset 0 / no caret in host) → DOM untouched, NO input (a no-op Backspace as browsers leave it). Wired into
+`dispatch_key` (dom_bindings.rs) beside the printable-key arm: an uncancelled Backspace keydown into an
+editing host calls the helper. Scope: cross-node/block-boundary merge is a later larger brick; this handles
+collapsed-caret-in-a-text-run + delete-the-selection, the common path. contenteditable only.
+
+GATE: G_CONTENTEDITABLE_DELETE (page) — caret after "Hello", two Backspaces → "Hel" with two
+`bi/in:deleteContentBackward` pairs; Backspace at offset 0 fires no input (`bcount=2`); a veto editable whose
+beforeinput preventDefaults stays "Keep". RED-proven by neutralizing the Backspace arm. Neighbors green:
+g_contenteditable_typing, g_exec_insert_text, g_exec_command_copy, g_ime_composition, g_selection, g_range.
+
+TICK SHAPE: capability (contenteditable EDITING brick 3/N; +1 gate). GATES +1.
+CONSTELLATION: rich-editing — a contenteditable now supports type AND delete (the editing loop).
+WIKI: interaction-surface.md — new section after the t472 typing note.
+WEB-PATTERNS: edit-text-in-a-rich-editor-delete-with-backspace.
+AGENTIC: the agent can now both insert and delete in an editable region (full round-trip text control).
+NEXT VEIN NOTE: same-substrate atomic follow-ons remain — `insertParagraph`/`insertLineBreak` (Enter/
+Shift+Enter → block split / <br>), `deleteContentForward` (Delete key), `insertFromPaste` plaintext, and
+(bigger) dispatch_key modifier-state plumbing + cross-block boundary merge for Backspace. Formatting-command
+wrapping (`bold`→<b>) is a later larger brick. Constitution Check #25 landed t471 (next due 479).

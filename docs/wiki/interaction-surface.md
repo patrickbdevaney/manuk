@@ -2526,3 +2526,28 @@ logs `bi:insertText:X|in:insertText:X`; a following `Enter` inserts nothing (one
 editable whose `keydown` handler `preventDefault()`s stays "Keep". RED-proven by neutralizing the
 default-action block → the key fires but nothing inserts. Neighbors green: g_exec_insert_text (the shared
 helper), g_exec_command_copy, g_ime_composition, g_contenteditable_query, g_selection, g_range.
+
+## Backspace deletes the grapheme before the caret in a contenteditable (tick 473)
+
+The DELETE counterpart to t472's typed-character action, completing the type-and-delete loop. Before it, a
+`Backspace` keydown in a `<div contenteditable>` fired the `KeyboardEvent` and shrank nothing.
+
+**Mechanism.** A shared `globalThis.__deleteBackwardAtCaret(host)` helper (event_loop.rs), sibling to
+`__insertTextAtCaret`: fire cancelable `beforeinput` (`inputType:'deleteContentBackward'`) → if not vetoed,
+delete → fire non-cancelable `input`. The delete: if the Selection is non-collapsed inside the host,
+`deleteContents()` the selection; else if the caret sits in a text node at offset > 0, `deleteData(off-n, n)`
+where `n` backs up over a low surrogate's leading high surrogate so a whole code point goes (not half an
+astral char), then re-collapse the caret. When there is genuinely nothing to delete (caret at offset 0 / no
+caret in host) the DOM is untouched and `input` does NOT fire — a no-op Backspace, as browsers leave it.
+Wired into `dispatch_key` (dom_bindings.rs) beside the printable-key arm: an uncancelled `Backspace` keydown
+whose target is inside an editing host calls the helper.
+
+**Scope.** Cross-node boundary deletion (Backspace at the start of a block merging it with the previous one)
+is a later, larger brick; this handles the collapsed-caret-in-a-text-run and delete-the-selection cases —
+the overwhelming common path. contenteditable only, same as the insert side.
+
+GATE: G_CONTENTEDITABLE_DELETE (page) — caret after "Hello", two Backspaces → "Hel" with two
+`bi/in:deleteContentBackward` pairs; a Backspace at offset 0 fires no `input` (`bcount=2`); a second editable
+whose `beforeinput` handler `preventDefault()`s stays "Keep". RED-proven by neutralizing the Backspace arm.
+Neighbors green: g_contenteditable_typing, g_exec_insert_text, g_exec_command_copy, g_ime_composition,
+g_selection, g_range.
