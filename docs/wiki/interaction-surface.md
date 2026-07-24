@@ -2743,3 +2743,21 @@ it, insert, place the caret after the inserted content, fire `input`. Adds `inse
 GATE: G_EXEC_INSERT_HTML (page) — caret between "a"/"b" in `<div contenteditable>ab</div>` →
 `insertHTML('<b>X</b><i>Y</i>')` → `a<b>X</b><i>Y</i>b`, events `bi/in:insertHTML`, `queryCommandSupported`
 true; a veto editable stays unchanged. RED-proven by disabling the branch.
+
+## execCommand('createLink', false, url) wraps the selection in <a href> (tick 484)
+
+An editor's "add link" button. Like bold/italic (t481) an UNAMBIGUOUS selection-wrap (no browser-divergent
+block heuristic), so it lands atomically without a Chrome oracle. Reuses t481's `__wrapSelectionFormat` helper,
+generalised to set attributes on the wrapper + carry event `data`; zero new dep.
+
+**Mechanism.** `__wrapSelectionFormat(host, tag, inputType, attrs, data)` gained `attrs` (attributes
+`setAttribute`'d on the wrapper; undefined for bold/italic) and `data` (rides beforeinput/input; the URL for
+insertLink). A `createlink` branch requires a URL arg (empty → no-op false; unlink is a separate unbuilt
+command) + a non-collapsed selection in an editable, then wraps the selection in `<a href="url">`, fires
+CANCELABLE `beforeinput` (`inputType:insertLink`, `data:url`), else `input`. The bold/italic gate stays green,
+confirming the shared-helper generalisation is backward-compatible.
+
+GATE: G_EXEC_CREATE_LINK (page) — select "this" in `<div contenteditable>see this now</div>` →
+`createLink('https://ex.com/')` → `see <a href="https://ex.com/">this</a> now`, events `bi/in:insertLink`,
+`beforeinput.data` === URL, `queryCommandSupported` true; a veto editable stays unchanged. RED-proven by
+disabling the branch.

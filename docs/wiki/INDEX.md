@@ -530,6 +530,7 @@
   - L2687 · execCommand('bold'|'italic') wraps the selection in <b>/<i> (tick 481)
   - L2711 · document.queryCommandState('bold'|'italic') reads the format back (tick 482)
   - L2729 · execCommand('insertHTML', false, html) inserts a parsed fragment (tick 483)
+  - L2747 · execCommand('createLink', false, url) wraps the selection in <a href> (tick 484)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -950,4 +951,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-865 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+866 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -4267,3 +4267,15 @@ exactly the parsed fragment at the caret, so it can land atomically now. It reus
 + `insertNode` rather than a bespoke parser, inheriting the same fragment-parsing the DOM already ships; the
 one sharp edge is caret placement — capture the fragment's `lastChild` BEFORE `insertNode` empties the
 fragment, or the caret has nothing to anchor after.
+
+## Turn the selected text into a link with a toolbar button (tick 484)
+
+**The class of the web this unlocks (every rich-text editor's link button):**
+`document.execCommand('createLink', false, url)` now wraps the current selection in `<a href="url">`, firing a
+vetoable `beforeinput`→`input` pair (`inputType:insertLink`, `data:url`) — the "add link" button in Gmail
+compose, Slack, GitHub/Reddit comments, and CMS editors. **The trap:** createLink is the LAST of the
+UNAMBIGUOUS wrap commands (bold/italic/createLink all wrap the selection with a definite DOM result); the
+remaining editing commands (insertParagraph, formatting toggle-off) are browser-DIVERGENT and cannot be landed
+honestly without measuring Chrome. It shares one helper with bold/italic (`__wrapSelectionFormat`,
+generalised to set attributes + carry event data), so the anchor inherits the exact selection-wrap +
+node-splitting the bold path already proved — one code path, three toolbar buttons.

@@ -19551,3 +19551,54 @@ AGENTIC: the agent can now insert structured (HTML) content into an editable reg
 NEXT VEIN NOTE: rich (text/html) PASTE can now build on insertHTML (Ctrl+V currently plain-text only); still
 ahead — Enter→insertParagraph (browser-divergent block split, needs a Chrome oracle), formatting toggle-off/
 typing-style, cross-block Backspace/Delete merge. Self-audit due 485; surface-audit next 488; Const-Check 487.
+
+## Tick 484 — execCommand('createLink', false, url) wraps the selection in <a href> (2026-07-24)
+
+Brick 14 of the contenteditable EDITING subsystem — an editor's "add link" button (Gmail/Slack/comment
+toolbars). Like bold/italic (t481) it is an UNAMBIGUOUS selection-wrap (no browser-divergent block heuristic),
+so it lands atomically without a Chrome oracle — chosen over the divergent tail (Enter→insertParagraph,
+formatting toggle-off) for exactly that reason. Reuses t481's `__wrapSelectionFormat` helper, generalised to
+set attributes on the wrapper + carry event `data`; zero new dep.
+
+MECHANISM: `__wrapSelectionFormat(host, tag, inputType, attrs, data)` gained two optional params — `attrs`
+(an object of attributes `setAttribute`'d on the wrapper; undefined for bold/italic) and `data` (rides
+beforeinput/input; the URL for insertLink). A `createlink` branch in the execCommand shim requires a URL arg
+(empty → no-op, false; unlink is a separate unbuilt command) + a non-collapsed selection in an editable, then
+calls `__wrapSelectionFormat(host, 'a', 'insertLink', {href:url}, url)` → wraps the selection in
+`<a href="url">`, fires CANCELABLE `beforeinput` (`inputType:insertLink`, `data:url`), on veto no mutation,
+else `input`. Adds `createlink` to `__EXEC_SUPPORTED`. The bold/italic gate (g_exec_format_bold) stays green,
+confirming the shared-helper generalisation is backward-compatible.
+
+GATE: G_EXEC_CREATE_LINK (page) — select "this" in `<div contenteditable>see this now</div>` →
+`execCommand('createLink', false, 'https://ex.com/')` → `innerHTML` `see <a href="https://ex.com/">this</a>
+now`, events `bi/in:insertLink`, `beforeinput.data` === the URL; `queryCommandSupported('createLink')` true; a
+veto editable whose `beforeinput` `preventDefault()`s stays "keep me". RED-proven by disabling the branch.
+Neighbors green: g_exec_format_bold, g_query_command_state, g_exec_insert_html.
+
+TICK SHAPE: capability (contenteditable EDITING brick 14/N — link insertion; +1 gate). GATES +1.
+CONSTELLATION: rich-editing — an editor's "add link" button now wraps the selection in <a href> (createLink).
+WIKI: interaction-surface.md — appended to the t483 insertHTML note.
+WEB-PATTERNS: turn-the-selected-text-into-a-link-with-a-toolbar-button.
+AGENTIC: the agent can now turn a selected run into a hyperlink in an editable region.
+
+NEXT VEIN NOTE: the CLEAN atomic wrap/insert bricks are now largely mined (insertText/HTML/LineBreak,
+bold/italic/createLink, cut/copy/paste, queryCommandState). The remaining editing bricks are the
+browser-DIVERGENT tail — Enter→insertParagraph (Chrome <div> vs FF <br>), formatting toggle-off/typing-style,
+cross-block Backspace/Delete merge — each needs a real Chrome oracle to land correctly, so the subsystem is at
+a natural CLEAN-saturation point; per Const-Check #26 the pivot to the ANCHOR's next ledger item
+(WebAuthn/vault/bidi/animations/widgets) is due when the divergent tail is the only thing left. Self-audit due
+485; surface-audit next 488; Const-Check next 487.
+
+### Tick 484 — PARKED (harness blocker: leaked 4-day Chrome, 2026-07-24)
+Tick 484 (createLink, above) is COMPLETE + RED-proven — g_exec_create_link + all neighbors
+(g_exec_format_bold/g_query_command_state/g_exec_insert_html) green in isolation, and the workspace/headless
+build + all non-shell gates green. It CANNOT LAND right now: tick.sh's internal verify false-REDs on
+`✗ manuk-shell tests FAILED` (the `tab_operations_stay_far_under_one_frame` RELATIVE-timing assertion) across
+several attempts INCLUDING launches at load1<0.5. Root cause is OBSERVER-OWNED and environmental, NOT my code:
+`ps -eo etime,comm | grep chrome` shows 8 Chrome procs **4 days 23 hours old** — leaked/stale (my gate Chrome
+is seconds old), the same class that parked tick 480. They cause scheduling jitter that spikes the sub-16ms
+tab-timing measurement into a false failure even on an otherwise-idle box. CONFIRMED contention not regression:
+`✓ teardown: manuk-shell suite green` in the same run, the tick touches only engine/js (event_loop.rs), and the
+absolute tab-op times stay «16ms. Per the mandate this is a harness problem the observer handles — WIP left
+intact (do NOT checkout, it is a complete tick), will land on a warm+quiet retry once the observer reaps the
+leaked Chrome. [[three-ticks-parked-wall-blocked]] [[wall-warm-rerun-lands-ticks]]

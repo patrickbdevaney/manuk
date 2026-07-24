@@ -2740,7 +2740,9 @@ const PRELUDE: &str = r#"
       // keystroke is bold; that stateful toggle, and the un-format of already-bold text (a true toggle),
       // are the larger follow-on brick. This wraps, honestly, and `queryCommandSupported` says so.
       if (typeof globalThis.__wrapSelectionFormat !== 'function') {
-        globalThis.__wrapSelectionFormat = function (host, tag, inputType) {
+        // `attrs` (optional) sets attributes on the wrapper — undefined for bold/italic, `{href:url}` for
+        // createLink; `data` (optional) rides the beforeinput/input events (the URL for insertLink).
+        globalThis.__wrapSelectionFormat = function (host, tag, inputType, attrs, data) {
           if (!host) { return false; }
           var sel = globalThis.getSelection();
           var r = sel && sel._r;
@@ -2750,11 +2752,12 @@ const PRELUDE: &str = r#"
           for (var a = anchor; a; a = a.parentNode) { if (a === host) { inHost = true; break; } }
           if (!inHost) { return false; }                  // selection not in this editable
           var bi = new Event('beforeinput', { bubbles: true, cancelable: true });
-          bi.inputType = inputType; bi.data = null;
+          bi.inputType = inputType; bi.data = (data == null ? null : data);
           host.dispatchEvent(bi);
           if (bi.defaultPrevented) { return true; }       // ran, but the format was vetoed — no mutation
           var frag = r.extractContents();
           var wrap = document.createElement(tag);
+          if (attrs) { for (var an in attrs) { if (attrs.hasOwnProperty(an)) { wrap.setAttribute(an, attrs[an]); } } }
           wrap.appendChild(frag);
           r.insertNode(wrap);
           // Leave the newly-formatted run selected, exactly as a browser does after a Bold/Italic click.
@@ -2762,14 +2765,14 @@ const PRELUDE: &str = r#"
           nr.selectNodeContents(wrap);
           if (sel.__set) { sel.__set(nr.startContainer, nr.startOffset, nr.endContainer, nr.endOffset); }
           var inp = new Event('input', { bubbles: true, cancelable: false });
-          inp.inputType = inputType; inp.data = null;
+          inp.inputType = inputType; inp.data = (data == null ? null : data);
           host.dispatchEvent(inp);
           return true;
         };
       }
 
       if (typeof document.execCommand !== 'function') {
-        var __EXEC_SUPPORTED = { copy: 1, cut: 1, selectall: 1, inserttext: 1, insertlinebreak: 1, inserthtml: 1, bold: 1, italic: 1 };
+        var __EXEC_SUPPORTED = { copy: 1, cut: 1, selectall: 1, inserttext: 1, insertlinebreak: 1, inserthtml: 1, bold: 1, italic: 1, createlink: 1 };
         document.execCommand = function (cmd) {
           cmd = String(cmd || '').toLowerCase();
           if (cmd === 'copy') {
@@ -2925,6 +2928,24 @@ const PRELUDE: &str = r#"
               var ftag = cmd === 'bold' ? 'b' : 'i';
               var ftype = cmd === 'bold' ? 'formatBold' : 'formatItalic';
               return globalThis.__wrapSelectionFormat(fhost, ftag, ftype);
+            } catch (e) { return false; }
+          }
+          if (cmd === 'createlink') {
+            // Wrap the selection in <a href="url">, firing beforeinput/input (inputType:insertLink,
+            // data:url) — an editor's "add link" button. Requires a non-collapsed selection in an editable
+            // and a URL argument; an empty URL is a no-op (unlinking is a separate 'unlink' command, not
+            // built). The URL is used verbatim (an editor sanitizes its own input before calling).
+            var url = arguments.length > 2 && arguments[2] != null ? String(arguments[2]) : '';
+            if (!url) { return false; }
+            try {
+              var lsel2 = globalThis.getSelection();
+              var lanchor2 = (lsel2 && lsel2._r) ? lsel2._r.startContainer : null;
+              var lhost2 = null;
+              for (var ln2 = lanchor2; ln2; ln2 = ln2.parentNode) {
+                if (ln2.nodeType === 1 && ln2.isContentEditable) { lhost2 = ln2; break; }
+              }
+              if (!lhost2) { return false; }
+              return globalThis.__wrapSelectionFormat(lhost2, 'a', 'insertLink', { href: url }, url);
             } catch (e) { return false; }
           }
           return false; // every other command is the editing subsystem — honestly not built
