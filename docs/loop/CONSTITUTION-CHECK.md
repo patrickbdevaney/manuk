@@ -1072,3 +1072,49 @@ only tempo note: the subsystem pivot is now genuinely underway — keep landing 
 against the shared substrate rather than reverting to atomic-completeness scavenging.
 
 **Next check due: tick 479.**
+
+## Check #26 — tick 479
+
+**Horizon:** Phase 0 — daily-driver rendering parity + the agentic surface (CONSTITUTION.MD **Part VII**,
+components 1 & 2). **Gate:** the FIDELITY-SCORING-REDESIGN.md certificate (≥0.75 placement fidelity on ≥95%
+of the corpus + ≥0.70 per top-20 category), NOT a WPT percentage. Anchor: PHASE0-ROADMAP-ANCHOR.md.
+
+**Gate or scoreboard?** Gate. Ticks 471-478 executed the Check #24/#25 steer to the letter: the
+**contenteditable EDITING** subsystem (the anchor's decompose-first ledger item, "IN PROGRESS 10-20") went
+from its first brick to eight — insertText (471), typed-char (472), Backspace (473), Delete (474),
+insertLineBreak (475), cut (476), **KeyModifiers plumbing (477)**, Ctrl+X/C keyboard routing (478) — and
+479 adds Shift+Enter→insertLineBreak. Every brick RED-proven, every one built on already-won substrate
+(Selection/Range/insertData/`new Event`), ZERO new dependency (I2 "publish, do not rebuild"). This is a real
+marquee subsystem being mined at a healthy tempo, NOT atomic-completeness scavenging.
+
+**The one inflection worth naming:** t477 was the first CROSS-CUTTING brick of the arc — a Rust signature
+change (`KeyModifiers` threaded through `dispatch_key`), the kind #25 flagged as "needs fresh context." It
+landed atomically by keeping the public 5-arg `Page::dispatch_key` STABLE (delegating with a default) and
+adding a 6-arg `dispatch_key_mods`, so all ~15 existing callers + both GUI sites compiled unchanged. That is
+the correct pattern for the remaining cross-cutting bricks, and it paid off immediately: t478 (keyboard
+cut/copy) and t479 (Shift+Enter) are both DIRECT consequences of the modifier substrate — the subsystem is
+now compounding on itself rather than bolting on isolated features.
+
+**Is the loop still pointed at the frontier?** Yes. The ANCHOR (observer, t461) still lists rich-editing as
+the current IN-PROGRESS ledger item; the CO-#1 board's #1 (fidelity-instrument rebuild) is what the OBSERVER
+is executing right now (the live oracle re-key crawl), so the agent's capability lane and the observer's
+instrument lane are complementary, not in conflict. No drift.
+
+**Is the agentic surface (component #2) served?** Directly and increasingly. The modifier substrate means the
+AGENT can now dispatch real chords (Ctrl/Cmd/Shift+key) that pages react to — command palettes (Cmd+K),
+keyboard cut/copy, Shift+Enter newlines. This is the "observe control state AND change it" write-half
+extending from form-control `.value` (dispatch_composition) to rich editors AND to keyboard-driven app UIs.
+
+**Any invariant bent?** No. Bar 0 held across the arc — additive branches inside the `dispatch_key` default
+action + `execCommand` shim; the cross-cutting t477 signature change was contained (stable public API). THE
+RATCHET honored: the only refusal this window (t478, WALL 476s>245s) was pure crawl-contention, NOT a
+regression — diagnosed (22G RAM free, swap-99% stale, hung 30h observer crawl leaving idle Chrome), cleared
+by ONE clean detached verify (213s), landed. No mark retuned. I2 intact — zero new deps across all 9 bricks.
+
+**PART VI / VII correction.** None. The four-component v1 scope and the fidelity-certificate exit stand.
+Tempo note: the contenteditable-EDITING subsystem is ~9 bricks in of the anchor's 10-20 estimate; the
+remaining bricks (Ctrl+V/insertFromPaste, Enter→insertParagraph block-split, cross-block boundary merge,
+formatting-command wrapping) are the harder tail — keep mining them against the shared substrate, and when
+the subsystem saturates, the anchor's next ledger item (WebAuthn/vault/bidi/animations/…) is the pivot.
+
+**Next check due: tick 487.**

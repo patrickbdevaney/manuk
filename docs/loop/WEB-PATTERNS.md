@@ -4205,3 +4205,14 @@ claims the chord — an editor with its own clipboard handler calls `preventDefa
 default cut/copy must then NOT run (or it double-acts). And an empty Ctrl+C must be a no-op, not a
 clipboard-clobbering write of "". `Ctrl+V`→paste waits on `insertFromPaste` (a paste-event trigger) — the
 next brick.
+
+## Insert a newline in a chat composer with Shift+Enter (tick 479)
+
+**The class of the web this unlocks (every chat composer, comment box and rich editor):** Shift+Enter now
+inserts a hard line break (`<br>`) at the caret in a contenteditable — the universal "newline without
+submitting" gesture (Slack, Discord, WhatsApp Web, GitHub comments, every AI-chat box). It reuses the t475
+`execCommand('insertLineBreak')` machinery, now driven from the keyboard because the dispatched KeyboardEvent
+carries the shift flag (t477). **The trap:** Enter handling is TWO different actions and only ONE is safe to
+land blindly — Shift+Enter → `<br>` is cross-browser identical, but PLAIN Enter → insertParagraph is a block
+split that Chrome and Firefox implement DIFFERENTLY (`<div>` vs `<br>`), so plain Enter must stay a no-op (the
+page's own composer handler owns it) rather than guess wrong. The block-split insertParagraph is a later brick.

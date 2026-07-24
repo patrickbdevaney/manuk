@@ -250,4 +250,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 475	aaf0b1a	1784858753	2026-07-23T22:05:53-04:00	1565	capability	71	9	252	36	242	81	3896	6960	0	329	31	execCommand('insertLineBreak') inserts a <br> at the caret in a contenteditable (2026-07-23)
 476	b5a1133	1784861155	2026-07-23T22:45:55-04:00	2402	capability	62	9	231	37	243	81	3896	6960	0	329	31	execCommand('cut') copies the selection to the clipboard and removes it (2026-07-23)
 477	df98fb1	1784863199	2026-07-23T23:19:59-04:00	2044	capability	67	12	339	46	244	81	3896	6960	0	329	31	a dispatched KeyboardEvent carries ctrlKey/shiftKey/altKey/metaKey (2026-07-23)
-478	f62d810	1784865321	2026-07-23T23:55:21-04:00	2122	capability	213	11	289	35	245	81	3896	6960	0	329	31	Ctrl+X cuts / Ctrl+C copies the selection (keyboard clipboard routing) + surface audit #21 (2026-07-23)
+478	6ac175b	1784866636	2026-07-24T00:17:16-04:00	3437	capability	219	10	266	36	246	81	3896	6960	0	329	31	Ctrl+X cuts / Ctrl+C copies the selection (keyboard clipboard routing) + surface audit #21 (2026-07-23)

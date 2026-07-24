@@ -8699,6 +8699,16 @@ impl PageContext {
                    if(hassel && lk==='x'){{ try{{ document.execCommand('cut'); }}catch(e){{}} }}\
                    else if(hassel && lk==='c'){{ try{{ document.execCommand('copy'); }}catch(e){{}} }}\
                  }}\
+                 else if(k==='Enter' && {shift} && typeof globalThis.__insertLineBreakAtCaret==='function'){{\
+                   /* Shift+Enter inserts a hard line break (<br>) at the caret — this is the UNAMBIGUOUS, */\
+                   /* cross-browser half of Enter handling (both Chrome and Firefox agree Shift+Enter = <br>). */\
+                   /* Reuses the t475 execCommand('insertLineBreak') helper. PLAIN Enter stays a no-op here: */\
+                   /* insertParagraph (a block split) is browser-DIVERGENT (Chrome <div>, FF <br>) and stays */\
+                   /* honestly unimplemented, so a page's own Enter handler / the typing gate's Enter=no-op holds. */\
+                   var host=null, t=(globalThis.__nodes && __nodes[{nid}])||null;\
+                   for(var n=t;n;n=n.parentNode){{ if(n.nodeType===1 && n.isContentEditable){{ host=n; break; }} }}\
+                   if(host){{ try{{ __insertLineBreakAtCaret(host); }}catch(e){{}} }}\
+                 }}\
                }}\
                return proceed;\
              }})()",

@@ -2650,3 +2650,20 @@ clobber the clipboard). A page that handles the chord keeps ownership — its ke
 GATE: G_KEY_SHORTCUT_CLIPBOARD (page) — select "World" in `<div contenteditable>Hello World</div>` + Ctrl+X →
 "Hello " with "World" on the clipboard queue; select "Hello" + Ctrl+C → "Hello" copied, DOM unchanged; a
 veto editable that `preventDefault()`s Ctrl+X keeps its text. RED-proven by disabling the cut-routing arm.
+
+## Shift+Enter inserts a hard line break (<br>) in a contenteditable (tick 479)
+
+The second payoff of the t477 modifier substrate (after keyboard cut/copy t478): the unambiguous, cross-browser
+half of Enter handling. Both Chrome and Firefox insert a `<br>` on Shift+Enter in a contenteditable; only PLAIN
+Enter (insertParagraph, a block split) is browser-divergent (Chrome `<div>`, FF `<br>`). So Shift+Enter lands
+now that the shift flag reaches `dispatch_key`; plain Enter stays honestly a no-op.
+
+**Mechanism.** A branch in `dispatch_key`'s default-action block: `k==='Enter' && shift` (and not a chord) →
+walk to the editing host → the t475 `__insertLineBreakAtCaret(host)` helper (inserts a `<br>` via
+`Range.insertNode`, re-collapses the caret after it, fires `beforeinput`→`input`, `inputType:insertLineBreak`).
+Plain Enter (shift:false — what the 5-arg `dispatch_key` passes) hits no branch, so the t472 typing gate's
+"Enter adds nothing" contract holds.
+
+GATE: G_SHIFT_ENTER_LINE_BREAK (page) — caret between "A"/"B", Shift+Enter → one `<br>` (`brs=1`), events
+`bi/in:insertLineBreak`, textContent still "AB"; a following plain Enter adds no `<br>`. RED-proven by disabling
+the Shift+Enter branch. Enter→insertParagraph (the block split) is the harder divergent brick still ahead.

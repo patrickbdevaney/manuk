@@ -19360,3 +19360,42 @@ NEXT VEIN NOTE: Ctrl+V→paste needs `insertFromPaste` (a paste-event trigger + 
 the next bounded editing brick. Then Shift+Enter→insertLineBreak vs Enter→insertParagraph (browser-divergent
 block split — the modifier state to distinguish them now EXISTS), cross-block boundary merge, formatting-
 command wrapping. Const-Check #26 DUE t479 (next tick); self-audit due 485; surface-audit done t478 (next 488).
+
+## Tick 479 — Shift+Enter inserts a hard line break (<br>) in a contenteditable + Const-Check #26 (2026-07-24)
+
+Brick 9 of the contenteditable EDITING subsystem, the SECOND direct payoff of t477's modifier substrate
+(after t478 keyboard cut/copy): the UNAMBIGUOUS, cross-browser half of Enter handling. Both Chrome and Firefox
+agree Shift+Enter inserts a `<br>` in a contenteditable; only PLAIN Enter (insertParagraph, a block split) is
+browser-divergent (Chrome `<div>`, FF `<br>`). So Shift+Enter is safe to land now that the shift flag reaches
+`dispatch_key`, while plain Enter stays honestly a no-op.
+
+MECHANISM: a new branch in `dispatch_key`'s default-action block (engine/js/src/dom_bindings.rs): when
+`k==='Enter' && shift` (and not a chord), walk to the editing host and call the t475
+`__insertLineBreakAtCaret(host)` helper — inserts a `<br>` via `Range.insertNode`, re-collapses the caret
+after it, fires `beforeinput`→`input` (`inputType:insertLineBreak`). Plain Enter (shift:false, the default the
+5-arg `dispatch_key` passes) hits no branch — so the t472 typing gate's "Enter adds nothing" contract holds.
+Zero new dep.
+
+GATE: G_SHIFT_ENTER_LINE_BREAK (page) — caret between "A"/"B", Shift+Enter → exactly one `<br>` (`brs=1`),
+events `bi/in:insertLineBreak`, textContent still "AB"; a following PLAIN Enter adds no `<br>` (`brs=1` still,
+only one insertLineBreak pair total). RED-proven by disabling the Shift+Enter branch. Neighbors green:
+g_contenteditable_typing (plain-Enter-no-op contract intact), g_exec_insert_line_break, g_key_modifiers,
+g_key_shortcut_clipboard, g_contenteditable_delete.
+
+TICK SHAPE: capability (contenteditable EDITING brick 9/N — Shift+Enter line break; +1 gate). GATES +1.
+CONSTELLATION: rich-editing — a contenteditable now takes a hard line break from the keyboard (Shift+Enter).
+WIKI: interaction-surface.md — new section after the t478 keyboard-clipboard note.
+WEB-PATTERNS: insert-a-newline-in-a-chat-composer-with-shift-enter.
+AGENTIC: the agent can now insert a line break in an editable via the Shift+Enter chord.
+
+CONST-CHECK #26 (cadence, due t479, folded in): re-read Part VII; the 9-brick contenteditable EDITING arc
+(471-479) is squarely on the ANCHOR's IN-PROGRESS ledger item, zero drift, zero new dep, Bar 0 held. Named the
+one inflection (t477 cross-cutting signature change, landed atomically via a stable public API + new
+`_mods` variant) and the t478 wall-refusal (pure crawl-contention, not a regression — cleared, not retuned).
+LAST_CONSTITUTION_CHECK 471→479 (set in STATUS.md); next due 487. Full entry: CONSTITUTION-CHECK.md Check #26.
+
+NEXT VEIN NOTE: remaining editing bricks are the harder tail — Ctrl+V→insertFromPaste (paste-event trigger +
+clipboard READ t461), Enter→insertParagraph (browser-divergent block split — the modifier state to gate
+Shift-vs-plain now EXISTS, but the block-split itself is the work), cross-block boundary merge for
+Backspace/Delete, formatting-command wrapping (`bold`→<b>). Self-audit due 485; surface-audit done t478 (next
+488); Const-Check done t479 (next 487).
