@@ -21170,3 +21170,36 @@ NEXT: 2 surface-audit unknowns remain (requestVideoFrameCallback — media-eleme
 likely a real build; scheduler.postTask/yield — may need a real priority queue). Otherwise the Check #32
 pivot stands (fidelity-instrument rebuild / test262). Self-audit next 534; surface next 538; const 535;
 wall 547.
+
+## Tick 530 — MEASURE+PIN: scheduler.postTask/yield (functional, not a stub) (2026-07-24)
+
+Finishing the Surface Audit #26 reconciliation. Probed the last two unknowns: requestVideoFrameCallback
+is ABSENT (rvfc:false — a real build, deferred), and scheduler.postTask/yield EXIST. But presence is
+not function — the audit specifically feared "a setTimeout alias, not a real priority queue" — so I
+verified FUNCTION before pinning (the works-marked-cap-may-be-a-stub discipline).
+
+WHAT WAS MEASURED (already built in an earlier session, dom_bindings.rs; the map just never recorded
+it): the scheduler is GENUINELY FUNCTIONAL — a real 3-bucket priority queue (user-blocking/user-visible/
+background), postTask returns a promise resolving to cb()'s return value, a user-blocking task posted
+AFTER a background one runs FIRST (real priority ordering), yield() resolves, and an aborted-signal task
+rejects without running.
+
+New gate g_scheduler_posttask asserts vals:b,42,7 (return values) / order:ub>bg (priority, NOT FIFO) /
+yield:ok / abort:rejected / done:true. RED-PROVEN: reversing the drain priority order in dom_bindings.rs
+(`pr=0→2` to `pr=2→0`) flips order:ub>bg → order:bg>ub and the gate fails — so the priority scheduling
+is genuinely tested, not just presence.
+
+rVFC updated unknown→missing (measured absent): it must fire per PRESENTED frame, tying it to the host
+frame drive (shell-side) — the same GUI-driver integration the t521 __mediaAdvance seam awaits. Deferred
+with that shell work.
+
+TICK SHAPE: measure-and-pin (instrument fidelity — scheduler unknown→gated with a FUNCTIONAL gate, rVFC
+unknown→missing measured; new gate g_scheduler_posttask E2E, RED-proven via the drain-order neuter; NO
+engine source changed — scheduler already built; Bar 0 held — pure measurement). WIKI: none —
+measurement tick, no engine change (gate in engine/page/tests/, not engine/*/src/). No [no-pattern] (no
+engine capability src touched).
+
+NEXT: all 4 Surface Audit #26 unknowns now resolved (Promise.withResolvers+Set-methods+scheduler PINNED
+gated t529-530; rVFC measured-missing, a shell-adjacent build). The Check #32 capability PIVOT is the
+clean frontier: fidelity-instrument rebuild (CO-#1 exit gate, decompose-first) or test262 (measurement).
+Self-audit next 534; surface 538; const 535; wall 547.
