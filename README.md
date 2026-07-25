@@ -42,7 +42,8 @@ what follows is an honest account of how far this has actually got, measured rat
 
 ## Where this actually is
 
-**Phase 0 (daily-driver capability) is in progress and near its exit.** Development runs on a differential
+**Phase 0 (daily-driver capability) is in progress** — broad in *coverage* of the real web, with *placement
+fidelity* the open gap to its exit certificate (below). Development runs on a differential
 oracle: **265 real sites across 15 design-pattern classes** are rendered by *both* Chromium and this engine
 from **one snapshot**, diffed by structural path, and the divergences **clustered by root cause**. The
 cluster ranking — ranked by *distinct sites explained*, not by hit count — **is** the priority ledger. No
@@ -77,6 +78,12 @@ count: it is a fidelity certificate measured by a rebuilt instrument on a strati
 the four *jarring* invariants (overlap / horizontal-overflow / reading-order / dead-click-target) ≥ 95%,
 parent-relative shape ≥ 0.75 on ≥ 95% of nodes, interactivity ≥ 95%, and only **named** exceptions. That is
 the finish line, and it is finite (see [Roadmap](#roadmap)).
+
+Its **first trustworthy full measurement** (a 72-site stratified sweep, after two instrument bugs were found
+and fixed) puts every term well below bar: **shape ≥ 0.75 on ~5.5%**, jarring invariants 44–75%. So there is
+real distance still to go, and *placement fidelity* — not coverage — is the gap. Encouragingly, the placement
+errors are **quantised** (box heights off by 8/16/32/64/128px), the signature of a few systematic box-model
+deltas rather than a thousand independent bugs. The live certificate figures track in the loop's anchor doc.
 
 ---
 
