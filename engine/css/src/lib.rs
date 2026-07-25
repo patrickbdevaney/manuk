@@ -666,6 +666,30 @@ pub enum TrackSize {
     MinMax(TrackUnit, TrackUnit),
 }
 
+/// One component of a `grid-template-columns` / `-rows` list.
+///
+/// **An `auto-fill` / `auto-fit` `repeat()` cannot be expanded by a cascade**, and that is the whole
+/// reason this type exists rather than a flat `Vec<TrackSize>`. The repetition count is defined by
+/// CSS Grid §7.2.3.1 as the largest N whose tracks plus gutters still fit **the grid container's
+/// resolved inline size** — a number only layout knows. Collapsing the repeat to a fixed count at
+/// parse time (we used `1`) turns the responsive-card idiom
+/// `repeat(auto-fill, minmax(18em, 1fr))` into a single full-width column on every site that uses it.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TrackComponent {
+    /// A single, non-repeated track — or one expansion of an integer `repeat(N, …)`, which the
+    /// cascade *can* expand because N is literal.
+    Single(TrackSize),
+    /// `repeat(auto-fill | auto-fit, <track-list>)`, carried through to layout intact.
+    AutoRepeat {
+        /// `true` for `auto-fit`, whose distinguishing behaviour is that repetitions which end up
+        /// **empty collapse to zero** (their gutters with them), so 2 items in a 3-track grid span
+        /// the container instead of huddling in the first two tracks. `auto-fill` keeps them.
+        fit: bool,
+        /// The track sizes inside the `repeat()`, repeated as a group.
+        tracks: Vec<TrackSize>,
+    },
+}
+
 /// A grid item's placement on one axis (`grid-column` / `grid-row`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum GridLine {
@@ -970,9 +994,11 @@ pub struct ComputedStyle {
     pub transform: Vec<TransformFn>,
     /// `vertical-align` — cross-axis alignment of an inline-level box on its line.
     pub vertical_align: VerticalAlign,
-    /// `grid-template-columns` / `-rows` (container). Empty = none.
-    pub grid_template_columns: Vec<TrackSize>,
-    pub grid_template_rows: Vec<TrackSize>,
+    /// `grid-template-columns` / `-rows` (container). Empty = none. A [`TrackComponent`] rather than
+    /// a bare [`TrackSize`] because `repeat(auto-fill|auto-fit, …)` has no fixed count until layout
+    /// knows the container's size.
+    pub grid_template_columns: Vec<TrackComponent>,
+    pub grid_template_rows: Vec<TrackComponent>,
     /// `grid-column` / `grid-row` (item) start/end line placement.
     pub grid_column: (GridLine, GridLine),
     pub grid_row: (GridLine, GridLine),
@@ -4970,13 +4996,58 @@ fn parse_angle_rad(s: &str) -> Option<f32> {
     })
 }
 
-/// Parse a `grid-template-columns`/`-rows` track list, expanding a single-track
-/// `repeat(N, <track>)`. Line names and `minmax()` are not modeled.
-fn parse_track_list(v: &str, fs: f32) -> Vec<TrackSize> {
-    split_tracks_top_level(&expand_grid_repeat(v))
-        .into_iter()
-        .filter_map(|t| parse_track(&t, fs))
-        .collect()
+/// Parse a `grid-template-columns`/`-rows` track list.
+///
+/// An integer `repeat(N, …)` is expanded here, because N is literal. An `auto-fill`/`auto-fit`
+/// `repeat()` is **kept intact** as a [`TrackComponent::AutoRepeat`] — its count is the largest that
+/// fits the container (CSS Grid §7.2.3.1), which the cascade cannot know.
+///
+/// This replaces a **string** rewrite (`expand_grid_repeat`) that scanned for the first `)` after
+/// `repeat(`. For `repeat(auto-fill, minmax(180px,1fr))` that `)` closes `minmax(`, so the rewrite
+/// parsed `"auto-fill"` as the count, failed, emitted nothing, and left a stray `)` behind for the
+/// track parser to discard. Parsing the nesting instead of pattern-matching the text is what makes
+/// `minmax()` inside `repeat()` — i.e. every responsive card grid on the web — survive at all.
+/// Line names are still not modeled.
+fn parse_track_list(v: &str, fs: f32) -> Vec<TrackComponent> {
+    let mut out = Vec::new();
+    for tok in split_tracks_top_level(v) {
+        let low = tok.to_ascii_lowercase();
+        let Some(inner) = low
+            .strip_prefix("repeat(")
+            .and_then(|s| s.strip_suffix(')'))
+        else {
+            if let Some(t) = parse_track(&tok, fs) {
+                out.push(TrackComponent::Single(t));
+            }
+            continue;
+        };
+        // `repeat(<count>, <track-list>)` — the FIRST top-level comma separates them; any comma
+        // after it belongs to a `minmax(a, b)` and must not be split on.
+        let Some((count, tracks)) = inner.split_once(',') else {
+            continue;
+        };
+        let tracks: Vec<TrackSize> = split_tracks_top_level(tracks)
+            .iter()
+            .filter_map(|t| parse_track(t, fs))
+            .collect();
+        if tracks.is_empty() {
+            continue;
+        }
+        match count.trim() {
+            "auto-fill" => out.push(TrackComponent::AutoRepeat { fit: false, tracks }),
+            "auto-fit" => out.push(TrackComponent::AutoRepeat { fit: true, tracks }),
+            n => {
+                // A literal count. Bounded: `repeat(100000, 1fr)` is legal CSS and would otherwise
+                // let one declaration allocate an unbounded track list — Bar 0 outranks fidelity to
+                // a track list no page can see.
+                let Ok(n) = n.parse::<usize>() else { continue };
+                for _ in 0..n.min(1000) {
+                    out.extend(tracks.iter().copied().map(TrackComponent::Single));
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Split a track list on whitespace, keeping parenthesized groups (`minmax(a, b)`) intact.
@@ -5093,30 +5164,6 @@ fn parse_grid_line(v: &str) -> GridLine {
     v.parse::<i16>()
         .map(GridLine::Line)
         .unwrap_or(GridLine::Auto)
-}
-
-/// Expand `repeat(N, <single-track>)` occurrences into N copies of the track.
-fn expand_grid_repeat(v: &str) -> String {
-    let mut out = String::new();
-    let mut rest = v;
-    while let Some(idx) = rest.to_ascii_lowercase().find("repeat(") {
-        out.push_str(&rest[..idx]);
-        let after = &rest[idx + 7..];
-        let Some(end) = after.find(')') else { break };
-        if let Some((n, track)) = after[..end].split_once(',') {
-            if let Ok(count) = n.trim().parse::<usize>() {
-                for i in 0..count {
-                    if i > 0 || !out.ends_with(' ') {
-                        out.push(' ');
-                    }
-                    out.push_str(track.trim());
-                }
-            }
-        }
-        rest = &after[end + 1..];
-    }
-    out.push_str(rest);
-    out
 }
 
 /// Parse the `flex` shorthand (`flex: <grow> <shrink>? <basis>?`, plus the `none`/`auto`/

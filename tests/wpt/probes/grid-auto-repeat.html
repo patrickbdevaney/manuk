@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+ /* QUESTION (t570): `repeat(auto-fill, …)` / `repeat(auto-fit, …)` — the responsive-card idiom.
+    t569 read martinfowler.com's own stylesheet and found its two-column collapse comes from
+    `grid-template-columns: repeat(auto-fill, minmax(18em, 1fr))`, which BOTH our cascades throw
+    away: Stylo's `RepeatCount::AutoFill` falls through `_ => 1`, and the MinimalCascade's
+    `expand_grid_repeat` finds the first `)` INSIDE `minmax(` and emits a stray `)`. So the whole
+    idiom renders as ONE column. This probe measures how many columns Chromium makes, and where. */
+ body{font-size:16px;margin:0;font-family:sans-serif}
+ div{width:600px}
+ section{background:#ccd}
+ /* 1. auto-fill: 600px, 180px min, 20px gap → Chromium fits 3 tracks. */
+ #fill{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:20px}
+ /* 2. auto-fit with FEWER items than tracks: the empty tracks collapse, so the two present
+       items share the whole 600px instead of sitting in the first two of three tracks. */
+ #fit{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:20px}
+ /* 3. martinfowler.com's exact declaration, at its measured container width. */
+ #mf{display:grid;grid-template-columns:repeat(auto-fill,minmax(18em,1fr));gap:20px;width:619px}
+ /* 4. GUARD — integer repeat() already works and must keep working. */
+ #three{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+</style></head><body>
+<div id="fill"><section>f1</section><section>f2</section><section>f3</section><section>f4</section><section>f5</section><section>f6</section></div>
+<div id="fit"><section>t1</section><section>t2</section></div>
+<div id="mf"><section>Topic one</section><section>Topic two</section><section>Topic three</section><section>Topic four</section></div>
+<div id="three"><section>g1</section><section>g2</section><section>g3</section></div>
+</body></html>

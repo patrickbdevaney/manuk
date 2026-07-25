@@ -218,9 +218,18 @@ fn track_size_to_ours(
     }
 }
 
-/// A Stylo `grid-template-columns`/`-rows` component → our flat `Vec<TrackSize>`, expanding
-/// integer `repeat()`; `none`/subgrid/masonry/auto-repeat collapse to what we can model.
-fn template_to_tracks(c: &stylo::values::computed::GridTemplateComponent) -> Vec<crate::TrackSize> {
+/// A Stylo `grid-template-columns`/`-rows` component → our `Vec<TrackComponent>`.
+///
+/// An integer `repeat(N, …)` is expanded here. An **`auto-fill`/`auto-fit`** repeat is carried
+/// through intact: Stylo keeps it in `list.values` at `auto_repeat_index` with a non-`Number` count,
+/// and the arm below used to fold every such count into `_ => 1` — so
+/// `repeat(auto-fill, minmax(18em, 1fr))`, the responsive-card idiom, became a SINGLE column on
+/// every page that used it. The repetition count belongs to layout (CSS Grid §7.2.3.1: the largest
+/// N that fits the container), not to the cascade. `none`/subgrid/masonry still collapse to what we
+/// can model.
+fn template_to_tracks(
+    c: &stylo::values::computed::GridTemplateComponent,
+) -> Vec<crate::TrackComponent> {
     use stylo::values::generics::grid::{
         GenericGridTemplateComponent as GC, GenericTrackListValue as TLV, RepeatCount,
     };
@@ -228,15 +237,30 @@ fn template_to_tracks(c: &stylo::values::computed::GridTemplateComponent) -> Vec
     if let GC::TrackList(list) = c {
         for v in list.values.iter() {
             match v {
-                TLV::TrackSize(ts) => out.push(track_size_to_ours(ts)),
+                TLV::TrackSize(ts) => {
+                    out.push(crate::TrackComponent::Single(track_size_to_ours(ts)))
+                }
                 TLV::TrackRepeat(r) => {
-                    let n = match r.count {
-                        RepeatCount::Number(i) => i.max(0) as usize,
-                        _ => 1,
-                    };
-                    for _ in 0..n {
-                        for ts in r.track_sizes.iter() {
-                            out.push(track_size_to_ours(ts));
+                    let tracks: Vec<crate::TrackSize> =
+                        r.track_sizes.iter().map(track_size_to_ours).collect();
+                    if tracks.is_empty() {
+                        continue;
+                    }
+                    match r.count {
+                        // Bounded for the same Bar-0 reason as the text cascade: `repeat(100000,
+                        // 1fr)` parses, and an unbounded track list is a hang, not a layout.
+                        RepeatCount::Number(i) => {
+                            for _ in 0..(i.max(0) as usize).min(1000) {
+                                out.extend(
+                                    tracks.iter().copied().map(crate::TrackComponent::Single),
+                                );
+                            }
+                        }
+                        RepeatCount::AutoFill => {
+                            out.push(crate::TrackComponent::AutoRepeat { fit: false, tracks })
+                        }
+                        RepeatCount::AutoFit => {
+                            out.push(crate::TrackComponent::AutoRepeat { fit: true, tracks })
                         }
                     }
                 }

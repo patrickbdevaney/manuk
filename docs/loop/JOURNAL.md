@@ -23162,3 +23162,77 @@ mapping never uses. Then the max-content contribution asymmetry the probe now is
 `align-items` mapping + unmodelled `align-content`/`justify-items` (same class of bug as this one, audited
 rather than guessed); then the same-face `{Open Sans/13}` metric delta; then the t556 cascade-origin bug.
 Cadences: self-audit 574; surface 578; const 575; wall 587.
+
+## Tick 570 — `repeat(auto-fill, …)` was resolved by the cascade to ONE column; the count belongs to layout (2026-07-25)
+
+t569 ended by reading martinfowler.com's own stylesheet instead of generalising from a probe, and the
+answer it found was `grid-template-columns: repeat(auto-fill, minmax(18em, 1fr))` — the responsive-card
+idiom — collapsing to a single column. This tick measured that, fixed it, and the headline number that
+was supposed to move **did not**, which is the more interesting half.
+
+**BOTH CASCADES DROPPED IT, INDEPENDENTLY, IN DIFFERENT WAYS.** Stylo keeps the auto-repeat in
+`TrackList::values` with a `RepeatCount` of `AutoFill`/`AutoFit`; `template_to_tracks` matched
+`Number(i)` and sent everything else through `_ => 1`. That catch-all is the shape to watch for — it is
+not a parse failure, it emits a valid track list, and the page renders, narrower. The text cascade
+failed differently and worse: `expand_grid_repeat` was a **string** rewrite that scanned for the first
+`)` after `repeat(`. For `repeat(auto-fill, minmax(180px,1fr))` that `)` closes `minmax(`, so it parsed
+`"auto-fill"` as a count, failed, emitted nothing, and left a stray `)` behind. **Pattern-matching text
+where the grammar nests is a bug waiting for its input.**
+
+RED PROOF FIRST, against live Chromium (`tests/wpt/probes/grid-auto-repeat.html`, committed): every
+case one full-width column. `auto-fill minmax(180px,1fr)` in 600px — Chromium three 187px tracks at
+x=0/207/413, ours `[0 0 600×18]`. `auto-fit` with two items — Chromium two 290px at 0/310 (the empty
+third repetition collapses, gutter included), ours one 600px. martinfowler's `minmax(18em,1fr)` at
+619px — Chromium two 300px at 0/320, ours one. **SHAPE 15.0%, absolute placement 0.0%.**
+
+THE FIX IS THE SAME LESSON AS t569, ONE TICK APART AND FROM THE OTHER SIDE. CSS Grid §7.2.3.1 defines
+the repetition count as the largest N whose tracks plus gutters fit **the container's resolved inline
+size** — a number the cascade cannot know, because the container has not been sized. So the cascade's
+job is to carry the *shape* (`TrackComponent::AutoRepeat { fit, tracks }`, replacing the flat
+`Vec<TrackSize>`), and taffy — which already models this as `GridTemplateComponent::Repeat` +
+`RepetitionCount::{AutoFill, AutoFit}` — does the counting where the size is known. Twice now the defect
+was **our cascade answering a question that belonged to layout**, and both times the borrowed library
+had already modelled the distinction we flattened. AFTER: **SHAPE 15.0% → 100.0%, absolute placement
+0.0% → 100.0%, dx=dy=dw=dh=0 across all 20 paths.**
+
+GATED `G_GRID_AUTO_REPEAT`, RED-proven by collapsing the `AutoRepeat` arm back to `Single(tracks[0])`
+(`fillx:0,207,413 w:187` → `fillx:0,0,0 w:600`). The integer-`repeat()` guard stayed **green under the
+RED patch** — that is what makes it a guard rather than decoration, because the rewrite had to fix the
+auto- forms without breaking the count that already worked. `auto-fit` is asserted separately from
+`auto-fill` for the same reason: a fix that generates the tracks but never collapses the empty ones
+looks correct on `auto-fill` and leaves a third of every `auto-fit` row blank.
+
+**AND THE HEADLINE DID NOT MOVE, WHICH IS THE FINDING.** martinfowler.com's two-column layout is now
+Chromium-exact — the elements t569 recorded as ours `[20 2500 619×174]` against Chromium
+`[345 2110 293×292]` now read `[345 … 293×…]` on both sides, and the right-hand column sits at x=681
+×289 in both. The collapse t569 explicitly re-checked and found still present is gone. **Yet the page's
+SHAPE reads 49.2%, against 49.0% recorded at t564 — before both this fix and t569's.** Two real
+structural fixes, ~0.2 points. I am not claiming they did nothing; the per-element boxes say otherwise.
+What it says is that **this page's SHAPE is dominated by something else**, and the cluster ranking now
+names it without ambiguity: 21 + 6 hits of `<a>` horizontal displacement at `{Open Sans/13}`, plus
+`<p>`/`<h2>` vertical drift. A parent-relative score over 384 mostly-text elements is not sensitive to
+where two containers sit. **The instrument is not wrong — it is answering a different question than the
+one I was watching it for, and noticing that beats explaining the number away.**
+
+Three jarring invariants are also now visible on this page and were not being tracked: **OVERLAP 14
+sibling pairs, READING-ORDER 13, DEAD-TARGET 9** (e.g. a 425×0 header link). Those are certificate-bar
+items, so they outrank another placement point.
+
+TICK SHAPE: capability (`TrackComponent` — `grid-template-columns`/`-rows` become a component list so
+an `auto-fill`/`auto-fit` repeat survives the cascade intact; both cascades rewritten, the text one off
+a nesting-aware parse instead of a string scan; taffy given the `RepetitionCount` so it counts against
+the resolved container; integer repeats bounded at 1000 because `repeat(100000, 1fr)` is legal CSS and
+Bar 0 outranks a track list no page can see) + measurement (probe committed and scored before/after
+against live Chromium; martinfowler's two-column collapse confirmed CLOSED at element level; the
+headline's insensitivity to that fix named rather than explained away). Bar 0 untouched.
+WIKI: docs/wiki/box-layout.md — "`repeat(auto-fill, …)` is a shape the cascade must NOT resolve".
+PATTERN: "The responsive card grid — `repeat(auto-fill|auto-fit, minmax(…, 1fr))`".
+
+NEXT: **the `{Open Sans/13}` `<a>` horizontal displacement** — now the top cluster on martinfowler by a
+wide margin (27 hits across two bands, x off by ~11–41px on inline links at the same face and size,
+`[59 3323 28×16]` vs `[26 3313 29×18]`); note our height is 16 where Chromium's is 18, so this may be
+an inline-box question rather than an advance one. Then the three jarring invariants above (overlap /
+reading-order / dead-target), which are certificate bars rather than placement points. Then the eager
+`align-items` mapping plus the unmodelled `align-content`/`justify-items` — the same class as t569,
+audited rather than guessed. Then the t556 cascade-origin bug. Cadences: self-audit 574; surface 578;
+const 575; wall 587.

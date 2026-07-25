@@ -14,12 +14,13 @@
 use manuk_css::{
     AlignItems as CssAlign, BoxSizing, ComputedStyle, Dim, Display as CssDisplay,
     FlexDirection as CssDir, FlexWrap as CssWrap, GridLine as CssGridLine,
-    JustifyContent as CssJustify, Position as CssPosition, TrackSize as CssTrackSize, TrackUnit,
+    JustifyContent as CssJustify, Position as CssPosition, TrackComponent as CssTrackComponent,
+    TrackSize as CssTrackSize, TrackUnit,
 };
 use taffy::prelude::*;
 use taffy::style::{
-    BoxSizing as TaffyBoxSizing, Dimension, LengthPercentage, LengthPercentageAuto,
-    Position as TaffyPosition,
+    BoxSizing as TaffyBoxSizing, CheapCloneStr, Dimension, GridTemplateRepetition,
+    LengthPercentage, LengthPercentageAuto, Position as TaffyPosition, RepetitionCount,
 };
 
 /// Register a mixed `calc(px + pct%)` into the tree's calc table and encode its index as the
@@ -172,6 +173,34 @@ fn track(t: &CssTrackSize) -> TrackSizingFunction {
     }
 }
 
+/// One `grid-template-columns`/`-rows` component → taffy.
+///
+/// The `AutoRepeat` arm is the point: taffy computes the repetition count itself (CSS Grid §7.2.3.1
+/// — the largest N whose tracks plus gutters fit the container's inline size), and `AutoFit`
+/// additionally collapses the repetitions that end up empty. Both are decisions that need the
+/// container's resolved size, so both belong here and not in either cascade. We carry no line names,
+/// so the `line_names` vector is empty rather than absent — taffy tolerates a short list.
+///
+/// Generic over taffy's custom-ident string because `Style`'s own parameter is defaulted and its
+/// concrete type (`taffy::util::sys::DefaultCheapStr`) is crate-private; inference resolves it at
+/// the call site rather than us hard-coding a `String` that a taffy bump could change.
+fn template_component<S: CheapCloneStr>(c: &CssTrackComponent) -> GridTemplateComponent<S> {
+    match c {
+        CssTrackComponent::Single(t) => GridTemplateComponent::Single(track(t)),
+        CssTrackComponent::AutoRepeat { fit, tracks } => {
+            GridTemplateComponent::Repeat(GridTemplateRepetition {
+                count: if *fit {
+                    RepetitionCount::AutoFit
+                } else {
+                    RepetitionCount::AutoFill
+                },
+                tracks: tracks.iter().map(track).collect(),
+                line_names: Vec::new(),
+            })
+        }
+    }
+}
+
 fn grid_line(pair: (CssGridLine, CssGridLine)) -> Line<GridPlacement> {
     fn one(l: CssGridLine) -> GridPlacement {
         match l {
@@ -249,12 +278,12 @@ pub fn to_taffy_style(cs: &ComputedStyle, calc: &mut Vec<(f32, f32)>) -> Style {
         grid_template_columns: cs
             .grid_template_columns
             .iter()
-            .map(|t| GridTemplateComponent::Single(track(t)))
+            .map(template_component)
             .collect(),
         grid_template_rows: cs
             .grid_template_rows
             .iter()
-            .map(|t| GridTemplateComponent::Single(track(t)))
+            .map(template_component)
             .collect(),
         grid_column: grid_line(cs.grid_column),
         grid_row: grid_line(cs.grid_row),

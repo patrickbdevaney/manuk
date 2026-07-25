@@ -329,4 +329,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 566	f13b3c44	1784981484	2026-07-25T08:11:24-04:00	224	measurement	85	8	127	32	274	81	3896	6960	0	329	31	ROOT CAUSE: implied grid tracks are content-sized where Chromium stretches them (2026-07-25)
 567	a545e31a	1784981678	2026-07-25T08:14:38-04:00	194	two	85	6	173	34	274	81	3896	6960	0	329	31	WALL AUDIT #15 (62s, the leanest on record) + CONSTITUTION CHECK #37: I3 is now OVERDUE (2026-07-25)
 568	f605d5c9	1784982530	2026-07-25T08:28:50-04:00	852	capability	85	10	229	36	274	81	3896	6960	0	329	31	`<search>` is a landmark (the I3 queue, discharged) + SURFACE AUDIT #30 measures what #29 added (2026-07-25)
-569	d69c352f	1784984559	2026-07-25T09:02:39-04:00	2029	capability	85	13	318	43	275	81	3896	6960	0	329	31	`justify-content: normal` is not `flex-start`, and that one conflation disabled grid track stretching everywhere (2026-07-25)
+569	eb3bb345	1784986122	2026-07-25T09:28:42-04:00	3592	capability	85	13	497	83	276	81	3896	6960	0	329	31	`justify-content: normal` is not `flex-start`, and that one conflation disabled grid track stretching everywhere (2026-07-25)

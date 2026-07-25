@@ -4693,3 +4693,29 @@ to use. **(4)** The fix's own failure mode is replacing one hard-coded alignment
 both are asserted as guards beside the feature in `G_GRID_IMPLIED_TRACK_STRETCH`. **(5)** The `repeat(auto-fill,
 minmax(…,1fr))` responsive-card idiom is a **separate** unfixed bug in the same area — both cascades collapse it
 to one column — and conflating the two is how the martinfowler.com hunt acquired four wrong answers.
+
+## The responsive card grid — `repeat(auto-fill|auto-fit, minmax(…, 1fr))` (tick 570)
+
+**Pattern:** one declaration that replaces a stack of media queries — a card list, a product grid, a
+docs-site topic list, a dashboard tile wall. The author states a *minimum* card width and the browser
+decides how many columns fit. It is the default way responsive grids have been written since Grid
+shipped, and `auto-fit` is the variant that lets a short list still span the container.
+
+**The class this unlocks: every card/tile/product grid on the web.** Both of our cascades dropped the
+auto-repeat independently and produced **one full-width column** — Stylo's `RepeatCount::AutoFill` fell
+through a `_ => 1` catch-all, and the text cascade's string rewrite matched the first `)` after
+`repeat(`, which belongs to the nested `minmax(`. Measured against live Chromium: `auto-fill`
+`minmax(180px,1fr)` in 600px → three 187px tracks (we gave one 600px), `auto-fit` with two items → two
+290px tracks (we gave one 600px), martinfowler.com's `minmax(18em,1fr)` at 619px → two 300px columns
+(we gave one). Probe SHAPE **15.0% → 100.0%**, absolute placement **0.0% → 100.0%**.
+
+**The traps.** **(1)** The count is **not the cascade's to compute** — CSS Grid §7.2.3.1 defines it
+against the container's *resolved* inline size, so the cascade must carry the auto-repeat as a shape and
+let layout count. Same lesson as tick 569's `justify-content: normal`, one tick apart, and both times
+the borrowed layout library had already modelled the distinction we flattened. **(2)** `auto-fit` is
+`auto-fill` **plus collapsing the empty repetitions** (gutters included). Implementing only the
+generation looks right on `auto-fill` and leaves a third of every `auto-fit` row blank. **(3)** Parsing
+`repeat()` by scanning for the next `)` breaks on the *one* argument shape that matters, because
+`minmax()` nests — pattern-matching text where the grammar nests is a bug waiting for its input.
+**(4)** `repeat(100000, 1fr)` is legal CSS; expanding an integer count needs a bound, or one declaration
+allocates until the tab dies. Bar 0 outranks fidelity to a track list no page can see.

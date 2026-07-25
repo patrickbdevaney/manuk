@@ -1148,3 +1148,45 @@ tracks content-sized and centre them, and a flex row must still pack at the star
 cannot be flattened onto one of its meanings at parse time. `normal`, `auto` and `stretch` are the family to
 watch. Where a downstream library models the distinction with an `Option`, that `Option` is the contract —
 filling it in is discarding information the library was about to use.
+
+## `repeat(auto-fill, …)` is a shape the cascade must NOT resolve (tick 570)
+
+`grid-template-columns: repeat(auto-fill, minmax(18em, 1fr))` is the responsive-card idiom — one
+declaration, no media queries, and the grid holds as many columns as the container can fit. **We
+rendered it as one full-width column, on every site that used it, from both cascades independently.**
+
+The two failures are different and each is instructive:
+
+- **Stylo path.** Stylo keeps the auto-repeat in `TrackList::values` at `auto_repeat_index`, with a
+  `RepeatCount` of `AutoFill`/`AutoFit`. `template_to_tracks` matched `RepeatCount::Number(i)` and sent
+  everything else through `_ => 1`. A catch-all that turns *"repeat this as many times as it fits"* into
+  *"once"* is the shape to watch for: it is not a parse failure, it produces a valid track list, and the
+  page renders — narrower.
+- **Text-cascade path.** `expand_grid_repeat` was a **string** rewrite that scanned for the first `)`
+  after `repeat(`. For `repeat(auto-fill, minmax(180px,1fr))` that `)` closes `minmax(`, so it parsed
+  `"auto-fill"` as the count, failed, emitted nothing, and left a stray `)` in the track list for the
+  track parser to discard. **Pattern-matching text where the grammar nests is a bug waiting for its
+  input**; the replacement parses the nesting (`split_tracks_top_level` already tracks depth) and splits
+  on the *first top-level* comma so `minmax(a, b)` survives.
+
+**The general principle, and it is the same one t569 landed from the other side.** The repetition count
+is defined by CSS Grid §7.2.3.1 as the largest N whose tracks plus gutters fit **the grid container's
+resolved inline size** — a number the cascade cannot know, because the container has not been sized yet.
+So the cascade's job is to carry the *shape* (`TrackComponent::AutoRepeat { fit, tracks }`), not to
+resolve it. taffy models exactly this (`GridTemplateComponent::Repeat` + `RepetitionCount::{AutoFill,
+AutoFit}`) and does the counting where the size is known. Twice in two ticks, the bug was **our cascade
+answering a question that belonged to layout**, and both times the borrowed library had already modelled
+the distinction we flattened.
+
+`auto-fit` differs from `auto-fill` in one way that is easy to implement halfway: the repetitions that
+end up **empty collapse to zero**, gutters included. Two items in a would-be three-track grid must
+therefore span the container (290px each at x=0/310 in a 600px box), not sit in the first two of three
+186.67px tracks. A fix that generates the tracks but never collapses them looks correct on `auto-fill`
+and leaves a third of every `auto-fit` row permanently blank, so the gate asserts both keywords.
+
+MEASURED against live Chromium on `tests/wpt/probes/grid-auto-repeat.html`: SHAPE **15.0% → 100.0%**,
+absolute placement **0.0% → 100.0%** (dx=dy=dw=dh=0 across all 20 paths). Gated by
+`G_GRID_AUTO_REPEAT`, RED-proven by collapsing the `AutoRepeat` arm back to `Single(tracks[0])`
+(`fillx:0,207,413 w:187` → `fillx:0,0,0 w:600`). The integer-`repeat()` guard stayed **green under the
+RED patch**, which is what makes it a guard: the rewrite had to fix the auto- forms without breaking the
+count that already worked.
