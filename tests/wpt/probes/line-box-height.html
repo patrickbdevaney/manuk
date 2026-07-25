@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+ /* QUESTION: with `line-height: normal`, does our line BOX match Chromium's for the same face?
+    A constant per-line delta compounds into every vertical position on the page AND changes where
+    inline content wraps, so it shows up as "displacement" far from its cause (t562). */
+ body{font-size:16px;margin:0}
+ span{display:inline-block}
+ .a{font-family:"Open Sans"} .b{font-family:"DejaVu Sans"} .c{font-family:sans-serif}
+ .d{font-family:"Open Sans";line-height:1.5} .e{font-family:"Open Sans";line-height:24px}
+ p{width:400px;font-family:"Open Sans"}
+</style></head><body>
+<div><span class="a">Line box height for Open Sans</span></div>
+<div><span class="b">Line box height for DejaVu Sans</span></div>
+<div><span class="c">Line box height for the generic stack</span></div>
+<div><span class="d">Line box height with line-height 1.5</span></div>
+<div><span class="e">Line box height with line-height 24px</span></div>
+<p id="wrap">A paragraph long enough to wrap several times so that any per-line height difference
+accumulates down the block and any per-glyph advance difference moves the wrap points, which is how a
+small metric error becomes a large apparent displacement far from its cause.</p>
+</body></html>

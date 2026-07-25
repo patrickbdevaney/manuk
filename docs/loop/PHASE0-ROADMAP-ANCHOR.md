@@ -340,3 +340,21 @@ never WPT count, never a vibe.
   cause — and 82px near the top of the document is the shape of a mis-measured header/nav block. It is the
   same class the t554 split was built to separate, which is where it should be chased.
 
+- `MEASURED @tick 562 — the line-box derivation is EXACT, so the residual is face-specific and the instrument
+  cannot yet name it.` `tests/wpt/probes/line-box-height.html` scores **100% SHAPE, 0 of 12 misplaced, and
+  absolute placement 100% (dx=dy=dw=dh=0)** across `Open Sans`, `DejaVu Sans`, the generic stack,
+  `line-height:1.5`, `line-height:24px`, and a 400px wrapping paragraph. So `line-height: normal` derivation,
+  explicit line-heights, and **wrap points** all agree with Chromium on a controlled page — the general
+  metrics formula is right.
+  **Which means martinfowler.com's residual is face- or size-specific to that page**, and the instrument
+  cannot say which: its instances read `[427 3270 74×16] vs [144 3373 76×18]` — Chromium's anchors are 16px
+  tall, ours 18px — and **a rect cannot tell you which FACE or what SIZE each engine used to produce it.**
+  Every remaining lead of this shape (2px here, 2px there, compounding into wrap-point and vertical drift) is
+  blocked on the same missing datum.
+  **So the next instrument brick is: carry the COMPUTED FONT (resolved family + used font-size) alongside the
+  rect for text-bearing elements**, on both sides. Chromium's probe can read `getComputedStyle(el).fontFamily`
+  and `fontSize`; ours has the resolved `FontFamily` and used size at the same point it records the box. Then
+  a 2px height divergence reads as *"Chromium used Face A at 13px, we used Face B at 14px"* instead of as an
+  unattributable displacement. That is the same step the `.SIG`, `median_mag`, instance-printing and
+  displaced-vs-mis-sized bricks each were: **make the diff carry the datum the next question needs.**
+

@@ -22721,3 +22721,55 @@ upstream ancestor (header/nav) and the instance printer plus the `geometry/displ
 built for exactly this. Then the two agentic rows from Audit #29 (`<search>` + `CloseWatcher`) as one tick to
 discharge the I3 drift Checks #35 and #36 both flagged; then the t556 cascade-origin bug; then nytimes.com;
 then the crawl-side `.SIG` correction. Cadences: self-audit 564; surface 568; const 567; wall 567.
+
+## Tick 562 — the line-box derivation is EXACT; the residual is face-specific and the instrument cannot name it (2026-07-25)
+
+t561 left `martinfowler.com` at 46.1% SHAPE with the boxes the right SIZE (`dw=1 dh=2`) and a `dy≈82px`
+displacement, and filed it as `geometry/displaced`. Opening the instances first, as the last four ticks have
+taught:
+
+```
+displaced: x ~256px (<a>)  e.g. …/p:nth-child(2)/a:nth-child(84): [427 3270 74×16] vs [144 3373 76×18]
+displaced: y ~128px (<p>)  e.g. …/article:nth-child(2)/p:nth-child(6): [681 1529 289×23] vs [681 1403 289×23]
+mis-sized: height ~64px (<div>) e.g. …/nav/div:nth-child(3): [551 3465 131×252] vs [551 3546 131×324]
+```
+Read together those are one story: the `<p>` instance is **identical in size AND x**, off only in y — pure
+vertical drift. The `<div>` is +72px tall = **four lines × 18px**. And every anchor is **16px tall in Chromium,
+18px in ours**. A per-line height delta compounds down a block and *also* moves inline wrap points, which is
+why anchors inside a paragraph with 84 inline children land at x=427 vs x=144. Small metric error, large
+apparent displacement, far from its cause — `subpixel-error-compounds`, with a font on top.
+
+SO I MEASURED THE OBVIOUS CULPRIT AND IT IS NOT GUILTY. `tests/wpt/probes/line-box-height.html` (committed):
+**100% SHAPE, 0 of 12 misplaced, absolute placement 100% — dx=dy=dw=dh=0** — across `Open Sans`,
+`DejaVu Sans`, the generic stack, `line-height:1.5`, `line-height:24px`, and a 400px wrapping paragraph. So
+`line-height: normal` derivation, explicit line-heights, **and wrap points** all agree with Chromium on a
+controlled page. The general metrics formula is right. (Fourth lead in this arc to die on contact with a
+measurement, and the fourth time that was cheaper than building on it.)
+
+**WHICH LEAVES A BLOCKED QUESTION, and naming the block is this tick's real result:** martinfowler's residual
+is face- or size-specific to that page, and **the instrument cannot say which, because a rect cannot tell you
+which FACE or what SIZE produced it.** `[74×16] vs [76×18]` is unattributable. Every remaining lead of this
+shape — 2px here, 2px there, compounding — is blocked on the same missing datum, and I would be guessing again
+if I picked a subsystem now.
+
+**So the next brick is: carry the COMPUTED FONT (resolved family + used font-size) alongside the rect for
+text-bearing elements, on both sides.** Chromium's probe can read `getComputedStyle(el).fontFamily` /
+`fontSize`; ours has the resolved `FontFamily` and used size at the exact point it records the box. Then a 2px
+height divergence reads as *"Chromium used Face A at 13px, we used Face B at 14px"* rather than as a
+displacement with no cause. That is precisely what the `.SIG` fix (t550), `median_mag` (t552), instance
+printing (t553) and the displaced/mis-sized split (t554) each were: **make the diff carry the datum the next
+question needs.** Six of those bricks have now paid for themselves inside twelve ticks.
+
+TICK SHAPE: measurement (the line-box derivation ruled out as a general defect by a committed probe scoring
+100% SHAPE / 0 misplaced / absolute dx=dy=dw=dh=0; martinfowler's instances read together as one per-line
+height delta compounding into wrap-point and vertical drift; the remaining question identified as BLOCKED on a
+datum the instrument does not carry, with the next brick specified). No engine src touched; Bar 0 untouched.
+WIKI: none — the measurement's home is `tests/wpt/probes/README.md` (question → answer) and the anchor's §6
+entry; the brick that follows will carry its mechanism into docs/wiki/conformance-and-oracles.md.
+[no-pattern]
+
+NEXT: **make the diff carry the computed font** (resolved family + used size, both sides) — it unblocks every
+remaining text-metric lead including martinfowler and probably nytimes. Then the two agentic rows from Audit
+#29 (`<search>` + `CloseWatcher`) as one tick, which discharges the I3 drift Checks #35 and #36 have both
+flagged; then the t556 cascade-origin bug (author `* { margin:0 }` losing to the UA `body` margin); then the
+crawl-side `.SIG` correction. Cadences: self-audit 564; surface 568; const 567; wall 567.
