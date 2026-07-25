@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+ /* QUESTION (t565): martinfowler.com lays two sections side by side via CSS Grid with NAMED AREAS.
+    Chromium puts them at x=20 (293px) and x=345 (293px); we stack both at x=20, 619px wide. Which
+    half is missing — the COLUMN TRACKS, or the NAMED-AREA placement that assigns items to them? */
+ body{font-size:16px;margin:0;font-family:sans-serif}
+ .g{width:600px}
+ /* A: explicit tracks, implicit (auto) placement — no names anywhere. */
+ #a{display:grid;grid-template-columns:1fr 1fr;column-gap:20px}
+ /* B: explicit tracks + NAMED AREAS + grid-area placement — what the site uses. */
+ #b{display:grid;grid-template-columns:1fr 1fr;column-gap:20px;grid-template-areas:"l r"}
+ #b .l{grid-area:l} #b .r{grid-area:r}
+ /* C: explicit tracks + explicit LINE placement (no names) — isolates naming from tracks. */
+ #c{display:grid;grid-template-columns:1fr 1fr;column-gap:20px}
+ #c .l{grid-column:1} #c .r{grid-column:2}
+ /* D: a fixed+fr mix, the site's other shape. */
+ #d{display:grid;grid-template-columns:1fr 200px;column-gap:20px;grid-template-areas:"i p"}
+ #d .l{grid-area:i} #d .r{grid-area:p}
+ section{background:#eee}
+</style></head><body>
+<div class="g" id="a"><section class="l">left auto</section><section class="r">right auto</section></div>
+<div class="g" id="b"><section class="l">left named</section><section class="r">right named</section></div>
+<div class="g" id="c"><section class="l">left lines</section><section class="r">right lines</section></div>
+<div class="g" id="d"><section class="l">left mix</section><section class="r">right mix</section></div>
+</body></html>

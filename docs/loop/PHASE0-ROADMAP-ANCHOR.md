@@ -379,3 +379,19 @@ never WPT count, never a vibe.
   ticks of rect-only diffing could only say "displaced". **Rank: the missing `Lora` webfont first** (a wrong
   wrap width dominates a 2px line box), then the same-face metric delta.
 
+- `MEASURED @tick 565 — CSS Grid named-area placement is EXACT, so martinfowler's two-column failure is a
+  CASCADE question, not a layout one.` `tests/wpt/probes/grid-template-areas.html` scores **100% SHAPE, 0 of 13
+  misplaced, absolute placement 100% (dx=dy=dw=dh=0)** across all four shapes the site uses: auto placement on
+  `grid-template-columns:1fr 1fr`, `grid-template-areas:"l r"` with `grid-area` names, explicit `grid-column`
+  line placement, and a `1fr 200px` fixed/flexible mix. Grid placement is **not** the defect.
+  Which relocates the lead precisely: our section is **619px wide = the full container**, i.e. it is a block in
+  a **non-grid parent**, so the container is simply **not receiving `display:grid`**. The rules are in
+  `home.css` (which we do fetch), so the question is now *which* — a selector we do not match (`main .top`),
+  an `@media` we evaluate differently at the 1200px probe viewport, or a cascade-origin/specificity loss. That
+  is a **cascade** investigation, and `getComputedStyle`-style verification on the container is the cheap next
+  step; the instrument already carries `display` per element in `Seen`, so the next sweep can answer it without
+  new plumbing.
+  **Fifth lead in this arc to die on contact with a measurement** (line-box derivation t562, webfont shadowing
+  t560/t561, text-measurement t552/t553, the power-of-two artifact t551, grid t565) — and the fifth time that
+  cost one cheap probe instead of one expensive wrong-subsystem tick.
+

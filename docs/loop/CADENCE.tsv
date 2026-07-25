@@ -325,3 +325,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 562	3ea16c37	1784977513	2026-07-25T07:05:13-04:00	301	measurement	67	7	123	32	274	81	3896	6960	0	329	31	the line-box derivation is EXACT; the residual is face-specific and the instrument cannot name it (2026-07-25)
 563	6ca36bce	1784978676	2026-07-25T07:24:36-04:00	1163	instrument	67	11	335	45	274	81	3896	6960	0	329	31	the diff carries the COMPUTED FONT, and it answers t562's blocked question TWICE (2026-07-25)
 564	f3d5b4ba	1784981065	2026-07-25T08:04:25-04:00	2389	capability	85	9	336	37	274	81	3896	6960	0	329	31	`@import` chains are FETCHED (an unfetched import DELETED a stylesheet) + self-audit (2026-07-25)
+565	5fe5b595	1784981260	2026-07-25T08:07:40-04:00	195	measurement	85	7	118	32	274	81	3896	6960	0	329	31	CSS Grid named areas are EXACT: martinfowler's two-column failure is a CASCADE question (2026-07-25)

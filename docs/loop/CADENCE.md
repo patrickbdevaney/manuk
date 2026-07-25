@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **326** | ticks 1–564 |
-| median tick cycle | **21m** | 325 intervals |
+| ticks landed | **327** | ticks 1–565 |
+| median tick cycle | **20m** | 326 intervals |
 | median, last 10 | **18m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.96** | 339.0h elapsed |
-| median verify wall | **64s** | 265 ticks |
-| wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.96** | 339.1h elapsed |
+| median verify wall | **64s** | 266 ticks |
+| wall trend | 39s → 85s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**170 of 326 ticks** (52%) moved a
+**170 of 327 ticks** (52%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **170** capability ticks, median cycle **21m**
-* median diff per tick: **+220 / −34** lines across 8 files
+* **170** capability ticks, median cycle **20m**
+* median diff per tick: **+219 / −34** lines across 8 files
 
 ## Every tick
 
@@ -423,5 +423,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **562** | 2026-07-25 07:05 | 5m | measurement | 67s | +123/−32 | 274 | 81 | 56.0% · | the line-box derivation is EXACT; the residual is face-specific and the instrument cannot  |
 | **563** | 2026-07-25 07:24 | 19m | instrument | 67s | +335/−45 | 274 | 81 | 56.0% · | the diff carries the COMPUTED FONT, and it answers t562's blocked question TWICE (2026-07- |
 | **564** | 2026-07-25 08:04 | 40m | capability | 85s | +336/−37 | 274 | 81 | 56.0% · | `@import` chains are FETCHED (an unfetched import DELETED a stylesheet) + self-audit (2026 |
+| **565** | 2026-07-25 08:07 | 3m | measurement | 85s | +118/−32 | 274 | 81 | 56.0% · | CSS Grid named areas are EXACT: martinfowler's two-column failure is a CASCADE question (2 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

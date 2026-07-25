@@ -22910,3 +22910,47 @@ journalled a wall regression and parked, because `honest-answer-is-not-a-fixed-a
 The guard's threshold and the gate concurrency both live in `scripts/`, which is observer-owned; flagged here
 for the observer rather than edited.
 
+
+## Tick 565 — CSS Grid named areas are EXACT: martinfowler's two-column failure is a CASCADE question (2026-07-25)
+
+t564's `@import` fix retired the font story for martinfowler's width and left a clean layout lead: Chromium
+places two sections side by side at `x=20` and `x=345`, 293px each; we stack both at `x=20`, 619px wide. The
+site does it with CSS Grid and **named areas** (`grid-template-columns:1fr 1fr` + `grid-template-areas:"l r"`
++ `grid-area`), and `css-grid` sits at 5.3% on the WPT board — so "grid named areas are unimplemented" was the
+obvious call, and the standing rule says measure it first.
+
+MEASURED, and it is **neither half**. `tests/wpt/probes/grid-template-areas.html` (committed): **100% SHAPE,
+0 of 13 misplaced, absolute placement 100% — dx=dy=dw=dh=0** across all four shapes the site uses:
+auto placement on `1fr 1fr` · `grid-template-areas:"l r"` with `grid-area` names · explicit `grid-column`
+line placement · a `1fr 200px` fixed/flexible mix. **Grid placement is not the defect.** A tick spent on grid
+would have been a tick spent on working code, and the WPT percentage was the misleading input — the board's own
+warning that its ranking hides usage-weighted truth, arriving from the other direction.
+
+WHICH RELOCATES THE LEAD PRECISELY, and this is the tick's value: our section is **619px wide = the full
+container**, so it is a block in a **non-grid parent** — the container is simply **not receiving
+`display:grid`**. The rules live in `home.css`, which we do fetch, so the question is now *which*: a selector
+we fail to match (`main .top`), an `@media` we evaluate differently at the 1200px probe viewport, or a
+cascade-origin/specificity loss. That is a **cascade** investigation, not a layout one, and the instrument
+already carries `display` per element in `Seen` — so the next sweep can answer it with no new plumbing.
+
+**Fifth lead in this arc to die on contact with a measurement** — the power-of-two artifact (t551),
+text-measurement-as-cause (t552/t553), webfont shadowing (t560/t561), line-box derivation (t562), grid (t565) —
+and the fifth time it cost one cheap probe instead of one expensive wrong-subsystem tick. Worth stating as the
+session's method rather than as five separate anecdotes: **the ranked cluster list says WHERE reliably and WHY
+never; a probe that isolates one mechanism against Chromium is the cheapest instrument this loop owns**, and
+five of them have now redirected work that the numbers alone would have misdirected.
+
+TICK SHAPE: measurement (CSS Grid named-area placement ruled out as the cause by a committed probe at 100%
+SHAPE / 0 misplaced / absolute dx=dy=dw=dh=0 across four grid shapes; martinfowler's two-column failure
+relocated from layout to CASCADE — the container is not receiving `display:grid` — with the next step named and
+requiring no new instrument plumbing). No engine src touched; Bar 0 untouched.
+WIKI: none — the measurement's home is `tests/wpt/probes/README.md` (question → answer per page) and the
+anchor's §6 entry, which is where the next session reads the lead. [no-pattern]
+
+NEXT: **why the container is not `display:grid`** — read the computed `display` on `main .top` and its
+ancestors against Chromium's (selector match · `@media` evaluation at 1200px · specificity/origin), which the
+`Seen.display` field already carries. Then the same-face `{Open Sans/13}` metric delta (variable-font variant
+vs hinting). Then the two agentic rows from Audit #29 (`<search>` + `CloseWatcher`) as one tick, discharging
+the I3 drift Checks #35/#36 flagged; then the t556 cascade-origin bug (author `* { margin:0 }` losing to the UA
+`body` margin — likely the SAME cascade-origin family as this one); then the crawl-side `.SIG` correction.
+Cadences: self-audit 574; surface 568; const 567; wall 567.
