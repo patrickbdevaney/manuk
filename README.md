@@ -79,11 +79,12 @@ the four *jarring* invariants (overlap / horizontal-overflow / reading-order / d
 parent-relative shape ≥ 0.75 on ≥ 95% of nodes, interactivity ≥ 95%, and only **named** exceptions. That is
 the finish line, and it is finite (see [Roadmap](#roadmap)).
 
-Its **first trustworthy full measurement** (a 72-site stratified sweep, after two instrument bugs were found
-and fixed) puts every term well below bar: **shape ≥ 0.75 on ~5.5%**, jarring invariants 44–75%. So there is
-real distance still to go, and *placement fidelity* — not coverage — is the gap. Encouragingly, the placement
-errors are **quantised** (box heights off by 8/16/32/64/128px), the signature of a few systematic box-model
-deltas rather than a thousand independent bugs. The live certificate figures track in the loop's anchor doc.
+Its **first trustworthy full measurement** (a 72-site stratified sweep, after several instrument bugs were
+found and fixed) puts every term well below bar: **shape ≥ 0.75 on ~5.5%**, jarring invariants 44–75%. So
+there is real distance still to go, and *placement fidelity* — not coverage — is the gap. That gap is **not
+yet resolved to a single cause**: opening individual divergences shows a mix of ancestor-layout displacement
+and element mis-sizing, so the ranked cluster list is a set of grouping hypotheses to be investigated, not a
+cause list. The live certificate figures track in the loop's anchor doc.
 
 ---
 
