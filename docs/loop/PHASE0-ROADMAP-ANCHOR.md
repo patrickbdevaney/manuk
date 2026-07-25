@@ -265,3 +265,19 @@ never WPT count, never a vibe.
   applied *outside* the cascade cannot be overridden by anything in it. Every CSS-reset page on the web hits
   this. Filed as its own lead, not folded into the font work.
 
+- `FIXED @tick 558 — the advance now follows the resolved face, and the probe page moves 36.4% -> 90.9%
+  SHAPE.` t557 fixed DETECTION (`resolve_family` no longer lowercases the name for fontdb's case-sensitive
+  query) and the rendered widths did not move a pixel: five families, five distinct `Named(...)` ids, **one
+  `FaceId(0)` and one width (330px)**. The case was thrown away one line later — `intern_family` stored the
+  LOWERCASED key in `family_names`, so `face_id` re-queried `fontdb::Family::Name` with lowercase, missed,
+  and fell back to `Family::SansSerif` for all of them. **A fix upstream of a lossy step is not a fix**, and
+  a resolution-level assertion could not see it, which is why the new test measures the WIDTH.
+  Dedup stays case-INSENSITIVE (CSS family matching is, so `ARIAL` and `Arial` must intern to one id);
+  storage is now case-PRESERVING. Measured on the committed probe against live Chromium:
+  **SHAPE 36.4% → 90.9%**, misplaced spans **5 of 5 → 1 of 11**, and the four real families
+  (`"DejaVu Sans"` · `"Noto Sans"` · `"DejaVu Serif"` · `"Liberation Mono"`) now all land within the 8px
+  tolerance of Chromium where they previously shared one width.
+  **The one residual is known and named:** `"NoSuchFontXYZ"` — Chromium falls back to a *serif* default
+  (299px), we fall back to *sans* (330px). A default-family divergence, not a resolution one, and it is its
+  own (small) row rather than folded into this fix.
+

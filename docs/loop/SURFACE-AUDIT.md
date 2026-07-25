@@ -1326,3 +1326,56 @@ hit). theguardian.com then ran past 3.5 minutes without completing. So the corpu
 expensive AND informative, which is the argument for running it rather than reasoning about it.
 
 LAST_SURFACE_AUDIT set to 548; next due 558.
+
+## Audit #29 — tick 558 (2026-07-25)
+
+SOURCES (searched, not recalled — #28 read Interop 2026's *priorities*, so this one deliberately read what
+actually SHIPPED, which is a different question and found different gaps):
+- web.dev Baseline monthly digests, Jan–Jun 2026: https://web.dev/blog/baseline-digest-jan-2026 ·
+  .../baseline-digest-mar-2026 · .../baseline-digest-apr-2026 · .../baseline-digest-may-2026
+- web.dev "New to the web platform" Jan–Jun 2026: https://web.dev/blog/web-platform-01-2026 ·
+  .../web-platform-02-2026 · .../web-platform-04-2026 · .../web-platform-05-2026 · .../web-platform-06-2026
+- https://web.dev/baseline/2026
+
+ADDED — **nine rows, all previously absent from the map.** Two are the kind of gap this instrument exists to
+find:
+- **`WebGPU` was not on the map at all** — only WebGL was. WebGPU reached Baseline across
+  Chrome/Firefox/Safari/Edge during 2026, so the map was tracking the *predecessor* of a shipped
+  cross-engine capability and had no row for the successor. It is XL and squarely in the observer's
+  DEATH-TAIL (feature-detect, name as a post-Phase-0 exception, do NOT build) — recorded `missing` so the
+  exception is **visible and counted** rather than absent. An unlisted exception is indistinguishable from
+  an oversight.
+- **`<search>` element** (Baseline Apr 2026) carries an *implicit ARIA landmark* `role=search`. Per
+  CONSTITUTION VI.1 `manuk-a11y` is already load-bearing for the agent observation channel, so an unmapped
+  landmark role is an **agentic** gap, not merely a rendering one. That is a class of miss the CSS-shaped
+  audits keep walking past.
+Also added: **multi-keyword `display: inline flex`** (a parse failure here does not degrade — the
+declaration is DROPPED and the box falls back to inherited/initial display, i.e. a layout collapse, so it
+must be probed behaviourally rather than with `CSS.supports`), **`animation-composition`**,
+**`text-justify`** (adjacent to the t557 text-metrics work — measure it *after* the advance follows the
+resolved face), **multicol Level 2 `column-wrap`/`column-height`** (kept as its own row so a Level-1 fix
+cannot be silently credited with Level 2), **CloseWatcher** (the actuation surface an agent uses to dismiss
+an overlay, so it belongs to the agentic thread too), **Reporting API**, and **Web Serial** (out of scope,
+named so the cut is deliberate and visible).
+
+WHAT WE WERE WRONG ABOUT: **#28 asked the wrong question and I did not notice.** It reconciled against
+Interop 2026 — the vendors' *priority list* — concluded "19 of 20 already on the map", and read that as the
+map being in good shape. Interop is what the vendors agreed to FIX; it is by construction a list of things
+already known and partly implemented. It says nothing about what SHIPPED, and shipped-and-Baseline is what
+real sites start using. Asking the shipping question instead produced **nine** absent rows in one pass,
+including a cross-engine Baseline capability with no row at all. **A reconciliation is only as wide as the
+source it reconciles against, and one source is not a survey** — rotate the source, not just the date.
+
+CORRECTED: nothing stale-optimistic this window. Map 208 → **218 capabilities** (t548's nine adds plus this
+one's — see the ratchet note below); MEASURED count unchanged, so the ratchet reads discovery, not rot,
+exactly as the audit's instructions promise. The stale-pessimistic rule paid again on the second pass: a
+first grep for `<search>` / `multicol` / `justify` came back looking empty or misleading (`search` matched
+`url.searchParams`, `multicol` matched the Level-1 row) — **grep with clean single terms and READ the hit
+before minting a row**, which is the same discipline #27 recorded.
+
+RE-RANK: **no.** None of the nine outranks the live thread. t557 fixed named-font resolution and t558 made
+the advance follow it (SHAPE on the probe page 36.4% → 90.9%), which is the largest measured fidelity move
+of the session and it is mid-arc. The nine adds are bounded probes for later ticks, and two of them
+(`<search>`, CloseWatcher) should be taken together with the agentic thread rather than as CSS rows.
+
+LAST_SURFACE_AUDIT set to 558; next due 568.

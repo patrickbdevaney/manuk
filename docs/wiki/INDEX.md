@@ -954,7 +954,7 @@
   - L878 · The ex unit is the face's real x-height (OS/2 sxHeight), not 0.5em (tick 500)
   - L892 · The cap unit is the face's real cap-height — it used to collapse to 0px (tick 502)
   - L907 · No named font family ever resolved — fontdb's name query is case-SENSITIVE (tick 557)
-  - L952 · ⚠ A SECOND defect is downstream, and it is now isolated
+  - L952 · The SECOND defect, one line later: intern_family discarded the case (tick 558)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`

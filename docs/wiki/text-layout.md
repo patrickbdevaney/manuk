@@ -949,14 +949,31 @@ lowercase in the query fails it with *"AR PL KaitiM Big5 IS installed on this bo
 Named(...), not SansSerif"*. It also asserts an absent family still falls back, so the fix cannot be "call
 everything a match".
 
-### ⚠ A SECOND defect is downstream, and it is now isolated
+### The SECOND defect, one line later: `intern_family` discarded the case (tick 558)
 
 Resolution is fixed and verified — a trace at the layout call site shows
 `["DejaVu Sans"] -> Named(0)`, `["Noto Sans"] -> Named(1)`, `["DejaVu Serif"] -> Named(2)`,
 `["Liberation Mono"] -> Named(3)`, `["NoSuchFontXYZ"] -> SansSerif`: five declarations, five distinct
 outcomes. **And the rendered widths are still 330px for all of them.** So the family now resolves and the
 *advance* does not follow — `face_id`/`load`, or the measurement path, is not using the resolved face.
-That is a separate bug with a separate fix, and it is stated here rather than folded in because a tick that
-claims two causes has proven neither. The probe page
-(`tests/wpt/probes/font-family-resolution.html`) is the standing RED proof for it: five families must
-produce five different widths. [[box-layout]]
+**Found and fixed at t558, and it is one line away from the first fix.** `intern_family` stored the
+**lowercased** key in `family_names`, so `family_name_of` handed `face_id` a lowercase string,
+`fontdb::Family::Name` missed *again*, and every named family fell back to `Family::SansSerif`. Dedup must
+be case-INSENSITIVE — CSS family matching is, so `font-family: ARIAL` and `font-family: Arial` have to
+intern to one id — but **storage must be case-PRESERVING**, and this function was doing only the first job.
+
+**A fix upstream of a lossy step is not a fix.** t557's assertion lived at the resolution layer and could
+not see this: five families, five distinct `Named(...)` ids, one `FaceId(0)`, one width. So the t558 test
+measures the **WIDTH** — `distinct_named_families_measure_distinctly` enumerates the mixed-case families
+actually installed on the box (417 here), requires more than one distinct `FaceId` *and* more than one
+distinct measured width, and fails with *"every one of 417 installed families resolved to the SAME face"* if
+the lowercase comes back. **Assert on the observable, not on the intermediate** — the intermediate was
+already correct and the observable was not.
+
+Measured end-to-end on the committed probe against live Chromium: **SHAPE 36.4% → 90.9%**, misplaced spans
+**5 of 5 → 1 of 11**, and `"DejaVu Sans"` / `"Noto Sans"` / `"DejaVu Serif"` / `"Liberation Mono"` all land
+within the 8px tolerance where they had shared one width.
+
+**One residual, named rather than folded in:** `"NoSuchFontXYZ"` — for an unknown family Chromium falls back
+to a *serif* default (299px) and we fall back to *sans* (330px). That is a default-family divergence, not a
+resolution one. [[box-layout]]

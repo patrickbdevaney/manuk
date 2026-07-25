@@ -22506,3 +22506,65 @@ NEXT: **the advance must follow the resolved face** — `face_id`/`load`/the mea
 Then the cascade-origin bug from t556 (author `* { margin:0 }` losing to the UA `body { margin:8px }` — every
 CSS reset on the web hits it), then nytimes.com, the crawl-side sig correction, STEP 1(c) 100-tab RSS,
 Audit #28's three CSS probes. Cadences: self-audit 564; surface 558 (DUE next tick); const 559; wall 567.
+
+## Tick 558 — the advance now FOLLOWS the resolved face (probe SHAPE 36.4% → 90.9%) + surface audit #29 (2026-07-25)
+
+t557 predicted a downstream defect and named it precisely: the family resolved and the advance did not
+follow. Found it, and it is one line away from the t557 fix. `intern_family` stored the **lowercased** key
+in `family_names`, so `family_name_of` handed `face_id` a lowercase string, `fontdb::Family::Name`
+(case-sensitive) missed *again*, and every named family fell back to `Family::SansSerif`. Five families,
+five distinct `Named(...)` ids, **one `FaceId(0)`, one width (330px)**.
+
+**A fix upstream of a lossy step is not a fix.** t557's assertion was at the resolution layer and could not
+see this — which is exactly why the new test measures the **WIDTH**: `distinct_named_families_measure_
+distinctly` enumerates the 417 mixed-case families installed on this box, requires more than one distinct
+`FaceId` and more than one distinct measured width, and fails with *"every one of 417 installed families
+resolved to the SAME face"* when the lowercase is restored. Dedup stays case-INSENSITIVE (CSS family
+matching is, so `ARIAL` and `Arial` must intern to one id); storage is now case-PRESERVING.
+
+MEASURED end-to-end on the committed probe page against live Chromium:
+  **SHAPE 36.4% → 90.9%** · misplaced spans **5 of 5 → 1 of 11**
+and the four real families (`"DejaVu Sans"` · `"Noto Sans"` · `"DejaVu Serif"` · `"Liberation Mono"`) now
+all land within the 8px tolerance where they previously shared one width. The single residual is known and
+named: `"NoSuchFontXYZ"` — Chromium falls back to a *serif* default (299px), we fall back to *sans* (330px).
+A default-family divergence, not a resolution one; its own small row, not folded in.
+
+CADENCE — SURFACE AUDIT #29 (due at 558), and it found something because it asked a DIFFERENT question.
+**#28 asked the wrong question and I did not notice.** It reconciled against Interop 2026 — the vendors'
+*priority* list — got "19 of 20 already on the map", and I read that as the map being in good shape. But
+Interop is what the vendors agreed to FIX: by construction a list of things already known and partly
+implemented. It says nothing about what SHIPPED, and shipped-and-Baseline is what real sites start using.
+Reading the Baseline digests and "new to the web platform" for Jan–Jun 2026 instead produced **nine absent
+rows in one pass**:
+
+- **`WebGPU` was not on the map at all** — only WebGL was. It reached Baseline across all four engines
+  during 2026, so the map tracked the *predecessor* of a shipped cross-engine capability and had no row for
+  the successor. XL and squarely DEATH-TAIL per the standing orders, recorded `missing` so the exception is
+  **visible and counted** — an unlisted exception is indistinguishable from an oversight.
+- **`<search>`** (Baseline Apr 2026) carries an implicit ARIA landmark `role=search`. `manuk-a11y` is
+  already load-bearing for the agent observation channel (CONSTITUTION VI.1), so an unmapped landmark role
+  is an **agentic** gap, not just a rendering one — a class the CSS-shaped audits keep walking past.
+- plus multi-keyword `display: inline flex` (a parse failure here DROPS the declaration and collapses the
+  box — probe behaviourally, not with `CSS.supports`), `animation-composition`, `text-justify` (adjacent to
+  this very tick's work — measure after the advance lands), multicol Level 2 `column-wrap`/`column-height`
+  (own row so a Level-1 fix cannot be silently credited with it), CloseWatcher (the actuation surface an
+  agent uses to dismiss an overlay), Reporting API, Web Serial (out of scope, named so the cut is visible).
+
+**The generalisable lesson: a reconciliation is only as wide as the source it reconciles against, and one
+source is not a survey. Rotate the source, not just the date.** Map 208 → 218; MEASURED unchanged, so the
+ratchet reads discovery rather than rot. RE-RANK: no — none of the nine outranks the live font arc.
+
+TICK SHAPE: capability (the text advance follows the resolved font family — `intern_family` was discarding
+the case one line downstream of the t557 fix; RED-proven by a WIDTH-level assertion over the box's 417
+installed mixed-case families, and verified end-to-end against Chromium at 36.4% → 90.9% SHAPE on the
+committed probe) + the DUE surface audit #29 (nine absent rows, incl. WebGPU entirely unmapped; #28's method
+corrected). Bar 0 untouched.
+WIKI: docs/wiki/text-layout.md — the tick-557 entry's "⚠ A SECOND defect is downstream" section is now the
+resolved half of that story (same mechanism, one line later).
+
+NEXT: the default-family divergence (unknown family → Chromium serif, ours sans) as a small named row; then
+**re-sweep the corpus** — the font fix is the first change since t551 that should move the SHAPE baseline,
+and the t551 line is differenceable, so this is the first honest before/after the instrument has ever been
+able to report. Then the t556 cascade-origin bug (author `* { margin:0 }` losing to the UA `body` margin —
+every CSS reset hits it), nytimes.com, the crawl-side sig correction, STEP 1(c) 100-tab RSS. Cadences:
+self-audit 564; surface 568; const 559 (DUE next tick); wall 567.

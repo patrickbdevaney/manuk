@@ -435,6 +435,19 @@ impl FontContext {
     }
 
     /// Intern a lowercase family name, returning its stable id.
+    /// Intern a CSS family name: **deduped case-INSENSITIVELY, stored case-PRESERVINGLY.**
+    ///
+    /// Those are two different jobs and this function used to do only the first — it pushed the
+    /// lowercased key into `family_names`, so `family_name_of` handed `face_id` a lowercase string and
+    /// `fontdb::Family::Name` (case-SENSITIVE) missed, fell through to `Family::SansSerif`, and **every
+    /// named family resolved to the same face.** t557 fixed the DETECTION in `resolve_family`; the case
+    /// was then discarded one line later, here, which is why the measured widths did not move at all
+    /// (five families, five distinct `Named(...)` ids, one `FaceId(0)`, one width). *A fix upstream of a
+    /// lossy step is not a fix.*
+    ///
+    /// So: the lowercased form remains the dedup KEY (CSS family matching is case-insensitive, and
+    /// `font-family: ARIAL` and `font-family: Arial` must intern to one id), and the ORIGINAL string is
+    /// what gets stored and handed back to the font database.
     fn intern_family(&self, name: &str) -> u32 {
         let key = name.to_ascii_lowercase();
         if let Some(&id) = self.family_ids.borrow().get(&key) {
@@ -442,7 +455,7 @@ impl FontContext {
         }
         let mut names = self.family_names.borrow_mut();
         let id = names.len() as u32;
-        names.push(key.clone());
+        names.push(name.to_string());
         self.family_ids.borrow_mut().insert(key, id);
         id
     }
@@ -1122,6 +1135,72 @@ mod tests {
         assert!(
             !matches!(bogus, FontFamily::Named(_)),
             "an absent family must fall back, not resolve: {bogus:?}"
+        );
+    }
+
+    /// **Distinct named families must MEASURE distinctly — the advance has to follow the resolution.**
+    ///
+    /// t557 made `resolve_family` return a distinct `Named(...)` for each installed family and the
+    /// rendered widths did not move by a single pixel: five families, five ids, **one `FaceId(0)` and one
+    /// width (330px)**. The case was thrown away one line later by `intern_family`, so `face_id`
+    /// re-queried the case-sensitive `fontdb::Family::Name` with a lowercased string, missed, and fell
+    /// back to `Family::SansSerif` for all of them. *A fix upstream of a lossy step is not a fix* — and
+    /// resolution-level assertions could not see it, which is why this one measures the WIDTH.
+    #[test]
+    fn distinct_named_families_measure_distinctly() {
+        let f = FontContext::new();
+        if f.face_count() == 0 {
+            eprintln!("no system fonts — skipping (an absent measurement, not a pass)");
+            return;
+        }
+        // Families whose real names differ in case AND that are installed here. Take a few and require
+        // that at least two of them measure differently — identical widths across unrelated faces is the
+        // signature of the fallback collapse.
+        let installed: Vec<String> = {
+            let db = f.db.borrow();
+            let mut v: Vec<String> = db
+                .faces()
+                .filter_map(|x| x.families.first().map(|(n, _)| n.clone()))
+                .filter(|n| n.chars().any(|c| c.is_ascii_uppercase()))
+                .collect();
+            v.sort();
+            v.dedup();
+            v
+        };
+        if installed.len() < 4 {
+            eprintln!("too few mixed-case families installed — skipping");
+            return;
+        }
+        const S: &str = "Announcing Rust 1.90.0 and the metrics probe";
+        let mut widths = Vec::new();
+        let mut faces = Vec::new();
+        for name in installed.iter() {
+            let family = f.resolve_family(&[name.clone()]);
+            let key = FontKey {
+                family,
+                bold: false,
+                italic: false,
+            };
+            faces.push(f.primary_face(key));
+            widths.push(f.measure(S, key, 16.0));
+        }
+        let distinct_faces: std::collections::BTreeSet<_> = faces.iter().collect();
+        assert!(
+            distinct_faces.len() > 1,
+            "every one of {} installed families resolved to the SAME face — the advance is not \
+             following the resolution, which is the fallback collapse this test exists for",
+            installed.len()
+        );
+        let mut uniq: Vec<u32> = widths.iter().map(|w| w.to_bits()).collect();
+        uniq.sort_unstable();
+        uniq.dedup();
+        assert!(
+            uniq.len() > 1,
+            "all {} families measured the SAME width ({:.1}px) — a substituted face has different \
+             per-glyph advances, so identical widths across unrelated faces means the named family is \
+             being ignored somewhere downstream of resolution",
+            widths.len(),
+            widths[0]
         );
     }
 }

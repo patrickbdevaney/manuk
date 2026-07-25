@@ -4586,3 +4586,15 @@ miss that and you trade a system-font bug for a webfont bug.
 **Honest limit:** resolution is fixed; the *advance* does not yet follow the resolved face (measured — five
 families still render one width), so the pattern is not closed. `tests/wpt/probes/font-family-resolution.html`
 is the standing proof: five declarations must produce five widths.
+
+**Update (tick 558) — the pattern is now CLOSED.** t557 fixed the resolution and the widths did not move:
+`intern_family` stored the lowercased key, so `face_id` re-queried the case-sensitive
+`fontdb::Family::Name` with lowercase, missed again, and every family still fell back. **A fix upstream of a
+lossy step is not a fix**, and the t557 assertion lived at the resolution layer where everything already
+looked right — so the t558 assertion measures the **WIDTH** instead (417 installed mixed-case families; more
+than one distinct face AND more than one distinct width required). Measured against live Chromium on the
+committed probe: **SHAPE 36.4% → 90.9%**, misplaced spans **5 of 5 → 1 of 11**. **Trap (6), the one this
+pair is really about: assert on the OBSERVABLE, not on the intermediate.** The intermediate was correct after
+t557 and the rendered page was not. Residual, named: an *unknown* family falls back to sans here and to serif
+in Chromium — a default-family divergence, not a resolution one.
+
