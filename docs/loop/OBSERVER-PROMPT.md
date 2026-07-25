@@ -40,6 +40,24 @@ is green — the release must not ship a red build.
 Do not pre-cut. Keep this fresh: when the certificate lands, re-check all lanes, close the musl blocker,
 THEN `workflow_dispatch` release.yml (or push the tag) for `v1.0.0`.
 
+**THEN — and only then — transition the loop into PHASE 1** (owner directive, 2026-07-25). After v1.0.0 is
+pinned, proceed with Phase 1 exactly as documented, no owner handback:
+1. Set the completion marker per `docs/loop/AGENTIC-PHASES-PLAN.md` §1 (`touch .git/manuk-phase0-complete`
+   + JOURNAL/HORIZON status), which is what `scripts/lever-pivot.sh` keys the phase pivot on.
+2. **Run the documented Phase-1 deep research FIRST** — the tab **hibernation-vs-warming** config decision
+   (HORIZON.md "Deep-research markers" → Phase 1; AGENTIC-PHASES-PLAN §6.5 SURVEY + §7 observer-latitude:
+   the observer DECIDES this, web-search-informed, no owner block — mindful of the 32GB box). Refresh the
+   prompt against the FINAL Phase-0 ground truth immediately before running it (§6 nested-cascade rule:
+   each v1 is optimal against reality, not pre-guessed).
+3. Steer the lever-board PHASE MANDATE from Phase 0 → **Phase 1 (UI/UX, tabs first)**: tab-set
+   restore (toggleable startup setting), lean tab ops (add/dup/close), mute/unmute (rides the landed media),
+   pin-to-stay-warm — HORIZON Phase 1. Then continue the verify-gated ratchet into Phases 2–6 per the same
+   plan (each opens with its §6 deep-research prompt refreshed against the layer beneath it).
+
+The phase transition is an OBSERVER steer (board mandate + marker + research), NOT agent-initiated; the
+grind agent only ever obeys the current board. Do not transition until the certificate genuinely PASSES
+and v1.0.0 is pinned — same discipline as the release itself.
+
 ## Division of labor — absolute
 
 - **Agent owns**: `engine/`, `shell/`, `agent/`, `demo/`, tests, `docs/wiki`, journal entries for
