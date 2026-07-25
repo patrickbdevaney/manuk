@@ -168,6 +168,85 @@ impl Cert {
     }
 }
 
+/// One machine-readable row per site, for a CHUNKED sweep.
+///
+/// A 265-site sweep cannot run in one process: a single hanging site takes the whole batch with it, and
+/// `timeout` only isolates cleanly at process granularity. So the sweep runs in chunks — and then each
+/// chunk prints its own certificate over its own five sites, which is not the number anyone wants. The
+/// fix is not to have a human add up 53 stanzas (that is the exact failure `certificate` was just
+/// written to end); it is to make the instrument APPEND rows and compute the certificate over the
+/// accumulated file.
+///
+/// Tab-separated, append-only, `#`-commented header written once: `name coverage shape j0 j1 j2 j3`.
+/// A site whose shape could not be scored writes `-`, and [`rows_from_tsv`] reads that back as `None`
+/// so an unscored site keeps counting against the bar across the chunk boundary too.
+pub fn append_rows_tsv(path: &Path, rows: &[Fidelity]) -> Result<()> {
+    use std::io::Write;
+    let fresh = !path.exists();
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .with_context(|| format!("open {}", path.display()))?;
+    if fresh {
+        writeln!(
+            f,
+            "#name\tcoverage\tshape\th_overflow\toverlap\treading_order\tdead_target"
+        )?;
+    }
+    for r in rows {
+        let num = |v: Option<f64>| match v {
+            Some(x) if !x.is_nan() => format!("{x:.6}"),
+            _ => "-".to_string(),
+        };
+        writeln!(
+            f,
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            r.name,
+            num(r.structure),
+            num(r.shape),
+            r.jarring[0],
+            r.jarring[1],
+            r.jarring[2],
+            r.jarring[3]
+        )?;
+    }
+    Ok(())
+}
+
+/// Read back what [`append_rows_tsv`] wrote. Only the fields the certificate scores are restored —
+/// this is deliberately NOT a full round-trip of `Fidelity`, because a partial reader that silently
+/// returned zeros for the visual score would let a later report print a number nobody measured.
+pub fn rows_from_tsv(path: &Path) -> Result<Vec<Fidelity>> {
+    let text = std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
+    let mut out = Vec::new();
+    for line in text.lines() {
+        let line = line.trim_end();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let f: Vec<&str> = line.split('\t').collect();
+        if f.len() < 7 {
+            anyhow::bail!("malformed row (want 7 fields, got {}): {line}", f.len());
+        }
+        let opt = |s: &str| s.parse::<f64>().ok();
+        let usz = |s: &str| s.parse::<usize>().unwrap_or(0);
+        out.push(Fidelity {
+            name: f[0].to_string(),
+            score: f64::NAN,
+            differing: 0,
+            total: 0,
+            structure: opt(f[1]),
+            shape: opt(f[2]),
+            missing: 0,
+            misplaced: 0,
+            probed: 0,
+            jarring: [usz(f[3]), usz(f[4]), usz(f[5]), usz(f[6])],
+        });
+    }
+    Ok(out)
+}
+
 /// Print the certificate block — the one place a sweep's headline is allowed to come from.
 pub fn certificate_report(rows: &[Fidelity]) {
     let c = certificate(rows);
@@ -765,5 +844,67 @@ mod shape_tests {
         // An EMPTY sweep never holds. A certificate over zero sites is the most flattering possible
         // reading of an engine and the least informative.
         assert!(!certificate(&[]).holds(), "zero sites is not a pass");
+    }
+
+    /// The chunked-sweep round trip. A 265-site sweep runs in timeout-isolated chunks, so the rows
+    /// must survive the process boundary — and the ONE property that must survive is the one that
+    /// makes the certificate honest: an UNSCORED site stays unscored across the boundary. If it came
+    /// back as 0.0 it would count as "measured and failed" (wrong, but harmless); if it came back as
+    /// 1.0, or vanished, the certificate could be met by a chunk that crashed.
+    #[test]
+    fn accumulated_rows_survive_the_chunk_boundary_with_unscored_still_unscored() {
+        let dir = std::env::temp_dir().join("manuk-cert-rows-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("rows.tsv");
+
+        // Chunk 1: one good site, one that could not be shape-scored.
+        let chunk1 = vec![
+            row("good.example", Some(0.91), [0, 0, 0, 0]),
+            Fidelity {
+                shape: None,
+                ..row("unprobeable.example", None, [0, 0, 0, 0])
+            },
+        ];
+        super::append_rows_tsv(&path, &chunk1).unwrap();
+        // Chunk 2: a separate process would append here.
+        let chunk2 = vec![row("jarring.example", Some(0.99), [2, 0, 1, 0])];
+        super::append_rows_tsv(&path, &chunk2).unwrap();
+
+        let back = super::rows_from_tsv(&path).unwrap();
+        assert_eq!(back.len(), 3, "append must not clobber the earlier chunk");
+        assert_eq!(back[0].name, "good.example");
+        assert!((back[0].shape.unwrap() - 0.91).abs() < 1e-6);
+        assert_eq!(
+            back[1].shape, None,
+            "an UNSCORED site must read back as unscored, not as 0.0 and never as a pass — a chunk \
+             that could not measure must not be able to satisfy the certificate"
+        );
+        assert_eq!(
+            back[2].jarring,
+            [2, 0, 1, 0],
+            "the four counts survive in ORDER"
+        );
+
+        // And the certificate over the accumulated file agrees with the certificate over the rows.
+        let c = certificate(&back);
+        assert_eq!(c.sites, 3);
+        assert_eq!(c.scored, 2);
+        assert_eq!(c.shape_ok, 2);
+        assert_eq!(c.clean, [2, 3, 2, 3]);
+        assert!(!c.holds());
+
+        // The header line is a comment and must not be read as a site.
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            text.starts_with("#name\t"),
+            "a header, written once: {text:?}"
+        );
+        assert_eq!(
+            text.matches("#name").count(),
+            1,
+            "and only once, across appends"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -1259,3 +1259,70 @@ RE-RANK: neither add is larger than the standing frontier (the fidelity-instrume
 continue the rebuild (next: §3b root-cause clustering, then the coverage→SHAPE gate-floor flip).
 
 LAST_SURFACE_AUDIT set to 538; next due 548.
+
+## Audit #28 — tick 548 (2026-07-25)
+
+SOURCES (searched, not recalled — the platform moved and my training data did not):
+- Interop 2026 focus areas, read from the authoritative list:
+  https://github.com/web-platform-tests/interop/blob/main/2026/README.md — **20 focus areas**:
+  container style queries · CSS anchor positioning · CSS attr() · CSS contrast-color() · CSS zoom ·
+  custom highlights · dialogs and popovers · fetch uploads and ranges · IndexedDB · JSPI for Wasm ·
+  media pseudo-classes · Navigation API · scoped custom element registries · scroll-driven animations ·
+  scroll snap · CSS shape() · view transitions · web compat · WebRTC · WebTransport. **4
+  investigations**: accessibility testing · JPEG XL · mobile testing · WebVTT.
+- https://hacks.mozilla.org/2026/02/launching-interop-2026/ · https://webkit.org/blog/17818/announcing-interop-2026/
+  · https://web.dev/blog/interop-2026 · https://www.igalia.com/news/interop-2026.html
+- Ladybird newsletters (an independent engine, walking this same road):
+  https://ladybird.org/newsletter/2026-04-30/ · .../2026-05-31/ · .../2026-06-30/
+- Baseline 2025/2026: https://web.dev/baseline/2025
+
+RECONCILED, one line per Interop-2026 area: **19 of 20 were already on the map** (web compat is not a
+feature). Present and gated/works: container queries incl. style queries (97), dialogs+popovers,
+fetch uploads and ranges (102), IndexedDB (36/37/168), media pseudo-classes, Navigation API (94),
+scroll snap, view transitions (92) + cross-document VT (93), WebVTT. Present and correctly NAMED as
+death-tail/out-of-scope: anchor positioning, custom highlights, JSPI, scoped registries, scroll-driven
+animations, WebRTC, WebTransport, JPEG XL. **The stale-pessimistic rule paid AGAIN** — every clean
+single-term grep found the row already there; nothing needed minting from scratch. That is the fifth
+consecutive audit where the first instinct ("this can't be on the map") was wrong.
+
+WHAT WE WERE WRONG ABOUT — and it is a MAP defect, not a capability one. Row 99 read
+**`CSS attr() / zoom / shape() / contrast-color()`** and carried **ONE `partial`** for **FOUR
+capabilities that Interop 2026 names SEPARATELY.** Three failure modes in one cell:
+1. **It counts as ONE measured capability when it is four** — so the MEASURED ratchet invariant, the
+   one number that is supposed to make discovery rewarded and rot punished, was being satisfied at a
+   quarter price here.
+2. **Its single verdict hides which of the four work.** The note said so honestly in prose
+   ("STILL MISSING: … typed attr(), per-element zoom, shape(), contrast-color()") — which means the
+   information existed and the *scoreable* field contradicted it. A cell whose note disagrees with its
+   status is a cell nobody can act on.
+3. **It made three unmeasured things inherit a `partial`.** Inherited-partial is the exact
+   stale-optimistic shape this ledger exists to catch, and it is worse than `unknown`, because
+   `unknown` gets probed and `partial` gets skipped.
+
+ADDED (decomposed, all `unknown` on purpose — an inherited verdict is not a measurement):
+- **CSS zoom (per-element property)** — t409's note said "only full-page zoom infra exists", which is a
+  note, not a measurement.
+- **CSS shape() function** — never probed on its own. Behavioural probe required, not `CSS.supports`:
+  a parse-only yes is the trap t543 caught on light-dark().
+- **CSS contrast-color()** — likely **stale-PESSIMISTIC**: a `servo_pref` for it was flipped in the
+  t464–466 arc. Re-probe before building, and measure the RESOLUTION half separately from parse
+  (t543/t544 precedent: a `partial` is not one verdict, each half is its own fact).
+Row 99 keeps `partial` and is now **only** typed `attr()`.
+
+CORRECTED: nothing stale-optimistic found this window. Map 205 → **208 capabilities**; MEASURED count
+unchanged (the three adds are new `unknown`s, not downgrades), so the ratchet sees discovery, not rot —
+exactly as the audit's own instructions promise.
+
+RE-RANK: **no.** The three new unknowns are cheap bounded probes, and the standing CO-#1 is the
+observer's STEP-1 exit verification, which is mid-execution: test262 ran at t546 (94.14% of 87,009
+executed / 81.41% honest), the certificate became computable at t547, and the full-corpus sweep is the
+item in flight. The probes reopen the cheap-probe vein that t543's journal declared mined out — a
+genuine, small result of leaving the frame — but they queue behind the sweep.
+
+SWEEP NOTE (measured during this tick, and it re-ranks nothing but it is the biggest thing seen this
+window): the first corpus chunk gives **nytimes.com structural 0.0% — 2,406 of 2,407 elements MISSING**,
+and **manuk 28.8s vs chromium 6.1s** on it (load budget exhausted + the 20,000-task event-loop ceiling
+hit). theguardian.com then ran past 3.5 minutes without completing. So the corpus read is going to be
+expensive AND informative, which is the argument for running it rather than reasoning about it.
+
+LAST_SURFACE_AUDIT set to 548; next due 558.

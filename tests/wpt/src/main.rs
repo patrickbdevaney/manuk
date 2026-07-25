@@ -85,6 +85,32 @@ fn run() {
         return;
     }
 
+    // `manuk-wpt certificate --rows FILE` — the Phase-0 exit certificate over an ACCUMULATED sweep.
+    // The companion to `fidelity --rows-out`: a chunked sweep writes rows, this reads them all and
+    // prints one certificate. No engine, no network, no fonts — it is arithmetic over a file.
+    if args.first().map(String::as_str) == Some("certificate") {
+        let Some(p) = flag(&args[1..], "--rows") else {
+            eprintln!(
+                "usage: manuk-wpt certificate --rows FILE   (written by `fidelity --rows-out`)"
+            );
+            std::process::exit(2);
+        };
+        match manuk_wpt::fidelity::rows_from_tsv(std::path::Path::new(&p)) {
+            Ok(rows) => {
+                eprintln!(
+                    "certificate over {} accumulated site row(s) from {p}",
+                    rows.len()
+                );
+                manuk_wpt::fidelity::certificate_report(&rows);
+            }
+            Err(e) => {
+                eprintln!("✗ {e}");
+                std::process::exit(2);
+            }
+        }
+        return;
+    }
+
     // `manuk-wpt test262` — the ECMAScript conformance suite against the engine we ship. See
     // `test262.rs` for the probity rules and the runner's stated limits.
     if args.first().map(String::as_str) == Some("test262") {
@@ -726,6 +752,14 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
     // gate run says "2 sites" and is obviously not a corpus read, which is better than a headline that
     // only appears when someone remembers to ask for it.
     manuk_wpt::fidelity::certificate_report(&rows);
+    // `--rows-out` APPENDS this chunk's rows, so a 265-site sweep split into timeout-isolated chunks
+    // still yields ONE certificate (`manuk-wpt certificate --rows FILE`) instead of 53 stanzas for a
+    // human to add up — the exact failure `certificate` was written to end.
+    if let Some(p) = flag(args, "--rows-out") {
+        if let Err(e) = manuk_wpt::fidelity::append_rows_tsv(std::path::Path::new(&p), &rows) {
+            eprintln!("✗ --rows-out {p}: {e}");
+        }
+    }
     if !ok && floor > 0.0 {
         std::process::exit(1);
     }

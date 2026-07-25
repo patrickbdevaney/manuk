@@ -21904,3 +21904,69 @@ unknown). Ranked follow-ons from t546 stand: JS_AddInterruptCallback (Bar 0 — 
 stopped, and it is why a test262 hang cannot be told from a slow test), SharedArrayBuffer/Atomics
 enablement (718 subtests + wasm threads), the runner's async/module goals (12,381 unrun). Cadences:
 self-audit 554; surface 548 (DUE next tick); const 551; wall 567.
+
+## Tick 548 — SURFACE AUDIT #28: Interop 2026 reconciled, and a LUMPED row was scoring four capabilities as one + chunked-sweep accumulation (2026-07-25)
+
+Cadence: the **surface audit was due at 548** and tick.sh blocks past it. Ran it properly — searched the
+web rather than recalling, read the authoritative Interop 2026 list, reconciled all 20 focus areas + 4
+investigations against docs/loop/CONSTELLATION.tsv. Ledger: Audit #28.
+
+RECONCILED: **19 of 20 were already on the map** (the 20th, "web compat", is not a feature). The
+stale-pessimistic rule paid for the FIFTH consecutive audit — every clean single-term grep found the row
+already there. Nothing needed minting from scratch.
+
+WHAT WE WERE WRONG ABOUT, and it is a MAP defect: row 99 read `CSS attr() / zoom / shape() /
+contrast-color()` and carried **ONE `partial` for FOUR capabilities Interop 2026 names SEPARATELY.**
+Three failure modes in one cell: (1) it counts as ONE measured capability when it is four, so the
+MEASURED ratchet invariant — the number whose whole job is to reward discovery and punish rot — was being
+satisfied at a quarter price here; (2) its single verdict CONTRADICTS its own note, which honestly said
+"STILL MISSING: typed attr(), per-element zoom, shape(), contrast-color()" — the information existed and
+the *scoreable* field disagreed with it, and a cell whose note contradicts its status is a cell nobody
+can act on; (3) it made three unmeasured things INHERIT a `partial`, and inherited-partial is worse than
+`unknown`, because `unknown` gets probed and `partial` gets skipped.
+
+DECOMPOSED into four rows: row 99 keeps `partial` and is now ONLY typed attr(); **CSS zoom
+(per-element)**, **CSS shape()**, **CSS contrast-color()** are their own rows at `unknown` — on purpose,
+because an inherited verdict is not a measurement. contrast-color is flagged likely stale-PESSIMISTIC (a
+servo_pref for it was flipped in the t464–466 arc). Map 205 → 208 capabilities; MEASURED count UNCHANGED,
+so the ratchet sees discovery rather than rot, exactly as the audit's own instructions promise. This
+reopens the cheap-probe vein that t543's journal declared mined out — a small, genuine result of leaving
+the frame.
+
+CAPABILITY (the instrument half): **chunked-sweep accumulation**, without which the corpus sweep cannot
+produce ONE certificate. A 265-site sweep cannot run in one process — a single hanging site takes the
+batch with it, and `timeout` only isolates at process granularity — so it runs in chunks, and each chunk
+was printing its own certificate over its own five sites. The fix is not a human adding up 53 stanzas
+(that is the exact failure t547's `certificate` was written to end): `fidelity --rows-out FILE` APPENDS
+one machine-readable row per site, and `manuk-wpt certificate --rows FILE` computes the certificate over
+the accumulated file. Arithmetic over a file — no engine, no network.
+
+RED-PROVEN: the property that must survive the process boundary is that an **UNSCORED site stays
+unscored**. Mutating the reader so an unparseable shape falls back to `1.0` — i.e. a chunk that could not
+measure becomes a chunk that passed — makes
+`accumulated_rows_survive_the_chunk_boundary_with_unscored_still_unscored` FAIL. Restored; 33 lib tests
+green.
+
+MEASURED IN PASSING (the sweep's first chunk, before I paused it to land this tick): **nytimes.com
+structural 0.0% — 2,406 of 2,407 elements MISSING**, MISSING-by-tag `div×1837 p×101 a×82 figure×69`, and
+**manuk 28.8s vs chromium 6.1s** (12s load budget exhausted mid-phase AND the 20,000-task event-loop
+ceiling hit). theguardian.com then ran past 3.5 minutes without completing. Two facts follow: the corpus
+read is going to be **expensive** (the naive 5-site chunking projects to many hours) and **informative**
+(a top-tier news site rendering ~nothing is not a placement-drift finding, it is a class failure). Paused
+rather than raced against the wall, because a sweep contending with verify.sh is how this loop earns
+false-REDs.
+
+TICK SHAPE: scheduled instrument (surface audit #28 — Interop 2026 reconciled; a lumped 4-in-1 row
+decomposed into 4 scoreable rows, +3 honest `unknown`s) + capability (chunked-sweep row accumulation:
+`--rows-out` + `manuk-wpt certificate --rows`, RED-proven on the unscored-survives-the-boundary property).
+No engine src touched; Bar 0 untouched.
+WIKI: none — the mechanism this tick adds is documented in the t547 conformance-and-oracles entry it
+extends ("The exit certificate is now COMPUTED…"), and the audit's findings belong in
+docs/loop/SURFACE-AUDIT.md Audit #28, which is where a future session looks for them. [no-pattern]
+
+NEXT: STEP 1(a) for real — a **stratified** corpus sweep (chunk 3, timeout 600s, round-robin across the
+15 category classes so a partial read is representative rather than news-heavy), accumulating to one
+certificate via `--rows-out`, then one actuals line in PHASE0-ROADMAP-ANCHOR.md §6. nytimes.com's 0.0%
+structural is already the biggest single finding on the board and will likely outrank everything after
+the sweep names its cluster. Then STEP 1(c) 100-tab RSS. Cadences: self-audit 554; surface 558; const
+551; wall 567.
