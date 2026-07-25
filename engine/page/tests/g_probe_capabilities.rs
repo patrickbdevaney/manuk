@@ -344,6 +344,28 @@ const HTML: &str = r##"<!doctype html>
              CSS.supports('image-rendering', 'crisp-edges') &&
              !CSS.supports('image-rendering', 'floops-not-a-value');
     });
+
+    // ── light-dark() CSS color function (Baseline 2024, surface audit #27): color: light-dark(A,B)
+    // picks A or B by the used color-scheme — the modern way to drop the @media (prefers-color-scheme)
+    // duplication. The color-scheme PROPERTY landed via a Stylo pref-flip (t464); this measures the
+    // consuming FUNCTION. Parse-level via CSS.supports (resolution needs a cascaded color-scheme the
+    // static probe does not drive); a bogus inner color discriminates a rubber-stamp.
+    probe('lightdark', function () {
+      return CSS.supports('color', 'light-dark(white, black)') &&
+             !CSS.supports('color', 'light-dark(floops-not-a-color, black)');
+    });
+
+    // ── CSS Level-4 stepped/sign math round()/mod()/abs()/sign() (Baseline 2024, surface audit #27).
+    // calc()/min()/max()/clamp() are older and WPT-covered; these are the newer functions modern
+    // fluid-type/layout math uses. Parse-level via CSS.supports in a <length> context (sign() returns a
+    // number, so it is tested inside calc()); a bogus function discriminates a rubber-stamp.
+    probe('cssmath4', function () {
+      return CSS.supports('width', 'round(down, 23px, 10px)') &&
+             CSS.supports('width', 'mod(18px, 5px)') &&
+             CSS.supports('width', 'abs(-5px)') &&
+             CSS.supports('width', 'calc(sign(-3) * 10px)') &&
+             !CSS.supports('width', 'floopz(1px)');
+    });
   </script>
 
   <!-- ES-module capability, measured from INSIDE a real `<script type=module>`. Modules are deferred,
@@ -476,4 +498,16 @@ const PINNED: &[&str] = &[
     // (module_resolve_hook returns null → `import from './y.js'` fails at ModuleLink) — recorded as
     // the gap on CONSTELLATION cell 169, a pre-fetched sync module registry is its follow-on subsystem.
     "esmmodule:yes",
+    // tick 539 (surface audit #27) — light-dark() CSS color function (Baseline 2024) PARSES + VALIDATES
+    // in this Stylo build (a bogus inner color is rejected — not a rubber-stamp). The stale-pessimistic
+    // rule pays yet again: added `unknown` in audit #27 expecting it might be gecko-gated, measured
+    // working a tick later. This pins the PARSE half; light-dark()'s color-scheme-dependent RESOLUTION
+    // in getComputedStyle is untested by the static probe → cell `partial`. Flips to a behavioural pin
+    // the day a probe drives color-scheme and reads the resolved color; never by retuning this probe.
+    "lightdark:yes",
+    // tick 539 (surface audit #27) — CSS Level-4 stepped/sign math round()/mod()/abs()/sign() (Baseline
+    // 2024) PARSE + VALIDATE (a bogus function is rejected). calc/min/max/clamp were already WPT-covered;
+    // these newer functions are what modern fluid-type math uses. Parse half only (whether round(down,
+    // 23px, 10px) actually computes 20px is untested here) → cell `partial`.
+    "cssmath4:yes",
 ];

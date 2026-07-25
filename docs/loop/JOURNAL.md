@@ -21503,3 +21503,34 @@ TICK SHAPE: cadence surface-audit (see JOURNAL Tick 538). WIKI: none — cadence
 
 NEXT: resume the fidelity rebuild — §3b root-cause clustering (group failures by first-divergence signature +
 offset, report DISTINCT CAUSES not sites). Cadences: self-audit 544; surface 548; const 543; wall 547.
+
+## Tick 539 — PROBE: light-dark() + CSS Level-4 math measured WORKING (audit-#27 unknowns resolved) (2026-07-24)
+
+Closing the two `unknown` cells surface audit #27 (t538) opened, via the cheap measure-and-pin path the
+board ranks high ("? outranks X"). Both are parse-level CSS.supports probes in G_PROBE_CAPABILITIES with a
+bogus-value discriminator (not a rubber-stamp).
+
+MEASURED (both YES — the stale-pessimistic rule pays AGAIN; I added them unknown expecting a possible gecko
+fence like @starting-style, and both parse fine a tick later):
+- **lightdark:yes** — `CSS.supports('color','light-dark(white,black)')` → yes; a bogus inner color rejected.
+  light-dark() the FUNCTION parses+validates in this servo Stylo (the color-scheme PROPERTY already landed
+  via a pref-flip t464). Cell unknown→PARTIAL: pins the PARSE half; the color-scheme-dependent RESOLUTION in
+  getComputedStyle is untested by the static probe (behavioural follow-up noted).
+- **cssmath4:yes** — round(down,23px,10px) / mod(18px,5px) / abs(-5px) / calc(sign(-3)*10px) all parse+validate;
+  a bogus function rejected. The Level-4 stepped/sign math (calc/min/max/clamp were already WPT-covered).
+  Cell unknown→PARTIAL: pins the parse/@supports half; whether round() actually COMPUTES 20px is untested.
+
+Both added to G_PROBE_CAPABILITIES PINNED (their loss is now a regression). RED-PROVEN: breaking each probe's
+real clause to a bogus function name flips it to `:no` and the PINNED assertion fails on `expected
+lightdark:yes` / `cssmath4:yes`; restored from a cp snapshot, test green (1 passed). Net map effect: UNKNOWN
+6→4, MEASURED 199→201.
+
+TICK SHAPE: measure-and-pin probe (two audit-#27 stale-unknown cells resolved to partial via parse-level
+CSS.supports probes with bogus-value discriminators, both PINNED + RED-proven; no capability src built —
+existing Stylo behaviour measured; Bar 0 untouched). WIKI: none — findings in docs/loop/CONSTELLATION.tsv +
+gate doc comments. [no-pattern]
+
+NEXT: resume the fidelity rebuild CO-#1 — §3b root-cause clustering (group failures by first-divergence
+signature + offset, report DISTINCT CAUSES not sites), then the coverage→SHAPE gate-floor flip. A behavioural
+light-dark()/round() resolution probe (upgrade partial→works) is a bounded follow-up when interleaving.
+Cadences: self-audit 544; surface 548; const 543; wall 547.
