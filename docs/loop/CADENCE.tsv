@@ -336,3 +336,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 574	df40a7d1	1785003082	2026-07-25T14:11:22-04:00	2509	capability	85	8	439	25	278	81	3896	6960	0	330	31	`CloseWatcher`, and the API's reason to exist was a live bug we had shipped (2026-07-25)
 575	d4180d61	1785006534	2026-07-25T15:08:54-04:00	3452	correctness	85	10	552	53	279	81	3896	6960	0	331	31	the cascade's FIRST sort was missing: every CSS reset on the web lost to our UA sheet (2026-07-25)
 576	301fb5bf	1785008790	2026-07-25T15:46:30-04:00	2256	capability-honesty	85	10	655	58	280	81	3896	6960	0	333	31	the honest "no" rots in BOTH directions: `@supports` promised 31 properties we never render (2026-07-25)
+577	aa7c5720	1785011428	2026-07-25T16:30:28-04:00	2638	correctness	85	9	400	106	281	81	3896	6960	0	334	31	a line-break OPPORTUNITY is not a space: the string the agent reads was corrupted (2026-07-25)

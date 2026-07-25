@@ -4846,3 +4846,28 @@ The standing rule (`honest-answer-is-not-a-fixed-answer`) is usually read as *th
 becoming a lie. It runs the other way too: here the engine told the truth and the **test** was the
 lie. Same failure — a claim about capability that nobody re-measured after the capability moved — and
 the same correction: **the gate follows the capability, never the reverse.**
+
+---
+
+## The page as READ — hyphenated words, URLs and long tokens in the agent's observation (tick 577)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| **Extracting "the text of this page"** for an agent to reason over, for full-text history search, for a summarizer or a find-in-page | `Observation.text` (what `manuk-agent` hands a model) and `store::history_index`'s embedded body — the two places the browser's *semantic* output is consumed rather than looked at | ✅ (tick 577) — every **break opportunity** was rendered as a space. The line breaker emits one fragment per opportunity, not per line, and CSS puts one after a hyphen, after `//`, and after `?` in a query string, so `visible_text`'s `join(" ")` produced `non- mainstream`, `https:// walled.example/? a=1&b=2`, `bot- challenge`, `standards- based`. Fixed with the geometry already on the fragment: same baseline + touching boxes ⇒ one word. Gated by `G_VISIBLE_TEXT_RUNS`, RED-proven on both halves of that condition. |
+
+**The class, and it is bigger than this function.** A rendering engine has two outputs: pixels and
+**text-for-machines**, and only the first has instruments. Every gate, cluster and fidelity score in
+this repo compares *boxes* — so a defect that produces correct boxes and a wrong string is invisible to
+the entire apparatus by construction. This one was found by a `contains()` assertion in a test about
+honest error pages, which the wall does not even launch.
+
+**What that implies for the agentic surface.** For an agent-native browser the extracted text is not a
+convenience API, it is the product; a model that cannot find `non-mainstream` on a page that plainly
+says it will conclude the page does not say it, and will act on that. The same question is worth asking
+of every other machine-facing string we emit — accessible names, `innerText`, link text, the a11y
+tree's labels: **is it assembled from the DOM (safe), or from laid-out fragments (needs this rule)?**
+
+**And the tell for the next one.** The bug produced a *plausible* string. It read like English, it
+passed casual inspection, and it broke exactly the queries a user or a model would issue. Corrupted
+output that still looks like output is the hardest kind to notice, and the only defence is asserting on
+a value the defect must change — here, `!contains("non- mainstream")` alongside `contains("non-mainstream")`.

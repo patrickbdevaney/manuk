@@ -23767,3 +23767,91 @@ t572/t573's stylesheet-work-done-per-element defect). Then the same-face `{Open 
 crawl-side `.SIG` correction; and a fresh corpus sweep, since t569's grid-stretch fix and t575's
 cascade-origin fix are both page-wide geometry changes and the sweep is differenceable.
 Cadences: const 583; surface 578; self-audit 584; wall 587.
+
+## Tick 577 — a line-break OPPORTUNITY is not a space: the string the agent reads was corrupted (2026-07-25)
+
+The last of the three unwatched reds t575's sweep found. It was filed as *"the honest-interstitial page
+renders without its own `<h1>` text — a self-contained rendering repro on a page we author"*. **It is not a
+rendering bug at all**, and what it actually is matters more than what it looked like.
+
+**THE MEASUREMENT.** `Page::visible_text()` on the interstitial returns:
+
+```text
+"This site blocks non- mainstream browsers https:// walled.example/? a=1&b=2 did not load:
+ the site served a bot- challenge (cf- mitigated). … standards- based engines."
+```
+
+A space after every hyphen, after `//`, after `?`. The `<h1>`'s `textContent` is exactly right; the boxes
+are exactly right. Only this string is wrong.
+
+**THE CAUSE.** The line breaker emits one fragment per **break opportunity**, not per line — and CSS puts
+one after a hyphen, after `//`, and after `?` in a query string. `visible_text` concatenated with
+`words.join(" ")`, so a word the layout merely *could* have broken came back broken, **on the same line**,
+with a space wedged into it.
+
+**WHY IT MATTERS, AND IT IS NOT A TEST HELPER.** `visible_text()` is `Observation.text` — the string
+`manuk-agent` hands a model (`agent/src/lib.rs:782`) — and the body `store::history_index` embeds for
+full-text history search. So a model asked to find "non-mainstream" on a page that plainly says it finds
+nothing and concludes the page does not say it; a user searching their history for a URL finds nothing.
+Every hyphenated compound, every URL and every long token on the open web, silently.
+
+**WHY NO INSTRUMENT COULD SEE IT, and this is the transferable half.** A rendering engine has two outputs —
+pixels and **text-for-machines** — and only the first has instruments here. Every gate, cluster and fidelity
+score in this repo compares *boxes*. A defect that produces correct boxes and a wrong string is invisible to
+the entire apparatus **by construction**, which is why this one had to be found by a `contains()` assertion
+inside a test about honest error pages that the wall does not launch. The rendering was never the thing to
+check; the **consumer** was. Constitution invariant I3 says the semantic model lands in lockstep with the
+renderer — this is what it looks like when it does not: the renderer was right for years and its semantic
+projection was wrong the whole time.
+
+**THE FIX USES GEOMETRY THAT WAS ALREADY THERE.** `TextFragment` already carries `x`, `baseline` and
+`width`. Two runs on the same baseline whose boxes touch (`next.x <= prev.x + prev.width`) are one word:
+concatenate. A real gap on the same line, or a different baseline, separates words: one space. A trailing
+space belonging to a run is inside both its `text` and its `width`, so it survives either branch. No new
+plumbing, no re-measurement, no second pass.
+
+**RED-PROVEN ON BOTH HALVES OF THE CONDITION, deliberately, because each could have carried the fix alone.**
+(1) Drop the x-adjacency test (concatenate everything) → `alpha beta gamma` fails: that is the guard against
+"fix claim 1 by gluing the page into one token", which would have passed the headline claim and been worse
+than the bug. (2) Drop the **baseline** test and keep only x-adjacency → `before<br>after` fails, because a
+new line restarts at `x = 0`, which trivially satisfies "touches the previous run's right edge". Neither
+half is decoration.
+
+**THE TELL, for the next one of these.** The bug produced a *plausible* string. It read like English, it
+survived casual inspection, and it broke exactly the queries a user or a model would issue. **Corrupted
+output that still looks like output is the hardest kind to notice**, and the only defence is asserting on a
+value the defect must change — so the gate asserts `!contains("non- mainstream")` alongside
+`contains("non-mainstream")`, not merely the latter.
+
+**A METHODOLOGY HAZARD, CAUGHT BY THIS TICK'S OWN GATE AND WORTH MORE THAN A FOOTNOTE.** The first
+full-suite sweep after the fix reported `g_visible_text_runs` RED — while running it alone reported green.
+The cause: the RED-proof procedure snapshots the file with `cp -a` and restores it the same way, and
+**`cp -a` preserves mtime**. Cargo compares mtimes, saw a file older than the artifact, and skipped the
+rebuild — so the sweep ran the *RED-patched* binary while the source on disk was correct. `touch` on the
+file and the rebuild happens. **A restore that the build system cannot see is a silent no-op with the
+opposite sign**: had the RED patch been one the gate did not catch, the sweep would have reported green on
+a tree that was not the tree. Sibling of `scripted-edit-silent-noop` and of the git-checkout probe hazard
+already recorded — the general form is *every undo needs its own verification, because an undo that did not
+happen looks exactly like one that did.* Restore with `cp` (not `cp -a`), or `touch` afterwards. That this
+was caught at all is the gate doing its job on the day it was written.
+
+**ALL THREE UNWATCHED REDS ARE NOW CLEARED** (t576 took two, this takes the third). `manuk-page --lib` goes
+15/15; the full page suite under the shipping feature set is green. The structural finding behind them
+stands unchanged and is not this loop's to fix: the wall launches ~19 of ~280 page-test binaries and runs
+the crate suites without `--features stylo`, so "the wall is green" and "the tree is green" remain different
+statements. Recorded for the observer; `scripts/` is not touched.
+
+TICK SHAPE: correctness of the AGENTIC surface (the browser's machine-facing text output, which had no
+instrument at all) — one function, whole-web blast radius, and the first defect this loop has found that is
+structurally invisible to every box-comparing gate it owns. Bar 0 untouched; no ratchet floor moved.
+Gates: `G_VISIBLE_TEXT_RUNS` (`engine/page/tests/g_visible_text_runs.rs`), RED-proven on both halves.
+WIKI: docs/wiki/dom-semantics.md — "…and then a break OPPORTUNITY was read as a space".
+PATTERN: new — the page as READ (and the general form: a rendering engine's second output has no gates).
+
+NEXT: **audit the OTHER machine-facing strings for the same assembly bug** — accessible names, `innerText`,
+link text, the a11y tree's labels: each is either assembled from the DOM (safe) or from laid-out fragments
+(needs this rule), and nothing has ever checked which. Then the `apply_has_rules` per-element hoist
+(`:has()` is 505 ms of the 2,570 ms cascade). Then the same-face `{Open Sans/13}` metric delta; the
+crawl-side `.SIG` correction; and a fresh corpus sweep, since t569's grid-stretch and t575's cascade-origin
+fixes are both page-wide geometry changes and the sweep is differenceable.
+Cadences: surface 578 (NEXT TICK); const 583; self-audit 584; wall 587.

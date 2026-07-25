@@ -6107,17 +6107,47 @@ impl Page {
     /// free. (`textContent` is a node-tree API and would miss shadow content entirely
     /// while including unrendered light-DOM children.)
     pub fn visible_text(&self) -> String {
-        let mut words: Vec<String> = Vec::new();
+        // ── A LINE-BREAK OPPORTUNITY IS NOT A SPACE.
+        //
+        // The line breaker emits one fragment per break *opportunity*, not per line — and CSS puts
+        // one after a hyphen, after `//`, and after `?` in a query string. This used to be
+        // `words.join(" ")`, so a word the layout merely COULD have broken came back broken, on the
+        // same line, with a space wedged into it: `non- mainstream`, `https:// walled.example/? a=1`.
+        //
+        // Nothing about the rendering was wrong — the pixels and the DOM `textContent` are both
+        // right. Only this string was, and this string is `Observation.text` (what `manuk-agent`
+        // hands a model) and the body `store::history_index` embeds. So a model asked to find
+        // "non-mainstream" found nothing, and so did a user searching their history for a URL.
+        //
+        // The geometry needed to tell the two cases apart was already on the fragment: two runs on
+        // the same baseline whose boxes touch are one word. A trailing space that belongs to a run
+        // is inside both its `text` and its `width`, so it survives either branch.
+        let mut out = String::new();
+        let mut prev: Option<(f32, f32)> = None; // (baseline, right edge)
         self.root_box.walk(&mut |b| {
             if let BoxContent::Inline(frags) = &b.content {
                 for f in frags {
-                    if !f.text.is_empty() {
-                        words.push(f.text.clone());
+                    if f.text.is_empty() {
+                        continue;
                     }
+                    let adjacent = match prev {
+                        // Same line AND the previous run's box reaches this one: one word, split by
+                        // the breaker. The half-pixel tolerance is for accumulated advance rounding,
+                        // not for a real gap — a space is an order of magnitude wider.
+                        Some((base, right)) => {
+                            (base - f.baseline).abs() < 0.5 && f.x <= right + 0.5
+                        }
+                        None => true, // nothing emitted yet: no separator before the first run
+                    };
+                    if !adjacent {
+                        out.push(' ');
+                    }
+                    out.push_str(&f.text);
+                    prev = Some((f.baseline, f.x + f.width));
                 }
             }
         });
-        words.join(" ")
+        out
     }
 }
 

@@ -149,6 +149,44 @@ content, and honour shadow DOM and slot assignment **for free**. The bug that ex
 laid out correctly with real geometry but was missing from both `visible_text` **and the a11y tree**,
 because both were walking the node tree.
 
+## …and then a break OPPORTUNITY was read as a space (tick 577)
+
+Reading the fragment tree fixed the *selection* of text. It introduced a subtler error in its
+*assembly*, which then sat there: `visible_text` concatenated with `words.join(" ")`.
+
+**The line breaker emits one fragment per break OPPORTUNITY, not per line.** CSS puts one after a
+hyphen, after `//`, and after `?` in a query string — so a word the layout merely *could* have broken
+came back broken, on the same line, with a space wedged into it:
+
+```text
+rendered:  This site blocks non-mainstream browsers
+observed:  This site blocks non- mainstream browsers
+rendered:  https://walled.example/?a=1&b=2
+observed:  https:// walled.example/? a=1&b=2
+```
+
+**Nothing about the rendering was wrong.** The pixels are right and the DOM `textContent` is right;
+only this one string was wrong — and this string is `Observation.text`, what `manuk-agent` hands a
+model, and the body `store::history_index` embeds for full-text history search. So a model asked to
+find "non-mainstream" on the page found nothing, and a user searching their history for a URL found
+nothing. Every hyphenated compound, every URL and every long token on the open web, silently, in
+favour of a *plausible-looking* string.
+
+**The geometry to tell the two cases apart was already on the fragment.** Two runs on the same
+baseline whose boxes touch (`next.x <= prev.x + prev.width`) are one word — concatenate. A real gap on
+the same line, or a different baseline, separates words — one space. A trailing space belonging to a
+run is inside both its `text` and its `width`, so it survives either branch.
+
+Both halves of that condition are load-bearing, and the gate proves it: drop the x-adjacency test and
+`alpha beta gamma` glues into one token; drop the **baseline** test and `before<br>after` glues, because
+a new line restarts at `x = 0` which trivially satisfies "touches the previous run's right edge."
+
+> **Why no visual gate could see it, and how it was actually found.** Every instrument that scores
+> rendering scores *boxes*. This defect produced correct boxes and a wrong string, so the entire
+> visual apparatus was blind to it by construction. It surfaced as a `contains()` assertion failing in
+> `hard_wall_detection_and_honest_interstitial` — a test about **honest error pages** — which the wall
+> does not launch. The rendering was never the thing to check; the **consumer** was.
+
 ## `innerText` is the RENDERED text, and the binding CAN compute it — it holds the styles already
 
 The JS `el.innerText` getter returned `textContent` for a long time, with a comment claiming the true
