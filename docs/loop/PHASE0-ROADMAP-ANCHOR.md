@@ -201,3 +201,21 @@ never WPT count, never a vibe.
   only then re-read the ranking. That is the next instrument brick, and it outranks acting on the current
   ordering.
 
+- `SIGNATURE SPLIT @tick 554 — the ranking is a CAUSE LIST now, and t552's lead is RESTORED on a signature
+  that can carry it.` `geometry:` is split into `geometry/displaced:` (size matches within 2px — an
+  ANCESTOR-layout fact, one parent's frame is off and every descendant inherits it, so the fix is upstream
+  and fixes many at once) and `geometry/mis-sized:` (the element's own box is wrong). Measured on four
+  sites, the top causes are now unambiguous and they are **all MIS-SIZED**:
+  `mis-sized: width ~8px (<a>)` 3 sites / **138 hits** / median **12px** ·
+  `mis-sized: width ~16px (<a>)` 3 sites / 62 hits / median **20px** ·
+  `mis-sized: height ~16px (<div>)` 3 sites / 26 hits / median **24px** ·
+  `mis-sized: height ~32px (<div>)` 3 sites / 10 hits / median 39px. The largest `displaced` cluster is
+  far behind (`<li>` vertical drift, 2 sites / 11 hits).
+  **So t552's `<a>`-WIDTH lead was right in substance and drawn from a signature that could not support
+  it** — the instance that falsified it at t553 was a *displacement* wrongly merged into the width bucket,
+  and with the confound separated the width cause stands as the largest by both sites and hits. The lead is
+  live again, and it is now falsifiable in the right place. ⚠ Next step is to open SEVERAL instances, not
+  one: a 12–20px width error on a *text* anchor is a shaping/metrics question, on an *icon* anchor
+  (`[130 471 18×46] vs [0 459 30×46]`) it is an intrinsic-sizing question, and the printer makes telling
+  them apart cheap now.
+

@@ -22277,3 +22277,56 @@ ranked list becomes a cause list, then re-read the t551 baseline rows through it
 rows are committed. Only then chase the top cause. Then nytimes.com as a named single-site investigation,
 the crawl-side sig correction, STEP 1(c) 100-tab RSS, Audit #28's three CSS probes. Cadences: self-audit 554
 (DUE next tick); surface 558; const 559; wall 567.
+
+## Tick 554 — the geometry signature is split by SIZE-MATCH: the ranking is a cause list, and t552's lead is restored + self-audit (2026-07-25)
+
+Cadence: the **self-audit was due at 554**. Ran `./scripts/self-audit.sh` — *"methodology and reality
+agree"*, every check green (49 process defects each naming the mechanism that closes it; 392 clusters; 433
+pattern rows; every gate declares how to break it; the tick-shape claim cross-checked against the cluster
+registry). `LAST_AUDIT_TICK` set to 554.
+
+CAPABILITY, and it is the brick t553 said outranked acting on the ranking: **`geometry:` is split into
+`geometry/displaced:` and `geometry/mis-sized:`.** Displacement means the box's width and height both match
+within 2px and only its position is wrong — an **ANCESTOR-layout fact**: one parent's frame is off and every
+descendant inherits it, so the fix is upstream and closes many at once. Mis-sizing is a fact about the
+element's own box. They have different fixes, and merging them is what let t551 and t552 each read a cause
+off this ranking and be wrong in a different direction.
+
+RED-PROVEN: collapsing the split (`sized_ok = false`) makes `displaced_and_mis_sized_are_different_clusters`
+fail — with the diagnostic showing both divergences merged into one
+`geometry/mis-sized: x (horizontal) ~128px (<a>)`. The same test also pins that the split must **separate
+causes, not shatter the ranking**: two displacements of the same tag and band across two sites still merge
+into one cluster with `sites == 2`. 37 lib tests green.
+
+MEASURED on four sites, and the ranking is finally unambiguous — **the top four causes are all MIS-SIZED**:
+  `mis-sized: width ~8px (<a>)` .... 3 sites · **138 hits** · median **12px**
+  `mis-sized: width ~16px (<a>)` ... 3 sites · 62 hits · median **20px**
+  `mis-sized: height ~16px (<div>)`  3 sites · 26 hits · median **24px**
+  `mis-sized: height ~32px (<div>)`  3 sites · 10 hits · median 39px
+and the largest `displaced` cluster is far behind (`<li>` vertical drift, 2 sites / 11 hits).
+
+**So t552's `<a>`-WIDTH lead was right in substance and drawn from a signature that could not support it.**
+The instance that falsified it at t553 — `[434 183 92×17] vs [305 183 92×17]`, identical size, 129px
+displaced — was a *displacement* wrongly merged into the width bucket. With the confound separated, the
+width cause stands as the largest by both sites and hits. The lead is live again and now falsifiable in the
+right place. That is three ticks of the instrument correcting itself and arriving back at the same lead with
+evidence that can actually bear it — which is what the loop is for, and cheaper than three ticks spent in
+the wrong subsystem.
+
+⚠ NEXT STEP STATED PRECISELY, because this is exactly where the last two ticks went wrong: **open SEVERAL
+instances, not one.** A 12–20px width error on a *text* anchor is a shaping/metrics question; on an *icon*
+anchor (`[130 471 18×46] vs [0 459 30×46]`) it is an intrinsic-sizing question. Both are in the same cluster
+and the printer makes telling them apart cheap now. Do not pick a subsystem before counting which kind
+dominates.
+
+TICK SHAPE: scheduled instrument (self-audit — methodology and reality agree) + instrument capability (the
+geometry signature split by size-match, RED-proven both that it separates causes AND that it does not
+shatter the ranking; the ranking read live and t552's lead restored on a signature that can carry it). No
+engine src touched; Bar 0 untouched; no ratchet floor moved.
+WIKI: none — the mechanism is documented at the signature-construction site in `oracle::cluster` and its
+consequence is the anchor's §6 entry, which is where the next session looks for the lead. [no-pattern]
+
+NEXT: **count the two kinds inside the `<a>`-width cluster** (text anchors vs icon anchors) by opening
+several instances, then chase whichever dominates — shaping/metrics or intrinsic sizing. Then nytimes.com as
+a named single-site investigation, the crawl-side sig correction, STEP 1(c) 100-tab RSS, Audit #28's three
+CSS probes. Cadences: self-audit 564; surface 558; const 559; wall 567.

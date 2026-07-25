@@ -313,7 +313,24 @@ pub fn cluster(divs: &[Divergence]) -> Vec<Cluster> {
                 } else {
                     ("x (horizontal)", dx)
                 };
-                format!("geometry: {axis} ~{}px   (<{}>)", mag_band(mag), d.tag)
+                // ── DISPLACED vs MIS-SIZED are DIFFERENT BUGS and must not share a cluster
+                // (tick 554). t553 printed the first instance ever and it read
+                // `[434 183 92×17] vs [305 183 92×17]` — identical size, 129px displaced — sitting in the
+                // same cluster as `[130 471 18×46] vs [0 459 30×46]`, a 12→30px mis-size. A right-sized
+                // box in the wrong place is an ANCESTOR-layout fact (one parent's frame is off and every
+                // child inherits it); a wrong-sized box is a sizing fact in the element itself. They have
+                // different fixes, and grouping them is what let two consecutive ticks read a cause off
+                // this ranking and be wrong both times.
+                //
+                // The test is the SIZE axes only: a box whose width and height both match within the
+                // same tolerance the diff used is correctly sized, wherever it ended up.
+                let sized_ok = dw.abs() <= 2 && dh.abs() <= 2;
+                let kindword = if sized_ok { "displaced" } else { "mis-sized" };
+                format!(
+                    "geometry/{kindword}: {axis} ~{}px   (<{}>)",
+                    mag_band(mag),
+                    d.tag
+                )
             }
         };
         let e = acc.entry(sig).or_insert_with(|| {
@@ -719,6 +736,62 @@ mod tests {
     /// into ONE cluster of 3 sites — and this assertion fails. The magnitude band is what lets the
     /// board tell a saturated near-miss from an amplified page collapse.
     #[test]
+    /// **A right-sized box in the wrong place and a wrong-sized box are DIFFERENT BUGS, and the
+    /// signature must say which.**
+    ///
+    /// t553 printed the first cluster instance ever and found `[434 183 92×17] vs [305 183 92×17]` —
+    /// identical size, 129px displaced — sharing a cluster with `[130 471 18×46] vs [0 459 30×46]`, a
+    /// 12→30px mis-size. Displacement is an ANCESTOR-layout fact (one parent's frame is off and every
+    /// descendant inherits it, so the fix is upstream and fixes many at once); mis-sizing is a fact about
+    /// the element itself. Merging them is what let t551 and t552 each read a cause off this ranking and
+    /// be wrong in a different direction.
+    #[test]
+    fn displaced_and_mis_sized_are_different_clusters() {
+        let displaced = Divergence {
+            site: "a.example".into(),
+            id: "body[0]/a[0]".into(),
+            kind: "geometry".into(),
+            tag: "a".into(),
+            chrome: "[434 183 92×17]".into(),
+            manuk: "[305 183 92×17]".into(),
+            delta: [129, 0, 0, 0], // x moved, size identical
+        };
+        let mis_sized = Divergence {
+            site: "b.example".into(),
+            id: "body[0]/a[0]".into(),
+            kind: "geometry".into(),
+            tag: "a".into(),
+            chrome: "[130 471 18×46]".into(),
+            manuk: "[0 459 30×46]".into(),
+            delta: [130, 12, 12, 0], // and 12px too wide
+        };
+        let c = cluster(&[displaced.clone(), mis_sized.clone()]);
+        assert_eq!(
+            c.len(),
+            2,
+            "a pure displacement and a mis-size must never share a cluster — they have different fixes: \
+             {:?}",
+            c.iter().map(|x| x.signature.clone()).collect::<Vec<_>>()
+        );
+        let sigs: Vec<String> = c.iter().map(|x| x.signature.clone()).collect();
+        assert!(
+            sigs.iter().any(|s| s.contains("geometry/displaced:")),
+            "the right-sized one is DISPLACED: {sigs:?}"
+        );
+        assert!(
+            sigs.iter().any(|s| s.contains("geometry/mis-sized:")),
+            "…and the other is MIS-SIZED: {sigs:?}"
+        );
+
+        // Two displacements of the same tag and band DO still merge — the split must separate causes,
+        // not shatter the ranking into one cluster per element.
+        let mut d2 = displaced.clone();
+        d2.site = "c.example".into();
+        let merged = cluster(&[displaced, d2]);
+        assert_eq!(merged.len(), 1, "same cause, two sites, one cluster");
+        assert_eq!(merged[0].sites, 2);
+    }
+
     /// **A cluster must carry an OPENABLE instance — the signature is a grouping hypothesis, not a
     /// cause, and it has to be possible to look at one.**
     ///
