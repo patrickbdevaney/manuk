@@ -71,6 +71,7 @@
   - L1052 · BUILD SPEC — inline SVG internals: borrow usvg, don't hand-write geometry (tick 393)
   - L1084 · Paint half LANDED (tick 394)
   - L1096 · List markers follow the HTML "ordinal value" algorithm — a running counter, not a sibling index (tick 411)
+  - L1116 · justify-content: normal is NOT flex-start — it is what makes an auto grid track stretch (tick 569)
 
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
@@ -986,4 +987,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-901 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+902 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

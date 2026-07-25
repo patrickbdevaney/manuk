@@ -23100,3 +23100,65 @@ NEXT: **implied/`auto` grid track sizing** — the t566 root cause with its RED 
 measured layout cause on the board. Then the same-face `{Open Sans/13}` metric delta (variable-font variant vs
 hinting); then the t556 cascade-origin bug (author `* { margin:0 }` losing to the UA `body` margin); then the
 crawl-side `.SIG` correction. Cadences: self-audit 574; surface 578; const 575; wall 587.
+
+## Tick 569 — `justify-content: normal` is not `flex-start`, and that one conflation disabled grid track stretching everywhere (2026-07-25)
+
+t566 committed the RED proof and named the target as "Taffy-side track sizing". **The target was wrong, and
+finding that out took one grep rather than a tick, because the proof was committed rather than described.**
+The implied-track code is fine. What was broken is one enum, three subsystems away.
+
+`justify-content` has six values in our CSS model and the CSS **initial value is not among them**. `normal`
+fell through both cascades' `_ =>` arm onto `FlexStart`, and `to_taffy_style` then handed taffy a concrete
+`Some(JustifyContent::FLEX_START)`. That reads as a harmless normalisation. It is the whole bug, because
+`normal` is precisely the value whose meaning the **formatting context** decides: flex-start in a flex
+container, **stretch** in a grid one. CSS Grid §11.8 *Stretch auto Tracks* — the step where an `auto`-max
+track claims its share of the container's free space — runs **only when the inline axis is stretch-aligned**.
+taffy models this exactly right (`justify_content` is an `Option`; flexbox resolves `None` to `FLEX_START`,
+grid to `STRETCH`); we filled the `Option` in and took the decision away from it. **So every grid this
+browser has ever laid out skipped §11.8 — author declaration or not.**
+
+MEASURED, on the committed probe against live Chromium (`tests/wpt/probes/grid-implied-tracks.html`, 600px
+container, `grid-template-areas:"l r"`, no `grid-template-columns`): **88px / 133px → 267px / 313px**, against
+Chromium's 289 / 291. The tracks now sum to the container exactly (267 + 20 gap + 313 = 600), which is §11.8
+running. The **residual is a different organ**: free space is distributed equally (+179px each), so the 46px
+split asymmetry is our two `<section>`s' **max-content contributions** differing by 46px where Chromium's
+differ by 2 — for two labels of identical length. That is an intrinsic-sizing question and it is now the
+sharpest thing the probe knows; naming it as alignment again would repeat t565's mistake.
+
+GATED `G_GRID_IMPLIED_TRACK_STRETCH`, RED-proven by re-collapsing `Normal → FLEX_START` (290px columns →
+**10px / 11px**). The gate carries **two guards beside the feature**, because the live failure mode of this
+fix is swapping one hard-coded alignment for another: an explicit `justify-content:center` must still leave
+the tracks content-sized and centre them, and a flex row of three fixed items must still pack at 0/100/200.
+Both stayed green *under the RED patch* — which is what makes them guards rather than decoration.
+
+**AND THE HEADLINE LEAD IS CORRECTED, with evidence rather than inference.** This does NOT fix
+martinfowler.com, and I checked rather than assumed: re-run after the fix still shows the two-column
+collapse (`[345 2110 293×292]` in Chromium vs `[20 2500 619×174]` ours — ours full-width, one column). Read
+the site's actual CSS: the container is `class = 'card-box topics'` →
+`grid-template-columns: repeat(auto-fill, minmax(18em, 1fr))`, and `stylo_map.rs::template_to_tracks` maps
+`RepeatCount::AutoFill`/`AutoFit` through `_ => 1` — **one column, for the whole responsive-card idiom**.
+18em ≈ 288px into 619px is Chromium's two 293px columns exactly. So the four-tick martinfowler hunt has a
+fourth answer, and this time it is a *read of the site's own stylesheet* rather than a probe generalisation.
+Both bugs were real; they were never the same bug.
+
+The lesson to carry beside t566's: **a context-dependent CSS keyword cannot be flattened onto one of its
+meanings at parse time.** `normal`, `auto` and `stretch` are the family. And when a borrowed library models
+the distinction as an `Option`, **that `Option` is the contract** — filling it in discards information the
+library was about to use. This is a cheap thing to audit and I have not audited it: `align-items` is mapped
+the same eager way, and `align-content`/`justify-items` are not modelled at all (they reach taffy as `None`,
+which is why grid ROWS were already correct and is the only reason this was half-invisible).
+
+TICK SHAPE: capability (`JustifyContent::Normal` — the CSS initial value given its own variant, defaulted,
+mapped in both cascades and passed to taffy as `None` so the formatting context resolves it; §11.8 now runs
+on every grid) + measurement (probe re-run vs live Chromium 88/133 → 267/313; the residual re-attributed to
+max-content contribution; martinfowler's real cause read off its stylesheet and named). Bar 0 untouched.
+WIKI: docs/wiki/box-layout.md — "`justify-content: normal` is NOT `flex-start` — it is what makes an `auto`
+grid track stretch (tick 569)". Probe README row updated with the after-number.
+
+NEXT: **`repeat(auto-fill, …)` / `auto-fit` track expansion** — `template_to_tracks` collapses both to a
+single track, so every responsive card grid on the web renders as one column; martinfowler.com is the
+committed evidence and taffy already has `GridTemplateComponent::Repeat`, which our `Single(track(t))`
+mapping never uses. Then the max-content contribution asymmetry the probe now isolates; then the eager
+`align-items` mapping + unmodelled `align-content`/`justify-items` (same class of bug as this one, audited
+rather than guessed); then the same-face `{Open Sans/13}` metric delta; then the t556 cascade-origin bug.
+Cadences: self-audit 574; surface 578; const 575; wall 587.

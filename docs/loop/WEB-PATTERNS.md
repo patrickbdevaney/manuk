@@ -4665,3 +4665,31 @@ hit and the map arm is still missing. **(2)** The fix must not shadow the explic
 child, so an index walk silently inspects head and reports nothing, which fails (or passes) for the wrong
 reason. **(4)** This class of gap is systematically under-found: every audit that reconciles against CSS-shaped
 sources walks past it, and it took an audit that read what actually SHIPPED to surface it.
+
+## A CSS Grid whose tracks are `auto` — i.e. almost every grid on the web (tick 569)
+
+**Pattern:** `display:grid` with tracks the author never sized explicitly — `grid-template-areas:"sidebar main"`
+with no `grid-template-columns`, an implied column from auto-placement, `grid-auto-columns` left at its initial
+`auto`. The author's mental model is "the grid fills its container and the tracks divide it up", and that model
+is correct *because* CSS Grid §11.8 **Stretch auto Tracks** gives every `auto`-max track a share of the
+container's leftover space.
+
+**The class this unlocks: every grid layout that does not hard-code its track widths.** §11.8 runs **only when
+the inline axis is stretch-aligned**, and the inline axis alignment is `justify-content`, whose initial value is
+`normal`. Our CSS enum had no `Normal` variant, so both cascades stored the initial value as `FlexStart` and
+handed taffy a concrete `FLEX_START` — which meant **no grid this browser has ever laid out ran §11.8**, whether
+or not the page mentioned `justify-content`. The visible result is a two-column layout huddled against the left
+edge with the container's right half empty: nothing missing, nothing misplaced, every item in the right cell,
+the columns simply content-sized. Measured against live Chromium on a 600px container: **88px / 133px where
+Chromium gives 289px / 291px** → now 267px / 313px.
+
+**The traps.** **(1)** It reads as a *placement* bug and it is an *alignment* bug — four ticks hunted it in the
+grid code, and the defect was one enum in the cascade. **(2)** `normal` is a **context-dependent keyword**:
+flex-start in flex, stretch in grid. Flattening it onto one meaning at parse time is exactly the mistake, and
+`auto` and `stretch` are the rest of that family. **(3)** Where a borrowed layout library models the distinction
+as an `Option`, **that `Option` is the contract** — filling it in discards the information the library was about
+to use. **(4)** The fix's own failure mode is replacing one hard-coded alignment with another, so an explicit
+`justify-content:center` must still leave the tracks content-sized, and flex must still pack at the start;
+both are asserted as guards beside the feature in `G_GRID_IMPLIED_TRACK_STRETCH`. **(5)** The `repeat(auto-fill,
+minmax(…,1fr))` responsive-card idiom is a **separate** unfixed bug in the same area — both cascades collapse it
+to one column — and conflating the two is how the martinfowler.com hunt acquired four wrong answers.

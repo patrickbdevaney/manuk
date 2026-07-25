@@ -558,13 +558,18 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
             stylo::values::computed::FlexBasis::Size(sz) => size_to_dim(&sz),
             _ => Dim::Auto,
         };
+        // AlignFlags: 0 AUTO, 1 NORMAL, 2 START, 3 END, 4 FLEX_START, 5 FLEX_END, 6 CENTER,
+        // 7 LEFT, 8 RIGHT, 11 STRETCH, 14/15/16 SPACE_{BETWEEN,AROUND,EVENLY}.
+        // This is the LIVE cascade, so `normal` MUST land on `Normal` here — the arm below is the
+        // one that decides whether a grid's `auto` tracks stretch (CSS Grid §11.8).
         s.justify_content = match av(cv.clone_justify_content().primary()) {
-            5 | 3 => crate::JustifyContent::FlexEnd,
+            5 | 3 | 8 => crate::JustifyContent::FlexEnd,
             6 => crate::JustifyContent::Center,
             14 => crate::JustifyContent::SpaceBetween,
             15 => crate::JustifyContent::SpaceAround,
             16 => crate::JustifyContent::SpaceEvenly,
-            _ => crate::JustifyContent::FlexStart,
+            2 | 4 | 7 => crate::JustifyContent::FlexStart,
+            _ => crate::JustifyContent::Normal,
         };
         let map_ai = |v: u8| match v {
             5 | 3 | 13 => crate::AlignItems::FlexEnd,

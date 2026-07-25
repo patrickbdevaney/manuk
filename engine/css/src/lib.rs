@@ -581,9 +581,17 @@ pub enum VerticalAlign {
     Super,
 }
 
-/// `justify-content` — main-axis distribution of flex items.
+/// `justify-content` — main-axis distribution of flex items, inline-axis distribution of grid tracks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JustifyContent {
+    /// The INITIAL value, and it is **not a synonym for `flex-start`** — that conflation is what this
+    /// variant exists to undo. `normal` behaves as `flex-start` in a FLEX container but as `stretch` in
+    /// a GRID one, and the grid half is load-bearing: CSS Grid §11.8 "Stretch auto Tracks" only runs
+    /// when the axis is stretch-aligned, so an `auto` track absorbs the container's free space *only*
+    /// under `normal`. With `normal` folded into `FlexStart` every grid we built skipped that step and
+    /// content-sized its implied tracks — a 600px container with `grid-template-areas:"l r"` produced
+    /// 88px/133px columns where Chromium gives 289px/291px.
+    Normal,
     FlexStart,
     FlexEnd,
     Center,
@@ -1066,7 +1074,7 @@ impl ComputedStyle {
             border_spacing: 0.0,
             border_collapse: false,
             box_sizing: BoxSizing::ContentBox,
-            justify_content: JustifyContent::FlexStart,
+            justify_content: JustifyContent::Normal,
             align_items: AlignItems::Stretch,
             flex_direction: FlexDirection::Row,
             flex_wrap: FlexWrap::NoWrap,
@@ -3963,7 +3971,11 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "space-between" => JustifyContent::SpaceBetween,
                 "space-around" => JustifyContent::SpaceAround,
                 "space-evenly" => JustifyContent::SpaceEvenly,
-                _ => JustifyContent::FlexStart,
+                "flex-start" | "start" | "left" => JustifyContent::FlexStart,
+                // Everything else — including the initial `normal` and an explicit `stretch` — is
+                // `Normal`, which is stretch in grid and flex-start in flex. Falling back to
+                // `FlexStart` here would silently re-introduce the implied-track bug.
+                _ => JustifyContent::Normal,
             };
         }
         "align-items" => {

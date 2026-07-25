@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **330** | ticks 1–568 |
-| median tick cycle | **20m** | 329 intervals |
+| ticks landed | **331** | ticks 1–569 |
+| median tick cycle | **20m** | 330 intervals |
 | median, last 10 | **10m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.97** | 339.4h elapsed |
-| median verify wall | **65s** | 269 ticks |
+| **ticks per hour** | **0.97** | 340.0h elapsed |
+| median verify wall | **66s** | 270 ticks |
 | wall trend | 39s → 85s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **274**
+* **live gates**: 27 → **275**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**171 of 330 ticks** (52%) moved a
+**172 of 331 ticks** (52%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **171** capability ticks, median cycle **20m**
-* median diff per tick: **+218 / −34** lines across 8 files
+* **172** capability ticks, median cycle **20m**
+* median diff per tick: **+219 / −34** lines across 8 files
 
 ## Every tick
 
@@ -427,5 +427,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **566** | 2026-07-25 08:11 | 4m | measurement | 85s | +127/−32 | 274 | 81 | 56.0% · | ROOT CAUSE: implied grid tracks are content-sized where Chromium stretches them (2026-07-2 |
 | **567** | 2026-07-25 08:14 | 3m | two | 85s | +173/−34 | 274 | 81 | 56.0% · | WALL AUDIT #15 (62s, the leanest on record) + CONSTITUTION CHECK #37: I3 is now OVERDUE (2 |
 | **568** | 2026-07-25 08:28 | 14m | capability | 85s | +229/−36 | 274 | 81 | 56.0% · | `<search>` is a landmark (the I3 queue, discharged) + SURFACE AUDIT #30 measures what #29  |
+| **569** | 2026-07-25 09:02 | 34m | capability | 85s | +318/−43 | 275 | 81 | 56.0% · | `justify-content: normal` is not `flex-start`, and that one conflation disabled grid track |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

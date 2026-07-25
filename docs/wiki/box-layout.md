@@ -1112,3 +1112,39 @@ resets it, the marked item takes the counter, and it steps by `±1` (`-1` when `
 items. One pass, one source for "what number is this item". Gated by
 `list_ordinals_follow_reversed_and_value_continuation`, RED-proven (revert to the index form →
 reversed reads `1. 2. 3.` and the value list reads `1. 7. 3.`).
+
+## `justify-content: normal` is NOT `flex-start` — it is what makes an `auto` grid track stretch (tick 569)
+
+Our `JustifyContent` enum had six variants and no `Normal`, so the CSS **initial value** was stored as
+`FlexStart` — by both cascades — and handed to taffy as a concrete `JustifyContent::FLEX_START`. That reads
+like a harmless normalisation. It is not, because `normal` is the one value whose meaning is **decided by the
+formatting context**:
+
+- in a **flex** container it behaves as `flex-start`;
+- in a **grid** container it behaves as **`stretch`**.
+
+And the grid half is load-bearing. CSS Grid §11.8 *Stretch auto Tracks* — the step that gives an `auto`-max
+track its share of the container's leftover space — runs **only when the inline axis is stretch-aligned**.
+taffy encodes this exactly: `style.justify_content()` is an `Option`, and it resolves `None` per context
+(`compute/flexbox.rs` → `unwrap_or(FLEX_START)`, `compute/grid/mod.rs` → `unwrap_or(STRETCH)`). By always
+passing `Some(FLEX_START)` we took that decision away from it, and **every grid we ever laid out skipped
+§11.8** — whether or not the author had written `justify-content` at all.
+
+The visible symptom was a two-column layout huddled against the left edge with the container's right half
+empty. `tests/wpt/probes/grid-implied-tracks.html`: a 600px container, `grid-template-areas:"l r"`, no
+`grid-template-columns`. Chromium 289px / 291px; ours **88px / 133px**. Every item was in the right cell and
+nothing was missing — the columns were simply content-sized, which is why it read as a placement bug for
+four ticks.
+
+The fix is one variant (`JustifyContent::Normal`, now the `Default`), the two cascades mapping the initial
+value onto it (`stylo_map.rs` `AlignFlags` 0/1/11; the text parser's fallback), `map_justify` returning
+`Option` so `Normal → None`, and `getComputedStyle` serialising it as `"normal"` — which is also what Chrome
+reports. Gated by `G_GRID_IMPLIED_TRACK_STRETCH`, RED-proven by re-collapsing `Normal → FLEX_START`
+(290px columns → 10px/11px). The gate carries two guards beside the feature, because the failure mode here
+is replacing one hard-coded alignment with another: an explicit `justify-content:center` must still leave the
+tracks content-sized and centre them, and a flex row must still pack at the start.
+
+**The general shape, and it is not specific to grid:** a CSS keyword whose meaning is *context-dependent*
+cannot be flattened onto one of its meanings at parse time. `normal`, `auto` and `stretch` are the family to
+watch. Where a downstream library models the distinction with an `Option`, that `Option` is the contract —
+filling it in is discarding information the library was about to use.

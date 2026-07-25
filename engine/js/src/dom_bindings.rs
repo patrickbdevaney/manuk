@@ -723,6 +723,8 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
     // so any layout code that measured a flex container got garbage. Serialize the CSS keyword,
     // exactly as Chrome's resolved value.
     let justify_content = match cs.justify_content {
+        // Chrome resolves the initial value as the keyword `normal`, not `flex-start`.
+        JustifyContent::Normal => "normal",
         JustifyContent::FlexStart => "flex-start",
         JustifyContent::FlexEnd => "flex-end",
         JustifyContent::Center => "center",

@@ -111,15 +111,22 @@ fn map_wrap(w: CssWrap) -> FlexWrap {
     }
 }
 
-fn map_justify(j: CssJustify) -> JustifyContent {
-    match j {
+/// `None` is not "unset" to taffy — it is the CSS initial value `normal`, and taffy resolves it
+/// PER FORMATTING CONTEXT exactly as the spec asks: flexbox falls back to `FLEX_START`, grid falls
+/// back to `STRETCH` (which is what gates CSS Grid §11.8 "Stretch auto Tracks"). Handing taffy a
+/// concrete `FLEX_START` instead — which is what we did while the CSS enum had no `Normal` — is
+/// therefore not a harmless normalisation: it silently disables free-space distribution for every
+/// `auto` grid track, on every grid, whether or not the author wrote `justify-content` at all.
+fn map_justify(j: CssJustify) -> Option<JustifyContent> {
+    Some(match j {
+        CssJustify::Normal => return None,
         CssJustify::FlexStart => JustifyContent::FLEX_START,
         CssJustify::FlexEnd => JustifyContent::FLEX_END,
         CssJustify::Center => JustifyContent::CENTER,
         CssJustify::SpaceBetween => JustifyContent::SPACE_BETWEEN,
         CssJustify::SpaceAround => JustifyContent::SPACE_AROUND,
         CssJustify::SpaceEvenly => JustifyContent::SPACE_EVENLY,
-    }
+    })
 }
 
 fn map_align(a: CssAlign) -> AlignItems {
@@ -229,7 +236,7 @@ pub fn to_taffy_style(cs: &ComputedStyle, calc: &mut Vec<(f32, f32)>) -> Style {
         },
         align_items: Some(map_align(cs.align_items)),
         align_self: cs.align_self.map(map_align),
-        justify_content: Some(map_justify(cs.justify_content)),
+        justify_content: map_justify(cs.justify_content),
         gap: Size {
             width: length(cs.column_gap),
             height: length(cs.row_gap),
