@@ -654,6 +654,11 @@ pub fn cascade_via_stylo_sized(
     if !has_sheets.is_empty() {
         let mut applied = 0usize;
         let _t_has = ();
+        // Lift the `:has()` selectors out ONCE. This used to happen inside the per-element loop —
+        // every rule of every `:has()`-carrying sheet re-walked, its `@media` re-evaluated and each
+        // selector re-asked whether it was relative, for every element on the page. See
+        // `RelativeRule` for the measurement, including which `n` actually drives it.
+        let has_index = crate::collect_relative_rules(&has_sheets);
         timed(&mut ph.has_ns, || {
             let nodes: Vec<NodeId> = dom.flat_descendants(dom.root());
             for node in nodes {
@@ -667,9 +672,7 @@ pub fn cascade_via_stylo_sized(
                 let Some(cs) = map.get_mut(&node) else {
                     continue;
                 };
-                for sh in &has_sheets {
-                    applied += sh.apply_has_rules(dom, node, cs, parent_fs);
-                }
+                applied += crate::apply_relative_rules(&has_index, dom, node, cs, parent_fs);
             }
         });
         let _ = _t_has;

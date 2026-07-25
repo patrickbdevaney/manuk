@@ -1907,6 +1907,73 @@ impl Rule {
     }
 }
 
+/// One `:has()` selector lifted out of the stylesheets, with everything the per-element pass needs.
+///
+/// **This type exists because the filtering was per-ELEMENT and depends only on the STYLESHEET.**
+/// `apply_has_rules` used to re-walk every rule of every `:has()`-carrying sheet for every element,
+/// re-evaluating each rule's `@media` and re-asking each selector whether it was relative — work whose
+/// answer cannot change between elements. Third instance of the same defect class as t572's
+/// `cascade_pseudo` and t573's `property_at(i)`: *work that depends only on the stylesheet, done once
+/// per element.*
+///
+/// **Measured, and the interesting part is WHICH n drives it.** Quadrupling the rules *within* a sheet
+/// (600 → 2,400, same elements) moved the cascade barely at all — the inner scan short-circuits on
+/// `has_relative()` and costs ~0.2 ns an iteration. Multiplying the *sheets* is what costs: on 60 sheets
+/// × 18,125 elements, adding one `:has()` rule per sheet moved the cascade **19.7 → 22.7 ms, 20.7 → 24.3,
+/// 21.9 → 23.8 — about +14%**, because the per-element loop runs `for sh in &has_sheets` and pays the
+/// whole scan again for each. A first attempt at this measurement varied the wrong n and showed nothing.
+pub struct RelativeRule<'a> {
+    sel: &'a Selector,
+    spec: u32,
+    order: usize,
+    decls: &'a [Declaration],
+}
+
+/// Lift every `:has()` selector out of `sheets` **once**, in global source order.
+///
+/// Cheap and done per cascade rather than per element; the returned slice is what
+/// [`apply_relative_rules`] walks. Sheets are indexed by a large stride so a later sheet's rules always
+/// sort after an earlier sheet's, which is the document order the cascade tie-break assumes.
+pub fn collect_relative_rules<'a>(sheets: &[&'a Stylesheet]) -> Vec<RelativeRule<'a>> {
+    let mut out = Vec::new();
+    for (si, sh) in sheets.iter().enumerate() {
+        sh.relative_rules(si * 1_000_000, &mut out);
+    }
+    out
+}
+
+/// Apply the pre-collected `:has()` rules that match `node`.
+///
+/// The per-element cost is now proportional to the number of `:has()` **selectors on the page** — which
+/// is small, and is the number that should have governed it all along — rather than to
+/// `elements × sheets × rules`.
+pub fn apply_relative_rules(
+    index: &[RelativeRule<'_>],
+    dom: &Dom,
+    node: NodeId,
+    style: &mut ComputedStyle,
+    parent_font_size: f32,
+) -> usize {
+    let mut winners: Vec<(u32, usize, &Declaration)> = Vec::new();
+    for r in index {
+        if selector_matches(r.sel, dom, node) {
+            for d in r.decls {
+                winners.push((r.spec, r.order, d));
+            }
+        }
+    }
+    if winners.is_empty() {
+        return 0;
+    }
+    // `(specificity, source order)` — the cascade's own ordering, and `!important` beats both.
+    winners.sort_by_key(|(spec, order, d)| (d.important, *spec, *order));
+    let n = winners.len();
+    for (_, _, d) in winners {
+        apply_declaration(style, d, parent_font_size);
+    }
+    n
+}
+
 /// An `@font-face` rule: the family name it defines and its candidate source URLs.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FontFace {
@@ -2012,33 +2079,13 @@ impl Stylesheet {
         style: &mut ComputedStyle,
         parent_font_size: f32,
     ) -> usize {
-        let mut winners: Vec<(u32, usize, &Declaration)> = Vec::new();
-        for (order, rule) in self.rules.iter().enumerate() {
-            if !rule.media_applies() {
-                continue;
-            }
-            for sel in &rule.selectors {
-                if !sel.has_relative() {
-                    continue;
-                }
-                if selector_matches(sel, dom, node) {
-                    let spec = sel.specificity();
-                    for d in &rule.declarations {
-                        winners.push((spec, order, d));
-                    }
-                }
-            }
-        }
-        if winners.is_empty() {
-            return 0;
-        }
-        // `(specificity, source order)` — the cascade's own ordering, and `!important` beats both.
-        winners.sort_by_key(|(spec, order, d)| (d.important, *spec, *order));
-        let n = winners.len();
-        for (_, _, d) in winners {
-            apply_declaration(style, d, parent_font_size);
-        }
-        n
+        apply_relative_rules(
+            &collect_relative_rules(std::slice::from_ref(&self)),
+            dom,
+            node,
+            style,
+            parent_font_size,
+        )
     }
 
     /// Whether this sheet contains any `:has()` rule at all — the cheap check that keeps the supplement
@@ -2047,6 +2094,27 @@ impl Stylesheet {
         self.rules
             .iter()
             .any(|r| r.selectors.iter().any(|s| s.has_relative()))
+    }
+
+    /// The sheet's `:has()` selectors, with the declarations they carry — the per-sheet half of
+    /// [`collect_relative_rules`]. `order` is offset by `base` so source order stays global across
+    /// sheets, which is what the cascade tie-break needs.
+    fn relative_rules<'a>(&'a self, base: usize, out: &mut Vec<RelativeRule<'a>>) {
+        for (i, rule) in self.rules.iter().enumerate() {
+            if !rule.media_applies() {
+                continue;
+            }
+            for sel in &rule.selectors {
+                if sel.has_relative() {
+                    out.push(RelativeRule {
+                        sel,
+                        spec: sel.specificity(),
+                        order: base + i,
+                        decls: &rule.declarations,
+                    });
+                }
+            }
+        }
     }
 
     /// The raw CSS text this sheet was parsed from (for the Stylo cascade path).

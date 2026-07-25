@@ -1193,3 +1193,51 @@ against an engine that was exactly right. A gate whose expected value came from 
 and it fails in the direction that costs most: a red gate on correct code invites someone to "fix" the
 code. The values are now derived, with the derivation written into the gate's header so the next reader
 can re-run it instead of trusting it.
+
+## The `:has()` supplement re-filtered the stylesheets for every element (tick 580)
+
+Third instance of the class t572 (`cascade_pseudo` re-walking 69 sheets twice per element) and t573
+(`property_at(i)` indexing a linked structure in a loop) established: **work that depends only on the
+stylesheet, done once per element.**
+
+`apply_has_rules` walked, *per element*, every rule of every `:has()`-carrying sheet — re-evaluating each
+rule's `@media` and re-asking each selector whether it was relative. Neither answer can change between
+elements. `collect_relative_rules` now lifts the `:has()` selectors out once per cascade and the
+per-element pass walks only them, so the cost is proportional to *the number of `:has()` selectors on the
+page* — which is small, and is the number that should have governed it all along.
+
+### The measurement, and the first attempt varied the wrong `n`
+
+Quadrupling the rules **within** a sheet (600 → 2,400, same elements) moved the cascade barely at all: the
+inner scan short-circuits on `has_relative()` and costs roughly 0.2 ns an iteration. On that evidence the
+hypothesis looked refuted.
+
+Multiplying the **sheets** is what costs, because the per-element loop is `for sh in &has_sheets` and pays
+the whole scan again for each one. Same page, same element count, the only difference one `:has()` rule per
+sheet, 60 sheets × 18,125 elements:
+
+| | cascade, `:has()` absent | cascade, `:has()` present | delta |
+|---|---|---|---|
+| before | 19.66 / 20.66 / 21.90 ms | 22.74 / 24.29 / 23.82 ms | **+3.1 / +3.6 / +1.9** |
+| after | 27.71 / 29.78 / 22.49 ms | 23.79 / 26.56 / 18.62 ms | −3.9 / −3.2 / −3.9 |
+
+The **sign flips** in the identical setup; the consistent ~+14% is gone. (The absolute numbers wander with
+machine load and with which page is measured first — a cold process penalises whichever page leads. Only
+the within-run delta is meaningful, which is why both orders were run.)
+
+> **A ratio is not a measurement until you know which `n` it is over.** This project's own standing lesson,
+> and it nearly buried the fix: the first experiment scaled rules-per-sheet, saw nothing, and would have
+> reported the lead dead. The cost was there — under a different variable.
+
+### The hoist's real hazard is ORDERING, and the gate that caught it caught itself first
+
+Source order used to be implicit in "sheet by sheet, rule by rule". It is now an explicit `order`, and a
+per-sheet stride keeps a later sheet's rules sorting after an earlier sheet's. `G_HAS_CASCADE_ORDER` asserts
+that, plus that specificity still beats source order and `!important` still beats both.
+
+**Its first fixture could not detect the defect it was written for.** Both competing rules sat at
+within-sheet index 0, so dropping the stride made them tie — and a *stable* sort preserves emission order,
+which happens to be the right answer. The RED patch left the gate green. Moving sheet 1's rule to index 3
+and sheet 2's to index 0 makes the stride the only thing that can order them, and the RED patch then fails
+with the earlier sheet winning. **An assertion whose fixture cannot reach the mechanism is green for a
+reason unrelated to the claim** — met here while writing the gate meant to catch exactly that.

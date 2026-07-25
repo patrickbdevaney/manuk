@@ -24010,3 +24010,76 @@ per-element hoist (`:has()` is 505 ms of the 2,570 ms cascade); the same-face `{
 delta; the crawl-side `.SIG` correction; and a fresh corpus sweep, since t569's grid-stretch and t575's
 cascade-origin fixes are both page-wide geometry changes.
 Cadences: const 583; self-audit 584; wall 587; surface 588.
+
+## Tick 580 — the `:has()` supplement re-filtered the stylesheets for every element (2026-07-25)
+
+Third instance of the class t572 (`cascade_pseudo` re-walking 69 sheets twice per element) and t573
+(`property_at(i)` indexing a linked structure in a loop) established: **work that depends only on the
+stylesheet, done once per element.** `apply_has_rules` walked, per element, every rule of every
+`:has()`-carrying sheet — re-evaluating each rule's `@media` and re-asking each selector whether it was
+relative. Neither answer can change between elements.
+
+**THE FIRST MEASUREMENT VARIED THE WRONG `n`, AND WOULD HAVE KILLED THE LEAD.** Quadrupling the rules
+*within* a sheet (600 → 2,400, same element count) moved the cascade from 10.34 to 13.57 ms — the inner
+scan short-circuits on `has_relative()` at roughly 0.2 ns an iteration, so 16 million extra iterations
+bought 3 ms. On that evidence the hypothesis looked refuted, and I nearly reported it dead.
+
+**Multiplying the SHEETS is what costs**, because the per-element loop is `for sh in &has_sheets` and pays
+the whole scan again for each one. The decisive experiment is two pages identical but for a single
+`:has()` rule per sheet — 60 sheets, 18,125 elements:
+
+```text
+                cascade, :has() absent      cascade, :has() present      delta
+before          19.66 / 20.66 / 21.90 ms    22.74 / 24.29 / 23.82 ms     +3.1 / +3.6 / +1.9  (~+14%)
+after           27.71 / 29.78 / 22.49 ms    23.79 / 26.56 / 18.62 ms     -3.9 / -3.2 / -3.9
+```
+
+The **sign flips in the identical setup** and the consistent +14% is gone. Absolute numbers wander with
+machine load and with which page leads (a cold process penalises the first), so only the within-run delta is
+read — and both page orders were run, per the t575 lesson that a benchmark is its corpus.
+
+> **A ratio is not a measurement until you know which `n` it is over.** The project's own standing lesson,
+> and it nearly buried a real fix: the cost was there, under a different variable than the one I varied.
+
+**THE HOIST'S REAL HAZARD IS ORDERING, NOT MATCHING.** Source order used to be implicit in "sheet by sheet,
+rule by rule"; it is now an explicit `order` with a per-sheet stride. `G_HAS_CASCADE_ORDER` asserts a later
+sheet wins at equal specificity, that specificity still beats source order across sheets, that `!important`
+still beats both, and — the control — that the supplement applies at all and only to matching elements
+(without which every ordering claim would pass vacuously, since Stylo discards these rules at parse).
+
+**⚠ AND THE GATE FAILED TO CATCH ITSELF FIRST, WHICH IS THE TICK'S SECOND LESSON.** Its first fixture put
+both competing rules at within-sheet index 0. Dropping the stride then makes them *tie* — and a **stable**
+sort preserves emission order, which happens to be the right answer. **The RED patch left the gate green.**
+Moving sheet 1's rule to index 3 and sheet 2's to index 0 makes the stride the only thing that can order
+them; the RED patch then fails with the earlier sheet winning (`left: (1,0,0)`, `right: (2,0,0)`). This is
+t573's fixture lesson met while writing the gate meant to enforce it — *an assertion whose fixture cannot
+reach the mechanism is green for a reason unrelated to the claim* — and it is the second time in three
+ticks that a RED proof, not a green run, is what exposed a defect in my own test.
+
+RED-PROVEN twice, both landing where designed once the fixture could reach them: drop the per-sheet stride
+→ the earlier sheet wins; make the sort positional (drop specificity) → `#sp` reads `(2,0,0)` instead of
+`(0,0,1)`.
+
+TICK SHAPE: performance (a per-element cost proportional to `elements × sheets × rules` reduced to
+`elements × :has()-selectors`, measured on the shape that produces it and gated against the ordering the
+refactor could silently change) + two methodology corrections. Bar 0 untouched; no capability changed; no
+ratchet floor moved.
+Gates: `G_HAS_CASCADE_ORDER` (`engine/page/tests/g_has_cascade_order.rs`), RED-proven twice.
+WIKI: docs/wiki/css-cascade.md — "The `:has()` supplement re-filtered the stylesheets for every element".
+PATTERN: the tick-42 `:has()` row (13% of sites) gains its COST line — correct from the day it shipped but
+priced per element, so the class carried a standing ~14%-of-cascade tax on exactly the sites that use the
+feature. No new class.
+
+HARNESS NOTE (observer, not fixed here per Part VII): `[no-pattern]` in a message passed to `git commit -F`
+is invisible to the pre-commit hook, which reads `.git/COMMIT_EDITMSG` — not yet written at that point. So
+the exemption `tick.sh`'s own pre-flight accepts can never satisfy the hook, and every "no capability
+change" tick must touch `WEB-PATTERNS.md` regardless. Cost two landing attempts this session (t578, t580).
+In both cases the ledger entry turned out to be worth writing, so the rule bit correctly even though the
+mechanism is broken.
+
+NEXT: **the unmapped-gate batch** (109 of 282 gates still have no constellation row after t578 took it from
+147; each is a `gated` row available for the cost of reading its header, and it is what makes every
+readiness figure honest). Then the same-face `{Open Sans/13}` metric delta; the crawl-side `.SIG`
+correction; and a fresh corpus sweep, since t569's grid-stretch and t575's cascade-origin fixes are both
+page-wide geometry changes and the sweep is differenceable.
+Cadences: const 583; self-audit 584; wall 587; surface 588.

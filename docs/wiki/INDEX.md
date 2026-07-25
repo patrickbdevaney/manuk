@@ -228,6 +228,9 @@
   - L1099 · @supports answered "does it PARSE", and one shared pref made 31 unread properties parseable (tick 576)
   - L1136 · Composition is the whole difficulty, and it is delegated rather than re-implemented
   - L1160 · CSS Color 4 — oklch(), lab(), color() and color-mix() all work, and nobody had asked (tick 579)
+  - L1197 · The :has() supplement re-filtered the stylesheets for every element (tick 580)
+  - L1209 · The measurement, and the first attempt varied the wrong n
+  - L1232 · The hoist's real hazard is ORDERING, and the gate that caught it caught itself first
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -999,4 +1002,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-914 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+917 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

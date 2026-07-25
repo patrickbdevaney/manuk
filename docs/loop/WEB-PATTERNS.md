@@ -485,6 +485,16 @@ them, in rounds, inside the load budget.
 | Pattern | % of the web | Status |
 |---|---|---|
 | **`:has()`** — subject, descendant, `>`, `+`, `~`, forgiving list | **13% of sites** | ✅ (tick 42) — **Stylo DISCARDS these rules at parse.** Matched by our own selector engine in a supplement pass. |
+
+**Cost re-measured and removed (tick 580).** The supplement was correct from tick 42 but priced per
+element: it re-walked every rule of every `:has()`-carrying sheet, re-evaluating each rule's `@media` and
+re-asking each selector whether it was relative — for every element on the page. Since **13% of sites use
+`:has()`**, and a site that uses it usually uses it across many sheets, the class carried a standing tax.
+Measured on 60 sheets × 18,125 elements, adding one `:has()` rule per sheet cost **~+14% of the whole
+cascade**; after hoisting the collection out (`collect_relative_rules`, once per cascade) the delta's sign
+flips and it is no longer distinguishable from zero. The `n` that drives it is the **sheet count**, not
+rules-per-sheet — quadrupling rules within a sheet moved almost nothing, which is what made the first
+measurement look like a refutation.
 | CSS nesting | ≥41% | ✅ (tick 39) |
 
 **Stylo's *servo* build hardcodes `parse_has() -> false`** (Gecko's returns `true`), so a selector

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **340** | ticks 1–579 |
-| median tick cycle | **21m** | 339 intervals |
-| median, last 10 | **51m** | 10 intervals |
+| ticks landed | **341** | ticks 1–580 |
+| median tick cycle | **21m** | 340 intervals |
+| median, last 10 | **43m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.97** | 348.2h elapsed |
-| median verify wall | **66s** | 279 ticks |
+| **ticks per hour** | **0.97** | 348.9h elapsed |
+| median verify wall | **66s** | 280 ticks |
 | wall trend | 39s → 85s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **282**
+* **live gates**: 27 → **283**
 * **✅ rows in the capability ledger**: 144 → **335**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**174 of 340 ticks** (51%) moved a
+**174 of 341 ticks** (51%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -437,5 +437,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **577** | 2026-07-25 16:30 | 44m | correctness | 85s | +400/−106 | 281 | 81 | 56.0% · | a line-break OPPORTUNITY is not a space: the string the agent reads was corrupted (2026-07 |
 | **578** | 2026-07-25 17:02 | 32m | correctness | 85s | +428/−60 | 281 | 81 | 56.0% · | the same defect in three consumers, and an audit that had never read its own gate corpus ( |
 | **579** | 2026-07-25 17:14 | 11m | measurement | 85s | +307/−34 | 282 | 81 | 56.0% · | CSS Color 4 already worked, and my own gate was wrong before the engine was (2026-07-25) |
+| **580** | 2026-07-25 17:55 | 41m | performance | 85s | +385/−63 | 283 | 81 | 56.0% · | the `:has()` supplement re-filtered the stylesheets for every element (2026-07-25) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
