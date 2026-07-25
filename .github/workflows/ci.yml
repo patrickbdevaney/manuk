@@ -61,7 +61,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y clang libclang-dev llvm-dev \
-            libxkbcommon-dev libwayland-dev libxcb1-dev libx11-dev
+            libxkbcommon-dev libwayland-dev libxcb1-dev libx11-dev \
+            libasound2-dev pkg-config
+          # libasound2-dev (+pkg-config): the media/audio work added `cpal` under the shell `gui`
+          # feature, which pulls `alsa-sys` on Linux — and alsa-sys' build script needs the ALSA dev
+          # headers. Without them the default "shipping desktop" build fails at alsa-sys (exit 101),
+          # which is what turned this badge red. macOS/Windows need no equivalent: cpal uses
+          # CoreAudio/WASAPI there, so this is a Linux-only dep.
           echo "LIBCLANG_PATH=$(llvm-config --libdir)" >> "$GITHUB_ENV"
           CXX_INC=$(ls -d /usr/include/c++/* | head -1)
           echo "BINDGEN_EXTRA_CLANG_ARGS=-I${CXX_INC} -I${CXX_INC}/x86_64-linux-gnu" >> "$GITHUB_ENV"

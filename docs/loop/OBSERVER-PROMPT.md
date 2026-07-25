@@ -11,6 +11,35 @@ its internal schedule) executes ONE verify-gated browser capability per tick and
 `scripts/tick.sh`. You do not build browser capability — you keep the FACTORY running and pointed
 at the right target.
 
+## ⭐ STANDING TRIGGER — cut v1.0.0 when Phase 0 is certified (owner directive, 2026-07-25)
+
+**When the Phase-0 exit CERTIFICATE actually PASSES** (Bar 0 + jarring invariants ≥95% + shape ≥0.75 on
+≥95% + interactivity ≥95% + named exceptions only — the FIDELITY-SCORING-REDESIGN §5 headline, landed by
+a tick whose commit/journal announces a PASSING certificate, not merely "certificate computed"): **pin a
+`v1.0.0` GitHub release of the binaries** — but ONLY *after* assuring the CI runners are green for **all
+deployments and all three OSes (macOS, Linux, Windows)**. This is an OBSERVER action (CI/releases are
+observer-owned); the grind agent must not cut the release.
+
+Mechanics: releases are built by `.github/workflows/release.yml` (static headless binaries for
+linux-musl / macos-arm64 / windows-msvc → GitHub release), triggerable via `workflow_dispatch` with the
+tag; cross-platform + static-binary status is in `ci.yml`. Do NOT tag v1.0.0 until every deployment lane
+is green — the release must not ship a red build.
+
+**CI state as of 2026-07-25 (measured, run 30143146004):**
+- ✅ **macOS + Windows fully green** — both the mozjs cross-platform build AND the static release binary.
+  The README's "cross-OS mozjs gap" is effectively closed on the runners; when confirmed stable, promote
+  those lanes out of `continue-on-error`.
+- ✅ **verify-linux (badge)** was RED — the media/audio `cpal`→`alsa-sys` dep needs `libasound2-dev`,
+  which the apt step omitted. **FIXED this session** (added `libasound2-dev pkg-config` to the
+  verify-linux system-deps step). Confirm it goes green on the next run.
+- ❌ **Linux musl static release** still RED — `--no-default-features` (no cpal/alsa), so a DIFFERENT
+  musl-specific C-dep failure (likely openh264/symphonia under musl-gcc). **Open blocker for the Linux
+  release binary.** Options when the certificate nears: fix the musl C build, or switch the Linux release
+  target musl→gnu. `release.yml`'s own binary-build path has also been failing (~10 min) — same root.
+
+Do not pre-cut. Keep this fresh: when the certificate lands, re-check all lanes, close the musl blocker,
+THEN `workflow_dispatch` release.yml (or push the tag) for `v1.0.0`.
+
 ## Division of labor — absolute
 
 - **Agent owns**: `engine/`, `shell/`, `agent/`, `demo/`, tests, `docs/wiki`, journal entries for
