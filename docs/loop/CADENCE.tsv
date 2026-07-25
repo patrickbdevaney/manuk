@@ -344,3 +344,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 582	55e7398f	1785019256	2026-07-25T18:40:56-04:00	1993	capability	85	11	530	41	284	81	3896	6960	0	336	31	`srcset` and `<picture>` were ignored entirely, and the map said `works` (2026-07-25)
 583	629af5c5	1785020165	2026-07-25T18:56:05-04:00	909	instrument	85	8	474	34	284	81	3896	6960	0	336	31	falsifying the certificate: no term is trusted until it is proven to go RED (2026-07-25)
 584	e4c58278	1785020869	2026-07-25T19:07:49-04:00	704	instrument	85	6	486	33	284	81	3896	6960	0	336	31	the fixed denominator, built as a TYPE so a drop is not a habit to keep (2026-07-25)
+585	df35a750	1785021550	2026-07-25T19:19:10-04:00	681	instrument	85	6	305	35	284	81	3896	6960	0	336	31	the FUNCTION leg, and the term-count guard fired exactly as t583 promised (2026-07-25)

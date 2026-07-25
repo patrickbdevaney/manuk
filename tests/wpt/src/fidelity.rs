@@ -1224,6 +1224,35 @@ pub fn falsify_certificate() -> Vec<Falsification> {
     ];
 
     let mut out = Vec::new();
+
+    // ── The FUNCTION leg (CO-#1 item 3). It is not a term of `Cert` — it is the other half of
+    //    `daily_driver_pass` — so it is falsified against its own producer rather than through the
+    //    render certificate. The break is the observer's own example: *make IndexedDB throw*.
+    {
+        let works = crate::corpus::SiteFunction {
+            site: "falsify".into(),
+            caps: crate::corpus::FUNCTION_CAPS
+                .iter()
+                .map(|c| (c.to_string(), crate::corpus::CapOutcome::Works))
+                .collect(),
+        };
+        assert!(
+            works.functions() && crate::corpus::daily_driver_pass(true, Some(&works)),
+            "FALSIFY: the FUNCTION baseline must PASS before the break, or 'went red' is vacuous"
+        );
+        let mut broken = works.clone();
+        broken.caps[0].1 = crate::corpus::CapOutcome::Threw; // indexeddb
+        out.push(Falsification {
+            term: "FUNCTION",
+            break_desc: "make IndexedDB throw — the killer that takes a site's own init path down \
+                         with it (Firebase/Firestore open it during init)",
+            went_red: !broken.functions() && !crate::corpus::daily_driver_pass(true, Some(&broken)),
+            // The FUNCTION leg is independent of every RENDER term by construction: it reads no
+            // rects. Breaking it must not, and cannot, move SHAPE or the invariants.
+            stayed_specific: true,
+        });
+    }
+
     for (term, desc, mutate) in breaks {
         let mut broken = base.clone();
         mutate(&mut broken);
@@ -1278,11 +1307,17 @@ mod falsify_tests {
     #[test]
     fn every_certificate_term_can_go_red() {
         let results = falsify_certificate();
+        // ⚠ THIS NUMBER IS A RATCHET TOOTH, NOT A CONSTANT TO KEEP CURRENT. It is what makes
+        // "every term is falsifiable" enforceable rather than aspirational: add a term to the
+        // certificate and this assertion goes RED until someone writes its break. It has already
+        // done its job once — t585 added the FUNCTION leg and this line failed with `left: 7,
+        // right: 6` before the falsification was wired, which is the guard working exactly as t583
+        // said it would. **Raise it only in the same commit that adds the falsification.**
         assert_eq!(
             results.len(),
-            6,
-            "the certificate has six terms (UNSCORED, shape, and four jarring invariants); a term \
-             added without a falsification is a term nobody has proven can fail"
+            7,
+            "the certificate has seven terms (UNSCORED, shape, four jarring invariants, and the \
+             FUNCTION leg); a term added without a falsification is a term nobody has proven can fail"
         );
         for f in &results {
             assert!(

@@ -377,3 +377,174 @@ mod tests {
         );
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// LAYER C-FUNCTION (observer CO-#1 item 3; DAILY-DRIVER-CERTIFICATION.md §4)
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/// How one capability behaved on one site.
+///
+/// **The three-way split is the whole design.** A capability the site never touches is not a claim we
+/// have to make — that is what keeps the certificate finite (§5: *"turning 'MDN lists 4,000 APIs' into
+/// 'these are what this site calls'"*). A capability it touches and that works is a pass. A capability
+/// it touches that **throws or no-ops** fails the site, and the distinction between those two is why
+/// `NoOp` is not folded into `Threw`:
+///
+/// - **`Threw`** is the IndexedDB-class killer: `indexedDB.open()` on an engine without it raises, the
+///   exception escapes into the site's own init path, and **unrelated page scripts die with it**.
+///   Firebase and Firestore do exactly this. One missing API takes down a page that had nothing else
+///   wrong with it.
+/// - **`NoOp`** is quieter and, for a certificate, just as disqualifying: `IntersectionObserver` that
+///   never fires leaves a lazy-loaded feed permanently empty with no error anywhere. The old
+///   `works`-with-no-gate rows in the capability map were all this shape.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CapOutcome {
+    /// The site never used it — no claim required, and it is not counted for or against.
+    Untouched,
+    /// Touched and exercised green.
+    Works,
+    /// Touched and raised — takes the surrounding script down with it.
+    Threw,
+    /// Touched and silently did nothing — no error, no effect.
+    NoOp,
+}
+
+/// The FUNCTION capabilities the certificate requires, when a site touches them.
+///
+/// Deliberately the **throw-class killers first** (§5's "Required — FUNCTION" list, ordered by what
+/// breaks a page hardest rather than by spec size). This list is expected to grow; every addition
+/// must also be falsified, which `G_CERT_FALSIFIABLE`'s term-count assertion enforces.
+pub const FUNCTION_CAPS: [&str; 8] = [
+    "indexeddb",
+    "intersection-observer",
+    "resize-observer",
+    "mutation-observer",
+    "fetch",
+    "local-storage",
+    "history",
+    "form-submit",
+];
+
+/// One site's FUNCTION result: what it touched, and how each behaved.
+#[derive(Debug, Clone, Default)]
+pub struct SiteFunction {
+    pub site: String,
+    /// Outcome per [`FUNCTION_CAPS`] entry, same order.
+    pub caps: Vec<(String, CapOutcome)>,
+}
+
+impl SiteFunction {
+    /// Does this site FUNCTION? Every capability it touches must work.
+    ///
+    /// **A site that touches nothing passes**, and that is correct rather than a loophole: a static
+    /// document really does work without IndexedDB. The loophole would be counting an *unprobed* site
+    /// as touching nothing, which is why `functions()` is only ever called on a site the probe
+    /// actually ran — the reconciliation in [`SweepLedger`](crate::corpus::SweepLedger) is what
+    /// guarantees that, and a site the probe could not run is a `Fail`, not a pass.
+    pub fn functions(&self) -> bool {
+        self.caps
+            .iter()
+            .all(|(_, o)| !matches!(o, CapOutcome::Threw | CapOutcome::NoOp))
+    }
+
+    /// The capabilities that failed this site, named — an unmet certificate must say which.
+    pub fn failures(&self) -> Vec<String> {
+        self.caps
+            .iter()
+            .filter(|(_, o)| matches!(o, CapOutcome::Threw | CapOutcome::NoOp))
+            .map(|(c, o)| format!("{c} {o:?}"))
+            .collect()
+    }
+}
+
+/// **The composed per-site verdict: `daily-driver-pass(site) = renders(site) ∧ functions(site)`.**
+///
+/// §4's composition, as one function, so no caller can compose it differently. Both legs must be
+/// present: a site with no FUNCTION probe is **not** a render-only pass — it is unproven on half the
+/// certificate, and returning `renders` alone there is precisely the shape of optimism this whole
+/// redesign exists to remove.
+pub fn daily_driver_pass(renders: bool, function: Option<&SiteFunction>) -> bool {
+    match function {
+        Some(f) => renders && f.functions(),
+        None => false,
+    }
+}
+
+#[cfg(test)]
+mod function_tests {
+    use super::*;
+
+    fn caps(pairs: &[(&str, CapOutcome)]) -> SiteFunction {
+        SiteFunction {
+            site: "s".into(),
+            caps: pairs
+                .iter()
+                .map(|(c, o)| (c.to_string(), o.clone()))
+                .collect(),
+        }
+    }
+
+    /// **G_CERT_FUNCTION — a capability a site TOUCHES that throws or no-ops fails that site.**
+    ///
+    /// The FUNCTION leg of `daily-driver-pass(site) = renders(site) ∧ functions(site)`, and the reason
+    /// the certificate needed a second axis at all: a page can be laid out perfectly and still be
+    /// useless. `DAILY-DRIVER-CERTIFICATION.md` §4 calls this "the IndexedDB-class killer" — absence
+    /// that **throws** does not degrade the feature, it kills the surrounding script, and Firebase and
+    /// Firestore both open IndexedDB during init.
+    #[test]
+    fn a_touched_capability_that_throws_fails_the_site() {
+        assert!(
+            caps(&[
+                ("indexeddb", CapOutcome::Works),
+                ("fetch", CapOutcome::Works)
+            ])
+            .functions(),
+            "everything the site touches works — it functions"
+        );
+        assert!(
+            !caps(&[("indexeddb", CapOutcome::Threw)]).functions(),
+            "a THROW takes the site's own init path down with it — Firebase/Firestore open IndexedDB \
+             during init, so this is not a degraded feature, it is a dead page"
+        );
+        assert!(
+            !caps(&[("intersection-observer", CapOutcome::NoOp)]).functions(),
+            "a silent NO-OP is just as disqualifying and harder to notice: an IntersectionObserver \
+             that never fires leaves a lazy-loaded feed permanently empty with no error anywhere"
+        );
+        assert!(
+            caps(&[("indexeddb", CapOutcome::Untouched)]).functions(),
+            "a capability the site never touches is not a claim we have to make — that is what keeps \
+             the certificate finite, and a static document really does work without IndexedDB"
+        );
+        assert_eq!(
+            caps(&[("indexeddb", CapOutcome::Threw), ("resize-observer", CapOutcome::NoOp)])
+                .failures()
+                .len(),
+            2,
+            "an unmet certificate must NAME which capabilities failed, or the next tick is guesswork"
+        );
+    }
+
+    /// The composition is one function so no caller can compose it differently — and a site with no
+    /// FUNCTION probe is NOT a render-only pass.
+    #[test]
+    fn the_composition_requires_both_legs() {
+        let ok = caps(&[("fetch", CapOutcome::Works)]);
+        let bad = caps(&[("indexeddb", CapOutcome::Threw)]);
+        assert!(daily_driver_pass(true, Some(&ok)), "renders AND functions");
+        assert!(
+            !daily_driver_pass(false, Some(&ok)),
+            "functions but does not render"
+        );
+        assert!(
+            !daily_driver_pass(true, Some(&bad)),
+            "renders but does not function"
+        );
+        assert!(
+            !daily_driver_pass(true, None),
+            "a site with NO function probe must not pass on the render leg alone — it is unproven on \
+             half the certificate, and counting it as a pass is exactly the optimism this redesign \
+             exists to remove"
+        );
+    }
+}

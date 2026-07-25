@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **345** | ticks 1–584 |
-| median tick cycle | **21m** | 344 intervals |
-| median, last 10 | **33m** | 10 intervals |
+| ticks landed | **346** | ticks 1–585 |
+| median tick cycle | **21m** | 345 intervals |
+| median, last 10 | **24m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.98** | 350.1h elapsed |
-| median verify wall | **66s** | 284 ticks |
+| **ticks per hour** | **0.98** | 350.3h elapsed |
+| median verify wall | **67s** | 285 ticks |
 | wall trend | 39s → 85s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **336**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**175 of 345 ticks** (51%) moved a
+**175 of 346 ticks** (51%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -442,5 +442,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **582** | 2026-07-25 18:40 | 33m | capability | 85s | +530/−41 | 284 | 81 | 56.0% · | `srcset` and `<picture>` were ignored entirely, and the map said `works` (2026-07-25) |
 | **583** | 2026-07-25 18:56 | 15m | instrument | 85s | +474/−34 | 284 | 81 | 56.0% · | falsifying the certificate: no term is trusted until it is proven to go RED (2026-07-25) |
 | **584** | 2026-07-25 19:07 | 12m | instrument | 85s | +486/−33 | 284 | 81 | 56.0% · | the fixed denominator, built as a TYPE so a drop is not a habit to keep (2026-07-25) |
+| **585** | 2026-07-25 19:19 | 11m | instrument | 85s | +305/−35 | 284 | 81 | 56.0% · | the FUNCTION leg, and the term-count guard fired exactly as t583 promised (2026-07-25) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

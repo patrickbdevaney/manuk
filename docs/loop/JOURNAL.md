@@ -24359,3 +24359,66 @@ leg is requiring those touched capabilities to exercise green **per site**. ⚠ 
 added to `falsify_certificate()` as it lands — the term-count assertion in `G_CERT_FALSIFIABLE` is what
 enforces that, and it will go red on the first unfalsified term.
 Cadences: wall 587; surface 588; const 591; self-audit 594.
+
+## Tick 585 — the FUNCTION leg, and the term-count guard fired exactly as t583 promised (2026-07-25)
+
+Observer CO-#1 item (3): compose FUNCTION into the certificate, starting with the throw-class killers.
+`daily-driver-pass(site) = renders(site) ∧ functions(site)` is now one function, so no caller can compose
+it differently.
+
+**WHY THE CERTIFICATE NEEDED A SECOND AXIS AT ALL: a page can be laid out perfectly and be useless.**
+Every term before this one reads rects. `DAILY-DRIVER-CERTIFICATION.md` §4 names the class — *the
+IndexedDB-class killer* — and the mechanism is worth stating precisely: absence that **throws** does not
+degrade a feature, it **kills the surrounding script**. `indexedDB.open()` raises, the exception escapes
+into the site's own init path, and unrelated page code dies with it. Firebase and Firestore both open
+IndexedDB during init, so one missing API takes down a page with nothing else wrong.
+
+**THE THREE-WAY SPLIT IS THE DESIGN, AND `NoOp` IS NOT FOLDED INTO `Threw`.** A `Threw` is loud and takes
+the page with it. A **`NoOp`** is quieter and, for a certificate, just as disqualifying: an
+`IntersectionObserver` that never fires leaves a lazy-loaded feed permanently empty **with no error
+anywhere**. Every `works`-with-no-gate row t581 found in the capability map was this shape. And
+`Untouched` is a third thing again — *not a claim we have to make*, which is what keeps the certificate
+finite (§5's "turning 'MDN lists 4,000 APIs' into 'these are what this site calls'"). A static document
+really does work without IndexedDB.
+
+**THE GUARD FROM t583 FIRED, WHICH IS THE POINT OF THIS ENTRY.** `G_CERT_FALSIFIABLE` asserts the *number*
+of certificate terms. t583's journal said: *"the FUNCTION terms do not exist yet and cannot be falsified
+until they do, so this guard must be re-run as each is added, and the gate asserts a term COUNT so a
+seventh term cannot appear unfalsified."* Adding the FUNCTION leg produced exactly that:
+
+```text
+assertion `left == right` failed: the certificate has six terms …; a term added without a
+falsification is a term nobody has proven can fail
+  left: 7
+ right: 6
+```
+
+**A promise made in a journal entry two ticks ago was kept by a machine, not by my memory.** The count is
+now 7, raised *in the same change that adds the falsification* — and the assertion carries a comment
+saying it is a **ratchet tooth, not a constant to keep current**, so the next person to add a term meets
+the same wall rather than quietly bumping the number.
+
+The FUNCTION falsification is the observer's own example — *make IndexedDB throw* — and it is the one
+break in the harness that is **specific by construction**: the FUNCTION leg reads no rects, so it cannot
+move SHAPE or the invariants, and that is asserted rather than assumed.
+
+RED-PROVEN twice: let a `NoOp` pass (fold it into "not a throw") → the silent-no-op assertion fails; let a
+site with **no** FUNCTION probe pass on the render leg alone → *"it is unproven on half the certificate,
+and counting it as a pass is exactly the optimism this redesign exists to remove"*. That second one is the
+important guard: it is the same shape as t584's dropped-timeout, one axis over.
+
+TICK SHAPE: instrument fidelity (the certificate's second axis, with the throw-class capability set and
+the composition as one function) + the demonstration that the falsification ratchet enforces itself. No
+engine source touched; Bar 0 untouched; no ratchet floor moved. `cargo test -p manuk-wpt`: 48 green.
+Gates: `G_CERT_FUNCTION` (`corpus::function_tests`), RED-proven twice; `G_CERT_FALSIFIABLE` extended to
+seven terms with the FUNCTION break wired.
+WIKI: none [forced] — no engine source changed; the mechanism's home is
+docs/loop/DAILY-DRIVER-CERTIFICATION.md §4/§5, which this implements.
+PATTERN: [no-pattern] — no engine capability changed.
+
+NEXT: the FUNCTION leg is now a **shape without a producer** — `CapOutcome` is decided by nothing yet. The
+next tick wires the on-page capability probe to emit per-site touch records, so `SiteFunction` is filled by
+measurement rather than by a caller. That is where §6.4's **two-population cross-check** starts to bite:
+each headline capability measured both by its fixture gate and by the corpus-site exercise, with
+disagreement treated as *the instrument or the engine is lying* rather than as a result.
+Cadences: wall 587; surface 588; const 591; self-audit 594.
