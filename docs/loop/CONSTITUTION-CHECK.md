@@ -1605,3 +1605,53 @@ t550 fixed in the exit gate, in the instrument the constitution calls its primar
 the marginal value of another measurement brick is currently higher than a new organ.
 
 **Next check due: tick 567.**
+
+## Check #37 — tick 567
+
+**HORIZON: H0 — Pareto Web Parity.** EXIT GATE (all binary): ~83% WPT across categories ·
+differential-oracle-verified viability across all four usage-weighted corpora · the headful shell
+daily-drivable by its own developer · every rendered construct queryable through the in-process semantic API.
+
+**GATE OR SCOREBOARD? — GATE, and the eight ticks since #36 are the clearest case yet.** `WPT:TOTAL` is *still*
+flat at 422,865 — **twenty-four ticks without a scoreboard move** — while t560–t566 produced: `@font-face`
+shadowing, the diff carrying the computed font, **`@import` chains fetched at all** (an unfetched import had
+been silently deleting whole stylesheets, which is a large class of the real web), and a root cause isolated in
+implied grid track sizing. Two of those are capability, two are the instrument earning its keep. Condition #2 is
+the one moving, and it is moving because the instrument keeps getting sharper.
+
+**THE PROCESS RESULT THIS WINDOW, and it is a correction to my own method.** Six leads died on contact with a
+measurement across t551–t566, which #36 praised. t565/t566 showed the failure mode of that same discipline:
+**`grid-template-areas.html` scored a perfect 100% and produced a CONFIDENT WRONG CONCLUSION** ("grid placement
+is not the defect"), because it set `grid-template-columns` alongside the areas and the bug was one declaration
+away. **An over-specified probe hides the bug it was written to find** — and a passing probe carries far more
+authority than a cluster ranking, so this error is more expensive than the five before it. The rule to carry:
+**when a probe PASSES, ask what it holds fixed that the real page does not.** That belongs beside
+`parity-methodology`'s "when a metric won't move, suspect the metric".
+
+**INVARIANTS.** I4 (Pareto): held — everything this window was corpus-driven, and t566 explicitly declined to
+read the `css-grid 5.3%` WPT number as a mandate (it would have sent a tick at working code). I2: held —
+`@import` fetching is embedder work Stylo already expects (`AllowImportRules::Yes` parses the rule; the bytes
+were always ours to supply). **I3 (semantic model in lockstep): NOW OVERDUE, third check running.** #35 flagged
+it, #36 flagged it and steered to discharge it, and #37 finds it still undone: Audit #29's `<search>` (implicit
+`role=search`) and `CloseWatcher` (an overlay-dismissal actuator) remain unmapped, and every tick since has
+been rendering-side. **This is no longer drift, it is a queue that keeps being deprioritised by more legible
+work** — which is exactly the failure mode I3 exists to prevent.
+
+**PART VI CORRECTION.** VI.2's `H0.6 networking completion` line reads as *"cache, cookies with SameSite
+partitioning, HTTP/2/3"* — a list of protocol features. t564 found the gap that actually mattered was neither:
+**we never fetched `@import`ed stylesheets**, a CSS-delivery hole in the *resource* layer that deleted whole
+sheets and surfaced as a font bug three subsystems away. Correct the map: networking completion is not only
+protocol depth, it is **resource-graph completeness** — every URL the CSS/HTML/JS graph names must actually be
+fetched, and the honest way to find the holes is the corpus, not the spec's table of contents.
+
+**STEER — and I3 goes FIRST this time, ahead of the hotter lead, precisely because it has been deferred three
+checks running.** (1) **`<search>` + `CloseWatcher` as ONE agentic tick** (implicit landmark role in the a11y
+tree that `manuk-agent` consumes; the dismissal actuator). Non-negotiable this window. (2) **implied/`auto` grid
+track sizing** — the t566 root cause, RED proof committed
+(`tests/wpt/probes/grid-implied-tracks.html`, 88/133 → ~289/291), Taffy-side and worth a fresh context. (3) the
+same-face `{Open Sans/13}` metric delta (variable-font variant vs hinting). (4) the t556 cascade-origin bug
+(author `* { margin:0 }` losing to the UA `body` margin). (5) the crawl-side `.SIG` correction. **Do NOT** open
+an XL subsystem: the instrument is still returning root causes at a tick apiece, and that is the best rate this
+loop has ever had.
+
+**Next check due: tick 575.**

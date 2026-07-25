@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **328** | ticks 1–566 |
-| median tick cycle | **20m** | 327 intervals |
-| median, last 10 | **18m** | 10 intervals |
+| ticks landed | **329** | ticks 1–567 |
+| median tick cycle | **20m** | 328 intervals |
+| median, last 10 | **10m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.96** | 339.1h elapsed |
-| median verify wall | **65s** | 267 ticks |
+| **ticks per hour** | **0.97** | 339.2h elapsed |
+| median verify wall | **65s** | 268 ticks |
 | wall trend | 39s → 85s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**170 of 328 ticks** (52%) moved a
+**170 of 329 ticks** (52%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -425,5 +425,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **564** | 2026-07-25 08:04 | 40m | capability | 85s | +336/−37 | 274 | 81 | 56.0% · | `@import` chains are FETCHED (an unfetched import DELETED a stylesheet) + self-audit (2026 |
 | **565** | 2026-07-25 08:07 | 3m | measurement | 85s | +118/−32 | 274 | 81 | 56.0% · | CSS Grid named areas are EXACT: martinfowler's two-column failure is a CASCADE question (2 |
 | **566** | 2026-07-25 08:11 | 4m | measurement | 85s | +127/−32 | 274 | 81 | 56.0% · | ROOT CAUSE: implied grid tracks are content-sized where Chromium stretches them (2026-07-2 |
+| **567** | 2026-07-25 08:14 | 3m | two | 85s | +173/−34 | 274 | 81 | 56.0% · | WALL AUDIT #15 (62s, the leanest on record) + CONSTITUTION CHECK #37: I3 is now OVERDUE (2 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

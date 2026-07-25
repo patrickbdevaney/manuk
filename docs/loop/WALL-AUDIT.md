@@ -304,3 +304,38 @@ manuk-js) at **~0 marginal warm wall**, because neither crate's tests are in the
 which is itself the standing note from `gates-not-in-the-wall`: gated ≠ watched.
 
 NO TRIM. **The wall is lean on the axes the agent may touch.** Mark untouched (189, ceiling 245).
+
+## Audit #15 — tick 567 (wall 62s warm)
+
+Ran `./scripts/wall-audit.sh run` on a quiet box. **Total 62s** — the leanest reading recorded in this ledger.
+Breakdown: **T 22s (35%)** · P 14s (23%) · G6 8s · G1 4s · F 2s · F4 1s · B 1s · every named gate ≤1s. Well
+under the 189s mark and the 245s ceiling.
+
+**The comparison with Audit #14 (tick 547) is the finding, and it is about the instrument, not the wall.** #14
+reported `G3 62s (49%)` of a 126s run and I noted then that G3's number *was the flaky-gate retry loop firing*,
+not the gate. This run confirms it from the other side: **G3 does not appear in the breakdown at all** — the
+`manuk-shell` suite passed first time, so its cost vanished into the noise floor, and the total halved. Same
+tree, same gates, same machine; the only variable was contention. **Two audits, 126s and 62s, and neither
+number is "the wall" — the honest statement is a range with a cause, and the cause is scheduling.**
+
+That also settles the self-audit item raised at t564 (*"verify wall: 644s EXCEEDS the 300s target"*): 644s was
+the contended tick-563 landing. Measured warm walls across this session: **62 · 65 · 76 · 85 · 86 · 104 · 119 ·
+120 · 126 · 246 · 644s.** The distribution is not a code property.
+
+⚠ **Recorded for the observer, unchanged from #14 and now with a second mechanism.** (a) verify.sh's flaky-gate
+retry waits ≤60s for `load1 < 2.5` while this box idles at 3–5, so all three attempts can run contended —
+`G_INTERACT`'s scaling assert (`shell/src/tab.rs:729`, a ratio of ~60µs sums) false-RED'd on **7 ticks** this
+session, each landing on a warm re-run. (b) `status-update.sh` declines to bank a wall whose receipt stamps
+`load1 >= 3.0`, but **the gate phase creates that load itself** (~25 test binaries at `CARGO_BUILD_JOBS=8`), so
+on this box every receipt stamps 4.5–6.5 and a poisoned number can never be replaced automatically — at t564 it
+hard-blocked every commit until `LAST_WALL_TIME` was set by hand to a twice-measured 85s (journalled explicitly;
+the MARK was not touched). Both live in `scripts/`, which is observer-owned, and neither was edited.
+
+Against the four rigor-preserving axes: unchanged from #12/#13/#14. REDUNDANCY (share one SpiderMonkey runtime
+across JS gates — cargo-nextest), PARALLELISM, CACHING, SCOPE — every admissible lever is in `scripts/verify.sh`
+plus the Cargo/build config. Coverage GREW substantially this window (t546–t566 added the test262 runner,
+6 fidelity/certificate bricks, 5 committed probe pages, and tests in manuk-text/manuk-css/manuk-wpt) at **~0
+marginal warm wall**, because those crates' tests are not in the wall's list — the standing
+`gates-not-in-the-wall` note, unchanged.
+
+NO TRIM. **The wall is lean on the axes the agent may touch.** Mark untouched (189, ceiling 245).

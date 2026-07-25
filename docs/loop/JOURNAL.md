@@ -22997,3 +22997,56 @@ a Taffy-side track-sizing question and deserves a fresh context rather than the 
 same-face `{Open Sans/13}` metric delta; then the two agentic rows from Audit #29 (`<search>` + `CloseWatcher`)
 as one tick, discharging the I3 drift Checks #35/#36 flagged; then the t556 cascade-origin bug; then the
 crawl-side `.SIG` correction. Cadences: self-audit 574; surface 568; const 567; wall 567.
+
+## Tick 567 — WALL AUDIT #15 (62s, the leanest on record) + CONSTITUTION CHECK #37: I3 is now OVERDUE (2026-07-25)
+
+Two cadences fell on the same tick: the wall-time audit (every 20, last at 547) and the constitution check
+(every 8, last at 559). Both run, both recorded.
+
+**WALL AUDIT #15 — total 62s, the leanest reading in the ledger.** T 22s (35%) · P 14s (23%) · G6 8s · G1 4s ·
+F 2s · everything else ≤1s. **And the comparison with Audit #14 is the finding, about the INSTRUMENT rather than
+the wall:** #14 reported `G3 62s (49%)` of a 126s run and I noted then that G3's number *was the flaky-gate retry
+loop firing*. This run confirms it from the other side — **G3 does not appear in the breakdown at all**, because
+the `manuk-shell` suite passed first time and its cost vanished into the noise floor. Same tree, same gates, same
+machine; the only variable was contention. **Two audits, 126s and 62s, and neither is "the wall": the honest
+statement is a range with a cause, and the cause is scheduling.** Measured warm walls this session: 62 · 65 · 76 ·
+85 · 86 · 104 · 119 · 120 · 126 · 246 · 644s — that distribution is not a code property, and it settles the
+t564 self-audit item (644s was the contended t563 landing). NO TRIM; every admissible lever is observer-owned.
+
+**CONSTITUTION CHECK #37 — GATE, and the clearest case yet.** `WPT:TOTAL` has been flat at 422,865 for
+**twenty-four ticks** while t560–t566 produced `@font-face` shadowing, the font-carrying diff, **`@import` chains
+fetched at all**, and a root cause isolated in implied grid track sizing. Condition #2 is the one moving, and it
+moves because the instrument keeps getting sharper.
+
+**A CORRECTION TO MY OWN METHOD, recorded in the check.** #36 praised six leads dying on contact with a
+measurement. t565/t566 showed that discipline's failure mode: `grid-template-areas.html` scored a perfect 100%
+and produced a **confident wrong conclusion**, because it held `grid-template-columns` fixed while the real page
+does not. **An over-specified probe hides the bug it was written to find**, and a passing probe carries far more
+authority than a cluster ranking — so this error cost four ticks where the number-driven ones cost one apiece.
+The rule to carry: **when a probe PASSES, ask what it holds fixed that the real page does not.** It belongs
+beside `parity-methodology`'s "when a metric won't move, suspect the metric".
+
+**I3 IS NOW OVERDUE — third check running, and I am naming it as a queue rather than as drift.** #35 flagged the
+agentic half of I3, #36 flagged it and steered to discharge it, and #37 finds it still undone: Audit #29's
+`<search>` (implicit `role=search`, which `manuk-agent`'s observation channel consumes) and `CloseWatcher` (an
+overlay-dismissal actuator) remain unmapped while every tick since has been rendering-side. That is exactly the
+failure mode I3 exists to prevent — **more legible work crowding out the semantic surface** — so the steer puts
+it FIRST next window, ahead of the hotter grid lead, precisely because it has been deferred three times.
+
+**PART VI corrected** on `H0.6 networking completion`: it reads as protocol depth (cache, SameSite, HTTP/2/3),
+but t564's actual gap was neither — **we never fetched `@import`ed stylesheets**, a resource-layer hole that
+deleted whole sheets and surfaced as a font bug three subsystems away. Networking completion is
+**resource-graph completeness**: every URL the CSS/HTML/JS graph names must actually be fetched, and the corpus
+finds those holes where the spec's table of contents does not.
+
+TICK SHAPE: two scheduled instruments (wall audit #15 — 62s, leanest on record, with the 126s-vs-62s pair shown
+to be a scheduling range rather than a wall number; constitution check #37 — GATE, PART VI corrected on
+resource-graph completeness, my own probe method corrected, and I3 escalated from drift to an overdue queue with
+the steer reordered to discharge it first). No engine src touched; Bar 0 untouched.
+WIKI: none — the audits' homes are docs/loop/WALL-AUDIT.md #15 and docs/loop/CONSTITUTION-CHECK.md #37, which is
+where the next session reads them. [no-pattern]
+
+NEXT, in the order Check #37 sets and with (1) non-negotiable: **(1) `<search>` + `CloseWatcher` as ONE agentic
+tick** (discharges the three-check I3 queue). (2) implied/`auto` grid track sizing — the t566 root cause, RED
+proof committed. (3) the same-face `{Open Sans/13}` metric delta. (4) the t556 cascade-origin bug. (5) the
+crawl-side `.SIG` correction. Cadences: self-audit 574; surface 568; const 575; wall 587.
