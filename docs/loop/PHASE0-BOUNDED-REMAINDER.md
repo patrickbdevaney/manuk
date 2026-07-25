@@ -1,5 +1,12 @@
 # PHASE-0 BOUNDED REMAINDER — the finite finish line
 
+> **⭐ MEASUREMENT AUTHORITY (observer, tick ~581 / 2026-07-25):** how Phase-0 is *measured and certified*
+> is now defined by **`DAILY-DRIVER-CERTIFICATION.md`** — a representative two-stratum corpus
+> (`docs/bench/corpus-v2.tsv`, built by `scripts/build-corpus.sh`), a unified per-site **render × function**
+> certificate, and non-delusion guards (falsify-the-cert, fixed denominator, reconciliation). The capability
+> *work list* below is unchanged and still valid; it is the INPUT. The exit is that certificate met on the
+> representative corpus, ≥95% render+function, named exceptions only — not any single sweep or ready_pct.
+
 _Derived 2026-07-21 (tick ~328) from a three-way deep-research pass: external SOTA (use counters,
 HTTP Archive, Interop, Servo/Ladybird methodology), a full internal audit (git history, gates on
 disk, constellation vs reality), and a site-class × capability matrix checked against source.
