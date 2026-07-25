@@ -93,3 +93,16 @@ never WPT count, never a vibe.
   ticks-spent-since-anchor S` — actuals vs bound, in one place.
 - Drift >20% over the 158 top → a mandatory re-derivation tick (measure why, update the bound
   with evidence, journal it). The bound is falsifiable on purpose; that is what makes it a bound.
+
+## 6. ACTUALS — exit-verification runs (§2C), appended one line per run
+
+- `test262 @tick 546: 94.14% of 87,009 executed subtests (81,908 passed / 5,101 failed) · honest
+  81.41% of the 100,617 the ratified suite defines (13,608 skipped: 10,739 async · 1,642 module ·
+  1,225 host-API · 2 measured-hang) · 51,922 files, tc39 rev 7a096c20 · wall 140s · runner
+  manuk-wpt test262.` **First run ever.** Reference point: Ladybird publishes 97.8% — on a suite
+  that includes the async and module goals we skip, so the comparable figure is the honest 81.41%
+  until those two are wired, and the gap is mostly *ours to run*, not the engine's to pass. Named
+  gaps behind the 5,101: `intl402/Temporal` 1,956 (Stage-3 proposal), `Atomics`+`SharedArrayBuffer`
+  718 (embedder must enable shared memory), `DisposableStack`/`AsyncDisposableStack`/
+  `SuppressedError` 360 (explicit resource management), `ShadowRealm` 114. Three findings the run
+  produced on its own are in the tick-546 journal entry; one of them is Bar 0.

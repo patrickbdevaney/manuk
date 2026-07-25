@@ -85,6 +85,13 @@ fn run() {
         return;
     }
 
+    // `manuk-wpt test262` — the ECMAScript conformance suite against the engine we ship. See
+    // `test262.rs` for the probity rules and the runner's stated limits.
+    if args.first().map(String::as_str) == Some("test262") {
+        run_test262_cmd(&args[1..]);
+        return;
+    }
+
     // `manuk-wpt parity` — layout-parity vs headless Chrome over a corpus.
     if args.first().map(String::as_str) == Some("parity") {
         run_parity_cmd(&args[1..], &fonts);
@@ -2694,6 +2701,267 @@ fn diag(rel: String, fonts: &manuk_text::FontContext) {
             None => println!("\nNO DIAG — the eval itself did not run (no JS context?)\n"),
         }
     });
+}
+
+/// This process's resident set, human-readable — printed alongside the progress line because the
+/// first full run died of memory, not of a test, and a runner that cannot see its own footprint
+/// reports that as "it hung".
+fn rss_human() -> String {
+    let kb = std::fs::read_to_string("/proc/self/status")
+        .ok()
+        .and_then(|s| {
+            s.lines()
+                .find_map(|l| l.strip_prefix("VmRSS:"))
+                .and_then(|v| {
+                    v.split_whitespace()
+                        .next()
+                        .and_then(|n| n.parse::<u64>().ok())
+                })
+        })
+        .unwrap_or(0);
+    format!("{:.1}GB", kb as f64 / 1024.0 / 1024.0)
+}
+
+/// `manuk-wpt test262 [--root DIR] [--limit N] [--dir PREFIX] [--out TSV]` — the ECMAScript
+/// conformance suite against the engine we ship (tick 546).
+///
+/// The suite is not vendored: it is a large third-party checkout that would dominate the repo, so
+/// the runner takes a path (`--root`, `$MANUK_TEST262`, or one of the usual local checkouts) and
+/// says so plainly when it cannot find one. **It refuses to print a number without a JS engine** —
+/// `NoScriptRuntime::eval` returns `Ok(undefined)` for every input, so a no-JS build would score a
+/// flawless 100% on a suite it never executed, which is the most dangerous shape a metric takes.
+fn run_test262_cmd(args: &[String]) {
+    use manuk_wpt::test262::{self, Tally, Verdict};
+
+    let mut root = String::new();
+    let mut limit = 0usize;
+    let mut prefix = String::new();
+    let mut out: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--root" => {
+                root = args.get(i + 1).cloned().unwrap_or_default();
+                i += 2;
+            }
+            "--limit" => {
+                limit = args.get(i + 1).and_then(|s| s.parse().ok()).unwrap_or(0);
+                i += 2;
+            }
+            "--dir" => {
+                prefix = args.get(i + 1).cloned().unwrap_or_default();
+                i += 2;
+            }
+            "--out" => {
+                out = args.get(i + 1).cloned();
+                i += 2;
+            }
+            other => {
+                eprintln!("unknown flag: {other}");
+                std::process::exit(2);
+            }
+        }
+    }
+    if root.is_empty() {
+        root = std::env::var("MANUK_TEST262").unwrap_or_default();
+    }
+    let root = if root.is_empty() {
+        // The checkouts that actually exist on a dev box, in preference order. Named rather than
+        // guessed at silently, so "no number" always comes with "and here is where I looked".
+        let candidates = ["WebKit/JSTests/test262", "test262", "../test262"];
+        match candidates
+            .iter()
+            .map(std::path::PathBuf::from)
+            .find(|p| p.join("test").is_dir())
+        {
+            Some(p) => p,
+            None => {
+                eprintln!(
+                    "✗ no test262 checkout found. Looked in: {}. \
+                     Pass --root DIR or set MANUK_TEST262 (git clone https://github.com/tc39/test262).",
+                    candidates.join(", ")
+                );
+                std::process::exit(2);
+            }
+        }
+    } else {
+        std::path::PathBuf::from(root)
+    };
+
+    let mut rt = manuk_js::new_runtime();
+    if !rt.engine_name().starts_with("SpiderMonkey") {
+        eprintln!(
+            "✗ no JS engine in this build ({}) — REFUSING to report a conformance number. \
+             A no-JS runtime returns undefined for every evaluation and would score 100% on a suite \
+             it never ran. Rebuild with --features spidermonkey.",
+            rt.engine_name()
+        );
+        std::process::exit(2);
+    }
+
+    let revision = std::fs::read_to_string(root.join("test262-Revision.txt"))
+        .ok()
+        .and_then(|s| {
+            s.lines().find_map(|l| {
+                l.strip_prefix("test262 revision:")
+                    .map(|r| r.trim().to_string())
+            })
+        })
+        .unwrap_or_else(|| "(unknown)".to_string());
+
+    let (mut files, fixtures, staging) = test262::discover(&root);
+    let discovered = files.len();
+    if !prefix.is_empty() {
+        files.retain(|p| p.to_string_lossy().contains(&prefix));
+    }
+    let selected_before_limit = files.len();
+    let files = test262::stride_sample(files, limit);
+
+    println!("TEST262 — {} @ {revision}", root.display());
+    println!(
+        "  engine: {}  ·  files discovered {discovered}  ·  excluded {fixtures} fixtures + {staging} staging",
+        rt.engine_name()
+    );
+    if limit > 0 && files.len() < selected_before_limit {
+        println!(
+            "  ⚠ SAMPLE: {} of {selected_before_limit} files, strided evenly across the suite — this is a \
+             SAMPLE and its number must be quoted as one.",
+            files.len()
+        );
+    }
+
+    let harness_dir = root.join("harness");
+    let mut cache: std::collections::HashMap<String, Option<String>> =
+        std::collections::HashMap::new();
+    let mut tally = Tally::default();
+    let mut rows = String::new();
+    let started = std::time::Instant::now();
+
+    for (n, path) in files.iter().enumerate() {
+        let rel = path
+            .strip_prefix(root.join("test"))
+            .unwrap_or(path)
+            .to_string_lossy()
+            .to_string();
+        let Ok(bytes) = std::fs::read(path) else {
+            continue;
+        };
+        // Lossy on purpose: a handful of cases are deliberately not valid UTF-8, and dropping them
+        // silently would be an unnamed skip. They run, and if the replacement character changes the
+        // verdict that shows up as an ordinary failure rather than a hole in the denominator.
+        let body = String::from_utf8_lossy(&bytes).to_string();
+        tally.files += 1;
+
+        // A crash takes the process with it and prints nothing, so the case that killed the run is
+        // otherwise unknowable. `MANUK_T262_TRACE=1` names every case BEFORE it runs: the last line
+        // on stderr is the culprit. (This is how the missing `JSAutoRealm` in the runtime's
+        // exception path was found — it aborted, it did not return an error.)
+        if std::env::var_os("MANUK_T262_TRACE").is_some() {
+            eprintln!("  → {rel}");
+        }
+        let fm = test262::parse_frontmatter(&body);
+        let ms = test262::modes(&fm);
+        if let Some(reason) = test262::skip_reason(&fm, &body) {
+            tally.skip(reason, ms.len());
+            continue;
+        }
+        if test262::is_slow(&rel) {
+            tally.skip(test262::SKIP_SLOW, ms.len());
+            continue;
+        }
+
+        for mode in ms {
+            let mut load = |name: &str| -> Option<String> {
+                cache
+                    .entry(name.to_string())
+                    .or_insert_with(|| std::fs::read_to_string(harness_dir.join(name)).ok())
+                    .clone()
+            };
+            let Some(src) = test262::assemble(&fm, &body, mode, &mut load) else {
+                // A harness file we could not read is OUR gap, not the engine's.
+                tally.skip("harness file missing from the checkout", 1);
+                continue;
+            };
+            let outcome = match rt.eval(&src, &rel) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(e.message),
+            };
+            match test262::verdict(&fm, outcome) {
+                Verdict::Pass => tally.passed += 1,
+                Verdict::Fail(why) => {
+                    tally.record_fail(&rel, &why);
+                    if out.is_some() {
+                        rows.push_str(&format!("{rel}\t{}\tFAIL\t{why}\n", mode.label()));
+                    }
+                }
+            }
+        }
+        // ── COLLECT, or the run eats the machine. Each `eval` is a fresh global+realm (the isolation
+        // that makes one test's damage invisible to the next), and SpiderMonkey's incremental GC never
+        // gets a chance against a loop that only ever evaluates. Measured before this line existed:
+        // **14.7 GB RSS at 14,000 of 51,922 files**, still climbing, on a 31 GB box — the run does not
+        // finish, it gets OOM-killed, and a conformance number that cannot survive its own suite is not
+        // a number. Every 250 files is far below the growth rate and costs a few seconds total; peak RSS at 500 was still
+        // 5.3 GB, which is fine on this box and would not be on a smaller one.
+        if n % 250 == 249 {
+            rt.gc();
+        }
+        if n % 2000 == 1999 {
+            eprintln!(
+                "  … {n}/{} files · {} passed · {} failed · {:.0}s · rss {}",
+                files.len(),
+                tally.passed,
+                tally.failed,
+                started.elapsed().as_secs_f64(),
+                rss_human()
+            );
+        }
+    }
+
+    if let Some(p) = &out {
+        let _ = std::fs::write(p, &rows);
+    }
+
+    println!(
+        "\n  subtests EXECUTED {}  ·  passed {}  ·  failed {}",
+        tally.executed(),
+        tally.passed,
+        tally.failed
+    );
+    println!("  PASS (of executed):  {:.2}%", tally.pass_pct_executed());
+    println!(
+        "  PASS (of defined):   {:.2}%   ← the honest number: every skip counted as NOT passed",
+        tally.pass_pct_defined()
+    );
+    println!("  skipped {} —", tally.skipped_total());
+    for (reason, n) in &tally.skipped {
+        println!("      {n:>7}  {reason}");
+    }
+    if !tally.fail_by_area.is_empty() {
+        let mut v: Vec<_> = tally.fail_by_area.iter().collect();
+        v.sort_by(|a, b| b.1.cmp(a.1));
+        println!(
+            "\n  FAILURES by area (a cause is area-shaped; 4,000 failures are never 4,000 bugs):"
+        );
+        for (area, n) in v.iter().take(15) {
+            println!("      {n:>7}  {area}");
+        }
+        let mut t: Vec<_> = tally.fail_by_type.iter().collect();
+        t.sort_by(|a, b| b.1.cmp(a.1));
+        println!("  FAILURES by thrown type:");
+        for (ty, n) in t.iter().take(8) {
+            println!("      {n:>7}  {ty}");
+        }
+        println!("  samples:");
+        for s in tally.samples.iter().take(12) {
+            println!("      {s}");
+        }
+    }
+    println!("\n  wall {:.0}s", started.elapsed().as_secs_f64());
+    // ADR-009: the thread that ran SpiderMonkey ends SpiderMonkey, or the process segfaults on the
+    // way out with every byte of output already correct.
+    drop(rt);
+    manuk_js::shutdown();
 }
 
 #[cfg(test)]

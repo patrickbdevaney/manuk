@@ -4529,3 +4529,32 @@ declarative open, the `{source}` option for `showPopover({source})`/`hidePopover
 bare call. Threaded through `__popToggleEvent` + `__popClick` (`{source: t}`) + `togglePopover({force,
 source})`. Gate `g_toggle_event_source`; RED: drop `ev.source`. Residue: the `<dialog>` toggle path
 doesn't carry source yet (a command-invoker follow-up).
+
+## Wasm glue that registers a finalizer — `new FinalizationRegistry(fn)` (tick 546)
+
+**Pattern:** `const registry = new FinalizationRegistry(ptr => wasm.__free(ptr))`. Nobody writes this
+by hand; **`wasm-bindgen` and Emscripten emit it in their standard JS glue**, and so do libraries that
+hand out handles to native resources. It is the standard way JS-side code releases something a
+non-JS heap owns.
+
+**The class this unlocks:** any embedder-driven eval of code that touches finalizers. `typeof
+FinalizationRegistry` was `"function"` — so every feature detector said yes — and constructing one
+**segfaulted the process**. The constructor asks the host for the *incumbent global* through
+`JS::JobQueue`; the bare `SpiderMonkeyRuntime` seam installed no queue and dereferenced a null one.
+
+**Scope, stated precisely rather than dramatically:** the page path was already safe, because
+`event_loop::install` installs the queue when it builds a document's global. The crash was on the
+[`JsRuntime`] seam — `manuk eval` and any other embedder of `manuk-js`. **The real defect is that two
+constructors of the same engine set the host up differently and nothing said so**, which is the kind of
+bug a gate cannot catch because neither path is wrong on its own.
+
+**The traps.** **(1)** A crash reports *nothing* — no exception, no log, no failing assertion — which is
+why this lived for 500+ ticks with a live constructor. **(2)** `typeof X === 'function'` is satisfied by
+a constructor that kills you; presence is not capability, and this is the fifth time that has been
+written down here. **(3)** The fix is the *job queue*, not the cleanup callback — installing
+`SetHostCleanupFinalizationRegistryCallback` alone does not stop the crash (measured). **(4)** Never
+firing the cleanup callback is **spec-legal** (ECMAScript does not require an implementation to ever
+call one), so the honest state is "the registry works, callbacks do not fire" — a legal answer, not a
+lie, and draining `doCleanup` through the real job queue is the named follow-on. **(5)** Found by
+running **test262**, not by the corpus crawl: no corpus site happens to construct one, which is the
+whole argument for an instrument that carries its own verdict.

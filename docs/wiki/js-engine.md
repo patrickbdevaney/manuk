@@ -1303,3 +1303,82 @@ always decoded UTF-8. The fix normalises the label in the constructor to `__enc`
 still only decode correctly through the HTTP-layer `encoding_rs` path; an unknown label falls back to
 UTF-8 (lenient) instead of the spec's `RangeError`, so nothing that previously limped newly throws;
 `fatal`/`ignoreBOM` are stored but BOM stripping is not yet applied.
+
+## test262, and the three defects the FIRST run found before it produced a number (tick 546)
+
+`docs/loop/CONSTELLATION.tsv` carried `?` on test262 from surface audit t83 to tick 545, under a
+sentence that reads like a reason not to bother: *"we embed SpiderMonkey, so this should be cheap and
+high."* Both halves were wrong in the informative direction. It was not cheap — a runner is real work
+— and the number is not automatically high, because **most of what test262 measures about an
+embedded engine is what the EMBEDDER did**, and nobody had ever asked.
+
+**The number, and both halves of it.** 94.14% of 87,009 executed subtests (81,908 pass), and 81.41%
+of the 100,617 the ratified suite defines, because 13,608 are skipped with named reasons. Quote the
+second one next to the first or don't quote either: a runner that skips more and reports a *higher*
+pass rate is the exact failure this pair exists to expose.
+
+### The runner: `manuk-wpt test262` (`tests/wpt/src/test262.rs`)
+
+One file is **one or two subtests** — sloppy *and* strict unless `flags` says otherwise — which is why
+51,922 files define ~100k subtests and why quoting the file count understates the suite. Frontmatter is
+read by hand rather than with a YAML crate, because `info:` is a free-form block scalar full of spec
+prose that is regularly not valid YAML in isolation, and a parser that *errors* there silently
+mis-classifies the case. Harness order is test262's own (`assert.js`, `sta.js`, includes, body), and a
+**missing harness file aborts the case instead of running it bare** — `assert.sameValue` with no
+`assert.js` throws `ReferenceError`, which would have been filed as an engine defect.
+
+`--limit` samples with a **stride across the sorted suite**, not off the front: `annexB/**` sorts first
+and is the least representative directory there is. Same lesson `scripts/fidelity-sweep.sh` records in
+its own header.
+
+### Three defects, in the order the run hit them
+
+**1. `new FinalizationRegistry(fn)` SEGFAULTED the process** — and `typeof FinalizationRegistry` was
+`"function"`, so every feature detector on the web said yes. Not `MOZ_CRASH`: a null dereference. The
+constructor asks the host for the *incumbent global*, that question routes through `JS::JobQueue`, and
+`SpiderMonkeyRuntime` installed no queue. **Scope, precisely:** the page path was already safe
+(`event_loop::install` calls `job_queue::install_once` when it builds a document's global), so this was
+never a tab crash — it was the bare [`JsRuntime`] seam that `manuk eval` and any embedder uses. The
+real defect is that *one of two constructors of the same engine set the host up and the other did
+not*, and nothing said so. Both now go through `install_host_hooks`.
+
+**2. The runtime would not say what threw.** `eval`'s error was the literal string
+`"uncaught exception while evaluating <file>"` — the same eleven words for a syntax error on line 1,
+a `TypeError` from a missing IDL property, and an OOM. This crate's own
+`dom_bindings::pending_exception` has reported the real message for ticks (*"every swallowed exception
+is a discarded bug report"*); the **runtime's own eval was the one path still swallowing it.** It is
+also load-bearing for conformance: a negative test's verdict is *which* error type was thrown, so
+~4,000 cases would have been scored on a coin flip. ⚠ **The read must happen inside the script's
+realm** — `evaluate_script` has already left it when it returns, and `JS_GetPendingException` outside a
+realm does not fail, it **aborts**. The `JSAutoRealm` in that arm is not tidiness.
+
+**3. A batch embedder leaks a global per `eval` — 14.7 GB RSS at 14,000 evaluations.** `eval` creates
+a fresh global and realm per call (that isolation is a feature: one test's damage cannot reach the
+next), and SpiderMonkey's incremental GC never gets a chance against a loop that only evaluates. The
+first full run did not fail, it *swelled* — 100% CPU, RSS climbing, indistinguishable from a hang. So
+`JsRuntime` gained `fn gc(&mut self)` (default no-op) and the runner calls it every 250 files: peak
+RSS 3.0 GB, whole suite in 140 s. **A metric that cannot survive its own suite is not a metric**, and
+the shape of that failure — slow, then heavy, then dead — is worth recognising on sight.
+
+### What the 5,101 failures are, and what they are not
+
+Clustered by area, because 5,101 failures are never 5,101 bugs: `intl402/Temporal` 1,956 (a Stage-3
+proposal), `Atomics` + `SharedArrayBuffer` 718 (**the embedder must enable shared memory** — this is
+ours, not SpiderMonkey's, and it is what wasm threads need),
+`DisposableStack`/`AsyncDisposableStack`/`SuppressedError` 360 (explicit resource management),
+`ShadowRealm` 114. So the top ~3,100 are *four* named causes, three of which are "this proposal is not
+turned on", and one of which is a real embedder capability with a real dependency behind it.
+
+### The skips are the honest part, and one of them is Bar 0
+
+10,739 **async** (`$DONE` needs a `print` host function and a microtask drain), 1,642 **module-goal**
+(the loader is not on the eval seam), 1,225 **host-API** (any reach for `$262` at all — the member-name
+list let 33 subtests through to fail with `$262 is not defined`, which is our missing host object
+recorded as the engine's defect). And **2 subtests for a measured hang**:
+`RGI_Emoji.js` runs `/^\p{RGI_Emoji}+$/v` over the whole Unicode space, at 100% CPU, and did not
+finish in four minutes. We cannot say whether it is slow or non-terminating — **and the reason we
+cannot is the finding**: there is no `JS_AddInterruptCallback` on this engine, so a synchronous script
+cannot be interrupted, deadlined, or asked how far it got. `STATUS.md` has carried *"production
+interruptibility (a cancellable long task) is still not built"* under Bar 0 for hundreds of ticks.
+This is the first instrument that walked into it and could not walk back out, and with an interrupt
+callback `SLOW_CASES` stops being a list and becomes a per-case deadline. [[conformance-and-oracles]]

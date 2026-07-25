@@ -21763,3 +21763,77 @@ NEXT: the observer's CURRENT ORDERS STEP 1 — the exit verification, in order: 
 with the rebuilt G1 instrument → one actuals line in PHASE0-ROADMAP-ANCHOR.md, (b) test262 (one of the two
 remaining constellation unknowns, near-zero cost, number unknown), (c) the 100-tab RSS benchmark (the other
 unknown). Cadences: self-audit 554; surface 548; const 551; wall 547.
+
+## Tick 546 — test262 RUN for the first time: 94.14% of 87,009 executed, and three defects the run found on its way (2026-07-24)
+
+The observer's CURRENT ORDERS make STEP 1 the exit verification, item (b) *"run test262 (SpiderMonkey
+embedded, near-zero cost, number unknown)"*. Both halves of "near-zero cost" turned out to be wrong in
+the informative direction: a runner is real work, and the number is not automatically high, because
+**most of what test262 measures about an EMBEDDED engine is what the embedder did** — and nobody had
+ever asked. The `?` on CONSTELLATION row 108 has been there since surface audit t83.
+
+MEASURED (first run ever): **94.14% of 87,009 executed subtests (81,908 pass / 5,101 fail)**, and
+**81.41% of the 100,617 the ratified suite defines**, because 13,608 are skipped with NAMED reasons.
+tc39 rev 7a096c20, 51,922 files, wall 140s, peak RSS 3.0GB. Both numbers or neither: a runner that
+skips more and reports a HIGHER pass rate is exactly the failure that pair exists to expose. Actuals
+line appended to PHASE0-ROADMAP-ANCHOR.md §6 (new section, per §5's protocol).
+
+THREE DEFECTS, found in this order, before the run produced a number:
+
+1. **`new FinalizationRegistry(fn)` SEGFAULTED the process** — Bar 0 on the `JsRuntime` seam. Not
+   MOZ_CRASH: a null deref. The constructor asks the host for the incumbent global through
+   `JS::JobQueue`, and `SpiderMonkeyRuntime` installed none. `typeof FinalizationRegistry` was
+   `"function"`, so every feature detector said yes. **Scope stated precisely, not dramatically:** the
+   PAGE path was already safe (`event_loop::install` calls `job_queue::install_once`), so this was
+   never a tab crash — it was `manuk eval` and any embedder of manuk-js. The real defect is that two
+   constructors of the same engine set the host up differently and nothing said so. Both now route
+   through `install_host_hooks`. RED-PROVEN: deleting the `install_once` line does not fail the new
+   assertion, it CORE-DUMPS the test binary — which is why it survived 500+ ticks.
+2. **The runtime would not say what threw.** `eval` returned the literal
+   `"uncaught exception while evaluating <file>"` for a syntax error, a TypeError and an OOM alike,
+   while this crate's own `dom_bindings::pending_exception` has reported the real message for ticks.
+   Load-bearing here: a `negative` test is scored on WHICH error type was thrown, so ~4,000 cases
+   would have been coin flips. ⚠ The read must happen INSIDE the script's realm —
+   `JS_GetPendingException` outside one does not fail, it ABORTS (measured: the runner core-dumped on
+   its first failing case until the `JSAutoRealm` existed).
+3. **A batch embedder leaks a global per `eval` — 14.7GB RSS at 14,000 evaluations**, 100% CPU,
+   indistinguishable from a hang. `eval` creates a fresh global+realm per call (the isolation is a
+   feature) and the incremental GC never gets a chance against a loop that only evaluates. `JsRuntime`
+   gained `fn gc(&mut self)` (default no-op); the runner collects every 250 files → peak 3.0GB, suite
+   in 140s. Killed the run at 14.7GB rather than let it OOM the box.
+
+WHAT THE 5,101 FAILURES ARE: four named causes carry ~3,100 of them — `intl402/Temporal` 1,956 (Stage-3
+proposal), `Atomics`+`SharedArrayBuffer` 718 (**the EMBEDDER must enable shared memory** — ours, not
+SpiderMonkey's, and it is what wasm threads need), DisposableStack/AsyncDisposableStack/SuppressedError
+360 (explicit resource management), `ShadowRealm` 114. Not 5,101 bugs.
+
+AND ONE SKIP IS BAR 0: 2 subtests are skipped for a measured HANG — `RGI_Emoji.js` runs
+`/^\p{RGI_Emoji}+$/v` over the whole Unicode space and did not finish in four minutes at 100% CPU. We
+cannot say whether it is slow or non-terminating, **and the reason is the finding**: there is no
+`JS_AddInterruptCallback`, so a synchronous script cannot be interrupted, deadlined, or asked how far
+it got. STATUS.md has carried "production interruptibility is still not built" under Bar 0 for hundreds
+of ticks; this is the first instrument that walked into it and could not walk back out.
+
+RED-PROOFS (six new unit tests in `test262.rs`, all RED-provable by construction, plus the runtime
+assertions): the negative-verdict table asserts that the RIGHT throw for the WRONG reason is a FAIL;
+`assemble` returns None on a missing harness file (running bare would throw ReferenceError and be filed
+as an engine defect); `skip_reason` catches `$262` from the SOURCE (the member-name list let 33
+subtests through to fail as `$262 is not defined` — our host object scored as the engine's defect);
+`pass_pct_defined` moves when skips grow. Pre-existing and NOT mine: the `manuk-js` crate test binary
+segfaults at EXIT (verified by stashing my diff — identical before); manuk-js is not in the wall's
+crate list, which is why it is tolerated. Noted, not fixed here.
+
+TICK SHAPE: measurement instrument + the engine fixes it forced (new `manuk-wpt test262` runner —
+frontmatter/harness/strict-and-sloppy/negative-type scoring/named skips/stride sampling; SpiderMonkey
+`eval` now reports the real exception inside a `JSAutoRealm`; host hooks — job queue +
+FinalizationRegistry cleanup — installed on the bare runtime seam, killing a segfault; `JsRuntime::gc`
+leak valve. Bar 0 IMPROVED: one segfault removed, one hang measured and named).
+WIKI: docs/wiki/js-engine.md — "test262, and the three defects the FIRST run found before it produced a
+number (tick 546)"; WEB-PATTERNS.md — wasm glue that registers a finalizer.
+
+NEXT: STEP 1 continues — (a) the fresh full-corpus sweep with the rebuilt G1 instrument (the actuals
+section now exists for it), (c) the 100-tab RSS benchmark (the last remaining constellation unknown).
+The three findings above each name a follow-on, ranked: `JS_AddInterruptCallback` (Bar 0 — a runaway
+script cannot be stopped today), SharedArrayBuffer/Atomics enablement (718 subtests + wasm threads),
+then the async/module goals of the runner (12,381 subtests currently unrun). Cadences: self-audit 554;
+surface 548; const 551; wall 547.

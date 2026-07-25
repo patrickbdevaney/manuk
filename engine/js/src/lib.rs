@@ -51,6 +51,18 @@ pub trait JsRuntime {
 
     /// Human-readable name of the backing engine, for diagnostics/about pages.
     fn engine_name(&self) -> &'static str;
+
+    /// Run a full garbage collection **now**, synchronously.
+    ///
+    /// This is not a tuning knob, it is a leak valve, and it exists because of a measured one:
+    /// [`eval`](JsRuntime::eval) creates a **fresh global and realm per call** (which is what makes
+    /// it a clean isolation boundary), and SpiderMonkey's incremental GC will not reclaim them
+    /// against a caller that never yields. A batch embedder — a conformance runner, a script-eval
+    /// service — therefore grows without bound: measured at **14.7 GB RSS after 14,000 evaluations**,
+    /// on its way to taking the machine with it (tick 546).
+    ///
+    /// Default no-op, so a JS-less build and any future engine stay correct without implementing it.
+    fn gc(&mut self) {}
 }
 
 /// The default runtime: executes nothing. Correct for the GUI-only, no-JS phase —
@@ -151,7 +163,12 @@ fn with_runtime<R>(
     spidermonkey::RUNTIME.with(|cell| {
         let mut slot = cell.borrow_mut();
         if slot.is_none() {
-            *slot = Some(std::mem::ManuallyDrop::new(Runtime::new(handle)));
+            let mut rt = Runtime::new(handle);
+            // The host hooks are per-JSContext, and this is a DIFFERENT context from the one
+            // `SpiderMonkeyRuntime::new` builds. Without this line `new FinalizationRegistry(...)`
+            // still aborts the process on the PAGE path — the only path a real tab uses.
+            spidermonkey::install_host_hooks_on(&mut rt);
+            *slot = Some(std::mem::ManuallyDrop::new(rt));
         }
         let rt: &mut Runtime = slot.as_mut().expect("runtime just initialized");
         let out = f(rt);

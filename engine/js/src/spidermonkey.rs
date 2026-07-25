@@ -197,9 +197,71 @@ pub struct SpiderMonkeyRuntime {
 
 impl SpiderMonkeyRuntime {
     pub fn new() -> Result<Self, JsError> {
-        let runtime = Runtime::new(engine_handle()?);
+        let mut runtime = Runtime::new(engine_handle()?);
+        install_host_hooks(&mut runtime);
         Ok(SpiderMonkeyRuntime { runtime })
     }
+}
+
+/// The host hooks SpiderMonkey **requires an embedder to install**, and aborts the process without.
+///
+/// ## `FinalizationRegistry` — a SEGFAULT on this seam, found by the first test262 run (tick 546)
+///
+/// `new FinalizationRegistry(() => {})` **core-dumped the process.** Not an exception, not a
+/// missing-feature `TypeError` — a null dereference: the constructor asks the host for the
+/// *incumbent global*, that question is routed through `JS::JobQueue`, and this runtime installed
+/// no queue. `typeof FinalizationRegistry` was `"function"`, so every feature detector on the web
+/// said yes.
+///
+/// **Scope, stated precisely rather than dramatically.** The PAGE path was already safe:
+/// `event_loop::install` calls `job_queue::install_once` when it builds a document's global, so a
+/// real tab has a queue. What did not was the bare [`SpiderMonkeyRuntime`] — the [`JsRuntime`] seam
+/// that `manuk eval` and any other embedder of this crate uses, and the seam the conformance runner
+/// runs on. So: a crash on a shipped surface, not a crash in the browser. Installing the queue here
+/// makes the two paths agree, which is the real defect — *one of two constructors of the same engine
+/// set up the host and the other did not*, and nothing said so.
+///
+/// It sat here for 500+ ticks because nothing had ever asked the engine this question. That is the
+/// meta-instrument argument as a receipt rather than a principle: the corpus crawl cannot see it (no
+/// corpus site constructs one), and the *first thing* a conformance suite did was walk into it.
+///
+/// ## The cleanup callback, and why a no-op is the honest answer
+///
+/// The `SetHostCleanupFinalizationRegistryCallback` half is belt-and-braces: with a queue installed
+/// the constructor no longer crashes, and this names where cleanup jobs would go if we ran them.
+/// **We do not run them, and that is spec-legal** — ECMAScript explicitly does not require an
+/// implementation to ever call a cleanup callback (a host that never collects is conforming). So the
+/// registry is real, registration and `unregister` work, and the callback never fires. Draining
+/// `doCleanup` through the real job queue after a GC is a named follow-on: an improvement on a legal
+/// baseline, not a fix for a lie.
+fn install_host_hooks(runtime: &mut Runtime) {
+    unsafe extern "C" fn drop_cleanup_job(
+        _do_cleanup: *mut mozjs::jsapi::JSFunction,
+        _incumbent_global: *mut mozjs::jsapi::JSObject,
+        _data: *mut std::ffi::c_void,
+    ) {
+    }
+    unsafe {
+        // The JOB QUEUE is the load-bearing half. `new FinalizationRegistry(fn)` asks the host for
+        // the *incumbent* global — through `JS::JobQueue` — and a context with no queue installed
+        // dereferences a null one. It is the queue, not the cleanup callback, that turns the abort
+        // into an ordinary object construction.
+        let raw = runtime.cx().raw_cx();
+        let _ = crate::job_queue::install_once(raw);
+        SetHostCleanupFinalizationRegistryCallback(
+            runtime.cx(),
+            Some(drop_cleanup_job),
+            ptr::null_mut(),
+        );
+    }
+}
+
+/// Install the host hooks on the shared per-thread runtime (`crate::with_runtime`), which builds its
+/// own `Runtime` and therefore its own `JSContext`. **The hooks are per-context, so installing them
+/// in one constructor does not cover the other** — and the page path is the one a real user's tab
+/// runs on, so missing it would leave the crash live exactly where it matters most.
+pub(crate) fn install_host_hooks_on(runtime: &mut Runtime) {
+    install_host_hooks(runtime);
 }
 
 impl JsRuntime for SpiderMonkeyRuntime {
@@ -231,14 +293,70 @@ impl JsRuntime for SpiderMonkeyRuntime {
 
         match res {
             Ok(()) => Ok(convert(rval.get())),
+            // ── SAY WHAT THREW. `"uncaught exception while evaluating <file>"` is a shrug, not a
+            // diagnostic: it is the same eleven words for a syntax error on line 1, a `TypeError`
+            // from a missing IDL property, and an out-of-memory. This file's own sibling
+            // (`dom_bindings::pending_exception`) has reported the real message for ticks — *"every
+            // swallowed exception is a discarded bug report"* — and the RUNTIME's own eval was the
+            // one path still swallowing it. It is also load-bearing for conformance: a negative
+            // test's verdict is *which* error type was thrown, so a runner cannot score one against
+            // an engine that will not say. Clears the exception (leaving it pending poisons the
+            // next eval on this context), and degrades to the old wording if there is nothing to
+            // read — an unstringifiable exception must not become a panic.
+            // ⚠ The read must happen INSIDE the script's realm. `evaluate_script` has already left
+            // it by the time it returns, and `JS_GetPendingException` asserts a current realm —
+            // outside one it does not return an error, it **aborts the process**. (Measured: the
+            // test262 runner core-dumped on its first failing case until this `JSAutoRealm` existed.)
             Err(()) => Err(JsError {
-                message: format!("uncaught exception while evaluating {filename}"),
+                message: unsafe {
+                    let raw = self.runtime.cx().raw_cx();
+                    let _ar = mozjs::jsapi::JSAutoRealm::new(raw, global.get());
+                    pending_exception_message(raw)
+                }
+                .unwrap_or_else(|| format!("uncaught exception while evaluating {filename}")),
             }),
         }
     }
 
     fn engine_name(&self) -> &'static str {
         "SpiderMonkey (mozjs)"
+    }
+
+    /// A full, non-incremental collection. `GCReason::API` is the reason code SpiderMonkey reserves
+    /// for an embedder asking explicitly, which keeps it distinguishable in a GC log from the
+    /// engine's own heuristics.
+    fn gc(&mut self) {
+        unsafe {
+            mozjs::jsapi::JS_GC(self.runtime.cx().raw_cx(), mozjs::jsapi::JS::GCReason::API);
+        }
+    }
+}
+
+/// The pending exception on `cx`, stringified, **and cleared** — `None` when there is nothing
+/// pending or it cannot be read.
+///
+/// Clearing is not optional bookkeeping. A pending exception left on the context makes the *next*
+/// call on it fail too, so the first real error would smear across every subsequent evaluation and
+/// the second failure would be reported as though it had its own cause. That is how one bug becomes
+/// a wall of noise with the true first line scrolled off the top.
+///
+/// `String::safe_from_jsval` runs the value's own `toString`, which for an `Error` yields
+/// `"SyntaxError: unexpected token"` — the type name FIRST, which is exactly the discriminator a
+/// conformance runner scores a negative test on. A thrown non-`Error` (test suites throw plain
+/// objects and primitives) stringifies by the same rule the language uses everywhere else, and an
+/// object whose `toString` itself throws returns `None` rather than re-entering the failure.
+unsafe fn pending_exception_message(cx: *mut mozjs::jsapi::JSContext) -> Option<String> {
+    use mozjs::conversions::{ConversionResult, FromJSValConvertible};
+    let ptr = std::ptr::NonNull::new(cx)?;
+    rooted!(in(cx) let mut ex = UndefinedValue());
+    if !mozjs::jsapi::JS_GetPendingException(cx, ex.handle_mut().into()) {
+        return None;
+    }
+    mozjs::jsapi::JS_ClearPendingException(cx);
+    let mut c = mozjs::context::JSContext::from_ptr(ptr);
+    match String::safe_from_jsval(&mut c, ex.handle(), ()) {
+        Ok(ConversionResult::Success(s)) => Some(s),
+        _ => None,
     }
 }
 
@@ -277,5 +395,52 @@ mod tests {
             rt.eval("let a = 3; a * a", "t.js").unwrap(),
             JsValue::Number(9.0)
         );
+
+        // ── Bar 0 on this seam: `new FinalizationRegistry(fn)` used to SEGFAULT the process.
+        //
+        // Not throw — segfault. The constructor asks the host for the incumbent global through
+        // `JS::JobQueue`, and this runtime installed none, so it dereferenced a null queue. The page
+        // path was safe (it installs one at global setup); this seam — the one `manuk eval` and any
+        // embedder of `JsRuntime` uses — was not, and nothing had ever asked it the question until a
+        // conformance suite did (tick 546).
+        //
+        // RED-PROVEN: delete the `job_queue::install_once` line in `install_host_hooks` and this test
+        // does not fail, it CORE-DUMPS the test binary. That is the shape of the bug, and it is why
+        // it lived here for 500+ ticks: a crash reports nothing at all.
+        assert_eq!(
+            rt.eval(
+                "var r = new FinalizationRegistry(function(){}); typeof r",
+                "t.js"
+            )
+            .unwrap(),
+            JsValue::Str("[string]".to_string()),
+            "constructing a FinalizationRegistry must be an ordinary object construction"
+        );
+
+        // ── And the runtime must SAY WHAT THREW. `"uncaught exception while evaluating t.js"` is the
+        // same eleven words for every failure; a conformance runner scores a negative test on the
+        // error TYPE, so a runtime that will not name it cannot be measured against the spec.
+        let e = rt.eval("throw new TypeError('boom')", "t.js").unwrap_err();
+        assert!(
+            e.message.starts_with("TypeError"),
+            "the exception must be reported with its own type FIRST, got: {}",
+            e.message
+        );
+        assert!(
+            e.message.contains("boom"),
+            "…and its message, got: {}",
+            e.message
+        );
+        // A syntax error is reported the same way — and it is the discriminator ~4,000 test262
+        // `negative: SyntaxError` cases are scored on.
+        let s = rt.eval("var = ;", "t.js").unwrap_err();
+        assert!(
+            s.message.starts_with("SyntaxError"),
+            "a parse failure must name SyntaxError, got: {}",
+            s.message
+        );
+        // The exception must be CLEARED, or it smears onto the next evaluation and the second
+        // failure is reported as though it had its own cause.
+        assert_eq!(rt.eval("1 + 1", "t.js").unwrap(), JsValue::Number(2.0));
     }
 }

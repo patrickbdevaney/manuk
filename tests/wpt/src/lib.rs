@@ -21,6 +21,7 @@ pub mod interact;
 pub mod oracle;
 pub mod parity;
 pub mod reftest;
+pub mod test262;
 
 use manuk_css::{MinimalCascade, StyleEngine, Stylesheet};
 use manuk_layout::{layout_document, BoxContent, LayoutBox};
