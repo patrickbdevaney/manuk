@@ -20,6 +20,10 @@ manuk-css = { workspace = true, features = ["stylo"] }
 manuk-layout.workspace = true
 manuk-paint.workspace = true
 manuk-text.workspace = true
+# The accessibility / semantic tree — pure (DOM-only, no tokio/net), so it targets wasm cleanly. This is
+# the "what an LLM agent sees" observation channel: role + accessible name + state + a click point, the
+# same tree the headless agent drives. Surfacing it is the whole point of the demo's Agent view.
+manuk-a11y.workspace = true
 
 wasm-bindgen = "=0.2.100"
 console_error_panic_hook = "0.1"

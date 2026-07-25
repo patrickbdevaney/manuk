@@ -23,6 +23,7 @@
 //! parallelism — and it is what keeps GitHub Pages hosting clean: **no `SharedArrayBuffer`, so no
 //! COOP/COEP headers**, which a static host cannot set anyway.
 
+use manuk_a11y::{A11yNode, Rect as A11yRect};
 use manuk_css::Rgba;
 use manuk_css::{MinimalCascade, StyleMap, Stylesheet};
 use manuk_dom::{Dom, NodeId};
@@ -31,6 +32,26 @@ use manuk_paint::CpuPainter;
 use manuk_text::FontContext;
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
+
+/// JSON-escape a string's control characters, quotes and backslashes. The inspector and the agent tree
+/// carry page-authored text (an element's accessible name, a class attribute), and a stray `"` or `\` in
+/// it corrupts the whole JSON payload — which is exactly the kind of silent, one-site-only break this
+/// project is built to refuse.
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out
+}
 
 /// One rendered page, kept alive across scrolls so the visitor is scrolling a **laid-out document**, not
 /// panning a picture of one.
@@ -212,11 +233,11 @@ impl Renderer {
              \"path\":\"{}\",\"display\":\"{}\",\"position\":\"{}\",\"color\":\"{}\",\
              \"background\":\"{}\",\"fontSize\":{:.1},\"shadow\":{},\
              \"box\":[{:.1},{:.1},{:.1},{:.1}]}}",
-            tag,
-            id,
-            class.chars().take(40).collect::<String>(),
-            href,
-            path.join(" › "),
+            json_escape(&tag),
+            json_escape(&id),
+            json_escape(&class.chars().take(40).collect::<String>()),
+            json_escape(&href),
+            json_escape(&path.join(" › ")),
             disp,
             pos,
             color,
@@ -260,9 +281,111 @@ impl Renderer {
             None => String::new(),
         }
     }
+
+    /// **THE AGENT'S VIEW — the accessibility tree an LLM drives, not a screenshot.**
+    ///
+    /// `role` + accessible `name` + interaction `state` + a click box, computed by `manuk-a11y` straight
+    /// from the DOM and the laid-out fragment tree — the *same* structured observation channel the
+    /// headless `agent` front-end feeds a model. It needs no JavaScript, which is exactly why it is
+    /// honest even in this JS-free demo: what makes this a browser an agent can *drive* is the semantic
+    /// tree, and the tree is a pure function of the parse and the layout.
+    ///
+    /// Returns a pre-order, semantically-pruned flat list — landmarks, headings, links, controls and any
+    /// named element; the anonymous `<div>` skeleton is folded away, exactly as an agent's observation
+    /// elides it. Each row carries its indentation `d`(epth), `role`, `name`, whether it is actionable
+    /// (`act`), its rendered interaction `state`, and its absolute `box` (`null` when the element was
+    /// never boxed — an agent has nowhere to click those).
+    pub fn agent_tree(&self) -> String {
+        let rects = self.a11y_rects();
+        let z = self.z_index_map();
+        let tree = manuk_a11y::build_tree_with_geometry(&self.dom, &rects, &z);
+        let mut out = String::from("[");
+        let mut idx: i32 = 0;
+        emit_agent_node(&tree, 0, &mut out, &mut idx);
+        out.push(']');
+        out
+    }
+
+    /// The affordance census an agent uses to orient before it acts: how many actionable controls,
+    /// landmark regions and headings the page actually exposes. The structured map, counted.
+    pub fn agent_summary(&self) -> String {
+        let rects = self.a11y_rects();
+        let z = self.z_index_map();
+        let tree = manuk_a11y::build_tree_with_geometry(&self.dom, &rects, &z);
+        let (mut act, mut land, mut head, mut named, mut total) = (0, 0, 0, 0, 0);
+        count_agent(
+            &tree, &mut act, &mut land, &mut head, &mut named, &mut total,
+        );
+        format!(
+            "{{\"interactive\":{},\"landmarks\":{},\"headings\":{},\"named\":{},\"nodes\":{}}}",
+            act, land, head, named, total
+        )
+    }
+
+    /// Every laid-out box, for the geometry overlay — proof the rectangles are *solved*, not a
+    /// decorative grid drawn over a bitmap. Each entry is `[x, y, w, h, depth]`; `depth` (nesting in the
+    /// fragment tree) drives the overlay's colour, so the structure of the layout is legible at a glance.
+    pub fn layout_boxes(&self) -> String {
+        let rects = self.root.node_rects(&self.dom);
+        let depth = self.depth_map();
+        let mut out = String::from("[");
+        let mut first = true;
+        for (n, r) in &rects {
+            if r.width <= 0.0 || r.height <= 0.0 {
+                continue;
+            }
+            if !first {
+                out.push(',');
+            }
+            first = false;
+            out.push_str(&format!(
+                "[{:.0},{:.0},{:.0},{:.0},{}]",
+                r.x,
+                r.y,
+                r.width,
+                r.height,
+                depth.get(n).copied().unwrap_or(0)
+            ));
+        }
+        out.push(']');
+        out
+    }
 }
 
 impl Renderer {
+    /// The laid-out boxes, converted into `manuk-a11y`'s dependency-lean `Rect` (the a11y crate stays
+    /// DOM-only so the agent and the screen-reader bridge can use it without the layout stack).
+    fn a11y_rects(&self) -> HashMap<NodeId, A11yRect> {
+        self.root
+            .node_rects(&self.dom)
+            .into_iter()
+            .map(|(n, r)| {
+                (
+                    n,
+                    A11yRect {
+                        x: r.x,
+                        y: r.y,
+                        width: r.width,
+                        height: r.height,
+                    },
+                )
+            })
+            .collect()
+    }
+
+    /// Nesting depth per DOM node (one pre-order walk) — colours the geometry overlay.
+    fn depth_map(&self) -> HashMap<NodeId, i32> {
+        let mut m = HashMap::new();
+        let mut stack = vec![(self.dom.root(), 0i32)];
+        while let Some((n, d)) = stack.pop() {
+            m.insert(n, d);
+            for c in self.dom.children(n) {
+                stack.push((c, d + 1));
+            }
+        }
+        m
+    }
+
     /// Deepest-wins over the LAID-OUT boxes — the same rects a click resolves against. Ties break toward
     /// the SMALLER box, because a lone `<button>` inside a same-size `<form>` must hit the button (that tie
     /// once resolved toward the ancestor, and the click landed on the form).
@@ -291,6 +414,91 @@ fn register_bundled_fonts(fonts: &FontContext) {
         &include_bytes!("../fonts/LiberationMono-Regular.ttf")[..],
     ] {
         fonts.register_font(data.to_vec());
+    }
+}
+
+/// Truncate to `max` characters (char-safe), with an ellipsis — an accessible name can be a whole
+/// paragraph, and the agent tree wants the identifying head of it, not the essay.
+fn truncate(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let head: String = s.chars().take(max).collect();
+        format!("{head}…")
+    }
+}
+
+/// Pre-order emit of the semantically-pruned agent tree (see [`Renderer::agent_tree`]). A node is kept
+/// if it is actionable, has an accessible name, or carries a real ARIA role — the anonymous-container
+/// skeleton is folded away and its meaningful descendants re-attach at the reduced depth, which is the
+/// same elision the headless agent's observation channel performs.
+fn emit_agent_node(n: &A11yNode, depth: i32, out: &mut String, idx: &mut i32) {
+    use manuk_a11y::Role;
+    let keep = n.role.is_interactive() || !n.name.is_empty() || n.role != Role::Generic;
+    if keep {
+        if *idx > 0 {
+            out.push(',');
+        }
+        let state = n.state.render();
+        let state = state.trim().trim_start_matches('[').trim_end_matches(']');
+        let bx = match n.bbox {
+            Some(r) => format!("[{:.0},{:.0},{:.0},{:.0}]", r.x, r.y, r.width, r.height),
+            None => "null".to_string(),
+        };
+        out.push_str(&format!(
+            "{{\"i\":{},\"d\":{},\"role\":\"{}\",\"name\":\"{}\",\"act\":{},\"state\":\"{}\",\"box\":{}}}",
+            *idx,
+            depth,
+            n.role.as_str(),
+            json_escape(&truncate(&n.name, 80)),
+            n.role.is_interactive(),
+            json_escape(state),
+            bx
+        ));
+        *idx += 1;
+    }
+    let child_depth = if keep { depth + 1 } else { depth };
+    for c in &n.children {
+        emit_agent_node(c, child_depth, out, idx);
+    }
+}
+
+/// Tally the affordance census over the whole tree (see [`Renderer::agent_summary`]).
+fn count_agent(
+    n: &A11yNode,
+    act: &mut i32,
+    land: &mut i32,
+    head: &mut i32,
+    named: &mut i32,
+    total: &mut i32,
+) {
+    use manuk_a11y::Role;
+    *total += 1;
+    if n.role.is_interactive() {
+        *act += 1;
+    }
+    if !n.name.is_empty() {
+        *named += 1;
+    }
+    if matches!(n.role, Role::Heading { .. }) {
+        *head += 1;
+    }
+    if matches!(
+        n.role,
+        Role::Banner
+            | Role::Navigation
+            | Role::Main
+            | Role::Complementary
+            | Role::ContentInfo
+            | Role::Region
+            | Role::Search
+            | Role::Form
+            | Role::Article
+    ) {
+        *land += 1;
+    }
+    for c in &n.children {
+        count_agent(c, act, land, head, named, total);
     }
 }
 

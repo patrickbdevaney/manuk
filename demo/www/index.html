@@ -6,59 +6,100 @@
 <title>Manuk — a browser engine you can see inside</title>
 <style>
   :root {
-    --ink:#12100e; --paper:#faf8f5; --line:#ded7cd; --dim:#6d6459;
-    --accent:#b4472c; --ok:#2f6b4f; --box:#2f6bb4;
+    --ink:#12100e; --paper:#faf8f5; --panel:#f3efe8; --line:#ded7cd; --dim:#6d6459;
+    --accent:#b4472c; --ok:#2f6b4f; --box:#2f6bb4; --paperRGB:250,248,245;
     --mono: ui-monospace,"SF Mono","Cascadia Mono",Menlo,monospace;
+    --serif: ui-serif,Georgia,"Times New Roman",serif;
   }
   @media (prefers-color-scheme: dark){
-    :root{--ink:#ece7e0;--paper:#14130f;--line:#33302a;--dim:#968c7f;--accent:#e0714f;--ok:#6fbf95;--box:#6fa8e0;}
+    :root{--ink:#ece7e0;--paper:#14130f;--panel:#1c1a15;--line:#33302a;--dim:#968c7f;
+          --accent:#e0714f;--ok:#6fbf95;--box:#6fa8e0;--paperRGB:20,19,15;}
   }
+  :root[data-theme="light"]{--ink:#12100e;--paper:#faf8f5;--panel:#f3efe8;--line:#ded7cd;--dim:#6d6459;
+          --accent:#b4472c;--ok:#2f6b4f;--box:#2f6bb4;--paperRGB:250,248,245;}
+  :root[data-theme="dark"]{--ink:#ece7e0;--paper:#14130f;--panel:#1c1a15;--line:#33302a;--dim:#968c7f;
+          --accent:#e0714f;--ok:#6fbf95;--box:#6fa8e0;--paperRGB:20,19,15;}
   *{box-sizing:border-box}
   body{margin:0;background:var(--paper);color:var(--ink);
-       font:16px/1.6 ui-serif,Georgia,"Times New Roman",serif;-webkit-font-smoothing:antialiased}
-  header{padding:2.5rem 1.5rem 1rem;max-width:70ch;margin:0 auto}
-  h1{font-size:1.95rem;line-height:1.15;margin:0 0 .5rem;letter-spacing:-.01em}
+       font:16px/1.6 var(--serif);-webkit-font-smoothing:antialiased}
+  header{padding:2.5rem 1.5rem 1rem;max-width:72ch;margin:0 auto}
+  h1{font-size:2.05rem;line-height:1.12;margin:0 0 .5rem;letter-spacing:-.015em}
   h1 em{font-style:normal;color:var(--accent)}
-  .lede{color:var(--dim);margin:0 0 1.25rem}
+  .lede{color:var(--dim);margin:0 0 1.25rem;font-size:1.02rem}
   .honest{border-left:3px solid var(--accent);padding:.75rem 0 .75rem 1rem;margin:0 0 1rem;
-          font-size:.9rem;background:color-mix(in srgb,var(--accent) 5%,transparent)}
+          font-size:.9rem;line-height:1.5;background:color-mix(in srgb,var(--accent) 5%,transparent)}
   .honest b{color:var(--accent)} .honest .no{color:var(--dim)}
-  details{font-size:.85rem;color:var(--dim);margin-bottom:1.5rem}
+  details{font-size:.85rem;color:var(--dim);margin-bottom:1.25rem}
   details summary{cursor:pointer;color:var(--accent)}
   details p{margin:.6rem 0}
-  main{max-width:1400px;margin:0 auto;padding:0 1.5rem 4rem}
-  .bar{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;padding:.75rem 0;
+  main{max-width:1440px;margin:0 auto;padding:0 1.5rem 4rem}
+
+  .bar{display:flex;gap:.9rem;flex-wrap:wrap;align-items:center;padding:.75rem 0;
        border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:1rem;
        font-family:var(--mono);font-size:.75rem}
-  .grp{display:flex;gap:.3rem;align-items:center;padding-right:.6rem;margin-right:.3rem;border-right:1px solid var(--line)}
-  .grp .lbl{color:var(--dim);font-size:.68rem;text-transform:uppercase;letter-spacing:.06em}
+  .grp{display:flex;gap:.3rem;align-items:center;flex-wrap:wrap}
+  .grp .lbl{color:var(--dim);font-size:.66rem;text-transform:uppercase;letter-spacing:.08em;margin-right:.15rem}
+  .spacer{flex:1 1 auto}
   button{font:inherit;font-family:var(--mono);font-size:.75rem;background:transparent;color:var(--ink);
-         border:1px solid var(--line);padding:.3rem .55rem;border-radius:3px;cursor:pointer}
+         border:1px solid var(--line);padding:.3rem .55rem;border-radius:3px;cursor:pointer;transition:.12s}
   button:hover{border-color:var(--accent);color:var(--accent)}
   button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
-  .stage{display:grid;gap:1rem;grid-template-columns:1fr 320px}
-  .stage.split{grid-template-columns:1fr 1fr 320px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+  .seg button{border:0;border-right:1px solid var(--line);border-radius:0;padding:.34rem .7rem}
+  .seg button:last-child{border-right:0}
+  .seg button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .seg .k{opacity:.5;font-size:.62rem;margin-left:.3rem}
+
+  .stage{display:grid;gap:1rem;grid-template-columns:1fr 360px}
+  .stage.split{grid-template-columns:1fr 1fr 360px}
   @media(max-width:1100px){.stage,.stage.split{grid-template-columns:1fr}}
-  figure{margin:0}
+  figure{margin:0;min-width:0}
   figcaption{font-family:var(--mono);font-size:.7rem;color:var(--dim);padding:.4rem 0;
              display:flex;justify-content:space-between;gap:1rem}
   figcaption .who{color:var(--ink);font-weight:700}
-  .frame{border:1px solid var(--line);border-radius:4px;overflow:hidden;height:74vh;background:#fff;position:relative}
+  .frame{border:1px solid var(--line);border-radius:4px;overflow:hidden;height:76vh;background:#fff;position:relative}
   canvas{display:block;cursor:crosshair}
   #ov{position:absolute;inset:0;pointer-events:none}
-  aside{border:1px solid var(--line);border-radius:4px;padding:.9rem;font-family:var(--mono);
-        font-size:.72rem;height:74vh;overflow:auto;line-height:1.5}
-  aside h3{margin:0 0 .5rem;font-family:var(--mono);font-size:.66rem;text-transform:uppercase;
-           letter-spacing:.08em;color:var(--accent)}
+  .modehint{position:absolute;left:.6rem;bottom:.5rem;font-family:var(--mono);font-size:.66rem;
+            color:var(--dim);background:rgba(var(--paperRGB),.82);padding:.15rem .4rem;border-radius:3px;
+            border:1px solid var(--line);pointer-events:none}
+
+  aside{border:1px solid var(--line);border-radius:4px;background:var(--panel);padding:.9rem;
+        font-family:var(--mono);font-size:.72rem;height:76vh;overflow:auto;line-height:1.5}
+  aside h3{margin:0 0 .5rem;font-family:var(--mono);font-size:.64rem;text-transform:uppercase;
+           letter-spacing:.09em;color:var(--accent)}
   aside .sec{border-top:1px dashed var(--line);margin-top:.9rem;padding-top:.7rem}
   .kv{display:grid;grid-template-columns:auto 1fr;gap:.15rem .6rem}
   .kv dt{color:var(--dim)} .kv dd{margin:0;word-break:break-word}
-  .layer{display:flex;justify-content:space-between;padding:.12rem 0}
+  .layer{display:flex;justify-content:space-between;gap:1rem;padding:.12rem 0}
   .layer b{font-weight:700} .layer .ms{color:var(--ok)}
   .swatch{display:inline-block;width:.7em;height:.7em;border:1px solid var(--line);vertical-align:-1px;margin-right:.25em}
   .hint{color:var(--dim);font-style:italic}
-  footer{max-width:70ch;margin:0 auto;padding:0 1.5rem 4rem;color:var(--dim);font-size:.85rem}
-  a{color:var(--accent)}
+
+  /* affordance census */
+  .census{display:grid;grid-template-columns:repeat(4,1fr);gap:.4rem;margin:.2rem 0 .3rem}
+  .stat{border:1px solid var(--line);border-radius:3px;padding:.4rem .3rem;text-align:center;background:var(--paper)}
+  .stat .n{font-size:1.15rem;font-weight:700;color:var(--accent);display:block;line-height:1.1}
+  .stat .l{font-size:.58rem;text-transform:uppercase;letter-spacing:.05em;color:var(--dim)}
+
+  /* the agent (a11y) tree */
+  .tree{margin-top:.2rem}
+  .arow{display:flex;gap:.4rem;align-items:baseline;padding:.09rem .3rem;border-radius:3px;cursor:default;
+        white-space:nowrap;overflow:hidden}
+  .arow:hover,.arow.on{background:color-mix(in srgb,var(--ok) 16%,transparent)}
+  .arow .role{color:var(--box);font-size:.66rem}
+  .arow.act .role{color:var(--ok);font-weight:700}
+  .arow .dot{color:var(--ok);font-size:.6rem}
+  .arow .nm{color:var(--ink);overflow:hidden;text-overflow:ellipsis}
+  .arow .anon{color:var(--dim);font-style:italic}
+  .arow .st{color:var(--accent);font-size:.64rem}
+
+  .legend{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.4rem}
+  .legend span{display:flex;align-items:center;gap:.25rem;color:var(--dim);font-size:.66rem}
+  .legend i{width:.9em;height:.9em;border-radius:2px;display:inline-block}
+
+  footer{max-width:72ch;margin:0 auto;padding:0 1.5rem 4rem;color:var(--dim);font-size:.88rem}
+  footer a,aside a{color:var(--accent)}
   .boot{font-family:var(--mono);font-size:.8rem;color:var(--dim);padding:2rem 0}
 </style>
 </head>
@@ -67,41 +108,52 @@
   <h1>A browser engine <em>you can see inside</em>.</h1>
   <p class="lede">
     Manuk — written from scratch in Rust — compiled to WebAssembly and executing on this page. It is
-    parsing, cascading, laying out and rasterizing real websites in your browser right now. Point at
-    anything and it will show you <em>its own</em> computed style and layout box, straight out of Stylo and
-    Taffy. Click a link and it will navigate.
+    parsing, cascading, laying out and rasterizing real websites in your browser right now. Switch to
+    <b>Agent view</b> to see the accessibility tree an LLM drives it through; switch to <b>Boxes</b> to see
+    the raw geometry. Point at anything and it reports <em>its own</em> engine state — straight out of Stylo,
+    Taffy and the a11y tree, never re-derived for display.
   </p>
   <p class="honest">
     <b>Real:</b> <b>Stylo</b> (Firefox's cascade), <b>Taffy</b> (flex/grid), <b>tiny-skia</b> (the
-    rasterizer), and this engine's own DOM, inline/float/table layout, paint, hit-testing and stacking.
-    Scrolling <b>re-renders</b>. The inspector reads the <b>actual</b> engine state — nothing is
-    re-derived for display.<br>
-    <span class="no"><b>Not real:</b> no JavaScript, and no live fetching — these are bundled snapshots of
-    real sites, with their stylesheets inlined. Saying so is the only thing that makes the rest
-    believable.</span>
+    rasterizer), <b>manuk-a11y</b> (the semantic tree an agent reads), and this engine's own DOM,
+    inline/float/table layout, paint, hit-testing and stacking. Scrolling <b>re-renders</b>. Every panel
+    reads the <b>actual</b> engine state.<br>
+    <span class="no"><b>Not real here:</b> no JavaScript, and no live fetching — these are bundled snapshots
+    of real sites, stylesheets inlined. Saying so is the only thing that makes the rest believable.</span>
   </p>
   <details>
-    <summary>Why no JavaScript? (the honest, technical answer)</summary>
+    <summary>Why no JavaScript in the demo — and why the agent view is honest without it</summary>
     <p>
-      The engine embeds <b>SpiderMonkey</b> natively — real JS, real JIT. But this demo targets
-      <code>wasm32-unknown-unknown</code>, and SpiderMonkey is C++: <code>mozjs</code>'s FFI links a native
-      library that has no build for that target.
+      The native engine embeds <b>SpiderMonkey</b> — real JS, real JIT. But this demo targets
+      <code>wasm32-unknown-unknown</code>, and SpiderMonkey is C++: <code>mozjs</code> links a native
+      library with no build for that target. SpiderMonkey <em>can</em> run on wasm, but only as an
+      <b>interpreter</b> — WebAssembly forbids the runtime code generation a JIT <em>is</em> — and it ships
+      as a separate WASI module, unlinkable into this binary. So the demo is the <b>rendering engine and the
+      agent's observation channel</b>, in full; the script runtime is native-only.
     </p>
     <p>
-      SpiderMonkey <em>can</em> run on WebAssembly — but only as an <b>interpreter</b>, because
-      <b>WebAssembly forbids runtime code generation</b>, which is precisely what a JIT is. That is why the
-      Bytecode Alliance built a portable baseline interpreter for it. It also ships as a separate WASI
-      module, not something linkable into this Rust wasm binary.
-    </p>
-    <p>
-      So: shipping JS here is a <em>project</em>, not a feature — and pretending otherwise would undermine
-      everything else on this page. What you are looking at is the <b>rendering engine</b>, in full.
+      The <b>Agent view</b> needs none of that: an accessibility tree (role + name + state + a click box) is
+      a pure function of the parsed DOM and the laid-out geometry. It is exactly what the headless
+      <code>agent</code> front-end feeds a model instead of a screenshot — computed here, with no JS, from
+      the same two things the render is.
     </p>
   </details>
 </header>
 
 <main>
-  <div class="bar" id="bar"></div>
+  <div class="bar" id="bar">
+    <div class="grp" id="pages"></div>
+    <span class="spacer"></span>
+    <div class="grp">
+      <span class="lbl">view</span>
+      <div class="seg" id="modes">
+        <button data-m="render"  aria-pressed="true">Render<span class="k">1</span></button>
+        <button data-m="agent"   aria-pressed="false">Agent view<span class="k">2</span></button>
+        <button data-m="boxes"   aria-pressed="false">Boxes<span class="k">3</span></button>
+      </div>
+      <button id="cmp" aria-pressed="false">compare with Chromium</button>
+    </div>
+  </div>
 
   <div class="stage" id="stage">
     <figure>
@@ -112,6 +164,7 @@
       <div class="frame" id="frame">
         <canvas id="cv"></canvas>
         <canvas id="ov"></canvas>
+        <span class="modehint" id="modehint"></span>
       </div>
     </figure>
 
@@ -120,37 +173,16 @@
       <div class="frame" style="overflow:auto"><img id="refimg" alt="Chromium's render" style="width:100%;display:block"></div>
     </figure>
 
-    <aside>
-      <h3>engine provenance</h3>
-      <div id="layers"></div>
-
-      <div class="sec">
-        <h3>under the cursor</h3>
-        <div id="insp"><span class="hint">move over the page…</span></div>
-      </div>
-
-      <div class="sec">
-        <h3>what this engine is</h3>
-        <div class="kv" style="grid-template-columns:auto 1fr">
-          <dt>parser</dt><dd>html5ever (ours)</dd>
-          <dt>cascade</dt><dd>Stylo — Firefox's</dd>
-          <dt>selectors</dt><dd>ours (+ <code>:has()</code>)</dd>
-          <dt>flex/grid</dt><dd>Taffy</dd>
-          <dt>inline/float/table</dt><dd>ours</dd>
-          <dt>raster</dt><dd>tiny-skia (CPU)</dd>
-          <dt>hit-test</dt><dd>ours, on the real boxes</dd>
-          <dt>JS</dt><dd>SpiderMonkey <span class="hint">(native only)</span></dd>
-        </div>
-      </div>
-    </aside>
+    <aside id="panel"></aside>
   </div>
   <div class="boot" id="boot">loading the engine…</div>
 </main>
 
 <footer>
   <p>
-    Don't take any of it on trust — press <b>compare</b> and look at Chromium's render of the identical
-    snapshot, side by side.
+    Don't take any of it on trust — press <b>compare with Chromium</b> and look at Chromium's render of the
+    identical snapshot, side by side. The engine is one shared core: this same pipeline drives a headful GUI
+    browser and a headless agentic one an LLM operates through the tree you see in Agent view.
   </p>
   <p><a href="https://github.com/patrickbdevaney/manuk">Source, methodology, and the engineering journal →</a></p>
 </footer>
@@ -160,37 +192,153 @@ import init, { Renderer } from './manuk_demo.js';
 
 const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
 const ov=document.getElementById('ov'), octx=ov.getContext('2d');
-const frame=document.getElementById('frame');
+const frame=document.getElementById('frame'), panel=document.getElementById('panel');
+const modehint=document.getElementById('modehint');
 const WIDTH=900;
-let r=null, pages=[], byName={}, cur=0, scrollY=0, hoverBox=null;
+let r=null, pages=[], cur=0, scrollY=0, mode='render';
+let hoverBox=null;                 // render-mode inspector box (doc coords)
+let nodes=[], boxes=[], census=null, hi=-1;   // agent + boxes state
 
 const esc = s => String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
+/* ── paint: the engine render, then a wash + overlays in the non-render modes ─────────────── */
 function paint(){
   const h=Math.min(frame.clientHeight||760,1600);
   cv.width=WIDTH; cv.height=h; ov.width=WIDTH; ov.height=h;
   ov.style.width=cv.style.width=WIDTH+'px';
   const t0=performance.now();
   const bytes=r.render(h, scrollY);
-  const ms=performance.now()-t0;
+  const rasterMs=performance.now()-t0;
   ctx.putImageData(new ImageData(new Uint8ClampedArray(bytes),WIDTH,h),0,0);
+  if(mode!=='render'){                     // wash the pixels back so the overlay reads clearly
+    ctx.save(); ctx.globalAlpha=.66; ctx.fillStyle=cssv('--paper')||'#faf8f5';
+    ctx.fillRect(0,0,cv.width,cv.height); ctx.restore();
+  }
   drawOverlay();
-  layers(ms);
+  if(mode==='render') updateProvenance(rasterMs);
 }
 
-// The layout box Taffy solved, drawn ON the render. Proof the geometry is real, not decorative.
 function drawOverlay(){
   octx.clearRect(0,0,ov.width,ov.height);
-  if(!hoverBox) return;
-  const [x,y,w,h]=hoverBox;
-  octx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--box').trim()||'#2f6bb4';
-  octx.lineWidth=1; octx.setLineDash([4,3]);
-  octx.strokeRect(x+.5, y-scrollY+.5, Math.max(w,1), Math.max(h,1));
+  const H=ov.height;
+  if(mode==='render'){
+    if(!hoverBox) return;
+    const [x,y,w,h]=hoverBox;
+    octx.strokeStyle=cssv('--box')||'#2f6bb4'; octx.lineWidth=1; octx.setLineDash([4,3]);
+    octx.strokeRect(x+.5, y-scrollY+.5, Math.max(w,1), Math.max(h,1));
+    return;
+  }
+  if(mode==='boxes'){
+    octx.setLineDash([]); octx.lineWidth=1;
+    for(const b of boxes){
+      const [x,y,w,h,d]=b, yy=y-scrollY;
+      if(yy>H||yy+h<0) continue;
+      octx.strokeStyle=`hsla(${(d*34)%360} 68% 52% / .55)`;
+      octx.strokeRect(x+.5, yy+.5, w, h);
+    }
+    return;
+  }
+  // agent view — the actionable + named boxes, the highlighted one labeled
+  const ok=cssv('--ok')||'#2f6b4f', dim=cssv('--dim')||'#6d6459', acc=cssv('--accent')||'#b4472c';
+  for(const n of nodes){
+    if(!n.box) continue;
+    const [x,y,w,h]=n.box, yy=y-scrollY;
+    if(yy>H||yy+h<0) continue;
+    const on=n.i===hi;
+    octx.setLineDash(n.act?[]:[3,3]);
+    octx.strokeStyle=n.act?ok:dim;
+    octx.lineWidth=on?2:1;
+    octx.strokeRect(x+.5, yy+.5, Math.max(w,1), Math.max(h,1));
+  }
+  const n=nodes.find(n=>n.i===hi);           // draw the label last, on top
+  if(n&&n.box){
+    const [x,y]=n.box, yy=y-scrollY;
+    const label=`${n.role}${n.name?' · '+n.name:''}${n.state?' ['+n.state+']':''}`;
+    octx.setLineDash([]); octx.font='11px ui-monospace,monospace';
+    const tw=Math.min(octx.measureText(label).width+8, WIDTH-x);
+    const ly=yy>14?yy-15:yy+n.box[3]+1;
+    octx.fillStyle=acc; octx.fillRect(x, ly, tw, 14);
+    octx.fillStyle='#fff'; octx.fillText(label, x+4, ly+11, WIDTH-x-8);
+  }
 }
 
-function layers(rasterMs){
+/* ── side panel, rebuilt per mode ─────────────────────────────────────────────────────────── */
+function renderPanel(){
+  if(mode==='render'){
+    panel.innerHTML=`
+      <h3>engine provenance</h3><div id="layers"></div>
+      <div class="sec"><h3>under the cursor</h3>
+        <div id="insp"><span class="hint">move over the page…</span></div></div>
+      <div class="sec"><h3>what this engine is</h3>
+        <div class="kv">
+          <dt>parser</dt><dd>html5ever (ours)</dd>
+          <dt>cascade</dt><dd>Stylo — Firefox's</dd>
+          <dt>selectors</dt><dd>ours (+ <code>:has()</code>)</dd>
+          <dt>flex/grid</dt><dd>Taffy</dd>
+          <dt>inline/float/table</dt><dd>ours</dd>
+          <dt>raster</dt><dd>tiny-skia (CPU)</dd>
+          <dt>a11y tree</dt><dd>ours (the agent channel)</dd>
+          <dt>JS</dt><dd>SpiderMonkey <span class="hint">(native only)</span></dd>
+        </div></div>`;
+    paint();
+  } else if(mode==='agent'){
+    const c=census||{interactive:0,landmarks:0,headings:0,named:0,nodes:0};
+    panel.innerHTML=`
+      <h3>what the agent sees</h3>
+      <div class="census">
+        <div class="stat"><span class="n">${c.interactive}</span><span class="l">actionable</span></div>
+        <div class="stat"><span class="n">${c.landmarks}</span><span class="l">landmarks</span></div>
+        <div class="stat"><span class="n">${c.headings}</span><span class="l">headings</span></div>
+        <div class="stat"><span class="n">${c.named}</span><span class="l">named</span></div>
+      </div>
+      <p class="hint" style="margin:.2rem 0 .5rem">role · name · state · a click box — the structured
+        observation the headless agent gets instead of a screenshot. Hover a row to find it on the page.</p>
+      <div class="sec" style="border-top:1px dashed var(--line)"><div class="tree" id="tree"></div></div>`;
+    const t=document.getElementById('tree');
+    t.innerHTML=nodes.map(n=>{
+      const nm=n.name?`<span class="nm">${esc(n.name)}</span>`:`<span class="nm anon">unnamed</span>`;
+      const st=n.state?`<span class="st">${esc(n.state)}</span>`:'';
+      const dot=n.act?`<span class="dot">●</span>`:'';
+      return `<div class="arow${n.act?' act':''}" data-i="${n.i}" style="padding-left:${.3+n.d*.75}rem">
+                <span class="role">${esc(n.role)}</span>${dot}${nm}${st}</div>`;
+    }).join('')||`<span class="hint">no semantic nodes — a purely presentational snapshot.</span>`;
+    t.querySelectorAll('.arow').forEach(el=>{
+      const i=+el.dataset.i;
+      el.addEventListener('mouseenter',()=>{ hi=i; markRow(); drawOverlay(); scrollBoxIntoView(i); });
+    });
+    paint();
+  } else { // boxes
+    panel.innerHTML=`
+      <h3>the layout geometry</h3>
+      <p class="hint" style="margin:.2rem 0 .6rem">Every box Taffy and our inline/float/table code solved —
+        <b id="bxcount">${boxes.length}</b> rectangles on this page. Real solved geometry, coloured by nesting
+        depth, not a decorative grid over a bitmap.</p>
+      <div class="legend">
+        <span><i style="background:hsl(0 68% 52%)"></i>shallow</span>
+        <span><i style="background:hsl(136 68% 52%)"></i>mid</span>
+        <span><i style="background:hsl(272 68% 52%)"></i>deep</span>
+      </div>
+      <div class="sec" style="border-top:1px dashed var(--line)">
+        <div class="kv">
+          <dt>boxes</dt><dd>${boxes.length}</dd>
+          <dt>doc height</dt><dd>${r.content_height().toFixed(0)}px</dd>
+          <dt>viewport</dt><dd>${WIDTH}px wide</dd>
+        </div>
+        <p class="hint" style="margin-top:.6rem">Scroll the page — the overlay re-solves against the same
+          offset the raster does.</p>
+      </div>`;
+    paint();
+  }
+  modehint.textContent = mode==='render' ? 'hover: inspect · click: follow link'
+                       : mode==='agent'  ? 'hover: ground a node · scroll to explore'
+                       : 'scroll: explore the fragment tree';
+}
+
+function updateProvenance(rasterMs){
+  const el=document.getElementById('layers'); if(!el) return;
   const s=JSON.parse(r.stats());
-  document.getElementById('layers').innerHTML =
+  el.innerHTML=
     `<div class="layer"><b>parse</b> <span>html5ever · ${s.nodes} nodes</span><span class="ms">${s.parseMs.toFixed(0)}ms</span></div>
      <div class="layer"><b>cascade</b> <span>Stylo · ${s.styled} styled</span><span class="ms">${s.cascadeMs.toFixed(0)}ms</span></div>
      <div class="layer"><b>layout</b> <span>Taffy + ours</span><span class="ms">${s.layoutMs.toFixed(0)}ms</span></div>
@@ -199,6 +347,22 @@ function layers(rasterMs){
      <div class="layer" style="color:var(--dim)"><span>document height</span><span>${s.contentHeight}px</span></div>`;
 }
 
+function markRow(){
+  panel.querySelectorAll('.arow.on').forEach(e=>e.classList.remove('on'));
+  const el=panel.querySelector(`.arow[data-i="${hi}"]`);
+  if(el) el.classList.add('on');
+}
+function scrollBoxIntoView(i){
+  const n=nodes.find(n=>n.i===i); if(!n||!n.box) return;
+  const [ , y, , h]=n.box, top=y-scrollY, bot=top+h;
+  if(top<0||bot>ov.height){
+    const max=Math.max(0, r.content_height()-cv.height);
+    scrollY=Math.min(max, Math.max(0, y-ov.height/3));
+    paint();
+  }
+}
+
+/* ── render-mode inspector (unchanged behaviour) ──────────────────────────────────────────── */
 function inspect(e){
   const b=cv.getBoundingClientRect();
   const x=e.clientX-b.left, y=e.clientY-b.top+scrollY;
@@ -207,7 +371,8 @@ function inspect(e){
   const i=JSON.parse(raw);
   hoverBox=i.box; drawOverlay();
   const sw=c=>c.startsWith('#')?`<span class="swatch" style="background:${c}"></span>${c}`:c;
-  document.getElementById('insp').innerHTML=
+  const el=document.getElementById('insp'); if(!el) return;
+  el.innerHTML=
     `<div class="kv">
        <dt>element</dt><dd>&lt;${esc(i.tag)}&gt;${i.id?'#'+esc(i.id):''}</dd>
        ${i.class?`<dt>class</dt><dd>${esc(i.class)}</dd>`:''}
@@ -216,7 +381,7 @@ function inspect(e){
      </div>
      <div class="sec" style="border-top:1px dashed var(--line);margin-top:.6rem;padding-top:.5rem">
        <div class="kv">
-         <dt colspan="2" style="color:var(--accent)">Stylo</dt><dd></dd>
+         <dt style="color:var(--accent)">Stylo</dt><dd></dd>
          <dt>display</dt><dd>${esc(i.display)}</dd>
          <dt>position</dt><dd>${esc(i.position)}</dd>
          <dt>color</dt><dd>${sw(i.color)}</dd>
@@ -224,7 +389,7 @@ function inspect(e){
          <dt>font-size</dt><dd>${i.fontSize.toFixed(1)}px</dd>
        </div>
        <div class="kv" style="margin-top:.5rem">
-         <dt colspan="2" style="color:var(--accent)">Taffy box</dt><dd></dd>
+         <dt style="color:var(--accent)">Taffy box</dt><dd></dd>
          <dt>x, y</dt><dd>${i.box[0].toFixed(0)}, ${i.box[1].toFixed(0)}</dd>
          <dt>w × h</dt><dd>${i.box[2].toFixed(0)} × ${i.box[3].toFixed(0)}</dd>
        </div>
@@ -232,12 +397,27 @@ function inspect(e){
      </div>`;
 }
 
-// A browser that cannot follow a link is a picture of a browser.
+// agent-mode: ground the smallest node under the cursor and reflect it in the tree
+function groundAgent(e){
+  const b=cv.getBoundingClientRect();
+  const x=e.clientX-b.left, y=e.clientY-b.top+scrollY;
+  let best=-1, area=Infinity;
+  for(const n of nodes){
+    if(!n.box) continue;
+    const [bx,by,bw,bh]=n.box;
+    if(x>=bx&&x<=bx+bw&&y>=by&&y<=by+bh){ const a=bw*bh; if(a<=area){area=a;best=n.i;} }
+  }
+  if(best!==hi){ hi=best; markRow(); drawOverlay();
+    const el=panel.querySelector(`.arow[data-i="${hi}"]`);
+    if(el) el.scrollIntoView({block:'nearest'});
+  }
+}
+
 function follow(e){
+  if(mode!=='render') return;
   const b=cv.getBoundingClientRect();
   const href=r.link_at(e.clientX-b.left, e.clientY-b.top+scrollY);
   if(!href) return;
-  // Internal routing: if the link lands on a page we bundled, NAVIGATE to it — in the engine.
   const hit=pages.find(p=>{
     try{ const a=new URL(href, pages[cur].url), b2=new URL(p.url);
          return a.host===b2.host && (a.pathname===b2.pathname || (a.pathname==='/'&&b2.pathname==='/')); }
@@ -248,17 +428,46 @@ function follow(e){
     window.open(new URL(href, pages[cur].url), '_blank', 'noopener');
 }
 
+/* ── loading + mode switching ─────────────────────────────────────────────────────────────── */
+function computeViews(){
+  nodes=JSON.parse(r.agent_tree());
+  boxes=JSON.parse(r.layout_boxes());
+  census=JSON.parse(r.agent_summary());
+  hi=-1;
+}
+
 async function load(i){
-  cur=i; scrollY=0; hoverBox=null;
+  cur=i; scrollY=0; hoverBox=null; hi=-1;
   const p=pages[i];
   const html=await (await fetch(p.html)).text();
   r=new Renderer(html, WIDTH);              // parse → Stylo → Taffy, in your browser
+  computeViews();
   document.getElementById('cls').textContent=`· ${p.class} web`;
   document.getElementById('url').textContent=p.url.replace(/^https?:\/\//,'');
   document.getElementById('refimg').src=p.ref;
-  paint();
-  document.querySelectorAll('#bar button[data-i]').forEach(b=>
+  renderPanel();
+  document.querySelectorAll('#pages button').forEach(b=>
     b.setAttribute('aria-pressed', String(+b.dataset.i===i)));
+}
+
+function setMode(m){
+  if(m===mode) return;
+  mode=m; hi=-1; hoverBox=null;
+  document.querySelectorAll('#modes button').forEach(b=>
+    b.setAttribute('aria-pressed', String(b.dataset.m===m)));
+  const c=document.getElementById('cmp');
+  c.style.display = m==='render' ? '' : 'none';
+  if(m!=='render' && c.getAttribute('aria-pressed')==='true') toggleCompare(false);
+  cv.style.cursor = m==='render' ? 'crosshair' : m==='agent' ? 'pointer' : 'default';
+  renderPanel();
+}
+
+function toggleCompare(on){
+  const c=document.getElementById('cmp');
+  c.setAttribute('aria-pressed', String(on));
+  document.getElementById('stage').classList.toggle('split', on);
+  document.getElementById('ref').hidden=!on;
+  paint();
 }
 
 frame.addEventListener('wheel',e=>{
@@ -267,15 +476,26 @@ frame.addEventListener('wheel',e=>{
   scrollY=Math.min(max,Math.max(0,scrollY+e.deltaY));
   paint();
 },{passive:false});
-cv.addEventListener('mousemove',inspect);
+cv.addEventListener('mousemove',e=>{ if(mode==='render') inspect(e); else if(mode==='agent') groundAgent(e); });
 cv.addEventListener('click',follow);
+
+document.getElementById('modes').addEventListener('click',e=>{
+  const btn=e.target.closest('button[data-m]'); if(btn) setMode(btn.dataset.m);
+});
+window.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+  if(e.key==='1') setMode('render');
+  else if(e.key==='2') setMode('agent');
+  else if(e.key==='3') setMode('boxes');
+  else if(e.key==='ArrowRight'){ if(cur<pages.length-1) load(cur+1); }
+  else if(e.key==='ArrowLeft'){ if(cur>0) load(cur-1); }
+});
 
 (async()=>{
   await init();
   pages=await (await fetch('./pages.json')).json();
-  pages.forEach(p=>byName[p.title]=p);
 
-  const bar=document.getElementById('bar');
+  const grp=document.getElementById('pages');
   for(const cls of ['doc','app','platform']){
     const g=document.createElement('span'); g.className='grp';
     g.innerHTML=`<span class="lbl">${cls}</span>`;
@@ -285,18 +505,9 @@ cv.addEventListener('click',follow);
       b.textContent=p.title; b.dataset.i=i; b.onclick=()=>load(i);
       g.appendChild(b);
     });
-    bar.appendChild(g);
+    grp.appendChild(g);
   }
-  const cmp=document.createElement('button');
-  cmp.textContent='compare with Chromium'; cmp.setAttribute('aria-pressed','false');
-  cmp.onclick=()=>{
-    const on=cmp.getAttribute('aria-pressed')!=='true';
-    cmp.setAttribute('aria-pressed',String(on));
-    document.getElementById('stage').classList.toggle('split',on);
-    document.getElementById('ref').hidden=!on;
-    paint();
-  };
-  bar.appendChild(cmp);
+  document.getElementById('cmp').onclick=()=>toggleCompare(document.getElementById('cmp').getAttribute('aria-pressed')!=='true');
 
   document.getElementById('boot').remove();
   await load(0);

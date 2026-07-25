@@ -6,49 +6,52 @@
 ### ▶ **[Run the engine in your own browser →](https://patrickbdevaney.github.io/manuk/)**
 
 Not a screenshot, not a video. That link compiles this engine to WebAssembly and executes it **in your
-browser**: **Stylo**'s cascade, **Taffy**'s flex/grid, **tiny-skia**'s rasterizer, and this engine's own
-DOM/layout/paint, rendering real page snapshots onto a canvas. Scroll it — scrolling **re-renders**, it
-does not pan a bitmap. Hover it — that is the real hit-test against the laid-out boxes. And press
-**compare with Chromium** to put our render next to Chromium's of the same document, so you do not have to
-take any of this on trust.
+browser** — **Stylo**'s cascade, **Taffy**'s flex/grid, **tiny-skia**'s rasterizer, and this engine's own
+DOM / layout / paint / accessibility tree, rendering real page snapshots onto a canvas. It has three views:
 
-It runs **41 real sites**, grouped the way this project thinks about the web — **doc** (Wikipedia, HN,
-RFC-Editor, BBC, SQLite, kernel.org…), **app** (the server-rendered DOM of React, Next, Svelte, Vue, Astro,
-Remix, Solid, Angular…), and **platform** (Tailwind, Bootstrap, GitHub, Stripe, MUI, Cloudflare, Linear…).
-Each carries a Chromium reference render, so each one can be disbelieved. Point at anything and the panel
-shows you **Stylo's actual computed style and Taffy's actual box** — read out of the live engine, not
-re-derived for display — next to the real cost of each stage: parse, cascade, layout, raster.
+- **Render** — the pixels. Scroll it and scrolling **re-renders**; it does not pan a bitmap. Hover it and
+  that is the real hit-test against the laid-out boxes.
+- **Agent view** — the **accessibility tree an LLM drives it through**: role + accessible name + interaction
+  state + a click box, computed with no JavaScript from the parsed DOM and the solved layout. Hover a node
+  to ground it on the page. This is the observation channel the headless agent gets *instead of* a
+  screenshot, and it is the whole thesis of the project made visible.
+- **Boxes** — every rectangle Taffy and our inline/float/table code solved, coloured by nesting depth.
 
-*What is not real **in this wasm demo** (the native browser does far more — see [What works](#what-works)), said in-product too:* **no JavaScript** and **no live fetching** (bundled snapshots).
-SpiderMonkey *can* target wasm, but only as an **interpreter** — WebAssembly forbids runtime code
-generation, which is what a JIT is — and it ships as a separate WASI module that cannot be linked into this
-binary. Saying so is the only thing that makes the rest believable.
+And **compare with Chromium** puts our render next to Chromium's of the same document, so none of it has to
+be taken on trust.
 
-A browser engine built from scratch in Rust — ~48k lines across 16 crates — with one shared engine
-core driving two front-ends: a **headful GUI browser** (`shell`) and a **headless agentic browser**
-(`agent`) an LLM can drive.
+*What is **not** real in the wasm demo (the native browser does far more — see [What works](#what-works)),
+said in-product too:* **no JavaScript** and **no live fetching** (bundled snapshots). SpiderMonkey *can*
+target wasm, but only as an **interpreter** — WebAssembly forbids the runtime code generation a JIT is — and
+it ships as a separate WASI module that cannot be linked into this binary. Saying so is the only thing that
+makes the rest believable. (The Agent view needs no JS: an a11y tree is a pure function of the DOM and the
+geometry.)
 
-The goal is a **daily driver**: fast, lean, and correct enough on the *breadth* of the real web to
-actually use — not pixel-exact on a handful of sites. Chromium parity across the whole web platform is
-the scope of a large team; what follows is an honest account of how far this has actually got, measured
-rather than asserted.
+---
+
+A browser engine built from scratch in Rust — **~129k lines across 18 crates** — with one shared engine
+core driving three front-ends: a **headful GUI browser** (`shell`), a **headless agentic browser** (`agent`)
+an LLM can drive, and the **wasm demo** above.
+
+The goal is a **daily driver**: fast, lean, and correct enough on the *breadth* of the real web to actually
+use — and, uniquely, **agent-native**: the same core exposes a structured surface an automation framework or
+an LLM can operate directly. Chromium parity across the whole web platform is the scope of a large team;
+what follows is an honest account of how far this has actually got, measured rather than asserted.
 
 ---
 
 ## Where this actually is
 
-Development runs on a differential oracle: **265 real sites across 15 design-pattern classes** are
-rendered by *both* Chromium and this engine from **one snapshot**, diffed by structural path, and the
-divergences **clustered by root cause**. The cluster ranking — ranked by *distinct sites explained*, not
-by hit count — **is** the priority ledger (`docs/loop/CLUSTERS.md`). No feature gets picked by judgement.
+**Phase 0 (daily-driver capability) is in progress and near its exit.** Development runs on a differential
+oracle: **265 real sites across 15 design-pattern classes** are rendered by *both* Chromium and this engine
+from **one snapshot**, diffed by structural path, and the divergences **clustered by root cause**. The
+cluster ranking — ranked by *distinct sites explained*, not by hit count — **is** the priority ledger. No
+feature is picked by taste.
 
-**The first principle is a ratchet.** Every tick must leave the engine strictly more capable than it
-found it, and nothing that worked before may work less well after — across **capability**,
-**performance**, and **instrument fidelity**. A capability is only *banked* once a gate proves it can go
-red; that proven gate is the ratchet tooth. The trajectory it produced: *nothing but Wikipedia (and
-crashes elsewhere) → dedup and lean efficiency → 20 doc-web sites at parity → SPA/app-web support → a
-265-site differential oracle → Web Platform Tests in the pipeline → next, the platform web (lazy-loaded
-feeds, iframes, media).*
+**The first principle is a ratchet.** Every unit of work must leave the engine strictly more capable than it
+found it, and nothing that worked before may work less well after — across **capability**, **performance**,
+and **instrument fidelity**. A capability is only *banked* once a gate proves it can go red; that proven gate
+is the ratchet tooth. Progress only turns one way.
 
 Three bars, and they are never conflated:
 
@@ -58,147 +61,119 @@ Three bars, and they are never conflated:
 | **Bar 1** | *Is the page legible, navigable, not visibly broken?* | The near-term target. |
 | **Bar 2** | *Is it pixel-exact?* | **Deliberately deferred.** Breadth beats depth until Bar 1 is real. |
 
-### Measured, on the 265-site frame
+The **north star**, one sentence, decides what "done" means: *Chromium is the **ceiling** on capability and
+the **floor** on everything else.* Match what a page can do in Chrome (scripts run, layout resolves, forms
+submit, media plays); **beat** Chrome on speed, stability, and resource use. A structural divergence is a
+bug; a timing divergence in our favour is the point.
 
-```
-Bar 1 node presence   92.2%    of the nodes Chromium renders, we render
-hangs (our clock)     4/211    1.9%  — timed per-engine on the same bytes
-faster than Chromium  195/211  92%   median 16.1s vs 36.5s
-crashes               0        (a panic kills the page, not the browser)
-```
+On the last full oracle run the engine rendered the node Chromium renders **~92% of the time**, was **faster
+than Chromium on ~92% of the corpus** (median roughly **2×**), and **crashed zero times** (a panic kills the
+page, not the browser). The live figures — tick number, hang count, cluster count — are generated into
+[`STATUS.md`](./STATUS.md); it is machine-written from the filesystem, git, and the verify receipt, never
+hand-edited.
 
-⚠ **A previous version of this README reported "~73/265 hangs (1 site in 4)". That number was wrong, and
-how it was wrong is worth knowing:** the crawl's 90-second watchdog wrapped the *whole oracle process* —
-**including Chromium's render** — and Chromium is the slower engine on 84% of this corpus (a cold headless
-news front page takes 30–110s). **We were booking Chromium's clock against ourselves.** Timed separately,
-the real figure is **4 of 211 (1.9%)**. *Every number has a harness, and the harness is part of the
-number.*
-
-### The app web (SPA frameworks)
-
-Eight **real** framework bundles (Vite production output, not toys). Before recent work: **0 of 8
-rendered anything** — every one mounted an empty `<div id="root">` and threw *zero exceptions* doing it.
-The silence was the bug.
-
-```
-✓ React   ✓ Vue   ✓ Svelte   ✓ Solid   ✓ Preact   ✓ Lit   ✓ Vanilla   ✓ React(JS)     8/8
-```
-
-It turned out to be **missing substrate, not a missing subsystem** — `import.meta` (SpiderMonkey needs a
-metadata hook; every Vite bundle emits `import.meta.url`), `nodeType` (React's `isValidContainer` checks
-it — without it, React error #299), `ownerDocument`, DOM interface constructors (`x instanceof
-HTMLIFrameElement` throws when the constructor is `undefined`), `createElementNS`/`createComment`.
-**All eight now render**, on roughly ten additive WebIDL fixes and **no new architecture** — which settles
-the question the whole schedule hung on: hydration failure does *not* cascade into needing a scheduling
-subsystem. Four of the five real blockers were in **our own primitives** (a use-after-GC in
-`ownerDocument`, an unsupported `file://` scheme, a missing `CharacterData.data`, a shadow root typed 8
-instead of 11). *The framework was never once the thing that was broken.*
+**The Phase-0 exit is a certificate, not a percentage.** It is not `ready_pct` (retired) and not a WPT
+count: it is a fidelity certificate measured by a rebuilt instrument on a stratified corpus — Bar 0 clean,
+the four *jarring* invariants (overlap / horizontal-overflow / reading-order / dead-click-target) ≥ 95%,
+parent-relative shape ≥ 0.75 on ≥ 95% of nodes, interactivity ≥ 95%, and only **named** exceptions. That is
+the finish line, and it is finite (see [Roadmap](#roadmap)).
 
 ---
 
 ## What works
 
-**Rendering.** Real sites over HTTPS: block/inline/flex/grid/table/float/positioning, the box model,
-`@media`/`@supports`/`@layer`, `var()`, real font selection and shaping, images (incl. SVG), gradients,
-backgrounds, shadows, `border-radius`, stacking contexts, `overflow` clipping. Stylo (Firefox's cascade)
-and SpiderMonkey are embedded as sanctioned FFI dependencies — never patched.
+**Rendering.** Real sites over HTTPS: block / inline / flex / grid / table / float / positioning, the box
+model, stacking contexts and `z-index`, `overflow` clipping, `border-radius`, gradients, backgrounds,
+shadows, transforms. The **live cascade is Stylo** (Firefox's) — `@media` / `@supports` / `@layer`, custom
+properties, container queries, `:has()`, and CSS Level-4 math (`round()` / `mod()` / `abs()` resolve to
+exact used values). Stylo and SpiderMonkey are embedded as sanctioned FFI dependencies — never patched
+internally.
 
-**Interactivity.** Click links, focus and type into fields, submit forms, toggle checkboxes, scroll,
-tabs (open/close/switch, hibernated background tabs), history, bookmarks, find-in-page, zoom, cookies
-(RFC 6265, public-suffix-aware), partitioned storage, session restore.
+**JavaScript (native).** SpiderMonkey with real DOM/BOM/CSSOM: event dispatch with capture/bubble,
+`fetch` / `XHR`, timers, promises + microtasks (spec ordering), custom elements + shadow DOM,
+`MutationObserver` / `IntersectionObserver` / `ResizeObserver`, **ES modules** (import maps + a real import
+graph, so CDN no-bundler apps boot), `<canvas>` 2D (paths, gradients, patterns, `getImageData` / `toDataURL`,
+`createImageBitmap`), the **Web Animations API** (`element.animate`), **View Transitions**, the **Navigation
+API**, **IndexedDB**, the **Cache API**, **Web / Service Workers** (same-thread), **CSP**, `Blob`, the
+**Sanitizer API**, popover, `scheduler.postTask`, and `crypto.subtle` on a real CSPRNG. Eight real SPA
+framework bundles (React, Vue, Svelte, Solid, Preact, Lit, Vanilla — Vite production output) mount and
+render.
 
-**JavaScript.** Inline and external scripts, ES modules, the DOM/BOM/CSSOM surface real sites use, event
-dispatch and bubbling, `fetch`/XHR, timers, promises/microtasks, custom elements + shadow DOM,
-`IntersectionObserver`/`ResizeObserver`.
+**Media.** `<video>` **plays**: MP4 demux → **H.264** video decode and **AAC** audio decode → decoded frames
+composited into the page → a real playback clock (`timeupdate` / `ended`, `currentTime` writes are true seeks
+firing `seeking` / `seeked`, `played`, `durationchange`), plus tracks / captions. MSE `SourceBuffer` is
+partial. EME / Widevine is **permanently out of scope** (a licensed proprietary CDM), so Netflix / Spotify
+are unreachable — stated once, not relitigated.
 
-**Agent-native.** The same engine core, headless: a11y-tree observation, in-process automation
-(selectors/wait/assert), WebDriver BiDi, and an `InferenceBackend` trait so any provider — local
-`llama-server`, Ollama, or a hosted endpoint — drives it identically. Agent actions fire the *real* DOM
-events (`input`/`keydown`/`focus`/`blur`/`change`), so React- and Vue-controlled inputs actually update.
+**Interactivity & shell.** Click links, focus and type into fields, submit forms (`<form method=POST>`
+navigation, multipart `FormData` uploads, constraint validation), toggle controls, scroll, tabs (open /
+close / switch, **hibernated** background tabs), history, bookmarks, find-in-page, zoom, cookies (RFC 6265,
+public-suffix-aware, `SameSite` + `__Host-` / `__Secure-` prefixes), partitioned storage, session restore, a
+password **vault + origin-scoped autofill**, and streaming **download-to-disk** (multi-GB files, no OOM). The
+request path carries headers and bodies faithfully with CORS enforcement.
 
-**Daily-driver hardening (recent).** The request path carries headers and bodies faithfully — an
-`Authorization` header and a JSON POST body reach the socket, no silent drops — with CORS enforcement,
-`SameSite` + `__Host-`/`__Secure-` cookie-prefix rules, and streaming download-to-disk (multi-GB files, no
-OOM under the document deadline). `crypto.subtle` + a real CSPRNG (off `Math.random`), `AbortController`/
-`AbortSignal`, `<form method=POST>` navigation, multipart `FormData` file uploads, and constraint validation
-(`required`/`type=email`/`pattern`/`:invalid`/`checkValidity`). CSS text-metric fidelity —
-`letter-spacing`/`word-spacing`, `text-transform`, `overflow-wrap`/`word-break`, `object-fit`/`object-position`,
-`aspect-ratio`, `text-overflow` — so styled UI measures and paints at the width the design specified. Shell
-state persists across restart: bookmarks, settings, the downloads list, per-origin zoom, and a visited-history
-table for the omnibox, on top of the hibernated session restore.
+**Agent-native.** The same engine core, headless: an **accessibility tree** (roles, accessible names,
+interaction state, focus, geometry) as the agent's observation channel, in-process automation
+(selectors / wait / assert), **WebDriver BiDi**, occlusion-aware hit-testing, and an `InferenceBackend`
+trait so any provider — local `llama-server`, Ollama, or a hosted endpoint — drives it identically. Agent
+actions fire the *real* DOM events (`input` / `keydown` / `focus` / `blur` / `change`), so React- and
+Vue-controlled inputs actually update. Page text reaches a model only through an untrusted-content fence.
 
-## What doesn't
+## What doesn't (yet), stated plainly
 
-Stated plainly, because a README that only lists wins is marketing:
+A README that only lists wins is marketing.
 
-- **WPT `dom/` is at 44.7%** (73.4% across all reachable areas; `html/dom` 93.3%). The spec surface is
-  measured continuously, and the remaining subsystems (grid-template-areas, IndexedDB, Service Workers, MSE,
-  full shadow-DOM lifecycle) are not yet implemented. That is the honest distance to "parity".
-- **No JS in the wasm demo.** SpiderMonkey is C++ and does not target wasm — the in-browser demo is
-  render-only, and says so on its own front page.
-- **Bar 2 (pixel precision) is deferred**, not achieved.
-- **SpiderMonkey segfaults in its static destructors at process exit** — an open Bar 0 residual, printed
-  every time rather than hidden.
-- **No multi-process isolation.** A panic is contained per-navigation; a fault *inside* SpiderMonkey's
-  C++ frames still cannot be caught in-process. That needs a per-tab process, and is deferred.
-- **No extensions, no DevTools, no WebGL/WebGPU content, no video playback.**
+- **Rich editing** — `contenteditable` + document `Selection` + editing commands (Gmail-compose / Notion
+  class), and **IME / composition** (CJK typing) — are Tier-1 remaining work, not yet done.
+- **WebAuthn / passkeys** — passkey-only sites are still hard walls (TOTP fallback covers the rest).
+- **Pixel precision (Bar 2)** is deferred, not achieved.
+- **No JavaScript in the wasm demo** — SpiderMonkey is C++ and does not target wasm; the in-browser demo is
+  render-only (and says so on its own front page).
+- **SpiderMonkey can fault inside its own C++ frames**, uncatchable in-process — an open Bar-0 residual whose
+  real fix is one OS process per tab (a **decided** architecture, sequenced into Phase-1 security work).
+- **Out of scope by decision** (feature-detected cleanly, not half-built): **EME/DRM**, **WebRTC**,
+  **WebGPU + heavy-WebGL creative apps** (Figma / Canva tier), a niche modern-CSS tail (subgrid, `@scope`,
+  anchor positioning, scroll-driven animations, `text-wrap: balance`, JPEG-XL, WebCodecs), and
+  HTTP/3 / QUIC. Each is a named exception with a reason, not a silent gap.
 
 ---
 
 ## How it is developed
 
-> **Two instruments, and they see different things.** The **differential oracle** (265 real sites vs
-> Chromium) finds what real pages do; **Web Platform Tests** finds what the *spec* says, needs no
-> oracle at all, and sees the adversarial cases no real site generates. The second was wired up in tick
-> 43 and immediately found a Bar 0 hang — `child.after(child)` — that no amount of crawling could have
-> surfaced. Cumulative findings are captured by topic in **`docs/wiki/`**.
+> **Three instruments, and they see different things.** The **differential oracle** (265 real sites vs
+> Chromium) finds what real pages do. **Web Platform Tests** finds what the *spec* says, needs no oracle,
+> and sees the adversarial cases no real site generates — its first run found a Bar-0 hang
+> (`child.after(child)`) no crawl could surface, and that `DOMContentLoaded` / `load` had never been
+> dispatched. The **fidelity instrument** (parent-relative shape scoring + the four jarring invariants) is
+> the Phase-0 exit gate. Cumulative findings are captured by topic in **`docs/wiki/`**.
 
-**One capability per tick, highest-leverage first.** Each commit lands exactly one verify-gated capability.
-The oracle's failing subtests are ranked by impact — the largest same-signature cluster first
-(`scripts/lever-board.sh`), weighted toward *daily-driver* leverage rather than raw WPT count — so the loop
-attacks the highest-leverage lever available, not the nearest one. If a lever turns out to be a
-subsystem-sized rabbit hole (grid-template-areas, IndexedDB), it is parked and the loop diversifies to the
-next bounded lever rather than stalling. The ratchet is absolute: a Bar 0 crash or *any* measured regression
-is reverted, never traded for a feature.
+**One capability per tick, highest-leverage first.** Each commit lands exactly one verify-gated capability;
+the loop attacks the largest same-root-cause cluster, weighted toward *daily-driver* leverage rather than
+raw WPT count. A subsystem-sized lever (media, ESM graph) is **decomposed** into independently landable
+bricks rather than stalling the loop. The ratchet is absolute: a Bar-0 crash or *any* measured regression is
+reverted, never traded for a feature.
 
-The methodology (`docs/loop/METHODOLOGY.md`) exists because a solo project cannot hand-verify the web.
-Its central claim: **automated, self-correcting measurement substitutes for the headcount this project
-doesn't have.** Two rules govern everything:
-
-> **A gate that does not measure what the user feels will report green while the user suffers.**
-> Every gate here was born from a user-visible failure that every existing gate slept through.
-
-> **The discovery rate has not flattened.** Every "done" is provisional until the oracle has looked at it.
-
-**The gates** run as one wall (`scripts/verify.sh`, ~60–190s) and are all-or-nothing:
+**The gates** run as one wall (`scripts/verify.sh`, ~60–190s) and are all-or-nothing — build, `parity`
+box-geometry probes within ±3px of headless Chrome, real-site fidelity, JS conformance, clickability, plus
+purpose-built gates each born from a user-visible failure every existing gate slept through:
 
 | | |
 |---|---|
-| `parity` | 72/72 box-geometry probes within ±3px of headless Chrome |
-| `G1`–`G3`, `G6` | real-site fidelity · JS conformance · affordances · clickability |
+| `G_CONTAIN` | **Bar 0** — a panic kills the page, not the process |
+| `G_HANG` | every crawled site under a watchdog; a timeout is a hard, counted, *attributed* failure |
 | `G_ALLOC` | per-input-event allocation rate (born from a scroll freeze every other gate called green) |
 | `G_LOAD` | a dead subresource cannot hold the document hostage |
-| `G_INTERACT` | tab open/switch/close stay under one frame — *with real pages in 30 tabs* |
-| `G_CONTAIN` | **Bar 0** — a panic kills the page, not the process |
-| `G_RUNTIME_COUNT` | one async runtime for the process, not one per action |
-| `G_HANG` | every crawled site under a watchdog; a timeout is a **hard, counted** failure |
-| `F1`/`F2` | cascade ≤40ms, full pipeline ≤125ms — asserted, not eyeballed |
+| `G_INTERACT` | tab open / switch / close stay under one frame — with real pages in 30 tabs |
+| `G_SILENT_FAIL` | an error on the load / render / script path that is swallowed |
+| `G_CLEAN_EXIT` | a process that ran JavaScript exits 0 |
+| `F1` / `F2` | cascade ≤ 40ms, full pipeline ≤ 125ms — asserted, not eyeballed |
 
-**Compliance is mechanical, not remembered.** A long session degrades on exactly the clauses that
-depend on being recalled, so they were moved into tooling:
-
-- **The gate receipt.** `verify.sh` records the git *tree* it verified; the pre-commit hook recomputes
-  it from what is staged and **refuses the commit if they differ**. Verifying one version of a diff and
-  committing another is impossible, not merely discouraged.
-- **The journal is enforced.** No commit without an entry for the current tick — written *before* the
-  work, so it states a hypothesis rather than narrating a success.
-- **The tick's shape is cross-checked.** A tick claiming to be a pattern-class fix must name the oracle
-  cluster it closes; the hook validates the id against the last crawl. A claim that cannot name a real
-  cluster is a single-site tick, and must say so.
-- **The self-audit is unavoidable.** Overdue by more than 10 ticks and the hook refuses everything until
-  it runs. It checks the filesystem, not anyone's memory.
-
-Every one of these has refused *its own author* at least once. That is the mechanism working.
+**Compliance is mechanical, not remembered.** A long session degrades on exactly the clauses that depend on
+being recalled, so they were moved into tooling: the **gate receipt** records the git *tree* verified and a
+pre-commit hook refuses a commit whose staged tree differs; the **journal is enforced** (no commit without a
+tick entry, written *before* the work as a hypothesis); a tick claiming a pattern-class fix must **name the
+oracle cluster** it closes; the **self-audit is unavoidable** past 10 ticks overdue. Every one of these has
+refused *its own author* at least once — that is the mechanism working.
 
 ---
 
@@ -211,16 +186,20 @@ cargo run -p manuk-shell --no-default-features -- render https://example.com/ -o
 # Interactive GPU window (winit + wgpu; needs a display):
 cargo run -p manuk-shell -- browse https://example.com/
 
-# Agentic browser (needs a provider API key, or a local llama-server) ------------------------------------
+# Agentic browser (needs a provider API key, or a local llama-server) -------
 cp .env.example .env            # then set your provider credential in it
 cargo run -p manuk-agent --bin agent-run -- "What is this page's main heading?" https://example.com/
 
-# JavaScript via SpiderMonkey (heavy feature) -------------------------------
+# JavaScript via SpiderMonkey; live cascade via Stylo (heavy features) -------
 cargo test -p manuk-js --features spidermonkey
+cargo test -p manuk-css --features stylo
+
+# The in-browser wasm demo (static site → demo/www) -------------------------
+./scripts/demo-build.sh
 
 # Conformance + tests -------------------------------------------------------
 cargo run -p manuk-wpt          # built-in layout reftests
-cargo test --workspace          # 40 tests, all crates
+cargo test --workspace
 ```
 
 ## Repository layout
@@ -230,450 +209,100 @@ engine/
   net/         HTTP(S) fetch + general request (hyper, rustls, tokio)
   html/        HTML parsing (html5ever) -> DOM
   dom/         arena DOM tree (shared core; no JS dependency)
-  css/         style engine: minimal cascade (+ Stylo behind a feature)
-  layout/      from-scratch block/inline layout (+ taffy for flex)
-  text/        font discovery + shaping + rasterization (fontdb, fontdue)
+  css/         style engine: Stylo cascade (live) + a minimal fallback
+  layout/      from-scratch block/inline/float/table layout (+ taffy for flex/grid)
+  text/        font discovery + shaping + rasterization
   js/          JsRuntime trait + no-op default (+ SpiderMonkey behind a feature)
+  media/       container demux + H.264/AAC decode -> decoded frames for <video>
+  a11y/        accessibility / semantic tree over the DOM (screen readers + the agent channel)
   paint/       display list + CPU raster tier (tiny-skia) -> PNG
   compositor/  tab tiers / hibernation, damage tracking, scroll
   page/        the shared pipeline: bytes -> DOM -> style -> layout -> paint
-shell/         headful GUI: `render` (headless PNG) + `browse` (winit/wgpu window)
-agent/         headless agentic browser: driver + backend-agnostic loop + Groq
-store/         local encrypted password store + origin-scoped autofill (E2)
+shell/         headful GUI: `render` (headless PNG) + `browse` (winit/wgpu window), tabs, session
+agent/         headless agentic browser: driver + backend-agnostic loop + inference backends
+store/         local encrypted password store + origin-scoped autofill
+demo/          the engine compiled to wasm — the in-browser demo (this repo's GitHub Pages site)
 tests/wpt/     Web Platform Tests harness + results tracking
-docs/          sample page + rendered screenshots
+docs/          wiki (findings by topic), the loop's methodology + status, sample pages
 ```
-
----
 
 ## The stack, layer by layer
 
-Every crate below is present and builds. **Reuse** = a mature upstream crate wired
-in; **Build** = written from scratch, to be verified against WPT.
+Every crate is present and builds. **Reuse** = a mature upstream crate wired in; **Build** = written from
+scratch, verified against WPT and the oracle.
 
-### Engine core
+| Crate | Role | Kind | State |
+|---|---|---|---|
+| `engine/net` | `fetch` + general `request` over pooled hyper + rustls (pure-Rust TLS), HTTP/2, gzip/br/deflate, streaming | Reuse | live HTTPS, connection pooling, streaming first-paint |
+| `engine/html` | `parse(html) -> Dom` via html5ever; incremental `StreamParser` | Reuse | full error recovery; streaming above-the-fold |
+| `engine/dom` | arena (`Vec`-indexed) DOM tree, the mutable Web API surface | Build | the shared core; **no JS dependency** by design |
+| `engine/css` | `StyleEngine` producing `ComputedStyle`; **Stylo is the live cascade** | Reuse (Stylo) | cascade / specificity / inheritance / `@`-rules / container queries / `:has()` |
+| `engine/layout` | block / inline / float / table / positioning / stacking; flex + grid via Taffy | Build (+Taffy) | wrapping, floats, tables, abs/fixed, margin collapse |
+| `engine/text` | font discovery, shaping, glyph raster | Reuse | Latin measure / shape / raster; complex-script is the frontier |
+| `engine/js` | `JsRuntime` trait; SpiderMonkey behind `--features spidermonkey` | Reuse (mozjs) | DOM bindings, event loop, ESM, the platform APIs listed above |
+| `engine/media` | container demux + H.264 / AAC decode → decoded frames | Build (+symphonia/openh264) | `<video>` plays; MSE partial; EME out of scope |
+| `engine/a11y` | role + accessible-name + state tree over the DOM | Build | screen-reader source **and** the agent observation channel |
+| `engine/paint` | display list → CPU raster (tiny-skia) → PNG / RGBA | Build | backgrounds, text, images, borders, gradients, clips |
+| `engine/compositor` | per-tab tiers (focused-GPU / background-CPU / hibernated), damage, scroll | Build | tier transitions, damage union, scroll clamp |
+| `engine/page` | the shared pipeline — headful and headless share this core | Build | load / relayout / paint / links / text |
+| `shell` | headful GUI: `render` (PNG) + `browse` (winit/wgpu), tabs, session, downloads | Build | the human front door |
+| `agent` | headless agentic browser + `InferenceBackend` (Groq / local llama / BYO) | Build | the LLM front door — see below |
+| `store` | encrypted password vault + origin-scoped autofill | Build | crypto core done; UX is Phase-0 polish |
 
-#### `engine/net` — networking · *Reuse*
-- **Does:** `fetch(url)` (GET + redirect following) and a general
-  `request(method, url, headers, body)` (POST etc.). Returns status, headers, a
-  (Content-Encoding-decoded) `Bytes` body, and the negotiated `HttpVersion`.
-- **Uses:** a process-global pooled `hyper-util` `legacy::Client` over a
-  `hyper-rustls` `HttpsConnector` (ALPN `h2,http/1.1`), `rustls` 0.23 (pure-Rust TLS
-  via `ring` — no OpenSSL), `webpki-roots`, `async-compression` (gzip/deflate/br)
-  over the streaming body, `tokio`.
-- **Works:** live HTTPS fetches of real sites; **HTTP/2 auto-negotiated** (verified
-  on example.com); **connection pooling** (sequential same-origin fetches reuse the
-  socket); **gzip/br/deflate decoding** (verified on httpbin.org/gzip); redirects;
-  the Groq client reuses the same stack for outbound LLM calls.
-- **Streaming fetch** (`fetch_streaming`): delivers the decoded body as chunks arrive
-  (16 KB, no buffering) → fed to `StreamParser` for a first-paint checkpoint;
-  `manuk_page::fetch_streaming_page` + the shell `render` use it end to end.
-- **External subresources:** `<link rel=stylesheet>` is fetched and applied before
-  paint (render-blocking; `Page::fetch_and_apply_stylesheets`, wired into shell
-  `render`); `<script src>`/`<img src>` are enumerated with `defer`/`async` semantics
-  (`Page::subresources`) — script execution + image rendering are follow-ons.
-- **Speculative preconnect** (`Preconnector`): warms a link's origin on hover with a
-  TCP+TLS handshake (no HTTP request), same-origin-only for privacy (no cross-origin
-  leak) + bounded concurrency/idle — the GUI hover-hit-test signal is the remaining wire.
-- **Not yet:** HTTP/3/QUIC (`quinn`) is a target, not yet a dependency; cookies/cache.
+### The JS-engine modification boundary
 
-#### `engine/html` — HTML parsing · *Reuse*
-- **Does:** `parse(html) -> Dom`, walking `html5ever`'s spec-compliant tree builder
-  (via `markup5ever_rcdom`) into our arena DOM.
-- **Uses:** `html5ever` 0.39, `markup5ever_rcdom`.
-- **Works:** full error recovery, implied tags, malformed input.
-- **Streaming:** `StreamParser` drives html5ever incrementally (feed chunks,
-  snapshot the parsed-so-far tree) → `Page::load_streaming` first-paints `<head>` +
-  above-the-fold before the tail arrives (~113x sooner than full-load in the bench).
-- **Not yet:** encoding sniffing at the parser layer (UTF-8 assumed; the net layer
-  does WHATWG charset decode); a chunked-body fetch to feed the stream from a real
-  socket (`fetch()` buffers today).
+`engine/js` **configures and binds to** SpiderMonkey (`mozjs`, the Servo path — not V8). It never patches
+SpiderMonkey's JIT (Warp/Ion) or GC internals, nor the sandbox — a deliberate boundary, because JIT
+miscompilation is historically the largest source of exploitable browser RCE, and the reason SpiderMonkey is
+trustworthy is years of adversarial fuzzing this project has no equivalent of. Where a vendored dependency's
+*build flag* leaves us behind Firefox, the capability wins via a named, minimal, guarded delta — never by
+forking an engine's algorithms and never by copying Blink/Gecko code.
 
-#### `engine/dom` — the DOM tree · *Build*
-- **Does:** an arena (`Vec`-indexed `NodeId`) tree of Document/Doctype/Element/
-  Text/Comment, with sibling/child links, attributes, class/id helpers, pre-order
-  descendants, and text-content extraction.
-- **Uses:** `smallvec`. **No JS dependency** — deliberately (see [deviations](#deviations)).
-- **Not yet:** the mutable Web API surface (`appendChild`, ranges, live
-  collections) — that is the large-volume follow-on.
+### The agentic browser
 
-#### `engine/css` — style engine · *Reuse target (Stylo), Build (fallback)*
-- **Does:** a `StyleEngine` trait producing a `ComputedStyle` per node. Default
-  `MinimalCascade` parses `<style>` + inline `style=""`, matches tag/id/class/`*`
-  selectors and the descendant combinator, applies specificity + source-order +
-  `!important`, inherits inherited properties, and resolves a UA default sheet
-  (block/inline/none, default margins, headings, bold). Property support covers
-  the box model + text (color, background, font, margins/padding, width/height,
-  text-align, white-space, line-height). `cssparser` handles length/number tokens.
-- **Uses:** `cssparser` 0.34; **Stylo** 0.19 behind `--features stylo`.
-- **Works:** cascade/specificity/inheritance/descendant matching (6 tests).
-- **Not yet:** Stylo's real cascade (the feature links + builds; the adapter
-  currently delegates to `MinimalCascade`); combinators `> + ~`, attribute/pseudo
-  selectors, `@media`/`@font-face`, most shorthands, calc, custom properties.
+The agent side is layered so the pieces are independently testable and swappable — the agent logic is
+decoupled from both the harness driving it and the inference backend:
 
-#### `engine/layout` — layout · *Build (+ taffy for flex)*
-- **Does:** builds a fragment tree of absolutely-positioned boxes from DOM +
-  computed styles. Implements **block** formatting (normal-flow vertical stacking,
-  the box model, `auto` width fill, `auto`-margin centering, **adjacent-sibling
-  margin collapsing**), **inline** formatting (greedy line-breaking with real font
-  measurement, per-line vertical metrics, text-align, **flow-around floats**),
-  **floats** (a BFC-aware `FloatContext`: left/right placement, horizontal
-  stacking + band-drop, `clear`, shrink-to-fit), **positioning**
-  (`relative`/`absolute`/`fixed` against the containing-block chain), and **tables**
-  (`display:table` with fixed/auto column algorithms + `border-spacing`).
-  `display:flex` routes through `taffy`.
-- **Uses:** `taffy` 0.12; consumes `manuk-text` for measurement.
-- **Works:** stacking, wrapping, centering, document height, flex rows, margin
-  collapse, float placement/clear/flow-around, relative/absolute/fixed positioning,
-  fixed/auto table layout (21 tests + an end-to-end table PNG render).
-- **Documented simplifications:** margin collapse is adjacent-sibling only
-  (no parent↔child); positioning has no `sticky`, no `z-index` ordering, and leaves
-  inset-less (static-position) abs boxes unplaced; tables use the separated model
-  (no `colspan`/`rowspan`, `border-collapse`, or captions); percentage heights only
-  against definite containers; inline is Latin/LTR with an inter-word space between
-  adjacent tokens.
-- **Not yet:** `sticky`, grid (native), writing-modes, bidi, `border-collapse`,
-  table spanning.
+- **`AgentBrowser`** — headless page driver over `engine/page`. Knows nothing about LLMs: `navigate`,
+  `scroll_by`, `screenshot_png`, and `observe` (the a11y tree — role + name + state + a click point per
+  element, a far less injection-prone channel than raw text + a screenshot).
+- **`InferenceBackend`** — the provider-agnostic, object-safe, multimodal model trait. Backends exist for a
+  hosted OpenAI-compatible endpoint (posting *through* `engine/net` — no separate HTTP client, no OpenSSL), a
+  keyless local `llama-server`, and a bundled small gguf; a user can point it at their own endpoint.
+- **`run_task`** — the observe → decide → act loop, taking `&dyn InferenceBackend` + `&mut AgentBrowser` and
+  naming neither a provider nor a harness. Actions are a small permission-gated JSON protocol
+  (`navigate` / `click` / `scroll` / `finish`, plus tab control).
 
-#### `engine/text` — text · *Reuse*
-- **Does:** `FontContext` discovers system fonts, resolves faces by
-  family/weight/style, returns line metrics, measures runs, shapes glyphs (pen
-  positions), and rasterizes glyphs to 8-bit coverage bitmaps.
-- **Uses:** `fontdb` 0.23 (discovery), `fontdue` 0.9 (metrics + raster) — the
-  lower layers of the Parley/swash family named in the directive.
-- **Works:** Latin measurement, shaping, and rasterization.
-- **Not yet:** complex-script shaping, bidi, ligatures/kerning, `@font-face`
-  loading — Parley's remit.
-
-#### `engine/js` — JavaScript · *Reuse (feature-gated)*
-- **Does:** a `JsRuntime` trait. Default `NoScriptRuntime` is a no-op (correct for
-  the no-JS default). **SpiderMonkey** (`mozjs`) behind `--features spidermonkey`
-  boots a process-global engine (shared across isolates), evaluates script, and
-  returns typed values.
-- **Uses:** `mozjs` 0.18 / `mozjs_sys` 140 (the Servo integration path — **not
-  V8**). In this environment it builds from a prebuilt in seconds.
-- **Works:** real evaluation under the feature (`40+2 == 42`, etc.). **DOM bindings**
-  — a hand-written jQuery-core subset over the arena DOM on a thin safe helper layer
-  (reserved-slot `NodeId`, the Servo mechanism, no `Dom<T>`). **Methods:**
-  `document.getElementById`/`querySelector`/`querySelectorAll`/`createElement`,
-  `element.appendChild`/`setAttribute`/`getAttribute`/`querySelector`/
-  `querySelectorAll`. **Accessor properties:** `textContent` (get+set), `tagName`,
-  `id` (get+set), `className` (get+set), `innerHTML` (get+set, re-parses a
-  fragment into the arena DOM). `querySelectorAll` returns a real JS array
-  NodeList. **Events:** `addEventListener`/`dispatchEvent` (synchronous dispatch +
-  dispatch scheduled through the event loop). **Event loop:** a real I/O loop — `setTimeout`
-  macrotasks + `queueMicrotask` microtasks (spec-correct ordering) + **`fetch`
-  (thenable) and `XMLHttpRequest`**, whose network I/O the loop performs via an
-  injected fetcher (production wires `manuk-net`; `engine/js::event_loop`). JS mutates the real arena DOM; validated end-to-end
-  (isolated tests).
-- **Boundary:** this crate only *configures and binds to* SpiderMonkey — never
-  patches JIT/GC or the sandbox. See [the modification boundary](#the-js-engine-modification-boundary).
-- **Not yet:** an `Event` object + capture/bubble propagation, `fetch` response
-  streaming/headers, and native-`Promise`-queue integration (blocked on a crashing
-  mozjs-0.18 wrapper) — the documented next tranches.
-
-#### `engine/paint` — rasterization · *Reuse target (Vello), Build (CPU tier)*
-- **Does:** flattens the fragment tree to a `DisplayList`, then a `Painter` renders
-  it. The **CPU tier** (`CpuPainter`) fills rects with `tiny-skia` and alpha-blits
-  `fontdue` glyph coverage, producing a `Canvas` that encodes to PNG (and to RGBA
-  bytes for GPU upload). Supports a scroll offset.
-- **Uses:** `tiny-skia` 0.12, `fontdue`.
-- **Works:** backgrounds, text, PNG output; deterministic and headless (3 tests).
-- **Not yet:** the Vello GPU-compute tier (the directive's quality lever) — it
-  slots behind the same `Painter` trait; borders/gradients/blur/clips/images.
-
-#### `engine/compositor` — composite policy · *Build*
-- **Does:** the per-tab memory model — `TabManager` assigns tiers (focused-GPU,
-  background-CPU, hibernated/evicted) with LRU eviction beyond a budget; `Damage`
-  accumulates dirty rects and unions them; `Viewport` clamps scroll and marks
-  damage.
-- **Works:** tier transitions, damage union, scroll clamping (4 tests).
-- **Not yet:** the actual GPU layer compositing (lives in `shell`); tile caching.
-
-#### `engine/page` — the shared pipeline · *Build*
-- **Does:** ties the core together: `Page::load` (fetch→parse→cascade→layout),
-  `relayout` (new width), `paint`/`paint_scrolled`, `links()` (anchors with hrefs
-  resolved absolute), `visible_text()`. `fetch_html` supports `http(s)`/`file`/
-  local paths. **This is the concrete "headful and headless share the core."**
-- **Works:** load, layout, link/text extraction (2 tests).
-
-### Front-ends
-
-#### `shell` — headful GUI · *Build*
-- **`render <url> -o out.png [--width N] [--height N]`** — headless: runs the full
-  pipeline and writes a PNG. No GPU/display needed.
-- **`browse <url>`** (feature `gui`, on by default) — opens a `winit` 0.30 window
-  and presents the CPU raster as a `wgpu` 27 fullscreen textured quad; mouse-wheel
-  scrolls, resize reflows. Compiles here; running needs a display.
-- **Tabs:** a `Browser`/`Tab` model over the compositor's `TabManager`.
-
-#### `agent` — headless agentic browser · *Build*
-See [The agentic browser](#the-agentic-browser).
-
-### Conformance
-
-#### `tests/wpt` — the **upstream** Web Platform Tests runner
-- **Does:** runs the real `testharness.js` suite — serves a WPT checkout over HTTP, supplies its own
-  `resources/testharnessreport.js` (the **vendor hook WPT itself documents**), and reads results back
-  through the DOM. Forks a child process per batch, because **`tokio::time::timeout` cannot interrupt
-  synchronous JavaScript** — only a process boundary contains a spinning JIT frame, so a hang is
-  *attributable* rather than fatal.
-- **Baseline (tick 43):** `dom/` — **457 files, 1,429/6,284 subtests = 22.7%, NO_REPORT 0, 90 hangs**
-  (`docs/loop/WPT-BASELINE.md`). `NO_REPORT 0` is the load-bearing figure: **every file reports**, so
-  the percentage is a measurement rather than a shadow of a broken runner.
-- **Runner:** `./scripts/wpt-setup.sh && cargo run --release -p manuk-wpt -- wpt dom --show-failures`
-- **Why it matters:** the 265-site Chromium diff can only see what those sites exercise, and it needs
-  Chromium to say what "right" is. **WPT tests carry their own verdict.** Its first run found four
-  engine defects — none of which move a box — including that **`DOMContentLoaded` and `load` had never
-  been dispatched, ever**, and an **infinite loop** when a node is inserted before itself.
+This is the seed of Phases 2–4: the same surface is the ingress a dev automation framework drives, the thing
+the default LLM harness sits on, and the thing an in-browser consumer chat bar would drive.
 
 ---
 
-## Data flow
-
-**Page load (both front-ends):**
-
-```
-URL ─fetch_html─▶ HTML bytes ─html5ever─▶ DOM ─MinimalCascade─▶ ComputedStyle map
-      │                                        │
-      └───────────────── layout_document ◀─────┘
-                              │
-                     fragment tree (absolute rects + text runs)
-                              │
-                    ┌─────────┴──────────┐
-              CpuPainter → PNG      DisplayList → (Vello GPU: future)
-```
-
-**Agent loop (`run_task`):**
-
-```
-observe (url, title, links[i], text, +screenshot PNG)
-      │
-      ▼
-InferenceBackend.complete(messages)  ──►  Groq (qwen/qwen3.6-27b)
-      │                                        │ strips <think>…</think>
-      ▼                                        ▼
-parse last JSON action  ◀──────────────  assistant reply
-      │
-      ├─ navigate{url} / click{index} → AgentBrowser.navigate
-      ├─ scroll{dy}                   → AgentBrowser.scroll_by
-      └─ finish{answer}               → done
-```
-
-## Feature flags
-
-| Crate | Feature | Default | Effect |
-|---|---|---|---|
-| `manuk-js` | `spidermonkey` | off | Real JS via `mozjs`; else no-op runtime |
-| `manuk-css` | `stylo` | off | Links Stylo; adapter present (delegates for now) |
-| `manuk-shell` | `gui` | **on** | The `winit`/`wgpu` window; off = headless `render` only |
-
-## The agentic browser
-
-The agent side is layered so the pieces are independently testable and swappable —
-and, per the brief, **the agent logic is decoupled from both the harness driving it
-and the inference backend**:
-
-- **`AgentBrowser`** — headless page driver over `engine/page`. Knows nothing about
-  LLMs: `navigate`, `scroll_by`, `screenshot_png`, `observe` (URL, title, links by
-  index, visible text, scroll position). Renders via the CPU tier — display-free
-  and deterministic.
-- **`InferenceBackend`** — the provider-agnostic model trait
-  (`async fn complete(&[Message]) -> String`), object-safe and multimodal
-  (`Content::Text` + `Content::ImagePng`). `GroqBackend` is one implementation; it
-  posts to Groq's OpenAI-compatible endpoint **through `engine/net`** (hyper +
-  rustls — no separate HTTP client, no OpenSSL) and strips `<think>…</think>`
-  reasoning blocks that qwen/DeepSeek-style models emit.
-- **`run_task`** — the observe→decide→act loop. Takes `&dyn InferenceBackend` +
-  `&mut AgentBrowser`; never names a provider or a harness. Actions are a small JSON
-  protocol: `navigate` / `click` / `scroll` / `finish`, robustly extracted from the
-  model's reply (reasoning stripped, last balanced `{…}` parsed).
-
-Default model: `qwen/qwen3.6-27b` (multimodal, Groq), overridable via `GROQ_MODEL`.
-
-### Runners
-
-- **`agent-run`** (committed) drives the agent against a single inference backend.
-- Local-only **parallel verification harnesses** exist for capability sweeps and for the
-  differential oracle's delta-debugging queue. They are **gitignored** — only the
-  single-backend runner is committed. They reuse the exact same `run_task`; they are
-  just drivers.
-- Credentials live in `.env`, which is gitignored and never committed; see `.env.example`.
-
-Live capability run (qwen/qwen3.6-27b, screenshots rendered by our own engine):
-
-```
-[1/4] text-extraction        PASS  answer: Example Domain
-[2/4] link-comprehension     PASS  answer: Example Domain site
-[3/4] link-navigation        PASS  answer: Example Domain     (real network hop)
-[4/4] multimodal-screenshot  PASS  answer: light              (read our engine's PNG)
-4/4 capabilities passed
-```
-
-### Bundled local model (INFERENCE.MD §2 — no API key, no network model call)
-
-The same four capabilities run against a **locally launched `llama-server`** through
-the keyless `OpenAiCompatBackend::local_llama` preset — identical `run_task`, only the
-backend differs. `scripts/setup-local-model.sh` fetches exactly one model (never the
-whole manifest), caches it outside the repo in `$MANUK_CACHE`, and launches the server;
-GPU layers auto-fit to free VRAM (set `MANUK_NGL` to pin). Run the gate with
-`agent-local-suite`.
-
-Measured on this harness (Linux, 8 GB GPU, auto-fit offload) — **not rounded**:
-
-| model (key)         | quant                         | suite result | vs Groq/qwen3.6-27B 4/4 |
-|---------------------|-------------------------------|:------------:|:-----------------------:|
-| `gemma-4-e4b`       | unsloth UD-Q4_K_XL (QAT)      | **4/4**      | clears                  |
-| `qwen3.5-4b-q4km`   | unsloth Q4_K_M                | **4/4**      | clears                  |
-| `qwen3.5-9b-q4km`   | unsloth Q4_K_M                | available, unverified on this harness |    |
-| `gemma-4-e2b-mobile`| unsloth UD-Q2_K_XL            | available, unverified on this harness |    |
-
-Both gated entries clear the baseline the cloud model set. The other two stay selectable
-but are labeled unverified — presence in the manifest is not validation.
-
-### In-browser agent panel (INFERENCE.MD §3 — `shell::panel`)
-
-The headful UI and the headless agent are the **same core** (`engine/page` +
-`Observation` + `run_task`) with different front-ends, so the panel is glue, not a second
-engine. Three constraints, each enforced structurally:
-
-- **Task-scoped permissions.** A `PanelScope` lowers to an N5 `Capabilities`; the default
-  is **read-only** (look/scroll/answer). Widening (`browse_within(origins)`, `custom`) is
-  an explicit choice, enforced at the *same* `capabilities::check` point the headless
-  binary uses.
-- **Page content is untrusted.** The only trusted instruction channel is the user's typed
-  task; page text reaches the model solely through the E6 UNTRUSTED-PAGE-CONTENT fence
-  (`run_task` is reused verbatim, never re-concatenating page text into the user turn).
-- **Handoff is explicit + consented.** Opening the panel does not touch the page; moving a
-  live session in/out (`take_over`/`hand_back`) each require a `HandoffConsent` token whose
-  only constructor is `user_approved()`. The moved value is a `manuk_agent::Handoff` — the
-  same type the standalone agent adopts/releases — so a logged-in DOM or half-filled form
-  travels between front-ends with no re-fetch.
-
-**In the GUI:** `Ctrl+J` opens the read-only agent prompt over the current tab (backend from
-`MANUK_LLAMA_PORT` or Groq `.env`). Verified end-to-end: synthesized keystrokes drove a live
-local model to answer over example.com.
-
-### Agent-scale traversal (INFERENCE.MD §4 — `agent::{cache,triage,concurrency}`)
-
-Three additive modules for traversing/scraping at scale — the lever is avoiding redundant
-work, not making one fetch faster:
-
-- **Content-addressed freshness cache.** Keyed by a digest of *extracted* content (not raw
-  HTML, which churns on ads/nonces/timestamps). Each URL learns a volatility that decays on
-  unchanged re-fetches and rises on changes; `Freshness::Adaptive` scales the caller's base
-  max-age by that stability, so a stable reference page earns a long TTL and a live feed a
-  short one. Deterministic (time passed in), in-memory (digests + metadata, not bodies).
-- **Page-triage fast path.** One parse + DOM walk (no layout, no JS) decides whether a
-  page's content is already in the server-rendered HTML (the common case → skip JS) or lives
-  behind an empty SPA shell (`<div id=root>`, `<noscript>enable JavaScript`, script-only
-  body → needs JS). Pre-rendered SSR mounts are correctly treated as content; every decision
-  carries its signals.
-- **Two-tier concurrency.** Network fetch (I/O-bound) and JS execution (CPU-bound) get
-  *separate* semaphores — never one conflated limit. `ConcurrencyLimits::for_machine` sets
-  net = 16×cores, js = cores; the JS tier stays near the core count while the fetch tier runs
-  wide.
-
-### Tab persistence, collections, agent tab control (INFERENCE.MD §5 — `shell::session`)
-
-One store outside the repo (XDG state dir), distinct keys per concern:
-
-- **Session restore, hibernated.** The tab set (URL, order, title, pinned) persists and
-  reopens with **every tab discarded** — no `Page`, no fetch — and only the previously
-  focused tab loads eagerly. Reopening 40 tabs costs 40 URLs of metadata, not 40 page loads,
-  preserving the hibernation-by-default memory model.
-- **Named collections.** Explicit "save these tabs as `<name>`", independent of the session
-  and of each other.
-- **Agent-driven tab control.** Close a *set* of tabs by domain / title / index; open a tab
-  only from persisted history (can't be steered to an arbitrary URL); open a search tab via
-  the configurable search template (default Google). These are first-class agent `Action`s
-  (`close_tabs`/`open_tab`/`search_tab`) — parse-able, permission-gated, risk-assessed —
-  executed through a `TabController` seam (`run_task_with_tabs`); the shell's `BrowserTabs`
-  binds them to the live tab model. In the GUI, `Ctrl+J` runs the agent under the assistant
-  scope (read-only page + tab control); verified live driving a local model to open real
-  search tabs.
-- **URL sensitivity.** Credentials in userinfo and secret-bearing query params
-  (`access_token`, `token`, …) are redacted before anything is written to the plaintext
-  store — URLs are not assumed uniformly low-stakes.
-
-**In the GUI:** the window restores the prior session (hibernated) on launch and saves it on
-close; `Ctrl+Tab`/`Ctrl+Shift+Tab` cycle tabs (wake-on-focus), `Ctrl+T`/`Ctrl+W` open/close.
-Verified end-to-end: a real window-close saved the session and a relaunch restored it.
-
-## The JS-engine modification boundary
-
-Per CLAUDE.md's most important section: `engine/js` **configures and binds to**
-SpiderMonkey (`mozjs`, the Servo path — not V8). It never patches SpiderMonkey's
-JIT (Warp/Ion) or GC internals, nor the sandbox — a "come back to the human"
-boundary, because JIT miscompilation is historically the largest source of
-exploitable browser RCE and the reason SpiderMonkey is trustworthy is years of
-adversarial fuzzing this project has no equivalent of.
-
-## Performance posture
-
-Hooks aligned with the directive's targets are in place; measurement is the ongoing
-work (see [CLAUDE.md frontiers](./CLAUDE.md)).
-
-- **Binary size:** release profile is `opt-level="s"`, `lto=true`,
-  `codegen-units=1`, `panic="abort"`, `strip=true`. `.cargo/config.toml` adds
-  static-CRT (Windows) / musl (Linux) target flags for fully-static binaries,
-  opt-in per target.
-- **Per-tab memory:** the compositor models isolate-per-tab tiers (focused GPU +
-  active JS; background CPU + frozen JS; hibernated/evicted); SpiderMonkey is a
-  process-global engine shared across isolates.
-- **Latency:** `Bytes`-based response bodies and html5ever's streaming sink are
-  positioned for incremental parse/layout (not yet wired).
-
-## Testing & conformance
-
-- `cargo test --workspace` — **40 tests**, zero warnings.
-- Feature builds verified: `--features spidermonkey` (JS eval), `--features stylo`
-  (links), `--all-features` (all together).
-- `cargo run -p manuk-wpt` — built-in layout reftests; `$WPT_DIR` is the hook for
-  the upstream WPT runner.
-- **CI** (`.github/workflows/ci.yml`): build+test on Linux/macOS/Windows, fmt+clippy,
-  and static-release binaries (musl / static-CRT / macOS framework) that each smoke-
-  render a PNG to prove they *run*. Cross-platform verification status is tracked in
-  [`PLATFORM.md`](./PLATFORM.md) — Linux is verified locally; macOS/Windows are
-  engineered-for-portability and gated in CI (await first green run).
-
-## Deviations
-
-- **`engine/dom` is its own crate.** The directive groups "DOM + Web API surface"
-  under `/engine/js`; but the DOM *tree* is consumed by html/css/layout, none of
-  which should depend on the JS engine. So the tree lives in `engine/dom` and
-  `engine/js` holds the *bindings*. Keeps the JS feature gate off the parse/layout
-  path.
-- **`engine/page`** is the concrete realization of "headful and headless share the
-  core, diverge at consumption."
-
-## Maintenance
-
-**This README and `CLAUDE.md` are updated on every major change** — a new crate, a
-new capability, a wired feature seam, or a changed public API. The README documents
-the stack *as it actually is* (no aspirational claims in the per-crate status); the
-directions of improvement live in [`CLAUDE.md`](./CLAUDE.md) and are reviewed
-periodically.
-
 ## Roadmap
 
-A finite, phase-ordered plan — the full version, with falsifiable good-enough bars and the self-executing
-research→implement cascade, lives in [`docs/loop/HORIZON.md`](./docs/loop/HORIZON.md) and
-[`reference/cap-research/ROADMAP.md`]. The seven phases:
+A finite, phase-ordered plan. The full version — with falsifiable good-enough bars and the self-executing
+research→implement cascade — lives in [`docs/loop/HORIZON.md`](./docs/loop/HORIZON.md) and
+[`docs/loop/PHASE0-BOUNDED-REMAINDER.md`](./docs/loop/PHASE0-BOUNDED-REMAINDER.md). The thesis: **a Rust,
+from-scratch, memory-safe, agent-native browser** — one a human daily-drives *and* that exposes a unified
+surface for agents to drive, with an optional in-browser "Claude Code for browsers" prompt-to-action layer.
 
-0. **Daily-driver capability** *(in progress)* — render + JS-platform + forms + shell parity for the
-   "document + download + un-gated-SPA" web. The tiers: transport/session → CSS render (±1px) →
-   JS-platform + storage → media (optional) → forms/autofill → shell/UX persistence → agentic actuation.
-1. **UI/UX features** — tab-set restore, pin-to-stay-warm, mute/unmute, and the hibernate-vs-keep-warm decision.
-2. **Agentic browser-automation API surface** — the pinnable ingress any automation framework drives.
-3. **Reference agent harness** — "Claude Code for browsers": the LLM tool-loop over that surface.
-4. **Consumer prompt-to-action UI** — an optional in-browser chat that drives the browser via a small local
-   gguf *or* a user-configured endpoint.
-5. **Performance** · 6. **Security.**
+0. **Daily-driver capability** *(in progress, near exit)* — render + JS-platform + media + forms + shell
+   parity for the "document + download + un-gated-SPA" web. Exit = the fidelity certificate above. The
+   bounded remainder is sized and has a named cut line; the marquee proof is **YouTube plays**.
+1. **UI/UX browser features** — tab-set restore (toggleable), lean tab ops, mute/unmute, pin-to-stay-warm,
+   and the hibernate-vs-keep-warm decision. (Also where **process-per-tab** isolation and DevTools land.)
+2. **Agentic browser-automation API surface** — the stable, pinnable **ingress** any automation framework or
+   async pipeline drives. Seeded already by the Phase-0 a11y tree, BiDi, and actuation.
+3. **Default agent harness** — "Claude Code for browsers": the LLM tool-loop over that surface (context,
+   multi-step steering, skill/tool exposure). Three deployment modes against one surface — consumer chat,
+   dev/enterprise headless automation, and bring-your-own agent framework.
+4. **Consumer prompt-to-action GUI** — an optional in-browser chat bar driving the browser via a bundled
+   small gguf *or* a user-configured endpoint, reusing the Phase-2 surface.
+5. **Performance.** · 6. **Security** (builds on the Phase-0 capability scoping + anti-injection fence).
 
-Each phase after 0 opens with a deep-research sweep updated against the implemented layer beneath it, and every
-step is held to the same verify-gated ratchet. Nearest term: the remaining daily-driver bounded levers
-(networking enforcement, JS-platform APIs, forms, shell persistence, agent actuation).
+Each phase after 0 opens with a deep-research sweep updated against the implemented layer beneath it, and
+every step is held to the same verify-gated ratchet. Fine-tuning any model to the surface is an explicit,
+owner-gated track *outside* this loop — the bring-your-own-endpoint path gives full capability with no tune.
 
 ## License
 
