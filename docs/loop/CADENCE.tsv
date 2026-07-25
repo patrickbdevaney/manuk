@@ -301,3 +301,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 537	e5ecb259	1784938009	2026-07-24T20:06:49-04:00	602	instrument-fidelity	67	6	111	33	274	81	3896	6960	0	329	31	FIDELITY REBUILD brick 4b: G1 producer enriched to `Seen`; all four jarring invariants wired direct (2026-07-24)
 539	5aa4e0e8	1784939190	2026-07-24T20:26:30-04:00	1181	measure-and-pin	67	6	100	34	274	81	3896	6960	0	329	31	PROBE: light-dark() + CSS Level-4 math measured WORKING (audit-#27 unknowns resolved) (2026-07-24)
 540	51aab2e0	1784940144	2026-07-24T20:42:24-04:00	954	fidelity-instrument	67	6	163	33	274	81	3896	6960	0	329	31	FIDELITY REBUILD brick 5: §3b root-cause clustering wired into the G1 exit gate (2026-07-24)
+541	359c89c8	1784940591	2026-07-24T20:49:51-04:00	447	measure-and-pin	67	6	91	33	274	81	3896	6960	0	329	31	PROBE: name-only @container query MEASURED working (unknown → gated) (2026-07-24)

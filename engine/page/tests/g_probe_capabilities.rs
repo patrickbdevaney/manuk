@@ -25,6 +25,8 @@ const HTML: &str = r##"<!doctype html>
   #mc { column-count: 3; column-gap: 10px; width: 300px; }
   #cq-outer { container-type: inline-size; width: 400px; }
   @container (min-width: 300px) { #cq { color: rgb(1, 2, 3); } }
+  #cqn-outer { container-type: inline-size; container-name: sidebar; width: 400px; }
+  @container sidebar { #cqn { color: rgb(2, 4, 6); } }
   #snap { overflow-x: scroll; scroll-snap-type: x mandatory; width: 100px; }
   #cjk { width: 60px; font-size: 16px; }
   @media print { #printonly { color: rgb(4, 5, 6); } }
@@ -41,6 +43,7 @@ const HTML: &str = r##"<!doctype html>
 </style></head><body>
   <div id="mc"><p>alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima</p></div>
   <div id="cq-outer"><div id="cq">container query target</div></div>
+  <div id="cqn-outer"><div id="cqn">named container query target</div></div>
   <div id="snap"><span>a</span></div>
   <div id="cjk">日本語のテキストはここで折り返されるべきです</div>
   <div id="printonly">print</div>
@@ -118,6 +121,15 @@ const HTML: &str = r##"<!doctype html>
 
     // ── Container queries: the rule applies only if the container's inline size was resolved.
     probe('containerq', function () { return cs('cq').color.indexOf('1, 2, 3') >= 0; });
+
+    // ── Name-only container query `@container sidebar { }` (Baseline May 2026, surface audit #25):
+    // scope a rule to the nearest container of a NAME with NO size/style condition — what component
+    // libraries use to target "the sidebar container" whatever its size. The prelude carries only the
+    // <container-name>, no <container-query>, so it exercises whether Stylo's ContainerCondition::parse
+    // (reached through the source-supplement path) accepts a bare name. The rule applies only if that
+    // empty-condition query both parsed AND matched #cqn-outer by its container-name — measured by the
+    // color landing on #cqn, not by whether the property parsed.
+    probe('containername', function () { return cs('cqn').color.indexOf('2, 4, 6') >= 0; });
 
     // ── Error.stackTraceLimit (audit #13 watch): the prelude defines the PROPERTY (typeof is
     // 'number'), but the capability is TRUNCATION — set the limit to 3 and a deep recursion's
@@ -445,6 +457,15 @@ const PINNED: &[&str] = &[
     // build cfg-drops the at-rule) make the #cq rule apply only because #cq-outer's resolved
     // inline size (400px) crosses the (min-width: 300px) condition.
     "containerq:yes",
+    // tick 541 (surface audit #25 unknown) — NAME-ONLY container query `@container sidebar { }`
+    // (Baseline May 2026): a prelude with only a <container-name> and NO size/style condition. MEASURED
+    // working (the stale-pessimistic rule pays again — added unknown expecting the empty-condition path
+    // might drop it). Stylo's ContainerCondition::parse, reached through the @container source-supplement
+    // (the servo build cfg-drops the at-rule, t379), accepts a bare name and matches #cqn by #cqn-outer's
+    // container-name. Behavioural, not parse-level: the rgb(2,4,6) lands on #cqn only via a real name
+    // match. RED-proven — dropping `container-name: sidebar` from the container flips it to `no`, so this
+    // pins the NAME MATCH, not "any container". Flips only WITH a real regression, never by retuning.
+    "containername:yes",
     // tick 400 — Error.stackTraceLimit: HONEST NO. The prelude defines the property (typeof
     // 'number' — audit #13's watch), but truncation is NOT wired: our SpiderMonkey predates the
     // Firefox-153 implementation of this V8-ism, so a limit of 3 does not cap .stack frames.

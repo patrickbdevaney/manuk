@@ -21576,3 +21576,39 @@ NEXT: the coverage→SHAPE gate-floor flip — the last rebuild item — once a 
 recalibrates the 0.75 bar (bricks 1–5 make SHAPE + jarring + root-cause clustering all honest; the floor
 still gates on COVERAGE). A behavioural light-dark()/round() resolution probe stays a bounded interleave.
 Cadences: self-audit 544; surface 548; const 543; wall 547.
+
+## Tick 541 — PROBE: name-only @container query MEASURED working (unknown → gated) (2026-07-24)
+
+The fidelity-instrument rebuild's four work-items all landed (bricks 1–5, through t540); its last item —
+the coverage→SHAPE gate-floor flip — is calibration-blocked on a broad off-tick path-keyed sweep the
+observer owns (I must not flip a ratchet floor to land my own tick, and can't run the 281-site sweep
+in-tick without blowing the wall). So this tick takes the board's cheapest-highest-yield lever: PROBE a
+remaining UNKNOWN ("? outranks X"). MEASURED 201 of 205; 4 unknown = 100-tab RSS (off-tick MEM-HARNESS),
+test262 (a subsystem, not a cheap probe), hidden=until-found, and name-only container queries. The last is
+the tractable one — it builds directly on the existing t379 @container machinery.
+
+MEASURED (containername:yes, PINNED): name-only `@container sidebar { #cqn{color:rgb(2,4,6)} }` — a prelude
+with only a <container-name> and NO size/style condition — APPLIES its rule to #cqn, matched by #cqn-outer's
+`container-name: sidebar`. The stale-pessimistic rule pays yet again (audit #25 t518 added it unknown
+expecting the empty-condition path might drop it; measured working). Mechanism: Stylo's
+ContainerCondition::parse, reached through the @container source-supplement (the servo build cfg-drops the
+at-rule, so `extract_container_blocks` lifts blocks and re-parses their preludes through Stylo's public
+parser), accepts a bare <container-name> with no <container-query>. BEHAVIOURAL, not parse-level: the
+rgb(2,4,6) lands on #cqn only via a genuine name match, added to the G_PROBE_CAPABILITIES gate in the same
+style as `containerq`.
+
+RED-PROVEN: removing `container-name: sidebar` from #cqn-outer (leaving an unnamed container) flips the
+probe `containername:yes → no` — the rule stops matching because the NAME no longer matches, not because
+"any container" applies. So the pin guards the name-match, not a rubber-stamp; restored, gate green
+(1 passed). Net map effect: UNKNOWN 4 → 3, MEASURED 201 → 202.
+
+TICK SHAPE: measure-and-pin probe (one audit-#25 stale-unknown cell — name-only @container — resolved to
+gated via a BEHAVIOURAL color-match probe with a name-removal RED discriminator, PINNED in
+G_PROBE_CAPABILITIES; no capability src built — existing Stylo + t379 source-supplement behaviour measured;
+test file only, Bar 0 untouched). WIKI: none — measure-and-pin; the finding is in the gate's PINNED comment
++ docs/loop/CONSTELLATION.tsv row 200. [no-pattern]
+
+NEXT: the two heavier unknowns (test262 harness run, 100-tab RSS MEM-HARNESS) are subsystem/off-tick, and
+hidden=until-found is the remaining cheap doc probe; the coverage→SHAPE gate-floor flip stays the standing
+CO-#1 the moment the observer banks a broad path-keyed SHAPE headline. Cadences: self-audit 544; surface
+548; const 543; wall 547.
