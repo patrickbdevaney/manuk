@@ -22174,3 +22174,55 @@ Chromium 6s, load budget exhausted AND the 20,000-task ceiling hit — three fac
 cause). **(3) the crawl-side sig correction** (`run_oracle_cmd` keys still carry sigs — the same defect,
 unfixed, in what the constitution calls its primary discovery mechanism). Then STEP 1(c) 100-tab RSS and
 Audit #28's three CSS probes. Cadences: self-audit 554; surface 558; const 559; wall 567.
+
+## Tick 552 — the "QUANTISED geometry" finding was the PRINTER, not the engine (2026-07-25)
+
+t551 banked a baseline and read a pattern off it: *"the deltas are QUANTISED — 8/16/32/64/128 on div
+heights, 8/16 on anchor widths — the signature of ONE systematic box-model or line-height delta, not a
+thousand independent bugs."* Check #35's steer made that cluster the next tick, with the standing rule
+attached: **forecast by error-signature before building.** Forecasting started by reading
+`oracle::mag_band`:
+
+```rust
+// Largest power of two ≤ m: 23→16, 28→16, 45→32, 82→64, 1400→1024, 6822→4096.
+1i64 << (63 - m.leading_zeros())
+```
+
+**Every geometry cluster this instrument has ever printed carries a power-of-two headline BY
+CONSTRUCTION.** The quantisation I read as evidence of a single systematic cause was a property of the
+printer. Lesson #4 — *every number has a harness, and the harness is part of the number* — firing on a
+conclusion I drew ONE TICK after writing the constitution check that warns about exactly this. Recording it
+that way on purpose: the near-miss is the useful part, because the rule was followed and it caught the
+error before a tick was spent in the wrong subsystem.
+
+FIXED SO IT CANNOT RECUR: `Cluster.median_mag` carries the **median of the actual dominant-axis deltas**,
+printed beside the band with the band explicitly labelled — `geometry: width ~16px (<a>) [median 19px — the
+~Npx above is a power-of-2 BAND]`. RED-PROVEN: re-banding the median (`mag_band(median)`) — the exact bug
+being guarded — fails `the_band_is_a_power_of_two_so_the_real_median_travels_with_it`. 35 lib tests green.
+
+THE REAL MEDIANS, measured live on four sites: `width (<a>)` band ~16 → **19px** · `height (<div>)` ~16 →
+**24px** · `height (<div>)` ~32 → **39px** · `width (<a>)` ~8 → **12px** · `x (<li>)` ~8 → **9px** ·
+`width (<a>)` ~32 → **37px** · `y (<nav>)` ~32 → **45px** · `x (<a>)` ~128 → **182px** · `x (<a>)` ~256 →
+**281px**. **Not a power of two among them.**
+
+AND THE CORRECTED NUMBERS POINT SOMEWHERE ELSE ENTIRELY — this is why it mattered. The largest clusters by
+distinct sites are `<a>` **WIDTH** deltas (medians 12–19px) and `<div>` **HEIGHT** deltas (median 24px ≈ one
+line-height). **An anchor's width IS its text's width**, so that cluster is a **text-measurement**
+signature — shaping, font metrics, letter-spacing — not a box-model one; and a 24px div-height median is a
+line-box signature. t551's "one systematic box-model delta" would have sent the next tick at the wrong
+subsystem, which is lesson #2 (*the symptom names the wrong organ*) queued up and then avoided.
+
+TICK SHAPE: instrument correction (a false inference in the freshly-banked baseline retracted in the anchor
+and the journal; `Cluster.median_mag` added so the power-of-two BAND can never again be read as the
+measurement, RED-proven by re-banding the median; real medians measured live on four sites and the lead
+re-aimed from box-model to text-measurement). No engine src touched; Bar 0 untouched; no ratchet floor
+moved.
+WIKI: none — the correction lives where the wrong claim lives (PHASE0-ROADMAP-ANCHOR.md §6 and this entry);
+the mechanism is three lines in `oracle::cluster` documented at the field. [no-pattern]
+
+NEXT: the re-aimed lead — **`<a>` width deltas with a 12–19px median across the most sites**, which is a
+TEXT-MEASUREMENT question, so the forecast is: measure one anchor's advance width against Chrome's for the
+same string and font before touching layout (the ch/ex font-metrics work at t499–502 is the nearest
+precedent, and `manuk-text::zero_advance` is the seam). Then nytimes.com as a named single-site
+investigation, then the crawl-side sig correction, STEP 1(c) 100-tab RSS, Audit #28's three CSS probes.
+Cadences: self-audit 554; surface 558; const 559; wall 567.

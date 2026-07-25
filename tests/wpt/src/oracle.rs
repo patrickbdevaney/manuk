@@ -86,6 +86,22 @@ pub struct Cluster {
     /// Total elements affected across all sites.
     pub hits: usize,
     pub examples: Vec<String>,
+    /// **The MEDIAN of the actual dominant-axis deltas in this cluster, in px** — 0 for non-geometry
+    /// clusters.
+    ///
+    /// This exists because the signature's `~Npx` is a [`mag_band`] value, i.e. **rounded down to a
+    /// power of two**, and a reader cannot tell that from looking. At tick 551 the pooled sweep output
+    /// read `width ~16px · height ~128px · width ~8px · height ~16px · ~64px · ~32px` and I recorded in
+    /// the roadmap anchor that the deltas were *"QUANTISED — 8/16/32/64/128 — the signature of ONE
+    /// systematic box-model delta, not a thousand independent bugs."* **They are quantised by the
+    /// BANDING.** Every geometry delta this instrument has ever reported is a power of two by
+    /// construction, so the pattern I read as evidence was a property of the printer.
+    ///
+    /// Lesson #4 in `STATUS.md` — *every number has a harness, and the harness is part of the number* —
+    /// firing on a conclusion drawn ONE TICK after writing the constitution check that warns about it.
+    /// The band still earns its place (it separates a 20px near-miss from a 4,000px collapse, which are
+    /// genuinely different bugs); it just must not be mistaken for the measurement. So both travel now.
+    pub median_mag: i64,
 }
 
 /// Is Chromium's own render usable as an oracle, or is it degraded?
@@ -272,6 +288,7 @@ pub fn cluster(divs: &[Divergence]) -> Vec<Cluster> {
             std::collections::BTreeSet<String>,
             usize,
             Vec<String>,
+            Vec<i64>,
         ),
     > = BTreeMap::new();
 
@@ -299,24 +316,54 @@ pub fn cluster(divs: &[Divergence]) -> Vec<Cluster> {
                 format!("geometry: {axis} ~{}px   (<{}>)", mag_band(mag), d.tag)
             }
         };
-        let e = acc
-            .entry(sig)
-            .or_insert_with(|| (d.kind.clone(), Default::default(), 0, Vec::new()));
+        let e = acc.entry(sig).or_insert_with(|| {
+            (
+                d.kind.clone(),
+                Default::default(),
+                0,
+                Vec::new(),
+                Vec::new(),
+            )
+        });
         e.1.insert(d.site.clone());
         e.2 += 1;
         if e.3.len() < 3 {
             e.3.push(format!("{}#{}: {} vs {}", d.site, d.id, d.chrome, d.manuk));
         }
+        // Keep the RAW dominant-axis magnitude so the cluster can report what the delta actually was,
+        // not only which power-of-two bucket it fell into.
+        if d.kind != "display" && d.kind != "missing" {
+            let [dx, dy, dw, dh] = d.delta;
+            let mag = if dw.abs() > dx.abs().max(dy.abs()).max(dh.abs()) {
+                dw
+            } else if dh.abs() > dx.abs().max(dy.abs()) {
+                dh
+            } else if dy.abs() > dx.abs() {
+                dy
+            } else {
+                dx
+            };
+            e.4.push(mag.abs());
+        }
     }
 
     let mut out: Vec<Cluster> = acc
         .into_iter()
-        .map(|(signature, (kind, sites, hits, examples))| Cluster {
-            signature,
-            kind,
-            sites: sites.len(),
-            hits,
-            examples,
+        .map(|(signature, (kind, sites, hits, examples, mut mags))| {
+            mags.sort_unstable();
+            let median_mag = if mags.is_empty() {
+                0
+            } else {
+                mags[mags.len() / 2]
+            };
+            Cluster {
+                signature,
+                kind,
+                sites: sites.len(),
+                hits,
+                examples,
+                median_mag,
+            }
         })
         .collect();
     // **Rank by distinct sites explained** — that is the whole point. A cause that breaks forty
@@ -672,6 +719,62 @@ mod tests {
     /// into ONE cluster of 3 sites — and this assertion fails. The magnitude band is what lets the
     /// board tell a saturated near-miss from an amplified page collapse.
     #[test]
+    /// **The band is a POWER OF TWO, and a reader cannot tell that from the signature — so the real
+    /// median must travel with it.**
+    ///
+    /// Written after the t551 sweep: the pooled output read `width ~16px · height ~128px · width ~8px ·
+    /// height ~16px · ~64px · ~32px`, and I recorded in the roadmap anchor that the deltas were
+    /// "QUANTISED — the signature of ONE systematic box-model delta". `mag_band` rounds DOWN to the
+    /// largest power of two, so **every** geometry delta this instrument reports is a power of two by
+    /// construction. The pattern I read as evidence was a property of the printer. This test makes the
+    /// distinction mechanical: two clusters with the SAME band and very different real medians.
+    #[test]
+    fn the_band_is_a_power_of_two_so_the_real_median_travels_with_it() {
+        // 17, 20 and 31 px all band to 16 — one cluster, and its real median is 20, not 16.
+        let same_band = vec![
+            geom_div("a.example", "div", [0, 0, 0, 17]),
+            geom_div("b.example", "div", [0, 0, 0, 20]),
+            geom_div("c.example", "div", [0, 0, 0, 31]),
+        ];
+        let c = cluster(&same_band);
+        assert_eq!(c.len(), 1, "17/20/31 all band to 16 — one cluster");
+        assert!(
+            c[0].signature.contains("~16px"),
+            "the signature reports the BAND: {}",
+            c[0].signature
+        );
+        assert_eq!(
+            c[0].median_mag, 20,
+            "…and the cluster carries the REAL median (20px), which the band cannot express. Without \
+             this, a 17px delta and a 31px delta are indistinguishable in the output and every geometry \
+             headline looks like a power of two."
+        );
+
+        // A cluster whose deltas are all exactly 16 is a genuinely different fact from the one above,
+        // and it must be distinguishable — that is the whole point.
+        let truly_16 = vec![
+            geom_div("a.example", "div", [0, 0, 0, 16]),
+            geom_div("b.example", "div", [0, 0, 0, 16]),
+        ];
+        assert_eq!(cluster(&truly_16)[0].median_mag, 16);
+
+        // Non-geometry clusters have no magnitude at all — 0, not a fabricated number.
+        let missing = vec![Divergence {
+            site: "a.example".into(),
+            id: "x".into(),
+            kind: "missing".into(),
+            tag: "div".into(),
+            chrome: "box".into(),
+            manuk: "absent".into(),
+            delta: [0, 0, 0, 0],
+        }];
+        assert_eq!(
+            cluster(&missing)[0].median_mag,
+            0,
+            "a missing box has no magnitude to report"
+        );
+    }
+
     fn cluster_bands_geometry_by_offset_magnitude() {
         let divs = vec![
             geom_div("a.example", "header", [0, 23, 0, 0]),

@@ -165,3 +165,23 @@ never WPT count, never a vibe.
   techcrunch.com 0.06% · reactjs.org 0.13% · stripe.com 0.14% · terraform.io 0.30% · notion.so 0.32% ·
   bitbucket.org 0.36%. **This is the named class for the next investigation.**
 
+- `CORRECTION to the t551 line @tick 552 — the "QUANTISED" READING WAS THE PRINTER, NOT THE ENGINE.`
+  t551 recorded that the geometry deltas were *"QUANTISED — 8/16/32/64/128 on div heights, 8/16 on anchor
+  widths — the signature of ONE systematic box-model or line-height delta."* **`oracle::mag_band` rounds
+  every magnitude DOWN to the largest power of two**, so every geometry cluster this instrument has ever
+  printed carries a power-of-two headline **by construction**. The pattern read as evidence was a property
+  of the printer. Lesson #4 (*every number has a harness, and the harness is part of the number*) firing on
+  a conclusion drawn ONE TICK after writing the constitution check that warns about it.
+  **The REAL medians, measured live at t552 with the magnitude now travelling beside the band:**
+  `width (<a>)` band ~16px → **median 19px** · `height (<div>)` ~16px → **24px** · `height (<div>)` ~32px →
+  **39px** · `width (<a>)` ~8px → **12px** · `x (<li>)` ~8px → **9px** · `width (<a>)` ~32px → **37px** ·
+  `y (<nav>)` ~32px → **45px** · `x (<a>)` ~128px → **182px** · `x (<a>)` ~256px → **281px**. Not a power of
+  two among them.
+  **What the corrected numbers actually point at, which is a DIFFERENT lead:** the largest clusters by
+  sites are `<a>` **WIDTH** deltas with medians of 12–19px, and `<div>` **HEIGHT** deltas with a median of
+  24px ≈ one line-height. An anchor's width is its *text's* width, so that cluster is a **text-measurement**
+  signature (shaping / font metrics / letter-spacing), not a box-model one — and a 24px div-height median is
+  a line-box signature. t551's "one systematic box-model delta" would have sent the next tick at the wrong
+  subsystem. The band still earns its place (it separates a 20px near-miss from a 4,000px collapse) but it
+  must never again be read as the measurement.
+

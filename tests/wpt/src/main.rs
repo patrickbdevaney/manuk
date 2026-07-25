@@ -784,9 +784,24 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
             all_divs.len()
         );
         for c in clusters.iter().take(12) {
+            // ⚠ The `~Npx` inside the signature is a POWER-OF-TWO BAND (`oracle::mag_band` rounds
+            // down), so every geometry cluster's headline number is a power of two by construction.
+            // At t551 that printer made me record "the deltas are QUANTISED — 8/16/32/64/128 — one
+            // systematic cause" in the roadmap anchor. They were quantised by the PRINTER. The real
+            // median travels alongside now, so the band cannot be mistaken for the measurement again.
             eprintln!(
-                "    {:>2} site(s) · {:>4} hit(s)   {}",
-                c.sites, c.hits, c.signature
+                "    {:>2} site(s) · {:>4} hit(s)   {}{}",
+                c.sites,
+                c.hits,
+                c.signature,
+                if c.median_mag > 0 {
+                    format!(
+                        "   [median {}px — the ~Npx above is a power-of-2 BAND]",
+                        c.median_mag
+                    )
+                } else {
+                    String::new()
+                }
             );
         }
     }
