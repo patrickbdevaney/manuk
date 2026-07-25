@@ -327,6 +327,7 @@
   - L1479 · <a>/<area> URL-decomposition setters (tick 447)
   - L1493 · <img>.currentSrc reports the URL we actually load, honestly (tick 493)
   - L1509 · document.activeElement defaults to <body>, not null (tick 494)
+  - L1522 · The same defect, three consumers, found by looking for it (tick 578)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -997,4 +998,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-912 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+913 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

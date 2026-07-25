@@ -95,11 +95,16 @@ impl FindSession {
 struct Run {
     text: String,
     rect: Rect,
+    /// Does this run continue the previous one — same word, split by the line breaker? See
+    /// [`manuk_layout::TextFragment::continues`]. Decided while the fragment geometry is still in
+    /// hand, because by the time a `Run` reaches the haystack builder the baselines are gone.
+    continues_prev: bool,
 }
 
 /// Collect the fragment tree's text runs in document order.
 fn runs(root: &LayoutBox) -> Vec<Run> {
     let mut out = Vec::new();
+    let mut prev: Option<manuk_layout::TextFragment> = None;
     root.walk(&mut |b| {
         if let BoxContent::Inline(frags) = &b.content {
             for f in frags {
@@ -109,7 +114,9 @@ fn runs(root: &LayoutBox) -> Vec<Run> {
                 out.push(Run {
                     text: f.text.clone(),
                     rect: f.rect(),
+                    continues_prev: prev.as_ref().is_some_and(|p| f.continues(p)),
                 });
+                prev = Some(f.clone());
             }
         }
     });
@@ -137,12 +144,18 @@ pub fn find(root: &LayoutBox, query: &str, case_sensitive: bool) -> FindSession 
         };
     }
 
-    // Build the searchable haystack: runs joined by a single space (inline layout drops
-    // the original whitespace), remembering each run's byte span so a hit maps back.
+    // Build the searchable haystack, remembering each run's byte span so a hit maps back to rects.
+    //
+    // ⚠ This used to join EVERY run with a space, on the premise that "inline layout drops the
+    // original whitespace". It does not: layout emits one run per line-break **opportunity**, and
+    // CSS puts one after a hyphen, after `//`, and after `?`. So Ctrl+F for `non-mainstream` or for
+    // a URL searched a haystack that read `non- mainstream` and `https:// example.com/? a=1`, and
+    // found nothing on a page that plainly contained it. Same defect, found independently, in
+    // `Page::visible_text` (tick 577) and in selection-copy — hence `TextFragment::continues`.
     let mut haystack = String::new();
     let mut spans: Vec<(usize, usize)> = Vec::with_capacity(runs.len());
     for (i, r) in runs.iter().enumerate() {
-        if i > 0 {
+        if i > 0 && !r.continues_prev {
             haystack.push(' ');
         }
         let start = haystack.len();
@@ -207,6 +220,49 @@ mod tests {
         let styles = MinimalCascade.cascade(&dom, &sheets);
         let fonts = FontContext::new();
         layout_document(&dom, &styles, &fonts, width)
+    }
+
+    /// **A line-break OPPORTUNITY is not a space — Ctrl+F must find a hyphenated word.**
+    ///
+    /// Inline layout emits one fragment per break *opportunity*, not per line, and CSS puts one
+    /// after a hyphen, after `//` and after `?`. The haystack builder joined every run with a
+    /// space on the premise that "inline layout drops the original whitespace" — so searching a
+    /// page that plainly reads `non-mainstream` searched `non- mainstream` and found nothing.
+    ///
+    /// The same defect was found independently in `Page::visible_text` (the agent's observation
+    /// text and the history index) at tick 577 and in selection-copy; the rule now lives once, on
+    /// `TextFragment::continues`.
+    ///
+    /// RED, run: restore `if i > 0 { haystack.push(' ') }` in `find` — the first two assertions
+    /// fail. Drop the `continues` test the other way (never separate) and `beta gamma` matches
+    /// nothing, which is what the third assertion guards.
+    #[test]
+    fn a_break_opportunity_is_not_a_space() {
+        // Narrow enough that real wrapping happens too, so both paths are exercised.
+        let root = layout(
+            "<body><p>blocks non-mainstream browsers</p>\
+             <p>https://walled.example/?a=1 here</p>\
+             <p>alpha beta gamma</p></body>",
+            320.0,
+        );
+        assert_eq!(
+            find(&root, "non-mainstream", false).len(),
+            1,
+            "a hyphen is a break OPPORTUNITY, not a space: joining every run with ' ' wedged one \
+             into the middle of the word, so Ctrl+F found nothing on a page that contains it"
+        );
+        assert_eq!(
+            find(&root, "https://walled.example/?a=1", false).len(),
+            1,
+            "a URL breaks after `//` and after `?` too — the string a user is most likely to \
+             search for is the one most likely to be broken"
+        );
+        assert_eq!(
+            find(&root, "beta gamma", false).len(),
+            1,
+            "THE GUARD: words genuinely separated by a space must stay separated. Concatenating \
+             every run would pass the first two assertions and glue the page into one token"
+        );
     }
 
     /// E1's headline acceptance: find-in-page highlights **all** matches, over the

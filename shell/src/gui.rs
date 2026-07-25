@@ -2675,7 +2675,8 @@ impl App {
         let single_line = (bot_line - top_line).abs() < 1.0;
 
         let mut rects = Vec::new();
-        let mut lines: Vec<(f32, Vec<String>)> = Vec::new();
+        // (line top, the line's text so far, the right edge of its last run)
+        let mut lines: Vec<(f32, String, f32)> = Vec::new();
         for (x, y, w, h, text) in in_band {
             // Trim the boundary lines to the horizontal selection extent.
             let on_top = (y - top_line).abs() < 1.0;
@@ -2690,14 +2691,28 @@ impl App {
                 continue;
             }
             rects.push((x, y, w, h));
+            // ⚠ A LINE-BREAK OPPORTUNITY IS NOT A SPACE. This used to collect each line's runs into
+            // a `Vec<String>` and `join(" ")` them — but inline layout emits one run per break
+            // OPPORTUNITY, not per line, and CSS puts one after a hyphen, after `//` and after `?`.
+            // So copying `non-mainstream` pasted `non- mainstream`, and copying a URL pasted
+            // `https:// example.com/? a=1`. Grouping is already per line here, so the baseline half
+            // of `TextFragment::continues` is implicit and only the x-adjacency test is needed: runs
+            // whose boxes touch are one word. (Third independent instance of this defect — see
+            // `Page::visible_text` at tick 577 and `shell::find` in the same tick as this.)
             match lines.last_mut() {
-                Some((ly, words)) if (*ly - y).abs() < 1.0 => words.push(text),
-                _ => lines.push((y, vec![text])),
+                Some((ly, line, right)) if (*ly - y).abs() < 1.0 => {
+                    if x > *right + 0.5 {
+                        line.push(' ');
+                    }
+                    line.push_str(&text);
+                    *right = x + w;
+                }
+                _ => lines.push((y, text, x + w)),
             }
         }
         let text = lines
             .iter()
-            .map(|(_, w)| w.join(" "))
+            .map(|(_, line, _)| line.as_str())
             .collect::<Vec<_>>()
             .join("\n");
         (text, rects)

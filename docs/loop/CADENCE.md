@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **338** | ticks 1–577 |
-| median tick cycle | **21m** | 337 intervals |
+| ticks landed | **339** | ticks 1–578 |
+| median tick cycle | **21m** | 338 intervals |
 | median, last 10 | **51m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.97** | 347.5h elapsed |
-| median verify wall | **66s** | 277 ticks |
+| **ticks per hour** | **0.97** | 348.0h elapsed |
+| median verify wall | **66s** | 278 ticks |
 | wall trend | 39s → 85s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **334**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**174 of 338 ticks** (51%) moved a
+**174 of 339 ticks** (51%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -435,5 +435,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **575** | 2026-07-25 15:08 | 58m | correctness | 85s | +552/−53 | 279 | 81 | 56.0% · | the cascade's FIRST sort was missing: every CSS reset on the web lost to our UA sheet (202 |
 | **576** | 2026-07-25 15:46 | 38m | capability-honesty | 85s | +655/−58 | 280 | 81 | 56.0% · | the honest "no" rots in BOTH directions: `@supports` promised 31 properties we never rende |
 | **577** | 2026-07-25 16:30 | 44m | correctness | 85s | +400/−106 | 281 | 81 | 56.0% · | a line-break OPPORTUNITY is not a space: the string the agent reads was corrupted (2026-07 |
+| **578** | 2026-07-25 17:02 | 32m | correctness | 85s | +428/−60 | 281 | 81 | 56.0% · | the same defect in three consumers, and an audit that had never read its own gate corpus ( |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

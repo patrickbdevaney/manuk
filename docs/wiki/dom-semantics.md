@@ -1518,3 +1518,34 @@ body. It is safe for the engine's own focus logic because every in-engine reader
 ae.isContentEditable`, and `body.isContentEditable` is false — so a body fallback and a null take the exact
 same branch (the contenteditable execCommand host-resolution paths were the ones to check). Focus tracking
 still wins: `.focus()` moves `activeElement` to the focused element. Gate `G_ACTIVE_ELEMENT_BODY_DEFAULT`.
+
+## The same defect, three consumers, found by looking for it (tick 578)
+
+Tick 577 fixed `visible_text`. The obvious follow-up question — *which other code assembles a string
+from laid-out fragments?* — took one grep and found the identical bug twice more:
+
+| consumer | what it broke |
+|---|---|
+| `Page::visible_text` | the agent's `Observation.text`, the history search index (t577) |
+| `shell::find` | **Ctrl+F**: searching a page that reads `non-mainstream` searched `non- mainstream` |
+| `shell::gui` selection | **Ctrl+C**: copying `non-mainstream` pasted `non- mainstream` |
+
+Three authors, three times, the same wrong premise — `find.rs`'s comment even stated it outright:
+*"runs joined by a single space (inline layout drops the original whitespace)"*. It does not; it emits
+one run per break **opportunity**.
+
+**So the rule moved to the data.** `TextFragment::continues(&prev)` answers *"is this run the same word
+as the previous one?"* — same baseline, boxes touching — and all three consumers call it. That is the
+difference between fixing three bugs and removing a way to have the bug: a fourth consumer written next
+year gets the question handed to it at the point where the geometry is still in scope.
+
+**Each consumer still owns its own assembly**, because they genuinely differ: `visible_text`
+concatenates a whole document, `find` needs per-run byte spans so a hit maps back to rects, and
+selection groups by line (so its baseline test is implicit and only x-adjacency remains). A shared
+`join_runs()` helper would have forced all three into one shape and been abandoned by the first one
+that needed spans. **The shared thing is the predicate, not the loop.**
+
+> **The generalisation worth keeping.** When a defect is found in one consumer of a data structure, the
+> question is not "are there other bugs like this" but "**what else reads this structure, and does it
+> ask the same question?**" — a grep for the type, not for the symptom. Here `BoxContent::Inline` had
+> seven readers; three assembled text and all three were wrong.

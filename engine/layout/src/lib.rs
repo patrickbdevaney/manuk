@@ -186,6 +186,31 @@ impl TextFragment {
             height: self.content_height,
         }
     }
+
+    /// **Is this run a direct continuation of `prev` — the SAME WORD, split by the line breaker?**
+    ///
+    /// This exists because the answer is not obvious and three separate consumers got it wrong the
+    /// same way. **Inline layout emits one fragment per line-break OPPORTUNITY, not per line**, and
+    /// CSS puts an opportunity after a hyphen, after `//`, and after `?` in a query string. So any
+    /// consumer that reassembles the page's text by joining runs with a space produces
+    /// `non- mainstream` and `https:// example.com/? a=1` for text that rendered, correctly, as one
+    /// unbroken word.
+    ///
+    /// That is invisible to every instrument this engine has, because the *boxes* are right and only
+    /// the *string* is wrong — so the rule lives here, next to the data it reads, rather than in each
+    /// consumer. `Page::visible_text` (the agent's `Observation.text` and the history index),
+    /// find-in-page, and selection-copy all ask this one question.
+    ///
+    /// Same baseline **and** boxes touching. Both halves are load-bearing: without the x test a whole
+    /// page glues into one token; without the baseline test a hard `<br>` glues, because a new line
+    /// restarts at `x = 0` and trivially "touches" the previous run's right edge. The half-pixel
+    /// tolerance absorbs accumulated advance rounding — a space is an order of magnitude wider.
+    ///
+    /// A trailing space that belongs to a run is inside both its `text` and its `width`, so it
+    /// survives either answer.
+    pub fn continues(&self, prev: &TextFragment) -> bool {
+        (prev.baseline - self.baseline).abs() < 0.5 && self.x <= prev.x + prev.width + 0.5
+    }
 }
 
 /// Contents of a laid-out box.

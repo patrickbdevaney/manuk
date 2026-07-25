@@ -1418,3 +1418,76 @@ WebGPU, Web Serial) stay below the live leads — implied grid track sizing (t56
 outranks all of them.
 
 LAST_SURFACE_AUDIT set to 568; next due 578.
+
+## Audit #31 — tick 578
+
+SOURCES (deliberately ROTATED — #28 used Interop, #29/#30 used Baseline/web.dev, and #30's own lesson was
+"rotate the SOURCE not just the date"):
+- Ladybird monthly newsletters, Feb–Jun 2026 — https://ladybird.org/newsletter/2026-06-30/ (and 05-31, 04-30,
+  03-31, 02-28)
+- Servo blog — https://servo.org/blog/2026/06/30/may-in-servo/ , https://servo.org/blog/2026/04/30/march-in-servo/
+- WPT top-level directory list, via the GitHub contents API — https://api.github.com/repos/web-platform-tests/wpt/contents/
+  (wpt.fyi itself is JS-rendered and returns nothing to a fetcher, which is worth recording: **the obvious URL
+  for "what does the platform contain" is unreadable by a crawler**)
+- https://web.dev/blog/web-platform-06-2026 , https://web.dev/baseline/2026 — cross-check only
+- **And the source no previous audit ever consulted: `engine/page/tests/`, our own gate corpus.**
+
+### THE FINDING, and it is about the instrument rather than the platform
+
+**281 page-gate files exist. 147 of them — 52% — are not referenced anywhere in `CONSTELLATION.tsv`.**
+Verified mechanically, not taken on report. The map is therefore **not a map of the engine**; it is a map of
+the loop's recent attention, and every readiness figure derived from it has been reading curation.
+
+The shape is unmistakable once seen: the map carried rows for `subgrid`, `scroll-driven animations`,
+`animation-composition` and `text-justify` — and **no row at all for CSS Grid, Flexbox, CSS transforms, CSS
+transitions/`@keyframes`, `position: sticky`, `:has()`, `@layer`, dark mode, WebCrypto, PerformanceObserver,
+contenteditable editing, focus management, or `inert`.** Every one of those is built, and almost every one is
+RED-proven by a dedicated gate. **The frontier was curated and the substrate was invisible.**
+
+Audit #45's Web Locks row filed this failure mode as a curiosity — *"inverse stale-pessimism: a green
+capability invisible to the map"*. It was not a curiosity. **It was the median case.**
+
+ADDED: **59 rows** — 24 banked directly as `gated` (built, gate file verified present, no row); 27 as
+`missing` (grep of `engine/ shell/ agent/ store/` returns **zero** — a measured absence, not an untested one);
+8 as `unknown` where the grep was ambiguous and honesty demands a probe. Highlights of the `missing` set the
+world names and we did not: Web Audio, XPath (**agentic** — it is the lingua franca of Playwright-style
+locators), Referrer Policy, HSTS/mixed-content, Permissions Policy, Trusted Types, Storage Access API, Client
+Hints *headers*, bfcache/`persisted`, `rel=preload`, `mediaCapabilities.decodingInfo()`, MediaRecorder/
+getUserMedia (**distinct from the out-of-scope WebRTC row**, and conflating them cuts a reachable capability by
+accident), SharedArrayBuffer/COOP-COEP, Cookie Store, text-fragment navigation `#:~:text=` (the first thing a
+user does after a search), Touch Events, `Intl.Segmenter`, the five UA pseudo-elements, WebDriver, and WPT's
+new `ai` directory — which sits directly beside row 163 (`navigator.modelContext`/WebMCP), the agentic thread's
+other half, unmapped.
+
+CORRECTED:
+- **Row 107 WebAuthn `missing` → `gated`.** `PublicKeyCredential`/`navigator.credentials` shipped at t484–485
+  with `g_webauthn_surface.rs`. The map was wrong for ~94 ticks. Scope stated honestly on the row: it
+  feature-detects and returns an honest `NotAllowedError`; a full round-trip is **not** claimed.
+- **Row 102 vs row 185 — a direct CONTRADICTION**: the same capability (`contrast-color()`) carried `unknown`
+  on one row and `gated` with a named receipt on the other. A map that gives one capability two verdicts is
+  worse than a map that gives it the wrong one. Status corrected; both rows annotated for merge.
+- **Rows 178≡188 and 183≡186** are semantic duplicates, annotated. The distinct capability count is ~3% below
+  the raw row count, so audit #30's banked "map stays 218" was measuring a slightly inflated number.
+- **Row 4's framing is the structural error**: "box model / floats / block layout" was the map's *only* layout
+  row, which implied our layout story stopped in 1998.
+- RE-RANK: **anchor positioning** (row 98) rests on a ~340-tick-old probe from when it was Chrome-only — it
+  reached Baseline in January 2026 and Ladybird shipped it in April/June; it now outranks most `unknown` CSS
+  rows. **`color-mix()`/`oklch`** is filed `unknown` rather than `missing` on purpose: zero occurrences in
+  `engine/`, but Stylo is a *dependency* and may resolve them without us naming them — **a grep is not a
+  measurement when the capability lives below you**. Tailwind v4's default palette is `oklch` and its opacity
+  modifiers compile to `color-mix()`, so this is the largest unresolved question on the CSS list.
+
+WHAT WE WERE WRONG ABOUT: **the audit had only ever looked outward.** Its whole design assumed the unknown
+unknowns live in the world — in what standards bodies prioritise and what browsers newly ship — so it spent
+five cycles curating the frontier while half the engine's own proven capabilities never reached the map. The
+cheapest and most authoritative source available to it was sitting in the repository the entire time, and no
+audit had ever run `ls engine/page/tests/ | grep -f` against the file. #30 corrected the cadence to
+*"measure some of what you added before adding more"*; **#31's correction is one level under that: before
+looking outward at all, diff the map against the receipts you already hold.** An instrument that cannot see
+what its own project has built is not measuring the project.
+
+STANDING RULE ADDED: **every surface audit begins by diffing `engine/page/tests/` against
+`CONSTELLATION.tsv`.** Web research comes second. The unmapped-gate count is now a number to drive to zero,
+and it starts at **147 of 281**.
+
+LAST_SURFACE_AUDIT set to 578; next due 588.

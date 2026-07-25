@@ -4871,3 +4871,30 @@ tree's labels: **is it assembled from the DOM (safe), or from laid-out fragments
 passed casual inspection, and it broke exactly the queries a user or a model would issue. Corrupted
 output that still looks like output is the hardest kind to notice, and the only defence is asserting on
 a value the defect must change — here, `!contains("non- mainstream")` alongside `contains("non-mainstream")`.
+
+### Three consumers, not one — and the fix is a predicate, not three patches (tick 578)
+
+Asking the follow-up question — *which other code assembles a string from laid-out fragments?* — took one
+grep for `BoxContent::Inline` and found the identical bug twice more, both **user-facing shell features**:
+
+| consumer | what a user saw |
+|---|---|
+| `Page::visible_text` | the agent's `Observation.text` and the history search index (t577) |
+| `shell::find` | **Ctrl+F** for `non-mainstream` or for a URL found **nothing** on a page containing it |
+| `shell::gui` selection | **Ctrl+C** on `non-mainstream` pasted `non- mainstream` |
+
+So the class this unlocks is not only the agentic one: **find-in-page and copy now work on any page
+containing a hyphenated compound, a URL, or a long token** — which is nearly every page. `find.rs`'s own
+comment had stated the wrong premise outright (*"inline layout drops the original whitespace"*), which is
+how three authors reached the same wrong answer independently.
+
+The rule now lives on the data as `TextFragment::continues(&prev)`, so a fourth consumer is handed the
+question where the geometry is still in scope. **Each consumer keeps its own assembly loop** — they
+genuinely differ (whole-document concatenation vs per-run byte spans for hit-mapping vs per-line grouping)
+— so *the shared thing is the predicate, not the loop*. A `join_runs()` helper would have been abandoned by
+the first consumer that needed spans.
+
+> **The generalisation.** When a defect is found in one consumer of a data structure, the question is not
+> *"are there other bugs like this"* but **"what else reads this structure, and does it ask the same
+> question?"** — a grep for the *type*, not for the *symptom*. `BoxContent::Inline` had seven readers;
+> three assembled text and all three were wrong.

@@ -23855,3 +23855,91 @@ link text, the a11y tree's labels: each is either assembled from the DOM (safe) 
 crawl-side `.SIG` correction; and a fresh corpus sweep, since t569's grid-stretch and t575's cascade-origin
 fixes are both page-wide geometry changes and the sweep is differenceable.
 Cadences: surface 578 (NEXT TICK); const 583; self-audit 584; wall 587.
+
+## Tick 578 — the same defect in three consumers, and an audit that had never read its own gate corpus (2026-07-25)
+
+Two halves, and the second is the larger finding.
+
+**HALF ONE — THE FOLLOW-UP QUESTION t577 NAMED, ASKED AND ANSWERED.** t577 fixed `visible_text`, which
+inserted a space at every line-break *opportunity* rather than at every line break. Its NEXT line was
+*"audit the OTHER machine-facing strings for the same assembly bug"*. One grep for `BoxContent::Inline`
+found seven readers, three of which assemble text — and **all three had the identical bug**:
+
+| consumer | what it broke |
+|---|---|
+| `Page::visible_text` | the agent's `Observation.text`, the history search index (fixed t577) |
+| `shell::find` | **Ctrl+F**: searching a page that reads `non-mainstream` searched `non- mainstream` |
+| `shell::gui` selection | **Ctrl+C**: copying `non-mainstream` pasted `non- mainstream` |
+
+Three authors, three times, the same wrong premise — and `find.rs`'s comment stated it outright: *"runs
+joined by a single space (inline layout drops the original whitespace)"*. It does not.
+
+**SO THE RULE MOVED TO THE DATA, not into three patches.** `TextFragment::continues(&prev)` answers *"is
+this run the same word as the previous one?"* — same baseline, boxes touching — and lives beside the
+geometry it reads. That is the difference between fixing three bugs and **removing a way to have the bug**:
+a fourth consumer written next year is handed the question at the point where the baselines are still in
+scope. Each consumer keeps its own assembly loop, because they genuinely differ (`visible_text`
+concatenates a document; `find` needs per-run byte spans so a hit maps back to rects; selection groups by
+line, so its baseline test is implicit and only x-adjacency remains). **The shared thing is the predicate,
+not the loop** — a `join_runs()` helper would have been abandoned by the first consumer that needed spans.
+
+RED-proven on the new consumer, twice: restore `if i > 0 { haystack.push(' ') }` → the hyphen and URL
+searches return 0 instead of 1; force `continues_prev: true` → `beta gamma` returns 0, which is the guard
+against fixing it by gluing the page into one token.
+
+**HALF TWO — SURFACE AUDIT #31, AND IT INDICTS THE INSTRUMENT.** The audit rotated sources as #30's own
+lesson demands (Ladybird and Servo engineering posts, the WPT directory list via the GitHub API — wpt.fyi
+itself is JS-rendered and returns nothing to a crawler, which is worth knowing). But the finding came from
+**a source no previous audit had ever consulted: our own gate corpus.**
+
+> **281 page-gate files exist. 147 of them — 52% — are not referenced anywhere in `CONSTELLATION.tsv`.**
+
+Verified mechanically here, not taken on report. The map is **not a map of the engine**; it is a map of the
+loop's recent attention, and every readiness number derived from it has been reading curation. The shape is
+unmistakable once seen: the map carried rows for `subgrid`, `scroll-driven animations`,
+`animation-composition` and `text-justify` — and **no row at all for CSS Grid, Flexbox, CSS transforms, CSS
+transitions, `position: sticky`, `:has()`, `@layer`, dark mode, WebCrypto, PerformanceObserver,
+contenteditable editing, focus management or `inert`.** All built; almost all RED-proven by a dedicated
+gate. **The frontier was curated and the substrate was invisible.** Audit #45's Web Locks row filed this
+failure mode as a curiosity — *"a green capability invisible to the map"*. It was the median case.
+
+ADDED **59 rows**: 24 banked as `gated` (gate file verified present), 27 as `missing` (grep of the four
+crates returns **zero** — a measured absence, which outranks an untested one), 8 as `unknown` where the grep
+was ambiguous and honesty demands a probe. The `missing` set the world names and we did not includes Web
+Audio, **XPath** (agentic — the lingua franca of Playwright-style locators), Referrer Policy, HSTS and
+mixed-content, Permissions Policy, Trusted Types, Storage Access API, Client Hints *headers*,
+bfcache/`persisted`, `rel=preload`, `mediaCapabilities.decodingInfo()`, **MediaRecorder/getUserMedia** (which
+the WebRTC out-of-scope decision does NOT cover — conflating them cuts a reachable capability by accident),
+SharedArrayBuffer/COOP-COEP, Cookie Store, `#:~:text=`, Touch Events, `Intl.Segmenter`, the five UA
+pseudo-elements, WebDriver, and WPT's new `ai` directory — which sits beside row 163 (`navigator.modelContext`)
+as the agentic thread's other half, unmapped.
+
+CORRECTED: row 107 **WebAuthn `missing` → `gated`** (shipped t484-485 with `g_webauthn_surface.rs`; the map
+was wrong for ~94 ticks, and the row now states honestly that it feature-detects and returns
+`NotAllowedError` rather than claiming a round-trip). Rows 102 vs 185 were a **direct contradiction** — the
+same capability with `unknown` on one row and `gated` on the other, which is worse than either. Rows 178≡188
+and 183≡186 are semantic duplicates, annotated; the distinct count is ~3% under the raw count, so #30's
+banked "map stays 218" was measuring a slightly inflated number. **`color-mix()`/`oklch` is filed `unknown`,
+not `missing`, on purpose**: zero occurrences in `engine/`, but Stylo is a *dependency* and may resolve them
+without us naming them — **a grep is not a measurement when the capability lives below you.** Tailwind v4's
+default palette is `oklch`, so this is the largest unresolved question on the CSS list.
+
+STANDING RULE ADDED to the audit: **every surface audit begins by diffing `engine/page/tests/` against
+`CONSTELLATION.tsv`; web research comes second.** The unmapped-gate count is a number to drive to zero and
+it starts at 147/281.
+
+TICK SHAPE: correctness (one predicate, three consumers, two of them user-facing shell features) + the DUE
+surface audit, which found that the map instrument had never read the repository's own receipts. Bar 0
+untouched; no ratchet floor moved.
+Gates: `TextFragment::continues` + `shell::find::a_break_opportunity_is_not_a_space` (RED-proven twice);
+`G_VISIBLE_TEXT_RUNS` re-pointed at the shared predicate.
+WIKI: docs/wiki/dom-semantics.md — "The same defect, three consumers, found by looking for it".
+PATTERN: none new — this is the t577 pattern's second and third instances, and the ledger entry already
+generalised it. [no-pattern]
+
+NEXT: **drive the unmapped-gate count down** — 147 of 281 gates have no row, and each is a `gated` row
+available for the cost of reading its header. That is the cheapest measured progress on the board and it
+makes every readiness figure honest for the first time. Interleave with **`color-mix()`/`oklch` probed
+behaviourally** (Tailwind v4's default palette; a grep cannot answer it) and the `apply_has_rules`
+per-element hoist (`:has()` is 505 ms of the 2,570 ms cascade).
+Cadences: const 583; self-audit 584; wall 587; surface 588.

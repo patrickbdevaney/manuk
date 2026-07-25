@@ -6119,31 +6119,23 @@ impl Page {
         // hands a model) and the body `store::history_index` embeds. So a model asked to find
         // "non-mainstream" found nothing, and so did a user searching their history for a URL.
         //
-        // The geometry needed to tell the two cases apart was already on the fragment: two runs on
-        // the same baseline whose boxes touch are one word. A trailing space that belongs to a run
-        // is inside both its `text` and its `width`, so it survives either branch.
+        // The geometry needed to tell the two cases apart was already on the fragment, and the rule
+        // now lives on `TextFragment::continues` — beside the data, because find-in-page and
+        // selection-copy had made the identical mistake independently (tick 578).
         let mut out = String::new();
-        let mut prev: Option<(f32, f32)> = None; // (baseline, right edge)
+        let mut prev: Option<manuk_layout::TextFragment> = None;
         self.root_box.walk(&mut |b| {
             if let BoxContent::Inline(frags) = &b.content {
                 for f in frags {
                     if f.text.is_empty() {
                         continue;
                     }
-                    let adjacent = match prev {
-                        // Same line AND the previous run's box reaches this one: one word, split by
-                        // the breaker. The half-pixel tolerance is for accumulated advance rounding,
-                        // not for a real gap — a space is an order of magnitude wider.
-                        Some((base, right)) => {
-                            (base - f.baseline).abs() < 0.5 && f.x <= right + 0.5
-                        }
-                        None => true, // nothing emitted yet: no separator before the first run
-                    };
-                    if !adjacent {
+                    // Nothing emitted yet ⇒ no separator before the first run.
+                    if prev.as_ref().is_some_and(|p| !f.continues(p)) {
                         out.push(' ');
                     }
                     out.push_str(&f.text);
-                    prev = Some((f.baseline, f.x + f.width));
+                    prev = Some(f.clone());
                 }
             }
         });
