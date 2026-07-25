@@ -22105,3 +22105,72 @@ actuals line that may legitimately be differenced. Then nytimes.com as a NAMED s
 20,000-task ceiling hit — the three facts probably share one cause). Then the crawl-side sig correction,
 STEP 1(c) 100-tab RSS, and Audit #28's three CSS probes. Cadences: self-audit 554; surface 558; const 551
 (DUE next tick); wall 567.
+
+## Tick 551 — CONSTITUTION CHECK #35 + the RE-SWEEP: coverage moved a lot, SHAPE moved not at all (2026-07-25)
+
+Cadence: the **constitution check was due at 551**. Ran it — Check #35 in docs/loop/CONSTITUTION-CHECK.md.
+HORIZON H0; gate condition #2 is *"differential-oracle-verified viability across the four usage-weighted
+corpora"*. **GATE, not scoreboard, and unambiguously so**: `WPT:TOTAL` is flat at 422,865 across all eight
+ticks of this window while condition #2 went from unfalsifiable-in-practice to a number with a bar.
+
+The check's own most important entry is a **correction to Check #34**, which had concluded *"the instrument
+is built; the certificate awaits the observer's broad sweep"* and steered toward holding. That was wrong in
+an instructive way: it treated *"the instrument is built"* as establishable **without running it broadly.**
+Two ticks of running it broadly found the certificate could be passed **vacuously** (t549) and that the
+coverage key reported **healthy pages as 0%** (t550). Neither was a calibration question; neither needed the
+observer. **An instrument is not built until it has been run at scale against reality.** PART VI corrected
+in three places (the "oracle never completed a full crawl" line is stale twice over; the flexbox/grid
+percentages are stale; the H0 gate's condition #2 now has a number and a bar, and they live in the anchor).
+I3 flagged as the invariant to watch — six of eight ticks were measurement work with no semantic surface.
+
+THEN THE WORK THE CHECK STEERED TO: the **re-sweep on the corrected keying**, same stratified 72-site
+sample, same driver, `.SIG` off the key. **This is the baseline** — t549's line was the record of what was
+measured, not something to difference.
+
+THE DIFF, and it is the most decision-relevant number in the anchor: **coverage moved a lot, SHAPE moved
+not at all.**
+  sites under 5% coverage ....... **13 → 8**
+  sites at ≥90% coverage ........ **30 → 34**
+  shape ≥0.75 on ................ **5.6% → 5.5%**
+So the coverage collapse was substantially the instrument, and **placement drift is the REAL gap** — it
+survived the correction untouched. The next ticks belong to placement, not coverage. Certificate: shape
+≥0.75 on 3 of 55 · h-overflow clean 74.5% · overlap 60.0% · reading-order 43.6% · dead-target 70.9% · 15 of
+55 UNSCORED. Bar is 95% on every term.
+
+THE FOUR JARRING TERMS EACH WENT SLIGHTLY DOWN (h-overflow 77.8→74.5, reading-order 46.3→43.6, dead-target
+75.9→70.9) and that is **expected and honest, not a regression**: the key intersection GREW, so more sites
+now have enough matched elements for an invariant to fire at all. The instrument sees more, so it reports
+more. Saying this out loud matters — a number that worsens because the measurement improved is exactly the
+kind of thing that gets quietly re-baselined away.
+
+ROOT CAUSES ARE NOW GEOMETRY, NOT ABSENCE: `geometry: width ~16px (<a>)` 18 sites · `height ~128px (<div>)`
+18 · `width ~8px (<a>)` 17 · `height ~16px (<div>)` 17 · `height ~64px (<div>)` 16 · `height ~32px (<div>)`
+13, then `missing box: <path>` 11 and `missing box: <a>` 10. **The deltas are QUANTISED — 8/16/32/64/128 on
+div heights, 8/16 on anchor widths** — which is the signature of a systematic box-model or line-height
+delta, not of a thousand independent bugs. That is a tractable shape, and it is the first time this
+instrument has produced one.
+
+RESIDUAL <5% CLASS, now 8 sites and NOT a keying artifact: nytimes.com 0.04% · newyorker.com 0.05% ·
+techcrunch.com 0.06% · reactjs.org 0.13% · stripe.com 0.14% · terraform.io 0.30% · notion.so 0.32% ·
+bitbucket.org 0.36%. Named for the next investigation. Rows committed as docs/loop/SWEEP-t551-rows.tsv.
+
+Honesty notes that travel with the number: two of 24 chunks hit the 600s cap, so 17 of 72 sampled sites are
+absent and the timeouts are the SLOW sites — the reading is biased OPTIMISTIC, same as t549, same direction,
+so the t549→t551 DIFF is sound even though each absolute number is a little kind to us.
+
+TICK SHAPE: scheduled instrument (constitution check #35 — gate-vs-scoreboard answered GATE, Check #34
+corrected, PART VI re-derived in three places) + measurement (the corrected-keying re-sweep: the first
+differenceable baseline, with the t549→t551 diff isolating coverage-was-instrument from placement-is-real).
+No engine src touched; Bar 0 untouched.
+WIKI: none — the sweep mechanism is already documented in the t549/t550 conformance-and-oracles entries;
+this tick's findings are the anchor's §6 actuals lines and Check #35, which is where a future session looks.
+[no-pattern]
+
+NEXT, in the order Check #35 sets: **(1) the quantised geometry cluster** — 8/16/32/64/128px div-height and
+8/16px anchor-width deltas across 13–18 sites each is one systematic cause, and it is now the largest
+tractable target the instrument has ever named; forecast it by error-signature before building. **(2)
+nytimes.com** as a named single-site investigation (2,381 of 2,382 missing with keying ruled out, 27s vs
+Chromium 6s, load budget exhausted AND the 20,000-task ceiling hit — three facts that probably share one
+cause). **(3) the crawl-side sig correction** (`run_oracle_cmd` keys still carry sigs — the same defect,
+unfixed, in what the constitution calls its primary discovery mechanism). Then STEP 1(c) 100-tab RSS and
+Audit #28's three CSS probes. Cadences: self-audit 554; surface 558; const 559; wall 567.

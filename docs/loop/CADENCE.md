@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **312** | ticks 1–550 |
-| median tick cycle | **21m** | 311 intervals |
-| median, last 10 | **17m** | 10 intervals |
+| ticks landed | **313** | ticks 1–551 |
+| median tick cycle | **21m** | 312 intervals |
+| median, last 10 | **25m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.93** | 332.9h elapsed |
-| median verify wall | **62s** | 251 ticks |
+| **ticks per hour** | **0.93** | 334.4h elapsed |
+| median verify wall | **62s** | 252 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**166 of 312 ticks** (53%) moved a
+**166 of 313 ticks** (53%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -409,5 +409,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **548** | 2026-07-24 23:56 | 18m | scheduled | 67s | +346/−34 | 274 | 81 | 56.0% · | SURFACE AUDIT #28: Interop 2026 reconciled, and a LUMPED row was scoring four capabilities |
 | **549** | 2026-07-25 01:24 | 88m | measurement | 67s | +332/−37 | 274 | 81 | 56.0% · | STEP 1(a): the first corpus sweep on the rebuilt instrument, and it found the CERTIFICATE  |
 | **550** | 2026-07-25 01:56 | 32m | instrument | 67s | +334/−34 | 274 | 81 | 56.0% · | the sub-5%-coverage "class failure" was substantially the INSTRUMENT: the class signature  |
+| **551** | 2026-07-25 03:26 | 89m | scheduled | 67s | +248/−33 | 274 | 81 | 56.0% · | CONSTITUTION CHECK #35 + the RE-SWEEP: coverage moved a lot, SHAPE moved not at all (2026- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -1486,3 +1486,69 @@ calibration is acceptable over drift. RE-PROBE stale-pessimistic before building
 (the rule paid AGAIN this window: IndexedDB/Service-Worker/Cache/scroll-snap were all already gated).
 
 **Next check due: tick 551.**
+
+## Check #35 — tick 551
+
+**HORIZON: H0 — Pareto Web Parity.** EXIT GATE (all binary): ~83% WPT across categories ·
+differential-oracle-verified viability across all four usage-weighted corpora (document, SPA/framework,
+social/platform, high-traffic utility) · the headful shell daily-drivable by its own developer · every
+rendered construct queryable through the in-process semantic API.
+
+**GATE OR SCOREBOARD? — GATE, and this is the first window in a long time where that is unambiguous.**
+The last eight ticks (544–551) did almost nothing to the scoreboard: `WPT:TOTAL` is flat at 422,865 across
+every one of them, and the readiness meter went 80 → 81 → 80. What moved is **exit-gate condition #2**,
+the one the constitution words as *"differential-oracle-verified viability across the four corpora"* — and
+it moved by being **measured for the first time on the rebuilt instrument** rather than by being improved:
+
+- t546 ran **test262** for the first time ever: 94.14% of 87,009 executed subtests, 81.41% honest.
+  That closed one of the two remaining `unknown` cells Check #34 named as blocking.
+- t547 made the **exit certificate computable by the instrument that measures it** (the jarring counts were
+  being printed and discarded, so the certificate could only be reached by a human summing 265 stanzas).
+- t549 ran the **first corpus certificate**: every term below bar — shape ≥0.75 on 5.6% of sites,
+  h-overflow 77.8%, overlap 59.3%, reading-order 46.3%, dead-target 75.9%.
+- t550 then found that the sub-5%-coverage "class failure" t549 reported was **substantially the
+  instrument**: with the class signature off the path key, gov.uk goes 0.0% → 82.8% and stripe 0.1% →
+  43.1%, while three healthy sites are byte-identical.
+
+**CORRECTION TO CHECK #34, and it is the important entry in this check.** #34 concluded *"the instrument
+is built; the certificate awaits the observer's broad sweep"* and steered toward holding for a calibration
+the observer owns. That was **wrong in a specific, instructive way**: it treated "the instrument is built"
+as a property that could be established without running it broadly. Two ticks of running it broadly found
+(a) the certificate could be **passed vacuously** (`0/0 = 1.0`, seven sites reporting `SHAPE 100.0% (0
+scored)`, one of them with all 418 probed elements missing) and (b) the coverage key was **reporting healthy
+pages as 0%**. Neither is a calibration question and neither needed the observer. **An instrument is not
+built until it has been run at scale against reality** — and #34's "hold for calibration is acceptable over
+drift" was, in hindsight, a way of not looking. The steer that actually paid was the observer's STEP-1
+("run the exit verification NOW"), which #34 had subordinated.
+
+**PART VI CORRECTIONS** (the reconciliation has drifted; re-derived from the tree):
+- **VI.2 / I5 — "the differential oracle never completed a full crawl"** is stale twice over. `STATUS.md`
+  reports `ORACLE_CRAWLED: 265 sites, 392 clusters`, and as of t549 the *fidelity* instrument has also swept
+  a stratified 72-site sample end-to-end with a computed certificate. The honest current statement is not
+  "not operational" but **"operational, and its keying was measurably wrong until t550"**.
+- **VI.2 / H0.1 — `css-flexbox 5.5%` / `css-grid 4.7%`** are stale: the board reads flexbox 6.2%, grid 5.3%
+  today. Still the weak spot in raw terms, but the standing steer (and the observer's) is explicitly NOT to
+  grind the CSS-layout tail — and t549's sweep supports that empirically: the corpus failures cluster on
+  `missing box: <div>` and 16–128px height deltas, not on flex/grid conformance.
+- **NEW, and it belongs in VI.2:** the H0 gate's condition #2 now has a *number* with a *bar*, and both
+  live in `docs/loop/PHASE0-ROADMAP-ANCHOR.md §6`. Before t547 that condition was unfalsifiable in practice.
+
+**INVARIANTS — is any being bent?** I4 (Pareto): no; the last eight ticks avoided the encoding/CSS tail
+entirely. I2 (never patch deps): no; the t546 SpiderMonkey work installs **embedder host hooks** (job queue,
+`SetHostCleanupFinalizationRegistryCallback`) through public API — the opposite of patching. I3 (semantic
+model in lockstep): **watch this one.** Six of the last eight ticks were instrument/measurement work with no
+semantic-API surface, which is legitimate for measurement but means the I3 habit went unexercised for a
+window; the next capability tick must not skip it.
+
+**STEER.** Stay on the observer's STEP 1 — it is the gate, and running it is what has produced every real
+finding this window. In order: **(1) RE-SWEEP on the corrected keying** — t549's line is the record of what
+was measured, not a baseline, and the re-sweep is the first actuals line that may legitimately be
+differenced. **(2) nytimes.com as a NAMED single-site investigation** — it did *not* move under the keying
+fix (2,381 of 2,382 still missing, 27s vs Chromium 6s, load budget exhausted AND the 20,000-task ceiling
+hit; three facts that probably share one cause), and it is the largest *real* failure the sweep found.
+**(3) the crawl-side sig correction** (`run_oracle_cmd` keys still carry sigs — the same defect, unfixed,
+in the instrument the constitution calls its primary discovery mechanism). Then STEP 1(c) 100-tab RSS and
+Audit #28's three CSS probes. **Do NOT** start an XL subsystem while the exit instrument is still returning
+corrections about itself — that is the ordering error #34 made in reverse.
+
+**Next check due: tick 559.**

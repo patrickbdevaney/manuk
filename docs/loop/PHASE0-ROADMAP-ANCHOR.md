@@ -142,3 +142,26 @@ never WPT count, never a vibe.
   2,381 of 2,382 still missing) — a genuine second failure that the homogeneous reading would have hidden
   behind the keying fix.
 
+- `sweep @tick 551 (RE-SWEEP on the CORRECTED keying — THE BASELINE; 72 sampled, 55 scored):`
+  **shape ≥0.75 on 3 of 55 sites (5.5%)** · h-overflow clean 74.5% · overlap clean 60.0% ·
+  reading-order clean 43.6% · dead-target clean 70.9% · 15 of 55 UNSCORED (shape sample <10). Bar is 95%
+  on every term. Rows: `docs/loop/SWEEP-t551-rows.tsv`. Same stratified 72-site sample and same driver as
+  t549, with `.SIG` off the path key (t550).
+  **THE DIFF THAT MATTERS — coverage moved a lot, SHAPE moved not at all.** Sites under 5% coverage:
+  **13 → 8**. Sites at ≥90% coverage: **30 → 34**. And shape ≥0.75: **5.6% → 5.5%.** So the coverage
+  collapse was substantially the instrument (t550), and **placement drift is the REAL gap** — it survived
+  the correction untouched. That is the single most decision-relevant number in this file: the next ticks
+  belong to placement, not to coverage.
+  The four jarring terms each went slightly DOWN (h-overflow 77.8→74.5, overlap 59.3→60.0,
+  reading-order 46.3→43.6, dead-target 75.9→70.9) and that is **expected and honest**: the key
+  intersection grew, so more sites now have enough matched elements for an invariant to fire at all. The
+  instrument sees more, so it reports more.
+  Pooled root causes are now dominated by GEOMETRY, not absence: `geometry: width ~16px (<a>)` 18 sites ·
+  `height ~128px (<div>)` 18 · `width ~8px (<a>)` 17 · `height ~16px (<div>)` 17 · `height ~64px (<div>)`
+  16 · `height ~32px (<div>)` 13 — then `missing box: <path>` 11 and `missing box: <a>` 10. The 8/16/32/64/128
+  clustering on `<div>` heights and 8/16 on `<a>` widths is a **quantised** signature, which is what a
+  systematic box-model or line-height delta looks like, not what a thousand independent bugs look like.
+  Residual <5% class, now 8 sites and NOT a keying artifact: nytimes.com 0.04% · newyorker.com 0.05% ·
+  techcrunch.com 0.06% · reactjs.org 0.13% · stripe.com 0.14% · terraform.io 0.30% · notion.so 0.32% ·
+  bitbucket.org 0.36%. **This is the named class for the next investigation.**
+
