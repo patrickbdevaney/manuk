@@ -56,6 +56,9 @@ const HTML: &str = r##"<!doctype html>
   <div id="attrbox" data-w="120px">attr</div>
   <div id="sda">scroll driven</div>
   <div id="lhbox" style="line-height:20px; width:5lh">lh</div>
+  <div id="m4round" style="width:round(down, 23px, 10px)">round</div>
+  <div id="m4mod" style="width:mod(18px, 5px)">mod</div>
+  <div id="m4abs" style="width:abs(-7px)">abs</div>
   <div id="cvon">shown</div><div id="cvoff" style="display:none">hidden</div><div id="cvvis" style="visibility:hidden">invisible</div>
   <div id="hp" hidden>plain hidden</div><div id="huf" hidden="until-found">hidden until found</div>
   <div id="ldlight" style="color-scheme:light; color:light-dark(rgb(10,20,30), rgb(40,50,60))">ld light</div>
@@ -405,6 +408,17 @@ const HTML: &str = r##"<!doctype html>
              CSS.supports('width', 'calc(sign(-3) * 10px)') &&
              !CSS.supports('width', 'floopz(1px)');
     });
+
+    // ── CSS Level-4 math RESOLUTION (the behavioural half t539 left `partial`): do the stepped/sign
+    // functions actually COMPUTE, or only parse? A design system using round() for fluid-type steps
+    // gets the WRONG size if the value silently reverts. Measured on used widths: round(down,23px,10px)
+    // must be 20px, mod(18px,5px) must be 3px, abs(-7px) must be 7px. A stub that parses-but-drops would
+    // fall back to auto (the div's content/containing width), never these exact px — so this discriminates.
+    probe('cssmath4resolve', function () {
+      return cs('m4round').width === '20px' &&
+             cs('m4mod').width === '3px' &&
+             cs('m4abs').width === '7px';
+    });
   </script>
 
   <!-- ES-module capability, measured from INSIDE a real `<script type=module>`. Modules are deferred,
@@ -577,4 +591,11 @@ const PINNED: &[&str] = &[
     // these newer functions are what modern fluid-type math uses. Parse half only (whether round(down,
     // 23px, 10px) actually computes 20px is untested here) → cell `partial`.
     "cssmath4:yes",
+    // tick 544 — CSS Level-4 math RESOLUTION (the behavioural half t539 left `partial`): the
+    // stepped/sign functions actually COMPUTE, not just parse. Measured on used widths:
+    // round(down,23px,10px) → exactly 20px, mod(18px,5px) → 3px, abs(-7px) → 7px. RED-proven — changing
+    // the round step to 7px (→21px) flips this to `no`, so it reads the real computed value, not a
+    // rubber-stamp. Unlike light-dark (resolution absent, t543), this pins yes: CONSTELLATION cell 206
+    // upgrades partial → works. Both t539 partials now have their resolution half measured.
+    "cssmath4resolve:yes",
 ];

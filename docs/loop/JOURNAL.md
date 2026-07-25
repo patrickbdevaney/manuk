@@ -21690,3 +21690,33 @@ NEXT: the bounded probe/measure vein is now genuinely mined out — remaining un
 standing CO-#1 is the fidelity coverage→SHAPE gate-floor flip, unblocked the moment the observer banks a
 broad path-keyed SHAPE headline. Cadences: self-audit 544 (NEXT); surface 548; const 543 (DUE — do next);
 wall 547.
+
+## Tick 544 — PROBE: CSS Level-4 math RESOLUTION measured working (partial → works) (2026-07-24)
+
+The sibling of t543: t539 pinned the PARSE half of both light-dark() and the Level-4 stepped/sign math and
+explicitly deferred each RESOLUTION half. t543 measured light-dark resolution ABSENT (always the light arm);
+this measures the math resolution half — and it is fully WORKING.
+
+MEASURED (cssmath4resolve:yes, PINNED — cell 206 partial → WORKS): round()/mod()/abs() actually COMPUTE, not
+just parse. On used widths: `width: round(down, 23px, 10px)` resolves to EXACTLY 20px, `mod(18px, 5px)` to
+3px, `abs(-7px)` to 7px (a diagnostic push confirmed round=[20px] mod=[3px] abs=[7px]). So a design system
+using round() for fluid-type steps gets the CORRECT size, not a silent fallback — the whole point of the
+capability. calc/min/max/clamp were already WPT-covered; these newer functions resolve through the same
+Stylo length-eval path.
+
+RED-PROVEN: changing the round step from 10px to 7px (which computes to 21px, not 20px) flips the probe
+`cssmath4resolve:yes → no` — so it reads the real computed value, not a rubber-stamp; restored, gate green
+(1 passed). Both t539 partials now have their resolution half measured: light-dark absent (t543 receipt),
+math working (t544 upgrade). The opposite outcomes are the value of measuring rather than assuming — a
+`partial` is not one verdict, each half is its own fact.
+
+TICK SHAPE: measure-and-pin probe (behavioural CSS Level-4 math RESOLUTION measured WORKING — round/mod/abs
+compute exact used widths, RED-proven by a round-step change; `cssmath4resolve:yes` PINNED in
+G_PROBE_CAPABILITIES, CONSTELLATION cell 206 upgraded partial→works; no capability src built — existing
+Stylo length-eval measured; test file only, Bar 0 untouched). WIKI: none — measure-and-pin; finding in the
+gate PINNED comment + docs/loop/CONSTELLATION.tsv row 206. [no-pattern]
+
+NEXT: both t539 resolution follow-ups are now closed. Per Check #34 (t543) the bounded probe/measure vein is
+mined out and the standing CO-#1 is the fidelity coverage→SHAPE gate-floor flip, unblocked the moment the
+observer banks a broad path-keyed SHAPE headline; absent that, a decompose-first XL subsystem arc. Cadences:
+self-audit 544 (DUE next tick); surface 548; const 551; wall 547.
