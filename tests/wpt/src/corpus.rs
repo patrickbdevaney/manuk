@@ -548,3 +548,150 @@ mod function_tests {
         );
     }
 }
+
+/// **The touch-recording probe — the producer that fills [`SiteFunction`] from a real page.**
+///
+/// §4: *"the on-page capability probe records which capabilities **this site actually touches** —
+/// every global read, every method call."* Until this existed, `CapOutcome` was decided by nothing:
+/// the FUNCTION leg was a shape a caller could fill with whatever it liked, which is precisely the
+/// defect the certification redesign exists to remove.
+///
+/// **Three properties, and each one is load-bearing.**
+///
+/// 1. **It observes without altering.** Every wrapper re-throws after recording, so a page that
+///    crashes on `indexedDB.open()` still crashes exactly where it did — the instrument must not
+///    change the thing it measures. Swallowing the throw would turn a `Threw` site into a passing
+///    one *and* make the page work better under measurement than in a browser.
+/// 2. **`Untouched` is the default and is never upgraded.** A capability is recorded only when the
+///    page reaches for it. That is what keeps the certificate finite and what makes a static
+///    document legitimately pass.
+/// 3. **A `NoOp` is detected by EFFECT, not by presence.** An observer that never fires and an
+///    observer that does not exist are the same thing to a user; `typeof X === 'function'` cannot
+///    tell them apart, and this repo ships inert stubs that would pass such a check. So the
+///    observers are recorded `Works` only once a callback has actually run.
+///
+/// Injected as a page script ahead of the document, the same shape `chrome.rs` already uses for
+/// instrumented copies. It writes its record into `#__manuk_caps` for the Rust side to read.
+pub const TOUCH_PROBE_JS: &str = r#"
+(function () {
+  var REC = {};                                  // cap -> "works" | "threw" | "noop"
+  var g = globalThis;
+  function mark(c, v) {
+    // A failure never downgrades to works: once a capability has thrown on a page, that page is
+    // failed by it, even if a later call happens to succeed.
+    if (REC[c] === 'threw') { return; }
+    if (REC[c] === 'noop' && v === 'noop') { return; }
+    REC[c] = v;
+  }
+  // `touch` records the reach-for, runs the real thing, and RE-THROWS — see property 1.
+  function touch(c, fn) {
+    try { var r = fn(); mark(c, 'works'); return r; }
+    catch (e) { mark(c, 'threw'); throw e; }
+  }
+  function wrapMethod(owner, name, cap) {
+    if (!owner) { return; }
+    var orig = owner[name];
+    if (typeof orig !== 'function') { return; }
+    owner[name] = function () {
+      var self = this, args = arguments;
+      return touch(cap, function () { return orig.apply(self, args); });
+    };
+  }
+  // ── The observer trio. Constructing one is a TOUCH; it only counts as WORKS once its callback
+  //    has actually fired, because an observer that never fires is indistinguishable from a missing
+  //    one to the user (property 3).
+  ['IntersectionObserver', 'ResizeObserver', 'MutationObserver'].forEach(function (n) {
+    var cap = n.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
+    var Orig = g[n];
+    if (typeof Orig !== 'function') { return; }
+    g[n] = function (cb) {
+      mark(cap, 'noop');                         // touched; not yet proven to fire
+      var wrapped = function () { mark(cap, 'works'); return cb.apply(this, arguments); };
+      try { return new Orig(wrapped); } catch (e) { mark(cap, 'threw'); throw e; }
+    };
+  });
+  // ── IndexedDB: the throw-class killer. Reaching for the global at all is the touch.
+  if (g.indexedDB) { wrapMethod(g.indexedDB, 'open', 'indexeddb'); }
+  else {
+    Object.defineProperty(g, 'indexedDB', {
+      configurable: true,
+      get: function () { mark('indexeddb', 'threw'); throw new Error('indexedDB is not available'); }
+    });
+  }
+  wrapMethod(g, 'fetch', 'fetch');
+  // ── localStorage needs a DIFFERENT wrap point, and finding out why was worth the detour.
+  //    MEASURED (t586): `localStorage.setItem = fn` **silently does nothing** in this engine — the
+  //    assignment is accepted and the original stays in place (`own=false`, `protoHas=undefined`,
+  //    `wrapStuck=false`), while `indexedDB.open = fn` wraps fine. So the storage object cannot be
+  //    patched through its own properties, and the probe must go one level up: the GLOBAL binding is
+  //    a plain configurable value, so it is redefined to a delegating façade.
+  //    That divergence is a real engine finding in its own right, not just a probe constraint —
+  //    patching storage is what every quota-shim, SSR guard and analytics wrapper on the web does.
+  if (g.localStorage) {
+    var realLS = g.localStorage;
+    try {
+      Object.defineProperty(g, 'localStorage', {
+        configurable: true,
+        get: function () {
+          return {
+            setItem: function (k, v) { return touch('local-storage', function () { return realLS.setItem(k, v); }); },
+            getItem: function (k) { return touch('local-storage', function () { return realLS.getItem(k); }); },
+            removeItem: function (k) { return touch('local-storage', function () { return realLS.removeItem(k); }); },
+            clear: function () { return touch('local-storage', function () { return realLS.clear(); }); },
+            get length() { return realLS.length; },
+            key: function (i) { return realLS.key(i); }
+          };
+        }
+      });
+    } catch (e) {}
+  }
+  if (g.history) {
+    wrapMethod(g.history, 'pushState', 'history');
+    wrapMethod(g.history, 'replaceState', 'history');
+  }
+  wrapMethod(g.HTMLFormElement && g.HTMLFormElement.prototype, 'submit', 'form-submit');
+  g.__manukCapsFlush = function () {
+    var out = [];
+    for (var k in REC) { if (REC.hasOwnProperty(k)) { out.push(k + '=' + REC[k]); } }
+    out.sort();
+    var n = document.getElementById('__manuk_caps');
+    if (!n) { n = document.createElement('div'); n.id = '__manuk_caps'; document.body.appendChild(n); }
+    n.textContent = out.join(' ');
+    return n.textContent;
+  };
+})();
+"#;
+
+/// Parse the probe's record (`cap=state cap=state …`) into a [`SiteFunction`].
+///
+/// Capabilities the record does not mention are [`CapOutcome::Untouched`] — the default that keeps
+/// the certificate finite. An unrecognised state is an **error**, not a silent `Untouched`: that
+/// would turn an instrument bug into a passing site, which is the leak `SweepLedger` closes one
+/// level up.
+pub fn parse_touch_record(site: &str, record: &str) -> Result<SiteFunction, String> {
+    let mut caps: Vec<(String, CapOutcome)> = FUNCTION_CAPS
+        .iter()
+        .map(|c| (c.to_string(), CapOutcome::Untouched))
+        .collect();
+    for tok in record.split_ascii_whitespace() {
+        let (cap, state) = tok
+            .split_once('=')
+            .ok_or_else(|| format!("touch record: expected `cap=state`, got {tok:?}"))?;
+        let outcome = match state {
+            "works" => CapOutcome::Works,
+            "threw" => CapOutcome::Threw,
+            "noop" => CapOutcome::NoOp,
+            other => return Err(format!("touch record: unknown state {other:?} for {cap:?}")),
+        };
+        match caps.iter_mut().find(|(c, _)| c == cap) {
+            Some(slot) => slot.1 = outcome,
+            // A capability the probe reports but the certificate does not list is an instrument
+            // drift, not a result — the two lists must be kept in step.
+            None => return Err(format!("touch record: {cap:?} is not in FUNCTION_CAPS")),
+        }
+    }
+    Ok(SiteFunction {
+        site: site.to_string(),
+        caps,
+    })
+}

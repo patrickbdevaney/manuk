@@ -24422,3 +24422,75 @@ measurement rather than by a caller. That is where §6.4's **two-population cros
 each headline capability measured both by its fixture gate and by the corpus-site exercise, with
 disagreement treated as *the instrument or the engine is lying* rather than as a result.
 Cadences: wall 587; surface 588; const 591; self-audit 594.
+
+## Tick 586 — the FUNCTION leg gets a PRODUCER, and `localStorage` turns out to be unpatchable (2026-07-25)
+
+t585 landed the FUNCTION leg as a *shape*: `CapOutcome` was decided by whatever a caller passed in.
+That is the same "a number nobody measured" defect the certification redesign exists to remove, and
+t585's own NEXT line said so. This is the producer.
+
+**`TOUCH_PROBE_JS` — injected as an ordinary page script**, the shape `chrome.rs` already uses for
+instrumented copies, so it observes the *page* rather than the engine's internals. Three properties, each
+load-bearing:
+
+1. **It observes without altering.** Every wrapper **re-throws** after recording. A page that dies on
+   `indexedDB.open()` must still die exactly where it did — swallowing the throw would turn a failing site
+   into a passing one *and* make the page work better under measurement than in a real browser.
+2. **`Untouched` is the default and is never upgraded.** A capability is recorded only when the page
+   reaches for it. That is what keeps the certificate finite, and what lets a static document legitimately
+   pass the FUNCTION leg.
+3. **A `NoOp` is detected by EFFECT, not by presence.** The observers are recorded `Works` only once a
+   callback has actually **run**. `typeof IntersectionObserver === 'function'` cannot distinguish an
+   observer that never fires from one that does not exist — and *this engine ships inert stubs that would
+   pass such a check.* To the user staring at an empty feed they are the same thing.
+
+**THE DETOUR WAS THE FIND: `localStorage.setItem = fn` SILENTLY DOES NOTHING.** The probe's first version
+wrapped storage the obvious way and recorded nothing at all. Measured, rather than guessed at:
+
+```text
+Storage=undefined | ls=object | same=true | own=false | protoHas=undefined | wrapStuck=false
+globalDesc=value,cfg=true | canRedefine=WRAPPED | idbOpenWrap=true | fetchWrap=true | ioWrap=true
+```
+
+`setItem` is neither an own property nor on a prototype, and **assigning to it is accepted and discarded**
+— while `indexedDB.open = fn` wraps fine and every global (`fetch`, `IntersectionObserver`, `indexedDB`)
+is a plain configurable value. So two host objects in the same engine behave differently under the same
+idiom, and the storage one silently loses the write.
+
+**That is a real engine divergence, not merely a probe constraint.** Patching storage is what every
+quota-shim, SSR guard, private-mode fallback and analytics wrapper on the web does — and here every one of
+them would appear to install and then never run, with no error. It is the `scripted-edit-silent-no-op`
+class *inside the engine*. Recorded and left for its own tick rather than folded in: this tick's job was
+the producer, and the finding deserves a gate of its own rather than a footnote in one.
+
+The probe works around it honestly — the global binding **is** configurable, so `localStorage` is redefined
+to a delegating façade — with the measurement written into the code beside the workaround so the next
+reader knows it is a workaround and not a preference.
+
+**AND THE GATE'S OWN HELPER HAD THE VACUOUS-PASS BUG WHILE I WAS WRITING IT.** `record()` returned
+`String::new()` when `#__manuk_caps` was absent, so claim 1 ("a quiet page records nothing") was passing
+on an empty string produced by *the probe never running*, at the same moment claim 2 was failing with
+`got: ""`. That is `CERT_MIN_SHAPE_SAMPLE`'s lesson — *a page we render nothing of must not score
+perfect* — reappearing in a test helper three ticks after being written into the certificate. The helper
+now `expect`s the node, with the reason recorded.
+
+RED-PROVEN: mark a constructed-but-never-fired observer `works` instead of `noop` → the gate reports
+`got: "intersection-observer=works"` and fails. That is the presence-vs-effect claim, proven to be doing
+work rather than decorating.
+
+TICK SHAPE: instrument fidelity (the FUNCTION leg stops being a shape and starts being a measurement) + a
+measured engine divergence filed with its evidence. No engine source touched; Bar 0 untouched; no ratchet
+floor moved. `cargo test -p manuk-wpt --features stylo,spidermonkey`: 53 green.
+Gates: `G_CAP_TOUCH_PROBE` (`tests/wpt/tests/g_cap_touch_probe.rs`) — driven through real page loads in
+this engine, RED-proven on the presence-vs-effect claim.
+WIKI: none [forced] — no engine source changed; the mechanism's home is
+docs/loop/DAILY-DRIVER-CERTIFICATION.md §4, and the localStorage measurement is recorded inline at the
+workaround.
+PATTERN: [no-pattern] — no engine capability changed.
+
+NEXT: **`localStorage` is not monkey-patchable and `indexedDB` is** — one tick, with a gate asserting that
+patching a storage method takes effect, because the libraries that do it are the ones that make private
+mode, quota exhaustion and SSR hydration work. Then §6.4's **two-population cross-check**: each headline
+capability measured both by its fixture gate and by the corpus-site exercise, with disagreement treated as
+*the instrument or the engine is lying* rather than as a result.
+Cadences: wall 587 (NEXT TICK); surface 588; const 591; self-audit 594.
