@@ -158,6 +158,18 @@ and v1.0.0 is pinned — same discipline as the release itself.
   truly stale first), `systemctl --user reset-failed`, confirm `is-system-running` says running,
   then bounce ONLY the uncontained agent at a wall-free moment — the supervisor relaunches it
   contained.
+  - **2026-07-25 recurrence — the CAUSE was an API-529 retry storm, and the fix worked cleanly.** The
+    uncontained fallback traced to an `API Error: 529 Overloaded` burst at launch (09:17–09:21): systemd
+    couldn't create a scope during it, so the supervisor went uncontained AND left ~3 stale *empty*
+    scopes behind (each a superseded launch attempt). Bounce recipe that worked: wait for the wall-free
+    moment right AFTER a tick commits (`git fetch`; confirm origin advanced), verify PID is the
+    `model claude-opus-5` grind agent and its grandparent is the supervisor, `kill -TERM` it, then
+    confirm the relaunch is in a `run-r*.scope` (`grep run-r /proc/<newpid>/cgroup`). Clean the stale
+    empties: for each non-live claude scope, if its `.../cgroup.procs` is empty, `systemctl --user stop`
+    it, then `reset-failed`. **GOTCHA that nearly caused a mis-kill: `PPID` is a bash READONLY variable —
+    `PPID=$(ps -o ppid= -p $AGENT)` silently fails and `$PPID` reads the CURRENT shell's parent (your own
+    observer session). Use any other name (`par=`, `GRANDP=`). The parentage guard fail-safed correctly
+    (refused to kill on the mismatch), but only by luck of comparing against the wrong value.**
 
 ## Safety rules — each one is a paid-for incident
 
