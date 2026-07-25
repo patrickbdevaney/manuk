@@ -281,3 +281,22 @@ never WPT count, never a vibe.
   (299px), we fall back to *sans* (330px). A default-family divergence, not a resolution one, and it is its
   own (small) row rather than folded into this fix.
 
+- `sweep @tick 559 (POST-FONT-FIX, same stratified sample; 59 rows, 43 scored):` **the certificate did NOT
+  move** — shape ≥0.75 on **3 of 59 (5.1%)** vs t551's 3 of 55 (5.5%) · h-overflow 72.9% · overlap 55.9% ·
+  reading-order 42.4% · dead-target 72.9%. Rows: `docs/loop/SWEEP-t559-rows.tsv`.
+  **And that headline is misleading on its own, which is the point of keeping the per-site rows.** Across
+  the **38 sites scored in BOTH sweeps**, mean SHAPE moved **+1.34 points**, with real individual wins:
+  `newegg.com` **5.2% → 28.3%** · `sentry.io` **36.2% → 57.8%** · `spotify.com` **59.3% → 72.5%** ·
+  `gutenberg.org` **46.6% → 58.4%** · `fastly.com` 8.6% → 13.1% · `css-tricks.com` 34.8% → 38.2%.
+  The certificate's site-bar is **≥0.75 per site**, and almost nothing in the corpus is near it — a
+  20-point gain on a site at 5% still leaves it at 28%. **A binary per-site bar cannot see a broad
+  distribution shift**, and reading only the bar would have recorded the largest text fix of the session as
+  "no effect". Both numbers stay.
+  ⚠ **ONE REGRESSION, and it is not dismissed:** `martinfowler.com` **68.2% → 49.2%**. The plausible
+  mechanism is the fix working *too* literally — we now resolve a named system family that Chromium does
+  NOT use there (because Chromium is using the site's `@font-face` webfont), so a page that previously
+  agreed by accident now disagrees on purpose. That is a **webfont-precedence** question (an `@font-face`
+  family must beat a same-named system face) and it is its own row, not a reason to revert: three sites
+  gained 12–23 points against one losing 19.
+  Also: `scala-lang.org` −5.8, `usa.gov` −2.1 — small, same suspected mechanism.
+

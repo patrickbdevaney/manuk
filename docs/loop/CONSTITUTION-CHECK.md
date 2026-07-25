@@ -1552,3 +1552,56 @@ Audit #28's three CSS probes. **Do NOT** start an XL subsystem while the exit in
 corrections about itself — that is the ordering error #34 made in reverse.
 
 **Next check due: tick 559.**
+
+## Check #36 — tick 559
+
+**HORIZON: H0 — Pareto Web Parity.** EXIT GATE (all binary): ~83% WPT across categories ·
+differential-oracle-verified viability across all four usage-weighted corpora · the headful shell
+daily-drivable by its own developer · every rendered construct queryable through the in-process semantic API.
+
+**GATE OR SCOREBOARD? — GATE, and this window finally converted measurement into a CAPABILITY fix.**
+Check #35 (t551) answered GATE on the grounds that condition #2 had become falsifiable. The eight ticks
+since (552–559) did something better: they used it. `WPT:TOTAL` is *still* flat at 422,865 — the scoreboard
+has not moved in sixteen ticks — while the instrument found, and the engine fixed, **the largest text-fidelity
+defect in the repo**: no named font family had ever resolved, because `fontdb::Family::Name` is
+case-sensitive and we lowercased before querying (t557), and then because `intern_family` discarded the case
+one line later (t558). Measured on the committed probe against live Chromium: **SHAPE 36.4% → 90.9%**.
+
+**THE PROCESS RESULT WORTH RECORDING, because it is the loop working as designed.** Nine ticks, one arc:
+t549 swept and got a number · t550 found the coverage key was reporting healthy pages as 0% · t551 re-swept
+and isolated placement as the real gap · t552 caught its own power-of-two inference as a printer artifact ·
+t553 printed an instance and falsified its own lead · t554 split the confounded signature and the lead came
+back · t555 sampled three instances and two independent signals named text metrics · t556 measured
+SELECTION vs COMPUTATION on a committed probe · t557 and t558 fixed it in two halves. **Six of those nine
+ticks corrected something the loop itself had just concluded**, and every correction was cheap because each
+one ended in a RED-proven assertion rather than a note. The alternative — acting on t551's reading — would
+have been one expensive tick in the box-model subsystem, which is not where the bug was.
+
+**INVARIANTS.** I4 (Pareto): held — the arc chased what 13–18 corpus sites showed, not a WPT directory.
+I2 (never patch deps): held — the `fontdb` defect was fixed by passing it the string it documents wanting,
+not by forking it. I3 (semantic model in lockstep): **still the one to watch, and #35's warning was not
+acted on.** t557/t558 are engine capability with no semantic-API surface, which is defensible for a text
+metric (there is nothing new to query) — but surface audit #29 then found `<search>` and `CloseWatcher`
+unmapped, both of which ARE agentic surface, and that is the second signal in two checks that the agentic
+half of I3 is drifting out of habit. **Steer below acts on it.**
+
+**PART VI CORRECTION.** VI.2's H0.8 line — *"text shaping / i18n to Pareto depth"* — was reading as a
+future item. It is now demonstrably a **present, load-bearing, and partly-broken** subsystem: shaping runs
+through swash, bidi and CJK are measured working, `ch`/`ex`/`cap` read real metrics (t499–502), and the
+single largest fidelity defect found this year lived in its *face selection*, not its shaping. Correct the
+map: text is not a depth question to be scheduled, it is a correctness surface already in the critical path,
+and the fidelity sweep is what makes its defects visible.
+
+**STEER, in order.** (1) **Re-sweep the corpus** — the font fix is the first change since t551 that should
+move the SHAPE baseline, and t551 is differenceable, so this is the first honest before/after the instrument
+has ever been able to report. Running now. (2) **Take the two agentic rows from Audit #29 together**
+(`<search>`'s implicit `role=search` and `CloseWatcher` as an overlay-dismissal actuator) as ONE tick that
+exercises I3 rather than two CSS-shaped probes — that discharges the drift #35 flagged and #36 is repeating.
+(3) The t556 cascade-origin bug (author `* { margin:0 }` losing to the UA `body { margin:8px }` — every CSS
+reset on the web hits it, so its blast radius is far wider than 8px suggests). (4) nytimes.com as a named
+single-site investigation. (5) The crawl-side `.SIG` correction — `run_oracle_cmd` still carries the defect
+t550 fixed in the exit gate, in the instrument the constitution calls its primary discovery mechanism.
+**Do NOT** open an XL subsystem while the exit instrument is still producing capability fixes at this rate;
+the marginal value of another measurement brick is currently higher than a new organ.
+
+**Next check due: tick 567.**

@@ -22568,3 +22568,54 @@ and the t551 line is differenceable, so this is the first honest before/after th
 able to report. Then the t556 cascade-origin bug (author `* { margin:0 }` losing to the UA `body` margin —
 every CSS reset hits it), nytimes.com, the crawl-side sig correction, STEP 1(c) 100-tab RSS. Cadences:
 self-audit 564; surface 568; const 559 (DUE next tick); wall 567.
+
+## Tick 559 — post-font-fix re-sweep: the certificate did NOT move, the DISTRIBUTION did (+1.34 pts) + constitution check #36 (2026-07-25)
+
+Cadence: the **constitution check was due at 559** — Check #36. GATE, and this window converted measurement
+into a capability fix: `WPT:TOTAL` has been flat at 422,865 for sixteen ticks while the instrument found and
+the engine fixed the largest text-fidelity defect in the repo. PART VI corrected on H0.8 (*"text shaping /
+i18n to Pareto depth"* was reading as a future item; it is a present, load-bearing, partly-broken subsystem
+already in the critical path). I3's agentic half flagged for the **second** check running — Audit #29 found
+`<search>` and `CloseWatcher` unmapped, both agentic surface — and the steer now acts on it.
+
+THE RE-SWEEP, and it is the first honest before/after this instrument has ever been able to report. Same
+stratified sample, same driver, only the font fix in between.
+
+**THE CERTIFICATE DID NOT MOVE:** shape ≥0.75 on **3 of 59 (5.1%)** vs t551's 3 of 55 (5.5%).
+
+**AND THAT HEADLINE IS MISLEADING ON ITS OWN.** Across the 38 sites scored in BOTH sweeps, mean SHAPE moved
+**+1.34 points**, with real wins: `newegg.com` **5.2% → 28.3%** · `sentry.io` **36.2% → 57.8%** ·
+`spotify.com` **59.3% → 72.5%** · `gutenberg.org` **46.6% → 58.4%** · fastly.com +4.4 · css-tricks.com +3.4.
+The certificate's bar is **≥0.75 per site**, and almost nothing in the corpus is near it — a 23-point gain
+on a site sitting at 5% still leaves it at 28%. **A binary per-site bar cannot see a broad distribution
+shift**, and reading only the bar would have recorded the largest text fix of the session as "no effect".
+Both numbers stay in the anchor, and the per-site rows are committed so any future claim can be checked
+rather than believed.
+
+This is worth stating as a property of the instrument rather than a complaint about it: the certificate is
+the right EXIT condition (it is what "the browser works" means) and the wrong PROGRESS meter (it is flat
+until sites cross 75%). The mean-over-common-sites diff is the progress meter, and it only exists because
+the rows are committed per sweep.
+
+⚠ **ONE REGRESSION, NOT DISMISSED:** `martinfowler.com` **68.2% → 49.2%** (also scala-lang.org −5.8,
+usa.gov −2.1). The plausible mechanism is the fix working *too literally*: we now resolve a named **system**
+family that Chromium does not use there because Chromium is using the site's `@font-face` **webfont** — so a
+page that previously agreed by accident now disagrees on purpose. That is a **webfont-precedence** question
+(an `@font-face` family must beat a same-named system face) and it is its own row. It is not a reason to
+revert: three sites gained 12–23 points against one losing 19, and the mechanism is understood rather than
+mysterious. Recorded loudly because a fix that helps the mean and hurts a site is exactly the shape that
+gets quietly averaged away.
+
+TICK SHAPE: scheduled instrument (constitution check #36 — GATE, PART VI H0.8 corrected, I3's agentic half
+flagged twice and now steered) + measurement (the first true before/after sweep: certificate flat, mean
++1.34 pts over 38 common sites, four sites up 12–23 points, one regression named with a mechanism and filed
+as its own row). No engine src touched; Bar 0 untouched.
+WIKI: none — the finding is the anchor's §6 actuals lines plus Check #36; the mechanism it measures was
+documented in the t557/t558 text-layout entries. [no-pattern]
+
+NEXT, per Check #36's steer: **(1) webfont precedence** — an `@font-face` family must beat a same-named
+system face; martinfowler.com is the RED proof and it is already committed as a sweep row.
+**(2) the two agentic rows from Audit #29 as ONE tick** (`<search>`'s implicit `role=search` +
+`CloseWatcher` as an overlay-dismissal actuator), which discharges the I3 drift two checks have now flagged.
+(3) the t556 cascade-origin bug (author `* { margin:0 }` losing to the UA `body` margin). (4) nytimes.com.
+(5) the crawl-side `.SIG` correction. Cadences: self-audit 564; surface 568; const 567; wall 567.

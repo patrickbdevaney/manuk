@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **320** | ticks 1–558 |
-| median tick cycle | **21m** | 319 intervals |
+| ticks landed | **321** | ticks 1–559 |
+| median tick cycle | **21m** | 320 intervals |
 | median, last 10 | **21m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.95** | 336.4h elapsed |
-| median verify wall | **63s** | 259 ticks |
+| **ticks per hour** | **0.95** | 337.6h elapsed |
+| median verify wall | **64s** | 260 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**168 of 320 ticks** (52%) moved a
+**168 of 321 ticks** (52%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **168** capability ticks, median cycle **21m**
-* median diff per tick: **+220 / −34** lines across 8 files
+* median diff per tick: **+219 / −34** lines across 8 files
 
 ## Every tick
 
@@ -417,5 +417,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **556** | 2026-07-25 04:26 | 4m | measurement | 67s | +167/−32 | 274 | 81 | 56.0% · | MEASURED: it is font SELECTION, not advance COMPUTATION — named sans families are ignored  |
 | **557** | 2026-07-25 04:49 | 23m | capability | 67s | +272/−37 | 274 | 81 | 56.0% · | no named font family ever resolved: `fontdb`'s name query is case-SENSITIVE (2026-07-25) |
 | **558** | 2026-07-25 05:28 | 39m | capability | 67s | +289/−40 | 274 | 81 | 56.0% · | the advance now FOLLOWS the resolved face (probe SHAPE 36.4% → 90.9%) + surface audit #29  |
+| **559** | 2026-07-25 06:40 | 72m | scheduled | 67s | +217/−33 | 274 | 81 | 56.0% · | post-font-fix re-sweep: the certificate did NOT move, the DISTRIBUTION did (+1.34 pts) + c |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
