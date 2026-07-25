@@ -13,3 +13,5 @@ A probe earns its place here when its answer changed a decision. Each one names 
 |---|---|---|
 | `font-family-resolution.html` | does an explicitly named, installed family resolve to that family? | **t556: NO for sans faces.** `"DejaVu Sans"`, `"Noto Sans"` and a deliberately non-existent `"NoSuchFontXYZ"` all render **330px** wide here, where Chromium gives 374 / 348 / 299 — three different faces. `"DejaVu Serif"` DOES resolve (299 vs Chromium 380), so name resolution is partial, not absent. |
 | `font-stack-metrics.html` | do the generic stacks (`sans-serif`/`serif`/`monospace`) measure like Chromium's? | **t556: YES, within the 8px tolerance** — which is what makes the finding above so specific: our *advance computation* is fine, our *face selection* is not. |
+| `font-local-vs-webfont-name.html` | with no `@font-face` in play, does a locally-installed named family measure exactly like Chromium's? | **t560: YES — 100% SHAPE, 0 of 7 misplaced.** `"Open Sans"`, `sans-serif`, and `"Open Sans",sans-serif` all agree. So the t557/t558 resolution is correct, and the `martinfowler.com` regression is NOT resolution: it is the **webfont-shadowing rule** (below). |
+

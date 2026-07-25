@@ -300,3 +300,24 @@ never WPT count, never a vibe.
   gained 12–23 points against one losing 19.
   Also: `scala-lang.org` −5.8, `usa.gov` −2.1 — small, same suspected mechanism.
 
+- `DIAGNOSED @tick 560 — the martinfowler.com regression is the WEBFONT-SHADOWING rule, not the resolution.`
+  Measured, not assumed. On a **local** page with no `@font-face` anywhere,
+  `tests/wpt/probes/font-local-vs-webfont-name.html` scores **100% SHAPE, 0 of 7 misplaced**:
+  `"Open Sans"`, `sans-serif` and `"Open Sans",sans-serif` all agree with Chromium exactly. So t557/t558's
+  named-family resolution is **correct**, and the regression is elsewhere.
+  What martinfowler.com actually declares: `Open Sans, sans-serif` · `Lora, serif` ·
+  `Inconsolata, monospace` · `'Marydale'` · `"remixicon"`, with `@font-face` rules for the last two and
+  Google-Fonts-delivered faces for the first three. Of those, **only `Open Sans` is installed on this box**
+  (13 faces) — so it is the only declaration whose behaviour the fix changed: it used to fall back to
+  `sans-serif`, and now it resolves to the **local** Open Sans.
+  **The spec rule we are getting wrong (CSS Fonts):** once an `@font-face` rule defines family
+  `"Open Sans"` for a document, a locally-installed family of the same name is **SHADOWED** for that
+  document. If every `src` in that rule fails to load, the family yields **no usable face** and matching
+  continues to the **NEXT entry in the font-family list** (`sans-serif`) — it does *not* fall back to the
+  same-named local face. We do fall back to it, so a **failed webfont load is now silently masked by a
+  local face with the same name**, and we diverge from Chromium (which loaded the webfont) on a page where
+  we previously agreed by both falling back.
+  That is a strictly better bug than the one it replaced — it only bites where a webfont fails AND a
+  same-named local face exists — but it is a real one, it is spec-anchored, and its RED proof is already
+  committed as a sweep row (`martinfowler.com` 68.2% → 49.2%). **Next tick: shadowing.**
+

@@ -22619,3 +22619,51 @@ system face; martinfowler.com is the RED proof and it is already committed as a 
 `CloseWatcher` as an overlay-dismissal actuator), which discharges the I3 drift two checks have now flagged.
 (3) the t556 cascade-origin bug (author `* { margin:0 }` losing to the UA `body` margin). (4) nytimes.com.
 (5) the crawl-side `.SIG` correction. Cadences: self-audit 564; surface 568; const 567; wall 567.
+
+## Tick 560 — the martinfowler regression DIAGNOSED: webfont shadowing, not resolution (2026-07-25)
+
+t559 recorded one regression from the font fix (`martinfowler.com` 68.2% → 49.2%) with a *plausible*
+mechanism and explicitly did not act on it. This tick measures it, because "plausible" is where the last
+five ticks kept going wrong.
+
+FIRST, RULE OUT OUR OWN FIX. On a **local** page with no `@font-face` anywhere,
+`tests/wpt/probes/font-local-vs-webfont-name.html` scores **100% SHAPE, 0 of 7 misplaced** — `"Open Sans"`,
+`sans-serif` and `"Open Sans",sans-serif` all agree with Chromium **exactly**. So t557/t558's named-family
+resolution is correct and is not what regressed. (Committed as a probe with its question and answer in the
+README, so the next session can re-run it rather than trust this paragraph.)
+
+WHAT THE SITE ACTUALLY DECLARES — read, not guessed: `Open Sans, sans-serif` · `Lora, serif` ·
+`Inconsolata, monospace` · `'Marydale'` · `"remixicon"`, with `@font-face` for the last two and
+Google-Fonts-delivered faces for the first three. `fc-list` says **only `Open Sans` is installed here** (13
+faces; Lora, Inconsolata, Marydale, remixicon: zero). So `Open Sans` is the *only* declaration whose
+behaviour the fix changed — it used to fall back to `sans-serif`, and now resolves to the **local** Open Sans.
+
+THE SPEC RULE WE GET WRONG (CSS Fonts): once an `@font-face` rule defines family `"Open Sans"` for a
+document, a locally-installed family of the same name is **SHADOWED** for that document. If every `src` in
+that rule fails, the family yields **no usable face** and matching continues to the **NEXT entry in the
+font-family list** (`sans-serif`) — it does *not* fall back to the same-named local face. We fall back to it.
+So **a failed webfont load is now silently masked by a same-named local face**, and we diverge from Chromium
+(which loaded the webfont) on a page where we previously agreed *by both falling back*.
+
+Two things worth stating plainly about that. **(1) It is a strictly better bug than the one it replaced** —
+it bites only where a webfont fails AND a same-named local face exists, where the old bug bit every named
+family on every page. **(2) The score got worse while the engine got more correct**, and that is the second
+time this session a number moved against a real improvement (t551's jarring terms went down because the key
+intersection grew). Both are the same shape and it is worth naming: **a fidelity score is a comparison, so
+it moves when EITHER side changes — including when our side changes for the better and the reference is
+doing something we cannot yet do.** The defence is the one already in use: keep per-site rows, diff them,
+and read the mechanism rather than the delta.
+
+TICK SHAPE: diagnosis (the t559 regression measured to a spec rule rather than assumed — our resolution
+ruled out by a committed local-page probe scoring 100% SHAPE, the site's declarations read, the one changed
+declaration identified, and the actual defect stated as CSS Fonts' shadowing rule with its RED proof already
+committed as a sweep row). No engine src touched; Bar 0 untouched.
+WIKI: none — the diagnosis lives in `tests/wpt/probes/README.md` (question → answer) and the anchor's §6
+entry; the fix tick will carry the shadowing rule into docs/wiki/text-layout.md. [no-pattern]
+
+NEXT: **implement shadowing** — an `@font-face`-declared family must shadow a same-named local face for that
+document, and a family whose every `src` failed must fall through to the NEXT font-family entry rather than
+to the local face. RED proof: `martinfowler.com` 49.2% → ≥68.2% on the committed sweep row. Then the two
+agentic rows from Audit #29 (`<search>` + `CloseWatcher`) as one tick to discharge the I3 drift Checks #35
+and #36 both flagged; then the t556 cascade-origin bug; then nytimes.com; then the crawl-side `.SIG`
+correction. Cadences: self-audit 564; surface 568; const 567; wall 567.
