@@ -15,6 +15,7 @@ use std::path::PathBuf;
 
 pub mod bench;
 pub mod chrome;
+pub mod corpus;
 pub mod fidelity;
 pub mod harness;
 pub mod interact;

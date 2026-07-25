@@ -24287,3 +24287,75 @@ dropping the hard sites is what made every past reading optimistic. Then (3) com
 certificate starting with the throw-class killers (IndexedDB, the observer trio), and (4) the
 reconciliation gate. Render-fidelity fixes continue in parallel per the orders.
 Cadences: self-audit 584 (NEXT TICK); wall 587; surface 588; const 591.
+
+## Tick 584 — the fixed denominator, built as a TYPE so a drop is not a habit to keep (2026-07-25)
+
+Observer CO-#1 item (2), taken together with item (4), **because they are one piece of work: the
+denominator IS the reconciliation.** Plus the DUE self-audit.
+
+**THE DEFECT THIS CLOSES IS STRUCTURAL, NOT STATISTICAL.** `DAILY-DRIVER-CERTIFICATION.md` §0 names it as
+cause #1: the old 265-site corpus was a convenience sample, and sites that timed out, crashed or hit a
+bot-wall were **dropped**. That is a filter which removes precisely the pages a browser is worst at, so
+every surviving average described an easier web than the real one. *"Near-done" was really "further than
+thought."*
+
+**SO THE FIX IS A TYPE, NOT DISCIPLINE.** `SiteOutcome` has **no variant meaning "not counted"**: every
+sampled site resolves to `Scored`, `Fail{reason}` or `Excluded{reason}`. `SweepLedger::reconcile()` then
+refuses any ledger where `sampled != scored + FAIL + EXCLUDED`, naming the unaccounted sites. A drop stops
+being something somebody has to remember not to do.
+
+> **8 of 30 historical process defects here were caught by a number that did not add up** — not by any
+> gate. This is that check, made mechanical.
+
+**THE RED PROOF IS THE CLEAREST THIS SESSION HAS PRODUCED**, because it reproduces the original lie
+exactly. Patch `by_stratum` so a `Fail` leaves the denominator — the old behaviour — and the gate reports:
+
+```text
+left: (1, 1)      ← 1 of 1 = 100%
+right: (1, 2)     ← 1 of 2 = 50%
+"If a timeout left the denominator this would read (1,1) = 100%, which is precisely how dropping the
+ hard sites manufactures an optimistic number"
+```
+
+One site passed, one timed out. Dropping the timeout turns 50% into **100%**. That is the whole history of
+this project's fidelity numbers in one assertion.
+
+**TWO DIRECTIONS, TWO DIFFERENT BUGS, AND THE ORDER OF THE CHECKS MATTERS.** A *shortfall* means sites were
+dropped; a *surplus* means an outcome was recorded for something never sampled — the sweep is scoring a
+corpus it does not think it is running. The surplus check runs **first**, because a stray outcome also
+makes the count differ, and reporting that as "a site was dropped" would send the next tick hunting the
+opposite defect. Found by writing the test for the surplus case and watching it get the shortfall message.
+
+**THE STRATA ARE REPORTED SEPARATELY, ON PURPOSE.** HEAD (traffic-weighted, rank ≤100k) and TAIL (uniform,
+100k–1M) answer two different questions — *does the web people actually use work?* and *does the long tail
+work?* — and averaging them produces a number that answers neither.
+
+**THE WALL'S SUB-SLICE IS DETERMINISTIC AND SPANS BOTH STRATA.** A regression guard that varies run to run
+is noise: a failure one tick and a pass the next teaches nothing. No RNG — a stride walk offset by a fixed
+seed, so the selection is identical on every machine and cannot change under a generator's implementation.
+Gated three ways: same seed → same slice; a different seed → a different slice (or the seed is decoration);
+and the slice must contain **both** strata, or it cannot see a tail regression.
+
+**A malformed corpus line is an ERROR, not a skip** — the same leak one layer earlier, where the corpus
+would quietly shrink and every ratio be computed against a denominator nobody chose.
+
+SELF-AUDIT (due at 584): **fully green** — including the wall-time item that t564 and t574 both had to
+record as an open exception. It cleared on its own once the box was quiet enough for an honest receipt,
+which is the outcome those entries predicted.
+
+TICK SHAPE: instrument fidelity (the certification corpus adopted with a denominator that cannot leak, and
+the reconciliation gate that proves it) + the DUE self-audit. No engine source touched; Bar 0 untouched;
+no ratchet floor moved.
+Gates: `G_CORPUS_DENOMINATOR` — six assertions in `corpus::tests`, RED-proven twice (a `Fail` leaving the
+denominator reproduces the manufactured 100%; disabling the count check hides a dropped site).
+WIKI: none [forced] — no engine source changed; the mechanism's home is
+docs/loop/DAILY-DRIVER-CERTIFICATION.md §3/§6.2, which this implements.
+PATTERN: [no-pattern] — no engine capability changed.
+
+NEXT: observer CO-#1 item (3) — **compose FUNCTION into the certificate**, starting with the throw-class
+killers named in §5: **IndexedDB** (Firebase/Firestore throw on init without it) and the observer trio
+(Intersection/Resize/Mutation). The on-page capability probe already records what a site touches; the new
+leg is requiring those touched capabilities to exercise green **per site**. ⚠ Each FUNCTION term must be
+added to `falsify_certificate()` as it lands — the term-count assertion in `G_CERT_FALSIFIABLE` is what
+enforces that, and it will go red on the first unfalsified term.
+Cadences: wall 587; surface 588; const 591; self-audit 594.
