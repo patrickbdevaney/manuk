@@ -238,3 +238,30 @@ never WPT count, never a vibe.
   the seam and the t499–502 ch/ex work is the nearest precedent. Do not touch layout until that answer
   exists — the constant +2px says the line box is derived from metrics we may simply be reading wrong.
 
+- `MEASURED @tick 556 — it is font SELECTION, not advance COMPUTATION, and the failure is specific.`
+  The t555 forecast asked exactly one question and it now has an answer. Probe pages committed at
+  `tests/wpt/probes/`.
+  **Generic stacks are FINE.** `sans-serif`, `serif`, `monospace` and a real site's
+  `"Fira Sans",Helvetica,Arial,sans-serif` all measure within the 8px tolerance of Chromium on the same
+  string — so the advance *computation* is not the problem.
+  **Explicitly named sans families are IGNORED.** On the same 44-character string, Chromium gives
+  `"DejaVu Sans"` **374px**, `"Noto Sans"` **348px** and a deliberately non-existent `"NoSuchFontXYZ"`
+  **299px** — three different faces. We give **330 · 330 · 330**: the two real, installed families and the
+  fake one all land on the same fallback face. `fc-list` confirms 23 DejaVu faces installed and
+  `fc-match "DejaVu Sans"` resolves it, so this is not a missing font.
+  **Resolution is PARTIAL, not absent:** `"DejaVu Serif"` DOES move us (299px vs Chromium's 380px), so some
+  names reach the face lookup and sans names do not. And our fallback for an unknown family is a sans face
+  where Chromium's is serif — a second, smaller divergence in the same code path.
+  **This explains both t555 signals at once**, which is what makes it the right cause: the ±9–22px
+  sign-changing anchor widths on real sites (they name specific sans families → we substitute a face with
+  different advances) and the constant +2px line-box height (a substituted face has different
+  ascent+descent). One defect, both symptoms.
+  Next tick is the FIX in `manuk-text`'s face lookup, and its RED proof already exists: these probe pages
+  must report `"DejaVu Sans"` ≠ `"Noto Sans"` ≠ `"NoSuchFontXYZ"`.
+- `ALSO MEASURED @tick 556 (separate defect, found by the same probe):` an author `* { margin:0 }` does
+  **not** beat the UA `body { margin:8px }` — Chromium put body at `[0 0 1200×92]`, we put it at
+  `[8 8 1184×91]`. An author universal selector outranks a UA rule by ORIGIN, so this is a cascade-origin
+  bug and it has the shape of the recorded `apply_ua_defaults`-vs-Stylo two-cascades trap: a UA default
+  applied *outside* the cascade cannot be overridden by anything in it. Every CSS-reset page on the web hits
+  this. Filed as its own lead, not folded into the font work.
+

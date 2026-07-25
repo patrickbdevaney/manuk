@@ -316,3 +316,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 553	89010cda	1784965880	2026-07-25T03:51:20-04:00	663	instrument	67	7	154	32	274	81	3896	6960	0	329	31	a cluster now carries an OPENABLE instance, and the first one falsified t552's lead (2026-07-25)
 554	0628d046	1784967066	2026-07-25T04:11:06-04:00	1186	scheduled	67	6	179	34	274	81	3896	6960	0	329	31	the geometry signature is split by SIZE-MATCH: the ranking is a cause list, and t552's lead is restored + self-audit (2026-07-25)
 555	8a880dee	1784967761	2026-07-25T04:22:41-04:00	695	instrument	67	7	162	34	274	81	3896	6960	0	329	31	three instances per cause, and the forecast RESOLVES: the top cause is TEXT METRICS (2026-07-25)
+556	986fc2df	1784967987	2026-07-25T04:26:27-04:00	226	measurement	67	8	167	32	274	81	3896	6960	0	329	31	MEASURED: it is font SELECTION, not advance COMPUTATION — named sans families are ignored (2026-07-25)

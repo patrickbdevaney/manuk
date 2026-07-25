@@ -22388,3 +22388,64 @@ anchor's §6 entry, which is where the next session reads the lead. [no-pattern]
 NEXT: the font-metrics measurement above — SELECTION vs COMPUTATION, on one string, before any layout
 change. Then nytimes.com as a named single-site investigation, the crawl-side sig correction, STEP 1(c)
 100-tab RSS, Audit #28's three CSS probes. Cadences: self-audit 564; surface 558; const 559; wall 567.
+
+## Tick 556 — MEASURED: it is font SELECTION, not advance COMPUTATION — named sans families are ignored (2026-07-25)
+
+t555 specified this tick as a **measurement, not a change**, and named the question: for one known string
+and a declared font stack, is the divergence font **SELECTION** (we resolved a different face) or advance
+**COMPUTATION** (same face, different measurement)? Answered. Probe pages committed at
+`tests/wpt/probes/` with a README that states each page's question and its answer, so the measurement is
+reproducible rather than a claim in a journal.
+
+**COMPUTATION IS FINE.** `sans-serif`, `serif`, `monospace` and a real site's
+`"Fira Sans",Helvetica,Arial,sans-serif` all measure **within the 8px tolerance** of Chromium on the same
+44-character string. So the advance machinery is not the defect — which is what makes the next line so
+specific.
+
+**SELECTION IS BROKEN, for the commonest case.** Same string, five declarations:
+
+| declared family | Chromium | ours |
+|---|---|---|
+| `"DejaVu Sans"` | **374px** | **330px** |
+| `"Noto Sans"` | **348px** | **330px** |
+| `"NoSuchFontXYZ"` (deliberately absent) | **299px** | **330px** |
+| `"DejaVu Serif"` | 380px | 299px |
+
+**Two real, installed families and a fake one all render identically at 330px here** — i.e. an explicitly
+named sans family is *ignored* and we fall back. `fc-list` confirms 23 DejaVu faces installed and
+`fc-match "DejaVu Sans"` resolves it, so this is not a missing font. Resolution is **PARTIAL, not absent**:
+`"DejaVu Serif"` DOES move us (299 vs Chromium's 380), so some names reach the face lookup and sans names do
+not. Second, smaller divergence in the same path: our fallback for an unknown family is a *sans* face where
+Chromium's is *serif* (299).
+
+**THIS EXPLAINS BOTH t555 SIGNALS AT ONCE, which is what makes it the right cause** rather than a plausible
+one: the ±9–22px **sign-changing** anchor widths on real sites (they name specific sans families → we
+substitute a face with different per-glyph advances, so the error goes either way depending on the string)
+AND the **constant +2px** line-box height (a substituted face has different ascent+descent, so the line box
+is off by a fixed amount everywhere). One defect, both symptoms, no residue. That is the test a root cause
+has to pass and neither t551's nor t552's candidate did.
+
+The RED proof for the FIX already exists and is committed: `tests/wpt/probes/font-family-resolution.html`
+must report `"DejaVu Sans"` ≠ `"Noto Sans"` ≠ `"NoSuchFontXYZ"`. Today it reports 330 · 330 · 330.
+
+SECOND DEFECT, found by the same probe and filed separately rather than folded in: **an author
+`* { margin:0 }` does not beat the UA `body { margin:8px }`.** Chromium put body at `[0 0 1200×92]`; we put
+it at `[8 8 1184×91]`. An author universal selector outranks a UA rule by ORIGIN, so this is a
+cascade-origin bug, and it has the exact shape of the recorded `apply_ua_defaults`-vs-Stylo two-cascades
+trap: a UA default applied *outside* the cascade cannot be overridden by anything inside it. **Every CSS
+reset on the web hits this**, which is a much wider blast radius than the 8px suggests. Not fixed here —
+one tick, one cause.
+
+TICK SHAPE: measurement (the t555 forecast answered — font SELECTION, not advance computation, with the
+failure narrowed to named sans families being ignored while generic stacks and named serif faces work;
+committed reproducible probe pages + README; one root cause shown to explain BOTH prior signals) and a
+second defect measured and filed (author `*` reset losing to a UA body margin — a cascade-origin bug). No
+engine src touched; Bar 0 untouched; no ratchet floor moved.
+WIKI: none — the measurement's home is `tests/wpt/probes/README.md` (question → answer, per page) plus the
+anchor's §6 entry; the fix tick will carry the mechanism into docs/wiki/text-layout.md. [no-pattern]
+
+NEXT: **the fix** — `manuk-text`'s face lookup must honour an explicitly named family before falling back,
+with `tests/wpt/probes/font-family-resolution.html` as the RED proof (330·330·330 → three distinct widths).
+Then the cascade-origin bug (author `*` vs UA `body` margin), then nytimes.com, the crawl-side sig
+correction, STEP 1(c) 100-tab RSS, Audit #28's three CSS probes. Cadences: self-audit 564; surface 558;
+const 559; wall 567.
