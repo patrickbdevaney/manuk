@@ -21612,3 +21612,41 @@ NEXT: the two heavier unknowns (test262 harness run, 100-tab RSS MEM-HARNESS) ar
 hidden=until-found is the remaining cheap doc probe; the coverage→SHAPE gate-floor flip stays the standing
 CO-#1 the moment the observer banks a broad path-keyed SHAPE headline. Cadences: self-audit 544; surface
 548; const 543; wall 547.
+
+## Tick 542 — PROBE: hidden=until-found DISTINGUISHED from plain hidden (unknown → partial) (2026-07-24)
+
+Third and last cheap doc-class unknown from surface audit #25. The remaining unknowns after this are
+subsystem/off-tick (test262 harness, 100-tab RSS MEM-HARNESS), so this closes the tractable-probe vein.
+
+MEASURED (hiduntilfound:yes, PINNED): Manuk DISTINGUISHES `hidden="until-found"` from plain `hidden`. The UA
+sheet already carries `[hidden]:not([hidden="until-found"]){display:none}` (stylo_engine.rs:249, with a
+comment noting the exemption exists precisely because until-found is meant to be `content-visibility:hidden`
+findable-but-collapsed) — so a plain `[hidden]` box is display:none'd to zero height while the until-found
+box SURVIVES. Measured behaviourally by the two boxes (plain height 0, until-found height > 0), added to
+G_PROBE_CAPABILITIES in the same style as the sibling probes.
+
+PARTIAL, not works — and honestly recorded so: the `content-visibility: hidden` COLLAPSE that would keep
+until-found findable-but-hidden is a servo-drop (measured `contentvis:no` the same run — the servo Stylo
+build has no content-visibility layout effect, the same fence that makes `::details-content` partial on row
+191). So until-found content renders VISIBLE rather than collapsed, and the `beforematch` reveal event is
+unimplemented. The pin guards the DISTINCTION half only (recognizing until-found ≠ plain hidden); the cell
+is `partial`, following the established `userinvalid`/`imagerendering`/`lightdark` yes-pin-for-partial-cell
+pattern. Graceful degradation: an accordion/FAQ using until-found shows expanded (content readable) rather
+than lost.
+
+RED-PROVEN: changing #huf from `hidden="until-found"` to plain `hidden` flips the probe `yes → no` — so it
+measures the until-found-VALUE exemption specifically, not "a div has a box". Restored, gate green (1
+passed). Net map effect: UNKNOWN 3 → 2, MEASURED 202 → 203; the two remaining unknowns are both heavy
+(test262 subsystem, RSS harness).
+
+TICK SHAPE: measure-and-pin probe (one audit-#25 stale-unknown cell — hidden=until-found — resolved to
+partial via a BEHAVIOURAL box-collapse probe with an until-found→plain-hidden RED discriminator, PINNED in
+G_PROBE_CAPABILITIES; no capability src built — existing UA-sheet exemption + measured content-visibility
+servo-drop; test file only, Bar 0 untouched). WIKI: none — measure-and-pin; finding in the gate PINNED
+comment + docs/loop/CONSTELLATION.tsv row 195. [no-pattern]
+
+NEXT: the cheap-probe vein is mined out (2 unknowns left are both subsystems). The fidelity-instrument
+rebuild's core (bricks 1–5) is complete; the coverage→SHAPE gate-floor flip stays the standing CO-#1 the
+moment the observer banks a broad path-keyed SHAPE headline. Absent that, the next lever is a bounded
+daily-driver capability from CO-#1 (re-probe stale-pessimistic before building). Cadences: self-audit 544;
+surface 548; const 543; wall 547.

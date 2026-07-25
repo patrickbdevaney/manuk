@@ -57,6 +57,7 @@ const HTML: &str = r##"<!doctype html>
   <div id="sda">scroll driven</div>
   <div id="lhbox" style="line-height:20px; width:5lh">lh</div>
   <div id="cvon">shown</div><div id="cvoff" style="display:none">hidden</div><div id="cvvis" style="visibility:hidden">invisible</div>
+  <div id="hp" hidden>plain hidden</div><div id="huf" hidden="until-found">hidden until found</div>
   <video id="vidmuted" muted></video><video id="vidloud"></video>
   <div id="out">-</div>
   <script>
@@ -357,6 +358,19 @@ const HTML: &str = r##"<!doctype html>
              !CSS.supports('image-rendering', 'floops-not-a-value');
     });
 
+    // ── hidden=until-found (Baseline 2025, surface audit #25 unknown): find-in-page / a URL-fragment
+    // REVEALS collapsed content (modern accordion/read-more/FAQ). Manuk distinguishes it from plain
+    // `hidden` via the UA rule `[hidden]:not([hidden="until-found"]){display:none}` — so a plain
+    // [hidden] box is display:none'd to zero while the until-found box SURVIVES (it is meant to be
+    // findable). Measured by the boxes: plain hidden collapses, until-found keeps a box. The
+    // content-visibility:hidden COLLAPSE that should keep until-found findable-but-hidden is a
+    // servo-drop (same fence as ::details-content), so it renders visible rather than collapsed — the
+    // cell is `partial`; this pins the DISTINCTION half (recognizing until-found ≠ plain hidden).
+    probe('hiduntilfound', function () {
+      return $('hp').getBoundingClientRect().height === 0 &&
+             $('huf').getBoundingClientRect().height > 0;
+    });
+
     // ── light-dark() CSS color function (Baseline 2024, surface audit #27): color: light-dark(A,B)
     // picks A or B by the used color-scheme — the modern way to drop the @media (prefers-color-scheme)
     // duplication. The color-scheme PROPERTY landed via a Stylo pref-flip (t464); this measures the
@@ -466,6 +480,15 @@ const PINNED: &[&str] = &[
     // match. RED-proven — dropping `container-name: sidebar` from the container flips it to `no`, so this
     // pins the NAME MATCH, not "any container". Flips only WITH a real regression, never by retuning.
     "containername:yes",
+    // tick 542 (surface audit #25 unknown) — hidden=until-found (Baseline 2025): Manuk DISTINGUISHES
+    // it from plain `hidden`. The UA rule `[hidden]:not([hidden="until-found"]){display:none}`
+    // (stylo_engine.rs) exempts the until-found value, so a plain [hidden] box collapses to zero while
+    // the until-found box survives (it is meant to stay findable). RED-proven — changing the element to
+    // plain `hidden` flips this to `no`, so the pin guards the until-found-VALUE exemption, not "a div
+    // has a box". This pins the DISTINCTION half only: the content-visibility:hidden COLLAPSE that keeps
+    // it findable-but-hidden is a servo-drop (contentvis:no here, same fence as ::details-content), so
+    // until-found renders VISIBLE rather than collapsed — CONSTELLATION cell stays `partial`, not works.
+    "hiduntilfound:yes",
     // tick 400 — Error.stackTraceLimit: HONEST NO. The prelude defines the property (typeof
     // 'number' — audit #13's watch), but truncation is NOT wired: our SpiderMonkey predates the
     // Firefox-153 implementation of this V8-ism, so a limit of 3 does not cap .stack frames.
