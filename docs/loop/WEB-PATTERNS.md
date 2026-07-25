@@ -4621,3 +4621,26 @@ not suppression. **(5)** ⚠ This was diagnosed from a site (`martinfowler.com`)
 have the pattern at all — it names `Open Sans` with no `@font-face` anywhere. The rule is right, the site was
 the wrong witness, and the lesson is the recurring one: **read the page before believing a mechanism that
 fits the numbers.**
+
+## A stylesheet that `@import`s another — Google Fonts and CSS architecture (tick 564)
+
+**Pattern:** `@import url(https://fonts.googleapis.com/css?family=Lora:400,700);` at the top of a site's
+one stylesheet — the classic Google Fonts delivery — and its architectural twin, an entry-point sheet that
+`@import`s `tokens.css`, `components.css`, `layout.css` so the page needs one `<link>`.
+
+**The class this unlocks:** every rule and every `@font-face` inside an imported sheet. We never fetched
+imports at all, so an `@import` chain was **silently deleted** — not degraded, deleted. The symptom appears
+far from the cause: `martinfowler.com` imports Open Sans, Inconsolata and Lora, so Chromium resolved
+`{Lora/13}` where we fell back to `{serif/13}`, and the diff only became readable once the instrument carried
+the computed font (t563).
+
+**The traps.** **(1)** `@import` is relative to the **importing sheet's** URL, not the document's — resolve
+against the wrong base and every import 404s. **(2)** A **media list** may follow the URL
+(`@import url(print.css) print;`) and it must not swallow the URL, and it must not prevent the FETCH: the
+enclosing `@media` decides *application*, the network decides *delivery*, and conflating them drops a sheet
+the page may still need. **(3)** Imports **chain**, so a single pass finds only the first level (tokens →
+components → page is ordinary), and an unbounded walk is a **cycle waiting to hang a tab** — depth-bounded,
+because Bar 0 outranks the last sheet in a chain. **(4)** Dedupe through the same map the `<link>` sheets use,
+or a re-entry after dynamic scripts re-fetches the whole chain. **(5)** The imported sheet must reach the
+**cascade**, not only the `@font-face` scan — an import that carries fonts almost always carries rules too,
+and wiring only the font path is the kind of half-fix that looks like it worked.

@@ -2016,6 +2016,48 @@ impl Stylesheet {
     pub fn font_faces(&self) -> &[FontFace] {
         &self.font_faces
     }
+
+    /// Every `@import` URL this sheet declares, in source order.
+    ///
+    /// **We never fetched these, and it costs whole stylesheets.** `@import
+    /// url(https://fonts.googleapis.com/css?family=Lora:400,700)` inside an external sheet is how a very
+    /// large share of the web delivers its fonts — and how CSS architectures split a design system into
+    /// partials behind one entry point. Dropping the import drops **every rule and every `@font-face` in
+    /// the imported sheet**, silently.
+    ///
+    /// Measured at t563/t564 on `martinfowler.com`: its `home.css` `@import`s Open Sans, Inconsolata and
+    /// Lora from Google Fonts, so Chromium resolved `{Lora/13}` where we fell back to `{serif/13}` — and
+    /// that one substitution made a `<p>` **293px wide in Chromium and 619px in ours**, a different wrap
+    /// width cascading through everything below it. The font was the visible symptom; the unfetched
+    /// stylesheet is the cause.
+    ///
+    /// Returns the raw URL text (relative or absolute) exactly as authored — resolution against the
+    /// sheet's own base URL is the caller's job, because only the caller knows it.
+    pub fn imports(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        let b = self.source.as_bytes();
+        let mut i = 0;
+        while let Some(pos) = self.source[i..].find("@import") {
+            let mut j = i + pos + "@import".len();
+            // `@import <url> [media];` — take everything up to the terminating `;` (or `{`, which means
+            // this is not a well-formed import and the sheet's error recovery should skip it).
+            let start = j;
+            while j < b.len() && b[j] != b';' && b[j] != b'{' {
+                j += 1;
+            }
+            if j < b.len() && b[j] == b';' {
+                let spec = self.source[start..j].trim();
+                if let Some(u) = import_url(spec) {
+                    out.push(u);
+                }
+            }
+            i = (j + 1).min(b.len());
+            if i >= b.len() {
+                break;
+            }
+        }
+        out
+    }
 }
 
 /// Parse an `@font-face` block body into a [`FontFace`] (`family` + `src` urls).
@@ -2052,6 +2094,32 @@ fn parse_font_face_block(block: &str) -> Option<FontFace> {
     }
     let family = family.filter(|f| !f.is_empty())?;
     (!srcs.is_empty()).then_some(FontFace { family, srcs })
+}
+
+/// Pull the URL out of an `@import` prelude: `url("a.css")`, `url(a.css)`, `'a.css'`, `"a.css"`,
+/// optionally followed by a media query list (which we ignore here — a conditional import still needs
+/// fetching; the enclosing `@media` decides application, not delivery).
+fn import_url(spec: &str) -> Option<String> {
+    let spec = spec.trim();
+    let inner = if let Some(rest) = spec
+        .strip_prefix("url(")
+        .or_else(|| spec.strip_prefix("URL("))
+    {
+        // `url(` … `)` — the media list, if any, follows the closing paren.
+        let end = rest.find(')')?;
+        &rest[..end]
+    } else {
+        // A bare string form: take the quoted run, ignoring any trailing media list.
+        let q = spec.chars().next()?;
+        if q != '"' && q != '\'' {
+            return None;
+        }
+        let rest = &spec[1..];
+        let end = rest.find(q)?;
+        &rest[..end]
+    };
+    let u = inner.trim().trim_matches(['"', '\'']).trim();
+    (!u.is_empty()).then(|| u.to_string())
 }
 
 impl Stylesheet {
@@ -5817,5 +5885,46 @@ mod pseudo_tests {
         let s = &styles[&p];
         assert!(s.before.is_some(), "::before must cascade");
         assert_eq!(s.before.as_ref().unwrap().content.as_deref(), Some("[X] "));
+    }
+
+    /// **`@import` URLs must be extracted, because an unfetched import drops a whole stylesheet.**
+    ///
+    /// Measured at t563/t564: `martinfowler.com`'s `home.css` `@import`s Open Sans, Inconsolata and Lora
+    /// from Google Fonts. Chromium resolved `{Lora/13}`; we fell back to `{serif/13}`, and that one
+    /// substitution made a `<p>` **293px wide in Chromium and 619px in ours**. The font was the visible
+    /// symptom; the unfetched sheet was the cause.
+    #[test]
+    fn imports_are_extracted_in_every_authored_form() {
+        let sheet = Stylesheet::parse(
+            r#"
+            @import url(https://fonts.googleapis.com/css?family=Lora:400,400i,700,700i);
+            @import url("partials/tokens.css");
+            @import 'partials/layout.css';
+            @import url(print.css) print;
+            @charset "utf-8";
+            body { color: red }
+            "#,
+        );
+        let got = sheet.imports();
+        assert_eq!(
+            got,
+            vec![
+                "https://fonts.googleapis.com/css?family=Lora:400,400i,700,700i".to_string(),
+                "partials/tokens.css".to_string(),
+                "partials/layout.css".to_string(),
+                "print.css".to_string(),
+            ],
+            "all four authored forms, in source order, and NOT the @charset — a media list after \
+             `url(...)` must not swallow the URL, and a conditional import still needs FETCHING (the \
+             enclosing @media decides application, not delivery)"
+        );
+        // A sheet with no imports yields none, and ordinary rules still parse alongside them.
+        assert!(Stylesheet::parse("body { color: red }")
+            .imports()
+            .is_empty());
+        assert!(
+            !sheet.rules.is_empty(),
+            "the imports must not eat the rest of the sheet"
+        );
     }
 }

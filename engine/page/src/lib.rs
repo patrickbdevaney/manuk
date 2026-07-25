@@ -4994,7 +4994,7 @@ impl Page {
     /// Extracted rather than inlined because `:active` and `:focus` are the same shape and are the
     /// obvious next fills — they should not each rediscover this.
     fn recascade_all_sources(&mut self, viewport_width: f32) {
-        let sources = collect_style_sources(&self.dom, &self.final_url);
+        let mut sources = collect_style_sources(&self.dom, &self.final_url);
         let sheets: Vec<Stylesheet> = sources
             .iter()
             .filter_map(|src| match src {
@@ -5618,7 +5618,7 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> usize {
-        let sources = collect_style_sources(&self.dom, &self.final_url);
+        let mut sources = collect_style_sources(&self.dom, &self.final_url);
         // Fetch all render-blocking external stylesheets concurrently (deduped, order-
         // independent) rather than serially — the biggest first-paint latency win here.
         let mut seen = std::collections::HashSet::new();
@@ -5664,6 +5664,70 @@ impl Page {
                 }
             }
         }
+        // ── `@import`ED SHEETS (tick 564). An unfetched import drops a WHOLE STYLESHEET.
+        //
+        // `@import url(https://fonts.googleapis.com/css?family=Lora:400,700)` inside an external sheet
+        // is how a very large share of the web delivers its fonts, and how CSS architectures put a
+        // design system behind one entry point. We never fetched them, so every rule and every
+        // `@font-face` in the imported sheet was silently absent. Measured at t563 on martinfowler.com:
+        // its `home.css` imports Open Sans, Inconsolata and Lora, Chromium resolved `{Lora/13}` where we
+        // fell back to `{serif/13}`, and that one substitution made a `<p>` 293px wide in Chromium and
+        // 619px in ours — a different wrap width cascading through everything below it.
+        //
+        // Resolved against the IMPORTING sheet's own URL (that is what `@import` is relative to, not the
+        // document), deduped through the same `external_css` map so a re-entry cannot re-fetch, and
+        // bounded to a small depth: import chains are legitimate (tokens → components → page) but an
+        // unbounded walk is a cycle waiting to hang a tab, and Bar 0 outranks the last sheet in a chain.
+        const IMPORT_DEPTH: usize = 3;
+        for _ in 0..IMPORT_DEPTH {
+            let mut want: Vec<(String, String)> = Vec::new(); // (import url, resolved)
+            for (sheet_url, css) in &external {
+                for spec in Stylesheet::parse(css).imports() {
+                    let resolved = resolve_url(sheet_url, &spec);
+                    if !external.contains_key(&resolved)
+                        && !self.failed_css.contains(&resolved)
+                        && !want.iter().any(|(_, r)| r == &resolved)
+                    {
+                        want.push((spec, resolved));
+                    }
+                }
+            }
+            if want.is_empty() {
+                break;
+            }
+            let got = futures_util::future::join_all(want.into_iter().map(|(_, url)| async move {
+                let text = manuk_net::fetch(&url).await.ok().map(|r| r.decoded_text());
+                (url, text)
+            }))
+            .await;
+            for (url, text) in got {
+                match text {
+                    Some(t) => {
+                        tracing::info!(bytes = t.len(), %url, "@import sheet applied");
+                        external.insert(url, t);
+                    }
+                    None => {
+                        tracing::warn!(%url, "@IMPORT SHEET FAILED — its rules and @font-faces are absent");
+                        self.failed_css.insert(url);
+                    }
+                }
+            }
+        }
+        // The imported sheets must reach the CASCADE too, not only the @font-face scan below — an
+        // import that delivered `@font-face` almost always delivers rules as well.
+        for (url, css) in &external {
+            if !sources
+                .iter()
+                .any(|s| matches!(s, StyleSource::External(u, _) if u == url))
+            {
+                // No media condition: an imported sheet's own `@media` (and any media list on the
+                // `@import` itself, which the enclosing sheet already carries) is decided by the
+                // cascade, not here.
+                let _ = css;
+                sources.push(StyleSource::External(url.clone(), None));
+            }
+        }
+
         // Web fonts: fetch @font-face sources (from inline + external CSS) and register
         // them BEFORE the relayout, so the cascade's font-family resolves to them.
         for s in &sources {

@@ -1311,3 +1311,29 @@ present, `isUVPAA()`/`isConditionalMediationAvailable()` resolve `false`, `get`/
 (return a rejected promise, not a synchronous throw) with `NotAllowedError`, a no-publicKey request resolves
 `null`, `store`/`preventSilentAccess` resolve. RED-proven by disabling the surface block →
 `pkc:false creds:false THREW:TypeError` (the original synchronous hard-wall reproduced exactly).
+
+## `@import` chains are fetched — an unfetched import DELETES a stylesheet (tick 564)
+
+`@import url(https://fonts.googleapis.com/css?family=Lora:400,700)` inside an external sheet is how a large
+share of the web delivers its fonts, and how CSS architectures hide a design system behind one `<link>`. We
+parsed the at-rule (Stylo is given `AllowImportRules::Yes`) and **never fetched the bytes**, so every rule
+and every `@font-face` in an imported sheet was absent — silently, and with the symptom appearing far from
+the cause.
+
+`Stylesheet::imports()` extracts the URLs in all four authored forms (`url(...)`, `url("...")`, `'...'`,
+`"..."`), ignoring a trailing media list but **not** letting it suppress the fetch: the enclosing `@media`
+decides *application*, the network decides *delivery*. The page pipeline then resolves each against **the
+importing sheet's own URL** (that is what `@import` is relative to — not the document), dedupes through the
+same `external_css` map the `<link>` sheets use so a re-entry cannot re-fetch a chain, walks to a bounded
+**depth 3**, and pushes the results into `sources` so they reach the **cascade** and not only the
+`@font-face` scan.
+
+Depth is bounded because imports legitimately chain (tokens → components → page) while an unbounded walk is
+a **cycle waiting to hang a tab**, and Bar 0 outranks the last sheet in a chain.
+
+**Measured on the site that motivated it**, `martinfowler.com`: `{serif/13}` → `{lora/13}`, i.e. the webfont
+now resolves. **And it revealed that the font was never the width story** — the paragraphs are `293px` wide in
+Chromium and `619px` in ours *before and after*, and the instances show Chromium placing sections side by side
+at `x=20` and `x=345` where we stack both at `x=20`. That is a **two-column layout we do not apply**, and the
+fonts had been masking it. One capability landed, one red herring retired, one real lead exposed.
+[[css-cascade]]

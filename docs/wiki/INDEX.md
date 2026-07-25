@@ -832,6 +832,7 @@
   - L1253 · HTTP Age header — CDN-aged freshness accounting (tick 348)
   - L1261 · url.searchParams is live; its constructor takes any iterable of pairs (tick 426)
   - L1282 · The passkey feature-detect surface exists and DEGRADES gracefully (tick 485)
+  - L1315 · @import chains are fetched — an unfetched import DELETES a stylesheet (tick 564)
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -984,4 +985,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-899 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+900 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
