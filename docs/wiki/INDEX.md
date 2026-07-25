@@ -225,6 +225,8 @@
   - L992 · The loop that reads linear and is quadratic: property_at(i) over a chained map (tick 573)
   - L1022 · Custom properties are copy-on-write with a PARENT CHAIN, and the chain yields shadowed names twice (tick 573)
   - L1051 · Our matcher merged winners by (specificity, order) — the cascade's FIRST sort was missing (tick 575)
+  - L1099 · @supports answered "does it PARSE", and one shared pref made 31 unread properties parseable (tick 576)
+  - L1136 · Composition is the whole difficulty, and it is delegated rather than re-implemented
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -994,4 +996,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-909 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+911 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

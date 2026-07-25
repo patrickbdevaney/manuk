@@ -4804,3 +4804,45 @@ supplement's second pass, both of which are currently expressed positionally her
 a side-observation of a *font* probe — Chromium put `body` at `[0 0 1200×92]` where we put it at
 `[8 8 1184×91]` — because no gate on this side of the tree ever wrote an author rule that *ought* to lose
 on specificity and *ought* to win on origin. Every cascade gate we had tested author-vs-author.
+
+---
+
+## Progressive enhancement — `@supports` is a bet the page places on our answer (tick 576)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| **`@supports (<modern-property>: <v>) { … }`** and `CSS.supports()` — the feature-detect that decides whether a page keeps its fallback or commits to the modern path | universal on the design-forward web: frosted-glass headers (`backdrop-filter`), view transitions, `offset-path` motion, `contain`, the `mask-*` family, container-query and anchor-positioning branches. The whole point of the construct is that the page **deletes the working fallback** when told yes | ✅ (tick 576) — we said **yes to 31 properties we do not render**. Stylo's servo build hides 35 longhands behind one shared `layout.unimplemented` pref; the cascade flips it because **four** of them are real here (`user-select`, `color-scheme`, `mask-image`, `text-overflow`), and the other 31 became *parseable* as a side effect — which is exactly what `@supports` and `CSS.supports()` answer. The flip's comment claimed it "changes nothing we read"; `@supports` reads it. Fixed by a measured denylist plus a condition-tree rewrite handed back to Stylo (so `not (unsupported)` still composes correctly), applied at all three sites the cascade descends into an `@supports` block. Gated by `G_SUPPORTS_HONESTY`, RED-proven on both the list and the composition. |
+
+**The failure mode is asymmetric, and that decides the design.** A false **no** costs a page its
+enhancement and leaves it looking like an older browser — annoying, and *working*. A false **yes**
+costs it the fallback it wrote and tested, and there is nothing underneath. So the list is a
+**denylist**: a property a future dependency bump puts behind that pref defaults to unsupported, and
+only an explicit deletion promotes it. Everywhere this trade appears — capability strings, codec
+`isTypeSupported`, `queryCommandSupported`, permission queries — the same asymmetry holds, and the
+default should fall the same way.
+
+**And the measurement that produces the list is not the obvious one.** Deriving "what do we render?"
+from `clone_*` accessors gives **two** of the four; `mask-image` and `text-overflow` arrive through
+the MinimalCascade recovery block instead, so the obvious grep would have made two properties every
+page uses answer "no". The question that works is *"does it reach a `ComputedStyle` field?"* — the
+consumer, not the accessor.
+
+---
+
+## The honest "no" rots in BOTH directions — and the fixture can hide it (tick 576)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| **An assertion that a capability is absent**, written truthfully, and never re-measured after the capability landed | every `honestly returns false` / `not built yet` claim in the tree — the currency this project pays for honest failure | ✅ (tick 576) — `g_exec_command_copy` carried **two** stale claims. `queryCommandSupported('bold') === false` was written at tick 463 and `execCommand('bold')` **landed at tick 481**: red on disk for ninety-four ticks, unnoticed because the wall launches ~19 of ~280 page-test binaries. `execCommand('cut') === false` was worse — it was **passing**, because the only selection the fixture ever made was inside a `<pre>` and `cut` correctly declines outside an editing host. Both replaced by claims with teeth: bold reports supported *and* wraps a real selection in `<b>`; cut declines outside an editable, succeeds inside one, and the text is really gone. |
+
+**Two distinct rots, and only one of them is loud.** The `bold` line went red the day the capability
+landed and simply was not watched. The `cut` line stayed **green for 113 ticks while being wrong** —
+the t573 fixture lesson again: *an assertion whose fixture cannot reach the mechanism is green for a
+reason unrelated to the claim.* The second kind cannot be found by running the tests, only by asking
+of each capability-denial: **what would this fixture have to do to make the "no" turn into a "yes",
+and does it do it?**
+
+The standing rule (`honest-answer-is-not-a-fixed-answer`) is usually read as *the engine's* "no"
+becoming a lie. It runs the other way too: here the engine told the truth and the **test** was the
+lie. Same failure — a claim about capability that nobody re-measured after the capability moved — and
+the same correction: **the gate follows the capability, never the reverse.**

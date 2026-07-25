@@ -1095,3 +1095,64 @@ far worse browser than the bug: every unstyled document loses its metrics at onc
 therefore asserts the same UA rules on a second document with **no author rules at all** — `body` 8px,
 `ul` 40px, `blockquote` 40px — alongside the reset case, plus that specificity still decides *within*
 the author origin and that author `!important` still beats author normal.
+
+## `@supports` answered "does it PARSE", and one shared pref made 31 unread properties parseable (tick 576)
+
+Tick 282 gave `@supports` and `CSS.supports()` a single evaluator. Both then answered the same
+question — *"does Stylo parse this declaration?"* — which is the spec's definition and is right for
+every property whose parseability we did not go out of our way to change. **We went out of our way.**
+
+Stylo's servo build hides **35 longhands** behind one shared pref, `layout.unimplemented`. The cascade
+flips it on because **four** of them are genuinely rendered here:
+
+| ungated and RENDERED | how it reaches `ComputedStyle` |
+|---|---|
+| `user-select` | `clone_user_select` (the pref was flipped for this, tick 464) |
+| `color-scheme` | `clone_color_scheme` |
+| `mask-image` | the **MinimalCascade recovery block** — every icon is a mask |
+| `text-overflow` | the MinimalCascade recovery block — the `…` on a clipped title |
+
+The other **31** — `backdrop-filter`, `view-transition-name`, `offset-path`, `contain`, `zoom`, the
+eight `corner-*-shape`s and the whole `mask-*` family — became *parseable* as a side effect. The
+flip's own comment said this was harmless: *"we consume a fixed set of computed values via explicit
+`clone_*` calls, so enabling the other properties it also ungates changes nothing we read."*
+**`@supports` reads them.** So a page writing
+
+```css
+@supports (backdrop-filter: blur(8px)) { .bar { background: rgba(255,255,255,.4) } }
+```
+
+got a **yes**, threw away the opaque fallback it had written for browsers that cannot blur, and put
+its text unreadably over a photograph. A false "yes" is strictly worse than a "no", because a "no"
+keeps a working page — that is the whole reason `honest-answer-is-not-a-fixed-answer` is a standing
+rule here, and this is the largest instance of it found so far.
+
+**Note the grep that under-counts.** Two of the four honest properties arrive through the
+MinimalCascade recovery block, not a `clone_*` accessor. Deriving the list from `clone_*` alone gives
+**two**, and would have made `mask-image` and `text-overflow` answer "no" — trading a false yes for a
+false no on two properties every page uses. The measurement that works is *"does it reach a
+`ComputedStyle` field?"*.
+
+### Composition is the whole difficulty, and it is delegated rather than re-implemented
+
+`not (backdrop-filter: blur(1px))` must be **true** while `(backdrop-filter: blur(1px))` must be
+**false**. Any filter shaped like *"does the condition text mention a banned property?"* gets that
+backwards, and `and`/`or` mixtures make it worse. So `honest_supports` evaluates nothing:
+
+1. walk the parsed `SupportsCondition` tree;
+2. replace every `Declaration` naming a `PARSE_ONLY_LONGHANDS` property with `-manuk-not-a-property: 1`;
+3. if nothing changed, return `None` — Stylo's own verdict already stands, and no second parse is paid;
+4. otherwise serialise the rewritten tree and hand it **back to Stylo**, which already knows how
+   `and`, `or` and `not` compose.
+
+RED-proven on both halves, deliberately: delete `backdrop-filter` from the list and `bdf:false` fails
+(the list is load-bearing); make step 4 return a bare `false` instead of re-asking Stylo and
+`notvtn:true` fails (the tree rewrite is load-bearing, not decoration).
+
+**It is a denylist, not an allowlist, and that direction is chosen.** A property Stylo adds behind
+this pref in a future bump should default to *unsupported*: a missing denylist entry yields a false
+"yes" that costs a page its fallback, while a stale entry yields a false "no" that keeps the page
+working. The same verdict is applied at all three places the cascade descends into an `@supports`
+block — `RuleIndex::add_rules`, `PseudoIndex::collect`, and the per-element `match_rules_recursive` —
+because `CSS.supports()` and the cascade disagreeing about one declaration is the tick-282 bug one
+level down: whichever the page consults, it gets a different browser.

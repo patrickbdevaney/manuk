@@ -23685,3 +23685,85 @@ third instance of t572/t573's stylesheet-work-done-per-element defect; `:has()` 
 cascade). Then the same-face `{Open Sans/13}` metric delta; the crawl-side `.SIG` correction; and a fresh
 corpus sweep, since t569's grid-stretch fix and this tick's origin fix are both page-wide geometry changes
 and the sweep is differenceable. Cadences: const 583; surface 578; self-audit 584; wall 587.
+
+## Tick 576 — the honest "no" rots in BOTH directions: `@supports` promised 31 properties we never render (2026-07-25)
+
+t575's regression sweep found three red tests that had never been in the wall. Two of them turned out to be
+the same defect wearing opposite faces, and that is this tick.
+
+**FACE ONE — THE ENGINE LIED. `@supports` answered "does it PARSE".** That is the spec's definition and is
+right for every property whose parseability we did not deliberately change — and we deliberately changed 35
+of them. Stylo's servo build hides 35 longhands behind one shared pref, `layout.unimplemented`; the cascade
+flips it on because **four** are genuinely rendered here (`user-select`, `color-scheme`, `mask-image`,
+`text-overflow`). The other **31** — `backdrop-filter`, `view-transition-name`, `offset-path`, `contain`,
+`zoom`, the eight `corner-*-shape`s and the whole `mask-*` family — became *parseable* as a side effect, and
+both `@supports` and `CSS.supports()` report parseability. The flip's own comment said it was harmless:
+*"we consume a fixed set of computed values via explicit `clone_*` calls, so enabling the other properties
+it also ungates changes nothing we read."* **`@supports` reads them.**
+
+**WHY THIS IS THE EXPENSIVE DIRECTION.** A page writing
+`@supports (backdrop-filter: blur(8px)) { .bar { background: rgba(255,255,255,.4) } }` was told **yes**, so
+it threw away the opaque fallback it wrote for browsers that cannot blur, and put its text unreadably over a
+photograph. A false "no" costs a page its enhancement and leaves it *working*; a false "yes" costs it the
+fallback and there is nothing underneath. That asymmetry is why the fix is a **denylist**: a property a
+future Stylo bump puts behind that pref defaults to unsupported, and only an explicit deletion promotes it.
+
+**THE MEASUREMENT THAT PRODUCES THE LIST IS NOT THE OBVIOUS ONE.** Grepping `clone_*` accessors gives
+**two** of the four honest properties; `mask-image` and `text-overflow` arrive through the MinimalCascade
+recovery block instead. The obvious grep would have made two properties every page uses answer "no" —
+trading a false yes for a false no. The question that works is *"does it reach a `ComputedStyle` field?"* —
+the consumer, not the accessor.
+
+**COMPOSITION IS THE WHOLE DIFFICULTY, AND IT IS DELEGATED RATHER THAN RE-IMPLEMENTED.**
+`not (backdrop-filter: blur(1px))` must be **true** while `(backdrop-filter: blur(1px))` must be **false**,
+and any filter shaped like *"does the condition text mention a banned property?"* gets that backwards. So
+`honest_supports` evaluates nothing: it walks the parsed `SupportsCondition` tree, replaces every
+`Declaration` naming a denylisted property with `-manuk-not-a-property: 1`, and — if anything changed —
+serialises the rewrite and hands it **back to Stylo**, which already knows how `and`/`or`/`not` compose.
+Unchanged conditions return `None` and pay for no second parse, which is nearly all of them. The verdict is
+applied at all three sites the cascade descends into an `@supports` block (`RuleIndex::add_rules`,
+`PseudoIndex::collect`, `match_rules_recursive`), because `CSS.supports()` and the cascade disagreeing about
+one declaration is the tick-282 bug one level down.
+
+**FACE TWO — THE TEST LIED, TWICE, IN TWO DIFFERENT WAYS.** `g_exec_command_copy` asserted
+`queryCommandSupported('bold') === false`, written at tick 463 as an honest "no". `execCommand('bold')`
+**landed at tick 481.** Red on disk for ninety-four ticks. And `execCommand('cut') === false` was worse: it
+was **passing**, for 113 ticks, because the only selection that fixture ever made was inside a `<pre>` and
+`cut` correctly declines outside an editing host — the capability had been fully built underneath it the
+whole time. **Two distinct rots and only one of them is loud.** The first goes red the day the capability
+lands and merely needs watching; the second stays green while being wrong, and can only be found by asking
+of each capability-denial: *what would this fixture have to do to make the "no" turn into a "yes", and does
+it do it?* That is the t573 fixture lesson pointed at assertions instead of at code.
+
+Neither was patched to green. Both were replaced with the claims they should always have been: bold reports
+supported **and** wraps a real selection in `<b>` (and still declines with nothing selected — supported is
+not unconditional); cut declines outside an editable, succeeds inside one, and the text is really gone.
+
+**THE STANDING RULE, READ THE OTHER WAY.** `honest-answer-is-not-a-fixed-answer` is written as *the
+engine's* "no" becoming a lie when the capability lands. Face two is the mirror: the engine told the truth
+and the assertion rotted. Same failure — a claim about capability nobody re-measured after the capability
+moved — same correction: the gate follows the capability, never the reverse.
+
+RED-PROVEN, and on the two claims that could each have been green for the wrong reason. (1) Delete
+`backdrop-filter` from `PARSE_ONLY_LONGHANDS` → `bdf:false` fails: the list is load-bearing. (2) Make the
+rewrite return a bare `false` instead of re-asking Stylo → `notvtn:true` fails: the tree rewrite is
+load-bearing, not decoration. The exec-command corrections proved themselves by changing value the moment
+the fixture could reach the mechanism (`cut` flipped to `true` unbidden).
+
+TICK SHAPE: capability-honesty (a page's progressive-enhancement branch is now decided by what we render,
+not by what Stylo parses — 31 properties' worth) + correctness of the tree's own claims (two stale
+assertions replaced by behavioural ones). Bar 0 untouched; no ratchet floor moved; no dependency patched.
+Gates: `G_SUPPORTS_HONESTY` (`engine/page/tests/g_supports_honesty.rs`), RED-proven twice; `G_EXEC_COMMAND_COPY`
+strengthened; the `manuk-css --features stylo` lib suite goes green (42/42) with 12 new assertions.
+WIKI: docs/wiki/css-cascade.md — "`@supports` answered 'does it PARSE', and one shared pref made 31 unread
+properties parseable".
+PATTERN: two — progressive enhancement as a bet the page places on our answer (with the asymmetric-failure
+rule that makes it a denylist), and the honest "no" rotting in both directions.
+
+NEXT: **the third unwatched red** — `hard_wall_detection_and_honest_interstitial`: the honest-interstitial
+page renders without its own `<h1>` text, a self-contained rendering repro on a page we author. Then the
+`apply_has_rules` per-element hoist (`:has()` is 505 ms of the 2,570 ms cascade — the third instance of
+t572/t573's stylesheet-work-done-per-element defect). Then the same-face `{Open Sans/13}` metric delta; the
+crawl-side `.SIG` correction; and a fresh corpus sweep, since t569's grid-stretch fix and t575's
+cascade-origin fix are both page-wide geometry changes and the sweep is differenceable.
+Cadences: const 583; surface 578; self-audit 584; wall 587.

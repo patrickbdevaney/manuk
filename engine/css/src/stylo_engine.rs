@@ -380,9 +380,16 @@ pub fn cascade_via_stylo_sized(
     // `user-select` (and its `-moz-`/`-webkit-` prefixes) is gated behind Stylo's shared
     // `layout.unimplemented` servo_pref — off by default, so the servo build drops it at parse and
     // every element's computed value stays `auto`. Flip it on so the property cascades and
-    // `getComputedStyle(el).userSelect` reflects it. The pref gates PARSING only; we consume a fixed
-    // set of computed values via explicit `clone_*` calls (user_select is the sole addition from this
-    // set), so enabling the other properties it also ungates changes nothing we read.
+    // `getComputedStyle(el).userSelect` reflects it.
+    //
+    // ⚠ **This comment used to end "…so enabling the other properties it also ungates changes
+    // nothing we read", and that was measured FALSE at tick 576.** The pref ungates 35 longhands;
+    // four are rendered here (`user-select`, `color-scheme`, `mask-image`, `text-overflow`) and the
+    // other 31 became *parseable* as a side effect — which is exactly the question `@supports` and
+    // `CSS.supports()` answer. So the flip silently promised `backdrop-filter`, `view-transition-name`,
+    // the `mask-*` family and 28 more, and every page that feature-detects them threw away a working
+    // fallback. `PARSE_ONLY_LONGHANDS` names the 31 and `honest_supports` subtracts them; keep the
+    // two in step when this list changes.
     stylo_static_prefs::set_pref!("layout.unimplemented", true);
     // `contrast-color(<color>)` (CSS Color 5, Baseline 2026) is gated behind its own
     // `layout.css.contrast-color.enabled` pref — off by default, so `color: contrast-color(black)` is
@@ -1278,7 +1285,14 @@ impl RuleIndex {
                     }
                 }
                 CssRule::Supports(supports_rule) => {
-                    if supports_rule.enabled {
+                    // **The CASCADE must take the same answer `CSS.supports()` gives**, or a page
+                    // gets a different browser depending on which one it asked (the tick-282 bug,
+                    // one level down). Stylo's `enabled` says "it parses"; `honest_supports` says
+                    // "we render it", and returns `None` — costing nothing — for the conditions
+                    // where those are the same question, which is nearly all of them.
+                    if supports_rule.enabled
+                        && honest_supports(&supports_rule.condition).unwrap_or(true)
+                    {
                         let nested = supports_rule.rules.read_with(guard);
                         self.add_rules(&nested.0, guard, device, order, qm, cq_stack, origin_rank);
                     }
@@ -1643,7 +1657,11 @@ impl PseudoIndex {
                     }
                 }
                 CssRule::Supports(supports_rule) => {
-                    if supports_rule.enabled {
+                    // Same honest verdict as `RuleIndex::add_rules` — a `::before` rule inside an
+                    // `@supports` the page should not have entered must not apply either.
+                    if supports_rule.enabled
+                        && honest_supports(&supports_rule.condition).unwrap_or(true)
+                    {
                         let nested = supports_rule.rules.read_with(guard);
                         self.collect(&nested.0, guard, device, qm, order, origin_rank);
                     }
@@ -1723,7 +1741,11 @@ fn match_rules_recursive(
             // `display:none`, then re-shows it inside `@supports (display:grid)` — so the sidebar
             // simply never appeared.) Stylo evaluates the condition at parse time into `enabled`.
             CssRule::Supports(supports_rule) => {
-                if supports_rule.enabled {
+                // Same honest verdict as `RuleIndex::add_rules` — this is the per-element matcher
+                // the index replaced, and the two must not disagree about which branch a page took.
+                if supports_rule.enabled
+                    && honest_supports(&supports_rule.condition).unwrap_or(true)
+                {
                     let nested = supports_rule.rules.read_with(guard);
                     match_rules_recursive(&nested.0, guard, device, el, caches, winners, order);
                 }
@@ -2019,7 +2041,154 @@ pub fn supports_condition(condition: &str) -> bool {
         .read_with(&guard)
         .rules(&guard)
         .iter()
-        .any(|rule| matches!(rule, CssRule::Supports(s) if s.enabled))
+        .find_map(|rule| match rule {
+            // Stylo's `enabled` answers *"does this parse?"*. That is the right question for every
+            // property except the ones we made parseable on purpose — see `honest_supports`.
+            CssRule::Supports(s) => Some(honest_supports(&s.condition).unwrap_or(s.enabled)),
+            _ => None,
+        })
+        .unwrap_or(false)
+}
+
+/// **The 31 properties `layout.unimplemented` ungates that this engine does NOT render.**
+///
+/// Stylo's servo build hides 35 longhands behind one shared pref. The cascade flips it on because
+/// **four** of them are real here — `user-select`, `color-scheme`, `mask-image`, `text-overflow` —
+/// and Stylo drops those at parse time otherwise. The flip's comment claimed the rest were
+/// harmless: *"we consume a fixed set of computed values via explicit `clone_*` calls, so enabling
+/// the other properties it also ungates changes nothing we read."* **`@supports` reads them**, and
+/// so does `CSS.supports()`, because both answer *"does this parse?"*.
+///
+/// Which four are honest was **measured, not recalled**: a property counts only if it reaches a
+/// `ComputedStyle` field. Three of the four arrive through the MinimalCascade recovery block rather
+/// than a `clone_*` accessor, which is why grepping for `clone_*` under-counts them.
+///
+/// **The list is a denylist rather than an allowlist deliberately.** A new property Stylo adds
+/// behind this pref should default to *unsupported* — the failure mode of a missing denylist entry
+/// is a false "yes", which throws away a page's fallback; the failure mode of a stale one is a
+/// false "no", which keeps a working page. When one of these is genuinely implemented, delete its
+/// line here and `G_SUPPORTS_HONESTY` will hold the new answer.
+const PARSE_ONLY_LONGHANDS: &[&str] = &[
+    "animation-composition",
+    "animation-range-end",
+    "animation-range-start",
+    "animation-timeline",
+    "backdrop-filter",
+    "contain",
+    "corner-bottom-left-shape",
+    "corner-bottom-right-shape",
+    "corner-end-end-shape",
+    "corner-end-start-shape",
+    "corner-start-end-shape",
+    "corner-start-start-shape",
+    "corner-top-left-shape",
+    "corner-top-right-shape",
+    "counter-increment",
+    "counter-reset",
+    "mask-clip",
+    "mask-composite",
+    "mask-mode",
+    "mask-origin",
+    "mask-position-x",
+    "mask-position-y",
+    "mask-repeat",
+    "mask-size",
+    "mask-type",
+    "offset-path",
+    "position-area",
+    "position-try-fallbacks",
+    "view-transition-class",
+    "view-transition-name",
+    "zoom",
+];
+
+/// A declaration that no engine supports, substituted for a parse-only one so that **Stylo** — not
+/// hand-rolled boolean logic — resolves the surrounding `and`/`or`/`not`.
+const NEVER_SUPPORTED: &str = "-manuk-not-a-property: 1";
+
+/// **The honest verdict for an `@supports` condition, or `None` when Stylo's own is already right.**
+///
+/// The whole difficulty is composition: `not (backdrop-filter: blur(1px))` must be **true** while
+/// `(backdrop-filter: blur(1px))` must be **false**, and a filter that merely asks *"does the text
+/// mention a banned property?"* gets that exactly backwards. So nothing here evaluates anything:
+/// the condition tree is **rewritten** — every declaration naming a parse-only property becomes
+/// [`NEVER_SUPPORTED`] — and the rewrite is handed back to Stylo, which already knows how `and`,
+/// `or` and `not` compose. `None` means the rewrite changed nothing, so Stylo's answer stands and
+/// no second parse is paid for.
+///
+/// Depth-bounded: a condition is untrusted input and a stack overflow in the cascade is Bar 0.
+fn honest_supports(cond: &stylo::stylesheets::supports_rule::SupportsCondition) -> Option<bool> {
+    let (rewritten, changed) = rewrite_parse_only(cond, 0);
+    if !changed {
+        return None;
+    }
+    use style_traits::ToCss;
+    Some(supports_condition(&rewritten.to_css_string()))
+}
+
+/// Replace every declaration naming a [`PARSE_ONLY_LONGHANDS`] property with [`NEVER_SUPPORTED`],
+/// reporting whether anything changed.
+fn rewrite_parse_only(
+    cond: &stylo::stylesheets::supports_rule::SupportsCondition,
+    depth: u32,
+) -> (stylo::stylesheets::supports_rule::SupportsCondition, bool) {
+    use stylo::stylesheets::supports_rule::{Declaration, SupportsCondition as SC};
+    if depth > 32 {
+        return (cond.clone(), false);
+    }
+    match cond {
+        SC::Declaration(d) => {
+            // `Declaration` holds the raw `prop: value` slice; the property is everything before
+            // the first colon. Compared case-insensitively, as CSS property names are.
+            let name = d.0.split(':').next().unwrap_or("").trim();
+            if PARSE_ONLY_LONGHANDS
+                .iter()
+                .any(|p| name.eq_ignore_ascii_case(p))
+            {
+                (
+                    SC::Declaration(Declaration(NEVER_SUPPORTED.to_string())),
+                    true,
+                )
+            } else {
+                (cond.clone(), false)
+            }
+        }
+        SC::Not(inner) => {
+            let (i, c) = rewrite_parse_only(inner, depth + 1);
+            (SC::Not(Box::new(i)), c)
+        }
+        SC::Parenthesized(inner) => {
+            let (i, c) = rewrite_parse_only(inner, depth + 1);
+            (SC::Parenthesized(Box::new(i)), c)
+        }
+        SC::And(list) => {
+            let mut changed = false;
+            let out = list
+                .iter()
+                .map(|c| {
+                    let (i, ch) = rewrite_parse_only(c, depth + 1);
+                    changed |= ch;
+                    i
+                })
+                .collect();
+            (SC::And(out), changed)
+        }
+        SC::Or(list) => {
+            let mut changed = false;
+            let out = list
+                .iter()
+                .map(|c| {
+                    let (i, ch) = rewrite_parse_only(c, depth + 1);
+                    changed |= ch;
+                    i
+                })
+                .collect();
+            (SC::Or(out), changed)
+        }
+        // `selector()`, `font-format()`, `font-tech()` and future syntax name no property, so the
+        // pref cannot have inflated their answer.
+        other => (other.clone(), false),
+    }
 }
 
 #[cfg(test)]
@@ -2041,9 +2210,34 @@ mod tests {
         // engine without them, and keeping it now would be the inverse lie. This is the documented
         // moment from the honest-answer rule: the gate follows the capability, never the reverse.
         assert!(supports_condition("container-type: inline-size"));
-        // Real properties this engine does not implement — the ones whose false "yes" made pages
-        // discard a working fallback.
+        // ── Real properties this engine does not implement — the ones whose false "yes" made pages
+        //    discard a working fallback. All of these PARSE (the cascade flips `layout.unimplemented`
+        //    for the four properties in that set it really renders), so Stylo alone answers yes and
+        //    `PARSE_ONLY_LONGHANDS` is what makes the answer honest.
         assert!(!supports_condition("view-transition-name: foo"));
+        assert!(!supports_condition("backdrop-filter: blur(4px)"));
+        assert!(!supports_condition("offset-path: none"));
+        assert!(!supports_condition("mask-repeat: no-repeat"));
+        // ── …and the FOUR from the same pref set that ARE rendered must keep answering yes, or the
+        //    fix has traded a false yes for a worse false no. Three of them arrive through the
+        //    MinimalCascade recovery block rather than a `clone_*` accessor.
+        assert!(supports_condition("user-select: none"));
+        assert!(supports_condition("color-scheme: dark"));
+        assert!(supports_condition("mask-image: url(a.svg)"));
+        assert!(supports_condition("text-overflow: ellipsis"));
+        // ── COMPOSITION, which is the whole difficulty. `not (<unsupported>)` is TRUE — the case a
+        //    filter that merely asked "does the text mention a banned property?" gets backwards. The
+        //    condition tree is rewritten and handed back to Stylo precisely so this comes out right.
+        assert!(supports_condition("not (backdrop-filter: blur(4px))"));
+        assert!(!supports_condition(
+            "(display: flex) and (backdrop-filter: blur(4px))"
+        ));
+        assert!(supports_condition(
+            "(display: flex) or (backdrop-filter: blur(4px))"
+        ));
+        assert!(supports_condition(
+            "(user-select: none) and (display: flex)"
+        ));
         // Nonsense.
         assert!(!supports_condition("notaproperty: 1"));
         assert!(!supports_condition("color: notacolor"));
