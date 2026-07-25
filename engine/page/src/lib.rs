@@ -828,6 +828,218 @@ fn collect_style_sources(dom: &Dom, base: &str) -> Vec<StyleSource> {
 
 /// Enumerate all external subresources (`<link rel=stylesheet>`, `<script src>`,
 /// `<img src>`) in document order — the scheduler's work-list.
+/// The viewport width `collect_subresources` resolves `sizes`/`media` against.
+///
+/// It runs before layout, so there is no real viewport yet — and picking one candidate step wrong is
+/// far cheaper than fetching the `src` thumbnail, which is what happened before. `pending_image_urls`
+/// uses the page's actual width once it is known.
+const DEFAULT_SELECTION_VIEWPORT: f32 = 800.0;
+
+/// The image MIME types this build can actually decode.
+///
+/// `image` is built with `["png","jpeg","gif","webp","bmp","ico"]` and **AVIF is deliberately off** —
+/// its decoder is C dav1d, declined on purpose. SVG is here because a raster-decode failure falls
+/// through to `decode_svg` (usvg/resvg).
+///
+/// This list is what makes `<picture>`'s `type` attribute worth honouring rather than a decoration:
+/// a site that ships `<source type="image/avif">` with a JPEG `<img>` fallback is telling us, in
+/// advance, which candidate we can use. Choosing the AVIF would render **nothing** — strictly worse
+/// than ignoring `srcset` altogether, which is why the skip is asserted before the pick.
+fn can_decode_image_type(mime: &str) -> bool {
+    matches!(
+        mime.trim().to_ascii_lowercase().as_str(),
+        "image/png"
+            | "image/jpeg"
+            | "image/jpg"
+            | "image/gif"
+            | "image/webp"
+            | "image/bmp"
+            | "image/x-icon"
+            | "image/vnd.microsoft.icon"
+            | "image/svg+xml"
+    )
+}
+
+/// One `srcset` candidate: a URL and its descriptor.
+struct Candidate<'a> {
+    url: &'a str,
+    /// `Nw` — the candidate's intrinsic width in px.
+    width: Option<f32>,
+    /// `Nx` — the candidate's pixel density. Defaults to 1 when no descriptor is given.
+    density: f32,
+}
+
+/// Parse a `srcset` attribute into candidates.
+///
+/// Deliberately lenient in the way the spec is: a comma inside a URL is vanishingly rare compared to
+/// a missing space after one, so candidates are split on commas and each is then split on whitespace.
+/// A malformed descriptor drops that candidate rather than the whole list — dropping the list is how
+/// this attribute silently costs a page its images.
+fn parse_srcset(srcset: &str) -> Vec<Candidate<'_>> {
+    let mut out = Vec::new();
+    for part in srcset.split(',') {
+        let mut it = part.split_ascii_whitespace();
+        let Some(url) = it.next() else { continue };
+        if url.is_empty() {
+            continue;
+        }
+        let mut width = None;
+        let mut density = 1.0f32;
+        if let Some(desc) = it.next() {
+            if let Some(w) = desc.strip_suffix('w').and_then(|n| n.parse::<f32>().ok()) {
+                width = Some(w);
+            } else if let Some(x) = desc.strip_suffix('x').and_then(|n| n.parse::<f32>().ok()) {
+                density = x;
+            } else {
+                continue; // an unparseable descriptor drops the candidate, not the list
+            }
+        }
+        out.push(Candidate {
+            url,
+            width,
+            density,
+        });
+    }
+    out
+}
+
+/// The slot width a `w`-descriptor list is measured against, from `sizes`.
+///
+/// **Bounded and named rather than half-implemented.** The full grammar is a comma-separated list of
+/// `<media-condition> <length>` pairs ending in an unconditional length. We take the LAST entry's
+/// length, which is that unconditional fallback, and resolve `vw`/`px`. A page whose first matching
+/// condition would have chosen differently gets the fallback slot — one candidate step off at worst,
+/// where ignoring `sizes` entirely is the thumbnail-across-a-hero bug this replaces.
+fn sizes_slot_width(sizes: Option<&str>, viewport_width: f32) -> f32 {
+    let Some(sizes) = sizes else {
+        return viewport_width;
+    };
+    let last = sizes.rsplit(',').next().unwrap_or("").trim();
+    let tok = last.split_ascii_whitespace().last().unwrap_or("");
+    if let Some(v) = tok.strip_suffix("vw").and_then(|n| n.parse::<f32>().ok()) {
+        return viewport_width * v / 100.0;
+    }
+    if let Some(v) = tok.strip_suffix("px").and_then(|n| n.parse::<f32>().ok()) {
+        return v;
+    }
+    viewport_width
+}
+
+/// Choose one candidate from a `srcset`, or `None` if the list yields nothing usable.
+///
+/// `w` descriptors win over `x` when both appear (the spec ignores `x` once any `w` is present).
+/// Either way the rule is *the smallest candidate that still covers the requirement*, falling back to
+/// the largest when none does — never the first listed, which is the cheap wrong answer.
+fn pick_candidate<'a>(cands: &[Candidate<'a>], slot_px: f32, dpr: f32) -> Option<&'a str> {
+    if cands.is_empty() {
+        return None;
+    }
+    let any_w = cands.iter().any(|c| c.width.is_some());
+    if any_w {
+        let need = slot_px * dpr;
+        let mut best: Option<&Candidate> = None;
+        for c in cands.iter().filter(|c| c.width.is_some()) {
+            let w = c.width.unwrap_or(0.0);
+            let better = match best {
+                None => true,
+                Some(b) => {
+                    let bw = b.width.unwrap_or(0.0);
+                    if bw < need {
+                        w > bw
+                    } else {
+                        w >= need && w < bw
+                    }
+                }
+            };
+            if better {
+                best = Some(c);
+            }
+        }
+        return best.map(|c| c.url);
+    }
+    let mut best: Option<&Candidate> = None;
+    for c in cands {
+        let better = match best {
+            None => true,
+            Some(b) => {
+                if b.density < dpr {
+                    c.density > b.density
+                } else {
+                    c.density >= dpr && c.density < b.density
+                }
+            }
+        };
+        if better {
+            best = Some(c);
+        }
+    }
+    best.map(|c| c.url)
+}
+
+/// **The image an `<img>` will actually load** — `<picture>` sources, then its own `srcset`, then `src`.
+///
+/// One function because there are two callers (`collect_subresources`, the fetch worklist, and
+/// `pending_image_urls`, the decode worklist) and they must not disagree about which URL the element
+/// wants. Two independent selections is the two-cascades trap in a different organ.
+///
+/// Measured before it was written (tick 582): every candidate list was ignored and the `src` fetched
+/// every time. On a `w`-descriptor list — which is what WordPress, every CMS and every image CDN emit
+/// — the `src` is frequently the *smallest* candidate, so this was not "2x displays get 1x images",
+/// it was a thumbnail scaled across a hero. And `<img srcset>` with no `src` at all is legal, where we
+/// requested nothing and rendered an empty box.
+fn select_image_url(dom: &Dom, node: NodeId, viewport_width: f32) -> Option<String> {
+    let dpr = 1.0f32;
+    let el = dom.element(node)?;
+    // `<picture>`: the first `<source>` before this `<img>` whose `media` matches and whose `type`
+    // we can decode. Order is document order and the first match wins — later sources are not
+    // considered, which is what lets an author put their best format first.
+    if let Some(parent) = dom.parent(node) {
+        if dom.tag_name(parent) == Some("picture") {
+            for child in dom.flat_children(parent) {
+                if child == node {
+                    break; // sources after the <img> do not participate
+                }
+                if dom.tag_name(child) != Some("source") {
+                    continue;
+                }
+                let Some(se) = dom.element(child) else {
+                    continue;
+                };
+                if let Some(t) = se.attr("type") {
+                    if !can_decode_image_type(t) {
+                        continue;
+                    }
+                }
+                if let Some(m) = se.attr("media") {
+                    if !manuk_css::media_matches(m) {
+                        continue;
+                    }
+                }
+                let Some(ss) = se.attr("srcset") else {
+                    continue;
+                };
+                let cands = parse_srcset(ss);
+                let slot = sizes_slot_width(se.attr("sizes"), viewport_width);
+                if let Some(u) = pick_candidate(&cands, slot, dpr) {
+                    return Some(u.to_string());
+                }
+            }
+        }
+    }
+    // The element's own `srcset`, then `src`.
+    if let Some(ss) = el.attr("srcset") {
+        let cands = parse_srcset(ss);
+        let slot = sizes_slot_width(el.attr("sizes"), viewport_width);
+        if let Some(u) = pick_candidate(&cands, slot, dpr) {
+            return Some(u.to_string());
+        }
+    }
+    el.attr("src")
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
 fn collect_subresources(dom: &Dom, base: &str) -> Vec<Subresource> {
     let attr = |n: NodeId, name: &str| {
         dom.element(n)
@@ -872,7 +1084,9 @@ fn collect_subresources(dom: &Dom, base: &str) -> Vec<Subresource> {
                 }
             }
             Some("img") => {
-                if let Some(src) = attr(n, "src").filter(|s| !s.trim().is_empty()) {
+                // `srcset`/`<picture>` decide which URL this element wants; `src` is the fallback.
+                // Same selector as `pending_image_urls`, deliberately — see `select_image_url`.
+                if let Some(src) = select_image_url(dom, n, DEFAULT_SELECTION_VIEWPORT) {
                     out.push(Subresource {
                         kind: SubresourceKind::Image,
                         url: resolve_url(base, src.trim()),
@@ -2410,8 +2624,11 @@ impl Page {
                 continue;
             };
             let src = match self.dom.tag_name(n) {
-                Some("img") => el.attr("src"),
-                Some("video") => el.attr("poster"), // a poster is a still, and we decode stills
+                // The SAME selector `collect_subresources` uses, against the same width — two
+                // independent choices here would be the two-cascades trap in a different organ: we
+                // would fetch one URL and then decode another.
+                Some("img") => select_image_url(&self.dom, n, DEFAULT_SELECTION_VIEWPORT),
+                Some("video") => el.attr("poster").map(str::to_string), // a poster is a still
                 _ => None,
             };
             let Some(src) = src else { continue };

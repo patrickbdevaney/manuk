@@ -1549,3 +1549,22 @@ that needed spans. **The shared thing is the predicate, not the loop.**
 > question is not "are there other bugs like this" but "**what else reads this structure, and does it
 > ask the same question?**" — a grep for the type, not for the symptom. Here `BoxContent::Inline` had
 > seven readers; three assembled text and all three were wrong.
+
+## The image an `<img>` wants is chosen, not read (tick 582)
+
+`select_image_url` is one function with two callers — `collect_subresources` (the fetch worklist) and
+`pending_image_urls` (the decode worklist) — **deliberately**, because two independent selections would
+be the two-cascades trap in a different organ: fetch one URL, decode another.
+
+Order: `<picture>`'s `<source>` children *before* the `<img>`, first match wins (so an author can put
+their best format first); then the `<img>`'s own `srcset`; then `src`. A `<source>` is skipped when its
+`media` does not match or its `type` is one we cannot decode.
+
+Candidate choice is *the smallest that still covers the requirement*, falling back to the largest when
+none does — **never the first listed**, which is the cheap wrong answer a naive fix reaches for and which
+the gate RED-proves against. `w` descriptors win over `x` when both appear, per spec.
+
+> **`type` matters more here than in a full-featured engine, not less.** `image` is built with
+> png/jpeg/gif/webp/bmp/ico and **AVIF is off on purpose** (C dav1d, declined). So the load-bearing use of
+> `<picture>` is *skipping* the format we cannot decode and taking the fallback the author shipped for
+> exactly that case. Choosing the AVIF would render nothing at all.

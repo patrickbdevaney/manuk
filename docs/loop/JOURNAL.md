@@ -24138,3 +24138,79 @@ one-capability-two-verdicts shape is worth a systematic sweep for more. Then the
 metric delta; the crawl-side `.SIG` correction; and a fresh corpus sweep, since t569's grid-stretch and
 t575's cascade-origin fixes are both page-wide geometry changes and the sweep is differenceable.
 Cadences: const 583; self-audit 584; wall 587; surface 588.
+
+## Tick 582 — `srcset` and `<picture>` were ignored entirely, and the map said `works` (2026-07-25)
+
+t581's map sweep left two contradictions on the board. This closes the larger one, and it turned out not
+to be a bookkeeping question at all.
+
+**THE CONTRADICTION.** `CONSTELLATION.tsv` row 15 read **`srcset / <picture>` — `works`**, gate `-`,
+receipt `capability-probe.html`. `g_img_current_src`'s own header said the opposite: *"it does not yet do
+srcset/`<picture>` candidate selection for the bitmap"*. Second instance of audit #31's
+one-capability-two-verdicts shape (after `contrast-color()`), and the first where the two verdicts were on
+*opposite sides* of a capability the whole responsive web depends on.
+
+**THE PROBE SETTLED IT IN ONE RUN — the comment was right and the map was wrong:**
+
+```text
+<img srcset="wide-2x.png 2x, wide-1x.png 1x" src="fallback.png">    requested: fallback.png
+<img srcset="w400.png 400w, w800.png 800w" sizes="100vw" src="…">   requested: fallback2.png
+<picture><source srcset="from-source.png"><img src="from-img.png">  requested: from-img.png
+```
+
+Every candidate list ignored, every time, silently.
+
+**AND THE ROW'S OWN FRAMING IS WHY IT SAT UNMEASURED.** It said *"2x displays get 1x images"* — a nicety.
+The real failure is worse in three separate ways. On a **`w`-descriptor list the `src` is frequently the
+smallest candidate**, which WordPress and every CMS and image CDN emit by default — so we were not serving
+a 1× asset to a 2× screen, we were scaling a **thumbnail across a hero**. **`<img srcset>` with no `src`
+is legal** and common, and there we requested *nothing* and rendered an empty box. A `what_breaks_without_it`
+that undersells its own row is how a `works` survives without a gate.
+
+**THE MOST INTERESTING PART IS THAT `type` MATTERS MORE HERE, NOT LESS.** `image` is compiled with
+`["png","jpeg","gif","webp","bmp","ico"]` and **AVIF is deliberately off** (its decoder is C dav1d,
+declined on purpose). I first wrote the gate expecting an `<source type="image/avif">` to **win** — an
+expectation taken from what the web serves rather than from what this engine decodes, which is the t579
+error exactly, two ticks later. The honest answer is the opposite: **skip it and take the `<img>`
+fallback.** So the load-bearing half of `<picture>` for us is not choosing the modern format, it is
+*declining* the one we cannot decode — choosing it would render **nothing**, strictly worse than ignoring
+`srcset` altogether. **An engine with a narrow decoder set needs `<picture>` support more than one with a
+wide set**, which is the reverse of the intuition and is now written into the gate.
+
+**ONE SELECTOR, TWO CALLERS, DELIBERATELY.** `select_image_url` is called by `collect_subresources` (the
+fetch worklist) and `pending_image_urls` (the decode worklist). Two independent selections would be the
+two-cascades trap in a different organ — fetch one URL, decode another — and this session has now found
+that shape three times (the two cascades, the three text-assembly consumers, this).
+
+Candidate choice is *the smallest that still covers the requirement*, falling back to the largest when
+none does — **never the first listed**, which is the cheap wrong answer and is one of the two RED patches.
+
+RED-PROVEN twice: ignore `type` → the AVIF `<source>` is chosen and `good.png` is never fetched; make the
+first candidate win → `wide-2x.png` instead of `wide-1x.png`. Fourteen claims, half of them **negative**
+(the fallbacks a candidate list replaces must not *also* be fetched — without that, a fix that fetches
+everything passes every positive claim and doubles the page's image bytes, which is the opposite of what
+responsive images are for).
+
+**THE SECOND CONTRADICTION IS ALSO CLOSED**, and it was the same defect one layer up: `g_img_current_src`'s
+scope note *"does not yet do srcset/`<picture>` candidate selection"* had outlived its limit. That is the
+t576 honest-"no" rot **in a doc comment instead of an assertion** — and note it was the only place in the
+tree telling the truth, while the map recorded the opposite. The gate itself needed no change, because it
+always asserted *"the URL we actually load"* and never *"the src attribute"*: a contract written against
+behaviour survives the capability changing underneath it.
+
+RESIDUE, named rather than discovered later: DPR is fixed at 1, and `sizes` resolves its *unconditional
+last entry* rather than evaluating the media-condition list — one candidate step off at worst, against a
+baseline of fetching the thumbnail every time.
+
+TICK SHAPE: capability (responsive images, the delivery mechanism of essentially every content image on
+the modern web) + the map correction that found it. Bar 0 untouched; no ratchet floor moved.
+Gates: `G_SRCSET_SELECTION` (`engine/page/tests/g_srcset_selection.rs`), RED-proven twice.
+WIKI: docs/wiki/dom-semantics.md — "The image an `<img>` wants is chosen, not read".
+PATTERN: new — responsive images, with the inverted `type` lesson.
+
+NEXT: **a fresh corpus sweep.** Four ticks have now changed page-wide geometry or resource selection
+(t569 grid stretch, t575 cascade origin, t582 responsive images) and the sweep is differenceable — this is
+the first window in a while where a re-sweep should move real numbers. Then the same-face `{Open Sans/13}`
+metric delta; the crawl-side `.SIG` correction; and a systematic sweep for more one-capability-two-verdicts
+rows, since two turned up in three ticks.
+Cadences: const 583 (NEXT TICK); self-audit 584; wall 587; surface 588.

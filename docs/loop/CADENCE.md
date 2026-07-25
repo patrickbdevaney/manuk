@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **342** | ticks 1–581 |
-| median tick cycle | **21m** | 341 intervals |
-| median, last 10 | **42m** | 10 intervals |
+| ticks landed | **343** | ticks 1–582 |
+| median tick cycle | **21m** | 342 intervals |
+| median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.98** | 349.1h elapsed |
-| median verify wall | **66s** | 281 ticks |
+| **ticks per hour** | **0.98** | 349.6h elapsed |
+| median verify wall | **66s** | 282 ticks |
 | wall trend | 39s → 85s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **283**
-* **✅ rows in the capability ledger**: 144 → **335**
+* **live gates**: 27 → **284**
+* **✅ rows in the capability ledger**: 144 → **336**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**174 of 342 ticks** (51%) moved a
+**175 of 343 ticks** (51%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **174** capability ticks, median cycle **21m**
-* median diff per tick: **+224 / −34** lines across 9 files
+* **175** capability ticks, median cycle **21m**
+* median diff per tick: **+226 / −34** lines across 9 files
 
 ## Every tick
 
@@ -439,5 +439,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **579** | 2026-07-25 17:14 | 11m | measurement | 85s | +307/−34 | 282 | 81 | 56.0% · | CSS Color 4 already worked, and my own gate was wrong before the engine was (2026-07-25) |
 | **580** | 2026-07-25 17:55 | 41m | performance | 85s | +385/−63 | 283 | 81 | 56.0% · | the `:has()` supplement re-filtered the stylesheets for every element (2026-07-25) |
 | **581** | 2026-07-25 18:07 | 12m | instrument | 85s | +404/−46 | 283 | 81 | 56.0% · | the unmapped-gate count goes 147 → 0, and the map finally describes the engine (2026-07-25 |
+| **582** | 2026-07-25 18:40 | 33m | capability | 85s | +530/−41 | 284 | 81 | 56.0% · | `srcset` and `<picture>` were ignored entirely, and the map said `works` (2026-07-25) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

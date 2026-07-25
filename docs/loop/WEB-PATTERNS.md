@@ -4928,3 +4928,30 @@ measurement when the capability lives below you* — `oklch` appears nowhere in 
 dependency. Collapsing those two statuses would have filed a working capability as weeks of work. This is
 the fifth already-built phantom this project has caught, and the first found by asking the question about
 a **dependency** rather than about our own code.
+
+---
+
+## Responsive images — `srcset`, `sizes` and `<picture>` (tick 582)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| **`<img srcset="… 400w, … 800w" sizes="…">`** and **`<picture><source type media srcset>`** | WordPress emits `srcset`+`sizes` on essentially every content image; so does every modern CMS, Next.js `<Image>`, and every image CDN. `<picture>` is how a site ships AVIF/WebP with a JPEG fallback | ✅ (tick 582) — **every candidate list was ignored and the `src` fetched every time.** Now x- and w-descriptor selection, `sizes`, `<picture>` `<source>` with `media` and `type`, and the `srcset`-with-no-`src` case. Gated by `G_SRCSET_SELECTION`, RED-proven on the `type` skip and on the candidate choice. |
+
+**The row that described this said *"2× displays get 1× images"*, and that framing is why it sat
+unmeasured for hundreds of ticks.** The real failure is worse in three separate ways:
+
+- On a **`w`-descriptor list the `src` is frequently the *smallest* candidate** — so we were not
+  serving a 1× asset to a 2× screen, we were scaling a thumbnail across a hero.
+- **`<img srcset>` with no `src` is legal** and common. There we requested *nothing at all* and rendered
+  an empty box.
+- **`type` is load-bearing in the opposite direction from the obvious one.** AVIF is deliberately off in
+  this build (`image` is compiled with png/jpeg/gif/webp/bmp/ico; AVIF's decoder is C dav1d). So the
+  valuable half of `<picture>` is not *choosing* the modern format — it is **skipping** the one we cannot
+  decode and taking the author's fallback. Choosing it would render nothing, which is strictly worse than
+  ignoring `srcset` altogether. An engine with a narrow decoder set needs `<picture>` support *more* than
+  one with a wide set, which is the reverse of the intuition.
+
+**Residue, named rather than discovered later:** DPR is fixed at 1, and `sizes` resolves its
+*unconditional last entry* rather than evaluating the media-condition list. A page whose first matching
+condition would choose differently gets one candidate step off — against a baseline of fetching the
+thumbnail every time.

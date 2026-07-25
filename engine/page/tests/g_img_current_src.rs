@@ -6,10 +6,16 @@
 //! absent: `'currentSrc' in img` was `false`, so those reads returned `undefined` and the library either
 //! threw or silently mis-behaved.
 //!
-//! This engine loads an `<img>`'s `src` attribute directly (it does not yet do srcset/`<picture>`
-//! candidate selection for the bitmap — see `Page::pending_image_urls`), so the honest `currentSrc` is
-//! precisely the **resolved `src`**: the absolute URL of the resource we actually load. Reporting our own
-//! loaded URL is truthful; diverging from Chrome's srcset pick is a *separate* responsive-images gap, not
+//! ⚠ **This paragraph used to read "it does not yet do srcset/`<picture>` candidate selection", and it
+//! outlived its own limit at tick 582** — which is the t576 honest-"no" rot, in a doc comment instead of
+//! an assertion. It was also the *only* place in the tree telling the truth about it, while the
+//! capability map recorded `srcset / <picture>` as `works`; audit #31's map sweep put the two side by
+//! side, and the probe found the comment right and the map wrong. Selection now happens in
+//! `select_image_url` and is gated by `G_SRCSET_SELECTION`.
+//!
+//! `currentSrc` is therefore still **the URL we actually load** — which is now the chosen candidate
+//! rather than the raw `src`. That is the same contract, and it is why this gate did not have to change:
+//! it always asserted "what we loaded", never "the src attribute". Reporting our own loaded URL is truthful; diverging from Chrome's srcset pick is a *separate* responsive-images gap, not
 //! a `currentSrc` defect.
 //!
 //! Four things to prove:
