@@ -59,6 +59,22 @@ pub struct Seen {
     pub tag: String,
     pub display: String,
     pub rect: [i64; 4],
+    /// **The computed font that produced this box** — `"<first family>/<used px>"`, or empty when the
+    /// producer does not supply it.
+    ///
+    /// A rect cannot say which FACE or what SIZE made it, and by t562 every remaining text-metric lead
+    /// was blocked on exactly that: `martinfowler.com` reports `[74×16] vs [76×18]` and the 2px is
+    /// **unattributable** — a different face, a different used size, or a different line-box rule all
+    /// look identical in a rect. A per-line delta compounds down a block *and* moves inline wrap points,
+    /// so it surfaces as "displacement" far from its cause; without the font, the next question has
+    /// nowhere to start.
+    ///
+    /// So the diff carries it, and a 2px height divergence reads as *"Chromium used Face A at 13px, we
+    /// used Face B at 14px"*. This is the same move as `.SIG` off the key (t550), `median_mag` (t552),
+    /// printed instances (t553) and the displaced/mis-sized split (t554): **make the diff carry the
+    /// datum the next question needs.** Empty is a legitimate value — a non-text element has no font
+    /// worth reporting — and an empty string prints as nothing rather than as a guess.
+    pub font: String,
 }
 
 /// What the two engines disagreed about, for one element.
@@ -133,6 +149,17 @@ pub fn oracle_is_healthy(chrome: &HashMap<String, Seen>) -> Result<(), String> {
     Ok(())
 }
 
+/// Render a `Seen.font` for an instance line: ` {Open Sans/13}`, or nothing when it is empty. Kept
+/// separate so an absent font prints as ABSENCE rather than as `{/0}`, which would read like a measured
+/// zero.
+fn fontsuffix(font: &str) -> String {
+    if font.is_empty() {
+        String::new()
+    } else {
+        format!("  {{{font}}}")
+    }
+}
+
 /// Diff one page. `tol` is the geometry tolerance in px.
 pub fn diff_page(
     site: &str,
@@ -149,8 +176,13 @@ pub fn diff_page(
                 tag: c.tag.clone(),
                 kind: "missing".into(),
                 chrome: format!(
-                    "{} [{} {} {}×{}]",
-                    c.display, c.rect[0], c.rect[1], c.rect[2], c.rect[3]
+                    "{} [{} {} {}×{}]{}",
+                    c.display,
+                    c.rect[0],
+                    c.rect[1],
+                    c.rect[2],
+                    c.rect[3],
+                    fontsuffix(&c.font)
                 ),
                 manuk: "(no box)".into(),
                 delta: [0; 4],
@@ -202,10 +234,21 @@ pub fn diff_page(
                         tag: c.tag.clone(),
                         kind: "geometry".into(),
                         chrome: format!(
-                            "[{} {} {}×{}]",
-                            c.rect[0], c.rect[1], c.rect[2], c.rect[3]
+                            "[{} {} {}×{}]{}",
+                            c.rect[0],
+                            c.rect[1],
+                            c.rect[2],
+                            c.rect[3],
+                            fontsuffix(&c.font)
                         ),
-                        manuk: format!("[{} {} {}×{}]", m.rect[0], m.rect[1], m.rect[2], m.rect[3]),
+                        manuk: format!(
+                            "[{} {} {}×{}]{}",
+                            m.rect[0],
+                            m.rect[1],
+                            m.rect[2],
+                            m.rect[3],
+                            fontsuffix(&m.font)
+                        ),
                         delta: d,
                     });
                 }
@@ -711,7 +754,68 @@ mod tests {
             tag: tag.into(),
             display: "block".into(),
             rect,
+            font: String::new(),
         }
+    }
+
+    fn seen_font(tag: &str, rect: [i64; 4], font: &str) -> Seen {
+        Seen {
+            tag: tag.into(),
+            display: "block".into(),
+            rect,
+            font: font.into(),
+        }
+    }
+
+    /// **A geometry instance must NAME THE FONT on both sides, or a 2px height divergence stays
+    /// unattributable.**
+    ///
+    /// t562's blocked question, made mechanical. `martinfowler.com` reported `[74×16] vs [76×18]` and
+    /// the 2px could equally be a different face, a different used size, or a different line-box rule —
+    /// three different fixes, indistinguishable in a rect. And an ABSENT font must print as absence: a
+    /// `{/0}` would read like a measured zero, which is the kind of fabricated datum this project keeps
+    /// catching in its own instruments.
+    #[test]
+    fn a_geometry_instance_names_the_font_on_both_sides() {
+        let mut c = HashMap::new();
+        let mut m = HashMap::new();
+        c.insert(
+            "a".to_string(),
+            seen_font("a", [0, 0, 74, 16], "Open Sans/13"),
+        );
+        m.insert(
+            "a".to_string(),
+            seen_font("a", [0, 0, 76, 18], "sans-serif/14"),
+        );
+        let d = diff_page("s.example", &c, &m, 1);
+        assert_eq!(
+            d.len(),
+            1,
+            "a 2px height delta beyond tolerance is one divergence"
+        );
+        assert!(
+            d[0].chrome.contains("{Open Sans/13}"),
+            "the CHROME side names its face and used size: {}",
+            d[0].chrome
+        );
+        assert!(
+            d[0].manuk.contains("{sans-serif/14}"),
+            "…and so does OURS — the comparison is the whole diagnostic: {}",
+            d[0].manuk
+        );
+
+        // No font supplied → the instance says NOTHING about the font, rather than `{/0}`.
+        let mut c2 = HashMap::new();
+        let mut m2 = HashMap::new();
+        c2.insert("a".to_string(), seen("a", [0, 0, 74, 16]));
+        m2.insert("a".to_string(), seen("a", [0, 0, 76, 18]));
+        let d2 = diff_page("s.example", &c2, &m2, 1);
+        assert!(
+            !d2[0].chrome.contains('{') && !d2[0].manuk.contains('{'),
+            "an ABSENT font prints as absence, never as a fabricated `{{/0}}`: {} / {}",
+            d2[0].chrome,
+            d2[0].manuk
+        );
     }
 
     fn geom_div(site: &str, tag: &str, delta: [i64; 4]) -> Divergence {

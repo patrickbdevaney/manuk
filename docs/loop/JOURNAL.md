@@ -22773,3 +22773,65 @@ remaining text-metric lead including martinfowler and probably nytimes. Then the
 #29 (`<search>` + `CloseWatcher`) as one tick, which discharges the I3 drift Checks #35 and #36 have both
 flagged; then the t556 cascade-origin bug (author `* { margin:0 }` losing to the UA `body` margin); then the
 crawl-side `.SIG` correction. Cadences: self-audit 564; surface 568; const 567; wall 567.
+
+## Tick 563 — the diff carries the COMPUTED FONT, and it answers t562's blocked question TWICE (2026-07-25)
+
+t562 ended by naming a block rather than guessing past it: every remaining text-metric lead needed a datum a
+rect cannot carry. `[74×16] vs [76×18]` could equally be a different face, a different used size, or a
+different line-box rule — three fixes, indistinguishable. So `oracle::Seen` gained `font`
+(`"<resolved family>/<used px>"`), emitted by Chromium's probe from `getComputedStyle().fontFamily`/`fontSize`
+and by ours from the resolved `FontFamily` + used size, recorded beside the box and printed on every instance.
+An **absent** font prints as absence, never `{/0}` — a fabricated zero reads like a measurement.
+
+RED-PROVEN: `a_geometry_instance_names_the_font_on_both_sides` asserts both sides name their face and size,
+AND that an absent font prints nothing; making `fontsuffix` emit `{/0}` fails it. Chromium's tuple grew 6→7
+and the parser still accepts 6 (an older cached probe output parses with an empty font rather than dropping
+the element — an absent datum must not silently remove an element from the diff). 39 lib tests green.
+
+IT PAID ON THE FIRST RUN, WITH TWO ANSWERS A RECT COULD NOT GIVE.
+
+**1 — same face, same size, different metrics.**
+```
+…/a:nth-child(37): [551 3126 51×16] {Open Sans/13}  vs  [112 3229 57×18] {Open Sans/13}
+```
+**Identical `{Open Sans/13}` on both sides**, and Chromium renders 51×16 where we render 57×18 — ~12% wider,
+2px taller. So it is **not** face selection (t557/t558 fixed that) and **not** font-size: it is the advance
+and line box of the *same face at the same size*. That points at the **variant** — Open Sans ships as a
+variable font and a different named instance has different advances — or at hinting/rounding. **A question
+that could not even be ASKED one tick ago.**
+
+**2 — and it is the larger finding: a webfont Chromium loads and we do not.**
+```
+…/p:nth-child(3): [20 2029 293×20] {Lora/13}  vs  [20 1752 619×20] {serif/13}
+```
+**Chromium resolves `Lora`; we fall back to `serif`.** `fc-list` reports **zero** Lora faces installed, so
+Chromium is fetching it from a declaration we are not seeing or not parsing. The `<p>` is **293px wide in
+Chromium and 619px in ours** — a different wrap width entirely, cascading to everything below and dwarfing the
+2px line box. Which also retires the last of t560's story: the site *does* pull a webfont, just not the one I
+went looking for.
+
+So martinfowler's residue is **two causes, separated and each independently actionable**, where twelve ticks
+of rect-only diffing could only say "displaced". **Rank: the missing `Lora` webfont first** — a wrong wrap
+width dominates a 2px line box — then the same-face metric delta.
+
+THE PATTERN, and this is its sixth instance: the ranked cluster list was never wrong about *where* the
+divergence was, only mute about *why*, and every brick that made the diff carry one more datum split one
+"cause" into the two or three real ones underneath — `.SIG` off the key (t550), `median_mag` (t552), printed
+instances (t553), displaced-vs-mis-sized (t554), three instances (t555), the font (t563). **Make the diff
+carry the datum the next question needs, then ask the question.** One field turned "displaced" into "a missing
+webfont and a variable-font variant".
+
+TICK SHAPE: instrument (the diff carries the computed font on both sides — `oracle::Seen.font`, Chromium's
+probe tuple 6→7 with backward-compatible parsing, our producer via a new `FontContext::resolved_family_name`;
+RED-proven that both sides name face+size and that an absent font prints as absence) + the two answers it
+immediately produced, ranked. No shipping-engine behaviour changed; Bar 0 untouched.
+WIKI: docs/wiki/conformance-and-oracles.md — "The diff carries the COMPUTED FONT — and a rect-only diff could
+not have asked the question (tick 563)". [no-pattern]
+
+NEXT: **the missing `Lora` webfont** — Chromium fetches a face we do not, so find the declaration we are not
+seeing (a `@font-face` in a stylesheet we skip, an `@import`, or a `<link>` we do not follow) and the wrap
+width follows. Then the same-face `{Open Sans/13}` metric delta (variable-font variant vs hinting). Then the
+two agentic rows from Audit #29 (`<search>` + `CloseWatcher`) as one tick, discharging the I3 drift Checks #35
+and #36 both flagged; then the t556 cascade-origin bug; then the crawl-side `.SIG` correction (and the crawl
+producer's `font` field, left empty here on purpose). Cadences: self-audit 564 (DUE next tick); surface 568;
+const 567; wall 567.

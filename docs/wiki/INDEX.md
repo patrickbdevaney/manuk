@@ -152,6 +152,7 @@
   - L949 · The class signature was making healthy pages read as 0% coverage (tick 550)
   - L962 · The ablation, measured on six sites, decisive in both directions
   - L985 · What this invalidates, said plainly
+  - L997 · The diff carries the COMPUTED FONT — and a rect-only diff could not have asked the question (tick 563)
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -983,4 +984,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-898 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+899 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

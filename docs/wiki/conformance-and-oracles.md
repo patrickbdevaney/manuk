@@ -993,3 +993,40 @@ over the intersection of keys, and the intersection just grew, so they change to
 The generalisable rule, because this is the second keying defect in twenty ticks: **an identity key must
 not be built out of the mutable state of things other than the element it identifies.** Position in the
 tree is structural; a class list is application state. [[fidelity-instrument-shared-snapshot]]
+
+## The diff carries the COMPUTED FONT — and a rect-only diff could not have asked the question (tick 563)
+
+By t562 every remaining text-metric lead was blocked on one missing datum. `martinfowler.com` reported
+`[74×16] vs [76×18]` and that 2px could equally be **a different face**, **a different used size**, or **a
+different line-box rule** — three different fixes, indistinguishable in a rect. So `oracle::Seen` gained
+`font`: `"<resolved family>/<used px>"`, emitted by Chromium's probe from `getComputedStyle().fontFamily` /
+`fontSize` and by ours from the resolved `FontFamily` plus the used size, recorded at the same point as the
+box and printed on every instance. An **absent** font prints as absence, never `{/0}` — a fabricated zero
+reads like a measurement, which is the failure this repo keeps catching in its own instruments.
+
+**It paid on the first run, with two answers a rect could not give.**
+
+**1 — same face, same size, different metrics.**
+```
+…/a:nth-child(37): [551 3126 51×16] {Open Sans/13}  vs  [112 3229 57×18] {Open Sans/13}
+```
+Identical `{Open Sans/13}` on both sides, and Chromium renders 51×16 where we render 57×18: ~12% wider, 2px
+taller. So it is **not** face selection (fixed at t557/t558) and **not** font-size — it is the advance and
+line box of the *same face at the same size*, which points at the **variant** (Open Sans ships as a variable
+font; a different named instance has different advances) or at hinting/rounding.
+
+**2 — a webfont Chromium loads and we do not.**
+```
+…/p:nth-child(3): [20 2029 293×20] {Lora/13}  vs  [20 1752 619×20] {serif/13}
+```
+Chromium resolves `Lora`; we fall back to `serif`. `fc-list` reports **zero** Lora faces installed, so
+Chromium is fetching it from a declaration we are not seeing or not parsing. The `<p>` is **293px wide in
+Chromium and 619px in ours** — a different wrap width entirely, which cascades to everything below it and
+dwarfs the 2px line box.
+
+**The pattern this is the sixth instance of:** the ranked cluster list was never wrong about *where* the
+divergence was, only mute about *why*, and each brick that made the diff carry one more datum split one
+"cause" into the two or three real ones underneath it — `.SIG` off the key (t550), `median_mag` (t552),
+printed instances (t553), displaced-vs-mis-sized (t554), three instances (t555), the font (t563). **Make the
+diff carry the datum the next question needs, then ask the question.** Twelve ticks of rect-only diffing could
+only say "displaced"; one field said "a missing webfont and a variable-font variant". [[fidelity-instrument-shared-snapshot]]

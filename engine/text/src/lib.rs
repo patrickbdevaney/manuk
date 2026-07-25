@@ -575,6 +575,22 @@ impl FontContext {
         FontFamily::SansSerif
     }
 
+    /// The **name of the family this stack actually resolves to** — the answer to *"which face did you
+    /// use?"*, which a box on its own cannot give.
+    ///
+    /// Returns the family name for a `Named(...)` resolution and the generic keyword otherwise, so a
+    /// diff can say `Open Sans/13` vs `sans-serif/14` instead of leaving a 2px height divergence
+    /// unattributable (t562/t563). `None` only when the list resolves to nothing nameable, which the
+    /// caller renders as `?` rather than as a guess.
+    pub fn resolved_family_name(&self, names: &[String]) -> Option<String> {
+        match self.resolve_family(names) {
+            FontFamily::Named(id) => self.family_name_of(id),
+            FontFamily::SansSerif => Some("sans-serif".to_string()),
+            FontFamily::Serif => Some("serif".to_string()),
+            FontFamily::Monospace => Some("monospace".to_string()),
+        }
+    }
+
     /// Resolve the fontdb face id for `key` (specific query, else any face).
     fn face_id(&self, key: FontKey) -> Option<fontdb::ID> {
         let named = match key.family {

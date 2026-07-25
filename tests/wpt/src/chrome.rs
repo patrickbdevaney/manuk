@@ -58,7 +58,8 @@ pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})
 /// React/Tailwind pages barely use ids (39% of the corpus was unmeasurable on `[id]` keys); a path is
 /// present on every element.
 ///
-/// Since tick 537 (brick 4b) each entry is a **`Seen`-shaped 6-tuple** `[tag, display, x, y, w, h]`
+/// Since tick 537 (brick 4b) each entry is a **`Seen`-shaped tuple** `[tag, display, x, y, w, h]`, and since tick 563 a
+/// 7th slot `"<family>/<px>"` carrying the COMPUTED FONT that produced the box
 /// — the SAME shape as the differential `oracle_probe` — not the bare 4-tuple box it emitted before.
 /// The extra tag+display let the G1 fidelity probe carry `oracle::Seen` maps and call the four jarring
 /// invariants (`jarring_h_overflow`/`jarring_overlap`/`jarring_reading_order`/`jarring_collapsed_target`)
@@ -82,7 +83,13 @@ for(var k=0;k<lim;k++){var e=all[k];var t=e.tagName.toLowerCase();
   if(t==='script'||t==='style'||t==='head'||t==='meta'||t==='link'||t==='base'||t==='title'||t==='noscript'||t==='template'||t==='html')continue;
   var r=e.getBoundingClientRect();
   if(r.width===0&&r.height===0)continue;   // not rendered: don't demand Manuk render it either
-  out[pathOf(e)]=[t,getComputedStyle(e).display,Math.round(r.x+window.scrollX),Math.round(r.y+window.scrollY),Math.round(r.width),Math.round(r.height)];}
+  var cs0=getComputedStyle(e);
+  // The COMPUTED FONT that produced this box: first declared family (unquoted) + used px size. A rect
+  // cannot say which face or size made it, and by t562 every remaining text-metric lead was blocked on
+  // exactly that — `[74x16] vs [76x18]` is unattributable without it (t563).
+  var fam0=(cs0.fontFamily||'').split(',')[0].trim().replace(/^["']|["']$/g,'');
+  var px0=Math.round(parseFloat(cs0.fontSize)||0);
+  out[pathOf(e)]=[t,cs0.display,Math.round(r.x+window.scrollX),Math.round(r.y+window.scrollY),Math.round(r.width),Math.round(r.height),fam0+'/'+px0];}
 var pre=document.createElement('pre');pre.id='__PARITY__';
 pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})();
 </script>"#;
@@ -596,9 +603,9 @@ fn parse_probe_json(dumped_dom: &str) -> Result<HashMap<String, Box4>> {
 }
 
 /// Pull the `#__PARITY__` JSON out of a dumped DOM and parse it as `Seen` entries — the enriched
-/// path producer (brick 4b) whose values are the 6-tuple `[tag, display, x, y, w, h]`, the same shape
+/// path producer (brick 4b) whose values are `[tag, display, x, y, w, h]` plus (since t563) a 7th `"<family>/<px>"`, the same shape
 /// `oracle_probe` emits. Reuses our own HTML parser so entity-escaping is handled correctly. Skips any
-/// entry that is not a well-formed 6-tuple rather than failing the whole page.
+/// entry that is not a well-formed 6- or 7-tuple rather than failing the whole page.
 fn parse_seen_probe_json(dumped_dom: &str) -> Result<HashMap<String, crate::oracle::Seen>> {
     use crate::oracle::Seen;
     let dom = manuk_html::parse(dumped_dom);
@@ -619,7 +626,10 @@ fn parse_seen_probe_json(dumped_dom: &str) -> Result<HashMap<String, crate::orac
     let mut map = HashMap::new();
     for (id, v) in raw {
         let Some(a) = v.as_array() else { continue };
-        if a.len() != 6 {
+        // 7 since t563 (the computed font joined the tuple); 6 is still accepted so a cached probe
+        // output from before that change parses with an EMPTY font rather than being dropped — an
+        // absent datum must not silently remove the element from the diff.
+        if a.len() != 6 && a.len() != 7 {
             continue;
         }
         let (Some(tag), Some(display)) = (a[0].as_str(), a[1].as_str()) else {
@@ -645,6 +655,7 @@ fn parse_seen_probe_json(dumped_dom: &str) -> Result<HashMap<String, crate::orac
                 tag: tag.to_string(),
                 display: display.to_string(),
                 rect,
+                font: a.get(6).and_then(|f| f.as_str()).unwrap_or("").to_string(),
             },
         );
     }

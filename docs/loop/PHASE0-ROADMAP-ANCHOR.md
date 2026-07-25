@@ -358,3 +358,24 @@ never WPT count, never a vibe.
   unattributable displacement. That is the same step the `.SIG`, `median_mag`, instance-printing and
   displaced-vs-mis-sized bricks each were: **make the diff carry the datum the next question needs.**
 
+- `UNBLOCKED @tick 563 — the diff now names the FONT on both sides, and it answers t562's question twice.`
+  `oracle::Seen` gained `font` (`"<resolved family>/<used px>"`), emitted by Chromium's probe from
+  `getComputedStyle` and by ours from the resolved `FontFamily` + used size, and printed on every instance.
+  On the site that was blocked:
+  **ANSWER 1 — same face, same size, different metrics.**
+  `…/a:nth-child(37): [551 3126 51×16] {Open Sans/13} vs [112 3229 57×18] {Open Sans/13}` — **identical
+  `{Open Sans/13}` on both sides**, yet Chromium renders 51×16 and we render 57×18. So it is **not** face
+  selection (t557/t558) and **not** font-size: it is the **advance and line box of the SAME face at the SAME
+  size** — we are ~12% wider and 2px taller. That points at the *variant* (Open Sans ships as a variable font;
+  a different named instance/weight has different advances) or at hinting/rounding, and it is a question that
+  could not even be ASKED before this brick.
+  **ANSWER 2 — and it is a separate, larger finding: a webfont Chromium loads and we do not.**
+  `…/p:nth-child(3): [20 2029 293×20] {Lora/13} vs [20 1752 619×20] {serif/13}` — **Chromium resolves `Lora`
+  and we fall back to `serif`.** `fc-list` reports **zero** Lora faces installed, so Chromium is getting it
+  over the network from a declaration we are not fetching or not parsing. The consequence is not subtle: that
+  `<p>` is **293px wide in Chromium and 619px in ours** — a completely different wrap width, which is the
+  single biggest per-element divergence on the page and it cascades to everything below.
+  So the martinfowler residue is **two** causes, now separated and each independently actionable, where twelve
+  ticks of rect-only diffing could only say "displaced". **Rank: the missing `Lora` webfont first** (a wrong
+  wrap width dominates a 2px line box), then the same-face metric delta.
+

@@ -540,11 +540,26 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                                 .map(|s| css_display_name(s.display))
                                 .unwrap_or("none")
                                 .to_string();
+                            // The COMPUTED FONT that produced this box, in the same
+                            // `"<family>/<px>"` shape Chromium's probe emits — resolved family name
+                            // (not the declared stack) and used size, so the two are comparable. See
+                            // `oracle::Seen::font`: by t562 every remaining text-metric lead was
+                            // blocked on a rect that could not say which face or size made it.
+                            let font = styles
+                                .get(&n)
+                                .map(|st| {
+                                    let fam = fonts
+                                        .resolved_family_name(&st.font_family)
+                                        .unwrap_or_else(|| "?".to_string());
+                                    format!("{fam}/{}", st.font_size.round() as i64)
+                                })
+                                .unwrap_or_default();
                             mseen.insert(
                                 path,
                                 manuk_wpt::oracle::Seen {
                                     tag: tag.to_string(),
                                     display,
+                                    font,
                                     rect: [
                                         r.x.round() as i64,
                                         r.y.round() as i64,
@@ -1859,7 +1874,21 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
         };
         let mut chrome: HashMap<String, Seen> = chrome_raw
             .into_iter()
-            .map(|(id, (tag, display, rect))| (id, Seen { tag, display, rect }))
+            .map(|(id, (tag, display, rect))| {
+                // The crawl-side producer does not carry the computed font yet (the exit gate got it
+                // first at t563). Empty rather than fabricated: `Seen::font` documents that an empty
+                // string prints as ABSENCE, so a crawl instance simply says nothing about the font
+                // instead of implying one was measured.
+                (
+                    id,
+                    Seen {
+                        tag,
+                        display,
+                        rect,
+                        font: String::new(),
+                    },
+                )
+            })
             .collect();
 
         // --- Never diff against a degraded oracle.
@@ -1939,7 +1968,15 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
                     None if display == "none" => [0, 0, 0, 0],
                     None => return None,
                 };
-                Some((id, Seen { tag, display, rect }))
+                Some((
+                    id,
+                    Seen {
+                        tag,
+                        display,
+                        rect,
+                        font: String::new(),
+                    },
+                ))
             })
             .collect();
 

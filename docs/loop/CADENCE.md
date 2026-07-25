@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **324** | ticks 1–562 |
-| median tick cycle | **21m** | 323 intervals |
-| median, last 10 | **14m** | 10 intervals |
+| ticks landed | **325** | ticks 1–563 |
+| median tick cycle | **20m** | 324 intervals |
+| median, last 10 | **18m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.96** | 338.0h elapsed |
-| median verify wall | **64s** | 263 ticks |
+| **ticks per hour** | **0.96** | 338.4h elapsed |
+| median verify wall | **64s** | 264 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**169 of 324 ticks** (52%) moved a
+**169 of 325 ticks** (52%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **169** capability ticks, median cycle **21m**
-* median diff per tick: **+218 / −34** lines across 8 files
+* **169** capability ticks, median cycle **20m**
+* median diff per tick: **+219 / −34** lines across 8 files
 
 ## Every tick
 
@@ -421,5 +421,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **560** | 2026-07-25 06:44 | 4m | diagnosis | 67s | +112/−32 | 274 | 81 | 56.0% · | the martinfowler regression DIAGNOSED: webfont shadowing, not resolution (2026-07-25) |
 | **561** | 2026-07-25 07:00 | 16m | capability | 67s | +274/−33 | 274 | 81 | 56.0% · | `@font-face` shadowing landed (spec-correct), and it REFUTED my own t560 diagnosis (2026-0 |
 | **562** | 2026-07-25 07:05 | 5m | measurement | 67s | +123/−32 | 274 | 81 | 56.0% · | the line-box derivation is EXACT; the residual is face-specific and the instrument cannot  |
+| **563** | 2026-07-25 07:24 | 19m | instrument | 67s | +335/−45 | 274 | 81 | 56.0% · | the diff carries the COMPUTED FONT, and it answers t562's blocked question TWICE (2026-07- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

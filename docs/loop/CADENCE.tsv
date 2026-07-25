@@ -323,3 +323,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 560	43311894	1784976256	2026-07-25T06:44:16-04:00	218	diagnosis	67	7	112	32	274	81	3896	6960	0	329	31	the martinfowler regression DIAGNOSED: webfont shadowing, not resolution (2026-07-25)
 561	a5cd5f4e	1784977212	2026-07-25T07:00:12-04:00	956	capability	67	10	274	33	274	81	3896	6960	0	329	31	`@font-face` shadowing landed (spec-correct), and it REFUTED my own t560 diagnosis (2026-07-25)
 562	3ea16c37	1784977513	2026-07-25T07:05:13-04:00	301	measurement	67	7	123	32	274	81	3896	6960	0	329	31	the line-box derivation is EXACT; the residual is face-specific and the instrument cannot name it (2026-07-25)
+563	6ca36bce	1784978676	2026-07-25T07:24:36-04:00	1163	instrument	67	11	335	45	274	81	3896	6960	0	329	31	the diff carries the COMPUTED FONT, and it answers t562's blocked question TWICE (2026-07-25)
