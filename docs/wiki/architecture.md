@@ -253,6 +253,42 @@ does exactly this, **and still lands 30–45% in "heap-unclassified"**).
 > **Printing a fabricated per-tab number is the dishonesty the feature exists to prevent. Report "not
 > reported."**
 
+## `drop()` frees to the ALLOCATOR; only a trim frees to the KERNEL — and eviction is judged on the second (tick 571)
+
+The section above ends with *"RSS reclaim additionally depends on the allocator returning freed pages to
+the OS."* That sentence sat here, correct and inert, for hundreds of ticks. The first run of the 100-tab
+benchmark (`manuk-wpt memtabs`) measured what it was pointing at, and **the dependency was not partly
+satisfied — it was totally unsatisfied.**
+
+On wix.com (3 MB of HTML) the process grew to **1.31 GB**. Dropping the whole `Page` returned **0%**.
+A single `malloc_trim(0)` returned **92%** (1.20 GB). The page's *retained* heap was ~11 MB — so
+essentially none of that gigabyte was live data at all. It was the **transient spike of parse + cascade**,
+freed to glibc and then held in its arenas forever.
+
+**Why the automatic trim does not save you, which is the part that is easy to get wrong.** glibc already
+shrinks the top of the heap when the free run there exceeds `M_TRIM_THRESHOLD`. So a program that
+allocates a slab and frees all of it *does* give the memory back with no help. A browser never has that
+shape: the spike is freed **around** the data the page keeps, stranding free pages in the middle of the
+heap where the top-of-heap shrink can never reach them. Only an explicit `malloc_trim` walks the free
+lists and hands those interior pages back.
+
+> This is also the trap that makes a *gate* for it easy to write wrongly. The first version of
+> `G_TAB_DISCARD_RELEASES_TO_OS` allocated and freed one contiguous slab — and **passed with the trim
+> stubbed out**, because the automatic shrink did the work. A gate must reproduce the *fragmented* shape
+> (keep every Nth allocation alive) or it is testing glibc's default, not our fix.
+
+**The consequence for the memory claim** (see *"The memory claim is STRUCTURAL"* above): an eviction that
+does not end in a trim is **bookkeeping, not eviction**. `TabManager` could move a tab to `Hibernated`,
+the owner could drop the `Page`, and the footprint the OOM killer reads would not move by one page. So the
+trim belongs on **discard** — the rare event — and *not* on freeze (which hands back pages the still-live
+page faults straight back in) and not per frame (it walks the free lists, so it costs real time).
+
+**RSS is also the wrong axis for comparing against a multi-process browser, in our favour, which means we
+must not use it.** Summing per-process RSS over a process tree counts every shared page once per process —
+the binary, the fonts, every copy-on-write page — so the arithmetic flatters a single-process design for
+free. `Pss` divides each shared page by the number of mappers and is the honest total. **Compare PSS to
+PSS.** `manuk_compositor::mem::Footprint` reports both for exactly this reason.
+
 ## Two design decisions recorded as DECIDED-BUT-UNDONE
 
 - **The DOM bindings are string-`eval` bindings.** Large parts build JS source strings and `eval` them (the

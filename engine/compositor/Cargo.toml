@@ -10,3 +10,9 @@ description = "Layer compositing, scroll, damage tracking, and tab hibernation l
 manuk-paint.workspace = true
 manuk-layout.workspace = true
 tracing.workspace = true
+
+# `mem::release_free_memory_to_os` needs `malloc_trim(3)`, which has no `std` equivalent:
+# Rust's allocator API can free to the allocator but never asks the allocator to hand pages
+# back to the kernel. Linux-only by target so no other platform grows a dependency for it.
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"

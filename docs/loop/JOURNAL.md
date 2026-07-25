@@ -23236,3 +23236,106 @@ reading-order / dead-target), which are certificate bars rather than placement p
 `align-items` mapping plus the unmodelled `align-content`/`justify-items` — the same class as t569,
 audited rather than guessed. Then the t556 cascade-origin bug. Cadences: self-audit 574; surface 578;
 const 575; wall 587.
+
+## Tick 571 — the 100-tab RSS benchmark, run for the first time: 4.39 GB, and eviction was returning NOTHING to the kernel (2026-07-25)
+
+`PHASE0-BOUNDED-REMAINDER.md` row 25b has read *"defined, never run; the memory thesis rests on zero
+data"* for ~350 ticks, and the observer's t543 orders put it in STEP 1 beside test262 (run at t546) as
+exit verification. This tick built the harness (`manuk-wpt memtabs`), ran it, and the first number it
+produced immediately falsified something we had been shipping.
+
+**THE HEADLINE: 100 real-site tabs = 4390 MB over an 11.4 MB floor. Median marginal cost 0.90 MB/tab;
+p90 49.7 MB.** Those two numbers say opposite-looking things and both are true. The **median** is the
+isolate model working exactly as claimed — a hundredth tab costs about a megabyte. The **aggregate** is
+carried almost entirely by four sites: wix.com **1274 MB**, apnews **938**, hubspot **708**, replit
+**431** — **76% of the total from 4% of the corpus**, each from ≤3 MB of HTML. An average would have
+hidden that completely, which is why the harness reports median and p90 and never `total / n`. Dividing
+the fixed process floor across the tabs makes per-tab cost fall as `n` rises by arithmetic alone; that is
+a way of winning, not of measuring.
+
+**AND THE THING THE BENCHMARK WAS ACTUALLY FOR.** `docs/wiki/architecture.md` already contained the
+sentence *"RSS reclaim additionally depends on the allocator returning freed pages to the OS."* It had
+sat there, correct and inert, never checked. **The dependency was not partly satisfied — it was totally
+unsatisfied.** Dropping every `Page` after the 100-tab load returned **3%**. On wix.com alone: 1305 MB
+grew, `drop()` returned **0%**, and a single `malloc_trim(0)` returned **1200.8 MB — 92%**. The page's
+*retained* heap was ~11 MB, so essentially none of that gigabyte was live data at all; it was the
+transient spike of parse+cascade, freed to glibc and then held in its arenas for the life of the process.
+RSS is what the OOM killer and the user's task manager read. **`TabManager` could move a tab to
+`Hibernated`, the owner could drop the whole `Page`, and the footprint would not move by one page** —
+so every eviction this browser has ever performed was bookkeeping, not eviction.
+
+FIXED: `manuk_compositor::mem::release_free_memory_to_os()` (`malloc_trim`, glibc-only, honest `false`
+elsewhere), called from `Browser::discard`. Deliberately **on discard and nowhere else**: not on freeze
+(it hands back pages the still-live page faults straight in) and not per frame (it walks the free lists).
+**THE `--trim-each` COUNTERFACTUAL LOOKED LIKE A SECOND FIX AND THEN STOPPED LOOKING LIKE ONE, WHICH IS
+WHY IT WAS RUN TO n=100 INSTEAD OF STOPPED AT THE GOOD NUMBER.** Trimming after *every page load* rather
+than only on eviction gives: n=10 **1422.8 → 770.3 MB (−46%)**, n=25 −31%, n=50 −17%, **n=100 4390.2 →
+4126.6 MB (−6%)**. The benefit decays monotonically to nearly nothing at exactly the scale the benchmark
+exists to measure. The absolute saving is roughly a fixed ~0.3–0.6 GB — the trim reclaims the most recent
+spike, and as more pages hold live data the freed pages interleave with it and stop being reclaimable at
+all. **Had I reported the n=10 figure I would have banked a 46% win that is 6% where it counts.** That is
+the `median_mag`/denominator lesson from t557 arriving from a new direction: a ratio is not a
+measurement until you know which n it was taken at. Trim-on-load is therefore **not** wired, and the
+decision to trim on discard only is now measured rather than assumed.
+
+**A residual nobody had seen: after dropping all 100 pages AND trimming, 1299.8 MB is still resident** —
+and it is 1299.9 MB in the untrimmed run, the same figure to within 0.1 MB. A constant that survives both
+paths is not allocator behaviour; it is something genuinely still held. Not chased this tick, named here.
+
+**THE GATE CAUGHT ME FIRST, AND THAT IS THE METHOD LESSON.** `G_TAB_DISCARD_RELEASES_TO_OS`'s first
+draft allocated 256 MB in 64 KiB chunks, freed all of it, and asserted the trim returned it — and it
+**PASSED WITH THE TRIM STUBBED OUT**. glibc already shrinks the top of the heap when the free run there
+exceeds `M_TRIM_THRESHOLD`, so freeing one contiguous slab needs no help from us. The real browser shape
+is not that: the load spike is freed **around** the data the page keeps, stranding free pages mid-heap
+where the top-of-heap shrink can never reach them. Pinning every 64th chunk reproduces it, and the RED
+patch then fails exactly as the real thing did — *"257 MB became resident, drop() returned 3 MB and the
+trim returned 0 MB — 254 MB of 257 MB never went back to the kernel."* **A gate that does not reproduce
+the failure's shape is testing the platform's default, not your fix**, and it passes for the same reason
+the bug was invisible. This is the sibling of t565's over-specified probe: there a passing probe hid the
+bug, here a passing gate hid the absence of a fix.
+
+**SECOND FINDING, NOT FIXED, NAMED: `Page::estimated_bytes` under-reports real growth by 16.8x** (260.7 MB
+claimed against 4390.2 MB) — 117x on wix alone. It is the number `TabManager`'s entire per-tab accounting
+and the task manager's per-tab column are built on. It walks the fragment tree, DOM and computed styles
+and cannot see the JS heap, decoded images, raster tiles or the font atlas. It is documented as a proxy;
+what was never known is the size of the error bar. Now it is.
+
+**THIRD FINDING, NOT FIXED, NAMED — and it is a Bar-0 risk, not a tuning item.** wix.com: 3 MB of HTML →
+**1.31 GB**. Bisected against the input rather than guessed: strip `<script>` → 655 MB, strip `<style>` →
+**143 MB**, all 68 `<style>` blocks with a one-element body → 65 MB. So CSS-only 65 + DOM-only 143 = 208,
+against 1308 together. **The cost is not in either input, it is in the cascade's cross product**, and it
+is transient (the retained `StyleMap` is ~11 MB). Four such sites are in a 100-site corpus. Logged as
+row 25b′.
+
+**And the elapsed column added at the end of the tick made it worse, in the useful way: wix.com takes
+164.7 SECONDS to load one page.** So the same cross product is simultaneously our largest memory outlier
+and a page-load time far past any hang threshold — `ORACLE_HANGS: 31` on our own clock has probably been
+counting this defect all along without anyone connecting the two. **One root cause, showing up on two
+instruments that were never read together.** That promotes 25b′ above everything else queued: it is Bar 0
+on the time axis and Bar 0 on the memory axis at once.
+
+NOT BANKED: any pass/fail threshold. `ENGINEERING-SYNTHESIS.md` defers the 2–3 GB budget to Phase 1, and
+`docs/loop/PROCESS-MODEL.md` §7 wants the Chromium side of the comparison, which does not exist yet.
+Fitting a bar to the first measurement is how a benchmark stops being one. Also recorded as required:
+this is **LINUX-ONLY**; macOS/Windows are a known unmeasured gap, not a passing result. The harness
+reports **PSS beside RSS** because summing per-process RSS across a process tree counts every shared page
+once per process and flatters a single-process design for free — the comparison PROCESS-MODEL §7 asks for
+must be PSS to PSS, or we will win it by arithmetic.
+
+TICK SHAPE: measurement (the 100-tab benchmark built and run — the last unrun item of the observer's
+STEP-1 exit verification; median/p90 marginal, PSS beside RSS, proxy error quantified, four pathological
+sites named) + capability (`release_free_memory_to_os` wired into `Browser::discard`, so an evicted tab
+now actually returns its memory to the OS — 92% of a 1.3 GB spike where it previously returned 0%).
+Bar 0 untouched. Gates: `G_TAB_DISCARD_RELEASES_TO_OS` (RED-proven, in the wall via `-p manuk-shell`)
+and the `smaps_rollup` parser identities in `manuk-compositor`.
+WIKI: docs/wiki/architecture.md — "`drop()` frees to the ALLOCATOR; only a trim frees to the KERNEL".
+PATTERN: "The site-builder mega-CSS page — megabytes of inline `<style>` in dozens of blocks".
+
+NEXT: **the cascade's cross-product blow-up** (row 25b′) — wix/apnews/hubspot/replit turn ≤3 MB of input
+into 0.4–1.3 GB of transient allocation AND, on wix, 164.7 s of page load. It is Bar 0 on both the memory
+and the time axis, it is the likely explanation for a chunk of `ORACLE_HANGS: 31`, and it now has a
+reproducible input bisect (`<style>` stripped → 143 MB; all the CSS with a one-element body → 65 MB). Then the `{Open Sans/13}` `<a>` horizontal displacement (t570's named
+top cluster, still untouched). Then the three jarring invariants on martinfowler (overlap 14 /
+reading-order 13 / dead-target 9 — certificate bars). Then the eager `align-items` mapping plus the
+unmodelled `align-content`/`justify-items`. Then the t556 cascade-origin bug.
+Cadences: self-audit 574; surface 578; const 575; wall 587.

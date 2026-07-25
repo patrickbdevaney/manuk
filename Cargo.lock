@@ -3201,6 +3201,7 @@ dependencies = [
 name = "manuk-compositor"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "manuk-layout",
  "manuk-paint",
  "tracing",
@@ -3455,6 +3456,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "image",
+ "manuk-compositor",
  "manuk-css",
  "manuk-dom",
  "manuk-html",

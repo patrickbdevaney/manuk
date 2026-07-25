@@ -52,6 +52,10 @@ manuk-page.workspace = true
 manuk-js.workspace = true
 manuk-net.workspace = true
 manuk-paint.workspace = true
+# `memtabs` (the 100-tab RSS benchmark) reads the process footprint through
+# `manuk_compositor::mem`, which is where the tier/eviction policy the benchmark exists to
+# test also lives — so the harness measures the same crate that makes the memory claim.
+manuk-compositor.workspace = true
 anyhow.workspace = true
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 serde_json.workspace = true

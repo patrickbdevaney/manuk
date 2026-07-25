@@ -46,6 +46,123 @@ pub mod mem {
             None
         }
     }
+
+    /// A whole-process memory footprint, split by who actually pays for each page.
+    ///
+    /// **RSS alone is the wrong number for the memory claim, and this type exists to say
+    /// why.** RSS counts every resident page at full price, including pages shared with
+    /// other processes — so a browser that spreads N tabs over N processes has its shared
+    /// binary, its shared fonts and its copy-on-write heap counted N times when you sum
+    /// per-process RSS, while a single-process browser counts them once. Summing RSS
+    /// across a process tree therefore *flatters* the single-process design for free, and
+    /// a win measured that way is an artefact of the arithmetic rather than of the engine.
+    ///
+    /// `Pss` (proportional set size) is the honest counterpart: each shared page is
+    /// divided by the number of processes mapping it, so PSS summed over a tree is a real
+    /// total. **Compare PSS to PSS.** `private` is the amount that would actually be
+    /// returned to the OS if this process exited — the ceiling on what any eviction
+    /// policy can ever reclaim.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct Footprint {
+        /// Resident set size — every resident page at full price, shared or not.
+        pub rss_bytes: usize,
+        /// Proportional set size — shared pages divided by the number of mappers.
+        pub pss_bytes: usize,
+        /// `Private_Clean + Private_Dirty` — mapped by this process alone.
+        pub private_bytes: usize,
+        /// `Shared_Clean + Shared_Dirty` — mapped by at least one other process too.
+        pub shared_bytes: usize,
+        /// Anonymous pages pushed out to swap. Resident cost is 0 but the page is still
+        /// owed, so a footprint that "improved" while swap grew has not improved.
+        pub swap_bytes: usize,
+    }
+
+    /// Read [`Footprint`] from `/proc/self/smaps_rollup`, or `None` where that is not
+    /// available (non-Linux, or a kernel older than 4.14 which lacks the rollup file).
+    ///
+    /// The rollup is the pre-summed form of `/proc/self/smaps`; reading it is one file
+    /// read rather than a walk over thousands of VMA blocks, which matters because the
+    /// walk itself allocates and so perturbs the thing being measured.
+    pub fn process_footprint() -> Option<Footprint> {
+        #[cfg(target_os = "linux")]
+        {
+            parse_smaps_rollup(&std::fs::read_to_string("/proc/self/smaps_rollup").ok()?)
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            None
+        }
+    }
+
+    /// Ask the allocator to return its free pages to the kernel. Returns `true` if any
+    /// memory was actually released.
+    ///
+    /// **This is the missing half of every eviction policy in this crate, and the 100-tab
+    /// benchmark is what found it.** [`TabManager`] can move a tab to
+    /// [`RenderTier::Hibernated`] and the owner can drop the whole `Page`, and the process
+    /// footprint will not move — because `free()` returns memory to *glibc*, and glibc
+    /// keeps it in per-thread arenas against the next allocation. That is the right default
+    /// for a program with a steady allocation rate. It is the wrong one for a browser,
+    /// whose peak is a transient spike during load (parse + cascade) an order of magnitude
+    /// above what the page actually retains: the spike gets baked into RSS permanently, and
+    /// RSS is what the OOM killer, the user's task manager, and any memory comparison read.
+    ///
+    /// So an eviction that does not end in a trim is bookkeeping, not eviction. Call this
+    /// after discarding a tab, not on every frame — it walks the free lists and can `munmap`,
+    /// so it costs real time and hands back pages the next allocation may fault straight
+    /// back in.
+    ///
+    /// Non-glibc targets (musl, macOS, Windows) have no equivalent and return `false`; the
+    /// footprint there is a **known unmeasured gap**, not a passing result.
+    pub fn release_free_memory_to_os() -> bool {
+        #[cfg(all(target_os = "linux", target_env = "gnu"))]
+        {
+            // SAFETY: `malloc_trim` takes a pad in bytes and only releases memory the
+            // allocator already owns and considers free. It touches no live allocation and
+            // has no Rust-visible side effect beyond the process footprint.
+            unsafe { libc::malloc_trim(0) == 1 }
+        }
+        #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+        {
+            false
+        }
+    }
+
+    /// Parse the `key: N kB` body of a `smaps_rollup` file. Split out from the read so
+    /// the parser is testable without a `/proc` that has the fields we want.
+    pub fn parse_smaps_rollup(text: &str) -> Option<Footprint> {
+        let mut f = Footprint::default();
+        let mut saw_rss = false;
+        for line in text.lines() {
+            let Some((key, rest)) = line.split_once(':') else {
+                continue;
+            };
+            // Every size field in this file is in kB; anything else (the header line's
+            // address range) has no colon-separated numeric body and is skipped.
+            let Some(kb) = rest
+                .split_whitespace()
+                .next()
+                .and_then(|n| n.parse::<usize>().ok())
+            else {
+                continue;
+            };
+            let bytes = kb * 1024;
+            match key.trim() {
+                "Rss" => {
+                    f.rss_bytes = bytes;
+                    saw_rss = true;
+                }
+                "Pss" => f.pss_bytes = bytes,
+                "Private_Clean" | "Private_Dirty" => f.private_bytes += bytes,
+                "Shared_Clean" | "Shared_Dirty" => f.shared_bytes += bytes,
+                "Swap" => f.swap_bytes = bytes,
+                _ => {}
+            }
+        }
+        // A rollup without an `Rss` line is not a rollup — report unavailable rather than
+        // an all-zero footprint, because a zero here reads as "we use no memory".
+        saw_rss.then_some(f)
+    }
 }
 
 /// Rolling frame-time instrument (CLAUDE.md §8 metric #4). Records per-frame
@@ -452,6 +569,58 @@ mod tests {
                 // Only acceptable off Linux (this environment is Linux).
                 assert!(!cfg!(target_os = "linux"), "RSS probe should work on Linux");
             }
+        }
+    }
+
+    /// The `smaps_rollup` parser, against a real kernel's output shape.
+    ///
+    /// The two assertions that matter are the *relationships*, because they are what make
+    /// the footprint interpretable: `Pss <= Rss` always (PSS only ever divides a shared
+    /// page's cost down), and `Private + Shared == Rss` exactly (every resident page is one
+    /// or the other). A parser that transposed two fields would still produce plausible
+    /// megabyte figures and would be caught only by these.
+    #[test]
+    fn smaps_rollup_parses_and_the_footprint_identities_hold() {
+        // A verbatim-shaped rollup: the header line has no numeric body and must be
+        // skipped, and `Rss` must not be confused with `Pss` or the `_Dirty` components.
+        let sample = "\
+55a0c0a00000-7ffd2b5ff000 ---p 00000000 00:00 0                          [rollup]
+Rss:              102400 kB
+Pss:               71680 kB
+Pss_Dirty:         40960 kB
+Shared_Clean:      40960 kB
+Shared_Dirty:          0 kB
+Private_Clean:     10240 kB
+Private_Dirty:     51200 kB
+Swap:               2048 kB
+";
+        let f = mem::parse_smaps_rollup(sample).expect("a rollup with an Rss line parses");
+        assert_eq!(f.rss_bytes, 102400 * 1024);
+        assert_eq!(f.pss_bytes, 71680 * 1024);
+        assert_eq!(f.private_bytes, (10240 + 51200) * 1024);
+        assert_eq!(f.shared_bytes, (40960 + 0) * 1024);
+        assert_eq!(f.swap_bytes, 2048 * 1024);
+        assert!(f.pss_bytes <= f.rss_bytes, "PSS can never exceed RSS");
+        assert_eq!(
+            f.private_bytes + f.shared_bytes,
+            f.rss_bytes,
+            "every resident page is private or shared — if these do not sum to RSS a field \
+             is being dropped or double-counted"
+        );
+
+        // A file with no `Rss` line is not a rollup. Reporting `None` rather than a
+        // default-zero `Footprint` matters: a zero here reads as "we use no memory", which
+        // is the most flattering possible way to be broken.
+        assert!(mem::parse_smaps_rollup("Pss: 100 kB\n").is_none());
+        assert!(mem::parse_smaps_rollup("").is_none());
+
+        // And the live reading must satisfy the same identities on this kernel.
+        if let Some(live) = mem::process_footprint() {
+            assert!(live.rss_bytes > 1 << 20, "live RSS implausibly small");
+            assert!(
+                live.pss_bytes <= live.rss_bytes,
+                "live PSS exceeded live RSS"
+            );
         }
     }
 

@@ -18,6 +18,7 @@ pub mod chrome;
 pub mod fidelity;
 pub mod harness;
 pub mod interact;
+pub mod memtabs;
 pub mod oracle;
 pub mod parity;
 pub mod reftest;

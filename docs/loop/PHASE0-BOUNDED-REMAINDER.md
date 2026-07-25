@@ -58,7 +58,8 @@ After tick 324, the remainder is **not a long tail**. It is:
 | # | item | size |
 |---|---|---|
 | 25a | Run **test262** (SpiderMonkey embedded; number unknown at near-zero cost; Ladybird publishes 97.8%) | S |
-| 25b | Run the **100-tab RSS benchmark** (defined, never run; the memory thesis rests on zero data) | S |
+| 25b | ~~Run the **100-tab RSS benchmark**~~ **DONE, tick 571** — `manuk-wpt memtabs`. **100 tabs = 4.39 GB**, median marginal **0.90 MB/tab**, p90 49.7 MB. Found and fixed: eviction never returned memory to the *kernel* (`drop()` 3%, `malloc_trim` 67%). Follow-on below. | S |
+| 25b′ | **The four pathological sites** the benchmark exposed — wix.com **1274 MB**, apnews 938, hubspot 708, replit 431 from ≤3 MB of HTML each; 76% of the 100-tab total from 4% of the corpus. Cause bisected to the **cascade** (wix: CSS-only 65 MB + DOM-only 143 MB, but together 1308 MB). This is a Bar-0 risk, not a tuning item. | M |
 | 25c | Large-DOM interactivity probe (8.8k-node paint measured linear; interaction unmeasured) | S |
 | 25d | **Fidelity instrument rebuild + full-corpus sweep** per FIDELITY-SCORING-REDESIGN.md (selector-path keying, parent-relative shape, root-cause clustering, jarring invariants) — THE exit gate | M (3-5) + sweep |
 

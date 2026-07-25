@@ -118,6 +118,13 @@ fn run() {
         return;
     }
 
+    // `manuk-wpt memtabs` — the standing 100-tab RSS benchmark. See `memtabs.rs` for what
+    // the memory claim actually says and what would falsify it.
+    if args.first().map(String::as_str) == Some("memtabs") {
+        manuk_wpt::memtabs::run(&args[1..], &fonts);
+        return;
+    }
+
     // `manuk-wpt parity` — layout-parity vs headless Chrome over a corpus.
     if args.first().map(String::as_str) == Some("parity") {
         run_parity_cmd(&args[1..], &fonts);

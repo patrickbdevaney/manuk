@@ -24,8 +24,9 @@
   - L225 · Extensions-as-a-runtime is a scope trap; the valuable subset is NATIVE
   - L235 · Chromium splits tab dormancy into two mechanisms, and only ONE reclaims RAM
   - L243 · Retained-heap accounting is NOT RSS, and saying so is the whole point of the metric
-  - L256 · Two design decisions recorded as DECIDED-BUT-UNDONE
-  - L267 · A frame is a bitmap, so its pixels need explicit refreshing (tick 232)
+  - L256 · drop() frees to the ALLOCATOR; only a trim frees to the KERNEL — and eviction is judged on the second (tick 571)
+  - L292 · Two design decisions recorded as DECIDED-BUT-UNDONE
+  - L303 · A frame is a bitmap, so its pixels need explicit refreshing (tick 232)
 
 ## BOX LAYOUT — taffy mapping realities and quirks (flex / grid / sizing)
 `docs/wiki/box-layout.md`
@@ -988,4 +989,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-903 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+904 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

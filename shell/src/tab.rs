@@ -240,11 +240,29 @@ impl Browser {
 
     /// Discard a tab: drop its `Page` (fragment tree + styles + DOM) to reclaim RAM,
     /// keeping the URL + source for a later wake. A no-op if already discarded.
+    ///
+    /// **The drop is only half of it, and for ~350 ticks this method did only that half.**
+    /// The 100-tab benchmark (`manuk-wpt memtabs`) measured it: dropping every `Page` after
+    /// loading wix.com returned **0%** of the 1.3 GB the load had cost, because `free()`
+    /// hands memory to glibc's arenas, not to the kernel. RSS is what the OOM killer and
+    /// the user's task manager read, so a tab that is "hibernated" but whose memory the
+    /// process still holds is hibernated in name only. Trimming after the drop returned
+    /// **92%** of that same 1.3 GB. See [`manuk_compositor::mem::release_free_memory_to_os`].
+    ///
+    /// The trim is deliberately here — on discard, the rare event — and not on freeze or on
+    /// every frame: it walks the allocator's free lists, so paying it per frame would trade
+    /// the memory win for jank, and paying it on freeze would hand back pages the still-live
+    /// page is about to fault straight back in.
     fn discard(&mut self, id: TabId) {
+        let mut dropped = false;
         if let Some(t) = self.tabs.iter_mut().find(|t| t.id == id) {
             if matches!(t.retained, Retained::Live { .. }) {
                 t.retained = Retained::Discarded;
+                dropped = true;
             }
+        }
+        if dropped {
+            manuk_compositor::mem::release_free_memory_to_os();
         }
         self.refresh_mem(id);
     }
@@ -780,5 +798,91 @@ mod g_runtime_count {
              building a runtime per user action. That is invisible at idle and lethal after an hour \
              of browsing, and it is the exact shape of the wheel-event clone regression one layer up."
         );
+    }
+
+    /// **G_TAB_DISCARD_RELEASES_TO_OS** — evicting a tab must return its memory to the
+    /// *kernel*, not merely to the allocator.
+    ///
+    /// This gate exists because the 100-tab RSS benchmark (`manuk-wpt memtabs`, tick 571)
+    /// measured the gap for the first time and it was total: after loading wix.com — 3 MB of
+    /// HTML — the process held **1.31 GB**, and dropping the `Page` returned **0%** of it.
+    /// The retained heap was only ~11 MB; the rest was the transient spike of parse+cascade,
+    /// freed to glibc and then kept in its arenas forever. A single `malloc_trim` returned
+    /// **92%**. RSS is the number the OOM killer and the user's task manager read, so
+    /// without the trim a "hibernated" tab is hibernated in name only.
+    ///
+    /// It lives in this crate rather than in `manuk-compositor` because [`Browser::discard`]
+    /// is the caller the fix protects, and because this crate's test binary is one the wall
+    /// actually runs — a gate the wall does not execute is documentation.
+    #[test]
+    fn discarding_a_tab_returns_memory_to_the_os_not_just_the_allocator() {
+        let Some(before) = manuk_compositor::mem::process_footprint() else {
+            return; // Non-Linux: honestly unmeasured, see release_free_memory_to_os.
+        };
+
+        // ~256 MB in 64 KiB chunks. Two details are load-bearing, and the first draft of
+        // this gate got the second one wrong and passed under its own RED patch.
+        //
+        // 1. **Chunk size.** glibc services anything over M_MMAP_THRESHOLD (128 KiB by
+        //    default) with its own `mmap` and gives THAT straight back on free, so a single
+        //    big block would prove nothing. 64 KiB comes off the heap.
+        //
+        // 2. **Fragmentation.** glibc *does* already shrink the top of the heap when the
+        //    free run there passes M_TRIM_THRESHOLD. So freeing one contiguous slab is
+        //    returned automatically and needs no trim — which is why a test that allocates
+        //    and frees everything is green even with the trim stubbed out. The real browser
+        //    case is not that shape: the load spike is freed *around* the data the page
+        //    keeps, leaving free pages stranded in the middle of the heap where the
+        //    top-of-heap shrink can never reach them. `PINNED` reproduces exactly that by
+        //    keeping every 64th chunk alive.
+        const CHUNK: usize = 64 * 1024;
+        const CHUNKS: usize = 4096;
+        const PIN_EVERY: usize = 64;
+        let mut hog: Vec<Vec<u8>> = (0..CHUNKS).map(|_| vec![1u8; CHUNK]).collect();
+        // Touch every chunk so the pages are genuinely resident, not just reserved.
+        for c in hog.iter_mut() {
+            c[0] = 2;
+            c[CHUNK - 1] = 2;
+        }
+        let peak = manuk_compositor::mem::process_footprint().unwrap();
+        let grew = peak.rss_bytes as i64 - before.rss_bytes as i64;
+        // If the allocation did not move RSS at all, this machine is not measuring what we
+        // think it is; skip rather than assert a conclusion we did not earn.
+        if grew < (128 << 20) {
+            return;
+        }
+
+        // Free everything except the pins — the stranded-free-pages shape.
+        let mut pinned: Vec<Vec<u8>> = Vec::new();
+        for (i, c) in hog.drain(..).enumerate() {
+            if i % PIN_EVERY == 0 {
+                pinned.push(c);
+            }
+        }
+        drop(hog);
+        let freed = manuk_compositor::mem::process_footprint().unwrap();
+        let by_drop = peak.rss_bytes as i64 - freed.rss_bytes as i64;
+
+        manuk_compositor::mem::release_free_memory_to_os();
+        let trimmed = manuk_compositor::mem::process_footprint().unwrap();
+        let by_trim = freed.rss_bytes as i64 - trimmed.rss_bytes as i64;
+        let returned = by_drop + by_trim;
+
+        assert!(
+            returned * 2 >= grew,
+            "G_TAB_DISCARD_RELEASES_TO_OS: {} MB became resident, drop() returned {} MB and the \
+             trim returned {} MB — {} MB of {} MB never went back to the kernel.\n\n  \
+             This is the defect the 100-tab benchmark found: an evicted tab whose memory the \
+             process still holds is not evicted, it is relabelled. At 100 tabs that is the \
+             difference between a session that fits in RAM and one the OOM killer ends.",
+            grew >> 20,
+            by_drop >> 20,
+            by_trim >> 20,
+            (grew - returned) >> 20,
+            grew >> 20,
+        );
+        // Keep the pins alive until after the measurement — dropping them earlier would
+        // un-fragment the heap and hand the trim a win it did not have to earn.
+        drop(pinned);
     }
 }
