@@ -945,3 +945,51 @@ of the 72 sampled sites are absent — and the ones that time out are the slow o
 biased **optimistic**. (2) It is **not comparable** to the `PHASE0-ROADMAP-ANCHOR.md` §2 t380→t392
 table: different keying (selector-path), different metric (parent-relative SHAPE vs absolute placement),
 different corpus slice. This is a new baseline, not a delta. [[fidelity-instrument-shared-snapshot]]
+
+## The class signature was making healthy pages read as 0% coverage (tick 550)
+
+t549's sweep found 13 of 54 sites under 5% coverage and called it a class failure. **Two of the three
+sites checked were not failing at all — the instrument was.**
+
+The selector-path key carries a `.SIG` (an fnv-1a hash of the sorted, deduped class list) on **every**
+component, so a path's identity is hostage to the class lists of *all* its ancestors — and class lists
+are the single most JS-mutated thing on the web. Chrome's `gov.uk` body key is
+`body.ba1d8e99:nth-child(2)` (its own JS adds `js-enabled`); Chrome's `nytimes.com` body key is
+`body:nth-child(2)` (no class at all). **One differing class on `<body>` invalidates every descendant
+key on the page, in either direction.** It is the Wikipedia `client-nojs → client-js` lesson, which this
+repo already records in `tests/wpt/Cargo.toml`, arriving one layer up.
+
+### The ablation, measured on six sites, decisive in both directions
+
+| | sigs ON | sigs OFF |
+|---|---|---|
+| jvns.ca | cov 100.0% · shape 94.3% | **byte-identical** |
+| blog.rust-lang.org | cov 100.0% · shape 87.4% | **byte-identical** |
+| lobste.rs | cov 84.1% · shape 85.8% | **byte-identical** |
+| **gov.uk** | **cov 0.0%** (418 of 418 missing) | **cov 82.8%** (72 missing) |
+| **stripe.com** | cov 0.1% (1439 of 1441 missing) | **cov 43.1%** (820 missing) |
+| nytimes.com | cov 0.0% (2381 of 2382 missing) | cov 0.0% — **unmoved** |
+
+The signature adds **no discriminating power where the two DOMs agree** — three healthy sites are
+unchanged to the decimal — and **destroys the measurement where one ancestor's class list differs.**
+`nth-child` already distinguishes siblings uniquely, so the sig never carried identity; it carried only
+fragility. It is off the key by default from tick 550. `MANUK_G1_CLASS_SIG=1` restores it, so the
+decision stays auditable instead of becoming folklore. RED-PROVEN on live data both ways: default gives
+`gov.uk` 82.8%, the restore flag gives 0.0%.
+
+**nytimes.com did not move**, and that is the other half of the finding: it is a *genuine* second
+failure, not the same bug. Had the sweep been read as one homogeneous "sub-5% class", the fix for
+gov.uk-and-friends would have been credited with nytimes too, and the real bug would have gone back into
+hiding. *A class of failures that shares a symptom does not share a cause until it is measured.*
+
+### What this invalidates, said plainly
+
+The **t549 certificate's coverage figures for the sub-5% class are wrong in the PESSIMISTIC direction**
+and must be re-swept — the anchor's §6 t549 line carries that correction. The four jarring-invariant
+percentages are less affected (they score sibling relationships within each side), but they were computed
+over the intersection of keys, and the intersection just grew, so they change too. And
+`run_oracle_cmd`'s crawl keys **still carry sigs** — the same correction is owed there, as its own tick.
+
+The generalisable rule, because this is the second keying defect in twenty ticks: **an identity key must
+not be built out of the mutable state of things other than the element it identifies.** Position in the
+tree is structural; a class list is application state. [[fidelity-instrument-shared-snapshot]]

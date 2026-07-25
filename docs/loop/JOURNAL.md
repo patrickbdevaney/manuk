@@ -22036,3 +22036,72 @@ newyorker/propublica/squarespace) which smells like a probe/fetch failure rather
 must be diagnosed BEFORE it is treated as a rendering bug — measure which, do not assume. Then STEP 1(c)
 100-tab RSS, then the three new `unknown` CSS probes from Audit #28. Cadences: self-audit 554; surface
 558; const 551; wall 567.
+
+## Tick 550 — the sub-5%-coverage "class failure" was substantially the INSTRUMENT: the class signature off the path key (2026-07-25)
+
+t549's sweep found 13 of 54 sites under 5% coverage and I wrote that it was "a CLASS failure, not
+placement drift". The tick's own NEXT said *measure which, do not assume*. Measured. **Two of the three
+sites checked were not failing at all — the instrument was.**
+
+FIRST HYPOTHESIS, REFUTED (and recording it because a refuted cause is a real result): the root component.
+Chrome keys every real page's body as `body:nth-child(2)` because `<head>` is `<html>`'s first element
+child; if our producer emitted `nth-child(1)` every key on every page would mismatch at its root. Pinned
+it as a permanent test — `the_body_key_matches_chromes_because_head_is_the_first_element_child` — and it
+passes. Our producer agrees with Chrome. Not the cause.
+
+SECOND HYPOTHESIS, CONFIRMED AND SIZED: the `.SIG` component. The path key carries an fnv-1a hash of the
+sorted class list on **every** component, so a path's identity is hostage to the class lists of ALL its
+ancestors — and class lists are the single most JS-mutated thing on the web. Chrome's gov.uk body key is
+`body.ba1d8e99:nth-child(2)` (its JS adds `js-enabled`); Chrome's nytimes body key is `body:nth-child(2)`
+(no class). **One differing class on `<body>` invalidates every descendant key on the page, in either
+direction** — the Wikipedia `client-nojs → client-js` lesson (already recorded in tests/wpt/Cargo.toml)
+arriving one layer up.
+
+ABLATION MEASURED on six sites, decisive in BOTH directions:
+  healthy, sigs ON vs OFF ...... **BYTE-IDENTICAL** — jvns.ca cov 100.0%/shape 94.3%,
+      blog.rust-lang.org 100.0%/87.4%, lobste.rs 84.1%/85.8%; every figure unchanged to the decimal.
+  reading ~0%, ON → OFF ........ **RECOVERED** — gov.uk cov **0.0% → 82.8%** (418 of 418 missing → 72),
+      stripe.com **0.1% → 43.1%** (1439 → 820 missing).
+  and one that did NOT move ..... nytimes.com 0.0% → 0.0%, 2,381 of 2,382 still missing.
+
+So the signature adds NO discriminating power where the two DOMs agree and DESTROYS the measurement where
+one ancestor's class list differs. `nth-child` already distinguishes siblings uniquely, so the sig never
+carried identity — only fragility. **Off the key by default from this tick**; `MANUK_G1_CLASS_SIG=1`
+restores it so the decision stays auditable rather than becoming folklore.
+
+RED-PROVEN on LIVE data, both directions: the new default gives gov.uk 82.8%, and
+`MANUK_G1_CLASS_SIG=1` gives 0.0% on the same URL in the same minute. Plus a unit test that `strip_sigs`
+removes only the signature (a tag literally named `abcdef012` must NOT be truncated — only a leading `.`
+marks a sig) and collapses no key into another. 4 bin tests + 34 lib tests green.
+
+NYTIMES DID NOT MOVE, and that is the other half of the finding: it is a GENUINE second failure, not the
+same bug. Read as one homogeneous "sub-5% class", the gov.uk fix would have been credited with nytimes too
+and the real bug would have gone back into hiding. **A class of failures that shares a symptom does not
+share a cause until it is measured** — which is lesson #2 (the symptom names the wrong organ) arriving as
+a near-miss rather than as a loss.
+
+WHAT THIS INVALIDATES, said plainly and recorded in the anchor: **the t549 certificate's coverage figures
+for the sub-5% class are wrong in the PESSIMISTIC direction**, and the four jarring percentages change too
+(they were computed over a key intersection that just grew). The t549 line stands as the record of what
+was measured; it is NOT the baseline. Also owed, as its own tick: `run_oracle_cmd`'s crawl keys still
+carry sigs. One honest caveat — stripe's recovery is not stable run-to-run (its page served 1441 then 1458
+paths), so gov.uk is the decisive case and stripe is corroborating, not load-bearing.
+
+The generalisable rule, because this is the second keying defect in twenty ticks: **an identity key must
+not be built out of the mutable state of things other than the element it identifies.** Position in the
+tree is structural; a class list is application state.
+
+TICK SHAPE: instrument correction (the class signature is off the selector-path key — a lying metric
+fixed; one hypothesis refuted with a permanent test, the real one confirmed and SIZED by a six-site
+ablation, RED-proven live in both directions; `strip_sigs` unit-tested for over-reach). No engine src
+touched; Bar 0 untouched; no ratchet floor moved (the marks are WPT/CLAIMS/GATES/CONST/MEASURED/WALL, none
+of which this touches).
+WIKI: docs/wiki/conformance-and-oracles.md — "The class signature was making healthy pages read as 0%
+coverage (tick 550)". [no-pattern]
+
+NEXT: **re-sweep on the corrected keying** — the same stratified 72-site sample, which becomes the first
+actuals line that may legitimately be differenced. Then nytimes.com as a NAMED single-site investigation
+(2,381 of 2,382 missing with keying ruled out, 27s vs chromium 6s, load budget exhausted AND the
+20,000-task ceiling hit — the three facts probably share one cause). Then the crawl-side sig correction,
+STEP 1(c) 100-tab RSS, and Audit #28's three CSS probes. Cadences: self-audit 554; surface 558; const 551
+(DUE next tick); wall 567.

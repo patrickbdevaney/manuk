@@ -149,6 +149,9 @@
   - L850 · The exit certificate is now COMPUTED, not read off 265 stanzas of stderr (tick 547)
   - L898 · The certificate's FIRST sweep found the certificate could be passed vacuously (tick 549)
   - L925 · What the sweep actually says
+  - L949 · The class signature was making healthy pages read as 0% coverage (tick 550)
+  - L962 · The ablation, measured on six sites, decisive in both directions
+  - L985 · What this invalidates, said plainly
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -977,4 +980,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-892 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+895 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

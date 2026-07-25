@@ -128,3 +128,17 @@ never WPT count, never a vibe.
   sites explained: `missing box: <div>` 20 · `geometry: height ~16px (<div>)` 17 ·
   `geometry: height ~64px (<div>)` 16 · `missing box: <a>` 15 · `missing box: <path>` 12 ·
   `missing box: <svg>` 9.
+
+- `CORRECTION to the t549 line @tick 550:` the class-signature ablation shows **the sub-5%-coverage
+  "class failure" was substantially the INSTRUMENT.** `gov.uk` coverage 0.0% → **82.8%** and
+  `stripe.com` 0.1% → **43.1%** with `.SIG` off the path key, while three healthy sites
+  (jvns.ca / blog.rust-lang.org / lobste.rs) are **byte-identical** — so the signature adds no
+  discrimination and destroys the measurement whenever one ancestor's class list differs between the
+  engines. Off by default from t550 (`MANUK_G1_CLASS_SIG=1` restores it). **The t549 coverage figures for
+  that class are therefore wrong in the PESSIMISTIC direction, and the four jarring percentages change
+  too** (they were computed over a key intersection that just grew). The t549 line stands as the record
+  of what was measured; it is NOT the baseline. The re-sweep on the corrected keying is the next actuals
+  line, and it is the first one that may be differenced. `nytimes.com` did **not** move (0.0% → 0.0%,
+  2,381 of 2,382 still missing) — a genuine second failure that the homogeneous reading would have hidden
+  behind the keying fix.
+

@@ -555,6 +555,45 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                             );
                         }
                     }
+                    // ── THE CLASS SIGNATURE IS OFF THE KEY (tick 550, MEASURED).
+                    //
+                    // The t549 sweep found 13 of 54 sites under 5% coverage, and several have the
+                    // signature of a KEYING failure rather than a rendering one: `gov.uk` 418 of 418
+                    // missing in 6.8s with no timeout excuse, `nytimes.com` 2,406 of 2,407. The
+                    // suspect is the `.SIG` component the path key carries at EVERY level: a path's
+                    // identity is hostage to the class lists of all its ancestors, and class lists are
+                    // the single most JS-mutated thing on the web. Chrome's gov.uk body key is
+                    // `body.ba1d8e99:nth-child(2)` (its JS adds `js-enabled`); Chrome's nytimes body key
+                    // is `body:nth-child(2)` (no class at all). ONE differing class on `<body>`
+                    // invalidates every descendant key on the page, in either direction — the
+                    // Wikipedia `client-nojs`→`client-js` lesson generalised.
+                    //
+                    // ABLATION MEASURED, on six sites, and it is decisive in both directions:
+                    //
+                    //   healthy sites, sigs ON vs OFF ......... BYTE-IDENTICAL
+                    //     jvns.ca cov 100.0% / shape 94.3%  ·  blog.rust-lang.org 100.0% / 87.4%
+                    //     lobste.rs 84.1% / 85.8%           ·  every figure unchanged to the decimal
+                    //   sites reading ~0%, sigs ON -> OFF ..... RECOVERED
+                    //     gov.uk    coverage   0.0% -> 82.8%   (418 paths: 418 missing -> 72 missing)
+                    //     stripe.com coverage  0.1% -> 43.1%   (1441 paths: 1439 -> 820 missing)
+                    //   and one that did NOT move — nytimes.com 0.0% -> 0.0% (2,381 of 2,382 still
+                    //     missing), which is how we know this is a real second failure and not all one bug
+                    //
+                    // So the signature adds NO discriminating power where the two DOMs agree, and
+                    // DESTROYS the measurement where a single ancestor's class list differs. `nth-child`
+                    // already distinguishes siblings uniquely, so the sig never carried identity — only
+                    // fragility. It is off by default from here.
+                    //
+                    // `MANUK_G1_CLASS_SIG=1` restores it, so the decision stays auditable and reversible
+                    // rather than becoming folklore. ⚠ Two consequences to carry forward: the t549
+                    // certificate's COVERAGE figures for the sub-5% class are INVALIDATED (pessimistic),
+                    // and `run_oracle_cmd`'s crawl keys still carry sigs — the same correction is owed
+                    // there, as its own tick.
+                    let (cseen, mseen) = if std::env::var_os("MANUK_G1_CLASS_SIG").is_some() {
+                        (cseen, mseen)
+                    } else {
+                        (strip_sigs(cseen), strip_sigs(mseen))
+                    };
                     // Rect-only Box4 views for the placement scorers (SHAPE / coverage / first-
                     // divergence still take bare box maps); the jarring invariants below read the
                     // `Seen` maps directly.
@@ -2045,6 +2084,53 @@ fn sig_of(dom: &manuk_dom::Dom, n: manuk_dom::NodeId) -> String {
     format!(".{h:08x}")
 }
 
+/// Strip every `.SIG` component from a keyed map — the class-signature ABLATION (`MANUK_G1_NO_SIG=1`).
+///
+/// A sig is exactly `.` + 8 lowercase hex digits, and it always sits immediately before `:nth-child(`,
+/// so the removal is unambiguous and needs no regex crate. Applied to BOTH sides identically, so the
+/// comparison stays a comparison; applied to `Seen` maps rather than at the producers, so Chromium's
+/// injected JS (a byte-identical contract with `sig_of`) is left untouched.
+///
+/// Collisions are possible in principle — two same-tag siblings differing only by class cannot happen,
+/// because `nth-child` already distinguishes siblings. Where a collision WOULD occur the later entry
+/// wins, which can only LOSE elements from each side, never invent matches; so a coverage number that
+/// rises under ablation is a real signal, not an artifact of the ablation.
+fn strip_sigs(
+    m: std::collections::HashMap<String, manuk_wpt::oracle::Seen>,
+) -> std::collections::HashMap<String, manuk_wpt::oracle::Seen> {
+    m.into_iter()
+        .map(|(k, v)| {
+            let mut out = String::with_capacity(k.len());
+            let mut rest = k.as_str();
+            while let Some(i) = rest.find(":nth-child(") {
+                let (head, tail) = rest.split_at(i);
+                // A sig, if present, is the final 9 bytes of `head`: `.` + 8 hex digits.
+                let keep = if head.len() >= 9 {
+                    let cand = &head[head.len() - 9..];
+                    if cand.starts_with('.')
+                        && cand[1..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                    {
+                        &head[..head.len() - 9]
+                    } else {
+                        head
+                    }
+                } else {
+                    head
+                };
+                out.push_str(keep);
+                // Copy `:nth-child(N)` verbatim, then continue after it.
+                let close = tail.find(')').map(|c| c + 1).unwrap_or(tail.len());
+                out.push_str(&tail[..close]);
+                rest = &tail[close..];
+            }
+            out.push_str(rest);
+            (out, v)
+        })
+        .collect()
+}
+
 /// `tag.SIG:nth-child(N)/…` from the root — N 1-based over ALL element siblings — mirroring the JS
 /// `pathOf` in chrome.rs. An element whose parent is NOT an element (i.e. `<html>`, whose parent is
 /// the document) contributes NO component, because the JS `e.parentElement` is null there and its
@@ -3049,7 +3135,7 @@ mod path_key_tests {
     //! honours for the SCORER. Without a slash-keyed key, `shape_stats::common_frame` finds no shared
     //! ancestor and silently degrades to absolute placement (the misleading 4.5% the redesign exists
     //! to kill), so "the key carries `/`-ancestry" is the load-bearing property, not a nicety.
-    use super::{path_of, sig_of};
+    use super::{path_of, sig_of, strip_sigs};
 
     // Independent fnv1a-32 over UTF-16 code units — the byte-identical contract with chrome.rs's JS
     // `sigOf`. Written separately from `sig_of` so the assertion is a real cross-check, not a
@@ -3114,5 +3200,84 @@ mod path_key_tests {
         // A classless element has the empty signature (so its key is `p:nth-child(N)`, no dot).
         let p = find_tag(&d, "p")[0];
         assert_eq!(sig_of(&d, p), "");
+    }
+
+    /// **Chrome's key for every real page's body is `body:nth-child(2)` — because `<head>` is the
+    /// first element child of `<html>`. If OUR producer disagrees, EVERY key on the page mismatches at
+    /// its root component and the site reports ~100% MISSING.**
+    ///
+    /// This is not hypothetical: the t549 sweep found 13 of 54 sites under 5% coverage, several of them
+    /// with the exact signature of a root-component mismatch — `gov.uk` 418 of 418 missing in 6.8s (no
+    /// timeout excuse), `nytimes.com` 2,406 of 2,407 missing with the leading component of every missing
+    /// path printed as `body:nth-child(2)`. A keying artifact and a rendering failure look identical in
+    /// the coverage number, so the key has to be pinned against the shape a real document has.
+    #[test]
+    fn the_body_key_matches_chromes_because_head_is_the_first_element_child() {
+        let d = manuk_html::parse(
+            r#"<!doctype html><html><head><title>t</title></head><body class="js-enabled"><div id="a"></div></body></html>"#,
+        );
+        let body = find_tag(&d, "body");
+        assert_eq!(body.len(), 1, "one body");
+        let p = path_of(&d, body[0]).expect("body has a path");
+        assert!(
+            p.starts_with("body"),
+            "the path is rooted at body (html's parent is the document, not an element): got {p}"
+        );
+        assert!(
+            p.ends_with(":nth-child(2)"),
+            "body must be the SECOND element child of <html> — <head> is the first, and Chrome keys it \
+             that way. If this is nth-child(1) then every descendant key on every real page mismatches \
+             at its root and the site reports ~100% MISSING: got {p}"
+        );
+        // And a descendant's full path must carry that same root component, or the mismatch is one
+        // level down instead of at the root.
+        let div = find_tag(&d, "div");
+        let dp = path_of(&d, div[0]).expect("div has a path");
+        assert!(
+            dp.starts_with("body.") || dp.starts_with("body:"),
+            "descendant paths are rooted at the body component: got {dp}"
+        );
+        assert!(
+            dp.contains(":nth-child(2)/"),
+            "…and it is body's nth-child(2) that leads: got {dp}"
+        );
+    }
+
+    /// The class-signature ABLATION must strip sigs and NOTHING else — an off-by-one here would
+    /// silently corrupt every key on both sides and produce a coverage number out of thin air.
+    #[test]
+    fn strip_sigs_removes_only_the_signature_component() {
+        use manuk_wpt::oracle::Seen;
+        let seen = |t: &str| Seen {
+            tag: t.into(),
+            display: "block".into(),
+            rect: [0, 0, 1, 1],
+        };
+        let mut m = std::collections::HashMap::new();
+        m.insert(
+            "body.ba1d8e99:nth-child(2)/div.74146c68:nth-child(6)".to_string(),
+            seen("div"),
+        );
+        m.insert("body:nth-child(2)/a:nth-child(3)".to_string(), seen("a"));
+        // A tag that ends in 9 hex-ish chars must NOT be truncated: only a leading `.` marks a sig.
+        m.insert("abcdef012:nth-child(1)".to_string(), seen("abcdef012"));
+        let out = strip_sigs(m);
+        assert!(
+            out.contains_key("body:nth-child(2)/div:nth-child(6)"),
+            "sigs gone: {:?}",
+            out.keys()
+        );
+        assert!(
+            out.contains_key("body:nth-child(2)/a:nth-child(3)"),
+            "a sig-less key is unchanged"
+        );
+        assert!(
+            out.contains_key("abcdef012:nth-child(1)"),
+            "9 hex chars with NO leading dot is a tag name, not a signature: {:?}",
+            out.keys()
+        );
+        assert_eq!(out.len(), 3, "no key collapsed into another");
+        // The values travel with their keys.
+        assert_eq!(out["body:nth-child(2)/div:nth-child(6)"].tag, "div");
     }
 }
