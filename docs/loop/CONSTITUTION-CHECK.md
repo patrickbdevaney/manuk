@@ -1655,3 +1655,72 @@ an XL subsystem: the instrument is still returning root causes at a tick apiece,
 loop has ever had.
 
 **Next check due: tick 575.**
+
+## Check #38 — tick 575
+
+**HORIZON: H0 — Pareto Web Parity.** EXIT GATE (all binary): ~83% WPT across categories ·
+differential-oracle-verified viability across all four usage-weighted corpora · the headful shell
+daily-drivable by its own developer · every rendered construct queryable through the in-process semantic API.
+
+**GATE OR SCOREBOARD? — GATE, and for the first window in a long time nothing is outstanding.** `WPT:TOTAL`
+is *still* flat — thirty-two ticks now — while t567–t574 produced: the `<search>` landmark and `CloseWatcher`
+(**I3 discharged**, after Checks #35/#36/#37 each flagged it), `justify-content: normal` (one enum conflation
+that had disabled grid track stretching in *every grid we have ever laid out*), `repeat(auto-fill)` resolved
+by the wrong subsystem, the **100-tab RSS benchmark run for the first time** (STEP 1(c) of the observer's exit
+verification, and it found eviction returning 0% to the kernel), and two quadratic cascade loops. STEP 1 of
+the exit verification is now COMPLETE — test262 (t546), the fresh instrument sweep (t531–540), and the RSS
+benchmark (t571) have all been run. Condition #2 keeps moving because the instruments keep getting sharper.
+
+**INVARIANTS.** I4 (Pareto): held — every tick this window was corpus- or instrument-driven. **I3: DISCHARGED
+and closed**, three checks after it was first flagged; the residue (`AccessKit` platform bridge) is VI.1's
+named gap, not drift. I2 (never patch dependencies): held, and this tick is the interesting case — it changes
+the `Origin` we *declare* to Stylo and adds a sort term to **our own** matcher; nothing in Stylo is patched,
+and the fork surface in `STATUS.md` stays empty.
+
+**PART VI CORRECTION — and it is a correction to the discovery MODEL, not just to a row.**
+
+- **VI.2's `I5` row is ~200 ticks stale.** It reads *"the differential oracle has never completed a full
+  crawl (`ORACLE_CRAWLED: 0` of 265)"*. It has crawled 265 sites, 392 clusters, and has been rebuilt
+  (t531–t540) into a SHAPE-scoring, selector-path-keyed, root-cause-clustering instrument. Replace the row:
+  the oracle is **operational and is the loop's highest-yield input**.
+- **VI.2's `H0.1` row is stale in its numbers** (`css-flexbox 5.5%`, `css-grid 4.7%`) and, more importantly,
+  in its *frame*. Those are WPT area percentages, and this tick is the counter-example that matters:
+  **the largest-blast-radius CSS defect on the board — every CSS reset on the web silently not applying —
+  was found as a side-observation of a FONT probe (t556), and no WPT area ranking would ever have surfaced
+  it.** A ranking over area percentages measures where the *tests* are, not where the *web* is.
+- **So VI.4's ordering is corrected at item 2.** "CSS layout breadth, in usage order, ranked by WPT area" is
+  demoted; **"whatever a real page, run for real, is measured to be doing wrong"** is promoted. That is not a
+  new principle — it *is* I5, and VI.4 had quietly re-expressed I5's job as a spec table of contents. The
+  loop's own record over the last ~30 ticks is unambiguous: the wins came from running test262, running the
+  RSS benchmark, running the corpus sweep, and running one probe page against live Chromium.
+
+**AN INSTRUMENT FINDING THAT OUTRANKS THIS TICK'S CAPABILITY, and it was found by accident.**
+Because tick 575 touches the cascade, it ran the WHOLE `manuk-page` suite under the shipping feature set
+instead of the wall's subset: **279 test binaries green, 3 red, all three verified pre-existing.** One is a
+`CSS.supports()` lie (`view-transition-name` answers **yes** for a property we do not implement — the
+`layout.unimplemented` pref's own comment claims it "changes nothing we read", and `CSS.supports()` reads it).
+One is a real rendering failure on a page we author (the honest interstitial renders without its `<h1>`).
+One — `g_exec_command_copy` asserting `queryCommandSupported('bold') === false` — was written at tick 463 as
+an honest "no" and has been **stale-red since tick 481**, when bold landed: ninety-four ticks.
+
+**The structural half is the part that matters to this document.** `verify.sh` launches ~19 named page-gate
+binaries of ~280 that exist, and runs the crate suites without `--features stylo`. So *"the wall is green"*
+and *"the tree is green"* are different statements, and the gap is wide enough to hide a ninety-four-tick
+staleness. The H0 exit gate's third condition is *"the headful shell daily-drivable by its own developer"* —
+a claim that cannot be made from a wall that watches 7% of the assertions the repo contains. Test selection
+lives in `scripts/`, observer-owned per Part VII, so this is **reported, not fixed**; the loop-side half is
+to stop treating a green wall as a green tree.
+
+**STEER, in order.** (1) **Clear the three unwatched reds**, cheapest first — the `qs-bold` assertion follows
+its capability (one line, plus an audit of every other honest-"no" written before its capability arrived); the
+interstitial's missing `<h1>`; then `CSS.supports()` vs `layout.unimplemented` per property. Where a fix needs
+watching, gate it from `manuk-page` (agent-editable) rather than reaching into `scripts/`.
+(2) **The `apply_has_rules` per-element hoist** — the third instance of
+t572/t573's *work-that-depends-only-on-the-stylesheet done per element* defect; `:has()` is 505 ms of the
+2,570 ms cascade. (3) The same-face `{Open Sans/13}` metric delta. (4) The crawl-side `.SIG` correction —
+`run_oracle_cmd` still carries the defect t550 fixed in the exit gate, in the instrument this document calls
+its primary discovery mechanism. (5) A fresh corpus sweep, since t569's grid-stretch fix and this tick's
+cascade-origin fix are both page-wide geometry changes and the sweep is differenceable. **Do NOT** open an XL
+subsystem: the instrument is still returning root causes at roughly a tick apiece.
+
+**Next check due: tick 583.**

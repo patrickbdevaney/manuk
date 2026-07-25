@@ -23561,3 +23561,127 @@ of `apply_has_rules` (the third instance of t572/t573's per-element-work-that-de
 defect; `has` is 505 ms of the 2,570 ms cascade). Then the t556 cascade-origin bug (author `* { margin:0 }`
 losing to the UA `body` margin); then the `{Open Sans/13}` metric delta; then the crawl-side `.SIG` correction.
 Cadences: const 575 (NEXT TICK); surface 578; self-audit 584; wall 587.
+
+## Tick 575 — the cascade's FIRST sort was missing: every CSS reset on the web lost to our UA sheet (2026-07-25)
+
+t556 filed this as a side-observation of a *font* probe and it sat on the NEXT list for nineteen ticks:
+**an author `* { margin: 0 }` did not beat the UA `body { margin: 8px }`.** Chromium put body at
+`[0 0 1200×92]`; we put it at `[8 8 1184×91]`. Named there as "the `apply_ua_defaults`-vs-Stylo two-cascades
+trap" — a UA default applied *outside* the cascade cannot be overridden by anything inside it. **That
+diagnosis was wrong, and the real one is worse.**
+
+**IT WAS INSIDE THE CASCADE, AND THE CASCADE'S FIRST SORT WAS NOT THERE.** This engine does not use the
+Stylist's cascade: it builds its own `RuleIndex`, matches candidates itself, and merges the winning
+declaration blocks in ascending priority before one `compute_for_declarations` call. That merge sorted on
+`winners.sort_by_key(|(spec, ord, _)| (*spec, *ord))` — **specificity, then document order, and no origin
+term at all.** CSS Cascade §6 sorts by origin and importance FIRST and by specificity only third. So
+`body` (0,0,1) beat `*` (0,0,0), exactly as it should have *within one origin*, and exactly as it must not
+across two.
+
+**THE BLAST RADIUS IS NOT 8px.** `* { margin:0; padding:0 }` is the first rule of Tailwind's preflight, of
+Normalize, of Bootstrap's reboot and of every hand-rolled reset since 2004 — and **a reset is written with
+the weakest possible selector on purpose**, which is precisely the shape that loses a specificity tie-break.
+Every rule in `UA_CSS` carries a type or descendant selector, so `ul, ol { padding-left: 40px }` and
+`blockquote { margin: 1em 40px }` survived the same reset, and any author rule deliberately written weak
+lost. A large fraction of the open web opens by declaring its own box model and we were discarding that
+declaration.
+
+**THE FIX IS TWO HALVES AND ONE OF THEM IS INERT ALONE — which is the trap worth recording.** First attempt:
+parse `UA_CSS` with `Origin::UserAgent` instead of `Origin::Author`. The gate stayed RED at exactly 8px,
+because **the Stylist's origin machinery is bypassed** — declaring an origin to a dependency you do not
+cascade through is a comment, not a behaviour change. The origin has to reach the sort *we* perform, so
+`IndexedRule` and `PseudoRule` now carry an `origin_rank` (`UserAgent 0 · User 1 · Author 2`, read off
+`contents.origin`) and both merges sort `(origin_rank, spec, order)`. The parse change stays, because it is
+what makes the rank *readable* rather than positional knowledge about sheet 0.
+
+**THE GENERAL FORM, and it is the reason the old comment was so convincing.** It read *"the UA sheet is
+matched first (lowest priority); author rules override it"* — true of the append order, false of the
+outcome. **Document order is the cascade's LAST tie-break, not a way to express priority.** Any invariant of
+the form *"X always loses to Y"* has to be a sort term; a position in a list is only ever consulted after
+everything else has tied. Two other places in this file still express an ordering positionally — the
+`@layer` flattening and the `@container` supplement's "ordered after the sheet's own" — and both deserve the
+same question.
+
+**WHY NO GATE SAW IT.** Every cascade gate we had tested **author against author**. None had ever written an
+author rule that *ought to lose on specificity* and *ought to win on origin*, which is the only shape that
+can detect this. `G_CASCADE_ORIGIN` is that shape, and three of its six claims are guards rather than the
+feature: winning claim 1 by *weakening* the UA sheet would be a far worse browser than the bug (every
+unstyled document loses its metrics at once), so a second document with **no author rules at all** asserts
+`body` 8px / `ul` 40px / `blockquote` 40px still hold; specificity must still decide *within* the author
+origin (`#loud` beats a LATER `*`); and author `!important` must still beat author normal.
+
+RED-PROVEN: the gate reports `expected 0px, got 8px` on the pre-fix tree, and again after the `Origin` change
+alone — the second RED is the one that found the inert half.
+
+**THE REGRESSION SWEEP FOUND THREE RED TESTS AND NONE OF THEM IS MINE — WHICH IS THE REAL FINDING.**
+Because this change touches the cascade, I ran the WHOLE `manuk-page` suite under the shipping feature set
+(`--features stylo,spidermonkey --no-fail-fast`) rather than the wall's subset: **279 test binaries green, 3
+red**, and every one of the three was verified pre-existing by stashing this tick's diff and re-running.
+
+1. `manuk-css --lib`: `supports_condition("view-transition-name: foo")` answers **true** for a property we
+   do not implement. The wall runs `cargo test -q -p manuk-css` **without `--features stylo`**, so the whole
+   `stylo_engine` test module (42 tests) has never been watched. The cause is almost certainly the
+   `layout.unimplemented` pref the cascade flips, whose own comment claims *"enabling the other properties
+   it also ungates changes nothing we read"* — `CSS.supports()` reads them, so that claim is measured false,
+   and a page asking `CSS.supports('view-transition-name: x')` is told yes and discards a working fallback.
+2. `manuk-page --lib`: `hard_wall_detection_and_honest_interstitial` — the honest-interstitial page renders
+   without its own `<h1>` text (`visible_text()` no longer contains "blocks non-mainstream browsers"). A real
+   rendering failure on a page **we** author, which makes it a clean, self-contained repro.
+3. `g_exec_command_copy`: asserts `queryCommandSupported('bold') === false`. Written at **tick 463** as an
+   honest "no"; `execCommand('bold')` **landed at tick 481**. The gate has been stale-red for ninety-four
+   ticks. This is the documented honest-answer moment in its purest form — *the gate follows the capability,
+   never the reverse* — and the engine is right while the assertion is the lie.
+
+**The structural finding outranks all three.** `verify.sh` launches ~19 named page-gate binaries out of ~280
+that exist, and runs the crate suites without the shipping features — so a test can be red on disk for
+ninety-four ticks and nothing says so. `gates-not-in-the-wall` recorded the shape of this before; this is
+the first time it has been quantified, and the honest reading is that "the wall is green" and "the tree is
+green" are different statements. Test selection lives in `scripts/`, which is observer-owned per Part VII, so
+this is reported rather than fixed. **Not folded in — one tick, one cause** — and none of the three is a
+regression from this diff.
+
+**THE FIRST WALL RUN PRINTED A 33% CASCADE REGRESSION AND IT WAS THE BOX, PROVEN RATHER THAN ASSUMED.**
+Large-page cascade read 9.79 ms against t574's 7.33 ms — inside F1's 0.55 ratio, but a 33% move on the
+property this tick touches is exactly the trade the ratchet refuses, and `Origin::UserAgent` has a plausible
+mechanism (Stylo routes UA-origin sheets through a process-global `UA_CASCADE_DATA_CACHE` mutex and rebuilds
+their cascade data separately). So it was measured, not reasoned about: variant A (`Origin::UserAgent`) and
+variant B (`Origin::Author` + positional rank, which never touches that cache) built and benched
+back-to-back on the same quiet box. **A: 7.59 / 7.35 / 9.34 ms. B: 7.49 / 7.69 / 7.41 ms.** Indistinguishable,
+and both at the historical figure — the 9.79 was contention. Variant A is kept, because the cost it might
+have had is now measured to be zero and the truthful origin is worth more than a positional convention.
+
+One methodological note, since it nearly produced the opposite conclusion: the FIRST A/B ran `large.html`
+alone and reported 14.9–18.0 ms for the *good* variant. Benching the large page without the mid page ahead
+of it measures a cold process. **A benchmark is its corpus** — comparing against a historical number
+requires the historical corpus, not a subset of it.
+
+The wall's other red was `manuk-shell`, the false-RED this loop has now hit a dozen times under parallel
+build load; re-run alone on a quiet box (load 1.6): **71 passed, 0 failed.** Harness-owned, recorded, not
+touched.
+
+CONSTITUTION CHECK #38 (due at 575): H0, gate not scoreboard — STEP 1 exit verification is COMPLETE
+(test262 t546 · instrument sweep t531-540 · 100-tab RSS t571) and **I3 is DISCHARGED** after three checks
+flagged it (`<search>` t568, `CloseWatcher` t574). PART VI corrected in three places, the substantive one
+being a correction to the *discovery model*: VI.4 had quietly re-expressed I5's job as a WPT-area ranking,
+and this tick is the counter-example — the largest-blast-radius CSS defect on the board was found as a side
+observation of a font probe, and no area percentage would ever have surfaced it.
+
+TICK SHAPE: correctness (the cascade's origin sort, whose absence silently discarded the first stylesheet
+rule on a very large fraction of the web) + the DUE constitution check. Bar 0 untouched; no ratchet floor
+moved; no dependency patched (the fork surface stays empty).
+Gates: `G_CASCADE_ORIGIN` (`engine/page/tests/g_cascade_origin.rs`), RED-proven twice — once on the defect,
+once on the incomplete fix.
+WIKI: docs/wiki/css-cascade.md — "Our matcher merged winners by `(specificity, order)` — the cascade's FIRST
+sort was missing".
+PATTERN: new — the CSS reset. Plus the general form: an invariant of the shape *"X always loses to Y"* must
+be a SORT TERM, never a position in a list.
+
+NEXT: **the three unwatched reds above, cheapest first** — (a) `g_exec_command_copy`'s `qs-bold` assertion
+follows the capability that landed at t481 (one line, plus the audit of every other honest-"no" assertion
+written before its capability arrived); (b) `hard_wall`'s interstitial renders no `<h1>` text — a
+self-contained rendering repro on a page we author; (c) `CSS.supports()` vs the `layout.unimplemented` pref —
+decide the honest answer per property. Then the `apply_has_rules` per-element hoist (the
+third instance of t572/t573's stylesheet-work-done-per-element defect; `:has()` is 505 ms of the 2,570 ms
+cascade). Then the same-face `{Open Sans/13}` metric delta; the crawl-side `.SIG` correction; and a fresh
+corpus sweep, since t569's grid-stretch fix and this tick's origin fix are both page-wide geometry changes
+and the sweep is differenceable. Cadences: const 583; surface 578; self-audit 584; wall 587.

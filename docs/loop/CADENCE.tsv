@@ -334,3 +334,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 571	344fbe68	1784995096	2026-07-25T11:58:16-04:00	3971	measurement	85	9	643	167	277	81	3896	6960	0	329	31	the 100-tab RSS benchmark, run for the first time: 4.39 GB, and eviction was returning NOTHING to the kernel (2026-07-25)
 572	776c4ab5	1785000573	2026-07-25T13:29:33-04:00	5477	measurement	85	13	448	139	277	81	3896	6960	0	329	31	`RuleIndex` was applied to one of two matchers; `cascade_pseudo` kept the O(elements × rules) defect (2026-07-25)
 574	df40a7d1	1785003082	2026-07-25T14:11:22-04:00	2509	capability	85	8	439	25	278	81	3896	6960	0	330	31	`CloseWatcher`, and the API's reason to exist was a live bug we had shipped (2026-07-25)
+575	d4180d61	1785006534	2026-07-25T15:08:54-04:00	3452	correctness	85	10	552	53	279	81	3896	6960	0	331	31	the cascade's FIRST sort was missing: every CSS reset on the web lost to our UA sheet (2026-07-25)

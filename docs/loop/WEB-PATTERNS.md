@@ -4784,3 +4784,23 @@ seam, because neither gate ever opens the other's construct. **Look for this whe
 independently register a handler for one shared input** — Escape, the back gesture, `beforeunload`,
 outside-click, focus-trap boundaries. The tell is not a failing assertion; it is that no assertion exists
 which opens both at once.
+
+---
+
+## The CSS reset — an author `*` rule must beat a UA type rule (tick 575)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| **`* { margin: 0; padding: 0 }`** and its descendants — Tailwind's preflight (`*,::before,::after{...margin:0;padding:0}`), Normalize/`sanitize.css`, Bootstrap's reboot, and every hand-rolled reset since 2004 | the **first stylesheet rule on a very large fraction of the open web**, and the one that decides a page's entire horizontal and vertical rhythm before any of its own layout runs | ✅ (tick 575) — it did not apply. Our matcher merged winning declaration blocks by `(specificity, source order)` with **no origin term**, so `UA_CSS`'s `body { margin: 8px }` (0,0,1) beat the author's `*` (0,0,0). A reset is written with the **weakest possible selector on purpose**, which is precisely the shape that loses a specificity tie-break — so being one origin too high made our UA sheet beat the rules that exist to override it. Every rule in `UA_CSS` carries a type or descendant selector, so this was never about 8px: `ul, ol { padding-left: 40px }` and `blockquote { margin: 1em 40px }` survived the same reset, and any author rule deliberately written weak lost. Fixed by parsing the sheet as `Origin::UserAgent` **and** leading the merge sort with an `origin_rank` — the parse change alone is inert, because the Stylist's own origin machinery is bypassed by our `RuleIndex`. Gated by `G_CASCADE_ORIGIN`. |
+
+**The shape to look for.** The old comment said *"the UA sheet is matched first (lowest priority); author
+rules override it"* — true of the append order, false of the outcome, because **document order is the
+cascade's last tie-break, not a way to express priority.** Any invariant of the form *"X always loses to
+Y"* has to be a **sort term**, never a position in a list; a position is only ever consulted after
+everything else has tied. The same question is worth asking of `@layer` ordering and of the `:has()`
+supplement's second pass, both of which are currently expressed positionally here.
+
+**Blast radius, and why it was found by measurement rather than by a gate.** It was filed at tick 556 as
+a side-observation of a *font* probe — Chromium put `body` at `[0 0 1200×92]` where we put it at
+`[8 8 1184×91]` — because no gate on this side of the tree ever wrote an author rule that *ought* to lose
+on specificity and *ought* to win on origin. Every cascade gate we had tested author-vs-author.

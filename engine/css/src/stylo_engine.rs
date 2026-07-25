@@ -409,17 +409,39 @@ pub fn cascade_via_stylo_sized(
     // iterate their compiled rules for matching.
     let mut stylo_sheets: Vec<ServoArc<StyloStylesheet>> = Vec::new();
     let mut stylist = Stylist::new(make_device(vw, vh, qm), qm);
-    // The UA sheet is matched first (lowest priority); author rules override it.
+    // ── THE UA SHEET IS A UA-ORIGIN SHEET, and saying so is the whole of the cascade's first sort.
+    //
+    // This used to hand `UA_CSS` to the Stylist as `Origin::Author` on the reasoning that it is
+    // appended FIRST, so author rules override it. That confuses two different tie-breaks. The
+    // cascade sorts by **origin, then importance, then specificity, and only then document order**
+    // — so as an author sheet, `body { margin: 8px }` (specificity 0,0,1) beat an author
+    // `* { margin: 0 }` (0,0,0), which is on a large fraction of the open web: it is the first rule
+    // of Tailwind's preflight, of Normalize, and of every hand-rolled reset since 2004. A reset is
+    // deliberately written with the WEAKEST possible selector, which is exactly the shape that loses
+    // a specificity tie-break — so being one origin too high made this sheet beat the rules that
+    // exist to override it. Measured against live Chromium at tick 556: Chromium `body [0 0 1200×92]`,
+    // ours `[8 8 1184×91]`, and the 8px was the smallest instance (`ul,ol { padding-left: 40px }`
+    // and `blockquote { margin: 1em 40px }` survived a reset the same way).
+    //
+    // The origin is declared HERE and consumed by `origin_rank` in `RuleIndex`/`PseudoIndex`,
+    // because the Stylist's own cascade is not what decides this page: this engine matches through
+    // its own `RuleIndex` and merges the winners itself (see `cascade_element`). Stamping the sheet
+    // truthfully is what lets that merge sort on origin instead of on position.
     let ua_sheet = Stylesheet::parse(UA_CSS);
     let all_sheets: Vec<&Stylesheet> = std::iter::once(&ua_sheet).chain(sheets.iter()).collect();
     {
         let guard = lock.read();
-        for sheet in &all_sheets {
+        for (i, sheet) in all_sheets.iter().enumerate() {
             let media = ServoArc::new(lock.wrap(MediaList::empty()));
+            let origin = if i == 0 {
+                Origin::UserAgent
+            } else {
+                Origin::Author
+            };
             let parsed = StyloStylesheet::from_str(
                 sheet.source(),
                 url_data.clone(),
-                Origin::Author,
+                origin,
                 media,
                 lock.clone(),
                 None,
@@ -1101,6 +1123,25 @@ fn timed<T>(slot: &mut u128, f: impl FnOnce() -> T) -> T {
 /// Correctness is unchanged because the *matching* is unchanged: every candidate still goes through
 /// `matches_selector`, and winners are still ordered by `(specificity, source order)`. The index only
 /// removes candidates that could not have matched.
+/// The author origin's rank in the cascade sort — see [`origin_rank`].
+const ORIGIN_AUTHOR: u8 = 2;
+
+/// **The cascade's first sort criterion, as one number.**
+///
+/// CSS Cascade §6 orders declarations by *origin and importance* first and by *specificity* only
+/// third. Our matcher merges the winners itself (`cascade_element`), so it needs the origin as a
+/// sortable key — higher wins. `User` sits between the two because a user stylesheet outranks the
+/// UA sheet and loses to the author's; we ship none today, but ranking it correctly costs nothing
+/// and stops the next reader having to re-derive it. (Importance is resolved *inside* the merged
+/// block by Stylo's `PropertyDeclarationBlock::push`, not here.)
+fn origin_rank(origin: Origin) -> u8 {
+    match origin {
+        Origin::UserAgent => 0,
+        Origin::User => 1,
+        Origin::Author => ORIGIN_AUTHOR,
+    }
+}
+
 struct RuleIndex {
     rules: Vec<IndexedRule>,
     by_id: std::collections::HashMap<String, Vec<u32>>,
@@ -1111,6 +1152,12 @@ struct RuleIndex {
 
 struct IndexedRule {
     sel: selectors::parser::Selector<stylo::selector_parser::SelectorImpl>,
+    /// **The cascade's FIRST sort, and this index did not have it.** 0 = user-agent, 1 = author.
+    /// Specificity is only the *third* criterion (origin, then importance, then specificity, then
+    /// document order) — so without this a UA `body { margin: 8px }` outranked an author
+    /// `* { margin: 0 }`, which is the first rule of every CSS reset on the web. See the sort in
+    /// `cascade_element`/`cascade_pseudo` and the note on the UA sheet's `Origin` at its parse site.
+    origin_rank: u8,
     spec: u32,
     order: usize,
     block: ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>,
@@ -1139,12 +1186,14 @@ impl RuleIndex {
         let mut order = 0usize;
         let mut cq_stack: Vec<ServoArc<Vec<ContainerCondition>>> = Vec::new();
         for sheet in sheets {
+            let rank = origin_rank(sheet.contents.read_with(guard).origin);
             let rules = sheet.contents.read_with(guard).rules(guard);
-            idx.add_rules(rules, guard, device, &mut order, qm, &mut cq_stack);
+            idx.add_rules(rules, guard, device, &mut order, qm, &mut cq_stack, rank);
         }
         idx
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn add_rules(
         &mut self,
         rules: &[CssRule],
@@ -1153,6 +1202,7 @@ impl RuleIndex {
         order: &mut usize,
         qm: QuirksMode,
         cq_stack: &mut Vec<ServoArc<Vec<ContainerCondition>>>,
+        origin_rank: u8,
     ) {
         use selectors::parser::Component;
         for rule in rules {
@@ -1180,6 +1230,7 @@ impl RuleIndex {
                         let i = self.rules.len() as u32;
                         self.rules.push(IndexedRule {
                             sel: sel.clone(),
+                            origin_rank,
                             spec: sel.specificity(),
                             order: *order,
                             block: sr.block.clone(),
@@ -1215,7 +1266,7 @@ impl RuleIndex {
                     // whether the rules it indexed were all the rules there were.
                     if let Some(nested) = &sr.rules {
                         let nested = nested.read_with(guard);
-                        self.add_rules(&nested.0, guard, device, order, qm, cq_stack);
+                        self.add_rules(&nested.0, guard, device, order, qm, cq_stack, origin_rank);
                     }
                 }
                 CssRule::Media(media_rule) => {
@@ -1223,18 +1274,18 @@ impl RuleIndex {
                     let mut custom = CustomMediaEvaluator::none();
                     if ml.evaluate(device, qm, &mut custom) {
                         let nested = media_rule.rules.read_with(guard);
-                        self.add_rules(&nested.0, guard, device, order, qm, cq_stack);
+                        self.add_rules(&nested.0, guard, device, order, qm, cq_stack, origin_rank);
                     }
                 }
                 CssRule::Supports(supports_rule) => {
                     if supports_rule.enabled {
                         let nested = supports_rule.rules.read_with(guard);
-                        self.add_rules(&nested.0, guard, device, order, qm, cq_stack);
+                        self.add_rules(&nested.0, guard, device, order, qm, cq_stack, origin_rank);
                     }
                 }
                 CssRule::LayerBlock(layer) => {
                     let nested = layer.rules.read_with(guard);
-                    self.add_rules(&nested.0, guard, device, order, qm, cq_stack);
+                    self.add_rules(&nested.0, guard, device, order, qm, cq_stack, origin_rank);
                 }
                 // `CssRule::Container` never appears here: stylo's servo build parses the
                 // `@container` at-rule only under `cfg!(feature = "gecko")` (rule_parser.rs), so
@@ -1461,7 +1512,16 @@ impl RuleIndex {
                 // the temporary stylesheet itself does not need to be kept alive.
                 let mut cq_stack = levels;
                 let rules = parsed.contents.read_with(guard).rules(guard);
-                self.add_rules(rules, guard, device, &mut order, qm, &mut cq_stack);
+                // Author sheets only (the caller says so, and the UA sheet has no `@container`).
+                self.add_rules(
+                    rules,
+                    guard,
+                    device,
+                    &mut order,
+                    qm,
+                    &mut cq_stack,
+                    ORIGIN_AUTHOR,
+                );
             }
         }
     }
@@ -1470,6 +1530,9 @@ impl RuleIndex {
 /// One `::before` / `::after` rule, hoisted out of the sheet tree at index-build time.
 struct PseudoRule {
     sel: selectors::parser::Selector<stylo::selector_parser::SelectorImpl>,
+    /// Same first-sort as [`IndexedRule::origin_rank`] — the UA sheet's `summary::before` marker
+    /// must lose to an author `*::before` the same way its `body` margin loses to an author `*`.
+    origin_rank: u8,
     spec: u32,
     /// Global source order across all sheets — counted over *every* selector, matching or not,
     /// so the cascade order is identical to the per-element tree walk this replaces.
@@ -1521,8 +1584,9 @@ impl PseudoIndex {
         };
         let mut order = 0usize;
         for sheet in sheets {
+            let rank = origin_rank(sheet.contents.read_with(guard).origin);
             let rules = sheet.contents.read_with(guard).rules(guard);
-            idx.collect(&rules, guard, device, qm, &mut order);
+            idx.collect(&rules, guard, device, qm, &mut order, rank);
         }
         idx
     }
@@ -1534,6 +1598,7 @@ impl PseudoIndex {
         device: &Device,
         qm: QuirksMode,
         order: &mut usize,
+        origin_rank: u8,
     ) {
         use stylo::selector_parser::PseudoElement as Pe;
         for rule in rules {
@@ -1552,6 +1617,7 @@ impl PseudoIndex {
                         if let Some(is_after) = bucket {
                             let r = PseudoRule {
                                 sel: sel.clone(),
+                                origin_rank,
                                 spec: sel.specificity(),
                                 order: *order,
                                 block: sr.block.clone(),
@@ -1573,18 +1639,18 @@ impl PseudoIndex {
                     let mut custom = CustomMediaEvaluator::none();
                     if ml.evaluate(device, qm, &mut custom) {
                         let nested = media_rule.rules.read_with(guard);
-                        self.collect(&nested.0, guard, device, qm, order);
+                        self.collect(&nested.0, guard, device, qm, order, origin_rank);
                     }
                 }
                 CssRule::Supports(supports_rule) => {
                     if supports_rule.enabled {
                         let nested = supports_rule.rules.read_with(guard);
-                        self.collect(&nested.0, guard, device, qm, order);
+                        self.collect(&nested.0, guard, device, qm, order, origin_rank);
                     }
                 }
                 CssRule::LayerBlock(layer_rule) => {
                     let nested = layer_rule.rules.read_with(guard);
-                    self.collect(&nested.0, guard, device, qm, order);
+                    self.collect(&nested.0, guard, device, qm, order, origin_rank);
                 }
                 _ => {}
             }
@@ -1700,6 +1766,7 @@ fn cascade_pseudo(
         return None;
     }
     let mut winners: Vec<(
+        u8,
         u32,
         usize,
         ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>,
@@ -1714,15 +1781,17 @@ fn cascade_pseudo(
             MatchingForInvalidation::No,
         );
         if matches_selector(&r.sel, 0, None, el, &mut ctx) {
-            winners.push((r.spec, r.order, r.block.clone()));
+            winners.push((r.origin_rank, r.spec, r.order, r.block.clone()));
         }
     }
     if winners.is_empty() {
         return None;
     }
-    winners.sort_by_key(|(spec, ord, _)| (*spec, *ord));
+    // ORIGIN FIRST, then specificity, then document order (CSS Cascade §6). Sorting on
+    // `(spec, order)` alone let the UA sheet's type selectors beat an author reset's `*`.
+    winners.sort_by_key(|(rank, spec, ord, _)| (*rank, *spec, *ord));
     let mut merged = PropertyDeclarationBlock::new();
-    for (_, _, block) in &winners {
+    for (_, _, _, block) in &winners {
         for (decl, importance) in block.read_with(guard).declaration_importance_iter() {
             merged.push(decl.clone(), importance);
         }
@@ -1780,6 +1849,7 @@ fn cascade_one_element(
     // unchanged: each candidate is still fully matched by `matches_selector`, and winners are still
     // ordered by (specificity, source order).
     let mut winners: Vec<(
+        u8,
         u32,
         usize,
         ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>,
@@ -1820,14 +1890,16 @@ fn cascade_one_element(
                     continue;
                 }
             }
-            winners.push((r.spec, r.order, r.block.clone()));
+            winners.push((r.origin_rank, r.spec, r.order, r.block.clone()));
         }
     }
-    winners.sort_by_key(|(spec, ord, _)| (*spec, *ord));
+    // ORIGIN FIRST, then specificity, then document order (CSS Cascade §6). Sorting on
+    // `(spec, order)` alone let the UA sheet's type selectors beat an author reset's `*`.
+    winners.sort_by_key(|(rank, spec, ord, _)| (*rank, *spec, *ord));
 
     // Merge winning declarations (ascending priority: later overrides earlier).
     let mut merged = PropertyDeclarationBlock::new();
-    for (_, _, block) in &winners {
+    for (_, _, _, block) in &winners {
         for (decl, importance) in block.read_with(guard).declaration_importance_iter() {
             merged.push(decl.clone(), importance);
         }

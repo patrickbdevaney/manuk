@@ -1047,3 +1047,51 @@ Found in passing by the same gate: `getComputedStyle(el).length` was the literal
 the standard-property list it counts had grown to **52** — so the last two custom properties were
 unreachable through `item(i)`. The count is now derived from the list. **A hand-maintained count of a
 list three hundred lines away drifts the moment someone appends to it, and nothing fails loudly.**
+
+## Our matcher merged winners by `(specificity, order)` — the cascade's FIRST sort was missing (tick 575)
+
+The engine does not use the Stylist's cascade. It builds its own `RuleIndex` from the parsed sheets,
+matches candidates itself, and merges the winning declaration blocks in ascending priority before one
+`compute_for_declarations` call. That merge sorted on:
+
+```rust
+winners.sort_by_key(|(spec, ord, _)| (*spec, *ord));   // ← origin is not in here
+```
+
+CSS Cascade §6 sorts by **origin and importance first**, specificity only *third*, document order
+*fourth*. Leaving origin out is not a subtle ordering nicety — it inverts the single most common
+override on the web:
+
+```css
+* { margin: 0; padding: 0 }     /* author, specificity (0,0,0) */
+body { margin: 8px }            /* OUR UA sheet, specificity (0,0,1) — and it WON */
+```
+
+That is the first rule of Tailwind's preflight, of Normalize, and of every hand-rolled reset since
+2004. **A reset is written with the weakest possible selector on purpose**, which is exactly the shape
+that loses a specificity tie-break — so a UA sheet one origin too high beats the rules that exist to
+override it. The 8px body margin was the *smallest* instance: every rule in `UA_CSS` has a type or
+descendant selector, so `ul, ol { padding-left: 40px }` and `blockquote { margin: 1em 40px }` survived
+the same reset. Measured against live Chromium at tick 556: Chromium `body [0 0 1200×92]`, ours
+`[8 8 1184×91]`.
+
+**The fix is two halves and both are needed.** The sheet is parsed with `Origin::UserAgent` instead of
+`Origin::Author` — so the origin is *readable* off `contents.origin` — and `IndexedRule`/`PseudoRule`
+carry an `origin_rank` that leads the sort key: `(origin_rank, spec, order)`. Changing only the parse
+origin does nothing, because **the Stylist's own origin machinery is bypassed**: it is our index that
+decides this page. That is the trap worth remembering here — *declaring* the origin to a dependency you
+do not cascade through is a comment, not a behaviour change.
+
+> The old comment read *"the UA sheet is matched first (lowest priority); author rules override it"*,
+> and it was true of the append order and false of the outcome. **Document order is the cascade's LAST
+> tie-break, not a way to express priority.** Anything that means "always loses" has to be a sort term.
+
+Declaring the origin also makes the `!important` ordering expressible (a UA `!important` outranks an
+author `!important`) — an ordering no amount of sheet re-ordering can produce. `UA_CSS` contains no
+`!important` today, so nothing depends on it yet.
+
+**The guard that matters more than the feature.** Winning this by *weakening* the UA sheet would be a
+far worse browser than the bug: every unstyled document loses its metrics at once. `G_CASCADE_ORIGIN`
+therefore asserts the same UA rules on a second document with **no author rules at all** — `body` 8px,
+`ul` 40px, `blockquote` 40px — alongside the reset case, plus that specificity still decides *within*
+the author origin and that author `!important` still beats author normal.
