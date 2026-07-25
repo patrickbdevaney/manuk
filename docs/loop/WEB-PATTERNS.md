@@ -4644,3 +4644,24 @@ because Bar 0 outranks the last sheet in a chain. **(4)** Dedupe through the sam
 or a re-entry after dynamic scripts re-fetches the whole chain. **(5)** The imported sheet must reach the
 **cascade**, not only the `@font-face` scan — an import that carries fonts almost always carries rules too,
 and wiring only the font path is the kind of half-fix that looks like it worked.
+
+## A page whose search box is wrapped in `<search>` (tick 568)
+
+**Pattern:** `<search><input type="search" name="q"><button>Go</button></search>` — the modern wrapper
+(Baseline Apr 2026) replacing `<div role="search">`. Sites adopt it precisely because the role is implicit.
+
+**The class this unlocks:** finding the search affordance **by role**. `Role::Search` existed for the explicit
+`role="search"` attribute; the ELEMENT fell through to `Role::Generic`, so the landmark vanished on any site
+that adopted the wrapper.
+
+**And the reason it belongs in this ledger rather than only in an a11y one:** `manuk-a11y` already feeds
+`manuk-agent`'s observation channel (CONSTITUTION VI.1), so an unmapped landmark is a missing **affordance** —
+the agent has to fall back to guessing from `input[type=search]` or placeholder text, which is the
+coordinate-and-heuristic brittleness the semantic surface exists to remove.
+
+**The traps.** **(1)** The ARIA half being present makes the HTML half look done — `grep Role::Search` finds a
+hit and the map arm is still missing. **(2)** The fix must not shadow the explicit attribute path; assert both.
+**(3)** When testing the tree, locate nodes **by tag, not child index** — `<head>` is `<html>`'s first element
+child, so an index walk silently inspects head and reports nothing, which fails (or passes) for the wrong
+reason. **(4)** This class of gap is systematically under-found: every audit that reconciles against CSS-shaped
+sources walks past it, and it took an audit that read what actually SHIPPED to surface it.

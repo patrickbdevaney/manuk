@@ -23050,3 +23050,53 @@ NEXT, in the order Check #37 sets and with (1) non-negotiable: **(1) `<search>` 
 tick** (discharges the three-check I3 queue). (2) implied/`auto` grid track sizing — the t566 root cause, RED
 proof committed. (3) the same-face `{Open Sans/13}` metric delta. (4) the t556 cascade-origin bug. (5) the
 crawl-side `.SIG` correction. Cadences: self-audit 574; surface 568; const 575; wall 587.
+
+## Tick 568 — `<search>` is a landmark (the I3 queue, discharged) + SURFACE AUDIT #30 measures what #29 added (2026-07-25)
+
+Check #37 made this non-negotiable and first in order: the agentic half of I3 had been flagged by **three
+consecutive** constitution checks and crowded out three times by more legible rendering work.
+
+RE-PROBED FIRST, per the standing rule, and the rule paid in an unusual direction: **`Role::Search` already
+existed** — for the explicit `role="search"` ATTRIBUTE. What was missing was the **`<search>` ELEMENT** in the
+tag→role map, so it fell through to `Role::Generic`. One arm. Not a subsystem, not stale-pessimistic in the usual
+"already built" sense, but *half* built — the ARIA half present, the HTML half absent.
+
+**Why it is an AGENTIC fix and not an a11y nicety.** Per CONSTITUTION VI.1 `manuk-a11y` is already load-bearing:
+it feeds `manuk-agent`'s observation channel. So on any site that adopted the modern wrapper, **the agent could
+not find "the search box" by role at all** — it would fall back to guessing from `input[type=search]` or
+placeholder text, which is exactly the coordinate-and-heuristic brittleness the semantic surface exists to
+remove. A missing landmark is a missing *affordance*.
+
+RED-PROVEN: `the_search_element_is_a_search_landmark` — removing the map arm yields `Some(Generic)`; the explicit
+`role="search"` attribute is asserted still working (the fix must not shadow it) and `<nav>` untouched. ⚠ Gotcha
+worth recording: the test locates nodes **by tag, not child index** — `<head>` is `<html>`'s first element child,
+so an index walk finds head and reports an empty role list, which is misleading in either direction. My first
+version did exactly that and "failed" for the wrong reason.
+
+CloseWatcher: **measured absent** (grep-clean in `engine/js`), so `typeof CloseWatcher === "undefined"` and a
+feature-detecting page takes its fallback — honest, not broken. Pinned `missing` rather than left `unknown`
+because a measured absence outranks an untested one, and re-filed: it is the **actuation** surface for a close
+request (Esc / Android back), so it belongs with dialog and popover in the agentic thread, not among the CSS rows
+Audit #29 filed it beside.
+
+SURFACE AUDIT #30 (due at 568) — **and it is deliberately NOT another source rotation.** #28 read Interop
+(priorities) and found ~nothing; #29 read what SHIPPED and found nine rows. The obvious #30 is a third source.
+But **an audit that only ever ADDS is half an instrument** — its own instructions include *re-rank* — and #29's
+nine rows had sat unprobed for ten ticks while three constitution checks flagged two of them as overdue. **A map
+that grows faster than it is measured is drifting in a new direction, not being corrected.** So #30 measured two
+of #29's own rows instead of adding more: map stays 218, MEASURED +1 `works` +1 `missing`. Recorded as a process
+defect **against the audit instrument itself**, with a standing rule: *an audit that added rows last cycle
+measures some of them this cycle before it adds more.*
+
+TICK SHAPE: capability (`<search>` → `Role::Search` in the tag map — the agentic landmark the observation channel
+consumes, RED-proven, with the ARIA attribute path and neighbouring landmarks asserted untouched) + measurement
+(CloseWatcher pinned measured-absent and re-filed to the agentic thread) + the DUE surface audit #30, which
+measured what #29 added rather than widening the map again. Bar 0 untouched.
+WIKI: docs/wiki/interaction-surface.md — "`<search>` is a LANDMARK, and an unmapped landmark is an AGENTIC gap
+(tick 568)".
+
+NEXT: **implied/`auto` grid track sizing** — the t566 root cause with its RED proof committed
+(`tests/wpt/probes/grid-implied-tracks.html`, 88/133 → ~289/291); Taffy-side track sizing, and the largest
+measured layout cause on the board. Then the same-face `{Open Sans/13}` metric delta (variable-font variant vs
+hinting); then the t556 cascade-origin bug (author `* { margin:0 }` losing to the UA `body` margin); then the
+crawl-side `.SIG` correction. Cadences: self-audit 574; surface 578; const 575; wall 587.

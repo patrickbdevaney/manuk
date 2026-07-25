@@ -1379,3 +1379,42 @@ of the session and it is mid-arc. The nine adds are bounded probes for later tic
 (`<search>`, CloseWatcher) should be taken together with the agentic thread rather than as CSS rows.
 
 LAST_SURFACE_AUDIT set to 558; next due 568.
+
+## Audit #30 — tick 568 (2026-07-25)
+
+**This audit is deliberately NOT another source-rotation — it is the one that closes the loop on #29.** #28
+read Interop 2026 (priorities) and found ~nothing; #29 read what SHIPPED (Baseline digests) and found nine
+absent rows. The obvious #30 move is a third source. But an audit that only ever ADDS is half an instrument:
+its own instructions say *"RE-RANK. A newly-discovered capability may be larger than everything already on the
+list"* — and #29's nine rows had sat unprobed for ten ticks while Constitution Checks #35, #36 and #37 each
+flagged the same two of them as an overdue I3 queue. **A map that grows faster than it is measured is drifting
+in a new direction, not being corrected.** So this audit measures what the last one added.
+
+MEASURED, two rows, both from #29:
+- **`<search>` element → `works`.** `Role::Search` already existed for the explicit `role="search"` ATTRIBUTE;
+  the ELEMENT was missing from the tag→role map and fell through to `Role::Generic`. One arm, RED-proven
+  (`the_search_element_is_a_search_landmark`; removing it yields `Some(Generic)`), with the explicit attribute
+  and the neighbouring landmarks asserted untouched. **It is an AGENTIC fix**: per CONSTITUTION VI.1 the a11y
+  tree already feeds `manuk-agent`'s observation channel, so on any site that adopted the wrapper the agent
+  could not find "the search box" **by role** at all.
+- **`CloseWatcher` → `missing` (measured, not assumed).** Absent from `engine/js` entirely (grep clean), so
+  `typeof CloseWatcher` is `undefined` and a feature-detecting page takes its fallback — the honest outcome, not
+  a break. Pinned `missing` rather than left `unknown` because **a measured absence outranks an untested one**
+  (#24/#26). Scoped for when it is built: it is the **actuation** surface an agent uses to dismiss an overlay
+  (Esc / Android back / a close request), so it belongs with the agentic thread beside dialog and popover, which
+  are already gated — not with the CSS rows it was filed among.
+
+WHAT WE WERE WRONG ABOUT: **the audit's own cadence had become additive-only.** Three consecutive constitution
+checks named the same queue and three consecutive windows of "more legible" rendering work crowded it out — and
+the surface audit, whose job includes re-ranking, kept widening the map instead of noticing that two of its own
+rows were the highest-ranked unmeasured items on it. Recorded as a process defect against this instrument, not
+as a scheduling accident. **The rule going forward: an audit that added rows last cycle MEASURES some of them
+this cycle before it adds more.**
+
+CORRECTED: map stays **218** capabilities (no adds this cycle, by design); MEASURED **+1 works, +1 missing**, so
+two `unknown`s became verdicts and the ratchet reads real progress rather than growth. RE-RANK: the remaining
+seven #29 rows (multi-keyword `display`, `animation-composition`, `text-justify`, multicol L2, Reporting API,
+WebGPU, Web Serial) stay below the live leads — implied grid track sizing (t566 root cause, RED proof committed)
+outranks all of them.
+
+LAST_SURFACE_AUDIT set to 568; next due 578.

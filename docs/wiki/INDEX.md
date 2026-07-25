@@ -548,6 +548,7 @@
   - L2747 · execCommand('createLink', false, url) wraps the selection in <a href> (tick 484)
   - L2765 · navigator.userActivation — the gesture-gated capability signal (tick 486)
   - L2803 · document.hasFocus() — tied to the tab-in-front signal, never a second focus state (tick 496)
+  - L2815 · <search> is a LANDMARK, and an unmapped landmark is an AGENTIC gap (tick 568)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -985,4 +986,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-900 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+901 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

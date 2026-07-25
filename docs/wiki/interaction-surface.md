@@ -2811,3 +2811,29 @@ that lies the moment the tab is backgrounded — `hasFocus()` returns `g.__visib
 tab-in-front fact that already backs `visibilityState`/`document.hidden`. The invariant that buys is that
 `hasFocus()` and `!document.hidden` can never contradict each other: foreground/visible → focused,
 backgrounded/hidden → not, and a `visibilitychange` flip moves both together. Gate `G_DOCUMENT_HAS_FOCUS`.
+
+## `<search>` is a LANDMARK, and an unmapped landmark is an AGENTIC gap (tick 568)
+
+`Role::Search` had existed for the explicit `role="search"` attribute since the a11y tree was built. The
+**`<search>` element** (Baseline Apr 2026; HTML-AAM gives it `role=search` implicitly) was missing from the
+tag→role map, so it fell through to `Role::Generic`.
+
+**Why that is not merely an accessibility miss.** Per CONSTITUTION VI.1 `manuk-a11y` is *already load-bearing*:
+it feeds `manuk-agent`'s observation channel, which is how the agent finds things semantically rather than by
+coordinates. So on any site that adopted the modern wrapper, **the agent could not find "the search box" by
+role at all** — it would have to fall back to guessing from `input[type=search]` or from placeholder text,
+which is exactly the coordinate-and-heuristic brittleness the semantic surface exists to remove. A missing
+landmark is a missing *affordance*, and the agentic thread is the half of I3 that keeps getting deprioritised
+because rendering work is more legible.
+
+One map arm, RED-proven: `the_search_element_is_a_search_landmark` asserts the element yields `Role::Search`
+(removing the arm yields `Some(Generic)`), that the explicit `role="search"` attribute still works — the fix
+must not shadow it — and that neighbouring landmarks (`<nav>`) are untouched. ⚠ The test locates nodes **by
+tag, not by child index**: `<head>` is `<html>`'s first element child, so an index walk finds head and reports
+an empty role list, which is a misleading result in either direction.
+
+**Sibling row, measured and left honest:** `CloseWatcher` is absent from `engine/js` entirely, so
+`typeof CloseWatcher === "undefined"` and a feature-detecting page takes its fallback — the honest outcome, not
+a break. It is pinned `missing` rather than `unknown` because a measured absence outranks an untested one. When
+it is built it belongs **here**, with dialog and popover: it is the *actuation* surface for a close request
+(Esc, Android back), which an agent needs to dismiss an overlay it has just opened. [[dialog-and-top-layer]]

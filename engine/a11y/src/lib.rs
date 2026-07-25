@@ -812,6 +812,16 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
             }
         }
         "nav" => Role::Navigation,
+        // ── `<search>` IS A LANDMARK (Baseline Apr 2026, HTML-AAM `role=search`).
+        //
+        // `Role::Search` already existed for the explicit `role="search"` attribute; the ELEMENT was
+        // missing from this map and fell through to `Role::Generic`, so a page using the modern wrapper
+        // lost the landmark entirely. That is not only a screen-reader gap: per CONSTITUTION VI.1 this
+        // tree already feeds `manuk-agent`'s observation channel, so an unmapped landmark is an
+        // **agentic** gap — the agent cannot find "the search box" by role on any site that adopted the
+        // element. Found by surface audit #29 (t558), which read what actually SHIPPED rather than what
+        // the vendors prioritised.
+        "search" => Role::Search,
         "main" => Role::Main,
         "header" => Role::Banner,
         "footer" => Role::ContentInfo,
@@ -1906,5 +1916,50 @@ mod tests {
         );
         // The generic wrapper still exists in the real tree (we only filter the view).
         assert!(tree.iter().any(|n| n.role == Role::Generic));
+    }
+
+    /// **`<search>` is a LANDMARK, and an unmapped landmark is an AGENTIC gap, not only an a11y one.**
+    ///
+    /// `Role::Search` existed for the explicit `role="search"` attribute; the ELEMENT (Baseline Apr 2026,
+    /// HTML-AAM `role=search`) was missing from the tag map and fell through to `Role::Generic`. Per
+    /// CONSTITUTION VI.1 this tree already feeds `manuk-agent`'s observation channel, so on any site that
+    /// adopted the wrapper the agent could not find "the search box" **by role** at all. Found by surface
+    /// audit #29 (t558) — the audit that read what SHIPPED rather than what the vendors prioritised — and
+    /// landed to discharge the I3 queue Constitution Checks #35/#36/#37 flagged three times running.
+    #[test]
+    fn the_search_element_is_a_search_landmark() {
+        let dom = manuk_html::parse(
+            r#"<html><body>
+                 <search><input type="search" name="q"><button>Go</button></search>
+                 <div role="search"><input></div>
+                 <nav></nav>
+               </body></html>"#,
+        );
+        // Locate by TAG rather than by child index: `<head>` is html's first element child, so an
+        // index walk finds head and reports an empty role list — which is a misleading pass/fail either
+        // way.
+        let by_tag = |t: &str| -> Vec<Option<Role>> {
+            dom.descendants(dom.root())
+                .filter(|&n| dom.tag_name(n) == Some(t))
+                .map(|n| role_of(&dom, n))
+                .collect()
+        };
+        let roles = by_tag("search");
+        assert_eq!(
+            roles.first().cloned().flatten(),
+            Some(Role::Search),
+            "the <search> ELEMENT maps to the search landmark — Generic here means an agent cannot \
+             find the search box by role: {roles:?}"
+        );
+        assert_eq!(
+            by_tag("div").first().cloned().flatten(),
+            Some(Role::Search),
+            "…and the explicit role=\"search\" attribute still works (this fix must not shadow it)"
+        );
+        assert_eq!(
+            by_tag("nav").first().cloned().flatten(),
+            Some(Role::Navigation),
+            "…and its landmark neighbours are untouched"
+        );
     }
 }
