@@ -22449,3 +22449,60 @@ with `tests/wpt/probes/font-family-resolution.html` as the RED proof (330·330·
 Then the cascade-origin bug (author `*` vs UA `body` margin), then nytimes.com, the crawl-side sig
 correction, STEP 1(c) 100-tab RSS, Audit #28's three CSS probes. Cadences: self-audit 564; surface 558;
 const 559; wall 567.
+
+## Tick 557 — no named font family ever resolved: `fontdb`'s name query is case-SENSITIVE (2026-07-25)
+
+The t556 measurement said SELECTION, not computation. The cause is three characters wide:
+
+```
+Family::Name("DejaVu Sans")  ->  Some("DejaVu Sans")
+Family::Name("dejavu sans")  ->  None
+```
+
+`resolve_family` lowercased the family before handing it to `fontdb::Family::Name`, and **that query is
+case-sensitive.** So `matched` was **always false** for any family whose real name is not entirely
+lowercase — essentially every font on every system — and every named family on the web fell through to the
+`contains("mono")`/`contains("serif")` hints or to `sans-serif`. **Two real installed families and a
+deliberately fake one all rendered the same width**, which is the tell for a resolution failure rather than
+a metrics one, and it is why the generic stacks measured fine the whole time: they never take the named path.
+
+WHY ONE DEFECT PRODUCED TWO UNLIKE SYMPTOMS — the test a root cause has to pass, and the reason t551's and
+t552's candidates were not it: a substituted face has different **per-glyph advances** (text widths wrong in
+BOTH directions depending on the string — the ±9–22px sign-changing anchor widths) and a different
+**ascent+descent** (the line box off by a CONSTANT — the +2px on every instance). One cause, both
+signatures, no residue.
+
+THE FIX: `orig` (trimmed, unquoted, ORIGINAL case) goes to fontdb and is what gets interned; the lowercased
+form stays the key for the generic keywords and the `@font-face` map, which is keyed lowercase because CSS
+family matching is case-insensitive. `face_id` lowers the interned name again for its webfont lookup —
+missing that would trade a system-font bug for a webfont bug. **Case-insensitivity is a CSS property, not a
+font-database property, and the boundary between those two facts is exactly where the bug lived.**
+
+RED-PROVEN: `a_named_installed_family_resolves_to_that_family_not_a_fallback` enumerates the mixed-case
+families actually installed on this box and asserts each resolves to `Named(that family)`; restoring the
+lowercase in the query fails it — *"AR PL KaitiM Big5 IS installed on this box and must resolve to
+Named(...), not SansSerif"*. It also asserts an absent family STILL falls back, so the fix cannot degenerate
+into "call everything a match". VERIFIED end-to-end by a trace at the layout call site:
+`["DejaVu Sans"] -> Named(0)` · `["Noto Sans"] -> Named(1)` · `["DejaVu Serif"] -> Named(2)` ·
+`["Liberation Mono"] -> Named(3)` · `["NoSuchFontXYZ"] -> SansSerif` — five declarations, five distinct
+outcomes, where before there was one. (The trace was removed before landing: `text_style` runs per text
+node and an env lookup there is a real cost on the F1/F2 floors.)
+
+⚠ AND A SECOND DEFECT IS DOWNSTREAM, NOW ISOLATED — stated rather than folded in, because a tick that claims
+two causes has proven neither. **The rendered widths are still 330px for all five families.** So the family
+resolves and the *advance does not follow*: `face_id`/`load`, or the measurement path, is not using the
+resolved face. The committed probe page is the standing RED proof for it — five families must produce five
+widths — and it is the next tick.
+
+TICK SHAPE: capability (named font families resolve at all — `fontdb`'s case-sensitive name query was being
+handed a lowercased string, so every named family on the web silently became sans-serif; RED-proven against
+the box's actually-installed mixed-case families, and verified end-to-end by a layout-site trace) + the
+downstream defect isolated and left named. Bar 0 untouched.
+WIKI: docs/wiki/text-layout.md — "No named font family ever resolved — fontdb's name query is
+case-SENSITIVE (tick 557)"; WEB-PATTERNS.md — a page that names its fonts.
+
+NEXT: **the advance must follow the resolved face** — `face_id`/`load`/the measurement path, with
+`tests/wpt/probes/font-family-resolution.html` as the RED proof (five families → five widths, today one).
+Then the cascade-origin bug from t556 (author `* { margin:0 }` losing to the UA `body { margin:8px }` — every
+CSS reset on the web hits it), then nytimes.com, the crawl-side sig correction, STEP 1(c) 100-tab RSS,
+Audit #28's three CSS probes. Cadences: self-audit 564; surface 558 (DUE next tick); const 559; wall 567.

@@ -456,7 +456,23 @@ impl FontContext {
     /// named→generic mapping (Courier→mono, Times→serif). Defaults to sans-serif.
     pub fn resolve_family(&self, names: &[String]) -> FontFamily {
         for raw in names {
-            let n = raw.trim().trim_matches(['"', '\'']).to_ascii_lowercase();
+            // ── THE NAME KEEPS ITS CASE FOR THE FACE QUERY (tick 557).
+            //
+            // `fontdb::Family::Name` matching is **case-SENSITIVE**, and this loop used to lowercase the
+            // family before querying — so `Family::Name("dejavu sans")` returned `None` while
+            // `Family::Name("DejaVu Sans")` returns the face, and **no named system family ever
+            // resolved.** Measured at t556: `"DejaVu Sans"`, `"Noto Sans"` and a deliberately
+            // non-existent `"NoSuchFontXYZ"` all rendered the same 330px wide here, where Chromium gave
+            // 374 / 348 / 299 — three different faces. Every named family on the web was silently
+            // substituted, which is one defect producing BOTH corpus symptoms: sign-changing text
+            // advances (a substituted face has different per-glyph widths) and a constant line-box height
+            // delta (different ascent+descent).
+            //
+            // So `orig` (trimmed, unquoted, ORIGINAL case) goes to fontdb and is what gets interned;
+            // `n` (lowercased) stays the key for the generic keywords and the `@font-face` map, which is
+            // keyed lowercase by CSS's case-insensitive family matching.
+            let orig = raw.trim().trim_matches(['"', '\'']);
+            let n = orig.to_ascii_lowercase();
             match n.as_str() {
                 "sans-serif" | "system-ui" | "ui-sans-serif" | "-apple-system"
                 | "blinkmacsystemfont" => return FontFamily::SansSerif,
@@ -470,8 +486,9 @@ impl FontContext {
                     }
                     // A named family: use it only if fontdb actually has a face whose family
                     // name matches (so unknown names fall through to hints / next entry).
+                    // ⚠ `orig`, not `n` — see the case note above; this query is case-sensitive.
                     let q = fontdb::Query {
-                        families: &[fontdb::Family::Name(&n)],
+                        families: &[fontdb::Family::Name(orig)],
                         weight: fontdb::Weight::NORMAL,
                         stretch: fontdb::Stretch::Normal,
                         style: fontdb::Style::Normal,
@@ -485,7 +502,9 @@ impl FontContext {
                         })
                     });
                     if matched {
-                        return FontFamily::Named(self.intern_family(&n));
+                        // Intern the ORIGINAL case: `face_id` re-queries fontdb with this string, so
+                        // lowering it here would reintroduce the same miss one call later.
+                        return FontFamily::Named(self.intern_family(orig));
                     }
                     if n.contains("mono") || n.contains("courier") || n.contains("consol") {
                         return FontFamily::Monospace;
@@ -513,7 +532,11 @@ impl FontContext {
         // An @font-face family resolves directly to its registered face ids (bypassing the
         // internal-name query), picking the bold/italic variant when present.
         if let Some(n) = &named {
-            if let Some(ids) = self.webfonts.borrow().get(n) {
+            // The `@font-face` map is keyed by the CSS name LOWERCASED (family matching is
+            // case-insensitive in CSS), while `named` now preserves the author's case for fontdb's
+            // case-sensitive query. Lower it here, or a webfont declared `"Fira Sans"` stops resolving.
+            let lower = n.to_ascii_lowercase();
+            if let Some(ids) = self.webfonts.borrow().get(&lower) {
                 if let Some(&id) = ids.iter().find(|&&id| {
                     self.db.borrow().face(id).is_some_and(|f| {
                         (f.weight == fontdb::Weight::BOLD) == key.bold
@@ -1033,5 +1056,72 @@ mod tests {
         let (h2, m2) = ctx.measure_cache_stats();
         assert_eq!(h2, 2, "different size does not falsely hit");
         assert_eq!(m2, 3);
+    }
+
+    /// **A named, installed family must resolve to THAT family — `fontdb`'s name query is
+    /// case-SENSITIVE.**
+    ///
+    /// `resolve_family` lowercased the family before querying fontdb, so
+    /// `Family::Name("dejavu sans")` returned `None` while `Family::Name("DejaVu Sans")` returns the
+    /// face — and **no named system family ever resolved.** Measured against Chromium at t556 on one
+    /// 44-character string: `"DejaVu Sans"` 374px, `"Noto Sans"` 348px, a deliberately absent
+    /// `"NoSuchFontXYZ"` 299px — three different faces; we rendered all three at **330px**. That single
+    /// defect produced both corpus-wide symptoms the t549–t555 sweeps chased: sign-changing text advances
+    /// (a substituted face has different per-glyph widths, so the error goes either way depending on the
+    /// string) and a **constant** line-box height delta (a substituted face has different
+    /// ascent+descent).
+    ///
+    /// RED PROOF: lowercase the name in the fontdb query and the two installed families collapse onto
+    /// the same resolution as the absent one.
+    #[test]
+    fn a_named_installed_family_resolves_to_that_family_not_a_fallback() {
+        let fonts = FontContext::new();
+        if fonts.face_count() == 0 {
+            eprintln!("no system fonts on this box — skipping (an absent measurement, not a pass)");
+            return;
+        }
+        // Pick two families that are ACTUALLY installed here, by their real (mixed-case) names, so the
+        // test measures resolution rather than the font list.
+        let installed: Vec<String> = {
+            let db = fonts.db.borrow();
+            let mut v: Vec<String> = db
+                .faces()
+                .filter_map(|f| f.families.first().map(|(n, _)| n.clone()))
+                .filter(|n| n.chars().any(|c| c.is_ascii_uppercase()))
+                .collect();
+            v.sort();
+            v.dedup();
+            v
+        };
+        if installed.len() < 2 {
+            eprintln!("fewer than two mixed-case families installed — skipping");
+            return;
+        }
+        let absent = FontFamily::Named(0); // never interned; only used for the shape of the assert below
+        let _ = absent;
+
+        for name in installed.iter().take(6) {
+            let got = fonts.resolve_family(&[name.clone()]);
+            match got {
+                FontFamily::Named(id) => {
+                    let back = fonts.family_name_of(id).unwrap_or_default();
+                    assert!(
+                        back.eq_ignore_ascii_case(name),
+                        "resolving {name:?} must yield THAT family, got {back:?}"
+                    );
+                }
+                other => panic!(
+                    "{name:?} IS installed on this box and must resolve to Named(...), not {other:?} —                      falling back substitutes a face with different advances and a different                      ascent+descent, which is exactly the corpus-wide text divergence measured at t556"
+                ),
+            }
+        }
+
+        // A family that is NOT installed must still fall back (the fix must not make every string a
+        // "match"), and it must NOT resolve to the same thing as an installed one.
+        let bogus = fonts.resolve_family(&["NoSuchFontXYZ".to_string()]);
+        assert!(
+            !matches!(bogus, FontFamily::Named(_)),
+            "an absent family must fall back, not resolve: {bogus:?}"
+        );
     }
 }

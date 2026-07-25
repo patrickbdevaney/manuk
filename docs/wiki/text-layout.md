@@ -903,3 +903,60 @@ for any face, so it cannot cleanly diverge from its own `1em` fallback and would
 gate. Gated by `g_cap_unit` (RED-proven: stub gives `cap100:0`; fix lands ~`1150`, pinned to
 `(900,1600)` so a wrong/larger metric fails). This closes the *clean* font-relative-unit work (`ch`,
 `ex`, `cap` real; `ic` measured-and-pinned as fallback-correct in `CONSTELLATION.tsv` tick 501).
+
+## No named font family ever resolved — `fontdb`'s name query is case-SENSITIVE (tick 557)
+
+Five ticks of instrument work (t551–t556) narrowed a corpus-wide text divergence to one question, and the
+answer is three characters wide: `resolve_family` lowercased the family name before handing it to
+`fontdb::Family::Name`, and **that query is case-sensitive.**
+
+```
+Family::Name("DejaVu Sans")  ->  Some("DejaVu Sans")
+Family::Name("dejavu sans")  ->  None
+```
+
+So `matched` was **always false** for any family whose real name is not entirely lowercase — which is
+essentially every font on every system. Every named family on the web fell through to the
+`contains("mono")` / `contains("serif")` hints, or to `sans-serif`. Measured against Chromium on one
+44-character string before the fix:
+
+| declared | Chromium | ours |
+|---|---|---|
+| `"DejaVu Sans"` | 374px | **330px** |
+| `"Noto Sans"` | 348px | **330px** |
+| `"DejaVu Serif"` | 380px | **330px** |
+| `"Liberation Mono"` | 422px | **330px** |
+| `"NoSuchFontXYZ"` (absent) | 299px | **330px** |
+
+**Two real families and a deliberately fake one, all the same width.** That is the tell for a resolution
+failure rather than a metrics one, and it is why the generic stacks (`sans-serif`, `serif`, `monospace`)
+measured *fine* the whole time — they never take the named path.
+
+**Why this one defect produced two different corpus symptoms**, which is the test a root cause has to pass:
+a substituted face has different **per-glyph advances** (so text widths are wrong in *both directions*
+depending on the string — the ±9–22px sign-changing anchor widths) and a different **ascent+descent** (so
+the line box is off by a *constant* — the +2px height on every instance). One cause, both signatures, no
+residue.
+
+**The fix:** `orig` (trimmed, unquoted, original case) goes to fontdb and is what gets interned; the
+lowercased form stays the key for the generic keywords and the `@font-face` map, which is keyed lowercase
+because CSS family matching is case-insensitive. `face_id` lowers the interned name again for its webfont
+lookup — miss that and a webfont declared `"Fira Sans"` stops resolving, trading one bug for another.
+
+RED-PROVEN: `a_named_installed_family_resolves_to_that_family_not_a_fallback` enumerates the mixed-case
+families actually installed on the box and asserts each resolves to `Named(that family)`; restoring the
+lowercase in the query fails it with *"AR PL KaitiM Big5 IS installed on this box and must resolve to
+Named(...), not SansSerif"*. It also asserts an absent family still falls back, so the fix cannot be "call
+everything a match".
+
+### ⚠ A SECOND defect is downstream, and it is now isolated
+
+Resolution is fixed and verified — a trace at the layout call site shows
+`["DejaVu Sans"] -> Named(0)`, `["Noto Sans"] -> Named(1)`, `["DejaVu Serif"] -> Named(2)`,
+`["Liberation Mono"] -> Named(3)`, `["NoSuchFontXYZ"] -> SansSerif`: five declarations, five distinct
+outcomes. **And the rendered widths are still 330px for all of them.** So the family now resolves and the
+*advance* does not follow — `face_id`/`load`, or the measurement path, is not using the resolved face.
+That is a separate bug with a separate fix, and it is stated here rather than folded in because a tick that
+claims two causes has proven neither. The probe page
+(`tests/wpt/probes/font-family-resolution.html`) is the standing RED proof for it: five families must
+produce five different widths. [[box-layout]]

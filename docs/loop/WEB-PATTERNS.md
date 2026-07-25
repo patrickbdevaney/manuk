@@ -4558,3 +4558,31 @@ call one), so the honest state is "the registry works, callbacks do not fire" �
 lie, and draining `doCleanup` through the real job queue is the named follow-on. **(5)** Found by
 running **test262**, not by the corpus crawl: no corpus site happens to construct one, which is the
 whole argument for an instrument that carries its own verdict.
+
+## A page that names its fonts — `font-family: "Inter", "Helvetica Neue", Arial, sans-serif` (tick 557)
+
+**Pattern:** every branded site on the web names its typefaces. A design system ships
+`font-family: "Inter", system-ui, sans-serif`; a docs site names its mono face; a news site names its
+display serif. The generic keyword at the end of the stack is the *fallback*, not the intent.
+
+**The class this unlocks:** correct text measurement on any page that names a font it has, or that the
+system has. `fontdb::Family::Name` matching is **case-sensitive** and we lowercased the family before
+querying it, so the lookup returned `None` for every mixed-case family name — i.e. **all of them** — and
+every named family silently became `sans-serif` or a `contains("serif")` guess. Two real installed
+families and a deliberately non-existent one all rendered the same width.
+
+**The traps.** **(1)** This is invisible per-element and enormous in aggregate: the page renders, the text
+is there, every box is *slightly* the wrong size, and no single screenshot looks broken — the
+`subpixel-error-compounds` failure mode with a font on top. **(2)** It produces **two** unlike symptoms
+from one cause — text widths wrong in *both directions* (per-glyph advances) and a *constant* line-box
+height error (ascent+descent) — so a debugger chasing either one alone concludes "box model" or
+"line-height" and is wrong twice. **(3)** The generic stacks measure FINE, which is what makes it survive:
+every synthetic test page that says `sans-serif` passes. **(4)** Case-insensitivity is a CSS property, not
+a font-database property — CSS matches families case-insensitively, `fontdb` does not, and the boundary
+between those two facts is exactly where the bug lived. **(5)** The `@font-face` map is keyed lowercase for
+the CSS reason, so preserving case for the system query means lowering it again for the webfont lookup;
+miss that and you trade a system-font bug for a webfont bug.
+
+**Honest limit:** resolution is fixed; the *advance* does not yet follow the resolved face (measured — five
+families still render one width), so the pattern is not closed. `tests/wpt/probes/font-family-resolution.html`
+is the standing proof: five declarations must produce five widths.
