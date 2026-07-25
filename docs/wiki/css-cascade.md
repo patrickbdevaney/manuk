@@ -1156,3 +1156,40 @@ working. The same verdict is applied at all three places the cascade descends in
 block — `RuleIndex::add_rules`, `PseudoIndex::collect`, and the per-element `match_rules_recursive` —
 because `CSS.supports()` and the cascade disagreeing about one declaration is the tick-282 bug one
 level down: whichever the page consults, it gets a different browser.
+
+## CSS Color 4 — `oklch()`, `lab()`, `color()` and `color-mix()` all work, and nobody had asked (tick 579)
+
+Surface audit #31 filed this `unknown` rather than `missing`, on the grounds that **a grep is not a
+measurement when the capability lives below you**: `oklch` and `color-mix` appear nowhere in `engine/`,
+but Stylo is a *dependency* and may resolve them without this repository ever naming them.
+
+It does. All of it, and to the integer:
+
+| declaration | resolved sRGB |
+|---|---|
+| `oklch(0.7 0.15 250)` | `(75, 163, 247)` |
+| `color-mix(in oklab, red 50%, blue)` | `(140, 83, 162)` |
+| `color-mix(in srgb, black 50%, white)` | `(128, 128, 128)` |
+| `lab(50% 40 30)` | `(187, 88, 70)` |
+| `color(display-p3 1 0 0)` | `(255, 0, 0)` (clipped — P3 red is outside sRGB) |
+
+Four of the five reproduce a from-scratch derivation off the CSS Color 4 matrices **exactly**, and the mix
+honours its percentage (`black 25%` → `(191, 191, 191)`, which is 0.75 × 255).
+
+**Why this mattered enough to spend a tick measuring.** Tailwind v4 does not *offer* `oklch` — it **emits
+it by default**: every `text-slate-700` and `bg-blue-500` is an `oklch()` literal, and every opacity
+utility (`bg-blue-500/50`) compiles to `color-mix(in oklab, … 50%, transparent)`. Had this been missing,
+a large and rapidly growing population of sites would render in the fallback colour, and the failure would
+have been *silent* — wrong colours, no error, nothing for a box-comparing gate to catch.
+
+> **The generalisable half.** The fifth "already built" phantom this project has caught, and the first
+> found by asking the right question about a *dependency* rather than about our own code. The map's status
+> vocabulary earns its keep here: `missing` claims a measurement, `unknown` admits there isn't one, and
+> collapsing the two would have filed this as a work item worth weeks.
+
+**⚠ And the gate was wrong before the engine was.** It was first written asserting
+`oklch(0.7 0.15 250) == (57, 137, 217)` — a number **recalled rather than derived** — and it failed
+against an engine that was exactly right. A gate whose expected value came from memory tests the memory,
+and it fails in the direction that costs most: a red gate on correct code invites someone to "fix" the
+code. The values are now derived, with the derivation written into the gate's header so the next reader
+can re-run it instead of trusting it.

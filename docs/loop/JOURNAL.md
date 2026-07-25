@@ -23943,3 +23943,70 @@ makes every readiness figure honest for the first time. Interleave with **`color
 behaviourally** (Tailwind v4's default palette; a grep cannot answer it) and the `apply_has_rules`
 per-element hoist (`:has()` is 505 ms of the 2,570 ms cascade).
 Cadences: const 583; self-audit 584; wall 587; surface 588.
+
+## Tick 579 — CSS Color 4 already worked, and my own gate was wrong before the engine was (2026-07-25)
+
+Surface audit #31's largest open question, answered. It filed `color-mix()`/`oklch` as **`unknown` rather
+than `missing`** on an explicit principle — *a grep is not a measurement when the capability lives below
+you*: neither string appears anywhere in `engine/`, but Stylo is a **dependency** and may resolve them
+without this repository ever naming them.
+
+**IT ALL WORKS, AND TO THE INTEGER.**
+
+```text
+oklch(0.7 0.15 250)                   (75, 163, 247)
+color-mix(in oklab, red 50%, blue)    (140, 83, 162)
+color-mix(in srgb, black 50%, white)  (128, 128, 128)
+lab(50% 40 30)                        (187, 88, 70)
+color(display-p3 1 0 0)               (255, 0, 0)   ← clipped; P3 red is outside sRGB
+```
+
+Four of the five reproduce a from-scratch derivation off the CSS Color 4 matrices **exactly**, and the mix
+honours its percentage (`black 25%` → `(191, 191, 191)` = 0.75 × 255).
+
+**WHY IT WAS WORTH A TICK TO MEASURE.** Tailwind v4 does not *offer* `oklch` — it **emits it by default**:
+every `text-slate-700` and `bg-blue-500` is an `oklch()` literal, and every opacity utility
+(`bg-blue-500/50`) compiles to `color-mix(in oklab, …)`. Had it been missing, a large and monthly-growing
+population of sites would have rendered in a fallback colour **silently**: same boxes, same text, wrong
+colours, no error. Nothing in this project's instrument set compares colours across a corpus, so it is
+precisely the class of failure that goes unnoticed indefinitely — the same structural blindness t577 found
+for machine-facing text, one axis over.
+
+**⚠ THE GATE WAS WRONG BEFORE THE ENGINE WAS, AND THAT IS THE LESSON OF THIS TICK.** I wrote it asserting
+`oklch(0.7 0.15 250) == (57, 137, 217)` and `color-mix(in oklab, red 50%, blue) == (186, 0, 152)` —
+**numbers recalled rather than derived** — and it went red against an engine that was exactly right. Only
+on re-deriving them (OKLab→LMS→linear sRGB with the published coefficients; Lab via D50→Bradford→D65) did
+the engine's output turn out to match to the last integer on all four.
+
+**A gate whose expected value came from memory tests the memory, not the engine — and it fails in the
+direction that costs most**, because a red gate sitting on correct code is an invitation to "fix" the code.
+This is the project's standing lesson (*when a probe passes, ask what it held fixed*) asked of a probe that
+**fails**: *when a probe fails, ask whether the expectation was measured or remembered.* The derivation is
+now written into the gate's header so the next reader can re-run it rather than trust it.
+
+**THE FIFTH ALREADY-BUILT PHANTOM**, after `localStorage`, `FormData`, `position: sticky` and
+`IntersectionObserver` — and the first found by asking the question about a **dependency** rather than
+about our own code. The map's status vocabulary is what saved it: `missing` claims a measurement,
+`unknown` admits there isn't one, and collapsing the two would have filed a working capability as weeks of
+work. Row 268 moves `unknown` → `gated`.
+
+RED-PROVEN twice, and both prove the assertions read the live cascade rather than a constant: move the
+declaration (`oklch(0.7 …)` → `oklch(0.5 …)`) and the colour becomes `(0, 101, 180)`; move the mix ratio
+(50% → 25%) and it becomes `(191, 191, 191)`. The second doubles as a measurement — the percentage is
+honoured exactly.
+
+TICK SHAPE: measurement (the audit's largest unresolved CSS question, answered behaviourally and pinned
+with a gate, converting an `unknown` into a verdict) + the methodology correction above. No engine src
+touched; Bar 0 untouched; no ratchet floor moved.
+Gates: `G_OKLCH_COLOR_MIX` (`engine/page/tests/g_oklch_color_mix.rs`), RED-proven twice.
+WIKI: docs/wiki/css-cascade.md — "CSS Color 4 — `oklch()`, `lab()`, `color()` and `color-mix()` all work,
+and nobody had asked".
+PATTERN: new — the Tailwind v4 palette, plus the silent-failure note (wrong colours produce identical
+boxes, so no instrument here would ever have caught it).
+
+NEXT: **drive the unmapped-gate count down from 147/281** — each is a `gated` row available for the cost of
+reading its header, and it is the cheapest measured progress on the board. Then the `apply_has_rules`
+per-element hoist (`:has()` is 505 ms of the 2,570 ms cascade); the same-face `{Open Sans/13}` metric
+delta; the crawl-side `.SIG` correction; and a fresh corpus sweep, since t569's grid-stretch and t575's
+cascade-origin fixes are both page-wide geometry changes.
+Cadences: const 583; self-audit 584; wall 587; surface 588.

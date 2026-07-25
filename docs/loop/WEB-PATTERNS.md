@@ -4898,3 +4898,23 @@ the first consumer that needed spans.
 > *"are there other bugs like this"* but **"what else reads this structure, and does it ask the same
 > question?"** — a grep for the *type*, not for the *symptom*. `BoxContent::Inline` had seven readers;
 > three assembled text and all three were wrong.
+
+---
+
+## The Tailwind v4 palette — `oklch()` and `color-mix()` as the DEFAULT colour syntax (tick 579)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| **`oklch()` colour literals and `color-mix(in oklab, … N%, transparent)`** | Tailwind v4 emits both **by default**: every `text-slate-700`/`bg-blue-500` is an `oklch()` literal and every `/50` opacity utility compiles to a `color-mix()`. Plus `lab()`, `color(display-p3 …)` and the rest of CSS Color 4 on design-led sites | ✅ (tick 579, **measured — it already worked**) — inherited free through Stylo and never once asked for. Five declarations probed, four reproduce a from-scratch derivation off the CSS Color 4 matrices **to the integer**; the mix honours its percentage. Gated by `G_OKLCH_COLOR_MIX`, RED-proven by moving the declaration and by moving the mix ratio. |
+
+**The failure this would have been is the silent kind.** Had `oklch()` not resolved, every Tailwind v4
+site would have rendered in a fallback colour with **no error and no structural divergence** — same boxes,
+same text, wrong colours. Nothing in this project's instrument set compares colours across a corpus, so it
+would have gone unnoticed indefinitely while the affected population grew every month.
+
+**And the reason it was measured rather than built: the map distinguished `unknown` from `missing`.** The
+audit that surfaced it refused to write `missing` on the strength of a grep, because *a grep is not a
+measurement when the capability lives below you* — `oklch` appears nowhere in `engine/`, and Stylo is a
+dependency. Collapsing those two statuses would have filed a working capability as weeks of work. This is
+the fifth already-built phantom this project has caught, and the first found by asking the question about
+a **dependency** rather than about our own code.
