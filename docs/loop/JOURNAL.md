@@ -21837,3 +21837,70 @@ The three findings above each name a follow-on, ranked: `JS_AddInterruptCallback
 script cannot be stopped today), SharedArrayBuffer/Atomics enablement (718 subtests + wasm threads),
 then the async/module goals of the runner (12,381 subtests currently unrun). Cadences: self-audit 554;
 surface 548; const 551; wall 547.
+
+## Tick 547 — the exit certificate is COMPUTED now, not read off 265 stanzas of stderr + wall audit #14 (2026-07-24)
+
+Cadence first: the **wall-time audit was due at 547** and tick.sh blocks past it. Ran it — recorded as
+Audit #14 in docs/loop/WALL-AUDIT.md. Headline finding is about the AUDIT, not the wall: it reported
+`G3 62s (49%)` of a 126s run, and G3 is the whole manuk-shell suite, which takes ~12s green and
+standalone. It cost 62s because the observer's flaky-gate retry loop FIRED — so the audit's own top line
+describes waiting for the box to calm down, and a reader optimising "G3" would be optimising contention.
+Lesson #4 (*every number has a harness*) firing for the fifth time, this time **on the instrument built
+to hunt wall bloat.** Honest headline is the warm one: 67s. NO TRIM; every admissible lever is in
+scripts/verify.sh, observer-owned. Also recorded for the observer: the retry loop was measured
+INSUFFICIENT at t545 and t546 — both reported FAILED after all three attempts and both were green
+standalone minutes later at load1≈1.9 (t546: 70 passed / 0 failed). It waits ≤60s for load1 < 2.5 and
+this box carries persistent background load ~3–5, so all three attempts run contended. Cost: two
+full-wall re-runs. Not touched.
+
+CAPABILITY (the instrument half, STEP 1 groundwork): **FIDELITY-SCORING-REDESIGN §3's certificate was
+stated mechanically, measured completely, and then thrown away.** The four jarring counts existed only
+as `eprintln!` lines — `Fidelity` had no field for them — so computing the certificate from a sweep
+meant a human reading 265 stanzas of stderr and adding up. That is the step that gets skipped and then
+ESTIMATED, and an estimated certificate is precisely what the redesign exists to prevent. A number
+printed and discarded is a log line, not a measurement.
+
+So: `Fidelity.jarring: [usize; 4]` (order pinned by `JARRING_NAMES`), `fidelity::certificate(rows)`
+with `holds()`/`shortfalls()`, printed by `certificate_report` on EVERY fidelity run — including the
+two-site G1 gate, where a block reading "sites 2" is self-evidently not a corpus read (safer than a
+headline that only appears when asked for). Plus `--urls-file PATH` so the 265-site corpus is drivable
+at all: a comma list that long hits ARG_MAX, and a file also leaves a record of WHICH list was swept.
+
+THREE ways the certificate could have been passed without being met, each closed deliberately:
+(1) it is a CONJUNCTION — one term below the bar fails it; averaging the four invariants would let a
+60%-clean reading-order hide behind three 100%s, and reading-order is the widest error bar in the
+roadmap's own risk register. (2) UNSCORED sites count AGAINST the bar, not out of it — `shape_frac`
+divides by `sites`, never `scored`, because dividing by `scored` means the certificate can be met BY
+FAILING TO MEASURE (the same defect the NaN check was added for after example.com scored 100% with no
+`[id]` elements). (3) the floor (0.75) and bar (0.95) are `const`, not parameters — a floor a caller
+can pass in is a floor that will eventually be passed in.
+
+RED-PROVEN: switching `shape_frac`'s denominator to `scored` and dropping the `scored == sites` term —
+i.e. exactly the "met by not measuring" mutation — makes
+`the_certificate_is_a_conjunction_not_an_average` FAIL. Restored; 32 lib tests green.
+
+FIRST REAL READING (one site, news.ycombinator.com, live): coverage 100.0%, visual 90.3%,
+**SHAPE 72.9% — just under the 0.75 floor** — and all four jarring invariants CLEAN. One root cause
+clustered: `geometry: height ~128px (<body>)`. That single row is the shape the corpus sweep is expected
+to produce: not missing content, not jarring breakage, but placement drift a few points below the bar.
+
+HARNESS NOTE (one line, observer's): `scripts/fidelity-sweep.sh` still greps the OLD
+`PLACEMENT: N% within Npx | median offset …` line that brick 4b replaced, so its `place` column comes
+back EMPTY and it cannot see SHAPE or the jarring invariants at all. Driving the instrument directly via
+`--urls-file` has no such gap, which is the path the sweep will take. Not fixed — scripts/ is
+observer-owned.
+
+TICK SHAPE: instrument (the exit certificate computed by the thing that measures it — four jarring
+counts persisted on the row, conjunction semantics, unscored-counts-against, const floor/bar,
+`--urls-file` corpus driver; RED-proven by the met-by-not-measuring mutation) + the DUE wall-time audit
+#14. No engine src touched; Bar 0 untouched.
+WIKI: docs/wiki/conformance-and-oracles.md — "The exit certificate is now COMPUTED, not read off 265
+stanzas of stderr (tick 547)". [no-pattern]
+
+NEXT: STEP 1(a) — the full-corpus sweep, now that the certificate is computable and drivable:
+`manuk-wpt fidelity --urls-file docs/bench/oracle-corpus.txt` in timeout-isolated chunks, one actuals
+line into PHASE0-ROADMAP-ANCHOR.md §6. Then STEP 1(c) the 100-tab RSS benchmark (the last constellation
+unknown). Ranked follow-ons from t546 stand: JS_AddInterruptCallback (Bar 0 — a runaway script cannot be
+stopped, and it is why a test262 hang cannot be told from a slow test), SharedArrayBuffer/Atomics
+enablement (718 subtests + wasm threads), the runner's async/module goals (12,381 unrun). Cadences:
+self-audit 554; surface 548 (DUE next tick); const 551; wall 567.

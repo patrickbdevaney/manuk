@@ -846,3 +846,51 @@ each decomposed before starting — not more surface probing.
 subsystem: the provider lives in the `Device` Stylo shares across rayon parallel-cascade threads while manuk's
 `FontContext` is RefCell-based, so it needs a Send+Sync-safe metrics path (a thread-local/RefCell shortcut is
 unsound under concurrent cascade), and `ex` needs a new x-height query in manuk-text.
+
+## The exit certificate is now COMPUTED, not read off 265 stanzas of stderr (tick 547)
+
+`FIDELITY-SCORING-REDESIGN.md §3` states the Phase-0 exit rule mechanically — *shape ≥ 0.75 on ≥95%
+of sites, and ≥95% of sites clean on each of the four jarring invariants* — and the rebuilt instrument
+(bricks t531–540) measured every term of it. Then it **printed them per site and threw them away.**
+The four jarring counts existed only as `eprintln!` lines; `Fidelity` had no field for them. So
+turning a sweep into the certificate meant a human reading 265 stanzas of stderr and adding up — which
+is exactly the step that gets skipped and then estimated, and an estimated certificate is the one
+thing the whole redesign exists to prevent.
+
+So: `Fidelity.jarring: [usize; 4]` (h-overflow · overlap · reading-order · dead-target, order pinned
+by `JARRING_NAMES` so a report cannot silently relabel three columns at once), and
+`fidelity::certificate(rows) -> Cert` with `holds()` / `shortfalls()`. `certificate_report` prints on
+**every** fidelity run, including the two-site G1 gate — a block that says "sites 2" is obviously not
+a corpus read, which is safer than a headline that appears only when someone remembers to ask.
+
+**Three design decisions, each one a way the certificate could have been passed without being met:**
+
+- **It is a CONJUNCTION.** One term below the bar fails it. Averaging the four invariants together
+  would let a 60%-clean reading-order hide behind three 100%s — and reading-order is the widest error
+  bar in the roadmap's own risk register.
+- **Unscored sites count AGAINST the bar, not out of it.** `shape_frac` divides by `sites`, never by
+  `scored`. Dividing by `scored` means the certificate can be met **by failing to measure**, which is
+  the same defect the NaN check in `report` was added for after `example.com` (no `[id]` elements)
+  scored a perfect 100% in the gate whose job is finding missing content. RED-PROVEN: switching the
+  denominator to `scored` and dropping the `scored == sites` term makes
+  `the_certificate_is_a_conjunction_not_an_average` fail.
+- **The floor and the bar are `const`, not parameters.** `CERT_SHAPE_FLOOR = 0.75`,
+  `CERT_SITE_BAR = 0.95`. A floor a caller can pass in is a floor that will eventually be passed in,
+  and *"widen the bar to pass"* is the one move this project refuses outright.
+
+`--urls-file PATH` drives the instrument from a corpus file (one URL per line, `#` comments, and a
+leading `category<TAB>url` — `docs/bench/oracle-corpus.txt`'s own shape — has the category stripped).
+265 URLs are not expressible as a comma list without hitting `ARG_MAX`, and more importantly a file
+leaves a record of *which* list was swept.
+
+**First real reading, one site, `news.ycombinator.com`:** coverage 100%, visual 90.3%,
+**shape 72.9%** — just under the floor — and all four jarring invariants clean. That single row is the
+shape of the finding the corpus sweep is expected to produce: not missing content, not jarring
+breakage, but placement drift sitting a few points below the bar. [[fidelity-instrument-shared-snapshot]]
+
+⚠ **Harness note, observer-owned:** `scripts/fidelity-sweep.sh` still greps for the OLD
+`PLACEMENT: N% within Npx | median offset dx=… dy=…` line, which brick 4b replaced with
+`SHAPE: … | [diag] absolute PLACEMENT …`. Its `place` column therefore comes back EMPTY and it cannot
+see SHAPE or the jarring invariants at all. The sweep driven directly through
+`manuk-wpt fidelity --urls-file` does not have that gap. Recorded, not fixed: `scripts/` is
+observer-owned.

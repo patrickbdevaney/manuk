@@ -360,9 +360,34 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
     let out = flag(args, "--out")
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
-    let Some(urls) = flag(args, "--urls") else {
-        eprintln!("usage: manuk-wpt fidelity --urls URL[,URL...] [--out DIR] [--floor 0.9]");
-        std::process::exit(2);
+    // `--urls-file` takes the corpus from a file — one URL per line, `#` comments and blanks
+    // ignored, and a leading `category<TAB>url` (the shape of `docs/bench/oracle-corpus.txt`) has the
+    // category stripped. A 265-site sweep is not expressible as a comma list on a command line
+    // without hitting ARG_MAX and, worse, without any record of WHICH list was swept.
+    let urls = match flag(args, "--urls-file") {
+        Some(p) => match std::fs::read_to_string(&p) {
+            Ok(text) => text
+                .lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty() && !l.starts_with('#'))
+                .map(|l| l.rsplit('\t').next().unwrap_or(l).trim().to_string())
+                .filter(|u| u.starts_with("http"))
+                .collect::<Vec<_>>()
+                .join(","),
+            Err(e) => {
+                eprintln!("✗ cannot read --urls-file {p}: {e}");
+                std::process::exit(2);
+            }
+        },
+        None => match flag(args, "--urls") {
+            Some(u) => u.to_string(),
+            None => {
+                eprintln!(
+                    "usage: manuk-wpt fidelity (--urls URL[,URL...] | --urls-file PATH) [--out DIR] [--floor 0.9]"
+                );
+                std::process::exit(2);
+            }
+        },
     };
     let _ = std::fs::create_dir_all(&out);
 
@@ -654,6 +679,15 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                                 .join("; ")
                         );
                     }
+                    // ── KEEP the four counts on the row, don't just print them (tick 547).
+                    //
+                    // They were computed and printed per site since brick 4b and then dropped on the
+                    // floor, which meant the exit CERTIFICATE — whose bar is literally "≥95% of sites
+                    // clean on each invariant" — could not be computed from a sweep at all: it needed a
+                    // human reading 265 stanzas of stderr, which is the kind of step that gets skipped
+                    // and then estimated. A number printed and discarded is a log line, not a
+                    // measurement.
+                    f.jarring = [hover, overlap, rinv, dead];
                     // Brick 5 (§3b): pool THIS page's divergences (missing / display / SHAPE-geometry)
                     // for end-of-sweep root-cause clustering. `diff_page` is the differential oracle's
                     // OWN diff (parent-relative SHAPE + display-before-geometry), so the exit gate and
@@ -688,6 +722,10 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
     }
 
     let ok = manuk_wpt::fidelity::report(&rows, floor);
+    // The certificate, computed by the thing that measured it. Printed on every run — a two-site G1
+    // gate run says "2 sites" and is obviously not a corpus read, which is better than a headline that
+    // only appears when someone remembers to ask for it.
+    manuk_wpt::fidelity::certificate_report(&rows);
     if !ok && floor > 0.0 {
         std::process::exit(1);
     }

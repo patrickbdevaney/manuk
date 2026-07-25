@@ -26,6 +26,7 @@ use anyhow::{Context, Result};
 /// missing **box**, so the structural half compares Chrome's `getBoundingClientRect` for every
 /// `[id]` element against Manuk's, and reports what is MISSING and what is MISPLACED. That number
 /// cannot be fooled by white matching white.
+#[derive(Clone)]
 pub struct Fidelity {
     pub name: String,
     /// Visual: fraction of grid blocks agreeing with Chromium, 0.0–1.0.
@@ -45,6 +46,158 @@ pub struct Fidelity {
     /// Elements both render, but Manuk places/sizes wrongly (beyond tolerance).
     pub misplaced: usize,
     pub probed: usize,
+    /// **The four JARRING invariants** (FIDELITY-SCORING-REDESIGN.md §2), as counts per site:
+    /// horizontal overflow · sibling overlap · reading-order inversion · collapsed interactive
+    /// target. They were computed and *printed* per site since brick 4b and then thrown away, so the
+    /// certificate — whose bar is *"≥95% of sites CLEAN on each invariant"* — could not be computed
+    /// from a sweep at all. A number printed and discarded is not a measurement, it is a log line.
+    pub jarring: [usize; 4],
+}
+
+/// The four jarring invariants, in the order they sit in [`Fidelity::jarring`]. Named so a report
+/// cannot silently reorder them and relabel three columns at once.
+pub const JARRING_NAMES: [&str; 4] = ["h-overflow", "overlap", "reading-order", "dead-target"];
+
+/// The Phase-0 exit certificate, evaluated over a sweep's rows (FIDELITY-SCORING-REDESIGN.md §3).
+///
+/// This exists because the certificate was written in prose and the instrument printed per-site
+/// lines: turning one into the other was a human reading 265 stanzas of stderr, which is exactly the
+/// kind of step that gets skipped and then estimated. The bar is **mechanical** — *shape ≥ 0.75 on
+/// ≥95% of sites, and ≥95% of sites clean on each jarring invariant* — so it is computed here, once,
+/// by the thing that measured it.
+#[derive(Debug, Default, PartialEq)]
+pub struct Cert {
+    /// Sites with a SHAPE score at all (an unprobeable page is not a passing page — it is excluded
+    /// from the numerator AND named, never averaged in).
+    pub scored: usize,
+    /// Sites in the sweep, including the ones that could not be scored.
+    pub sites: usize,
+    /// Sites at or above the shape floor.
+    pub shape_ok: usize,
+    /// Sites with ZERO divergences on each invariant, in [`JARRING_NAMES`] order.
+    pub clean: [usize; 4],
+}
+
+/// The certificate's shape floor and its site-fraction bar — the two numbers the exit rule is
+/// written in. Constants, not parameters, because *"widen the bar to pass"* is the one move this
+/// project refuses; a floor that a caller can pass in is a floor that will eventually be passed in.
+pub const CERT_SHAPE_FLOOR: f64 = 0.75;
+pub const CERT_SITE_BAR: f64 = 0.95;
+
+/// Evaluate the certificate over a sweep's rows.
+///
+/// **Unscored sites count against the site bar, not out of it.** A page Chrome could not be probed on
+/// (or one we failed to render) is a page we cannot claim; dividing by `scored` instead of `sites`
+/// would let the bar be met by failing to measure, which is the same defect
+/// `fidelity::report`'s NaN check was added for.
+pub fn certificate(rows: &[Fidelity]) -> Cert {
+    let mut c = Cert {
+        sites: rows.len(),
+        ..Default::default()
+    };
+    for r in rows {
+        if let Some(s) = r.shape {
+            if !s.is_nan() {
+                c.scored += 1;
+                if s >= CERT_SHAPE_FLOOR {
+                    c.shape_ok += 1;
+                }
+            }
+        }
+        for i in 0..4 {
+            if r.jarring[i] == 0 {
+                c.clean[i] += 1;
+            }
+        }
+    }
+    c
+}
+
+impl Cert {
+    fn frac(n: usize, d: usize) -> f64 {
+        if d == 0 {
+            0.0
+        } else {
+            n as f64 / d as f64
+        }
+    }
+    pub fn shape_frac(&self) -> f64 {
+        Self::frac(self.shape_ok, self.sites)
+    }
+    pub fn clean_frac(&self, i: usize) -> f64 {
+        Self::frac(self.clean[i], self.sites)
+    }
+    /// Does the certificate HOLD? Every term at or above the bar — one failing term fails it, which
+    /// is the point of a certificate rather than an average.
+    pub fn holds(&self) -> bool {
+        self.sites > 0
+            && self.scored == self.sites
+            && self.shape_frac() >= CERT_SITE_BAR
+            && (0..4).all(|i| self.clean_frac(i) >= CERT_SITE_BAR)
+    }
+    /// The terms that are BELOW the bar, named. An unmet certificate must say which term missed, or
+    /// the next tick is chosen by guesswork.
+    pub fn shortfalls(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        if self.scored != self.sites {
+            out.push(format!(
+                "{} of {} sites UNSCORED (cannot be claimed, counted against the bar)",
+                self.sites - self.scored,
+                self.sites
+            ));
+        }
+        if self.shape_frac() < CERT_SITE_BAR {
+            out.push(format!(
+                "shape ≥{:.2} on {:.1}% of sites (bar {:.0}%)",
+                CERT_SHAPE_FLOOR,
+                self.shape_frac() * 100.0,
+                CERT_SITE_BAR * 100.0
+            ));
+        }
+        for i in 0..4 {
+            if self.clean_frac(i) < CERT_SITE_BAR {
+                out.push(format!(
+                    "{} clean on {:.1}% of sites (bar {:.0}%)",
+                    JARRING_NAMES[i],
+                    self.clean_frac(i) * 100.0,
+                    CERT_SITE_BAR * 100.0
+                ));
+            }
+        }
+        out
+    }
+}
+
+/// Print the certificate block — the one place a sweep's headline is allowed to come from.
+pub fn certificate_report(rows: &[Fidelity]) {
+    let c = certificate(rows);
+    println!("\n=== PHASE-0 EXIT CERTIFICATE (FIDELITY-SCORING-REDESIGN §3) ===\n");
+    println!(
+        "  sites {} · scored {} · shape ≥{:.2} on {} ({:.1}%)",
+        c.sites,
+        c.scored,
+        CERT_SHAPE_FLOOR,
+        c.shape_ok,
+        c.shape_frac() * 100.0
+    );
+    for i in 0..4 {
+        println!(
+            "  {:<14} clean on {:>4} sites ({:.1}%)",
+            JARRING_NAMES[i],
+            c.clean[i],
+            c.clean_frac(i) * 100.0
+        );
+    }
+    if c.holds() {
+        println!(
+            "\n  CERTIFICATE HOLDS on this sweep. (Bar 0 and interactivity are scored elsewhere.)"
+        );
+    } else {
+        println!("\n  CERTIFICATE NOT MET — shortfalls, in the order to work them:");
+        for s in c.shortfalls() {
+            println!("      · {s}");
+        }
+    }
 }
 
 /// Grid resolution — coarse enough to ignore glyph AA, fine enough to catch a missing element.
@@ -116,6 +269,7 @@ pub fn compare(manuk: &Path, chrome: &Path, name: &str) -> Result<Fidelity> {
         missing: 0,
         misplaced: 0,
         probed: 0,
+        jarring: [0; 4],
     })
 }
 
@@ -445,7 +599,7 @@ pub fn report(rows: &[Fidelity], floor: f64) -> bool {
 
 #[cfg(test)]
 mod shape_tests {
-    use super::shape_stats;
+    use super::{certificate, shape_stats, Fidelity};
     use std::collections::HashMap;
 
     // A realistic selector-path box tree modelling the microsoft.com artifact from the redesign:
@@ -534,5 +688,82 @@ mod shape_tests {
             "a box only Chrome rendered is a COVERAGE miss, not a SHAPE miss"
         );
         assert!((shape - 1.0).abs() < f64::EPSILON);
+    }
+
+    fn row(name: &str, shape: Option<f64>, jarring: [usize; 4]) -> Fidelity {
+        Fidelity {
+            name: name.into(),
+            score: 1.0,
+            differing: 0,
+            total: 1,
+            structure: Some(1.0),
+            shape,
+            missing: 0,
+            misplaced: 0,
+            probed: 10,
+            jarring,
+        }
+    }
+
+    /// The certificate is a CONJUNCTION, and every way of accidentally turning it into an average is
+    /// a way of passing it without meeting it. These pin all four.
+    #[test]
+    fn the_certificate_is_a_conjunction_not_an_average() {
+        // 20 sites, all shaped and all clean → holds.
+        let all_good: Vec<Fidelity> = (0..20)
+            .map(|i| row(&format!("s{i}"), Some(0.9), [0; 4]))
+            .collect();
+        let c = certificate(&all_good);
+        assert_eq!(c.sites, 20);
+        assert_eq!(c.scored, 20);
+        assert_eq!(c.shape_ok, 20);
+        assert!(c.holds(), "20/20 shaped and clean must hold");
+        assert!(c.shortfalls().is_empty());
+
+        // ONE invariant below the bar fails the whole thing — 2 of 20 sites with an overlap is 90%
+        // clean, and the bar is 95%.
+        let mut one_bad = all_good.clone();
+        one_bad[0].jarring[1] = 3;
+        one_bad[1].jarring[1] = 1;
+        let c = certificate(&one_bad);
+        assert!(
+            !c.holds(),
+            "90% clean on ONE invariant must fail the certificate — averaging the four terms \
+             together is how a certificate becomes a vibe"
+        );
+        let sf = c.shortfalls();
+        assert_eq!(
+            sf.len(),
+            1,
+            "and it must name exactly the term that missed: {sf:?}"
+        );
+        assert!(sf[0].starts_with("overlap "), "got {}", sf[0]);
+
+        // A site that could not be SCORED counts AGAINST the bar, never out of it — otherwise the
+        // certificate is met by failing to measure, which is the same defect the NaN check in
+        // `report` exists for.
+        let mut unscored = all_good.clone();
+        unscored[0].shape = None;
+        unscored[1].shape = Some(f64::NAN);
+        let c = certificate(&unscored);
+        assert_eq!(c.scored, 18);
+        assert_eq!(c.shape_ok, 18);
+        assert!(
+            !c.holds(),
+            "18 of 20 scored is 90% — below the bar, not 100% of what we measured"
+        );
+        assert!(
+            c.shortfalls().iter().any(|s| s.contains("UNSCORED")),
+            "the unscored sites must be NAMED: {:?}",
+            c.shortfalls()
+        );
+
+        // The shape FLOOR is per-site and strict-at-the-boundary-from-below: 0.75 passes, 0.74 does not.
+        assert_eq!(certificate(&[row("a", Some(0.75), [0; 4])]).shape_ok, 1);
+        assert_eq!(certificate(&[row("a", Some(0.74), [0; 4])]).shape_ok, 0);
+
+        // An EMPTY sweep never holds. A certificate over zero sites is the most flattering possible
+        // reading of an engine and the least informative.
+        assert!(!certificate(&[]).holds(), "zero sites is not a pass");
     }
 }

@@ -271,3 +271,36 @@ session) is a scheduling/isolation matter for the observer, recorded here as a d
 The wall is a build-latency (observer) axis; it is NOT a capability regression — THE RATCHET held every
 tick this session. An audit that finds the wall already lean (on the agent's axes) is a fine result, and
 this is one.
+
+## Audit #14 — tick 547 (wall 126s on the tick-546 landing run; 67s warm)
+
+Ran `./scripts/wall-audit.sh run`. Breakdown: **G3 62s (49%)** · T 23s (18%) · P 14s (11%) · G6 9s ·
+G1 5s · F 2s · everything else ≤1s. Total 126s — under the 189s mark and the 245s ceiling.
+
+**FINDING, and it is about the AUDIT, not the wall: "G3 = 49% of the wall" is a measurement of
+CONTENTION, not of the gate.** G3 is the whole `manuk-shell` suite, which runs in ~12s green and
+standalone. It cost 62s on the audited run because the observer's flaky-gate retry loop (verify.sh
+~L318: up to 3× serial re-runs, each waiting up to 60s for load1 < 2.5) *fired* — the timing gate
+`G_INTERACT` false-RED'd under the gate-phase launch spike. So the audit's own top line describes the
+retry, and a reader optimising "G3" would be optimising a wait for the box to calm down.
+
+This is lesson #4 in STATUS.md firing for the fifth time — **every number has a harness, and the
+harness is part of the number** — and it is worth recording because it fired on the instrument built to
+hunt wall bloat. The honest headline is the warm one: **67s**, banked at the tick-546 landing.
+
+New this window: **the retry loop was measured insufficient twice at t545/t546.** Both ticks reported
+`manuk-shell tests FAILED` after all three retries, and both were green on a standalone re-run minutes
+later at load1 ≈ 1.9 (t546 confirmed 70 passed / 0 failed). The retry waits ≤60s for load1 < 2.5; this
+box carries a persistent background load of ~3–5, so the wait expires and all three attempts run
+contended. Recorded for the observer — the wait budget and the load threshold both live in
+`scripts/verify.sh`, which is DONE and OBSERVER-OWNED, and the agent does not touch it. Cost this
+window: two full-wall re-runs.
+
+Against the four rigor-preserving axes: unchanged from #12/#13. REDUNDANCY (share one SpiderMonkey
+runtime across JS gates — cargo-nextest), PARALLELISM, CACHING, SCOPE — every admissible lever still
+lands in `scripts/verify.sh` + the Cargo/build config, all observer-owned. Coverage GREW this window
+(t546 added the `manuk-wpt test262` runner and its 6 unit tests, plus 3 new runtime assertions in
+manuk-js) at **~0 marginal warm wall**, because neither crate's tests are in the wall's crate list —
+which is itself the standing note from `gates-not-in-the-wall`: gated ≠ watched.
+
+NO TRIM. **The wall is lean on the axes the agent may touch.** Mark untouched (189, ceiling 245).
