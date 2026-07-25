@@ -1433,3 +1433,56 @@ clustering (§3b); then the gate-floor flip (coverage→SHAPE) once a broad path
 0.75 bar. Do NOT resume mining atomic members (vein confirmed out at #32) and do NOT grind the CSS-layout tail.
 
 **Next check due: tick 543.**
+
+## Check #34 — tick 543
+
+Re-read CONSTITUTION.MD Part I (invariants) + Part VII (V1 scope) + the RATCHET's three faces. Window
+535-543 CLOSED the fidelity-instrument rebuild's CORE: **536** collapsed-target invariant, **537** brick 4b
+(producer enriched to `Seen`, all four Layer-2 jarring invariants wired DIRECT on the oracle fns), **540**
+brick 5 §3b root-cause clustering (`run_fidelity_cmd` pools per-page `oracle::diff_page` divergences and
+calls `oracle::cluster` VERBATIM — the exit gate now reports DISTINCT CAUSES not failing sites, sharing ONE
+definition with the differential crawl). Bricks 1–5 of FIDELITY-SCORING-REDESIGN.md are DONE. Interleaved
+measure-and-pin: **538** surface audit #27, **539** light-dark/CSS-math parse probes, **541** name-only
+@container (→gated), **542** hidden=until-found (→partial), **543** light-dark RESOLUTION (measured absent —
+always the light arm).
+
+**Horizon + gate.** H0 / Phase-0. The EXIT GATE is VII.1's test for component #1: *reliably renders the
+representative real internet — the fidelity CERTIFICATE, NOT a WPT percentage.*
+
+**Gate or scoreboard?** GATE. The rebuild bricks moved the exit INSTRUMENT itself (the third RATCHET face) —
+§3b clustering is the last piece that lets the certificate distinguish saturation from amplification ("40
+sites, 1 bug"). The probes are the board's ranked cheapest-highest-yield measure-and-pin (`?`/`partial`
+outranks `X`); they keep the MAP honest (a wrong `unknown` steers the loop blind) without pretending to move
+the gate. Zero WPT-chasing, zero encoding tail across the whole window — orient's usage-weighted breadth
+(§VI.3) is still the north star; no big-but-tail number crept back to the top.
+
+**Any invariant bent?** No — and one was actively HONORED under temptation. **I2 (never patch deps):** the
+window MEASURED four capabilities absent that live behind the servo-Stylo cfg fence — content-visibility
+(t542 `contentvis:no`) and light-dark RESOLUTION (t543 `lightdarkresolve:no`, always the light arm because
+the cascaded color-scheme is not consulted). The correct response to each was a pinned measured-absent
+RECEIPT, NOT patching vendored Stylo to force it — exactly what I2 demands. The whole `missing` residue
+(subgrid, @scope, @starting-style, text-wrap:balance, anchor-positioning, scroll-driven-animations) is the
+same fence; grinding it would mean patching deps, so it stays honestly unmet. **I3 (semantic model in
+lockstep):** all window work is measurement — no capability landed without exposure. **I4 (Pareto):** every
+probe is usage-weighted (dark mode, accordions/FAQ, component-library container scoping), not tail. **Bar 0
+held** every tick.
+
+**Part VI correction.** The fidelity-instrument rebuild is no longer "in progress" — its CORE (bricks 1–5)
+is COMPLETE. The ONE remaining rebuild item is the coverage→SHAPE gate-floor flip, and it is BLOCKED on a
+broad path-keyed SHAPE-headline sweep to recalibrate the 0.75 bar — a calibration the observer owns and that
+must NOT be self-served by retuning the floor to land a tick (the honest-answer-is-not-a-fixed-answer rule).
+So the real blocker for the Phase-0 EXIT CERTIFICATE is now that calibration sweep, not any agent-editable
+instrument code. Separately, the bounded probe/measure vein is genuinely MINED OUT: the 2 remaining
+`unknown` cells are subsystems (test262 harness, 100-tab RSS MEM-HARNESS), and the `missing` rows are XL
+subsystems (WebGL/WebRTC/WebCodecs/WebTransport/MathML), out-of-scope (EME, JPEG-XL), or the servo-drop
+fence above.
+
+**STEER.** The instrument is built; the certificate awaits the observer's broad sweep. Do NOT manufacture
+marginal ticks to keep a cadence — novelty never outranks the gate (Part III standing rule). The honest next
+moves, in order: (1) if the observer banks a broad path-keyed SHAPE headline, DO the coverage→SHAPE
+gate-floor flip (the certificate's last piece). (2) Otherwise advance an XL subsystem as a DECOMPOSE-FIRST
+arc from the board — media playback join / the pivot list — never a half-built lump. (3) Hold for
+calibration is acceptable over drift. RE-PROBE stale-pessimistic before building anything marked missing
+(the rule paid AGAIN this window: IndexedDB/Service-Worker/Cache/scroll-snap were all already gated).
+
+**Next check due: tick 551.**

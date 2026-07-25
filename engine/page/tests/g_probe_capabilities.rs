@@ -58,6 +58,8 @@ const HTML: &str = r##"<!doctype html>
   <div id="lhbox" style="line-height:20px; width:5lh">lh</div>
   <div id="cvon">shown</div><div id="cvoff" style="display:none">hidden</div><div id="cvvis" style="visibility:hidden">invisible</div>
   <div id="hp" hidden>plain hidden</div><div id="huf" hidden="until-found">hidden until found</div>
+  <div id="ldlight" style="color-scheme:light; color:light-dark(rgb(10,20,30), rgb(40,50,60))">ld light</div>
+  <div id="lddark" style="color-scheme:dark; color:light-dark(rgb(10,20,30), rgb(40,50,60))">ld dark</div>
   <video id="vidmuted" muted></video><video id="vidloud"></video>
   <div id="out">-</div>
   <script>
@@ -381,6 +383,17 @@ const HTML: &str = r##"<!doctype html>
              !CSS.supports('color', 'light-dark(floops-not-a-color, black)');
     });
 
+    // ── light-dark() RESOLUTION (the behavioural half t539 left as `partial`): does the used
+    // color-scheme actually PICK the right color of the pair through the cascade? light-dark(A,B) → A
+    // under `color-scheme: light`, B under `color-scheme: dark`. Measured on two elements that differ
+    // ONLY in color-scheme, so a stub that always picks one arm fails: light must resolve rgb(10,20,30)
+    // AND dark must resolve rgb(40,50,60). This is what a page authored with light-dark() and NO @media
+    // fallback depends on — if resolution is unwired the palette is simply wrong.
+    probe('lightdarkresolve', function () {
+      return cs('ldlight').color.indexOf('10, 20, 30') >= 0 &&
+             cs('lddark').color.indexOf('40, 50, 60') >= 0;
+    });
+
     // ── CSS Level-4 stepped/sign math round()/mod()/abs()/sign() (Baseline 2024, surface audit #27).
     // calc()/min()/max()/clamp() are older and WPT-covered; these are the newer functions modern
     // fluid-type/layout math uses. Parse-level via CSS.supports in a <length> context (sign() returns a
@@ -549,6 +562,16 @@ const PINNED: &[&str] = &[
     // in getComputedStyle is untested by the static probe → cell `partial`. Flips to a behavioural pin
     // the day a probe drives color-scheme and reads the resolved color; never by retuning this probe.
     "lightdark:yes",
+    // tick 543 — light-dark() RESOLUTION: HONEST NO (the behavioural half t539 left `partial`). The
+    // function PARSES (lightdark:yes above) and resolves to a real color, but it ALWAYS picks the FIRST
+    // (light) arm — measured directly: `color-scheme: dark` on an element with
+    // `light-dark(rgb(10,20,30), rgb(40,50,60))` still computes rgb(10,20,30), never the dark
+    // rgb(40,50,60). So the used color-scheme is NOT consulted at resolution time, and a dark-mode page
+    // authored with light-dark() and no @media fallback gets the LIGHT palette. Pinned `:no` per the
+    // stacklimit precedent so the gap is a loud receipt — it flips to yes the day Stylo's light-dark
+    // resolution reads the cascaded color-scheme, never by retuning this probe. CONSTELLATION cell 205
+    // stays `partial`; this is its resolution receipt.
+    "lightdarkresolve:no",
     // tick 539 (surface audit #27) — CSS Level-4 stepped/sign math round()/mod()/abs()/sign() (Baseline
     // 2024) PARSE + VALIDATE (a bogus function is rejected). calc/min/max/clamp were already WPT-covered;
     // these newer functions are what modern fluid-type math uses. Parse half only (whether round(down,

@@ -21650,3 +21650,43 @@ rebuild's core (bricks 1–5) is complete; the coverage→SHAPE gate-floor flip 
 moment the observer banks a broad path-keyed SHAPE headline. Absent that, the next lever is a bounded
 daily-driver capability from CO-#1 (re-probe stale-pessimistic before building). Cadences: self-audit 544;
 surface 548; const 543; wall 547.
+
+## Tick 543 — PROBE: light-dark() RESOLUTION measured absent (always the light arm) — partial receipt (2026-07-24)
+
+The probe vein's cheap unknowns are mined out (t541-542; the 2 remaining are subsystems), and the fidelity
+rebuild's core is complete (bricks 1-5) with only the calibration-blocked gate-floor flip left. So this
+tick takes the bounded interleave the last four JOURNAL entries have queued: the BEHAVIOURAL light-dark()
+RESOLUTION probe that upgrades or refutes the t539 `partial`.
+
+MEASURED (lightdarkresolve:no, PINNED as a receipt): light-dark() PARSES (t539 lightdark:yes) but does NOT
+resolve per the used color-scheme — it ALWAYS picks the FIRST (light) arm. Measured directly on two elements
+differing ONLY in color-scheme: `color-scheme: light` and `color-scheme: dark`, both with
+`color: light-dark(rgb(10,20,30), rgb(40,50,60))`, BOTH compute rgb(10,20,30) (a diagnostic push confirmed
+light=[rgb(10,20,30)] dark=[rgb(10,20,30)] — identical). Per spec dark should resolve rgb(40,50,60). So the
+cascaded color-scheme is not consulted at resolution time in this servo Stylo build: a dark-mode page
+authored with light-dark() and no @media fallback gets the LIGHT palette (a real fidelity gap, not a crash —
+the value is valid, just always the light arm).
+
+Pinned `:no` following the `stacklimit:no` precedent — a measured absence pinned so the gap is a LOUD
+receipt that FAILS the gate (forcing an honest pin update) the day Stylo's light-dark resolution reads the
+cascaded color-scheme, never flipped by retuning the probe. This upgrades CONSTELLATION cell 205's note from
+"resolution untested" to "resolution MEASURED absent (parse-only)" — the #24/#26 lesson: measured-absent >>
+untested. The cell stays `partial` (parse works, resolution doesn't), now with a receipt for BOTH halves.
+
+Not RED-proven in the flip-an-edit sense (a measured `no`, like stacklimit): the evidence is the direct
+diagnostic that the light and dark elements compute the identical color, which a working resolution could
+not produce. Gate green (1 passed) with lightdark:yes + lightdarkresolve:no both pinned.
+
+TICK SHAPE: measure-and-pin probe (behavioural light-dark() RESOLUTION measured absent — always the light
+arm, color-scheme not consulted — pinned `:no` in G_PROBE_CAPABILITIES as a loud receipt per the stacklimit
+precedent; CONSTELLATION cell 205 note upgraded untested→measured-absent, cell stays partial; no capability
+src built — existing Stylo parse-only behaviour measured; test file only, Bar 0 untouched). WIKI: none —
+measure-and-pin; finding in the gate PINNED comment + docs/loop/CONSTELLATION.tsv row 205. [no-pattern]
+
+NEXT: the bounded probe/measure vein is now genuinely mined out — remaining unknowns are subsystems
+(test262, RSS harness) and remaining `missing` rows are XL subsystems (WebGL/WebRTC/WebCodecs), out-of-scope
+(EME/JPEG-XL), or servo-drops that would require patching vendored Stylo (forbidden by I2: subgrid, @scope,
+@starting-style, content-visibility, text-wrap:balance, anchor-positioning, scroll-driven-animations). The
+standing CO-#1 is the fidelity coverage→SHAPE gate-floor flip, unblocked the moment the observer banks a
+broad path-keyed SHAPE headline. Cadences: self-audit 544 (NEXT); surface 548; const 543 (DUE — do next);
+wall 547.
