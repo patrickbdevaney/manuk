@@ -736,6 +736,49 @@ mod tests {
     /// into ONE cluster of 3 sites — and this assertion fails. The magnitude band is what lets the
     /// board tell a saturated near-miss from an amplified page collapse.
     #[test]
+    /// **A cluster must retain THREE instances, because one cannot tell you whether it is homogeneous.**
+    ///
+    /// t554 left the ranking a real cause list and immediately hit the next limit: `mis-sized: width ~8px
+    /// (<a>)` spans three sites and 139 hits, and whether those are TEXT anchors or ICON anchors decides
+    /// which subsystem the next tick touches. With three, t555 read them as homogeneous text anchors
+    /// (widths off ±9–22px in BOTH directions, height a constant +2px) and the forecast resolved. With
+    /// one, t553 read a displacement and concluded the opposite. The printer depends on this cap, so it is
+    /// pinned here rather than left as an implementation detail two files apart.
+    #[test]
+    fn a_cluster_retains_three_instances_so_homogeneity_is_visible() {
+        let mk = |site: &str, dw: i64| Divergence {
+            site: site.into(),
+            id: "body[0]/a[0]".into(),
+            kind: "geometry".into(),
+            tag: "a".into(),
+            chrome: format!("[0 0 {}×30]", 100 + dw),
+            manuk: "[0 0 100×32]".into(),
+            delta: [0, 0, dw, 2],
+        };
+        // Four divergences in ONE cluster (same tag, same axis, same band, all mis-sized).
+        let c = cluster(&[
+            mk("a.example", 9),
+            mk("b.example", 11),
+            mk("c.example", 12),
+            mk("d.example", 10),
+        ]);
+        assert_eq!(c.len(), 1, "one cause");
+        assert_eq!(c[0].hits, 4);
+        assert_eq!(
+            c[0].examples.len(),
+            3,
+            "THREE instances retained — one is a door, three are a sample, and the difference is whether \
+             a reader can see that the cluster is homogeneous before choosing a subsystem"
+        );
+        // Every retained instance must be openable in its own right.
+        for ex in &c[0].examples {
+            assert!(
+                ex.contains('#') && ex.contains(" vs "),
+                "each is a full comparison: {ex}"
+            );
+        }
+    }
+
     /// **A right-sized box in the wrong place and a wrong-sized box are DIFFERENT BUGS, and the
     /// signature must say which.**
     ///

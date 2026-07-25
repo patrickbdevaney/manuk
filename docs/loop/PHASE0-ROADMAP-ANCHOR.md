@@ -219,3 +219,22 @@ never WPT count, never a vibe.
   (`[130 471 18×46] vs [0 459 30×46]`) it is an intrinsic-sizing question, and the printer makes telling
   them apart cheap now.
 
+- `FORECAST COMPLETE @tick 555 — the top cause is TEXT METRICS, and the sample is homogeneous.` With three
+  instances printed per leading cause instead of one, the `<a>`-width cluster resolves cleanly. All three
+  instances of `mis-sized: width ~8px (<a>)` (3 sites, 139 hits) are **text** anchors in the same table:
+  `[224 25200 266×30] vs [219 25244 255×32]` · `[224 7044 347×30] vs [219 7084 358×32]` ·
+  `[224 25469 426×30] vs [219 25513 435×32]`. The `~16px` band is the same shape:
+  `288×30 vs 269×32` · `318×30 vs 301×32` · `419×30 vs 397×32`.
+  **Two signals, and together they name one subsystem:**
+  1. **Width errors go BOTH WAYS** — −11, +11, +9, −19, −17, −22 px. A constant padding or margin error
+     cannot do that; **per-glyph advance differences can.** So this is text measurement, not box model.
+  2. **Height is a CONSTANT +2px on every one** — Chrome 30, ours 32, on every single instance across both
+     bands. A constant line-box height delta beside variable width deltas is the signature of **a different
+     font face being used, or the same face's metrics being read differently** (ascent+descent → line box).
+  So the next tick is a **font-metrics measurement, not a layout change**: for one known string and the
+  page's declared font stack, compare our advance width and our line-box height against Chrome's, and
+  determine whether the divergence is **font SELECTION** (we resolved a different face) or **advance
+  COMPUTATION** (same face, different measurement). `manuk-text::{zero_advance, x_height, cap_height}` is
+  the seam and the t499–502 ch/ex work is the nearest precedent. Do not touch layout until that answer
+  exists — the constant +2px says the line box is derived from metrics we may simply be reading wrong.
+

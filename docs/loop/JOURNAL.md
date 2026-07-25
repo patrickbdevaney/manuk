@@ -22330,3 +22330,61 @@ NEXT: **count the two kinds inside the `<a>`-width cluster** (text anchors vs ic
 several instances, then chase whichever dominates — shaping/metrics or intrinsic sizing. Then nytimes.com as
 a named single-site investigation, the crawl-side sig correction, STEP 1(c) 100-tab RSS, Audit #28's three
 CSS probes. Cadences: self-audit 564; surface 558; const 559; wall 567.
+
+## Tick 555 — three instances per cause, and the forecast RESOLVES: the top cause is TEXT METRICS (2026-07-25)
+
+t554 left the ranking a genuine cause list and named the next limit precisely: **one instance cannot tell
+you whether a cluster is homogeneous**, and whether the `<a>`-width cluster is text anchors (a
+shaping/metrics question) or icon anchors (an intrinsic-sizing question) decides which subsystem the next
+tick touches. So: three instances for the four leading causes, one for the tail.
+
+RESOLVED, and the sample is homogeneous. All three instances of `mis-sized: width ~8px (<a>)` (3 sites, 139
+hits) are **text** anchors in the same table:
+```
+[224 25200 266×30] vs [219 25244 255×32]
+[224  7044 347×30] vs [219  7084 358×32]
+[224 25469 426×30] vs [219 25513 435×32]
+```
+and the `~16px` band is the same shape (`288×30 vs 269×32` · `318×30 vs 301×32` · `419×30 vs 397×32`).
+
+TWO SIGNALS, and together they name ONE subsystem:
+1. **The width errors go BOTH WAYS** — −11, +11, +9, −19, −17, −22 px. A constant padding, margin or
+   border error *cannot* produce sign changes; **per-glyph advance differences can.** So this is text
+   measurement, not the box model — which is what t552 guessed and could not then support.
+2. **The height is a CONSTANT +2px on every single instance** — Chrome 30, ours 32, across both bands and
+   every example. A constant line-box height delta sitting beside variable width deltas is the signature of
+   **a different font face in use, or the same face's metrics read differently** (ascent+descent → line
+   box). This second signal is new and it is the more diagnostic of the two, because a constant is much
+   easier to attribute than a distribution.
+
+RED-PROVEN: dropping the retained-examples cap from 3 to 1 fails
+`a_cluster_retains_three_instances_so_homogeneity_is_visible` — the printer depends on that cap and it now
+lives as a pinned contract rather than an implementation detail two files apart. 38 lib tests green.
+
+WHAT THE NEXT TICK IS, stated so it cannot drift into a layout change: **a font-metrics MEASUREMENT.** For
+one known string and the page's declared font stack, compare our advance width and our line-box height
+against Chrome's, and determine which of two things is true — **font SELECTION** (we resolved a different
+face than Chrome did) or **advance COMPUTATION** (same face, different measurement).
+`manuk-text::{zero_advance, x_height, cap_height}` is the seam; the t499–502 ch/ex font-metrics work is the
+nearest precedent. **Do not touch layout until that answer exists** — the constant +2px specifically
+suggests the line box is derived from metrics we may simply be reading wrong, and a layout fix on top of a
+wrong metric is the two-cascades trap in a different organ.
+
+This is the fifth consecutive tick of the instrument correcting itself, and it is worth naming what the
+sequence bought: t551 read a pattern off a printer artifact · t552 re-aimed on a confounded signature ·
+t553 opened an instance and falsified it · t554 split the confound and the lead came back · t555 sampled
+three and the lead is now backed by two independent signals pointing at one subsystem. **Five cheap
+measurement ticks instead of one expensive wrong-subsystem tick** — and the thing that made each step
+cheap was that every one of them ended in a RED-proven assertion rather than a note.
+
+TICK SHAPE: instrument (three instances printed for the leading causes so homogeneity is visible before a
+subsystem is chosen, RED-proven by dropping the retained cap) + the forecast it completed (the `<a>`-width
+cause read as homogeneous TEXT anchors; two signals — sign-changing width deltas and a constant +2px height
+— naming text metrics, with the next tick specified as a measurement rather than a change). No engine src
+touched; Bar 0 untouched; no ratchet floor moved.
+WIKI: none — the mechanism is one printer line plus a pinned cap documented at the test; the finding is the
+anchor's §6 entry, which is where the next session reads the lead. [no-pattern]
+
+NEXT: the font-metrics measurement above — SELECTION vs COMPUTATION, on one string, before any layout
+change. Then nytimes.com as a named single-site investigation, the crawl-side sig correction, STEP 1(c)
+100-tab RSS, Audit #28's three CSS probes. Cadences: self-audit 564; surface 558; const 559; wall 567.

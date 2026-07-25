@@ -783,7 +783,7 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
             clusters.len(),
             all_divs.len()
         );
-        for c in clusters.iter().take(12) {
+        for (rank, c) in clusters.iter().take(12).enumerate() {
             // ⚠ The `~Npx` inside the signature is a POWER-OF-TWO BAND (`oracle::mag_band` rounds
             // down), so every geometry cluster's headline number is a power of two by construction.
             // At t551 that printer made me record "the deltas are QUANTISED — 8/16/32/64/128 — one
@@ -810,7 +810,14 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
             // and give a reader no way to look at a single one. Chasing the t552 text-measurement lead
             // began by wanting exactly this line and not having it. One example opens the door; three
             // would bury the sites-explained ranking the ordering exists to give.
-            if let Some(ex) = c.examples.first() {
+            // THREE instances for the leading causes, one for the tail. t554 left the ranking a real
+            // cause list and immediately hit the next limit: ONE instance cannot tell you whether a
+            // cluster is homogeneous. `mis-sized: width ~8px (<a>)` spans three sites and 138 hits, and
+            // whether those are TEXT anchors (a shaping/metrics question) or ICON anchors (an
+            // intrinsic-sizing question) decides which subsystem the next tick touches. One example is a
+            // door; three are a sample.
+            let show = if rank < 4 { 3 } else { 1 };
+            for ex in c.examples.iter().take(show) {
                 eprintln!("        e.g. {ex}");
             }
         }

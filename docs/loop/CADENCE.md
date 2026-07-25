@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **316** | ticks 1–554 |
-| median tick cycle | **21m** | 315 intervals |
-| median, last 10 | **26m** | 10 intervals |
+| ticks landed | **317** | ticks 1–555 |
+| median tick cycle | **21m** | 316 intervals |
+| median, last 10 | **19m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.94** | 335.1h elapsed |
-| median verify wall | **63s** | 255 ticks |
+| **ticks per hour** | **0.94** | 335.3h elapsed |
+| median verify wall | **63s** | 256 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**166 of 316 ticks** (53%) moved a
+**166 of 317 ticks** (52%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **166** capability ticks, median cycle **21m**
-* median diff per tick: **+220 / −34** lines across 9 files
+* median diff per tick: **+219 / −34** lines across 9 files
 
 ## Every tick
 
@@ -413,5 +413,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **552** | 2026-07-25 03:40 | 14m | instrument | 67s | +234/−43 | 274 | 81 | 56.0% · | the "QUANTISED geometry" finding was the PRINTER, not the engine (2026-07-25) |
 | **553** | 2026-07-25 03:51 | 11m | instrument | 67s | +154/−32 | 274 | 81 | 56.0% · | a cluster now carries an OPENABLE instance, and the first one falsified t552's lead (2026- |
 | **554** | 2026-07-25 04:11 | 20m | scheduled | 67s | +179/−34 | 274 | 81 | 56.0% · | the geometry signature is split by SIZE-MATCH: the ranking is a cause list, and t552's lea |
+| **555** | 2026-07-25 04:22 | 12m | instrument | 67s | +162/−34 | 274 | 81 | 56.0% · | three instances per cause, and the forecast RESOLVES: the top cause is TEXT METRICS (2026- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
