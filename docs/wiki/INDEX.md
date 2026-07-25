@@ -293,22 +293,23 @@
   - L1170 · Two answers to the same question must agree — permissions.query vs Notification.permission
   - L1199 · The Sanitizer API — Element.setHTML / setHTMLUnsafe (tick 288)
   - L1223 · The teeth G_SANITIZER uses
-  - L1235 · Element.checkVisibility() — is it actually rendered? (tick 291)
-  - L1252 · The teeth G_CHECK_VISIBILITY uses
-  - L1262 · <template>.content is the parser's fragment, not the element's direct children (tick 425)
-  - L1279 · The <select> write API — add / remove(index) + HTMLOptionsCollection (tick 438)
-  - L1295 · option.text + the Option() constructor's defaultSelected argument (tick 439)
-  - L1310 · textarea.value is its text content, not a value attribute (tick 440)
-  - L1326 · select.length is the option count and resizes the list (tick 441)
-  - L1338 · select.options.length is a LIVE writable accessor — the collection clear-idiom (tick 459)
-  - L1363 · input.valueAsNumber + stepUp/stepDown for numeric inputs (tick 442)
-  - L1374 · input.valueAsDate + valueAsNumber for date/time/month inputs (tick 443)
-  - L1385 · progress.position + output.value (tick 444)
-  - L1395 · the .text property for a/script/title (tick 445)
-  - L1403 · datetime-local + week typed values (tick 446)
-  - L1416 · <a>/<area> URL-decomposition setters (tick 447)
-  - L1430 · <img>.currentSrc reports the URL we actually load, honestly (tick 493)
-  - L1446 · document.activeElement defaults to <body>, not null (tick 494)
+  - L1231 · The config's first brick — removeElements (tick 545)
+  - L1260 · Element.checkVisibility() — is it actually rendered? (tick 291)
+  - L1277 · The teeth G_CHECK_VISIBILITY uses
+  - L1287 · <template>.content is the parser's fragment, not the element's direct children (tick 425)
+  - L1304 · The <select> write API — add / remove(index) + HTMLOptionsCollection (tick 438)
+  - L1320 · option.text + the Option() constructor's defaultSelected argument (tick 439)
+  - L1335 · textarea.value is its text content, not a value attribute (tick 440)
+  - L1351 · select.length is the option count and resizes the list (tick 441)
+  - L1363 · select.options.length is a LIVE writable accessor — the collection clear-idiom (tick 459)
+  - L1388 · input.valueAsNumber + stepUp/stepDown for numeric inputs (tick 442)
+  - L1399 · input.valueAsDate + valueAsNumber for date/time/month inputs (tick 443)
+  - L1410 · progress.position + output.value (tick 444)
+  - L1420 · the .text property for a/script/title (tick 445)
+  - L1428 · datetime-local + week typed values (tick 446)
+  - L1441 · <a>/<area> URL-decomposition setters (tick 447)
+  - L1455 · <img>.currentSrc reports the URL we actually load, honestly (tick 493)
+  - L1471 · document.activeElement defaults to <body>, not null (tick 494)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -968,4 +969,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-883 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+884 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

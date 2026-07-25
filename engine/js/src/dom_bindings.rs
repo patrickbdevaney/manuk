@@ -5166,17 +5166,24 @@ unsafe fn el_set_inner_html(cx: *mut RawJSContext, argc: u32, vp: *mut Value) ->
 ///   * `javascript:` URLs in the navigational/loading attributes (`href`/`src`/`action`/`formaction`/
 ///     `xlink:href`) — removed, because a `javascript:` href executes on activation.
 ///
-/// This is the *baseline* the spec calls the default (unsafe) config minus scripting; the full
-/// configurable allow/block lists are an honest follow-on. It is deliberately conservative: it only
-/// ever REMOVES, never rewrites, so it cannot itself introduce a value a page did not author.
-fn sanitize_subtree(dom: &mut Dom, root: NodeId) {
+/// This is the *baseline* the spec calls the default (unsafe) config minus scripting. Over it, the
+/// caller's Sanitizer config (`setHTML(html, { sanitizer: { removeElements: [...] } })`) can name
+/// additional elements to remove ENTIRELY — the first configurable brick; the allow-list (`elements`),
+/// `replaceWithChildrenElements`, and attribute lists are honest follow-ons. It is deliberately
+/// conservative: it only ever REMOVES, never rewrites, so it cannot itself introduce a value a page did
+/// not author. `remove` holds the config block-list, lowercased.
+fn sanitize_subtree(dom: &mut Dom, root: NodeId, remove: &std::collections::HashSet<String>) {
     // Gather the plan under an immutable borrow, then mutate — a node cannot be removed while the
     // descendant iterator holds the tree.
     let mut to_remove: Vec<NodeId> = Vec::new();
     let mut strip_attrs: Vec<(NodeId, Vec<String>)> = Vec::new();
     for id in dom.descendants(root).collect::<Vec<_>>() {
         let Some(el) = dom.element(id) else { continue };
-        if el.name == "script" {
+        // `<script>` is always stripped (the baseline); the config block-list removes any additional
+        // named element wholesale. Element names are lowercased for the case-insensitive HTML match.
+        if el.name == "script"
+            || (!remove.is_empty() && remove.contains(&el.name.to_ascii_lowercase()))
+        {
             to_remove.push(id);
             continue;
         }
@@ -5213,6 +5220,58 @@ fn sanitize_subtree(dom: &mut Dom, root: NodeId) {
     }
 }
 
+/// Parse the element block-list from `setHTML`'s Sanitizer config —
+/// `setHTML(html, { sanitizer: { removeElements: ["img", "iframe"] } })`. Returns the element names to
+/// remove ENTIRELY (lowercased), on top of the always-on safe baseline. Any missing or malformed piece
+/// (no options object, no `sanitizer`, no `removeElements` array) yields an empty set, so the baseline
+/// still runs — the config only ever ADDS removals here. This is the first configurable Sanitizer brick;
+/// the allow-list (`elements`), `replaceWithChildrenElements`, and attribute lists are honest follow-ons.
+unsafe fn read_sanitizer_remove_elements(
+    cx: *mut RawJSContext,
+    vp: *mut Value,
+    argc: u32,
+) -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    let Some(opts) = arg_object(vp, argc, 1) else {
+        return out;
+    };
+    let mut c = wrap_cx(cx);
+    rooted!(in(cx) let o = opts);
+    rooted!(in(cx) let mut san = UndefinedValue());
+    if !JS_GetProperty(&mut c, o.handle(), c"sanitizer".as_ptr(), san.handle_mut())
+        || !san.get().is_object()
+    {
+        return out;
+    }
+    rooted!(in(cx) let sobj = san.get().to_object());
+    rooted!(in(cx) let mut rem = UndefinedValue());
+    if !JS_GetProperty(
+        &mut c,
+        sobj.handle(),
+        c"removeElements".as_ptr(),
+        rem.handle_mut(),
+    ) || !rem.get().is_object()
+    {
+        return out;
+    }
+    rooted!(in(cx) let arr = rem.get().to_object());
+    rooted!(in(cx) let mut len = UndefinedValue());
+    if JS_GetProperty(&mut c, arr.handle(), c"length".as_ptr(), len.handle_mut()) {
+        let n = len.get().to_number() as u32;
+        for i in 0..n {
+            rooted!(in(cx) let mut item = UndefinedValue());
+            if JS_GetElement(&mut c, arr.handle(), i, item.handle_mut()) {
+                if let Ok(ConversionResult::Success(s)) =
+                    String::safe_from_jsval(&mut c, item.handle(), ())
+                {
+                    out.insert(s.to_ascii_lowercase());
+                }
+            }
+        }
+    }
+    out
+}
+
 /// `element.setHTMLUnsafe(html)` — parse `html` into the element with NO sanitization (the explicit
 /// opt-out; identical to the `innerHTML` setter here, since we do not yet parse declarative shadow
 /// roots, which is the only other thing it adds). The `Unsafe` in the name is the contract: the caller
@@ -5235,9 +5294,11 @@ unsafe fn el_set_html_unsafe(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -
 unsafe fn el_set_html(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let value = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        // The Sanitizer config's element block-list (arg 1), applied ON TOP of the safe baseline.
+        let remove = read_sanitizer_remove_elements(cx, vp, argc);
         let old_kids: Vec<NodeId> = (*dom).children(node).collect();
         manuk_html::set_inner_html(&mut *dom, node, &value);
-        sanitize_subtree(&mut *dom, node);
+        sanitize_subtree(&mut *dom, node, &remove);
         let new_kids: Vec<NodeId> = (*dom).children(node).collect();
         record_mutation(cx, dom, "childList", node, None, None, &new_kids, &old_kids);
     }

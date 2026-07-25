@@ -21720,3 +21720,46 @@ NEXT: both t539 resolution follow-ups are now closed. Per Check #34 (t543) the b
 mined out and the standing CO-#1 is the fidelity coverage→SHAPE gate-floor flip, unblocked the moment the
 observer banks a broad path-keyed SHAPE headline; absent that, a decompose-first XL subsystem arc. Cadences:
 self-audit 544 (DUE next tick); surface 548; const 551; wall 547.
+
+## Tick 545 — the Sanitizer CONFIG's first brick: removeElements block-list (2026-07-24)
+
+RESUMED WIP: a crashed tick left this in the tree complete-but-unlanded (one call site, one helper, three
+gate claims). Per the atomicity rule I inspected it rather than assuming: `sanitize_subtree` takes the
+block-list as a PARAMETER (the baseline is not a default a config can switch off), the single call site was
+updated, the helper reads the config defensively. It cleanly completes, so it lands rather than being
+thrown away — and the observer's STEP-1 exit verification is the next tick, not a reason to discard finished
+capability.
+
+CAPABILITY: `el.setHTML(html, { sanitizer: { removeElements: ['img', 'iframe'] } })`. The t288 baseline
+answers "is this markup safe?" and nothing else; every real caller also asks "and drop the things I don't
+want" — a comment renderer that permits `<b>`/`<a>` but never an `<img>` (a baseline-safe `<img src=…>` is
+still a tracking pixel and a layout bomb) or an `<iframe>`. Before this, the options argument was READ AND
+IGNORED, which is the worst shape: the page is told YES and gets an unfiltered tree.
+
+The shape is the point, and it is the direction the rest of the config has to grow in: **the safe answer is
+the floor, and configuration only ever RAISES it.** `<script>` is stripped whether or not a config was
+passed; `read_sanitizer_remove_elements` returns an EMPTY set for a missing options object, a missing
+`sanitizer` key, or a non-array `removeElements` — so a malformed config degrades to the safe baseline
+rather than to nothing. Element names are lowercased both sides for HTML's case-insensitive match.
+
+RED-PROVEN: with `removeElements: ['nosuchtag']` the gate FAILS on `cfg-removes-img:false` (the `<img>`
+survives) — measured, not asserted; the only thing that changed was the config's CONTENT, so the claim reads
+the real tree and the config is genuinely what removes the element. Restored → 1 passed. Three new claims:
+`cfg-removes-img` (the config removes), `cfg-keeps-safe` (a block-list, not delete-everything — `<b>` lives),
+`cfg-baseline-still` (`<script>` still stripped — the config did not REPLACE the baseline).
+
+CONSTELLATION row 116 stays `partial` and says why: this is a block-list, not the whole config. The
+allow-list (`elements`), `replaceWithChildrenElements`, the attribute lists, a reusable `Sanitizer` object
+and `Document.parseHTMLUnsafe` are honest follow-ons. Bar 0 untouched (removal-only, no new paint/layout).
+
+TICK SHAPE: capability (Sanitizer API config — `removeElements` element block-list applied on top of the
+always-on safe baseline; `sanitize_subtree` re-shaped to take the block-list as a parameter so the baseline
+cannot be configured off, `read_sanitizer_remove_elements` degrades every malformed config to the baseline;
+RED-proven via a config-content swap; 3 new G_SANITIZER claims; constellation 116 note upgraded, stays
+partial). WIKI: docs/wiki/dom-semantics.md — "The config's first brick — removeElements (tick 545)".
+[no-pattern]
+
+NEXT: the observer's CURRENT ORDERS STEP 1 — the exit verification, in order: (a) fresh full-corpus sweep
+with the rebuilt G1 instrument → one actuals line in PHASE0-ROADMAP-ANCHOR.md, (b) test262 (one of the two
+remaining constellation unknowns, near-zero cost, number unknown), (c) the 100-tab RSS benchmark (the other
+unknown). Cadences: self-audit 554; surface 548; const 551; wall 547.

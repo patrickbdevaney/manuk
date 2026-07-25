@@ -2354,6 +2354,23 @@ introduce a value the page never authored. **(5)** Be honest about scope: the sa
 handlers / `javascript:`) is real; the configurable allow/block lists are a follow-on — mark the row
 `partial`, not `works`.
 
+**Update (tick 545) — the config's first brick, `removeElements`.** The baseline answers *"is this
+markup safe?"*; every real caller also asks *"and drop the things I don't want"*. A comment renderer
+permits `<b>` and `<a>` but never an `<img>` or an `<iframe>` — a baseline-safe `<img src=…>` is still a
+tracking pixel and a layout bomb, and the baseline has no reason to remove it.
+`setHTML(html, { sanitizer: { removeElements: ['img','iframe'] } })` now removes those elements
+entirely. Before this the options argument was **read and ignored**, which is the worst shape a failure
+takes: the page is told YES and gets an unfiltered tree.
+
+**Trap (6), and it is the one that decides the whole config's shape: the baseline must not be
+configurable OFF.** `sanitize_subtree` takes the block-list as a *parameter* rather than the config
+replacing the sanitizer, so `<script>` is stripped whether or not a config was passed — and every
+malformed config (no options object, no `sanitizer` key, a non-array `removeElements`) degrades to an
+EMPTY block-list, i.e. to the safe baseline, never to nothing. *The safe answer is the floor and
+configuration only ever raises it.* The row stays `partial`: this is a block-list, and the allow-list
+(`elements`), `replaceWithChildrenElements`, the attribute lists and a reusable `Sanitizer` object are
+the named follow-ons.
+
 ## Validating a URL without a try/catch — `URL.canParse` / `URL.parse` (tick 289)
 
 **Pattern:** `if (!URL.canParse(userInput)) return showError('bad url')` and

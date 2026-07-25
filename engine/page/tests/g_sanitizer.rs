@@ -24,6 +24,7 @@ use manuk_text::FontContext;
 const HTML: &str = r##"<!doctype html><html><body>
 <div id="safe"></div>
 <div id="unsafe"></div>
+<div id="cfg"></div>
 <div id="out">-</div>
 <script>
 var r = [];
@@ -57,6 +58,15 @@ try {
   var un = document.getElementById('unsafe');
   un.setHTMLUnsafe(payload);
   push('unsafe-keeps-script:' + (un.getElementsByTagName('script').length === 1));
+
+  // Sanitizer CONFIG: removeElements is a block-list applied ON TOP of the baseline. With
+  // removeElements:['img'] the <img> is removed too, the safe <b> is KEPT, and the baseline still
+  // strips <script>. RED-prover: if the config is ignored the <img> survives (cfg-removes-img fails).
+  var cfg = document.getElementById('cfg');
+  cfg.setHTML(payload, { sanitizer: { removeElements: ['img'] } });
+  push('cfg-removes-img:' + (cfg.getElementsByTagName('img').length === 0));
+  push('cfg-keeps-safe:' + (cfg.getElementsByTagName('b').length === 1));
+  push('cfg-baseline-still:' + (cfg.getElementsByTagName('script').length === 0));
 } catch (e) {
   push('THREW:' + e);
 }
@@ -78,6 +88,9 @@ fn set_html_sanitizes_and_set_html_unsafe_does_not() {
         "jsurl-gone:true",  // javascript: href removed
         "safe-kept:true",   // <b> and a normal href preserved — not delete-everything
         "unsafe-keeps-script:true", // setHTMLUnsafe is the real opt-out, genuinely different
+        "cfg-removes-img:true", // Sanitizer config removeElements block-list removes the <img>
+        "cfg-keeps-safe:true", // …while keeping safe <b> (block-list, not delete-everything)
+        "cfg-baseline-still:true", // …and the always-on baseline still strips <script>
     ] {
         assert!(
             got.contains(claim),

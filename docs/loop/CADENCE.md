@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **306** | ticks 1–544 |
-| median tick cycle | **21m** | 305 intervals |
+| ticks landed | **307** | ticks 1–545 |
+| median tick cycle | **21m** | 306 intervals |
 | median, last 10 | **11m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.93** | 328.3h elapsed |
-| median verify wall | **62s** | 245 ticks |
+| **ticks per hour** | **0.93** | 328.8h elapsed |
+| median verify wall | **62s** | 246 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**165 of 306 ticks** (54%) moved a
+**166 of 307 ticks** (54%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **165** capability ticks, median cycle **21m**
+* **166** capability ticks, median cycle **21m**
 * median diff per tick: **+216 / −34** lines across 9 files
 
 ## Every tick
@@ -403,5 +403,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **542** | 2026-07-24 20:58 | 8m | measure-and-pin | 67s | +95/−33 | 274 | 81 | 56.0% · | PROBE: hidden=until-found DISTINGUISHED from plain hidden (unknown → partial) (2026-07-24) |
 | **543** | 2026-07-24 21:09 | 11m | measure-and-pin | 67s | +151/−34 | 274 | 81 | 56.0% · | PROBE: light-dark() RESOLUTION measured absent (always the light arm) — partial receipt (2 |
 | **544** | 2026-07-24 21:20 | 11m | measure-and-pin | 67s | +86/−34 | 274 | 81 | 56.0% · | PROBE: CSS Level-4 math RESOLUTION measured working (partial → works) (2026-07-24) |
+| **545** | 2026-07-24 21:53 | 33m | capability | 67s | +220/−58 | 274 | 81 | 56.0% · | the Sanitizer CONFIG's first brick: removeElements block-list (2026-07-24) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

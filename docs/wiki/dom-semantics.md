@@ -1228,8 +1228,33 @@ the page did not author, and ordinary markup (`<b>`, text, a normal `href`) is p
 Commenting out the `sanitize_subtree` call was demonstrated to flip the three `*-gone` claims red
 before the tick landed.
 
-**Honest limit:** the safe baseline only. The full configurable Sanitizer (`options` allow/block/drop
-lists, a `Sanitizer` config object, `Document.parseHTMLUnsafe`) is the follow-on, and declarative
+### The config's first brick — `removeElements` (tick 545)
+
+The baseline answers *"is this markup safe?"*. It does not answer the other question every real caller
+asks, which is *"and also drop the things I don't want"* — a comment renderer that permits `<b>` and
+`<a>` but never an `<img>` or an `<iframe>`, because the safe-baseline `<img src=…>` is still a
+tracking pixel and a layout bomb. That is `setHTML(html, { sanitizer: { removeElements: [...] } })`,
+and it is the **first configurable brick**: a block-list of element names removed **entirely**, applied
+*on top of* the always-on baseline, never instead of it.
+
+The shape matters more than the code. `sanitize_subtree` takes the block-list as a parameter, so the
+baseline is not a default the config can turn off — `<script>` is stripped whether or not a config was
+passed, and a config can only ever **add** removals. `read_sanitizer_remove_elements` reads
+`options.sanitizer.removeElements` defensively: a missing options object, a missing `sanitizer`, a
+non-array `removeElements` each yield an empty set, so **a malformed config degrades to the safe
+baseline rather than to nothing**. Names are lowercased on both sides for HTML's case-insensitive
+element match. This is the direction the whole config has to grow in: *the safe answer is the floor,
+and configuration raises the floor.*
+
+`G_SANITIZER`'s three new claims are `cfg-removes-img` (the `<img>` the baseline keeps is now gone),
+`cfg-keeps-safe` (the `<b>` survives — a block-list, not delete-everything) and `cfg-baseline-still`
+(the `<script>` is still stripped, so the config did not replace the baseline). RED-proven by changing
+the config to `removeElements: ['nosuchtag']`: `cfg-removes-img` flips to `false` — the assertion reads
+the real tree, and the *only* thing that changed was the config's content.
+
+**Honest limit:** a block-list, not the whole config. The allow-list (`elements`),
+`replaceWithChildrenElements`, the attribute lists (`attributes` / `removeAttributes`), a reusable
+`Sanitizer` config *object*, and `Document.parseHTMLUnsafe` are the follow-ons, and declarative
 shadow roots are not parsed — so the constellation row stays `partial`, not `works`. [[js-engine]]
 
 ## `Element.checkVisibility()` — is it actually rendered? (tick 291)

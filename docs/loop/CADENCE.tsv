@@ -305,3 +305,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 542	acd0546f	1784941090	2026-07-24T20:58:10-04:00	499	measure-and-pin	67	6	95	33	274	81	3896	6960	0	329	31	PROBE: hidden=until-found DISTINGUISHED from plain hidden (unknown → partial) (2026-07-24)
 543	eb686092	1784941777	2026-07-24T21:09:37-04:00	687	measure-and-pin	67	7	151	34	274	81	3896	6960	0	329	31	PROBE: light-dark() RESOLUTION measured absent (always the light arm) — partial receipt (2026-07-24)
 544	0576069d	1784942439	2026-07-24T21:20:39-04:00	662	measure-and-pin	67	6	86	34	274	81	3896	6960	0	329	31	PROBE: CSS Level-4 math RESOLUTION measured working (partial → works) (2026-07-24)
+545	092cade4	1784944421	2026-07-24T21:53:41-04:00	1982	capability	67	11	220	58	274	81	3896	6960	0	329	31	the Sanitizer CONFIG's first brick: removeElements block-list (2026-07-24)
