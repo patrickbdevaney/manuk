@@ -340,3 +340,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 578	632131ea	1785013365	2026-07-25T17:02:45-04:00	1937	correctness	85	13	428	60	281	81	3896	6960	0	334	31	the same defect in three consumers, and an audit that had never read its own gate corpus (2026-07-25)
 579	cc0ce800	1785014048	2026-07-25T17:14:08-04:00	683	measurement	85	9	307	34	282	81	3896	6960	0	335	31	CSS Color 4 already worked, and my own gate was wrong before the engine was (2026-07-25)
 580	a62735eb	1785016522	2026-07-25T17:55:22-04:00	2474	performance	85	10	385	63	283	81	3896	6960	0	335	31	the `:has()` supplement re-filtered the stylesheets for every element (2026-07-25)
+581	461fcaca	1785017263	2026-07-25T18:07:43-04:00	741	instrument	85	7	404	46	283	81	3896	6960	0	335	31	the unmapped-gate count goes 147 → 0, and the map finally describes the engine (2026-07-25)

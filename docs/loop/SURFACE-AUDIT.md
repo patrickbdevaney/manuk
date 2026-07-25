@@ -1491,3 +1491,36 @@ STANDING RULE ADDED: **every surface audit begins by diffing `engine/page/tests/
 and it starts at **147 of 281**.
 
 LAST_SURFACE_AUDIT set to 578; next due 588.
+
+### Audit #31 follow-up — tick 581: the unmapped-gate count is ZERO
+
+#31's standing rule was *"every surface audit begins by diffing `engine/page/tests/` against
+`CONSTELLATION.tsv`"*, and it left a number to drive down: **147 of 281 gate files unreferenced.** t578
+took it to 109 by adding the substrate rows. This closes it.
+
+**147 → 109 → 0 of 283.** Every gate file the repository contains is now named by a row.
+
+ADDED **47 rows** covering 86 gates, plus **14 backfill edits** to existing rows whose `gate` cell was `-`,
+lowercase, abbreviated, or named the weaker of two available gates. Four rows changed status on the
+evidence: rows 59 (WebSocket), 65 (clipboard), 137 (fetch streaming) and 129 (device identity) each read
+`works` while a dedicated gate existed — and row 129 *already named one in its own gate cell*, which the
+map's vocabulary directly contradicts. `works` is what you write when nothing proves it; `gated` is what a
+gate earns.
+
+**The map now reads: 211 gated · 55 missing · 23 partial · 19 works · 15 unknown · 1 measured.** For the
+first time that distribution describes the *engine* rather than the loop's recent attention, so it is the
+first honest input the Phase-0 readiness figure has ever had.
+
+TWO CONTRADICTIONS SURFACED BY THE SWEEP, recorded rather than quietly resolved:
+- **`img.currentSrc`'s gate header says we do NOT do `srcset`/`<picture>` candidate selection**, while the
+  responsive-images row reads `works`. One of the two is wrong; both are now visible, and the row carries a
+  ⚠ CHECK. This is exactly the shape audit #31 found for `contrast-color()` — the same capability with two
+  verdicts — and it is the second instance, which suggests looking for more.
+- **`g_fetch_stream`'s "not claimed here" scope note is stale** now that `G_FETCH_STREAM_INCREMENTAL`
+  exists. An honest-limit comment that outlived its limit is the t576 rot in a doc comment rather than an
+  assertion.
+
+METHOD NOTE: every one of the 86 gate references was checked against a real file before the rows were
+written, and two were wrong — `VTT_CAPTIONS` and the A/V-sync gates live in `engine/media/tests/`, not
+`engine/page/tests/`. **A gate name is a claim like any other**; the check cost one command and caught two
+errors in a batch that had already been reviewed.

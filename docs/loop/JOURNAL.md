@@ -24083,3 +24083,58 @@ readiness figure honest). Then the same-face `{Open Sans/13}` metric delta; the 
 correction; and a fresh corpus sweep, since t569's grid-stretch and t575's cascade-origin fixes are both
 page-wide geometry changes and the sweep is differenceable.
 Cadences: const 583; self-audit 584; wall 587; surface 588.
+
+## Tick 581 — the unmapped-gate count goes 147 → 0, and the map finally describes the engine (2026-07-25)
+
+Surface audit #31 (t578) found that **52% of this repository's gate files were not referenced anywhere in
+`CONSTELLATION.tsv`** — the map tracked the loop's recent attention, not the engine, so every readiness
+figure derived from it was reading curation. It left a standing rule (*every audit starts by diffing
+`engine/page/tests/` against the map*) and a number: **147 of 281**. t578 took it to 109. This closes it.
+
+**147 → 109 → 0 of 283.** Every gate file the repository contains is now named by a row.
+
+ADDED **47 rows** covering 86 gates, plus **14 backfill edits** to existing rows whose `gate` cell was `-`,
+lowercase, abbreviated so it did not match on name, or named the weaker of two available gates. The new
+rows are not padding — each one is a capability with a RED-proven gate and, in most cases, a measured
+defect behind it: `display:contents` parsed as `inline` (the worst answer, because a real box keeps every
+element present and in the wrong place); `element.attributes.length` a TypeError, so DOMPurify could not
+enumerate what it was there to strip; `mousedown`/`mouseup`/`pointerdown` dispatched **nowhere** in the
+engine, so every dropdown and slider was inert; `createTreeWalker` returning a plain object, which is a
+**security** property wearing traversal clothes.
+
+**FOUR ROWS CHANGED STATUS ON THE EVIDENCE.** Rows 59 (WebSocket), 65 (clipboard), 137 (fetch streaming)
+and 129 (device identity) each read `works` while a dedicated gate existed — and **row 129 already named a
+gate in its own gate cell while claiming only `works`**, which the map's own vocabulary contradicts.
+`works` is what you write when nothing proves it; `gated` is what a gate earns.
+
+**THE MAP NOW READS: 211 gated · 55 missing · 23 partial · 19 works · 15 unknown · 1 measured.** For the
+first time that distribution describes the *engine* rather than the loop's recent attention, which makes
+it the first honest input the Phase-0 readiness figure has ever had.
+
+**TWO MORE CONTRADICTIONS SURFACED, recorded rather than quietly resolved.** `img.currentSrc`'s gate header
+says we do **not** do `srcset`/`<picture>` candidate selection, while the responsive-images row reads
+`works` — one of the two is wrong, and the row now carries a ⚠ CHECK. That is the second instance of audit
+#31's `contrast-color()` shape (one capability, two verdicts), which is enough to suspect more. And
+`g_fetch_stream`'s "not claimed here" scope note is stale now that `G_FETCH_STREAM_INCREMENTAL` exists — the
+t576 honest-"no" rot, in a doc comment instead of an assertion.
+
+**METHOD NOTE, and it earned its keep immediately.** All 86 gate references were checked against real files
+before any row was written, and **two were wrong**: `VTT_CAPTIONS` and the A/V-sync gates live in
+`engine/media/tests/`, not `engine/page/tests/`. **A gate name is a claim like any other.** The check cost
+one command and caught two errors in a batch that had already been reviewed once — which is the whole
+argument for mechanical verification over careful reading.
+
+TICK SHAPE: instrument fidelity — the third face of the ratchet, and the one that had been silently
+degrading. No engine source touched, so no capability moved and no gate ran differently; what changed is
+that the project can now tell what it has built. Bar 0 untouched; no ratchet floor moved.
+Gates: none new — this tick makes 283 existing gates *visible* to the map that decides what gets built next.
+WIKI: none [forced] — the mechanism is the audit protocol itself, and its home is
+docs/loop/SURFACE-AUDIT.md, which carries the full result and the two contradictions.
+PATTERN: [no-pattern] — no engine capability changed.
+
+NEXT: **chase the two contradictions** (`img.currentSrc` vs the responsive-images row; the stale
+`g_fetch_stream` scope note) — both are one-probe questions, and the second instance of a
+one-capability-two-verdicts shape is worth a systematic sweep for more. Then the same-face `{Open Sans/13}`
+metric delta; the crawl-side `.SIG` correction; and a fresh corpus sweep, since t569's grid-stretch and
+t575's cascade-origin fixes are both page-wide geometry changes and the sweep is differenceable.
+Cadences: const 583; self-audit 584; wall 587; surface 588.
