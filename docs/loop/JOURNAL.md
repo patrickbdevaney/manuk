@@ -21534,3 +21534,45 @@ NEXT: resume the fidelity rebuild CO-#1 — §3b root-cause clustering (group fa
 signature + offset, report DISTINCT CAUSES not sites), then the coverage→SHAPE gate-floor flip. A behavioural
 light-dark()/round() resolution probe (upgrade partial→works) is a bounded follow-up when interleaving.
 Cadences: self-audit 544; surface 548; const 543; wall 547.
+
+## Tick 540 — FIDELITY REBUILD brick 5: §3b root-cause clustering wired into the G1 exit gate (2026-07-24)
+
+The rebuild's fourth work-item (§3b of FIDELITY-SCORING-REDESIGN.md) landed: the G1 fidelity exit gate
+now reports DISTINCT ROOT CAUSES, not failing sites. Bricks 1–4b gave the gate SHAPE keying + parent-
+relative scoring + all four jarring invariants; brick 5 closes the "40 sites, 1 bug" gap the board has
+called out since tick 267 ("we count SITES, not CAUSES").
+
+MECHANISM — reuse, not reinvent. `run_fidelity_cmd` already builds `oracle::Seen` maps per page
+(`cseen`/`mseen`, since brick 4b). Brick 5 pools every page's divergences into `all_divs` via
+`oracle::diff_page` (the differential crawl's OWN diff — parent-relative SHAPE, display-before-geometry),
+then after the sweep calls `oracle::cluster(&all_divs)` and prints the ranked causes. So the exit gate and
+the differential crawl share ONE definition of both "divergence" and "root cause" — they can never drift on
+what a cause is. The report line: `G1 ROOT CAUSES (§3b) — N distinct cause(s) across M divergence(s);
+ranked by sites explained`, top 12 rows `<sites> · <hits> · <signature>`. `cluster` already bands geometry
+by offset magnitude (mag_band, §3b), so a ~20px near-miss and a ~1400px collapse stay distinct.
+
+Also removed `__META__` from `cseen` right after capture (as `run_oracle_cmd` does) — Chrome's health-
+metadata pseudo-element was silently counting as one phantom "missing" box in coverage AND would have
+polluted the cluster with a `missing box: <>` cause. One-liner, strictly more correct (coverage can only
+improve), gate floor is COVERAGE so no regression risk.
+
+RED-PROVEN (`oracle::tests::exit_gate_clusters_shape_cancelled_descendants_once_per_site`): three sites each
+shift their root `<header>` (and, by inheritance, its two `<p>` children) by 23/28/1400px. Because
+`diff_page` scores SHAPE, the children CANCEL against the shifted header frame — each site contributes
+EXACTLY ONE divergence, so the pool holds 3 (not 9), the 23/28px near-miss clusters as 2 sites / 2 hits, the
+1400px collapse is its own 1-site cause. Flipping `diff_page`'s `common_frame` match to `None` (absolute
+diffing) makes the pool hold 9 and the near-miss read 4 hits → the `all.len()==3` assertion fails on
+`left: 9, right: 3`; restored byte-for-byte, all 10 oracle + 3 fidelity tests green. This proves one root
+cause counts ONCE per site through the whole pool→cluster path the exit gate walks, never once per
+inheriting element — the exact amplification §3b exists to kill.
+
+TICK SHAPE: fidelity-instrument brick (§3b root-cause clustering wired into the G1 exit gate by reusing
+`oracle::diff_page`+`oracle::cluster` verbatim — one-definition with the differential crawl; RED-proven via a
+new composition test; `__META__` phantom stripped from the fidelity `cseen`; agent-editable manuk-wpt
+harness only, no engine capability src, Bar 0 untouched). WIKI: none — instrument-fidelity work; the
+mechanism is documented in FIDELITY-SCORING-REDESIGN.md §3b + the gate's own code comments. [no-pattern]
+
+NEXT: the coverage→SHAPE gate-floor flip — the last rebuild item — once a broad path-keyed sweep
+recalibrates the 0.75 bar (bricks 1–5 make SHAPE + jarring + root-cause clustering all honest; the floor
+still gates on COVERAGE). A behavioural light-dark()/round() resolution probe stays a bounded interleave.
+Cadences: self-audit 544; surface 548; const 543; wall 547.

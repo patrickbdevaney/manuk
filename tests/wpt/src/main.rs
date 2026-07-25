@@ -364,6 +364,9 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
         .build()
         .expect("rt");
     let mut rows = Vec::new();
+    // Brick 5 (§3b) accumulator — every page's SHAPE/display/missing divergences, pooled so the
+    // gate can cluster them into DISTINCT ROOT CAUSES at the end instead of reciting per-site counts.
+    let mut all_divs: Vec<manuk_wpt::oracle::Divergence> = Vec::new();
 
     for url in urls.split(',').map(str::trim).filter(|u| !u.is_empty()) {
         let name = url
@@ -435,7 +438,8 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                 // element against Manuk's, keyed by SELECTOR-PATH (tick 532: replaced `[id]` keys,
                 // which 39% of the corpus lacks and which carry no `/`-ancestry for SHAPE). A missing
                 // sidebar is a MISSING BOX; the pixel score averages it away, this does not.
-                if let Ok(cseen) = manuk_wpt::chrome::capture_seen_all_paths(url, vw, vh) {
+                if let Ok(mut cseen) = manuk_wpt::chrome::capture_seen_all_paths(url, vw, vh) {
+                    cseen.remove("__META__"); // health metadata, not an element (as run_oracle_cmd does)
                     let dom = page.dom();
                     let rects = page.root_box.node_rects(dom);
                     let styles = page.styles_map();
@@ -643,10 +647,36 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                                 .join("; ")
                         );
                     }
+                    // Brick 5 (§3b): pool THIS page's divergences (missing / display / SHAPE-geometry)
+                    // for end-of-sweep root-cause clustering. `diff_page` is the differential oracle's
+                    // OWN diff (parent-relative SHAPE + display-before-geometry), so the exit gate and
+                    // the crawl can never drift on what counts as a divergence — one definition.
+                    all_divs.extend(manuk_wpt::oracle::diff_page(&name, &cseen, &mseen, 8));
                 }
                 rows.push(f);
             }
             Err(e) => eprintln!("  compare: {e}"),
+        }
+    }
+
+    // Brick 5 (§3b) ROOT-CAUSE CLUSTERING — group the pooled divergences by FIRST-DIVERGENCE
+    // signature + offset magnitude band and report DISTINCT CAUSES, ranked by how many sites each
+    // explains, NOT failing sites. If 40 sites drift from one `<header>` delta the board must say
+    // ONE bug — that is what separates a saturated near-miss from an amplified one. Reuses
+    // `oracle::cluster` verbatim (the same clustering the differential crawl uses), so the exit gate
+    // and the crawl can never disagree on what a root cause is (FIDELITY-SCORING-REDESIGN.md §3b).
+    if !all_divs.is_empty() {
+        let clusters = manuk_wpt::oracle::cluster(&all_divs);
+        eprintln!(
+            "\n  === G1 ROOT CAUSES (§3b) — {} distinct cause(s) across {} divergence(s); ranked by sites explained ===",
+            clusters.len(),
+            all_divs.len()
+        );
+        for c in clusters.iter().take(12) {
+            eprintln!(
+                "    {:>2} site(s) · {:>4} hit(s)   {}",
+                c.sites, c.hits, c.signature
+            );
         }
     }
 

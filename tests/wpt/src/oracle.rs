@@ -702,6 +702,63 @@ mod tests {
         );
     }
 
+    /// **The G1 exit gate's §3b path, and its RED proof: SHAPE-cancelled descendants do NOT amplify a
+    /// root cause.** This is the property `run_fidelity_cmd` now depends on — pool every page's
+    /// `diff_page` divergences, then `cluster`. Three sites each shift their root `<header>` down (and,
+    /// by inheritance, its two `<p>` children) by 23px, 28px, and 1400px. Because `diff_page` scores
+    /// SHAPE (parent-relative), the children cancel against the shifted header frame and only the
+    /// header itself diverges — each site contributes EXACTLY ONE divergence. So the pool holds 3
+    /// divergences (not 9), the near-miss (23/28px) clusters as 2 sites / 2 hits, and the 1400px
+    /// collapse is its own 1-site cause.
+    ///
+    /// If SHAPE cancellation were dropped (absolute diffing) each child would diverge too, the pool
+    /// would hold 9, and the near-miss cluster would read 4 hits — this assertion fails. That is the
+    /// RED proof that one root cause counts ONCE per site through the whole pool→cluster path the exit
+    /// gate walks, never once per inheriting element (FIDELITY-SCORING-REDESIGN.md §3b).
+    #[test]
+    fn exit_gate_clusters_shape_cancelled_descendants_once_per_site() {
+        fn shifted_site(off: i64) -> (HashMap<String, Seen>, HashMap<String, Seen>) {
+            let hk = "header.h:nth-child(1)".to_string();
+            let c1 = format!("{hk}/p.p:nth-child(1)");
+            let c2 = format!("{hk}/p.p:nth-child(2)");
+            let mut chrome = HashMap::new();
+            chrome.insert(hk.clone(), seen("header", [0, 0, 1000, 80]));
+            chrome.insert(c1.clone(), seen("p", [10, 10, 200, 20]));
+            chrome.insert(c2.clone(), seen("p", [10, 40, 200, 20]));
+            let mut manuk = HashMap::new();
+            // The header itself is genuinely shifted; both children INHERIT that same offset, so their
+            // shape (box relative to the header) is unchanged — SHAPE must forgive them.
+            manuk.insert(hk, seen("header", [0, off, 1000, 80]));
+            manuk.insert(c1, seen("p", [10, 10 + off, 200, 20]));
+            manuk.insert(c2, seen("p", [10, 40 + off, 200, 20]));
+            (chrome, manuk)
+        }
+        let mut all = Vec::new();
+        for (i, off) in [23i64, 28, 1400].into_iter().enumerate() {
+            let (c, m) = shifted_site(off);
+            all.extend(diff_page(&format!("site{i}"), &c, &m, 8));
+        }
+        assert_eq!(
+            all.len(),
+            3,
+            "each site's inherited children must CANCEL under SHAPE — one divergence per site (the \
+             header), not one per element; got {} divergences",
+            all.len()
+        );
+        let clusters = cluster(&all);
+        assert_eq!(clusters.len(), 2, "near-miss vs collapse are two causes");
+        assert_eq!(
+            clusters[0].sites, 2,
+            "the 23/28px near-miss explains 2 sites"
+        );
+        assert_eq!(
+            clusters[0].hits, 2,
+            "one header per site — NOT amplified by the two inheriting children (would be 4)"
+        );
+        assert!(clusters[0].signature.contains("~16px"));
+        assert_eq!(clusters[1].sites, 1, "the 1400px collapse is its own cause");
+    }
+
     /// **The corpus jarring tally, and its RED proof.** Three sites: site A has 2 overlaps + 1
     /// reorder, site B has 3 overlaps, site C is clean. The tally must report overlap as (2 sites, 5
     /// total) and reorder as (1 site, 1 total) — sites-affected counts only the sites with a nonzero
