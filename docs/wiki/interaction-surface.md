@@ -2837,3 +2837,50 @@ an empty role list, which is a misleading result in either direction.
 a break. It is pinned `missing` rather than `unknown` because a measured absence outranks an untested one. When
 it is built it belongs **here**, with dialog and popover: it is the *actuation* surface for a close request
 (Esc, Android back), which an agent needs to dismiss an overlay it has just opened. [[dialog-and-top-layer]]
+
+## The close request is ONE stack, and the missing API was hiding a live bug (tick 574)
+
+Built at t574, six ticks after it was pinned. What the tick actually found is worth more than the API.
+
+**A close request is singular.** Escape — and on a phone the back gesture — asks the page to dismiss **one**
+thing, and the spec names which one: the *topmost*, whichever of the open modal dialogs, open `auto` popovers
+and live `CloseWatcher`s was activated last. Being unable to express *"the topmost, once"* is precisely why
+`CloseWatcher` was added to the platform: before it, every overlay library rolled its own `keydown` listener,
+and on one keypress they all fired.
+
+**We had shipped that bug, and had shipped it for as long as both features have existed here.** `__dialogEscape`
+(t~195, dialog) and `__popEscape` (t~196, popover) were two independent capture listeners on `document`, each
+unconditional and each unaware of the other. So:
+
+- a modal that opened a menu — the ordinary command-palette and confirm-dialog shape — lost **both** to one
+  Escape, which reads to the user as the keypress having been registered twice;
+- `__popEscape` did not even stop at one popover: it looped `querySelectorAll('[data-manuk-popover-open]')`
+  and closed every `auto` one, so a single keypress could clear the whole top layer.
+
+Neither had a gate, because each was gated *alone* — `g_dialog` proved Escape closes a dialog and `g_popover`
+proved Escape closes a popover, and both remained true. **The defect lived in the interaction between two
+features that were each individually correct, which is the class of bug a per-feature gate cannot see.** It
+took building the API whose reason for existing is that interaction to surface it.
+
+**The mechanism.** One `__closeStack` of `{active, request}` entries, one `keydown` capture listener:
+
+- `showModal()` enrols the dialog; `showPopover()` enrols an `auto` popover (a `manual` one is not
+  light-dismissable and is deliberately not enrolled); the `CloseWatcher` constructor enrols itself.
+- The scan walks from the top, **reaping** entries whose `active()` is false — closed since they were pushed by
+  an outside click, by script, or by popover exclusivity — and stops at the first **active** one.
+- It stops at the first *active* entry, **not** the first entry that actually closed. That distinction is the
+  veto: a `cancel` handler calling `preventDefault()` leaves its entry live and on top, so the next Escape asks
+  *it* again rather than falling through. An unsaved-changes guard that silently dismissed the thing underneath
+  it would be worse than no guard. RED-proven by inserting `if (e.active()) { continue; }` → `w2untouched:false`.
+
+**`CloseWatcher` itself cannot extend `EventTarget` here.** This engine's `EventTarget.prototype` is the *DOM
+chain's* root — the `iface` predicate gates on `isNode(o) || o === globalThis` — so a non-Node platform object
+hand-rolls the listener surface, exactly as `MediaSource`, `WebSocket` and `EventSource` already do. The one
+place it must differ from those: their `dispatchEvent` returns a bare `true`, but a `CloseWatcher`'s must return
+`!ev.defaultPrevented`, because that boolean **is** the veto `requestClose()` reads. `destroy()` fires no
+`close` (the "went away for another reason" exit); `close()` skips the `cancel`; `requestClose()` is the
+cancelable path Escape runs.
+
+RED-proven twice, and the second proof is the one that mattered: restoring the private `__dialogEscape`
+listener yields `dlgkept:false` — one Escape, two dismissals, reproduced exactly. `G_CLOSE_WATCHER`.
+[[dialog-and-top-layer]]

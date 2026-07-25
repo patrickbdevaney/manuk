@@ -23485,3 +23485,79 @@ properties Stylo's servo build does not expose**; narrowing it to those properti
 cascade × ~8 cascades. Then the **~8 cascades per `Page::load`** (nothing is reused between them). Then
 `Stylist::flush()`, built and never used for matching. Then the `{Open Sans/13}` `<a>` displacement.
 Cadences: self-audit 574 (NEXT TICK); surface 578; const 575; wall 587.
+
+## Tick 574 — `CloseWatcher`, and the API's reason to exist was a live bug we had shipped (2026-07-25)
+
+Check #37 filed `CloseWatcher` beside `<search>` as the agentic half of I3; t568 discharged `<search>` and
+**measured `CloseWatcher` absent**, pinning it rather than guessing. Six ticks later it is built — and the
+build found something the probe could not.
+
+**WHAT A CLOSE REQUEST IS.** Escape — and on a phone the back gesture — asks the page to dismiss **one** thing,
+and the spec names which: the *topmost*, whichever of the open modal dialogs, open `auto` popovers and live
+`CloseWatcher`s was activated last. Being unable to express *"the topmost, once"* is the entire reason
+`CloseWatcher` was added to the platform: before it, every overlay library rolled its own `keydown` listener and
+on one keypress they all fired.
+
+**WE HAD SHIPPED EXACTLY THAT BUG, AND THAT IS THE HALF OF THIS TICK THAT MATTERS.** `__dialogEscape` (from the
+dialog tick) and `__popEscape` (from the popover tick) were two independent capture listeners on `document`,
+each unconditional and each unaware of the other. So a modal that had opened a menu — the ordinary
+command-palette / confirm-dialog shape — lost **both** to one Escape. And `__popEscape` did not stop at one
+popover either: it looped `querySelectorAll('[data-manuk-popover-open]')` and closed every `auto` one, so a
+single keypress could clear the whole top layer.
+
+**WHY NO GATE SAW IT, AND THIS IS THE LESSON.** Each half was gated *alone*: `g_dialog` proves Escape closes a
+dialog, `g_popover` proves Escape closes a popover, and **both assertions remained true the whole time**. The
+defect lived in the *interaction between two features that were each individually correct* — the class of bug a
+per-feature gate is structurally unable to see, because neither gate ever opens the other's construct. It took
+building the API whose whole purpose is that interaction to surface it. Sibling of the t573 fixture lesson
+(green for a reason unrelated to the code being right), one level up: there the fixture was too small, here the
+fixture was too *pure*.
+
+**THE MECHANISM.** One `__closeStack` of `{active, request}` entries and one `keydown` capture listener.
+`showModal()` enrols the dialog, `showPopover()` enrols an `auto` popover (a `manual` one is not
+light-dismissable and is deliberately not enrolled), the `CloseWatcher` constructor enrols itself. The scan
+walks from the top, reaping entries whose `active()` is false — closed since being pushed by an outside click,
+by script, or by popover exclusivity — and stops at the first **active** one. It stops at the first *active*
+entry, **not** the first that actually closed: that distinction IS the veto. A `cancel` handler calling
+`preventDefault()` leaves its entry live and on top, so the next Escape asks *it* again rather than falling
+through — an unsaved-changes guard that silently dismissed the thing underneath it would be worse than no guard.
+
+**THE API.** `new CloseWatcher({signal})` + `requestClose()` (cancelable) / `close()` (skips the veto) /
+`destroy()` (skips both — the "went away for another reason" exit; firing `close` there would re-run the page's
+teardown twice), with `cancel`/`close` events and `oncancel`/`onclose`. It cannot extend `EventTarget`: this
+engine's `EventTarget.prototype` is the DOM chain's root (the `iface` predicate gates on `isNode(o) || o ===
+globalThis`), so the listener surface is hand-rolled as `MediaSource`/`WebSocket`/`EventSource` already do —
+with one required difference, since theirs return a bare `true` from `dispatchEvent` and a watcher's must return
+`!ev.defaultPrevented`, because that boolean is the veto `requestClose()` reads.
+
+**RED-PROVEN TWICE, and deliberately on the two claims that could have been green for the wrong reason.**
+(1) Restore the private `__dialogEscape` listener → `dlgkept:false`: one Escape, two dismissals, reproduced
+exactly — the old code was broken, not merely un-unified. (2) Let a vetoed request fall through
+(`if (e.active()) { continue; }`) → `w2untouched:false`. Neighbouring gates asserted untouched: `g_dialog`,
+`g_dialog_request_close`, `g_popover`, `g_popover_render`, `g_dialog_render`, `g_toggle_event_source`,
+`g_details_beforetoggle`, `g_globals`, `g_click_activation`, `g_a11y_roles`, `g_contenteditable_typing`.
+
+SELF-AUDIT (due at 574): all green except the same single item t564 found — *"verify wall: 677s EXCEEDS the
+300s target"*. The receipt behind it is the box, not the code, and says so in its own fields:
+`build_seconds: 36`, `unattributed_seconds: 677`, `load1: 5.90`, against WALL-AUDIT #15's 62s on an idle box and
+STATUS's banked 85s. It is also stamped at `head: 526d078d` — **tick 572**, so it is stale by two ticks as well
+as poisoned. Harness-owned per Part VII; recorded, not fixed. `LAST_AUDIT_TICK` set to 574 by hand.
+
+TICK SHAPE: capability (`CloseWatcher` — the close-request actuator for the hand-rolled drawer/lightbox/command
+palette, which is still most of what ships, and the single agentic verb for "dismiss the topmost thing"
+regardless of which of the three mechanisms the site chose) + correctness (one Escape now dismisses exactly one
+thing; the popover handler no longer clears the top layer) + the DUE self-audit. Bar 0 untouched.
+Gates: `G_CLOSE_WATCHER`, RED-proven on both the API and the ordering claim.
+WIKI: docs/wiki/interaction-surface.md — "The close request is ONE stack, and the missing API was hiding a live
+bug".
+PATTERN: new — **the bug in the seam between two individually-correct features**. Neither feature's gate can
+reach it; it surfaces only when something forces them into the same test. Look for it wherever two ticks each
+added a global listener for the same input.
+
+NEXT: **implied/`auto` grid track sizing** — the t566 root cause with its RED proof already committed
+(`tests/wpt/probes/grid-implied-tracks.html`, 88/133 → ~289/291), Taffy-side, still the largest measured layout
+cause on the board. Then the parked `wip` stash from this session's start: hoisting `relative_rule_indices` out
+of `apply_has_rules` (the third instance of t572/t573's per-element-work-that-depends-only-on-the-stylesheet
+defect; `has` is 505 ms of the 2,570 ms cascade). Then the t556 cascade-origin bug (author `* { margin:0 }`
+losing to the UA `body` margin); then the `{Open Sans/13}` metric delta; then the crawl-side `.SIG` correction.
+Cadences: const 575 (NEXT TICK); surface 578; self-audit 584; wall 587.

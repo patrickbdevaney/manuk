@@ -4769,3 +4769,18 @@ are unremarkable, and the blow-up is 400x the input. **(2)** It is invisible to 
 process RSS around the load, not a heap walk after it. **(3)** Four sites of this shape in a 100-site
 corpus produced **76% of the whole 100-tab footprint** — so a mean, or any "typical site" figure, hides
 the entire problem. Report the p90 and name the outliers.
+
+---
+
+## The close request — Escape dismisses the topmost overlay, and exactly one of them (tick 574)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| **A close request (`Escape`, Android back) dismisses the TOPMOST dismissable and only it** — modal `<dialog>`, `auto` `[popover]`, and script-owned overlays via **`CloseWatcher`** | every app-class page that stacks UI: a command palette that opens a menu, a confirm-dialog over a dropdown, a settings sheet with a select popup — plus every hand-rolled drawer/lightbox/palette that is neither a `<dialog>` nor a `[popover]`, which is still most of what ships | ✅ (tick 574) — `CloseWatcher` was **absent** (measured and pinned t568), so a script-owned overlay had no way to answer Escape at all and a feature-detecting page took its fallback. Building it surfaced a **live bug it was designed to prevent**: `__dialogEscape` (t194) and `__popEscape` (t195) were two independent, unconditional `keydown` capture listeners on `document`, so one Escape over a modal that had opened a menu dismissed **both**, and `__popEscape` looped every open `[data-manuk-popover-open]` closing all of them — one keypress could clear the entire top layer. **Neither feature's own gate could see it**: `g_dialog` and `g_popover` each proved *their* construct closes on Escape, and both assertions stayed true; the defect lived only in the seam between two individually-correct features. Now one `__closeStack` of `{active, request}` entries and one listener: `showModal()`/`showPopover()` (auto only — `manual` is not light-dismissable) / the `CloseWatcher` constructor enrol; the scan walks from the top, reaps entries whose `active()` went false (closed meanwhile by a click, by script, or by popover exclusivity), and stops at the first **active** entry — *not* the first that actually closed, which is what makes a `cancel` veto keep its place instead of falling through to the overlay underneath. `CloseWatcher` hand-rolls its listener surface because this engine's `EventTarget.prototype` is the DOM chain's root (`iface` gates on `isNode`), with the one required difference from `MediaSource`/`WebSocket`: `dispatchEvent` returns `!ev.defaultPrevented`, since that boolean **is** the veto `requestClose()` reads. Gated by `G_CLOSE_WATCHER`, RED-proven twice — restore the private dialog listener → `dlgkept:false` (one Escape, two dismissals, reproduced); let a vetoed request fall through → `w2untouched:false`. Residue: no back-gesture/`navigation` integration (Escape is the only close-request source here), and the spec's user-activation grouping (one "free" watcher without a gesture) is not modelled.
+
+**The lesson, and it generalises past this feature.** Two ticks each added a global listener for the same
+input, each gated alone, each correct alone. A per-feature gate is *structurally* unable to reach that
+seam, because neither gate ever opens the other's construct. **Look for this wherever two features
+independently register a handler for one shared input** — Escape, the back gesture, `beforeunload`,
+outside-click, focus-trap boundaries. The tell is not a failing assertion; it is that no assertion exists
+which opens both at once.

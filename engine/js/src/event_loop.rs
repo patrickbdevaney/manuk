@@ -5042,6 +5042,127 @@ const PRELUDE: &str = r#"
         __HP.reportValidity = function() { return this.checkValidity(); };
       }
 
+      // ── THE CLOSE REQUEST, and it is ONE STACK — not one per dismissable kind.
+      //
+      // Escape (and, on a phone, the back gesture) is a *close request*: the platform asks the page to
+      // dismiss ONE thing, and the spec is explicit that it is the **topmost** thing — whichever of the
+      // open modal dialogs, open `auto` popovers and live `CloseWatcher`s was activated last, and only
+      // that one. Being unable to express "the topmost, once" is precisely why `CloseWatcher` was added
+      // to the platform: before it every overlay library rolled its own `keydown` listener, and they all
+      // fired on the same keypress.
+      //
+      // **We had shipped that exact bug.** `__dialogEscape` and `__popEscape` were two independent
+      // capture listeners on `document`, each unconditional, so one Escape over a modal that had opened
+      // a menu dismissed BOTH; and `__popEscape` looped over every `[data-manuk-popover-open]` element
+      // closing all of them, so one keypress was capable of clearing the whole top layer. The bug and the
+      // missing API are the same mechanism, which is why they are fixed together rather than in sequence.
+      //
+      // An entry is `{active, request}`. `active()` reports whether it is still open — it may have been
+      // closed since it was pushed by a click, by script, or by popover exclusivity — and dead entries
+      // are reaped lazily as the scan passes them. `request()` performs that entry's own close request,
+      // which may be **vetoed** (a `cancel` handler calling `preventDefault()`); a vetoed entry stays on
+      // top, so the next Escape asks it again rather than falling through to what is underneath it. That
+      // fall-through is the reason the scan stops at the first ACTIVE entry and not at the first entry
+      // that actually closed.
+      // The listener install is guarded on the stack's own existence, and that guard is load-bearing
+      // rather than defensive tidiness: **installing it twice would be the original bug again**, one
+      // Escape running two close requests. The `||` on the stack is not enough on its own — a second
+      // prelude run would find the stack and add a second listener to it.
+      var __closeStackNew = !globalThis.__manukCloseStack;
+      var __closeStack = (globalThis.__manukCloseStack = globalThis.__manukCloseStack || []);
+      var __pushClose = function(active, request) { __closeStack.push({ active: active, request: request }); };
+      var __closeRequest = function() {
+        for (var i = __closeStack.length - 1; i >= 0; i--) {
+          var e = __closeStack[i];
+          if (!e.active()) { __closeStack.splice(i, 1); continue; }
+          e.request();
+          return true;      // one close request dismisses exactly one thing
+        }
+        return false;
+      };
+      if (__closeStackNew) {
+        try {
+          document.addEventListener('keydown', function(ev) {
+            if (ev.key !== 'Escape' && ev.keyCode !== 27) { return; }
+            __closeRequest();
+          }, true);
+        } catch (e) {}
+      }
+
+      // `CloseWatcher` — the close-request actuator for an overlay that is NEITHER a `<dialog>` nor a
+      // `[popover]`: a hand-rolled drawer, lightbox, command palette or sheet, which is still most of
+      // what ships. The page constructs one when it opens its overlay and `destroy()`s it when it
+      // closes, and Escape then routes to it in the same stack order as the built-in dismissables
+      // instead of the page having to guess whether something else is above it.
+      //
+      // It is an AGENTIC surface as much as a page one: `manuk-agent` needs a single verb for "dismiss
+      // the topmost thing" that works whichever of the three mechanisms the site chose, and
+      // `__closeRequest()` above is now that verb. Measured absent at tick 568 and pinned, rather than
+      // guessed at — a feature-detecting page took its fallback, which was honest but left the overlay
+      // undismissable by anything but a mouse.
+      //
+      // It cannot extend `EventTarget`: this engine's `EventTarget.prototype` is the DOM chain's root,
+      // not a general one (the `iface` predicate in the prelude gates on `isNode`), so the listener
+      // surface is hand-rolled exactly as `MediaSource`/`WebSocket`/`EventSource` do it here. The one
+      // difference that matters: `dispatchEvent` must return **false** when a handler prevented the
+      // default, because that boolean IS the veto that `requestClose()` reads.
+      if (typeof globalThis.CloseWatcher === 'undefined') {
+        var CloseWatcher = function CloseWatcher(options) {
+          if (!(this instanceof CloseWatcher)) {
+            throw new TypeError("Failed to construct 'CloseWatcher': Please use the 'new' operator");
+          }
+          var self = this;
+          this.__ls = {};
+          this.__closed = false;
+          this.oncancel = null;
+          this.onclose = null;
+          __pushClose(function() { return !self.__closed; }, function() { self.requestClose(); });
+          // `new CloseWatcher({signal})` — an already-aborted signal means the watcher is born dead,
+          // and a later abort destroys it. This is how a component ties the watcher's lifetime to its
+          // own teardown without having to remember a `destroy()` on every exit path.
+          var signal = options && options.signal;
+          if (signal) {
+            if (signal.aborted) { this.__closed = true; }
+            else { try { signal.addEventListener('abort', function() { self.destroy(); }); } catch (e) {} }
+          }
+        };
+        CloseWatcher.prototype.addEventListener = function(t, fn) {
+          if (typeof fn === 'function') { (this.__ls[t] = this.__ls[t] || []).push(fn); }
+        };
+        CloseWatcher.prototype.removeEventListener = function(t, fn) {
+          var a = this.__ls[t]; if (!a) { return; }
+          var i = a.indexOf(fn); if (i >= 0) { a.splice(i, 1); }
+        };
+        CloseWatcher.prototype.dispatchEvent = function(ev) {
+          if (!ev) { return true; }
+          ev.target = this; ev.currentTarget = this;
+          var on = this['on' + ev.type];
+          if (typeof on === 'function') { try { on.call(this, ev); } catch (e) {} }
+          // Copied before iteration: a handler is allowed to remove itself.
+          var a = (this.__ls[ev.type] || []).slice();
+          for (var i = 0; i < a.length; i++) { try { a[i].call(this, ev); } catch (e) {} }
+          return !ev.defaultPrevented;
+        };
+        // `requestClose()` is the cancelable path — what Escape runs, and what a ✕ button should call.
+        CloseWatcher.prototype.requestClose = function() {
+          if (this.__closed) { return; }
+          var ok = true;
+          try { ok = this.dispatchEvent(new Event('cancel', { bubbles: false, cancelable: true })); } catch (e) {}
+          if (ok === false) { return; }   // a `cancel` handler vetoed — the watcher stays live
+          this.close();
+        };
+        // `close()` skips the veto and fires `close`; `destroy()` skips BOTH — it is the "the overlay
+        // went away for an unrelated reason" exit, and firing `close` there would re-run the page's
+        // teardown a second time.
+        CloseWatcher.prototype.close = function() {
+          if (this.__closed) { return; }
+          this.__closed = true;
+          try { this.dispatchEvent(new Event('close', { bubbles: false, cancelable: false })); } catch (e) {}
+        };
+        CloseWatcher.prototype.destroy = function() { this.__closed = true; };
+        globalThis.CloseWatcher = CloseWatcher;
+      }
+
       // ── `<dialog>`: show() / showModal() / close() — the modal. Every cookie banner, every
       // confirm-delete, every command palette shipped since the pattern stopped being a hand-rolled
       // `<div class="modal">` is a `<dialog>`, and the whole surface was ABSENT: `open` reflected as an
@@ -5074,6 +5195,13 @@ const PRELUDE: &str = r#"
           this.setAttribute('open', '');
           this.setAttribute('data-manuk-modal', '');
           __modalStack.push(this);
+          // A modal dialog is a close-request target from the moment it opens, and it takes its place
+          // in the SHARED stack — above whatever was open before it, below whatever opens after.
+          var dlg = this;
+          __pushClose(
+            function() { return dlg.hasAttribute('open') && dlg.hasAttribute('data-manuk-modal'); },
+            function() { dlg.requestClose(); }
+          );
         };
         __HP.close = function(rv) {
           if (!__isDialog(this) || !this.hasAttribute('open')) { return; }
@@ -5126,19 +5254,12 @@ const PRELUDE: &str = r#"
           ev.preventDefault();
           dlg.close(t.getAttribute('value') || '');
         };
-        // Escape dismisses the topmost modal, firing a cancelable `cancel` first — the hook every
-        // "are you sure you want to discard?" guard hangs off.
-        var __dialogEscape = function(ev) {
-          if (ev.key !== 'Escape' && ev.keyCode !== 27) { return; }
-          var dlg = __modalStack[__modalStack.length - 1];
-          if (!dlg || !dlg.hasAttribute('open')) { return; }
-          var ok = true;
-          try { ok = dlg.dispatchEvent(new Event('cancel', { bubbles: false, cancelable: true })); } catch (e) {}
-          if (ok !== false) { dlg.close(); }
-        };
+        // Escape dismissal is NOT handled here any more — `showModal()` above enrols the dialog in the
+        // shared close-request stack, so the single listener installed with that stack dismisses the
+        // topmost dismissable of ANY kind. A private `keydown` listener here is what made one Escape
+        // close a modal and its menu at the same time.
         try {
           document.addEventListener('click', __dialogSubmit, true);
-          document.addEventListener('keydown', __dialogEscape, true);
         } catch (e) {}
       }
 
@@ -5194,6 +5315,17 @@ const PRELUDE: &str = r#"
             }
           }
           this.setAttribute('data-manuk-popover-open', '');
+          // An `auto` popover is light-dismissable, so it joins the shared close-request stack — a
+          // `manual` one is not, and deliberately does not (that is what `manual` means: only script
+          // closes it). `active()` re-reads both facts because the popover may have been closed by an
+          // outside click, by script, or by another `auto` popover's exclusivity since it was pushed.
+          if (__popType(this) === 'auto') {
+            var pop = this;
+            __pushClose(
+              function() { return __popOpen(pop) && __popType(pop) === 'auto'; },
+              function() { pop.hidePopover(); }
+            );
+          }
           __popToggleEvent(this, 'toggle', 'closed', 'open', false, src);
         };
         __HP.hidePopover = function(options) {
@@ -5247,17 +5379,11 @@ const PRELUDE: &str = r#"
             if (!inside) { p.hidePopover(); }
           }
         };
-        // Escape light-dismisses `auto` popovers too (the dialog handler above owns modals).
-        var __popEscape = function(ev) {
-          if (ev.key !== 'Escape' && ev.keyCode !== 27) { return; }
-          var open = document.querySelectorAll('[data-manuk-popover-open]');
-          for (var i = open.length - 1; i >= 0; i--) {
-            if (__popType(open[i]) === 'auto') { open[i].hidePopover(); }
-          }
-        };
+        // Escape dismissal is NOT handled here any more — `showPopover()` above enrols an `auto`
+        // popover in the shared close-request stack. The loop that used to live here closed EVERY open
+        // auto popover on one keypress, which is a close request answered N times.
         try {
           document.addEventListener('click', __popClick, true);
-          document.addEventListener('keydown', __popEscape, true);
         } catch (e) {}
         // **Feature detection reads `HTMLElement.prototype`, and ours is not `__protoHTMLElement`.**
         // The custom-elements shim gives the `HTMLElement` constructor a fresh `{}` prototype on
