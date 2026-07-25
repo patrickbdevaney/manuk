@@ -1,0 +1,14 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+ body{font-size:16px;margin:0;font-family:sans-serif}
+ div{width:600px}
+ /* AREAS ALONE — no grid-template-columns. The areas string IMPLIES two columns. */
+ #areasonly{display:grid;grid-template-areas:"l r";column-gap:20px}
+ #areasonly .l{grid-area:l} #areasonly .r{grid-area:r}
+ /* areas alone, TWO ROWS — implies 2 cols x 2 rows */
+ #two{display:grid;grid-template-areas:"a b" "c d";column-gap:20px}
+ #two .p{grid-area:a} #two .q{grid-area:b} #two .r2{grid-area:c} #two .s{grid-area:d}
+ section{background:#ccd}
+</style></head><body>
+<div id="areasonly"><section class="l">areas-only L</section><section class="r">areas-only R</section></div>
+<div id="two"><section class="p">A</section><section class="q">B</section><section class="r2">C</section><section class="s">D</section></div>
+</body></html>

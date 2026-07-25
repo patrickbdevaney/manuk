@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+ /* QUESTION (t566): martinfowler's desktop grid tracks are gated behind
+    `@media screen and (min-width: 600px)`. A bare `@media (min-width: 600px)` is known to work.
+    Do we honour the media TYPE prefix (`screen and`), or drop the whole block? */
+ body{font-size:16px;margin:0;font-family:sans-serif}
+ div{width:600px;background:#eee}
+ #bare{display:grid} #typed{display:grid} #onlyscreen{display:grid} #allkw{display:grid}
+ @media (min-width: 600px)                  { #bare       { grid-template-columns:1fr 1fr; column-gap:20px } }
+ @media screen and (min-width: 600px)       { #typed      { grid-template-columns:1fr 1fr; column-gap:20px } }
+ @media only screen and (min-width: 600px)  { #onlyscreen { grid-template-columns:1fr 1fr; column-gap:20px } }
+ @media all and (min-width: 600px)          { #allkw      { grid-template-columns:1fr 1fr; column-gap:20px } }
+ section{background:#ccd}
+</style></head><body>
+<div id="bare"><section>bare L</section><section>bare R</section></div>
+<div id="typed"><section>screen-and L</section><section>screen-and R</section></div>
+<div id="onlyscreen"><section>only-screen L</section><section>only-screen R</section></div>
+<div id="allkw"><section>all-and L</section><section>all-and R</section></div>
+</body></html>

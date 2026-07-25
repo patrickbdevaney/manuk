@@ -22954,3 +22954,46 @@ vs hinting). Then the two agentic rows from Audit #29 (`<search>` + `CloseWatche
 the I3 drift Checks #35/#36 flagged; then the t556 cascade-origin bug (author `* { margin:0 }` losing to the UA
 `body` margin — likely the SAME cascade-origin family as this one); then the crawl-side `.SIG` correction.
 Cadences: self-audit 574; surface 568; const 567; wall 567.
+
+## Tick 566 — ROOT CAUSE: implied grid tracks are content-sized where Chromium stretches them (2026-07-25)
+
+t565 relocated martinfowler's two-column failure to "the container is not receiving `display:grid`". Checked
+that first, and it was wrong too: the sweep reports **zero `display:` divergences on the entire site**, so both
+engines agree the container is a grid. Then the next hypothesis — the site's desktop tracks are gated behind
+`@media screen and (min-width: 600px)`, so maybe we drop the media TYPE prefix. Probed it
+(`tests/wpt/probes/media-type-prefix.html`): `@media (…)`, `@media screen and (…)`, `only screen and`, and
+`all and` **all correct — 100% SHAPE, 0 of 13 misplaced.** Not that either.
+
+THEN THE REAL ONE, and it was hiding behind my own probe. `grid-template-areas` **with NO
+`grid-template-columns`**: in a 600px container with `grid-template-areas:"l r"`, Chromium gives each implied
+column an equal share — **289px / 291px** — and we size them to **content**: `88px` / `133px`, leaving the free
+space unused. The column **count** is right (items land 2-across, correct rows in the 2×2 case); the implied
+**track sizing** is wrong. Per CSS Grid, `grid-template-areas` creates implicit columns sized by
+`grid-auto-columns` (default `auto`), and `auto` tracks **absorb the container's free space**; we treat them as
+max-content and stop.
+
+**AND t565's PROBE HID IT.** `grid-template-areas.html` always set `grid-template-columns` *alongside* the
+areas, so it scored a perfect 100% and I concluded "grid placement is not the defect" — true as written, and
+misleading, because the bug was one declaration away. **An over-specified probe hides the bug it was written to
+find.** That is a new lesson and a sharper one than the five before it: those leads died because a *number* was
+over-interpreted; this one survived four ticks because a *measurement* was, and a passing probe feels much more
+authoritative than a cluster ranking. The correction: when a probe passes, ask what it holds FIXED that the real
+page does not.
+
+RED PROOF COMMITTED: `tests/wpt/probes/grid-implied-tracks.html` — 2-across and 2×2 shapes, `grid-template-areas`
+only. Today: Chromium `[0 0 289×18]` / `[309 0 291×18]`, ours `[0 0 88×18]` / `[108 0 133×18]`.
+
+TICK SHAPE: measurement (two more hypotheses refuted with committed probes — `display` agrees site-wide, media
+type prefixes are honoured — then the ROOT CAUSE isolated: implied/`auto` grid tracks are content-sized instead
+of absorbing free space, with a committed RED proof and the fix target named; plus the lesson that t565's own
+passing probe concealed it by over-specifying). No engine src touched; Bar 0 untouched.
+WIKI: none — the measurements' home is `tests/wpt/probes/README.md` (question → answer per page) and the
+anchor's §6 entry; the fix tick will carry the track-sizing mechanism into docs/wiki/box-layout.md.
+[no-pattern]
+
+NEXT: **fix implied/`auto` grid track sizing** — an `auto` track must distribute the container's free space, not
+stop at max-content, with `tests/wpt/probes/grid-implied-tracks.html` as the RED proof (88/133 → ~289/291). It is
+a Taffy-side track-sizing question and deserves a fresh context rather than the tail of a long session. Then the
+same-face `{Open Sans/13}` metric delta; then the two agentic rows from Audit #29 (`<search>` + `CloseWatcher`)
+as one tick, discharging the I3 drift Checks #35/#36 flagged; then the t556 cascade-origin bug; then the
+crawl-side `.SIG` correction. Cadences: self-audit 574; surface 568; const 567; wall 567.

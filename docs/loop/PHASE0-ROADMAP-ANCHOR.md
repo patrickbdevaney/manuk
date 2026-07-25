@@ -395,3 +395,20 @@ never WPT count, never a vibe.
   t560/t561, text-measurement t552/t553, the power-of-two artifact t551, grid t565) — and the fifth time that
   cost one cheap probe instead of one expensive wrong-subsystem tick.
 
+- `ROOT CAUSE @tick 566 — IMPLIED grid tracks are content-sized where Chromium stretches them.` Two more
+  refutations first (both committed probes at 100% SHAPE): the container **does** get `display:grid` (the sweep
+  reports **zero** `display:` divergences on the whole site), and the media TYPE prefix is honoured
+  (`@media screen and (...)`, `only screen and`, `all and` all correct). Then the real one:
+  **`grid-template-areas` with NO `grid-template-columns`.** In a 600px container with
+  `grid-template-areas:"l r"`, Chromium gives each implied column an equal share — **289px / 291px** — and we
+  size them to **content**: `88px` / `133px`, leaving the free space unused. The column **count** is right
+  (items land 2-across at the correct rows); the implied-track **sizing** is wrong.
+  Per CSS Grid, `grid-template-areas` creates implicit columns sized by `grid-auto-columns` (default `auto`),
+  and `auto` tracks **absorb the container's free space**. We treat them as max-content and stop.
+  **And the earlier grid probe hid this**: `grid-template-areas.html` always set `grid-template-columns`
+  alongside the areas, so it scored a perfect 100% while the bug sat one declaration away. *An over-specified
+  probe hides the bug it was written to find* — worth remembering, because the probe that scored 100% was mine
+  and it produced a confident wrong conclusion at t565.
+  Fix target: implied/`auto` grid track sizing must distribute free space, not stop at content.
+  RED proof committed: `tests/wpt/probes/grid-implied-tracks.html` (2-across and 2×2 shapes).
+
