@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **332** | ticks 1–570 |
-| median tick cycle | **20m** | 331 intervals |
-| median, last 10 | **15m** | 10 intervals |
+| ticks landed | **333** | ticks 1–571 |
+| median tick cycle | **20m** | 332 intervals |
+| median, last 10 | **17m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.97** | 341.8h elapsed |
-| median verify wall | **66s** | 271 ticks |
+| **ticks per hour** | **0.97** | 342.9h elapsed |
+| median verify wall | **66s** | 272 ticks |
 | wall trend | 39s → 85s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **276**
+* **live gates**: 27 → **277**
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**173 of 332 ticks** (52%) moved a
+**173 of 333 ticks** (52%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **173** capability ticks, median cycle **20m**
-* median diff per tick: **+220 / −34** lines across 8 files
+* median diff per tick: **+220 / −34** lines across 9 files
 
 ## Every tick
 
@@ -429,5 +429,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **568** | 2026-07-25 08:28 | 14m | capability | 85s | +229/−36 | 274 | 81 | 56.0% · | `<search>` is a landmark (the I3 queue, discharged) + SURFACE AUDIT #30 measures what #29  |
 | **569** | 2026-07-25 09:28 | 60m | capability | 85s | +497/−83 | 276 | 81 | 56.0% · | `justify-content: normal` is not `flex-start`, and that one conflation disabled grid track |
 | **570** | 2026-07-25 10:52 | 83m | capability | 85s | +817/−37 | 276 | 81 | 56.0% · | `repeat(auto-fill, …)` was resolved by the cascade to ONE column; the count belongs to lay |
+| **571** | 2026-07-25 11:58 | 66m | measurement | 85s | +643/−167 | 277 | 81 | 56.0% · | the 100-tab RSS benchmark, run for the first time: 4.39 GB, and eviction was returning NOT |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

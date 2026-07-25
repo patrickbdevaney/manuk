@@ -331,3 +331,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 568	f605d5c9	1784982530	2026-07-25T08:28:50-04:00	852	capability	85	10	229	36	274	81	3896	6960	0	329	31	`<search>` is a landmark (the I3 queue, discharged) + SURFACE AUDIT #30 measures what #29 added (2026-07-25)
 569	eb3bb345	1784986122	2026-07-25T09:28:42-04:00	3592	capability	85	13	497	83	276	81	3896	6960	0	329	31	`justify-content: normal` is not `flex-start`, and that one conflation disabled grid track stretching everywhere (2026-07-25)
 570	1251c5ec	1784991125	2026-07-25T10:52:05-04:00	5003	capability	85	17	817	37	276	81	3896	6960	0	329	31	`repeat(auto-fill, …)` was resolved by the cascade to ONE column; the count belongs to layout (2026-07-25)
+571	344fbe68	1784995096	2026-07-25T11:58:16-04:00	3971	measurement	85	9	643	167	277	81	3896	6960	0	329	31	the 100-tab RSS benchmark, run for the first time: 4.39 GB, and eviction was returning NOTHING to the kernel (2026-07-25)

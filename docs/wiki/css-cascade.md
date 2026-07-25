@@ -941,3 +941,50 @@ lines and every element reads `auto`.
 The lesson: **confirm which Stylo source actually compiles before assuming a `servo_pref` gate.** A
 property gated by `servo_pref` reaches the servo build (pref-flippable); a property gated by
 `engine = "gecko"` never does (MinimalCascade-recover it).
+
+## `RuleIndex` was applied to ONE of the two matchers, and the other kept the O(elements × rules) defect for its whole life (tick 572)
+
+`RuleIndex`'s own doc comment in `stylo_engine.rs` records the history: `cascade_one_element` used to
+walk **every rule in every sheet for every element**, the cascade was therefore O(elements × rules), and
+bucketing rules by their rightmost simple selector fixed it. That comment has been true and correct for
+hundreds of ticks.
+
+**`cascade_pseudo` sat a few dozen lines below it, doing exactly the thing the comment describes as
+fixed** — and doing it *twice per element*, once for `::before` and once for `::after`. For every
+element it re-descended all 69 stylesheets' rule trees, took a `read_with(guard)` lock read on every
+nested rule list, **re-evaluated every `@media` query against a device that had not changed since the
+last element**, and tested `sel.pseudo_element()` on every selector in the document — to find the handful
+of rules that carry a pseudo at all.
+
+**Measured**, on a wix.com snapshot (10,424 nodes, 1.8 MB of CSS across 68 `<style>` blocks), with the
+`MANUK_CASCADE_PROFILE=1` phase timers added in the same tick:
+
+| phase | before | after |
+|---|---|---|
+| `pseudo` | **9,000 ms (46%)** | **1,630 ms** |
+| `element` (the indexed path) | 1,250 ms | 1,000 ms |
+| `minimal` (the second, whole cascade) | 500 ms | 470 ms |
+| `has` | 490 ms | 440 ms |
+| `flush` (the `Stylist` that is never matched against) | 6 ms | 6 ms |
+| **total per cascade** | **19,500 ms** | **11,300 ms** |
+
+End to end the page load went **164.7 s → 101.8 s**. Note the multiplier that makes those numbers add
+up: **the cascade runs ~8× per `Page::load`** on a scripted page (initial, post-script restyle, container
+re-pass), so a second saved inside one cascade is eight seconds saved on the page.
+
+**The fix is a hoist, not an algorithm.** `PseudoIndex::build` descends the sheet tree **once per
+document**, evaluating `@media`/`@supports`/`@layer` once, and files each `::before`/`::after` rule into
+one of two flat `Vec`s. Per element the cascade then iterates only those. Nothing about *matching*
+changes — same selectors, same `ForStatelessPseudoElement` mode, same specificity, same source order —
+which is what makes it safe: the work removed is precisely the work whose result could not vary by
+element.
+
+**Three things worth carrying.** **(1)** The general shape: *when you index one matcher, grep for the
+others.* A fix applied to the path you were profiling leaves its twin untouched, and the twin has no
+comment saying it is slow. **(2)** `@media` evaluation is **device-scoped**, so hoisting it out of the
+per-element loop is free correctness-wise and was most of the win. **(3)** The profiler had to be built
+first and it changed the answer: the ranked suspect list before measuring put a `PropertyDeclarationBlock`
+merge quadratic first; the timers said pseudo, and the remaining **~7.8 s is still `unattributed`** —
+inside the element walk, in `to_computed_style` and the recovery loops, and not yet broken down. Report
+the unattributed remainder as its own line; an instrument whose parts silently sum to the whole cannot
+tell you it is missing something.

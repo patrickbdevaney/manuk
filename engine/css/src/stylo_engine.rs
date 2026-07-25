@@ -402,6 +402,9 @@ pub fn cascade_via_stylo_sized(
     };
     let url_data = UrlExtraData(ServoArc::new(url));
 
+    let mut ph = Phases::default();
+    #[cfg(not(target_arch = "wasm32"))]
+    let t_all = std::time::Instant::now();
     // Parse each sheet's raw source with Stylo's own parser; keep the Arcs so we can
     // iterate their compiled rules for matching.
     let mut stylo_sheets: Vec<ServoArc<StyloStylesheet>> = Vec::new();
@@ -431,7 +434,9 @@ pub fn cascade_via_stylo_sized(
             stylist.append_stylesheet(DocumentStyleSheet(arc.clone()), &guard);
             stylo_sheets.push(arc);
         }
-        stylist.flush(&StylesheetGuards::same(&guard));
+        timed(&mut ph.flush_ns, || {
+            stylist.flush(&StylesheetGuards::same(&guard))
+        });
     }
 
     CASCADES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -481,14 +486,18 @@ pub fn cascade_via_stylo_sized(
         by_id = index.by_id.len(),
         "RULEINDEX"
     );
+    // The ::before/::after rules, hoisted out of the sheet tree ONCE — the same trick `RuleIndex`
+    // plays for element rules, applied to the path that never got it. See `PseudoIndex`.
+    let pseudo_index = PseudoIndex::build(&stylo_sheets, &guard, stylist.device(), qm);
     let mut candidates: Vec<u32> = Vec::new();
     let mut caches = SelectorCaches::default();
+    let mut pseudo_caches = SelectorCaches::default();
 
     // The recovered-property cascade (see the merge loop below) — computed BEFORE the Stylo walk
     // because ONE recovered property must be visible to `apply_presentational_hints` inside the
     // walk: `field-sizing: content` stands the UA intrinsic-width hints down, so it has to be on
     // the style before the hint decides to fire (the other recovered properties merge after).
-    let minimal = MinimalCascade.cascade(dom, sheets);
+    let minimal = timed(&mut ph.minimal_ns, || MinimalCascade.cascade(dom, sheets));
     let mut map: StyleMap = StyleMap::new();
     // Preorder walk so a parent's ComputedValues exists before its children's cascade.
     let mut parent_cv: std::collections::HashMap<NodeId, ServoArc<ComputedValues>> =
@@ -518,21 +527,23 @@ pub fn cascade_via_stylo_sized(
             continue;
         }
         let el = StyloElement::new(dom, node, &store);
-        let cv = cascade_one_element(
-            &stylist,
-            &index,
-            &mut candidates,
-            &mut caches,
-            &lock,
-            &url_data,
-            &guard,
-            &guards,
-            &el,
-            node,
-            &parent_cv,
-            dom,
-            cq_active,
-        );
+        let cv = timed(&mut ph.element_ns, || {
+            cascade_one_element(
+                &stylist,
+                &index,
+                &mut candidates,
+                &mut caches,
+                &lock,
+                &url_data,
+                &guard,
+                &guards,
+                &el,
+                node,
+                &parent_cv,
+                dom,
+                cq_active,
+            )
+        });
         // **`rem` is root-relative.** The device carries the root font size that every `rem` in the
         // document resolves against, and it starts at the initial 16px. Unless it is updated once
         // the root element's own font size is known, `html{font-size:62.5%}` — the "1rem = 10px"
@@ -555,28 +566,34 @@ pub fn cascade_via_stylo_sized(
         apply_presentational_hints(dom, node, &mut cs);
         // `::before` / `::after` — generated content, cascaded against this element as its parent.
         use stylo::selector_parser::PseudoElement as Pe;
-        cs.before = cascade_pseudo(
-            &stylist,
-            &stylo_sheets,
-            &lock,
-            &guard,
-            &guards,
-            &el,
-            &cv,
-            Pe::Before,
-        )
-        .map(Box::new);
-        cs.after = cascade_pseudo(
-            &stylist,
-            &stylo_sheets,
-            &lock,
-            &guard,
-            &guards,
-            &el,
-            &cv,
-            Pe::After,
-        )
-        .map(Box::new);
+        if !pseudo_index.is_empty() {
+            timed(&mut ph.pseudo_ns, || {
+                cs.before = cascade_pseudo(
+                    &stylist,
+                    &pseudo_index,
+                    &mut pseudo_caches,
+                    &lock,
+                    &guard,
+                    &guards,
+                    &el,
+                    &cv,
+                    Pe::Before,
+                )
+                .map(Box::new);
+                cs.after = cascade_pseudo(
+                    &stylist,
+                    &pseudo_index,
+                    &mut pseudo_caches,
+                    &lock,
+                    &guard,
+                    &guards,
+                    &el,
+                    &cv,
+                    Pe::After,
+                )
+                .map(Box::new);
+            });
+        }
         map.insert(node, cs);
         // On the sized re-pass, publish this element's ComputedValues into Stylo's own data cell:
         // that is where `ContainerCondition::matches` reads an ancestor's `container-type`/`-name`
@@ -605,22 +622,26 @@ pub fn cascade_via_stylo_sized(
     let has_sheets: Vec<&Stylesheet> = sheets.iter().filter(|sh| sh.has_relative_rules()).collect();
     if !has_sheets.is_empty() {
         let mut applied = 0usize;
-        let nodes: Vec<NodeId> = dom.flat_descendants(dom.root());
-        for node in nodes {
-            if !dom.is_element(node) {
-                continue;
+        let _t_has = ();
+        timed(&mut ph.has_ns, || {
+            let nodes: Vec<NodeId> = dom.flat_descendants(dom.root());
+            for node in nodes {
+                if !dom.is_element(node) {
+                    continue;
+                }
+                let parent_fs = dom
+                    .parent(node)
+                    .and_then(|p| map.get(&p).map(|s| s.font_size))
+                    .unwrap_or(16.0);
+                let Some(cs) = map.get_mut(&node) else {
+                    continue;
+                };
+                for sh in &has_sheets {
+                    applied += sh.apply_has_rules(dom, node, cs, parent_fs);
+                }
             }
-            let parent_fs = dom
-                .parent(node)
-                .and_then(|p| map.get(&p).map(|s| s.font_size))
-                .unwrap_or(16.0);
-            let Some(cs) = map.get_mut(&node) else {
-                continue;
-            };
-            for sh in &has_sheets {
-                applied += sh.apply_has_rules(dom, node, cs, parent_fs);
-            }
-        }
+        });
+        let _ = _t_has;
         tracing::debug!(
             sheets = has_sheets.len(),
             declarations = applied,
@@ -739,6 +760,30 @@ pub fn cascade_via_stylo_sized(
     // only shadow content falls back. Giving Stylo a scoped flat-tree walk is the follow-on.
     for (node, m) in minimal.iter() {
         map.entry(*node).or_insert_with(|| m.clone());
+    }
+
+    if profiling() {
+        let el_count = map.len();
+        let ms = |ns: u128| ns as f64 / 1.0e6;
+        #[cfg(not(target_arch = "wasm32"))]
+        let total_ns = t_all.elapsed().as_nanos();
+        #[cfg(target_arch = "wasm32")]
+        let total_ns = 0u128;
+        // Whatever the named phases do not account for is reported as its own line rather than
+        // spread across them. An instrument whose parts silently sum to the whole is one that
+        // cannot tell you it is missing something.
+        let named = ph.flush_ns + ph.minimal_ns + ph.element_ns + ph.pseudo_ns + ph.has_ns;
+        tracing::warn!(
+            nodes = el_count,
+            total_ms = ms(total_ns),
+            flush_ms = ms(ph.flush_ns),
+            minimal_ms = ms(ph.minimal_ns),
+            element_ms = ms(ph.element_ns),
+            pseudo_ms = ms(ph.pseudo_ns),
+            has_ms = ms(ph.has_ns),
+            unattributed_ms = ms(total_ns.saturating_sub(named)),
+            "CASCADE PHASES"
+        );
     }
 
     map
@@ -969,6 +1014,50 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
 
 /// Part 22.3: full-document cascades per navigation. Counted, not assumed.
 pub static CASCADES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Per-phase wall time inside one cascade, in nanoseconds. **Opt-in** via
+/// `MANUK_CASCADE_PROFILE=1`, and off it costs one relaxed atomic read per phase and no clock
+/// reads at all.
+///
+/// It exists because there was no way to answer "where did the 165 seconds go" from inside the
+/// engine. `RULEINDEX` timed the index build and nothing timed the two things that turned out to
+/// dominate. A cascade that can only be profiled from outside the process is one whose cost gets
+/// attributed by guess — and the guesses were wrong twice before this was added.
+#[derive(Default)]
+struct Phases {
+    flush_ns: u128,
+    minimal_ns: u128,
+    element_ns: u128,
+    pseudo_ns: u128,
+    has_ns: u128,
+}
+
+/// Whether phase profiling is on. Read from the environment ONCE.
+fn profiling() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("MANUK_CASCADE_PROFILE").is_ok_and(|v| v != "0"))
+}
+
+/// Run `f`, adding its duration to `slot` when profiling is on.
+///
+/// ⚠ `Instant::now()` PANICS on `wasm32-unknown-unknown` — there is no clock there. One
+/// debug-only timing line once took down the entire cascade in the browser demo, surfacing as
+/// `RuntimeError: unreachable` from inside the wasm module. **A measurement must never be able to
+/// break the thing it measures**, so the clock is behind both the target guard and the flag.
+#[inline]
+fn timed<T>(slot: &mut u128, f: impl FnOnce() -> T) -> T {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if profiling() {
+            let t = std::time::Instant::now();
+            let r = f();
+            *slot += t.elapsed().as_nanos();
+            return r;
+        }
+    }
+    let _ = &mut *slot;
+    f()
+}
 
 /// **A rule index — so an element only tests rules it could possibly match.**
 ///
@@ -1356,6 +1445,149 @@ impl RuleIndex {
     }
 }
 
+/// One `::before` / `::after` rule, hoisted out of the sheet tree at index-build time.
+struct PseudoRule {
+    sel: selectors::parser::Selector<stylo::selector_parser::SelectorImpl>,
+    spec: u32,
+    /// Global source order across all sheets — counted over *every* selector, matching or not,
+    /// so the cascade order is identical to the per-element tree walk this replaces.
+    ///
+    /// **Belt-and-braces, and measured to be so.** G_PSEUDO_CASCADE's RED patches show that
+    /// neither zeroing this field nor skipping the increment on non-pseudo selectors changes any
+    /// result: rules are collected in source order and the winner sort is stable, so source order
+    /// already survives. It is kept because it makes the ordering explicit rather than a property
+    /// of two other things staying true — but it should not be mistaken for what is load-bearing.
+    order: usize,
+    block: ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>,
+}
+
+/// **The `::before`/`::after` rules, collected ONCE per document instead of per element.**
+///
+/// `RuleIndex`'s doc comment above records that `cascade_one_element` used to walk every rule in
+/// every sheet for every element, that this made the cascade O(elements × rules), and that
+/// bucketing fixed it. **The pseudo-element path never got that fix**, and it is worse than the
+/// original: `cascade_pseudo` ran the whole recursive descent over all 69 sheets *twice per
+/// element* — re-reading every `Locked` rule list under the guard, re-evaluating every `@media`
+/// query against the same unchanged device, and re-testing every selector's `pseudo_element()` —
+/// to find the handful of rules that carry a pseudo at all.
+///
+/// Measured on a wix.com snapshot (10,424 nodes, 1.8 MB of CSS in 68 blocks) with
+/// `MANUK_CASCADE_PROFILE=1`: **9.0 s of each 19.5 s cascade — 46% — was this function**, and the
+/// cascade runs 8× per page load, so it was ~72 s of a 165 s load.
+///
+/// The hoist changes no semantics. The same selectors are tested with the same
+/// `ForStatelessPseudoElement` matching mode, the same specificity, and the same global source
+/// order — the `order` counter is advanced over every selector during collection exactly as the
+/// walk advanced it. What disappears is only work whose result could not vary by element: the tree
+/// descent, the lock reads, and the media-query evaluation, all of which depend on the device and
+/// the sheets, not on the element being styled.
+struct PseudoIndex {
+    before: Vec<PseudoRule>,
+    after: Vec<PseudoRule>,
+}
+
+impl PseudoIndex {
+    fn build(
+        sheets: &[ServoArc<StyloStylesheet>],
+        guard: &SharedRwLockReadGuard<'_>,
+        device: &Device,
+        qm: QuirksMode,
+    ) -> Self {
+        let mut idx = PseudoIndex {
+            before: Vec::new(),
+            after: Vec::new(),
+        };
+        let mut order = 0usize;
+        for sheet in sheets {
+            let rules = sheet.contents.read_with(guard).rules(guard);
+            idx.collect(&rules, guard, device, qm, &mut order);
+        }
+        idx
+    }
+
+    fn collect(
+        &mut self,
+        rules: &[CssRule],
+        guard: &SharedRwLockReadGuard<'_>,
+        device: &Device,
+        qm: QuirksMode,
+        order: &mut usize,
+    ) {
+        use stylo::selector_parser::PseudoElement as Pe;
+        for rule in rules {
+            match rule {
+                CssRule::Style(style_rule) => {
+                    let sr = style_rule.read_with(guard);
+                    for sel in sr.selectors.slice() {
+                        // Advance the counter for EVERY selector, matching or not — the source
+                        // order this produces has to be the same one the per-element walk
+                        // produced, or rules that tie on specificity would reorder.
+                        let bucket = match sel.pseudo_element() {
+                            Some(&Pe::Before) => Some(false),
+                            Some(&Pe::After) => Some(true),
+                            _ => None,
+                        };
+                        if let Some(is_after) = bucket {
+                            let r = PseudoRule {
+                                sel: sel.clone(),
+                                spec: sel.specificity(),
+                                order: *order,
+                                block: sr.block.clone(),
+                            };
+                            if is_after {
+                                self.after.push(r);
+                            } else {
+                                self.before.push(r);
+                            }
+                        }
+                        *order += 1;
+                    }
+                }
+                // `@media` is device-scoped, so it is evaluated ONCE here rather than once per
+                // element. That is the single largest saving in this type: the old path called
+                // `ml.evaluate` for every media block for every element.
+                CssRule::Media(media_rule) => {
+                    let ml = media_rule.media_queries.read_with(guard);
+                    let mut custom = CustomMediaEvaluator::none();
+                    if ml.evaluate(device, qm, &mut custom) {
+                        let nested = media_rule.rules.read_with(guard);
+                        self.collect(&nested.0, guard, device, qm, order);
+                    }
+                }
+                CssRule::Supports(supports_rule) => {
+                    if supports_rule.enabled {
+                        let nested = supports_rule.rules.read_with(guard);
+                        self.collect(&nested.0, guard, device, qm, order);
+                    }
+                }
+                CssRule::LayerBlock(layer_rule) => {
+                    let nested = layer_rule.rules.read_with(guard);
+                    self.collect(&nested.0, guard, device, qm, order);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn rules_for(&self, want: &stylo::selector_parser::PseudoElement) -> &[PseudoRule] {
+        use stylo::selector_parser::PseudoElement as Pe;
+        match want {
+            Pe::Before => &self.before,
+            Pe::After => &self.after,
+            // Only ::before/::after are generated here; anything else has no rules to offer.
+            _ => &[],
+        }
+    }
+
+    /// Whether any rule in the document targets a generated-content pseudo at all.
+    ///
+    /// The overwhelmingly common case on real pages is a handful; a fair number of documents have
+    /// none, and those should not pay a per-element call at all.
+    fn is_empty(&self) -> bool {
+        self.before.is_empty() && self.after.is_empty()
+    }
+}
+
 fn match_rules_recursive(
     rules: &[CssRule],
     guard: &SharedRwLockReadGuard<'_>,
@@ -1432,7 +1664,8 @@ fn match_rules_recursive(
 #[allow(clippy::too_many_arguments)]
 fn cascade_pseudo(
     stylist: &Stylist,
-    stylo_sheets: &[ServoArc<StyloStylesheet>],
+    pseudo_index: &PseudoIndex,
+    caches: &mut SelectorCaches,
     lock: &SharedRwLock,
     guard: &SharedRwLockReadGuard<'_>,
     guards: &StylesheetGuards<'_>,
@@ -1440,26 +1673,27 @@ fn cascade_pseudo(
     parent_cv: &ServoArc<ComputedValues>,
     want: stylo::selector_parser::PseudoElement,
 ) -> Option<crate::ComputedStyle> {
+    let candidates = pseudo_index.rules_for(&want);
+    if candidates.is_empty() {
+        return None;
+    }
     let mut winners: Vec<(
         u32,
         usize,
         ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>,
     )> = Vec::new();
-    let mut order = 0usize;
-    let mut caches = SelectorCaches::default();
-    let device = stylist.device();
-    for sheet in stylo_sheets {
-        let rules = sheet.contents.read_with(guard).rules(guard);
-        match_pseudo_rules(
-            rules,
-            guard,
-            device,
-            el,
-            &want,
-            &mut caches,
-            &mut winners,
-            &mut order,
+    for r in candidates {
+        let mut ctx = MatchingContext::new(
+            MatchingMode::ForStatelessPseudoElement,
+            None,
+            caches,
+            qm_of(el.dom),
+            NeedsSelectorFlags::No,
+            MatchingForInvalidation::No,
         );
+        if matches_selector(&r.sel, 0, None, el, &mut ctx) {
+            winners.push((r.spec, r.order, r.block.clone()));
+        }
     }
     if winners.is_empty() {
         return None;
@@ -1502,69 +1736,6 @@ fn cascade_pseudo(
     };
     cs.content = Some(text);
     Some(cs)
-}
-
-/// Like [`match_rules_recursive`], but matches only selectors whose rightmost part is the wanted
-/// **pseudo-element**, in `ForStatelessPseudoElement` mode.
-#[allow(clippy::type_complexity, clippy::too_many_arguments)]
-fn match_pseudo_rules(
-    rules: &[CssRule],
-    guard: &SharedRwLockReadGuard<'_>,
-    device: &Device,
-    el: &StyloElement<'_>,
-    want: &stylo::selector_parser::PseudoElement,
-    caches: &mut SelectorCaches,
-    winners: &mut Vec<(
-        u32,
-        usize,
-        ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>,
-    )>,
-    order: &mut usize,
-) {
-    for rule in rules {
-        match rule {
-            CssRule::Style(style_rule) => {
-                let sr = style_rule.read_with(guard);
-                for sel in sr.selectors.slice() {
-                    if sel.pseudo_element() != Some(want) {
-                        *order += 1;
-                        continue;
-                    }
-                    let mut ctx = MatchingContext::new(
-                        MatchingMode::ForStatelessPseudoElement,
-                        None,
-                        caches,
-                        qm_of(el.dom),
-                        NeedsSelectorFlags::No,
-                        MatchingForInvalidation::No,
-                    );
-                    if matches_selector(sel, 0, None, el, &mut ctx) {
-                        winners.push((sel.specificity(), *order, sr.block.clone()));
-                    }
-                    *order += 1;
-                }
-            }
-            CssRule::Media(media_rule) => {
-                let ml = media_rule.media_queries.read_with(guard);
-                let mut custom = CustomMediaEvaluator::none();
-                if ml.evaluate(device, qm_of(el.dom), &mut custom) {
-                    let nested = media_rule.rules.read_with(guard);
-                    match_pseudo_rules(&nested.0, guard, device, el, want, caches, winners, order);
-                }
-            }
-            CssRule::Supports(supports_rule) => {
-                if supports_rule.enabled {
-                    let nested = supports_rule.rules.read_with(guard);
-                    match_pseudo_rules(&nested.0, guard, device, el, want, caches, winners, order);
-                }
-            }
-            CssRule::LayerBlock(layer_rule) => {
-                let nested = layer_rule.rules.read_with(guard);
-                match_pseudo_rules(&nested.0, guard, device, el, want, caches, winners, order);
-            }
-            _ => {}
-        }
-    }
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -23339,3 +23339,74 @@ top cluster, still untouched). Then the three jarring invariants on martinfowler
 reading-order 13 / dead-target 9 — certificate bars). Then the eager `align-items` mapping plus the
 unmodelled `align-content`/`justify-items`. Then the t556 cascade-origin bug.
 Cadences: self-audit 574; surface 578; const 575; wall 587.
+
+## Tick 572 — `RuleIndex` was applied to one of two matchers; `cascade_pseudo` kept the O(elements × rules) defect (2026-07-25)
+
+t571 ended by naming the cascade cross-product as the top item — Bar 0 on both the memory and the time
+axis — with a reproducible input bisect and nothing else. This tick built the instrument that could
+attribute it, found the organ, fixed it, and had two of its own claims falsified on the way.
+
+**FIRST, THE INSTRUMENT, BECAUSE WITHOUT IT THE ANSWER WAS WRONG.** There was no timer anywhere in the
+cascade except around the `RuleIndex` build. `perf` is unavailable here (`perf_event_paranoid=4`), so the
+attribution had to come from inside: `MANUK_CASCADE_PROFILE=1` now emits per-phase wall time
+(`flush`/`minimal`/`element`/`pseudo`/`has`) **plus an explicit `unattributed` line**. Opt-in via a
+`OnceLock` env read, so it costs no clock reads when off, and behind the `wasm32` guard the existing
+comment warns about (`Instant::now()` panics there and once took the whole browser demo down).
+**The ranked suspect list written before measuring put a `PropertyDeclarationBlock` merge quadratic
+first. The timers said otherwise.**
+
+**THE ORGAN.** `RuleIndex`'s own doc comment records that `cascade_one_element` used to walk every rule
+in every sheet for every element, that this made the cascade O(elements × rules), and that bucketing
+fixed it. **`cascade_pseudo` sits a few dozen lines below that comment doing exactly the thing it
+describes as fixed** — and twice per element, once per pseudo. Per element it re-descended all 69 sheets'
+rule trees, took a lock read on every nested rule list, **re-evaluated every `@media` query against a
+device that had not changed**, and tested `pseudo_element()` on every selector in the document, to find
+the handful of rules carrying a pseudo at all. On wix.com: **9,000 ms of each 19,500 ms cascade — 46%.**
+
+FIXED by a hoist, not an algorithm: `PseudoIndex::build` descends the sheet tree **once per document**,
+evaluates `@media`/`@supports`/`@layer` once, and files each rule into a flat `before`/`after` `Vec`.
+Matching is untouched — same selectors, same `ForStatelessPseudoElement` mode, same specificity, same
+source order — which is what makes it safe: the removed work is exactly the work whose result could not
+vary by element. **pseudo 9,000 → 1,630 ms (5.5×), cascade 19,500 → 11,300 ms, and the wix.com page load
+164.7 s → 101.8 s (−38%).** The multiplier that makes those add up is worth stating: **the cascade runs
+~8× per `Page::load`** on a scripted page, so a second saved inside one cascade is eight on the page.
+
+**MEMORY DID NOT MOVE — 1308 MB before, 1308 MB after — AND SAYING SO IS THE POINT.** t571 named one
+defect on two axes and it turns out to be two defects. This was the time half. The 1.3 GB is still there,
+still transient, still unexplained, and the `unattributed` phase (~7.8 s, inside the element walk in
+`to_computed_style` and the recovery loops) is the place to look next. Claiming this tick fixed "the
+cascade cross-product" would have been the easy sentence and the wrong one.
+
+**TWO OF MY OWN CLAIMS FALSIFIED BY THEIR OWN RED PATCHES, WHICH IS WHAT THE RED PATCH IS FOR.**
+`G_PSEUDO_CASCADE` was written asserting that the index's global `order` counter is what preserves source
+order at equal specificity. Patch A (stop advancing the counter on non-pseudo selectors) — **green**:
+the shift is uniform, so relative order survives. Patch B (never record an order at all) — **green**:
+rules are collected in source order and the winner sort is *stable*, so source order survives without the
+counter entirely. **The field is belt-and-braces and I had written a paragraph claiming it was
+load-bearing.** Both the gate's prose and the field's own doc comment now say so. What the gate IS
+RED-proven against is the conditional groups: ignoring the `@media` evaluation makes `#nomedia` gain
+content the author excluded (RED), and dropping the `@layer` arm makes `#inlayer` lose its content (RED).
+**A gate is only as good as the patch you can produce that breaks it; two patches that don't break it are
+two claims you have not earned.**
+
+Also worth its own line: **there was no `::before`/`::after` gate in `manuk-page` at all** — 276 gate
+files and none on generated content, which is how this path survived unexamined for so long. `RuleIndex`
+was applied to the matcher someone was profiling; its twin had no comment saying it was slow.
+`match_pseudo_rules` is deleted rather than left beside its replacement (the two-cascades trap).
+
+TICK SHAPE: measurement (per-phase cascade profiling with an honest unattributed remainder — the thing
+that made the attribution possible and corrected the guess) + capability (`PseudoIndex`: generated-content
+rules indexed once per document; wix.com load −38%, and every page with `<style>` blocks and a real DOM
+benefits in proportion). Bar 0 improved on the time axis, untouched elsewhere.
+Gate `G_PSEUDO_CASCADE`, RED-proven twice (`@media` exclusion, `@layer` descent), first generated-content
+gate in the tree.
+WIKI: docs/wiki/css-cascade.md — "`RuleIndex` was applied to ONE of the two matchers".
+PATTERN: extends "The site-builder mega-CSS page" with the time half and its cause.
+
+NEXT: **the `unattributed` ~7.8 s and the 1.3 GB**, which are the same suspect — the per-element tail of
+the walk (`to_computed_style` from `ComputedStyle::initial()`, the per-element `custom_properties`
+`Vec<(String,String)>` copy that is O(elements × tokens), and the 28-property recovery loop that clones
+`mask_image`/`background_images`/`box_shadows` per node). Break that phase down before fixing anything.
+Then the ~8 cascades per `Page::load` — no parsed sheet, `Stylist` or index is reused between them. Then
+the `{Open Sans/13}` `<a>` horizontal displacement. Then the three jarring invariants on martinfowler.
+Cadences: self-audit 574; surface 578; const 575; wall 587.

@@ -4740,10 +4740,16 @@ neither input but in the cascade's cross product of them**. It is also *transien
 `StyleMap` is ~11 MB — which is why it was invisible to every per-tab number we had: the spike is freed
 immediately and then held by the allocator forever.
 
-**It is a TIME defect by the same mechanism, and the two instruments were never read together.** The same
-wix.com page takes **164.7 seconds to load**. `STATUS.md` has carried `ORACLE_HANGS: 31` — pages over 30 s
+**It is a TIME defect too — and tick 572 found that the time and the memory are DIFFERENT causes, not one.**
+The same wix.com page took **164.7 seconds to load**. `STATUS.md` has carried `ORACLE_HANGS: 31` — pages over 30 s
 on our own clock — as a separate top-of-file concern; this pattern is very likely a chunk of it. One root
 cause, two dashboards, no one had joined them.
+
+Tick 572 fixed the time half: `cascade_pseudo` re-walked every rule in every sheet **twice per element**
+to find the few carrying a `::before`/`::after`, which was 46% of every cascade; indexing those rules once
+per document took the load to **101.8 s (-38%)**. **Memory did not move at all — 1308 MB before and after.**
+So this pattern is two defects that happened to share a page: an `elements x rules` TIME cost in the pseudo
+matcher, and a still-unexplained ~1.3 GB of transient allocation in the per-element tail of the cascade.
 
 **The traps.** **(1)** A page-size or node-count budget does not catch this: 3 MB of HTML and ~10k nodes
 are unremarkable, and the blow-up is 400x the input. **(2)** It is invisible to retained-heap accounting
