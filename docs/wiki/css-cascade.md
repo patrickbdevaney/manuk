@@ -988,3 +988,62 @@ merge quadratic first; the timers said pseudo, and the remaining **~7.8 s is sti
 inside the element walk, in `to_computed_style` and the recovery loops, and not yet broken down. Report
 the unattributed remainder as its own line; an instrument whose parts silently sum to the whole cannot
 tell you it is missing something.
+
+## The loop that reads linear and is quadratic: `property_at(i)` over a chained map (tick 573)
+
+Tick 572's phase timers said `to_computed_style` was **7,580 ms of an 11,300 ms cascade — 67%**, and a
+sub-timer put essentially all of that in one block: the copy of computed custom properties into
+`ComputedStyle::custom_properties`.
+
+**The first hypothesis was allocation, and it was wrong.** 575 distinct custom properties inherited
+across 10,424 elements is 1.44M `(String, String)` pairs per cascade — 2.9M heap allocations. Interning
+both halves (575 distinct names, a small value vocabulary) took 7,580 ms to **7,461 ms: 2%.** Worth
+recording as a negative result, because the arithmetic was persuasive and the measurement was not.
+
+**The actual cause was the loop's shape.**
+
+```rust
+let mut i = 0;
+while let Some((name, value)) = cp.property_at(i) { … ; i += 1; }
+```
+
+`property_at` forwards to `CustomPropertiesMap::get_index`, whose entire body is
+`self.0.iter().nth(index)` — under a comment in Stylo that reads *"FIXME: This is O(n) which is a bit
+unfortunate."* Indexing it in a `while` loop is therefore **O(n²)**, and nothing at the call site says
+so: the only visible operation is `i += 1`. Custom properties **inherit**, so on a design-token page
+`n` is the whole token vocabulary at *every* element. Switching to `iter()` — one linear walk —
+took the phase to **233 ms (32×)**, the cascade to **2,570 ms**, and, because the transient allocation
+went with it, wix.com's whole load from **101.8 s / 1308 MB to 26.5 s / 471 MB**.
+
+> **The general shape: an index-addressed API over a linked or chained structure turns any `for i in
+> 0..len` into a quadratic.** Grep for `get_index`, `nth`, and `at(i)` in loops. The give-away is that
+> the *callee* documents its cost and the *caller* cannot see it.
+
+## Custom properties are copy-on-write with a PARENT CHAIN, and the chain yields shadowed names twice (tick 573)
+
+Fixing the above exposed a correctness bug underneath it, which had been there all along.
+
+Above 8 own properties, `CustomPropertiesMap::should_expand_chain` stops copying into the child and
+starts a **parent chain**: the redefining element's map holds only its own entry and points at its
+ancestor's. The chain iterator then yields the shadowing entry **and, later, the ancestor's entry for
+the same name.** Every consumer of `ComputedStyle::custom_properties` takes the *last* write — the
+`__custom` object literal `getPropertyValue` reads, and the `item(i)` enumeration — so:
+
+- `#shadow { --brand: green }` under `:root { --brand: red }` computed to **red**, and
+- `--brand` **enumerated twice**.
+
+The fix is *first occurrence wins* (own precedes ancestor in the chain walk), deduped through a reused
+thread-local scratch set. **It predates the rewrite** — the original `property_at` walk produces the
+identical wrong answer on the same fixture, which is worth verifying rather than assuming when a
+refactor and a bug show up together.
+
+**Why it hid for so long: the threshold.** Below 9 custom properties no chain forms, the child just
+copies, and the bug cannot occur. `G_COMPUTED_CUSTOM_PROPERTIES`'s fixture had **two** tokens. A gate
+whose fixture sits below the threshold of the mechanism it tests is green for a reason that has nothing
+to do with the code being right — the fixture now declares twelve, deliberately, with a comment saying
+why.
+
+Found in passing by the same gate: `getComputedStyle(el).length` was the literal `50 + customs`, while
+the standard-property list it counts had grown to **52** — so the last two custom properties were
+unreachable through `item(i)`. The count is now derived from the list. **A hand-maintained count of a
+list three hundred lines away drifts the moment someone appends to it, and nothing fails loudly.**

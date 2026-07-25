@@ -556,14 +556,16 @@ pub fn cascade_via_stylo_sized(
                 .device()
                 .set_root_font_size(cv.get_font().clone_font_size().computed_size().px());
         }
-        let mut cs = to_computed_style(&cv);
+        let mut cs = timed(&mut ph.computed_ns, || to_computed_style(&cv));
         // `field-sizing` predates stylo 0.19, so it is recovered from MinimalCascade — and it must
         // be recovered HERE, before the hints, because its whole job is to veto the UA
         // intrinsic-width hint below.
         if let Some(m) = minimal.get(&node) {
             cs.field_sizing_content = m.field_sizing_content;
         }
-        apply_presentational_hints(dom, node, &mut cs);
+        timed(&mut ph.hints_ns, || {
+            apply_presentational_hints(dom, node, &mut cs)
+        });
         // `::before` / `::after` — generated content, cascaded against this element as its parent.
         use stylo::selector_parser::PseudoElement as Pe;
         if !pseudo_index.is_empty() {
@@ -656,95 +658,99 @@ pub fn cascade_via_stylo_sized(
     // and stylesheets alike. Targeted patch — everything else stays Stylo's. Could later be
     // narrowed to a vertical-align-only scan to avoid the second cascade.
     // (`minimal` was computed before the walk — `field-sizing` is recovered in-walk, the rest here.)
-    for (node, cs) in map.iter_mut() {
-        if let Some(m) = minimal.get(node) {
-            cs.vertical_align = m.vertical_align;
-            // `visibility` is not exposed by Stylo's servo build. It is NOT optional: the modern
-            // web hides dropdowns/modals/tooltips with `visibility:hidden` (animatable, unlike
-            // `display:none`), and without it every one of them paints on top of the page.
-            cs.visibility = m.visibility;
-            // `mask-image` is likewise not exposed by Stylo's servo build. Without it every icon
-            // (an empty span with a background-color shaped by a mask) paints as a black square.
-            cs.mask_image = m.mask_image.clone();
-            // `background-image` (url + gradients), `text-decoration`, and `list-style` are taken
-            // from MinimalCascade for the same reason as `visibility`: Stylo's servo build models
-            // them as generic image/keyword types we would have to reimplement to consume. Dropping
-            // them was not cosmetic — a gradient hero, an underlined link and a bulleted list are
-            // three of the most common things on a web page, and all three rendered as nothing.
-            cs.background_images = m.background_images.clone();
-            cs.background_size = m.background_size;
-            // `background-position` recovered from MinimalCascade so the shipping path places a sprite/
-            // logo where the design put it (Stylo's servo build models it as a generic `Position`).
-            cs.background_position = m.background_position;
-            // `border-style` recovered from MinimalCascade so the shipping path renders dashed/dotted/
-            // double borders (drop-zones, dividers, ticket cards) instead of solid.
-            cs.border_style = m.border_style;
-            // `text-shadow` recovered from MinimalCascade (inherited there) so the shipping path paints
-            // the shadow behind hero/heading text — Stylo's servo build models it as a generic list.
-            cs.text_shadow = m.text_shadow;
-            // `object-fit` recovered from MinimalCascade like the rest of this block, so the shipping
-            // Stylo path renders it too: a card grid's `object-fit:cover` thumbnails must not distort.
-            cs.object_fit = m.object_fit;
-            // `object-position` recovered from MinimalCascade alongside `object-fit` so the shipping
-            // path positions a cropped image's subject (Stylo's servo build models it as a
-            // `Position` we'd otherwise map by hand).
-            cs.object_position = m.object_position;
-            // `text-transform` recovered from MinimalCascade (inherited there) so the shipping path
-            // renders uppercase nav/buttons — Stylo's servo build models it as a bitflags type.
-            cs.text_transform = m.text_transform;
-            // `text-overflow` recovered from MinimalCascade so the shipping path truncates clipped
-            // single-line titles/labels with `…` (Stylo's servo build models it as a two-value enum).
-            cs.text_overflow = m.text_overflow;
-            // `-webkit-line-clamp` recovered from MinimalCascade: it is `engine="gecko"` in stylo
-            // 0.19, so the servo build never parses it — without this the shipping path shows every
-            // line of a clamped card/excerpt instead of N + `…`.
-            cs.line_clamp = m.line_clamp;
-            // `overflow-wrap`/`word-wrap` and `word-break` recovered from MinimalCascade so the
-            // shipping path also breaks long unbreakable tokens (a URL in a narrow column) instead
-            // of letting them overflow. Stylo's servo build models these as keyword enums we don't
-            // consume directly.
-            cs.overflow_wrap = m.overflow_wrap;
-            // `scroll-snap-type`/`scroll-snap-align` recovered from MinimalCascade for the same
-            // reason as the properties above: Stylo's servo build models them as typed values we do
-            // not consume, and the shipping path needs the axis and the alignment as plain keywords
-            // to decide where a scroll lands.
-            cs.scroll_snap_type = m.scroll_snap_type;
-            cs.scroll_snap_align = m.scroll_snap_align;
-            // `scrollbar-width`/`scrollbar-color` recovered from MinimalCascade: both are
-            // `engine="gecko"` in stylo 0.19 and never reach the servo build's computed values, so the
-            // CSSOM would otherwise report `undefined` for the scrollbar-theming a dark-mode page sets.
-            cs.scrollbar_width = m.scrollbar_width;
-            cs.scrollbar_color = m.scrollbar_color;
-            cs.word_break = m.word_break;
-            // `direction` likewise: the bidi base level decides ORDER, and Stylo's servo build
-            // does not surface it in a form we consume, so the shipping path would otherwise
-            // render every RTL paragraph LTR-ordered.
-            cs.direction = m.direction;
-            // `letter-spacing`/`word-spacing` recovered from MinimalCascade so the shipping path
-            // tracks uppercase nav/buttons/labels too (Stylo's servo build exposes them as a
-            // `Spacing<Length>` we'd otherwise map by hand).
-            cs.letter_spacing = m.letter_spacing;
-            cs.word_spacing = m.word_spacing;
-            cs.background_repeat = m.background_repeat;
-            // `box-shadow`: stylo_map already fills this from Stylo's own computed value (richer
-            // selector matching), so only fall back to MinimalCascade's parse when Stylo left it
-            // empty — never overwrite a shadow Stylo already resolved.
-            if cs.box_shadows.is_empty() {
-                cs.box_shadows = m.box_shadows.clone();
+    let _recover_guard = ();
+    timed(&mut ph.recover_ns, || {
+        for (node, cs) in map.iter_mut() {
+            if let Some(m) = minimal.get(node) {
+                cs.vertical_align = m.vertical_align;
+                // `visibility` is not exposed by Stylo's servo build. It is NOT optional: the modern
+                // web hides dropdowns/modals/tooltips with `visibility:hidden` (animatable, unlike
+                // `display:none`), and without it every one of them paints on top of the page.
+                cs.visibility = m.visibility;
+                // `mask-image` is likewise not exposed by Stylo's servo build. Without it every icon
+                // (an empty span with a background-color shaped by a mask) paints as a black square.
+                cs.mask_image = m.mask_image.clone();
+                // `background-image` (url + gradients), `text-decoration`, and `list-style` are taken
+                // from MinimalCascade for the same reason as `visibility`: Stylo's servo build models
+                // them as generic image/keyword types we would have to reimplement to consume. Dropping
+                // them was not cosmetic — a gradient hero, an underlined link and a bulleted list are
+                // three of the most common things on a web page, and all three rendered as nothing.
+                cs.background_images = m.background_images.clone();
+                cs.background_size = m.background_size;
+                // `background-position` recovered from MinimalCascade so the shipping path places a sprite/
+                // logo where the design put it (Stylo's servo build models it as a generic `Position`).
+                cs.background_position = m.background_position;
+                // `border-style` recovered from MinimalCascade so the shipping path renders dashed/dotted/
+                // double borders (drop-zones, dividers, ticket cards) instead of solid.
+                cs.border_style = m.border_style;
+                // `text-shadow` recovered from MinimalCascade (inherited there) so the shipping path paints
+                // the shadow behind hero/heading text — Stylo's servo build models it as a generic list.
+                cs.text_shadow = m.text_shadow;
+                // `object-fit` recovered from MinimalCascade like the rest of this block, so the shipping
+                // Stylo path renders it too: a card grid's `object-fit:cover` thumbnails must not distort.
+                cs.object_fit = m.object_fit;
+                // `object-position` recovered from MinimalCascade alongside `object-fit` so the shipping
+                // path positions a cropped image's subject (Stylo's servo build models it as a
+                // `Position` we'd otherwise map by hand).
+                cs.object_position = m.object_position;
+                // `text-transform` recovered from MinimalCascade (inherited there) so the shipping path
+                // renders uppercase nav/buttons — Stylo's servo build models it as a bitflags type.
+                cs.text_transform = m.text_transform;
+                // `text-overflow` recovered from MinimalCascade so the shipping path truncates clipped
+                // single-line titles/labels with `…` (Stylo's servo build models it as a two-value enum).
+                cs.text_overflow = m.text_overflow;
+                // `-webkit-line-clamp` recovered from MinimalCascade: it is `engine="gecko"` in stylo
+                // 0.19, so the servo build never parses it — without this the shipping path shows every
+                // line of a clamped card/excerpt instead of N + `…`.
+                cs.line_clamp = m.line_clamp;
+                // `overflow-wrap`/`word-wrap` and `word-break` recovered from MinimalCascade so the
+                // shipping path also breaks long unbreakable tokens (a URL in a narrow column) instead
+                // of letting them overflow. Stylo's servo build models these as keyword enums we don't
+                // consume directly.
+                cs.overflow_wrap = m.overflow_wrap;
+                // `scroll-snap-type`/`scroll-snap-align` recovered from MinimalCascade for the same
+                // reason as the properties above: Stylo's servo build models them as typed values we do
+                // not consume, and the shipping path needs the axis and the alignment as plain keywords
+                // to decide where a scroll lands.
+                cs.scroll_snap_type = m.scroll_snap_type;
+                cs.scroll_snap_align = m.scroll_snap_align;
+                // `scrollbar-width`/`scrollbar-color` recovered from MinimalCascade: both are
+                // `engine="gecko"` in stylo 0.19 and never reach the servo build's computed values, so the
+                // CSSOM would otherwise report `undefined` for the scrollbar-theming a dark-mode page sets.
+                cs.scrollbar_width = m.scrollbar_width;
+                cs.scrollbar_color = m.scrollbar_color;
+                cs.word_break = m.word_break;
+                // `direction` likewise: the bidi base level decides ORDER, and Stylo's servo build
+                // does not surface it in a form we consume, so the shipping path would otherwise
+                // render every RTL paragraph LTR-ordered.
+                cs.direction = m.direction;
+                // `letter-spacing`/`word-spacing` recovered from MinimalCascade so the shipping path
+                // tracks uppercase nav/buttons/labels too (Stylo's servo build exposes them as a
+                // `Spacing<Length>` we'd otherwise map by hand).
+                cs.letter_spacing = m.letter_spacing;
+                cs.word_spacing = m.word_spacing;
+                cs.background_repeat = m.background_repeat;
+                // `box-shadow`: stylo_map already fills this from Stylo's own computed value (richer
+                // selector matching), so only fall back to MinimalCascade's parse when Stylo left it
+                // empty — never overwrite a shadow Stylo already resolved.
+                if cs.box_shadows.is_empty() {
+                    cs.box_shadows = m.box_shadows.clone();
+                }
+                cs.text_decoration = m.text_decoration;
+                cs.list_style_type = m.list_style_type;
+                cs.list_style_inside = m.list_style_inside;
             }
-            cs.text_decoration = m.text_decoration;
-            cs.list_style_type = m.list_style_type;
-            cs.list_style_inside = m.list_style_inside;
+            // Resolve logical `text-align: start`/`end` to physical now that `direction` is final — layout
+            // only understands left/center/right/justify. Done here, per node, because direction was just
+            // recovered above; in LTR `start`→left (no change), in RTL `start`→right, which is what an
+            // unstyled Arabic/Hebrew/Persian paragraph (initial value `start`) must do. Runs even when the
+            // node had no MinimalCascade entry, so `Start`/`End` never leak to layout.
+            cs.text_align = cs
+                .text_align
+                .resolve_physical(cs.direction == crate::Direction::Rtl);
         }
-        // Resolve logical `text-align: start`/`end` to physical now that `direction` is final — layout
-        // only understands left/center/right/justify. Done here, per node, because direction was just
-        // recovered above; in LTR `start`→left (no change), in RTL `start`→right, which is what an
-        // unstyled Arabic/Hebrew/Persian paragraph (initial value `start`) must do. Runs even when the
-        // node had no MinimalCascade entry, so `Start`/`End` never leak to layout.
-        cs.text_align = cs
-            .text_align
-            .resolve_physical(cs.direction == crate::Direction::Rtl);
-    }
+    });
+    let _ = _recover_guard;
 
     // CSS `opacity` forms a group: it applies to the whole SUBTREE. Fold each element's own opacity
     // with its ancestors' so every box carries an *effective* opacity and paint needs no ancestor
@@ -772,11 +778,21 @@ pub fn cascade_via_stylo_sized(
         // Whatever the named phases do not account for is reported as its own line rather than
         // spread across them. An instrument whose parts silently sum to the whole is one that
         // cannot tell you it is missing something.
-        let named = ph.flush_ns + ph.minimal_ns + ph.element_ns + ph.pseudo_ns + ph.has_ns;
+        let named = ph.flush_ns
+            + ph.minimal_ns
+            + ph.element_ns
+            + ph.pseudo_ns
+            + ph.has_ns
+            + ph.computed_ns
+            + ph.hints_ns
+            + ph.recover_ns;
         tracing::warn!(
             nodes = el_count,
             total_ms = ms(total_ns),
             flush_ms = ms(ph.flush_ns),
+            computed_ms = ms(ph.computed_ns),
+            hints_ms = ms(ph.hints_ns),
+            recover_ms = ms(ph.recover_ns),
             minimal_ms = ms(ph.minimal_ns),
             element_ms = ms(ph.element_ns),
             pseudo_ms = ms(ph.pseudo_ns),
@@ -1026,6 +1042,12 @@ pub static CASCADES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicU
 #[derive(Default)]
 struct Phases {
     flush_ns: u128,
+    /// `to_computed_style` — the Stylo `ComputedValues` -> our `ComputedStyle` conversion, once per
+    /// element. Split out from `element_ns` because it is a different organ: `element_ns` is
+    /// *matching*, this is *materialising*, and the two have completely different fixes.
+    computed_ns: u128,
+    hints_ns: u128,
+    recover_ns: u128,
     minimal_ns: u128,
     element_ns: u128,
     pseudo_ns: u128,

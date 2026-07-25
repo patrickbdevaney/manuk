@@ -839,8 +839,15 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
             arr.push_str(&js_string_literal(name));
         }
         arr.push(']');
-        arr
+        (arr, STD.len() + cs.custom_properties.len())
     };
+    // **`length` is DERIVED, not a literal.** It used to be the constant `50`, and the `STD` list
+    // above had since grown to 52 — so `getComputedStyle(el).length` under-reported by two and
+    // `item(i)` could not reach the last two custom properties at all. A hand-maintained count of a
+    // list that lives three hundred lines away drifts the moment someone appends a property, and
+    // nothing fails loudly when it does. G_COMPUTED_CUSTOM_PROPERTIES caught this by enumerating
+    // for a name it knew was present and finding it unreachable.
+    let (names_js, names_len) = names_js;
     let q = js_string_literal;
     format!(
         "({{color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
@@ -965,7 +972,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
             obj
         },
         names_js,
-        50 + cs.custom_properties.len(),
+        names_len,
     )
 }
 

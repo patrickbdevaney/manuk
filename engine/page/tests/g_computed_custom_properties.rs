@@ -20,11 +20,32 @@
 use manuk_text::FontContext;
 
 const HTML: &str = r#"<!doctype html><html><head><style>
-    :root { --brand: #ff0000; --gap: 8px; }
+    /* MORE THAN EIGHT properties here on purpose: Stylo's `should_expand_chain` only switches the
+       custom-property map from copy-to-child to a PARENT-CHAIN above a threshold of 8. Below it a
+       redefining descendant just copies, the chain never forms, and the duplicate this gate exists
+       to catch cannot occur. A fixture with two tokens tests the easy shape only. */
+    :root { --brand: #ff0000; --gap: 8px; --t1: 1px; --t2: 2px; --t3: 3px; --t4: 4px;
+            --t5: 5px; --t6: 6px; --t7: 7px; --t8: 8px; --t9: 9px; --t10: 10px; }
     #a { --local: 42px; color: var(--brand); }
-  </style></head><body><div id="a"><span id="child">x</span></div><div id="out">-</div><script>
+    /* SHADOWING: a descendant redefines an inherited token. Stylo stores this copy-on-write, as a
+       child map whose PARENT still holds the old entry — so the overridden name is reachable twice
+       through the chain if the walk is not bounded by `len()`. */
+    #shadow { --brand: #00ff00; }
+  </style></head><body><div id="a"><span id="child">x</span></div>
+  <div id="shadow"><span id="deep">y</span></div>
+  <div id="out">-</div><script>
     var r = [];
     var a = document.getElementById('a'), c = document.getElementById('child');
+    var sh = document.getElementById('shadow'), dp = document.getElementById('deep');
+    r.push('shadow:' + getComputedStyle(sh).getPropertyValue('--brand'));
+    r.push('deep:' + getComputedStyle(dp).getPropertyValue('--brand'));
+    // Every custom property must be enumerated EXACTLY ONCE. `getPropertyValue` cannot see a
+    // duplicate (the lookup object is keyed by name, so a repeat silently collapses); the
+    // enumeration can, and it is the only place the copy-on-write parent chain leaking a shadowed
+    // entry back into the list would ever show up.
+    var cs = getComputedStyle(sh), seen = 0;
+    for (var i = 0; i < cs.length; i++) { if (cs.item(i) === '--brand') seen++; }
+    r.push('brandcount:' + seen);
     r.push('local:' + getComputedStyle(a).getPropertyValue('--local'));
     r.push('root:' + getComputedStyle(a).getPropertyValue('--brand'));
     r.push('inherit:' + getComputedStyle(c).getPropertyValue('--brand'));
@@ -50,6 +71,11 @@ fn getcomputedstyle_returns_custom_property_values() {
         "gap:8px",
         "missing:[]", // a missing --x is '' (total function), not undefined
         "color:rgb",  // a normal longhand still resolves (no regression to the fixed map)
+        // The override wins on the element that declares it AND on its descendants...
+        "shadow:#00ff00",
+        "deep:#00ff00",
+        // ...and the shadowed name is listed ONCE, not once per level of the property chain.
+        "brandcount:1",
     ] {
         assert!(
             got.contains(claim),

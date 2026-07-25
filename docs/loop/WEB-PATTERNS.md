@@ -4749,7 +4749,19 @@ Tick 572 fixed the time half: `cascade_pseudo` re-walked every rule in every she
 to find the few carrying a `::before`/`::after`, which was 46% of every cascade; indexing those rules once
 per document took the load to **101.8 s (-38%)**. **Memory did not move at all — 1308 MB before and after.**
 So this pattern is two defects that happened to share a page: an `elements x rules` TIME cost in the pseudo
-matcher, and a still-unexplained ~1.3 GB of transient allocation in the per-element tail of the cascade.
+matcher, and a ~1.3 GB of transient allocation in the per-element tail of the cascade.
+
+**Tick 573 closed the second one, and it was ONE loop.** These pages ship design-token sheets — wix
+declares **575 custom properties** — and custom properties INHERIT, so every element's computed style
+carries a copy of the whole vocabulary (1.44M entries per cascade). The copy was written as
+`while let Some(..) = cp.property_at(i) { i += 1 }`, and `property_at` is `iter().nth(index)` — so the
+loop was **quadratic while reading linear**. One `iter()` instead: wix **101.8 s -> 26.5 s** and
+**1308 MB -> 471 MB**, and across the whole 100-site corpus **4390 MB -> 2457 MB (-44%)**. The pattern's
+cost is now ordinary rather than pathological.
+
+**The token sheet is the thing to watch for in this pattern, not the CSS bytes.** A page-weight or
+node-count budget sees nothing unusual; what makes these pages expensive is `elements x tokens` and
+`elements x rules`, both invisible in any single-axis measurement.
 
 **The traps.** **(1)** A page-size or node-count budget does not catch this: 3 MB of HTML and ~10k nodes
 are unremarkable, and the blow-up is 400x the input. **(2)** It is invisible to retained-heap accounting

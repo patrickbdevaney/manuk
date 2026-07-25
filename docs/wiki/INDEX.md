@@ -222,6 +222,8 @@
   - L908 · contrast-color() is a one-pref win: the resolution path was already wired (tick 466)
   - L919 · scrollbar-color/scrollbar-width are engine="gecko" — recovered from MinimalCascade, NOT a pref flip (tick 469)
   - L945 · RuleIndex was applied to ONE of the two matchers, and the other kept the O(elements × rules) defect for its whole life (tick 572)
+  - L992 · The loop that reads linear and is quadratic: property_at(i) over a chained map (tick 573)
+  - L1022 · Custom properties are copy-on-write with a PARENT CHAIN, and the chain yields shadowed names twice (tick 573)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -990,4 +992,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-905 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+907 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

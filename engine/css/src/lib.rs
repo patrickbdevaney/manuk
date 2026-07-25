@@ -1010,7 +1010,15 @@ pub struct ComputedStyle {
     /// where `name` includes the leading `--`. This is what `getComputedStyle(el).getPropertyValue(
     /// '--foo')` returns — the design-token read every theming system, chart library and CSS-in-JS
     /// runtime does. Empty when the element defines/inherits no custom properties.
-    pub custom_properties: Vec<(String, String)>,
+    /// **`Arc<str>`, not `String`, and that is a measured decision rather than a style one.** A page
+    /// with a design-token sheet has hundreds of custom properties on `:root`, and they INHERIT — so
+    /// every element's computed style carries a copy of essentially all of them. Measured on
+    /// wix.com (575 distinct custom properties, 10,424 elements): **1.44 million entries per
+    /// cascade**, which as owned `String`s was 2.9 million heap allocations per cascade and ~67% of
+    /// the whole cascade's wall time. The set of distinct strings is tiny; the number of copies is
+    /// enormous. Interning collapses the allocations to one per distinct string and makes cloning a
+    /// `ComputedStyle` — which the recovery loop does per node — a refcount bump.
+    pub custom_properties: Vec<(std::sync::Arc<str>, std::sync::Arc<str>)>,
 }
 
 impl ComputedStyle {

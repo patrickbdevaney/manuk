@@ -23410,3 +23410,78 @@ the walk (`to_computed_style` from `ComputedStyle::initial()`, the per-element `
 Then the ~8 cascades per `Page::load` — no parsed sheet, `Stylist` or index is reused between them. Then
 the `{Open Sans/13}` `<a>` horizontal displacement. Then the three jarring invariants on martinfowler.
 Cadences: self-audit 574; surface 578; const 575; wall 587.
+
+## Tick 573 — the loop that reads linear and is quadratic; 100-tab corpus 4390 MB → 2457 MB (2026-07-25)
+
+t572 left a precise question: its phase timers put **7,580 ms of an 11,300 ms cascade (67%) in
+`to_computed_style`**, and it explicitly declined to claim it had fixed the memory (1308 MB before,
+1308 MB after). This tick attributed that 67% to a single block, was **wrong about the cause on the
+first try**, found the real one, and got both axes.
+
+**THE HYPOTHESIS THAT FAILED, RECORDED BECAUSE THE ARITHMETIC WAS PERSUASIVE.** wix.com declares **575
+distinct custom properties**; they INHERIT, so every one of 10,424 elements carries a copy —
+**1,438,792 `(String, String)` pairs per cascade**, 2.9M heap allocations, each name built with a fresh
+`format!("--{}", name)`. That is a compelling story and it is not the answer: interning both halves took
+7,580 ms → **7,461 ms, 2%**. A number that large with a cause that obvious deserved one measurement
+before the fix, and got one.
+
+**THE REAL CAUSE IS THE LOOP'S SHAPE, AND IT IS INVISIBLE AT THE CALL SITE.**
+`while let Some(..) = cp.property_at(i) { i += 1 }` — `property_at` forwards to
+`CustomPropertiesMap::get_index`, whose entire body is `self.0.iter().nth(index)`, under a comment in
+Stylo reading *"FIXME: This is O(n) which is a bit unfortunate."* **Indexing it in a loop is O(n²)**, and
+the only operation you can see where it is written is `i += 1`. Because custom properties inherit, `n` is
+the whole token vocabulary at every element. One `iter()` instead: **phase 7,461 → 233 ms (32×)**,
+cascade **11,072 → 2,570 ms**, and the transient allocation went with the time.
+
+**BOTH AXES, AND CORPUS-WIDE RATHER THAN ONE SITE.** wix.com **101.8 s → 26.5 s** and **1308 MB →
+471 MB**. Across the whole 100-site corpus, against t571's banked numbers: **4390.2 MB → 2457.2 MB
+(−44%)**, 10 tabs 1422.8 → 585.4 MB (−59%), p90 marginal 49.7 → 77.2 MB, median 0.90 → 0.82 MB. The
+proxy error `Page::estimated_bytes` under-reports by fell from **16.8× to 9.4×** — not because the proxy
+improved but because the real figure came down toward it. Cumulative on wix over three ticks:
+**164.7 s → 26.5 s (6.2×) and 1308 → 471 MB (2.8×)**.
+
+**THE FIX EXPOSED A CORRECTNESS BUG UNDERNEATH IT, WHICH IS THE MORE IMPORTANT HALF.** Above 8 own
+properties Stylo stops copying into the child map and starts a **parent chain**; the chain iterator then
+yields a shadowing element's own entry *and later the ancestor's entry for the same name*. Every consumer
+takes the LAST write, so **`#shadow{--brand:green}` under `:root{--brand:red}` computed to RED**, and
+`--brand` enumerated twice. Fixed as *first occurrence wins* (own precedes ancestor), deduped through a
+reused thread-local scratch set. **Verified pre-existing rather than assumed**: I temporarily restored
+the original `property_at` walk and it produces the identical wrong answer on the same fixture. A refactor
+and a bug surfacing together is exactly when that check is worth the five minutes.
+
+**WHY IT HID, AND THE LESSON IS ABOUT FIXTURES.** Below 9 custom properties **no chain forms at all** and
+the bug cannot occur. `G_COMPUTED_CUSTOM_PROPERTIES`'s fixture declared **two** tokens. **A gate whose
+fixture sits below the threshold of the mechanism it tests is green for a reason unrelated to the code
+being right** — sibling of t565's over-specified probe and t572's RED patches that failed to bite. The
+fixture now declares twelve, deliberately, with a comment saying why, and asserts both the override's
+value and that the name enumerates exactly once. RED-proven: revert the dedup and it reads
+`shadow:#ff0000 … brandcount:2`.
+
+**AND A THIRD BUG THE SAME GATE FOUND IN PASSING.** `getComputedStyle(el).length` was the literal
+`50 + customs`, while the standard-property list it counts had grown to **52** — so the last two custom
+properties were unreachable through `item(i)`, which is what made `brandcount` read 0 before it read 2.
+The count is now derived from the list. A hand-maintained count of a list three hundred lines away drifts
+the moment someone appends to it, and nothing fails loudly when it does.
+
+Interning is KEPT despite its 2%: it is what makes `ComputedStyle::clone` — which the recovery loop does
+per node — a refcount bump rather than a deep string copy, and the field's doc records both the
+measurement and the fact that it was not the win it looked like. The temporary sub-attribution counters
+added to find this are REMOVED; leaving two `Instant::now()` calls and two atomics per element to serve a
+question already answered is how instrumentation becomes overhead.
+
+TICK SHAPE: capability (the cascade's dominant cost removed — corpus-wide 100-tab RSS −44%, wix.com
+−74% wall; and the custom-property shadowing correctness fix, which is a wrong-value bug on every page
+whose design system redefines a token below `:root`) + measurement (the negative interning result and
+the corpus re-measurement banked against t571's line). Bar 0 improved on both axes.
+Gates: `G_COMPUTED_CUSTOM_PROPERTIES` extended past the chain threshold and RED-proven.
+WIKI: docs/wiki/css-cascade.md — "The loop that reads linear and is quadratic" + "Custom properties are
+copy-on-write with a PARENT CHAIN".
+PATTERN: extends "The site-builder mega-CSS page" — the cause is named and now mostly closed.
+
+NEXT: the cascade is now **2,570 ms** and its remaining shape is flat: `element` 996 ms, `minimal`
+548 ms (a whole SECOND cascade run for ~28 recovered properties), `has` 505 ms, `computed` 233 ms. The
+biggest single item left is **`minimal` — `MinimalCascade` runs in full to recover a couple of dozen
+properties Stylo's servo build does not expose**; narrowing it to those properties is worth ~0.5 s per
+cascade × ~8 cascades. Then the **~8 cascades per `Page::load`** (nothing is reused between them). Then
+`Stylist::flush()`, built and never used for matching. Then the `{Open Sans/13}` `<a>` displacement.
+Cadences: self-audit 574 (NEXT TICK); surface 578; const 575; wall 587.

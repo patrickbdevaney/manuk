@@ -59,7 +59,7 @@ After tick 324, the remainder is **not a long tail**. It is:
 |---|---|---|
 | 25a | Run **test262** (SpiderMonkey embedded; number unknown at near-zero cost; Ladybird publishes 97.8%) | S |
 | 25b | ~~Run the **100-tab RSS benchmark**~~ **DONE, tick 571** — `manuk-wpt memtabs`. **100 tabs = 4.39 GB**, median marginal **0.90 MB/tab**, p90 49.7 MB. Found and fixed: eviction never returned memory to the *kernel* (`drop()` 3%, `malloc_trim` 67%). Follow-on below. | S |
-| 25b′ | **The four pathological sites** the benchmark exposed — wix.com **1274 MB**, apnews 938, hubspot 708, replit 431 from ≤3 MB of HTML each; 76% of the 100-tab total from 4% of the corpus. Cause bisected to the **cascade** (wix: CSS-only 65 MB + DOM-only 143 MB, but together 1308 MB). This is a Bar-0 risk, not a tuning item. | M |
+| 25b′ | ~~**The four pathological sites**~~ **LARGELY CLOSED, ticks 572-573.** Cause was two loops, both `elements × something`: `cascade_pseudo` re-walked every sheet per element (t572) and the custom-property copy was `property_at(i)` over a chained map, i.e. quadratic (t573). wix.com **164.7 s / 1308 MB → 26.5 s / 471 MB**; whole-corpus 100-tab **4390 → 2457 MB (−44%)**. Residual tail: `MinimalCascade` runs in full for ~28 recovered properties, and the cascade runs ~8× per `Page::load`. | M |
 | 25c | Large-DOM interactivity probe (8.8k-node paint measured linear; interaction unmeasured) | S |
 | 25d | **Fidelity instrument rebuild + full-corpus sweep** per FIDELITY-SCORING-REDESIGN.md (selector-path keying, parent-relative shape, root-cause clustering, jarring invariants) — THE exit gate | M (3-5) + sweep |
 

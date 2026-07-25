@@ -782,20 +782,117 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     // case — `--foo: 42px` with no `@property`) carry their CSS text in the universal variant.
     {
         let cp = cv.custom_properties();
-        let mut i = 0usize;
-        while let Some((name, value)) = cp.property_at(i) {
-            if let Some(v) = value {
-                if let Some(var) = v.as_universal() {
-                    s.custom_properties
-                        .push((format!("--{}", name), var.css.trim().to_string()));
+        // **`iter()`, NOT `property_at(i)` in a loop — the difference is O(n) against O(n²).**
+        // `property_at` forwards to `CustomPropertiesMap::get_index`, whose body is
+        // `self.0.iter().nth(index)` under a comment in Stylo reading *"FIXME: This is O(n) which
+        // is a bit unfortunate."* Indexing it in a `while` loop makes the whole walk quadratic, and
+        // it reads as linear at the call site because the only visible operation is `i += 1`.
+        //
+        // Custom properties INHERIT, so on a page with a design-token sheet n is the size of the
+        // whole token vocabulary at every element. Measured on wix.com — 575 tokens, 10,424
+        // elements, 1.44M entries per cascade — this loop alone was **7.5 s of an 11.3 s cascade**.
+        //
+        // ⚠ **FIRST OCCURRENCE WINS, and that is a correctness fix, not a tidy-up.** The map is
+        // copy-on-write with a PARENT CHAIN (Stylo switches to chaining above 8 own properties),
+        // and the chain iterator yields a shadowing element's own entry first and then the
+        // ancestor's entry for the SAME name. Every consumer of this list — the `__custom` object
+        // literal that `getPropertyValue` reads, and the `item(i)` enumeration — takes the LAST
+        // write, so an overridden token resolved to the value it overrode. `#shadow{--brand:green}`
+        // under `:root{--brand:red}` computed to RED, and `--brand` enumerated twice.
+        //
+        // This predates the rewrite: the original `property_at` walk produced the identical wrong
+        // answer on the same fixture, which G_COMPUTED_CUSTOM_PROPERTIES now pins. It stayed
+        // invisible because it needs >8 custom properties to form a chain at all, and the old
+        // fixture had two.
+        let (n_inh, n_non) = (cp.inherited.len(), cp.non_inherited.len());
+        s.custom_properties.reserve(n_inh + n_non);
+        SEEN.with(|seen| {
+            let mut seen = seen.borrow_mut();
+            seen.clear();
+            for (name, value) in cp.inherited.iter().chain(cp.non_inherited.iter()) {
+                let Some(v) = value else { continue };
+                let Some(var) = v.as_universal() else {
+                    continue;
+                };
+                // Both halves are interned: the NAME repeats once per element that inherits it, and
+                // the VALUE repeats just as hard, because an inherited token has the same computed
+                // text on every descendant. See the field's doc comment.
+                let key = intern_dashed(name);
+                if !seen.insert(std::sync::Arc::clone(&key)) {
+                    continue; // already taken from a more-derived level of the chain
                 }
+                s.custom_properties.push((key, intern(var.css.trim())));
             }
-            i += 1;
-        }
+        });
     }
 
     s
 }
+
+thread_local! {
+    /// Scratch de-duplication set for the custom-property walk, reused across elements so a
+    /// document does not allocate one hash set per element.
+    static SEEN: std::cell::RefCell<std::collections::HashSet<std::sync::Arc<str>>> =
+        std::cell::RefCell::new(std::collections::HashSet::new());
+}
+
+/// A process-wide interner for the strings that end up in
+/// [`ComputedStyle::custom_properties`](crate::ComputedStyle::custom_properties).
+///
+/// **Thread-local, deliberately.** The cascade is single-threaded per document and a global lock
+/// here would serialise the one loop this exists to speed up. The cost is one table per thread,
+/// which is bounded by the number of DISTINCT custom-property strings a page uses — hundreds, not
+/// millions.
+///
+/// It is never cleared. That is a bounded leak by design: the keys are custom-property names and
+/// their computed values, so the ceiling is the vocabulary of the pages this thread has rendered,
+/// and re-rendering the same page (which is the common case — the cascade runs ~8× per load) hits
+/// every entry rather than growing the table.
+mod interner {
+    use std::cell::RefCell;
+    use std::collections::{HashMap, HashSet};
+    use std::sync::Arc;
+
+    thread_local! {
+        static POOL: RefCell<HashSet<Arc<str>>> = RefCell::new(HashSet::new());
+        /// Bare custom-property name -> the `--`-prefixed interned form.
+        static DASHED: RefCell<HashMap<Box<str>, Arc<str>>> = RefCell::new(HashMap::new());
+    }
+
+    pub fn intern(s: &str) -> Arc<str> {
+        POOL.with(|p| {
+            let mut p = p.borrow_mut();
+            if let Some(a) = p.get(s) {
+                return Arc::clone(a);
+            }
+            let a: Arc<str> = Arc::from(s);
+            p.insert(Arc::clone(&a));
+            a
+        })
+    }
+
+    /// `intern` for a custom-property NAME, returning it WITH its leading `--`.
+    ///
+    /// Keyed by the **bare** name in its own table, so the lookup hashes the `&str` Stylo already
+    /// has and the `format!("--{name}")` runs only on a genuine miss — 575 times for a page with
+    /// 575 tokens, not 1.44 million.
+    ///
+    /// (The first draft of this probed the shared pool with `.iter().find(…)` to dodge that
+    /// `format!`. A linear scan of a 575-entry table, 1.44M times, is 800M string comparisons —
+    /// **slower than the allocation it was avoiding.** A second table is the right trade: interning
+    /// is only a win if the lookup is O(1).)
+    pub fn intern_dashed(name: &str) -> Arc<str> {
+        DASHED.with(|p| {
+            if let Some(a) = p.borrow().get(name) {
+                return Arc::clone(a);
+            }
+            let a: Arc<str> = Arc::from(format!("--{name}").as_str());
+            p.borrow_mut().insert(name.into(), Arc::clone(&a));
+            a
+        })
+    }
+}
+use interner::{intern, intern_dashed};
 
 #[cfg(test)]
 mod tests {
