@@ -121,7 +121,9 @@ fn ms(d: Duration) -> f64 {
 /// So the bench measures the machine too. A fixed integer workload — no allocation, no I/O, no engine —
 /// whose time depends on nothing but the CPU. The floor is then compared against a **normalized** figure:
 ///
-///     normalized_ms = measured_ms / (calibration_ms / CALIBRATION_REFERENCE)
+/// ```text
+/// normalized_ms = measured_ms / (calibration_ms / CALIBRATION_REFERENCE)
+/// ```
 ///
 /// i.e. *"what this would have cost on the machine the floor was set on."* A downclocked CPU raises the
 /// calibration in exactly the proportion it raises everything else, and the floor stops lying.

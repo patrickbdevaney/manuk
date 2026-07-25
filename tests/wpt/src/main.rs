@@ -3328,6 +3328,12 @@ mod path_key_tests {
             tag: t.into(),
             display: "block".into(),
             rect: [0, 0, 1, 1],
+            // `font` was added to `Seen` at t563 so a geometry divergence could name the FACE that
+            // produced it; this constructor was missed, and `cargo test -p manuk-wpt` has not
+            // compiled since. It is the `paint-enum-field-breaks-wpt-bench` shape exactly — a struct
+            // field added, one test constructor missed, and the breakage invisible because the wall
+            // does not build this crate's tests. Empty is the legitimate "no font worth reporting".
+            font: String::new(),
         };
         let mut m = std::collections::HashMap::new();
         m.insert(

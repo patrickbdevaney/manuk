@@ -24214,3 +24214,76 @@ the first window in a while where a re-sweep should move real numbers. Then the 
 metric delta; the crawl-side `.SIG` correction; and a systematic sweep for more one-capability-two-verdicts
 rows, since two turned up in three ticks.
 Cadences: const 583 (NEXT TICK); self-audit 584; wall 587; surface 588.
+
+## Tick 583 — falsifying the certificate: no term is trusted until it is proven to go RED (2026-07-25)
+
+**The board changed mid-session.** The observer's tick-581 orders make
+`docs/loop/DAILY-DRIVER-CERTIFICATION.md` the authority and supersede the tick-543 exit verification,
+with a new CO-#1 in **strict order** whose first item is: *extend the falsify pass to the fidelity
+certificate — deliberately break each term and PROVE it goes red. No cert term is trusted until proven
+falsifiable.* Stated reason: the rig *"can flatter itself (six false numbers in one session)"*. This tick
+is that item, plus the DUE constitution check.
+
+**WHY IT IS FIRST AND NOT A NICETY.** `falsify.sh` exists because `G_LOAD` — a **Bar 0** gate — had never
+tested the thing it was named for, `G1` was structurally incapable of failing, and `G6` scored a browser
+finding **zero links** as perfect clickability. The certificate is now the single claim the entire Phase-0
+exit rests on, and it had never been asked that question. A term unmoved by a real break is measuring
+nothing — **and it would report this project done.**
+
+**WHAT WAS BUILT.** `falsify_certificate()` in the fidelity instrument (agent territory; `scripts/` stays
+observer-owned). A synthetic 24-box page both engines agree on perfectly — asserted to PASS the
+certificate first, because otherwise every "went red" below is vacuous — then six named, engine-shaped
+breaks, each scored through the **real** producers (`shape_stats`, `oracle::jarring_*`) rather than by
+setting `Fidelity::shape` by hand. That distinction is the whole value: hand-setting the field and
+watching the average move would prove only that division works.
+
+**THE HARNESS CORRECTED ITS OWN CLAIM ON FIRST RUN, WHICH IS THE TICK'S REAL LESSON.** I asserted
+*specificity* — each break must redden its own term and leave the others alone. It failed immediately:
+widening a box to make it overflow **also moves SHAPE**, because all five terms are functions of the same
+rects. That is not an instrument defect, it is arithmetic — *you cannot make a box overflow without moving
+it* — and my claim was simply false.
+
+The claim that is **true and load-bearing** is the inverse, and it is exactly why the jarring invariants
+were added to the certificate at all: *"SHAPE cannot see it — two boxes can each be shaped correctly
+relative to their parent and still land on top of each other."* SHAPE is a **fraction with a floor**
+(≥0.75 of nodes); the invariants are **zero-tolerance**. So each jarring break now perturbs **one or two
+elements of twenty-four** — well inside SHAPE's floor, which stays green — and the invariant still goes
+red. That is the real page it exists for: almost right everywhere, with one control buried under a banner.
+
+RED-PROVEN twice, on the harness itself: blind the h-overflow invariant → *"did NOT move the `h-overflow`
+term"*; widen SHAPE's tolerance from 8 to 64 so a 30px nudge is swallowed → *"did NOT move the `shape`
+term"*. The gate also asserts the term **count**, so a seventh term cannot be added without a
+falsification.
+
+**AND GETTING IT TO RUN AT ALL EXPOSED A SECOND INSTANCE OF THE SAME CLASS.** `cargo test -p manuk-wpt`
+did not compile: `oracle::Seen` gained a `font` field at **t563** and one test constructor was never
+updated, and a prose formula in a `///` comment was being compiled as a **doctest**. So the crate holding
+the fidelity instrument, the oracle and the bench **has not had its tests build for ~20 ticks**. This is
+`paint-enum-field-breaks-wpt-bench` repeating, and it sits directly beside t578's finding: the wall does
+not build this crate's tests either, so *"the wall is green"* and *"the instrument compiles"* are also
+different statements. Both fixed here, because they blocked verifying this tick's own work.
+
+CONSTITUTION CHECK #39 (due at 583): the exit gate itself has been REPLACED, which is the check's whole
+content. PART VI corrected — §VI.4's *"get the oracle to finish one clean crawl"* is not merely done but
+**superseded**, since a clean crawl of a convenience sample is precisely the reading the redesign rejects;
+replaced by the observer's strict order. Recorded that this tick is **I5 turned on itself**: the discovery
+engine is now subject to the falsification discipline it applies to the browser.
+
+**RESIDUE, NAMED:** the certificate's **FUNCTION** terms do not exist yet, so they cannot be falsified —
+this guard must be re-run as each is added, which is what the term-count assertion enforces.
+
+TICK SHAPE: instrument fidelity (the observer's #1 — six certificate terms proven capable of going red,
+through the real scoring functions) + two pre-existing compile fixes that were blocking the crate's tests
+entirely + the DUE constitution check. No engine source touched; Bar 0 untouched; no ratchet floor moved.
+Gates: `G_CERT_FALSIFIABLE` (`fidelity::falsify_tests::every_certificate_term_can_go_red`), RED-proven twice.
+WIKI: none [forced] — no engine source changed; the mechanism's home is
+docs/loop/DAILY-DRIVER-CERTIFICATION.md §6.1, which this implements, and the harness's own doc comment
+carries the corrected specificity argument.
+PATTERN: [no-pattern] — no engine capability changed.
+
+NEXT: the observer's order, item (2) — **adopt `docs/bench/corpus-v2.tsv` with a FIXED DENOMINATOR**: a
+timeout, crash or bot-wall is a COUNTED FAIL or an EXCLUDED-with-reason, never a silent drop, since
+dropping the hard sites is what made every past reading optimistic. Then (3) compose FUNCTION into the
+certificate starting with the throw-class killers (IndexedDB, the observer trio), and (4) the
+reconciliation gate. Render-fidelity fixes continue in parallel per the orders.
+Cadences: self-audit 584 (NEXT TICK); wall 587; surface 588; const 591.

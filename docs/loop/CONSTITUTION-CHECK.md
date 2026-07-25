@@ -1724,3 +1724,60 @@ cascade-origin fix are both page-wide geometry changes and the sweep is differen
 subsystem: the instrument is still returning root causes at roughly a tick apiece.
 
 **Next check due: tick 583.**
+
+## Check #39 — tick 583
+
+**HORIZON: H0 — Pareto Web Parity.** But the EXIT GATE has been **replaced** since #38, and that is the
+whole content of this check. The observer's tick-581 orders make `docs/loop/DAILY-DRIVER-CERTIFICATION.md`
+the authority, superseding the tick-543 exit-verification orders: the certificate is now
+**daily-driver-pass(site) = renders(site) ∧ functions(site)** over a 400-site CrUX-sampled corpus with a
+**fixed denominator**, and it composes a RENDER layer (SHAPE + the four jarring invariants) with a new
+FUNCTION layer (the capabilities each site actually touches, exercised per-site via BiDi).
+
+**GATE OR SCOREBOARD? — GATE, and this window is the sharpest instance yet, because the loop's own numbers
+were the thing found wanting.** The observer's stated reason for the redesign is that *"the fidelity RIG
+can flatter itself (six false numbers in one session)"* and that the 265-site corpus is *"a convenience
+sample with timeouts dropped"*. That is not a scoreboard complaint — it says the exit gate itself was
+unsound. Ticks 574–582 land on the right side of it: t575 (cascade origin), t576 (`@supports` honesty),
+t577/578 (machine-facing text), t580 (`:has()` cost), t582 (responsive images) are all Layer-C-render or
+honest-failure work, which the orders explicitly say **remain valid and must not stop**.
+
+**THE PART THAT MATTERS MOST, and it is a correction to my own recent ticks.** t578's audit found the map
+had never read its own gate corpus; t581 drove that to zero. Both were *instrument-fidelity* work and both
+were right — but the observer's #1 is a level deeper and I had not asked it: **is each certificate term
+capable of going red at all?** The map being complete says nothing about whether the number it feeds is
+falsifiable. `falsify.sh` exists because `G_LOAD` — a Bar 0 gate — had never tested what it was named for;
+the certificate is now the single claim the Phase-0 exit rests on and had never been asked the same
+question. This tick answers it for all six terms.
+
+**INVARIANTS.** I4 (Pareto): held, and strengthened — the new corpus is explicitly usage-weighted (CrUX
+HEAD traffic-weighted + TAIL uniform), which is I4 expressed as a sampling frame rather than a
+disposition. I5 (the oracle is the discovery engine): held, and this tick is I5 *turned on itself* —
+the discovery engine is now subject to the same falsification discipline it applies to the browser. I3:
+discharged at t574 and not re-opened. I2: held; nothing vendored, nothing patched.
+
+**PART VI CORRECTION.** §VI.4's ordering is now downstream of the certification redesign and should say so:
+its item 3 (*"get the oracle to finish one clean crawl"*) is not merely done, it has been **superseded** —
+a clean crawl of a convenience sample is exactly the reading the redesign rejects. Replace it with the
+observer's strict order: **falsify the certificate → adopt the fixed-denominator corpus → compose FUNCTION
+→ reconciliation gate.** The rest of VI.4 (usage-weighted breadth, semantic model in lockstep) is unchanged
+and correct.
+
+**A SECOND FINDING, and it is the same class as the certificate's.** Getting the falsification to run
+required fixing **two pre-existing compile errors** in `manuk-wpt`'s own test build: `Seen` gained a `font`
+field at t563 and one test constructor was never updated, and a prose formula in a `///` comment was being
+compiled as a doctest. **`cargo test -p manuk-wpt` had not compiled for ~20 ticks** — in the crate that
+holds the fidelity instrument, the oracle and the bench. This is the `paint-enum-field-breaks-wpt-bench`
+lesson repeating, and it belongs beside t578's finding: the wall does not build this crate's tests either,
+so *"the wall is green"* and *"the instrument compiles"* were also different statements.
+
+**STEER — the observer's order, unchanged, with the residue named.** (1) ✅ **falsify the certificate** —
+done this tick for all six RENDER terms; **the FUNCTION terms do not exist yet and cannot be falsified
+until they do**, so this guard must be re-run as each is added, and the gate asserts a term COUNT so a
+seventh term cannot appear unfalsified. (2) **adopt `docs/bench/corpus-v2.tsv`** with the fixed
+denominator — a timeout/crash/bot-wall is a COUNTED FAIL, never a silent drop. (3) **compose FUNCTION**,
+starting with the throw-class killers (IndexedDB, the observer trio). (4) **the reconciliation gate**
+(`sampled == scored + FAIL + EXCLUDED`). **Do NOT** stop the render-fidelity fixes; they move Layer C of
+the new certificate and the orders say so explicitly.
+
+**Next check due: tick 591.**

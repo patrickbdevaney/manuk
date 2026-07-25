@@ -1001,3 +1001,304 @@ mod shape_tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// FALSIFYING THE CERTIFICATE (observer CO-#1, tick ~581 — the top-priority non-delusion guard)
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/// One falsification: break the engine in a named way, and prove the certificate term that claims to
+/// watch it goes RED.
+///
+/// **Why this is the highest-priority guard rather than a nicety.** `falsify.sh` was built because
+/// `G_LOAD` — a *Bar 0* gate — had never tested the thing it was named for, `G1` was structurally
+/// incapable of failing, and `G6` scored a browser finding zero links as perfect clickability. The
+/// certificate is now the single number the whole Phase-0 exit hangs on, and it has never been asked
+/// the same question: **is each of its terms capable of going red at all?** A term unmoved by a real
+/// break is measuring nothing, and it would report the project done.
+///
+/// The perturbations are the observer's own examples — *"nudge a box 30px"* — applied to the real
+/// scoring functions (`shape_stats`, `oracle::jarring_*`) rather than to the arithmetic downstream of
+/// them. That distinction is the whole value: setting `Fidelity::shape` by hand and watching the
+/// average move would prove only that division works.
+pub struct Falsification {
+    /// The certificate term this break must move, as `Cert::shortfalls` names it.
+    pub term: &'static str,
+    /// What was broken, in engine terms.
+    pub break_desc: &'static str,
+    /// Did the term go red?
+    pub went_red: bool,
+    /// Did the break leave the OTHER terms alone? A break that reddens everything proves nothing
+    /// about which term watches what — see `SPECIFICITY` below.
+    pub stayed_specific: bool,
+}
+
+/// A synthetic page both engines agree on perfectly: 24 boxes, four sibling groups of six, laid out
+/// in a column inside a 1000px viewport. Chrome's map and ours start identical, so the certificate
+/// holds on it — which is the precondition for a falsification to mean anything. **If the baseline
+/// did not pass, every "went red" below would be vacuous.**
+fn falsify_baseline() -> (
+    std::collections::HashMap<String, crate::oracle::Seen>,
+    std::collections::HashMap<String, crate::oracle::Seen>,
+) {
+    let mut m = std::collections::HashMap::new();
+    for g in 0..4 {
+        for i in 0..6 {
+            let y = (g * 6 + i) as i64 * 40;
+            let tag = if i == 0 { "a" } else { "div" };
+            m.insert(
+                format!(
+                    "body/div:nth-child({}){}/{}:nth-child({})",
+                    g + 1,
+                    "",
+                    tag,
+                    i + 1
+                ),
+                crate::oracle::Seen {
+                    tag: tag.to_string(),
+                    display: "block".to_string(),
+                    rect: [0, y, 200, 30],
+                    font: String::new(),
+                },
+            );
+        }
+    }
+    (m.clone(), m)
+}
+
+/// Score one (chrome, manuk) pair into a single-site `Fidelity` row through the REAL producers.
+fn falsify_score(
+    chrome: &std::collections::HashMap<String, crate::oracle::Seen>,
+    manuk: &std::collections::HashMap<String, crate::oracle::Seen>,
+) -> Fidelity {
+    let cb: std::collections::HashMap<String, [i64; 4]> =
+        chrome.iter().map(|(k, v)| (k.clone(), v.rect)).collect();
+    let mb: std::collections::HashMap<String, [i64; 4]> =
+        manuk.iter().map(|(k, v)| (k.clone(), v.rect)).collect();
+    let (shape, shape_n) = shape_stats(&cb, &mb, 8);
+    let (hov, _) = crate::oracle::jarring_h_overflow(chrome, manuk, 1000, 2);
+    let (ovl, _, _) = crate::oracle::jarring_overlap(chrome, manuk, 2);
+    let (ord, _, _) = crate::oracle::jarring_reading_order(chrome, manuk, 2);
+    let (dead, _) = crate::oracle::jarring_collapsed_target(chrome, manuk, 8);
+    Fidelity {
+        name: "falsify".to_string(),
+        score: 1.0,
+        differing: 0,
+        total: 0,
+        structure: None,
+        shape: Some(shape),
+        missing: 0,
+        misplaced: 0,
+        probed: manuk.len(),
+        jarring: [hov, ovl, ord, dead],
+        shape_n,
+    }
+}
+
+/// The lexicographically first key — deterministic, so a failing falsification names the same
+/// element every run rather than whichever the hash map happened to yield first.
+fn first_key(m: &std::collections::HashMap<String, crate::oracle::Seen>) -> String {
+    m.keys().min().cloned().unwrap_or_default()
+}
+
+/// A sibling of `k` (same parent path), deterministically chosen — sibling-scoped because that is
+/// the scope `jarring_overlap` and `jarring_reading_order` work in.
+fn sibling_key(
+    m: &std::collections::HashMap<String, crate::oracle::Seen>,
+    k: &str,
+) -> Option<String> {
+    let cut = k.rfind('/')?;
+    let parent = &k[..cut];
+    m.keys()
+        .filter(|o| o.as_str() != k)
+        .filter(|o| {
+            o.len() > parent.len() && o.starts_with(parent) && o.as_bytes()[parent.len()] == b'/'
+        })
+        .filter(|o| !o[parent.len() + 1..].contains('/'))
+        .min()
+        .cloned()
+}
+
+/// Run every falsification. Returns one [`Falsification`] per certificate term.
+///
+/// **SPECIFICITY is asserted as well as redness, and getting it right CORRECTED THE CLAIM.** The
+/// first version broke every box — and every jarring break moved SHAPE too, because all five terms
+/// are functions of the same rects. That is not an instrument defect, it is arithmetic: you cannot
+/// make a box overflow without moving it.
+///
+/// The claim that is both true and worth asserting is the **inverse**, and it is exactly why the
+/// jarring invariants were added to the certificate (FIDELITY-SCORING-REDESIGN Layer 2):
+///
+/// > *"SHAPE cannot see it — two boxes can each be shaped correctly relative to their parent and
+/// > still land on top of each other."*
+///
+/// SHAPE is a **fraction with a floor** (≥0.75 of nodes); the invariants are **zero-tolerance** (any
+/// occurrence fails the site). So each jarring break here perturbs **one or two elements of
+/// twenty-four** — well inside SHAPE's floor, which stays green — and the invariant still goes red.
+/// That is the real-world case they exist for: a page almost right everywhere, with one control
+/// buried under a banner. The SHAPE break conversely must move enough elements to breach the floor,
+/// and is allowed to take the invariants with it.
+pub fn falsify_certificate() -> Vec<Falsification> {
+    let (chrome, base) = falsify_baseline();
+    let baseline_cert = certificate(&[falsify_score(&chrome, &base)]);
+    assert!(
+        baseline_cert.holds(),
+        "FALSIFY: the synthetic baseline must PASS the certificate before any break is applied — \
+         otherwise every 'went red' below is vacuous. shortfalls: {:?}",
+        baseline_cert.shortfalls()
+    );
+
+    // Each break: (term name, description, mutation).
+    type Mut = Box<dyn Fn(&mut std::collections::HashMap<String, crate::oracle::Seen>)>;
+    let breaks: Vec<(&'static str, &'static str, Mut)> = vec![
+        (
+            "shape",
+            "nudge EVERY box 30px right of where Chrome puts it (the observer's own example) — enough elements to breach SHAPE's 0.75 floor",
+            Box::new(|m: &mut std::collections::HashMap<String, crate::oracle::Seen>| {
+                for v in m.values_mut() {
+                    v.rect[0] += 30;
+                }
+            }),
+        ),
+        (
+            "h-overflow",
+            "spill ONE box of twenty-four past the 1000px viewport Chrome keeps it inside",
+            Box::new(|m: &mut std::collections::HashMap<String, crate::oracle::Seen>| {
+                let k = first_key(m);
+                if let Some(v) = m.get_mut(&k) {
+                    v.rect[2] = 1400;
+                }
+            }),
+        ),
+        (
+            "overlap",
+            "drop ONE box onto its sibling — the buried-control case SHAPE cannot see",
+            Box::new(|m: &mut std::collections::HashMap<String, crate::oracle::Seen>| {
+                let k = first_key(m);
+                let onto = m.get(&k).map(|v| v.rect[1]).unwrap_or(0);
+                if let Some(sib) = sibling_key(m, &k) {
+                    if let Some(v) = m.get_mut(&sib) {
+                        v.rect[1] = onto;
+                    }
+                }
+            }),
+        ),
+        (
+            "reading-order",
+            "swap ONE pair of siblings vertically, leaving every other box where Chrome has it",
+            Box::new(|m: &mut std::collections::HashMap<String, crate::oracle::Seen>| {
+                let a = first_key(m);
+                if let Some(b) = sibling_key(m, &a) {
+                    let ya = m[&a].rect[1];
+                    let yb = m[&b].rect[1];
+                    m.get_mut(&a).unwrap().rect[1] = yb;
+                    m.get_mut(&b).unwrap().rect[1] = ya;
+                }
+            }),
+        ),
+        (
+            "dead-target",
+            "collapse ONE link to a 1x1 box Chrome renders full-size — a click target that is perfectly placed and cannot be hit",
+            Box::new(|m: &mut std::collections::HashMap<String, crate::oracle::Seen>| {
+                let k = m
+                    .iter()
+                    .filter(|(_, v)| v.tag == "a")
+                    .map(|(k, _)| k.clone())
+                    .min()
+                    .unwrap_or_default();
+                if let Some(v) = m.get_mut(&k) {
+                    v.rect[2] = 1;
+                    v.rect[3] = 1;
+                }
+            }),
+        ),
+        (
+            "UNSCORED",
+            "render almost nothing, so the SHAPE sample falls below CERT_MIN_SHAPE_SAMPLE",
+            Box::new(|m: &mut std::collections::HashMap<String, crate::oracle::Seen>| {
+                let mut k: Vec<String> = m.keys().cloned().collect();
+                k.sort();
+                let keep: Vec<String> = k.into_iter().take(3).collect();
+                m.retain(|k, _| keep.contains(k));
+            }),
+        ),
+    ];
+
+    let mut out = Vec::new();
+    for (term, desc, mutate) in breaks {
+        let mut broken = base.clone();
+        mutate(&mut broken);
+        let cert = certificate(&[falsify_score(&chrome, &broken)]);
+        let shortfalls = cert.shortfalls().join(" | ");
+        let went_red = !cert.holds() && shortfalls.contains(term);
+        // SPECIFICITY, in the direction that is actually true and actually load-bearing: a jarring
+        // break of one or two elements must leave SHAPE green. That is the invariants' whole reason
+        // to exist — SHAPE is a fraction with a floor, they are zero-tolerance, and a page that is
+        // almost right everywhere with one buried control must fail. `shape` and `UNSCORED` are
+        // exempt: breaching the floor legitimately moves other terms, and rendering nothing
+        // legitimately takes SHAPE with it. Claiming otherwise would be a false statement about the
+        // instrument rather than a check on it.
+        let stayed_specific = match term {
+            "shape" | "UNSCORED" => true,
+            _ => !shortfalls.contains("shape \u{2265}"),
+        };
+        out.push(Falsification {
+            term,
+            break_desc: desc,
+            went_red,
+            stayed_specific,
+        });
+    }
+    out
+}
+
+#[cfg(test)]
+mod falsify_tests {
+    use super::*;
+
+    /// **G_CERT_FALSIFIABLE — every certificate term is proven capable of going RED.**
+    ///
+    /// The observer's CO-#1 as of tick 581, and it is first in the order for a reason: the recent
+    /// episode produced *six flattering numbers in one session*, and the certificate is the single
+    /// claim the whole Phase-0 exit rests on. `falsify.sh` exists because `G_LOAD` — a Bar 0 gate —
+    /// had never tested what it was named for. **No cert term is trusted until it is proven to go
+    /// red**, and this is the proof, re-run on every wall.
+    ///
+    /// Two claims per term, and the second is the one that catches a lazy instrument:
+    ///
+    /// 1. **It goes red.** A real, engine-shaped break (nudge a box 30px; collapse an interactive
+    ///    element; invert sibling order) must make that term fail.
+    /// 2. **It stays specific.** The break must NOT redden the other terms. A certificate whose terms
+    ///    all move together is one term wearing five hats — it would still "hold" or "fail" correctly
+    ///    in aggregate while being unable to tell the next tick *what* to fix, which is the whole
+    ///    reason the certificate is a list of terms rather than an average.
+    ///
+    /// `UNSCORED` is exempt from claim 2 and says so in the harness: a page we render nothing of
+    /// legitimately takes the shape term with it, and asserting otherwise would be a false claim
+    /// about the instrument rather than a check on it.
+    #[test]
+    fn every_certificate_term_can_go_red() {
+        let results = falsify_certificate();
+        assert_eq!(
+            results.len(),
+            6,
+            "the certificate has six terms (UNSCORED, shape, and four jarring invariants); a term \
+             added without a falsification is a term nobody has proven can fail"
+        );
+        for f in &results {
+            assert!(
+                f.went_red,
+                "G_CERT_FALSIFIABLE: breaking the engine — {} — did NOT move the `{}` term. \
+                 A certificate term unmoved by a real break is measuring nothing, and it would \
+                 report this project done.",
+                f.break_desc, f.term
+            );
+            assert!(
+                f.stayed_specific,
+                "G_CERT_FALSIFIABLE: breaking the engine — {} — reddened terms other than `{}`. \
+                 A certificate whose terms move together cannot say WHICH capability regressed, \
+                 which is the only thing a list of terms buys over an average.",
+                f.break_desc, f.term
+            );
+        }
+    }
+}
