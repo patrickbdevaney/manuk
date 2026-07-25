@@ -83,7 +83,7 @@ launch_agent() {
   # ── MODEL (observer, user directive 2026-07-22 16:45 ET): back to Opus 4.8 unconditionally —
   # the temporary Fable-5 window (schedule removed) is over early by user request.
   # MANUK_AGENT_MODEL still overrides.
-  AGENT_MODEL="${MANUK_AGENT_MODEL:-claude-opus-4-8}"
+  AGENT_MODEL="${MANUK_AGENT_MODEL:-claude-opus-5}"
   say "agent model for this launch: $AGENT_MODEL"
   systemctl --user reset-failed "${AGENT_SCOPE}.scope" 2>/dev/null || true   # clear any lingering scope name
   if systemd-run --user --scope --quiet \
