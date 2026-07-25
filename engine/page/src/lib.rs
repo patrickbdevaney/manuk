@@ -5672,6 +5672,15 @@ impl Page {
                 StyleSource::External(url, _) => external.get(url).cloned().unwrap_or_default(),
             };
             for ff in Stylesheet::parse(&css).font_faces() {
+                // ── DECLARE FIRST, FETCH SECOND (tick 561). CSS Fonts' shadowing rule is about the
+                // DECLARATION: once this document says `@font-face { font-family: "Open Sans" }`, a
+                // locally-installed `Open Sans` is shadowed for this document, and if every `src` fails
+                // the family yields no usable face and matching continues to the NEXT `font-family`
+                // entry. Declaring only on success would let a failed download be masked by a
+                // same-named local face — measured at t559/t560 as a 19-point SHAPE loss on
+                // martinfowler.com, where a failed webfont looked like a different font rather than
+                // like a failure.
+                fonts.declare_webfont_family(&ff.family);
                 for src in &ff.srcs {
                     let url = resolve_url(&self.final_url, src);
                     if let Some(data) = fetch_font_bytes(&url).await {

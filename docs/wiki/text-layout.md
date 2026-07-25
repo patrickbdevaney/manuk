@@ -977,3 +977,32 @@ within the 8px tolerance where they had shared one width.
 **One residual, named rather than folded in:** `"NoSuchFontXYZ"` — for an unknown family Chromium falls back
 to a *serif* default (299px) and we fall back to *sans* (330px). That is a default-family divergence, not a
 resolution one. [[box-layout]]
+
+## `@font-face` shadows a same-named local face — a failed download must look failed (tick 561)
+
+CSS Fonts: once a document declares `@font-face { font-family: "Open Sans" }`, a locally-installed
+`Open Sans` is **shadowed for that document**. If every `src` in the rule fails to load, the family yields
+**no usable face** and matching continues to the **next entry in the `font-family` list** — it does *not*
+fall back to the same-named local font.
+
+We used to fall back to it, and the bug only became reachable once t557/t558 made named families resolve at
+all: before that, everything fell to a generic and the question never arose. So `declare_webfont_family` is
+called for **every** `@font-face` rule *before* the fetch is attempted — the rule is about the **declaration**,
+not the download — and `resolve_family` skips a declared family with no loaded face rather than querying the
+system for it.
+
+**Why "declare first, fetch second" is the whole design:** declaring only on success would make a failed
+download indistinguishable from a font we simply do not have, and the failure mode is not a missing glyph —
+it is *a different font, silently*, which measures as a page-wide metrics divergence and reads as a layout
+bug. RED-PROVEN: `a_declared_webfont_family_shadows_the_local_face_of_the_same_name` takes a family the box
+actually has, asserts it resolves locally when undeclared, declares it with nothing loaded, and asserts the
+resolution falls through to `sans-serif`; removing the shadowing check fails it.
+
+⚠ **Honest scope: this is a spec fix, not the fix for the site that motivated it.** t560 diagnosed
+`martinfowler.com`'s 68.2% → 49.2% SHAPE as a masked webfont failure. **It was not** — that site has no
+webfont `<link>` for Open Sans at all; it names `Open Sans, sans-serif` and uses the local install, the same
+face Chromium uses. With the sizes now correct (`dw=1 dh=2` where they had been ±9–22px), the page turns out
+to be **displaced by dy≈82px**, and the earlier sizing error had been partially *compensating* for it.
+**A score can fall because a confound was removed** — which is the third time in this arc that a mechanism
+fitting the numbers was not the mechanism, and each time the fix was to read the page instead of the
+distribution. [[box-layout]]

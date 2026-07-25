@@ -22667,3 +22667,57 @@ to the local face. RED proof: `martinfowler.com` 49.2% → ≥68.2% on the commi
 agentic rows from Audit #29 (`<search>` + `CloseWatcher`) as one tick to discharge the I3 drift Checks #35
 and #36 both flagged; then the t556 cascade-origin bug; then nytimes.com; then the crawl-side `.SIG`
 correction. Cadences: self-audit 564; surface 568; const 567; wall 567.
+
+## Tick 561 — `@font-face` shadowing landed (spec-correct), and it REFUTED my own t560 diagnosis (2026-07-25)
+
+Implemented the CSS Fonts shadowing rule: a declared `@font-face` family shadows a same-named local face for
+that document, and if every `src` fails the family yields no usable face so matching continues to the **next**
+`font-family` entry. `declare_webfont_family` is called for every `@font-face` rule **before** the fetch —
+the rule keys on the DECLARATION, not the download, because declaring only on success makes a failed download
+indistinguishable from a font we simply do not have. RED-PROVEN:
+`a_declared_webfont_family_shadows_the_local_face_of_the_same_name` takes a family the box actually has,
+asserts it resolves locally when undeclared, declares it with nothing loaded, and asserts the resolution falls
+through to `sans-serif`; removing the check fails it. 7 manuk-text tests green.
+
+**AND THE SITE-LEVEL PROOF DID NOT RECOVER, WHICH REFUTES t560'S DIAGNOSIS.** martinfowler.com after the fix:
+**46.1% SHAPE** — no better than the 49.2% regression. The reason is not subtle and I should have checked it a
+tick earlier: **the site has no webfont `<link>` for Open Sans at all.** Grepping the fetched HTML for a fonts
+link returns nothing; it simply names `Open Sans, sans-serif` and relies on the local install, which this box
+has — so Chromium and we now use the **same local face**, and t560's "failed webfont masked by a local face"
+story was fiction that fit the numbers. **Third self-correction in this arc, identical cause each time: a
+mechanism that fits the numbers is not the mechanism until the page is read.**
+
+WHAT THE PAGE ACTUALLY SAYS, and it is better news than the score:
+```
+structural 100.0% (384 paths, 0 missing) · SHAPE 46.1%
+[diag] absolute PLACEMENT 4.9%, median dx=0 dy=82 dw=1 dh=2
+```
+**`dw=1` and `dh=2`** — the boxes are now the RIGHT SIZE, where they had been ±9–22px out. That is the font
+fix landing on this site too. What remains is a **dy≈82px vertical displacement** of the whole page. So
+martinfowler did not regress into a sizing error: **the font fix REMOVED a sizing error that had been
+partially compensating for a displacement**, and the displacement is now visible on its own. *A score can fall
+because a confound was removed* — the same shape as t551's jarring terms falling when the key intersection
+grew, and the second time this session that a number moved against a real improvement.
+
+That also files it correctly: 82px near the top of a document, right sizes, pure offset, is the
+`geometry/displaced` class — an ANCESTOR-layout fact with one upstream cause, most likely a mis-measured
+header/nav block. That is exactly the class the t554 signature split was built to separate from mis-sizing,
+so it goes there rather than back into the font work.
+
+The shadowing rule stays: it is spec-correct, RED-proven, and cannot regress the case it was written for
+(a *loaded* webfont still wins — shadowing is precedence, not suppression). It is simply not the fix for the
+site that motivated it, and saying so is cheaper than carrying a wrong belief into the next tick.
+
+TICK SHAPE: capability (`@font-face` shadowing — a declared family with no loaded face falls through to the
+next stack entry instead of being masked by a same-named local font, declared-before-fetch so a failed
+download looks failed; RED-proven) + the refutation of my own t560 diagnosis, with the real mechanism measured
+(sizes now correct at dw=1/dh=2, a dy≈82px displacement exposed by removing the compensating sizing error) and
+re-filed into the `geometry/displaced` class. Bar 0 untouched.
+WIKI: docs/wiki/text-layout.md — "`@font-face` shadows a same-named local face — a failed download must look
+failed (tick 561)"; WEB-PATTERNS.md — a page whose webfont fails to download.
+
+NEXT: **the dy≈82px displacement on martinfowler.com** — right sizes, pure vertical offset, so it is one
+upstream ancestor (header/nav) and the instance printer plus the `geometry/displaced` signature are already
+built for exactly this. Then the two agentic rows from Audit #29 (`<search>` + `CloseWatcher`) as one tick to
+discharge the I3 drift Checks #35 and #36 both flagged; then the t556 cascade-origin bug; then nytimes.com;
+then the crawl-side `.SIG` correction. Cadences: self-audit 564; surface 568; const 567; wall 567.

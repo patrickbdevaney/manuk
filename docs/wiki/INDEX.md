@@ -955,6 +955,7 @@
   - L892 · The cap unit is the face's real cap-height — it used to collapse to 0px (tick 502)
   - L907 · No named font family ever resolved — fontdb's name query is case-SENSITIVE (tick 557)
   - L952 · The SECOND defect, one line later: intern_family discarded the case (tick 558)
+  - L981 · @font-face shadows a same-named local face — a failed download must look failed (tick 561)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -982,4 +983,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-897 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+898 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

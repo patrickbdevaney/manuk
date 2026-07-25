@@ -321,3 +321,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 558	f209e26a	1784971717	2026-07-25T05:28:37-04:00	2366	capability	67	11	289	40	274	81	3896	6960	0	329	31	the advance now FOLLOWS the resolved face (probe SHAPE 36.4% → 90.9%) + surface audit #29 (2026-07-25)
 559	29fd9053	1784976038	2026-07-25T06:40:38-04:00	4321	scheduled	67	7	217	33	274	81	3896	6960	0	329	31	post-font-fix re-sweep: the certificate did NOT move, the DISTRIBUTION did (+1.34 pts) + constitution check #36 (2026-07-25)
 560	43311894	1784976256	2026-07-25T06:44:16-04:00	218	diagnosis	67	7	112	32	274	81	3896	6960	0	329	31	the martinfowler regression DIAGNOSED: webfont shadowing, not resolution (2026-07-25)
+561	a5cd5f4e	1784977212	2026-07-25T07:00:12-04:00	956	capability	67	10	274	33	274	81	3896	6960	0	329	31	`@font-face` shadowing landed (spec-correct), and it REFUTED my own t560 diagnosis (2026-07-25)

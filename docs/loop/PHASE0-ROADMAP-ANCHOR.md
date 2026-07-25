@@ -321,3 +321,22 @@ never WPT count, never a vibe.
   same-named local face exists — but it is a real one, it is spec-anchored, and its RED proof is already
   committed as a sweep row (`martinfowler.com` 68.2% → 49.2%). **Next tick: shadowing.**
 
+- `CORRECTION to the t560 diagnosis @tick 561 — shadowing was the WRONG mechanism for martinfowler.com, and
+  the right one is BETTER news.` The shadowing rule is implemented and RED-proven at the unit level (a
+  declared-but-unloaded `@font-face` family now falls through to the next stack entry instead of being masked
+  by a same-named local face — spec-correct, and it stays). **It does not fire on martinfowler.com, because
+  the site has no webfont `<link>` for Open Sans at all** — grepping the fetched HTML for a fonts link returns
+  nothing. It simply names `Open Sans, sans-serif` and relies on the local install, which this box has. So
+  Chromium and we now use the **same** local face, and t560's "failed webfont masked by a local face" story
+  was wrong. Third self-correction in this arc, same cause each time: a mechanism that fits the numbers is not
+  the mechanism until the page is read.
+  **What the page now actually says, and it is the useful part:**
+  `structural 100.0% (384 paths, 0 missing) · SHAPE 46.1% · [diag] absolute PLACEMENT 4.9%, median dx=0
+  dy=82 dw=1 dh=2`. **`dw=1` and `dh=2` — the boxes are now the RIGHT SIZE** (that is the font fix landing on
+  this site too), and the whole page is displaced **dy≈82px**. So martinfowler did not regress into a sizing
+  error; the font fix **removed** a sizing error that had been *compensating* for a vertical displacement,
+  and the displacement is now visible on its own. A score can fall because a confound was removed.
+  That makes it an instance of the `geometry/displaced` class — an ANCESTOR-layout fact with one upstream
+  cause — and 82px near the top of the document is the shape of a mis-measured header/nav block. It is the
+  same class the t554 split was built to separate, which is where it should be chased.
+

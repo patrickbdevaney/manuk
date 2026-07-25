@@ -4598,3 +4598,26 @@ pair is really about: assert on the OBSERVABLE, not on the intermediate.** The i
 t557 and the rendered page was not. Residual, named: an *unknown* family falls back to sans here and to serif
 in Chromium — a default-family divergence, not a resolution one.
 
+
+## A page whose webfont fails to download — `@font-face` shadowing (tick 561)
+
+**Pattern:** every site that self-hosts or CDN-hosts a typeface. `@font-face { font-family: "Inter"; src:
+url(/fonts/inter.woff2) }` plus `font-family: Inter, system-ui, sans-serif`. The interesting case is not the
+happy path — it is the **download failing**: a CDN blip, an ad-blocker, a CSP rule, a format we cannot decode.
+
+**The class this unlocks:** honest degradation when a webfont does not arrive. Per CSS Fonts the declared
+family **shadows** any same-named local font for that document, so a failed `src` means the family has no
+usable face and matching moves to the **next entry in the stack**. We instead fell back to a same-named local
+face — so a *failed download* rendered as *a different font*, page-wide, with different advances and a
+different line box.
+
+**The traps.** **(1)** It is only reachable once named families resolve at all — before that everything fell
+to a generic and the bug was invisible, which is how a fix creates the conditions for the next bug to matter.
+**(2)** The rule keys on the **declaration**, not the load: register the family name *before* attempting the
+fetch, or a failure is indistinguishable from "we don't have that font". **(3)** The symptom is not a missing
+glyph — the page renders, in the wrong metrics, everywhere — so it reads as a layout bug and gets chased in
+the wrong subsystem. **(4)** Do not over-fit: a *loaded* webfont must still win, so shadowing is precedence,
+not suppression. **(5)** ⚠ This was diagnosed from a site (`martinfowler.com`) that turned out **not** to
+have the pattern at all — it names `Open Sans` with no `@font-face` anywhere. The rule is right, the site was
+the wrong witness, and the lesson is the recurring one: **read the page before believing a mechanism that
+fits the numbers.**

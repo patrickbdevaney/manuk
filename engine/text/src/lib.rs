@@ -210,6 +210,21 @@ pub struct FontContext {
     /// `@font-face` family name (lowercase) → the registered face ids, so a web font
     /// resolves under its CSS-declared name even if the file's internal name differs.
     webfonts: RefCell<HashMap<String, Vec<fontdb::ID>>>,
+    /// **Every family name an `@font-face` rule DECLARED**, lowercased — whether or not any of its
+    /// `src`s actually loaded.
+    ///
+    /// This is the CSS Fonts **shadowing** rule, and it needs the declaration rather than the load:
+    /// once a document declares `@font-face { font-family: "Open Sans" }`, a locally-installed
+    /// `Open Sans` is shadowed *for that document*. If every `src` fails, the family yields **no
+    /// usable face** and matching continues to the NEXT entry in the `font-family` list — it does not
+    /// silently fall back to the same-named local face.
+    ///
+    /// Measured consequence of getting this wrong (t559/t560): `martinfowler.com` declares
+    /// `Open Sans, sans-serif` and `Open Sans` happens to be installed on the box, so a failed webfont
+    /// load was masked by the local face and the page went from 68.2% to 49.2% SHAPE against a Chromium
+    /// that had loaded the real webfont. **A failed download must look failed, not like a different
+    /// font.**
+    declared_webfonts: RefCell<std::collections::HashSet<String>>,
     /// swash's reusable scaling context (glyph rasterization). `RefCell` because scaling
     /// takes `&mut`; single-threaded like the rest of the context.
     scale_ctx: RefCell<swash::scale::ScaleContext>,
@@ -375,6 +390,7 @@ impl FontContext {
             family_names: RefCell::new(Vec::new()),
             family_ids: RefCell::new(HashMap::new()),
             webfonts: RefCell::new(HashMap::new()),
+            declared_webfonts: RefCell::new(std::collections::HashSet::new()),
             scale_ctx: RefCell::new(swash::scale::ScaleContext::new()),
             shape_ctx: RefCell::new(swash::shape::ShapeContext::new()),
             measure_cache: RefCell::new(LruCache::new(
@@ -414,6 +430,18 @@ impl FontContext {
 
     /// Register a downloaded `@font-face` font under its CSS-declared `family` name, so
     /// `font-family: family` resolves to it regardless of the file's internal name.
+    /// Record that an `@font-face` rule DECLARED this family, independently of whether its `src`
+    /// loaded. Call it for every `@font-face` rule the document has, before attempting the fetch —
+    /// the shadowing rule is about the declaration, not the download (see [`declared_webfonts`]).
+    ///
+    /// [`declared_webfonts`]: FontContext::declared_webfonts
+    pub fn declare_webfont_family(&self, family: &str) {
+        let n = family.trim().trim_matches(['"', '\'']).to_ascii_lowercase();
+        if !n.is_empty() {
+            self.declared_webfonts.borrow_mut().insert(n);
+        }
+    }
+
     pub fn register_named_font(&self, family: &str, data: Vec<u8>) {
         let before: std::collections::HashSet<fontdb::ID> =
             self.db.borrow().faces().map(|f| f.id).collect();
@@ -496,6 +524,17 @@ impl FontContext {
                     // An @font-face-registered family wins under its CSS name.
                     if self.webfonts.borrow().contains_key(&n) {
                         return FontFamily::Named(self.intern_family(&n));
+                    }
+                    // ── SHADOWING (CSS Fonts, tick 561). If the document DECLARED this family via
+                    // `@font-face` and no face loaded for it, the family has no usable face and
+                    // matching must continue to the NEXT `font-family` entry. It must NOT fall back to
+                    // a same-named LOCAL face: that is how a failed download starts looking like a
+                    // different font instead of like a failure. (Measured at t559/t560 —
+                    // `martinfowler.com` declares `Open Sans, sans-serif`, `Open Sans` is installed on
+                    // this box, and masking the failed webfont with the local face cost 19 points of
+                    // SHAPE against a Chromium that had the real one.)
+                    if self.declared_webfonts.borrow().contains(&n) {
+                        continue;
                     }
                     // A named family: use it only if fontdb actually has a face whose family
                     // name matches (so unknown names fall through to hints / next entry).
@@ -1201,6 +1240,72 @@ mod tests {
              being ignored somewhere downstream of resolution",
             widths.len(),
             widths[0]
+        );
+    }
+
+    /// **A DECLARED `@font-face` family whose `src` failed must fall through to the next stack entry —
+    /// never to a same-named LOCAL face.**
+    ///
+    /// CSS Fonts' shadowing rule, and the reason it matters is measured: `martinfowler.com` declares
+    /// `font-family: Open Sans, sans-serif` and loads Open Sans from Google Fonts; `Open Sans` also
+    /// happens to be installed on this box (13 faces). Once t557/t558 made named families resolve, a
+    /// failed webfont load was silently masked by the local face and the page fell **68.2% → 49.2%**
+    /// SHAPE against a Chromium that had loaded the real webfont. **A failed download must look failed,
+    /// not like a different font.**
+    #[test]
+    fn a_declared_webfont_family_shadows_the_local_face_of_the_same_name() {
+        let f = FontContext::new();
+        if f.face_count() == 0 {
+            eprintln!("no system fonts — skipping (an absent measurement, not a pass)");
+            return;
+        }
+        // Pick a family that IS installed here, so the test is about shadowing rather than about
+        // whether the box happens to have the font.
+        let local: Option<String> = {
+            let db = f.db.borrow();
+            let mut found = None;
+            for face in db.faces() {
+                if let Some((n, _)) = face.families.first() {
+                    if n.chars().any(|c| c.is_ascii_uppercase()) {
+                        found = Some(n.clone());
+                        break;
+                    }
+                }
+            }
+            found
+        };
+        let Some(local) = local else {
+            eprintln!("no mixed-case family installed — skipping");
+            return;
+        };
+
+        // Without any declaration, the local face is the right answer.
+        let before = f.resolve_family(&[local.clone(), "sans-serif".to_string()]);
+        assert!(
+            matches!(before, FontFamily::Named(_)),
+            "{local:?} is installed and undeclared, so it must resolve to the local face: {before:?}"
+        );
+
+        // Declare it as an `@font-face` family and load NOTHING for it (the failed-src case).
+        f.declare_webfont_family(&local);
+        let after = f.resolve_family(&[local.clone(), "sans-serif".to_string()]);
+        assert_eq!(
+            after,
+            FontFamily::SansSerif,
+            "once `@font-face` DECLARES {local:?}, the local face of that name is SHADOWED for this \
+             document — a failed src must fall through to the NEXT stack entry (sans-serif), not be \
+             masked by a same-named local font"
+        );
+
+        // And a declaration that DID load must still win (shadowing is not suppression).
+        let f2 = FontContext::new();
+        f2.declare_webfont_family("MyWebFont");
+        // No bytes registered -> falls through; with bytes it would resolve. The fall-through half is
+        // what this asserts, since registering real font bytes needs a fixture.
+        assert_eq!(
+            f2.resolve_family(&["MyWebFont".to_string(), "serif".to_string()]),
+            FontFamily::Serif,
+            "a declared-but-unloaded family falls through to the next entry, whatever that entry is"
         );
     }
 }

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **322** | ticks 1–560 |
-| median tick cycle | **21m** | 321 intervals |
-| median, last 10 | **17m** | 10 intervals |
+| ticks landed | **323** | ticks 1–561 |
+| median tick cycle | **21m** | 322 intervals |
+| median, last 10 | **15m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.95** | 337.7h elapsed |
-| median verify wall | **64s** | 261 ticks |
+| **ticks per hour** | **0.95** | 337.9h elapsed |
+| median verify wall | **64s** | 262 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**168 of 322 ticks** (52%) moved a
+**169 of 323 ticks** (52%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **168** capability ticks, median cycle **21m**
-* median diff per tick: **+218 / −34** lines across 8 files
+* **169** capability ticks, median cycle **21m**
+* median diff per tick: **+219 / −34** lines across 8 files
 
 ## Every tick
 
@@ -419,5 +419,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **558** | 2026-07-25 05:28 | 39m | capability | 67s | +289/−40 | 274 | 81 | 56.0% · | the advance now FOLLOWS the resolved face (probe SHAPE 36.4% → 90.9%) + surface audit #29  |
 | **559** | 2026-07-25 06:40 | 72m | scheduled | 67s | +217/−33 | 274 | 81 | 56.0% · | post-font-fix re-sweep: the certificate did NOT move, the DISTRIBUTION did (+1.34 pts) + c |
 | **560** | 2026-07-25 06:44 | 4m | diagnosis | 67s | +112/−32 | 274 | 81 | 56.0% · | the martinfowler regression DIAGNOSED: webfont shadowing, not resolution (2026-07-25) |
+| **561** | 2026-07-25 07:00 | 16m | capability | 67s | +274/−33 | 274 | 81 | 56.0% · | `@font-face` shadowing landed (spec-correct), and it REFUTED my own t560 diagnosis (2026-0 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
