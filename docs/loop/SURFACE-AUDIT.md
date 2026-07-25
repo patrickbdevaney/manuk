@@ -1217,3 +1217,45 @@ recorded rather than lost.
 RE-RANK: none of the 4 is larger than the standing frontier (the fidelity-instrument rebuild / media XL
 work). They are bounded probes/small builds for a later tick; the Check #32 pivot (fidelity instrument or
 test262) stands. LAST_SURFACE_AUDIT set to 528.
+
+## Audit #27 — tick 538 (2026-07-24)
+
+SOURCES: Interop 2026 focus-area README (web-platform-tests/interop, the authoritative list) enumerated in
+FULL, plus web.dev Baseline 2024-2026 and MDN — checked against docs/loop/CONSTELLATION.tsv. Audit #26 (same
+calendar day, tick 528) focused on the just-built media neighbourhood; this audit does the thing #26 did not:
+walk EVERY Interop 2026 line and confirm each has a verdict, rather than trusting a general "map looks good".
+
+INTEROP 2026 — ALL 20 FOCUS AREAS + 4 INVESTIGATIONS RECONCILED, EVERY ONE ALREADY ON THE MAP WITH A VERDICT:
+  Container style queries → gated (t379) + name-only unknown row · CSS anchor positioning → missing (t230) ·
+  CSS attr() → partial (t409) · contrast-color() → partial (pref-flip) · CSS zoom → partial · Custom highlights
+  → missing (t225) · Dialogs & popovers → gated · Fetch uploads & ranges → gated (G_MEDIA_SEGMENT_FETCH t228,
+  ReadableStream body works row 134) · IndexedDB → gated (t278/t329) · JSPI for Wasm → missing (t230; wasm CORE
+  gated) · Media pseudo-classes → partial (t344) · Navigation API → gated (t309) · Scoped custom element
+  registries → missing (t225) · Scroll-driven animations → missing (t230) · Scroll snap → works · CSS shape()
+  → missing · View transitions → gated (t308) · WebRTC → missing (out of scope) · WebTransport → missing
+  (deferred, needs HTTP/3) · Web compat → n/a. INVESTIGATIONS: Accessibility testing → a11y roles gated ·
+  JPEG XL → missing (t237, below ROI) · WebVTT → gated (t255-261) · Mobile testing → n/a.
+  CONCLUSION: the map is COMPLETE against Interop 2026 — the "stale-pessimistic / map in good shape" finding
+  of #25 and #26 holds, now proven line-by-line rather than asserted.
+
+ADDED (world names them, our map did not — now `unknown`, the GOOD kind of growth; MEASURED, not unknown, is
+the invariant):
+1. **light-dark() CSS color function** (doc) — Baseline 2024, automatic dark mode. The color-scheme PROPERTY
+   landed via a Stylo servo_pref flip (t464), but the CONSUMING function light-dark() is unrowed/unmeasured —
+   it may parse-drop (gecko fence, à la @starting-style) or resolve. A site authored light-dark() with no
+   @media fallback renders the wrong palette if we drop it. Bounded probe queued.
+2. **CSS Level-4 math functions round()/mod()/rem()/sign()/abs()** (doc) — Baseline 2024. calc()/min()/max()/
+   clamp() are exercised by css-values WPT, but the stepped/sign math is unrowed and unmeasured; an unsupported
+   function invalidates the whole declaration. Bounded probe queued.
+
+STALE-PESSIMISTIC RULE PAID AGAIN (the #24/#26 lesson, re-lived): first-pass alternation greps for WASM / AVIF /
+scoped-registries came back EMPTY and nearly minted duplicate `unknown` rows — a re-grep with proper terms found
+all three ALREADY on the map (WebAssembly gated, WebAssembly GC gated, AVIF gated, scoped registries missing).
+GREP THE MAP WITH CLEAN SINGLE TERMS before adding — a stale-pessimistic ADD is as much drift as a stale-optimistic
+row. Both survivors (light-dark, Level-4 math) were confirmed absent by clean single-term grep.
+
+RE-RANK: neither add is larger than the standing frontier (the fidelity-instrument rebuild, CO-#1, mid-execution
+— brick 4b landed t537). They are bounded probes/small builds for a later tick. The Check #33 steer stands:
+continue the rebuild (next: §3b root-cause clustering, then the coverage→SHAPE gate-floor flip).
+
+LAST_SURFACE_AUDIT set to 538; next due 548.

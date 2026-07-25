@@ -21470,3 +21470,36 @@ conformance-and-oracles.md (the tick-537 brick-4b paragraph: enriched producer +
 NEXT: §3b root-cause clustering (group failures by first-divergence signature + offset, report DISTINCT
 CAUSES not sites); then the coverage→SHAPE gate-floor flip after a recalibrating path-keyed sweep.
 Cadences: self-audit 544; surface 538 (DUE next tick); const 543; wall 547.
+
+## Tick 538 — CADENCE Surface Audit #27 — map is COMPLETE against Interop 2026; +2 unknown rows (2026-07-24)
+
+Surface audit due at tick 538 (last 528, cadence 10). Left the frame per scripts/surface-audit.sh: pulled
+the authoritative Interop 2026 focus-area README (web-platform-tests/interop) and web.dev Baseline 2024-2026,
+reconciled against docs/loop/CONSTELLATION.tsv.
+
+HEADLINE: enumerated ALL 20 Interop 2026 focus areas + 4 investigation efforts LINE BY LINE — every single one
+already has a verdict on our map (gated / partial / missing / out-of-scope). Audit #26 (same calendar day,
+tick 528) asserted "map in good shape" from the media neighbourhood; this audit PROVES it against the full
+Interop list rather than trusting the assertion. The map is complete against the world's current agreed frontier.
+
+ADDED (world names them, map did not — now `unknown`, the measured-not-unknown invariant):
+1. light-dark() CSS color function (doc) — Baseline 2024 auto dark-mode. The color-scheme PROPERTY landed via
+   a Stylo pref-flip (t464) but the consuming FUNCTION is unrowed/unmeasured.
+2. CSS Level-4 math round()/mod()/rem()/sign()/abs() (doc) — Baseline 2024; calc/min/max/clamp are WPT-exercised
+   but the stepped/sign math is unrowed.
+Both confirmed absent by clean single-term grep, both with a bounded probe queued.
+
+STALE-PESSIMISTIC RULE PAID AGAIN: first-pass alternation greps for WASM/AVIF/scoped-registries came back empty
+and nearly minted duplicate rows — a re-grep found all three already mapped. Grep the map with CLEAN single terms
+before adding; a stale-pessimistic ADD is drift too. (The #24/#26 lesson, re-lived and re-recorded.)
+
+RE-RANK: neither add outranks the standing frontier (fidelity-instrument rebuild CO-#1, brick 4b landed t537).
+The Check #33 steer stands: next is §3b root-cause clustering, then the coverage→SHAPE gate-floor flip.
+
+Governance/cadence tick — docs only (CONSTELLATION.tsv +2 rows, SURFACE-AUDIT.md Audit #27, STATUS
+LAST_SURFACE_AUDIT 528→538). No engine change; Bar 0 untouched.
+
+TICK SHAPE: cadence surface-audit (see JOURNAL Tick 538). WIKI: none — cadence governance tick, no engine change.
+
+NEXT: resume the fidelity rebuild — §3b root-cause clustering (group failures by first-divergence signature +
+offset, report DISTINCT CAUSES not sites). Cadences: self-audit 544; surface 548; const 543; wall 547.

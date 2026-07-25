@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **299** | ticks 1–536 |
-| median tick cycle | **21m** | 298 intervals |
-| median, last 10 | **17m** | 10 intervals |
+| ticks landed | **300** | ticks 1–537 |
+| median tick cycle | **21m** | 299 intervals |
+| median, last 10 | **12m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.91** | 326.9h elapsed |
-| median verify wall | **62s** | 238 ticks |
+| **ticks per hour** | **0.91** | 327.1h elapsed |
+| median verify wall | **62s** | 239 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**165 of 299 ticks** (55%) moved a
+**165 of 300 ticks** (55%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **165** capability ticks, median cycle **21m**
-* median diff per tick: **+222 / −34** lines across 9 files
+* median diff per tick: **+220 / −34** lines across 9 files
 
 ## Every tick
 
@@ -396,5 +396,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **534** | 2026-07-24 19:16 | 5m | cadence | 67s | +58/−33 | 274 | 81 | 56.0% · | CADENCE: self-audit #N (clean — methodology and reality agree) (2026-07-24) |
 | **535** | 2026-07-24 19:23 | 7m | cadence | 67s | +106/−33 | 274 | 81 | 56.0% · | CADENCE: Constitution Check #33 (fidelity-rebuild arc is on-frontier) (2026-07-24) |
 | **536** | 2026-07-24 19:56 | 33m | instrument-fidelity | 67s | +320/−204 | 274 | 81 | 56.0% · | FIDELITY REBUILD brick 4a: collapsed-interactive-target invariant in the G1 probe (2026-07 |
+| **537** | 2026-07-24 20:06 | 10m | instrument-fidelity | 67s | +111/−33 | 274 | 81 | 56.0% · | FIDELITY REBUILD brick 4b: G1 producer enriched to `Seen`; all four jarring invariants wir |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
