@@ -147,6 +147,8 @@
   - L794 · JS-platform-surface probe sweep — vein mined out (tick 487)
   - L812 · The DOM-method / CSS-property surface vein is mined out too — one level deeper than t487 (tick 492)
   - L850 · The exit certificate is now COMPUTED, not read off 265 stanzas of stderr (tick 547)
+  - L898 · The certificate's FIRST sweep found the certificate could be passed vacuously (tick 549)
+  - L925 · What the sweep actually says
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -975,4 +977,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-890 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+892 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

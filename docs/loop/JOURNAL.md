@@ -21970,3 +21970,69 @@ certificate via `--rows-out`, then one actuals line in PHASE0-ROADMAP-ANCHOR.md 
 structural is already the biggest single finding on the board and will likely outrank everything after
 the sweep names its cluster. Then STEP 1(c) 100-tab RSS. Cadences: self-audit 554; surface 558; const
 551; wall 567.
+
+## Tick 549 — STEP 1(a): the first corpus sweep on the rebuilt instrument, and it found the CERTIFICATE could be passed vacuously (2026-07-25)
+
+Ran the observer's STEP 1(a): a stratified 72-site sweep (round-robin across all 15 category classes, so a
+partial read is representative rather than news-heavy) through `manuk-wpt fidelity --urls-file` in 24
+timeout-isolated chunks of 3, accumulating via `--rows-out`, then ONE certificate over the file.
+
+FIRST PRINT: **shape ≥0.75 on 12 of 55 sites (21.8%)**. That number is WRONG, and finding out why is the
+tick. `shape_stats` returns a RATIO, and `0/0` is `1.0` — so seven sites reported
+`SHAPE: 100.0% within 8px vs shared ancestor (0 scored)`, and one of them was **gov.uk, where all 418
+probed elements were MISSING.** A page we render nothing of scored perfect placement, and the certificate
+I wrote two ticks ago counted it as meeting the placement bar. **Nine of the twelve apparent passes were
+vacuous.** Corrected: **3 of 54 (5.6%)** — a factor of four.
+
+**Fifth instrument built here to produce a bad number on its first real run** (crawl-report's 2.8%;
+G_LOAD never testing its own budget; G6 scoring zero-links-found as perfect clickability; example.com's
+100% coverage with no `[id]`s). The shape is always the same: **a denominator nobody checked.** So
+`Fidelity.shape_n` travels with the score, `CERT_MIN_SHAPE_SAMPLE = 10` makes a thin sample UNSCORED
+(counting AGAINST the bar, not out of it), and the sample size round-trips through the rows file so a
+vacuous pass refused in-process cannot return across the chunk boundary. Ten is not arbitrary — it is
+`scripts/fidelity-sweep.sh`'s own `LOW_SAMPLE` threshold, added there for exactly this reason: the lesson
+had been learned in one instrument and not the others, AGAIN.
+
+RED-PROVEN: deleting the `r.shape_n >= CERT_MIN_SHAPE_SAMPLE` term makes
+`a_shape_score_over_an_empty_sample_is_never_a_pass` FAIL on the exact gov.uk row the sweep produced.
+34 lib tests green.
+
+THE CERTIFICATE, all five terms below the 95% bar: shape ≥0.75 on **5.6%** · h-overflow clean 77.8% ·
+overlap clean 59.3% · reading-order clean 46.3% · dead-target clean 75.9% · 16 of 54 UNSCORED. Actuals
+line appended to PHASE0-ROADMAP-ANCHOR.md §6; per-site rows committed as docs/loop/SWEEP-t549-rows.tsv.
+
+AND THE FINDING THAT OUTRANKS ALL FIVE: **13 of 54 sites render under 5% of what Chrome renders** —
+nytimes.com 0.04%, stripe.com 0.14%, reactjs.org 0.13%, notion.so 0.32%, terraform.io 0.30%,
+bitbucket.org 0.36%, and cdc.gov / intel.com / gov.uk / harvard.edu / newyorker.com / propublica.org /
+squarespace.com at **0.0%**. That is a CLASS FAILURE, not placement drift — which also means the four
+jarring numbers above are measured on the sites that work. Pooled root causes ranked by sites explained:
+`missing box: <div>` 20 · `geometry: height ~16px (<div>)` 17 · `~64px (<div>)` 16 · `missing box: <a>`
+15 · `missing box: <path>` 12 · `missing box: <svg>` 9. The three sites that DO clear the shape bar are
+static-ish blogs (jvns.ca 94.3%, blog.rust-lang.org 87.4%, lobste.rs 85.7%) — the class this engine has
+always been good at, which is the uncomfortable part.
+
+TWO HONESTY NOTES that travel with the number: (1) three chunks hit the 600s cap, so 18 of 72 sampled
+sites are absent — and the ones that time out are the SLOW ones, so this reading is biased
+**OPTIMISTIC**; (2) it is **NOT comparable** to the anchor's §2 t380→t392 table (different keying,
+different metric, different slice). A new baseline, not a delta. Also measured: nytimes took manuk 28.8s
+vs chromium 6.1s with the 12s load budget exhausted AND the 20,000-task event-loop ceiling hit.
+
+The corrected numbers were computed over rows rebuilt from THIS run's own per-site output lines (the
+sweep predates the `shape_n` column by minutes), rather than paying a 1.5h re-run — stated so nobody
+later mistakes it for a second sweep. The next sweep writes `shape_n` natively.
+
+TICK SHAPE: measurement (STEP 1(a) first corpus certificate on the rebuilt instrument — 72-site
+stratified, 54 scored, every term below bar, one actuals line + committed per-site rows) + the instrument
+FIX it forced (the vacuous-pass guard: `shape_n` travels with the ratio, `CERT_MIN_SHAPE_SAMPLE`,
+round-tripped across the chunk boundary; RED-proven on the real gov.uk row). No engine src touched; Bar 0
+untouched.
+WIKI: docs/wiki/conformance-and-oracles.md — "The certificate's FIRST sweep found the certificate could be
+passed vacuously (tick 549)". [no-pattern]
+
+NEXT: the sweep has re-ranked the board, and it outranks the remaining STEP-1 items. **CO-#1 is now the
+sub-5%-coverage CLASS**: 13 of 54 sites render essentially nothing, six of them JS-heavy app shells
+(stripe/notion/reactjs/terraform/bitbucket/nytimes) and seven at flat 0.0% (cdc/intel/gov.uk/harvard/
+newyorker/propublica/squarespace) which smells like a probe/fetch failure rather than a render failure and
+must be diagnosed BEFORE it is treated as a rendering bug — measure which, do not assume. Then STEP 1(c)
+100-tab RSS, then the three new `unknown` CSS probes from Audit #28. Cadences: self-audit 554; surface
+558; const 551; wall 567.

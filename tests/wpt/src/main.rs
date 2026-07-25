@@ -621,6 +621,11 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                     // `placement_stats` (absolute) is kept as a Layer-3 diagnostic only.
                     let (shape, shape_n) = manuk_wpt::fidelity::shape_stats(&cmap, &mboxes, 8);
                     f.shape = Some(shape);
+                    // The SAMPLE travels with the ratio. `shape_stats` returns 1.0 over an empty
+                    // sample, and the first real sweep produced seven `SHAPE: 100.0% … (0 scored)`
+                    // rows that the certificate counted as passes — one of them a page whose 418 probed
+                    // elements were ALL missing. The certificate needs `shape_n` to refuse that.
+                    f.shape_n = shape_n;
                     let (dx, dy, dw, dh, within) =
                         manuk_wpt::fidelity::placement_stats(&cmap, &mboxes, 8);
                     eprintln!(

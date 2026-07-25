@@ -894,3 +894,54 @@ breakage, but placement drift sitting a few points below the bar. [[fidelity-ins
 see SHAPE or the jarring invariants at all. The sweep driven directly through
 `manuk-wpt fidelity --urls-file` does not have that gap. Recorded, not fixed: `scripts/` is
 observer-owned.
+
+## The certificate's FIRST sweep found the certificate could be passed vacuously (tick 549)
+
+The first stratified corpus read on the rebuilt instrument — 72 sites round-robin across all 15 category
+classes, 54 scored — printed **shape ≥0.75 on 12 of 55 sites (21.8%)**. That number is wrong, and
+finding out why is the whole tick.
+
+`shape_stats` returns a **ratio**, and `0/0` is `1.0`. Seven sites reported
+`SHAPE: 100.0% within 8px vs shared ancestor (0 scored)` — and one of them was `gov.uk`, where
+**all 418 probed elements were MISSING.** A page we render nothing of scored perfect placement, and the
+certificate counted it as meeting the placement bar. Nine of the twelve apparent passes were vacuous.
+Corrected: **3 of 54 (5.6%)**, a factor of four.
+
+**This is the fifth instrument built here that produced a bad number on its first real run** (the crawl
+report announced 2.8% for a browser that renders fine; `G_LOAD` had never tested its own budget; `G6`
+scored a browser finding zero links as perfect clickability; `example.com` scored 100% coverage with no
+`[id]` elements). The shape is always identical: **a denominator nobody checked.** A ratio is not a
+measurement until you know what it was computed over — so `Fidelity.shape_n` now travels with the score,
+`CERT_MIN_SHAPE_SAMPLE = 10` makes a thin sample **UNSCORED** (which counts *against* the bar, not out
+of it), and the sample size round-trips through the accumulated-rows file so a vacuous pass refused
+in-process cannot come back from the chunk boundary. RED-PROVEN: removing the `shape_n` term from
+`certificate` makes `a_shape_score_over_an_empty_sample_is_never_a_pass` fail on the exact `gov.uk` row
+the sweep produced.
+
+Ten is not arbitrary: it is `scripts/fidelity-sweep.sh`'s own `LOW_SAMPLE` threshold, added to that
+script for exactly this reason. The lesson had been learned in one instrument and not the others —
+*again*, which is the thing `verify.sh`'s own header says about SHORT-vs-CRASH.
+
+### What the sweep actually says
+
+| term | measured | bar |
+|---|---|---|
+| shape ≥0.75 | **5.6%** of sites | 95% |
+| h-overflow clean | 77.8% | 95% |
+| overlap clean | 59.3% | 95% |
+| reading-order clean | 46.3% | 95% |
+| dead-target clean | 75.9% | 95% |
+
+And the finding that outranks all five: **13 of 54 sites render under 5% of what Chrome renders** —
+nytimes.com 0.04%, stripe.com 0.14%, reactjs.org 0.13%, notion.so 0.32%, terraform.io 0.30%,
+bitbucket.org 0.36%, and cdc.gov / intel.com / gov.uk / harvard.edu / newyorker.com / propublica.org /
+squarespace.com at 0.0%. That is a **class failure, not placement drift**, and it means the drift
+numbers above are measured on the sites that work. The three sites that clear the shape bar are all
+static-ish blogs (`jvns.ca` 94.3%, `blog.rust-lang.org` 87.4%, `lobste.rs` 85.7%) — the class this
+engine has always been good at.
+
+**Two honesty notes that must travel with the number.** (1) Three of 24 chunks hit the 600s cap, so 18
+of the 72 sampled sites are absent — and the ones that time out are the slow ones, so the reading is
+biased **optimistic**. (2) It is **not comparable** to the `PHASE0-ROADMAP-ANCHOR.md` §2 t380→t392
+table: different keying (selector-path), different metric (parent-relative SHAPE vs absolute placement),
+different corpus slice. This is a new baseline, not a delta. [[fidelity-instrument-shared-snapshot]]

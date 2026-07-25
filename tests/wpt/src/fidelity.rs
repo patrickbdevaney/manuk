@@ -52,6 +52,12 @@ pub struct Fidelity {
     /// certificate — whose bar is *"≥95% of sites CLEAN on each invariant"* — could not be computed
     /// from a sweep at all. A number printed and discarded is not a measurement, it is a log line.
     pub jarring: [usize; 4],
+    /// **How many elements the SHAPE score was computed over.** Load-bearing, not diagnostic: with no
+    /// sample, `shape_stats` returns the ratio `0/0` as **1.0**, and the first real sweep duly reported
+    /// seven sites at `SHAPE: 100.0% … (0 scored)` — including `gov.uk`, where all 418 probed elements
+    /// were MISSING. A page we render nothing of scored a perfect placement. The certificate cannot
+    /// accept that, and it cannot detect it from the ratio alone, so the sample size travels with it.
+    pub shape_n: usize,
 }
 
 /// The four jarring invariants, in the order they sit in [`Fidelity::jarring`]. Named so a report
@@ -83,6 +89,16 @@ pub struct Cert {
 /// project refuses; a floor that a caller can pass in is a floor that will eventually be passed in.
 pub const CERT_SHAPE_FLOOR: f64 = 0.75;
 pub const CERT_SITE_BAR: f64 = 0.95;
+/// The minimum number of elements a SHAPE score must be computed over to count as a verdict.
+///
+/// **This is the vacuous-pass guard, and it exists because the certificate's FIRST real sweep failed
+/// it.** `shape_stats` computes a ratio; over an empty sample that ratio is `1.0`, so seven of 55 sites
+/// came back `SHAPE: 100.0% … (0 scored)` and were counted as *passing the placement bar* — one of them
+/// (`gov.uk`) with all 418 probed elements MISSING. **A page we render nothing of must never score
+/// perfect placement.** Ten matches `scripts/fidelity-sweep.sh`'s own `LOW_SAMPLE` threshold, which was
+/// added to that script for precisely this reason; a sub-threshold site is UNSCORED, which counts
+/// against the bar rather than out of it.
+pub const CERT_MIN_SHAPE_SAMPLE: usize = 10;
 
 /// Evaluate the certificate over a sweep's rows.
 ///
@@ -97,7 +113,9 @@ pub fn certificate(rows: &[Fidelity]) -> Cert {
     };
     for r in rows {
         if let Some(s) = r.shape {
-            if !s.is_nan() {
+            // A ratio over an empty (or trivially small) sample is not a measurement of placement — it
+            // is arithmetic on nothing. Such a site is UNSCORED, never a pass.
+            if !s.is_nan() && r.shape_n >= CERT_MIN_SHAPE_SAMPLE {
                 c.scored += 1;
                 if s >= CERT_SHAPE_FLOOR {
                     c.shape_ok += 1;
@@ -201,14 +219,15 @@ pub fn append_rows_tsv(path: &Path, rows: &[Fidelity]) -> Result<()> {
         };
         writeln!(
             f,
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             r.name,
             num(r.structure),
             num(r.shape),
             r.jarring[0],
             r.jarring[1],
             r.jarring[2],
-            r.jarring[3]
+            r.jarring[3],
+            r.shape_n
         )?;
     }
     Ok(())
@@ -242,6 +261,10 @@ pub fn rows_from_tsv(path: &Path) -> Result<Vec<Fidelity>> {
             misplaced: 0,
             probed: 0,
             jarring: [usz(f[3]), usz(f[4]), usz(f[5]), usz(f[6])],
+            // A row written before `shape_n` existed has no 8th field. It reads back as 0, which is
+            // BELOW the sample floor, so an old row is UNSCORED rather than silently trusted — the
+            // conservative direction, and the only one that cannot resurrect a vacuous pass.
+            shape_n: f.get(7).map(|v| usz(v)).unwrap_or(0),
         });
     }
     Ok(out)
@@ -349,6 +372,7 @@ pub fn compare(manuk: &Path, chrome: &Path, name: &str) -> Result<Fidelity> {
         misplaced: 0,
         probed: 0,
         jarring: [0; 4],
+        shape_n: 0,
     })
 }
 
@@ -781,6 +805,7 @@ mod shape_tests {
             misplaced: 0,
             probed: 10,
             jarring,
+            shape_n: 64,
         }
     }
 
@@ -904,6 +929,74 @@ mod shape_tests {
             text.matches("#name").count(),
             1,
             "and only once, across appends"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// **The vacuous-pass guard, and the certificate's first real sweep is the reason it exists.**
+    ///
+    /// `shape_stats` returns a RATIO, and `0/0` is 1.0. So seven of 55 swept sites reported
+    /// `SHAPE: 100.0% … (0 scored)` and were counted as PASSING the placement bar — one of them
+    /// `gov.uk`, whose 418 probed elements were **all missing**. A page we render nothing of scored
+    /// perfect placement. That is the fifth time an instrument built here produced a bad number on its
+    /// first real run, and the pattern is always the same shape: a denominator nobody checked.
+    #[test]
+    fn a_shape_score_over_an_empty_sample_is_never_a_pass() {
+        // The exact row the sweep produced: nothing rendered, "perfect" shape.
+        let vacuous = Fidelity {
+            shape: Some(1.0),
+            shape_n: 0,
+            structure: Some(0.0),
+            ..row("gov.uk", Some(1.0), [0; 4])
+        };
+        let c = certificate(&[vacuous]);
+        assert_eq!(
+            c.shape_ok, 0,
+            "a shape ratio computed over ZERO elements must not count as meeting the placement bar"
+        );
+        assert_eq!(
+            c.scored, 0,
+            "…and the site is UNSCORED, which counts AGAINST the bar"
+        );
+        assert!(!c.holds());
+
+        // Just below and just above the sample floor.
+        let thin = Fidelity {
+            shape_n: super::CERT_MIN_SHAPE_SAMPLE - 1,
+            ..row("thin", Some(0.99), [0; 4])
+        };
+        let ok = Fidelity {
+            shape_n: super::CERT_MIN_SHAPE_SAMPLE,
+            ..row("ok", Some(0.99), [0; 4])
+        };
+        assert_eq!(
+            certificate(&[thin]).scored,
+            0,
+            "a thin sample is not a verdict"
+        );
+        assert_eq!(certificate(&[ok]).scored, 1);
+
+        // And the sample size must SURVIVE the chunk boundary, or a vacuous pass comes back from the
+        // accumulated file even though it was refused in-process.
+        let dir = std::env::temp_dir().join("manuk-cert-vacuous-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("rows.tsv");
+        super::append_rows_tsv(
+            &path,
+            &[Fidelity {
+                shape: Some(1.0),
+                shape_n: 0,
+                ..row("gov.uk", Some(1.0), [0; 4])
+            }],
+        )
+        .unwrap();
+        let back = super::rows_from_tsv(&path).unwrap();
+        assert_eq!(back[0].shape_n, 0, "the sample size round-trips");
+        assert_eq!(
+            certificate(&back).shape_ok,
+            0,
+            "and the guard still refuses it after the boundary"
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

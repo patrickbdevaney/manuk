@@ -106,3 +106,25 @@ never WPT count, never a vibe.
   718 (embedder must enable shared memory), `DisposableStack`/`AsyncDisposableStack`/
   `SuppressedError` 360 (explicit resource management), `ShadowRealm` 114. Three findings the run
   produced on its own are in the tick-546 journal entry; one of them is Bar 0.
+
+- `sweep @tick 549 (STRATIFIED 72-site sample, 54 scored): certificate NOT MET on every term.`
+  **shape ≥0.75 on 3 of 54 sites (5.6%)** · h-overflow clean 77.8% · overlap clean 59.3% ·
+  reading-order clean 46.3% · dead-target clean 75.9% · 16 of 54 UNSCORED (shape sample <10). Bar on
+  every term is 95%. Rows: `docs/loop/SWEEP-t549-rows.tsv`. Driven by
+  `manuk-wpt fidelity --urls-file` in 24 timeout-isolated chunks of 3; 3 chunks hit the 600s cap and
+  their sites are absent (18 of the 72 sampled), so **this reading is biased OPTIMISTIC — the sites
+  that timed out are the slow ones.**
+  ⚠ **The headline was 21.8% until the instrument was fixed mid-tick.** `shape_stats` returns a ratio,
+  and `0/0` is `1.0`, so seven sites reported `SHAPE: 100.0% … (0 scored)` and were counted as meeting
+  the placement bar — including `gov.uk`, whose 418 probed elements were **all missing**. Nine of the
+  twelve apparent passes were vacuous. `CERT_MIN_SHAPE_SAMPLE = 10` now makes a thin sample UNSCORED.
+  **NOT COMPARABLE to the §2 t380→t392 table**: different keying (selector-path), different metric
+  (parent-relative SHAPE, not absolute placement), and a different corpus slice. This line is the new
+  baseline; the next sweep is the first one that may be differenced against it.
+  **THE FINDING that outranks the drift numbers: 13 of 54 sites render under 5% of what Chrome does** —
+  nytimes 0.04%, stripe 0.14%, reactjs 0.13%, notion 0.32%, terraform 0.30%, bitbucket 0.36%, and
+  cdc/intel/gov.uk/harvard/newyorker/propublica/squarespace at 0.0%. That is a CLASS failure, not
+  placement drift, and it is where the next ticks go. Pooled root causes across the sweep, ranked by
+  sites explained: `missing box: <div>` 20 · `geometry: height ~16px (<div>)` 17 ·
+  `geometry: height ~64px (<div>)` 16 · `missing box: <a>` 15 · `missing box: <path>` 12 ·
+  `missing box: <svg>` 9.
