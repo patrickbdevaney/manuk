@@ -22226,3 +22226,54 @@ same string and font before touching layout (the ch/ex font-metrics work at t499
 precedent, and `manuk-text::zero_advance` is the seam). Then nytimes.com as a named single-site
 investigation, then the crawl-side sig correction, STEP 1(c) 100-tab RSS, Audit #28's three CSS probes.
 Cadences: self-audit 554; surface 558; const 559; wall 567.
+
+## Tick 553 — a cluster now carries an OPENABLE instance, and the first one falsified t552's lead (2026-07-25)
+
+t552 re-aimed the placement lead at TEXT MEASUREMENT: the largest clusters were `<a>` WIDTH with 12–19px
+medians, and an anchor's width is its text's width. Following the standing rule — forecast before building —
+the next step was to look at one. **Nothing printed one.** `Cluster.examples` has carried
+`site#path: chrome vs manuk` since the clustering landed and the fidelity printer never showed it, so the
+ledger could say *"`<a>` width is wrong on 18 sites"* and give a reader no way to open a single case.
+
+Printed it (one per cluster — three would bury the sites-explained ranking). **The first instance falsified
+the lead immediately:**
+
+```
+geometry: x (horizontal) ~8px (<a>)   [median 10px]
+  e.g. lobste.rs …/li:nth-child(3)/div:nth-child(2)/a:nth-child(3): [434 183 92×17] vs [305 183 92×17]
+```
+
+**Identical in size, 129px displaced.** That is an ancestor-layout fact, not a text-measurement one. And the
+width cases inside the SAME band are different again — `[130 471 18×46] vs [0 459 30×46]`, a 12→30px
+icon-ish anchor, and `[133 589 12×46] vs [0 573 30×23]` where both axes move. **One signature
+(`geometry: width ~8px (<a>)`), at least two causes.**
+
+So: **two consecutive inferences drawn from cluster HEADLINES were wrong** — t551's power-of-two
+"quantisation" (the printer's banding) and t552's text-measurement re-aim (a signature merging displacement
+with mis-sizing) — and both times the fix was to open an instance. Recording the generalisable form, because
+it is the third variant of lesson #2 this session: **a cluster signature is a GROUPING HYPOTHESIS, not a
+cause. It must be openable, and it must be opened before it is believed.** The ranked list is not a cause
+list yet.
+
+RED-PROVEN: dropping both engines' rects from the instance string (keeping just `site#path`) fails
+`a_cluster_carries_an_openable_instance_with_both_engines_rects` — the diagnostic value is entirely in the
+COMPARISON, since same-size-different-x and wrong-size are different bugs with different fixes. 36 lib tests
+green.
+
+HONEST CONSEQUENCE, recorded in the anchor: **the placement gap is not yet resolved to a subsystem**, and
+the next instrument brick is to **split the geometry signature by whether the SIZE matches** — pure
+displacement and mis-sizing must not share a cluster — and only then re-read the ranking. That outranks
+acting on the current ordering, which is the mistake t551 and t552 each made in a different direction.
+
+TICK SHAPE: instrument (clusters print an openable instance — `site#selector-path: chrome-rect vs
+manuk-rect`, RED-proven that both rects must be present) + the falsification it produced (t552's
+text-measurement re-aim retracted in the anchor; the signature identified as too coarse to rank causes). No
+engine src touched; Bar 0 untouched; no ratchet floor moved.
+WIKI: none — the correction lives where the wrong claim lives (PHASE0-ROADMAP-ANCHOR.md §6 + this entry) and
+the mechanism is one printer line documented at the call site. [no-pattern]
+
+NEXT: **split the geometry cluster signature by size-match** (`displaced (size ok)` vs `mis-sized`) so the
+ranked list becomes a cause list, then re-read the t551 baseline rows through it — no new sweep needed, the
+rows are committed. Only then chase the top cause. Then nytimes.com as a named single-site investigation,
+the crawl-side sig correction, STEP 1(c) 100-tab RSS, Audit #28's three CSS probes. Cadences: self-audit 554
+(DUE next tick); surface 558; const 559; wall 567.

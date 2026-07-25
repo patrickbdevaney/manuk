@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **314** | ticks 1–552 |
-| median tick cycle | **21m** | 313 intervals |
+| ticks landed | **315** | ticks 1–553 |
+| median tick cycle | **21m** | 314 intervals |
 | median, last 10 | **25m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.94** | 334.6h elapsed |
-| median verify wall | **63s** | 253 ticks |
+| **ticks per hour** | **0.94** | 334.8h elapsed |
+| median verify wall | **63s** | 254 ticks |
 | wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **329**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**166 of 314 ticks** (53%) moved a
+**166 of 315 ticks** (53%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **166** capability ticks, median cycle **21m**
-* median diff per tick: **+221 / −34** lines across 9 files
+* median diff per tick: **+220 / −34** lines across 9 files
 
 ## Every tick
 
@@ -411,5 +411,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **550** | 2026-07-25 01:56 | 32m | instrument | 67s | +334/−34 | 274 | 81 | 56.0% · | the sub-5%-coverage "class failure" was substantially the INSTRUMENT: the class signature  |
 | **551** | 2026-07-25 03:26 | 89m | scheduled | 67s | +248/−33 | 274 | 81 | 56.0% · | CONSTITUTION CHECK #35 + the RE-SWEEP: coverage moved a lot, SHAPE moved not at all (2026- |
 | **552** | 2026-07-25 03:40 | 14m | instrument | 67s | +234/−43 | 274 | 81 | 56.0% · | the "QUANTISED geometry" finding was the PRINTER, not the engine (2026-07-25) |
+| **553** | 2026-07-25 03:51 | 11m | instrument | 67s | +154/−32 | 274 | 81 | 56.0% · | a cluster now carries an OPENABLE instance, and the first one falsified t552's lead (2026- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

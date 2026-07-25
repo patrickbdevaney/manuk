@@ -803,6 +803,16 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                     String::new()
                 }
             );
+            // ── AND ONE INSTANCE, because a cause you cannot open is not actionable (tick 553).
+            //
+            // `Cluster.examples` has carried `site#path: chrome vs manuk` since the clustering landed and
+            // this printer never showed it, so the ledger could say *"`<a>` width is wrong on 18 sites"*
+            // and give a reader no way to look at a single one. Chasing the t552 text-measurement lead
+            // began by wanting exactly this line and not having it. One example opens the door; three
+            // would bury the sites-explained ranking the ordering exists to give.
+            if let Some(ex) = c.examples.first() {
+                eprintln!("        e.g. {ex}");
+            }
         }
     }
 

@@ -185,3 +185,19 @@ never WPT count, never a vibe.
   subsystem. The band still earns its place (it separates a 20px near-miss from a 4,000px collapse) but it
   must never again be read as the measurement.
 
+- `CORRECTION to the t552 re-aim @tick 553 — the text-measurement lead is FALSIFIED, and the signature is
+  too coarse to have carried it.` t552 corrected t551's power-of-two artifact and re-aimed at
+  text-measurement because the largest clusters were `<a>` WIDTH with 12–19px medians ("an anchor's width IS
+  its text's width"). The **first instance ever printed** falsified it:
+  `lobste.rs …/li:nth-child(3)/div:nth-child(2)/a:nth-child(3): [434 183 92×17] vs [305 183 92×17]` —
+  **identical in size, 129px displaced.** That is an ancestor-layout fact, not a text one. The width cases
+  in the same band are 12–30px icon-ish anchors (`[130 471 18×46] vs [0 459 30×46]`), a third thing again.
+  **One signature (`geometry: width ~8px (<a>)`), at least two causes.**
+  So the ranked cluster list is a **grouping hypothesis, not a cause list**, and the honest statement about
+  the placement gap is: it is not yet resolved to a subsystem. Two consecutive inferences drawn from cluster
+  headlines were wrong, and both times the fix was to open an instance — which nothing printed until t553.
+  **The tightening the ledger needs before it can rank causes again: split the geometry signature by
+  whether the SIZE matches** (pure displacement vs mis-sizing are different bugs with different fixes), and
+  only then re-read the ranking. That is the next instrument brick, and it outranks acting on the current
+  ordering.
+

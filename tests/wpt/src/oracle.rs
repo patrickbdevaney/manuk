@@ -719,6 +719,50 @@ mod tests {
     /// into ONE cluster of 3 sites — and this assertion fails. The magnitude band is what lets the
     /// board tell a saturated near-miss from an amplified page collapse.
     #[test]
+    /// **A cluster must carry an OPENABLE instance — the signature is a grouping hypothesis, not a
+    /// cause, and it has to be possible to look at one.**
+    ///
+    /// Written at tick 553 after two consecutive wrong inferences drawn from cluster HEADLINES: t551 read
+    /// a power-of-two pattern that was the printer's banding, and t552 re-aimed the lead at
+    /// text-measurement because `<a>` width was the biggest cluster. The first instance printed
+    /// falsified that too — `lobste.rs …/a:nth-child(3): [434 183 92×17] vs [305 183 92×17]` is
+    /// **identical in size** and 129px displaced, which is an ancestor-layout fact, not a text one, while
+    /// the width cases in the same band are 12–30px icon-ish anchors. **One signature, at least two
+    /// causes.** The examples field existed the whole time and nothing printed it, so the ledger could
+    /// name a cause with no way to open it.
+    #[test]
+    fn a_cluster_carries_an_openable_instance_with_both_engines_rects() {
+        let d = Divergence {
+            site: "lobste.rs".into(),
+            id: "body:nth-child(2)/a:nth-child(3)".into(),
+            kind: "geometry".into(),
+            tag: "a".into(),
+            chrome: "[434 183 92×17]".into(),
+            manuk: "[305 183 92×17]".into(),
+            delta: [129, 0, 0, 0],
+        };
+        let c = cluster(&[d]);
+        assert_eq!(c.len(), 1);
+        let ex = c[0]
+            .examples
+            .first()
+            .expect("a cluster must carry at least one instance");
+        assert!(
+            ex.contains("lobste.rs"),
+            "the instance names its SITE: {ex}"
+        );
+        assert!(
+            ex.contains("body:nth-child(2)/a:nth-child(3)"),
+            "…and the selector-path, so it can be opened in a browser: {ex}"
+        );
+        assert!(
+            ex.contains("[434 183 92×17]") && ex.contains("[305 183 92×17]"),
+            "…and BOTH engines' rects, because the whole diagnostic value is in the comparison — a \
+             pure displacement (same size, different x) and a sizing error are different bugs that the \
+             signature groups together: {ex}"
+        );
+    }
+
     /// **The band is a POWER OF TWO, and a reader cannot tell that from the signature — so the real
     /// median must travel with it.**
     ///

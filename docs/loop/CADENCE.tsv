@@ -313,3 +313,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 550	6b827b10	1784959017	2026-07-25T01:56:57-04:00	1927	instrument	67	8	334	34	274	81	3896	6960	0	329	31	the sub-5%-coverage "class failure" was substantially the INSTRUMENT: the class signature off the path key (2026-07-25)
 551	15bd97a0	1784964373	2026-07-25T03:26:13-04:00	5356	scheduled	67	7	248	33	274	81	3896	6960	0	329	31	CONSTITUTION CHECK #35 + the RE-SWEEP: coverage moved a lot, SHAPE moved not at all (2026-07-25)
 552	91d1f07b	1784965217	2026-07-25T03:40:17-04:00	844	instrument	67	7	234	43	274	81	3896	6960	0	329	31	the "QUANTISED geometry" finding was the PRINTER, not the engine (2026-07-25)
+553	89010cda	1784965880	2026-07-25T03:51:20-04:00	663	instrument	67	7	154	32	274	81	3896	6960	0	329	31	a cluster now carries an OPENABLE instance, and the first one falsified t552's lead (2026-07-25)
