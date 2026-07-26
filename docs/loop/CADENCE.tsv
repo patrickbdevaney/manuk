@@ -377,3 +377,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 616	b15976fc	1785080864	2026-07-26T11:47:44-04:00	1479	capability	63	8	424	8	310	81	3896	6960	0	341	31	a 404 page is a document to RENDER, not JavaScript to EXECUTE (2026-07-26)
 617	f42e9582	1785082551	2026-07-26T12:15:51-04:00	1687	capability	63	10	534	16	311	81	3896	6960	0	341	31	an external module resolved its imports against the DOCUMENT, and welt.de went from blank to rendered (2026-07-26)
 618	793df534	1785083089	2026-07-26T12:24:49-04:00	538	reliability	63	6	264	62	311	81	3896	6960	0	341	31	SURFACE AUDIT #34: the map claimed `works` for a capability that does not exist (2026-07-26)
+619	99b894a8	1785084833	2026-07-26T12:53:53-04:00	1744	capability	63	10	550	5	313	81	3896	6960	0	341	31	web fonts had NO gate, and building one found a bug whose blast radius is smaller than I expected (2026-07-26)

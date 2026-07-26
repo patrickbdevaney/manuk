@@ -442,6 +442,20 @@ impl FontContext {
         }
     }
 
+    /// Has a face already been REGISTERED (not merely declared) for this `@font-face` family?
+    ///
+    /// The page layer needs this to answer "is this download new?", and the answer is load-bearing
+    /// twice over: `fetch_and_apply_stylesheets` runs again after **every** round of dynamic scripts,
+    /// so without it the same font is re-fetched and re-registered each round — and, since a newly
+    /// registered face now forces a relayout, that would mean a full-document relayout per script
+    /// round, which is precisely the waste the relayout guard exists to prevent.
+    pub fn has_webfont_face(&self, family: &str) -> bool {
+        self.webfonts
+            .borrow()
+            .get(&family.to_ascii_lowercase())
+            .is_some_and(|ids| !ids.is_empty())
+    }
+
     pub fn register_named_font(&self, family: &str, data: Vec<u8>) {
         let before: std::collections::HashSet<fontdb::ID> =
             self.db.borrow().faces().map(|f| f.id).collect();

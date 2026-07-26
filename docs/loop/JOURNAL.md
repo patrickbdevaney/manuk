@@ -27172,3 +27172,92 @@ NEXT: `import()` is now correctly marked `missing` and is the honest next capabi
 subsystem (a host hook plus an async graph fetch), and welt.de reaches it. `@font-face` having **no
 gate at all** is the most surprising residue here: web fonts drive text metrics, which is the thing
 half the fidelity work has been chasing.
+
+## Tick 619 — web fonts had NO gate, and building one found a bug whose blast radius is smaller than I expected (2026-07-26)
+
+Surface audit #34 (t618) turned up one residue more surprising than the rest: **`@font-face` had zero
+occurrences in the entire gate directory** while the map claimed it `works`. Web fonts drive text
+metrics, which is what half the fidelity work has been chasing, so it went to the top.
+
+**THE PROBE FOUND A REAL BUG, AND EVERY LAYER IN ISOLATION WAS CORRECT.** Serving the WPT `Ahem` face
+(every glyph exactly 1em, so 5 characters at 20px is exactly 100px and no fallback can land there by
+accident):
+
+```text
+  measured        66.7px          the fallback face
+  Ahem promises  100.0px
+```
+
+Bisected downward, and each layer passed: the WOFF2 decoder is fine (7 `manuk-text` tests green, incl.
+this fixture), and `manuk-text` registers the face and measures `XXXXX` at **exactly 100.0**. The
+font was even fetched — the local server logged `GET /ahem.woff2`. What was missing sat one level up,
+in the relayout guard:
+
+```rust
+if count > 0 || self.dom.has_dirty() {   // external CSS arrived, or a script mutated the tree
+```
+
+Two reasons to re-lay-out, and there are **three**. A face that has just arrived changes the advance
+of every glyph in the document — every line box, wrap point and content height computed with the
+fallback is stale. The guard is not wrong to exist (an unconditional re-cascade is 257ms a go on
+bbc.co.uk); it was **incomplete**. *An optimisation guard is only as correct as its list of inputs.*
+
+**⚠ AND THEN THE MEASUREMENT DISAGREED WITH MY OWN PRICING, WHICH IS THE PART WORTH RECORDING.** I
+expected this to move real sites. Measured across the HEAD corpus: **10 of 16 sites use `@font-face`,
+and 10 of those 10 have it in an EXTERNAL sheet.** Only `www.welt.de` has one inline — and its
+fidelity is **byte-for-byte unchanged** by this fix:
+
+```text
+  before   COVERAGE 94.9%   SHAPE 66.9% (n=3063)   VISUAL 82.8%
+  after    COVERAGE 94.9%   SHAPE 66.9% (n=3063)   VISUAL 82.8%
+```
+
+Because `count` counts **all** external stylesheets, not only ones containing `@font-face`. Any page
+with a single external sheet — which is every site measured — already took the relayout branch. The
+broken path needs a page whose `@font-face` is inline **and** which has no external stylesheet at all.
+**Measured blast radius on this corpus: zero sites.**
+
+That is t590's lesson again — *a capability's usage is not its impact; measure in your own engine
+before pricing* — and this time it corrected me **after** the fix rather than before. The fix stays:
+it is correct, RED-proven, and cheap. But the tick's real deliverable is not the fix.
+
+**THE DELIVERABLE IS THAT WEB FONTS ARE MEASURED AT ALL, FOR THE FIRST TIME.** The map asserted
+`works` on nothing for as long as the row has existed; `G_WEBFONT_RELAYOUT` now asserts the whole
+chain end to end — fetch, WOFF2 decode, registration, family resolution, and *the document actually
+being laid out with it* — against a number only the real face can produce. Both stylesheet paths are
+gated, because they take different branches.
+
+RED-PROVEN:
+  · restore the two-input guard          -> RED, 66.7px instead of 100px
+  · vacuity guard inside the gate itself -> the serif fallback must NOT also measure 100px, or `== 100`
+    proves nothing about which face was used
+⚠ **I introduced a performance regression and caught it by reading my own diff.** `registered_webfont`
+was set on every successful fetch — but `fetch_and_apply_stylesheets` runs again after **every** round
+of dynamic scripts, so the same font would re-register each round and force a full-document relayout
+each time: precisely the waste the guard exists to prevent. Fixed with a new
+`FontContext::has_webfont_face()` that skips a family already registered, so the second round does no
+fetch and forces no relayout. **A fix that reintroduces the cost of the thing it fixes is not a fix.**
+⚠ **One change was DROPPED for being unprovable.** I had also excluded `registered_webfont` from the
+`RestyleDamage::None` early return. Neither gate could reach that branch — the external case answers
+`damage != None` because the sheet is genuinely new — so it went out. *An unproven change gets a gate
+or gets removed*, and I could not construct the case it was written for.
+
+**MAP: the web-fonts row comes off `unknown` to `partial`** (not `works` — see NEXT). `map-reconcile`
+now reports **drift 1**, and that one row is the instrument's own blind spot documented in audit #34:
+`G_CAP_TOUCH_PROBE` exists at `tests/wpt/tests/`, which the reconciler does not scan. The map is
+correct; the reconciler under-reads it. `scripts/` is observer-owned, so this is a note, not an edit —
+**observer: widening that scan is what takes drift to a true 0 and unblocks `--strict`.**
+
+TICK SHAPE: capability + measurement (a capability that had no gate now has one that exercises the
+entire chain; the bug it exposed is real and fixed, and its measured impact is honestly zero on this
+corpus). Bar 0 untouched; no ratchet floor moved; no capability traded.
+Gates: +2 `G_WEBFONT_RELAYOUT` (`g_webfont_relayout.rs` inline · `g_webfont_relayout_external.rs`
+external) — Ahem at exactly 100.0px, with a vacuity guard on the fallback.
+WIKI: `docs/wiki/text-layout.md` — "a downloaded web font is a third reason to re-lay-out".
+PATTERN: [no-pattern] — the fix changes no class of site on the measured corpus, and saying otherwise
+because a gate went green is exactly the overclaim this entry exists to avoid.
+
+NEXT: the map row for web fonts can come off `unknown` now that a gate exists — but note it should read
+`partial`, not `works`: nothing yet asserts `font-display`, unicode-range subsetting, or the FOUT/FOIT
+swap behaviour, and t563's Lora finding (Chromium resolves a webfont we fall back on) is still
+unexplained by this tick, since that page's sheet was external.

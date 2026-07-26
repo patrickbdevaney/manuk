@@ -1044,6 +1044,11 @@
   - L907 · No named font family ever resolved — fontdb's name query is case-SENSITIVE (tick 557)
   - L952 · The SECOND defect, one line later: intern_family discarded the case (tick 558)
   - L981 · @font-face shadows a same-named local face — a failed download must look failed (tick 561)
+  - L1010 · A downloaded web font is a THIRD reason to re-lay-out (tick 619)
+  - L1026 · Every layer below it was already correct
+  - L1041 · ⚠ The blast radius is smaller than it looks, and it was measured
+  - L1057 · The fix must not reintroduce the cost it is fixing
+  - L1065 · What is still unmeasured
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1071,4 +1076,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-986 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+991 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -6008,6 +6008,10 @@ impl Page {
 
         // Web fonts: fetch @font-face sources (from inline + external CSS) and register
         // them BEFORE the relayout, so the cascade's font-family resolves to them.
+        //
+        // `registered_webfont` records whether a face arrived that the document has NOT been laid
+        // out with yet — see the relayout guard below.
+        let mut registered_webfont = false;
         for s in &sources {
             let css = match s {
                 StyleSource::Inline(c, _) => c.clone(),
@@ -6023,10 +6027,24 @@ impl Page {
                 // martinfowler.com, where a failed webfont looked like a different font rather than
                 // like a failure.
                 fonts.declare_webfont_family(&ff.family);
+                // **Already have a face for this family? Then there is nothing new to lay out with.**
+                // This function runs again after EVERY round of dynamic scripts, so without this the
+                // same font is re-fetched and re-registered each round — and because a new face now
+                // forces a relayout, that would be a full-document relayout per round: exactly the
+                // waste the guard below exists to prevent. The fix must not reintroduce the cost the
+                // thing it fixes was protecting against.
+                if fonts.has_webfont_face(&ff.family) {
+                    continue;
+                }
                 for src in &ff.srcs {
                     let url = resolve_url(&self.final_url, src);
                     if let Some(data) = fetch_font_bytes(&url).await {
                         fonts.register_named_font(&ff.family, data);
+                        // **A FONT THAT ARRIVES IS A REASON TO RE-LAY-OUT, and it was not one.**
+                        // Every text box was measured with the fallback face; the new face has
+                        // different advances, so every line box, wrap point and content height in
+                        // the document is now stale.
+                        registered_webfont = true;
                         break; // first usable source wins
                     }
                 }
@@ -6041,7 +6059,14 @@ impl Page {
         // Doing it unconditionally costs a *full extra cascade* on every load, and on a 19,000-node
         // page the cascade is the single most expensive stage in the pipeline. Correctness did not
         // need it; only the mutated-tree case did.
-        if count > 0 || self.dom.has_dirty() {
+        // …**and a web font that just arrived is the THIRD reason**, which this condition did not
+        // know about. Measured: a page whose `@font-face` is in an INLINE `<style>` — what every
+        // "inline your critical CSS" build produces — has `count == 0` and a clean tree, so it took
+        // the `else` branch and kept the layout computed with the FALLBACK face. The font
+        // downloaded, decoded, registered and resolved correctly (`manuk-text` measures Ahem at
+        // exactly 100.0px for 5 chars at 20px) and then nothing asked the document to use it: the
+        // box stayed 66.7px. **An optimisation guard is only as correct as its list of inputs.**
+        if count > 0 || self.dom.has_dirty() || registered_webfont {
             // **Part 22.3: no duplicate tree renders.** `apply_stylesheets` now returns
             // `RestyleDamage::None` when the cascade's inputs have not moved (same sheets, same
             // tree). Laying out anyway threw that away: a full-document layout ran after EVERY round

@@ -1006,3 +1006,64 @@ to be **displaced by dy≈82px**, and the earlier sizing error had been partiall
 **A score can fall because a confound was removed** — which is the third time in this arc that a mechanism
 fitting the numbers was not the mechanism, and each time the fix was to read the page instead of the
 distribution. [[box-layout]]
+
+## A downloaded web font is a THIRD reason to re-lay-out (tick 619)
+
+`fetch_and_apply_stylesheets` re-cascades on two conditions:
+
+```rust
+if count > 0 || self.dom.has_dirty() {   // external CSS arrived, or a script mutated the tree
+```
+
+Both are right, and the guard earns its keep — an unconditional re-cascade is 257ms a go on
+bbc.co.uk, and the `else` branch was added because a relayout that cannot change the output is waste
+with a safety story attached. But it lists **two** reasons and there are **three**: a `@font-face`
+face that has just been registered changes the advance of every glyph in the document, so every line
+box, wrap point and content height computed with the fallback is stale.
+
+**An optimisation guard is only as correct as its list of inputs.**
+
+### Every layer below it was already correct
+
+Bisected with the WPT `Ahem` face, whose every glyph is exactly 1em wide — so `XXXXX` at 20px is
+exactly 100px and no fallback can produce that number by accident:
+
+| layer | result |
+|---|---|
+| WOFF2 decode (`manuk_text::decode_webfont`) | ✓ 7 tests green, incl. this fixture |
+| `register_named_font` + `resolve_family` | ✓ face count +1, resolves `Named(_)` |
+| `FontContext::measure` | ✓ **exactly 100.0** |
+| the fetch (local server log) | ✓ `GET /ahem.woff2` |
+| **the document's layout** | ✗ **66.7px** — the fallback |
+
+The font downloaded, decoded, registered and resolved, and nothing asked the page to use it.
+
+### ⚠ The blast radius is smaller than it looks, and it was measured
+
+`count` is `external.len()` — **all** external stylesheets, not only those containing `@font-face`. So
+any page with a single external sheet already took the relayout branch. Measured across the HEAD
+corpus:
+
+```text
+  10 of 16 sites use @font-face
+  10 of those 10 have it in an EXTERNAL sheet
+   1 has one inline (www.welt.de) — and its fidelity is byte-for-byte unchanged by this fix
+```
+
+The broken path needs a page whose `@font-face` is inline **and** which has no external stylesheet at
+all. **Measured impact on this corpus: zero sites.** The fix is correct and stays; the honest value of
+the tick is the *gate*, since the map had claimed `works` on nothing.
+
+### The fix must not reintroduce the cost it is fixing
+
+`fetch_and_apply_stylesheets` runs again after **every** round of dynamic scripts. Setting
+"a font arrived" on each successful fetch therefore re-registers the same face every round and forces
+a full-document relayout every round — exactly the waste the guard exists to prevent.
+`FontContext::has_webfont_face()` skips a family that already has a registered face, so the second
+round does no fetch and forces no relayout.
+
+### What is still unmeasured
+
+`font-display` (FOUT/FOIT swap behaviour), `unicode-range` subsetting, and the `Lora`-shaped finding
+from t563 — Chromium resolving a webfont where we fall back to `serif`, on a page whose sheet was
+**external** and therefore not explained by this tick. The map row should read `partial`, not `works`.
