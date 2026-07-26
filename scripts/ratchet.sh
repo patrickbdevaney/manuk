@@ -171,10 +171,22 @@ show|check)
   W=$(current_wall); MW=$(mark WALL); MW=${MW:-0}
   _rcpt=".git/manuk-verify-receipt"
   _rres=$(grep -oP '^result:\s*\K\w+' "$_rcpt" 2>/dev/null || echo "")
-  if [ "$MW" -gt 0 ] && [ "$W" -gt 0 ] && [ "$_rres" != "green" ]; then
-    printf '  %s! WALL       %4ss  (mark %ss) — ADVISORY: last receipt is %s, so this figure is not\n' \
-      "$YEL" "$W" "$MW" "${_rres:-absent}" 
-    printf '               trusted and will NOT block. verify.sh below is the real gate.%s\n' "$OFF"
+  # FRESHNESS (observer, tick 611). The breaker above trusted ANY green receipt — but a GREEN receipt
+  # from a PRIOR tree (verify never re-ran for THIS tree) is stale, and trusting it re-created the exact
+  # deadlock the breaker was built to kill: at t610 a green 05:34 receipt refused every tick for ~3.5h
+  # while the verify that would replace it never ran. Trust the wall only if the receipt is green AND
+  # measured THIS tree — computed exactly as verify.sh does (throwaway-index `add -A` + write-tree), so
+  # the two agree by construction. A green-but-stale figure now WARNS and defers to verify.sh, which
+  # re-measures. Safe by construction: a false "stale" only forces an extra verify (the real gate).
+  _ti="$(mktemp)"; GIT_INDEX_FILE="$_ti" git read-tree HEAD 2>/dev/null; GIT_INDEX_FILE="$_ti" git add -A 2>/dev/null
+  _curtree="$(GIT_INDEX_FILE="$_ti" git write-tree 2>/dev/null)"; rm -f "$_ti"
+  _rtree=$(grep -oP '^tree:\s*\K\w+' "$_rcpt" 2>/dev/null || echo "")
+  if [ "$MW" -gt 0 ] && [ "$W" -gt 0 ] && { [ "$_rres" != "green" ] || [ -z "$_rtree" ] || [ "$_rtree" != "$_curtree" ]; }; then
+    if [ "$_rres" = "green" ] && [ -n "$_rtree" ] && [ "$_rtree" != "$_curtree" ]; then
+      _why="STALE (a green receipt, but it measured a different tree — verify has not re-run for this one)"
+    else _why="last receipt is ${_rres:-absent}"; fi
+    printf '  %s! WALL       %4ss  (mark %ss) — ADVISORY: %s,\n' "$YEL" "$W" "$MW" "$_why"
+    printf '               so this figure is not trusted and will NOT block. verify.sh below is the real gate.%s\n' "$OFF"
     MW=0
   fi
   if [ "$MW" -gt 0 ] && [ "$W" -gt 0 ]; then
