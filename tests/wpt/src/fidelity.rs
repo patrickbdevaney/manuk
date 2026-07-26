@@ -72,6 +72,21 @@ pub enum Unmeasurable {
     /// removed the site from the corpus instead of counting against it, so the one outcome that
     /// most deserves to lower the score was the one that could not.
     RenderFailed,
+    /// **A subprocess we invoked did not come back.** Carries the deadline in seconds.
+    ///
+    /// Every step that shells out to Chrome used `Command::output()`, which has **no timeout of any
+    /// kind**. The sweep runs sites in ONE process, one after another, so a child that never returns
+    /// stalls the whole corpus — and worse, the run then produces no certificate at all, so **the
+    /// sites that already completed are lost with it.** A 20-site sweep was killed by its outer
+    /// `timeout` after ~45 minutes on the ninth site and its nine finished rows went with it.
+    ///
+    /// That is the fixed-denominator rule's blind spot. §0 makes a timeout a COUNTED outcome — but
+    /// only once something *notices* it. An unbounded child is not counted, not excluded and not
+    /// reported: it is total loss of the measurement, strictly worse than the flattering drop the rule
+    /// was written to prevent. It is also Lesson 4 in a new place (*"an oracle must never be able to
+    /// charge its own slowness to your account"*): the differential crawl solved this with a per-site
+    /// process and a watchdog, and the certification sweep never inherited either.
+    Timeout(u64),
     /// **The ORACLE rendered a shell, so there is nothing to compare against.** Carries the number of
     /// elements Chrome's probe actually produced.
     ///
@@ -109,6 +124,7 @@ impl Unmeasurable {
             Self::ProbeBlocked => "probe-blocked".into(),
             Self::RenderFailed => "render-failed".into(),
             Self::ShellOnly(n) => format!("shell-only-{n}"),
+            Self::Timeout(secs) => format!("timeout-{secs}s"),
         }
     }
 
@@ -119,6 +135,10 @@ impl Unmeasurable {
             "unreachable" => Some(Self::Unreachable),
             "probe-blocked" => Some(Self::ProbeBlocked),
             "render-failed" => Some(Self::RenderFailed),
+            _ if s.starts_with("timeout-") && s.ends_with('s') => s["timeout-".len()..s.len() - 1]
+                .parse()
+                .ok()
+                .map(Self::Timeout),
             _ if s.starts_with("shell-only-") => {
                 s["shell-only-".len()..].parse().ok().map(Self::ShellOnly)
             }
@@ -160,6 +180,12 @@ impl Unmeasurable {
                  that most deserves to count against the score"
                     .into()
             }
+            Self::Timeout(secs) => format!(
+                "a child process did not return within {secs}s and was killed. The sweep runs sites in \
+                 ONE process, so an unbounded child stalls the WHOLE corpus and the run yields no \
+                 certificate at all — the sites that already finished are lost with it, which is \
+                 strictly worse than the silent drop the fixed-denominator rule exists to prevent"
+            ),
             Self::ShellOnly(n) => format!(
                 "the ORACLE rendered only {n} element(s) — a shell, not the page. The probe serves one \
                  fetched copy from file://, where the site's own origin is null and its scripts' \
@@ -1406,6 +1432,7 @@ mod shape_tests {
             Unmeasurable::ProbeBlocked,
             Unmeasurable::RenderFailed,
             Unmeasurable::ShellOnly(3),
+            Unmeasurable::Timeout(90),
         ] {
             assert_eq!(
                 Unmeasurable::from_tag(&u.tag()),

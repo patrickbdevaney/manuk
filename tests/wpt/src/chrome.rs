@@ -409,7 +409,8 @@ pub fn capture_seen_all_paths(
         .arg("--virtual-time-budget=6000")
         .arg("--dump-dom")
         .arg(format!("file://{}", tmp.display()));
-    let out = cmd.output().map_err(|_| Unmeasurable::ProbeBlocked)?;
+    let secs = chrome_timeout_secs();
+    let out = output_with_deadline(cmd, secs).ok_or(Unmeasurable::Timeout(secs))?;
     let _ = std::fs::remove_file(&tmp);
     if !out.status.success() {
         return Err(Unmeasurable::ProbeBlocked);
@@ -494,6 +495,182 @@ pub fn fetch_document(url: &str) -> std::result::Result<String, Unmeasurable> {
     match crate::fidelity::classify_fetch(status, &body) {
         Some(reason) => Err(reason),
         None => Ok(body),
+    }
+}
+
+/// **How long a single Chrome invocation may take before it is killed.**
+///
+/// **This deadline exists to make an INFINITE wait finite. It is not a latency budget**, and the
+/// difference decides the number: any value comfortably above the legitimate worst case and far below
+/// "the whole sweep" achieves the goal, so it should be set at the generous end and left there.
+///
+/// The first draft used 90s and **the wall failed on it immediately** — G1's own two `file://`
+/// snapshots came back `2×timeout-90s`. Chrome is not slow on those pages; the WALL runs ~25 test
+/// binaries in parallel, and a Chrome that takes seconds on an idle box takes minutes under that.
+/// Which is precisely the trap this comment already warned about in its first version — *a deadline
+/// that fires on a working site turns a fidelity measurement into a timing one* — written by me, and
+/// then walked into on the very next verify.
+///
+/// 300s is ~6x the slowest legitimate run observed on an idle box and ~9x under the wall's own load,
+/// while still turning the observed failure (a sweep stalled ~45 minutes, losing nine completed
+/// sites) into one counted row. `MANUK_CHROME_TIMEOUT_SECS` overrides.
+fn chrome_timeout_secs() -> u64 {
+    std::env::var("MANUK_CHROME_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(300)
+}
+
+/// **Run a child process with a deadline. `Command::output()` has none.**
+///
+/// Every Chrome invocation in this file used `output()`, which blocks forever if the child does. The
+/// sweep runs sites in ONE process, one after another, so a single stuck child stalls the entire
+/// corpus — and the run then produces no certificate at all, losing the sites that already finished.
+/// Observed: a 20-site sweep killed by its outer `timeout` after ~45 minutes on the ninth site, with
+/// its nine completed rows discarded.
+///
+/// `None` means the deadline fired and the child was killed; the caller turns that into a COUNTED
+/// [`Unmeasurable::Timeout`] row rather than losing the run.
+///
+/// Polling rather than a `wait_timeout` crate: it is a dozen lines, adds no dependency, and the
+/// resolution that matters here is seconds. **The kill is not optional** — returning without it would
+/// leak a headless Chrome per stuck site, and the sweep's whole problem is that it runs long.
+fn output_with_deadline(mut cmd: Command, secs: u64) -> Option<std::process::Output> {
+    use std::io::Read;
+    use std::process::Stdio;
+    let mut child = cmd
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .ok()?;
+
+    // **THE PIPES MUST BE DRAINED WHILE WE WAIT, AND THE FIRST VERSION OF THIS DID NOT.**
+    //
+    // `Command::output()` reads stdout and stderr concurrently with the wait. A poll loop that only
+    // calls `try_wait` does not — so when the child fills the 64KB pipe buffer it BLOCKS on write and
+    // never exits, and the "timeout" then fires on a process that was working perfectly. Chrome's
+    // `--dump-dom` emits hundreds of KB, so this is not an edge case: it is every real page.
+    //
+    // The wall caught it in the most pointed way available. The first draft timed out on G1's own two
+    // snapshot pages; I read that as "the deadline is too tight", raised it — and they simply took the
+    // longer deadline instead. **A bound that turns a working process into a timeout is a worse bug
+    // than the unbounded wait it replaced**, because the unbounded wait at least never lied about a
+    // healthy site.
+    let mut so = child.stdout.take()?;
+    let mut se = child.stderr.take()?;
+    let t_out = std::thread::spawn(move || {
+        let mut v = Vec::new();
+        let _ = so.read_to_end(&mut v);
+        v
+    });
+    let t_err = std::thread::spawn(move || {
+        let mut v = Vec::new();
+        let _ = se.read_to_end(&mut v);
+        v
+    });
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(secs);
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(st)) => break st,
+            Ok(None) => {}
+            Err(_) => return None,
+        }
+        if std::time::Instant::now() >= deadline {
+            // The kill is not optional: returning without it leaks a headless Chrome per stuck site,
+            // and the sweep's whole problem is that it runs long. Killing also closes the pipes, so
+            // the reader threads finish and can be joined rather than detached.
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = t_out.join();
+            let _ = t_err.join();
+            tracing::warn!(
+                secs,
+                "a Chrome invocation exceeded its deadline and was killed"
+            );
+            return None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    };
+
+    Some(std::process::Output {
+        status,
+        stdout: t_out.join().ok()?,
+        stderr: t_err.join().ok()?,
+    })
+}
+
+#[cfg(test)]
+mod deadline_tests {
+    use super::*;
+
+    /// **G_SUBPROCESS_DEADLINE — a child that never returns must be killed, not waited on forever.**
+    ///
+    /// `Command::output()` has no timeout. The certification sweep runs sites in ONE process, one
+    /// after another, so a single stuck Chrome stalls the whole corpus — and the run then yields no
+    /// certificate at all, so the sites that already completed are lost with it. Observed: a 20-site
+    /// sweep killed by its outer `timeout` after ~45 minutes on the ninth site, its nine finished rows
+    /// discarded.
+    ///
+    /// The hang itself was NOT reproducible in isolation (`ebay.com` alone completes in 32s), which is
+    /// exactly why this gates the MECHANISM rather than the site: the defect is that an unbounded wait
+    /// exists at all, and that is true whether or not any particular page triggers it today.
+    #[test]
+    fn a_child_that_never_returns_is_killed_at_the_deadline() {
+        // Well under any real Chrome run, so the assertion cannot pass by the child finishing.
+        let mut c = Command::new("sleep");
+        c.arg("120");
+        let t = std::time::Instant::now();
+        let out = output_with_deadline(c, 1);
+        let elapsed = t.elapsed();
+        assert!(
+            out.is_none(),
+            "a child that outlives its deadline must report None, so the caller can COUNT the site as \
+             Unmeasurable::Timeout instead of blocking the corpus"
+        );
+        assert!(
+            elapsed < std::time::Duration::from_secs(15),
+            "the deadline must actually fire — returned after {elapsed:?}, which means the wait is \
+             still unbounded and one stuck child still costs the whole sweep"
+        );
+
+        // …and the ordinary case must be untouched: a child that finishes returns its output.
+        let mut ok = Command::new("echo");
+        ok.arg("alive");
+        let got = output_with_deadline(ok, 30).expect("a fast child returns its output");
+        assert!(
+            String::from_utf8_lossy(&got.stdout).contains("alive"),
+            "bounding the wait must not change what a healthy child returns"
+        );
+
+        // ── **A LARGE OUTPUT, which is what the first version of this deadlocked on.**
+        //
+        // A poll loop that does not drain the pipes lets the child fill the 64KB buffer and BLOCK on
+        // write; `try_wait` then never reports exit and the deadline fires on a healthy process.
+        // Chrome's `--dump-dom` emits hundreds of KB, so this is the normal case, not an edge one —
+        // and the failure it produces (a working page reported as a timeout) is worse than the
+        // unbounded wait this replaced. 4MB is ~64 pipe buffers: nothing survives that without
+        // concurrent draining.
+        let mut big = Command::new("sh");
+        big.arg("-c")
+            .arg("yes ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz | head -c 4000000");
+        let t2 = std::time::Instant::now();
+        let out2 = output_with_deadline(big, 30).expect(
+            "a child producing 4MB must COMPLETE, not hit the deadline — if this is None the pipes \
+             are not being drained while we wait, and every real Chrome run will 'time out' while \
+             working perfectly",
+        );
+        assert_eq!(
+            out2.stdout.len(),
+            4_000_000,
+            "the whole of a large stdout must come back — a truncated read is a silently wrong probe"
+        );
+        assert!(
+            t2.elapsed() < std::time::Duration::from_secs(25),
+            "4MB should stream in well under the deadline; {:?} means it is being throttled by the \
+             poll interval rather than read concurrently",
+            t2.elapsed()
+        );
     }
 }
 
@@ -605,7 +782,8 @@ pub fn capture_url_screenshot(
         .arg("--virtual-time-budget=6000") // let the page settle (webfonts, JS) before the shot
         .arg(format!("--screenshot={}", dest.display()))
         .arg(format!("file://{}", tmp.display()));
-    let out = cmd.output().map_err(|_| Unmeasurable::ProbeBlocked)?;
+    let secs = chrome_timeout_secs();
+    let out = output_with_deadline(cmd, secs).ok_or(Unmeasurable::Timeout(secs))?;
     let _ = std::fs::remove_file(&tmp);
     if !out.status.success() {
         return Err(Unmeasurable::ProbeBlocked);

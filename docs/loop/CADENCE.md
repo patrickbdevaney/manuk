@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **384** | ticks 1–624 |
-| median tick cycle | **21m** | 383 intervals |
+| ticks landed | **385** | ticks 1–625 |
+| median tick cycle | **21m** | 384 intervals |
 | median, last 10 | **23m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.04** | 369.6h elapsed |
-| median verify wall | **67s** | 323 ticks |
+| **ticks per hour** | **1.03** | 371.7h elapsed |
+| median verify wall | **67s** | 324 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**192 of 384 ticks** (50%) moved a
+**192 of 385 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -481,5 +481,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **622** | 2026-07-26 13:51 | 16m | correction | 63s | +159/−21 | 314 | 81 | 56.0% · | ResizeObserver is NOT an inert stub, and t621 said it was (2026-07-26) |
 | **623** | 2026-07-26 13:55 | 4m | the | 63s | +171/−4 | 314 | 81 | 56.0% · | constitution check #44, and re-verifying the other negative under t622's new rule (2026-07 |
 | **624** | 2026-07-26 14:40 | 45m | capability | 63s | +482/−17 | 315 | 81 | 56.0% · | dynamic `import()` works, and the thing that parked it was a LIFETIME (2026-07-26) |
+| **625** | 2026-07-26 16:43 | 2.1h | reliability | 63s | +351/−4 | 315 | 81 | 56.0% · | one stuck child process costs the WHOLE corpus, and nothing was bounded (2026-07-26) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
