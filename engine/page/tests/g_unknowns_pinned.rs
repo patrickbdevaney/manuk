@@ -13,13 +13,20 @@
 //!   forced reflow               40 -> 140   (a mid-script style write is visible to the NEXT read)
 //!   list markers                li.left 48 vs ul.left 8 — the marker's 40px of indent exists
 //!   overflow-anchor             MISSING from getComputedStyle — the property is not computed at all
-//!   ResizeObserver              constructs, observes, and NEVER DELIVERS (fired:0 after mutate+drain)
+//!   ResizeObserver              DELIVERS — see the correction below
 //! ```
 //!
-//! **`overflow-anchor` and `ResizeObserver` are the reason this audit was worth running.** Both had
-//! `works` in the map. One is not implemented at all; the other is the `G_MUTATION` shape — an object
-//! that constructs, accepts `observe()`, and calls your callback never. *"The global exists" is not
-//! "the observer fires"*, and only a probe that waits for delivery can tell them apart.
+//! **`overflow-anchor` had `works` in the map and is not implemented at all** — the property is not
+//! even computed. That is the finding this audit was worth running for.
+//!
+//! ⚠⚠ **AND ONE OF t621's FINDINGS WAS WRONG, CORRECTED HERE AT t622.** ResizeObserver was pinned as
+//! an "inert stub, callback NEVER called". It is not. `__runObservers` — the engine's only honest
+//! moment to ask *"did this box change size?"* — is called from `view_changed`, and the t621 probe
+//! drove the page with script evaluation alone. Driven the way a real frame drives it, the callback
+//! fires with the right box. **I measured a capability through a path that cannot deliver it and
+//! published "inert stub" to the map, the journal and a commit message — one tick after writing
+//! *"suspect the instrument before the subject"* twice.** The assertion here is now the POSITIVE, and
+//! the harness calls `view_changed` so the gate exercises the real delivery path.
 
 use manuk_text::FontContext;
 
@@ -29,6 +36,7 @@ const HTML: &str = r#"<!doctype html><html><head><style>
 </style></head><body>
   <ul id="ul"><li>one</li><li>two</li></ul>
   <div id="box">x</div>
+  <div id="robox" style="width:80px;height:55px">r</div>
   <div id="out">-</div>
   <script>
     var R = [];
@@ -62,18 +70,27 @@ const HTML: &str = r#"<!doctype html><html><head><style>
                - Math.round(document.getElementById('ul').getBoundingClientRect().left);
     R.push('markerIndent:' + indent);
 
-    // ── RESIZEOBSERVER, pinned as the HONEST NEGATIVE it measured as. It constructs and accepts
-    // `observe()`, and the callback is never called — the `G_MUTATION` shape. This assertion is a
-    // NEGATIVE and is therefore the one that rots: **the moment delivery lands it goes RED, and that
-    // is the signal to re-price the map row, not to retune this line.** An honest "no" that nobody
-    // updates becomes a lie exactly when the capability arrives.
+    // ── RESIZEOBSERVER. t621 pinned this as an "inert stub, callback NEVER called" and **that was
+    // WRONG** — the probe drove it with script evaluation alone, and `__runObservers` (the engine's
+    // only honest moment to ask "did this box change size?") is called from `view_changed`. Driven
+    // the way the engine actually drives it, the callback fires. The assertion is now the POSITIVE,
+    // and the harness below calls `view_changed` because that is what a real frame does.
     R.push('roCtor:' + (typeof ResizeObserver));
-    var roFired = 0;
-    var ro = new ResizeObserver(function () { roFired++; });
-    ro.observe(document.getElementById('box'));
-    b.style.height = '260px';               // a real size change on the observed element
-    R.push('roFired:' + roFired);
+    globalThis.__roFired = 0;
+    globalThis.__roSizes = [];
+    new ResizeObserver(function (list) {
+      globalThis.__roFired++;
+      list.forEach(function (e) { globalThis.__roSizes.push(Math.round(e.contentRect.height)); });
+      // A DEDICATED element: the forced-reflow assertion above mutates #box, and an observer on the
+      // same node would report that mutation instead of the size it was asked about — two assertions
+      // silently measuring each other.
+    }).observe(document.getElementById('robox'));
 
+    globalThis.__report = function () {
+      R.push('roFired:' + (globalThis.__roFired > 0));
+      R.push('roSize:' + globalThis.__roSizes.join(','));
+      document.getElementById('out').textContent = R.join(' ');
+    };
     document.getElementById('out').textContent = R.join(' ');
   </script>
 </body></html>"#;
@@ -81,7 +98,12 @@ const HTML: &str = r#"<!doctype html><html><head><style>
 #[test]
 fn capabilities_the_map_asserted_are_measured() {
     let fonts = FontContext::new();
-    let page = manuk_page::Page::load(HTML, "https://u.test/", &fonts, 800.0);
+    let mut page = manuk_page::Page::load(HTML, "https://u.test/", &fonts, 800.0);
+    // **The engine drives the observers.** `__runObservers` runs from `view_changed`, which is what a
+    // real frame does — not from script evaluation. Omitting this is precisely how t621 measured
+    // ResizeObserver as inert and published it.
+    page.view_changed(0.0, 600.0, 800.0, false);
+    page.eval_for_test("__report()");
     let root = page.dom().root();
     let out = manuk_css::query_selector_all(page.dom(), root, "#out")[0];
     let got = page.dom().text_content(out);
@@ -96,9 +118,10 @@ fn capabilities_the_map_asserted_are_measured() {
         "reflow:40->140",
         // the marker's indent exists (Chrome's default is 40px; the claim is that it is NOT 0)
         "markerIndent:40",
-        // …and the honest negative: the surface exists, delivery does not.
+        // …and ResizeObserver DELIVERS, once driven the way the engine drives it.
         "roCtor:function",
-        "roFired:0",
+        "roFired:true",
+        "roSize:55",
     ] {
         assert!(
             got.contains(claim),

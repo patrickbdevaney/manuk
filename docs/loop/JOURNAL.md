@@ -27373,3 +27373,64 @@ NEXT: `ResizeObserver` delivery is now a named, measured gap with a gate that wi
 and it is worth more than its row suggests, since `IntersectionObserver` already fires (t59) and every
 responsive component library reaches for RO. The remaining `unknown` rows from audit #34 (web fonts'
 `font-display`/`unicode-range`, `ic`/`ric` units, test262) are each a probe of this shape.
+
+## Tick 622 — ResizeObserver is NOT an inert stub, and t621 said it was (2026-07-26)
+
+**t621's headline finding was wrong, and it shipped.** I pinned `ResizeObserver` as *"constructs,
+observes, callback NEVER called"* — the `G_MUTATION` shape — in the map, in the journal, and in a
+commit message. It fires:
+
+```text
+  t621 probe (script evaluation only)   fired:0
+  driven as the engine drives it        fired:1  contentRect.height 55  ✓
+```
+
+`__runObservers` — the engine's one honest moment to ask *"did this box change size?"* — is called
+from **`view_changed`**, i.e. from a real frame. My probe drove the page with `eval_for_test` and
+never called it. **A capability measured through a path that cannot deliver it reads exactly like a
+capability that does not exist**, and the two are indistinguishable from the JS side: the constructor
+works, `observe()` accepts the element, and nothing arrives.
+
+**The delivery code was there the whole time and so was a passing test for it** — `engine/page/src/lib.rs`
+scenario 21 asserts `ro:top=40` and drives it with `page.view_changed(...)`. I did not look for an
+existing test of the thing I was about to declare absent.
+
+**⚠ THIS IS THE SESSION'S OWN LESSON, IGNORED BY THE PERSON WHO WROTE IT TWICE.** *"Suspect the
+instrument before the subject"* is in audit #34 (t618), where it fired twice in one tick — the
+"262 unreferenced gate files" that were 6, and the dangling `G_CAP_TOUCH_PROBE` that exists. Three
+ticks later I did it again, and this time the wrong answer did not get caught by a re-check because
+**a negative result feels like it needs no confirmation**. That asymmetry is the whole defect:
+`fired:0` was accepted at face value, while a surprising *positive* would have been re-run twice.
+
+**The rule that would have caught it, and it is cheap:** *before publishing an absence, name the code
+path that WOULD deliver it and show that path ran.* I could not have named `__runObservers` at t621 —
+which is exactly the state in which one must not publish "inert".
+
+**⚠⚠ AND THE NEGATIVE ASSERTION IS WHY IT WAS CAUGHT AT ALL.** t621 pinned `roFired:0` into the gate
+because the reconciler refused a bare `partial`. That assertion is what made the claim *falsifiable*,
+and re-reading it while looking at `__runObservers` is what exposed it — one tick later instead of
+fifty. **A wrong claim written as an assertion is enormously better than a wrong claim written as
+prose**, and t621's own entry called that line "the one that rots". It rotted immediately, in the
+useful direction.
+
+The gate now asserts the POSITIVE (`roFired:true`, `roSize:55`) and its harness calls `view_changed`,
+so it exercises the real delivery path. RO gets a dedicated element: the forced-reflow assertion
+mutates `#box`, and an observer on the same node would report *that* mutation — two assertions
+silently measuring each other.
+
+RED-PROVEN: disabling the `ro._cb(res, ro)` delivery call → RED `roFired:false`, `roSize:` empty. Map
+row corrected to `gated`, drift back to 0.
+
+TICK SHAPE: correction (a false absence retracted; a capability that works is claimed again, with a
+gate that exercises the path that makes it work). Bar 0 untouched; no ratchet floor moved. **No engine
+source changed** — the engine was right and the measurement was wrong.
+Gates: `G_UNKNOWNS_PINNED` amended — the ResizeObserver claim inverted from negative to positive, and
+its harness now drives `view_changed`.
+WIKI: none [forced] — no engine mechanism changed.
+PATTERN: [no-pattern] — no browser capability changed.
+
+NEXT: `overflow-anchor` remains genuinely missing (the property is not computed) — that one was
+re-checked against the same standard and stands. The unexamined risk this tick exposes is broader than
+one row: **every other `unknown`→verdict I pin from a probe needs the delivering code path named before
+the verdict is written**, and the same question should be asked of the three `works` verdicts pinned at
+t621 — those were positives, so a path exists by construction, which is why the asymmetry matters.
