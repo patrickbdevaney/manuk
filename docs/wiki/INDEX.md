@@ -248,6 +248,7 @@
   - L1324 · 86 of 95 — the throw-class defect was never four properties wide (tick 597)
   - L1336 · One list, three consumers — the structural half
   - L1347 · Two serializations the obvious implementation gets wrong
+  - L1365 · A FALSE NO costs a page its enhancement, exactly as a false yes costs it its fallback (tick 601)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1027,4 +1028,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-942 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+943 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

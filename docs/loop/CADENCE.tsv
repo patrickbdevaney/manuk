@@ -360,3 +360,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 598	78bc684f	1785040745	2026-07-26T00:39:05-04:00	568	the	85	7	297	38	294	81	3896	6960	0	338	31	SURFACE AUDIT #33: the board is steering at finished work, and the map was not machine-readable (2026-07-26)
 599	b4e28d29	1785043189	2026-07-26T01:19:49-04:00	2444	the	85	12	504	43	295	81	3896	6960	0	338	31	CONSTITUTION CHECK #41 + Subresource Integrity: a security control may be absent, but not unknown (2026-07-26)
 600	ab94740a	1785044509	2026-07-26T01:41:49-04:00	1320	capability	85	9	459	40	296	81	3896	6960	0	338	31	anti-framing: two mechanisms, one enforcement point, and `frame-ancestors` WINS (2026-07-26)
+601	36d1e351	1785045777	2026-07-26T02:02:57-04:00	1268	measurement	85	9	321	41	297	81	3896	6960	0	338	31	one probe, two honesty corrections, pointing OPPOSITE ways (2026-07-26)

@@ -2101,7 +2101,13 @@ const PARSE_ONLY_LONGHANDS: &[&str] = &[
     "position-try-fallbacks",
     "view-transition-class",
     "view-transition-name",
-    "zoom",
+    // `zoom` LEFT THIS LIST at tick 601, and it is the first entry to leave for the OPPOSITE
+    // reason to the rest: it was never unimplemented. **Stylo applies it inside its own length
+    // computation** (`effective_zoom`), so it works without this engine reading a `zoom` field at
+    // all — measured end to end: a `zoom: 2` 50px box lays out at 100px, its `font-size: 10px`
+    // computes to 20px, and a 20px CHILD comes out at 40px, which is inheritance behaving too.
+    // Denying it was a FALSE NO, and a false no costs a page its enhancement branch just as surely
+    // as a false yes costs it a fallback.
 ];
 
 /// **Properties Stylo's servo build parses NATIVELY and this engine still does not render.**
@@ -2131,6 +2137,10 @@ const PARSE_ONLY_LONGHANDS: &[&str] = &[
 /// over. Delete a line here the moment its property is genuinely rendered; `G_SUPPORTS_HONESTY` holds
 /// the answer either way.
 const UNRENDERED_LONGHANDS: &[&str] = &[
+    // `text-justify` JOINED at tick 601, found by the same probe that freed `zoom`. Stylo's servo
+    // build parses it natively and nothing in this engine reads it — the t591 category exactly.
+    // One probe, two corrections, in OPPOSITE directions.
+    "text-justify",
     // `filter` LEFT THIS LIST at tick 592 — it is rendered now (`stylo_map` reads the computed
     // list, `manuk-paint` runs the pipeline over an offscreen group). The list is meant to shorten
     // exactly this way, one entry per landed capability, each with its own evidence.
@@ -2280,6 +2290,7 @@ mod tests {
         // `clip-path` moved to the rendered set at t593 (basic shapes).
         // `mix-blend-mode` moved to the rendered set at t594.
         assert!(!supports_condition("isolation: isolate"));
+        assert!(!supports_condition("text-justify: inter-word"));
         assert!(!supports_condition("writing-mode: vertical-rl"));
         // …and composition still resolves through Stylo for the remaining list too.
         assert!(supports_condition("not (isolation: isolate)"));
@@ -2296,6 +2307,9 @@ mod tests {
         assert!(supports_condition("clip-path: circle(50%)"));
         assert!(supports_condition("mix-blend-mode: multiply"));
         assert!(supports_condition("backdrop-filter: blur(4px)"));
+        // `zoom` is RENDERED — by Stylo's own effective-zoom machinery, not by a field we read —
+        // so the honest answer is yes. It was a FALSE NO until tick 601 measured it.
+        assert!(supports_condition("zoom: 2"));
         assert!(supports_condition(
             "(display: flex) and (filter: blur(4px))"
         ));

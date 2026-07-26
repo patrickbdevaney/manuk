@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **361** | ticks 1–600 |
-| median tick cycle | **21m** | 360 intervals |
-| median, last 10 | **23m** | 10 intervals |
+| ticks landed | **362** | ticks 1–601 |
+| median tick cycle | **21m** | 361 intervals |
+| median, last 10 | **22m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.01** | 356.6h elapsed |
-| median verify wall | **67s** | 300 ticks |
+| **ticks per hour** | **1.01** | 357.0h elapsed |
+| median verify wall | **67s** | 301 ticks |
 | wall trend | 39s → 85s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **296**
+* **live gates**: 27 → **297**
 * **✅ rows in the capability ledger**: 144 → **338**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**181 of 361 ticks** (50%) moved a
+**181 of 362 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -458,5 +458,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **598** | 2026-07-26 00:39 | 9m | the | 85s | +297/−38 | 294 | 81 | 56.0% · | SURFACE AUDIT #33: the board is steering at finished work, and the map was not machine-rea |
 | **599** | 2026-07-26 01:19 | 41m | the | 85s | +504/−43 | 295 | 81 | 56.0% · | CONSTITUTION CHECK #41 + Subresource Integrity: a security control may be absent, but not  |
 | **600** | 2026-07-26 01:41 | 22m | capability | 85s | +459/−40 | 296 | 81 | 56.0% · | anti-framing: two mechanisms, one enforcement point, and `frame-ancestors` WINS (2026-07-2 |
+| **601** | 2026-07-26 02:02 | 21m | measurement | 85s | +321/−41 | 297 | 81 | 56.0% · | one probe, two honesty corrections, pointing OPPOSITE ways (2026-07-26) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

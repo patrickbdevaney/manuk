@@ -1361,3 +1361,38 @@ engine genuinely does not compute (grid shorthand forms, `transition`/`animation
 logical-property spellings, `perspective`, `zoom`, `clip`). An honest `undefined` for an unimplemented
 property is a different thing from an `undefined` for a rendered one — and only the second kind was
 ever the bug.
+
+## A FALSE NO costs a page its enhancement, exactly as a false yes costs it its fallback (tick 601)
+
+Four ticks of this project have been about the danger of `CSS.supports` saying **yes** about
+something we cannot render: the page drops the fallback it shipped and breaks. Tick 601 found the
+mirror, and it had been live the whole time.
+
+**`zoom` works. Fully. And we were denying it.** It sat on `PARSE_ONLY_LONGHANDS`, so
+`CSS.supports('zoom', '2')` answered false — while a `zoom: 2` 50px box laid out at 100px, its
+`font-size: 10px` computed to 20px, and a 20px child came out at 40px. Geometry, typography, and
+inheritance: a complete implementation.
+
+**It works because Stylo applies zoom inside its own length computation** (`effective_zoom`), so it
+takes effect without this engine reading a `zoom` field at all. That is why a source-grep found
+nothing — `grep clone_zoom` returns empty, and the capability is still there. **A grep can only find
+capabilities this engine implements; it is blind to the ones the borrowed library implements for
+us.** Only a behavioural probe can see those, which is the argument for measuring rather than reading
+the code, stated one more time.
+
+The general rule, which `honest-answer-is-not-a-fixed-answer` implied and did not spell out:
+
+> The rule is not "never say yes to something you cannot do". It is **the answer must match the
+> engine** — and it is violated symmetrically. A false yes costs the page the fallback it shipped
+> and tested; a false no costs it the enhancement it wrote. Both are a page rendering worse than it
+> was built to.
+
+The same probe found the other direction in the same run: **`text-justify` was a false yes** —
+parsed natively by Stylo, read by nothing here — and joined `UNRENDERED_LONGHANDS`. One probe, two
+corrections, pointing opposite ways.
+
+⚠ And the reason to check the whole denylist rather than one entry: `zoom` was on a list of 30
+properties assumed unimplemented *as a group*, because the pref that ungated them was flipped for
+four others. The list was right about 29 of them (`counter-increment`/`counter-reset` were re-checked
+behaviourally in the same tick — `content: counter(x)` renders nothing, so they stay). It took a
+measurement to find the one it was wrong about.

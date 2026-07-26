@@ -25526,3 +25526,70 @@ letter. Cheapest first and all measure-and-pin: Reporting API, `window.screen` +
 `UNRENDERED_LONGHANDS` row with real usage, still needing a nested paint group, so measure the cost
 before committing to it.
 Cadences: self-audit 604; wall 607; const 607; surface 608.
+
+## Tick 601 — one probe, two honesty corrections, pointing OPPOSITE ways (2026-07-26)
+
+Audit #33 established that probing the remaining unknowns is the only genuinely open CO-#1 letter.
+This is that work, and it paid better than a capability tick would have: **17 unknowns → 8**, two
+honesty bugs corrected, and three capabilities found already built.
+
+**`zoom` WAS A FALSE NO, AND IT HAD BEEN LIVE THE WHOLE TIME.** It sat on `PARSE_ONLY_LONGHANDS`, so
+`CSS.supports('zoom','2')` answered **false** — while a `zoom: 2` 50px box laid out at **100px**, its
+`font-size: 10px` computed to **20px**, and a 20px **child** came out at **40px**. Geometry,
+typography and inheritance: a complete implementation.
+
+**It works because Stylo applies zoom inside its own length computation** (`effective_zoom`), so it
+takes effect without this engine reading a `zoom` field at all. `grep clone_zoom` returns empty and
+the capability is still there. **A source-grep can only find capabilities WE implement; it is blind
+to the ones the borrowed library implements for us** — which is the argument for behavioural probes
+over code reading, and the reason this row could sit `unknown` for hundreds of ticks.
+
+**AND THE RULE IS SYMMETRIC, which four ticks of false-yes work had let me half-forget.** The rule is
+not *never say yes to what you cannot do*; it is **the answer must match the engine**. A false yes
+costs the page the fallback it shipped and tested. **A false no costs it the enhancement it wrote.**
+Both render a page worse than it was built to be, and I had been treating only one direction as a
+defect.
+
+**THE SAME PROBE FOUND THE OTHER DIRECTION IN THE SAME RUN.** `text-justify` — parsed natively by
+Stylo, read by nothing here, `CSS.supports` saying yes. The t591 category exactly. It joined
+`UNRENDERED_LONGHANDS`.
+
+**THREE MORE UNKNOWNS WERE ALREADY BUILT**, which is the stale-pessimistic rule collecting again:
+`window.screen` (800/800/24) **and** `screen.orientation.type` (`landscape-primary`); multi-keyword
+`display: inline flex` → `inline-flex`. **Reporting API split rather than flat-verdicted**:
+`reportError` is a function, `ReportingObserver` is absent → `partial`, with both halves pinned,
+which is what makes `partial` a measurement instead of a shrug. Genuinely absent: OPFS/File System
+Access (`navigator.storage` exists but `getDirectory` does not — the shape that makes a
+feature-detect on the namespace alone wrong), Speculation Rules/`document.prerendering`, and
+`@counter-style` (the at-rule is ignored; the marker stays `disc`).
+
+**`@counter-style` is also the tick's methodological warning.** `CSS.supports('list-style',
+'manuk-dots')` answers **true** — correctly, because the *property* is supported — so a
+supports-based probe would have scored this row as working. **The at-rule is the thing that is
+missing, and only rendering the marker could see it.** Behavioural probe, again, for the third
+distinct reason in one tick.
+
+I also re-checked `counter-increment`/`counter-reset` behaviourally rather than trusting their
+denylist entries: `content: counter(x)` renders nothing, so they stay. **The denylist was right
+about 29 of its 30 entries; it took a measurement to find the one it was wrong about.**
+
+RED-PROVEN both directions: put `zoom` back on the parse-only list → `supZoom=true` fails; drop
+`text-justify` from the unrendered list → `supTj=false` fails. Both feature configurations compile;
+`G_SUPPORTS_HONESTY`, `G_CSS_SUPPORTS` and `G_CONSTELLATION_WELLFORMED` green.
+
+TICK SHAPE: measurement (7 rows pinned, unknowns 17→8) + capability-honesty (two `CSS.supports`
+answers corrected, in opposite directions). Bar 0 untouched; no ratchet floor moved; no rendering
+changed — `zoom` was already rendering.
+Gates: `G_ZOOM_AND_PROBE_PINS` (`engine/page/tests/g_zoom_and_probe_pins.rs` — an unzoomed control
+FIRST, then zoom's three effects, then both corrected answers, then seven pins; RED-proven).
+WIKI: docs/wiki/css-cascade.md — "A FALSE NO costs a page its enhancement, exactly as a false yes
+costs it its fallback".
+PATTERN: [no-pattern] — no rendering capability changed.
+
+NEXT: the remaining **8** unknowns, of which the CSS ones are cheapest (`shape()` for
+clip-path/shape-outside — now measurable against t593's real clip path; `animation-composition`;
+`text-justify` is now answered; multicol L2; the 2026 CSS frontier bundle). Then SVG
+filters/patterns/SMIL and per-glyph font fallback, both of which need rendering probes rather than JS.
+Then `isolation` (18.0%) — the last `UNRENDERED_LONGHANDS` row with real usage, still needing a
+nested paint group.
+Cadences: self-audit 604; wall 607; const 607; surface 608.
