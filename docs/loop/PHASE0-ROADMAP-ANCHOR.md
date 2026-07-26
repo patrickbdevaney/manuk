@@ -96,6 +96,19 @@ never WPT count, never a vibe.
 
 ## 6. ACTUALS — exit-verification runs (§2C), appended one line per run
 
+- `corpus-v2 HEAD-20 @tick 626: sites 20 · scored 6 · shape >=0.75 on 0 (bar 95%) · MEAN COVERAGE
+  85.2% · MEAN SHAPE 40.0% (n>=10 only; 34.3% as printed, incl. vacuous rows) · MEAN VISUAL 66.0%.
+  UNSCORED 14, decomposed: 5 bot-wall-403 · 4 unreachable · 1 empty-202 · 1 shell-only-1 ·
+  1 shell-only-3 · 1 timeout-300s · 1 with NO recorded reason.` Against t611's run on the same 20
+  (scored 5, MEAN COVERAGE 62.8%, MEAN SHAPE 37.1% n>=10, 4 unexplained): the DECOMPOSITION is the
+  reliable movement — **unexplained unscored 4 -> 1** — and it is instrument work, not engine work.
+  Site-level deltas on live origins are NOISY (ebay served 473KB one day and 13.5KB the next), so the
+  only site claim made here is `www.welt.de` **coverage 0.0% -> 95.7%**, reproduced across four runs
+  and attributable to t617's module base-URL fix. **THE BINDING CONSTRAINT HAS MOVED**: it was
+  measurability (t606: 9 of 14 unscoreable, no reasons); it is now that **5 of 20 HEAD sites bot-wall
+  us, which V1-SCOPE puts explicitly out of scope** — so the achievable ceiling on this corpus is
+  15/20, not 20/20, and the certificate's denominator should be read with that in mind.
+
 - `test262 @tick 546: 94.14% of 87,009 executed subtests (81,908 passed / 5,101 failed) · honest
   81.41% of the 100,617 the ratified suite defines (13,608 skipped: 10,739 async · 1,642 module ·
   1,225 host-API · 2 measured-hang) · 51,922 files, tc39 rev 7a096c20 · wall 140s · runner

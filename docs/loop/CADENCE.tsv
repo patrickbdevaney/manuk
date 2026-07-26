@@ -384,3 +384,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 623	1a15ea84	1785088537	2026-07-26T13:55:37-04:00	232	the	63	5	171	4	314	81	3896	6960	0	341	31	constitution check #44, and re-verifying the other negative under t622's new rule (2026-07-26)
 624	b2104544	1785091238	2026-07-26T14:40:38-04:00	2701	capability	63	11	482	17	315	81	3896	6960	0	341	31	dynamic `import()` works, and the thing that parked it was a LIFETIME (2026-07-26)
 625	af483910	1785098636	2026-07-26T16:43:56-04:00	7398	reliability	63	5	351	4	315	81	3896	6960	0	341	31	one stuck child process costs the WHOLE corpus, and nothing was bounded (2026-07-26)
+626	bff075ab	1785099663	2026-07-26T17:01:03-04:00	1027	measurement	63	4	135	2	315	81	3896	6960	0	341	31	the certificate, re-measured: the constraint has MOVED from measurability to scope (2026-07-26)
