@@ -90,7 +90,9 @@ fi
 #    agent to cite a gate / set status; false drift ⇒ fix map-reconcile's search. This is reconciliation
 #    made STANDING (the doctrine's goal) without the wall-brick risk.
 if [ -x scripts/map-reconcile.sh ]; then
-  MD=$(bash scripts/map-reconcile.sh 2>/dev/null | grep -oE 'DRIFT TOTAL: [0-9]+' | grep -oE '[0-9]+' | head -1)
+  _mout=$(bash scripts/map-reconcile.sh 2>/dev/null)
+  if printf '%s' "$_mout" | grep -q 'RECONCILED'; then MD=0     # drift 0 prints "RECONCILED", not "DRIFT TOTAL: 0"
+  else MD=$(printf '%s' "$_mout" | grep -oE 'DRIFT TOTAL: [0-9]+' | grep -oE '[0-9]+' | head -1); fi
   [ "${MD:-0}" -gt 0 ] && { note "ALERT: map drift ${MD} row(s) — a capability claims a gate that doesn't exist (real ⇒ steer agent; false ⇒ fix map-reconcile search)"; alert=$((alert+1)); }
 fi
 
