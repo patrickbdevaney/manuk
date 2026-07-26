@@ -11277,6 +11277,11 @@ const WINDOW_PRELUDE: &str = r#"
                 }
             };
             var keysOf = function () { return JSON.parse(g.__storage('keys', area, '', '') || '[]'); };
+            // The pristine methods, captured before any page can shadow them. `deleteProperty` needs
+            // something to restore TO, and the proxy target is the very object being shadowed — so
+            // comparing against the target would compare a value with itself.
+            var pristine = {};
+            for (var mk in api) { if (Object.prototype.hasOwnProperty.call(api, mk)) { pristine[mk] = api[mk]; } }
             return new Proxy(api, {
                 get: function (t, p) {
                     if (p === 'length') return keysOf().length;
@@ -11285,9 +11290,41 @@ const WINDOW_PRELUDE: &str = r#"
                     var v = g.__storage('get', area, p, '');
                     return v === null ? undefined : v;
                 },
+                // **A method-name assignment SHADOWS; anything else is a storage write.**
+                //
+                // This used to drop the first case on the floor — `if (!hasOwnProperty(t, p))
+                // { store }` with a bare `return true` after it — so `localStorage.setItem = fn`
+                // reported success and changed nothing. In a browser the methods live on
+                // `Storage.prototype`, so assigning one creates an OWN property that shadows it and
+                // subsequent calls run the replacement.
+                //
+                // That is not a conformance detail: **patching storage is one of the commonest
+                // things a real page does** — private-mode and quota fallbacks wrap `setItem` to
+                // catch `QuotaExceededError`, SSR/hydration guards replace it with a no-op, session
+                // and analytics libraries mirror writes through it, and every `spyOn(localStorage,
+                // 'setItem')` in a page's own bundle does it too. All of them installed silently and
+                // then never ran, with no error, so a page looked fine until the case its wrapper
+                // existed for arrived. Measured at t586: `wrapStuck=false` here while
+                // `indexedDB.open` and every global wrapped fine — two host objects in one engine
+                // disagreeing about the same idiom.
                 set: function (t, p, v) {
-                    if (typeof p === 'string' && !Object.prototype.hasOwnProperty.call(t, p)) {
+                    if (typeof p !== 'string') { return true; }
+                    if (Object.prototype.hasOwnProperty.call(t, p)) {
+                        t[p] = v;                     // shadow the method, as a browser does
+                    } else {
                         g.__storage('set', area, p, String(v));
+                    }
+                    return true;
+                },
+                // `delete localStorage.setItem` restores the original method rather than removing
+                // it: the shadow is what goes away. A key that is not a method name is a storage
+                // item and is removed from storage, which is the trap's original job.
+                deleteProperty: function (t, p) {
+                    if (typeof p !== 'string') { return true; }
+                    if (Object.prototype.hasOwnProperty.call(pristine, p)) {
+                        t[p] = pristine[p];
+                    } else {
+                        g.__storage('remove', area, p, '');
                     }
                     return true;
                 },
@@ -11295,10 +11332,7 @@ const WINDOW_PRELUDE: &str = r#"
                     if (p === 'length' || Object.prototype.hasOwnProperty.call(t, p)) return true;
                     return typeof p === 'string' && g.__storage('get', area, p, '') !== null;
                 },
-                deleteProperty: function (t, p) {
-                    if (typeof p === 'string') g.__storage('remove', area, p, '');
-                    return true;
-                },
+
                 ownKeys: function () { return keysOf(); },
                 getOwnPropertyDescriptor: function (t, p) {
                     if (typeof p !== 'string') return undefined;

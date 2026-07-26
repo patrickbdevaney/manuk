@@ -339,3 +339,43 @@ marginal warm wall**, because those crates' tests are not in the wall's list —
 `gates-not-in-the-wall` note, unchanged.
 
 NO TRIM. **The wall is lean on the axes the agent may touch.** Mark untouched (189, ceiling 245).
+
+## Audit #16 — tick 587
+
+**230s total on a genuinely quiet box (`load1 0.32`)** — the first audit in a while taken under conditions
+that measure the code rather than the machine. Nothing was trimmed. One number carries the whole result:
+
+```text
+ 175s  P   parity          ███████████████████ 76%
+  22s  T   crate tests     ██ 10%
+  15s  B   build           █  7%
+   7s  G6 · 5s G1 · 5s D · 2s F · 1s F4 · every named gate at or below 7s
+```
+
+**`P · parity` is 76% of the wall, and the cause is a false dependency.** `parity::run_parity` is a serial
+`for` loop over ~30 fixture pages; each iteration calls `chrome::capture_boxes`, which **launches headless
+Chrome**. 175s ÷ 30 ≈ **5.8s a page** — that is process startup, not box comparison. Nothing in the loop
+carries state between pages, so they are independent and the serialisation buys nothing. This is audit
+question #2 (*is the slowest section actually parallel, or serialised by a false dependency?*) with the
+answer "serialised".
+
+**The fix is bounded concurrency, and the bound is the whole difficulty.** This section's own comment in
+`verify.sh` records why: *"Under load Chrome drops pages: the gate reported 65/65 probes — a 100% pass rate
+— as a hard FAILURE, and that false RED is what kept two finished media ticks unlandable."* Unbounded
+parallelism would run every wall at exactly the load that causes the drop, converting a slow gate into a
+flaky one. **Coverage is sacred; trading 100s of wall for a gate that false-REDs is not an admissible
+optimisation.** So the lever is named and scheduled, not taken: pick the bound empirically on a quiet box,
+in its own tick, with the page-count floor watched across repeated runs.
+
+**Everything else is already lean.** The gate wall proper — 25+ page gates, the JS conformance run, the
+containment and interaction gates — totals under 30s combined. The three prior causes this ledger tracked
+(hygiene-cron pruning mid-run, ramdisk incremental flush, feature thrash between target dirs) show no
+signature in this reading: `B` at 15s means the incrementals survived, and the parity section did not swing
+between warm and rebuilding.
+
+⚠ **Standing item, unchanged from #14/#15 and still observer-owned:** `status-update.sh` declines to bank a
+wall whose receipt stamps `load1 >= 3.0`, but the gate phase creates that load itself, so a genuinely fast
+wall often cannot be banked. Measured this session: warm walls of **60 · 62 · 230 · 264 · 292 · 296s**, with
+`load1` in the receipt ranging 0.3–6.5 on identical trees. The 85s standing mark remains honest.
+
+Next wall audit due: tick 607.

@@ -4955,3 +4955,26 @@ unmeasured for hundreds of ticks.** The real failure is worse in three separate 
 *unconditional last entry* rather than evaluating the media-condition list. A page whose first matching
 condition would choose differently gets one candidate step off — against a baseline of fetching the
 thumbnail every time.
+
+---
+
+## Patching `localStorage` — the private-mode / SSR / analytics wrapper (tick 587)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| **`localStorage.setItem = wrapper`** (and `spyOn(localStorage, 'setItem')`) | private-mode and quota fallbacks that catch `QuotaExceededError` and swap in an in-memory shim; SSR/hydration guards that no-op storage during pre-hydration render; session and analytics libraries that mirror, namespace or expire writes; a page's own test bundle | ✅ (tick 587) — the assignment was **accepted and discarded**. `localStorage` is a Proxy whose `set` trap stored non-method keys and fell through to a bare `return true` for method names, so every wrapper reported a successful install and never ran. Fixed: a method name shadows (as `Storage.prototype` does in a browser), anything else still writes to storage. Gated by `G_STORAGE_PATCHABLE`, RED-proven in **both** directions. |
+
+**The failure shape is why it survived so long: silent success.** No error, no warning, and the original
+behaviour continues — so the page works right up until the moment its fallback was supposed to engage,
+which is the moment storage was already failing. A wrapper that cannot install is worse than no wrapper,
+because the author has stopped checking.
+
+**The generalisable half is about host objects.** `indexedDB.open`, `fetch` and `IntersectionObserver` all
+wrapped fine; only storage did not. **Two host objects in one engine disagreeing about the same idiom** is
+a class worth sweeping for — anything exposed through a Proxy or a native accessor should be asked whether
+the web's standard monkey-patch works on it, because "can a page wrap this?" is a capability the platform
+implicitly promises everywhere.
+
+**And it was found by an instrument that needed the capability**, not by a conformance test: tick 586's
+certificate probe tried to wrap storage to record touches and recorded nothing. Building the measuring
+tool out of the same primitives the web uses is what made the engine's divergence visible.

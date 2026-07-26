@@ -24494,3 +24494,98 @@ mode, quota exhaustion and SSR hydration work. Then §6.4's **two-population cro
 capability measured both by its fixture gate and by the corpus-site exercise, with disagreement treated as
 *the instrument or the engine is lying* rather than as a result.
 Cadences: wall 587 (NEXT TICK); surface 588; const 591; self-audit 594.
+
+## Tick 587 — `localStorage.setItem = fn` was accepted and discarded (2026-07-25)
+
+t586 found this while building the certificate's capability probe and deliberately deferred it: *"the
+finding deserves a gate of its own rather than a footnote in one."* This is that gate, and the fix.
+
+**THE DEFECT.** `localStorage` is a `Proxy` over the `__storage` native seam, which is what gives it the
+real interface (indexed access, `length`, enumeration, `delete`). Its `set` trap:
+
+```js
+set: function (t, p, v) {
+  if (typeof p === 'string' && !hasOwnProperty.call(t, p)) { __storage('set', area, p, v); }
+  return true;                    // ← a METHOD NAME falls through here and is dropped
+}
+```
+
+`localStorage.foo = 'bar'` correctly stored an item. **`localStorage.setItem = fn` was accepted and thrown
+away** — the bare `return true` told the assignment it had succeeded. In a browser the methods live on
+`Storage.prototype`, so assigning one creates an own property that **shadows** it and subsequent calls run
+the replacement.
+
+**WHY IT IS A CAPABILITY AND NOT A CONFORMANCE DETAIL.** Patching storage is one of the commonest things a
+real page does, and every one of these installed silently and then never ran: **private-mode and quota
+fallbacks** (wrap `setItem`, catch `QuotaExceededError`, swap in an in-memory shim — Safari's private mode
+made this universal), **SSR/hydration guards** that no-op storage during pre-hydration render, **session
+and analytics libraries** that mirror or namespace writes, and every `spyOn(localStorage, 'setItem')` in a
+page's own test bundle.
+
+**The failure shape is the worst available: silent success.** No error, no warning, and the original
+behaviour continues — so the page works right up until the moment its fallback was supposed to engage,
+which is the moment storage was already failing. **A wrapper that cannot install is worse than no wrapper,
+because the author has stopped checking.**
+
+**THE FIX IS CONSTRAINED BY A GUARD, AND THE GUARD IS THE INTERESTING HALF.** A method name shadows;
+anything else is still a storage write. The obvious fix — make every assignment shadow — is **over-broad**
+and would break every page that uses property syntax for storage, so `G_STORAGE_PATCHABLE` RED-proves both
+directions: revert the shadow and `stuck:true` fails; shadow everything and `plain:true` fails.
+`deleteProperty` restores from a `pristine` copy captured **before** the Proxy is built — the target *is*
+the object being shadowed, so there is nothing to restore from otherwise, and my first attempt compared
+`t[p]` against `api[p]` where `t === api`, i.e. a value with itself.
+
+**HOW IT WAS FOUND, AND THE ARGUMENT THAT FOLLOWS FROM IT.** Not by a conformance test — by an
+**instrument that needed the capability**. t586's probe tried to wrap storage to record touches and
+recorded nothing: `wrapStuck=false` for storage while `indexedDB.open`, `fetch` and
+`IntersectionObserver` all wrapped fine. **Two host objects in one engine disagreeing about the same
+idiom.** Building the measuring tool out of the same primitives the web uses is what made it visible, and
+that is a reason to keep doing so.
+
+The class is worth sweeping: anything exposed through a Proxy or a native accessor should be asked whether
+the web's standard monkey-patch works on it, because *"can a page wrap this?"* is a capability the platform
+implicitly promises everywhere.
+
+TICK SHAPE: capability (a whole class of storage wrapper — private-mode fallbacks, SSR guards, analytics,
+test doubles — can now install). Bar 0 untouched; no ratchet floor moved.
+Gates: `G_STORAGE_PATCHABLE` (`engine/page/tests/g_storage_patchable.rs`), RED-proven in both directions.
+WIKI: docs/wiki/storage.md — "A `localStorage` method assignment was ACCEPTED AND DISCARDED".
+PATTERN: new — patching `localStorage`, with the host-object generalisation.
+
+NEXT: **sweep the host objects for the same question.** `localStorage`/`sessionStorage` are fixed; every
+other Proxy-or-accessor surface (`CSSStyleDeclaration`, the collections, `dataset`, `classList`) should be
+asked whether a page can wrap or shadow it, since that is a promise the platform makes uniformly and this
+engine has now been measured breaking it once. Then §6.4's **two-population cross-check** — each headline
+capability measured by BOTH its fixture gate and the corpus-site exercise, with disagreement treated as
+*the instrument or the engine is lying* rather than as a result.
+Cadences: surface 588; const 591; self-audit 594; wall audit #16 run this tick (next 607).
+
+**WALL AUDIT #16 (due 587) — RUN, and it found one number worth the whole exercise.** I had first written
+here that I would defer it. The pre-flight refused the tick, correctly: *the wall taxes every tick; a sparse
+audit keeps it lean without cutting a gate.* That refusal is the enforcement working, and the deferral would
+have been the wrong call — the audit found something.
+
+**Total 230s on a genuinely quiet box (load 0.32), and `P · parity` is 175s of it — 76%.** Everything else
+is noise by comparison: crate tests 22s, build 15s, and every named gate at or under 7s.
+
+```text
+ 175s  P  ███████████████████ 76%      22s  T  ██ 10%      15s  B  █ 7%
+   7s  G6                              5s  G1                5s  D
+```
+
+**The cause is structural and the lever is named.** `parity::run_parity` is a **serial `for` loop** over
+~30 fixture pages, and each iteration calls `chrome::capture_boxes`, which **launches headless Chrome**.
+175s ÷ 30 ≈ 5.8s a page — that is process startup, not comparison. The pages are independent: nothing in
+the loop carries state between them, so the serialisation is a *false dependency*, which is exactly audit
+question #2.
+
+**And I am NOT taking it in this tick, for a reason the parity section itself documents at length.** That
+section carries a long comment about false REDs: *"Under load Chrome drops pages: the gate reported 65/65
+probes — a 100% pass rate — as a hard FAILURE, and that false RED is what kept two finished media ticks
+unlandable."* Unbounded parallelism would make every wall run under exactly the load that causes the drop.
+So the fix has to be **bounded** concurrency, and choosing the bound is an empirical question that needs a
+quiet box and its own tick — trading 100s of wall for a gate that false-REDs is a bad trade, and coverage
+is sacred. **Named, measured, and scheduled rather than rushed at the tail of a long session.**
+
+Nothing was trimmed this audit. The wall is lean everywhere except the one place it is not, and that place
+now has a number, a cause and a constraint on its fix.

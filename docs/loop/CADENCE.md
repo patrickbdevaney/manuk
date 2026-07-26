@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **347** | ticks 1–586 |
-| median tick cycle | **21m** | 346 intervals |
+| ticks landed | **348** | ticks 1–587 |
+| median tick cycle | **21m** | 347 intervals |
 | median, last 10 | **14m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.99** | 350.5h elapsed |
-| median verify wall | **67s** | 286 ticks |
+| **ticks per hour** | **0.99** | 351.1h elapsed |
+| median verify wall | **67s** | 287 ticks |
 | wall trend | 39s → 85s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **284**
-* **✅ rows in the capability ledger**: 144 → **336**
+* **live gates**: 27 → **285**
+* **✅ rows in the capability ledger**: 144 → **337**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**175 of 347 ticks** (50%) moved a
+**176 of 348 ticks** (51%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **175** capability ticks, median cycle **21m**
+* **176** capability ticks, median cycle **21m**
 * median diff per tick: **+226 / −34** lines across 9 files
 
 ## Every tick
@@ -444,5 +444,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **584** | 2026-07-25 19:07 | 12m | instrument | 85s | +486/−33 | 284 | 81 | 56.0% · | the fixed denominator, built as a TYPE so a drop is not a habit to keep (2026-07-25) |
 | **585** | 2026-07-25 19:19 | 11m | instrument | 85s | +305/−35 | 284 | 81 | 56.0% · | the FUNCTION leg, and the term-count guard fired exactly as t583 promised (2026-07-25) |
 | **586** | 2026-07-25 19:33 | 14m | instrument | 85s | +340/−32 | 284 | 81 | 56.0% · | the FUNCTION leg gets a PRODUCER, and `localStorage` turns out to be unpatchable (2026-07- |
+| **587** | 2026-07-25 20:11 | 38m | capability | 85s | +407/−39 | 285 | 81 | 56.0% · | `localStorage.setItem = fn` was accepted and discarded (2026-07-25) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

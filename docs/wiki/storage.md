@@ -235,3 +235,52 @@ consumers that read `__blobText` as text (fetch request body, FormData multipart
 **Honest limit:** `__blobText` is a UTF-16 JS string used as a byte container, so a code unit above 0xFF
 would still truncate under `& 0xff`; string parts are not UTF-8 re-encoded (so `size` of a multibyte
 TEXT part is its char count, the pre-existing behaviour, not its UTF-8 byte length).
+
+## A `localStorage` method assignment was ACCEPTED AND DISCARDED (tick 587)
+
+`localStorage` is a `Proxy` over the `__storage` native seam, which gives it the real interface —
+indexed access, `length`, enumeration, `delete`. Its `set` trap read:
+
+```js
+set: function (t, p, v) {
+  if (typeof p === 'string' && !hasOwnProperty.call(t, p)) { __storage('set', area, p, v); }
+  return true;                    // ← a METHOD NAME falls through here and is dropped
+}
+```
+
+So `localStorage.foo = 'bar'` correctly stored an item, and **`localStorage.setItem = fn` was accepted
+and thrown away** — the bare `return true` told the assignment it had succeeded. In a browser the methods
+live on `Storage.prototype`, so assigning one creates an **own property that shadows it**, and subsequent
+calls run the replacement.
+
+### Why it is a capability, not a conformance detail
+
+**Patching storage is one of the commonest things a real page does**, and every one of these installed
+silently and then never ran:
+
+- **private-mode / quota fallbacks** — wrap `setItem`, catch `QuotaExceededError`, fall back to an
+  in-memory shim. Safari's private mode made this idiom universal.
+- **SSR / hydration guards** — replace storage with a no-op so shared code does not touch a missing API
+  during server-side or pre-hydration render.
+- **session and analytics libraries** — wrap `setItem` to mirror writes, namespace keys, or expire them.
+- **a page's own test bundle** — every `spyOn(localStorage, 'setItem')`.
+
+The failure shape is the worst available: **no error, no warning, and the original behaviour continues**,
+so the page looks fine until the case the wrapper existed for actually arrives.
+
+### The fix, and the guard that constrains it
+
+A method-name assignment writes to the **target** (shadowing); anything else is a storage write.
+`deleteProperty` restores from a `pristine` copy captured before the Proxy is built — the target *is* the
+object being shadowed, so there is nothing to restore from otherwise, and comparing against it would
+compare a value with itself.
+
+`G_STORAGE_PATCHABLE` RED-proves **both directions**, and the second is the one that matters: make *every*
+assignment shadow and `plain:true` fails, because `localStorage.plainkey = 'v'` must still write to
+storage. The obvious fix is over-broad, and the gate says so.
+
+> **How it was found: by an instrument that needed the capability.** Tick 586's certificate probe tried to
+> wrap storage to record touches and recorded nothing. `wrapStuck=false` here while `indexedDB.open`,
+> `fetch` and `IntersectionObserver` all wrapped fine — **two host objects in one engine disagreeing about
+> the same idiom**. A tool built to measure the browser found a bug in it, which is the argument for
+> building the instrument out of the same primitives the web uses.

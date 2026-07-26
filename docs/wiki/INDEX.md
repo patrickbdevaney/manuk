@@ -907,6 +907,9 @@
   - L202 · A miss resolves undefined — it does not reject
   - L209 · Honest limits
   - L220 · A Blob holds BYTES, not String(part) — binary parts and readAsArrayBuffer (tick 422)
+  - L239 · A localStorage method assignment was ACCEPTED AND DISCARDED (tick 587)
+  - L256 · Why it is a capability, not a conformance detail
+  - L271 · The fix, and the guard that constrains it
 
 ## TEXT AND LAYOUT — fonts, shaping, measurement
 `docs/wiki/text-layout.md`
@@ -1003,4 +1006,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-918 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+921 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
