@@ -25770,3 +25770,71 @@ remaining work is the CERTIFICATION line the observer made the authority at t581
 tiered sweep and the per-site render∧function certificate — now that every board CO-#1 letter is
 built or measured and the map has zero unknowns.
 Cadences: wall 607; const 607; surface 608; self-audit 614.
+
+## Tick 605 — `isolation`: measured, priced, and deliberately NOT built (2026-07-26)
+
+`isolation` is the last `UNRENDERED_LONGHANDS` row with real usage (18.0% of page loads). §VI.3 says
+price a candidate by measuring it **in this engine** before building it. t590 did that for
+`appearance` and found a no-op, saving a misdirected tick. **This measurement came out the other
+way** — and then said *don't build it yet*, which is the harder half of the same discipline.
+
+**THE MEASUREMENT.** A cyan page, a card with **no background of its own**, a red
+`mix-blend-mode: multiply` overlay. What the overlay blends with is whatever is behind the card:
+
+```text
+plain card       red × cyan → (0,0,0)     correct
+isolated card    red × cyan → (0,0,0)     WRONG — should be (255,0,0)
+```
+
+`isolation: isolate` makes the card a stacking context, so the overlay's backdrop is the card's own
+**empty** surface, not the cyan page. Multiplying against nothing leaves it red. We paint black: the
+blend **leaks past the ancestor that asked to contain it**.
+
+**AND IT BECAME A REAL DEFECT AT t594, NOT BEFORE.** Until `mix-blend-mode` landed there was nothing
+for `isolation` to contain — which is exactly why this row could sit at `missing` for hundreds of
+ticks without consequence. Landing one capability turned a dormant row into a live one:
+
+> **A capability's price is not fixed. Its neighbours change it.**
+
+That is a genuine addition to §VI.3's pricing clause. t590 established that usage ≠ impact and that
+impact must be measured here; this adds that the measurement **expires** — a row priced before its
+neighbours landed is a stale price, and the visual-effects bundle just moved four of them.
+
+**NOT BUILT, DELIBERATELY, AND THIS IS THE POINT OF THE TICK.** The paint model is **flat**: one group
+per box, z-sorted, each composited onto the page — and blending works *precisely because* a group's
+backdrop is whatever is already on the canvas. Isolation needs the isolating subtree composited into
+its **own** surface first, i.e. a **nested** group, which restructures how groups are built and
+ordered rather than adding a field to one. `IndexedDB MVP: keep ABSENT until done — half-built is
+worse` applies directly: **a partial isolation that contained *some* blends would be harder to
+diagnose than one that contains none.**
+
+So the gate **pins the wrong behaviour** rather than leaving the row a vague `missing`, and states
+how it is meant to die: when the assertion fails with `(255,0,0)`, isolation has landed — flip the
+row, drop `isolation` from `UNRENDERED_LONGHANDS`, and replace the gate with one asserting the
+correct value. A gate that documents its own obsolescence condition is the only kind that can be
+safely deleted later.
+
+The gate also asserts the **un-isolated** case is `(0,0,0)`, which is not decoration: if
+`mix-blend-mode` ever regresses, the isolation question is moot and this file should say so rather
+than reporting a mysterious pass.
+
+RED-PROVEN by construction — it asserts exact measured pixels, and both a blend regression and an
+isolation landing break it. Workspace `--all-targets` clean.
+
+TICK SHAPE: measurement (a row re-priced from generic `missing` to a measured defect with a named
+cost and an obsolescence condition). Bar 0 untouched; no ratchet floor moved; no engine source
+changed.
+Gates: `G_ISOLATION_PRICED` (`engine/page/tests/g_isolation_priced.rs` — vacuity guard, the working
+blend, and the pinned defect).
+WIKI: none [forced] — no engine mechanism changed; the finding's home is the constellation receipt
+and the gate's own header.
+PATTERN: [no-pattern] — no browser capability changed.
+
+NEXT: **the CERTIFICATION line**, which is now the honest remaining work — every board CO-#1 letter
+is built or measured, the map has zero unknowns, and the observer made
+`docs/loop/DAILY-DRIVER-CERTIFICATION.md` the authority at t581. Its CO-#1 (1)-(4) landed at
+t583-t586; the standing next step is the **corpus-v2 tiered sweep** (a small fixed-seed slice in the
+per-tick wall as a real-site regression guard, the full sweep off-tick, fixed denominator). If a
+capability tick is wanted first, **nested paint groups** is now a named, priced subsystem that buys
+`isolation` and would also give `mix-blend-mode` its correct stacking-context semantics.
+Cadences: wall 607; const 607; surface 608; self-audit 614.
