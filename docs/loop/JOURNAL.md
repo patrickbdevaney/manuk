@@ -25187,3 +25187,61 @@ and now four properties deep — half the web writes `getComputedStyle(el).filte
 expression and `undefined.indexOf` kills the caller's frame. Then `border-radius` on the backdrop
 region (a rounded frosted panel currently filters a square). Then `font-display`/`unicode-range`.
 Cadences: surface 598; const 599; wall 607; self-audit 604.
+
+## Tick 596 — the bundle reads back as STRINGS: `undefined` from `getComputedStyle` is a thrown exception, not a gap (2026-07-25)
+
+t592-595 made `filter`, `backdrop-filter`, `clip-path` and `mix-blend-mode` render. All four still
+read back `undefined`, and **that is the worse half of the same lie, not the smaller one.**
+
+```js
+if (getComputedStyle(el).filter.indexOf('blur') !== -1) { … }   // TypeError → frame dead
+```
+
+A missing *rendering* degrades a page. A missing *string* **stops the script**. The CSSOM contract is
+that every supported property is a string, always, and `"none"` is a perfectly good answer. **Third
+sighting of one class**: t576 on `getPropertyValue`, t590 on `appearance`, now four properties wide.
+
+**THE GATE ASSERTS TYPE BEFORE VALUE, AND THAT ORDER IS THE POINT.** A test that only checked the
+*set* case would pass while every page that feature-detects before styling still died — and that is
+most of them. So the first four claims are `typeof === 'string'` on an **unstyled** element, and one
+claim runs the failing idiom itself and asserts it does not throw.
+
+**THE UNSET VALUE MUST BE THE INITIAL KEYWORD, NEVER `""`.** An empty string is falsy, so
+`if (cs.filter)` takes the wrong branch silently. `"none"`/`"normal"` are truthy and correct.
+
+**THREE PLACES ONE SET OF PROPERTIES LIVES, AND THEY DRIFT INDEPENDENTLY** — the object literal, the
+`STD` name list behind `length`/`item(i)`, and the `getPropertyValue` dash→camel map. A property in
+the first but not the second is *enumerable-invisible* (the exact drift `G_COMPUTED_CUSTOM_PROPERTIES`
+caught when `length` was a hand-maintained `50` against a list of 52). And the map is **not optional**
+for prefixed spellings: the fallback auto-camelCases, so `-webkit-filter` becomes `WebkitFilter` —
+not a property — and returns `""` **silently**. All three routes are asserted to agree, because
+`getPropertyValue` and the property disagreeing about one declaration is the tick-282 bug in new
+clothes: whichever the page consults, it gets a different browser.
+
+**AND A SMALL ONE WORTH RECORDING BECAUSE IT IS THE SESSION'S PATTERN AGAIN.** I wrote a `dim_css`
+helper and the compiler found the file already had one, 90 lines up. That is the sixth time this
+session that the answer was *check what already exists in this class first* — cheap here (a compile
+error), expensive the times it was not.
+
+RED-PROVEN: rename the seven new object slots → `t_filter:string` fails on the very first claim.
+Workspace `--all-targets` clean; `G_COMPUTED_CUSTOM_PROPERTIES` still green under the change (it is
+the guard for the list-drift this touched).
+
+TICK SHAPE: capability-honesty (a throw-class defect on four properties that are on ~143% of page
+loads between them — the script-killing half of the bundle t592-595 landed). Bar 0 untouched; no
+ratchet floor moved; no rendering changed.
+Gates: `G_COMPUTED_VISUAL_EFFECTS` (`engine/page/tests/g_computed_visual_effects.rs` — type-before-
+value, initial-keyword defaults, round-trip, prefixed aliases, `getPropertyValue` agreement, the
+throwing idiom itself, and enumeration; RED-proven).
+WIKI: docs/wiki/css-cascade.md — "`undefined` from `getComputedStyle` is not a missing feature — it is
+a thrown exception in the caller".
+PATTERN: [no-pattern] — no rendering capability changed; the honest-string row moves.
+
+NEXT: **`appearance`** — t590 measured its rendering as a genuine no-op here and priced the row down,
+but explicitly left `getComputedStyle(el).appearance === undefined` as live residue of exactly the
+class this tick just closed. It is now a five-line companion fix and it retires t590's open item.
+Then **`isolation` (18.0%)** — the last `UNRENDERED_LONGHANDS` row with real usage, and now
+load-bearing because three of the bundle's four properties are live and none is confined to a
+stacking context that asks to contain it. Then `border-radius` on the backdrop region (a rounded
+frosted panel currently filters a square). Then `font-display`/`unicode-range`.
+Cadences: surface 598; const 599; wall 607; self-audit 604.

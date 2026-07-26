@@ -599,6 +599,135 @@ fn transform_css(fns: &[manuk_css::TransformFn], rect: Option<[f32; 4]>) -> Stri
     )
 }
 
+/// `getComputedStyle(el).filter` / `.backdropFilter` — the resolved function list, or `"none"`.
+///
+/// **`undefined` here is not a missing feature, it is a THROWN EXCEPTION in the caller.** Half the
+/// web writes `getComputedStyle(el).filter.indexOf('blur')` in a single expression, and
+/// `undefined.indexOf` kills the frame — so the page does not degrade, it stops. The CSSOM contract
+/// is that every supported property is a **string**, always, and `"none"` is a perfectly good answer.
+/// This is the same defect t576 found on `getPropertyValue` and t590 re-found on `appearance`.
+fn filter_list_css(ops: &[manuk_css::FilterOp]) -> String {
+    use manuk_css::FilterOp as F;
+    if ops.is_empty() {
+        return "none".into();
+    }
+    let n = |v: f32| {
+        let r = (v * 1e4).round() / 1e4;
+        if r == r.trunc() {
+            format!("{}", r as i64)
+        } else {
+            format!("{r}")
+        }
+    };
+    ops.iter()
+        .map(|op| match *op {
+            F::Blur(r) => format!("blur({}px)", n(r)),
+            F::Brightness(k) => format!("brightness({})", n(k)),
+            F::Contrast(k) => format!("contrast({})", n(k)),
+            F::Grayscale(k) => format!("grayscale({})", n(k)),
+            F::HueRotate(d) => format!("hue-rotate({}deg)", n(d)),
+            F::Invert(k) => format!("invert({})", n(k)),
+            F::Opacity(k) => format!("opacity({})", n(k)),
+            F::Saturate(k) => format!("saturate({})", n(k)),
+            F::Sepia(k) => format!("sepia({})", n(k)),
+            // Colour first, then offsets — the order every engine serializes `drop-shadow` in.
+            F::DropShadow {
+                dx,
+                dy,
+                blur,
+                color,
+            } => format!(
+                "drop-shadow({} {}px {}px {}px)",
+                rgba_css(&color),
+                n(dx),
+                n(dy),
+                n(blur)
+            ),
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// `getComputedStyle(el).clipPath` — the resolved basic shape, or `"none"`.
+fn clip_path_css(cp: Option<&manuk_css::ClipShape>) -> String {
+    use manuk_css::{ClipShape as CS, ShapeRadius as SR};
+    let Some(cp) = cp else {
+        return "none".into();
+    };
+    let rad = |r: SR| match r {
+        SR::Len(d) => dim_css(&d),
+        SR::ClosestSide => "closest-side".into(),
+        SR::FarthestSide => "farthest-side".into(),
+    };
+    match cp {
+        CS::Inset {
+            top,
+            right,
+            bottom,
+            left,
+            round,
+        } => {
+            let base = format!(
+                "inset({} {} {} {})",
+                dim_css(top),
+                dim_css(right),
+                dim_css(bottom),
+                dim_css(left)
+            );
+            if *round > 0.0 {
+                format!("{} round {}px", base, round)
+            } else {
+                base
+            }
+        }
+        CS::Circle { cx, cy, r } => {
+            format!("circle({} at {} {})", rad(*r), dim_css(cx), dim_css(cy))
+        }
+        CS::Ellipse { cx, cy, rx, ry } => format!(
+            "ellipse({} {} at {} {})",
+            rad(*rx),
+            rad(*ry),
+            dim_css(cx),
+            dim_css(cy)
+        ),
+        CS::Polygon { even_odd, points } => {
+            let pts = points
+                .iter()
+                .map(|(x, y)| format!("{} {}", dim_css(x), dim_css(y)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            if *even_odd {
+                format!("polygon(evenodd, {pts})")
+            } else {
+                format!("polygon({pts})")
+            }
+        }
+    }
+}
+
+/// `getComputedStyle(el).mixBlendMode` — the keyword.
+fn blend_mode_css(m: manuk_css::BlendMode) -> &'static str {
+    use manuk_css::BlendMode as B;
+    match m {
+        B::Normal => "normal",
+        B::Multiply => "multiply",
+        B::Screen => "screen",
+        B::Overlay => "overlay",
+        B::Darken => "darken",
+        B::Lighten => "lighten",
+        B::ColorDodge => "color-dodge",
+        B::ColorBurn => "color-burn",
+        B::HardLight => "hard-light",
+        B::SoftLight => "soft-light",
+        B::Difference => "difference",
+        B::Exclusion => "exclusion",
+        B::Hue => "hue",
+        B::Saturation => "saturation",
+        B::Color => "color",
+        B::Luminosity => "luminosity",
+    }
+}
+
 fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> String {
     use manuk_css::{
         AlignItems, BoxSizing, Display, FlexDirection, FlexWrap, JustifyContent, Overflow,
@@ -826,6 +955,12 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
             "max-height",
             "scroll-snap-type",
             "scroll-snap-align",
+            // The visual-effects bundle (ticks 592-595). Every one of these RENDERS now, and a
+            // property that renders but reads back `undefined` is the worse half of the same lie.
+            "filter",
+            "backdrop-filter",
+            "clip-path",
+            "mix-blend-mode",
         ];
         let mut arr = String::from("[");
         for (i, n) in STD.iter().enumerate() {
@@ -860,7 +995,9 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
           justifyContent:{}, alignItems:{}, alignSelf:{}, flexDirection:{}, flexWrap:{}, \
           flexGrow:{}, flexShrink:{}, flexBasis:{}, rowGap:{}, columnGap:{}, \
           boxSizing:{}, minWidth:{}, maxWidth:{}, minHeight:{}, maxHeight:{}, \
-          scrollSnapType:{}, scrollSnapAlign:{}, __custom:{}, \
+          scrollSnapType:{}, scrollSnapAlign:{}, \
+          filter:{}, webkitFilter:{}, backdropFilter:{}, webkitBackdropFilter:{}, \
+          clipPath:{}, webkitClipPath:{}, mixBlendMode:{}, __custom:{}, \
           getPropertyValue:function(p){{\
           if(p.charCodeAt(0)===45&&p.charCodeAt(1)===45){{var cvv=this.__custom[p];return cvv===undefined?'':String(cvv);}}\
           var m={{'background-color':'backgroundColor','font-size':'fontSize',\
@@ -880,7 +1017,9 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
           'column-gap':'columnGap','box-sizing':'boxSizing','min-width':'minWidth',\
           'max-width':'maxWidth','min-height':'minHeight','max-height':'maxHeight',\
           'overflow-x':'overflowX','overflow-y':'overflowY',\
-          'scroll-snap-type':'scrollSnapType','scroll-snap-align':'scrollSnapAlign'}};\
+          'scroll-snap-type':'scrollSnapType','scroll-snap-align':'scrollSnapAlign',\
+          '-webkit-filter':'filter','-webkit-backdrop-filter':'backdropFilter',\
+          '-webkit-clip-path':'clipPath'}};\
           var k=m[p]||String(p).replace(/-([a-z])/g,function(_,c){{return c.toUpperCase();}});\
           var v=this[k];if(v===undefined)v=this[p];\
           return v===undefined?'':String(v);}},\
@@ -955,6 +1094,16 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
             manuk_css::ScrollSnapAlign::End => "end",
             manuk_css::ScrollSnapAlign::None => "none",
         }),
+        // The visual-effects bundle (ticks 592-595). `filter` and `-webkit-filter` are the SAME
+        // resolved value, as are the other prefixed pairs — a page that feature-detects on the
+        // prefixed name and then reads the unprefixed one (or the reverse) must not see a hole.
+        q(&filter_list_css(&cs.filter)),
+        q(&filter_list_css(&cs.filter)),
+        q(&filter_list_css(&cs.backdrop_filter)),
+        q(&filter_list_css(&cs.backdrop_filter)),
+        q(&clip_path_css(cs.clip_path.as_ref())),
+        q(&clip_path_css(cs.clip_path.as_ref())),
+        q(blend_mode_css(cs.mix_blend_mode)),
         // `__custom` — the computed CSS custom properties (`--foo`), as a JS object literal keyed by the
         // full `--name`. `getPropertyValue` short-circuits to it for any name starting with `--`, so
         // `getComputedStyle(el).getPropertyValue('--foo')` returns the cascaded/var()-expanded value.

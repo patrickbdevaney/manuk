@@ -1288,3 +1288,35 @@ break-opportunity bug was in *three* text-assembly consumers, not one. t581: gat
 directories, not one. t588's own standing rule had the blind spot it was written to cure. t591: t576's
 denylist covered one of *two* categories. The cheap version of the question is **"what else reads this, or
 is in this state, and does it have the same problem?"** — a grep for the **class**, not the symptom.
+
+## `undefined` from `getComputedStyle` is not a missing feature — it is a thrown exception in the caller (tick 596)
+
+Ticks 592-595 made `filter`, `backdrop-filter`, `clip-path` and `mix-blend-mode` render. All four
+still read back `undefined`, and **that is the worse half of the same lie, not the smaller one:**
+
+```js
+if (getComputedStyle(el).filter.indexOf('blur') !== -1) { … }   // TypeError → frame dead
+```
+
+A missing *rendering* degrades a page. A missing *string* stops the script. The CSSOM contract is
+that every supported property is a string **always**, and `"none"` is a perfectly good answer. This is
+the third sighting of one defect class — t576 found it on `getPropertyValue`, t590 re-found it on
+`appearance` — and here it was four properties wide.
+
+**The unset value must be the CSS initial keyword, never `""`.** An empty string is falsy, so
+`if (cs.filter)` takes the wrong branch silently; `"none"` and `"normal"` are truthy and correct.
+That is why `G_COMPUTED_VISUAL_EFFECTS` asserts `typeof === 'string'` *before* it asserts any value:
+a test that only checked the *set* case would pass while every page that feature-detects before
+styling still died, and that is most of them.
+
+**Three places one set of properties lives, and they drift independently.** The object literal, the
+`STD` name list behind `length`/`item(i)`, and the `getPropertyValue` dash→camel map. A property in
+the first but not the second is enumerable-invisible (the drift `G_COMPUTED_CUSTOM_PROPERTIES` caught
+when `length` was a hand-maintained `50` against a list of 52). And the map is not optional for
+prefixed spellings: `getPropertyValue`'s fallback auto-camelCases, which turns `-webkit-filter` into
+`WebkitFilter` — not a property, so it returns `""` **silently**. The gate asserts all three routes
+agree, because `getPropertyValue` and the property disagreeing about one declaration is the tick-282
+bug wearing new clothes: whichever the page consults, it gets a different browser.
+
+Prefixed aliases resolve to the *same* value rather than to a duplicate serialization, so a page that
+feature-detects on `webkitFilter` and then reads `filter` (or the reverse) cannot find a hole.
