@@ -72,6 +72,29 @@ pub enum Unmeasurable {
     /// removed the site from the corpus instead of counting against it, so the one outcome that
     /// most deserves to lower the score was the one that could not.
     RenderFailed,
+    /// **The ORACLE rendered a shell, so there is nothing to compare against.** Carries the number of
+    /// elements Chrome's probe actually produced.
+    ///
+    /// The instrument feeds both engines ONE fetched document from a `file://` temp copy — deliberately,
+    /// so the two Chrome probes cannot render different pages (Wikipedia's origin injects a banner a
+    /// local copy never sees). The cost of that choice was never priced: from `file://` the page's own
+    /// origin is `null`, so a JS-rendered site's fetches and module loads are cross-origin and blocked,
+    /// and **Chrome builds almost nothing**. Measured:
+    ///
+    /// ```text
+    ///   comix.to    file:// snapshot     28 elements ·  4 with a box
+    ///               live navigation    ~2643 tags
+    /// ```
+    ///
+    /// A 94x gap, and the certificate was scoring the small side of it: `comix.to` reported
+    /// **coverage 66.7%**, computed over **three elements**. That is not a measurement of comix.to — it
+    /// is a measurement of comix.to's pre-hydration shell, printed in the same column, in the same
+    /// units, as `bbs.ruliweb.com`'s 4,122-path score.
+    ///
+    /// This does NOT fix the oracle; it stops the oracle LYING. Naming the condition converts the last
+    /// of t611's *"unscored with NO recorded reason"* rows — the residue that tick could not explain —
+    /// into a stated one, and removes a false number from the certificate.
+    ShellOnly(usize),
 }
 
 impl Unmeasurable {
@@ -85,6 +108,7 @@ impl Unmeasurable {
             Self::EmptyBody(c) => format!("empty-{c}"),
             Self::ProbeBlocked => "probe-blocked".into(),
             Self::RenderFailed => "render-failed".into(),
+            Self::ShellOnly(n) => format!("shell-only-{n}"),
         }
     }
 
@@ -95,6 +119,9 @@ impl Unmeasurable {
             "unreachable" => Some(Self::Unreachable),
             "probe-blocked" => Some(Self::ProbeBlocked),
             "render-failed" => Some(Self::RenderFailed),
+            _ if s.starts_with("shell-only-") => {
+                s["shell-only-".len()..].parse().ok().map(Self::ShellOnly)
+            }
             _ => num("bot-wall-")
                 .map(Self::BotWall)
                 .or_else(|| num("http-").map(Self::HttpStatus))
@@ -133,6 +160,12 @@ impl Unmeasurable {
                  that most deserves to count against the score"
                     .into()
             }
+            Self::ShellOnly(n) => format!(
+                "the ORACLE rendered only {n} element(s) — a shell, not the page. The probe serves one \
+                 fetched copy from file://, where the site's own origin is null and its scripts' \
+                 fetches are cross-origin and blocked, so a JS-rendered page never builds (comix.to: 28 \
+                 elements here vs ~2643 live). Scoring this measures the shell, not the site"
+            ),
         }
     }
 }
@@ -959,13 +992,25 @@ pub fn report(rows: &[Fidelity], floor: f64) -> bool {
     } else {
         scored_v.iter().sum::<f64>() / scored_v.len() as f64
     };
-    let structs: Vec<f64> = rows.iter().filter_map(|r| r.structure).collect();
+    // Same site set as MEAN VISUAL above, and for the same reason: `comix.to` carried a `coverage`
+    // of 66.7% computed over THREE elements of a shell the oracle could not hydrate. Averaging that
+    // into the headline while excluding it from the certificate computes two numbers over two
+    // populations and prints them three lines apart.
+    let structs: Vec<f64> = rows
+        .iter()
+        .filter(|r| r.unmeasurable.is_none())
+        .filter_map(|r| r.structure)
+        .collect();
     let mean_s = if structs.is_empty() {
         None
     } else {
         Some(structs.iter().sum::<f64>() / structs.len() as f64)
     };
-    let shapes: Vec<f64> = rows.iter().filter_map(|r| r.shape).collect();
+    let shapes: Vec<f64> = rows
+        .iter()
+        .filter(|r| r.unmeasurable.is_none())
+        .filter_map(|r| r.shape)
+        .collect();
     let mean_shape = if shapes.is_empty() {
         None
     } else {
@@ -1360,6 +1405,7 @@ mod shape_tests {
             Unmeasurable::EmptyBody(202),
             Unmeasurable::ProbeBlocked,
             Unmeasurable::RenderFailed,
+            Unmeasurable::ShellOnly(3),
         ] {
             assert_eq!(
                 Unmeasurable::from_tag(&u.tag()),
@@ -1459,6 +1505,29 @@ mod shape_tests {
                 super::JARRING_NAMES[i]
             );
         }
+
+        // ── A SHELL IS NOT A SCORE. `comix.to` reported `coverage 66.7%` over THREE probed elements,
+        // because the oracle's own `file://` copy cannot hydrate a JS-rendered page (28 elements here
+        // vs ~2643 live). The certificate already refused to SCORE such a row — what it could not do
+        // was say why, and an unexplained refusal is indistinguishable from an instrument gap.
+        let shell = Fidelity {
+            shape: Some(1.0),
+            shape_n: 2,
+            structure: Some(0.667),
+            unmeasurable: Some(Unmeasurable::ShellOnly(3)),
+            ..row("comix.to", Some(1.0), [0; 4])
+        };
+        let sc = certificate(&[shell]);
+        assert_eq!(sc.sites, 1, "a shell-only site stays in the denominator");
+        assert_eq!(
+            sc.scored, 0,
+            "…and is never scored — 66.7% of three elements is not a coverage"
+        );
+        assert!(
+            sc.shortfalls().join(" | ").contains("shell-only-3"),
+            "the shell must be named with the element count that proves it: {:?}",
+            sc.shortfalls()
+        );
 
         // ── A site unscored with NO reason is itself reported, so the decomposition can never look
         // complete just because the explained causes are the only ones printed.

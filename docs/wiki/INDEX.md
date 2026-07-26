@@ -171,6 +171,10 @@
   - L1085 · A refusal is not a rendering result — and this is the sharp edge
   - L1101 · And the denominator had a hole the whole time
   - L1118 · What the report says now
+  - L1132 · The oracle renders a SHELL for JS-built pages, and the certificate was scoring it (tick 614)
+  - L1153 · Naming it, not fixing it
+  - L1168 · The vacuous rows were inflating the headline
+  - L1189 · The open question, stated rather than smuggled
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1058,4 +1062,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-973 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+977 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

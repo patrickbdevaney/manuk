@@ -1128,3 +1128,69 @@ single total cannot be worked. And a site unscored with *no* recorded reason is 
 shortfall — *"the instrument could not say why, which is an instrument gap, not a result"* — so the
 decomposition can never look complete merely because the explained causes are the only ones listed.
 [[certification-redesign]] [[reliability-doctrine]]
+
+## The oracle renders a SHELL for JS-built pages, and the certificate was scoring it (tick 614)
+
+The fidelity probe feeds both engines **one fetched copy, served from a `file://` temp file.** That is
+deliberate and defends a real invariant, recorded in `chrome.rs`: point Chrome at the live URL instead
+and the *two Chrome probes* render different pages — Wikipedia's origin injects a fundraising banner a
+local copy never sees, which once pinned a metric at 5,122px across four correct fixes.
+
+**The cost of that choice was never priced.** From `file://` the page's own origin is `null`, so a
+JS-rendered site's `fetch`es and module loads are cross-origin and blocked, and Chrome builds almost
+nothing:
+
+```text
+  comix.to    file:// snapshot (what the instrument scores)    28 elements ·  4 with a box
+              live navigation                                ~2643 tags
+```
+
+A **94× gap** — and the certificate scored the small side of it. `comix.to` reported
+**`coverage 66.7%`**, computed over **three elements**, printed in the same column and the same units
+as `bbs.ruliweb.com`'s 4,122-path score. That is not a measurement of comix.to; it is a measurement of
+comix.to's pre-hydration shell.
+
+### Naming it, not fixing it
+
+`Unmeasurable::ShellOnly(n)` carries the element count that proves the condition. The threshold is
+`CERT_MIN_SHAPE_SAMPLE`, **reused rather than invented** — the certificate already refused to score a
+placement ratio computed over fewer than ten elements, so **no verdict changes**. What changes is that
+the refusal states its cause, which was the whole of t611's *"unscored with NO recorded reason"*
+residue.
+
+```text
+  comix.to        UNMEASURABLE [shell-only-3]
+  www.naukri.com  UNMEASURABLE [shell-only-1]
+```
+
+Fixing the oracle is a separate question and deliberately not answered here — see below.
+
+### The vacuous rows were inflating the headline
+
+`shape_stats` returns `1.0` over an empty sample, so a shell contributed a *perfect* placement score to
+the mean. Recomputed from the t611 sweep's own saved output:
+
+```text
+  comix.to      100.0%  n=2   ← vacuous       desitales2   63.0%  n=598
+  welt.de         0.0%  n=1   ← vacuous       agoda.com     7.7%  n=13
+  naukri.com    100.0%  n=0   ← vacuous       keirin.jp     9.9%  n=503
+  ebay.com        0.0%  n=4   ← vacuous       ikea.com     51.7%  n=698
+                                              ruliweb      53.1%  n=4091
+
+  MEAN SHAPE as reported (9 rows)   42.8%
+  MEAN SHAPE over n>=10 only        37.1%
+```
+
+**5.7 points optimistic**, from four rows scored over 0–4 elements. All three headline means
+(`MEAN VISUAL`, `MEAN COVERAGE`, `MEAN SHAPE`) now take the **same site set the certificate does** —
+otherwise two numbers printed three lines apart are computed over two different populations, which is
+the accounting mismatch of `THE SEVEN META-INSTRUMENTS` #3.
+
+### The open question, stated rather than smuggled
+
+**Can this oracle measure a JS-rendered page at all?** `file://` protects one invariant (both Chrome
+probes see one document) at the cost of another (the document is the one a user would actually get).
+Serving the snapshot from a local `http://127.0.0.1` origin would satisfy both and is the obvious
+candidate — but it changes what **every past number meant**, so it needs its own tick with a
+before/after on the same corpus, not a quiet swap. Until then the honest position is the printed one:
+those sites are UNMEASURED, with a reason. [[certification-redesign]]

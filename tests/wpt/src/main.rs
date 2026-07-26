@@ -704,6 +704,24 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                     f.misplaced = misplaced;
                     f.probed = probed;
                     eprintln!("  structural: {:.1}% ({probed} paths, {missing} missing, {misplaced} misplaced)", sc * 100.0);
+                    // **A HANDFUL OF PROBED ELEMENTS IS A SHELL, AND SCORING IT IS A FALSE NUMBER.**
+                    //
+                    // The oracle serves one fetched copy from `file://` so both Chrome probes see the
+                    // same document — deliberate, and it costs this: from `file://` the page's origin
+                    // is `null`, so a JS-rendered site's own fetches are cross-origin and blocked and
+                    // Chrome builds almost nothing. `comix.to` yields 28 elements here against ~2643
+                    // live, and the certificate duly printed `coverage 66.7%` computed over THREE
+                    // elements — in the same column, in the same units, as a 4,122-path score.
+                    //
+                    // The threshold is `CERT_MIN_SHAPE_SAMPLE`, reused rather than invented: the
+                    // certificate ALREADY refuses to score a placement ratio over fewer than that many
+                    // elements, so this changes no verdict. It supplies the REASON that refusal never
+                    // had, which is the whole of t611's unexplained residue.
+                    if probed < manuk_wpt::fidelity::CERT_MIN_SHAPE_SAMPLE {
+                        let reason = manuk_wpt::fidelity::Unmeasurable::ShellOnly(probed);
+                        eprintln!("  UNMEASURABLE [{}]: {}", reason.tag(), reason.explain());
+                        f.unmeasurable = Some(reason);
+                    }
                     if let Some((last_ok, _, first_bad, dy)) =
                         manuk_wpt::fidelity::first_divergence(&cmap, &mboxes, 60)
                     {

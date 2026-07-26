@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **373** | ticks 1–613 |
-| median tick cycle | **21m** | 372 intervals |
+| ticks landed | **374** | ticks 1–614 |
+| median tick cycle | **21m** | 373 intervals |
 | median, last 10 | **33m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.02** | 365.6h elapsed |
-| median verify wall | **67s** | 312 ticks |
+| **ticks per hour** | **1.02** | 365.9h elapsed |
+| median verify wall | **67s** | 313 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**187 of 373 ticks** (50%) moved a
+**187 of 374 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -470,5 +470,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **611** | 2026-07-26 09:33 | 1.6h | reliability | 63s | +1042/−53 | 305 | 81 | 56.0% · | the certificate cannot see an HTTP status, so a bot-wall and a document are the same thing |
 | **612** | 2026-07-26 10:06 | 33m | capability | 63s | +522/−12 | 306 | 81 | 56.0% · | `innerText` had no setter, and a getter-only accessor is a THROW, not a gap (2026-07-26) |
 | **613** | 2026-07-26 10:36 | 30m | capability | 63s | +577/−23 | 308 | 81 | 56.0% · | `XMLHttpRequest` had the legacy half of its API and none of the EventTarget half (2026-07- |
+| **614** | 2026-07-26 10:54 | 18m | reliability | 63s | +319/−6 | 308 | 81 | 56.0% · | the oracle was rendering a SHELL and the certificate was scoring it (2026-07-26) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
