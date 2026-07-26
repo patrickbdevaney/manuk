@@ -25309,3 +25309,77 @@ real restructure, unlike the last three. Then `border-radius` on the backdrop re
 frosted panel currently filters a square). Then `font-display`/`unicode-range`. Surface audit is due
 at 598 — and it should start, per the standing rule, by diffing `engine/page/tests/` against the map.
 Cadences: surface 598 (NEXT TICK); const 599; wall 607; self-audit 604.
+
+## Tick 598 — SURFACE AUDIT #33: the board is steering at finished work, and the map was not machine-readable (2026-07-26)
+
+**THE AUDIT'S FIRST TWO NUMBERS WERE BOTH WRONG, AND THAT IS THE FIRST ENTRY.** Per the t581 standing
+rule I opened by diffing `engine/page/tests/` against the map. Pass one: *27 of 293 gate files
+unreferenced*. Pass two: *18*. Truth: **2**. Both earlier figures were artifacts of **my own
+matcher** — it upper-cased names and grepped `G_[A-Z0-9_]+` while the map cites plenty in lowercase.
+The loop's own lesson, pointed at the loop's own instrument: **when a measurement produces an alarming
+number, the instrument is a suspect before the subject is.** Acting on 27 would have meant "fixing"
+two dozen rows that were never broken. The t581 rule itself **held**: coverage is 291/293.
+
+**THE HEADLINE — THE BOARD'S CO-#1 IS SUBSTANTIALLY STALE.** Checked each letter against the map and,
+where the claim needed confirming, **by running the gate**:
+- **(A) MEDIA/YouTube**, billed as "5%, the biggest gap": MSE, container demux, audio output,
+  `<video>` playback + A/V sync and WebVTT are all **gated**. Only decode breadth is `partial`; EME
+  is deliberately out. The observer said this at t264; the PHASE MANDATE text was never updated.
+- **(B) OAUTH**: redirect flow, popup+`postMessage`, cross-frame `postMessage` all **gated**. Only
+  FedCM is `unknown`.
+- **(C) canvas fillText**, billed as "HIGH-LEVERAGE, one fix unlocks Docs/Sheets/terminals":
+  **already done and gated.** I ran `g_canvas_text` — it asserts real ink, ink colour, a transparent
+  surround, per-glyph widths and `textAlign`/`textBaseline`, and it passes.
+- **(D) probe the unknowns**: **17** remain (not ~35), and it is now the only letter genuinely open.
+
+`scripts/lever-board.sh` is observer-owned; I did not touch it. The finding is reported in the audit
+ledger with the evidence, which is the whole point of having one.
+
+**AND THE MAP WAS NOT MACHINE-READABLE — one landed capability had been invisible for nine ticks.**
+Three defects, none visible by *reading* the file, all of them in its *shape*:
+1. **Two rows joined by a missing newline** → an 11-field row whose second half was t587's
+   `G_STORAGE_PATCHABLE` row: a landed capability with a full receipt, **unreadable by every
+   column-based consumer** — the lever board, `phase0-progress.sh`, `--gaps`, and this audit — since
+   t587. (It is also why my first pass mis-reported that gate as unmapped.) The join had eaten its
+   `class` column too; restored.
+2. A **stray blank row**, which shifts every line reference into the map.
+3. A status reading **`measured`** — not one of the five values anything downstream understands, so
+   that capability silently dropped out of every tally, including the readiness percentage the phase
+   gate is judged on.
+
+Plus **two rows citing a gate that does not test them**: View Transitions and promise-returning
+scroll methods both read `g_mse_join claims` — prose pasted from an unrelated MEDIA row.
+
+**A DOCUMENT THE LOOP REASONS FROM NEEDS A TEST LIKE ANY OTHER INPUT.** `G_CONSTELLATION_WELLFORMED`
+now asserts six fields exactly, five legal statuses, no blank rows, and a row-count floor so a
+truncating write is loud. RED-proven by re-injecting the exact defect.
+
+**ONE ASSERTION WAS DELETED RATHER THAN TUNED, and that is the tick's other lesson.** The companion
+"every cited gate exists" test *found* the `g_mse_join` rows — and then had to go: the gate column's
+vocabulary is heterogeneous by design (file gates, crate-internal unit-test function names, perf
+floors like `F1/F2`, bare subsystem names, multi-gate expressions), and every version that admitted
+those also admitted the prose that caused the bug. **A gate tuned until it is green is the thing this
+repo refuses.** What would make it real is written into the gate's own header: a canonical gate
+registry emitted by the harness and cited by key — which would also make `verify.sh`'s coverage
+countable, an open question memory already carries ("gated" ≠ "watched"). Observer-owned; named, not
+attempted.
+
+RED-PROVEN: join two map rows → the gate names the offending line and its field count. Workspace
+`--all-targets` clean.
+
+TICK SHAPE: the DUE surface audit (#33) — four findings, three map defects repaired, one new gate,
+and a correction to the loop's own steering. Bar 0 untouched; no ratchet floor moved; no engine
+source changed.
+Gates: `G_CONSTELLATION_WELLFORMED` (`engine/page/tests/g_constellation_wellformed.rs`; RED-proven).
+WIKI: none [forced] — no engine mechanism changed; the findings' home is the audit ledger and the
+gate's own header.
+PATTERN: [no-pattern] — no browser capability changed.
+
+NEXT: **(D) is the only genuinely open CO-#1 letter, so take it** — the 17 unknowns are cheap
+measure-and-pin probes and several will already work (t225/t226 found five that did). Highest-value
+first: `X-Frame-Options`/CSP `frame-ancestors` and Subresource Integrity are SECURITY rows carried as
+unknown, which is the worst status for a security control; then Reporting API, `window.screen` +
+Screen Orientation, File System Access/OPFS. Then `isolation` (18.0%, the last `UNRENDERED_LONGHANDS`
+row with real usage — it needs a nested paint group, so measure before committing). Constitution
+check is due at 599.
+Cadences: const 599 (NEXT TICK); self-audit 604; wall 607; surface 608.

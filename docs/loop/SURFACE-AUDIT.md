@@ -1631,3 +1631,70 @@ roadmap.** The Blink use-counter dumps are two URLs and parse in seconds; there 
 implicit ranking to disagree with them again.
 
 LAST_SURFACE_AUDIT set to 588; next due 598.
+
+## Audit #33 — tick 598
+
+**METHOD, and the first two numbers it produced were both wrong.** Per the standing rule (t581), the
+audit opens by diffing `engine/page/tests/` against `CONSTELLATION.tsv`. The first pass said **27 of
+293 gate files are unreferenced by the map**. The second, checking whole rows rather than the gate
+column, said **18**. The true answer is **2**.
+
+Both earlier figures were artifacts of **my own matcher**: it upper-cased gate names and grepped for
+`G_[A-Z0-9_]+`, while the map cites plenty of gates in lowercase (`g_canvas_text`, `g_a11y_roles`).
+Recorded because it is the loop's own recurring lesson pointed at the loop's own instrument: **when a
+measurement produces an alarming number, the instrument is a suspect before the subject is.** Acting
+on 27 would have meant "fixing" two dozen rows that were never broken.
+
+**FINDING 1 — the t581 rule HELD. Gate/map coverage is 291 of 293.** The two exceptions:
+- `engine/page/tests/webfont_live.rs` does not follow the `g_*.rs` convention, so a name-based audit
+  cannot see it at all. Left as-is (renaming a gate file risks the wall, which is observer-owned) and
+  recorded here so the next audit does not re-derive it.
+- `g_scroll_anchor` is unnamed in the map, though `g_scroll_anchor_live` is cited by the same row.
+
+**FINDING 2 — THE HEADLINE: the board's CO-#1 list is substantially stale, and the loop is being
+steered at work that is already done.** Checked each letter against the map and, where the map's own
+claim needed confirming, by *running the gate*:
+
+| board CO-#1 | board says | actual |
+|---|---|---|
+| **(A) MEDIA/YouTube** | "5% — biggest gap; build MSE → symphonia → cpal → …" | MSE **gated**, container demux **gated**, audio output **gated**, `<video>` playback + A/V sync **gated**, WebVTT **gated**. Only decode *breadth* is `partial`; EME is deliberately out of scope. (The observer already said this at t264 — the PHASE MANDATE text was never updated.) |
+| **(B) OAUTH** | "O1 redirect flow → … → O5 FedCM" | redirect flow **gated**, popup + `postMessage` **gated**, cross-frame `postMessage` **gated**. Only FedCM is `unknown`. |
+| **(C) canvas fillText** | "HIGH-LEVERAGE: wire the existing swash raster to the 2D ctx" | **DONE and gated** — `g_canvas_text` passes, asserting real ink, ink colour, transparent surround, per-glyph widths, `textAlign`/`textBaseline`. Verified by running it this tick, not by reading the map. |
+| **(D) probe the unknowns** | "~35 unknowns" | **17** remain, listed below. Genuinely open, and now the only letter that is. |
+
+`scripts/lever-board.sh` is observer-owned and was not touched. This is the report.
+
+The 17 remaining unknowns: CSS `zoom`, `shape()`, multi-keyword `display`, `animation-composition`,
+`text-justify`, multicol L2, Reporting API, `X-Frame-Options`/CSP `frame-ancestors`, Subresource
+Integrity, File System Access + OPFS, `window.screen` + Screen Orientation, FedCM + Digital
+Credentials, SVG filters/patterns/SMIL, `@counter-style`, the 2026 CSS frontier bundle, per-glyph font
+fallback across scripts, Speculation Rules + `document.prerendering`.
+
+**FINDING 3 — THE MAP WAS NOT MACHINE-READABLE, and one landed capability had been invisible for nine
+ticks.** Three integrity defects, none of them visible by reading the file:
+1. **Two rows joined by a missing newline** → an 11-field row. The second half was the tick-587
+   `G_STORAGE_PATCHABLE` row — a landed capability with a full receipt, **unreadable by every
+   column-based consumer** (the lever board, `phase0-progress.sh`, `--gaps`, this audit) since t587.
+   It also lost its `class` column in the join; restored to `storage`.
+2. A **stray blank row**, which shifts every line-number reference into the map.
+3. A row whose status read **`measured`** — not one of the five values anything downstream
+   understands, so the capability silently dropped out of every tally including the readiness
+   percentage the phase gate is judged on. (100-tab RSS budget; it names a gate, so: `gated`.)
+
+**FINDING 4 — two rows cited a gate that does not test them.** `cross-document View Transitions (MPA)`
+and `promise-returning scroll methods` both had a gate column reading `g_mse_join claims` — prose
+pasted from an unrelated MEDIA row. Corrected to `G_VIEW_TRANSITION` and `G_ELEMENT_SCROLL_TO`.
+
+**WHAT WAS BUILT SO FINDING 3 CANNOT RECUR SILENTLY: `G_CONSTELLATION_WELLFORMED`.** Six fields
+exactly on every row, five legal statuses, no blank rows, and a floor on the row count so a
+truncating write is loud. RED-proven by re-injecting the exact defect (join two rows → the gate names
+the offending line and its field count).
+
+**AND ONE ASSERTION WAS DELETED RATHER THAN TUNED.** The companion "every cited gate exists on disk"
+test found Finding 4 and was then removed: the gate column's vocabulary is heterogeneous *by design*
+(file gates, crate-internal unit-test function names, perf floors like `F1/F2`, bare subsystem names,
+multi-gate expressions), and every version that admitted those also admitted the prose that caused
+the bug. **A gate tuned until it is green is the thing this repo refuses.** What it would take is
+recorded in the gate's own header: a canonical gate registry emitted by the harness, cited by key —
+which would also make `verify.sh`'s coverage countable, an open question memory already carries
+("gated" ≠ "watched"). Observer-owned; named, not attempted.
