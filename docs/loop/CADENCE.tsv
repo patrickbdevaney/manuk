@@ -387,3 +387,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 626	bff075ab	1785099663	2026-07-26T17:01:03-04:00	1027	measurement	63	4	135	2	315	81	3896	6960	0	341	31	the certificate, re-measured: the constraint has MOVED from measurability to scope (2026-07-26)
 627	58903d8f	1785100321	2026-07-26T17:12:01-04:00	658	reliability	63	7	299	11	315	81	3896	6960	0	341	31	the diff's font field compared a DECLARATION to a RESOLUTION (2026-07-26)
 628	f928007c	1785100602	2026-07-26T17:16:42-04:00	281	reliability	63	5	161	6	315	81	3896	6960	0	341	31	SURFACE AUDIT #35: audit #34 was wrong, and its own first step caught it (2026-07-26)
+629	f6d0bca5	1785100895	2026-07-26T17:21:35-04:00	293	measurement	63	3	118	2	315	81	3896	6960	0	341	31	SVG geometry children have no box: `getBBox` knows, `getBoundingClientRect` does not (2026-07-26)
