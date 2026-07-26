@@ -445,6 +445,20 @@ pub fn set_module_graph_sources(sources: std::collections::HashMap<String, Strin
 #[cfg(not(feature = "_sm"))]
 pub fn set_module_graph_sources(_sources: std::collections::HashMap<String, String>) {}
 
+/// Drop the compiled-module registry after a page's deferred scripts AND their microtasks have run.
+///
+/// It used to be dropped at the end of each `run_module`, which is too early: a dynamic `import()`
+/// completes its caller's promise in a later microtask and the module must still be resolvable then.
+/// Clearing here keeps the contract that matters — the registry never outlives the NAVIGATION, so
+/// nothing pins a dead realm's modules — while letting `import()` finish.
+#[cfg(feature = "_sm")]
+pub fn clear_module_registry() {
+    dom_bindings::clear_module_registry();
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn clear_module_registry() {}
+
 /// Drop the pre-fetched module-graph sources after a page's deferred scripts have run.
 #[cfg(feature = "_sm")]
 pub fn clear_module_graph_sources() {

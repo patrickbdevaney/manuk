@@ -694,6 +694,10 @@
   - L1571 · A module's imports resolve against the MODULE's url, not the document's (tick 617)
   - L1596 · What it cost, measured
   - L1617 · The mechanism: the DOM cannot answer, so something else must
+  - L1633 · A dynamic import's module must OUTLIVE the hook that made it (tick 624)
+  - L1663 · Why a synchronous hook is honest here
+  - L1672 · ⚠ A hook installed at one of two sites looks exactly like no hook at all
+  - L1680 · The three symptoms, and what each one means
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1076,4 +1080,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-991 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+995 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

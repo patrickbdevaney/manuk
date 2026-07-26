@@ -5269,3 +5269,27 @@ say: only on real production sites, and on essentially *all* of them.
 written for whichever case the author had in front of them, and the comment will state the general
 rule correctly while the code implements the special one. Look for the configuration that separates
 the cases — here, "is the module in the same directory as the document?" — and test *that*.
+
+## The code-split bundle — `import()` for a route, a component, a polyfill (tick 624)
+
+**The class:** every application built with code splitting, which is the default in every modern
+bundler. A lazy route (`const Page = lazy(() => import('./routes/settings.js'))`), an on-demand
+component, a polyfill loaded only where needed, an analytics module deferred past first paint.
+
+`import()` threw *"Dynamic module import is disabled or not supported in this context"* at **every**
+call, because no `HostImportModuleDynamically` hook was installed. That is not a degraded experience —
+the promise rejects, so the route never mounts, the component never appears, and the page's error
+boundary (if it has one) shows a failure instead of content.
+
+**The map claimed this `works` for as long as the row existed**, bundled into `ES modules + dynamic
+import()` — one row asserting two capabilities and reporting the stronger one's verdict for both.
+Surface audit #34 caught it; t624 built it.
+
+**What makes it tractable here without an async loader:** the page already pre-fetches its whole
+reachable module graph before any script runs, because there is no synchronous network on the JS
+thread. Extending the pre-scan to literal `import("…")` specifiers puts the code-split chunks in that
+same map, so the hook resolves from memory and finishes immediately. **A computed specifier
+(`import(url)`) still rejects**, and that is the honest boundary: a page that builds specifiers at
+runtime already has a `.catch()`, and telling it "no" is far better than a promise that never settles.
+
+`www.welt.de`: VISUAL 82.8% → 91.1%, COVERAGE 94.9% → 95.7%.

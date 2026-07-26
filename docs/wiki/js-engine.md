@@ -1629,3 +1629,61 @@ until you run it. Both are independently RED-proven in `G_MODULE_BASE_URL`.
 still failed after the page-side fix, moving the *document* into the script's directory — where both
 resolutions coincide — made it pass, which proved the harness worked and the remaining failure was
 real. That diagnostic is what pointed at the second site instead of at the test.
+
+## A dynamic import's module must OUTLIVE the hook that made it (tick 624)
+
+`import()` needs a `HostImportModuleDynamically` hook; without one SpiderMonkey rejects every call with
+*"Dynamic module import is disabled or not supported in this context"*. Installing one is the easy
+half. The half that cost a parked tick is a **lifetime**.
+
+`run_module` used to clear the compiled-module registry the instant the ROOT was linked and evaluated:
+
+```rust
+if have_graph { esm_registry_clear(); }   // "SpiderMonkey's own records keep the graph alive now"
+```
+
+Correct **for static imports** — once `ModuleLink` has run, the engine's module records hold the graph
+through the still-rooted root. **Wrong for dynamic ones.** `FinishDynamicModuleImport` completes the
+caller's promise in a **later microtask**, and the module must still be returned by the resolve hook at
+that point. The API header says so, in a sentence that reads as being about registration and is
+actually about lifetime:
+
+> *"If successful, **after calling FinishDynamicModuleImport()** the module should be returned by the
+> resolve hook when passed |referencingPrivate| and |moduleRequest|."*
+
+So the module was compiled, linked, evaluated, registered and exception-free — and **deleted between
+the hook returning and SpiderMonkey asking for it.** The symptom is a promise that rejects with
+`undefined`, which looks like nothing in particular.
+
+The clear now runs at the end of the **script pass**, beside where `MODULE_GRAPH_SOURCES` is dropped.
+The GC contract is unchanged in substance — *the registry must never outlive the NAVIGATION*, so
+nothing pins a dead realm's modules — and it is simply later than the last moment a dynamic import can
+need it.
+
+### Why a synchronous hook is honest here
+
+There is no synchronous network on the JS thread, so the module has to be in hand already — and it is:
+the page pre-fetches the reachable graph before any script runs. `scan_static_import_specifiers` now
+also collects **literal** `import("…")` specifiers, which it deliberately skipped while nothing could
+execute one. A **computed** specifier still cannot be seen by a textual scan and **rejects**, which is
+the honest answer: the page's `.catch()` is what such a page already relies on, and a promise that
+never settles is strictly worse than one that rejects.
+
+### ⚠ A hook installed at one of two sites looks exactly like no hook at all
+
+There are **two** `SetModuleResolveHook` call sites and the page path uses the second. Installing the
+dynamic hook at only the first reproduces the pre-hook symptom exactly — *"Dynamic module import is
+disabled"* — so the natural reading is "my change did not apply", not "my change applied halfway".
+§VI.3's fourth clause from the other direction: not two implementations of one rule disagreeing, but
+one implementation registered in one of two places.
+
+### The three symptoms, and what each one means
+
+| break | symptom |
+|---|---|
+| no hook installed (or only at one site) | `"Dynamic module import is disabled or not supported"` |
+| registry cleared too early | `rejected:undefined` |
+| scanner does not collect the specifier | the promise **never settles** |
+
+`G_DYNAMIC_IMPORT` names all three in its assertion messages, because the first and third are easy to
+mistake for each other and the second looks like nothing.

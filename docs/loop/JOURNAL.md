@@ -27479,3 +27479,76 @@ NEXT: unchanged and both still standing for the observer — `manuk-wpt`'s tests
 `engine/page/tests/` so a real gate under `tests/wpt/tests/` reads as dangling, which is the whole of
 the remaining drift and what blocks `--strict`. On capability: dynamic `import()` is parked one
 question from working (t620), and `document.fonts` is undefined at 1-of-16 measured sites.
+
+## Tick 624 — dynamic `import()` works, and the thing that parked it was a LIFETIME (2026-07-26)
+
+t618's audit found the map claiming `works` for `import()` when it was not implemented; t620 built the
+hook, got every step succeeding, and parked with the promise still rejecting. **The parked question is
+answered and the capability is in.**
+
+**THE ANSWER WAS NOT THE HOOK — IT WAS WHEN THE MODULE STOPPED EXISTING.** `run_module` cleared the
+compiled-module registry the instant the ROOT was linked and evaluated, on reasoning that is correct
+*for static imports*: SpiderMonkey's own module records keep a linked graph alive, so the registry's
+roots stop being load-bearing. **False for dynamic imports.** `FinishDynamicModuleImport` completes the
+caller's promise in a **later microtask**, and the module must still be returned by the resolve hook at
+that point — which the API's own header says, in the sentence I had read as being about registration
+rather than about *lifetime*:
+
+> *"If successful, **after calling FinishDynamicModuleImport()** the module should be returned by the
+> resolve hook…"*
+
+So the module was compiled, linked, evaluated, registered, exception-free — and deleted between the
+hook returning and SpiderMonkey asking for it. The clear now happens at the end of the **script pass**,
+beside where `MODULE_GRAPH_SOURCES` is dropped, which preserves the contract that actually matters —
+*the registry never outlives the NAVIGATION, so nothing pins a dead realm's modules* — and is simply
+later than the last moment a dynamic import can need it.
+
+**AND ONE FAILURE ON THE WAY BACK IN IS WORTH RECORDING, BECAUSE IT COST A FULL WRONG ANSWER.**
+Re-applying t620's hook I installed it at **one** of the two `SetModuleResolveHook` sites. The page path
+uses the *second*. The first run therefore reported *"Dynamic module import is disabled"* — the
+pre-hook symptom — and I nearly concluded the re-application had failed. **A hook installed at one of
+two sites looks exactly like a hook not installed at all**, which is §VI.3's fourth clause arriving from
+the other direction: not "two implementations of one rule disagree" but "one implementation registered
+in one of two places". The gate's assertion message now names this explicitly, because the symptom is
+indistinguishable from the original bug.
+
+RED-PROVEN THREE WAYS, and each reproduces a DIFFERENT real symptom rather than three flavours of red:
+```text
+  remove the hook            -> "Dynamic module import is disabled or not supported in this context"
+  restore the early clear    -> "rejected:undefined"      ← t620's exact parked symptom
+  revert the scanner         -> the promise never settles ← the miss case
+```
+The un-prefetched specifier **rejects** rather than hanging, which is asserted in its own right: a
+computed specifier cannot be seen by a textual pre-scan, and a promise that never settles is strictly
+worse than one that rejects — the page's `.catch()` is what such a page already relies on.
+
+**MEASURED on `www.welt.de`**, which reaches `import()`:
+
+```text
+                before (t617)      after
+  VISUAL         82.8%             91.1%
+  COVERAGE       94.9%             95.7%   (163 → 136 missing)
+  SHAPE          66.9%             67.2%
+```
+
+Modest against t617's 0.0→94.9, and real. The class is larger than the number: **every code-splitting
+bundle** — a lazy route, an on-demand component, a deferred polyfill — is `import()`.
+
+REGRESSION: all six ESM gates green (`g_esm_page_graph`, `g_esm_prefetched_graph`, `g_esm_import_map`,
+`g_esm_import_graph`, `g_esm_module_registry`, `g_module_base_url`), plus `g_defer`, `g_globals` and
+the whole `manuk-js` suite. Both feature configurations compile.
+
+The self-audit was also due at this tick and is **clean** — methodology and reality agree.
+`LAST_AUDIT_TICK` moves to 624.
+
+TICK SHAPE: capability (`import()` goes from throwing at every call to working; the map row moves
+`missing` → `gated`). Bar 0 untouched; no ratchet floor moved; no capability traded — the registry's
+navigation-scoped lifetime is unchanged, only the moment it is dropped.
+Gates: +1 `G_DYNAMIC_IMPORT` (`engine/page/tests/g_dynamic_import.rs`) — resolution AND honest
+rejection, with the assertion messages naming all three failure symptoms by name.
+WIKI: `docs/wiki/js-engine.md` — "a dynamic import's module must outlive the hook that made it".
+PATTERN: `docs/loop/WEB-PATTERNS.md` — the code-split bundle.
+
+NEXT: `document.fonts` is undefined (1 of 16 measured sites, welt.de's last named error). And the
+standing observer items are unchanged: `manuk-wpt` tests not in the wall; `map-reconcile` scanning only
+`engine/page/tests/`.

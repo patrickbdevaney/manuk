@@ -2090,6 +2090,11 @@ impl Page {
         };
         manuk_js::clear_module_graph_sources();
         manuk_js::clear_module_node_bases();
+        // …and the compiled-module registry, which `run_module` used to drop itself. Too early: a
+        // dynamic `import()` settles its promise in a later microtask and needs the module to still
+        // be resolvable. Here is after the deferred pass and its microtasks, and still inside the
+        // navigation — which is the lifetime the GC contract actually cares about.
+        manuk_js::clear_module_registry();
         manuk_js::clear_import_map();
         self.drain_canvases();
         self.drain_element_scrolls();
@@ -6880,7 +6885,9 @@ fn scan_static_import_specifiers(src: &str) -> Vec<String> {
                 content.push(d);
                 i += 1;
             }
-            if (quote == b'\'' || quote == b'"') && (prev == "from" || prev == "import") {
+            if (quote == b'\'' || quote == b'"')
+                && (prev == "from" || prev == "import" || prev == "import(")
+            {
                 let s = String::from_utf8_lossy(&content).trim().to_string();
                 if !s.is_empty() {
                     out.push(s);
@@ -6902,7 +6909,14 @@ fn scan_static_import_specifiers(src: &str) -> Vec<String> {
         // Punctuation. `import(` is a dynamic import — clear so the bare-import rule cannot fire on the
         // string inside. Any other single byte becomes the previous token.
         if c == b'(' && prev == "import" {
+            // **A LITERAL `import("m")` specifier IS collected (t624).** The dynamic-import host hook
+            // resolves from this same pre-fetched map, so a specifier missing from it is one
+            // `import()` cannot satisfy. `import(` becomes its own marker so the string branch can
+            // tell it from a bare side-effect `import 'm'`. A COMPUTED specifier still cannot be seen
+            // by a textual scan and rejects at runtime — over-collecting is the safe direction, since
+            // a fetched module nothing imports costs one request and a missing one costs the feature.
             prev.clear();
+            prev.push_str("import(");
         } else {
             prev = (c as char).to_string();
         }
