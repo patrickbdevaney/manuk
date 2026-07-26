@@ -142,6 +142,33 @@ never WPT count, never a vibe.
   2,381 of 2,382 still missing) — a genuine second failure that the homogeneous reading would have hidden
   behind the keying fix.
 
+- `PILOT @tick 606 (FIRST sweep on CORPUS-V2 — the representative corpus, 20 HEAD sites):`
+  **shape ≥0.75 on 0 of 14 sites (0.0%)** · h-overflow clean 92.9% · overlap clean 85.7% ·
+  reading-order clean 71.4% · dead-target clean 100% · **9 of 14 UNSCORED and counted against the bar**.
+  MEAN VISUAL 63.4% · MEAN SHAPE 48.2%. Bar is 95% on every term. Rows: `/tmp/pilot-rows.tsv` (pilot
+  scratch; the full sweep banks a committed path).
+  **This is the first number from the corpus the certification redesign was built for**, and it is NOT
+  differenceable against t551: different corpus (CrUX-representative v2 vs the old convenience sample),
+  different denominator rule. It is a new baseline, not a movement.
+  **THE HEADLINE IS THE DENOMINATOR, and it is working as designed.** 20 sampled → **6 fetch-failed**
+  (bot-walls/timeouts) → 14 reached the instrument → **5 scored**. Under the old rig every one of those
+  6 would have silently vanished and the 5 scored sites would have become the whole story. §0's cause #1
+  is now mechanically impossible to repeat.
+  **The instrument also refused to flatter itself, unprompted:** `www.imdb.com` came back
+  *"Chrome rendered NO [id] elements — this URL cannot be structurally probed, so it measures nothing…
+  counting it as a pass is how a gate that cannot fail looks green forever"*, and was counted BELOW
+  rather than scored. That is CO-#1 item (1) paying out on live data.
+  **A SECOND, UNASKED-FOR FINDING: we are SLOW on the real web.** 10 of 14 sites tripped the
+  "OURS IS SLOW" ledger line — `welt.de` 34.4s vs Chromium 6.7s, `naukri.com` 21.5s vs 7.6s,
+  `keirin.jp` 16.6s vs 8.0s, `tamildhool.tech` 15.1s vs 0.9s. The 12s load budget is being exhausted on
+  ordinary HEAD sites, so those pages are painted *deliberately incomplete* — which means the shape
+  number above is partly a **timing** result, not only a layout one. That interaction was not visible on
+  the old easy corpus and it re-prices the load-budget work: it is now a fidelity input, not a comfort
+  metric.
+  **Next from this pilot:** p̂ ≈ 0/5 scored-and-passing is too small to size the full sweep from — the
+  binding constraint is the 64% unscored/failed rate, not p̂. Fix the *measurability* first (why 9 of 14
+  cannot be scored) before spending a full 400-site sweep on it.
+
 - `sweep @tick 551 (RE-SWEEP on the CORRECTED keying — THE BASELINE; 72 sampled, 55 scored):`
   **shape ≥0.75 on 3 of 55 sites (5.5%)** · h-overflow clean 74.5% · overlap clean 60.0% ·
   reading-order clean 43.6% · dead-target clean 70.9% · 15 of 55 UNSCORED (shape sample <10). Bar is 95%

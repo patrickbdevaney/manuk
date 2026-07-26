@@ -25838,3 +25838,73 @@ per-tick wall as a real-site regression guard, the full sweep off-tick, fixed de
 capability tick is wanted first, **nested paint groups** is now a named, priced subsystem that buys
 `isolation` and would also give `mix-blend-mode` its correct stacking-context semantics.
 Cadences: wall 607; const 607; surface 608; self-audit 614.
+
+## Tick 606 — THE PILOT: the first honest number on the representative corpus (2026-07-26)
+
+The board's t599 CLARITY steer said the only live CO-#1 priorities are the corpus-v2 pilot and the
+open unknowns; t601/t602 drove the unknowns to zero, so this is the other one. **This is the number
+the whole certification redesign was built to produce**, and it is worse than the readiness
+percentage suggests — which is the point of having built it.
+
+**20 HEAD sites of `corpus-v2.tsv`:**
+
+```text
+sites 14 · scored 5 · shape ≥0.75 on 0 (0.0%)        bar 95%
+h-overflow    clean 92.9%      overlap     clean 85.7%
+reading-order clean 71.4%      dead-target clean 100%
+MEAN VISUAL 63.4% · MEAN SHAPE 48.2%
+```
+
+**IT IS NOT DIFFERENCEABLE AGAINST t551 AND MUST NOT BE READ THAT WAY.** Different corpus
+(CrUX-representative vs the old convenience sample) and a different denominator rule. It is a **new
+baseline**, not a movement, and the anchor line says so.
+
+**THE HEADLINE IS THE DENOMINATOR, WORKING EXACTLY AS DESIGNED.** 20 sampled → **6 fetch-failed**
+(bot-walls, timeouts) → 14 reached the instrument → **5 scored**. Under the old rig all 6 would have
+silently vanished and the 5 scored sites would have become the whole story. §0's cause #1 — *dropping
+the hard sites is what made every past reading optimistic* — is now mechanically impossible, and the
+first live run demonstrates it rather than asserting it.
+
+**AND THE INSTRUMENT REFUSED TO FLATTER ITSELF, UNPROMPTED.** `www.imdb.com` came back with
+*"Chrome rendered NO [id] elements — this URL cannot be structurally probed, so it measures nothing…
+counting it as a pass is how a gate that cannot fail looks green forever"*, and was counted **BELOW**
+rather than scored. That is CO-#1 item (1) paying out on live data instead of on a fixture.
+
+**A SECOND FINDING NOBODY ASKED FOR: WE ARE SLOW ON THE REAL WEB, AND IT CONTAMINATES THE FIDELITY
+NUMBER.** 10 of 14 sites tripped the "OURS IS SLOW" line — `welt.de` **34.4s** vs Chromium 6.7s,
+`naukri.com` 21.5s vs 7.6s, `keirin.jp` 16.6s vs 8.0s, `tamildhool.tech` 15.1s vs **0.9s**. The 12s
+load budget is being exhausted on ordinary HEAD sites, so those pages are painted **deliberately
+incomplete** — meaning the shape number above is partly a **timing** result, not purely a layout one.
+
+That interaction was invisible on the old easy corpus, and it **re-prices the load-budget work**: it
+is a fidelity input, not a comfort metric. It is also the North Star's stated trap in a new place —
+*"fast because we never ran the script"* has a sibling, **"low fidelity because we ran out of time"**,
+and only a representative corpus surfaces it.
+
+**WHAT THE PILOT SAYS TO DO NEXT, and it is not "run the full sweep".** p̂ is unusable for sizing —
+0 of 5 scored sites pass, so the binding constraint is the **64% unscored/failed rate**, not p̂.
+Spending a 400-site sweep to measure the same unmeasurability would be the expensive way to learn
+this twice. **Fix measurability first**: why 6 sites cannot be fetched at all, and why 9 of 14 cannot
+be scored.
+
+RED-PROVEN: not applicable — this tick runs an instrument and banks its output; the instrument's own
+terms were falsify-proven at t583. No engine source changed.
+
+TICK SHAPE: measurement (the Phase-0 exit number, on the representative corpus, for the first time;
+one actuals line appended to `PHASE0-ROADMAP-ANCHOR.md` per the standing rule). Bar 0 untouched; no
+ratchet floor moved.
+Gates: none added — the certificate IS the instrument, and its terms are already gated.
+WIKI: none [forced] — no engine mechanism changed; the finding's home is the anchor's actuals line.
+PATTERN: [no-pattern] — no browser capability changed.
+
+⚠ PROCESS: I ran `pkill -f "manuk-wpt fidelity"` to clear a hung tail process and **killed my own
+waiting shell with it** — the pattern was in the waiter's own cmdline. That is a memory item I
+already had (*never `pkill -f` a binary the agent also runs; kill by PID*) re-learned the expensive
+way. Killed by PID afterwards.
+
+NEXT: **measurability, in the order the pilot ranked it.** (1) The 6 fetch failures — bot-wall vs
+timeout vs DNS is not yet distinguished in the ledger, and the three want different answers. (2) The
+9 unscored — `imdb` is "no [id] elements" (the selector-path keying should not need ids at all; t550
+already moved off `.SIG`, so this is the next keying gap). (3) The load-budget/fidelity interaction
+above, which is now a first-class fidelity input. Only then size the full sweep.
+Cadences: wall 607; const 607; surface 608; self-audit 614.
