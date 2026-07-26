@@ -24589,3 +24589,87 @@ is sacred. **Named, measured, and scheduled rather than rushed at the tail of a 
 
 Nothing was trimmed this audit. The wall is lean everywhere except the one place it is not, and that place
 now has a number, a cause and a constraint on its fix.
+
+## Tick 588 — SURFACE AUDIT #32: the map had been ranking by roadmap, not by usage (2026-07-25)
+
+Two halves. The first found the instrument's own blind spot; the second found six capabilities on half the
+web that the map had no row for, four of which are genuinely unimplemented.
+
+**HALF ONE — THE STANDING RULE CAUGHT ITSELF, ONE LEVEL OUT.** #31 added *"every surface audit begins by
+diffing the gate corpus against the map"*, and running it first found **one** unmapped gate
+(`g_storage_patchable`, from the previous tick) — the rule working. Then the sharper question: **is
+`engine/page/tests/` actually the gate corpus?** It is not. Gates live in **seven** directories, and the
+rule could see one. Widened, the count is **7 unmapped of 302**, not 1 of 285.
+
+**The rule created to fix the map's blind spot had the same blind spot one level out** — it defined the
+gate corpus as *where I last looked*, which is #31's own finding repeated inside the cure. And it is
+structural, not accidental: `manuk-page` cannot depend on `manuk-wpt` (the instrument depends on the
+engine, never the reverse), so the certificate's own gates **must** live outside `engine/`. The six rows
+added are not marginal — `G_VIDEO_PLAYER` (media's M6 *join*, without which five green gates could each
+demonstrate a step of playback while nothing could play), `G_TEARDOWN` (no exit path bypasses `Drop` — the
+gate between a teardown-crash workaround and silently losing the user's session), the CSS and HTML **fuzz**
+harnesses (Bar-0: a parser panic on the first untrusted bytes the web sends). **7 → 0 of 302.**
+
+**HALF TWO — THE SOURCE ROTATION FINALLY PAID, AND IT INDICTS THE MAP'S RANKING.** #28 used Interop,
+#29/#30 Baseline, #31 Ladybird/Servo/WPT. #32 went to the **raw Blink use-counter dumps** — 948 CSS
+properties and 4,030 feature counters as **% of page loads**, snapshot 2026-07-24, pulled and parsed rather
+than read off a summary.
+
+```text
+appearance: none   49.3% / 60.5%   NOT IMPLEMENTED      font-display     51.8%   absent
+filter             51.9%           NOT IMPLEMENTED      unicode-range    45.1%   absent
+clip-path          43.8%           NOT IMPLEMENTED      -webkit-box      29.9%   absent
+```
+
+**Four were verified UNIMPLEMENTED, not merely unmapped.** `stylo_map.rs` — the bridge deciding which
+Stylo-computed properties we actually read — has **zero** entries for `filter`, `clip-path`, `appearance`,
+`mix-blend-mode`, `writing-mode`. **Stylo computes them correctly and we throw the result away.** Checked
+directly, not taken on report; the same check that caught two wrong gate names at t581.
+
+**THE SHARPEST CORRECTION: `images: PNG/JPEG/GIF/WebP` goes `works` → `partial`.**
+`image::load_from_memory` at three call sites returns **one frame**, and
+`AnimationDecoder`/`into_frames`/`frame_count` appear nowhere in the repo — animated GIF, animated WebP and
+APNG all render a **still**. **A `works` can be true of the FORMAT and false of the USAGE.** And
+`Touch Events`, framed as *"ontouchstart feature detection"*, is 66% of page loads *registering listeners* —
+the risk was never detection.
+
+**WHAT WE WERE WRONG ABOUT.** We had been ranking by **standards-body attention while believing we were
+ranking by usage** — #28–#30's trap entered from the opposite side. The map carries detailed, correct,
+well-gated rows for `Temporal`, `CloseWatcher`, `Node.moveBefore`, `scheduler.postTask`, `light-dark()` and
+`contrast-color()`, and carried **nothing** for `filter`, `appearance`, `clip-path`, `unicode-range` or
+`font-display`. Interop and Baseline report what vendors are *working on*, which is systematically the
+opposite of what is already everywhere.
+
+> **A capability's name is not its shape.** "GIF" names a decoder; the web uses it as a video codec. "Touch
+> Events" names a feature detect; the web uses it as two-thirds of all event registration. Ranking by the
+> name is how a map stays green while the pages stay wrong. Same lesson as the font-family arc and
+> `property_at(i)`, in a third register.
+
+**AND ONE BAR-0 ITEM SURFACED SIDEWAYS:** `interpolate-size` is **8.16%** of page loads — one in twelve —
+and this project carries an open, unresolved release-only **SIGSEGV** under `calc-size`/`interpolate-size`,
+filed as an exotic curiosity. It is not exotic.
+
+Also recorded deliberately: **built-in AI / Prompt API is 0.08%**, Summarizer 0.13%. #31 added those rows
+partly on novelty; confirming a **low** rank is as much a result as raising one.
+
+STANDING RULES ADDED: (1) the gate-corpus diff scans **all seven** gate directories, not `engine/page/tests`
+alone; (2) **rank by measured page-load usage, not by position on a standards roadmap** — the use-counter
+dumps are two URLs and parse in seconds.
+
+Map: **351 rows — 215 gated · 74 missing · 24 partial · 17 works · 17 unknown**.
+
+TICK SHAPE: instrument fidelity (the DUE surface audit, both halves: the gate-corpus rule corrected for its
+own blind spot, and the map's implicit ranking corrected against measured usage). No engine source touched;
+Bar 0 untouched; no ratchet floor moved.
+Gates: none new — 26 rows added and 8 corrected, including one `works` demoted on verified evidence.
+WIKI: none [forced] — no engine source changed; the audit's home is docs/loop/SURFACE-AUDIT.md.
+PATTERN: [no-pattern] — no engine capability changed.
+
+NEXT: the audit hands the board an unusually clear ranking, and it is **not** where the loop was heading.
+`appearance: none` (60.5% of page loads, unimplemented) and `filter` (51.9%, unimplemented) are each larger
+than anything currently on the NEXT list, and both are *the same shape*: **Stylo already computes the value
+and `stylo_map.rs` does not read it**, which is the cheapest kind of capability there is. Then
+`font-display`/`unicode-range` — adjacent to the t557/t558 font arc, which was this project's largest
+fidelity win and did not cover this axis. Then the `interpolate-size` SIGSEGV, re-priced from exotic to
+one-page-load-in-twelve.
+Cadences: const 591; self-audit 594; surface 598; wall 607.

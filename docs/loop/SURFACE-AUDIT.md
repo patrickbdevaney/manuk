@@ -1486,9 +1486,12 @@ audit had ever run `ls engine/page/tests/ | grep -f` against the file. #30 corre
 looking outward at all, diff the map against the receipts you already hold.** An instrument that cannot see
 what its own project has built is not measuring the project.
 
-STANDING RULE ADDED: **every surface audit begins by diffing `engine/page/tests/` against
+STANDING RULE ADDED: **every surface audit begins by diffing the gate corpus against
 `CONSTELLATION.tsv`.** Web research comes second. The unmapped-gate count is now a number to drive to zero,
 and it starts at **147 of 281**.
+
+> ⚠ **AMENDED at #32:** the rule as first written scanned only `engine/page/tests/`, and gates live in
+> **seven** directories. Widened to `engine/*/tests`, `tests/wpt/tests` and `shell/tests` — see #32.
 
 LAST_SURFACE_AUDIT set to 578; next due 588.
 
@@ -1524,3 +1527,107 @@ METHOD NOTE: every one of the 86 gate references was checked against a real file
 written, and two were wrong — `VTT_CAPTIONS` and the A/V-sync gates live in `engine/media/tests/`, not
 `engine/page/tests/`. **A gate name is a claim like any other**; the check cost one command and caught two
 errors in a batch that had already been reviewed.
+
+## Audit #32 — tick 588
+
+### The standing rule caught the audit's own blind spot, one level out
+
+#31 added the rule *"every surface audit begins by diffing the gate corpus against the map"*, and #32 ran
+it first as required. It found **one** unmapped gate — `g_storage_patchable`, landed by the previous tick,
+which is the rule working exactly as intended.
+
+Then the sharper question: **is `engine/page/tests/` actually the gate corpus?** It is not. Gates live in
+**seven** directories, and the rule as written could see only one of them:
+
+```text
+engine/page/tests  285      engine/media/tests  10     engine/text/tests   3
+engine/css/tests     1      engine/html/tests    1     tests/wpt/tests     1      shell/tests  1
+```
+
+Widening the diff to all of them found **7 unmapped of 302**, not 1 of 285. **The rule created to fix the
+map's blind spot had the same blind spot one level out** — it assumed the gate corpus was the directory
+that happened to hold most of it, which is precisely #31's finding ("the map tracked the loop's recent
+attention") repeated in the instrument built to cure it.
+
+ADDED **6 rows** covering all 7 files, and the ones outside `engine/page/tests` are not marginal:
+**`G_VIDEO_PLAYER`** (media step M6 — the *join* that owns demux, decode, timeline and A/V sync together,
+without which five green gates could each demonstrate a step of playback while nothing could play),
+**`G_TEARDOWN`** (no exit path bypasses `Drop` — the gate standing between a teardown-crash workaround and
+silently losing the user's session), the **CSS and HTML fuzz** harnesses (Bar-0: a parser panic on the first
+untrusted bytes the web sends), **`G_CAP_TOUCH_PROBE`** (the certificate's FUNCTION producer), and
+**`G_STORAGE_PATCHABLE`**. One row is honestly `unknown`: `probe_script_fallback.rs` is a *probe, not a
+gate*, and its own header says why — the fallback machinery is present, whether it fires is a different
+question, and this project has been wrong about exactly that four times.
+
+**Unmapped-gate count: 7 → 0 of 302.** The rule is amended above so the next audit scans all seven
+directories.
+
+**The transferable half:** a rule that says "diff X against Y" is only as good as its definition of X, and
+the cheapest way to be wrong is to define X as *where you last looked*. `manuk-page` cannot depend on
+`manuk-wpt` — the instrument depends on the engine, never the reverse — so the certificate's own gates
+*must* live outside `engine/`, and any rule that assumes otherwise will keep missing them structurally.
+
+### The outward half — usage counters, and the map had been ranking by the wrong thing
+
+SOURCES (rotated again — #28 Interop, #29/#30 Baseline, #31 Ladybird/Servo/WPT, so #32 goes to *what real
+pages actually use*):
+- **`https://chromestatus.com/data/csspopularity`** and **`https://chromestatus.com/data/featurepopularity`**
+  — the raw Blink use-counter dumps, snapshot **2026-07-24**: 948 CSS properties and 4,030 feature counters,
+  each as a **% of page loads**. Pulled and parsed rather than read off a summary page.
+- `https://almanac.httparchive.org/en/2025/capabilities` (the 2025 Almanac has **no** CSS, JavaScript or
+  Markup chapter — those URLs 404, so this angle yielded only Capabilities).
+- `https://webtransitions.org/servo-readiness/` (aggregate only, names no features — low yield, said so).
+- `https://wiki.mozilla.org/Compatibility/System_Addon/Interventions` (categories only; the concrete
+  injections data 404'd — **this angle largely failed and was not padded**).
+
+ADDED **20 rows**, every one carrying a real page-load percentage. The headline is not any single row, it is
+the shape of what was missing:
+
+| unmapped capability | % of page loads | and it is |
+|---|---|---|
+| `appearance: none` | **49.3% / 60.5%** | **not implemented** — no `clone_appearance`, no ComputedStyle field |
+| `filter` / `backdrop-filter` | **51.9% / 34.3%** | **not implemented** |
+| `font-display` | **51.8%** | absent |
+| `unicode-range` | **45.1%** | absent |
+| `clip-path` | **43.8%** | **not implemented** |
+| `-webkit-box` legacy flexbox | **29.9%** | absent — the highest-usage *layout mode* with no row |
+
+**Four of those were verified UNIMPLEMENTED, not merely unmapped.** `stylo_map.rs` — the bridge deciding
+which Stylo-computed properties we actually read — has **zero** entries for `filter`, `clip-path`,
+`appearance`, `mix-blend-mode` and `writing-mode`. Stylo computes them correctly and **we throw the result
+away.** Checked directly rather than taken on report.
+
+CORRECTED:
+- **`images: PNG/JPEG/GIF/WebP` `works` → `partial`.** `image::load_from_memory` at three call sites returns
+  **one frame**, and `AnimationDecoder`/`into_frames`/`frame_count` appear nowhere in the repo — so animated
+  GIF, animated WebP and APNG all render a still. Verified directly. **A `works` can be true of the FORMAT
+  and false of the USAGE.**
+- **`Touch Events`** was framed as *"ontouchstart feature detection"*. `PassiveTouchEventListener` is
+  **66.47%** of page loads. The risk was never detection; it is `TouchEvent`/`Touch`/`TouchList` being
+  absent when a carousel library constructs or `instanceof`-checks one.
+- **RE-RANKED UP:** WebGL (**~28%** of page loads — the largest `missing` we carry, filed as a peer of
+  WebRTC and EME), Referrer Policy (**65.7%**), Client Hints headers (**32%**, and a self-inconsistency
+  since we ship the JS half), Compression Streams (the Almanac's **#1 adopted** capability), and
+  Subresource Integrity (**22%**, and ignoring it means *executing scripts Chrome would block* — a security
+  divergence the fidelity oracle is structurally blind to).
+- **RE-RANK CONFIRMED LOW, recorded deliberately:** built-in AI / Prompt API at **0.08%**, Summarizer 0.13%.
+  *Confirming a low rank is as much a result as raising one*, and #31 added those rows partly on novelty.
+- **`interpolate-size` is 8.16% of page loads** — one in twelve — and this project carries an open,
+  unresolved release-only **SIGSEGV** under `calc-size`/`interpolate-size`. That is a **Bar-0 crash sitting
+  under a feature we had implicitly treated as exotic.**
+
+WHAT WE WERE WRONG ABOUT: **we had been ranking by standards-body attention while believing we were ranking
+by usage** — the same trap as #28–#30, entered from the opposite side. The map carries detailed, correct,
+well-gated rows for `Temporal`, `CloseWatcher`, `Node.moveBefore`, `scheduler.postTask`, `light-dark()` and
+`contrast-color()`, and carried **nothing at all** for `filter`, `appearance`, `clip-path`, `unicode-range`
+or `font-display`. Reading Interop and Baseline as if they were usage data is what produced that: they
+report what vendors are *working on*, which is systematically the opposite of what is already everywhere.
+The unifying lesson is the one the font-family and `property_at(i)` ticks taught in another register —
+**a capability's name is not its shape.** "GIF" names a decoder; the web uses it as a video codec. "Touch
+Events" names a feature detect; the web uses it as two-thirds of all event registration.
+
+STANDING RULE ADDED: **rank by measured page-load usage, not by where the capability sits on a standards
+roadmap.** The Blink use-counter dumps are two URLs and parse in seconds; there is no excuse for the map's
+implicit ranking to disagree with them again.
+
+LAST_SURFACE_AUDIT set to 588; next due 598.
