@@ -386,6 +386,41 @@ stop measuring, arriving exactly when re-measuring is cheapest.
 decoder** is the real remaining blocker for WebM *audio*, and VP9 stays on the floor per the
 observer's t235 steer. AV1-in-WebM video is done.
 
+## M3d — `navigator.mediaCapabilities.decodingInfo()` (tick 635): the rendition chooser
+
+`navigator.mediaCapabilities` was `undefined`, so `decodingInfo({…})` **threw a TypeError**. Shaka,
+dash.js, hls.js and YouTube's own player all call it on boot, **once per candidate rendition** — a
+throw there happens while enumerating renditions, so the player never gets to render any of them.
+That is the throw-class that blanks a page, not a missing nicety. The RED probe reproduces it
+exactly: delete the install and the gate's record stops **dead** at `mc:undefined`, because the very
+next line throws.
+
+**This was the THIRD asker of one question, and that is the design constraint.**
+`MediaSource.isTypeSupported`, `HTMLMediaElement.canPlayType` and `decodingInfo().supported` all
+answer *"can this tree decode this contentType"*. M3c had just paid to consolidate the first two
+after their WebM answers silently drifted; a third regex would have restored the defect at full
+size, one tick later. So `canDecode` is published once as `__manukCanDecodeType` and all three read
+it.
+
+**The gate asserts AGREEMENT, not answers — and the RED probe is why that distinction is the whole
+point.** `G_MEDIA_CAPABILITIES` compares `decodingInfo().supported` against `isTypeSupported()`
+**in the page**, across six contentTypes spanning both containers and both sides of every codec line
+this tree draws, plus a `mixed:` claim proving the six do not all get the same answer. Giving
+`decodingInfo` its own plausible-looking `/mp4/` test turns `agree:` red **and nothing else**:
+`sup:true`, `pe:false`, `mixedcfg:false` and `webrtc:false` all stay green. A second implementation
+is invisible to every per-answer assertion, which is precisely how the drift M3c cleaned up got in.
+
+**The honest values, which are not the flattering ones:**
+
+| field | answer | why |
+|---|---|---|
+| `supported` | the shared predicate | the only load-bearing field; players filter on it |
+| `powerEfficient` | **always `false`** | factually true: every decoder here is software (openh264, symphonia, re_rav1d) and there is no VA-API/VideoToolbox/DXVA path. A checkable claim — and a lie the day one lands |
+| `smooth` | tracks `supported` | we do not model decode throughput, so this cannot discriminate 4K from 360p and does not pretend to. Asserted in the gate so the limitation is executable rather than a comment |
+| `type: 'webrtc'` | `supported: false` | a decided non-goal (STATUS.md), which is a different thing from an absence nobody has looked at |
+| invalid config | **rejects** with `TypeError` | a player must be able to tell *"you told me no"* from *"you did not understand the question"*; collapsing them hides its own bugs |
+| a MIXED config (decodable video + Opus audio) | `false` | pairing a stream we can show with one we cannot hear is not playable — the same trade `av1opus:false` refuses |
+
 ## M4 — AAC decode (tick 235): sound-shaped numbers, not yet sound
 
 `engine/media/src/audio.rs`. M3 could find the audio and name it (`mp4a.67`, 44100 Hz, stereo) and

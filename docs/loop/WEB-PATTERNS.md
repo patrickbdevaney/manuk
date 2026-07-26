@@ -5350,3 +5350,29 @@ never does.
 helper that only one caller actually reaches looks identical to a shared helper. The RED probe is
 what distinguishes them: mutating the single function moved **both** answers red together. That is
 the check to run whenever this pattern is applied, because the failure mode of the fix is silent.
+
+## The adaptive player's boot-time rendition scan — `mediaCapabilities.decodingInfo()` (tick 635)
+
+**The class:** every modern adaptive player — shaka, dash.js, hls.js, YouTube's own — calls
+`navigator.mediaCapabilities.decodingInfo()` on boot, **once per candidate rendition**, and filters
+its variant list on the `supported` field. It is the modern replacement for `canPlayType`, and it is
+how a player decides which quality ladder rung it is allowed to fetch.
+
+`navigator.mediaCapabilities` was `undefined`, so the call **threw a TypeError** — and it threw
+*inside the loop that enumerates renditions*, so the player never reached any of them. A missing
+API here does not degrade quality selection; it removes the video. The RED probe shows the shape
+exactly: deleting the install makes the gate's own record stop dead at the claim before it.
+
+**The generalisation — the third asker is where a consolidated rule quietly un-consolidates.** Three
+surfaces now answer "can this tree decode this contentType". The tick before this one had just
+merged two of them after their answers drifted; adding the third with its own regex would have
+restored the defect at full size, one tick after paying to remove it. **A rule that has been
+consolidated is not safe — it is safe *until the next consumer*, and the next consumer always
+arrives wearing a different API's name**, which is why it does not look like the thing you just
+fixed.
+
+**And the check that catches it is AGREEMENT, not answers.** Assert the two surfaces against each
+other at runtime over inputs that are not all the same answer — never each against a constant you
+wrote down. Giving the new surface its own plausible codec test turned the agreement claim red and
+left every per-answer assertion green. Per-answer assertions cannot see a second implementation;
+that is what a second implementation *is*.

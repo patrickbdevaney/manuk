@@ -15,7 +15,7 @@
 | median tick cycle | **21m** | 393 intervals |
 | median, last 10 | **14m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.05** | 374.4h elapsed |
+| **ticks per hour** | **1.05** | 374.7h elapsed |
 | median verify wall | **66s** | 333 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,7 +27,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **316**
+* **live gates**: 27 → **317**
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
@@ -490,6 +490,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **631** | 2026-07-26 17:43 | 3m | the | 63s | +179/−3 | 315 | 81 | 56.0% · | constitution check #45: four false absences, zero false presences (2026-07-26) |
 | **632** | 2026-07-26 17:50 | 6m | measurement | 63s | +149/−3 | 315 | 81 | 56.0% · | the load budget moves COVERAGE and SHAPE in opposite directions (2026-07-26) |
 | **633** | 2026-07-26 18:36 | 46m | capability | 63s | +1454/−120 | 316 | 81 | 56.0% · | WebM/Matroska demux: the container half of the VP9 ladder (2026-07-26) |
-| **634** | 2026-07-26 19:27 | 51m | capability | 63s | +739/−153 | 316 | 81 | 56.0% · | AV1-in-WebM: the join was already complete, and both answers said no (2026-07-26) |
+| **634** | 2026-07-26 19:48 | 71m | capability | 63s | +575/−100 | 317 | 81 | 56.0% · | AV1-in-WebM: the join was already complete, and both answers said no (2026-07-26) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -28263,3 +28263,77 @@ NEXT: an **Opus decoder** is the narrowest remaining blocker for WebM *audio* (s
 none; `audiopus`/`opus` are C bindings, so this is a real dependency decision, not a wiring tick).
 VP9 stays on the floor per the observer's t235 steer. Unchanged and still open: our own latency on
 the placement half (17-28s vs Chromium's 6s), and t629's `getBoundingClientRect()` on an SVG child.
+
+## Tick 635 — `navigator.mediaCapabilities.decodingInfo()`: the rendition chooser, and a THIRD consumer of one codec rule (2026-07-26)
+
+HYPOTHESIS: the constellation lists `navigator.mediaCapabilities.decodingInfo()` as a media-class
+hole — *"YouTube, Shaka, dash.js and hls.js call it to choose a rendition"*. Probed rather than
+grepped, and the map is right for once: `mc:undefined`, and calling it **throws a TypeError**.
+That is the throw-class that blanks pages (const check: welt.de), not a missing nicety.
+
+It is also the natural third consumer of the codec rule t634 consolidated. `isTypeSupported`,
+`canPlayType` and `decodingInfo` all answer "can this tree decode this contentType", and three
+regexes would be the one-rule-N-implementations defect at full size. If this tick adds a third
+implementation it has made things worse, however good the API looks from a page.
+
+**LANDED.** `navigator.mediaCapabilities` with `decodingInfo` and `encodingInfo`, both returning
+Promises, both validating per spec. 14 claims through the public API.
+
+**THE THROW-CLASS, REPRODUCED BY THE RED PROBE RATHER THAN ARGUED FOR.** Delete the install and the
+gate's record stops **dead** at `mc:undefined` — one claim, then nothing, because the very next line
+(`typeof navigator.mediaCapabilities.decodingInfo`) throws and takes the script with it. That is not
+a demonstration I wrote; it is what the mutation printed. A player calling this in a loop over
+candidate renditions never reaches any of them, so the failure is not *worse quality selection*, it
+is *no video*.
+
+**THE DESIGN CONSTRAINT WAS THE THIRD ASKER.** `isTypeSupported`, `canPlayType` and
+`decodingInfo().supported` all answer "can this tree decode this contentType". t634 had just paid to
+merge the first two after their WebM answers drifted apart. Writing a third regex here would have
+restored the defect at full size **one tick after removing it** — so `canDecode` is published once
+as `__manukCanDecodeType` and all three read it.
+
+> **A rule that has been consolidated is not safe — it is safe UNTIL THE NEXT CONSUMER, and the next
+> consumer always arrives wearing a different API's name.** That is why it does not look like the
+> thing you just fixed. `decodingInfo` reads as a new capability, not as a fourth copy of an old
+> answer.
+
+**AND THE GATE ASSERTS AGREEMENT, NOT ANSWERS — the RED probe is what proved that distinction is
+load-bearing rather than stylistic.** The gate compares `decodingInfo().supported` against
+`isTypeSupported()` **in the page**, over six contentTypes spanning both containers and both sides of
+every codec line this tree draws, with a `mixed:` claim proving the six do not all get the same
+answer. Giving `decodingInfo` its own plausible `/mp4/` test turned `agree:` red **AND NOTHING
+ELSE** — `sup:true`, `pe:false`, `mixedcfg:false`, `webrtc:false` all stayed green.
+
+> **Per-answer assertions cannot see a second implementation. That is what a second implementation
+> IS.** Six correct answers checked against six constants I wrote down would have passed a gate whose
+> whole subject had been reintroduced.
+
+**THE HONEST FIELDS, NOT THE FLATTERING ONES.** `powerEfficient` is **always false**, and that is
+factually true of this tree — every decoder is software (openh264, symphonia, re_rav1d) and there is
+no VA-API/VideoToolbox/DXVA path at all. It is a *checkable* claim, and a lie the day one lands.
+`smooth` tracks `supported` because we do not model decode throughput, so it cannot discriminate 4K
+from 360p; that limitation is written as an **executable claim** (`smooth:true`) rather than a
+comment, so the day throughput is measured the line goes red and forces the question. `webrtc` is an
+honest no about a decided non-goal. An invalid config **rejects** rather than resolving
+`supported:false` — a player must be able to tell "you told me no" from "you did not understand the
+question". A MIXED config (AV1-in-WebM video we decode + Opus audio we do not) is `false`, the same
+trade `av1opus:false` refuses in G_MEDIA_WEBM.
+
+Declared, not glossed: the `badtype:`/`noparts:` validation claims are **asserted, not probed** — no
+mutation was run against them. Saying so is cheaper than the alternative, which t633 paid for.
+
+TICK SHAPE: capability (the boot-time rendition scan every adaptive player performs, which threw;
+plus the codec rule held at ONE implementation across a third consumer, proven by a mutation that
+only the agreement check can see). Bar 0 untouched — this removes a TypeError rather than adding
+one; no ratchet floor moved; five media gates + the shell suite re-run green.
+Gates: **G_MEDIA_CAPABILITIES** (`engine/page/tests/g_media_capabilities.rs`, 14 claims, 3 RED
+mutations run and tabulated, with the un-probed claims named as such).
+WIKI: `docs/wiki/media-pipeline.md` — "M3d — `navigator.mediaCapabilities.decodingInfo()`: the
+rendition chooser", including the honest-fields table.
+PATTERN: `docs/loop/WEB-PATTERNS.md` — "The adaptive player's boot-time rendition scan".
+
+NEXT: unchanged — an **Opus decoder** is the narrowest remaining WebM blocker (symphonia 0.6 has
+none; `audiopus`/`opus` are C bindings, so it is a real dependency decision). The constellation's
+media class also still lists `requestVideoFrameCallback` and the audio output device. Still open
+from earlier: our own latency on the placement half, and t629's `getBoundingClientRect()` on an SVG
+child.

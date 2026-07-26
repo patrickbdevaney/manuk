@@ -143,6 +143,18 @@ pub const MSE_JS: &str = r#"
     return true;
   };
 
+  // ── The decode question has THREE askers, and exactly one answer (tick 635).
+  //
+  // `MediaSource.isTypeSupported` (below), `HTMLMediaElement.canPlayType` (event_loop.rs) and
+  // `navigator.mediaCapabilities.decodingInfo` (further down this file) all ask *"can this tree
+  // decode this contentType"*. t634 consolidated the first two after the WebM answers drifted;
+  // adding `decodingInfo` with its own regex would have restored the defect at full size, one
+  // tick after paying to remove it. So `canDecode` is published once and all three read it.
+  //
+  // Published under a `__manuk` name rather than exported, because the page must not be able to
+  // see or patch the thing three spec surfaces agree through.
+  g.__manukCanDecodeType = function (t) { return canDecode(t); };
+
   var fail = function (msg, name) { return new g.DOMException(msg, name); };
 
   // ── TimeRanges. Immutable, index-checked, and empty until a demuxer says otherwise.
@@ -525,5 +537,96 @@ pub const MSE_JS: &str = r#"
     obj.__setReadyState('open');
     return true;
   };
+
+  // ══ navigator.mediaCapabilities (tick 635) — how a modern player picks a rendition ═══════════
+  //
+  // Shaka, dash.js, hls.js and YouTube's own player all call `decodingInfo()` on boot, once per
+  // candidate rendition, and drop the ones it calls unsupported. Before this it was `undefined`,
+  // so the call was a **TypeError** — not a missing nicety but the throw-class that blanks a page,
+  // since a player that throws while enumerating renditions never gets to render any of them.
+  //
+  // **`supported` is the whole load-bearing field**, and it is the same answer `isTypeSupported`
+  // gives because it is literally the same function. The other two are ranking hints, and the
+  // honest values here are not the flattering ones:
+  //
+  //   * `powerEfficient: false` — **factually true of this tree**: every decoder here is software
+  //     (openh264, symphonia, re_rav1d) and there is no VA-API/VideoToolbox/DXVA path at all. A
+  //     grep for a hardware decoder finds nothing, which is what makes this a checkable claim
+  //     rather than a modest-sounding guess — and what makes it a lie the day one lands.
+  //   * `smooth: supported` — we do NOT model decode throughput, so this cannot honestly
+  //     discriminate 4K from 360p, and it says so here rather than pretending to. It matches what
+  //     Chrome answers for `type:'file'` on a software-decode desktop, and players treat `smooth`
+  //     as a preference input rather than a filter (shaka gates variants on `supported`;
+  //     `preferredDecodingAttributes` is empty by default). **If a player is ever observed
+  //     excluding renditions on it, this becomes a measurement tick, not a constant to re-tune.**
+  //
+  // `webrtc` answers `supported: false` because WebRTC is explicitly out of scope (STATUS.md),
+  // which is an honest no about a decided non-goal rather than an absence nobody has looked at.
+  function mcInvalid(msg) { return g.Promise.reject(new g.TypeError(msg)); }
+
+  var mediaCapabilities = {
+    decodingInfo: function (config) {
+      // The spec's validation, and it runs BEFORE anything else: a bad config REJECTS, it does not
+      // resolve `supported:false`. A player distinguishes "you told me no" from "you did not
+      // understand the question", and collapsing the two hides its own bugs.
+      if (config === null || typeof config !== 'object') {
+        return mcInvalid('decodingInfo requires a MediaDecodingConfiguration');
+      }
+      var t = config.type;
+      if (t !== 'file' && t !== 'media-source' && t !== 'webrtc') {
+        return mcInvalid("decodingInfo: type must be 'file', 'media-source' or 'webrtc'");
+      }
+      if (!config.audio && !config.video) {
+        return mcInvalid('decodingInfo: at least one of audio or video is required');
+      }
+      var ok = true;
+      var parts = [config.video, config.audio];
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i];
+        if (!p) { continue; }
+        if (typeof p.contentType !== 'string' || p.contentType === '') {
+          return mcInvalid('decodingInfo: contentType is required and must be a string');
+        }
+        // WebRTC is a decided non-goal; every other transport routes to the ONE decode answer.
+        if (t === 'webrtc' || !g.__manukCanDecodeType(p.contentType)) { ok = false; }
+      }
+      return g.Promise.resolve({
+        supported: ok,
+        smooth: ok,
+        powerEfficient: false,
+        // The spec echoes the input back so a player can correlate an answer with the rendition
+        // it asked about — several drive their variant filter off exactly this.
+        configuration: config,
+      });
+    },
+    // Encoding is a recorder's question (MediaRecorder), and nothing here encodes. It is present
+    // and answers a truthful no, because `typeof …encodingInfo === 'function'` is what a feature
+    // detect reads, and an absent method is the TypeError this whole section exists to remove.
+    encodingInfo: function (config) {
+      if (config === null || typeof config !== 'object') {
+        return mcInvalid('encodingInfo requires a MediaEncodingConfiguration');
+      }
+      if (config.type !== 'record' && config.type !== 'webrtc') {
+        return mcInvalid("encodingInfo: type must be 'record' or 'webrtc'");
+      }
+      if (!config.audio && !config.video) {
+        return mcInvalid('encodingInfo: at least one of audio or video is required');
+      }
+      return g.Promise.resolve({
+        supported: false,
+        smooth: false,
+        powerEfficient: false,
+        configuration: config,
+      });
+    },
+  };
+
+  if (g.navigator && !g.navigator.mediaCapabilities) {
+    Object.defineProperty(g.navigator, 'mediaCapabilities', {
+      get: function () { return mediaCapabilities; },
+      configurable: true,
+      enumerable: true,
+    });
+  }
 })();
 "#;
