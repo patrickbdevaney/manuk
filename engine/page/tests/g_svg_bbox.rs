@@ -25,7 +25,7 @@
 //! <text>    x/y                       → origin, size 0   honestly: it needs shaping
 //! ```
 //!
-//! **`<text>` and `<path>` report zero size on purpose.** A plausible-looking guess for a text bbox
+//! **`<path>` is EXACT since t630; `<text>` and elliptical arcs report zero size on purpose.** A plausible-looking guess for a text bbox
 //! silently mis-places every label that trusts it; a zero is visible. That is the same choice
 //! `clip-path` made when it left `shape()` unclipped rather than approximating it, and it is the one
 //! this project keeps arriving at: **a wrong answer costs more than an obviously missing one.**
@@ -45,6 +45,14 @@ const HTML: &str = r##"<!doctype html><html><body>
   <polygon id="p" points="10,90 40,90 40,110"/>
   <g id="g"><rect id="gr" x="5" y="5" width="10" height="10"/><rect x="20" y="30" width="10" height="10"/></g>
   <text id="t" x="7" y="115">label</text>
+  <!-- `<path>`, the element every icon set is made of. The two CURVES are the load-bearing cases:
+       their control points sit at 20 and their real extrema at 15 and 10, so a control-point hull
+       (the easy wrong implementation) gives 20 and is caught. -->
+  <path id="pl" d="M4 4 L20 4 L20 12 L4 12 Z"/>
+  <path id="pc" d="M0 0 C 0 20 20 20 20 0"/>
+  <path id="pq" d="M0 0 Q 10 20 20 0"/>
+  <path id="pr" d="m5 5 l10 0 l0 6 z"/>
+  <path id="pa" d="M0 0 A 5 5 0 0 1 10 10"/>
 </svg>
 <div id="out">-</div>
 <script>
@@ -55,6 +63,7 @@ const HTML: &str = r##"<!doctype html><html><body>
     return b.x + ',' + b.y + ',' + b.width + ',' + b.height;
   };
   ['r','c','e','l','p','g','t'].forEach(function(id){ R.push(id + '=' + bb(id)); });
+  ['pl','pc','pq','pr','pa'].forEach(function(id){ R.push(id + '=' + bb(id)); });
   // The idiom that used to throw, run for real.
   var threw = false;
   try { document.getElementById('r').getBBox().width.toFixed(1); } catch (err) { threw = true; }
@@ -109,6 +118,39 @@ fn getbbox_reports_user_space_geometry() {
             "`<text>` reports its ORIGIN with a ZERO size, honestly: a text bbox needs shaping, and a \
              plausible-looking guess silently mis-places every label that trusts it while a zero is \
              visible. Same choice `clip-path` made leaving `shape()` unclipped",
+        ),
+        (
+            "pl=4,4,16,8",
+            "a `<path>` of straight segments is the min/max of its points — and until t630 `<path>` \
+             had NO arm in `svg_bbox` at all, so `getBBox()` answered 0x0 for the single most common \
+             SVG element. Every icon set (Lucide, Feather, Material), every chart shape generator and \
+             every logo is made of these",
+        ),
+        (
+            "pc=0,0,20,15",
+            "**THE CASE THAT PROVES THE BOUNDS ARE EXACT.** This cubic's control points are at y=20 \
+             and the curve itself only reaches y=15. A control-point hull — the easy wrong \
+             implementation — reports 20 and is STRICTLY LARGER than the curve. A too-large bbox is a \
+             wrong answer that looks plausible: it mis-positions every tooltip anchored to an icon and \
+             mis-sizes every chart hit-area, while reading as 'close enough'",
+        ),
+        (
+            "pq=0,0,20,10",
+            "the same for a quadratic: control point at y=20, real extremum at y=10. Solved from the \
+             derivative's root, not guessed from the hull",
+        ),
+        (
+            "pr=5,5,10,6",
+            "relative commands (`m`/`l`) accumulate from the current point, and `z` returns to the \
+             SUBPATH start — not to the origin",
+        ),
+        (
+            "pa=0,0,0,0",
+            "**an elliptical arc returns NO bbox, deliberately.** Bounding one exactly needs the \
+             endpoint->centre parameterisation and the extrema of a rotated ellipse over the swept \
+             angle range; that work is not done, and the honest answer to 'what is this path's box' \
+             when part of it cannot be bounded is NO ANSWER rather than a guess in either direction. \
+             The same choice `<text>` makes above",
         ),
         (
             "cssX=48",

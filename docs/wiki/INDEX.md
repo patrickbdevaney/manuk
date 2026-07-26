@@ -84,6 +84,10 @@
   - L1349 · One number is recorded and NOT asserted, on purpose
   - L1369 · backdrop-filter — the bundle closes, and the property that was LAST is the one that justifies the split (tick 595)
   - L1397 · The session's recurring lesson collected a fifth time
+  - L1412 · An exact path bbox is the EXTREMA, not the control-point hull (tick 630)
+  - L1420 · The curve is the whole difficulty
+  - L1443 · Elliptical arcs REFUSE, and that is the design
+  - L1455 · What this does NOT fix
 
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
@@ -1082,4 +1086,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-997 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1001 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -1408,3 +1408,53 @@ have to move together.
 filters a square. `isolation` (18.0%) is still unread, so a blend or a filter is not confined to a
 stacking context that asked to contain it. And `getComputedStyle()` still returns `undefined` for all
 four of these — the CSSOM half of the bundle is one tick's work and is now the obvious next one.
+
+## An exact path bbox is the EXTREMA, not the control-point hull (tick 630)
+
+`<path>` had no arm in `svg_bbox`'s match at all, so `getBBox()` answered `0×0` for the single most
+common SVG element — every icon set (Lucide, Feather, Material), every chart shape generator, every
+logo. It was a **deliberate** zero: the gate's own doc said *"`<text>` and `<path>` report zero size on
+purpose"*, on the same reasoning `<text>` uses — a plausible guess mis-places everything that trusts
+it. That was right about guessing and wrong about the alternative.
+
+### The curve is the whole difficulty
+
+```text
+  M0 0 C 0 20 20 20 20 0     control points at y=20     the curve reaches y=15
+  M0 0 Q 10 20 20 0          control point  at y=20     the curve reaches y=10
+```
+
+**A control-point hull is the easy, obvious, wrong implementation.** It is strictly LARGER than the
+curve, and it looks entirely plausible — which is what makes it dangerous rather than merely
+imprecise: a too-large icon box mis-positions every tooltip anchored to it and mis-sizes every chart
+hit-area, while reading as "close enough" to anyone eyeballing it.
+
+So each segment is solved for its real extrema — the roots of the derivative in `(0,1)`:
+
+- **cubic**: `a = 3(−p0+3p1−3p2+p3)`, `b = 6(p0−2p1+p2)`, `c = 3(p1−p0)`; roots of `at²+bt+c` in
+  `(0,1)`, evaluated on the Bézier.
+- **quadratic**: `t = (p0−p1) / (p0−2p1+p2)`, when the denominator is non-degenerate.
+- endpoints always count; `S`/`T` reflect the previous control point, and only when the previous
+  command was of the matching family.
+
+The tokeniser is a scanner rather than a `split_whitespace`, because `-` and `.` start a new number
+without a separator: `M0-5` is two numbers, and `1.5.5` is `1.5` then `.5`.
+
+### Elliptical arcs REFUSE, and that is the design
+
+`A` returns `None`. Bounding an arc exactly needs the endpoint→centre parameterisation and then the
+extrema of a rotated ellipse over the swept angle range. That work is not done, and **the honest
+answer to "what is this path's box" when part of it cannot be bounded is no answer** — not a guess in
+either direction. Same choice `<text>` makes, and `clip-path` before it.
+
+⚠ **A negative assertion needs a probe that produces a DIFFERENT wrong answer.** The first RED probe
+for the arc refusal made the "guess" the current point — `(0,0)`, giving `0×0`, indistinguishable from
+the refusal — and the gate stayed green. A realistic guess consumes the seven arc parameters and takes
+the endpoint, giving `0,0,10,10`, which the gate does catch.
+
+### What this does NOT fix
+
+`getBoundingClientRect()` on an SVG child still returns `0×19` — an empty inline box at the default
+line height — because `svg_bbox` lives in the JS binding layer and the CSS box comes from layout.
+That is a separate subsystem (t629); this makes sure it will have correct geometry to consume for the
+commonest element when it lands.

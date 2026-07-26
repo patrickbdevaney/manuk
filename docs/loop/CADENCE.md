@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **389** | ticks 1–629 |
-| median tick cycle | **21m** | 388 intervals |
+| ticks landed | **390** | ticks 1–630 |
+| median tick cycle | **21m** | 389 intervals |
 | median, last 10 | **17m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.04** | 372.3h elapsed |
-| median verify wall | **67s** | 328 ticks |
+| **ticks per hour** | **1.04** | 372.6h elapsed |
+| median verify wall | **67s** | 329 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**192 of 389 ticks** (49%) moved a
+**193 of 390 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **192** capability ticks, median cycle **21m**
-* median diff per tick: **+233 / −34** lines across 9 files
+* **193** capability ticks, median cycle **21m**
+* median diff per tick: **+234 / −34** lines across 8 files
 
 ## Every tick
 
@@ -486,5 +486,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **627** | 2026-07-26 17:12 | 11m | reliability | 63s | +299/−11 | 315 | 81 | 56.0% · | the diff's font field compared a DECLARATION to a RESOLUTION (2026-07-26) |
 | **628** | 2026-07-26 17:16 | 5m | reliability | 63s | +161/−6 | 315 | 81 | 56.0% · | SURFACE AUDIT #35: audit #34 was wrong, and its own first step caught it (2026-07-26) |
 | **629** | 2026-07-26 17:21 | 5m | measurement | 63s | +118/−2 | 315 | 81 | 56.0% · | SVG geometry children have no box: `getBBox` knows, `getBoundingClientRect` does not (2026 |
+| **630** | 2026-07-26 17:40 | 19m | capability | 63s | +510/−5 | 315 | 81 | 56.0% · | `<path>` had no bbox arm at all, and now has an EXACT one (2026-07-26) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

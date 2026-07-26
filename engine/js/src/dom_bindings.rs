@@ -3044,6 +3044,289 @@ unsafe fn el_get_bbox(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool
     true
 }
 
+/// **Exact bounds of an SVG `d` path string, or `None` if it contains something we cannot bound
+/// exactly.**
+///
+/// `<path>` had no arm in [`svg_bbox`] at all, so `getBBox()` on the single most common SVG element
+/// answered `0×0` — and `<path>` is what every icon set (Lucide, Feather, Material), every chart
+/// library's shape generator and every logo is made of. Measured at t629 against Chromium:
+/// `M4 4 L20 4 L20 12 L4 12 Z` is `16×8` there and was `0×0` here.
+///
+/// **The bounds are EXACT, which is the whole difficulty and the reason this is not ten lines.** A
+/// curve's extent is not the hull of its control points — that box is strictly LARGER than the curve,
+/// often by a lot, and a too-large bbox is a wrong answer that looks plausible: it positions tooltips
+/// off the icon, sizes chart hit-areas wrong, and reads as "close enough" in exactly the way this
+/// session has been finding and deleting. So each cubic and quadratic segment is solved for its real
+/// extrema (the roots of the derivative in `(0,1)`), not approximated.
+///
+/// **`A` (elliptical arc) returns `None` — deliberately.** Bounding an arc exactly needs the
+/// endpoint→centre parameterisation and then the extrema of the rotated ellipse over the swept angle
+/// range. That is correct work and it is not done here, and the honest answer to "what is this path's
+/// box" when part of it cannot be bounded is *no answer*, not a smaller-or-larger guess.
+/// `[[honest-answer-is-not-a-fixed-answer]]`
+fn svg_path_bbox(d: &str) -> Option<[f32; 4]> {
+    // Tokenise: commands are letters, everything else is a number. `-` and `.` can start a new number
+    // without a separator (`M0-5`, `1.5.5` = `1.5` then `.5`), which is why this is a scanner and not
+    // a `split_whitespace`.
+    #[derive(Debug)]
+    enum Tok {
+        Cmd(char),
+        Num(f32),
+    }
+    let mut toks: Vec<Tok> = Vec::new();
+    let b = d.as_bytes();
+    let mut i = 0usize;
+    while i < b.len() {
+        let c = b[i] as char;
+        if c.is_ascii_alphabetic() {
+            toks.push(Tok::Cmd(c));
+            i += 1;
+        } else if c == ',' || c.is_whitespace() {
+            i += 1;
+        } else {
+            let start = i;
+            if b[i] == b'-' || b[i] == b'+' {
+                i += 1;
+            }
+            let mut seen_dot = false;
+            while i < b.len() {
+                let ch = b[i] as char;
+                if ch.is_ascii_digit() {
+                    i += 1;
+                } else if ch == '.' && !seen_dot {
+                    seen_dot = true;
+                    i += 1;
+                } else if (ch == 'e' || ch == 'E')
+                    && i + 1 < b.len()
+                    && (b[i + 1].is_ascii_digit() || b[i + 1] == b'-' || b[i + 1] == b'+')
+                {
+                    i += 2;
+                } else {
+                    break;
+                }
+            }
+            if i == start {
+                return None; // an unparseable byte — refuse rather than guess
+            }
+            toks.push(Tok::Num(d[start..i].parse::<f32>().ok()?));
+        }
+    }
+
+    let (mut minx, mut miny) = (f32::MAX, f32::MAX);
+    let (mut maxx, mut maxy) = (f32::MIN, f32::MIN);
+    let mut hit = false;
+    let mut add = |x: f32, y: f32| {
+        minx = minx.min(x);
+        miny = miny.min(y);
+        maxx = maxx.max(x);
+        maxy = maxy.max(y);
+    };
+
+    // The extrema of one cubic axis: endpoints plus the derivative's roots inside (0,1).
+    fn cubic_axis(p0: f32, p1: f32, p2: f32, p3: f32, out: &mut Vec<f32>) {
+        out.push(p0);
+        out.push(p3);
+        let a = 3.0 * (-p0 + 3.0 * p1 - 3.0 * p2 + p3);
+        let bb = 6.0 * (p0 - 2.0 * p1 + p2);
+        let c = 3.0 * (p1 - p0);
+        let eval = |t: f32| {
+            let u = 1.0 - t;
+            u * u * u * p0 + 3.0 * u * u * t * p1 + 3.0 * u * t * t * p2 + t * t * t * p3
+        };
+        if a.abs() < 1e-6 {
+            if bb.abs() > 1e-6 {
+                let t = -c / bb;
+                if t > 0.0 && t < 1.0 {
+                    out.push(eval(t));
+                }
+            }
+            return;
+        }
+        let disc = bb * bb - 4.0 * a * c;
+        if disc < 0.0 {
+            return;
+        }
+        let sq = disc.sqrt();
+        for t in [(-bb + sq) / (2.0 * a), (-bb - sq) / (2.0 * a)] {
+            if t > 0.0 && t < 1.0 {
+                out.push(eval(t));
+            }
+        }
+    }
+    fn quad_axis(p0: f32, p1: f32, p2: f32, out: &mut Vec<f32>) {
+        out.push(p0);
+        out.push(p2);
+        let den = p0 - 2.0 * p1 + p2;
+        if den.abs() > 1e-6 {
+            let t = (p0 - p1) / den;
+            if t > 0.0 && t < 1.0 {
+                let u = 1.0 - t;
+                out.push(u * u * p0 + 2.0 * u * t * p1 + t * t * p2);
+            }
+        }
+    }
+
+    let (mut cx, mut cy) = (0.0f32, 0.0f32); // current point
+    let (mut sx, mut sy) = (0.0f32, 0.0f32); // subpath start, for Z
+                                             // The previous curve's control point, for the S/T shorthands' reflection.
+    let (mut pcx, mut pcy) = (0.0f32, 0.0f32);
+    let mut prev_cmd = ' ';
+    let mut ti = 0usize;
+    let mut cmd = ' ';
+    while ti < toks.len() {
+        if let Tok::Cmd(c) = toks[ti] {
+            cmd = c;
+            ti += 1;
+        } else if cmd == ' ' {
+            return None; // numbers before any command
+        }
+        // Implicit repetition: after `M x y` further pairs are `L`, per the grammar.
+        let eff = if cmd == 'M' && prev_cmd == 'M' {
+            'L'
+        } else if cmd == 'm' && prev_cmd == 'm' {
+            'l'
+        } else {
+            cmd
+        };
+        let rel = eff.is_ascii_lowercase();
+        let up = eff.to_ascii_uppercase();
+        let mut num = |ti: &mut usize| -> Option<f32> {
+            match toks.get(*ti) {
+                Some(Tok::Num(n)) => {
+                    *ti += 1;
+                    Some(*n)
+                }
+                _ => None,
+            }
+        };
+        match up {
+            'Z' => {
+                cx = sx;
+                cy = sy;
+                add(cx, cy);
+                hit = true;
+            }
+            'M' | 'L' | 'T' => {
+                let x = num(&mut ti)?;
+                let y = num(&mut ti)?;
+                let (nx, ny) = if rel { (cx + x, cy + y) } else { (x, y) };
+                if up == 'T' {
+                    // Quadratic with the reflected control point.
+                    let (qx, qy) = if prev_cmd.to_ascii_uppercase() == 'Q'
+                        || prev_cmd.to_ascii_uppercase() == 'T'
+                    {
+                        (2.0 * cx - pcx, 2.0 * cy - pcy)
+                    } else {
+                        (cx, cy)
+                    };
+                    let mut xs = Vec::new();
+                    let mut ys = Vec::new();
+                    quad_axis(cx, qx, nx, &mut xs);
+                    quad_axis(cy, qy, ny, &mut ys);
+                    for v in xs {
+                        add(v, cy);
+                    }
+                    for v in ys {
+                        add(cx, v);
+                    }
+                    pcx = qx;
+                    pcy = qy;
+                }
+                if up == 'M' {
+                    sx = nx;
+                    sy = ny;
+                }
+                cx = nx;
+                cy = ny;
+                add(cx, cy);
+                hit = true;
+            }
+            'H' | 'V' => {
+                let v = num(&mut ti)?;
+                if up == 'H' {
+                    cx = if rel { cx + v } else { v };
+                } else {
+                    cy = if rel { cy + v } else { v };
+                }
+                add(cx, cy);
+                hit = true;
+            }
+            'C' | 'S' => {
+                let (x1, y1) = if up == 'C' {
+                    let a = num(&mut ti)?;
+                    let b = num(&mut ti)?;
+                    if rel {
+                        (cx + a, cy + b)
+                    } else {
+                        (a, b)
+                    }
+                } else if prev_cmd.to_ascii_uppercase() == 'C'
+                    || prev_cmd.to_ascii_uppercase() == 'S'
+                {
+                    (2.0 * cx - pcx, 2.0 * cy - pcy)
+                } else {
+                    (cx, cy)
+                };
+                let a = num(&mut ti)?;
+                let b = num(&mut ti)?;
+                let (x2, y2) = if rel { (cx + a, cy + b) } else { (a, b) };
+                let a = num(&mut ti)?;
+                let b = num(&mut ti)?;
+                let (x3, y3) = if rel { (cx + a, cy + b) } else { (a, b) };
+                let mut xs = Vec::new();
+                let mut ys = Vec::new();
+                cubic_axis(cx, x1, x2, x3, &mut xs);
+                cubic_axis(cy, y1, y2, y3, &mut ys);
+                for v in xs {
+                    add(v, cy);
+                }
+                for v in ys {
+                    add(cx, v);
+                }
+                pcx = x2;
+                pcy = y2;
+                cx = x3;
+                cy = y3;
+                add(cx, cy);
+                hit = true;
+            }
+            'Q' => {
+                let a = num(&mut ti)?;
+                let b = num(&mut ti)?;
+                let (x1, y1) = if rel { (cx + a, cy + b) } else { (a, b) };
+                let a = num(&mut ti)?;
+                let b = num(&mut ti)?;
+                let (x2, y2) = if rel { (cx + a, cy + b) } else { (a, b) };
+                let mut xs = Vec::new();
+                let mut ys = Vec::new();
+                quad_axis(cx, x1, x2, &mut xs);
+                quad_axis(cy, y1, y2, &mut ys);
+                for v in xs {
+                    add(v, cy);
+                }
+                for v in ys {
+                    add(cx, v);
+                }
+                pcx = x1;
+                pcy = y1;
+                cx = x2;
+                cy = y2;
+                add(cx, cy);
+                hit = true;
+            }
+            // See the doc comment: an arc cannot be bounded exactly without the centre
+            // parameterisation, and a guess is worse than no answer.
+            'A' => return None,
+            _ => return None,
+        }
+        prev_cmd = eff;
+    }
+    if !hit {
+        return None;
+    }
+    Some([minx, miny, maxx - minx, maxy - miny])
+}
+
 /// The user-space bbox of one SVG element, from its geometry attributes; containers union their
 /// children. Returns `None` for a node that is not an SVG element at all.
 unsafe fn svg_bbox(dom: *mut Dom, node: NodeId) -> Option<[f32; 4]> {
@@ -3061,6 +3344,12 @@ unsafe fn svg_bbox(dom: *mut Dom, node: NodeId) -> Option<[f32; 4]> {
                 "rect" | "image" | "foreignobject" | "use" => {
                     Some([g("x"), g("y"), g("width"), g("height")])
                 }
+                // `<path>` — the element every icon set, chart shape and logo is made of, and the
+                // one arm this match did not have. See `svg_path_bbox`: exact, or `None`.
+                "path" => dom
+                    .element(n)
+                    .and_then(|e| e.attr("d"))
+                    .and_then(svg_path_bbox),
                 "circle" => {
                     let r = g("r");
                     Some([g("cx") - r, g("cy") - r, r * 2.0, r * 2.0])

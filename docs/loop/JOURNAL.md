@@ -27887,3 +27887,66 @@ existing gate to extend, and is what chart libraries actually call — and doing
 correct geometry to consume for the commonest element. Then **(1)**, which is the larger win and the
 larger job. The map row stays `partial`, which it already was and which this measurement confirms
 rather than changes.
+
+## Tick 630 — `<path>` had no bbox arm at all, and now has an EXACT one (2026-07-26)
+
+t629 ranked this first of two: `<path>` — the element every icon set, chart shape generator and logo
+is made of — had **no arm in `svg_bbox`'s match at all**, so `getBBox()` answered `0×0` for the single
+most common SVG element.
+
+**AND IT WAS A DELIBERATE ZERO, WHICH IS WHY IT SURVIVED.** `G_SVG_BBOX`'s own doc comment said
+*"`<text>` and `<path>` report zero size **on purpose**"* — the same honest refusal `<text>` makes,
+because a plausible guess mis-places every label that trusts it. That reasoning was right about
+guessing and wrong about the alternative: **an exact answer is available, and it is neither a zero nor
+a guess.**
+
+**MEASURED against Chromium, and the curves are the proof:**
+
+```text
+                                            manuk        Chrome
+  M4 4 L20 4 L20 12 L4 12 Z                4,4 16×8     4,4 16×8    ✓
+  M0 0 C 0 20 20 20 20 0                   0,0 20×15    0,0 20×15   ✓  control points at 20
+  M0 0 Q 10 20 20 0                        0,0 20×10    0,0 20×10   ✓  control point at 20
+  m5 5 l10 0 l0 6 z                        5,5 10×6     5,5 10×6    ✓  relative + subpath close
+  M0 0 A 5 5 0 0 1 10 10                   0,0 0×0      (real)      — refused, see below
+```
+
+**THE CUBIC IS THE WHOLE DIFFICULTY.** Its control points sit at `y=20`; the curve only reaches
+`y=15`. **A control-point hull — the easy, obvious, wrong implementation — reports 20**, is strictly
+larger than the curve, and looks entirely plausible. It would mis-position every tooltip anchored to
+an icon and mis-size every chart hit-area while reading as "close enough". So each cubic and quadratic
+is solved for the roots of its derivative in `(0,1)`. The RED probe for this is the one that matters:
+adding the control points to the extrema list turns `20×15` into `20×20` and the gate catches it.
+
+**ELLIPTICAL ARCS STILL REFUSE, DELIBERATELY.** Bounding one exactly needs the endpoint→centre
+parameterisation and then the extrema of a rotated ellipse over the swept angle range. That work is
+not done, and the honest answer to *"what is this path's box"* when part of it cannot be bounded is
+**no answer** — not a guess in either direction. `[[honest-answer-is-not-a-fixed-answer]]`
+
+⚠ **AND MY FIRST RED PROBE FOR THAT REFUSAL WAS VACUOUS.** I made the arc "guess" by adding the
+current point, which is `(0,0)` — producing `0×0`, indistinguishable from the refusal, and the gate
+stayed green. A realistic guess consumes the seven arc parameters and takes the endpoint, giving
+`0,0,10,10` — which the gate does catch. **A negative assertion needs a probe that produces a
+DIFFERENT wrong answer, not a differently-shaped absence.** Fourth vacuity caught by RED-probing this
+session, and the only one where the probe rather than the claim was at fault.
+
+RED-PROVEN THREE WAYS:
+```text
+  control-point hull instead of extrema  -> RED  pc=0,0,20,20   (the plausible wrong implementation)
+  remove the `path` arm                  -> RED  every path 0,0,0,0   (the pre-t630 state)
+  let an arc guess its endpoint          -> RED  pa=0,0,10,10
+```
+
+TICK SHAPE: capability (`getBBox()` on `<path>` goes from `0×0` to exact). Bar 0 untouched; no ratchet
+floor moved; no capability traded — the arc refusal is unchanged and `<text>` still reports its honest
+zero.
+Gates: `G_SVG_BBOX` extended with five path cases, two of which exist specifically to fail against a
+control-point hull.
+WIKI: `docs/wiki/box-layout.md` — "an exact path bbox is the extrema, not the control-point hull".
+PATTERN: [no-pattern] — `getBBox` is a measurement API; the class of site this unlocks is the one t629
+named and it needs part (1), which is untouched.
+
+NEXT: t629's part **(1)**, unchanged and now the larger of the two — `getBoundingClientRect()` on an
+SVG child still returns `0×19`, an empty inline box, because `svg_bbox` lives in the JS binding layer
+and the CSS box comes from layout. That is the subsystem; this tick makes sure it will have correct
+geometry to consume for the commonest element when it lands.
