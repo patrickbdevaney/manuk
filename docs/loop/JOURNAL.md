@@ -25593,3 +25593,68 @@ filters/patterns/SMIL and per-glyph font fallback, both of which need rendering 
 Then `isolation` (18.0%) — the last `UNRENDERED_LONGHANDS` row with real usage, still needing a
 nested paint group.
 Cadences: self-audit 604; wall 607; const 607; surface 608.
+
+## Tick 602 — the unknowns reach ZERO, and two rows are pinned for what makes them MISLEADING (2026-07-26)
+
+t601 took the unknowns 17 → 8. This takes them **8 → 0**. Every capability in the map now carries a
+measured verdict: 229 gated, 81 missing, 27 partial, 17 works, **0 unknown**.
+
+**Absent and honestly reported** (pinned in BOTH directions — absent *and* the answer matching):
+`clip-path: shape()`, multicol L2 (`column-wrap`/`column-height`), `animation-composition`, and the
+whole 2026 frontier bundle (`if()`, `text-fit`, `progress()`, `@function`/`CSSFunctionRule`). One
+probe closed the frontier row entirely.
+
+`shape()` is the interesting one, because t593 landed `clip-path` for real: the **basic shapes clip**
+and `shape()` maps to `None`. That is the narrower residue t593's own row named — now **pinned rather
+than remembered**, so if it ever lands without the `@supports` answer following, the gate goes red
+*here*. That is exactly the state `zoom` sat in for hundreds of ticks.
+
+**TWO ROWS ARE PINNED FOR WHAT MAKES THEM MISLEADING, WHICH IS THE TICK'S REAL FINDING.**
+
+**FedCM is absent — and the naive feature-detect says otherwise.** `navigator.credentials.get` **is**
+a function; it arrived with WebAuthn at t484. So a page probing `navigator.credentials` alone
+concludes FedCM is available. `IdentityCredential`/`DigitalCredential` are the honest signal and both
+are `undefined`. The gate asserts `credGet=function` **deliberately** — recording the trap rather
+than merely avoiding it, because a later reader who checks the namespace will reach the wrong
+conclusion exactly as a page would.
+
+This is the same shape as t601's OPFS finding (`navigator.storage` exists, `getDirectory` does not),
+and two instances make it a class worth naming:
+
+> **A namespace existing is not the capability existing.** Only the sub-capability check is honest —
+> for us when we measure, and for the page when it feature-detects.
+
+**SVG filters/patterns/SMIL: the ELEMENTS are all there and nothing consumes them.** `<filter>`,
+`<pattern>` and `<animate>` are reachable by id with the right `tagName`, which is precisely the
+evidence that would make a DOM-based probe score this row as working. Parsed-but-unconsumed — the
+same category as t591's `filter`/`clip-path` finding, one subsystem over. (Measured alongside: the
+outer `<svg>` **does** get its box at 40px, while an SVG child `<rect>` reports a 0-width client
+rect — a separate gap, and the reason the elements' presence must not be read as the capability.)
+
+**PER-GLYPH FONT FALLBACK: measured WORKING, and recorded as `partial` on purpose.** At 20px — Latin
+`Hello` 44px, CJK `日本語` **60px = exactly 3em** (the correct full-width advance), emoji 50px,
+Arabic `مرحبا` **shaped** to 42px (joined forms are narrower than five isolated glyphs), empty
+control 0. Four scripts, four script-appropriate answers, none of them a uniform `.notdef` box —
+the t557/t558 named-family fix still holding. It is **not** marked `works`: distinct advances prove
+different faces with different metrics, not that every glyph is the right glyph. **Pinning the claim
+I actually measured, rather than the one the evidence gestures at, is the entire discipline.**
+
+RED-PROVEN by construction: every claim is an exact measured value, so any of them changing fails the
+gate — which is what a pin is for. Workspace `--all-targets` clean;
+`G_CONSTELLATION_WELLFORMED` green.
+
+TICK SHAPE: measurement (8 rows pinned; the map's unknown count reaches ZERO for the first time).
+Bar 0 untouched; no ratchet floor moved; no engine source changed.
+Gates: `G_FRONTIER_PINS` (`engine/page/tests/g_frontier_pins.rs` — seven honest-absent answers, the
+FedCM namespace trap pinned deliberately, four per-script advances plus an empty control).
+WIKI: none [forced] — no engine mechanism changed; the findings' home is the constellation receipts
+and the gate's own header.
+PATTERN: [no-pattern] — no browser capability changed.
+
+NEXT: **(D) is now exhausted — every letter of the board's CO-#1 is either built or measured.** The
+honest remaining work is the CERTIFICATION line the observer made the authority at t581: the
+corpus-v2 tiered sweep and the per-site render∧function certificate. Before that, two bounded
+capability items the measurements surfaced: `isolation` (18.0%, the last `UNRENDERED_LONGHANDS` row
+with real usage, needs a nested paint group) and **SVG children not getting client rects**, which
+this tick found incidentally and which breaks every script that measures an SVG node.
+Cadences: self-audit 604; wall 607; const 607; surface 608.
