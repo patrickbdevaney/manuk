@@ -6533,10 +6533,71 @@ fn collect_meta_csp(dom: &Dom) -> Vec<String> {
     out
 }
 
+/// **Does `bytes` satisfy an `integrity` attribute?**
+///
+/// The attribute is a whitespace-separated list of `<algo>-<base64digest>` metadata. Per SRI §3.3.4
+/// the strongest algorithm present wins and the content is valid if it matches **any** entry of that
+/// strength — which is what lets a page list a fallback for older agents without weakening itself.
+/// Implementing "any entry at all matches" instead would let a page's own weak `sha256` fallback
+/// downgrade its `sha512`, so the strength selection is not a detail.
+///
+/// Unknown algorithms are ignored (spec: they are not valid metadata). An `integrity` attribute that
+/// contains **no** recognised algorithm is treated as no integrity at all, per §3.3.3 — `integrity=""`
+/// must not block the script, and neither must `integrity="md5-…"`.
+fn sri_matches(spec: &str, bytes: &[u8]) -> bool {
+    use base64::Engine as _;
+    use sha2::Digest as _;
+
+    // Strength order matters; the strongest algorithm the attribute names is the only one checked.
+    let mut best: Option<&'static str> = None;
+    for tok in spec.split_whitespace() {
+        let algo = match tok.split('-').next() {
+            Some("sha512") => "sha512",
+            Some("sha384") => "sha384",
+            Some("sha256") => "sha256",
+            _ => continue,
+        };
+        let rank = |a: &str| match a {
+            "sha512" => 3,
+            "sha384" => 2,
+            _ => 1,
+        };
+        if best.is_none_or(|b| rank(algo) > rank(b)) {
+            best = Some(algo);
+        }
+    }
+    let Some(algo) = best else {
+        return true; // no recognised metadata == no integrity requirement (SRI §3.3.3)
+    };
+
+    let digest: Vec<u8> = match algo {
+        "sha512" => sha2::Sha512::digest(bytes).to_vec(),
+        "sha384" => sha2::Sha384::digest(bytes).to_vec(),
+        _ => sha2::Sha256::digest(bytes).to_vec(),
+    };
+    // Both alphabets: the spec says base64, and real pages carry standard-alphabet digests, but a
+    // url-safe one is a copy-paste away and rejecting it would fail closed on a *correct* hash.
+    let std_b64 = base64::engine::general_purpose::STANDARD.encode(&digest);
+    let url_b64 = base64::engine::general_purpose::URL_SAFE.encode(&digest);
+
+    spec.split_whitespace().any(|tok| {
+        let Some((a, want)) = tok.split_once('-') else {
+            return false;
+        };
+        if !a.eq_ignore_ascii_case(algo) {
+            return false;
+        }
+        // Trailing `?options` is allowed by the grammar and carries no meaning today.
+        let want = want.split('?').next().unwrap_or(want);
+        want == std_b64 || want == url_b64
+    })
+}
+
 /// Fetch every external `<script src>` in `dom` (resolved against `base`) and inline its
 /// content as the script node's text, dropping the `src`, so the from_dom script pass runs it.
 /// External scripts fetch sequentially in document order (the classic-script model).
 #[cfg(feature = "spidermonkey")]
+
 async fn fetch_external_scripts(
     dom: &mut Dom,
     base: &str,
@@ -6556,7 +6617,14 @@ async fn fetch_external_scripts(
                         tracing::info!(url = %u, "CSP blocked a <script src> — not fetched");
                         continue;
                     }
-                    targets.push((n, u.to_string()));
+                    // `integrity` is read HERE, with the node, because after the fetch the
+                    // element has been rewritten (`src` dropped, text inlined) and the attribute
+                    // would have to be re-found on a node that no longer looks external.
+                    let integrity = dom
+                        .element(n)
+                        .and_then(|e| e.attr("integrity"))
+                        .map(str::to_string);
+                    targets.push((n, u.to_string(), integrity));
                 }
             }
         }
@@ -6577,11 +6645,9 @@ async fn fetch_external_scripts(
     let budget = load_budget();
     let fetched = match tokio::time::timeout(
         budget,
-        futures_util::future::join_all(
-            targets
-                .iter()
-                .map(|(n, url)| async move { (*n, manuk_net::fetch(url).await.ok()) }),
-        ),
+        futures_util::future::join_all(targets.iter().map(|(n, url, integ)| async move {
+            (*n, integ.clone(), manuk_net::fetch(url).await.ok())
+        })),
     )
     .await
     {
@@ -6595,9 +6661,33 @@ async fn fetch_external_scripts(
         }
     };
     let mut authorized = Vec::new();
-    for (node, resp) in fetched {
+    for (node, integrity, resp) in fetched {
         match resp {
             Some(r) => {
+                // **Subresource Integrity, checked on the RAW bytes before anything is executed.**
+                //
+                // `integrity="sha384-…"` is the page telling us, in advance, exactly which bytes it
+                // expects — the one control a page has against a compromised or swapped CDN. Running
+                // the script anyway is not a partial implementation of that promise, it is the
+                // absence of it, and the page cannot tell the difference: nothing throws and nothing
+                // is logged, so a supply-chain substitution executes silently. That is the same
+                // shape as every silent-failure defect this engine has been caught by, with the
+                // consequence turned up.
+                //
+                // The digest is over `body`, the bytes as received — NOT `decoded_text()`. A
+                // transcode to UTF-8 changes the bytes and would make every hash on a non-UTF-8 or
+                // BOM-prefixed script fail for the wrong reason.
+                if let Some(spec) = integrity.as_deref() {
+                    if !sri_matches(spec, &r.body) {
+                        tracing::warn!(
+                            "SRI mismatch — <script src> NOT executed (integrity=\"{spec}\")"
+                        );
+                        // Leave `src` in place: `collect_inline_scripts` skips a node that still
+                        // looks external, which is exactly the "there is nothing to run" path a
+                        // failed fetch already takes.
+                        continue;
+                    }
+                }
                 let js = r.decoded_text();
                 dom.remove_attr(node, "src");
                 let text = dom.create_text(js);

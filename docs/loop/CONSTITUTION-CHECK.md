@@ -1838,3 +1838,50 @@ the certificate's FUNCTION terms are falsified as they are added, which `G_CERT_
 assertion enforces mechanically.
 
 **Next check due: tick 599.**
+
+## Check #41 — tick 599
+
+**Horizon:** H0 — the Phase-0 daily-driver certificate (`docs/loop/DAILY-DRIVER-CERTIFICATION.md`,
+the authority since t581).
+
+**Is the hill the mountain?** This window (t592-599) spent six ticks on ONE bundle — the
+visual-effects properties and their CSSOM half — plus the due surface audit and this check. That
+concentration is worth interrogating, because "six ticks on CSS" is exactly the shape of the
+death-tail PART VI warns about.
+
+**It holds, and the reason is measurable rather than aesthetic.** Every property in the bundle was
+selected by the Blink use counters, not by what was tractable: `filter` 51.9%, `clip-path` 43.8%,
+`backdrop-filter` 34.3%, `mix-blend-mode` 12.9%. All four were in the state §VI.3's second clause
+exists to catch — *parsed, computed, and never read* — which is the specific failure that makes a
+capability invisible to a capability count while being visible to every user. And the arc converged:
+each successive property cost less because the first one paid for the offscreen group. That is the
+opposite of a tail.
+
+**§VI.3 gains a third clause, from t598's audit.** The rule so far reads *rank by usage-weighted
+breadth, then price each candidate by measuring it IN THIS ENGINE*. The audit found the loop's own
+board still steering at three CO-#1 items that were **already built** (MEDIA's MSE/demux/playback/
+captions, OAuth's redirect/popup/postMessage, canvas `fillText` — confirmed by running its gate).
+So: **before taking a named priority, verify it is still unmet.** A stale priority is not a small
+waste; it is a tick spent re-deriving something the ratchet already banked, and the loop cannot see
+it because the board reads like an instruction rather than a claim. The self-audit checks whether the
+loop obeys its process; nothing was checking whether the process's *inputs* were still true.
+
+**I5, and the direction it moved this window.** t591 recorded that turning the instrument on itself
+found engine defects no conformance test would. That continued and sharpened: t597's probe of 95
+properties found **86** returning `undefined` where t596 had fixed four, and t598's audit produced
+**two wrong numbers of its own** (27, then 18, against a truth of 2) before the third pass. Both are
+the same lesson from opposite ends — **measure the population before you claim the fix, and suspect
+the instrument before the subject.** The loop is now generating this correction itself rather than
+being handed it, which is the healthiest form of I5 available.
+
+**PART VII / V1-SCOPE — one drift, corrected this tick.** Two SECURITY rows were carried as
+`unknown`: `X-Frame-Options`/`frame-ancestors` and Subresource Integrity. For a security control
+`unknown` is the worst available status — nobody can rely on it and nobody is alarmed — and one of
+them (`frame-ancestors`) was documented as unimplemented *in the source's own header* while the map
+said unknown. Both are now measured. SRI is **built and gated** (t599); XFO is honestly `missing`
+with its enforcement point named. **A security capability may be absent, but it may not be unknown.**
+
+**No drift found in the north star.** Chromium remains the ceiling on capability and the floor on
+everything else; nothing this window traded performance or honesty for a feature, and three of the
+six capability ticks *removed* a lie (`@supports` answering yes about `filter`, `clip-path`,
+`backdrop-filter`) rather than adding a rendering.

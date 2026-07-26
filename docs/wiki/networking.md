@@ -1337,3 +1337,42 @@ Chromium and `619px` in ours *before and after*, and the instances show Chromium
 at `x=20` and `x=345` where we stack both at `x=20`. That is a **two-column layout we do not apply**, and the
 fonts had been masking it. One capability landed, one red herring retired, one real lead exposed.
 [[css-cascade]]
+
+## Subresource Integrity — the check belongs at the fetch choke point, on the RAW bytes (tick 599)
+
+`integrity="sha384-…"` is the page telling us, in advance, exactly which bytes it expects — the one
+control a page has against a compromised or swapped CDN, and the reason a site can host its framework
+somewhere it does not control. Surface audit #33 found it **absent**, and carried in the map as
+`unknown`, which for a security control is the worst available status: nobody can rely on it and
+nobody is alarmed.
+
+**The failure was silent, which is what made it this repo's recurring shape rather than a missing
+feature.** A substituted script ran, nothing threw, nothing was logged, and the page that did
+everything right could not tell.
+
+It is enforced in `fetch_external_scripts` — the single place classic `<script src>` bytes land
+before being inlined into the element and executed. Three decisions there are load-bearing:
+
+**Hash the raw body, never `decoded_text()`.** A transcode to UTF-8 changes the bytes, so every hash
+on a BOM-prefixed or non-UTF-8 script would fail *for the wrong reason*. A security control that
+fires on innocent content teaches everyone to remove it, which is worse than not having it.
+
+**Read `integrity` before the fetch, with the node.** After the fetch the element has been rewritten
+(`src` dropped, source inlined) and the attribute would have to be re-found on a node that no longer
+looks external.
+
+**Implement SRI §3.3.4's strength selection, don't approximate it.** When several algorithms are
+listed, the **strongest present** decides. The tempting shortcut — "valid if any listed hash matches"
+— would let a page's own stale `sha256` fallback authorise content its `sha512` rejects. That is an
+attack on the mechanism, not a rounding error.
+
+And the mirror-image trap, §3.3.3: an attribute with **no recognised metadata** (`integrity=""`, or
+only `md5-…`) is **no requirement at all** and must not block. Failing closed there feels like the
+cautious choice and is the wrong one — it bricks pages while protecting nobody. The gate asserts both
+directions, because an implementation that blocks everything passes any "did it block the bad one?"
+test while making the browser useless.
+
+⚠ Residue: `<link rel=stylesheet integrity>` and module scripts are not covered — classic
+`<script src>` is the dominant SRI carrier and the only one routed through this choke point today.
+`X-Frame-Options` / CSP `frame-ancestors` remain **missing** (measured, not unknown); their
+enforcement point is the iframe document load, and the two share it.

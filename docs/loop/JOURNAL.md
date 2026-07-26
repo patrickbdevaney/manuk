@@ -25383,3 +25383,84 @@ Screen Orientation, File System Access/OPFS. Then `isolation` (18.0%, the last `
 row with real usage — it needs a nested paint group, so measure before committing). Constitution
 check is due at 599.
 Cadences: const 599 (NEXT TICK); self-audit 604; wall 607; surface 608.
+
+## Tick 599 — CONSTITUTION CHECK #41 + Subresource Integrity: a security control may be absent, but not unknown (2026-07-26)
+
+**THE PROBE, taken straight from audit #33's finding that (D) is now the only genuinely open CO-#1
+letter.** Two of the 17 unknowns were SECURITY rows, and `unknown` is the worst status a security
+control can have: nobody can rely on it and nobody is alarmed. Measured both:
+
+- **`X-Frame-Options` / CSP `frame-ancestors` — ABSENT**, both halves. And `engine/net/src/csp.rs`'s
+  own header *already documented* `frame-ancestors` as unimplemented, so the map was carrying as
+  unknown something the source had written down. Now honestly `missing`, with its enforcement point
+  named (the iframe document load; the two mechanisms share one).
+- **Subresource Integrity — ABSENT.** No `integrity` handling anywhere in the tree. Every
+  SRI-protected script on the web was executing **unverified**.
+
+**AND SRI WAS CHEAP ENOUGH TO BUILD IN THE SAME TICK, SO I DID.** `integrity="sha384-…"` is the one
+control a page has against a compromised or swapped CDN. Ignoring it is not a partial implementation
+of that promise — it is the absence of it, **silently**: a substituted script runs, nothing throws,
+nothing is logged, and the page that did everything right cannot tell. Same shape as every
+silent-failure defect this engine has been caught by, with the consequence turned up.
+
+**THREE DECISIONS IN IT ARE LOAD-BEARING.** (1) Hash the **raw body**, never `decoded_text()` — a
+UTF-8 transcode changes the bytes, so every hash on a BOM-prefixed script would fail *for the wrong
+reason*, and a security control that fires on innocent content teaches everyone to remove it. (2)
+Read `integrity` **before** the fetch, with the node: afterwards the element has been rewritten
+(`src` dropped, source inlined) and no longer looks external. (3) Implement §3.3.4's **strength
+selection** rather than "any listed hash matches" — otherwise a page's own stale `sha256` fallback
+authorises content its `sha512` rejects, which attacks the mechanism itself.
+
+**AND THE MIRROR-IMAGE TRAP, which the gate asserts in both directions.** Per §3.3.3 an attribute
+with no *recognised* metadata (`integrity=""`, or only `md5-…`) is **no requirement at all** and must
+not block. Failing closed there feels cautious and is wrong: it bricks pages while protecting nobody.
+An implementation that simply blocks everything passes any "did it block the bad one?" test while
+making the browser useless — which is why the gate's first claim is that a **correct** hash still
+runs.
+
+**CONSTITUTION CHECK #41 (due 599).** The window t592-599 spent six ticks on one bundle, which is the
+shape §VI warns about — so it was interrogated rather than assumed. It holds: every property was
+selected by the Blink use counters (51.9 / 43.8 / 34.3 / 12.9%), not by tractability; all four were
+in the *parsed-computed-never-read* state §VI.3's second clause exists to catch; and the arc
+**converged**, each property cheaper than the last because the first paid for the offscreen group.
+That is the opposite of a tail. **§VI.3 gains a third clause from audit #33: before taking a named
+priority, verify it is still unmet** — the board was steering at three CO-#1 items already built, and
+nothing was checking whether the process's *inputs* were still true, only whether the loop obeyed the
+process. Recorded on I5: t597's probe (86 undefined where 4 had been fixed) and t598's own two wrong
+numbers (27, 18, truth 2) are the same lesson from opposite ends — **measure the population before
+claiming the fix, and suspect the instrument before the subject** — and the loop is now generating
+that correction itself rather than being handed it.
+
+**THE WALL CAUGHT SOMETHING MY OWN CHECK COULD NOT, AND THE MECHANISM IS WORTH WRITING DOWN.** The
+first landing attempt went RED: `manuk-agent` exit 101, no verdict on two runs. Per the standing note
+(t448) **exit 101 is a COMPILE ERROR, not an OOM**, and it was: my anchored insert had placed
+`sri_matches` between `#[cfg(feature = "spidermonkey")]` and the function it decorated, so the
+attribute re-attached to *my helper* and `fetch_external_scripts` — which is not cfg-gated — called a
+function that vanished without the feature.
+
+**And `cargo check --workspace --all-targets` had reported clean**, because I ran it with
+`--features stylo,spidermonkey`, the configuration in which *both* items compile. **An anchored
+insert can split an attribute from its item, and checking the feature-ON build hides exactly that
+class.** Both configurations are now checked before landing. This is the `scripted-edit silent no-op`
+family with a new member: the edit applied perfectly, and the damage was to what the *previous* line
+now governed.
+
+RED-PROVEN: bypass the check → the tampered script runs (`ABCDEF` instead of `ACDEF`). `manuk-agent`
+126 green after the fix; both feature configurations of `manuk-page` compile; `G_CSP` and
+`G_CONSTELLATION_WELLFORMED` green under the change.
+
+TICK SHAPE: the DUE constitution check + probe-and-pin of two security unknowns + a capability (SRI
+built and gated). Bar 0 untouched; no ratchet floor moved.
+Gates: `G_SRI` (`engine/page/tests/g_sri.rs` — correct hash RUNS, tampered does NOT, absent/empty/
+unknown-algorithm do not block, strongest-algorithm-decides; RED-proven).
+WIKI: docs/wiki/networking.md — "Subresource Integrity — the check belongs at the fetch choke point,
+on the RAW bytes".
+PATTERN: [no-pattern] — a security control landed; no rendering capability changed.
+
+NEXT: **`X-Frame-Options` + `frame-ancestors` together** — measured this tick, one enforcement point
+(the iframe document load), and the pair is a single bounded tick now that the measurement is done.
+Then the rest of (D)'s 17 unknowns, cheapest first: Reporting API, `window.screen` + Screen
+Orientation, File System Access/OPFS, `@counter-style`. Then `isolation` (18.0%) — still the last
+`UNRENDERED_LONGHANDS` row with real usage, and still needing a nested paint group, so measure before
+committing.
+Cadences: self-audit 604; wall 607; const 607; surface 608.
