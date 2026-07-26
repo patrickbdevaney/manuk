@@ -1836,3 +1836,55 @@ are this session's real gates, and they are banked at the same moment. The corre
 retreat; it is a *truer* number in both directions.
 
 **Next audit due: tick 628.**
+
+---
+
+## Audit #35 — tick 628
+
+**This audit's finding is that AUDIT #34 WAS WRONG, in a way that its own standing first step caught
+ten ticks later.** #34 demoted 14 rows to `unknown` on the grounds that "no gate exists". **Three of
+those already had gates**, one of them for **420 ticks**:
+
+| row | #34 said | reality |
+|---|---|---|
+| scroll anchoring | `missing` | `G_SCROLL_ANCHOR` + `G_SCROLL_ANCHOR_LIVE`, built **tick 203/204**, passing today |
+| forced reflow | `unknown`, then credited to #34's own new gate | `G_FORCED_REFLOW`, built **tick 213** |
+| real-world quirks | `unknown` | `g_quirks_mode.rs` exists and passes |
+
+**THE METHOD WAS THE BUG, AND IT IS WORTH STATING PRECISELY.** Audit #34 asked *"does this ROW cite a
+gate?"* and answered *"no gate exists."* **Those are different questions.** A gate can exist under a
+name the row never mentioned — and the map's whole failure mode is rows that do not know what backs
+them. Searching the map for the gate can only ever confirm what the map already says.
+
+> **The correct first step is to search the GATE DIRECTORY for the capability, not the map for the
+> gate.** Audit #31 established "diff `engine/page/tests/` against the map" — #34 ran that diff in one
+> direction (gates with no row) and not the other (rows with no *searched-for* gate).
+
+**AND t623 COMPOUNDED IT WHILE APPLYING THE RULE MEANT TO PREVENT IT.** t622 established *"before
+publishing an absence, name the code path that would deliver it and show that path ran."* At t623 I
+applied that to scroll anchoring, found `overflow-anchor` absent from all four of Stylo's built
+property tables, and called the negative confirmed. **`overflow-anchor` is the OPT-OUT property.** The
+capability is the behaviour — a feed that does not jump when content loads above the read position —
+and it has been implemented and gated since t203. The rule is only sound if **the path you name
+delivers the thing you are ruling on**; I named the path for a different thing and got a true fact
+about it, which is the most convincing possible way to be wrong.
+
+**THAT IS THREE FALSE ABSENCES IN ONE SESSION** — `ResizeObserver` (t621, corrected t622), scroll
+anchoring and forced reflow (t618/t621, corrected here) — against **zero** false presences of my own
+making. Constitution check #44 named the asymmetry (*"a negative result feels like it needs no
+confirmation"*) and this audit is its third instance, including one where I believed I was checking.
+**The loop's scepticism is well calibrated for good news and badly calibrated for bad news**, and that
+is now measured rather than suspected.
+
+**Gate-vs-map diff (the standing step), run in BOTH directions this time:**
+```text
+  315 gate files · 7 unmapped by name
+     G_DEFER · G_SILENT_FAIL          — long-standing, mapped under their capability rows, not by name
+     G_WEBFONT_RELAYOUT_EXTERNAL      — t619's second half; the row cites the primary
+     G_FORCED_REFLOW · G_SCROLL_ANCHOR · G_SCROLL_ANCHOR_LIVE · WEBFONT_LIVE
+                                      — the gates this audit found, now cited
+```
+
+Drift **0** after the corrections; `G_CONSTELLATION_WELLFORMED` green.
+
+**Next audit due: tick 638.**
