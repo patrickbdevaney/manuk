@@ -17,6 +17,7 @@
 //! not be: `grayscale(1)` has one right answer and a browser that guesses it renders every
 //! screenshot-diffing test a shade off forever.
 
+use crate::Rect;
 use manuk_css::{FilterOp, Rgba};
 use tiny_skia::Pixmap;
 
@@ -253,6 +254,144 @@ fn drop_shadow(px: &mut Pixmap, dx: f32, dy: f32, blur_px: f32, color: Rgba) {
         None,
     );
     px.data_mut().copy_from_slice(out.data());
+}
+
+/// Clip an offscreen group's surface to a `clip-path` basic shape.
+///
+/// `reference` is the **border box of the element that declared the clip**, already translated into
+/// the surface's coordinates — not the box of whatever descendant is being painted. Getting that
+/// wrong is silent: percentages still resolve, the shape still draws, it is just in the wrong place
+/// and the wrong size, which looks like a layout bug rather than a clip bug.
+///
+/// A shape we cannot build (a degenerate radius, a polygon with fewer than three points) clips
+/// **nothing** rather than everything. Erasing the element would be the more "correct-looking"
+/// failure and it is the wrong one: an unclipped element is visibly wrong and fixable, a vanished
+/// one reads as content that was never there.
+pub(crate) fn apply_clip_shape(px: &mut Pixmap, shape: &manuk_css::ClipShape, reference: Rect) {
+    use manuk_css::ClipShape as CS;
+    if reference.width <= 0.0 || reference.height <= 0.0 {
+        return;
+    }
+    let (w, h) = (reference.width, reference.height);
+    // A `<position>` / inset component: percentages against the matching axis of the reference box.
+    let x_of = |d: manuk_css::Dim| reference.x + d.resolve(w, 0.0);
+    let y_of = |d: manuk_css::Dim| reference.y + d.resolve(h, 0.0);
+    // A `<shape-radius>`. `axis` is the box side a LENGTH-percentage resolves against; a bare
+    // `circle(50%)` instead uses the CSS reference-box diagonal, which is neither side.
+    let radius = |r: manuk_css::ShapeRadius, cx: f32, cy: f32, axis: f32| -> f32 {
+        use manuk_css::ShapeRadius as SR;
+        let (dx0, dx1) = ((cx - reference.x).abs(), (reference.x + w - cx).abs());
+        let (dy0, dy1) = ((cy - reference.y).abs(), (reference.y + h - cy).abs());
+        match r {
+            SR::ClosestSide => dx0.min(dx1).min(dy0).min(dy1),
+            SR::FarthestSide => dx0.max(dx1).max(dy0).max(dy1),
+            SR::Len(manuk_css::Dim::Percent(p)) if axis <= 0.0 => {
+                // The diagonal form: sqrt(w² + h²) / √2.
+                (w * w + h * h).sqrt() / std::f32::consts::SQRT_2 * p / 100.0
+            }
+            SR::Len(d) => d.resolve(if axis > 0.0 { axis } else { w }, 0.0),
+        }
+    };
+
+    // Built as an `Option<Path>` rather than a `PathBuilder` because the rounded `inset()` case
+    // reuses `round_rect_path`, which already hands back a finished path.
+    let mut path: Option<tiny_skia::Path> = None;
+    let mut pb = tiny_skia::PathBuilder::new();
+    let mut even_odd = false;
+    match shape {
+        CS::Inset {
+            top,
+            right,
+            bottom,
+            left,
+            round,
+        } => {
+            let x0 = reference.x + left.resolve(w, 0.0);
+            let y0 = reference.y + top.resolve(h, 0.0);
+            let x1 = reference.x + w - right.resolve(w, 0.0);
+            let y1 = reference.y + h - bottom.resolve(h, 0.0);
+            // Overlapping insets produce an EMPTY shape, and that is the point of `inset(50%)` —
+            // the `.visually-hidden` idiom. Clamping the rect to non-negative would render the
+            // screen-reader-only text this is meant to remove.
+            if x1 <= x0 || y1 <= y0 {
+                px.data_mut().fill(0);
+                return;
+            }
+            let r = round.min((x1 - x0) / 2.0).min((y1 - y0) / 2.0).max(0.0);
+            let Some(rect) = tiny_skia::Rect::from_ltrb(x0, y0, x1, y1) else {
+                return;
+            };
+            let box_rect = Rect {
+                x: x0,
+                y: y0,
+                width: x1 - x0,
+                height: y1 - y0,
+            };
+            match (r > 0.0)
+                .then(|| crate::round_rect_path(box_rect, r))
+                .flatten()
+            {
+                Some(p) => path = Some(p),
+                None => pb.push_rect(rect),
+            }
+        }
+        CS::Circle { cx, cy, r } => {
+            let (x, y) = (x_of(*cx), y_of(*cy));
+            let rr = radius(*r, x, y, 0.0);
+            if rr <= 0.0 {
+                px.data_mut().fill(0);
+                return;
+            }
+            pb.push_circle(x, y, rr);
+        }
+        CS::Ellipse { cx, cy, rx, ry } => {
+            let (x, y) = (x_of(*cx), y_of(*cy));
+            let (a, b) = (radius(*rx, x, y, w), radius(*ry, x, y, h));
+            if a <= 0.0 || b <= 0.0 {
+                px.data_mut().fill(0);
+                return;
+            }
+            let Some(oval) = tiny_skia::Rect::from_ltrb(x - a, y - b, x + a, y + b) else {
+                return;
+            };
+            pb.push_oval(oval);
+        }
+        CS::Polygon {
+            even_odd: eo,
+            points,
+        } => {
+            if points.len() < 3 {
+                return; // not a shape — leave the element unclipped
+            }
+            even_odd = *eo;
+            for (i, (px_d, py_d)) in points.iter().enumerate() {
+                let (x, y) = (x_of(*px_d), y_of(*py_d));
+                if i == 0 {
+                    pb.move_to(x, y);
+                } else {
+                    pb.line_to(x, y);
+                }
+            }
+            pb.close();
+        }
+    }
+    let Some(path) = path.or_else(|| pb.finish()) else {
+        return; // degenerate geometry — unclipped, never erased
+    };
+    let Some(mut mask) = tiny_skia::Mask::new(px.width(), px.height()) else {
+        return;
+    };
+    mask.fill_path(
+        &path,
+        if even_odd {
+            tiny_skia::FillRule::EvenOdd
+        } else {
+            tiny_skia::FillRule::Winding
+        },
+        true, // anti-aliased: a polygon's diagonal is the whole reason the property is used
+        tiny_skia::Transform::identity(),
+    );
+    px.apply_mask(&mask);
 }
 
 #[cfg(test)]

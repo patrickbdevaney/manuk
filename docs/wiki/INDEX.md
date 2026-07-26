@@ -78,6 +78,8 @@
   - L1232 · The blur lost 84% of its ink, and the test that caught it was itself wrong first
   - L1249 · Two coordinate spaces meet at the scratch surface, and only one of them still owes the scroll
   - L1259 · Colour matrices are spec constants, so they are asserted EXACTLY
+  - L1280 · clip-path — the second capability out of the same offscreen group, at a fraction of the price (tick 593)
+  - L1306 · inset(50%) must be allowed to clip everything, and it is the one place the module's default is wrong
 
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
@@ -1013,4 +1015,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-928 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+930 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

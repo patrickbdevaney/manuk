@@ -550,6 +550,80 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
             .collect();
     }
 
+    // `clip-path` — the four BASIC SHAPES. `path()`/`shape()`/`url()` need an SVG path graph and are
+    // mapped to `None` (unclipped) rather than to a variant nothing draws: an unclipped element is
+    // visibly wrong, a shape we pretend to honour is *silently* wrong, and this engine has just spent
+    // two ticks removing that second kind.
+    {
+        use stylo::values::generics::basic_shape::{
+            GenericBasicShape as GBS, GenericClipPath as GCP, GenericShapeRadius as GSR,
+        };
+        use stylo::values::generics::position::GenericPositionOrAuto as GPA;
+        // A `<position>` component → our `Dim`, measured from the box's top-left. `auto` is the
+        // shape's own default centre, which for both circle and ellipse is 50%.
+        let pos_or_auto = |p: &GPA<stylo::values::computed::Position>| match p {
+            GPA::Auto => (crate::Dim::Percent(50.0), crate::Dim::Percent(50.0)),
+            GPA::Position(p) => (lp_to_dim(&p.horizontal), lp_to_dim(&p.vertical)),
+        };
+        let radius = |r: &GSR<LengthPercentage>| match r {
+            GSR::Length(l) => crate::ShapeRadius::Len(lp_to_dim(&l.0)),
+            GSR::ClosestSide => crate::ShapeRadius::ClosestSide,
+            GSR::FarthestSide => crate::ShapeRadius::FarthestSide,
+            // The CORNER keywords are not spellable in `circle()`/`ellipse()` — Stylo shares this
+            // enum with `radial-gradient()`, where they are. Mapped to their side counterparts
+            // rather than left to a catch-all, so a future grammar change surfaces as a compile
+            // error instead of a silently wrong radius.
+            GSR::ClosestCorner => crate::ShapeRadius::ClosestSide,
+            GSR::FarthestCorner => crate::ShapeRadius::FarthestSide,
+        };
+        s.clip_path = match cv.clone_clip_path() {
+            GCP::Shape(shape, _geometry_box) => match &*shape {
+                GBS::Rect(inset) => Some(crate::ClipShape::Inset {
+                    top: lp_to_dim(&inset.rect.0),
+                    right: lp_to_dim(&inset.rect.1),
+                    bottom: lp_to_dim(&inset.rect.2),
+                    left: lp_to_dim(&inset.rect.3),
+                    round: match lp_to_dim(&inset.round.top_left.0.width.0) {
+                        crate::Dim::Px(px) => px.max(0.0),
+                        _ => 0.0,
+                    },
+                }),
+                GBS::Circle(c) => {
+                    let (cx, cy) = pos_or_auto(&c.position);
+                    Some(crate::ClipShape::Circle {
+                        cx,
+                        cy,
+                        r: radius(&c.radius),
+                    })
+                }
+                GBS::Ellipse(e) => {
+                    let (cx, cy) = pos_or_auto(&e.position);
+                    Some(crate::ClipShape::Ellipse {
+                        cx,
+                        cy,
+                        rx: radius(&e.semiaxis_x),
+                        ry: radius(&e.semiaxis_y),
+                    })
+                }
+                GBS::Polygon(p) => {
+                    use stylo::values::generics::basic_shape::FillRule;
+                    Some(crate::ClipShape::Polygon {
+                        even_odd: matches!(p.fill, FillRule::Evenodd),
+                        points: p
+                            .coordinates
+                            .iter()
+                            .map(|c| (lp_to_dim(&c.0), lp_to_dim(&c.1)))
+                            .collect(),
+                    })
+                }
+                // `path()` / `shape()` — an SVG path graph, honestly unclipped.
+                GBS::PathOrShape(_) => None,
+            },
+            // `none`, a bare `<geometry-box>` (which clips to a box we already clip to), or `url()`.
+            _ => None,
+        };
+    }
+
     // Position mode — drives whether the insets below are actually applied by layout.
     use stylo::values::computed::{
         Clear as SClear, Float as SFloat, Overflow as SOverflow, PositionProperty, ZIndex,

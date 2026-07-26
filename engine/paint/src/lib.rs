@@ -437,9 +437,16 @@ impl DisplayList {
             inherited_z: i32,
             inherited_clip: Option<Rect>,
             inherited_filters: &[manuk_css::FilterOp],
+            inherited_shapes: &[(manuk_css::ClipShape, Rect)],
             z_index: &std::collections::HashMap<manuk_dom::NodeId, i32>,
             clip_map: &std::collections::HashMap<manuk_dom::NodeId, Rect>,
-            emit: &mut impl FnMut(&LayoutBox, i32, Option<Rect>, &[manuk_css::FilterOp]),
+            emit: &mut impl FnMut(
+                &LayoutBox,
+                i32,
+                Option<Rect>,
+                &[manuk_css::FilterOp],
+                &[(manuk_css::ClipShape, Rect)],
+            ),
         ) {
             let z = b
                 .node
@@ -463,15 +470,31 @@ impl DisplayList {
                     .chain(b.filters.iter().copied())
                     .collect()
             };
-            emit(b, z, clip, &filters);
+            // `clip-path` accumulates the same way, and it must carry the REFERENCE BOX with it:
+            // percentages in the shape resolve against the box that DECLARED the clip, not against
+            // the descendant being painted. Nested clips INTERSECT, which is what applying each
+            // mask in turn does (`apply_mask` multiplies alpha).
+            let shapes: Vec<(manuk_css::ClipShape, Rect)> = match &b.clip_path {
+                None => inherited_shapes.to_vec(),
+                Some(cp) => inherited_shapes
+                    .iter()
+                    .cloned()
+                    .chain(std::iter::once((cp.clone(), b.rect)))
+                    .collect(),
+            };
+            emit(b, z, clip, &filters, &shapes);
             if let BoxContent::Block(children) = &b.content {
                 for c in children {
-                    visit(c, z, clip, &filters, z_index, clip_map, emit);
+                    visit(c, z, clip, &filters, &shapes, z_index, clip_map, emit);
                 }
             }
         }
         let mut push_group =
-            |b: &LayoutBox, z: i32, clip: Option<Rect>, filters: &[manuk_css::FilterOp]| {
+            |b: &LayoutBox,
+             z: i32,
+             clip: Option<Rect>,
+             filters: &[manuk_css::FilterOp],
+             shapes: &[(manuk_css::ClipShape, Rect)]| {
                 let mut items = Vec::new();
                 // `visibility: hidden` / `opacity: 0` — the box still occupies its space (layout already
                 // accounted for it) but paints NOTHING. Without this, every dropdown, modal and tooltip
@@ -797,11 +820,12 @@ impl DisplayList {
                         z,
                         clip,
                         filters: filters.to_vec(),
+                        shapes: shapes.to_vec(),
                         items,
                     });
                 }
             };
-        visit(root, 0, None, &[], z_index, clip_map, &mut push_group);
+        visit(root, 0, None, &[], &[], z_index, clip_map, &mut push_group);
         // Stable sort keeps tree (document) order within each layer.
         groups.sort_by_key(|g| g.z);
         groups
@@ -822,6 +846,9 @@ pub(crate) struct PaintGroup {
     pub z: i32,
     pub clip: Option<Rect>,
     pub filters: Vec<manuk_css::FilterOp>,
+    /// The `clip-path` chain from the root down, each paired with the border box of the element
+    /// that declared it — the shape's reference box, which a descendant's own box is not.
+    pub shapes: Vec<(manuk_css::ClipShape, Rect)>,
     pub items: Vec<DisplayItem>,
 }
 
@@ -1069,7 +1096,7 @@ impl CpuPainter<'_> {
                 width: c.width,
                 height: c.height,
             });
-            if g.filters.is_empty() {
+            if g.filters.is_empty() && g.shapes.is_empty() {
                 for item in &g.items {
                     self.draw_item(&mut pixmap, item, clip, 0.0, -scroll_y);
                 }
@@ -1088,6 +1115,9 @@ impl CpuPainter<'_> {
     /// canvas), **not** to the viewport — a page with fifty drop-shadowed icons must not pay fifty
     /// full-screen buffers. Everything is translated so the box's top-left is the surface origin,
     /// which is the only reason `draw_item` takes an offset pair instead of just the scroll.
+    ///
+    /// `clip-path` rides the same path — it needs the identical offscreen surface, and giving it
+    /// its own would mean two round-trips for an element that has both.
     fn draw_filtered_group(
         &self,
         pixmap: &mut tiny_skia::Pixmap,
@@ -1143,6 +1173,20 @@ impl CpuPainter<'_> {
             self.draw_item(&mut scratch, item, clip, dx, dy);
         }
         apply_filters(&mut scratch, &g.filters);
+        // **`clip-path` runs AFTER `filter`, and the order is not arbitrary** (CSS Masking §:
+        // filter, then clip, then mask, then opacity). Clipping first would let the blur smear
+        // colour back across the edge the clip had just cut, which is the visible difference
+        // between a hard-edged shape and a fuzzy one.
+        for (shape, reference) in &g.shapes {
+            // The reference box is in page space like the items, so it takes the same offset.
+            let rb = Rect {
+                x: reference.x + dx,
+                y: reference.y + dy,
+                width: reference.width,
+                height: reference.height,
+            };
+            filters::apply_clip_shape(&mut scratch, shape, rb);
+        }
         pixmap.draw_pixmap(
             x0 as i32,
             y0 as i32,
@@ -1423,7 +1467,7 @@ fn fill_rect(pixmap: &mut tiny_skia::Pixmap, rect: Rect, color: Rgba) {
 }
 
 /// A rounded-rectangle path (uniform corner radius), clamped so the corners never overlap.
-fn round_rect_path(rect: Rect, radius: f32) -> Option<tiny_skia::Path> {
+pub(crate) fn round_rect_path(rect: Rect, radius: f32) -> Option<tiny_skia::Path> {
     let (x, y, w, h) = (rect.x, rect.y, rect.width, rect.height);
     if w <= 0.0 || h <= 0.0 {
         return None;

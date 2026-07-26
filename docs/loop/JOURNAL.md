@@ -24979,3 +24979,76 @@ either. Then `font-display`/`unicode-range` (cheap, adjacent to the t557/t558 fo
 `getComputedStyle().filter` CSSOM half, which folds into whichever CSSOM tick comes next. Then the
 `interpolate-size` SIGSEGV, re-priced from exotic to one page load in twelve.
 Cadences: self-audit 594; surface 598; const 599; wall 607.
+
+## Tick 593 — `clip-path` out of the same offscreen group, and `inset(50%)` is the case that had to clip everything (2026-07-25)
+
+t592 built an offscreen paint group so `filter` would have somewhere to run. This tick is the return
+on that: `clip-path` (43.8% of page loads, in exactly the state `filter` had been in — parsed,
+computed, never read) landed in one short tick, because **a clip mask applies to precisely the
+surface a filter pipeline runs over**. Same four links (`ComputedStyle` → `LayoutBox` → `PaintGroup`,
+composed down the subtree), and the raster step is two `tiny-skia` calls. That is the argument for
+building the group properly rather than special-casing blur, and it is worth naming *because the
+cheapness is the evidence*, not a coincidence.
+
+`inset()` (incl. `round`), `circle()`, `ellipse()`, `polygon()` (both fill rules) are supported.
+`path()` / `shape()` / `url(#svgclip)` map to `None` — honestly unclipped, not a variant nothing
+draws.
+
+**MEASURED FIRST, per §VI.3, AND THE FAILURE IS NOT UNIFORMLY COSMETIC.** A round avatar rendering
+square is a blemish. Two cases are not: a `polygon()` diagonal section divider renders as a
+full-bleed rectangle **covering the content beneath it** — because the part the author clipped away
+is exactly the overlapping part — and `clip-path: inset(50%)` is Bootstrap 5's `.visually-hidden`,
+the modern replacement for `clip: rect(0,0,0,0)`. Ignore that one and **screen-reader-only text
+renders on the page**. Pricing this row off "avatars look square" would have been the t590 mistake
+in reverse: measuring the *pretty* use and missing the *load-bearing* one.
+
+**SO THE ONE PLACE THE MODULE'S DEFAULT IS WRONG IS THE EMPTY REGION.** `apply_clip_shape` fails
+**open** everywhere else — a degenerate radius or a two-point polygon clips *nothing*, because an
+unclipped element is visibly wrong and fixable while an erased one reads as content that was never
+there. But overlapping insets are not a failure, they are the request. Clamping that rect to
+non-negative is the obvious defensive move and it is the bug. **An author can ask for nothing, and
+"nothing" is an answer a renderer has to be able to give** — the `opacity: 0` fade-in lesson with the
+sign flipped.
+
+**TWO NON-OBVIOUS INVARIANTS, BOTH GATED.** The reference box is the box that **declared** the clip,
+not the descendant being painted (`circle(50%)` inside a clipped section still means 50% *of the
+section*) — get it wrong and the shape still draws, percentages still resolve, and it merely looks
+like a layout bug. And the clip runs **after** the filter, per CSS Masking's `filter → clip → mask →
+opacity`; clipping first would let a blur smear colour back across the edge just cut.
+
+**RESIDUE THE GATE ITSELF FOUND, NAMED RATHER THAN PAPERED OVER.** The subtree test was first written
+with a `position: absolute` child and failed. `position_absolutes` re-parents an abspos box out of
+its ancestor's subtree, so a paint-time tree walk cannot see it and neither `clip-path` nor
+`overflow: hidden` clips it — a **box-tree** limitation shared by both, not a clip-path one. The test
+now uses an in-flow child (the dominant real case) and the limitation is written down in three
+places rather than silently rewritten away.
+
+`clip-path` leaves `UNRENDERED_LONGHANDS` and its `G_SUPPORTS_HONESTY` term moves to `clip:true`.
+That trade is now explicit in the row: `@supports (clip-path: path(…))` becomes a yes about a form we
+do not draw — a **narrower** lie than the one retired, taken deliberately because the basic shapes
+are what pages actually branch on.
+
+RED-PROVEN: bypass `apply_clip_shape` → the circle's corners stay red and the nested test's corner
+stays blue; both gate tests fail. `manuk-css --features stylo` 42/42, the four affected page gates
+green, full workspace `--all-targets` clean.
+
+TICK SHAPE: capability (`clip-path` renders end-to-end on 43.8% of page loads) — the second
+capability out of one tick's infrastructure, which is the point of the entry. Bar 0 untouched; no
+ratchet floor moved; the unclipped, unfiltered paint path is unchanged.
+Gates: `G_CLIP_PATH` (`engine/page/tests/g_clip_path.rs`, two tests — the four shapes with a vacuity
+guard, and subtree-with-declaring-box; both RED-proven); `G_SUPPORTS_HONESTY` term flipped with the
+capability.
+WIKI: docs/wiki/box-layout.md — "`clip-path` — the second capability out of the same offscreen group,
+at a fraction of the price".
+PATTERN: [no-pattern] — the same `filter` plumbing shape from t592, applied a second time; the
+generalisable observation (build the group, get the next property nearly free) is in the wiki.
+
+NEXT: **`mix-blend-mode` (12.9%) — MEASURE FIRST, and the measurement question is specific**: it needs
+the group's *backdrop*, which is the same missing input as `backdrop-filter` (34.3%). Find out whether
+one mechanism (compositing the group against what is already on the canvas under its ink box, rather
+than against transparency) buys **both** before pricing either — if it does, that is a 47% combined
+row and it outranks everything else in the bundle. Then `font-display`/`unicode-range` (cheap,
+adjacent to the t557/t558 font arc). Then the CSSOM half of the visual-effects bundle
+(`getComputedStyle().filter` / `.clipPath`, the t576/t590 `undefined`-not-a-string class), which is
+now three properties deep and worth one tick together. Then the `interpolate-size` SIGSEGV.
+Cadences: self-audit 594 (NEXT TICK); surface 598; const 599; wall 607.

@@ -2138,8 +2138,13 @@ const UNRENDERED_LONGHANDS: &[&str] = &[
     //
     // `backdrop-filter` stays, and the distinction is not pedantry: it filters what is painted
     // BEHIND the element, which is a different input we do not have at group-paint time.
+    //
+    // `clip-path` LEFT at tick 593 — the four basic shapes (`inset`/`circle`/`ellipse`/`polygon`)
+    // clip the group's offscreen surface. `path()`/`shape()`/`url()` still do not, which is a
+    // narrower "no" than this list can express: `@supports (clip-path: circle(50%))` is now honestly
+    // yes and `@supports (clip-path: path(...))` is honestly-yes-but-unrendered. Taking the yes is
+    // the right trade — the basic shapes are what pages branch on.
     "backdrop-filter",
-    "clip-path",
     "mix-blend-mode",
     "isolation",
     "writing-mode",
@@ -2275,22 +2280,23 @@ mod tests {
         //    **`filter` LEFT THIS SET AT TICK 592** — it is rendered now, so the honest answer
         //    flipped a second time and its assertion moved down to the rendered group. Two flips in
         //    two ticks is not churn: t591 corrected a lie, t592 removed the reason for it.
-        assert!(!supports_condition("clip-path: circle(50%)"));
+        // `clip-path` moved to the rendered set at t593 (basic shapes).
         assert!(!supports_condition("mix-blend-mode: multiply"));
         assert!(!supports_condition("isolation: isolate"));
         assert!(!supports_condition("writing-mode: vertical-rl"));
         // …and composition still resolves through Stylo for the remaining list too.
-        assert!(supports_condition("not (clip-path: circle(50%))"));
+        assert!(supports_condition("not (mix-blend-mode: multiply)"));
         assert!(!supports_condition(
-            "(display: flex) and (clip-path: circle(50%))"
+            "(display: flex) and (mix-blend-mode: multiply)"
         ));
         assert!(supports_condition(
-            "(display: flex) or (clip-path: circle(50%))"
+            "(display: flex) or (mix-blend-mode: multiply)"
         ));
         // ── …and the properties that ARE rendered must keep answering yes, or the fix has traded a
         //    false yes for a worse false no. Three of them arrive through the MinimalCascade
         //    recovery block rather than a `clone_*` accessor.
         assert!(supports_condition("filter: blur(4px)"));
+        assert!(supports_condition("clip-path: circle(50%)"));
         assert!(supports_condition(
             "(display: flex) and (filter: blur(4px))"
         ));

@@ -1276,3 +1276,49 @@ that is a compositor-order change, not another entry in the pipeline. Also open:
 .filter` is still `undefined` (the CSSOM half of the t576/t590 class), `url()` SVG filter references
 need an SVG filter graph, and a filter does not yet establish a containing block for its fixed/abspos
 descendants.
+
+## `clip-path` — the second capability out of the same offscreen group, at a fraction of the price (tick 593)
+
+`clip-path` is 43.8% of page loads and was in exactly the state `filter` had been in the tick before:
+Stylo parsed and computed it, nothing read it, every clipped element rendered as its full rectangle.
+It landed in one short tick because **t592's offscreen paint group is precisely the surface a clip
+mask applies to** — the plumbing (`ComputedStyle` → `LayoutBox` → `PaintGroup`, composed down the
+subtree with the declaring element's box) is the same four links, and the raster step is
+`Mask::fill_path` + `Pixmap::apply_mask`. That is the argument for building the group properly the
+first time rather than special-casing blur.
+
+Supported: `inset()` (including `round`), `circle()`, `ellipse()`, `polygon()` (both fill rules).
+`path()`, `shape()` and `url(#svgclip)` need an SVG path graph and map to **`None`** — honestly
+unclipped, rather than a variant nothing draws.
+
+**Two things about the shape are not obvious and both are load-bearing.**
+
+**The reference box is the box that DECLARED the clip, not the box being painted.** A `clip-path` on
+a section applies to everything inside it, but `circle(50%)` still means 50% of *the section*. Get
+this wrong and the shape still draws, percentages still resolve, and the result merely looks like a
+layout bug — which is why the gate nests a child inside a clipped ancestor and asserts the ancestor's
+circle, not the child's.
+
+**The clip runs AFTER the filter**, per CSS Masking's `filter → clip → mask → opacity` order.
+Clipping first would let a blur smear colour back across the edge the clip just cut, which is the
+whole visible difference between a hard-edged shape and a fuzzy one.
+
+### `inset(50%)` must be allowed to clip everything, and it is the one place the module's default is wrong
+
+`apply_clip_shape` fails **open**: a degenerate radius or a two-point polygon clips *nothing*. That is
+deliberate — an unclipped element is visibly wrong and fixable, an erased one reads as content that
+was never there. But overlapping insets are not a failure, they are the point: `clip-path: inset(50%)`
+is Bootstrap 5's `.visually-hidden` and the modern replacement for `clip: rect(0,0,0,0)`. Clamping
+that rect to non-negative — the obvious defensive move — renders the screen-reader-only text the rule
+exists to remove. So the empty region is an explicit branch, and the gate asserts three points inside
+the box are all still page-white.
+
+This is the same lesson as the `opacity: 0` fade-in, with the sign flipped: **an author can ask for
+nothing, and "nothing" is an answer a renderer has to be able to give.**
+
+⚠ **RESIDUE, found by this tick's own gate.** A `position: absolute` descendant is hoisted out of its
+ancestor's box subtree by `position_absolutes`, so a paint-time tree walk cannot see it and neither
+`clip-path` nor `overflow: hidden` clips it. That is a box-tree limitation shared by both, not a
+clip-path one. Also open: `getComputedStyle().clipPath` is `undefined`, and `@supports (clip-path:
+path(…))` is now a yes about a form we do not draw — a narrower lie than the one retired, named here
+so it is not mistaken for coverage.

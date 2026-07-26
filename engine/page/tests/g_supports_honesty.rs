@@ -63,10 +63,10 @@ const HTML: &str = r##"<!doctype html><html><head><style>
   R.push('bdf:' + s('backdrop-filter: blur(4px)'));
   R.push('op:'  + s('offset-path: none'));
   // ── The SECOND category (t591): parsed NATIVELY, behind no pref, still not rendered.
-  R.push('clip:' + s('clip-path: circle(50%)'));
   R.push('wm:' + s('writing-mode: vertical-rl'));
   // ── The guard: the ones that are genuinely rendered must still answer yes.
   R.push('flt:'  + s('filter: blur(4px)'));
+  R.push('clip:' + s('clip-path: circle(50%)'));
   R.push('us:'   + s('user-select: none'));
   R.push('csch:' + s('color-scheme: dark'));
   R.push('mi:'   + s('mask-image: url(a.svg)'));
@@ -126,7 +126,14 @@ fn supports_answers_for_what_we_render_not_for_what_stylo_parses() {
              ever lost this goes red HERE as well as there. `backdrop-filter` stays a no: it filters \
              what is painted BEHIND the element, a different input",
         ),
-        ("clip:false", "`clip-path` (43.8% of page loads) — parsed natively, never read"),
+        (
+            "clip:true",
+            "`clip-path` (43.8% of page loads) followed `filter` across at tick 593 — the four basic \
+             shapes clip the group's offscreen surface (G_CLIP_PATH). It is the same shape of move \
+             and, notably, the same MECHANISM: the offscreen group t592 built for `filter` is \
+             exactly the surface a clip mask applies to, which is why the second capability cost a \
+             fraction of the first",
+        ),
         ("wm:false", "`writing-mode` — the same, and the axis the CJK story stops short of"),
         (
             "us:true",

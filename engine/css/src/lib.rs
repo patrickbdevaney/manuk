@@ -779,6 +779,56 @@ pub enum FilterOp {
     },
 }
 
+/// A `<shape-radius>` — the radius of a `circle()`/`ellipse()` clip.
+///
+/// A percentage here does **not** resolve against a box side. `circle(50%)` resolves against
+/// `sqrt(w² + h²) / √2`, the CSS "reference box diagonal", which is why the radius carries its own
+/// type instead of reusing [`Dim`]'s resolver: handing it a width would make every non-square
+/// avatar the wrong size, and in the direction that clips the face.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ShapeRadius {
+    Len(Dim),
+    /// Distance to the nearest side of the reference box — the default for `circle()`.
+    ClosestSide,
+    FarthestSide,
+}
+
+/// A `clip-path` basic shape. Coordinates are relative to the element's **border box**.
+///
+/// `path()`, `shape()` and `url(#svgclip)` are deliberately absent: they need an SVG path/filter
+/// graph, and modelling them here as a variant nothing draws is exactly the "parses, never renders"
+/// lie this engine spent two ticks removing. A `clip-path` we cannot draw stays `None`, which
+/// renders the element unclipped — visibly wrong, but not silently wrong.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ClipShape {
+    /// `inset(top right bottom left round <radius>)` — insets from each edge of the reference box.
+    Inset {
+        top: Dim,
+        right: Dim,
+        bottom: Dim,
+        left: Dim,
+        /// A uniform corner radius (`round`), px only — the elliptical/per-corner forms are residue.
+        round: f32,
+    },
+    Circle {
+        cx: Dim,
+        cy: Dim,
+        r: ShapeRadius,
+    },
+    Ellipse {
+        cx: Dim,
+        cy: Dim,
+        rx: ShapeRadius,
+        ry: ShapeRadius,
+    },
+    /// `polygon(<fill-rule>? x y, …)` — the diagonal section dividers and angled banners.
+    Polygon {
+        /// `evenodd` rather than the default `nonzero`.
+        even_odd: bool,
+        points: Vec<(Dim, Dim)>,
+    },
+}
+
 /// A `text-shadow` layer: `offset-x offset-y [blur] [color]`. Like `box-shadow` but with no spread and
 /// no `inset` — it paints the run's glyphs a second time, offset and (eventually) blurred, behind the
 /// text. `text-shadow` is inherited.
@@ -962,6 +1012,12 @@ pub struct ComputedStyle {
     /// visual effects, has no cascade-level fallback: a page that asks for a blur and gets a sharp
     /// image is not degraded, it is wrong — the frosted bar it drew its text over is now opaque.
     pub filter: Vec<FilterOp>,
+    /// `clip-path` — the element's own shape, or `None` for `none`/`url()`/`path()`/`shape()`.
+    /// Coordinates resolve against this element's **border box**, so paint carries the box along
+    /// with the shape. Like [`Self::filter`] it clips the element AND its subtree as a group.
+    ///
+    /// 43.8% of page loads (Blink use counters, surface audit #32).
+    pub clip_path: Option<ClipShape>,
     pub width: Dim,
     /// The **intrinsic sizing keyword** on `width`, if any. `width` itself collapses to `Dim::Auto`
     /// for length resolution (an intrinsic width is content-driven, not a length), but unlike a plain
@@ -1135,6 +1191,7 @@ impl ComputedStyle {
             box_shadows: Vec::new(),
             text_shadow: None,
             filter: Vec::new(),
+            clip_path: None,
             width: Dim::Auto,
             width_keyword: None,
             width_stretch: false,
