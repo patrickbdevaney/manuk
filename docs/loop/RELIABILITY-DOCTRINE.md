@@ -55,10 +55,15 @@ Phase-0 measurement — generalised to the whole loop.
 ### 2. Inaccurate instruments → no metric is trusted until falsify-proven
 - **Done:** `falsify.sh` mutation-tests the gate wall; the pre-commit hook requires a gate be RED-proven;
   the certificate now falsifies each of its own terms (t583, agent).
-- **Fix (observer to build):** extend the "must ship with a RED proof" rule from GATES to INSTRUMENT
+- **Fix (observer):** extend the "must ship with a RED proof" rule from GATES to INSTRUMENT
   METRICS (the cert numbers, the RSS figure, any published %). A metric committed without a falsify test
   that demonstrably moves it is a hypothesis, not a measurement — flag it. Every ratio carries its N;
   `0/0` is `UNSCORED-against-bar`, never a pass (generalise `CERT_MIN_SHAPE_SAMPLE`).
+- **PATTERN BUILT (t602, `map-reconcile.sh --self-test`):** an observer instrument ships with a `--self-test`
+  that runs the real check against a SYNTHETIC fixture of known-good + known-bad input and asserts it reports
+  exactly that — proving the instrument can BOTH fire (on the 2 planted drift rows) and NOT false-fire (on
+  the 1 valid row). This turns "I proved it honest by hand" (catching map-reconcile's own 90 false positives)
+  into a standing, CI-runnable falsify-proof. Extend the same `--self-test` to every metric-producing script.
 
 ### 3 & 4. Re-implementation AND false presence → the map is a PROJECTION of the gate wall
 Both are map-drift, and they have ONE fix: **`status` must be COMPUTED, not hand-set.** The constellation

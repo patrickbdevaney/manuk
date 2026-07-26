@@ -14,8 +14,32 @@
 # tick on legacy drift. `--strict` returns non-zero on any drift, for that future wiring + CI.
 set -uo pipefail
 cd "$(dirname "$0")/.." 2>/dev/null || exit 0
-MAP=docs/loop/CONSTELLATION.tsv
+MAP="${MANUK_MAP:-docs/loop/CONSTELLATION.tsv}"
 STRICT=0; [ "${1:-}" = "--strict" ] && STRICT=1
+
+# --self-test: falsify-prove the instrument itself (RELIABILITY-DOCTRINE Cat A §2 — a metric you have not
+# proven can BOTH fire and not-fire is a hypothesis, not a measurement). Run the real check against a
+# synthetic map with one KNOWN-ok + one KNOWN-bare + one KNOWN-dangling row, and assert it reports exactly
+# that. If it doesn't, the drift numbers cannot be trusted and this exits LOUD (non-zero).
+if [ "${1:-}" = "--self-test" ]; then
+  FIX=$(mktemp)
+  {
+    printf 'class\tcapability\twhat\tstatus\tgate\treceipt\n'
+    printf 'test\tOK-row\tx\tworks\tG_SELECTOR\t-\n'                    # real gate -> must be OK
+    printf 'test\tBARE-row\tx\tworks\t-\t-\n'                           # gate '-' + claim -> bare drift
+    printf 'test\tDANGLE-row\tx\tgated\tG_DOES_NOT_EXIST_XYZ\t-\n'      # fake gate -> dangling drift
+  } > "$FIX"
+  OUT=$(MANUK_MAP="$FIX" "$0" 2>&1); rm -f "$FIX"
+  got=$(printf '%s\n' "$OUT" | grep -oE 'DRIFT TOTAL: [0-9]+' | grep -oE '[0-9]+' | head -1)
+  okc=$(printf '%s\n' "$OUT" | grep -oE 'real gate\): [0-9]+' | grep -oE '[0-9]+' | head -1)
+  echo "self-test: fixture (1 ok + 1 bare + 1 dangling) -> instrument reported DRIFT=${got:-?} OK=${okc:-?}"
+  if [ "${got:-x}" = "2" ] && [ "${okc:-x}" = "1" ]; then
+    echo "✓ SELF-TEST PASS — fires on real drift (bare+dangling), does NOT false-fire on a valid row. Falsify-proven."
+    exit 0
+  fi
+  echo "✗ SELF-TEST FAIL — map-reconcile is BROKEN (expected DRIFT=2 OK=1). Its drift numbers are NOT trustworthy." >&2
+  exit 1
+fi
 [ -f "$MAP" ] || { echo "map-reconcile: $MAP not found"; exit 0; }
 
 # Precompute the set of existing gate-test basenames (g_foo from .../tests/g_foo.rs) ONCE — the fuzzy
