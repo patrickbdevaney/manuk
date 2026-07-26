@@ -835,6 +835,8 @@ impl DisplayList {
                     filters: filters.to_vec(),
                     shapes: shapes.to_vec(),
                     blend,
+                    backdrop: b.backdrop.clone(),
+                    bounds: b.rect,
                     items,
                 });
             }
@@ -876,6 +878,11 @@ pub(crate) struct PaintGroup {
     /// `mix-blend-mode` for this group. Anything but `Normal` forces the offscreen path, because a
     /// blend needs the group's own pixels SEPARATE from the backdrop it is blending against.
     pub blend: manuk_css::BlendMode,
+    /// `backdrop-filter` for this box — its OWN value, never inherited (see `LayoutBox::backdrop`).
+    pub backdrop: Vec<manuk_css::FilterOp>,
+    /// This box's own border box, in page coordinates. `backdrop-filter` is confined to it, and it
+    /// is the one thing a display list of loose items cannot reconstruct.
+    pub bounds: Rect,
     pub items: Vec<DisplayItem>,
 }
 
@@ -1123,6 +1130,11 @@ impl CpuPainter<'_> {
                 width: c.width,
                 height: c.height,
             });
+            // `backdrop-filter` runs BEFORE the element's own content: it filters what is already
+            // on the canvas, in place, and the element then paints over the result.
+            if !g.backdrop.is_empty() {
+                self.filter_the_backdrop(&mut pixmap, g, clip, scroll_y);
+            }
             if g.filters.is_empty() && g.shapes.is_empty() && !g.blend.is_blending() {
                 for item in &g.items {
                     self.draw_item(&mut pixmap, item, clip, 0.0, -scroll_y);
@@ -1224,6 +1236,65 @@ impl CpuPainter<'_> {
             scratch.as_ref(),
             &tiny_skia::PixmapPaint {
                 blend_mode: blend_mode(g.blend),
+                ..Default::default()
+            },
+            tiny_skia::Transform::identity(),
+            None,
+        );
+    }
+
+    /// `backdrop-filter` — filter what is ALREADY PAINTED behind this box, in place.
+    ///
+    /// This is the one member of the visual-effects bundle that needed genuinely new code rather
+    /// than a new field, and the reason is worth stating: every other property here operates on the
+    /// element's own pixels, which the offscreen group already separates out. This one operates on
+    /// the pixels the element is about to cover. So it reads the canvas region back, filters that
+    /// copy, and writes it down again with `Source` (a replace, not a blend) — after which the
+    /// normal group path paints the element on top exactly as before.
+    ///
+    /// It is confined to the box's own border box, which is why `PaintGroup` carries `bounds`: the
+    /// blur must stop at the frosted panel's edge, not bleed across the page.
+    fn filter_the_backdrop(
+        &self,
+        pixmap: &mut tiny_skia::Pixmap,
+        g: &PaintGroup,
+        clip: Option<Rect>,
+        scroll_y: f32,
+    ) {
+        let mut r = Rect {
+            x: g.bounds.x,
+            y: g.bounds.y - scroll_y,
+            width: g.bounds.width,
+            height: g.bounds.height,
+        };
+        if let Some(cl) = clip {
+            r = r.intersect(&cl);
+        }
+        let x0 = r.x.floor().max(0.0);
+        let y0 = r.y.floor().max(0.0);
+        let x1 = (r.x + r.width).ceil().min(pixmap.width() as f32);
+        let y1 = (r.y + r.height).ceil().min(pixmap.height() as f32);
+        if x1 <= x0 || y1 <= y0 {
+            return;
+        }
+        let Some(irect) =
+            tiny_skia::IntRect::from_xywh(x0 as i32, y0 as i32, (x1 - x0) as u32, (y1 - y0) as u32)
+        else {
+            return;
+        };
+        let Some(mut back) = pixmap.clone_rect(irect) else {
+            return;
+        };
+        apply_filters(&mut back, &g.backdrop);
+        pixmap.draw_pixmap(
+            x0 as i32,
+            y0 as i32,
+            back.as_ref(),
+            &tiny_skia::PixmapPaint {
+                // REPLACE, not composite: the filtered copy IS the backdrop now. Compositing it
+                // source-over its own unfiltered original would leave the sharp version showing
+                // through wherever the filter reduced alpha.
+                blend_mode: tiny_skia::BlendMode::Source,
                 ..Default::default()
             },
             tiny_skia::Transform::identity(),

@@ -354,3 +354,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 592	315394ee	1785033729	2026-07-25T22:42:09-04:00	2501	capability	85	15	1654	518	288	81	3896	6960	0	338	31	`filter` for real: the pipeline reaches the pixels, and the blur nearly shipped as a fade (2026-07-25)
 593	5f2f2671	1785035244	2026-07-25T23:07:24-04:00	1515	capability	85	15	676	47	289	81	3896	6960	0	338	31	`clip-path` out of the same offscreen group, and `inset(50%)` is the case that had to clip everything (2026-07-25)
 594	eb30c9a2	1785036709	2026-07-25T23:31:49-04:00	1465	self-audit	85	14	778	356	290	81	3896	6960	0	338	31	SELF-AUDIT #? (due) + `mix-blend-mode`: the composite-back IS the backdrop (2026-07-25)
+595	68701494	1785037883	2026-07-25T23:51:23-04:00	1174	capability	85	14	430	83	291	81	3896	6960	0	338	31	`backdrop-filter`: the bundle closes, and the property that was LAST is the one that justifies the split (2026-07-25)

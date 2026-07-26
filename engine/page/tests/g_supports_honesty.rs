@@ -4,7 +4,7 @@
 //! A progressive-enhancement branch is a **bet on the browser's answer**. When a page writes
 //!
 //! ```css
-//! @supports (backdrop-filter: blur(8px)) { .bar { background: rgba(255,255,255,.4) } }
+//! @supports (isolation: isolate) { .layer { /* enhancement that needs an unread property */ } }
 //! ```
 //!
 //! a "yes" makes it throw away the opaque fallback it wrote for browsers that cannot blur — and if
@@ -51,7 +51,7 @@ const HTML: &str = r##"<!doctype html><html><head><style>
   @supports (user-select: none) { #enh { color: rgb(0, 128, 0); } }
   /* A property we do NOT render: the branch must NOT be taken, or the page has thrown away a
      fallback that was working. */
-  @supports (backdrop-filter: blur(4px)) { #enh { color: rgb(255, 0, 0); } }
+  @supports (isolation: isolate) { #enh { color: rgb(255, 0, 0); } }
 </style></head><body>
 <div id="enh">enhanced?</div>
 <div id="out">-</div>
@@ -60,7 +60,6 @@ const HTML: &str = r##"<!doctype html><html><head><style>
   var s = function(c) { return CSS.supports(c); };
   // ── The lie: three properties Stylo parses under the pref and this engine never reads.
   R.push('vtn:' + s('view-transition-name: none'));
-  R.push('bdf:' + s('backdrop-filter: blur(4px)'));
   R.push('op:'  + s('offset-path: none'));
   // ── The SECOND category (t591): parsed NATIVELY, behind no pref, still not rendered.
   R.push('wm:' + s('writing-mode: vertical-rl'));
@@ -68,6 +67,7 @@ const HTML: &str = r##"<!doctype html><html><head><style>
   R.push('flt:'  + s('filter: blur(4px)'));
   R.push('clip:' + s('clip-path: circle(50%)'));
   R.push('mbm:'  + s('mix-blend-mode: multiply'));
+  R.push('bdf:'  + s('backdrop-filter: blur(4px)'));
   R.push('us:'   + s('user-select: none'));
   R.push('csch:' + s('color-scheme: dark'));
   R.push('mi:'   + s('mask-image: url(a.svg)'));
@@ -111,10 +111,15 @@ fn supports_answers_for_what_we_render_not_for_what_stylo_parses() {
              here takes its view-transition branch against an engine that never reads the property",
         ),
         (
-            "bdf:false",
-            "`backdrop-filter` is the costliest instance: a page that believes us drops the OPAQUE \
-             fallback it wrote for browsers that cannot blur, and its text lands unreadable over a \
-             photo. A false yes is strictly worse than a no, because a no keeps a working page",
+            "bdf:true",
+            "**THE ONE THIS GATE WAS WRITTEN AROUND, retired at tick 595.** `backdrop-filter` was the \
+             costliest possible false yes — a page told yes drops the OPAQUE fallback it shipped for \
+             engines that cannot blur and its text lands unreadable over a photo — and it stayed an \
+             honest NO for three ticks while `filter`, `clip-path` and `mix-blend-mode` landed \
+             around it, because it needs a different INPUT (what is painted behind the element) and \
+             not merely a different operation. It is now genuinely rendered (G_BACKDROP_FILTER), so \
+             the yes is true. If the rendering is ever lost this must go back to `false` in the same \
+             commit — the whole point of this file is that the answer follows the capability",
         ),
         ("op:false", "`offset-path` — same class, a third unread property"),
         (
@@ -187,7 +192,7 @@ fn supports_answers_for_what_we_render_not_for_what_stylo_parses() {
         color_of(&page, "#enh"),
         (0, 128, 0),
         "G_SUPPORTS_HONESTY: the `@supports (user-select: none)` branch must APPLY (green) and the \
-         `@supports (backdrop-filter: blur(4px))` branch must NOT (red). Getting red means the \
+         `@supports (isolation: isolate)` branch must NOT (red). Getting red means the \
          cascade took an enhancement branch for a property it does not render — the same lie as \
          `CSS.supports()` telling the page yes, but with the fallback already thrown away."
     );

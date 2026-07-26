@@ -247,6 +247,11 @@ pub struct LayoutBox {
     /// `mix-blend-mode` — how this box's group composites against what is already painted beneath
     /// it. `Normal` (the overwhelming majority) keeps the box on the direct-to-canvas paint path.
     pub blend: manuk_css::BlendMode,
+    /// `backdrop-filter` — this box's OWN list, and deliberately **not** propagated to descendants
+    /// the way `filter` is. `filter` applies to the subtree as a group; `backdrop-filter` applies to
+    /// what is behind *this box*, once. Inheriting it would re-filter the same backdrop for every
+    /// descendant group — both wrong and expensive.
+    pub backdrop: Vec<manuk_css::FilterOp>,
     /// `visibility: hidden|collapse` — the box still OCCUPIES its space but is not painted.
     pub hidden: bool,
     /// `mask-image: url(...)` — the icon shape. The background is painted THROUGH this mask's
@@ -749,6 +754,7 @@ pub fn layout_document(
             filters: Vec::new(),
             clip_path: None,
             blend: manuk_css::BlendMode::Normal,
+            backdrop: Vec::new(),
             hidden: false,
             mask_image: None,
             background_images: Vec::new(),
@@ -2217,6 +2223,7 @@ impl Ctx<'_> {
             filters: s.filter.clone(),
             clip_path: s.clip_path.clone(),
             blend: s.mix_blend_mode,
+            backdrop: s.backdrop_filter.clone(),
             hidden: s.visibility != manuk_css::Visibility::Visible,
             mask_image: s.mask_image.clone(),
             background_images: s.background_images.clone(),
@@ -2439,6 +2446,7 @@ impl Ctx<'_> {
                     filters: Vec::new(),
                     clip_path: None,
                     blend: manuk_css::BlendMode::Normal,
+                    backdrop: Vec::new(),
                     hidden: false,
                     mask_image: None,
                     background_images: Vec::new(),
@@ -2647,6 +2655,7 @@ impl Ctx<'_> {
             filters: s.filter.clone(),
             clip_path: s.clip_path.clone(),
             blend: s.mix_blend_mode,
+            backdrop: s.backdrop_filter.clone(),
             hidden: s.visibility != manuk_css::Visibility::Visible,
             mask_image: s.mask_image.clone(),
             background_images: s.background_images.clone(),
@@ -3156,6 +3165,7 @@ impl Ctx<'_> {
                 filters: rs.map(|s| s.filter.clone()).unwrap_or_default(),
                 clip_path: rs.and_then(|s| s.clip_path.clone()),
                 blend: rs.map(|s| s.mix_blend_mode).unwrap_or_default(),
+                backdrop: rs.map(|s| s.backdrop_filter.clone()).unwrap_or_default(),
                 hidden: rs
                     .map(|s| s.visibility != manuk_css::Visibility::Visible)
                     .unwrap_or(false),
@@ -3200,6 +3210,7 @@ impl Ctx<'_> {
             filters: s.filter.clone(),
             clip_path: s.clip_path.clone(),
             blend: s.mix_blend_mode,
+            backdrop: s.backdrop_filter.clone(),
             hidden: s.visibility != manuk_css::Visibility::Visible,
             mask_image: s.mask_image.clone(),
             background_images: s.background_images.clone(),
@@ -3448,6 +3459,7 @@ impl Ctx<'_> {
                 filters: s.filter.clone(),
                 clip_path: s.clip_path.clone(),
                 blend: s.mix_blend_mode,
+                backdrop: s.backdrop_filter.clone(),
                 hidden: s.visibility != manuk_css::Visibility::Visible,
                 mask_image: s.mask_image.clone(),
                 background_images: s.background_images.clone(),
@@ -3553,6 +3565,7 @@ impl Ctx<'_> {
                         filters: Vec::new(),
                         clip_path: None,
                         blend: manuk_css::BlendMode::Normal,
+                        backdrop: Vec::new(),
                         hidden: false,
                         mask_image: None,
                         background_images: Vec::new(),
@@ -3840,6 +3853,7 @@ impl Ctx<'_> {
             filters: s.filter.clone(),
             clip_path: s.clip_path.clone(),
             blend: s.mix_blend_mode,
+            backdrop: s.backdrop_filter.clone(),
             hidden: s.visibility != manuk_css::Visibility::Visible,
             mask_image: s.mask_image.clone(),
             background_images: s.background_images.clone(),
@@ -3923,6 +3937,7 @@ impl Ctx<'_> {
             filters: Vec::new(),
             clip_path: None,
             blend: manuk_css::BlendMode::Normal,
+            backdrop: Vec::new(),
             hidden: false,
             mask_image: None,
             background_images: Vec::new(),
@@ -4061,6 +4076,7 @@ impl Ctx<'_> {
                 filters: s.filter.clone(),
                 clip_path: s.clip_path.clone(),
                 blend: s.mix_blend_mode,
+                backdrop: s.backdrop_filter.clone(),
                 hidden: s.visibility != manuk_css::Visibility::Visible,
                 mask_image: s.mask_image.clone(),
                 background_images: s.background_images.clone(),
@@ -4102,6 +4118,7 @@ impl Ctx<'_> {
                 filters: Vec::new(),
                 clip_path: None,
                 blend: manuk_css::BlendMode::Normal,
+                backdrop: Vec::new(),
                 // `visibility` and `opacity`-as-folded ARE readable off a text node in both
                 // cascades, and they must be: a hidden container's text stays hidden.
                 hidden: s.visibility != manuk_css::Visibility::Visible,

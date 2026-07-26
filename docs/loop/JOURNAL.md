@@ -25121,3 +25121,69 @@ Then the CSSOM half of the whole bundle in one tick — `getComputedStyle()` ret
 `filter`, `clipPath` and `mixBlendMode`, the t576/t590 `undefined`-not-a-string class, now three
 properties deep. Then `font-display`/`unicode-range`.
 Cadences: surface 598; const 599; wall 607; self-audit 604.
+
+## Tick 595 — `backdrop-filter`: the bundle closes, and the property that was LAST is the one that justifies the split (2026-07-25)
+
+Four ticks, four properties, one mechanism: `filter` (592), `clip-path` (593), `mix-blend-mode` (594),
+`backdrop-filter` (595). By the Blink counters that is **~143% of page loads** of visual effects that
+had all been in the identical state — Stylo parsed and computed them, and nothing read the result.
+
+**`backdrop-filter` WAS LAST ON PURPOSE, AND THAT IS THE REUSABLE PART.** Every other property in the
+bundle operates on the **element's own pixels**, which t592's offscreen group already separates out,
+so each was a new *field* on the composite-back. This one operates on the pixels the element is about
+to **cover** — a different *input*, not a different operation. t592 split this row out of `filter`'s
+constellation row rather than carrying it along, and three ticks later that reads as vindicated
+rather than merely cautious: **the taxonomy that correctly predicted which capability would be cheap
+was "what does it consume", not "what does it look like".** That is a better sorting rule than usage
+% for a bundle, and it is the one I would use again.
+
+**TWO DECISIONS IN THE IMPLEMENTATION ARE WORTH KEEPING.** (1) `clone_rect` the canvas region, filter
+the copy, write it down with **`Source`** — a replace. Compositing it source-over its own unfiltered
+original would leave the sharp version showing through wherever the filter reduced alpha, a bug that
+presents as "the blur is too weak" and is actually double-drawing. (2) It is **confined to the border
+box** (`PaintGroup` gained `bounds` for this), and the gate has a *separate third claim* for that: a
+backdrop filter that blurred the whole canvas passes any "did the seam soften?" test and is
+catastrophically wrong.
+
+The `filter`/`backdrop-filter` list mapper is now **one function used twice**, not two copies. They
+share a grammar exactly, and two copies of one grammar is how a `drop-shadow` fix lands in one
+property and not the other.
+
+**THE SESSION'S RECURRING LESSON COLLECTED A FIFTH TIME, AND IN A NEW DIRECTION.** `backdrop-filter`
+was on **both** denylists — `PARSE_ONLY_LONGHANDS` (it is pref-gated) *and* `UNRENDERED_LONGHANDS`
+(t591 put it there too). Removing it from one left `CSS.supports` still answering no; the unit test
+caught it in seconds. t591's rule again — *a change scoped to the shape the problem presented in is
+one category too narrow* — but note the direction: the **fix** was fine, the **bookkeeping** was in
+two places. Both halves of a capability's honesty ("do we render it" and "why was it parseable") have
+to move together.
+
+**AND THE HONEST-NO THIS GATE WAS BUILT AROUND IS RETIRED.** `backdrop-filter` was the costliest
+possible false yes in this engine — the literal scenario `G_SUPPORTS_HONESTY`'s header describes — and
+it stayed an honest **no** for three ticks while its neighbours landed. It is now a **true** yes.
+`G_SUPPORTS_HONESTY`'s not-taken `@supports` branch moved to `isolation`, which is genuinely still
+unread, so the gate keeps testing what it was written to test rather than becoming decorative.
+
+RED-PROVEN: skip the backdrop pass → the seam under the frosted panel stays hard and the gate fails.
+`manuk-css --features stylo` 42/42, `manuk-paint` 22/22, the affected page gates green, workspace
+`--all-targets` clean.
+
+TICK SHAPE: capability (`backdrop-filter` renders on 34.3% of page loads; the visual-effects bundle
+named in the observer's CO-#1 STEP-2 list is now complete except `background-attachment`). Bar 0
+untouched; no ratchet floor moved; a box without a backdrop filter never pays the read-back.
+Gates: `G_BACKDROP_FILTER` (`engine/page/tests/g_backdrop_filter.rs`, vacuity guard + unfiltered
+control + softening + CONFINEMENT; RED-proven); `G_SUPPORTS_HONESTY` `bdf:false` → `bdf:true` and its
+cascade branch re-pointed at `isolation`.
+WIKI: docs/wiki/box-layout.md — "`backdrop-filter` — the bundle closes, and the property that was
+LAST is the one that justifies the split".
+PATTERN: [no-pattern] — no new cross-cutting pattern; the sorting rule (classify by INPUT, not by
+appearance) is recorded in the wiki and above.
+
+NEXT: **`isolation` (18.0%)** — now load-bearing rather than cosmetic, because three of this
+bundle's four properties are live and none of them is confined to a stacking context that asks to
+contain it; it is also the last row on the `UNRENDERED_LONGHANDS` list with real usage. Then the
+**CSSOM half of the whole bundle in ONE tick**: `getComputedStyle()` returns `undefined` for `filter`,
+`clipPath`, `mixBlendMode` and `backdropFilter`, which is the t576/t590 `undefined`-not-a-string class
+and now four properties deep — half the web writes `getComputedStyle(el).filter.indexOf(…)` in one
+expression and `undefined.indexOf` kills the caller's frame. Then `border-radius` on the backdrop
+region (a rounded frosted panel currently filters a square). Then `font-display`/`unicode-range`.
+Cadences: surface 598; const 599; wall 607; self-audit 604.

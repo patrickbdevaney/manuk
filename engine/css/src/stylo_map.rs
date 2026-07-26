@@ -53,6 +53,42 @@ fn lp_to_dim(lp: &LengthPercentage) -> Dim {
     }
 }
 
+/// A computed `filter` / `backdrop-filter` function list → ours.
+///
+/// **One function, two properties, on purpose.** `filter` and `backdrop-filter` take the *same*
+/// grammar and differ only in what they are applied to; two copies of this map would be two things
+/// that must stay identical forever, which is how a `drop-shadow` gets fixed in one and not the
+/// other. `Filter::Url` is `Impossible` in the servo build — the variant cannot be constructed, so
+/// there is no arm to write and none to forget.
+fn map_filter_list(
+    list: &[stylo::values::computed::effects::Filter],
+    current: &AbsoluteColor,
+) -> Vec<crate::FilterOp> {
+    use stylo::values::computed::effects::Filter as SFilter;
+    list.iter()
+        .filter_map(|f| {
+            Some(match f {
+                SFilter::Blur(l) => crate::FilterOp::Blur(l.0.px().max(0.0)),
+                SFilter::Brightness(n) => crate::FilterOp::Brightness(n.0.max(0.0)),
+                SFilter::Contrast(n) => crate::FilterOp::Contrast(n.0.max(0.0)),
+                SFilter::Grayscale(n) => crate::FilterOp::Grayscale(n.0.clamp(0.0, 1.0)),
+                SFilter::HueRotate(a) => crate::FilterOp::HueRotate(a.degrees()),
+                SFilter::Invert(n) => crate::FilterOp::Invert(n.0.clamp(0.0, 1.0)),
+                SFilter::Opacity(n) => crate::FilterOp::Opacity(n.0.clamp(0.0, 1.0)),
+                SFilter::Saturate(n) => crate::FilterOp::Saturate(n.0.max(0.0)),
+                SFilter::Sepia(n) => crate::FilterOp::Sepia(n.0.clamp(0.0, 1.0)),
+                SFilter::DropShadow(sh) => crate::FilterOp::DropShadow {
+                    dx: sh.horizontal.px(),
+                    dy: sh.vertical.px(),
+                    blur: sh.blur.0.px().max(0.0),
+                    color: abs_to_rgba(&sh.color.clone().resolve_to_absolute(current)),
+                },
+                _ => return None,
+            })
+        })
+        .collect()
+}
+
 /// `width`/`height` `Size` → `Dim` (content-keywords and `auto` collapse to `Dim::Auto`).
 fn size_to_dim(s: &Size) -> Dim {
     match s {
@@ -518,37 +554,11 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     // blur(2px)` and `blur(2px) grayscale(1)` are different pictures. Stylo's servo build parses and
     // computes this correctly and always has; the defect (t591) was that nothing ever *read* it, so
     // `@supports` answered yes to a capability that painted nothing.
-    //
-    // `Filter::Url` is `Impossible` in the servo build — the variant cannot be constructed, so there
-    // is no arm to write and none to forget.
-    {
-        use stylo::values::computed::effects::Filter as SFilter;
-        s.filter = cv
-            .clone_filter()
-            .0
-            .iter()
-            .filter_map(|f| {
-                Some(match f {
-                    SFilter::Blur(l) => crate::FilterOp::Blur(l.0.px().max(0.0)),
-                    SFilter::Brightness(n) => crate::FilterOp::Brightness(n.0.max(0.0)),
-                    SFilter::Contrast(n) => crate::FilterOp::Contrast(n.0.max(0.0)),
-                    SFilter::Grayscale(n) => crate::FilterOp::Grayscale(n.0.clamp(0.0, 1.0)),
-                    SFilter::HueRotate(a) => crate::FilterOp::HueRotate(a.degrees()),
-                    SFilter::Invert(n) => crate::FilterOp::Invert(n.0.clamp(0.0, 1.0)),
-                    SFilter::Opacity(n) => crate::FilterOp::Opacity(n.0.clamp(0.0, 1.0)),
-                    SFilter::Saturate(n) => crate::FilterOp::Saturate(n.0.max(0.0)),
-                    SFilter::Sepia(n) => crate::FilterOp::Sepia(n.0.clamp(0.0, 1.0)),
-                    SFilter::DropShadow(sh) => crate::FilterOp::DropShadow {
-                        dx: sh.horizontal.px(),
-                        dy: sh.vertical.px(),
-                        blur: sh.blur.0.px().max(0.0),
-                        color: abs_to_rgba(&sh.color.clone().resolve_to_absolute(&current)),
-                    },
-                    _ => return None,
-                })
-            })
-            .collect();
-    }
+    s.filter = map_filter_list(&cv.clone_filter().0, &current);
+
+    // `backdrop-filter` — the same function list as `filter`, so the same mapping, deliberately
+    // sharing one closure rather than a second copy that could drift from it.
+    s.backdrop_filter = map_filter_list(&cv.clone_backdrop_filter().0, &current);
 
     // `clip-path` — the four BASIC SHAPES. `path()`/`shape()`/`url()` need an SVG path graph and are
     // mapped to `None` (unclipped) rather than to a variant nothing draws: an unclipped element is

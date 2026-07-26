@@ -1059,6 +1059,15 @@ pub struct ComputedStyle {
     /// over anything are all this property; without it the overlay simply covers what it was meant to
     /// tint.
     pub mix_blend_mode: BlendMode,
+    /// `backdrop-filter` — the SAME function list as [`Self::filter`], applied to a different input:
+    /// what is already painted **behind** the element, seen through its own box. That difference is
+    /// the whole reason it stayed an honest "no" for three ticks after `filter` landed.
+    ///
+    /// 34.3% of page loads (Blink use counters, surface audit #32) — the frosted sticky header, the
+    /// glassmorphic modal, the blurred sheet behind a dialog. It is also the single costliest
+    /// property to lie about: a page that is told yes drops the opaque background it shipped for
+    /// engines that cannot blur, and its text lands unreadable over a photograph.
+    pub backdrop_filter: Vec<FilterOp>,
     pub width: Dim,
     /// The **intrinsic sizing keyword** on `width`, if any. `width` itself collapses to `Dim::Auto`
     /// for length resolution (an intrinsic width is content-driven, not a length), but unlike a plain
@@ -1234,6 +1243,7 @@ impl ComputedStyle {
             filter: Vec::new(),
             clip_path: None,
             mix_blend_mode: BlendMode::Normal,
+            backdrop_filter: Vec::new(),
             width: Dim::Auto,
             width_keyword: None,
             width_stretch: false,
@@ -4360,6 +4370,9 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         "box-shadow" => s.box_shadows = parse_box_shadows(v, s.font_size),
         "text-shadow" => s.text_shadow = parse_text_shadow(v, s.font_size),
         "filter" | "-webkit-filter" => s.filter = parse_filters(v, s.font_size),
+        "backdrop-filter" | "-webkit-backdrop-filter" => {
+            s.backdrop_filter = parse_filters(v, s.font_size)
+        }
         "mask-image" | "-webkit-mask-image" => {
             let v = v.trim();
             if let Some(rest) = v.strip_prefix("url(") {

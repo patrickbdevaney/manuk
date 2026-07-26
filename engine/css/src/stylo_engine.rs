@@ -2076,7 +2076,6 @@ const PARSE_ONLY_LONGHANDS: &[&str] = &[
     "animation-range-end",
     "animation-range-start",
     "animation-timeline",
-    "backdrop-filter",
     "contain",
     "corner-bottom-left-shape",
     "corner-bottom-right-shape",
@@ -2136,15 +2135,15 @@ const UNRENDERED_LONGHANDS: &[&str] = &[
     // list, `manuk-paint` runs the pipeline over an offscreen group). The list is meant to shorten
     // exactly this way, one entry per landed capability, each with its own evidence.
     //
-    // `backdrop-filter` stays, and the distinction is not pedantry: it filters what is painted
-    // BEHIND the element, which is a different input we do not have at group-paint time.
+    // `backdrop-filter` LEFT at tick 595 — the last member of the visual-effects bundle, and the
+    // one that genuinely needed the new input rather than a new field. This list is now down to the
+    // three properties that really are unread.
     //
     // `clip-path` LEFT at tick 593 — the four basic shapes (`inset`/`circle`/`ellipse`/`polygon`)
     // clip the group's offscreen surface. `path()`/`shape()`/`url()` still do not, which is a
     // narrower "no" than this list can express: `@supports (clip-path: circle(50%))` is now honestly
     // yes and `@supports (clip-path: path(...))` is honestly-yes-but-unrendered. Taking the yes is
     // the right trade — the basic shapes are what pages branch on.
-    "backdrop-filter",
     "isolation",
     "writing-mode",
     "text-orientation",
@@ -2267,7 +2266,6 @@ mod tests {
         //    for the four properties in that set it really renders), so Stylo alone answers yes and
         //    `PARSE_ONLY_LONGHANDS` is what makes the answer honest.
         assert!(!supports_condition("view-transition-name: foo"));
-        assert!(!supports_condition("backdrop-filter: blur(4px)"));
         assert!(!supports_condition("offset-path: none"));
         assert!(!supports_condition("mask-repeat: no-repeat"));
         // ── The SECOND category (t591): properties Stylo's servo build parses NATIVELY, behind no
@@ -2297,6 +2295,7 @@ mod tests {
         assert!(supports_condition("filter: blur(4px)"));
         assert!(supports_condition("clip-path: circle(50%)"));
         assert!(supports_condition("mix-blend-mode: multiply"));
+        assert!(supports_condition("backdrop-filter: blur(4px)"));
         assert!(supports_condition(
             "(display: flex) and (filter: blur(4px))"
         ));
@@ -2308,13 +2307,11 @@ mod tests {
         // ── COMPOSITION, which is the whole difficulty. `not (<unsupported>)` is TRUE — the case a
         //    filter that merely asked "does the text mention a banned property?" gets backwards. The
         //    condition tree is rewritten and handed back to Stylo precisely so this comes out right.
-        assert!(supports_condition("not (backdrop-filter: blur(4px))"));
+        assert!(supports_condition("not (offset-path: none)"));
         assert!(!supports_condition(
-            "(display: flex) and (backdrop-filter: blur(4px))"
+            "(display: flex) and (offset-path: none)"
         ));
-        assert!(supports_condition(
-            "(display: flex) or (backdrop-filter: blur(4px))"
-        ));
+        assert!(supports_condition("(display: flex) or (offset-path: none)"));
         assert!(supports_condition(
             "(user-select: none) and (display: flex)"
         ));

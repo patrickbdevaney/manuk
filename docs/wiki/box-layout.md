@@ -1365,3 +1365,46 @@ non-separable answer is an open item for the parity harness, which is the tool b
 ⚠ Also open: `isolation` (18.0%) is still unread, so a blend is not confined to a stacking context
 that asked to contain it; and `getComputedStyle().mixBlendMode` is `undefined` — the CSSOM half of
 this bundle is now three properties deep and worth one tick together.
+
+## `backdrop-filter` — the bundle closes, and the property that was LAST is the one that justifies the split (tick 595)
+
+Four ticks, four properties, one mechanism: `filter` (t592), `clip-path` (t593), `mix-blend-mode`
+(t594), `backdrop-filter` (t595). Together they are **~143% of page loads** by the Blink counters, and
+they were all in the same state — Stylo parsed and computed them, nothing read the result.
+
+`backdrop-filter` came last **on purpose**, and the reason is the reusable part. Every other property
+in the bundle operates on the **element's own pixels**, which t592's offscreen group already
+separates out; a new property was a new *field* on the composite. This one operates on the pixels the
+element is about to **cover** — a different *input*, not a different operation. That is precisely why
+t592 split its constellation row out of `filter`'s instead of carrying it along, and three ticks later
+that split reads as vindicated rather than merely cautious: **the taxonomy that predicted which
+capability would be cheap was "what does it consume", not "what does it look like".**
+
+The implementation is small and the two decisions in it are the ones worth keeping:
+
+- **Read back, filter, write with `Source`.** `clone_rect` the canvas region under the box, run the
+  same pipeline over the copy, and write it down as a **replace**. Compositing it source-over its own
+  unfiltered original would leave the sharp version showing through wherever the filter reduced alpha
+  — a bug that looks like "the blur is too weak" and is actually double-drawing.
+- **Confined to the border box.** `PaintGroup` gained `bounds` for this. A backdrop filter that
+  blurred the whole canvas passes any "did the seam soften?" test and is catastrophically wrong, so
+  the gate has a third, separate claim that the seam *outside* the panel is still hard.
+
+The `filter`/`backdrop-filter` list mapper is **one function used twice**, not two copies: they share
+a grammar exactly, and two copies of one grammar is how a `drop-shadow` fix lands in one property and
+not the other.
+
+### The session's recurring lesson collected a fifth time
+
+`backdrop-filter` was on **both** denylists — `PARSE_ONLY_LONGHANDS` (it is pref-gated) *and*
+`UNRENDERED_LONGHANDS` (t591 added it there too). Removing it from one left `CSS.supports` still
+answering no, and the unit test caught it immediately. This is t591's rule again, now at its fifth
+width in one session: **a change scoped to the shape the problem presented in is one category too
+narrow — grep for the class.** Note the direction, though: the *fix* was fine, the *bookkeeping* was
+in two places. Both halves of a capability's honesty — "do we render it" and "why was it parseable" —
+have to move together.
+
+⚠ Residue: the backdrop region ignores `border-radius`, so a frosted panel with rounded corners
+filters a square. `isolation` (18.0%) is still unread, so a blend or a filter is not confined to a
+stacking context that asked to contain it. And `getComputedStyle()` still returns `undefined` for all
+four of these — the CSSOM half of the bundle is one tick's work and is now the obvious next one.
