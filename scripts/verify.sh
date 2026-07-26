@@ -583,15 +583,28 @@ _crate_suite() {
   R=$(echo "$out" | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
   if [ -n "$R" ]; then ok "$c: $R"; return; fi
 
-  # No verdict. That is the instrument, not the engine — retry once, alone, with nothing else running.
-  printf '  %s⟳%s %s produced no verdict (exit %s) — retrying alone; a killed gate is not a failing gate\n' \
-    "$YEL" "$OFF" "$c" "$rc"
+  # No verdict = the INSTRUMENT faulted (signal/OOM/build-starved), NOT the engine. And a no-verdict is
+  # almost always LOAD-induced: the retry used to run immediately, but if the box was still busy from this
+  # tick's own build the retry faulted too — so a busy box became a RED tick, and the agent burned a full
+  # warm re-run to clear it (the manuk-shell/manuk-agent false-RED, ~7× this session). EXTINGUISH IT AT THE
+  # SOURCE: a load-induced no-verdict is a harness condition, so RE-MEASURE ALONE ON A SETTLED BOX — up to
+  # 3 times, each after waiting for load to drop below 1.5 — before believing it. A verdict on a quiet box
+  # is the truth; only if a genuinely QUIET box STILL yields no verdict is it a real hang/OOM. This
+  # self-heals the flake INSIDE the wall, so a tick never sees a RED that was really "the box was busy".
   wait
-  out=$(cargo test -q -p "$c" 2>&1)
-  if echo "$out" | grep -q 'test result: FAILED'; then bad "$c tests FAILED (on retry)"; return; fi
-  R=$(echo "$out" | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
-  if [ -n "$R" ]; then ok "$c: $R (after an instrument fault — the first run was killed, not red)"; return; fi
-  bad "$c: INSTRUMENT FAULT — no verdict on two runs. Unmeasurable is not passing."
+  local try s _l10=99
+  for try in 1 2 3; do
+    for s in 1 2 3 4 5 6 7 8 9 10; do
+      _l10=$(awk '{printf "%d",$1*10}' /proc/loadavg 2>/dev/null); [ "${_l10:-99}" -lt 15 ] && break; sleep 10
+    done
+    printf '  %s⟳%s %s produced no verdict — re-measuring ALONE on a settled box (attempt %s/3; load %s.%s)\n' \
+      "$YEL" "$OFF" "$c" "$try" "$((_l10/10))" "$((_l10%10))"
+    out=$(cargo test -q -p "$c" 2>&1)
+    if echo "$out" | grep -q 'test result: FAILED'; then bad "$c tests FAILED (on a settled re-measure — REAL)"; return; fi
+    R=$(echo "$out" | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+    if [ -n "$R" ]; then ok "$c: $R (instrument fault cleared on a settled re-measure — a busy box, not a red gate)"; return; fi
+  done
+  bad "$c: INSTRUMENT FAULT — no verdict on 4 runs incl 3 on a QUIET box (load<1.5). A REAL hang/OOM, not wall contention."
 }
 
 for c in manuk-css manuk-layout manuk-paint manuk-dom manuk-net manuk-agent manuk-shell; do
