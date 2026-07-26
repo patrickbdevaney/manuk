@@ -1450,3 +1450,74 @@ Fixing this did **not** make welt.de render. It removed *one* abort and revealed
 `TypeError: setting getter-only property "innerText"`, with the same adblock-abort handler catching
 it. Boot-path failures on real sites stack, and each fix peels one layer — the same shape the
 aljazeera investigation took. **Do not book "site X now works" from "site X's first error is gone".**
+
+## The event-loop drain is bounded by the CLOCK, not only by a task count (t610)
+
+`MAX_TASKS_PER_DRAIN = 20_000` has capped `run_deferred` since Bar 0 was written, and its stated
+purpose is a wall-clock one: *"the alternative is a frozen tab."* But **a count is a poor proxy for a
+clock**, and the gap is not marginal. Measured per drain, with the clock bound disabled:
+
+```text
+  en.wikipedia.org       1 task,      4ms      ← a page that converges
+  mangago.me         20000 tasks, 30216ms      ← and it did this FIVE times in one load
+  theguardian.com                     did not finish inside 480s
+```
+
+Four orders of magnitude. The same declared policy — *"this page is not converging; paint what we
+have"* — handed one page 4ms of grace and another half a minute of it, five times over, for reasons
+unrelated to what either had actually cost the user. On `mangago.me` the drain was the **single
+largest segment of an 85s load**, larger than every network phase put together.
+
+**The effect, two runs per arm on an idle box (`mangago.me`):**
+
+```text
+  budget=0 (shipped)    did not finish in 400s   ·   114874ms, visual 0.2%
+  budget=5000            35743ms, visual 0.9%    ·    36863ms, visual 0.2%
+```
+
+**Latency 3-11x and stable; visual unchanged.** That pairing is the whole claim, and it is what makes
+this *not* the North Star's *"fast because we never ran the script"* trap — argued from what was
+already true rather than from a fidelity number. **These pages were already being cut**, by the
+20,000-task ceiling, just 30 seconds per drain later. The capability outcome is identical by
+construction, which is precisely what an unchanged visual score shows independently. All that changed
+is **how much of the user's clock a page spends proving it will never converge.**
+
+> ⚠ An earlier draft of this page claimed `theguardian.com` went **22.9% → 52.4% visual** when
+> bounded — that bounding script execution *raised* fidelity. **It does not reproduce** and has been
+> retracted: guardian does not reliably finish inside 480s in *either* arm, so nothing can be
+> differenced across them, and the original reading was taken beside a running release build. A
+> single A/B point on a live third-party site is a hypothesis, not a result.
+
+**The two bounds are complementary and both are kept.** A tight self-rescheduling loop of cheap tasks
+trips the *count* first; a handful of expensive ones trips the *clock* first. Whichever fires, the
+page has already demonstrated it is not converging.
+
+**Checked only on the task boundary.** The budget bounds a runaway *chain* — which is all the count
+ceiling was ever for — and never preempts a single running task. JS is not interrupted mid-flight.
+
+### `run_with_fetcher` had no bound at all
+
+`run_deferred` was capped; `run_with_fetcher` — which `run()` delegates to and which `dom_bindings`
+drives — had **neither a count ceiling nor a clock**. The exact runaway `MAX_TASKS_PER_DRAIN` exists
+to forbid ran forever there. Its `did_io` arm makes it worse rather than better: *"a delivered result
+may have scheduled more work"* `continue`s past the task check unconditionally, so a page that
+re-fetches on every delivery loops indefinitely. **One rule, two implementations, one of them
+enforced** — §VI.3's fourth clause, booked again. Both bounds now apply to both loops.
+
+### What the gate had to prove, and the draft that was green for the wrong reason
+
+Any bound on script execution is one bad constant away from *"fast because we never ran the script"*,
+so `G_DRAIN_BUDGET`'s load-bearing claim is the **negative**: a page doing 5,000 real, converging
+tasks runs every one of them and lands all 5,000 nodes.
+
+The first draft of the gate asserted *"the runaway load finishes in under 20s"* — and **it passed with
+the clock bound deleted.** A cheap self-rescheduling task hits the 20,000-task ceiling quickly, so
+the *count* was doing the stopping and the gate never exercised the clock at all. The RED patch is
+what caught it; the assertion had looked entirely reasonable.
+
+The rewrite compares **arms instead of constants**: the same runaway page is loaded with the budget
+disabled and then with it set, and the gate compares how many spins each got. That is why
+`max_drain_ms()` reads its env on every drain rather than memoising into a `OnceLock` — the same
+reasoning `g_load_document.rs` sets out. A spin-count comparison is also machine-independent in a way
+a millisecond threshold on a loaded build box is not. With the bound removed the two arms read
+**80001 and 80001**, and the gate says so.

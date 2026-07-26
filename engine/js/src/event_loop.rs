@@ -34,6 +34,32 @@ use mozjs::rust::Runtime;
 /// A runaway task chain must not hang the browser. See `run_deferred`.
 const MAX_TASKS_PER_DRAIN: u32 = 20_000;
 
+/// **The drain's other bound, and the one that matches the harm.**
+///
+/// `MAX_TASKS_PER_DRAIN` is a *count*, and a count is a poor proxy for the thing it is defending
+/// against. The ceiling exists to stop a frozen tab — a wall-clock harm — but 20,000 tasks costs
+/// milliseconds on a converging page and **29.7 seconds** on `mangago.me`, where it was the single
+/// largest segment of an 85s load. So the same declared policy ("this page is not converging; paint
+/// what we have") was handing one page a fraction of a second of grace and another half a minute of
+/// it, for reasons unrelated to how much either had actually cost the user.
+///
+/// The two bounds are complementary, not redundant, and both are kept: a tight self-rescheduling
+/// loop of cheap tasks trips the count first; a handful of expensive ones trips the clock first.
+/// Whichever fires, the page has already demonstrated it is not converging.
+///
+/// **Set with the measured distribution in hand, not by taste** — see the constant's value and the
+/// gate `G_DRAIN_BUDGET`. `MANUK_MAX_DRAIN_MS` overrides; `0` disables the clock bound entirely,
+/// which is what lets the gate show that this bound and not the count is what changes the outcome.
+fn max_drain_ms() -> u128 {
+    std::env::var("MANUK_MAX_DRAIN_MS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(DEFAULT_MAX_DRAIN_MS)
+}
+
+/// See [`max_drain_ms`]. Chosen from the measured per-drain distribution across real sites.
+const DEFAULT_MAX_DRAIN_MS: u128 = 5_000;
+
 const PRELUDE: &str = r#"
     globalThis.__tasks = [];
     globalThis.__micro = [];
@@ -5998,6 +6024,8 @@ pub fn run(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<u32, S
 /// Returns the number of macrotasks run.
 pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<u32, String> {
     let mut count = 0u32;
+    let started = std::time::Instant::now();
+    let budget = max_drain_ms();
     loop {
         microtask_checkpoint(rt, global)?;
         let ran = eval(rt, global, NEXT_TASK, "event_loop_tick.js")?;
@@ -6017,8 +6045,22 @@ pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Resu
             if count >= MAX_TASKS_PER_DRAIN {
                 tracing::warn!(
                     count,
+                    elapsed_ms = started.elapsed().as_millis() as u64,
                     "event loop hit its task ceiling — the page is not converging (a self-rescheduling \
                      timer, most likely). Painting what we have. The alternative is a frozen tab."
+                );
+                break;
+            }
+            // **The same policy, measured in the unit the user actually feels.** Checked only on the
+            // task boundary, so a single long-running task is not interrupted mid-flight — this bounds
+            // a runaway *chain*, which is what the ceiling above was always for, and never preempts JS.
+            if budget > 0 && started.elapsed().as_millis() > budget {
+                tracing::warn!(
+                    count,
+                    elapsed_ms = started.elapsed().as_millis() as u64,
+                    budget_ms = budget as u64,
+                    "event loop hit its TIME budget — the page is not converging fast enough to be \
+                     worth more of the user's clock. Painting what we have."
                 );
                 break;
             }
@@ -6027,6 +6069,14 @@ pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Resu
         break;
     }
     microtask_checkpoint(rt, global)?;
+    // The per-drain distribution, which is how the budget above was chosen rather than guessed. A
+    // converging page's drain is tens of tasks and single-digit milliseconds; anything that shows up
+    // here in seconds is the interesting case.
+    tracing::debug!(
+        count,
+        elapsed_ms = started.elapsed().as_millis() as u64,
+        "drain complete"
+    );
     Ok(count)
 }
 
@@ -6319,6 +6369,16 @@ where
     F: Fn(&str, &str) -> (u16, String),
 {
     let mut count = 0u32;
+    // **This loop had NO bound of any kind — not a count, not a clock.**
+    //
+    // `run_deferred` has been capped since Bar 0 was written, and this one was left behind: `run()`
+    // delegates straight to it and `dom_bindings` drives it, so the exact runaway the ceiling exists
+    // to forbid — `setInterval(fn, 0)`, a self-reposting `requestAnimationFrame` — hangs forever
+    // here. The `did_io` arm makes it worse rather than better: a page that re-fetches on every
+    // delivery `continue`s past the task check indefinitely. One rule, two implementations, and only
+    // one of them enforced it.
+    let started = std::time::Instant::now();
+    let budget = max_drain_ms();
     loop {
         microtask_checkpoint(rt, global)?;
 
@@ -6356,6 +6416,27 @@ where
 
         let ran = eval(rt, global, NEXT_TASK, "event_loop_tick.js")?;
         let ran = ran.is_boolean() && ran.to_boolean();
+        // Both bounds, checked on the task boundary and before either `continue` — including the
+        // `did_io` one, because "a delivered result may have scheduled more work" is precisely how a
+        // polling page loops here forever.
+        if count >= MAX_TASKS_PER_DRAIN {
+            tracing::warn!(
+                count,
+                elapsed_ms = started.elapsed().as_millis() as u64,
+                "fetcher event loop hit its task ceiling — the page is not converging. Painting what \
+                 we have. The alternative is a frozen tab."
+            );
+            break;
+        }
+        if budget > 0 && started.elapsed().as_millis() > budget {
+            tracing::warn!(
+                count,
+                elapsed_ms = started.elapsed().as_millis() as u64,
+                budget_ms = budget as u64,
+                "fetcher event loop hit its TIME budget — painting what we have."
+            );
+            break;
+        }
         if ran {
             count += 1;
             continue;
@@ -6366,6 +6447,11 @@ where
         break;
     }
     microtask_checkpoint(rt, global)?; // final checkpoint
+    tracing::debug!(
+        count,
+        elapsed_ms = started.elapsed().as_millis() as u64,
+        "fetcher drain complete"
+    );
     Ok(count)
 }
 

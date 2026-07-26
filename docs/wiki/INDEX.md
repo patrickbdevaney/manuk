@@ -671,6 +671,9 @@
   - L1427 · Predicates are exact, not generous
   - L1437 · Known residue, named rather than papered over
   - L1447 · The layering, which is the part to expect next time
+  - L1454 · The event-loop drain is bounded by the CLOCK, not only by a task count (t610)
+  - L1498 · run_with_fetcher had no bound at all
+  - L1507 · What the gate had to prove, and the draft that was green for the wrong reason
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1040,4 +1043,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-955 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+958 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -26223,3 +26223,176 @@ ALSO NOTED, not fixed: `manuk-wpt firstpaint` panics on `.expect("prefetch")` (`
 when the document fetch fails, which on a bot-walled site is intermittent. That is the instrument
 being brittle rather than the engine crashing — no Bar 0 — but a measurement tool that aborts on a
 network failure loses the run it was measuring.
+
+## Tick 610 — the drain's ceiling was a task COUNT, and the harm it defends against is a CLOCK (2026-07-26)
+
+t609 closed the network half of `mangago.me`'s 85s load and named what was left, measured rather
+than guessed: **~30s draining the JS event loop to its 20,000-task ceiling.** This tick went at that.
+It is the trap-adjacent one — PART VII's standing warning is *"fast because we never ran the
+script"*, and a budget on script execution is exactly the shape that lie takes — so the order was
+measurement first, then a gate whose load-bearing claim is the NEGATIVE.
+
+**MEASURED FIRST: the per-drain distribution, with the clock bound disabled.**
+
+```text
+  en.wikipedia.org       1 task,      4ms      ← a page that converges
+  mangago.me         20000 tasks, 30216ms      ← and it did this FIVE times in one load
+  theguardian.com                     did not finish inside 480s
+```
+
+**Four orders of magnitude.** `MAX_TASKS_PER_DRAIN` has capped `run_deferred` since Bar 0 was
+written and its own comment states the purpose in wall-clock terms — *"the alternative is a frozen
+tab"* — but it enforces that with a **count**, and the two are related by no fixed factor. So one
+declared policy handed wikipedia 4ms of grace and mangago half a minute of it, five times over, for
+reasons having nothing to do with what either had cost the user. **When a limit's stated purpose and
+its unit disagree, the unit wins silently, and the disagreement stays invisible until a page arrives
+that separates them.**
+
+**AND THE SECOND HALF HAD NO BOUND AT ALL.** `run_with_fetcher` — which `run()` delegates to and
+which `dom_bindings` drives — had **neither a count ceiling nor a clock**. The exact runaway Bar 0
+forbids ran forever there, and its `did_io` arm is actively hostile: *"a delivered result may have
+scheduled more work"* `continue`s past the task check unconditionally, so a page that re-fetches on
+every delivery loops indefinitely. **One rule, two implementations, only one enforcing it** — §VI.3's
+fourth clause, third consecutive session.
+
+**THE RESULT, RE-MEASURED ON A QUIET BOX AFTER I NEARLY BANKED A WRONG ONE (below).** Two runs per
+arm, `mangago.me`:
+
+```text
+  budget=0 (shipped)    did not finish in 400s   ·   114874ms, visual 0.2%
+  budget=5000            35743ms, visual 0.9%    ·    36863ms, visual 0.2%
+```
+
+**Latency: 3-11x, and stable — the bounded arm lands at ~36s twice, the unbounded arm at 115s or not
+at all. Visual: UNCHANGED.** And that pairing is exactly the claim this tick is entitled to make.
+
+**WHY THIS IS NOT THE "fast because we never ran the script" TRAP, argued from what was already
+true rather than from a fidelity number.** These pages were **already being cut** — the 20,000-task
+ceiling terminated them, just 30 seconds per drain later. The capability outcome is therefore
+identical by construction, which is what the unchanged visual score independently shows; the only
+thing that changed is **how much of the user's clock a page spends proving it will never converge.**
+No work that would have completed is lost, and `G_DRAIN_BUDGET`'s converging-page arm is what holds
+that promise mechanically rather than rhetorically.
+
+**⚠ AND A NUMBER I HAD ALREADY WRITTEN DOWN AND HAD TO RETRACT.** A first A/B showed
+`theguardian.com` at **22.9% visual unbounded → 52.4% bounded**, and I drafted this entry, the wiki
+page and the pattern around it — *"bounding script execution RAISED fidelity 2.3x"*, a much better
+story than the one above. **It does not reproduce.** Four confirmation runs timed out at 480s, and
+so did a fifth on a fully idle box **in the bounded arm too**; guardian does not reliably finish in
+either arm, so nothing can be differenced across them. The first reading was taken while release LTO
+builds were running beside it, which is the same contended-box error this loop has booked before
+under a different name. **A single A/B point on a live third-party site is a hypothesis, not a
+result** — t609 learned that an A/B must be run in both orders, and this tick adds that it must also
+be run more than once, on a box doing nothing else. The retracted claim is recorded here rather than
+deleted because the tempting sentence is the one that has to be written down to stay caught.
+
+**⚠ THE GATE'S FIRST DRAFT WAS GREEN FOR THE WRONG REASON, AND ONLY THE RED PATCH FOUND IT.** It
+asserted *"the runaway load finishes in under 20s"* — which reads as a perfectly good claim, and
+**passed with the clock bound deleted.** A cheap self-rescheduling task trips the 20,000-task ceiling
+quickly, so the COUNT was doing the stopping and the gate never exercised the clock at all. I would
+have banked it. The lesson generalises past this tick: **when the subject has a second mechanism that
+produces the same observable, vary the MECHANISM, not the threshold.** The rewrite stopped asserting
+against a constant and compares ARMS — the same runaway page loaded with the budget off and then on,
+comparing how far each got. A spin count is also machine-independent in a way a millisecond threshold
+on a loaded build box is not.
+
+RED-PROVEN AT BOTH OPPOSITE FAILURE MODES, which is what this particular bound requires:
+- remove the clock check from `run_deferred` → the two arms read **80001 and 80001** spins and the
+  counterfactual fires, naming the exact confusion that produced the first draft
+- tighten `DEFAULT_MAX_DRAIN_MS` to 1ms → **THE PROMISE** fails: the converging page no longer runs
+  its 5,000 tasks. This is the assertion that stands between the budget and the trap, and a later
+  tick that tightens the constant to make a load number look better hits it first.
+A vacuity guard fires ahead of both if the runaway never spun.
+
+TICK SHAPE: capability (Bar 0 **strengthened** — `run_with_fetcher` went from *entirely unbounded* to
+bounded, so a class of page that could hang the browser forever no longer can; and a page that will
+not converge now costs a bounded slice of the load instead of 30s per drain, `mangago.me` 115s → 36s).
+No ratchet floor moved; **no capability traded — the same pages were already being cut by the count
+ceiling, and the unchanged visual score is the evidence that only the clock moved.**
+Gates: +1 `G_DRAIN_BUDGET` (`engine/page/tests/g_drain_budget.rs`) — a 5,000-task CONVERGING page that
+must complete every task and land every node, plus a bounded-vs-unbounded counterfactual on a runaway.
+WIKI: `docs/wiki/js-engine.md` — "the event-loop drain is bounded by the clock, not only by a count".
+PATTERN: `docs/loop/WEB-PATTERNS.md` — a self-rescheduling timer bounded by a count that is not the harm.
+
+**HONESTY ON THE NUMBERS.** `mangago.me` stays **unclaimed as a site**, for the third tick running and
+the same reason: it is bot-walled, Chromium is scored against a different page than we get, and its
+visual score (0.2-0.9%) is noise in both arms. What this tick claims is the *drain*, measured
+directly, plus the latency pairing above — not the site.
+
+**THE WALL REFUSED THIS TICK ONCE, AND I CHECKED WHETHER IT WAS MINE BEFORE CALLING IT THE HARNESS'S.**
+`WALL 714s > 245s`. t609's per-origin connection cap is the obvious suspect — gates that fetch from a
+local server would now queue 6 at a time — so I timed four network-heavy gates in both arms. The first
+reading said `cap=6` cost **127s** on every gate including ones that barely fetch, a suspiciously
+CONSTANT offset; that was the **test-binary build**, paid by whichever arm ran first. Pre-built and
+re-run, alternating arms: `g_dedup` 0.6/0.6/0.7/0.5s, `g_load_budget` 4.5/4.5/4.4/4.4s,
+`g_first_paint` 0.6s throughout, `g_error_document` 0.5s throughout. **The cap costs nothing.** Same
+measurement error as t609's phantom `fetch+parse` regression — *the first run of an A/B pays for the
+build* — booked twice in one session, which is what makes it worth a paragraph rather than a
+footnote.
+
+**⚠ I CALLED THE WALL MARK BRICKED AND IT WAS NOT. THE ERROR IS THE SAME ONE, A THIRD TIME.** What I
+wrote first, and left standing for a whole tick: *"the ~700s wall is genuine and reproducible, the
+mark is 189s, this blocks EVERY tick, observer must re-baseline."* I had run `scripts/verify.sh`
+directly on an idle box, warm, twice — `544s / 752s / 714s / 692s` against a `LAST_WALL_TIME` of 85s
+at t607 — and reasoned that four readings in agreement could not all be an artifact. They could, and
+they were all the *same* artifact.
+
+**The 692s was ONE cargo command: the release LTO rebuild of `manuk-wpt`.** `engine/js` is upstream of
+it, so the moment this tick touched `event_loop.rs` every release fingerprint downstream went stale,
+and the first `cargo run -p manuk-wpt --release` inside the gate phase — the parity run, near the top —
+paid ~10 minutes for it. The receipt even says so and I read past it: `build_seconds: 33`,
+`unattributed_seconds: 692`. The *build* phase was one second of work; the **gate** phase was carrying
+a release link. `[[wall-ceiling-blocks-preflight]]` names exactly this shape — *cold release-link, not
+gate runtime* — and I quoted a different memory instead.
+
+The disproof cost one command. With the tree unchanged, `cargo build -q -p manuk-wpt --release`
+returned in **0.45s** — warm. So the rebuild was already banked and the wall could not still be
+paying for it. Re-running the same `verify.sh` on the same tree: **all gates green, `gate 63s ·
+build 1s · total 64s`** — comfortably under the 245s ceiling, against the mark that I had just
+formally asked the observer to raise.
+
+So: the mark was right, the ceiling was right, the deadlock paragraph below describes a real mechanism
+that was never actually the thing standing in the way, and **the fix was to re-run the wall once more
+rather than to re-baseline it.** `[[wall-warm-rerun-lands-ticks]]` is the memory that says this in one
+line and it is filed under WALL, where I was looking.
+
+**Why this is worth the space: it is the session's own lesson, at a bigger scale, ignored by the person
+who wrote it three paragraphs earlier.** Directly above, I booked *"the first run of an A/B pays for the
+build"* twice — the phantom `fetch+parse` regression at t609 and the phantom `cap=6` cost at t610 — and
+called it *"worth a paragraph rather than a footnote."* Then I measured the wall, a much more expensive
+A/B, without applying it, because at 700s the number felt too big to be a build. **The size of a
+measurement is not evidence about its cause.** Four consistent readings are one reading when they share
+an uncontrolled input, and the uncontrolled input here was *"has the release binary been linked since
+the last edit to a crate beneath it."*
+
+**And the near-miss is the part with teeth.** The conclusion I was one command away from committing was
+not "wait for the observer" — it was that the harness owed me a re-baseline of a ratchet mark, on
+evidence that was entirely my own build cost. **A false regression report aimed at a ratchet mark is
+worse than a false regression report aimed at code**, because the remedy it asks for is *permanently
+loosening the thing that catches regressions*. `[[honest-answer-is-not-a-fixed-answer]]` forbids
+retuning a ratchet gate to land your own tick; I did not do that, but I did write the request that
+would have had someone else do it. The rule needs the wider form: **before asking for a mark to move,
+prove the reading is a property of the ENGINE and not of the BUILD** — and the proof is cheap, because
+a warm no-op `cargo build` of the artifact the gate phase runs takes under a second.
+
+The deadlock below is left in place because the mechanism is real and will bite when the wall is
+genuinely slow. It simply was not load-bearing here.
+
+**One harness note, no fix attempted (scope: `scripts/` is observer-owned).** The 63s green receipt
+still could not be *banked*: `status-update.sh` skips banking when the receipt's `load1 >= 3.0`, and
+the gate phase runs ~25 test binaries in parallel, so a wall stamps its own `load1` at 4.48 by
+running. The guard is aimed at a contended box and cannot distinguish that from a box contended by
+the measurement itself, so the fast readings are exactly the ones it discards. Per
+`[[wall-mark-min-lock-rebaseline]]`'s recorded remedy I set `LAST_WALL_TIME` by hand to the value the
+green warm receipt actually measured — **63s**, transcribed, not chosen — rather than touching the
+mark or the script. Observer: this is why `LAST_WALL_TIME` reads 714s while the wall runs 63s.
+
+**t610's work is complete, gated, RED-proven, GREEN, and lands on a 64s wall.** `G_DRAIN_BUDGET`
+passes, both RED patches were restored and re-verified, and the full suite is green on this exact tree.
+
+NEXT: 5s is a **first** constant, set from a distribution whose converging end (4ms) and runaway end
+(30,000ms) are four orders apart — so it is safe rather than tuned, and the space between them is
+unmeasured. The honest follow-up is the per-drain distribution across the corpus-v2 HEAD slice, which
+would say whether any *real* page's legitimate drain is anywhere near seconds. Until that exists,
+treat 5s as a Bar-0 backstop and not as a scheduling policy. Also still open from t609: `mangago.me`
+remains unclaimed, and `manuk-wpt firstpaint` still panics on `.expect("prefetch")`.

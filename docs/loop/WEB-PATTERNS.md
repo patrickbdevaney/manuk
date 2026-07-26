@@ -5100,3 +5100,46 @@ improve, because its load is dominated by a different defect this tick did not t
 draining the JS event loop to its 20,000-task ceiling, which has no wall-clock bound at all.** The
 images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
 "site X works now" from "one of site X's defects is gone."**
+
+## A self-rescheduling timer is bounded by a task COUNT, and the count is not the harm (tick 610)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| A page schedules work that reschedules itself (`setInterval(fn, 0)`, a self-reposting `requestAnimationFrame`, a poller that re-fetches on every delivery). The drain is capped by a TASK COUNT, so the cost of "not converging" is however long that page's 20,000 tasks happen to take — milliseconds for one page, half a minute for another | **`mangago.me`**: 20,000 tasks / **30,216ms per drain, FIVE drains in one load** — the largest single segment of an 85s load, bigger than every network phase combined. **`theguardian.com`**: did not finish inside **480s**. A converging page (`en.wikipedia.org`) drains in **1 task / 4ms** | ✅ fixed (tick 610) — a wall-clock budget alongside the count in BOTH drains, gated by **`G_DRAIN_BUDGET`** |
+
+**The bound existed; it was measured in the wrong unit.** The ceiling's own comment says what it is
+for — *"the alternative is a frozen tab"* — which is a wall-clock harm. It was enforced with a task
+count, and the two are not related by any fixed factor: the same declared policy gave one page 4ms of
+grace and another 30s, five times over. **When a limit's stated purpose and its unit disagree, the
+unit wins silently, and the disagreement is invisible until a page arrives that separates them.**
+
+**WHY THIS IS NOT "fast because we never ran the script", argued from what was already true.** The
+North Star's standing trap says a speed win from *skipping work* is indistinguishable, on the clock,
+from an optimisation. The answer here is not a fidelity number — it is that **these pages were
+already being cut**, by the 20,000-task ceiling, just 30 seconds per drain later. Nothing that would
+have completed is lost; only *when* the non-convergence is admitted changed. `mangago.me`, two runs
+per arm on an idle box: **latency 115s (or never) → 36s, visual UNCHANGED at 0.2-0.9%.** The
+unchanged score is not a disappointment, it is the evidence — same outcome, a third of the clock.
+
+**⚠ AND A RETRACTION, kept because the tempting sentence has to be written down to stay caught.** A
+first A/B showed `theguardian.com` at **22.9% → 52.4% visual** when bounded — *bounding script
+execution RAISES fidelity*, a far better story, and the wiki page and journal entry were drafted
+around it. **It does not reproduce.** Guardian does not reliably finish inside 480s in *either* arm,
+so nothing can be differenced across them, and the original reading was taken beside a running
+release build. t609 established that an A/B on a live origin must be run in **both orders**; this
+tick adds that it must also be run **more than once, on a box doing nothing else**.
+
+**⚠ THE GATE'S FIRST DRAFT WAS GREEN FOR THE WRONG REASON, AND ONLY THE RED PATCH FOUND IT.** It
+asserted *"the runaway load finishes in under 20s"* — a reasonable-looking claim that **passed with
+the clock bound deleted**, because a cheap self-rescheduling task trips the 20,000-task ceiling
+quickly and the COUNT was doing the stopping. The gate had never touched the thing it was written to
+defend. The fix was to stop asserting against a constant and compare ARMS: load the same runaway with
+the budget off and then on, and compare how far each got. With the bound removed the two arms read
+**80001 and 80001**. **A gate whose subject has a second mechanism that produces the same observable
+must vary the mechanism, not the threshold.**
+
+**One rule, two implementations, one enforced — again.** `run_deferred` was capped; `run_with_fetcher`
+(which `run()` delegates to and `dom_bindings` drives) had **no bound of any kind**, so the exact
+runaway Bar 0 forbids ran forever there. Its `did_io` arm was actively hostile: *"a delivered result
+may have scheduled more work"* `continue`d past the task check unconditionally. Third consecutive
+session in which the defect was a rule implemented more than once with the copies disagreeing.
