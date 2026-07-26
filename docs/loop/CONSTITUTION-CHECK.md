@@ -1885,3 +1885,72 @@ with its enforcement point named. **A security capability may be absent, but it 
 everything else; nothing this window traded performance or honesty for a feature, and three of the
 six capability ticks *removed* a lie (`@supports` answering yes about `filter`, `clip-path`,
 `backdrop-filter`) rather than adding a rendering.
+
+## Check #42 — tick 607
+
+**Horizon:** H0 — the Phase-0 daily-driver certificate (`docs/loop/DAILY-DRIVER-CERTIFICATION.md`,
+the authority since t581). Its gate is `daily-driver-pass(site) = renders(site) ∧ functions(site)`
+over the fixed-denominator corpus-v2, **not** a WPT percentage (PART VII.1).
+
+**Gate or scoreboard?** t600-607 is eight ticks: anti-framing (600), the map-honesty probe (601),
+unknowns→0 (602), foreign-content namespace (603), self-audit + `getBBox()` (604), `isolation`
+measured-and-**declined** (605), THE PILOT (606), error documents (607). **Gate, and unusually
+cleanly** — 606 produced the exit-gate number itself, 607 removed a defect that number surfaced, and
+605 is the rarest shape on this board: a capability *priced and refused*, which only a real gate
+lets you do without guilt.
+
+**THE FINDING OF THIS WINDOW, AND IT IS ABOUT WHERE BUGS LIVE.** The certificate was built to measure
+*rendering*. Its first live run found a defect **one layer below rendering**: five of twenty HEAD
+sites answered `403` with a real body and the engine refused to fetch them, so a quarter of the
+representative head was invisible to the exit measurement *for a reason that had nothing to do with
+layout*. I5 says the differential oracle is the discovery engine; the sharpened version is
+**an instrument finds bugs in everything it must traverse to measure, not only in what it measures.**
+t606's *other* unrequested finding — 10 of 14 sites tripped OURS-IS-SLOW — is the same shape again,
+and the observer's t602 board steer has already promoted it: **performance is now a fidelity input**,
+because a page painted incomplete at the load budget scores as a layout failure. That is a genuine
+correction to how this loop reads its own number, and it came from the instrument, not from a plan.
+
+**§VI.3 GAINS A FOURTH CLAUSE, AND IT IS EARNED BY THREE INSTANCES.** The rule so far: rank by
+usage-weighted breadth → price by measuring IN THIS ENGINE (t590) → before taking a named priority,
+verify it is still unmet (t598). Add: **when a defect is found, ask whether the rule it violates is
+implemented MORE THAN ONCE — and whether the copies agree.** Booked three times now, each time with
+the *correct* implementation already present somewhere in the tree: two cascades (Stylo `UA_CSS` vs
+`apply_ua_defaults`, and the live one went stale); two structural probes (`[id]` vs selector-path,
+and the stale one kept 39% of the corpus unmeasurable); and now two navigation paths — GET `bail!`ing
+on `status >= 400` while POST carried the correct rule **in a comment eight hundred lines away**
+(*"a 4xx/5xx still has a body worth showing … matching a real browser"*). This is strictly cheaper
+than t591's "grep for the CLASS, not the symptom", because the answer is usually already written
+down: the work is reconciliation, not derivation.
+
+**INVARIANTS.** I2: held — nothing vendored or patched. I4 (Pareto): held; t605 is the proof, since
+declining `isolation` on measured impact is exactly what I4 asks for and is the hardest form of it to
+actually do. I3: t607 is a network/navigation tick with no new rendered construct, so no semantic-model
+exposure was owed. **I5: strengthened, per the finding above.**
+
+**PART VI IS CORRECTED, and one row was years stale.** VI.2 still reads *"the differential oracle has
+**never completed a full crawl** (`ORACLE_CRAWLED: 0` of 265)… the constitution's primary discovery
+mechanism is not operational."* That has been false since roughly t380: 265/265 crawled, 392 clusters,
+and the mechanism has since been *replaced* by a better one (the corpus-v2 certificate, t581+). The
+real H0 blocker is no longer "get the oracle to finish" and it is no longer capability count either —
+**it is MEASURABILITY**: 6 of 20 HEAD sites unfetchable (t607 closes the dominant class) and 9 of 14
+unscoreable, against which p̂ = 0/5 cannot size anything. VI.2's flexbox/grid percentages are also
+stale as a *steer*, though not as facts — PART VII.1 already demoted WPT from gate to diagnostic, so
+they no longer name the blocker.
+
+**STEER — and the next tick is already measured rather than guessed.** t607's live confirmation run
+handed over the mechanism behind the OURS-IS-SLOW finding: `mangago.me` returned **200** and took
+**174 seconds**, pulling ~hundreds of images that each timed out at the 8.0s subresource deadline
+with **nothing bounding the aggregate**, plus `event loop hit its task ceiling` at 20,000 tasks. The
+per-request deadline works; there is no total load budget above it. That single number is both a
+Bar-0-class hang on our own clock **and** the fidelity input the board just promoted, which makes it
+the unambiguous next tick. After it: the pilot's two remaining measurability classes — the
+202-with-empty-body site (imdb) and the three connection failures — then re-run the pilot before
+sizing any full sweep.
+
+**No drift found in the north star.** Chromium remains the ceiling on capability and the floor on
+everything else. ⚠ One thing to watch, named here so it cannot become folklore: **the load-budget work
+now has a motive to make a number go up**, and "fast because we never loaded the images" is the exact
+trap PART VII/the North Star names. Any load-budget tick must move fidelity and latency *together*,
+or it is measuring what we stopped doing.
+
+**Next check due: tick 615.**

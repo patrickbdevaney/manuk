@@ -1418,3 +1418,47 @@ user sees something" is precisely the outcome the header exists to prevent.
 ⚠ Residue: no error page inside the refused frame (Chrome draws one), `ALLOW-FROM` unsupported (it
 was removed from every engine because it could not express the origin the navigation came from), and
 no violation reporting.
+
+## An HTTP error status is a DOCUMENT, and its body is what the site chose to say
+
+A `404`, a `403` bot-wall interstitial, a `429` rate-limit notice and a `500` stack trace all arrive
+with a real HTML body. **Every browser renders it.** This engine used to `bail!` on `status >= 400`,
+which converts *"the server answered"* into *"the network broke"* — the user gets a blank tab where
+Chrome shows the page, and the engine cannot tell a dead origin from a site that simply said no.
+
+**The rule, and it is one line:** a response with a status is a response. Only a *transport* failure
+— refused connection, DNS failure, TLS failure, timeout — is a network error. The status rides on
+`Response::status` for the callers that care (the UI, `iframe` load semantics), and is logged so an
+error page is never silently indistinguishable from a normal one.
+
+**Two places enforced it wrongly, and they are the two top-level navigation paths:**
+
+| path | used by | was |
+|---|---|---|
+| `manuk_net::fetch_document_or_download` | the shell's navigation | `bail!("server returned HTTP …")` |
+| `manuk_page::fetch_html_with_headers` | iframes, the agent, the fidelity instrument | same |
+
+The iframe one is the nastier of the two, because its failure is *silent*: `fetch_and_load_iframes`
+does `fetch_html_with_headers(&url).await.ok()?`, so a framed OAuth consent screen or 3DS challenge
+that answered `403` rendered as **nothing at all** inside an otherwise-working page, with no error
+anywhere.
+
+**Why it mattered more than it sounds.** Measured on the certification pilot's own corpus (t606, the
+20 HEAD sites of `corpus-v2.tsv`): **five of twenty answer `403`** with a ~5.5KB challenge page.
+Those five were the bulk of the pilot's `fetch failed, skipping` column — a quarter of the head of
+the representative web was unscoreable by the Phase-0 exit measurement for a reason that had nothing
+to do with rendering.
+
+**The part worth remembering.** `page::prefetch_document_post` — the *POST* navigation, eight hundred
+lines away — already carried the correct rule, in a comment: *"A 4xx/5xx still has a body worth
+showing (the server's 'invalid password' page), so it is rendered rather than turned into an error —
+matching a real browser, which shows the page."* So one repo held two answers to one question, and
+the wrong one sat on the path virtually every navigation takes. When a rule is found violated, grep
+for **every implementation of that rule**, not for the shape the bug presented in: the odds are good
+that one of them is already right and nobody reconciled them.
+
+**The gate's honesty floor.** `G_ERROR_DOCUMENT` binds a port, learns it, drops the listener, and
+asserts the resulting fetch still `Err`s. Without that claim an engine that never reported a network
+failure at all would pass every "did it render?" assertion in the file — *"an error status is a
+document"* must not decay into *"nothing ever fails"*. Its mirror is the `200` vacuity guard, which
+stayed green under both RED patches and is what proves the other claims failed for the real reason.

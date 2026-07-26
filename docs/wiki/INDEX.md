@@ -877,6 +877,7 @@
   - L1380 · Anti-framing — two mechanisms, one enforcement point, and frame-ancestors WINS (tick 600)
   - L1396 · The thing an implementation written from intuition gets wrong
   - L1404 · Two failure directions, and they point opposite ways
+  - L1422 · An HTTP error status is a DOCUMENT, and its body is what the site chose to say
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -1032,4 +1033,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-947 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+948 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

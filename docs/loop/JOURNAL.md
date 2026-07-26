@@ -25908,3 +25908,91 @@ timeout vs DNS is not yet distinguished in the ledger, and the three want differ
 already moved off `.SIG`, so this is the next keying gap). (3) The load-budget/fidelity interaction
 above, which is now a first-class fidelity input. Only then size the full sweep.
 Cadences: wall 607; const 607; surface 608; self-audit 614.
+
+## Tick 607 — an HTTP error status is a DOCUMENT: the browser stopped refusing to look (2026-07-26)
+
+t606's pilot ranked its own follow-up and put **measurability first**: *"why 6 sites cannot be
+fetched at all"*, with the note that bot-wall vs timeout vs DNS is not distinguished and *"the three
+want different answers"*. This tick answers the first of the three, and the answer was not a network
+capability — it was a **refusal**.
+
+**MEASURED FIRST, on the pilot's own 20 HEAD sites of `corpus-v2.tsv`** (curl, real Chrome UA):
+
+```text
+403 + a ~5.5KB challenge body   5   tamildhool.tech · mangago.me · supjav.com · fdown.net · quora.com
+202 + ZERO bytes                1   imdb.com          ← the "Chrome rendered NO elements" site
+000 (conn/DNS failure)          3   docomo.ne.jp · bill.pitc.com.pk · fawanews.sc
+200                            11
+```
+
+So the dominant class is not a transport gap at all. **Five of twenty HEAD sites answer `403` with a
+real HTML body, and this engine threw that body away.** `manuk_net::fetch_document_or_download` and
+`manuk_page::fetch_html_with_headers` — the two top-level navigation paths, one for the shell and one
+for iframes/agent/instrument — both did `bail!("server returned HTTP {status}")`. No browser does
+this. A `404`, a `403` interstitial, a `429` notice and a `500` stack trace all arrive with a body,
+and the body *is what the site chose to say*. Refusing it converts **"the server answered"** into
+**"the network broke"**, and the user gets a blank tab where every other browser shows the page.
+
+**THE REPO ALREADY HELD THE CORRECT RULE, IN WRITING, ON THE OTHER PATH.**
+`page::prefetch_document_post` carries this comment verbatim: *"A 4xx/5xx still has a body worth
+showing (the server's 'invalid password' page), so it is rendered rather than turned into an error —
+matching a real browser, which shows the page."* So the **POST** navigation rendered error pages
+while the **GET** navigation refused them: one question, two answers, and the wrong one sitting on
+the path virtually every navigation takes. That is this project's most-repeated defect shape — *two
+implementations of one rule, and the live one goes stale* — and it is the fourth time it has been
+booked. The fix is two `bail!`s becoming two `tracing::info!`s; the *finding* is that the correct
+behaviour was already documented eight hundred lines away.
+
+**LIVE CONFIRMATION, not just a fixture.** `manuk-wpt fidelity` on the five 403 sites afterwards:
+**zero `fetch failed`** — all five fetch, render and reach the instrument. Five sites that the
+Phase-0 certificate could not score, and could not score *not because we render them badly but
+because we declined to look*. A quarter of the head of the representative corpus was invisible to the
+exit measurement for a reason that had nothing to do with rendering.
+
+**⚠ A SECOND FINDING THE LIVE RUN HANDED ME, AND IT IS NOT THIS TICK'S BUG.** `mangago.me` came back
+**200** (the real site, not a challenge) and took **174 seconds**. The trace says exactly why: the
+page pulls ~hundreds of cover images from `mangapicgallery.com`, **every one of them timing out at
+the 8.0s subresource deadline**, and nothing bounds the *aggregate*. The per-request deadline works;
+there is no total load budget above it. The same run also hit `event loop hit its task ceiling —
+the page is not converging` at 20,000 tasks. **This is not attributable to this tick** — the response
+was 200, so the error-document path was never entered, and the identical load happens without the
+change. It is t606's third finding (*"we are slow on the real web, and it contaminates the fidelity
+number"*) with a named mechanism at last, and it is the next tick.
+
+RED-PROVEN, and each half independently, because the two paths are in different crates and a fix to
+one would have looked like a fix to both:
+- restore only `manuk_net`'s bail → the SHELL-path claim fails, the `fetch_html` claims still pass
+- restore only `manuk_page`'s bail → the `404` claim fails first, at "**THE POINT**"
+The `200` vacuity guard passed under both RED patches, so the gate is not failing for a trivial
+reason. The gate also carries an **honesty floor**: a REFUSED connection (bind a port, learn it, drop
+the listener) must still `Err`. Without it, an engine that never reported a network failure at all
+would satisfy every "did it render?" claim above — *"an error status is a document"* must not decay
+into *"nothing ever fails"*.
+
+TICK SHAPE: capability (the error-document class: 404/403/429/500 pages render, on BOTH navigation
+paths and inside iframes — where a 403 OAuth consent screen or 3DS challenge previously vanished
+with no error anywhere). Bar 0 untouched; no ratchet floor moved; no performance traded.
+Gates: +1 `G_ERROR_DOCUMENT` (`engine/page/tests/g_error_document.rs`) — 7 claims: 200 vacuity guard,
+404/403/500 via `fetch_html`, 403 via the shell's `fetch_document`, 403 in an `<iframe>`, and the
+refused-connection honesty floor.
+WIKI: `docs/wiki/networking.md` — "an HTTP error status is a document".
+PATTERN: error-document rendering.
+
+NEXT: **the unbounded aggregate subresource load**, measured above at 174s on one 200-status site
+with a working 8s per-request deadline. That is a Bar-0-class number on our own clock and it is the
+mechanism behind t606's "OURS IS SLOW on 10 of 14 sites" finding, so it is both a stability item and
+a fidelity input — pages painted deliberately incomplete score as layout failures. After it, the
+pilot's remaining two measurability classes: the 202-with-empty-body site (imdb) and the three
+connection failures.
+
+ALSO THIS TICK (both cadences came due at the pre-flight and are recorded in their own ledgers):
+**CONSTITUTION CHECK #42** — the window is gate-work rather than scoreboard; §VI.3 gains a fourth
+clause (*when a defect is found, ask whether the rule it violates is implemented MORE THAN ONCE, and
+whether the copies agree* — booked three times now: two cascades, two structural probes, and this
+tick's two navigation paths, each with the CORRECT implementation already present somewhere in the
+tree), and PART VI.2's claim that the oracle *"has never completed a full crawl"* is corrected as
+~220 ticks stale. **WALL AUDIT #17 — nothing trimmed, and it RETIRES audit #16's queued lever**:
+parity was 175s / 76% of a 230s wall at t587 and is now **14s / 22% of 65s**, a 12x drop, with no
+agent tick in the window having touched the observer-owned `verify.sh`. A named lever that quietly
+stops being a lever is precisely the stale-priority shape §VI.3's third clause exists to catch.
+Cadences: wall 627; const 615; surface 608; self-audit 614.

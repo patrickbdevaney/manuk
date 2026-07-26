@@ -1036,8 +1036,29 @@ pub async fn fetch_document_or_download(url: &str, dir: &std::path::Path) -> Res
     };
 
     let status = resp.status().as_u16();
+    // **An HTTP error status is a DOCUMENT, not a network failure.** This used to `bail!`, which is
+    // the one thing no browser does: a `404`, a `403` bot-wall challenge, a `429` rate-limit notice
+    // and a `500` stack trace all arrive with a real HTML body, and the body is *the whole point* —
+    // it is what the site chose to say. Refusing it turns "the server answered" into "the network
+    // broke", and the user gets a blank tab where every other browser shows the page.
+    //
+    // It is also the repo disagreeing with itself: `page::prefetch_document_post` already carries
+    // the correct rule in a comment ("a 4xx/5xx still has a body worth showing … matching a real
+    // browser"), so the POST navigation rendered error pages while the GET navigation refused them.
+    // Two paths, one question, two answers — and the wrong one was on the path 99% of navigations
+    // take.
+    //
+    // MEASURED, and it is not an edge case: of the 20 HEAD sites in the certification pilot (t606),
+    // **5 answer `403`** with a ~5.5KB challenge page (tamildhool, mangago, supjav, fdown, quora).
+    // Those were the bulk of the pilot's "fetch failed" column — sites the certificate could not
+    // score not because we render them badly but because we declined to look.
+    //
+    // The status is not swallowed: it rides on `Response::status` for every caller that cares, and
+    // is logged here so a page that *is* an error is never silently indistinguishable from one that
+    // is not. A genuinely dead origin (refused connection, DNS failure, timeout) still fails loudly
+    // above — that is a different fact and it keeps its own answer.
     if status >= 400 {
-        bail!("server returned HTTP {status} for {final_url}");
+        tracing::info!(%status, %final_url, "server returned an error status — rendering its body, as a browser does");
     }
     let http_version = resp.version().into();
     let headers = collect_headers(&resp);

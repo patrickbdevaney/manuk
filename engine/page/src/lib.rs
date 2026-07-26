@@ -7293,8 +7293,13 @@ pub async fn fetch_html_with_headers(url: &str) -> Result<(String, String, Vec<(
         let resp = manuk_net::fetch_document(url)
             .await
             .with_context(|| format!("fetching {url}"))?;
+        // The second half of the same rule enforced in `manuk_net::fetch_document_or_download`: an
+        // error status is a document. This bail was the one on the path the **iframe** loader takes
+        // (`fetch_and_load_iframes` → `fetch_html_with_headers`), so a framed OAuth consent screen
+        // that answered `403`, or a 3DS challenge that answered `404`, rendered as *nothing at all*
+        // inside an otherwise-working page — the failure shape this project calls silent.
         if resp.status >= 400 {
-            anyhow::bail!("server returned HTTP {} for {}", resp.status, url);
+            tracing::info!(status = resp.status, %url, "error status — rendering its body, as a browser does");
         }
         // WHATWG charset sniff (D4) instead of lossy UTF-8.
         Ok((

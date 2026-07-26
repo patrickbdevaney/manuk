@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **367** | ticks 1–606 |
-| median tick cycle | **21m** | 366 intervals |
-| median, last 10 | **19m** | 10 intervals |
+| ticks landed | **368** | ticks 1–607 |
+| median tick cycle | **21m** | 367 intervals |
+| median, last 10 | **20m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.02** | 358.4h elapsed |
-| median verify wall | **67s** | 306 ticks |
+| **ticks per hour** | **1.02** | 359.1h elapsed |
+| median verify wall | **67s** | 307 ticks |
 | wall trend | 39s → 85s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **301**
-* **✅ rows in the capability ledger**: 144 → **338**
+* **live gates**: 27 → **302**
+* **✅ rows in the capability ledger**: 144 → **339**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**182 of 367 ticks** (50%) moved a
+**183 of 368 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **182** capability ticks, median cycle **21m**
+* **183** capability ticks, median cycle **21m**
 * median diff per tick: **+231 / −34** lines across 9 files
 
 ## Every tick
@@ -464,5 +464,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **604** | 2026-07-26 02:46 | 18m | the | 85s | +376/−34 | 300 | 81 | 56.0% · | SELF-AUDIT (due) + `getBBox()`: the geometry call every chart makes, and it threw (2026-07 |
 | **605** | 2026-07-26 02:51 | 5m | measurement | 85s | +207/−32 | 301 | 81 | 56.0% · | `isolation`: measured, priced, and deliberately NOT built (2026-07-26) |
 | **606** | 2026-07-26 03:24 | 33m | measurement | 85s | +145/−32 | 301 | 81 | 56.0% · | THE PILOT: the first honest number on the representative corpus (2026-07-26) |
+| **607** | 2026-07-26 04:08 | 44m | capability | 85s | +526/−37 | 302 | 81 | 56.0% · | an HTTP error status is a DOCUMENT: the browser stopped refusing to look (2026-07-26) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

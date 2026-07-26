@@ -5004,3 +5004,30 @@ apart is what makes the row honest.
 **The gate's sharpest claim is `walk`.** A collection that supports `[0]` and `namedItem` but whose
 `length` is wrong satisfies every other assertion — and enumeration is how the older sniffs actually read
 it. RED-proven by making `length` lie.
+
+## An HTTP error status is a DOCUMENT — the 403 bot-wall, the 404, the 429, the 500 (tick 607)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| A top-level navigation whose response carries **`status >= 400` and a real HTML body** — the Cloudflare/Akamai `403` interstitial, a site's own branded `404`, a `429` rate-limit notice, a `500` stack trace | **A quarter of the head of the representative corpus.** Measured on the 20 HEAD sites of `corpus-v2.tsv` (tick 606's pilot): **5 of 20 answer `403` with a ~5.5KB challenge page** (tamildhool · mangago · supjav · fdown · quora). Also every framed consent/challenge screen: an OAuth `403` or a 3DS `404` inside an `<iframe>` | ✅ (tick 607) — both top-level navigation paths `bail!`d on `status >= 400`, so *the server answered* was reported to the user as *the network broke* and the tab went blank. The body now renders, as it does in every other browser; the status still rides on `Response::status` and is logged. Gated by **`G_ERROR_DOCUMENT`** (7 claims), RED-proven **per-path** — restoring either `bail!` alone fails a different claim. |
+
+**The correct rule was already written in this repo, eight hundred lines from the wrong one.**
+`page::prefetch_document_post` carries it verbatim: *"A 4xx/5xx still has a body worth showing (the
+server's 'invalid password' page), so it is rendered rather than turned into an error — matching a real
+browser, which shows the page."* So the **POST** navigation rendered error pages while the **GET**
+navigation refused them: one question, two implementations, and the wrong one sitting on the path
+virtually every navigation takes. That is this project's most-repeated defect shape — *two implementations
+of one rule, and the live one goes stale* — booked here for the fourth time, and it is why §VI.3 of the
+constitution check now asks, on every defect, **whether the rule is implemented more than once and whether
+the copies agree.**
+
+**Why this is a measurement bug as much as a rendering one.** Those five sites were not scoring badly in
+the Phase-0 certificate; they were **unscoreable**, and not because we render them poorly but because we
+*declined to look*. An instrument finds bugs in everything it must traverse to measure, not only in what
+it measures.
+
+**Honesty floor, and the gate asserts it.** *"An error status is a document"* must not decay into
+*"nothing ever fails"*: a **refused connection** (bind a port, learn its number, drop the listener) must
+still `Err`. Without that claim, an engine that never reported a network failure at all would satisfy
+every "did it render?" assertion above. A dead origin, a DNS failure and a timeout are a different fact
+and they keep their own answer.

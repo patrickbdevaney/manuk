@@ -379,3 +379,39 @@ wall often cannot be banked. Measured this session: warm walls of **60 · 62 · 
 `load1` in the receipt ranging 0.3–6.5 on identical trees. The 85s standing mark remains honest.
 
 Next wall audit due: tick 607.
+
+## Audit #17 — tick 607 (wall 65s, `load1 ≈ 1.0`)
+
+**Nothing trimmed, and for once that is the headline rather than a shrug: the wall is 65s against an 85s
+banked mark, and audit #16's dominant cost is gone.**
+
+```text
+  22s  T   crate tests     ████████ 34%
+  14s  P   parity          █████ 22%
+   7s  G6 · 4s G1 · 4s D · 2s F · 1s F4 · 1s B · every named gate at or below 7s
+```
+
+**THE FINDING IS THE DELTA ON `P`, AND IT REVERSES AUDIT #16's WHOLE RESULT.** Twenty ticks ago parity was
+**175s and 76% of a 230s wall** — a serial `for` loop over ~30 fixture pages at ~5.8s each, which #16
+diagnosed as headless-Chrome process startup and named as the loop's biggest wall lever. It is now **14s
+and 22%**, a **12× drop**, with no tick in this window having touched `verify.sh` (which is observer-owned
+and which the agent must not edit). So either the snapshot cache is now serving those pages or the launch
+path changed underneath; **either way the scheduled "bounded concurrency" tick #16 queued is no longer
+worth taking, and this entry retires it.** Recorded explicitly because a named lever that quietly stops
+being a lever is exactly the kind of stale priority §VI.3's third clause (t598) exists to catch — the board
+would otherwise keep steering at a 175s problem that costs 14s.
+
+**`T · crate tests` is now the largest single line (22s, 34%), and it is not a defect.** It is the whole
+workspace's unit tests, which is the one section where cost scales with the thing we actually want more of.
+Audit question #1 (redundancy — do two gates each stand up a SpiderMonkey runtime for overlapping
+assertions?) is the only admissible lever pointed at it, and at 22s the ceiling on that saving is small
+enough that the measurement would cost more than the fix returns. Not taken, and named as not-taken rather
+than left as an open question.
+
+**Nothing in the three historical wall-poison signatures shows up in this reading:** `B` at **1s** means
+the incrementals survived intact (hygiene-cron did not prune mid-run, the ramdisk did not flush), and no
+section swung between warm and rebuilding. The one caveat on the number itself: `load1 ≈ 1.0` is quiet but
+not idle, so 65s is if anything a slight over-read.
+
+**Admissible optimisations found: none.** Coverage unchanged, no gate dropped, no floor widened, nothing
+moved to CI.
