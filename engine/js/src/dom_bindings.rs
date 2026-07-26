@@ -13623,10 +13623,62 @@ const WINDOW_PRELUDE: &str = r#"
                 g.console[m] = mk(m === 'error' ? 'error' : (m === 'warn' ? 'warn' : 'log'));
             }
         }
+        // The five PDF-viewer entries the HTML standard MANDATES (whatwg/html#4809, shipped Chrome
+        // 93+). Identical descriptions across all five is deliberate and specified: the whole point of
+        // the fixed list is that it carries no information about the machine.
+        var __PDF_NAMES = ['PDF Viewer', 'Chrome PDF Viewer', 'Chromium PDF Viewer',
+                           'Microsoft Edge PDF Viewer', 'WebKit built-in PDF'];
+        var __PDF_MIMES = ['application/pdf', 'text/pdf'];
+        // A legacy platform collection: indexed AND named access, `length`, `item`/`namedItem`, and
+        // iterability. A sniffer may reach an entry any of those ways, so a collection that only
+        // indexes would satisfy a shallow check and fail a real one.
+        var __mkCollection = function (entries, keyOf) {
+            var o = { length: entries.length };
+            for (var i = 0; i < entries.length; i++) { o[i] = entries[i]; o[keyOf(entries[i])] = entries[i]; }
+            o.item = function (i) { return entries[Number(i)] || null; };
+            o.namedItem = function (n) {
+                for (var j = 0; j < entries.length; j++) { if (keyOf(entries[j]) === String(n)) { return entries[j]; } }
+                return null;
+            };
+            // Legacy code calls `plugins.refresh()` unconditionally; it must exist and be harmless.
+            o.refresh = function () {};
+            return o;
+        };
+        var __mkMimeTypeArray = function () {
+            return __mkCollection(__PDF_MIMES.map(function (t) {
+                return { type: t, suffixes: 'pdf', description: 'Portable Document Format', enabledPlugin: null };
+            }), function (m) { return m.type; });
+        };
+        var __mkPluginArray = function () {
+            return __mkCollection(__PDF_NAMES.map(function (n) {
+                var p = { name: n, filename: 'internal-pdf-viewer',
+                          description: 'Portable Document Format', length: __PDF_MIMES.length };
+                for (var i = 0; i < __PDF_MIMES.length; i++) {
+                    p[i] = { type: __PDF_MIMES[i], suffixes: 'pdf',
+                             description: 'Portable Document Format', enabledPlugin: p };
+                    p[__PDF_MIMES[i]] = p[i];
+                }
+                p.item = function (i) { return this[Number(i)] || null; };
+                p.namedItem = function (t) { return this[String(t)] || null; };
+                return p;
+            }), function (p) { return p.name; });
+        };
         g.navigator = g.navigator || {
             userAgent: "%UA%",
             appName: "Netscape", appCodeName: "Mozilla", appVersion: "5.0",
             product: "Gecko", platform: "%PLATFORM%",
+            // `navigator.plugins` / `navigator.mimeTypes` — read on 32.5% / 12.5% of page loads
+            // (Blink use counters, 2026-07-24) and absent here, so `navigator.plugins.length` was the
+            // TypeError the `vendor` comment below already describes. That argument was made and then
+            // applied to exactly one property.
+            //
+            // **This is not a claim to support plugins.** Since Chrome 93 the spec HARD-CODES this to
+            // five fixed PDF-viewer entries on every desktop browser, precisely so it stops being a
+            // fingerprinting surface — the list is no longer a report of what is installed, it is a
+            // constant the standard requires. Returning it is conformance; returning `undefined` is
+            // the divergence. Whether we RENDER a PDF is a separate question with a separate answer
+            // (no), and keeping the two apart is the point.
+            plugins: __mkPluginArray(), mimeTypes: __mkMimeTypeArray(),
             language: "en-US", languages: ["en-US", "en"],
             onLine: true, cookieEnabled: true, doNotTrack: null,
             // `vendor` was UNDEFINED, and it is one of the handful of things a UA-sniffing bundle

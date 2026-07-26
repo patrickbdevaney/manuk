@@ -24673,3 +24673,68 @@ and `stylo_map.rs` does not read it**, which is the cheapest kind of capability 
 fidelity win and did not cover this axis. Then the `interpolate-size` SIGSEGV, re-priced from exotic to
 one-page-load-in-twelve.
 Cadences: const 591; self-audit 594; surface 598; wall 607.
+
+## Tick 589 — `navigator.plugins` was undefined, and the argument for fixing it was already in the file (2026-07-25)
+
+t588's audit handed the board a usage-ranked list. This is the first item off it that is completable in one
+tick, and it is the one whose case had **already been made in this repository, about a different property.**
+
+**THE DEFECT.** `navigator.plugins` and `navigator.mimeTypes` were absent from the navigator literal, which
+shipped `vendor`, `vendorSub`, `productSub`, `deviceMemory`, `hardwareConcurrency`, `maxTouchPoints` and
+`webdriver`. Read on **32.5% / 12.5% of page loads** (Blink use counters, 2026-07-24). The RED proof is the
+failure itself, verbatim:
+
+```text
+THREW: TypeError: can't access property "length", navigator.plugins is undefined
+```
+
+**THE ARGUMENT WAS ALREADY WRITTEN, NEXT TO `vendor`:** *"it is one of the handful of things a UA-sniffing
+bundle reads on its first line… a TypeError that takes the rest of the bundle with it — and sniffing code
+is, by nature, the code that runs before anything else."* That reasoning is correct and it was applied to
+**one** property. **A correct argument in a comment does not generalise itself.** The next property with
+the same shape needs someone to notice it has the same shape — which is precisely what a usage-ranked map
+is for, and why t588's re-ranking mattered more than any single row it added.
+
+**HONESTY, PRECISELY BOUNDED — this is not evasion and the boundary is worth stating.** Since Chrome 93 the
+spec **hard-codes** this list to five fixed PDF-viewer entries on every desktop browser, *specifically so it
+stops being a fingerprinting surface*. The list is therefore not a report of what is installed; it is **a
+constant the standard requires**, and returning `undefined` is the divergence. So: the honest answer to
+*"can a page enumerate plugins?"* is now yes, and the honest answer to *"do you render PDF?"* **stays no** —
+two separate questions with two separate answers, kept apart in the row and in the code comment. The
+project's scope rule (no stealth, no fingerprint evasion) is untouched: implementing a constant the spec
+mandates is conformance, not disguise.
+
+**THE GATE'S SHARPEST CLAIM IS `walk`.** A collection that supports `[0]` and `namedItem` but whose
+`length` is wrong satisfies *every other assertion in the gate* — and a `for` loop over `length` is how the
+older sniffs actually read it. RED-proven by making `length` lie: `expected walk:true`.
+
+**AND A PROCESS FAILURE WORTH RECORDING, because it cost three attempts.** I edited this file with
+`python` string-replacement twice and mangled it both times — the second insertion landed *inside* the
+navigator object literal, splitting the statement, and the symptom was `ReferenceError: navigator is not
+defined`, which reads like a missing binding rather than a syntax error I had introduced. The recovery was
+`git checkout --` on that one file (safe here: its only uncommitted change was my broken edit) and a redo
+with a **single anchored `Edit`** instead. The lesson is the repo's own `scripted-edit-silent-noop` with the
+sign flipped — a scripted edit that *does* apply, in the wrong place, is harder to notice than one that
+does not apply at all, because the file still compiles as Rust and only fails as JavaScript at runtime.
+**For a large embedded-JS block, anchor on unique surrounding text and edit once.**
+
+RED-PROVEN twice: remove the two properties → the original TypeError returns; make `length` lie → `walk`
+fails while every other claim still passes.
+
+TICK SHAPE: capability (the first line of a third of the web's bundles stops throwing). Bar 0 untouched;
+no ratchet floor moved.
+Gates: `G_NAVIGATOR_PLUGINS` (`engine/page/tests/g_navigator_plugins.rs`), RED-proven twice.
+WIKI: none [forced] — the mechanism is a spec-mandated constant and its reasoning lives at the code site;
+the class it belongs to is in WEB-PATTERNS.md, which this tick updates.
+PATTERN: new — the line-one UA sniff, with the "a correct argument in a comment does not generalise itself"
+lesson.
+
+NEXT: continue down t588's usage-ranked list, which is now the board's clearest ordering. **`appearance:
+none` (60.5% of page loads) and `filter` (51.9%) are the two largest**, and both are the same shape —
+`stylo_map.rs` does not read a value Stylo already computes — except that `appearance` is `engine="gecko"`
+in Stylo 0.19, so the servo build never parses it and it needs the MinimalCascade recovery route that
+`-webkit-line-clamp` already uses. `filter` additionally needs real paint work, so it is the larger of the
+two. ⚠ A first probe of `appearance` was written and discarded this tick because its fixture could not
+isolate the property — both the styled and the "plain" control matched the same rule. Write that one
+carefully.
+Cadences: const 591; self-audit 594; surface 598; wall 607.

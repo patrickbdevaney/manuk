@@ -4978,3 +4978,29 @@ implicitly promises everywhere.
 **And it was found by an instrument that needed the capability**, not by a conformance test: tick 586's
 certificate probe tried to wrap storage to record touches and recorded nothing. Building the measuring
 tool out of the same primitives the web uses is what made the engine's divergence visible.
+
+---
+
+## The line-one UA sniff — `navigator.plugins` / `navigator.mimeTypes` (tick 589)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| **`navigator.plugins.length`**, `plugins.namedItem('PDF Viewer')`, `navigator.mimeTypes['application/pdf']`, and a `for` loop over `plugins` | UA-sniffing and capability-detection bundles — analytics, ad tags, anti-fraud, video players — which by nature run **before anything else on the page** | ✅ (tick 589) — both were `undefined`, so `navigator.plugins.length` threw a **TypeError in the first line of the first bundle**, taking the rest of that bundle down with it. Read on **32.5% / 12.5% of page loads**. Now the five PDF-viewer entries the HTML standard mandates, as a real legacy platform collection. Gated by `G_NAVIGATOR_PLUGINS`, RED-proven twice. |
+
+**The argument for this was already written in this repo, next to a different property.** The comment beside
+`navigator.vendor` says: *"it is one of the handful of things a UA-sniffing bundle reads on its first line…
+a TypeError that takes the rest of the bundle with it — and sniffing code is, by nature, the code that runs
+before anything else."* That reasoning was correct, and it was applied to **one** property. **A correct
+argument in a comment does not generalise itself** — the next property with the same shape needs someone to
+notice it has the same shape, which is what a usage-ranked map is for.
+
+**Honesty, precisely bounded.** Since Chrome 93 the spec **hard-codes** this list to five fixed PDF-viewer
+entries on every desktop browser, *specifically to stop it being a fingerprinting surface*. So the list is
+not a report of what is installed — it is a **constant the standard requires**, and returning `undefined`
+is the divergence. This is not "pretend to have Flash", and it is not the bot-evasion the project's scope
+rules out: **whether we render a PDF is a separate question, and its answer stays no.** Keeping those two
+apart is what makes the row honest.
+
+**The gate's sharpest claim is `walk`.** A collection that supports `[0]` and `namedItem` but whose
+`length` is wrong satisfies every other assertion — and enumeration is how the older sniffs actually read
+it. RED-proven by making `length` lie.

@@ -348,3 +348,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 586	3686d622	1785022380	2026-07-25T19:33:00-04:00	830	instrument	85	6	340	32	284	81	3896	6960	0	336	31	the FUNCTION leg gets a PRODUCER, and `localStorage` turns out to be unpatchable (2026-07-25)
 587	02253327	1785024682	2026-07-25T20:11:22-04:00	2302	capability	85	10	407	39	285	81	3896	6960	0	337	31	`localStorage.setItem = fn` was accepted and discarded (2026-07-25)
 588	450f72a9	1785025895	2026-07-25T20:31:35-04:00	1213	instrument	85	6	259	42	285	81	3896	6960	0	337	31	SURFACE AUDIT #32: the map had been ranking by roadmap, not by usage (2026-07-25)
+589	9529f6d0	1785027959	2026-07-25T21:05:59-04:00	2064	capability	85	8	287	33	286	81	3896	6960	0	338	31	`navigator.plugins` was undefined, and the argument for fixing it was already in the file (2026-07-25)
