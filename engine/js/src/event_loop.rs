@@ -4066,6 +4066,32 @@ const PRELUDE: &str = r#"
       iface('HTMLFormElement',     tagIs('FORM'));
       iface('HTMLCanvasElement',   tagIs('CANVAS'));
       iface('HTMLScriptElement',   tagIs('SCRIPT'));
+      // **`HTMLScriptElement.supports(type)` — the STATIC feature-detect, and its absence is a THROW.**
+      //
+      // A page asks this before choosing how to load its own code: `HTMLScriptElement.supports('module')`
+      // decides between an ES-module bundle and a classic fallback, and `supports('importmap')` decides
+      // whether to emit a map or ship a resolver. Calling a static that does not exist is
+      // `TypeError: HTMLScriptElement.supports is not a function` — so the page does not fall back, it
+      // DIES at the feature-detect, which is the worst possible outcome for a call whose entire purpose
+      // is to let a page degrade. Third rung of `www.welt.de`'s chain, after t612's `innerText` setter
+      // and t613's XHR EventTarget.
+      //
+      // The answers are ours to give truthfully rather than optimistically, and each is checkable:
+      // classic scripts run, ES modules run with a real resolve hook and cycle-safe graph walk (t512-516),
+      // and import maps land there too. `speculationrules` is a prefetch hint we do not implement, and
+      // answering `false` is how a page knows to do its own prefetching — a wrong `true` here is the
+      // honest-answer trap in its purest form, since the caller is ASKING to be told no.
+      if (typeof globalThis.HTMLScriptElement === 'function' &&
+          typeof globalThis.HTMLScriptElement.supports !== 'function') {
+        globalThis.HTMLScriptElement.supports = function (type) {
+          switch (String(type)) {
+            case 'classic':   return true;
+            case 'module':    return true;
+            case 'importmap': return true;
+            default:          return false;   // speculationrules, and anything later
+          }
+        };
+      }
       iface('HTMLStyleElement',    tagIs('STYLE'));
       iface('HTMLLinkElement',     tagIs('LINK'));
       iface('HTMLTemplateElement', tagIs('TEMPLATE'));

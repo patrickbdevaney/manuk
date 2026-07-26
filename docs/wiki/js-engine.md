@@ -1521,3 +1521,49 @@ disabled and then with it set, and the gate compares how many spins each got. Th
 reasoning `g_load_document.rs` sets out. A spin-count comparison is also machine-independent in a way
 a millisecond threshold on a loaded build box is not. With the bound removed the two arms read
 **80001 and 80001**, and the gate says so.
+
+## A feature-detect that THROWS is worse than one that answers no (tick 615)
+
+`HTMLScriptElement.supports(type)` was `undefined`. A page calls it to decide how to load **its own
+code** — an ES-module bundle or a classic fallback, an import map or a hand-rolled resolver. Calling a
+static that does not exist is:
+
+```text
+  TypeError: HTMLScriptElement.supports is not a function
+```
+
+So the page does not take the fallback branch — **it dies at the feature-detect.** For a call whose
+entire purpose is to let a page degrade gracefully, that is the worst available outcome, and it is
+strictly worse than answering `false`: `false` sends the page down a path it has already written.
+
+**The general shape, which applies to every detect surface:**
+
+> A missing *feature* costs you the feature. A missing *feature-detect* costs you the **fallback** —
+> and the fallback is the thing that was going to work.
+
+So a detect API is worth implementing **before** the capability it reports on, and it must be
+implemented to return the honest answer rather than the absent one. The same reasoning already applies
+to `CSS.supports` (t576/t591, where answering "does it PARSE" promised 31 properties we never render)
+and to `MediaSource.isTypeSupported`.
+
+### The answers, and why one of them is deliberately `false`
+
+| type | answer | backing |
+|---|---|---|
+| `classic` | `true` | classic scripts run |
+| `module` | `true` | real resolve hook + cycle-safe graph walk (t512-516) |
+| `importmap` | `true` | import maps land on the same path |
+| `speculationrules` | **`false`** | not implemented — and the page is *asking to be told no* |
+
+`speculationrules` is the load-bearing one. A page that asks about it does so in order to prefetch by
+itself if the answer is no. A flattering `true` means **the page stops and we never start** — a
+capability claimed is a capability nobody provides. `[[honest-answer-is-not-a-fixed-answer]]`
+
+### Where it was found, and what it did not fix
+
+Third rung of `www.welt.de`'s anti-adblock chain, after t612's `innerText` setter and t613's XHR
+EventTarget. Clearing it did **not** make the site render — the chain continues to
+`Error: Failed to execute packing script`, with one visible error left: a `<script type=module>`
+request answered with **HTML** (`SyntaxError: expected expression, got '<'`). Three real
+TypeError-class gaps found, each justified by its own measured corpus population, and the site still
+blank. An arc that peels one layer per fix has to be able to say that, or it becomes a sunk-cost march.

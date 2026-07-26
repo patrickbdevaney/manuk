@@ -688,6 +688,9 @@
   - L1454 · The event-loop drain is bounded by the CLOCK, not only by a task count (t610)
   - L1498 · run_with_fetcher had no bound at all
   - L1507 · What the gate had to prove, and the draft that was green for the wrong reason
+  - L1525 · A feature-detect that THROWS is worse than one that answers no (tick 615)
+  - L1549 · The answers, and why one of them is deliberately false
+  - L1562 · Where it was found, and what it did not fix
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1062,4 +1065,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-977 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+980 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

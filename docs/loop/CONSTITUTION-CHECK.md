@@ -1954,3 +1954,84 @@ trap PART VII/the North Star names. Any load-budget tick must move fidelity and 
 or it is measuring what we stopped doing.
 
 **Next check due: tick 615.**
+
+---
+
+## Check #43 — tick 615
+
+**Horizon:** H0 — the Phase-0 daily-driver certificate (`docs/loop/DAILY-DRIVER-CERTIFICATION.md`,
+the authority since t581). Gate: `daily-driver-pass(site) = renders(site) ∧ functions(site)` over the
+fixed-denominator corpus-v2 — **not** a WPT percentage (PART VII.1).
+
+**Gate or scoreboard?** t608-615 is eight ticks: map-reconcile self-test (608), interface objects
+(609), the drain's clock bound (610), the certificate's fetch reasons (611), `innerText`'s setter
+(612), XHR as an EventTarget (613), the oracle's shell (614), and this check plus
+`HTMLScriptElement.supports` (615). **Gate.** Five of the eight came from *running the certificate and
+reading what it said*, which is the shape §VI.4 asks for, and three of those (612/613/615) are the
+same chain being peeled one rung at a time on one real site.
+
+**§VI.3'S FOURTH CLAUSE IS NOT A PATTERN ANY MORE, IT IS THE DOMINANT DEFECT.** Check #42 added it on
+three instances — *when a defect is found, ask whether the rule it violates is implemented MORE THAN
+ONCE, and whether the copies agree.* This window fired it **five more times, consecutively**:
+
+| tick | one rule | two implementations | the one that was wrong |
+|---|---|---|---|
+| 610 | the event-loop drain is bounded | `run_deferred` · `run_with_fetcher` | the second had **no bound at all** |
+| 611 | a site that cannot be reached is a counted row | 4 separate `continue`s in one loop | three of the four dropped it silently |
+| 612 | rendered text is settable | `outerText` · `innerText` | `innerText` had **no setter** |
+| 613 | an XHR event is dispatched | streaming path · buffered path | buffered never fired `loadend` |
+| 614 | a placement ratio needs a real sample | `certificate()` · the printed MEAN | the MEAN averaged in vacuous rows |
+
+**Eight consecutive ticks, eight instances.** That is no longer "a thing to check"; it is the modal
+bug in this codebase, and it has a common cause worth naming: **this engine grew by adding a second
+path beside a working one** — a streaming delivery beside a buffered one, a prelude object beside a
+Rust binding, a certificate function beside a report function — and the second path is written by
+someone who has just read the *behaviour* rather than the *rule*. The remedy that actually worked five
+times running is mechanical rather than attentional: **when you fix one, grep for the other and route
+both through one function**, so there is no longer a place to write the rule down twice. t613 is the
+clean form — six open-coded dispatch sites collapsed into one `__xhrFire`.
+
+**AND A NEW CLAUSE, EARNED THREE TIMES IN ONE SESSION — §VI.3.5: BEFORE BELIEVING A MEASUREMENT,
+ESTABLISH WHETHER IT IS A PROPERTY OF THE ENGINE OR OF THE INSTRUMENT.**
+
+1. **t610 (the wall).** Four consistent readings of 544-752s against a mark of 189 produced a written
+   request that the observer *re-baseline the ratchet mark*. All four were one artifact: an
+   `engine/js` edit forces a ~10-minute release LTO relink **inside the gate phase**. Disproof cost
+   one command (`cargo build -p manuk-wpt --release` → 0.45s warm); the same wall then ran **64s**.
+   **A false regression report aimed at a RATCHET MARK is worse than one aimed at code, because the
+   remedy it requests is permanently loosening the thing that catches regressions.**
+2. **t613 (the getter-only list).** t612 published a residue list of "spec-settable properties that
+   throw here", derived by **grepping** a registration macro. Probing found `nodeValue` already
+   writable from a setter on another prototype. The list described the grep, not the engine.
+3. **t614 (the shell).** `comix.to` scored `coverage 66.7%` — over **three elements**, because the
+   oracle's own `file://` reference cannot hydrate a JS-built page (28 elements vs ~2643 live). The
+   number measured the instrument's reach, not the engine's.
+
+Each was one command away from disproof, and in each case the *reflex* was to believe the number
+because the number was large, or consistent, or came from code I had just written. The clause:
+**a measurement is a claim about a SYSTEM — engine plus harness plus corpus — and the attribution is
+part of the result.** This is Lesson 4 in STATUS ("every number has a harness") generalised from
+*timing* to *every* metric, which is where it was always heading.
+
+**INVARIANTS.** I2: held — nothing vendored or patched; 612/613/615 are all our own JS/binding code.
+I4 (Pareto): held, and this window is unusually disciplined about it — t613 *measured* `.classList =`,
+`document.body =` and `.selectionDirection =` at **zero corpus usage** and declined to build them, and
+found `.style =`'s 15 apparent hits were all React props objects. Declining on measured impact is the
+same shape as t605's `isolation`. I3: no new rendered construct, so no semantic-model exposure owed.
+I5: **strengthened again** — every capability tick this window (612/613/615) was found by the
+certificate traversing a real site, not by a plan; check #42's *"an instrument finds bugs in
+everything it must traverse"* is now the loop's main discovery channel.
+
+**PART VII / V1-SCOPE: held.** Every tick is rendering parity or the agentic surface. The three
+measurement ticks (611/614 and half of 615) are the certificate itself, which PART VII.1 names as the
+gate, not as tooling.
+
+**⚠ STANDING ITEM FOR THE OBSERVER, UNCHANGED SINCE t611:** `manuk-wpt`'s tests are **not in the
+wall** — `verify.sh`'s `_crate_suite` lists seven crates and `manuk-wpt` is not one, with no `_launch`
+line either. `G_CERT_FALSIFIABLE`, whose own doc comment reads *"this is the proof, re-run on every
+wall"*, has never run on one; nor has the vacuous-pass guard, nor `G_UNMEASURABLE_REASON`. They are
+green (`cargo test -p manuk-wpt` → 54 passed in **14s**) and the RATCHET's `GATES` count has been
+counting them as coverage. This is `[[gates-not-in-the-wall]]` applied to the certificate itself.
+`scripts/` is observer-owned; one line closes it.
+
+**Next check due: tick 623.**

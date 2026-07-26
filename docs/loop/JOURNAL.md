@@ -26855,3 +26855,84 @@ cost of another (the document is the one the user would get). A local origin tha
 over `http://127.0.0.1` would satisfy both, and is the obvious candidate — but it changes what every
 past number meant, so it wants its own tick with a before/after on the same corpus, not a quiet swap.
 Until then the honest position is the one now printed: those sites are UNMEASURED, with a reason.
+
+## Tick 615 — the feature-detect that THREW, plus constitution check #43 (2026-07-26)
+
+The constitution re-read was due (every 8 ticks; last at 607). **Check #43 is written**, and its
+finding is that §VI.3's fourth clause — *is this rule implemented more than once, and do the copies
+agree?* — fired in **eight consecutive ticks, eight times**, which stops being a heuristic and becomes
+the modal defect of this codebase:
+
+```text
+  610  drain bounded        run_deferred | run_with_fetcher   → the second had NO bound at all
+  611  unreachable = a row  4 `continue`s in one loop         → three dropped it silently
+  612  rendered text set    outerText | innerText             → innerText had no setter
+  613  XHR event dispatch   streaming | buffered              → buffered never fired loadend
+  614  ratio needs a sample certificate() | the printed MEAN  → the MEAN averaged vacuous rows
+```
+
+Common cause, and it is worth naming because it predicts where the next one is: **this engine grew by
+adding a second path beside a working one** — a streaming delivery beside a buffered one, a JS prelude
+object beside a Rust binding, a report function beside a certificate function — and the second path
+gets written by someone who has read the *behaviour* rather than the *rule*. The remedy that worked
+five times running is mechanical, not attentional: **fix one, grep for the other, and route both
+through a single function**, so there is no longer anywhere to write the rule down twice. t613 is the
+clean form — six open-coded dispatch sites collapsed into one `__xhrFire`.
+
+Check #43 also adds **§VI.3.5: before believing a measurement, establish whether it is a property of
+the ENGINE or of the INSTRUMENT** — earned three times this session (the wall that was a release
+relink, the getter-only list that was a grep artifact, the 66.7% coverage that was an oracle shell),
+each one command away from disproof and each believed because the number was large, or consistent, or
+came from code I had just written.
+
+**THE CAPABILITY HALF: `HTMLScriptElement.supports` was `undefined`, and that is a THROW at exactly
+the moment a page is trying to degrade gracefully.** A page calls it to decide between an ES-module
+bundle and a classic fallback, or whether emitting an import map is worth it. Calling a static that
+does not exist is `TypeError: HTMLScriptElement.supports is not a function` — so the page does not
+take the fallback branch, **it dies at the feature-detect.** For a call whose entire purpose is to let
+a page degrade, that is the worst available outcome. Third rung of welt.de's chain.
+
+**The answers are ours to give truthfully, and one of them is a `false` on purpose.** `classic`,
+`module` and `importmap` are all genuinely backed here (t512-516 built the module graph with a real
+resolve hook and a cycle-safe walk). `speculationrules` answers **false**, and that is load-bearing in
+the other direction: a page asking about it is *asking to be told no* so it can prefetch by itself. A
+flattering `true` means the page stops and we never start — a capability claimed is a capability
+nobody provides. `[[honest-answer-is-not-a-fixed-answer]]`
+
+RED-PROVEN, TWO MECHANISMS:
+  · remove `supports` again          -> RED `threw:true` — welt.de's exact rung
+  · answer `true` for everything      -> RED `speculationrules:false` — the flattering-answer trap
+
+**HONESTY: welt.de STILL DOES NOT RENDER, and this is the third rung cleared without the door
+opening.**
+
+```text
+  t612 before:  adblock: TypeError: setting getter-only property "innerText"
+  t613 before:  adblock: TypeError: a.addEventListener is not a function
+  t615 before:  adblock: TypeError: HTMLScriptElement.supports is not a function
+  t615 after:   adblock: Error: Failed to execute packing script     ← still blank
+```
+
+One error remains on that run — `a page module failed: SyntaxError: expected expression, got '<'`, a
+`<script type=module>` request answered with **HTML**. That is the interesting one and it is NOT a
+missing API: it means a module URL resolved to a document, which is either a 404 page being served as
+JavaScript or a resolution bug on our side. It is named here rather than guessed at.
+
+**And the honest accounting of this arc: three ticks, three real TypeError-class capability gaps
+found, one site still blank.** Each fix stands on its own measured population (t612: 4 of 16 sites
+write `innerText`; t613: 8 of 16 construct an XHR and 4 of 16 attach listeners to one), which is why
+they are claimed at all — *not* because the site improved, because it has not. A chain-peeling arc has
+to be able to say that, or it becomes a sunk-cost march.
+
+TICK SHAPE: capability (a feature-detect that threw now answers, truthfully including its `false`) +
+the due constitution check. Bar 0 untouched; no ratchet floor moved; no capability traded.
+Gates: +1 `G_SCRIPT_SUPPORTS` (`engine/page/tests/g_script_supports.rs`) — it exists and does not
+throw, it is STATIC (absent on instances), the three backed types answer true, the unimplemented one
+answers false, and all four are real booleans since `=== true` is how feature detects are written.
+WIKI: `docs/wiki/js-engine.md` — "a feature-detect that throws is worse than one that answers no".
+PATTERN: [no-pattern] — the class (a site that probes the DOM and blanks itself on a bad answer) was
+written at t612 and this is its third instance, not a new one.
+
+NEXT: the module-answered-with-HTML error is the last visible rung on welt.de and the only one that is
+a *mechanism* rather than a missing member. Also still standing for the observer: `manuk-wpt`'s tests
+(including `G_CERT_FALSIFIABLE`) are not in the wall — 54 tests, 14s.
