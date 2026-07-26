@@ -24738,3 +24738,71 @@ two. ⚠ A first probe of `appearance` was written and discarded this tick becau
 isolate the property — both the styled and the "plain" control matched the same rule. Write that one
 carefully.
 Cadences: const 591; self-audit 594; surface 598; wall 607.
+
+## Tick 590 — the highest-usage item on the board was worth much less than its number (2026-07-25)
+
+t588's audit ranked `appearance` the single largest unmapped capability: **49.3% of page loads, and
+`CSSValueAppearanceNone` 60.5%**, with `stylo_map.rs` reading it nowhere. On the number alone it was the
+obvious next tick, and t589's journal named it as such.
+
+**MEASURED FIRST, AND THE NUMBER DOES NOT TRANSFER.** In a real browser `appearance: none` suppresses
+**native OS widget rendering** — the drawn dropdown arrow, the checkbox glyph, the range track — which CSS
+cannot otherwise override, and that is the entire reason authors write it. **This engine has no native
+widget rendering.** Form controls are drawn by ordinary UA *CSS* at lowest specificity, so an author rule
+already beats them:
+
+```text
+#plain     (nothing)                        border=1  bg=#fff  padLeft=2
+#styled    (appearance:none)                border=1  bg=#fff  padLeft=2    ← identical: NO-OP
+#override  (border:0; background:none; …)   border=0  bg=None  padLeft=0    ← the effect, achieved
+```
+
+**The visual capability authors reach for `appearance: none` to get is already available here, and already
+working.** A tick that "implemented `appearance`" by adding a `ComputedStyle` field nobody reads would have
+been **theatre — and the 60.5% would have justified it.** That is the trap this tick exists to avoid, and
+it is a new one: not a stale row, not a phantom, but a **correctly-measured usage number whose impact does
+not survive contact with a different architecture.**
+
+**WHAT IS ACTUALLY MISSING IS SMALLER, REAL, AND A DIFFERENT KIND OF WORK.**
+
+```text
+getComputedStyle(el).appearance       → undefined      (the CSSOM contract says a STRING, always)
+getComputedStyle(el).webkitAppearance → undefined
+CSS.supports('appearance', 'none')    → false
+```
+
+`undefined` is t576's `getPropertyValue` defect again — half the web writes
+`getComputedStyle(el).appearance.indexOf(…)` in one expression, and `undefined.indexOf` kills the caller's
+frame. Worth fixing on its own terms, but it is **CSSOM completeness, not rendering**, and pricing it as
+60.5%-of-page-loads *rendering* work would have sent a tick at the wrong subsystem.
+
+**THE GENERAL FORM, and it sharpens t588's own lesson rather than contradicting it.** #588 said *a
+capability's name is not its shape* — rank by usage, not by roadmap. True, and this is the next term in
+that series: **a capability's usage is not its impact.** A use counter measures what pages *ask for*; what
+it costs *you* depends on what you would otherwise do. Both halves are needed, and the second one is only
+answerable by measurement in your own engine. The audit was right to raise the row; it could not have known
+the price.
+
+**THE GATE PINS THE MEASUREMENT so it cannot rot.** If native widget painting ever lands, `#styled` and
+`#plain` stop being identical and `G_APPEARANCE_NONE` goes red — which is exactly the moment this row needs
+re-pricing again. It also carries a **vacuity guard** (RED-proven): if the UA sheet ever stops giving a
+bare `<select>` a border and background, claim 3 would be comparing two blanks, so that is asserted first.
+
+Row 333 re-priced `missing` → `partial`, with the evidence and the residue in the receipt.
+
+TICK SHAPE: measurement (the board's #1 by usage, measured and re-priced downward with a gate pinning the
+finding) — the cheapest tick of the session and the one that saved the most misdirected work. No engine
+source touched; Bar 0 untouched; no ratchet floor moved.
+Gates: `G_APPEARANCE_NONE` (`engine/page/tests/g_appearance_none.rs`), vacuity guard RED-proven.
+WIKI: none [forced] — no engine source changed; the finding's home is the gate's own header and the
+constellation receipt.
+PATTERN: [no-pattern] — no engine capability changed.
+
+NEXT: **`filter` (51.9%) is now the board's #1, and unlike `appearance` its impact DOES transfer** — there
+is no cascade-level workaround for a blur, so a page that asks for one gets nothing. It needs real paint
+work (a separable-Gaussian pass over the composited layer), which makes it the first genuine subsystem tick
+in a while. Before starting it, apply this tick's lesson: measure what a `filter`-using page currently
+renders, because "nothing" and "the unfiltered content" are different failures with different prices. Then
+`font-display`/`unicode-range` — adjacent to the t557/t558 font arc and cheap by comparison. The CSSOM half
+of `appearance` folds naturally into whichever CSSOM tick comes next.
+Cadences: const 591 (NEXT TICK); self-audit 594; surface 598; wall 607.

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **350** | ticks 1–589 |
-| median tick cycle | **21m** | 349 intervals |
-| median, last 10 | **18m** | 10 intervals |
+| ticks landed | **351** | ticks 1–590 |
+| median tick cycle | **21m** | 350 intervals |
+| median, last 10 | **16m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.99** | 352.0h elapsed |
-| median verify wall | **67s** | 289 ticks |
+| **ticks per hour** | **0.99** | 352.3h elapsed |
+| median verify wall | **67s** | 290 ticks |
 | wall trend | 39s → 85s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **286**
+* **live gates**: 27 → **287**
 * **✅ rows in the capability ledger**: 144 → **338**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**177 of 350 ticks** (51%) moved a
+**177 of 351 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -447,5 +447,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **587** | 2026-07-25 20:11 | 38m | capability | 85s | +407/−39 | 285 | 81 | 56.0% · | `localStorage.setItem = fn` was accepted and discarded (2026-07-25) |
 | **588** | 2026-07-25 20:31 | 20m | instrument | 85s | +259/−42 | 285 | 81 | 56.0% · | SURFACE AUDIT #32: the map had been ranking by roadmap, not by usage (2026-07-25) |
 | **589** | 2026-07-25 21:05 | 34m | capability | 85s | +287/−33 | 286 | 81 | 56.0% · | `navigator.plugins` was undefined, and the argument for fixing it was already in the file  |
+| **590** | 2026-07-25 21:23 | 18m | measurement | 85s | +204/−33 | 287 | 81 | 56.0% · | the highest-usage item on the board was worth much less than its number (2026-07-25) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
