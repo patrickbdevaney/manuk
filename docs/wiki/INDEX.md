@@ -166,6 +166,11 @@
   - L962 · The ablation, measured on six sites, decisive in both directions
   - L985 · What this invalidates, said plainly
   - L997 · The diff carries the COMPUTED FONT — and a rect-only diff could not have asked the question (tick 563)
+  - L1034 · curl exits 0 on a 403, so the certificate could not tell a bot wall from a document (tick 611)
+  - L1064 · The second mechanism, which a status check alone would not have found
+  - L1085 · A refusal is not a rendering result — and this is the sharp edge
+  - L1101 · And the denominator had a hole the whole time
+  - L1118 · What the report says now
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1043,4 +1048,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-958 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+963 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

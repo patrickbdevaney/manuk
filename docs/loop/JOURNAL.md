@@ -26396,3 +26396,185 @@ unmeasured. The honest follow-up is the per-drain distribution across the corpus
 would say whether any *real* page's legitimate drain is anywhere near seconds. Until that exists,
 treat 5s as a Bar-0 backstop and not as a scheduling policy. Also still open from t609: `mangago.me`
 remains unclaimed, and `manuk-wpt firstpaint` still panics on `.expect("prefetch")`.
+
+## Tick 611 — the certificate cannot see an HTTP status, so a bot-wall and a document are the same thing (2026-07-26)
+
+The board's live CO-#1 is the certification redesign, and observer t602 named the next target
+precisely: *"do NOT jump to the full 400-site sweep — the binding constraint is the 64%
+unscored/failed rate. Fix WHY 9 of 14 cannot be scored."* So this tick asks the instrument that
+question, and the answer turned out to be about the instrument rather than the engine.
+
+**HYPOTHESIS GOING IN — and it was wrong, which is why it is written down here.** t606's own NEXT
+line said *"`imdb` is 'no [id] elements' — the selector-path keying should not need ids at all, so
+this is the next keying gap."* That is a plausible story: `capture_boxes_all_ids` still keys on
+`[id]` while `capture_seen_all_paths` moved to selector paths at t532, which is the same
+one-rule-two-implementations shape t610 just closed in `run_with_fetcher`. I expected to find the
+coverage leg stranded on the old keying.
+
+**It is not.** `capture_boxes_all_ids` has **no callers at all** — the fidelity path has keyed on
+selector paths since t532, exactly as advertised. The `[id]` story was the instrument's own stale
+*error message* describing a failure it no longer has, and it named the wrong organ for five ticks.
+
+MEASURED INSTEAD — the probe's own fetch, run by hand across the 20 HEAD sites of `corpus-v2.tsv`.
+
+```text
+  200 with a body ......... 11        measurable
+  403 Cloudflare .......... 5         tamildhool · mangago · supjav · fdown · quora
+  202 zero bytes .......... 1         imdb.com
+  transport failure ....... 3         docomo · pitc · fawanews
+```
+
+**Six of twenty answer with an HTTP status the instrument never reads.** The probe's fetch checked
+`out.status.success()` — **`curl`'s process exit code, not the HTTP status** — and `curl -sL` without
+`-f` exits 0 on a 403. So Cloudflare's *"Just a moment…"* interstitial was returned to the caller **as
+the document**, and `imdb.com`'s 202-with-zero-bytes as **an empty document**. Neither is a page, and
+no layer downstream could discover that, because the fact was destroyed before any of them ran.
+
+That is the bulk of the pilot's *"9 of 14 could not be scored"*, and it is exactly why *"find out
+why"* was unanswerable **from the instrument's own output**: every distinct way of failing to reach a
+page arrived at the report as the same bare `—`.
+
+**A SECOND MECHANISM, WHICH A STATUS CHECK ALONE WOULD NOT HAVE FOUND.** A 403's body is not inert.
+The challenge page ships `<meta http-equiv="content-security-policy" content="default-src 'none';
+script-src 'nonce-…'">`, and the whole probe works by **injecting a `<script>` into the fetched
+HTML**. The nonce CSP blocks it: Chrome parses the probe, refuses to run it, and dumps a DOM in which
+the probe is present *as text* and its output never existed. `parse_seen_probe_json` then fails with
+precisely the right words — *"no `__PARITY__` probe output in dumped DOM (did Chrome run the
+script?)"* — and the caller was `if let Ok(mut cseen) = capture_seen_all_paths(...)`, which throws
+that sentence on the floor. **The instrument had been telling us the answer for five ticks and the
+`if let Ok` ate it.** The error type is now `Unmeasurable`, which an `if let Ok` cannot quietly
+discard.
+
+**THE SHARP EDGE, AND IT IS THE POINT OF THE TICK.** t607 landed the complementary truth for the
+ENGINE: *an HTTP error status IS a document — 403/404/429/500 pages render* — because the user has to
+see them. Both are correct at once:
+
+> **The browser renders the 403. The certificate refuses to count it as evidence about the site
+> behind it.**
+
+And the harm is worse than a missing label, because a challenge page is a **real document that both
+engines render, and they agree**. Left on the ordinary path it scores as **high fidelity on a site we
+never reached** — a gate passing by comparing a refusal against itself. `certificate()` now skips a
+row carrying a reason *before* it reads any score. Until this tick "unscored" was true only by
+**accident of control flow** (a failed probe leaves `shape` at `None`), and the accident was one
+plausible edit away from reversing: for a 403 we *do* hold a document, and "well, we have it, let's
+measure it" is a reasonable-sounding change. The rule has to outrank the flow.
+
+**AND THE DENOMINATOR HAD A HOLE THE WHOLE TIME — found only because this tick's change walked into
+it.** The sweep loop's chrome-capture arm was `eprintln!; continue`. A site we could not reach **left
+no row, so it left the denominator too**. My first run of the fix made it visible by making the
+failure happen earlier: three sites vanished and the certificate proudly reported `sites 1`. Restoring
+the `continue` deliberately, on a two-site sweep:
+
+```text
+  with the drop      sites 1 · scored 1                          ← 100% of the corpus scored
+  counted            sites 2 · scored 1 — 1×bot-wall-403
+```
+
+That is §0's stated cause #1 — *dropping the hard sites is what made every past reading optimistic* —
+**reproduced live, inside the instrument built to prevent it, 28 ticks after the rule was written.**
+A rule enforced at one layer is not enforced. Same shape as t610's `run_with_fetcher` (one bound, two
+implementations, one enforcing it) and t591's `@supports` (one fix, one of two lists): **three
+sessions running, the same class.**
+
+**WHAT THE REPORT SAYS NOW**, and why the split is the deliverable rather than the label:
+
+```text
+  3 of 4 sites UNSCORED (cannot be claimed, counted against the bar) — 2×bot-wall-403, 1×empty-202
+```
+
+Each cause is owned by a different part of this project. A **bot wall** is the identity/fingerprint
+axis (PLATFORM MAP item 3) and *no amount of rendering work moves it*. An **http-404** is corpus
+construction. A **probe-blocked** is the measurement channel. An **empty body** is none of those. A
+single total cannot be worked, which is why the pilot's headline stalled the redesign for five ticks.
+A site unscored with **no** recorded reason is now printed as its own shortfall — *"the instrument
+could not say why, which is an instrument gap, not a result"* — so the decomposition can never look
+complete merely because the explained causes are the only ones listed.
+
+RED-PROVEN, FIVE WAYS, EACH A DIFFERENT MECHANISM (the t610 lesson: vary the mechanism, not the
+threshold — a gate can be green because a *second* mechanism produces the same observable):
+  · make `classify_fetch` status-blind again      -> RED, the 202/403/404 classifications collapse
+  · drop the reason column from the row file      -> RED, the reason dies at the chunk boundary
+  · hide the unexplained-residue shortfall        -> RED, an unexplained site reads as explained
+  · let a reasoned row into the scoring loop      -> RED, a bot wall meets the placement bar
+  · restore the `continue` (the silent drop)      -> RED, `sites 2` becomes `sites 1 · scored 1`
+The fourth went red **before** I wrote its fix — I wrote the assertion, the certificate failed it, and
+that is how the scoring exclusion came to exist at all rather than being assumed.
+
+⚠ **ONE GAP NAMED RATHER THAN IMPLIED.** The counted-row invariant is gated at the `certificate()`
+level (a `Fidelity::unmeasured` row stays in the denominator and is clean on nothing) but **not at the
+call site** — that the sweep loop actually *calls* it lives in `main.rs`, which has no test harness.
+It was proven live by RED probe 5 and is not held by a gate. `[[gates-not-in-the-wall]]`
+
+⚠⚠ **AND THE BIGGER ONE, FOR THE OBSERVER: `manuk-wpt`'s TESTS ARE NOT IN THE WALL.** `verify.sh`
+runs `_crate_suite` over `manuk-css manuk-layout manuk-paint manuk-dom manuk-net manuk-agent
+manuk-shell` and there is no `_launch` line for `manuk-wpt` — so **`G_CERT_FALSIFIABLE`, whose own doc
+comment says *"this is the proof, re-run on every wall"*, has never run on a wall**, nor has the
+vacuous-pass guard, nor this tick's gate. They are green (`cargo test -p manuk-wpt` → **54 passed in
+14s**, so the cost of watching them is ~14s), and the RATCHET's `GATES` count has been counting them
+as coverage. This is `[[gates-not-in-the-wall]]` on the certificate itself — *"gated" ≠ watched* — and
+`scripts/` is observer-owned, so I have not touched it. **One line adds them.**
+
+**AND THEN THE FIRST HONEST RUN FOUND TWO MORE DROPS, WHICH IS WHY THE FIRST NUMBER WAS NOT THE LAST.**
+Running the fixed instrument over the 20 HEAD sites returned **`sites 17`**. Three had vanished. The
+chrome-capture arm was only *one* of four `continue`s in that loop: our own `fetch_html` failing
+(`"fetch failed, skipping"`) and our own **paint** failing each dropped the site too. The paint one is
+the worst of the four and was the quietest — **a render failure REMOVED the site from the corpus
+instead of counting against it**, so the single outcome that most deserves to lower the score was the
+one outcome that could not. It gets its own reason, `render-failed`, and its own sentence, because
+filing it under `probe-blocked` would have been this tick's own sin: *naming the wrong organ.*
+
+**MEASURED, 20 HEAD sites of `corpus-v2.tsv`, after all four:**
+
+```text
+  sites 20 · scored 5 · shape >=0.75 on 0 (0.0%)
+  15 of 20 UNSCORED — 5×bot-wall-403, 4×unreachable, 1×empty-202, 1×probe-blocked
+  4 of those have NO recorded reason — an instrument gap, not a result
+  MEAN VISUAL 59.2% · MEAN COVERAGE 62.8% · MEAN SHAPE 42.8%
+```
+
+**`sites 20`, where the same corpus read `sites 17` an hour earlier and `sites 14` at the pilot.** The
+denominator is whole for the first time, and the headline got *worse* by exactly the amount it had
+been quietly flattering itself — which is the entire purpose of the fixed-denominator rule and the
+first time it has been observably enforced end to end.
+
+⚠ **The 4 unexplained are a REAL residue and not a rounding error**, so they are named rather than
+smoothed: `comix.to`, `welt.de`, `naukri.com`, `ebay.com` all *reached* the scorer and then fell below
+`CERT_MIN_SHAPE_SAMPLE` (comix probed 3 paths, naukri 1). That is a **different class** from anything
+this tick classified — the fetch worked, the probe ran, and there was almost nothing on the other side
+to compare. It wants its own diagnosis (why does Chrome's path probe return 1 element for naukri?) and
+deliberately does NOT get an `Unmeasurable` variant here, because inventing a label for a cause I have
+not yet measured is how the `[id]` message this tick deleted came to exist in the first place.
+
+**`aparat.com` IS THE CASE A STATUS CHECK ALONE WOULD HAVE MISSED, and it exposed one more lie.** It
+answers **200 with a real document**; only its CSP blocks the box probe. So it is `probe-blocked`,
+which is why both mechanisms had to be built and not just the status one. And on the old code it
+printed **`99.9% … ok`** — because the per-row verdict falls back to the PIXEL score when there is no
+structural score. The aggregate verdict was already correct, which is exactly what makes that shape
+dangerous: **the number a human reads said the opposite of the number the gate used.** An unmeasurable
+row now reads `UNMEAS`, and it is excluded from `MEAN VISUAL` as well — otherwise two headlines three
+lines apart are computed over two different populations, which is the accounting mismatch that has
+caught more defects in this project than any gate.
+
+TICK SHAPE: reliability/measurement (the certificate can now say WHY a site was not scored, and can no
+longer score a site it never reached, nor drop one from its own denominator). Bar 0 untouched; no
+ratchet floor moved; no capability traded.
+Gates: +1 `G_UNMEASURABLE_REASON` (`tests/wpt/src/fidelity.rs`, `an_unscored_site_must_name_its_cause`)
+— classification per cause, every variant round-trips its own tag, a refusal is never scored, a refusal
+stays in the denominator and is CLEAN ON NOTHING (or refusing to answer becomes the cheapest way to
+look clean), and the unexplained residue is reported.
+
+NEXT, in the order the measurement ranks it — and note the shape of the list, because it is the point
+of having split the causes: **only one of these four is a rendering job.**
+  1. **4 unscored with no reason** — thin-sample sites (`naukri` probed ONE path). Why does Chrome's
+     path probe return almost nothing on pages it clearly renders? This is the instrument again.
+  2. **5×bot-wall-403** — the identity/fingerprint axis (PLATFORM MAP item 3), not rendering. A quarter
+     of the HEAD stratum is refusing us as a client, and *no amount of layout work moves it*.
+  3. **4×unreachable** — corpus construction; three of these were invisible until this tick.
+  4. **shape 42.8% on the 5 sites we CAN score** — the actual rendering work, and the only line here
+     that a cascade/layout tick moves.
+The pilot's *"0 of 5 passing"* could not have produced that ordering, which is why t602 was right that
+measurability, not the sweep, was the binding constraint.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "`curl` exits 0 on a 403, so the certificate could not
+tell a bot wall from a document".
+PATTERN: [no-pattern] — no browser capability changed; this is the instrument.

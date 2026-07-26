@@ -1030,3 +1030,101 @@ divergence was, only mute about *why*, and each brick that made the diff carry o
 printed instances (t553), displaced-vs-mis-sized (t554), three instances (t555), the font (t563). **Make the
 diff carry the datum the next question needs, then ask the question.** Twelve ticks of rect-only diffing could
 only say "displaced"; one field said "a missing webfont and a variable-font variant". [[fidelity-instrument-shared-snapshot]]
+
+## `curl` exits 0 on a 403, so the certificate could not tell a bot wall from a document (tick 611)
+
+The certification design's §0 rule reads: *"a timeout/crash/bot-wall is a COUNTED outcome
+(FAIL/EXCLUDED **with reason**), never a silent drop."* The counting half was built at t583. **The
+reason half was not, and could not be** — the information was destroyed one layer below any code that
+reports, in the probe's own fetch:
+
+```rust
+let out = Command::new("curl").args(["-sL", "--max-time", "25", "-A", UA, url]).output()?;
+if !out.status.success() { bail!("curl failed for {url}"); }   // curl's PROCESS exit, not the HTTP status
+Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+```
+
+`curl -sL` without `-f` exits **0** on a 403. So the Cloudflare interstitial came back to the caller as
+*the document*, and an `imdb.com` reply of **202 with a zero-byte body** came back as *an empty
+document*. Neither is a page, and nothing downstream could discover that.
+
+**Measured across the 20 HEAD sites of `corpus-v2.tsv`, all in one pass:**
+
+```text
+  200 with a body ......... 11        measurable
+  403 Cloudflare .......... 5         tamildhool · mangago · supjav · fdown · quora
+  202 zero bytes .......... 1         imdb.com
+  transport failure ....... 3         docomo · pitc · fawanews
+```
+
+**Six of twenty answer with a status the instrument never read.** That is the bulk of the pilot's
+*"9 of 14 could not be scored"*, and it is why "find out why" was not answerable from the instrument's
+own output: every distinct way of failing to reach a page arrived at the report as the same bare `—`.
+
+### The second mechanism, which a status check alone would not have found
+
+A 403's body is not inert. Cloudflare's challenge page ships
+
+```html
+<meta http-equiv="content-security-policy" content="default-src 'none'; script-src 'nonce-…' …">
+```
+
+and the probe works by **injecting a `<script>` into the fetched HTML**. A nonce-based CSP blocks it:
+Chrome parses the probe, refuses to execute it, and dumps a DOM in which the probe is present *as
+text* and its output never existed. `parse_seen_probe_json` then fails with exactly the right words —
+*"no `__PARITY__` probe output in dumped DOM (did Chrome run the script?)"* — and the caller was
+
+```rust
+if let Ok(mut cseen) = capture_seen_all_paths(url, vw, vh) { … }
+```
+
+which throws that sentence away. **An `if let Ok` is how a diagnostic that already exists goes
+unheard for five ticks.** The error type is now `Unmeasurable`, which an `if let Ok` cannot silently
+discard, because the caller has to say what it did with it.
+
+### A refusal is not a rendering result — and this is the sharp edge
+
+t607 landed the complementary truth for the ENGINE: **an HTTP error status IS a document, and 403/404/
+429/500 pages must render**, because the user has to see them. Both are correct at once, and the
+distinction is the whole tick:
+
+> **The browser renders the 403. The certificate refuses to count it as evidence about the site
+> behind it.**
+
+The harm is not hypothetical, and it is worse than a missing label. A challenge page is a *real*
+document that **both engines render, and they agree** — so left on the ordinary path it scores as
+**high fidelity on a site we never reached**: a gate passing by comparing a refusal against itself.
+`certificate()` therefore skips a row carrying a reason *before* it reads any score, and says so, since
+until now "unscored" was true only by accident of control flow — a failed probe left `shape` at `None`
+— and the accident was one edit away from reversing.
+
+### And the denominator had a hole the whole time
+
+The sweep loop's chrome-capture arm was `eprintln!; continue`. A site we could not reach **left no
+row, so it left the denominator too**, and `sites N` silently shrank by however many origins refused
+us that day. Demonstrated by restoring the `continue` on a two-site sweep:
+
+```text
+  with the drop      sites 1 · scored 1        ← 100% of the corpus scored
+  counted            sites 2 · scored 1 — 1×bot-wall-403
+```
+
+That is §0's cause #1 — *dropping the hard sites is what made every past reading optimistic* —
+reproduced live, inside the instrument built to prevent it, 28 ticks after the rule was written.
+**A rule enforced at one layer is not enforced.** The same shape as t610's `run_with_fetcher` (one
+drain bound, two implementations, one enforcing it) and t591's `@supports` (one fix, one of two
+lists), three sessions running.
+
+### What the report says now
+
+```text
+  3 of 4 sites UNSCORED (cannot be claimed, counted against the bar) — 2×bot-wall-403, 1×empty-202
+```
+
+Each cause is owned by a different part of the project, which is the point of splitting them: a **bot
+wall** is the identity/fingerprint axis and no amount of rendering work moves it; an **http-404** is
+corpus construction; a **probe-blocked** is the measurement channel; an **empty body** is neither. A
+single total cannot be worked. And a site unscored with *no* recorded reason is itself printed as a
+shortfall — *"the instrument could not say why, which is an instrument gap, not a result"* — so the
+decomposition can never look complete merely because the explained causes are the only ones listed.
+[[certification-redesign]] [[reliability-doctrine]]

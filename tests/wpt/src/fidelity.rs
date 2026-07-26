@@ -19,6 +19,157 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
+/// **Why a site could not be measured — the REASON the fixed-denominator rule always required and
+/// never had.**
+///
+/// `DAILY-DRIVER-CERTIFICATION.md` §0 states the rule the whole redesign rests on: *"a
+/// timeout/crash/bot-wall is a COUNTED outcome (FAIL/EXCLUDED **with reason**), never a silent
+/// drop."* The counting half was built at t583. The **reason** half was not, and could not be: the
+/// information was discarded one layer below, in the probe's own fetch, which read `curl`'s process
+/// exit code and never its HTTP status. `curl -sL` exits 0 on a 403, so a Cloudflare interstitial
+/// came back indistinguishable from the site, and every distinct way of failing to reach a page
+/// arrived at the report as the same bare `—`.
+///
+/// The pilot's headline — *"9 of 14 could not be scored"* — was therefore a number with no
+/// decomposition, and "find out why" was not answerable from the instrument's output at all. These
+/// variants are that decomposition, and each one implies **a different remedy**, which is the point
+/// of naming them apart rather than counting them together:
+///
+/// * [`Unreachable`](Self::Unreachable) — a corpus/network problem: DNS, TLS, connect, timeout.
+/// * [`BotWall`](Self::BotWall) — we are being refused *as a client*. No amount of rendering work
+///   fixes it; it is the fingerprint/identity axis (`PLATFORM MAP` item 3).
+/// * [`HttpStatus`](Self::HttpStatus) — the origin answered something else non-2xx. The URL is
+///   likely stale and belongs back in corpus construction.
+/// * [`EmptyBody`](Self::EmptyBody) — a 2xx with nothing in it. `imdb.com` answers **202 with zero
+///   bytes** to this client, which is what produced the "Chrome rendered NO [id] elements" line that
+///   blamed the corpus for the network's answer.
+/// * [`ProbeBlocked`](Self::ProbeBlocked) — we *did* get a document, and the document's own CSP
+///   stopped the measurement. This one is invisible to any status check and is why the status check
+///   alone is not sufficient.
+///
+/// ⚠ **A refusal is not a rendering result, and must never be scored as one.** This matters more
+/// than the missing label: for a 403 the challenge page is a real document that BOTH engines render,
+/// and rendering it identically would score as *high fidelity on a site we never reached*. t607
+/// established the complementary truth for the ENGINE — an HTTP error status **is** a document and
+/// must render, because the user has to see it. Both are correct at once: the browser renders the
+/// 403, and the certificate refuses to count it as evidence about the site behind it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Unmeasurable {
+    /// The request never completed — DNS, TLS, connect, or timeout. No status exists.
+    Unreachable,
+    /// The origin refused this client (401/403/429, or a 5xx carrying a challenge marker).
+    BotWall(u32),
+    /// Any other non-2xx answer.
+    HttpStatus(u32),
+    /// A 2xx with a zero-length body.
+    EmptyBody(u32),
+    /// The document arrived, but the injected probe never executed — a page-supplied CSP, in every
+    /// case observed so far. The instrument's own error text already asked the right question
+    /// (*"did Chrome run the script?"*) and the caller discarded it.
+    ProbeBlocked,
+    /// **We fetched the page and could not paint it.** The only variant here that is OUR bug rather
+    /// than a property of the origin, and it was the quietest of the four drops: a render failure
+    /// removed the site from the corpus instead of counting against it, so the one outcome that
+    /// most deserves to lower the score was the one that could not.
+    RenderFailed,
+}
+
+impl Unmeasurable {
+    /// A short stable tag for the TSV column and for grouping in the shortfall list. Stable because
+    /// a sweep's rows outlive the run that wrote them.
+    pub fn tag(&self) -> String {
+        match self {
+            Self::Unreachable => "unreachable".into(),
+            Self::BotWall(c) => format!("bot-wall-{c}"),
+            Self::HttpStatus(c) => format!("http-{c}"),
+            Self::EmptyBody(c) => format!("empty-{c}"),
+            Self::ProbeBlocked => "probe-blocked".into(),
+            Self::RenderFailed => "render-failed".into(),
+        }
+    }
+
+    /// Read back what [`Self::tag`] wrote, so a chunked sweep keeps its reasons across the boundary.
+    pub fn from_tag(s: &str) -> Option<Self> {
+        let num = |p: &str| s.strip_prefix(p).and_then(|n| n.parse::<u32>().ok());
+        match s {
+            "unreachable" => Some(Self::Unreachable),
+            "probe-blocked" => Some(Self::ProbeBlocked),
+            "render-failed" => Some(Self::RenderFailed),
+            _ => num("bot-wall-")
+                .map(Self::BotWall)
+                .or_else(|| num("http-").map(Self::HttpStatus))
+                .or_else(|| num("empty-").map(Self::EmptyBody)),
+        }
+    }
+
+    /// The operator-facing sentence: what happened, and which axis owns the fix.
+    pub fn explain(&self) -> String {
+        match self {
+            Self::Unreachable => "the request never completed (DNS/TLS/connect/timeout) — no HTTP \
+                 status exists, so this is a corpus or network problem, not a rendering one"
+                .into(),
+            Self::BotWall(c) => format!(
+                "the origin answered {c} and refused this client — a BOT WALL, not a rendering \
+                 failure. Rendering work cannot move it; identity/fingerprint can"
+            ),
+            Self::HttpStatus(c) => format!(
+                "the origin answered {c} — we rendered its error page correctly (t607), but that \
+                 page is not the site, so it is not evidence about the site"
+            ),
+            Self::EmptyBody(c) => format!(
+                "the origin answered {c} with a ZERO-BYTE body — there was no document to measure. \
+                 This is the true cause behind the old 'Chrome rendered NO [id] elements' line, \
+                 which blamed the corpus for the network's answer"
+            ),
+            Self::ProbeBlocked => {
+                "the document loaded but its own Content-Security-Policy blocked \
+                 the injected probe, so no boxes came back. The page is measurable in principle; \
+                 the measurement channel is not"
+                    .into()
+            }
+            Self::RenderFailed => {
+                "we fetched the page and FAILED TO PAINT IT — the only reason on \
+                 this list that is our own bug rather than a property of the origin, and the one \
+                 that most deserves to count against the score"
+                    .into()
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for Unmeasurable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.tag())
+    }
+}
+
+/// Classify a completed fetch. Split out from the fetching so it is testable without a network:
+/// the classification is the load-bearing judgement, and a rule that can only be exercised against
+/// the live internet is a rule nobody re-checks.
+///
+/// `None` means measurable — a 2xx with a body.
+///
+/// **Challenge markers matter only for 5xx.** 401/403/429 are refusals of this client whatever the
+/// vendor, so they need no marker. A 503, by contrast, is genuinely ambiguous — an origin can be
+/// down — so it is only called a bot wall when the body says so.
+pub fn classify_fetch(status: u32, body: &str) -> Option<Unmeasurable> {
+    const CHALLENGE: [&str; 4] = [
+        "Just a moment",
+        "cf-browser-verification",
+        "challenges.cloudflare.com",
+        "Attention Required",
+    ];
+    match status {
+        200..=299 if body.trim().is_empty() => Some(Unmeasurable::EmptyBody(status)),
+        200..=299 => None,
+        401 | 403 | 429 => Some(Unmeasurable::BotWall(status)),
+        s if (500..=599).contains(&s) && CHALLENGE.iter().any(|m| body.contains(m)) => {
+            Some(Unmeasurable::BotWall(status))
+        }
+        s => Some(Unmeasurable::HttpStatus(s)),
+    }
+}
+
 /// Per-page fidelity result — **two** numbers on purpose.
 ///
 /// This session proved repeatedly that a pixel score alone is a poor proxy for correctness: an
@@ -58,6 +209,44 @@ pub struct Fidelity {
     /// were MISSING. A page we render nothing of scored a perfect placement. The certificate cannot
     /// accept that, and it cannot detect it from the ratio alone, so the sample size travels with it.
     pub shape_n: usize,
+    /// **Why this site could not be measured**, when it could not be. `None` on a site that reached
+    /// the scorer — including one that scored badly, which is a *result* and not an absence.
+    ///
+    /// The certificate has counted UNSCORED sites against the bar since t583, which was the
+    /// important half. But "9 of 14 UNSCORED" with no decomposition is a number that cannot be
+    /// worked: bot-wall, dead URL, empty body and CSP-blocked probe are four different jobs owned by
+    /// four different parts of this project, and they were all printing the same `—`.
+    pub unmeasurable: Option<Unmeasurable>,
+}
+
+impl Fidelity {
+    /// A **counted** row for a site that could not be measured at all.
+    ///
+    /// The point is that it EXISTS. A site we could not reach used to `continue` out of the sweep
+    /// loop and leave no row, so it silently left the denominator as well — the sweep reported
+    /// "sites N" over however many origins happened not to refuse us that day. §0 of the
+    /// certification design names that as cause #1 of every historically flattering number.
+    ///
+    /// Scores are `None` rather than 0.0 on purpose: zero is a *measurement* that we rendered
+    /// nothing, and we did not measure. The jarring invariants are 0 divergences because none were
+    /// observed — and `certificate` skips this row's shape term entirely on the reason, so the
+    /// zeros cannot be read as four clean passes.
+    pub fn unmeasured(name: &str, reason: Unmeasurable) -> Self {
+        Fidelity {
+            name: name.to_string(),
+            score: f64::NAN,
+            differing: 0,
+            total: 0,
+            structure: None,
+            shape: None,
+            missing: 0,
+            misplaced: 0,
+            probed: 0,
+            jarring: [0; 4],
+            shape_n: 0,
+            unmeasurable: Some(reason),
+        }
+    }
 }
 
 /// The four jarring invariants, in the order they sit in [`Fidelity::jarring`]. Named so a report
@@ -82,6 +271,14 @@ pub struct Cert {
     pub shape_ok: usize,
     /// Sites with ZERO divergences on each invariant, in [`JARRING_NAMES`] order.
     pub clean: [usize; 4],
+    /// **The unscored count, decomposed by cause** — `(reason tag, sites)`, most common first.
+    ///
+    /// The pilot's binding constraint was *"9 of 14 could not be scored"*, and the observer's next
+    /// order was to find out why. A single total cannot answer that and cannot be worked: a bot wall
+    /// is the identity axis, a dead URL is corpus construction, a CSP-blocked probe is the
+    /// measurement channel, and an empty body is neither. Sorted by count so the list reads as a
+    /// priority order rather than a set.
+    pub unmeasured_by_reason: Vec<(String, usize)>,
 }
 
 /// The certificate's shape floor and its site-fraction bar — the two numbers the exit rule is
@@ -112,6 +309,18 @@ pub fn certificate(rows: &[Fidelity]) -> Cert {
         ..Default::default()
     };
     for r in rows {
+        // **A SITE WE NEVER REACHED CANNOT BE SCORED, WHATEVER NUMBERS ARE ATTACHED TO IT.**
+        //
+        // Today this is belt-and-braces: a failed probe leaves `shape` at `None`, so a refused site
+        // falls out anyway. It is written as an explicit term regardless, because "unscored" is
+        // currently true by ACCIDENT of the control flow rather than by rule — and the accident is one
+        // edit away from reversing. The tempting edit is a real one: for a 403 we *do* hold a
+        // document (Cloudflare's challenge page), both engines render it, and they agree. Scoring
+        // that would report high fidelity on a site we never reached — a gate passing by comparing a
+        // refusal against itself. The rule has to outrank the flow.
+        if r.unmeasurable.is_some() {
+            continue;
+        }
         if let Some(s) = r.shape {
             // A ratio over an empty (or trivially small) sample is not a measurement of placement — it
             // is arithmetic on nothing. Such a site is UNSCORED, never a pass.
@@ -128,6 +337,17 @@ pub fn certificate(rows: &[Fidelity]) -> Cert {
             }
         }
     }
+    let mut by_reason: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
+    for r in rows {
+        if let Some(u) = &r.unmeasurable {
+            *by_reason.entry(u.tag()).or_default() += 1;
+        }
+    }
+    c.unmeasured_by_reason = by_reason.into_iter().collect();
+    // Most common first: the list is a work order, and the biggest cause is the first job.
+    c.unmeasured_by_reason
+        .sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
     c
 }
 
@@ -158,11 +378,36 @@ impl Cert {
     pub fn shortfalls(&self) -> Vec<String> {
         let mut out = Vec::new();
         if self.scored != self.sites {
+            let named: usize = self.unmeasured_by_reason.iter().map(|(_, n)| n).sum();
+            let by = if self.unmeasured_by_reason.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    " — {}",
+                    self.unmeasured_by_reason
+                        .iter()
+                        .map(|(t, n)| format!("{n}×{t}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            };
             out.push(format!(
-                "{} of {} sites UNSCORED (cannot be claimed, counted against the bar)",
+                "{} of {} sites UNSCORED (cannot be claimed, counted against the bar){}",
                 self.sites - self.scored,
-                self.sites
+                self.sites,
+                by
             ));
+            // **The residue is itself a finding, and it must not round to zero.** A site that failed
+            // to score with NO reason attached is one the instrument could not explain — the exact
+            // state this tick exists to end. Naming it keeps the gap visible instead of letting the
+            // decomposition look complete because the named causes are the only ones printed.
+            let unexplained = (self.sites - self.scored).saturating_sub(named);
+            if unexplained > 0 {
+                out.push(format!(
+                    "{unexplained} of those UNSCORED sites have NO recorded reason — the instrument \
+                     could not say why, which is an instrument gap, not a result"
+                ));
+            }
         }
         if self.shape_frac() < CERT_SITE_BAR {
             out.push(format!(
@@ -209,7 +454,7 @@ pub fn append_rows_tsv(path: &Path, rows: &[Fidelity]) -> Result<()> {
     if fresh {
         writeln!(
             f,
-            "#name\tcoverage\tshape\th_overflow\toverlap\treading_order\tdead_target"
+            "#name\tcoverage\tshape\th_overflow\toverlap\treading_order\tdead_target\tshape_n\treason"
         )?;
     }
     for r in rows {
@@ -219,7 +464,7 @@ pub fn append_rows_tsv(path: &Path, rows: &[Fidelity]) -> Result<()> {
         };
         writeln!(
             f,
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             r.name,
             num(r.structure),
             num(r.shape),
@@ -227,7 +472,11 @@ pub fn append_rows_tsv(path: &Path, rows: &[Fidelity]) -> Result<()> {
             r.jarring[1],
             r.jarring[2],
             r.jarring[3],
-            r.shape_n
+            r.shape_n,
+            // The reason travels WITH the row. A chunked sweep writes rows and a later
+            // `certificate --rows` reads them back, so a reason that lived only in the running
+            // process would vanish at exactly the moment the headline is computed.
+            r.unmeasurable.as_ref().map(|u| u.tag()).unwrap_or_default()
         )?;
     }
     Ok(())
@@ -265,6 +514,10 @@ pub fn rows_from_tsv(path: &Path) -> Result<Vec<Fidelity>> {
             // BELOW the sample floor, so an old row is UNSCORED rather than silently trusted — the
             // conservative direction, and the only one that cannot resurrect a vacuous pass.
             shape_n: f.get(7).map(|v| usz(v)).unwrap_or(0),
+            // Absent or empty on a row written before reasons existed — which reads back as "no
+            // reason recorded", not as "measurable". The site is still UNSCORED and still counts
+            // against the bar; only the explanation is missing, which is the honest state.
+            unmeasurable: f.get(8).and_then(|v| Unmeasurable::from_tag(v)),
         });
     }
     Ok(out)
@@ -373,6 +626,9 @@ pub fn compare(manuk: &Path, chrome: &Path, name: &str) -> Result<Fidelity> {
         probed: 0,
         jarring: [0; 4],
         shape_n: 0,
+        // The PIXEL compare succeeded, so nothing here is unmeasurable. The structural probe runs
+        // separately and sets this if it cannot reach the page.
+        unmeasurable: None,
     })
 }
 
@@ -630,21 +886,36 @@ pub fn report(rows: &[Fidelity], floor: f64) -> bool {
     for r in rows {
         // Gate on structure when we have it (a missing sidebar must FAIL, not be averaged away).
         let gated = r.structure.unwrap_or(r.score);
-        // **A page we could not PROBE is a broken gate CONFIG, not a pass.** `coverage` is NaN when
-        // Chrome rendered no `[id]` elements — and `example.com`, which was in this gate's default URL
-        // list, has none. It scored a perfect 100% and inflated the mean of the gate whose entire job is
-        // to catch missing content. Mutation-testing found it: emptying `node_rects()` so the browser
-        // renders NOTHING still scored 100% there.
-        if gated.is_nan() {
-            eprintln!(
-                "  ⚠ {}: Chrome rendered NO [id] elements — this URL cannot be structurally probed, \
-                 so it measures nothing. Choose a URL with ids. Counting it as a pass is how a gate \
-                 that cannot fail looks green forever.",
-                r.name
-            );
+        // **A page we could not PROBE is a broken gate CONFIG, not a pass.** Mutation-testing found
+        // the original: emptying `node_rects()` so the browser renders NOTHING still scored 100% on
+        // a URL that probed zero elements, inflating the mean of the gate whose entire job is to
+        // catch missing content. `NaN` is the honest answer, and it is excluded from the mean.
+        //
+        // **And a page we could not measure is now named by its REAL cause.** This used to print "Chrome
+        // rendered NO [id] elements … Choose a URL with ids" for every unprobeable page — text left
+        // over from before t532 moved the keying to selector paths, and by t606 it was pointing the
+        // operator at the corpus for what was almost always the *network's* answer (`imdb.com`
+        // replies 202 with a zero-byte body). A diagnostic that names the wrong organ is worse than
+        // none: it sends the next tick somewhere there is nothing to fix.
+        if gated.is_nan() || r.unmeasurable.is_some() {
+            match &r.unmeasurable {
+                Some(u) => eprintln!("  ⚠ {} UNMEASURABLE [{}]: {}", r.name, u.tag(), u.explain()),
+                None => eprintln!(
+                    "  ⚠ {}: the document loaded and the probe ran, but Chrome rendered NO elements \
+                     at all — so there is nothing to compare and this measures nothing. Counting it \
+                     as a pass is how a gate that cannot fail looks green forever.",
+                    r.name
+                ),
+            }
             all_ok = false;
         }
-        let ok = gated >= floor;
+        // **AN UNMEASURABLE ROW MUST NEVER READ `ok`, AND ONE DID.** `gated` falls back to the
+        // PIXEL score when there is no structural score, so `aparat.com` — a live 200 page whose own
+        // CSP blocked the box probe — printed `99.9% … ok` off its screenshot alone, on a row the
+        // same function had just flagged UNMEASURABLE two lines above. The aggregate verdict was
+        // already correct (`all_ok` was false), which is exactly what makes this the dangerous shape:
+        // the number a human reads said the opposite of the number the gate used.
+        let ok = r.unmeasurable.is_none() && gated >= floor;
         if !ok {
             all_ok = false;
         }
@@ -657,11 +928,37 @@ pub fn report(rows: &[Fidelity], floor: f64) -> bool {
                 .unwrap_or_else(|| "—".into()),
             r.missing,
             r.misplaced,
-            if ok { "ok" } else { "BELOW" }
+            match (&r.unmeasurable, ok) {
+                (Some(_), _) => "UNMEAS",
+                (None, true) => "ok",
+                (None, false) => "BELOW",
+            }
         );
     }
-    let n = rows.len().max(1) as f64;
-    let mean_v = rows.iter().map(|r| r.score).sum::<f64>() / n;
+    // **EVERY HEADLINE MEAN IS OVER THE SAME SITE SET: the ones the instrument accepted.**
+    //
+    // Two rules in one filter, and the second is the subtle one. `NaN` must go, or a single refused
+    // origin turns the headline into `NaN%`. And a row carrying a REASON must go even when it has a
+    // real number attached — `aparat.com` is a live 200 page whose own CSP blocked the box probe, so
+    // its pixel score is a genuine measurement while its structural score does not exist. Averaging
+    // it into MEAN VISUAL but not into MEAN COVERAGE would compute two headlines over two different
+    // populations and print them three lines apart, which is precisely the accounting mismatch that
+    // has caught more defects here than any gate (`THE SEVEN META-INSTRUMENTS` #3).
+    //
+    // The site is not thereby forgiven: it stays a counted row and `certificate` holds it against
+    // the bar. A mean and a denominator answer different questions — conflating them is how "we
+    // dropped the hard sites" happened the first time.
+    let scored_v: Vec<f64> = rows
+        .iter()
+        .filter(|r| r.unmeasurable.is_none())
+        .map(|r| r.score)
+        .filter(|s| !s.is_nan())
+        .collect();
+    let mean_v = if scored_v.is_empty() {
+        f64::NAN
+    } else {
+        scored_v.iter().sum::<f64>() / scored_v.len() as f64
+    };
     let structs: Vec<f64> = rows.iter().filter_map(|r| r.structure).collect();
     let mean_s = if structs.is_empty() {
         None
@@ -806,6 +1103,7 @@ mod shape_tests {
             probed: 10,
             jarring,
             shape_n: 64,
+            unmeasurable: None,
         }
     }
 
@@ -1000,6 +1298,203 @@ mod shape_tests {
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    /// **G_UNMEASURABLE_REASON — an unscored site must say WHY, and a refusal must never be scored.**
+    ///
+    /// The certificate has counted unscored sites against the bar since t583. What it could not do is
+    /// say what went wrong, because the probe's fetch read `curl`'s *process* exit code and never the
+    /// HTTP status — so a Cloudflare 403 interstitial, a 202 with an empty body and a genuine layout
+    /// failure all arrived at the report as the same bare `—`. Measured across the 20 HEAD sites of
+    /// `corpus-v2.tsv`: **six answer non-2xx or empty**, and every one of them was invisible.
+    ///
+    /// Three claims, and the second is the one with teeth:
+    ///
+    /// 1. **Each way of failing is classified apart**, because each implies a different remedy.
+    /// 2. **A refusal is never scored.** For a 403 the challenge page is a real document both engines
+    ///    render, so scoring it would report *high fidelity on a site we never reached* — a gate
+    ///    passing by comparing a refusal against itself.
+    /// 3. **The reason survives the chunk boundary**, or it vanishes exactly when the headline is
+    ///    computed from the accumulated rows.
+    #[test]
+    fn an_unscored_site_must_name_its_cause() {
+        use super::{classify_fetch, Unmeasurable};
+
+        // ── 1. Classification. A body is supplied for each so the rule is exercised, not assumed.
+        assert_eq!(
+            classify_fetch(200, "<html>hi</html>"),
+            None,
+            "a 2xx with a body is measurable"
+        );
+        assert_eq!(
+            classify_fetch(202, ""),
+            Some(Unmeasurable::EmptyBody(202)),
+            "imdb.com answers 202 with ZERO bytes — a 2xx is not enough, the body has to exist"
+        );
+        assert_eq!(
+            classify_fetch(403, "<title>Just a moment...</title>"),
+            Some(Unmeasurable::BotWall(403)),
+            "a 403 is a refusal of this CLIENT, not a rendering failure"
+        );
+        assert_eq!(
+            classify_fetch(429, "slow down"),
+            Some(Unmeasurable::BotWall(429))
+        );
+        // **A SCHEME WITH NO HTTP STATUS IS NOT A REFUSAL.** G1's own corpus is `file://` snapshots,
+        // where `curl -w '%{http_code}'` reports `000` because there is nothing to report — and the
+        // first draft of this tick read that as `Unreachable` and turned the fidelity floor's two
+        // static pages "unreachable" on the very next wall. `classify_fetch` never sees status 0 (the
+        // caller decides on the body), so what is pinned here is the boundary either side of it.
+        assert_eq!(
+            classify_fetch(200, "<html>ok</html>"),
+            None,
+            "a 2xx with a body is measurable — the fixed G1 path"
+        );
+
+        // Every variant round-trips through its own tag, including the three that carry no status.
+        // A tag that writes but does not read back is a reason that dies at the chunk boundary —
+        // silently, and precisely when the headline is computed from the accumulated rows.
+        for u in [
+            Unmeasurable::Unreachable,
+            Unmeasurable::BotWall(403),
+            Unmeasurable::HttpStatus(404),
+            Unmeasurable::EmptyBody(202),
+            Unmeasurable::ProbeBlocked,
+            Unmeasurable::RenderFailed,
+        ] {
+            assert_eq!(
+                Unmeasurable::from_tag(&u.tag()),
+                Some(u.clone()),
+                "{u:?} must survive its own tag"
+            );
+        }
+        assert_eq!(
+            classify_fetch(404, "gone"),
+            Some(Unmeasurable::HttpStatus(404)),
+            "a dead URL is corpus construction, and must not be filed as a bot wall"
+        );
+        // A 5xx is genuinely ambiguous — an origin can just be down — so it needs the marker.
+        assert_eq!(
+            classify_fetch(503, "backend down"),
+            Some(Unmeasurable::HttpStatus(503))
+        );
+        assert_eq!(
+            classify_fetch(503, "please wait <a>challenges.cloudflare.com</a>"),
+            Some(Unmeasurable::BotWall(503)),
+            "…but a 503 CARRYING a challenge marker is the same wall wearing a different code"
+        );
+
+        // ── 2. A refusal is never scored, however good the numbers attached to it look.
+        //
+        // This is the shape of the harm, not a hypothetical: Cloudflare's interstitial is a real
+        // document, Chrome renders it, we render it, and the two agree. Left to the ordinary path it
+        // would score as a PASS on a site we never reached.
+        let refused = Fidelity {
+            shape: Some(1.0),
+            shape_n: 500,
+            structure: Some(1.0),
+            unmeasurable: Some(Unmeasurable::BotWall(403)),
+            ..row("fdown.net", Some(1.0), [0; 4])
+        };
+        let c = certificate(&[refused.clone()]);
+        assert_eq!(
+            c.shape_ok, 0,
+            "a bot-walled site must NOT meet the placement bar — a challenge page rendered \
+             identically by both engines is agreement about Cloudflare, not about the site"
+        );
+        assert_eq!(c.scored, 0, "…and it is UNSCORED, counting against the bar");
+        assert!(!c.holds());
+
+        // ── The decomposition the pilot's "9 of 14 UNSCORED" could not produce.
+        let rows = vec![
+            refused.clone(),
+            Fidelity {
+                name: "supjav.com".into(),
+                ..refused.clone()
+            },
+            Fidelity {
+                name: "imdb.com".into(),
+                unmeasurable: Some(Unmeasurable::EmptyBody(202)),
+                ..refused.clone()
+            },
+            Fidelity {
+                name: "csp-site".into(),
+                unmeasurable: Some(Unmeasurable::ProbeBlocked),
+                ..refused.clone()
+            },
+        ];
+        let c = certificate(&rows);
+        assert_eq!(
+            c.unmeasured_by_reason,
+            vec![
+                ("bot-wall-403".to_string(), 2),
+                ("empty-202".to_string(), 1),
+                ("probe-blocked".to_string(), 1),
+            ],
+            "the unscored total must decompose by CAUSE, most common first — a single number is not \
+             a work list, and 'find out why' is what the pilot could not answer"
+        );
+        let short = c.shortfalls().join(" | ");
+        assert!(
+            short.contains("2×bot-wall-403"),
+            "the shortfall list must carry the decomposition, got: {short}"
+        );
+
+        // ── A refused site is a COUNTED ROW, and it is clean on NOTHING.
+        //
+        // The sweep loop used to `continue` past an unreachable origin, leaving no row — so the
+        // site left the DENOMINATOR too and "sites N" shrank by however many origins refused us
+        // that day. Both halves matter: the row must exist, and its all-zero jarring counts must
+        // NOT read as four clean passes, or refusing to answer would become the cheapest way to
+        // look clean.
+        let dropped = Fidelity::unmeasured("supjav.com", Unmeasurable::BotWall(403));
+        let d = certificate(&[row("real", Some(0.9), [0; 4]), dropped]);
+        assert_eq!(d.sites, 2, "an unreachable site stays IN the denominator");
+        assert_eq!(d.scored, 1, "…but is not scored");
+        for i in 0..4 {
+            assert_eq!(
+                d.clean[i],
+                1,
+                "{} must count only the site we measured — a page we never fetched is not CLEAN, \
+                 it is UNKNOWN, and counting its zeros as clean makes refusal the cheapest pass",
+                super::JARRING_NAMES[i]
+            );
+        }
+
+        // ── A site unscored with NO reason is itself reported, so the decomposition can never look
+        // complete just because the explained causes are the only ones printed.
+        let mystery = Fidelity {
+            shape: Some(1.0),
+            shape_n: 0,
+            unmeasurable: None,
+            ..row("mystery", Some(1.0), [0; 4])
+        };
+        let short = certificate(&[mystery]).shortfalls().join(" | ");
+        assert!(
+            short.contains("NO recorded reason"),
+            "an unexplained unscored site is an instrument gap and must be named, got: {short}"
+        );
+
+        // ── 3. The reason round-trips through the chunked-sweep file.
+        let dir = std::env::temp_dir().join("manuk-cert-reason-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("rows.tsv");
+        super::append_rows_tsv(&path, &rows).unwrap();
+        let back = super::rows_from_tsv(&path).unwrap();
+        assert_eq!(
+            back.iter().filter_map(|r| r.unmeasurable.clone()).count(),
+            4,
+            "every reason survives the chunk boundary"
+        );
+        assert_eq!(back[0].unmeasurable, Some(Unmeasurable::BotWall(403)));
+        assert_eq!(back[2].unmeasurable, Some(Unmeasurable::EmptyBody(202)));
+        assert_eq!(
+            certificate(&back).unmeasured_by_reason,
+            c.unmeasured_by_reason,
+            "and the decomposition is identical computed from the file"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -1091,6 +1586,8 @@ fn falsify_score(
         probed: manuk.len(),
         jarring: [hov, ovl, ord, dead],
         shape_n,
+        // A falsification row is synthetic: both sides are supplied, so there is no fetch to refuse.
+        unmeasurable: None,
     }
 }
 

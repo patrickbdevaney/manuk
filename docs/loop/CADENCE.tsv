@@ -369,3 +369,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 607	e09f5cff	1785053300	2026-07-26T04:08:20-04:00	2618	capability	85	13	526	37	302	81	3896	6960	0	339	31	an HTTP error status is a DOCUMENT: the browser stopped refusing to look (2026-07-26)
 608	c73f1a59	1785058490	2026-07-26T05:34:50-04:00	5190	capability	85	11	530	35	304	81	3896	6960	0	340	31	a missing interface object is a ReferenceError, and a ReferenceError renders NOTHING (2026-07-26)
 610	738ea8f1	1785067163	2026-07-26T07:59:23-04:00	8673	capability	63	11	653	34	305	81	3896	6960	0	341	31	the drain's ceiling was a task COUNT, and the harm it defends against is a CLOCK (2026-07-26)
+611	29380f28	1785072800	2026-07-26T09:33:20-04:00	5637	reliability	63	8	1042	53	305	81	3896	6960	0	341	31	the certificate cannot see an HTTP status, so a bot-wall and a document are the same thing (2026-07-26)

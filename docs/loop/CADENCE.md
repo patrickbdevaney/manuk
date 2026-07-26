@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **370** | ticks 1–610 |
-| median tick cycle | **21m** | 369 intervals |
-| median, last 10 | **22m** | 10 intervals |
+| ticks landed | **371** | ticks 1–611 |
+| median tick cycle | **21m** | 370 intervals |
+| median, last 10 | **27m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.02** | 362.9h elapsed |
-| median verify wall | **67s** | 309 ticks |
-| wall trend | 39s → 85s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **1.02** | 364.5h elapsed |
+| median verify wall | **67s** | 310 ticks |
+| wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**185 of 370 ticks** (50%) moved a
+**185 of 371 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **185** capability ticks, median cycle **21m**
-* median diff per tick: **+232 / −34** lines across 9 files
+* median diff per tick: **+232 / −35** lines across 9 files
 
 ## Every tick
 
@@ -467,5 +467,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **607** | 2026-07-26 04:08 | 44m | capability | 85s | +526/−37 | 302 | 81 | 56.0% · | an HTTP error status is a DOCUMENT: the browser stopped refusing to look (2026-07-26) |
 | **608** | 2026-07-26 05:34 | 86m | capability | 85s | +530/−35 | 304 | 81 | 56.0% · | a missing interface object is a ReferenceError, and a ReferenceError renders NOTHING (2026 |
 | **610** | 2026-07-26 07:59 | 2.4h | capability | 63s | +653/−34 | 305 | 81 | 56.0% · | the drain's ceiling was a task COUNT, and the harm it defends against is a CLOCK (2026-07- |
+| **611** | 2026-07-26 09:33 | 1.6h | reliability | 63s | +1042/−53 | 305 | 81 | 56.0% · | the certificate cannot see an HTTP status, so a bot-wall and a document are the same thing |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

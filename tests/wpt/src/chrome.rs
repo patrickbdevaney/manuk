@@ -21,6 +21,8 @@ use std::process::Command;
 
 use anyhow::{anyhow, bail, Context, Result};
 
+use crate::fidelity::Unmeasurable;
+
 /// A probe element's border-box, in CSS px, rounded — `[x, y, width, height]`.
 pub type Box4 = [i32; 4];
 
@@ -379,13 +381,20 @@ pub fn capture_boxes_all_ids(url: &str, vw: u32, vh: u32) -> Result<HashMap<Stri
 ///
 /// Returns `oracle::Seen` maps so the G1 fidelity probe scores placement AND the four jarring invariants
 /// through the SAME oracle functions the differential crawl uses — no Box4 mirror in between (brick 4b).
+///
+/// **The error type is [`Unmeasurable`], not `anyhow`, and that is the load-bearing part.** Its one
+/// caller used to write `if let Ok(cseen) = capture_seen_all_paths(...)`, which threw every failure
+/// on the floor: the row printed a bare `—`, the certificate counted an UNSCORED site, and the
+/// reason — the thing §0 of the certification design requires and t602 explicitly asked for — was
+/// gone. A typed error cannot be discarded by an `if let Ok`; the caller has to say what it did with
+/// it.
 pub fn capture_seen_all_paths(
     url: &str,
     vw: u32,
     vh: u32,
-) -> Result<HashMap<String, crate::oracle::Seen>> {
-    let chrome = chrome_bin().ok_or_else(|| anyhow!("no Chrome/Chromium found"))?;
-    let html = ureq_get(url)?;
+) -> std::result::Result<HashMap<String, crate::oracle::Seen>, Unmeasurable> {
+    let chrome = chrome_bin().ok_or(Unmeasurable::Unreachable)?;
+    let html = fetch_document(url)?;
     let base = format!("<base href=\"{url}\">");
     let doc = if let Some(i) = html.find("<head>") {
         let (a, b) = html.split_at(i + 6);
@@ -394,25 +403,47 @@ pub fn capture_seen_all_paths(
         format!("{base}{html}{PROBE_ALL_PATHS_JS}")
     };
     let tmp = std::env::temp_dir().join(format!("manuk-shape-{}.html", stable_tag(&doc)));
-    std::fs::write(&tmp, &doc)?;
+    std::fs::write(&tmp, &doc).map_err(|_| Unmeasurable::ProbeBlocked)?;
     let mut cmd = Command::new(&chrome);
     cmd.args(base_flags(vw, vh))
         .arg("--virtual-time-budget=6000")
         .arg("--dump-dom")
         .arg(format!("file://{}", tmp.display()));
-    let out = cmd.output().context("chrome --dump-dom (shape probe)")?;
+    let out = cmd.output().map_err(|_| Unmeasurable::ProbeBlocked)?;
     let _ = std::fs::remove_file(&tmp);
     if !out.status.success() {
-        bail!(
-            "chrome --dump-dom failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
+        return Err(Unmeasurable::ProbeBlocked);
     }
+    // **A missing `__PARITY__` means the page stopped our script, not that the page is empty.**
+    // Measured on `fdown.net`: Cloudflare's interstitial ships
+    // `<meta http-equiv="content-security-policy" content="default-src 'none'; script-src 'nonce-…'">`,
+    // so Chrome parses the injected probe, refuses to execute it for want of the nonce, and dumps a
+    // DOM in which the probe is present as TEXT and its output never existed. `parse_seen_probe_json`
+    // already asks exactly the right question — *"did Chrome run the script?"* — and for five ticks
+    // nobody heard it, because the caller discarded the error.
     parse_seen_probe_json(&String::from_utf8_lossy(&out.stdout))
+        .map_err(|_| Unmeasurable::ProbeBlocked)
 }
 
 /// Minimal blocking GET (the harness already links reqwest-free; use curl for zero new deps).
 fn ureq_get(url: &str) -> Result<String> {
+    fetch_document(url).map_err(|r| anyhow!("{url}: {}", r.explain()))
+}
+
+/// **Fetch a document AND look at what the server actually said.**
+///
+/// The function this replaces checked `out.status.success()` — **`curl`'s process exit code, not the
+/// HTTP status.** `curl -sL` without `-f` exits 0 on a 403, so a Cloudflare *"Just a moment…"*
+/// interstitial was returned to the caller as if it were the page, and an `imdb.com` answer of **202
+/// with zero bytes** was returned as an empty document. Six of the certification corpus's 20 HEAD
+/// sites answer non-2xx or empty to this client; all six were indistinguishable from a site that
+/// simply renders badly.
+///
+/// That is why the certificate's fixed-denominator rule could count an unscored site but never say
+/// **why** — the reason was destroyed here, before any layer that reports existed. Classification
+/// itself lives in [`crate::fidelity::classify_fetch`] so it is exercisable without a network.
+pub fn fetch_document(url: &str) -> std::result::Result<String, Unmeasurable> {
+    let body_path = std::env::temp_dir().join(format!("manuk-fetch-{}.body", stable_tag(url)));
     let out = Command::new("curl")
         .args([
             "-sL",
@@ -420,14 +451,50 @@ fn ureq_get(url: &str) -> Result<String> {
             "25",
             "-A",
             "Mozilla/5.0 (X11; Linux x86_64) Manuk/0.1",
+            "-o",
+            &body_path.to_string_lossy(),
+            "-w",
+            "%{http_code}",
             url,
         ])
         .output()
-        .context("curl")?;
+        .map_err(|_| Unmeasurable::Unreachable)?;
+    // A non-zero curl exit is a TRANSPORT failure (DNS, TLS, connect, timeout) — there is no status
+    // to report, and that is itself the distinguishing fact.
     if !out.status.success() {
-        bail!("curl failed for {url}");
+        let _ = std::fs::remove_file(&body_path);
+        return Err(Unmeasurable::Unreachable);
     }
-    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    let status: u32 = String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .parse()
+        .unwrap_or(0);
+    let body = std::fs::read(&body_path)
+        .map(|b| String::from_utf8_lossy(&b).into_owned())
+        .unwrap_or_default();
+    let _ = std::fs::remove_file(&body_path);
+    // **`000` MEANS "NO HTTP STATUS", WHICH IS NOT THE SAME AS "REFUSED".**
+    //
+    // This first read `status == 0 => Unreachable`, and G1 went red on the very next wall: the gate's
+    // own corpus is `file://` SNAPSHOTS, and `curl -w '%{http_code}'` reports `000` for every
+    // non-HTTP scheme because there is no status to report. curl exited 0 and the bytes are right
+    // there — the fetch worked perfectly. A rule written for one scheme had quietly condemned all the
+    // others, and the two static pages the fidelity floor is measured on became "unreachable".
+    //
+    // The transport failure that `000` *can* also indicate is already caught above, by curl's exit
+    // code. So at this point the only honest reading of `000` is "this scheme has no HTTP status",
+    // and the body decides.
+    if status == 0 {
+        return if body.trim().is_empty() {
+            Err(Unmeasurable::Unreachable)
+        } else {
+            Ok(body)
+        };
+    }
+    match crate::fidelity::classify_fetch(status, &body) {
+        Some(reason) => Err(reason),
+        None => Ok(body),
+    }
 }
 
 /// Find an installed Chrome/Chromium binary, preferring stable Chrome.
@@ -503,8 +570,17 @@ pub fn capture_boxes(html: &str, vw: u32, vh: u32) -> Result<HashMap<String, Box
 /// G1 — screenshot a **live URL** in headless Chrome, so Chromium fetches the page's own CSS,
 /// images and fonts exactly as it would for a user. (The file:// variant below can't do that for a
 /// real site: relative subresource URLs would resolve against the temp file.)
-pub fn capture_url_screenshot(url: &str, vw: u32, vh: u32, dest: &Path) -> Result<()> {
-    let chrome = chrome_bin().ok_or_else(|| anyhow!("no Chrome/Chromium found"))?;
+///
+/// Errors as [`Unmeasurable`] for the same reason `capture_seen_all_paths` does: this is the first
+/// step that touches the origin, so it is where a refusal is discovered, and its caller has to
+/// COUNT that site rather than skip it. A `continue` here is exactly the silent drop §0 forbids.
+pub fn capture_url_screenshot(
+    url: &str,
+    vw: u32,
+    vh: u32,
+    dest: &Path,
+) -> std::result::Result<(), Unmeasurable> {
+    let chrome = chrome_bin().ok_or(Unmeasurable::Unreachable)?;
     // Screenshot the SAME page the box probe measures: the fetched HTML, served from a temp file
     // with a `<base>` so subresources still resolve to the real origin.
     //
@@ -513,7 +589,7 @@ pub fn capture_url_screenshot(url: &str, vw: u32, vh: u32, dest: &Path) -> Resul
     // fundraising banner on the real origin and not on a `file://` page, so the screenshot had a
     // banner the box probe never saw — and the visual score and the structural score were measuring
     // two different documents. One page, two probes.
-    let html = ureq_get(url)?;
+    let html = fetch_document(url)?;
     let base = format!("<base href=\"{url}\">");
     let doc = match html.find("<head>") {
         Some(i) => {
@@ -523,22 +599,16 @@ pub fn capture_url_screenshot(url: &str, vw: u32, vh: u32, dest: &Path) -> Resul
         None => format!("{base}{html}"),
     };
     let tmp = std::env::temp_dir().join(format!("manuk-shot-{}.html", stable_tag(&doc)));
-    std::fs::write(&tmp, &doc)?;
+    std::fs::write(&tmp, &doc).map_err(|_| Unmeasurable::ProbeBlocked)?;
     let mut cmd = Command::new(&chrome);
     cmd.args(base_flags(vw, vh))
         .arg("--virtual-time-budget=6000") // let the page settle (webfonts, JS) before the shot
         .arg(format!("--screenshot={}", dest.display()))
         .arg(format!("file://{}", tmp.display()));
-    let out = cmd
-        .output()
-        .context("running headless Chrome --screenshot <url>")?;
+    let out = cmd.output().map_err(|_| Unmeasurable::ProbeBlocked)?;
     let _ = std::fs::remove_file(&tmp);
     if !out.status.success() {
-        bail!(
-            "chrome --screenshot exited with {}: {}",
-            out.status,
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
+        return Err(Unmeasurable::ProbeBlocked);
     }
     Ok(())
 }

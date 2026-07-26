@@ -460,8 +460,15 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
         // make the mis-attribution impossible in code, not a thing to remember. An oracle you are
         // measuring yourself against must never be able to charge its own slowness to your account.
         let t_manuk = std::time::Instant::now();
+        // The SECOND silent drop on this path, found by the first honest run of the fix below: a
+        // 20-site sweep reported `sites 17`. Three origins failed OUR fetch and "skipped" — leaving
+        // no row, hence no denominator entry. `Unreachable` is the honest classification: our own
+        // fetch is where the transport failure surfaced, and unlike `capture_url_screenshot` it
+        // hands back no status to be more specific with.
         let Ok((html, final_url)) = rt.block_on(manuk_page::fetch_html(url)) else {
-            eprintln!("  fetch failed, skipping");
+            let reason = manuk_wpt::fidelity::Unmeasurable::Unreachable;
+            eprintln!("  UNMEASURABLE [{}]: {}", reason.tag(), reason.explain());
+            rows.push(manuk_wpt::fidelity::Fidelity::unmeasured(&name, reason));
             continue;
         };
         let page = rt.block_on(async {
@@ -470,8 +477,13 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
             p
         });
         let mpath = out.join(format!("{name}.manuk.png"));
+        // …and the THIRD. A page we fetched but could not paint is the most damning outcome of the
+        // four, and it was the quietest: it left no row at all, so a render failure REMOVED the site
+        // from the corpus rather than counting against it.
         if page.paint(fonts, vw, vh).save_png(&mpath).is_err() {
-            eprintln!("  manuk render failed");
+            let reason = manuk_wpt::fidelity::Unmeasurable::RenderFailed;
+            eprintln!("  UNMEASURABLE [{}]: {}", reason.tag(), reason.explain());
+            rows.push(manuk_wpt::fidelity::Fidelity::unmeasured(&name, reason));
             continue;
         }
         let manuk_ms = t_manuk.elapsed().as_millis();
@@ -479,8 +491,16 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
         // Chromium — the same live URL, so it fetches its own subresources.
         let t_chrome = std::time::Instant::now();
         let cpath = out.join(format!("{name}.chrome.png"));
-        if let Err(e) = manuk_wpt::chrome::capture_url_screenshot(url, vw, vh, &cpath) {
-            eprintln!("  chrome: {e}");
+        // **A SITE WE COULD NOT REACH IS A COUNTED ROW, NOT A `continue`.**
+        //
+        // This was `eprintln!; continue` — the site left no row, so it left the DENOMINATOR too, and
+        // a sweep's "sites N" silently shrank by however many origins had refused us that day. That
+        // is precisely the failure `DAILY-DRIVER-CERTIFICATION.md` §0 names as cause #1 of every past
+        // optimistic reading: *dropping the hard sites is what made every past number flattering.*
+        // The fixed-denominator rule was built at t583 and this path walked around it.
+        if let Err(reason) = manuk_wpt::chrome::capture_url_screenshot(url, vw, vh, &cpath) {
+            eprintln!("  UNMEASURABLE [{}]: {}", reason.tag(), reason.explain());
+            rows.push(manuk_wpt::fidelity::Fidelity::unmeasured(&name, reason));
             continue;
         }
         let chrome_ms = t_chrome.elapsed().as_millis();
@@ -507,7 +527,16 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                 // element against Manuk's, keyed by SELECTOR-PATH (tick 532: replaced `[id]` keys,
                 // which 39% of the corpus lacks and which carry no `/`-ancestry for SHAPE). A missing
                 // sidebar is a MISSING BOX; the pixel score averages it away, this does not.
-                if let Ok(mut cseen) = manuk_wpt::chrome::capture_seen_all_paths(url, vw, vh) {
+                // **THE REASON IS RECORDED, NOT DISCARDED.** This was `if let Ok(...)` — every way of
+                // failing to reach a page fell into the same silent `else`, the row printed `—`, and
+                // the certificate counted an UNSCORED site it could not explain. t602 asked "why can
+                // 9 of 14 not be scored"; the instrument had thrown the answer away here.
+                let probe = manuk_wpt::chrome::capture_seen_all_paths(url, vw, vh);
+                if let Err(reason) = &probe {
+                    eprintln!("  UNMEASURABLE [{}]: {}", reason.tag(), reason.explain());
+                    f.unmeasurable = Some(reason.clone());
+                }
+                if let Ok(mut cseen) = probe {
                     cseen.remove("__META__"); // health metadata, not an element (as run_oracle_cmd does)
                     let dom = page.dom();
                     let rects = page.root_box.node_rects(dom);
