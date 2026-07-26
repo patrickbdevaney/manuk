@@ -1382,3 +1382,71 @@ cannot be interrupted, deadlined, or asked how far it got. `STATUS.md` has carri
 interruptibility (a cancellable long task) is still not built"* under Bar 0 for hundreds of ticks.
 This is the first instrument that walked into it and could not walk back out, and with an interrupt
 callback `SLOW_CASES` stops being a list and becomes a per-case deadline. [[conformance-and-oracles]]
+
+## An interface object is defined IFF the thing it names exists (tick 608)
+
+`globalThis` carries ~183 **interface objects** — `HTMLMetaElement`, `Navigator`,
+`HTMLTableCellElement`, `CanvasRenderingContext2D`. They look like decoration and they are not, for
+one mechanical reason:
+
+> **Reading an absent global is a `ReferenceError`, and a `ReferenceError` kills the frame that read
+> it.** It does not return `undefined`, it does not degrade, and there is no `?.` a page can write to
+> survive it.
+
+That is a different failure class from a missing *method*. `el.foo?.()` survives a missing method;
+nothing survives `HTMLMetaElement` not existing, because the throw happens at the *identifier read*,
+before any operator the author could have guarded with.
+
+### What it cost, measured
+
+`www.welt.de` (top-1k, in `docs/bench/corpus-v2.tsv`) scored **0.0% coverage — 3,242 of 3,243
+elements missing**. Not "rendered badly": rendered *not at all*. The console named it:
+
+```text
+ReferenceError: HTMLMetaElement is not defined
+ReferenceError: Navigator is not defined
+Failed to load website due to adblock: Loader aborted: HTMLMetaElement is not defined
+```
+
+The site's loader probes interface objects; the probe threw; **the site concluded it was being
+ad-blocked and aborted its own boot.** The engine rendered nothing because the page *decided* to
+render nothing. A coverage number says how much is missing and never says why — only the console did.
+This is a general hazard of scoring by box-diff: `0.0%` and `we are slow` are indistinguishable in the
+metric, and the two want opposite fixes. (t606's pilot had in fact filed this site under *timing*.)
+
+### The rule, and the negative half is the load-bearing half
+
+An interface object is installed **iff the thing it names exists in this engine.** Every name added at
+t608 was probed present first (`navigator`, `localStorage`, `performance`, `customElements`,
+`crypto.subtle`, `document.implementation`, the 2D context). **`OffscreenCanvas` is deliberately
+absent** — `getContext` has no offscreen tier, so `'OffscreenCanvas' in window` must keep answering
+`false`. A stub naming a capability we lack defeats feature-detection and is *worse than the gap*
+(`DAILY-DRIVER-CERTIFICATION.md` §1). `G_IFACE_SURFACE` asserts that absence, so the list cannot
+quietly become a claim instead of a fact.
+
+### Predicates are exact, not generous
+
+`iface(name, test)` answers `instanceof` via `Symbol.hasInstance` rather than a prototype chain — our
+reflectors do not have one to hang these off, and the question frameworks ask ("is this an input?") is
+answerable directly. An **over-broad predicate is a wrong answer, not a generous one**: `<cite>` is
+plain `HTMLElement` and not `HTMLQuoteElement`; `<my-widget>` is `HTMLElement` and not
+`HTMLUnknownElement`; `HTMLTableCellElement` is one interface over both `<td>` and `<th>`. The gate
+carries nine `NEG_*` claims because without them a predicate that simply returned `true` would satisfy
+every positive claim in the file.
+
+### Known residue, named rather than papered over
+
+`CanvasRenderingContext2D.prototype` is **not in a context's prototype chain** — `getContext` builds a
+fresh object carrying own methods — so patching `CanvasRenderingContext2D.prototype.fillText` is
+accepted and **inert**. The interface object is honest (canvas 2D really does rasterize); the patch
+path is not built. That is the [[dom-semantics]] `G_PROTOTYPE` lesson recurring on the canvas surface.
+Nine names remain absent, each blocked on a capability rather than on the list:
+`IDBFactory`/`IDBDatabase`/`IDBRequest`, `TextTrack`/`TextTrackCue`/`VTTCue`, `DOMStringMap`,
+`MessageEvent`, and `OffscreenCanvas` (by design).
+
+### The layering, which is the part to expect next time
+
+Fixing this did **not** make welt.de render. It removed *one* abort and revealed the next:
+`TypeError: setting getter-only property "innerText"`, with the same adblock-abort handler catching
+it. Boot-path failures on real sites stack, and each fix peels one layer — the same shape the
+aljazeera investigation took. **Do not book "site X now works" from "site X's first error is gone".**

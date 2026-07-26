@@ -25996,3 +25996,110 @@ parity was 175s / 76% of a 230s wall at t587 and is now **14s / 22% of 65s**, a 
 agent tick in the window having touched the observer-owned `verify.sh`. A named lever that quietly
 stops being a lever is precisely the stale-priority shape §VI.3's third clause exists to catch.
 Cadences: wall 627; const 615; surface 608; self-audit 614.
+
+## Tick 608 — a missing interface object is a ReferenceError, and a ReferenceError renders NOTHING (2026-07-26)
+
+The board's live CO-#1 is the certification redesign's STEP-2, and the observer named its two
+measurability targets: *(1) fix WHY 9 of 14 cannot be scored; (2) we are SLOW on real HEAD sites.*
+t607 answered the fetch-fail half of (1). This tick went at (2) — and (2) turned out to be a symptom
+of something much larger that neither target had named.
+
+**MEASURED FIRST, on `www.welt.de` — a top-1k HEAD site of `corpus-v2.tsv`, and the pilot's worst
+row (coverage 0.000312).** The expectation, from t606's finding, was a *timing* result: the 12s load
+budget exhausted, the page painted deliberately incomplete. That is not what the instrument said.
+
+```text
+  load: manuk 31248ms · chromium 6856ms
+  structural: 0.0% (3243 paths, 3242 missing, 1 misplaced)
+
+  WARN  a page <script> threw   error=TypeError: a.addEventListener is not a function
+  WARN  UNHANDLED PROMISE REJECTION  error=ReferenceError: HTMLMetaElement is not defined
+  WARN  UNHANDLED PROMISE REJECTION  error=ReferenceError: Navigator is not defined
+  ERROR page.console: Failed to load website due to adblock: Loader aborted: HTMLMetaElement is not defined
+```
+
+**The site's loader probes interface objects. The probe threw. The site concluded it was being
+AD-BLOCKED and aborted its own boot.** So welt.de did not render *badly* and it did not render
+*incompletely* — it rendered **nothing**, 3,242 of 3,243 elements absent, and the cause was one
+missing global. The 31s is what an aborted boot costs, not what a slow one costs. **A coverage number
+says how much is missing and never says why; only the console did.**
+
+**THE POPULATION, not the instance — the lesson this loop has now paid for six times.** Before
+writing a line of fix I probed the 183 interface objects a browser exposes: **63 were absent.** The
+21 that existed had each been added by whichever test happened to need it — a list shaped by *this
+loop's attention* rather than by the platform, which is exactly the defect shape the tick-591 surface
+audit found in the capability map. `HTMLParagraphElement`, `HTMLLIElement`, `HTMLTableCellElement`,
+`Navigator`, `Storage`, `Performance`, `CanvasRenderingContext2D` — all missing, every one of them a
+`ReferenceError` waiting for the first page that reads it.
+
+**THE RULE, and the negative half is the load-bearing half.** An interface object is defined **iff
+the thing it names exists in this engine.** Each of the 54 added was probed present first (`navigator`,
+`localStorage`, `performance`, `customElements`, `crypto.subtle`, `document.implementation`, the 2D
+context). **`OffscreenCanvas` is deliberately NOT added** — `getContext` has no offscreen tier, so its
+absence is TRUE, and `'OffscreenCanvas' in window` must keep answering `false`. A stub that names a
+capability we lack defeats feature-detection and is worse than the gap
+(`DAILY-DRIVER-CERTIFICATION.md` §1; this repo's honest-answer law). The gate asserts that absence, so
+a later tick cannot quietly turn the list into a claim instead of a fact.
+
+Predicates are exact, not generous: `<cite>` is plain `HTMLElement` and NOT `HTMLQuoteElement`; a
+custom element (`<my-widget>`) is `HTMLElement` and NOT `HTMLUnknownElement`; `HTMLTableCellElement`
+is one interface over `<td>` AND `<th>`. Six `NEG_*` claims exist because **an over-broad predicate is
+a wrong answer, not a generous one** — without them a test returning `true` unconditionally would pass
+every positive claim in the file.
+
+RED-PROVEN three ways, each at a different failure mode, because one proof only shows the gate reads
+one thing:
+- delete `iface('HTMLMetaElement')` → **THE POINT** claim fails (the literal welt.de global)
+- widen `HTMLQuoteElement` to include `CITE` → `NEG_cite_quote` fails (over-broad predicate)
+- add a dishonest `OffscreenCanvas` → `offscreen_absent` fails (the honest-negative floor)
+
+A vacuity guard fails first if the fixture script did not run at all, so no claim can be checked
+against a blank string.
+
+TICK SHAPE: capability (the interface-object surface: 120 → 174 of 183 platform interface objects,
+`instanceof` answered exactly). Bar 0 untouched; no ratchet floor moved; no performance traded.
+Gates: +1 `G_IFACE_SURFACE` (`engine/page/tests/g_iface_surface.rs`) — 37 claims, of which 9 are
+`NEG_*` (a wrong tag must NOT match), 1 is the honest-negative and 1 is a vacuity guard.
+WIKI: `docs/wiki/javascript-engine.md` — "an interface object is defined iff the thing it names exists".
+PATTERN: interface-object surface.
+
+NEXT: **the 9 still absent, each blocked on a capability rather than on this list** —
+`IDBFactory`/`IDBDatabase`/`IDBRequest`, `TextTrack`/`TextTrackCue`/`VTTCue`, `DOMStringMap`,
+`MessageEvent`, and `OffscreenCanvas` (which stays absent by design). Their predicates need a
+distinguishing shape this tick did not establish, and guessing one would be exactly the dishonest
+stub the rule forbids. Also named and NOT fixed here:
+`CanvasRenderingContext2D.prototype` is not in a context's chain (`getContext` builds a fresh object
+with own methods), so patching `…prototype.fillText` is accepted and **inert** — that is the
+G_PROTOTYPE lesson recurring on the canvas surface, and it wants the context to become a real
+reflector.
+
+**RE-MEASURED LIVE AFTER THE FIX, AND THE HONEST RESULT IS "ONE LAYER, NOT THE SITE".** Both
+`ReferenceError`s are **gone** from welt.de's boot, and both unhandled promise rejections with them —
+the loader now gets further than it ever has. It still aborts, on the **next** defect, caught by the
+same adblock handler:
+
+```text
+  BEFORE: ReferenceError: HTMLMetaElement is not defined   → Loader aborted
+          ReferenceError: Navigator is not defined
+  AFTER:  TypeError: setting getter-only property "innerText"  → Loader aborted
+```
+
+So coverage is still 0.0%, and **this tick does not get to claim welt.de.** Recorded this way
+deliberately: the tempting sentence was *"this fixes the site"*, and the measurement refuses it.
+Boot-path failures on real sites **stack**, one named error per fix — the same shape the aljazeera
+investigation took. `innerText` needs a setter (it is getter-only today), and that is the next layer;
+whether it is the last one is not knowable until it lands. **Do not book "site X works now" from
+"site X's first error is gone."**
+
+ALSO THIS TICK: **SURFACE AUDIT #34** (came due at the pre-flight; full entry in
+`docs/loop/SURFACE-AUDIT.md`). It found this tick's own gap from the other direction — **the map had
+no row for the interface-object surface at all**, audit #31's finding recurring. Checked all 20
+Interop-2026 focus areas: **19 of 20 present**, with **container STYLE queries** absent (probed:
+missing), plus **`scrollend`** (probed: missing) and **ESM top-level await** (left `unknown` on
+purpose — the probe only showed `async`/`await` parses, which is not the claim). 4 rows added. And
+the audit's own opening diff **produced a wrong number for the second consecutive audit** — 261 of
+303 gate files "unreferenced", an artifact of case-sensitivity in my matcher, the exact mirror of
+audit #33's bug; `scripts/map-reconcile.sh` is the real instrument and reports **26 drift rows**,
+carried as the board's CO-#1 item (3) and NOT closed here. The audit also **corrected an
+attribution**: welt.de's 0% was on the board as a *timing* result, and it never was.
+Cadences: wall 627; const 615; surface 618; self-audit 614.

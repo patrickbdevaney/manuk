@@ -1698,3 +1698,70 @@ the bug. **A gate tuned until it is green is the thing this repo refuses.** What
 recorded in the gate's own header: a canonical gate registry emitted by the harness, cited by key —
 which would also make `verify.sh`'s coverage countable, an open question memory already carries
 ("gated" ≠ "watched"). Observer-owned; named, not attempted.
+
+## Audit #34 — tick 608
+
+**METHOD.** The standing rule (t581) first: diff `engine/page/tests/` against `CONSTELLATION.tsv`,
+then leave the frame and search the web. Both halves produced a finding, and the gate-corpus half
+produced a *third* number that was again an artifact of the matcher — audit #33's exact lesson,
+repeated one audit later.
+
+**THE MATCHER LIED AGAIN, AND IT LIED THE SAME WAY.** My first pass reported **261 of 303 gate files
+unreferenced by the map** — a catastrophic-looking regression from #33's 291-of-293. It was my own
+one-liner: I compared bare file stems (`g_iface_surface`) against `grep -oE 'g_[a-z0-9_]+'` of the
+map, which only ever matches the *lowercase* citations and misses every `G_UPPERCASE` one — the exact
+mirror of the bug #33 caught (which missed the lowercase ones). **The rule to carry: this audit's
+opening diff has now produced a wrong number on two consecutive runs, in opposite directions, from
+the same case-sensitivity assumption.** The real instrument for this is `scripts/map-reconcile.sh`,
+which does the matching properly; the hand-rolled diff should not be re-derived a third time.
+
+**`map-reconcile.sh` — the honest number: 26 drift rows** (225 OK, 25 descriptive-floor, 82 honestly
+unbacked). 20 are **bare assertions** (a `works`/`partial`/`gated` status with `gate='-'`: tables,
+lists, web fonts, ResizeObserver, ESM, fetch/XHR, History, localStorage, custom elements, POST forms,
+test262, scroll anchoring, forced reflow, …) and 6 are **dangling gates** (a `G_*` named with no
+backing test: `G_AVIF_PAINT`, `G_AUDIO_PUMP`/`G_AUDIO_JOIN`, `G_TAB_DISCARD_RELEASES_TO_OS`,
+`G_FIDELITY`, `G_RATE`, `G_CAP_TOUCH_PROBE`). This is the board's live CO-#1 item (3) and it is **not
+closed by this audit** — it is a tick of its own, recorded here so it is not rediscovered.
+
+**FINDING 1 — THE MAP HAD NO ROW FOR THE INTERFACE-OBJECT SURFACE, AND ITS ABSENCE COST A TOP-1K SITE
+100% OF ITS CONTENT.** Zero hits for "interface object" across 359 rows. Nothing named the ~183
+constructors a browser exposes on `globalThis`, and a probe found **63 of them missing**. This is
+audit #31's finding recurring: the map tracked *the loop's attention* (21 interfaces, each added by
+whichever test happened to need it) rather than the platform. The cost was measured, not imagined —
+`www.welt.de`'s loader read `HTMLMetaElement`, took the `ReferenceError`, **concluded it was being
+ad-blocked and aborted its own boot**: 3,242 of 3,243 elements unrendered, scored as `0.0% coverage`
+by an instrument that could say *how much* was missing and never *why*. Row added, now `gated` by
+`G_IFACE_SURFACE` (t608 took the surface 120 → 174 of 183).
+
+**FINDING 2 — one Interop 2026 focus area was entirely absent, and two more named items with it.**
+Checked all 20 focus areas + 4 investigation efforts against the map. **19 of 20 were present** —
+which is a good result and worth stating, since an audit that only reports misses reads as if the map
+were worthless. The misses:
+- **container STYLE queries** (`@container style(--x: y)`) — zero hits. The map had container *size*
+  queries (t386) and nothing for the style half, which is a separate mechanism. **PROBED: missing** —
+  the rule did not apply (computed colour stayed `rgb(0,0,0)`).
+- **`scrollend`** — zero hits. **PROBED: missing** — `'onscrollend' in el` and `in window` both false.
+- **ESM top-level await / cyclic module records** (Interop's *web compat* area, alongside
+  `user-select` and scroll/animation event timing, both already mapped) — zero hits. Added
+  **`unknown` ON PURPOSE**: the probe only showed that `async`/`await` *parses*, which is not the
+  claim, and booking `works` off it would have been testing the probe rather than the engine.
+
+**WHAT WE HAD BEEN WRONG ABOUT — and it is a mis-attribution, not a gap.** The board and t606's pilot
+both read welt.de's near-zero coverage as a **timing** result: *"the 12s load budget is exhausted, so
+pages paint incomplete"*. It was nothing of the sort. The page was not painted incomplete — it was
+**never booted**, and the 31s was the cost of an aborted load rather than a slow one. The reasoning
+that produced the wrong answer is worth naming: a plausible mechanism (we are measurably slow) was
+already on the table, so a symptom consistent with it was filed under it **without reading the
+console**. `OURS IS SLOW` fires on wall-clock alone and cannot tell a slow boot from a dead one.
+
+**SOURCES** (searched 2026-07-26, not recalled):
+- <https://web.dev/blog/interop-2026> — the authoritative 20 focus areas + 4 investigation efforts
+- <https://hacks.mozilla.org/2026/02/launching-interop-2026/> · <https://webkit.org/blog/17818/announcing-interop-2026/>
+- <https://github.com/web-platform-tests/interop/blob/main/2026/README.md> — the *web compat* area's
+  actual contents (ESM cyclic modules + multiple TLA, scroll/animation event timing, `user-select`)
+- Ladybird 2026 status (2.07M WPT subtests, 97.8% of test262) — the independent-engine reference
+  point for what order a from-scratch engine takes this in
+
+**ADDED:** 4 rows (interface objects `gated`; container style queries `missing`; `scrollend`
+`missing`; ESM TLA `unknown`). **CORRECTED:** welt.de's failure re-attributed from *timing* to
+*aborted boot*. **CARRIED:** the 26 map-reconcile drift rows, unclosed and owned by a later tick.

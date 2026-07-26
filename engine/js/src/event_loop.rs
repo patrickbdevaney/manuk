@@ -3993,6 +3993,159 @@ const PRELUDE: &str = r#"
       iface('HTMLBodyElement',     tagIs('BODY'));
       iface('HTMLTitleElement',    tagIs('TITLE'));
 
+      // ── **THE REST OF THE INTERFACE-OBJECT SURFACE. A MISSING ONE IS A `ReferenceError`, AND A
+      //    `ReferenceError` KILLS THE FRAME THAT READ IT — IT DOES NOT DEGRADE.**
+      //
+      // The 21 interfaces above were added one at a time, each by the test that happened to need it.
+      // That is a list shaped by *this loop's attention*, not by the platform — and a probe of the 183
+      // interface objects a browser exposes found **63 of them simply absent** here.
+      //
+      // MEASURED, and it is the reason this is a capability tick and not tidying. `www.welt.de` (a
+      // top-1k HEAD site in the certification corpus) scored **0.0% coverage — 3,242 of 3,243 elements
+      // missing**, and the console said exactly why:
+      //
+      //     ReferenceError: HTMLMetaElement is not defined
+      //     ReferenceError: Navigator is not defined
+      //     Failed to load website due to adblock: Loader aborted: HTMLMetaElement is not defined
+      //
+      // The site's loader probes interface objects, the probe threw, and the site concluded it was
+      // being **ad-blocked** and aborted its own boot. So the page did not render badly — it rendered
+      // *nothing*, and the cause was one absent global. This is the `undefined`-from-a-platform-read
+      // class this project has now booked repeatedly: the absence is not a gap the page routes around,
+      // it is a throw that takes the caller's whole frame with it.
+      //
+      // **THE RULE FOR WHAT GOES IN THIS LIST, and it is the honest-negative law applied to identity:**
+      // an interface object is defined **iff the thing it names exists in this engine.** Every entry
+      // below is backed by a real capability (the elements exist; `navigator`, `localStorage`,
+      // `performance`, `customElements`, `crypto.subtle`, `document.implementation` and the 2D context
+      // were each probed present before their name was added). `OffscreenCanvas` is deliberately NOT
+      // here — `getContext` has no offscreen tier, so its absence is TRUE and a page's
+      // `'OffscreenCanvas' in window` must keep getting the right answer. `G_IFACE_SURFACE` asserts
+      // that absence, so a later tick cannot quietly make this list a claim instead of a fact.
+      var tagIn = function () {
+        var set = Object.create(null);
+        for (var i = 0; i < arguments.length; i++) { set[arguments[i]] = 1; }
+        return function (o) { return isEl(o) && !!set[o.tagName]; };
+      };
+
+      // Document metadata + the sectioning/grouping elements every server-rendered page is built from.
+      iface('HTMLMetaElement',     tagIs('META'));
+      iface('HTMLBaseElement',     tagIs('BASE'));
+      iface('HTMLParagraphElement', tagIs('P'));
+      iface('HTMLHeadingElement',  tagIn('H1','H2','H3','H4','H5','H6'));
+      iface('HTMLUListElement',    tagIs('UL'));
+      iface('HTMLOListElement',    tagIs('OL'));
+      iface('HTMLLIElement',       tagIs('LI'));
+      iface('HTMLDListElement',    tagIs('DL'));
+      iface('HTMLPreElement',      tagIn('PRE','LISTING','XMP'));
+      // `<cite>` is NOT in here: the spec gives it plain `HTMLElement`, and only `<blockquote>`/`<q>`
+      // are `HTMLQuoteElement`. An over-broad predicate is a wrong answer, not a generous one.
+      iface('HTMLQuoteElement',    tagIn('BLOCKQUOTE','Q'));
+      iface('HTMLModElement',      tagIn('INS','DEL'));
+      iface('HTMLBRElement',       tagIs('BR'));
+      iface('HTMLHRElement',       tagIs('HR'));
+      iface('HTMLTimeElement',     tagIs('TIME'));
+      iface('HTMLDataElement',     tagIs('DATA'));
+      iface('HTMLMenuElement',     tagIs('MENU'));
+      iface('HTMLDetailsElement',  tagIs('DETAILS'));
+
+      // Tables — `HTMLTableCellElement` is ONE interface over two tags (`<td>`/`<th>`) and
+      // `HTMLTableSectionElement` over three, which is why the single-tag helper cannot express them.
+      iface('HTMLTableRowElement',     tagIs('TR'));
+      iface('HTMLTableCellElement',    tagIn('TD','TH'));
+      iface('HTMLTableSectionElement', tagIn('THEAD','TBODY','TFOOT'));
+      iface('HTMLTableColElement',     tagIn('COL','COLGROUP'));
+      iface('HTMLTableCaptionElement', tagIs('CAPTION'));
+
+      // Forms — the half of the form surface the 21-entry list happened to miss. A form library that
+      // narrows a control with `instanceof HTMLFieldSetElement` used to throw rather than narrow.
+      iface('HTMLFieldSetElement', tagIs('FIELDSET'));
+      iface('HTMLLegendElement',   tagIs('LEGEND'));
+      iface('HTMLOptGroupElement', tagIs('OPTGROUP'));
+      iface('HTMLDataListElement', tagIs('DATALIST'));
+      iface('HTMLOutputElement',   tagIs('OUTPUT'));
+      iface('HTMLProgressElement', tagIs('PROGRESS'));
+      iface('HTMLMeterElement',    tagIs('METER'));
+
+      // Embedded content + image maps.
+      iface('HTMLEmbedElement',    tagIs('EMBED'));
+      iface('HTMLObjectElement',   tagIs('OBJECT'));
+      iface('HTMLTrackElement',    tagIs('TRACK'));
+      iface('HTMLMapElement',      tagIs('MAP'));
+      iface('HTMLAreaElement',     tagIs('AREA'));
+
+      // The obsolete-but-still-parsed set. They are in the spec *because the web still contains them*,
+      // and a page that touches one must not die for it.
+      iface('HTMLFrameElement',     tagIs('FRAME'));
+      iface('HTMLFrameSetElement',  tagIs('FRAMESET'));
+      iface('HTMLMarqueeElement',   tagIs('MARQUEE'));
+      iface('HTMLFontElement',      tagIs('FONT'));
+      iface('HTMLParamElement',     tagIs('PARAM'));
+      iface('HTMLDirectoryElement', tagIs('DIR'));
+
+      // `HTMLUnknownElement` — the interface of an element the HTML spec does NOT define, which is
+      // what `document.createElement('my-thing')` produces before any custom-element upgrade. The
+      // predicate needs the known-tag set to answer "unknown", so it is derived from the tags named
+      // above plus the ones the earlier block covers; anything else in the HTML namespace is unknown.
+      var KNOWN_HTML_TAGS = ('HTML,HEAD,BODY,TITLE,BASE,META,LINK,STYLE,SCRIPT,NOSCRIPT,TEMPLATE,SLOT,'
+        + 'DIV,SPAN,P,H1,H2,H3,H4,H5,H6,UL,OL,LI,DL,DT,DD,PRE,LISTING,XMP,BLOCKQUOTE,Q,CITE,INS,DEL,'
+        + 'BR,HR,TIME,DATA,MENU,DETAILS,SUMMARY,DIALOG,FIGURE,FIGCAPTION,MAIN,SECTION,ARTICLE,ASIDE,'
+        + 'HEADER,FOOTER,NAV,ADDRESS,HGROUP,SEARCH,A,EM,STRONG,SMALL,S,B,I,U,MARK,RUBY,RT,RP,BDI,BDO,'
+        + 'WBR,SUB,SUP,CODE,KBD,SAMP,VAR,ABBR,DFN,TABLE,TR,TD,TH,THEAD,TBODY,TFOOT,COL,COLGROUP,'
+        + 'CAPTION,FORM,INPUT,BUTTON,SELECT,OPTION,OPTGROUP,TEXTAREA,LABEL,FIELDSET,LEGEND,DATALIST,'
+        + 'OUTPUT,PROGRESS,METER,IMG,PICTURE,SOURCE,VIDEO,AUDIO,TRACK,CANVAS,IFRAME,EMBED,OBJECT,'
+        + 'AREA,MAP,FRAME,FRAMESET,MARQUEE,FONT,PARAM,DIR,CENTER,BIG,STRIKE,TT,NOBR,ACRONYM,BASEFONT'
+      ).split(',');
+      var KNOWN_SET = Object.create(null);
+      KNOWN_HTML_TAGS.forEach(function (t) { KNOWN_SET[t] = 1; });
+      iface('HTMLUnknownElement', function (o) {
+        // A custom element (a name containing `-`) is an `HTMLElement`, NOT an `HTMLUnknownElement` —
+        // getting that backwards is the one way this predicate can be actively wrong.
+        return isEl(o) && !KNOWN_SET[o.tagName] && o.tagName.indexOf('-') === -1;
+      });
+
+      // ── Non-element platform interfaces. Each predicate is IDENTITY against the singleton it names,
+      // which is exact — these objects have exactly one instance per global.
+      iface('Navigator',              function (o) { return !!o && o === globalThis.navigator; });
+      iface('Performance',            function (o) { return !!o && o === globalThis.performance; });
+      iface('CustomElementRegistry',  function (o) { return !!o && o === globalThis.customElements; });
+      iface('Crypto',                 function (o) { return !!o && o === globalThis.crypto; });
+      iface('SubtleCrypto',           function (o) {
+        return !!o && !!globalThis.crypto && o === globalThis.crypto.subtle;
+      });
+      // `Storage` has TWO instances, and `localStorage instanceof Storage` is how a page tells a real
+      // storage object from a polyfilled `{}` before trusting it with a quota check.
+      iface('Storage', function (o) {
+        return !!o && (o === globalThis.localStorage || o === globalThis.sessionStorage);
+      });
+      // `DOMImplementation` is per-document, so identity against the main document's would be wrong for
+      // an iframe's. Duck-typed on the two methods only it has.
+      iface('DOMImplementation', function (o) {
+        return !!o && typeof o.createHTMLDocument === 'function'
+                   && typeof o.createDocumentType === 'function';
+      });
+      // `ProcessingInstruction` completes the `CharacterData` family — `Text` (3) and `Comment` (8)
+      // are already here, and a PI is nodeType 7. It gets the REAL Node prototype, like its siblings.
+      REAL.ProcessingInstruction = globalThis.__protoNode;
+      iface('ProcessingInstruction', function (o) { return !!o && o.nodeType === 7; });
+      // `XMLHttpRequestEventTarget` is XHR's WebIDL base. Every `XMLHttpRequest` is one; nothing else
+      // in this engine is, so deferring to XHR's own answer is exact.
+      iface('XMLHttpRequestEventTarget', function (o) {
+        try { return !!o && o instanceof globalThis.XMLHttpRequest; } catch (e) { return false; }
+      });
+      // The 2D context family. Canvas 2D genuinely rasterizes here (G_CANVAS), so naming its interfaces
+      // is a true statement. ⚠ Their `.prototype` is NOT in a context's chain — `getContext` builds a
+      // fresh object with own methods — so patching `CanvasRenderingContext2D.prototype.fillText` is
+      // accepted and inert. That is a REAL residual gap and it is named in the gate, not papered over.
+      iface('CanvasRenderingContext2D', function (o) {
+        return !!o && typeof o === 'object' && !!o.canvas && typeof o.fillRect === 'function';
+      });
+      iface('CanvasGradient', function (o) { return !!o && typeof o.addColorStop === 'function'; });
+      iface('CanvasPattern',  function (o) { return !!o && !!o.__pattern; });
+      // SVG's `path` — the one SVG element interface the earlier list reached for and missed. SVG
+      // tag names are case-sensitive and stay lowercase, unlike HTML's.
+      iface('SVGPathElement', function (o) { return isEl(o) && o.tagName === 'path'; });
+
       // `performance.now()` — schedulers, profilers and animation libraries all feature-detect it and
       // most fall back to `Date.now()`. The ones that don't simply break.
       if (typeof globalThis.performance === 'undefined') {

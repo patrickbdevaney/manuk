@@ -665,6 +665,12 @@
   - L1334 · Three defects, in the order the run hit them
   - L1363 · What the 5,101 failures are, and what they are not
   - L1372 · The skips are the honest part, and one of them is Bar 0
+  - L1386 · An interface object is defined IFF the thing it names exists (tick 608)
+  - L1400 · What it cost, measured
+  - L1417 · The rule, and the negative half is the load-bearing half
+  - L1427 · Predicates are exact, not generous
+  - L1437 · Known residue, named rather than papered over
+  - L1447 · The layering, which is the part to expect next time
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1033,4 +1039,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-948 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+954 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

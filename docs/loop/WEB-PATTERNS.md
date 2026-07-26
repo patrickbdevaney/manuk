@@ -5031,3 +5031,31 @@ it measures.
 still `Err`. Without that claim, an engine that never reported a network failure at all would satisfy
 every "did it render?" assertion above. A dead origin, a DNS failure and a timeout are a different fact
 and they keep their own answer.
+
+## Pattern — a page that PROBES the platform's interface objects and aborts when one is absent (tick 608)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| A boot script reads a bare interface-object identifier (`HTMLMetaElement`, `Navigator`, `HTMLTableCellElement`, `CanvasRenderingContext2D`). If it is absent the read is a **`ReferenceError`**, which kills the frame — and a page whose loader is wrapped in a `try/catch` reads that throw as a **hostile environment** rather than a missing feature | **A top-1k HEAD site of `corpus-v2.tsv`.** `www.welt.de`'s loader probed `HTMLMetaElement`, took the throw, **concluded it was being ad-blocked, and aborted its own boot** — `0.0% coverage`, **3,242 of 3,243 elements never rendered**. A probe of the 183 interface objects a browser exposes found **63 absent** here | ⚠ partial (tick 608) — 54 added, **120 → 174 of 183**, gated by **`G_IFACE_SURFACE`** (37 claims, 9 of them negatives, RED-proven three ways). **welt.de still does not render**: removing this abort revealed the next one (`TypeError: setting getter-only property "innerText"`), caught by the same adblock handler |
+
+**This failure class is not "a missing feature", and the difference is mechanical.** `el.foo?.()`
+survives a missing *method*; **nothing survives a missing interface object**, because the throw happens
+at the identifier read — before any operator the author could have guarded with. That is why the
+absence does not degrade the page by a little: it removes the page.
+
+**The instrument could see the size and never the cause.** `0.0% coverage` and *"we are slow"* are
+indistinguishable in a box-diff, and they want opposite fixes — t606's pilot had in fact filed this
+site under **timing** (*"the 12s load budget is exhausted, so pages paint incomplete"*). The page was
+not painted incomplete; it was **never booted**, and the 31s was the cost of an aborted load rather
+than a slow one. **When a coverage number is ~0 rather than merely low, read the console before
+theorising: 0% is a different failure mode from 40%, not a worse one.**
+
+**The rule, and its negative half is what keeps it honest.** An interface object is defined **iff the
+thing it names exists in this engine** — each name added was probed present first. `OffscreenCanvas`
+is **deliberately absent** (no offscreen tier), and the gate asserts that absence, so the list cannot
+quietly become a claim instead of a fact. A stub that names a capability we lack defeats
+feature-detection and is worse than the gap.
+
+**Boot-path failures on real sites STACK.** One fix peels one layer — the same shape the aljazeera
+investigation took, one named error per fix. **Do not book "site X works now" from "site X's first
+error is gone."**
