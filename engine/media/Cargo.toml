@@ -119,6 +119,11 @@ required-features = ["video"]
 name = "av1_decode"
 required-features = ["av1"]
 
+# G_MEDIA_WEBM_AV1 (tick 634): the join between t633's EBML reader and the t354 AV1 decoder.
+[[test]]
+name = "webm_av1_decode"
+required-features = ["av1"]
+
 [[test]]
 name = "avif_alpha"
 required-features = ["avif"]

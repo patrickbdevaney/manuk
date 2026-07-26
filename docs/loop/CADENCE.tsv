@@ -392,3 +392,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 631	37fb2c28	1785102225	2026-07-26T17:43:45-04:00	205	the	63	4	179	3	315	81	3896	6960	0	341	31	constitution check #45: four false absences, zero false presences (2026-07-26)
 632	10d9a017	1785102613	2026-07-26T17:50:13-04:00	388	measurement	63	5	149	3	315	81	3896	6960	0	341	31	the load budget moves COVERAGE and SHAPE in opposite directions (2026-07-26)
 633	bbb2cb2c	1785105398	2026-07-26T18:36:38-04:00	2785	capability	63	16	1454	120	316	81	3896	6960	0	341	31	WebM/Matroska demux: the container half of the VP9 ladder (2026-07-26)
+634	a3f7dae1	1785108440	2026-07-26T19:27:20-04:00	3042	capability	63	15	739	153	316	81	3896	6960	0	341	31	AV1-in-WebM: the join was already complete, and both answers said no (2026-07-26)

@@ -308,7 +308,83 @@ call.
 
 **Next on this ladder:** a VP9 decoder (libvpx bindings — the same "a working pipeline with zero
 system dependencies" trade openh264 already represents) and an Opus decoder, at which point the
-`codecs=` answers may move and not before.
+`codecs=` answers may move and not before. ⚠ **This paragraph was wrong within one tick — see M3c.**
+
+## M3c — AV1-in-WebM (tick 634): the join was already complete, and both answers said no
+
+M3b's closing sentence above said the `codecs=` answers could not move until a VP9 or Opus decoder
+existed. The premise was that WebM means VP9+Opus. **It does not: AV1 is the other codec WebM
+carries, `re_rav1d` has decoded AV1 here since t354, and the container was never part of the decode
+question.** A probe — not a plan — settled it: demux `bear-av1-480x360.webm` with t633's EBML
+reader, feed the samples straight to the existing `Av1Decoder`, and **82 frames come out at
+480×360, non-uniform, correctly timestamped.** No new decode code was written in t634. The
+capability existed, was reachable, and reported absent.
+
+**The shape of the finding is the reusable part.** t633 wrote an honest negative
+(`[[honest-answer-is-not-a-fixed-answer]]`), and it was honest — but it was stated as a property of
+*the container* when the true constraint was a property of *the codec set*. A negative scoped one
+level too wide reads as settled and rots invisibly, because the sentence stays literally defensible
+("no VP9 decoder exists") while the conclusion it supports ("so no `codecs=` answer can move")
+quietly stops following.
+
+**What moved, and what deliberately did not:**
+
+| answer | before | after | why |
+|---|---|---|---|
+| `isTypeSupported('video/webm')` | true | true | bare container — unchanged, t633's contract |
+| `isTypeSupported('video/webm; codecs="av01.0.01M.08"')` | false | **true** | decodes end-to-end; the false absence |
+| `isTypeSupported('video/webm; codecs="av01.…,opus"')` | false | false | mixed list: we would render video and silently drop audio |
+| `isTypeSupported('video/webm; codecs="av01"')` | false | false | matches `av1::can_decode`, which refuses the dotless form |
+| `isTypeSupported('video/webm; codecs="vp9"')` | false | false | no VP9 decoder, deliberately (board t235) |
+| `canPlayType('video/webm')` | `''` | `''` | bare webm on the open web is overwhelmingly VP9+Opus |
+| `canPlayType('video/webm; codecs="av01.0.01M.08"')` | `''` | **`'probably'`** | canPlayType is what picks a `<source>` |
+
+**One rule, one implementation — made falsifiable.** `isTypeSupported` and `canPlayType` live in
+different files (`mse_js.rs`, `event_loop.rs`) and both must answer "does this WebM's codec list
+name something we decode". Two regexes would drift the first time either was edited — the
+one-rule-N-implementations defect this loop caught in eight consecutive ticks. So
+`__manukWebmCodecsDecodable` is defined once in `mse.js` and read by both, and the RED probe proves
+it: mutating that single function moves **both** `av1:true` and `cpav1:[probably]` red together. A
+shared helper that only one caller actually reaches would have shown one red, not two.
+
+**The prefix includes the dot, and that is the t627 rule applied.** `av01\.` matches
+`manuk_media::av1::can_decode` character for character, so the JS claim and the Rust capability
+compute the *same quantity*. A WebM AV1 track whose `CodecPrivate` is not a readable `av1C` reports
+the bare string `av01`, and the Rust side refuses it; the JS side must refuse it too or the claim is
+about a different thing than the capability behind it.
+
+**Gates:** `engine/media/tests/webm_av1_decode.rs` (`G_MEDIA_WEBM_AV1` — real EBML samples through
+real dav1d, three RED mutations tabulated, each landing on a *different* assertion) and the extended
+`engine/page/tests/g_media_webm.rs` (five new claims, two RED mutations). Only the first 8 samples
+are decoded: dav1d in a test-profile build costs ~1s/frame, and the picture assertions do not
+improve after frame 8 while the wall cost does.
+
+**A RED probe corrected the gate's own documentation.** I wrote that `cpvp9:[]` proves the shared
+predicate refuses VP9. It does not — `canPlayType`'s codec refuse-list catches `vp9` several lines
+earlier, so mutating the predicate to accept everything leaves that claim green. The honest reading
+is *"the refuse-list still runs first"*. This is t633's lesson arriving a second time: **the gate's
+doc is written by the same person who wrote the blind spot, so the mutation is the only reader that
+is not already convinced.**
+
+**Two paths, and only one of them was proved by the MSE evidence.** `isTypeSupported` answers for
+MSE; `canPlayType` is a promise about *the element*, driven by `MediaSet::load` in the shell lane.
+The verify wall caught this: t354's `g_mse_join` asserts `canPlayType('video/webm; codecs="av01.…")
+=== ''`, went red on the change, and re-pointing it on MSE evidence alone would have been
+advertising ahead of the capability. `G_WEBM_AV1_DRIVE` (`shell/src/media.rs`) closes it — an AV1
+WebM loads, advances, and **changes what is painted**. The fixture is trimmed to 4 frames
+(stream-copied, no re-encode) because `MediaSet::load` decodes the whole timeline eagerly at ~1s a
+frame in a test build: the 82-frame original cost 82 wall-seconds for what frame 4 already proves,
+and a gate that expensive is a gate that gets deleted rather than kept.
+
+**The near-miss worth recording.** The wall's failure triple (`G_RUNTIME_COUNT` + `G_INTERACT` +
+`manuk-shell`) is exactly the known parallel-build false-RED shape, on a box at load 3.3. Invoking
+that precedent instead of re-running the crate would have landed a hole. **A remembered false-RED
+that matches the symptom is more dangerous than no memory at all** — it is a ready-made reason to
+stop measuring, arriving exactly when re-measuring is cheapest.
+
+**Next on this ladder** (replacing the paragraph above it, which was scoped too wide): an **Opus
+decoder** is the real remaining blocker for WebM *audio*, and VP9 stays on the floor per the
+observer's t235 steer. AV1-in-WebM video is done.
 
 ## M4 — AAC decode (tick 235): sound-shaped numbers, not yet sound
 

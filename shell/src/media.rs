@@ -646,7 +646,9 @@ mod tests {
       R.push('vp9:' + MediaSource.isTypeSupported('video/webm; codecs="vp9"'));
       R.push('mse-av1:' + MediaSource.isTypeSupported('video/mp4; codecs="av01.0.00M.08"'));
       R.push('cpt-av1:' + (document.getElementById('v').canPlayType('video/mp4; codecs="av01.0.00M.08"') === 'probably'));
-      R.push('cpt-webm:' + (document.getElementById('v').canPlayType('video/webm; codecs="av01.0.00M.08"') === ''));
+      R.push('cpt-webm:' + (document.getElementById('v').canPlayType('video/webm; codecs="av01.0.00M.08"') === 'probably'));
+      R.push('cpt-webm-bare:' + (document.getElementById('v').canPlayType('video/webm') === ''));
+      R.push('cpt-webm-vp9:' + (document.getElementById('v').canPlayType('video/webm; codecs="vp9"') === ''));
       R.push('cpt-mpeg:' + (document.getElementById('v').canPlayType('audio/mpeg') === 'probably'));
       R.push('cpt-flac:' + (document.getElementById('v').canPlayType('audio/flac') === 'probably'));
       R.push('cpt-oggv:' + (document.getElementById('v').canPlayType('audio/ogg; codecs="vorbis"') === 'probably'));
@@ -698,7 +700,26 @@ mod tests {
             // never be a substring of another record entry).
             "mse-av1:true",
             "cpt-av1:true",
+            // ── tick 634 RE-POINTED this claim, and the re-point is the interesting part.
+            //
+            // t354 asserted `canPlayType('video/webm; codecs="av01.…"') === ''` and was RIGHT:
+            // WebM was not demuxable at all, so an AV1 WebM was an honest no. t633 built the EBML
+            // reader and t634 found the decoder had been sitting behind it since t354, so the
+            // answer is now `'probably'` — earned by `g_webm_av1_drive` below, which decodes this
+            // exact container in the shell lane and asserts the PIXELS change. This is
+            // `[[honest-answer-is-not-a-fixed-answer]]` firing on schedule: the test went red the
+            // moment the capability landed, which is the whole reason to encode an honest no as an
+            // ASSERTION rather than a comment. A comment would still say `''` today.
+            //
+            // RED: revert the webm arm in canPlayType (cpt-webm:false), or break
+            // `__manukWebmCodecsDecodable` in mse.js — one function, both callers.
             "cpt-webm:true",
+            // And the two answers that deliberately did NOT move with it, asserted next to it so
+            // `cpt-webm:true` can never be read as "webm is supported": a BARE `video/webm` is
+            // overwhelmingly VP9+Opus on the open web, and canPlayType is what picks a <source>,
+            // so 'maybe' there would steer a <video> off the .mp4 we can actually decode.
+            "cpt-webm-bare:true",
+            "cpt-webm-vp9:true",
             // tick 363: raw MPEG audio plays end-to-end, so canPlayType says so. RED: put mp3
             // back in the refuse regex / delete the audio-mpeg arm.
             "cpt-mpeg:true",
@@ -1109,6 +1130,59 @@ mod tests {
     ///   through to H264's refusal, `load` returns false, and nothing paints.
     /// - **the `<source type>` fetch** — put `av01` back in `media_type_rejected`'s certain-no
     ///   list: the page skips the source and the request never happens.
+    /// # G_WEBM_AV1_DRIVE — an AV1 WebM decodes in the shell lane and reaches the SCREEN
+    ///
+    /// **This gate is what earns the `canPlayType` answer above it.** Tick 634 moved
+    /// `canPlayType('video/webm; codecs="av01.…")` from `''` to `'probably'`, and that is a
+    /// promise about *this element* — a different path from `isTypeSupported`, which is MSE's.
+    /// Tick 354 asserted `=== ''` for that exact string and was right to: WebM was not demuxable
+    /// at all then. Re-pointing a stale honest-no is only legitimate with the evidence attached,
+    /// otherwise it is advertising ahead of the capability — the failure MEDIA.md's MSE warning
+    /// is named for, and the one that turns a working player into a black rectangle.
+    ///
+    /// ## How each claim goes RED
+    ///
+    /// - **the load** — drop `av1` from the shell's manuk-media features, or revert t633's WebM
+    ///   arm in `manuk_media::demux`: `load` returns false and nothing paints. Two different
+    ///   organs, one assert, because from the element's point of view they are the same failure.
+    /// - **the picture** — the assert is on PAINTED output, not on `load`'s boolean. A decoder
+    ///   that produced correctly-sized nothing satisfies the first and fails this one.
+    ///
+    /// ## Cost — the fixture is trimmed, and the reason is worth writing down
+    ///
+    /// `MediaSet::load` decodes the WHOLE timeline eagerly and dav1d costs ~1s/frame in a
+    /// test-profile build, so the 82-frame `bear-av1-480x360.webm` put **82 seconds** on the wall
+    /// for a claim the fourth frame already proves. `bear-av1-4frames.webm` is that file's first
+    /// four frames, **stream-copied, not re-encoded** (`ffmpeg -frames:v 4 -c copy`, the system
+    /// binary used as a DEV TOOL to author a fixture — which is not linking ffmpeg into the
+    /// browser), so it is the same encoder's same bitstream. 4.2s.
+    #[test]
+    fn g_webm_av1_drive() {
+        const WEBM: &[u8] = include_bytes!("../../engine/media/tests/data/bear-av1-4frames.webm");
+        let fonts = manuk_text::FontContext::new();
+        let mut page = manuk_page::Page::load(PAGE_HTML, "https://video.test/", &fonts, 800.0);
+        let (node, _) = page.pending_media_urls()[0].clone();
+
+        let blank = painted(&page);
+        let mut set = MediaSet::new();
+        assert!(
+            set.load(node, WEBM),
+            "an AV1 WebM must decode in the shell lane — a false here means either the `av1` \
+             feature is missing from this lane or the WebM demux arm is gone, and in both cases \
+             `canPlayType` is promising a picture nothing can produce"
+        );
+        assert!(
+            set.advance(0.0, &mut page, None),
+            "the first advance publishes a frame"
+        );
+        assert_ne!(
+            blank,
+            painted(&page),
+            "a decoded AV1-in-WebM frame must change what is PAINTED — the container is not part \
+             of the decode question, and this is the assertion that says so in pixels"
+        );
+    }
+
     #[test]
     fn g_av1_drive() {
         const AV1: &[u8] = include_bytes!("../../engine/media/tests/data/four-colors-av1.mp4");

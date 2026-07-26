@@ -51,6 +51,39 @@ pub const MSE_JS: &str = r#"
   // the types they land here; nothing else in this file changes when they do.
   if (!g.__mseCodecs) { g.__mseCodecs = []; }
 
+  // ── WebM codec acceptance, in ONE place — the tick-634 rule.
+  //
+  // Two callers have to answer "does this WebM's codec list name something we decode":
+  // `isTypeSupported` just below, and `HTMLMediaElement.canPlayType` over in event_loop.rs. If
+  // they answer it with two regexes they will disagree the first time either is edited, and the
+  // disagreement surfaces as a page being told it can play something it cannot. That is the
+  // one-rule-N-implementations defect this project has caught in eight consecutive ticks, so the
+  // rule lives here once and both read it.
+  //
+  // **Accepts iff EVERY named codec is `av01.*`.** AV1 is what `re_rav1d` has decoded since
+  // t354, and t633's EBML reader now supplies its samples — the container was never part of the
+  // decode question, which is exactly why answering `false` for AV1-in-WebM was a false absence
+  // rather than a conservative choice.
+  //
+  // The prefix **includes the dot**, and that is not cosmetic: it matches
+  // `manuk_media::av1::can_decode` character for character. A WebM AV1 track whose `CodecPrivate`
+  // is not a readable `av1C` reports the bare string `av01`, and the Rust side refuses that one.
+  // Both sides must compute the SAME QUANTITY or the claim is about a different thing than the
+  // capability behind it.
+  //
+  // `vp9`/`vp8`/`opus`/`vorbis` — the short forms a WebM `codecs=` parameter actually carries,
+  // per `webm::codec_string` — are all NO, and a MIXED list (`av01.…,opus`) is NO for the same
+  // reason: rendering the video and silently dropping the audio is not playing the file.
+  g.__manukWebmCodecsDecodable = function (codecs) {
+    if (typeof codecs !== 'string') { return false; }
+    var list = codecs.replace(/^"|"$/g, '').split(',');
+    if (list.length === 0) { return false; }
+    for (var i = 0; i < list.length; i++) {
+      if (!/^av01\.[0-9a-z.]+$/.test(list[i].trim().toLowerCase())) { return false; }
+    }
+    return true;
+  };
+
   var canDecode = function (type) {
     if (typeof type !== 'string' || type === '') { return false; }
     var want = type.toLowerCase().replace(/\s+/g, '');
@@ -64,27 +97,36 @@ pub const MSE_JS: &str = r#"
     // (`mp4a.40.*`) demuxes+decodes to PCM (G_MEDIA_AAC), and AV1-in-MP4 (`av01.*`) decodes via
     // re_rav1d in the shell lane (tick 354).
     //
-    // ── WebM, and the line is drawn at the CONTAINER (tick 633).
+    // ── WebM. The container line was drawn at t633; t634 moved the AV1 codec line with it.
     //
-    // `manuk_media::webm` now opens EBML: tracks, codec strings, a verified sample table and
-    // `buffered`. No VP9 and no Opus DECODER exists anywhere in the tree, so every `codecs=` form
-    // stays **false** — that is the line MEDIA.md draws, and saying yes to `codecs="vp9"` is
-    // precisely the black-rectangle failure it warns about. What changes is the **bare** container
-    // form, which now means for WebM exactly what it has always meant for MP4 on the line below:
-    // *we can open this container*. That is `isTypeSupported`'s documented contract for a type with
-    // no codecs parameter, it is what Chrome answers, and it is what makes the demuxer reachable
-    // from a page at all — `addSourceBuffer` is the only door to `__demux`, and it consults this
-    // function.
+    // `manuk_media::webm` opens EBML: tracks, codec strings, a verified sample table and
+    // `buffered`. The **bare** container form means for WebM what it has always meant for MP4 on
+    // the line below — *we can open this container* — which is `isTypeSupported`'s documented
+    // contract for a type with no codecs parameter, is what Chrome answers, and is what makes the
+    // demuxer reachable from a page at all (`addSourceBuffer` is the only door to `__demux`, and
+    // it consults this function).
     //
-    // Two things deliberately do NOT move with it, and both are load-bearing:
-    //   * `HTMLMediaElement.canPlayType` still answers `''` for webm (event_loop.rs). If it said
-    //     otherwise, a `<video>` with a `.webm` <source> before its `.mp4` one would select the
-    //     WebM we cannot decode over the MP4 we can — a REGRESSION traded for a capability, which
-    //     the ratchet refuses.
+    // The **codecs=** form was `false` for everything at t633, on the stated ground that no VP9
+    // and no Opus decoder exists in this tree. True, and it was not the whole truth: AV1 has
+    // decoded here since t354 and is the other codec WebM carries — so `codecs="av01.…"` is now
+    // yes, on the evidence of `G_MEDIA_WEBM_AV1` decoding real EBML samples to real pictures, and
+    // everything else stays no. Saying yes to `codecs="vp9"` would still be precisely the
+    // black-rectangle failure MEDIA.md warns about.
+    //
+    // Two things deliberately do NOT move, and both are load-bearing:
+    //   * `HTMLMediaElement.canPlayType` still answers `''` for **bare** `video/webm`
+    //     (event_loop.rs). If it said otherwise, a `<video>` with an unqualified `.webm` <source>
+    //     before its `.mp4` one would select a file that is overwhelmingly likely to be VP9+Opus
+    //     over the MP4 we can decode — a REGRESSION traded for a capability, which the ratchet
+    //     refuses. A <source> that NAMES av01 carries no such risk and moves to 'probably'.
     //   * every real adaptive player (hls.js, dash.js, shaka) probes WITH codecs, so none of them
-    //     is steered here by the bare form. It is feature-detection code that reads it.
-    if (/^(video|audio)\/webm$/.test(want)) { return true; }
-    if (/^(video|audio)\/webm;/.test(want)) { return false; }
+    //     is steered by the bare form. It is feature-detection code that reads it.
+    var wm = /^(video|audio)\/webm($|;)/.exec(want);
+    if (wm) {
+      var wq = want.indexOf('codecs=');
+      if (wq < 0) { return true; }
+      return g.__manukWebmCodecsDecodable(want.slice(wq + 7));
+    }
     var m = /^(video|audio)\/mp4($|;codecs=)/.exec(want);
     if (!m) { return false; }
     var q = want.indexOf('codecs=');

@@ -73,6 +73,16 @@ const HTML: &str = r##"<!doctype html>
     R.push('vp9opus:' + MediaSource.isTypeSupported('video/webm; codecs="vp9,opus"'));
     R.push('canplay:[' + document.getElementById('v').canPlayType('video/webm') + ']');
 
+    // ── The AV1 line (tick 634). AV1 is the OTHER codec WebM carries, it has decoded here since
+    //    t354, and both answers said no — a false absence, not a conservative one. These sit next
+    //    to the vp9 lines above on purpose: the SAME container, one codec yes and one no, is what
+    //    proves the answer is about the decoder rather than about the file extension.
+    R.push('av1:' + MediaSource.isTypeSupported('video/webm; codecs="av01.0.01M.08"'));
+    R.push('av1opus:' + MediaSource.isTypeSupported('video/webm; codecs="av01.0.01M.08,opus"'));
+    R.push('bareav01:' + MediaSource.isTypeSupported('video/webm; codecs="av01"'));
+    R.push('cpav1:[' + document.getElementById('v').canPlayType('video/webm; codecs="av01.0.01M.08"') + ']');
+    R.push('cpvp9:[' + document.getElementById('v').canPlayType('video/webm; codecs="vp9"') + ']');
+
     var ms = new MediaSource();
     var v = document.getElementById('v');
     v.src = URL.createObjectURL(ms);
@@ -214,9 +224,47 @@ const CLAIMS: &[(&str, &str)] = &[
     ),
     (
         "canplay:[]",
-        "`canPlayType` must stay the empty string — the spec's 'no'. If it moved, a <video> \
-         listing a .webm <source> before its .mp4 one would select the WebM we cannot decode over \
+        "`canPlayType` on the BARE form must stay the empty string — the spec's 'no'. Bare webm on \
+         the open web is overwhelmingly VP9+Opus, so if this moved, a <video> listing an \
+         unqualified .webm <source> before its .mp4 one would select a file we cannot decode over \
          the MP4 we can: a REGRESSION traded for a capability, which the ratchet refuses",
+    ),
+    // ── The tick-634 AV1 line. Every one of these is in the SAME container as the vp9 claims
+    //    above, which is what makes them evidence about the decoder rather than about the file.
+    (
+        "av1:true",
+        "AV1-in-WebM decodes end-to-end here (G_MEDIA_WEBM_AV1 pushes real EBML samples through \
+         re_rav1d to real 480x360 pictures) and both answers used to say no. A capability that \
+         works and reports absent is a false absence — the class this loop keeps catching — and \
+         `addSourceBuffer` consulting this is what makes it reachable from an adaptive player",
+    ),
+    (
+        "av1opus:false",
+        "a MIXED list is refused: we would render the video and silently drop the Opus audio, \
+         which is not playing the file. This is the assertion that stops `av1:true` from being \
+         read as `webm:true`",
+    ),
+    (
+        "bareav01:false",
+        "the bare `av01` string (what a WebM AV1 track reports when its CodecPrivate is not a \
+         readable av1C) is refused, because `manuk_media::av1::can_decode` refuses it too. Both \
+         sides must compute the SAME QUANTITY or the claim describes something other than the \
+         capability behind it",
+    ),
+    (
+        "cpav1:[probably]",
+        "canPlayType is what decides which <source> a <video> selects, so it — not \
+         isTypeSupported — is the answer that gates playback for an ordinary media element. \
+         'probably' is the spec's word for `the codecs were NAMED and we have them`",
+    ),
+    (
+        "cpvp9:[]",
+        "and canPlayType still says no to VP9 in the same container, one line apart. NOTE what \
+         actually holds this, because the RED probe corrected me: the codec refuse-list in \
+         `canPlayType` catches `vp9` BEFORE the webm arm is reached, so this claim is guarded by \
+         that list and not by the shared predicate — mutating the predicate to accept everything \
+         leaves this line green. It is defence in depth, and the honest reading of it is `the \
+         refuse-list still runs first`, not `the predicate refuses VP9`",
     ),
     (
         "sourceopen:true",

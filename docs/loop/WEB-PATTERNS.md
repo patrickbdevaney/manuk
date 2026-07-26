@@ -5321,3 +5321,32 @@ neighbours, and invisible to both structural checks a sample table admits. Conta
 disjointness are properties of the TABLE, not of the BYTES. It took a check against the *codec's*
 framing to see it, and the RED probe — not review — is what revealed that the gate's first draft
 could not fail on the bug its own doc claimed it caught.
+
+## The AV1 `<video>` in a WebM — the half of that class that already worked (tick 634)
+
+**The class:** the entry above says WebM carries "VP9 or AV1 video". The tick that wrote it then
+concluded that no `codecs=` answer could move until a VP9 decoder existed — and read straight past
+its own "or AV1". `re_rav1d` has decoded AV1 since t354, and a decoder does not care which container
+the samples arrived in. AV1-in-WebM is what a modern Chrome is served on YouTube and on every site
+that ships the newer rung of the same ladder.
+
+**No decode code was written for this.** A probe fed t633's EBML sample table straight into the
+existing `Av1Decoder`: **82 frames, 480×360, non-uniform, correctly timestamped.** The capability was
+complete, reachable, and reporting absent — `isTypeSupported('video/webm; codecs="av01.…")` said
+`false` and `canPlayType` said `''`. Both now answer truthfully; VP9, Opus, mixed lists and the
+dotless `av01` form all stay `false`, and **bare** `video/webm` stays `''` because bare webm on the
+open web is overwhelmingly VP9+Opus and `canPlayType` is what picks a `<source>`.
+
+**The generalisation — a negative scoped one level too wide rots invisibly.** t633's refusal was
+honest and it was stated about *the container* when the real constraint was about *the codec set*.
+That sentence stays literally defensible ("there is no VP9 decoder") long after the conclusion it
+supports ("so no WebM codec answer can move") has stopped following, which is precisely why nobody
+re-reads it. **When writing an honest `no`, name the narrowest thing that is actually missing** — a
+`no` about a missing decoder gets re-checked when a decoder lands; a `no` about a whole container
+never does.
+
+**The second-order finding: one rule, one implementation, made falsifiable.** Two files must answer
+"does this WebM's codec list name something we decode". A shared helper is the fix — but a shared
+helper that only one caller actually reaches looks identical to a shared helper. The RED probe is
+what distinguishes them: mutating the single function moved **both** answers red together. That is
+the check to run whenever this pattern is applied, because the failure mode of the fix is silent.

@@ -81,3 +81,21 @@ All three are from the Chromium `media/test/data` corpus, which is BSD-licensed 
   provenance. Its `CodecPrivate` is a real 4-byte `av1C` record (`81 01 0c 00`), which is what makes
   `av01.0.01M.08` **derivable from the bytes** rather than a guess — the one codec whose RFC 6381
   long form a WebM track carries enough information to state.
+
+## `bear-av1-4frames.webm` (tick 634)
+
+The first **4 frames** of `bear-av1-480x360.webm`, **stream-copied, not re-encoded**:
+
+```
+ffmpeg -i bear-av1-480x360.webm -frames:v 4 -c copy bear-av1-4frames.webm
+```
+
+Same provenance and licence as its parent (Chromium test data, BSD-3), and byte-for-byte the same
+encoder's bitstream — `-c copy` re-muxes, it does not re-compress, so nothing about the AV1 stream
+under test is a property of the trimming.
+
+**Why it exists:** `MediaSet::load` decodes the WHOLE timeline eagerly and dav1d costs ~1s/frame in
+a test-profile build, so `G_WEBM_AV1_DRIVE` against the 82-frame parent put **82 seconds** on the
+verify wall to prove something the fourth frame already proves. 20,526 bytes → 2,977; 82s → 4.2s.
+The system `ffmpeg` binary is used here as a **dev tool to author a fixture**, which is not the
+thing the no-ffmpeg rule forbids (linking ffmpeg into the browser).

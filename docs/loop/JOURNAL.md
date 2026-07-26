@@ -28144,3 +28144,122 @@ NEXT: the rung above this one is a **VP9 decoder** (libvpx bindings — the same
 with zero system dependencies" trade openh264 already represents) and an **Opus decoder**; the
 `codecs=` answers may move then and not before. Unchanged and still open: our own latency on the
 placement half (17-28s vs Chromium's 6s), and t629's `getBoundingClientRect()` on an SVG child.
+
+## Tick 634 — AV1-in-WebM: the join was already complete, and both answers said no (2026-07-26)
+
+HYPOTHESIS: t633 landed the WebM/Matroska demuxer and held every `codecs=` claim at **false**,
+correctly, because "no VP9 and no Opus decoder exists anywhere in the tree". That sentence is
+true and it is not the whole truth: **`re_rav1d` has decoded AV1 since t354**, and AV1 is the
+other codec WebM carries — the one YouTube actually serves to a modern Chrome. The board
+(observer, t235) explicitly leaves VP9 on the floor and names AV1 as the rung, so AV1-in-WebM is
+not a detour around the VP9 blocker; it *is* the ladder.
+
+So the question is not "can we build this" but "does it already work". Probe first.
+
+**THE PROBE ANSWERED IN 80 SECONDS AND NO DECODE CODE WAS WRITTEN THIS TICK.** Feed t633's EBML
+sample table straight to the existing `Av1Decoder`: **82 frames, 480x360, non-uniform, correctly
+timestamped.** The join was already complete. What was missing was the *claim* — and both places
+that make it said no.
+
+**THE FINDING, AND IT IS ABOUT HOW AN HONEST `NO` ROTS.** t633's refusal was true and it was
+written one level too wide. It said the `codecs=` answers could not move *until a VP9 or Opus
+decoder existed*, which is a statement about **the container**; the real constraint was about
+**the codec set**. The supporting sentence ("there is no VP9 decoder in this tree") stays literally
+defensible forever, so nobody re-reads it — while the conclusion it carries ("so no WebM codec
+answer can move") had already stopped following, in the same repository, from a decoder that had
+shipped 279 ticks earlier.
+
+> **When writing an honest `no`, name the NARROWEST thing that is actually missing.** A `no` about
+> a missing decoder gets re-checked the day a decoder lands. A `no` about a whole container never
+> does — it is not wrong, so nothing ever makes it wrong.
+
+This is `[[honest-answer-is-not-a-fixed-answer]]` with the mechanism named: the rot is not that the
+answer was dishonest, it is that its SCOPE was wider than its evidence, and scope is the part no
+gate reads.
+
+**WHAT MOVED, AND WHAT DELIBERATELY DID NOT.** `codecs="av01.0.01M.08"` -> **true** (decodes, and
+`G_MEDIA_WEBM_AV1` proves it on real EBML bytes). `canPlayType('video/webm; codecs="av01.…")` ->
+**'probably'** — that is the answer that actually gates playback, since `canPlayType` is what picks
+a `<source>`. Held at no: `vp9` (no decoder, board t235 leaves it on the floor), `opus`, the MIXED
+list `av01.…,opus` (rendering video and silently dropping audio is not playing the file), the
+dotless `av01`, and **bare `video/webm`, still `''`** for t633's own reason — bare webm on the open
+web is overwhelmingly VP9+Opus, so 'maybe' would steer a `<video>` onto a `.webm <source>` listed
+ahead of the `.mp4` we can decode. That trade is still refused.
+
+**ONE RULE, ONE IMPLEMENTATION — AND THE RED PROBE IS WHAT TELLS THE TWO APART.** `isTypeSupported`
+(`mse_js.rs`) and `canPlayType` (`event_loop.rs`) both have to answer "does this WebM's codec list
+name something we decode", and the const-check #43 defect — *"one rule, N implementations", eight
+consecutive ticks* — is exactly what two regexes would have been. So `__manukWebmCodecsDecodable`
+is defined once and read by both. **But a shared helper that only one caller actually reaches looks
+identical to a shared helper.** The mutation is the only reader that is not already convinced:
+breaking that single function moved `av1:true` AND `cpav1:[probably]` red **together**. One red
+would have meant the second caller still had its own copy.
+
+**AND THE RED PROBE CORRECTED THIS GATE'S DOCUMENTATION TOO, ONE TICK AFTER t633'S DID.** I wrote
+that `cpvp9:[]` proves the shared predicate refuses VP9. It does not: `canPlayType`'s codec
+refuse-list catches `vp9` several lines earlier, so mutating the predicate to accept **everything**
+leaves that claim green. The claim is real (it is defence in depth) and my stated reason for it was
+wrong. Corrected in place rather than deleted. Twice now in two ticks: **the gate's doc is written
+by the same person who wrote the blind spot.**
+
+Three RED mutations on the media gate, each landing on a DIFFERENT assertion — which is the reason
+to tabulate them at all, since three asserts that fail together are one assert wearing three names:
+sample offsets shifted 6 bytes -> `decode_sample` **errors** (not "returns no frame", which is what
+I had written before running it); `av1::can_decode` accepts any video track -> the VP9 refusal
+fires; `presentation_time` stops riding through dav1d -> the per-frame pts assert fires alone.
+
+**THE WALL WENT RED, AND IT WAS RIGHT — MY FIRST READING OF IT WAS THE NEAR-MISS.** The failure
+triple was `G_RUNTIME_COUNT` + `G_INTERACT` + `manuk-shell`, which is EXACTLY the shape recorded in
+`[[wall-false-red-shell-rebuild]]` as a known parallel-build false-RED. I had the memory loaded and
+the box was at load 3.3. Re-running the crate directly instead of invoking that precedent is the
+only reason this tick did not land a hole: **`g_mse_join` had a real, reproducible failure.**
+
+> A remembered false-RED that MATCHES the symptom is more dangerous than no memory at all: it is a
+> ready-made reason to stop measuring, and it arrives exactly when re-measuring is cheapest.
+
+What it caught: t354 asserts `canPlayType('video/webm; codecs="av01.0.00M.08"') === ''`, which was
+correct then — WebM was not demuxable at all — and my change made it `'probably'`. That is
+`[[honest-answer-is-not-a-fixed-answer]]` firing on schedule, for the third time in two ticks, and
+**it only fired because t354 wrote its honest no as an ASSERTION rather than a comment.** A comment
+would still say `''` today and nothing would have noticed.
+
+**AND THE STALE ASSERTION EXPOSED A GAP IN MY OWN EVIDENCE.** `isTypeSupported` is MSE's path;
+`canPlayType` is a promise about *the element*, which is a DIFFERENT path, and I had proved only
+the first. Re-pointing t354's claim on the strength of MSE evidence would have been advertising
+ahead of the capability — the precise failure MEDIA.md's MSE warning is named for. So I probed the
+shell drive: `MediaSet::load` an AV1 WebM, `advance`, and **the painted output changes.** Only then
+did the answer move, and now `G_WEBM_AV1_DRIVE` holds it in pixels.
+
+**A gate that costs 82 seconds is a gate that gets deleted.** The drive gate against the 82-frame
+fixture put 82s on the wall (`MediaSet::load` decodes the whole timeline eagerly; dav1d is ~1s/frame
+in a test build) — for a claim the fourth frame already proves. `bear-av1-4frames.webm` is the same
+file **stream-copied**, not re-encoded, so nothing under test is a property of the trimming: 82s ->
+4.2s, and the wall keeps a real pixel assertion instead of losing one to cost.
+
+TICK SHAPE: capability (AV1-in-WebM: the decode claim that was already true and said no; plus the
+codec rule consolidated into one implementation that a mutation proves both callers reach). Bar 0
+untouched; no ratchet floor moved; seven adjacent media gates re-run green; one STALE honest-no (t354's) re-pointed with new evidence attached, not merely flipped.
+Gates: **G_MEDIA_WEBM_AV1** (`engine/media/tests/webm_av1_decode.rs`, 2 tests, 3 RED mutations
+tabulated), **G_WEBM_AV1_DRIVE** (`shell/src/media.rs` — the AV1 WebM reaches the SCREEN; RED: fed
+the VP9 fixture instead), 5 new claims in `engine/page/tests/g_media_webm.rs` (2 RED mutations), and
+2 new claims in `g_mse_join` pinning the answers that did NOT move (RED: revert the canPlayType webm
+arm -> `cpt-webm:false` while `cpt-webm-bare`/`cpt-webm-vp9` stay green, which is what proves those
+two assert something different).
+WIKI: `docs/wiki/media-pipeline.md` — new section "M3c — AV1-in-WebM: the join was already
+complete, and both answers said no", with the before/after answer table.
+PATTERN: `docs/loop/WEB-PATTERNS.md` — "The AV1 `<video>` in a WebM — the half of that class that
+already worked".
+
+SELF-AUDIT (tick 634, due at 634): **one** prescribed-but-not-executed item, and it is the
+standing harness one — *"verify wall 812s exceeds the 300s target"*. Same finding as WALL AUDIT #18
+(t627): `manuk-wpt` is 51MB under `lto=true, codegen-units=1` and any tick touching `engine/` pays
+a release relink inside the gate phase; this tick edited `engine/js`, so it paid the maximum. The
+wall is **observer-owned** — noted, not touched. Every other audit line is green (28 gates declare
+how to break them, 49 process defects each name a closing mechanism, 476 pattern rows, journal
+complete). ⚠ Recorded rather than passed over: an audit item that is *someone else's* to fix still
+rots if the only place it lives is an exit code.
+
+NEXT: an **Opus decoder** is the narrowest remaining blocker for WebM *audio* (symphonia 0.6 has
+none; `audiopus`/`opus` are C bindings, so this is a real dependency decision, not a wiring tick).
+VP9 stays on the floor per the observer's t235 steer. Unchanged and still open: our own latency on
+the placement half (17-28s vs Chromium's 6s), and t629's `getBoundingClientRect()` on an SVG child.

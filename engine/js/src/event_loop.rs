@@ -3650,6 +3650,26 @@ const PRELUDE: &str = r#"
           // genuinely play in the shell lane, and refusing them became the lie in reverse.
           // Opus stays: symphonia has no Opus decoder, so codecs="opus" is an honest no.
           if (/vp8|vp9|vp09|hev1|hvc1|theora|opus|ac-3/.test(t)) { return ''; }
+          // ── WebM carrying AV1 (tick 634) — the one webm form that genuinely plays.
+          //
+          // `re_rav1d` decodes AV1 whatever container it arrived in, and t633's EBML reader now
+          // supplies the sample table, so a <source> that NAMES av01 in a WebM is something this
+          // tree renders (`G_MEDIA_WEBM_AV1` decodes real EBML samples to real 480x360 pictures).
+          // Answering `''` to it was a false absence — and canPlayType is precisely what decides
+          // which <source> a <video> selects, so it is the answer that gates playback in practice.
+          //
+          // **ONE rule, read rather than restated**: `__manukWebmCodecsDecodable` lives in mse.js
+          // and `isTypeSupported` reads the same function. A second regex here is how the two
+          // answers drift apart. The `typeof` guard is not decoration either — if mse.js somehow
+          // did not install, falling through to the blanket `''` below is the honest degradation.
+          //
+          // The **bare** `video/webm` form stays `''` on the line below, unmoved from t633 and for
+          // its reason: bare webm on the open web is overwhelmingly VP9+Opus, so 'maybe' would
+          // steer a <video> onto a .webm <source> listed ahead of the .mp4 we can decode.
+          if (/^video\/webm;/.test(t) && typeof globalThis.__manukWebmCodecsDecodable === 'function') {
+            var wq = t.indexOf('codecs=');
+            if (wq >= 0 && globalThis.__manukWebmCodecsDecodable(t.slice(wq + 7))) { return 'probably'; }
+          }
           if (/webm|matroska|x-flv/.test(t)) { return ''; }
           // Raw audio streams (t363/364): mp3 and flac decode outright; an Ogg is 'probably'
           // only when it NAMES vorbis — a bare audio/ogg may be Opus, so the container being
