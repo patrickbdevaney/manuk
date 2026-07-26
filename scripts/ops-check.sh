@@ -84,7 +84,17 @@ if [ "$RR" = green ] && [ "${RL:-99}" -lt 15 ] && [ "${WB:-0}" -gt 0 ] && [ "${R
   note "ALERT: LAST_WALL_TIME=${WB}s but a QUIET green receipt ran in ${RS}s — the bank is stale-high; re-baseline by hand"; alert=$((alert+1))
 fi
 
+# 7. MAP RECONCILIATION (RELIABILITY-DOCTRINE Cat A §3&4) — the capability map must stay backed by real
+#    gates. ALERT, never block: making this a wall gate risks bricking every tick on an instrument false
+#    positive (the tests/ blind spot proved they exist). Observer acts on the alert — real drift ⇒ steer the
+#    agent to cite a gate / set status; false drift ⇒ fix map-reconcile's search. This is reconciliation
+#    made STANDING (the doctrine's goal) without the wall-brick risk.
+if [ -x scripts/map-reconcile.sh ]; then
+  MD=$(bash scripts/map-reconcile.sh 2>/dev/null | grep -oE 'DRIFT TOTAL: [0-9]+' | grep -oE '[0-9]+' | head -1)
+  [ "${MD:-0}" -gt 0 ] && { note "ALERT: map drift ${MD} row(s) — a capability claims a gate that doesn't exist (real ⇒ steer agent; false ⇒ fix map-reconcile search)"; alert=$((alert+1)); }
+fi
+
 # Summary line (the observer reads the tail of $LOG each heartbeat).
-note "ops-check: ${heal} healed, ${alert} alert(s) [disk ${DP:-?}% · grind ${NG} · systemd ${st:-n/a}]"
+note "ops-check: ${heal} healed, ${alert} alert(s) [disk ${DP:-?}% · grind ${NG} · systemd ${st:-n/a} · mapdrift ${MD:-?}]"
 [ "$alert" -gt 0 ] && exit 0   # alerts are informational; ops-check NEVER fails anything.
 exit 0
