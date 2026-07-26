@@ -691,6 +691,9 @@
   - L1525 · A feature-detect that THROWS is worse than one that answers no (tick 615)
   - L1549 · The answers, and why one of them is deliberately false
   - L1562 · Where it was found, and what it did not fix
+  - L1571 · A module's imports resolve against the MODULE's url, not the document's (tick 617)
+  - L1596 · What it cost, measured
+  - L1617 · The mechanism: the DOM cannot answer, so something else must
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1068,4 +1071,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-983 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+986 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

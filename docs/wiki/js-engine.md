@@ -1567,3 +1567,65 @@ EventTarget. Clearing it did **not** make the site render — the chain continue
 request answered with **HTML** (`SyntaxError: expected expression, got '<'`). Three real
 TypeError-class gaps found, each justified by its own measured corpus population, and the site still
 blank. An arc that peels one layer per fix has to be able to say that, or it becomes a sunk-cost march.
+
+## A module's imports resolve against the MODULE's url, not the document's (tick 617)
+
+`fetch_external_scripts` inlines a `<script src>` into its node and drops `src`. By the time
+`prefetch_module_graph` walks the DOM, an **external** module is indistinguishable from an inline one —
+and both halves of the module machinery resolved its imports against the **document**:
+
+```rust
+// engine/page: the pre-fetch walk
+queue.push_back((base_url.clone(), spec));            // base_url = the DOCUMENT url
+
+// engine/js: the root module's SpiderMonkey private
+let base = DOC_URL.with(|u| u.borrow().clone());      // …the DOCUMENT url again
+```
+
+Both sat under comments that state the correct rule. The page-side one:
+
+> *"the document URL, since an inline module resolves its relative imports against the document"*
+
+— true, and applied to a case it does not cover. And the JS-side one is even more explicit:
+
+> *"A root inline `<script type=module>`'s base IS the document url; a **fetched** module's base is its
+> own url — which is exactly why the answer must live on the module, not in one per-document slot."*
+
+**Two comments, in two crates, both correct, both above code doing the opposite.**
+
+### What it cost, measured
+
+`www.welt.de`'s entry module is `/assets/bff-section/scripts/section.module.BPEBKMaY.js` and it imports
+`./chunks/react.BPdhuoKc.js`:
+
+```text
+  against the SCRIPT    /assets/bff-section/scripts/chunks/react.BPdhuoKc.js   200 ·   8,391 B · JavaScript
+  against the DOCUMENT  /chunks/react.BPdhuoKc.js                              404 · 414,112 B · HTML
+```
+
+One directory tree too high. And the wrong URL does not fail cleanly — the origin's SPA fallback
+answers with **HTML**, which compiles as a module: `SyntaxError: expected expression, got '<'`.
+
+**This is the shape of every Vite/Rollup/esbuild production build**: an entry module under a hashed
+asset directory importing its chunks relatively. The class is "sites that ship modern bundled
+JavaScript".
+
+```text
+  www.welt.de     COVERAGE 0.0% → 94.9%    SHAPE 0.0% (n=1) → 66.9% (n=3063)    verdict BELOW → ok
+```
+
+### The mechanism: the DOM cannot answer, so something else must
+
+Once `src` is gone the DOM has no record of where a script came from. `fetch_external_scripts` now
+returns `node → origin url` alongside its authorized set; the page carries it as
+`Page::module_node_bases` and seeds it into the JS layer beside `MODULE_GRAPH_SOURCES`, on the same
+seam and cleared at the same time. `run_module` takes the node and prefers that base over `DOC_URL`.
+
+⚠ **Fixing one half does nothing.** The pre-fetch decides which URLs are *fetched*; the module private
+decides which URLs the loader *asks for*. They must agree, and a fix to either alone looks complete
+until you run it. Both are independently RED-proven in `G_MODULE_BASE_URL`.
+
+⚠ **A gate that has never been seen to pass is not evidence that the code is broken.** When the gate
+still failed after the page-side fix, moving the *document* into the script's directory — where both
+resolutions coincide — made it pass, which proved the harness worked and the remaining failure was
+real. That diagnostic is what pointed at the second site instead of at the test.

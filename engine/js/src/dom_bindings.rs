@@ -91,6 +91,15 @@ thread_local! {
     /// on the page path fills this map, and [`run_module`] hands it to [`esm_load_graph`] as the
     /// injected fetcher (the seam B3 was written against). Empty ⇒ no page populated it ⇒ `run_module`
     /// behaves exactly as it did before the graph loader existed (self-contained modules only).
+    /// **The URL each `<script type=module>` NODE was fetched from**, for the roots that came from a
+    /// `src` rather than being inline.
+    ///
+    /// A module's imports resolve against the MODULE's url. For an inline module that is the document
+    /// url — which is why `run_module` reading `DOC_URL` was right for years and wrong the moment an
+    /// external module reached it. By then `fetch_external_scripts` has inlined the source and dropped
+    /// `src`, so the DOM cannot answer "where did this come from" any more; this map is the record.
+    static MODULE_NODE_BASES: std::cell::RefCell<std::collections::HashMap<usize, String>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
     static MODULE_GRAPH_SOURCES: std::cell::RefCell<std::collections::HashMap<String, String>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
 
@@ -9043,7 +9052,7 @@ pub fn run_scripts(
             // `<script type=module>`: compile + link + evaluate as an ES module, so
             // import/export syntax is valid and self-contained modules run. Modules are
             // never `document.currentScript`, per spec.
-            if !unsafe { run_module(raw_cx, src) } {
+            if !unsafe { run_module(raw_cx, src, Some(*node)) } {
                 tracing::warn!(error = %pending_exception(raw_cx), "a page module failed");
             }
         } else {
@@ -10191,6 +10200,15 @@ pub fn esm_registry_clear() {
 /// the whole map per navigation is deliberate — a stale source for one document must never resolve an
 /// `import` in the next. Empty map ⇒ [`run_module`] runs modules exactly as it did before the graph
 /// loader existed.
+pub fn set_module_node_bases(bases: std::collections::HashMap<usize, String>) {
+    MODULE_NODE_BASES.with(|m| *m.borrow_mut() = bases);
+}
+
+/// See [`set_module_node_bases`].
+pub fn clear_module_node_bases() {
+    MODULE_NODE_BASES.with(|m| m.borrow_mut().clear());
+}
+
 pub fn set_module_graph_sources(sources: std::collections::HashMap<String, String>) {
     MODULE_GRAPH_SOURCES.with(|m| *m.borrow_mut() = sources);
 }
@@ -10675,6 +10693,7 @@ pub unsafe fn esm_page_module_graph_selftest_in_realm(cx: *mut RawJSContext) -> 
         let ran = run_module(
             cx,
             "import { answer } from './esm-page-dep.js'; globalThis.__esm_page = answer * 6;",
+            None, // an INLINE root: its base is the document url, which is this test's whole premise
         );
 
         let ok = ran && {
@@ -10803,7 +10822,7 @@ unsafe fn esm_load_graph(
     true
 }
 
-unsafe fn run_module(cx: *mut RawJSContext, source: &str) -> bool {
+unsafe fn run_module(cx: *mut RawJSContext, source: &str, node: Option<NodeId>) -> bool {
     use mozjs::jsapi::{CompileModule, ModuleEvaluate, ModuleLink};
     let opts = CompileOptionsWrapper::new(&wrap_cx(cx), c"module.js".to_owned(), 1);
     let utf16: Vec<u16> = source.encode_utf16().collect();
@@ -10820,7 +10839,16 @@ unsafe fn run_module(cx: *mut RawJSContext, source: &str) -> bool {
     // is the per-module URL thread the import-graph resolve hook (B2) extends: every fetched module
     // gets this same private set to its resolved url. SpiderMonkey traces the private off the module
     // object, so the JS string stored here is rooted for the module's life.
-    let base = DOC_URL.with(|u| u.borrow().clone());
+    // **The comment above states the rule; the code used to contradict it for external modules.**
+    // `DOC_URL` is right for an inline root and wrong for a fetched one, and after
+    // `fetch_external_scripts` inlines a `<script type=module src>` the two are indistinguishable in
+    // the DOM. `MODULE_NODE_BASES` carries the answer the DOM can no longer give. Measured on
+    // www.welt.de: with the document base, `./chunks/react.js` from an entry module under
+    // `/assets/bff-section/scripts/` resolved to `/chunks/react.js` — 404, 414KB of HTML, compiled as
+    // a module, `SyntaxError: expected expression, got '<'`.
+    let base = node
+        .and_then(|n| MODULE_NODE_BASES.with(|m| m.borrow().get(&n.index()).cloned()))
+        .unwrap_or_else(|| DOC_URL.with(|u| u.borrow().clone()));
     set_module_private_url(cx, mod_obj.handle().get(), &base);
     // **B3b — drive the import-graph population walk over the pre-fetched source map.** A root inline
     // `<script type=module>` may `import` a relative graph; the async pre-fetch pass seeded every
@@ -11057,7 +11085,7 @@ fn run_one_script(
 ) {
     if is_module {
         // Modules are never `document.currentScript`, per spec — the thread-local stays -1.
-        if !unsafe { run_module(raw_cx, src) } {
+        if !unsafe { run_module(raw_cx, src, Some(node)) } {
             tracing::warn!(error = %pending_exception(raw_cx), "a page module failed");
         }
     } else {

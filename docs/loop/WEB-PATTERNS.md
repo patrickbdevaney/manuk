@@ -5238,3 +5238,34 @@ The same 403 challenge page is a document to render (navigation), not evidence (
 not code (a subresource). **Fixing the interpretation at one consumer says nothing about the others**,
 and a comment promising that "the status rides along for every caller that cares" is not a mechanism —
 it is a hope about callers that had not been audited.
+
+## The bundled-SPA entry module under a hashed asset directory (tick 617)
+
+**The class:** every site built by Vite, Rollup or esbuild for production. The output shape is
+invariant across all of them — one entry module in a hashed asset directory, importing its code-split
+chunks **relatively**:
+
+```html
+<script type="module" src="/assets/app/entry.a1b2c3.js"></script>
+```
+```js
+import { x } from './chunks/vendor.d4e5f6.js';
+```
+
+We resolved that `./chunks/...` against the **document** rather than against the module, so every
+chunk was requested one directory tree too high. And the wrong URL does not 404 cleanly on a real
+site — an SPA host answers it with the **index HTML**, which then compiles as JavaScript and throws.
+
+`www.welt.de` went **COVERAGE 0.0% → 94.9%** on this one fix, from a blank white page to a rendered
+front page.
+
+**Why this belongs in the ledger rather than the bug list:** the failure is invisible on the sites
+most likely to be in a test corpus. A page whose modules sit next to the document — which is how
+almost every hand-written example, tutorial and local dev server lays them out — resolves identically
+either way. The bug only appears once a **bundler** has moved the entry into `/assets/`, which is to
+say: only on real production sites, and on essentially *all* of them.
+
+**The generalisation:** when a rule's two cases coincide in the common configuration, the code will be
+written for whichever case the author had in front of them, and the comment will state the general
+rule correctly while the code implements the special one. Look for the configuration that separates
+the cases — here, "is the module in the same directory as the document?" — and test *that*.

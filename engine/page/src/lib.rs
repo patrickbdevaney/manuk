@@ -1221,6 +1221,11 @@ pub struct Page {
     /// blocking→paint→deferred gap and is seeded on whichever thread runs the scripts. Empty ⇒ modules
     /// link self-contained, exactly as before the loader existed.
     module_graph_sources: std::collections::HashMap<String, String>,
+    /// `<script type=module>` node index → the URL its source was fetched from. Empty for a document
+    /// whose module roots are all inline (their base IS the document url). A module's imports resolve
+    /// against the MODULE's url, and after `fetch_external_scripts` inlines an external one the DOM can
+    /// no longer say where it came from — this is that record.
+    module_node_bases: std::collections::HashMap<usize, String>,
     /// **The document's import map (tick 520)** — bare specifier → raw target, parsed from a
     /// `<script type=importmap>`. Seeded into the JS layer alongside [`Self::module_graph_sources`] by
     /// `run_deferred_scripts` so `import 'react'` resolves through it. Empty ⇒ bare specifiers fail
@@ -1651,6 +1656,11 @@ impl Page {
         }
         #[allow(unused_mut)]
         let mut dom = manuk_html::parse(html);
+        // Where each inlined external script CAME FROM, produced by the fetch inside the block below
+        // and read by the module-graph walk after it. Declared out here because the two are in
+        // different scopes and a module's imports resolve against the MODULE's url, not the document's.
+        #[allow(unused_mut)]
+        let mut script_origins: HashMap<NodeId, String> = HashMap::new();
         // Fold this document's `<meta>` policy into whatever the caller seeded from the response
         // headers, and leave the result seeded for `from_dom` — the script FETCH below needs it
         // now, and the inline-script check needs it a few lines later.
@@ -1665,7 +1675,11 @@ impl Page {
                 csp.add_meta(&content);
             }
             #[cfg(feature = "spidermonkey")]
-            let authorized = fetch_external_scripts(&mut dom, final_url, &csp).await;
+            let authorized = {
+                let (a, origins) = fetch_external_scripts(&mut dom, final_url, &csp).await;
+                script_origins = origins;
+                a
+            };
             #[cfg(not(feature = "spidermonkey"))]
             let authorized: Vec<NodeId> = Vec::new();
             set_pending_csp_with_authorized(csp, authorized);
@@ -1680,13 +1694,18 @@ impl Page {
         #[cfg(feature = "spidermonkey")]
         let import_map = extract_import_map(&dom);
         #[cfg(feature = "spidermonkey")]
-        let module_graph_sources = prefetch_module_graph(&dom, final_url, &import_map).await;
+        let module_graph_sources =
+            prefetch_module_graph(&dom, final_url, &import_map, &script_origins).await;
         let mut page = Page::from_dom(dom, final_url, fonts, viewport_width);
         // Carry the pre-fetched graph + import map onto the page; `run_deferred_scripts` seeds them into
         // the JS layer and clears them after the module pass (the same seam the shell path uses).
         #[cfg(feature = "spidermonkey")]
         {
             page.module_graph_sources = module_graph_sources;
+            page.module_node_bases = script_origins
+                .iter()
+                .map(|(n, u)| (n.index(), u.clone()))
+                .collect();
             page.import_map = import_map;
         }
         // **Both passes, back to back** — see `load`. `from_dom` runs only the scripts that block first
@@ -2052,6 +2071,8 @@ impl Page {
         // pre-fetch pass carried onto the page, exactly like the scroll/snap geometry above. Empty ⇒
         // no-op. Cleared right after the pass so one document's graph can never resolve the next's.
         manuk_js::set_module_graph_sources(self.module_graph_sources.clone());
+        // …and WHERE each module root came from, which is what its relative imports resolve against.
+        manuk_js::set_module_node_bases(self.module_node_bases.clone());
         // The import map rides alongside the graph sources (tick 520) — the resolve hook consults it for
         // bare `import 'react'` specifiers during the same module pass.
         manuk_js::set_import_map(self.import_map.clone());
@@ -2068,6 +2089,7 @@ impl Page {
             }
         };
         manuk_js::clear_module_graph_sources();
+        manuk_js::clear_module_node_bases();
         manuk_js::clear_import_map();
         self.drain_canvases();
         self.drain_element_scrolls();
@@ -3990,6 +4012,7 @@ impl Page {
             images,
             masks,
             module_graph_sources,
+            module_node_bases,
             import_map,
         } = pre;
         // Seeded before construction, because `from_dom` runs the document's blocking scripts and
@@ -4000,6 +4023,7 @@ impl Page {
         // may call much later, after paint — seeds it for the module (deferred) pass. This is the shell
         // path's half of B3b; `load_async` sets the same field on the streaming/agent path.
         page.module_graph_sources = module_graph_sources;
+        page.module_node_bases = module_node_bases;
         page.import_map = import_map;
         if !css.is_empty() {
             page.apply_stylesheets(&css, fonts, viewport_width);
@@ -4170,6 +4194,7 @@ impl Page {
             // Empty by default; the async pre-fetch pass on the caller's path sets this before the
             // deferred (module) scripts run (`load_async`, `from_prefetched_inner`).
             module_graph_sources: std::collections::HashMap::new(),
+            module_node_bases: std::collections::HashMap::new(),
             import_map: std::collections::HashMap::new(),
             zoom: 1.0,
             // The inline images decoded above already have their natural size in `styles`; carrying
@@ -6634,12 +6659,23 @@ fn sri_matches(spec: &str, bytes: &[u8]) -> bool {
 /// External scripts fetch sequentially in document order (the classic-script model).
 #[cfg(feature = "spidermonkey")]
 
+/// Returns `(csp-authorized nodes, node -> the URL each inlined script CAME FROM)`.
+///
+/// **The second half exists because a module's imports resolve against the MODULE's url, not the
+/// document's.** This function inlines an external `<script src>` into the node and drops `src`, so by
+/// the time `prefetch_module_graph` walks the DOM an external module is indistinguishable from an
+/// inline one — and it was resolving `./chunks/react.js` against the document. On `www.welt.de` that
+/// turned `/assets/bff-section/scripts/chunks/react.BPdhuoKc.js` (200, 8KB of real JavaScript) into
+/// `/chunks/react.BPdhuoKc.js` (404, 414KB of HTML), which then compiled as a module:
+/// `SyntaxError: expected expression, got '<'`. Carrying the origin URL forward is what lets the
+/// graph walk ask the right question.
 async fn fetch_external_scripts(
     dom: &mut Dom,
     base: &str,
     csp: &manuk_net::csp::Csp,
-) -> Vec<NodeId> {
+) -> (Vec<NodeId>, HashMap<NodeId, String>) {
     let mut targets = Vec::new();
+    let mut origins: HashMap<NodeId, String> = HashMap::new();
     for n in dom.descendants(dom.root()) {
         if dom.tag_name(n) == Some("script") {
             if let Some(src) = dom.element(n).and_then(|e| e.attr("src")) {
@@ -6732,6 +6768,9 @@ async fn fetch_external_scripts(
                 let Some(js) = subresource_text(&r) else {
                     continue;
                 };
+                // Remember where this script CAME FROM before the evidence is destroyed. `src` is
+                // removed on the next line and the node then looks inline forever after.
+                origins.insert(node, r.final_url.to_string());
                 dom.remove_attr(node, "src");
                 let text = dom.create_text(js);
                 dom.append_child(node, text);
@@ -6743,7 +6782,7 @@ async fn fetch_external_scripts(
             None => tracing::warn!("external script fetch failed"),
         }
     }
-    authorized
+    (authorized, origins)
 }
 
 /// **Scan JS source for the specifiers of its STATIC `import` / `export … from` statements (B3b).**
@@ -6984,14 +7023,22 @@ async fn prefetch_module_graph(
     dom: &Dom,
     base: &str,
     import_map: &HashMap<String, String>,
+    script_origins: &HashMap<NodeId, String>,
 ) -> HashMap<String, String> {
     let mut sources: HashMap<String, String> = HashMap::new();
     let base_url = match Url::parse(base) {
         Ok(u) => u,
         Err(_) => return sources,
     };
-    // The roots' import specifiers, each paired with the importer URL to resolve it against (the
-    // document URL, since an inline module resolves its relative imports against the document).
+    // The roots' import specifiers, each paired with **the importer URL to resolve against — which is
+    // the MODULE's own url, not the document's.**
+    //
+    // For a genuinely inline `<script type=module>` those are the same thing, which is why the bug
+    // hid: the code said "the document URL, since an inline module resolves against the document",
+    // which is true, and then applied it to external modules too. `fetch_external_scripts` inlines a
+    // `<script type=module src>` and drops `src`, so by the time this walk runs an external module is
+    // indistinguishable from an inline one — and every relative import in it resolved one directory
+    // tree too high. `script_origins` is the record of where each inlined script came from.
     let mut queue: std::collections::VecDeque<(Url, String)> = std::collections::VecDeque::new();
     for node in dom.descendants(dom.root()) {
         if dom.tag_name(node) != Some("script") {
@@ -7009,8 +7056,15 @@ async fn prefetch_module_graph(
         if src.trim().is_empty() {
             continue;
         }
+        // An external module's imports are relative to IT; an inline one's are relative to the
+        // document. Same rule, and `script_origins` is what distinguishes the two cases now that the
+        // DOM no longer can.
+        let importer = script_origins
+            .get(&node)
+            .and_then(|u| Url::parse(u).ok())
+            .unwrap_or_else(|| base_url.clone());
         for spec in scan_static_import_specifiers(&src) {
-            queue.push_back((base_url.clone(), spec));
+            queue.push_back((importer.clone(), spec));
         }
     }
     if queue.is_empty() {
@@ -7093,6 +7147,9 @@ pub struct Prefetched {
     /// this; the map rides on the page (`Page::module_graph_sources`) and is seeded into the JS layer at
     /// the moment the deferred pass runs. Empty ⇒ no module imports ⇒ modules link self-contained.
     pub module_graph_sources: HashMap<String, String>,
+    /// `<script type=module>` node index → the URL its source came from, carried the same way and for
+    /// the same reason as the graph above: a module's imports resolve against the MODULE's url.
+    pub module_node_bases: HashMap<usize, String>,
     /// **The document's import map (tick 520)** — bare specifier → raw target from `<script
     /// type=importmap>`. Parsed off-thread with the graph and carried onto the page the same way, so the
     /// resolve hook resolves `import 'react'` at link. Empty ⇒ bare specifiers fail loud-but-safe.
@@ -7168,9 +7225,16 @@ async fn prepare_prefetched(html: String, final_url: String, mut csp: Csp) -> Re
     // External <script src> — fetched and inlined here, off-thread. (Execution still
     // happens on the UI thread inside `from_dom`; only the *fetch* moves.)
     #[cfg(feature = "spidermonkey")]
-    let csp_authorized_scripts = fetch_external_scripts(&mut dom, &final_url, &csp).await;
+    let (csp_authorized_scripts, script_origins) =
+        fetch_external_scripts(&mut dom, &final_url, &csp).await;
     #[cfg(not(feature = "spidermonkey"))]
     let csp_authorized_scripts: Vec<NodeId> = Vec::new();
+    // Headless has no module runner, so there is nothing to resolve imports FOR — but the field is
+    // unconditional on `Prefetched`, so it needs a value in both configurations. (This is the split
+    // that `--features stylo,spidermonkey` hides: the shipping build compiled clean while the headless
+    // one did not.)
+    #[cfg(not(feature = "spidermonkey"))]
+    let script_origins: HashMap<NodeId, String> = HashMap::new();
 
     // **The ES-module import graph (B3b-iii) + import map (tick 520)** — pre-fetched off-thread here, on
     // the DEBT-1 path the shell actually navigates with, exactly as `load_async` does for the
@@ -7182,7 +7246,8 @@ async fn prepare_prefetched(html: String, final_url: String, mut csp: Csp) -> Re
     #[cfg(not(feature = "spidermonkey"))]
     let import_map: HashMap<String, String> = HashMap::new();
     #[cfg(feature = "spidermonkey")]
-    let module_graph_sources = prefetch_module_graph(&dom, &final_url, &import_map).await;
+    let module_graph_sources =
+        prefetch_module_graph(&dom, &final_url, &import_map, &script_origins).await;
     #[cfg(not(feature = "spidermonkey"))]
     let module_graph_sources: HashMap<String, String> = HashMap::new();
 
@@ -7257,6 +7322,10 @@ async fn prepare_prefetched(html: String, final_url: String, mut csp: Csp) -> Re
         images,
         masks,
         module_graph_sources,
+        module_node_bases: script_origins
+            .iter()
+            .map(|(n, u)| (n.index(), u.clone()))
+            .collect(),
         import_map,
     })))
 }

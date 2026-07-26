@@ -406,6 +406,30 @@ pub fn set_snap_candidates(c: std::collections::HashMap<manuk_dom::NodeId, (Vec<
 pub fn set_snap_candidates(_c: std::collections::HashMap<manuk_dom::NodeId, (Vec<f32>, Vec<f32>)>) {
 }
 
+/// **Seed the `<script type=module>` NODE → source-url map (tick 617).**
+///
+/// A module's imports resolve against the MODULE's url. That is the document url for an inline root —
+/// which is why `run_module` reading `DOC_URL` was right until an external module reached it. By then
+/// `fetch_external_scripts` has inlined the source and dropped `src`, so the DOM can no longer say
+/// where a module came from; this map is that record. Keyed by `NodeId::index()` to keep the JS crate's
+/// public seam free of DOM types. Pairs with [`clear_module_node_bases`].
+#[cfg(feature = "_sm")]
+pub fn set_module_node_bases(bases: std::collections::HashMap<usize, String>) {
+    dom_bindings::set_module_node_bases(bases);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_module_node_bases(_bases: std::collections::HashMap<usize, String>) {}
+
+/// Drop the module node → url map after a page's deferred scripts have run.
+#[cfg(feature = "_sm")]
+pub fn clear_module_node_bases() {
+    dom_bindings::clear_module_node_bases();
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn clear_module_node_bases() {}
+
 /// **Seed the pre-fetched ES-module graph the page module runner consumes (B3b).** The page path
 /// pre-fetches every module a `<script type=module>` reaches through its static `import`s (there is no
 /// synchronous network on the JS thread, so the whole graph must be fetched *before* scripts run) and
