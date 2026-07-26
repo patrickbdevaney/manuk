@@ -1568,3 +1568,43 @@ the gate RED-proves against. `w` descriptors win over `x` when both appear, per 
 > png/jpeg/gif/webp/bmp/ico and **AVIF is off on purpose** (C dav1d, declined). So the load-bearing use of
 > `<picture>` is *skipping* the format we cannot decode and taking the fallback the author shipped for
 > exactly that case. Choosing the AVIF would render nothing at all.
+
+## One hardcoded namespace in a four-line function disabled the parser's whole foreign-content mode (tick 603)
+
+Every element inside an inline `<svg>` was in the **XHTML** namespace. The `<svg>` element itself was
+correct — which is why this read for a long time as "SVG namespaces mostly work". **The defect
+started one level down**, and that is the general shape worth keeping: a capability probed at its
+entry point can be wrong everywhere past it.
+
+**html5ever was never the problem.** It implements the tree builder's SVG/MathML *foreign content*
+mode correctly, and it decides it is in that mode by asking the sink for the **current node's
+qualified name**. `TreeSink::elem_name` answered `ns!(html)` for every element, so the tree builder
+could never observe that it was inside an `<svg>`, never switched modes, and built every descendant
+as HTML. `create_element` discarded `name.ns` on top of that.
+
+**A borrowed library's correctness is only as good as the answers you give its callbacks.** This is
+the same lesson as the Blitz layout contract (Taffy owns containers, the host owns leaf measurement):
+the library asks questions, and a lazy answer silently disables machinery you believe you are
+getting for free.
+
+Foreign-content mode is not only `namespaceURI`. It also drives **attribute-name adjustment**
+(`viewBox` staying camel-cased instead of lowercasing to `viewbox`, `xlink:href`), self-closing tag
+handling, and the HTML-breakout rules. One wrong answer turned all of it off, and the gate asserts
+`viewBox` survives precisely so the fix cannot be narrowed back to the namespace alone.
+
+### The claim that matters is not "is it right" but "do the two ways agree"
+
+`document.createElementNS(SVG_NS, 'rect')` has kept its namespace since t125. So a page that **builds**
+SVG in script and a page that **ships** the same SVG in markup produced two different DOMs for the
+same tree. Every library that branches on `namespaceURI`, matches an `svg|rect` selector, or asks
+`instanceof SVGElement` was right about one half of the web and wrong about the other — and nothing
+anywhere reported a disagreement. `G_FOREIGN_CONTENT_NS` asserts `parsedEqMade`, because that
+equality is what a library actually depends on.
+
+It also asserts an ordinary `<div>` stays XHTML: a "fix" that put everything in the SVG namespace
+would otherwise pass every other claim in the gate.
+
+⚠ Residue, measured and deliberately not fixed: SVG **children** still report CSS-box geometry from
+`getBoundingClientRect` rather than user-space geometry, and `getBBox`/`ownerSVGElement` are absent —
+so charting code that *measures* SVG nodes still fails. That is SVG layout, a subsystem, and it is
+named rather than half-built.

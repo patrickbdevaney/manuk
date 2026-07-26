@@ -125,8 +125,24 @@ impl TreeSink for ArenaSink {
         let local = dom
             .tag_name(*target)
             .expect("elem_name on a non-element node");
+        // **This is what tells html5ever it is in foreign content, and it was hardcoded to HTML.**
+        //
+        // The tree builder decides whether to enter SVG/MathML "foreign content" mode by asking the
+        // sink for the CURRENT NODE's qualified name. Answering `ns!(html)` for every element meant
+        // it could never observe that it was inside an `<svg>`, so it never switched modes: the
+        // `<svg>` element itself got the SVG namespace (from the token) and every descendant landed
+        // in XHTML. Foreign-content mode also drives attribute-name adjustment (`viewBox`,
+        // `xlink:href`) and the self-closing/breakout rules, so this one wrong answer disabled all
+        // of it.
+        //
+        // It could not be seen from the `<svg>` element itself, which is why the earlier probe read
+        // as "namespaces mostly work" — the defect starts one level down.
         ArenaElemName {
-            ns: html5ever::ns!(html),
+            ns: match dom.namespace(*target) {
+                Some(ns) if ns == "http://www.w3.org/2000/svg" => html5ever::ns!(svg),
+                Some(ns) if ns == "http://www.w3.org/1998/Math/MathML" => html5ever::ns!(mathml),
+                _ => html5ever::ns!(html),
+            },
             local: LocalName::from(local),
         }
     }
@@ -138,7 +154,18 @@ impl TreeSink for ArenaSink {
         _flags: html5ever::tree_builder::ElementFlags,
     ) -> NodeId {
         let mut dom = self.dom.borrow_mut();
-        let el = dom.create_element(name.local.to_string());
+        // **The namespace html5ever computed must be KEPT.** html5ever implements the tree
+        // builder's foreign-content mode correctly — inside `<svg>` and `<math>` it hands us
+        // `name.ns` as the SVG/MathML namespace — and this discarded it, so every element of every
+        // inline `<svg>` landed in the XHTML namespace.
+        //
+        // That is not cosmetic. `document.createElementNS(SVG_NS, 'rect')` DOES keep its namespace
+        // (gated since t125), so a page that builds SVG in script and a page that ships SVG in
+        // markup produced two different DOMs for the same tree — and every library that branches on
+        // `namespaceURI`, matches an `svg|rect` selector, or asks `instanceof SVGElement` saw the
+        // wrong answer for the markup half. `create_element_ns` already normalises the XHTML
+        // namespace back to `None`, so ordinary HTML is unaffected.
+        let el = dom.create_element_ns(Some(name.ns.to_string()), name.local.to_string());
         for a in attrs {
             dom.set_attr(el, a.name.local.to_string(), a.value.to_string());
         }

@@ -351,6 +351,8 @@
   - L1509 · document.activeElement defaults to <body>, not null (tick 494)
   - L1522 · The same defect, three consumers, found by looking for it (tick 578)
   - L1553 · The image an <img> wants is chosen, not read (tick 582)
+  - L1572 · One hardcoded namespace in a four-line function disabled the parser's whole foreign-content mode (tick 603)
+  - L1595 · The claim that matters is not "is it right" but "do the two ways agree"
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1028,4 +1030,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-943 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+945 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

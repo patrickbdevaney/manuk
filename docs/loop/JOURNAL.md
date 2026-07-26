@@ -25658,3 +25658,61 @@ capability items the measurements surfaced: `isolation` (18.0%, the last `UNREND
 with real usage, needs a nested paint group) and **SVG children not getting client rects**, which
 this tick found incidentally and which breaks every script that measures an SVG node.
 Cadences: self-audit 604; wall 607; const 607; surface 608.
+
+## Tick 603 — one hardcoded namespace disabled the parser's whole foreign-content mode (2026-07-26)
+
+Found while **pinning** the SVG row at t602, which is the second time in two ticks that a measurement
+tick produced a capability finding: every element inside an inline `<svg>` was in the **XHTML**
+namespace. The `<svg>` element itself was correct — which is exactly why this had read as "SVG
+namespaces mostly work". **The defect started one level down**, and that is the reusable shape: *a
+capability probed at its entry point can be wrong everywhere past it.*
+
+**ROOT CAUSE, AND IT WAS FOUR LINES.** html5ever was never the problem — it implements the tree
+builder's SVG/MathML *foreign content* mode correctly, and it decides it is in that mode by asking
+the sink for the **current node's qualified name**. `TreeSink::elem_name` answered `ns!(html)` for
+every element, so the tree builder could never observe it was inside an `<svg>`, never switched
+modes, and built every descendant as HTML. `create_element` discarded `name.ns` on top of that.
+
+**A BORROWED LIBRARY'S CORRECTNESS IS ONLY AS GOOD AS THE ANSWERS YOU GIVE ITS CALLBACKS.** Same
+lesson as the Blitz layout contract (Taffy owns containers, the host owns leaf measurement): the
+library asks questions, and a lazy answer silently disables machinery you believe you are getting for
+free. Two ticks ago the mirror of this appeared — `zoom` *worked* because Stylo did it for us. Here
+foreign content *failed* because html5ever asked and we lied. **Borrowing cuts both ways, and neither
+direction is visible from our own source.**
+
+**ONE WRONG ANSWER TURNED OFF MORE THAN NAMESPACES.** Foreign-content mode also drives attribute-name
+adjustment (`viewBox` staying camel-cased rather than lowercasing to `viewbox`, `xlink:href`),
+self-closing handling, and the HTML-breakout rules. The gate asserts `viewBox` survives precisely so
+the fix cannot later be narrowed back to `namespaceURI` alone.
+
+**AND THE CLAIM THAT MATTERS IS NOT "IS IT RIGHT" BUT "DO THE TWO WAYS AGREE".**
+`createElementNS(SVG_NS,'rect')` has kept its namespace since t125. So a page that **builds** SVG in
+script and a page that **ships** the same SVG in markup produced **two different DOMs for the same
+tree**. Every library branching on `namespaceURI`, matching `svg|rect`, or asking `instanceof
+SVGElement` was right about one half of the web and wrong about the other, with nothing reporting the
+disagreement. `parsedEqMade` is the assertion for that, and it is the one a library actually depends
+on.
+
+The gate also asserts an ordinary `<div>` stays XHTML — a "fix" that namespaced everything would
+otherwise pass every other claim in it.
+
+RED-PROVEN: restore the hardcoded `ns!(html)` → `r=2000/svg` fails. `manuk-html` 12/12, `manuk-dom`
+11/11, and `g_names`/`g_node_name`/`g_namespace_lookup`/`g_capability`/`g_attrs`/`g_attr_case` all
+green — this touches the parser, so the regression surface is every document, and it was checked
+broadly rather than at the new gate alone. Both feature configurations compile.
+
+TICK SHAPE: capability (a parser-mode defect affecting every page with inline SVG or MathML —
+which is most of the modern web, since icons ship as inline `<svg>`). Bar 0 untouched; no ratchet
+floor moved.
+Gates: `G_FOREIGN_CONTENT_NS` (`engine/page/tests/g_foreign_content_ns.rs` — nesting two levels deep,
+MathML children, the plain-`<div>` guard, `viewBox` survival, and parsed==scripted; RED-proven).
+WIKI: docs/wiki/dom-semantics.md — "One hardcoded namespace in a four-line function disabled the
+parser's whole foreign-content mode".
+PATTERN: [no-pattern] — no new cross-cutting pattern; the generalisable observation (a borrowed
+library's correctness depends on the answers you give its callbacks) is in the wiki.
+
+NEXT: **SVG child geometry** — `getBoundingClientRect` on an SVG child returns CSS-box numbers rather
+than user-space ones, and `getBBox`/`ownerSVGElement` are absent, so charting code that measures
+nodes still fails. Measured this tick, named as residue, and it is the natural follow-on now that the
+subtree is correctly namespaced. Then `isolation` (18.0%). The self-audit is due at 604.
+Cadences: self-audit 604 (NEXT TICK); wall 607; const 607; surface 608.
