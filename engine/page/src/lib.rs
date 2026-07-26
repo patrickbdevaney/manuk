@@ -2935,7 +2935,10 @@ impl Page {
             }
             let fetched =
                 futures_util::future::join_all(pending.into_iter().map(|(node, url)| async move {
-                    let text = manuk_net::fetch(&url).await.ok().map(|r| r.decoded_text());
+                    let text = manuk_net::fetch(&url)
+                        .await
+                        .ok()
+                        .and_then(|r| subresource_text(&r));
                     (node, text)
                 }))
                 .await;
@@ -5883,7 +5886,10 @@ impl Page {
             .filter(|url| !self.external_css.contains_key(url))
             .collect();
         let fetched = futures_util::future::join_all(ext_urls.into_iter().map(|url| async move {
-            let text = manuk_net::fetch(&url).await.ok().map(|r| r.decoded_text());
+            let text = manuk_net::fetch(&url)
+                .await
+                .ok()
+                .and_then(|r| subresource_text(&r));
             (url, text)
         }))
         .await;
@@ -5940,7 +5946,10 @@ impl Page {
                 break;
             }
             let got = futures_util::future::join_all(want.into_iter().map(|(_, url)| async move {
-                let text = manuk_net::fetch(&url).await.ok().map(|r| r.decoded_text());
+                let text = manuk_net::fetch(&url)
+                    .await
+                    .ok()
+                    .and_then(|r| subresource_text(&r));
                 (url, text)
             }))
             .await;
@@ -6715,7 +6724,14 @@ async fn fetch_external_scripts(
                         continue;
                     }
                 }
-                let js = r.decoded_text();
+                // **An error page is not a script.** `continue` takes the exact "there is nothing to
+                // run" path a failed fetch and an SRI mismatch already take (both leave `src` in
+                // place, and `collect_inline_scripts` skips a node that still looks external) —
+                // instead of injecting an HTML error document as inline JavaScript, whose SyntaxError
+                // would then kill whatever frame ran it.
+                let Some(js) = subresource_text(&r) else {
+                    continue;
+                };
                 dom.remove_attr(node, "src");
                 let text = dom.create_text(js);
                 dom.append_child(node, text);
@@ -6908,6 +6924,46 @@ fn resolve_page_specifier(
             .or_else(|| Url::parse(&target).ok());
     }
     importer.join(spec).ok()
+}
+
+/// **A 404 page is a DOCUMENT to render — it is not JavaScript to execute, and not CSS to apply.**
+///
+/// t607 established the first half and was right: an HTTP error status arrives with a real body and a
+/// browser renders it, so `manuk_net::fetch` stops failing on `status >= 400`. Its own comment said
+/// *"the status is not swallowed: it rides on `Response::status` for every caller that cares"* —
+/// **and none of the six subresource callers cared.** Every one of them was
+/// `fetch(&url).await.ok().map(|r| r.decoded_text())`, which reads *"the request completed"* as
+/// *"the request succeeded"*.
+///
+/// What that costs, found on `www.welt.de`:
+///
+/// ```text
+///   a page module failed — SyntaxError: expected expression, got '<'
+/// ```
+///
+/// A module URL answered `404`, the error page's `<!doctype html>` was inserted as the module's
+/// SOURCE, and SpiderMonkey compiled HTML as JavaScript. The same hazard sits on `<script src>`,
+/// where the error page becomes inline script text and its `SyntaxError` kills whatever frame runs
+/// it — the throw class t612 and t615 spent two ticks on.
+///
+/// **The distinction is the interesting part, and it is the same fact answered three ways.** A 403
+/// challenge page is: a *document* to the navigation path (render it — t607), *not evidence* to the
+/// certificate (refuse to score it — t611), and *not code* here. One response, three consumers, three
+/// correct and different answers. Getting one right does not settle the others.
+///
+/// `< 400` rather than `2xx` on purpose: redirects are already followed by the time a caller sees a
+/// response, and a revalidated `304` is returned as the STORED entry (status 200), so this rejects
+/// exactly the error statuses and cannot regress a path that works today.
+fn subresource_text(r: &manuk_net::Response) -> Option<String> {
+    if r.status >= 400 {
+        tracing::info!(
+            url = %r.final_url, status = r.status,
+            "subresource answered with an error status — NOT executed or applied as content \
+             (its body is an error page, not the resource)"
+        );
+        return None;
+    }
+    Some(r.decoded_text())
 }
 
 /// **Pre-fetch the whole static-import graph of a document's inline `<script type=module>` roots (B3b).**
@@ -7141,7 +7197,10 @@ async fn prepare_prefetched(html: String, final_url: String, mut csp: Csp) -> Re
         .filter(|u| seen.insert(u.clone()))
         .collect();
     let fetched = futures_util::future::join_all(ext.into_iter().map(|u| async move {
-        let text = manuk_net::fetch(&u).await.ok().map(|r| r.decoded_text());
+        let text = manuk_net::fetch(&u)
+            .await
+            .ok()
+            .and_then(|r| subresource_text(&r));
         (u, text)
     }))
     .await;

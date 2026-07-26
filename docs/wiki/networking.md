@@ -1606,3 +1606,55 @@ listing `nodeValue` as an unwritable property, derived by grepping `prop_guarded
 Probing found `nodeValue` **already writable** from a setter on another prototype the grep never saw.
 The same instrument-artifact shape as the stale `[id]` message deleted at t611. **Probe; do not grep.**
 [[board-and-constellation-stale]]
+
+## A 404 page is a document to RENDER, not code to EXECUTE (tick 616)
+
+t607 stopped `manuk_net::fetch` failing on `status >= 400`, because an error status arrives with a real
+body and every browser renders it. That was right, and its comment promised the rest:
+
+> *"The status is not swallowed: it rides on `Response::status` for every caller that cares."*
+
+**None of the six subresource callers cared.** All six were the same line:
+
+```rust
+let text = manuk_net::fetch(&url).await.ok().map(|r| r.decoded_text());
+```
+
+reading *"the request completed"* as *"the request succeeded"*. The consequences, by consumer:
+
+| subresource | what a 404 produced |
+|---|---|
+| `<script src>` | the error page injected into the node **as inline JavaScript** |
+| `<script type=module>` | the error page **compiled as a module** — `SyntaxError: expected expression, got '<'` |
+| `<link rel=stylesheet>` | HTML parsed as CSS |
+
+And a `SyntaxError` is not a quiet failure: t612 and t615 spent two ticks on what a throw costs the
+frame that raised it.
+
+### One fact, three consumers, three different correct answers
+
+A 403 challenge page is:
+
+- a **document** to the navigation path — render it (t607)
+- **not evidence** to the certificate — refuse to score it (t611)
+- **not code** to a subresource loader — do not execute or apply it (t616)
+
+**Getting one right does not settle the others**, which is exactly how a correct tick introduced this
+defect. The fix is a single `subresource_text(&Response) -> Option<String>` that all six sites route
+through, because patching six sites is how you get a seventh.
+
+`< 400` rather than `2xx` on purpose: redirects are already followed by the time a caller sees a
+response, and a revalidated `304` returns the **stored** entry (status 200), so this rejects exactly
+the error statuses and cannot regress a path that works today.
+
+### The refusal must leave the ESTABLISHED "nothing to run" state
+
+A failed fetch and an SRI mismatch both leave `src` in place, precisely so `collect_inline_scripts`
+skips the node. An error response lands in that same state rather than inventing a third one — a RED
+probe that removed `src` on the error path goes red, because the node then stops looking external and
+the rest of the pipeline would try to run an empty script.
+
+⚠ **`Page::load` DOES NOT FETCH.** The gate's first draft used it, so every assertion was true by
+construction and it passed **with the fix disabled**. `Page::load_async` is the path the shell and the
+renderer take and the one that fetches subresources. A network gate written against the sync
+constructor measures nothing. [[page-gates-need-features]]

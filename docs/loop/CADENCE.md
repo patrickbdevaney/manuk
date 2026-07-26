@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **375** | ticks 1–615 |
-| median tick cycle | **21m** | 374 intervals |
+| ticks landed | **376** | ticks 1–616 |
+| median tick cycle | **21m** | 375 intervals |
 | median, last 10 | **33m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.02** | 366.3h elapsed |
-| median verify wall | **67s** | 314 ticks |
+| **ticks per hour** | **1.02** | 366.7h elapsed |
+| median verify wall | **67s** | 315 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **309**
+* **live gates**: 27 → **310**
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**188 of 375 ticks** (50%) moved a
+**189 of 376 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **188** capability ticks, median cycle **21m**
-* median diff per tick: **+233 / −34** lines across 9 files
+* **189** capability ticks, median cycle **21m**
+* median diff per tick: **+234 / −34** lines across 9 files
 
 ## Every tick
 
@@ -472,5 +472,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **613** | 2026-07-26 10:36 | 30m | capability | 63s | +577/−23 | 308 | 81 | 56.0% · | `XMLHttpRequest` had the legacy half of its API and none of the EventTarget half (2026-07- |
 | **614** | 2026-07-26 10:54 | 18m | reliability | 63s | +319/−6 | 308 | 81 | 56.0% · | the oracle was rendering a SHELL and the certificate was scoring it (2026-07-26) |
 | **615** | 2026-07-26 11:23 | 28m | capability | 63s | +401/−4 | 309 | 81 | 56.0% · | the feature-detect that THREW, plus constitution check #43 (2026-07-26) |
+| **616** | 2026-07-26 11:47 | 25m | capability | 63s | +424/−8 | 310 | 81 | 56.0% · | a 404 page is a document to RENDER, not JavaScript to EXECUTE (2026-07-26) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -910,6 +910,9 @@
   - L1566 · Six open-coded dispatch sites, and they had already drifted
   - L1586 · What the listener list must do to be an EventTarget rather than an array
   - L1598 · Still missing on XHR, named rather than implied
+  - L1610 · A 404 page is a document to RENDER, not code to EXECUTE (tick 616)
+  - L1634 · One fact, three consumers, three different correct answers
+  - L1650 · The refusal must leave the ESTABLISHED "nothing to run" state
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -1065,4 +1068,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-980 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+983 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

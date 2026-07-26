@@ -5216,3 +5216,25 @@ one method real code reaches for is missing. Check both forms of any dual-form A
 sites, they drift. `loadend` was fired by the streaming delivery path and not by the buffered one, so
 a spec event's delivery depended on **whether the response arrived in chunks**. One dispatch function,
 or the copies will disagree — the fifth instance of that shape in five ticks.
+
+## A subresource that 404s to an HTML error page (tick 616)
+
+**The class:** every page with a stale, moved or mis-deployed asset URL — which is most of the web at
+any moment. A CDN or SPA host answers a missing `/bundle.abc123.js` with its **HTML error page**, at
+404 or sometimes at 200, and the browser must treat that body as *nothing* rather than as JavaScript.
+
+We were injecting it into the `<script>` node as inline code. The resulting `SyntaxError` then kills
+the frame that ran it — which is not a lost script, it is a lost *page*, since script execution order
+means whatever ran next did not run. The same body reached the module compiler and the CSS parser.
+
+**Why the class is bigger than "a broken asset":** it is the normal steady state of a deploy. A cache
+holding an old HTML shell that references a hashed bundle the new deploy no longer has is the single
+most common transient failure on a modern site, and every real browser rides through it by treating a
+non-OK subresource as absent. A browser that instead *executes the error page* turns a missing file
+into a broken document.
+
+**The generalisation:** one HTTP response has as many correct interpretations as it has consumers.
+The same 403 challenge page is a document to render (navigation), not evidence (the certificate), and
+not code (a subresource). **Fixing the interpretation at one consumer says nothing about the others**,
+and a comment promising that "the status rides along for every caller that cares" is not a mechanism —
+it is a hope about callers that had not been audited.
