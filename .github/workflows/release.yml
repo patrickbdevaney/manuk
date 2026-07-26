@@ -97,7 +97,9 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl   # fully static: runs on any Linux, no deps
+            target: x86_64-unknown-linux-gnu    # glibc-dynamic: runs on any mainstream Linux. (musl-static
+                                                # is blocked on openh264's C++ needing a musl g++ cross-
+                                                # toolchain; a glibc binary is right for a desktop browser.)
             name: manuk-linux-x86_64
           - os: macos-latest
             target: aarch64-apple-darwin
@@ -121,7 +123,7 @@ jobs:
         shell: bash
         run: |
           case "${{ matrix.target }}" in
-            *musl|*msvc) export RUSTFLAGS="-C target-feature=+crt-static" ;;
+            *msvc) export RUSTFLAGS="-C target-feature=+crt-static" ;;
           esac
           bash scripts/ci-run.sh "release ${{ matrix.target }}" \
             cargo build --release --workspace --no-default-features --target ${{ matrix.target }}

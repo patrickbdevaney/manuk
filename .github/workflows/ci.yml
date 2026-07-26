@@ -162,7 +162,7 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
+            target: x86_64-unknown-linux-gnu
           - os: windows-latest
             target: x86_64-pc-windows-msvc
           - os: macos-latest
@@ -183,7 +183,7 @@ jobs:
         shell: bash
         run: |
           case "${{ matrix.target }}" in
-            *windows-msvc|*linux-musl) export RUSTFLAGS="-C target-feature=+crt-static" ;;
+            *windows-msvc) export RUSTFLAGS="-C target-feature=+crt-static" ;;
           esac
           bash scripts/ci-run.sh "static ${{ matrix.target }}" \
             cargo build --release --workspace --no-default-features --target ${{ matrix.target }}
