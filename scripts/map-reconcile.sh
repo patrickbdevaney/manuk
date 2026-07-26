@@ -45,7 +45,9 @@ fi
 # Precompute the set of existing gate-test basenames (g_foo from .../tests/g_foo.rs) ONCE — the fuzzy
 # match target. G_FOO in the map maps to a file whose basename == or STARTS WITH g_foo (e.g.
 # G_BIDI_BASE -> g_bidi_base_direction.rs), so a prefix test over this set is the sound check.
-BASENAMES=$(find engine agent -path '*/tests/*.rs' -printf '%f\n' 2>/dev/null | sed 's/\.rs$//' | sort -u)
+# Search engine + agent + tests: cert/manuk-wpt gates live in tests/wpt/tests/ (e.g. g_cap_touch_probe.rs),
+# and omitting tests/ made those gates read as DANGLING — a blind spot in this instrument, not a map error.
+BASENAMES=$(find engine agent tests -path '*/tests/*.rs' -printf '%f\n' 2>/dev/null | sed 's/\.rs$//' | sort -u)
 
 gate_backed(){ # $1 = the WHOLE gate cell (may name several: "G_FORM, G_FORMDATA+G_X (note)").
   # 0 if AT LEAST ONE named G_ gate is backed by a real test — the sound false-presence test is "does
@@ -54,7 +56,7 @@ gate_backed(){ # $1 = the WHOLE gate cell (may name several: "G_FORM, G_FORMDATA
   for tok in $(printf '%s' "$1" | grep -oE 'G_[A-Z0-9_]+'); do
     lc=$(printf '%s' "$tok" | tr 'A-Z' 'a-z')
     printf '%s\n' "$BASENAMES" | grep -qE "^${lc}(_|$)" && return 0        # a test file g_foo*.rs
-    grep -rqlF "$tok" --include='*.rs' engine agent 2>/dev/null && return 0  # or the const named in source
+    grep -rqlF "$tok" --include='*.rs' engine agent tests 2>/dev/null && return 0  # or the const named in source
   done
   return 1
 }
