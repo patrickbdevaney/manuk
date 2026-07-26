@@ -74,6 +74,19 @@ already names each row's `gate` (audit #33 made it machine-readable, unmapped-ga
   `@supports` parse-not-render bug): the reconciliation should flag gates that assert an intermediate
   (`typeof x === 'function'`, "it parses") rather than the OBSERVABLE OUTCOME (it renders / it functions).
 
+**BUILT (t601, `scripts/map-reconcile.sh`)** — the LIGHT, SOUND half first: read-only (no cargo, safe
+mid-tick), it verifies the invariant that KILLS false-presence at the assertion layer — *a row claiming
+`works`/`gated`/`partial` must name a gate whose test actually EXISTS* (fuzzy `G_FOO`→`g_foo*.rs` + const
+grep; multi-gate cells tokenized so ANY real backing gate satisfies it). First honest run: **26 drift rows
+of 357** — 20 BARE assertions (status claimed with gate `-`) + 6 DANGLING (cites a gate name with no test).
+The *result*-reconciliation half (green-gate⇒works / red⇒broken) needs a per-gate result ledger that does
+not exist yet (there is no sound way to recompute 300 statuses without re-running the wall) — deferred.
+ROLLOUT (per the doctrine's own no-brick rule): report-only today (`exit 0`); the map's owner (the agent)
+drives the 26 to 0 (cite the real gate, or set `missing`/`unmeasured`); THEN `--strict` wires it into the
+wall as a failing gate. The check itself ate its own dog food — its v1 flagged 90 false positives from
+un-tokenized multi-gate cells; shipping that would have been the very inaccurate-instrument mode it targets,
+so it was falsify-corrected before commit.
+
 ### 5. Agent context / rule-following → the board is short, dated, and self-flagging
 The agent reads the board every tick and works from it. Audit #33: "the board steers at finished work."
 - **Done (t599):** a CLARITY line names the only live CO-#1s and marks the rest historical.
