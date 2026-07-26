@@ -86,9 +86,15 @@ grep; multi-gate cells tokenized so ANY real backing gate satisfies it). First h
 of 357** — 20 BARE assertions (status claimed with gate `-`) + 6 DANGLING (cites a gate name with no test).
 The *result*-reconciliation half (green-gate⇒works / red⇒broken) needs a per-gate result ledger that does
 not exist yet (there is no sound way to recompute 300 statuses without re-running the wall) — deferred.
-ROLLOUT (per the doctrine's own no-brick rule): report-only today (`exit 0`); the map's owner (the agent)
-drives the 26 to 0 (cite the real gate, or set `missing`/`unmeasured`); THEN `--strict` wires it into the
-wall as a failing gate. The check itself ate its own dog food — its v1 flagged 90 false positives from
+ROLLOUT (per the doctrine's own no-brick rule): report-only first (`exit 0`); the map's owner (the agent)
+drove the 26 → 0 (surface audit #34). **FINAL DESIGN (t611): reconciliation is made STANDING via an
+`ops-check.sh` ALERT, NOT a wall gate.** Why not `--strict` in the wall: the instrument itself can
+false-positive (it once read every cert gate as dangling because it did not search `tests/`), and a wall
+gate would then brick every tick. So `ops-check` runs `map-reconcile` every 15m + each observer heartbeat
+and ALERTS on drift; the observer acts — real drift ⇒ steer the agent, false drift ⇒ fix the search. Same
+standing-reconciliation goal, zero wall-brick risk. The `--strict` mode stays for CI, once the instrument
+is proven false-positive-free over many ticks. **An honesty checker with a blind spot is itself a dishonest
+instrument — the doctrine applies to its own tools; `--self-test` + the `tests/` fix are that discipline.** The check itself ate its own dog food — its v1 flagged 90 false positives from
 un-tokenized multi-gate cells; shipping that would have been the very inaccurate-instrument mode it targets,
 so it was falsify-corrected before commit.
 
