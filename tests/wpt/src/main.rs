@@ -216,11 +216,15 @@ fn run() {
         let t1 = std::time::Instant::now();
         let imgs = rt.block_on(manuk_page::fetch_image_urls(urls));
         let t_img = t1.elapsed().as_secs_f64() * 1000.0;
+        // **How many images LANDED, not just how long the phase took.** The elapsed time alone reads
+        // the same whether every image arrived or every image timed out — and on a stampeded host it
+        // is the second one. A phase that reports only its duration cannot tell a slow success from a
+        // fast total loss, which is exactly the distinction this measurement exists to make.
+        let n_ok = imgs.len();
         println!(
             "  FIRST PAINT {t_paint:7.1}ms  (fetch+parse {t_fetch:7.1}ms)   \
-             then {n_def} deferred scripts in {t_def:7.1}ms, {n_img} images in {t_img:7.1}ms",
+             then {n_def} deferred scripts in {t_def:7.1}ms, {n_ok} of {n_img} images in {t_img:7.1}ms",
         );
-        let _ = imgs.len();
         return;
     }
 

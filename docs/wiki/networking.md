@@ -1462,3 +1462,74 @@ asserts the resulting fetch still `Err`s. Without that claim an engine that neve
 failure at all would pass every "did it render?" assertion in the file — *"an error status is a
 document"* must not decay into *"nothing ever fails"*. Its mirror is the `200` vacuity guard, which
 stayed green under both RED patches and is what proves the other claims failed for the real reason.
+
+## The connection cap — a page's images are lost to our own stampede, not to the network (t609)
+
+Every subresource phase in `manuk-page` is an unbounded `futures_util::future::join_all` over its
+whole worklist — images, external CSS, `@import`, scripts, icon masks, background images. Nothing
+underneath them bounded the result either, so **N images meant N simultaneous sockets.** That reads
+like a tuning detail. It is not one.
+
+**Measured on `mangago.me`, a HEAD site of `docs/bench/corpus-v2.tsv`:**
+
+```text
+  MANUK_MAX_CONNS_PER_HOST=0     26 of 173 images in 8013ms      ← what shipped
+  MANUK_MAX_CONNS_PER_HOST=6    171 of 173 images in 9487ms
+```
+
+147 images did not fail slowly or partially. They ran out the **8s subresource deadline while queued
+behind our own requests**, and the per-navigation negative cache (`FAILED`) then remembered each one
+as dead, so within that navigation they were never asked for again. The page rendered 85% imageless.
+
+**The origin was healthy the entire time**, which is what makes this ours rather than the web's: a
+single request for one of those images returns `200` in **0.52s**, and 27 of them fetched
+concurrently by `curl` all succeed in 3.2s. We were the only thing failing.
+
+**So the deadline was measuring the wrong interval.** A request's clock exists to bound *the
+server's* slowness. It was instead being consumed by our own backlog, which converts a healthy
+origin into an indistinguishably dead one. The permit is what puts the clock back on the server: a
+request waits for a permit with no deadline running, and `fetch_with_deadline` starts only once the
+request actually reaches the wire. Total waiting is bounded a level up by `manuk-page`'s load budget,
+which is the right home for it — *"how long may this PAGE take"* is a page question, not a socket
+question.
+
+**The number was measured, not cited.** The knee is sharp:
+
+```text
+  cap  0 → 26/173      cap 12 → 59/173      cap 48 → 26/173
+  cap  6 → 171/173     cap 24 → 26/173
+```
+
+24 and 48 are indistinguishable from no cap at all, because 173 images across ~8 hosts is only ~22
+per host to begin with. 6 sits on the right side of a cliff the engine was falling off, and it
+happens to coincide with Chromium's HTTP/1.1 per-host limit — but the agreement is a check on the
+number, not its justification.
+
+**This is not a speed/capability trade, and that distinction is the whole point.** The North Star's
+standing trap is *"fast because we never loaded the images"*. Here the engine was **both** slower
+**and** not loading the images, and one change moves both: on well-behaved sites the image phase gets
+*faster* while landing the same content (bbc.com 22/22 in 2825ms → 22/22 in 1282ms; wikipedia 6/6 in
+1071ms → 6/6 in 399ms). Doing less concurrently gets more content, sooner.
+
+**Placement: one choke point, not one per phase.** The permit lives in `fetch_scoped`, which every
+subresource in every phase passes through, rather than in each phase's `join_all`. A rule implemented
+once cannot have copies that disagree — the defect shape §VI.3 was extended for. Two orderings there
+are load-bearing:
+
+- **After** the single-flight `INFLIGHT` gate, so a caller parked on a URL lock holds no permit and
+  therefore cannot starve the very request it is waiting for. The deadlock is avoided by
+  construction rather than by argument.
+- **Before** `fetch_with_deadline`, so the 8s clock starts at the wire and not at the queue.
+
+**The document is deliberately exempt.** `fetch_document` does not route through `fetch_scoped` at
+all, so the thing the user came for never waits behind a tracker. Capping it would trade *"some
+sites are slow"* for *"some sites are unreachable"*, which is the same non-trade `document_timeout`
+already exists to refuse.
+
+**Keyed by origin `(scheme, host, port)`, not by host.** A socket to `:443` is not a socket to
+`:8080`, and two origins sharing a hostname must not queue behind one another.
+
+`max_conns_per_host()` is deliberately **not** memoised into a `OnceLock`, unlike `request_timeout`
+and for the reason `g_load_document.rs` documents at its head: `G_CONN_CAP` has to run its capped and
+uncapped arms in one process to show that the cap is what moves the number, and a `OnceLock` would
+let whichever arm ran first decide for both.

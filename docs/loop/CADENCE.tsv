@@ -367,4 +367,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 605	26d58a26	1785048696	2026-07-26T02:51:36-04:00	316	measurement	85	6	207	32	301	81	3896	6960	0	338	31	`isolation`: measured, priced, and deliberately NOT built (2026-07-26)
 606	e515715f	1785050682	2026-07-26T03:24:42-04:00	1986	measurement	85	6	145	32	301	81	3896	6960	0	338	31	THE PILOT: the first honest number on the representative corpus (2026-07-26)
 607	e09f5cff	1785053300	2026-07-26T04:08:20-04:00	2618	capability	85	13	526	37	302	81	3896	6960	0	339	31	an HTTP error status is a DOCUMENT: the browser stopped refusing to look (2026-07-26)
-608	682c5648	1785055497	2026-07-26T04:44:57-04:00	2197	capability	85	11	702	34	303	81	3896	6960	0	339	31	a missing interface object is a ReferenceError, and a ReferenceError renders NOTHING (2026-07-26)
+608	c73f1a59	1785058490	2026-07-26T05:34:50-04:00	5190	capability	85	11	530	35	304	81	3896	6960	0	340	31	a missing interface object is a ReferenceError, and a ReferenceError renders NOTHING (2026-07-26)

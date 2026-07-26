@@ -884,6 +884,7 @@
   - L1396 · The thing an implementation written from intuition gets wrong
   - L1404 · Two failure directions, and they point opposite ways
   - L1422 · An HTTP error status is a DOCUMENT, and its body is what the site chose to say
+  - L1466 · The connection cap — a page's images are lost to our own stampede, not to the network (t609)
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -1039,4 +1040,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-954 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+955 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

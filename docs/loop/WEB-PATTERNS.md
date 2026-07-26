@@ -5059,3 +5059,44 @@ feature-detection and is worse than the gap.
 **Boot-path failures on real sites STACK.** One fix peels one layer — the same shape the aljazeera
 investigation took, one named error per fix. **Do not book "site X works now" from "site X's first
 error is gone."**
+
+## The page asks for its subresources all at once, and the origin throttles per client (tick 609)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| A page references N subresources on a handful of hosts. Every phase issues them in ONE unbounded `join_all`, so N images = N simultaneous sockets. The origin serves a few and **stalls** the rest; the stalled ones burn the per-request deadline, fail, and are entered in the per-navigation negative cache — so they are **never retried within that navigation** | **`mangago.me`, a HEAD site of `corpus-v2.tsv`.** 173 images issued at once, **26 arrived**. The page rendered **85% imageless**, and the same origin answers a single one of those images `200` in **0.52s** | ✅ fixed (tick 609) — a per-origin permit at the single choke point (`manuk_net::fetch_scoped`), default **6**, gated by **`G_CONN_CAP`** (RED-proven twice: removing the permit drops the capped arm 40 → 6; un-throttling the test origin fires the counterfactual assertion) |
+
+**A stalled request is worse than a refused one, and that asymmetry is the mechanism.** A refused
+connection fails fast and cheaply. A stalled one holds the socket, consumes the client's entire
+deadline, and then presents to every layer above as *"this origin is down"* — indistinguishable, at
+the call site, from a genuinely dead host. Our own concurrency is what produced the stall, so the
+engine was manufacturing the evidence that the web was broken.
+
+**The deadline was measuring the wrong interval.** A per-request clock exists to bound *the server's*
+slowness; it was being spent on *our own backlog*. Any queue placed under a deadline must start that
+deadline when the work reaches the wire, never when it joins the queue — otherwise the deadline
+silently becomes a cap on throughput. Bounding the total belongs a level up, where the question
+*"how long may this page take"* is actually asked.
+
+**"Slow" and "missing content" were ONE bug, which is why this is not a trade.** The board carried
+`mangago.me` as an OURS-IS-SLOW row and the certification pilot carried it as a low-coverage row;
+both were the same stampede. The North Star's standing trap is *"fast because we never loaded the
+images"* — here the engine was **both** slow **and** not loading the images, and the fix moves both
+the same way (bbc.com's image phase: 22/22 in 2825ms → 22/22 in **1282ms**). **Doing less
+concurrently got more content, sooner.** When a perf finding and a fidelity finding name the same
+site, suspect they are one defect before pricing them separately.
+
+**Pick the constant by measuring the knee, not by citing another browser.** 6 → 171 landed; 12 → 59;
+24 → 26; 48 → 26 — identical to no cap, because 173 images over ~8 hosts is only ~22 per host to
+start with. The cliff is real and steep, and "Chromium uses 6" arrived afterwards as a *check* on the
+number rather than as its justification.
+
+**One choke point, not one per phase.** Seven phases each had their own unbounded `join_all`; the
+permit went into the single function all of them route through. §VI.3's fourth clause in reverse — do
+not implement a rule seven times and hope the copies agree.
+
+**⚠ AND THE HONEST HALF: this did NOT fix the site.** `mangago.me`'s end-to-end fidelity did not
+improve, because its load is dominated by a different defect this tick did not touch — **~30s spent
+draining the JS event loop to its 20,000-task ceiling, which has no wall-clock bound at all.** The
+images now arrive; the page is still slow for another reason. Same discipline as t608: **do not book
+"site X works now" from "one of site X's defects is gone."**

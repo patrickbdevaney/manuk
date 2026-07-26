@@ -15,7 +15,7 @@
 | median tick cycle | **21m** | 368 intervals |
 | median, last 10 | **22m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.02** | 359.7h elapsed |
+| **ticks per hour** | **1.02** | 360.5h elapsed |
 | median verify wall | **67s** | 308 ticks |
 | wall trend | 39s → 85s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,8 +27,8 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **303**
-* **✅ rows in the capability ledger**: 144 → **339**
+* **live gates**: 27 → **304**
+* **✅ rows in the capability ledger**: 144 → **340**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
 **184 of 369 ticks** (50%) moved a
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **184** capability ticks, median cycle **21m**
-* median diff per tick: **+231 / −34** lines across 9 files
+* median diff per tick: **+231 / −35** lines across 9 files
 
 ## Every tick
 
@@ -465,6 +465,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **605** | 2026-07-26 02:51 | 5m | measurement | 85s | +207/−32 | 301 | 81 | 56.0% · | `isolation`: measured, priced, and deliberately NOT built (2026-07-26) |
 | **606** | 2026-07-26 03:24 | 33m | measurement | 85s | +145/−32 | 301 | 81 | 56.0% · | THE PILOT: the first honest number on the representative corpus (2026-07-26) |
 | **607** | 2026-07-26 04:08 | 44m | capability | 85s | +526/−37 | 302 | 81 | 56.0% · | an HTTP error status is a DOCUMENT: the browser stopped refusing to look (2026-07-26) |
-| **608** | 2026-07-26 04:44 | 37m | capability | 85s | +702/−34 | 303 | 81 | 56.0% · | a missing interface object is a ReferenceError, and a ReferenceError renders NOTHING (2026 |
+| **608** | 2026-07-26 05:34 | 86m | capability | 85s | +530/−35 | 304 | 81 | 56.0% · | a missing interface object is a ReferenceError, and a ReferenceError renders NOTHING (2026 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

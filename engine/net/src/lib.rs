@@ -764,6 +764,81 @@ static SEEN: OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> = Onc
 static FAILED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
     std::sync::OnceLock::new();
 
+/// **Per-host connection permits — the thing that makes a page's images ARRIVE.**
+///
+/// Every subresource phase in `manuk-page` is an unbounded `join_all` over its whole worklist, and
+/// nothing below it bounded them either: N images meant N simultaneous sockets. On a real page that
+/// is not a tuning detail, it is a **loss of content**, and the number is not close. Measured on
+/// `mangago.me` (a corpus-v2 HEAD site): 173 images issued at once, **26 arrived**. The other 147
+/// did not fail slowly or partially — all of them ran out the 8s subresource deadline *while queued
+/// behind our own stampede*, and `FAILED` then remembered each one, so within that navigation they
+/// were never asked for again. The page rendered 85% imageless.
+///
+/// The server was never the problem, which is what makes this ours: the same host answers a single
+/// request for one of those images in **0.52s with a 200**, and 27 of them fetched concurrently by
+/// `curl` all succeed in 3.2s. We were the only thing failing.
+///
+/// So the deadline was measuring the wrong interval. A request's clock is meant to bound *the
+/// server's* slowness; it was instead being consumed by our own queue, which converts a healthy
+/// origin into a dead one. The permit is what puts the clock back on the server: a request waits
+/// here without a deadline running, and `fetch_with_deadline` starts only once it actually goes to
+/// the wire. Total waiting is bounded a level up, by `manuk-page`'s load budget — which is the right
+/// place for it, because "how long may this PAGE take" is a page question, not a socket question.
+///
+/// Six per host is Chromium's HTTP/1.1 limit, and it is deliberately not larger. This is a case
+/// where doing *less* concurrently gets *more* content, sooner, so there is no capability being
+/// traded for speed here — both move the same way. HTTP/2 multiplexes over one pooled connection, so
+/// an h2 origin is bounded by its own stream limits well before it reaches this number.
+///
+/// `MANUK_MAX_CONNS_PER_HOST` overrides. The document is NOT subject to this: `fetch_document` does
+/// not route through `fetch_scoped`, so the thing the user came for never waits behind a tracker.
+#[allow(clippy::type_complexity)]
+static HOST_PERMITS: std::sync::OnceLock<
+    std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::Semaphore>>>,
+> = std::sync::OnceLock::new();
+
+/// Concurrent connections allowed per origin. `MANUK_MAX_CONNS_PER_HOST` overrides; 0 disables the
+/// cap entirely, which exists so the gate can prove the cap is what changes the outcome.
+///
+/// **Deliberately NOT memoised**, unlike `request_timeout` — `document_timeout` is not either, and
+/// for the same reason: a gate has to be able to run the capped and uncapped arms in one process to
+/// show that the cap is what moves the number. A `OnceLock` here would let whichever arm ran first
+/// decide for both, which is precisely the defect `g_load_document.rs` documents at its head. The
+/// read is a process-env lookup against a network round-trip; it does not show up.
+pub fn max_conns_per_host() -> usize {
+    std::env::var("MANUK_MAX_CONNS_PER_HOST")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(6)
+}
+
+/// The permit-holder for one origin, or `None` when the cap is disabled or the URL has no host
+/// (`file:`, `data:` — neither touches a socket, so neither should hold a socket permit).
+///
+/// **Keyed by (scheme, host, port), not by host.** That is what a connection limit is actually
+/// about — a socket to `:443` is not a socket to `:8080`, and two origins that merely share a
+/// hostname must not queue behind one another.
+fn host_permit_for(url: &str) -> Option<std::sync::Arc<tokio::sync::Semaphore>> {
+    let n = max_conns_per_host();
+    if n == 0 {
+        return None;
+    }
+    let u = Url::parse(url).ok()?;
+    let host = u.host_str()?.to_ascii_lowercase();
+    let key = format!(
+        "{}://{host}:{}",
+        u.scheme(),
+        u.port_or_known_default().unwrap_or(0)
+    );
+    let map = HOST_PERMITS.get_or_init(Default::default);
+    let mut g = map.lock().unwrap();
+    Some(
+        g.entry(key)
+            .or_insert_with(|| std::sync::Arc::new(tokio::sync::Semaphore::new(n)))
+            .clone(),
+    )
+}
+
 pub fn fetch_stats() -> (usize, usize) {
     (
         FETCHES.load(std::sync::atomic::Ordering::Relaxed),
@@ -866,6 +941,20 @@ async fn fetch_scoped(url: &str, initiator: Option<&Url>) -> Result<Response> {
     {
         bail!("already failed this navigation (not retried): {url}");
     }
+
+    // **Take a connection permit for this host, and take it AFTER the single-flight gate.**
+    //
+    // The order is load-bearing in both directions. Taking it after the gate means a caller parked on
+    // the URL lock is holding no permit, so it cannot starve the very request it is waiting for —
+    // that is the deadlock this arrangement avoids by construction rather than by argument. And
+    // taking it *before* `fetch_with_deadline` means the 8s clock starts when the request reaches the
+    // wire, not when it joined the queue. Those two are the same line of code and the second is the
+    // whole point: a deadline that runs while queued is a deadline on our own backlog, and it was
+    // failing 147 of 173 images that the origin was answering in half a second.
+    let _conn = match host_permit_for(url) {
+        Some(sem) => sem.acquire_owned().await.ok(),
+        None => None,
+    };
 
     let out = fetch_with_deadline(url, request_timeout(), initiator).await;
     if out.is_err() {

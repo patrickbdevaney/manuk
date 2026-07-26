@@ -26103,3 +26103,123 @@ audit #33's bug; `scripts/map-reconcile.sh` is the real instrument and reports *
 carried as the board's CO-#1 item (3) and NOT closed here. The audit also **corrected an
 attribution**: welt.de's 0% was on the board as a *timing* result, and it never was.
 Cadences: wall 627; const 615; surface 618; self-audit 614.
+
+## Tick 609 — 147 of a page's 173 images were lost to our own stampede, not to the network (2026-07-26)
+
+The board's live CO-#1 is the certification redesign's STEP-2, whose second measurability target is
+*"we are SLOW on real HEAD sites"*, and t607's constitution check handed over the specific mechanism
+to chase: `mangago.me` took **174 seconds**, *"pulling ~hundreds of images that each timed out at the
+8.0s subresource deadline with nothing bounding the aggregate."* That framing turned out to be half
+right and the wrong half was the important one.
+
+**MEASURED FIRST, and the first measurement contradicted the premise.** Reproduced at 85s (vs
+Chromium's 723ms), and the timestamps say the aggregate bound *is* there and *does* fire:
+
+```text
+  08:46:25.02   28 images time out at 8.0s — all within 2 MILLISECONDS of each other
+  08:46:37.10   load budget of 12.0s exhausted — painting without images/masks/background images
+  08:47:06.81   event loop hit its task ceiling  count=20000        ← 29.7s, unbounded
+```
+
+The 12s page budget expired exactly on time. What is unbounded is elsewhere (below). But the line
+that mattered was the first one: **28 requests timing out within two milliseconds of one another is
+not 28 slow servers. It is one stampede.**
+
+**THE NUMBER, from the instrument after teaching it to report the thing it had never reported.**
+`firstpaint` printed how long the image phase took and never how many images *arrived* — and those
+two read identically whether every image landed or every image died. One line changed, and the
+answer was not subtle:
+
+```text
+  26 of 173 images in 8013ms
+```
+
+**147 images lost.** Not slowly, not partially: they ran out the 8s subresource deadline **while
+queued behind our own requests**, and `manuk_net`'s per-navigation `FAILED` cache then remembered
+each one as dead, so they were never asked for again. The page rendered **85% imageless**.
+
+**AND THE ORIGIN WAS HEALTHY THE WHOLE TIME, which is what makes this ours.** A single request for
+one of those exact images returns **`200` in 0.52s**. 27 of them fetched concurrently by `curl` all
+succeed, in 3.2s. We were the only thing failing. **The engine was manufacturing the evidence that
+the web was broken.**
+
+**THE CAUSE, and it was in the shape of the code rather than in any one line.** Every subresource
+phase in `manuk-page` — images, external CSS, `@import`, scripts, icon masks, background images,
+page fetches — is an unbounded `join_all` over its whole worklist, and nothing underneath bounded
+them either. N images meant N simultaneous sockets. So **the per-request deadline was measuring the
+wrong interval**: a request's clock exists to bound *the server's* slowness, and it was being spent
+on *our own backlog*, which converts a healthy origin into an indistinguishably dead one.
+
+**THE FIX IS ONE CHOKE POINT, NOT SEVEN.** A per-origin semaphore in `manuk_net::fetch_scoped`, the
+one function every subresource in every phase routes through. Two orderings are load-bearing:
+**after** the single-flight `INFLIGHT` gate, so a caller parked on a URL lock holds no permit and
+cannot starve the request it is waiting for (the deadlock is avoided by construction, not by
+argument); and **before** `fetch_with_deadline`, so the 8s clock starts at the wire rather than at
+the queue. Keyed by `(scheme, host, port)` — a socket to `:443` is not a socket to `:8080`. The
+**document is exempt by construction**: `fetch_document` does not route through `fetch_scoped`, so
+the thing the user came for never waits behind a tracker.
+
+**THE CONSTANT WAS MEASURED, NOT CITED — and the knee is a cliff:**
+
+```text
+  cap  0 → 26/173      cap  6 → 171/173      cap 12 → 59/173      cap 24 → 26/173      cap 48 → 26/173
+```
+
+24 and 48 are indistinguishable from no cap, because 173 images over ~8 hosts is only ~22 per host to
+begin with. 6 sits on the right side of the cliff. That it also happens to be Chromium's HTTP/1.1
+per-host limit arrived *afterwards*, as a check on the number rather than as its justification.
+
+**THIS IS NOT A SPEED-FOR-CAPABILITY TRADE, and the constitution check specifically warned that this
+tick would have a motive to make one.** t607 named the trap in advance: *"the load-budget work now
+has a motive to make a number go up, and 'fast because we never loaded the images' is exactly what
+PART VII names."* The honest resolution is that the engine was **both** slow **and** not loading the
+images, and one change moves both the same way — on well-behaved sites the image phase gets *faster*
+while landing identical content: **bbc.com 22/22 in 2825ms → 22/22 in 1282ms; wikipedia 6/6 in
+1071ms → 6/6 in 399ms.** Doing less concurrently got more content, sooner. **When a perf finding and
+a fidelity finding name the same site, suspect they are one defect before pricing them separately.**
+
+**A REGRESSION I CHASED AND THEN DISPROVED, recorded because I nearly banked it as real.** The first
+A/B showed `fetch+parse` at 3.3s uncapped and 10.5s capped — a clean-looking trade, and the ratchet
+refuses trades. Running the capped arm *alone* gave 2.6–3.1s. The 10.5s readings tracked **position
+in the A/B**, not the setting; and running the pair in the reverse order produced an 11.6s reading
+for the **uncapped** arm too. It is site variance on a bot-walled origin, present in both arms.
+**An A/B against a live third-party origin is a paired measurement and must be run in both orders
+before either number is believed.**
+
+RED-PROVEN TWICE, at two different failure modes, because one proof only shows a gate reads one thing:
+- delete the permit acquisition → the capped arm drops **40 → 6** and THE POINT fails, with the
+  mangago shape reproduced exactly
+- un-throttle the test origin (`SERVER_CONCURRENCY` 6 → 999) → the **counterfactual** assertion fires:
+  the gate refuses to keep claiming credit once it has stopped reproducing the defect
+A vacuity guard fails first if neither arm fetched anything, so the comparison cannot be satisfied by
+nothing happening.
+
+TICK SHAPE: capability (subresource delivery: 26 → 171 of 173 on the measured site; the same fix
+covers all seven unbounded phases because it sits under all of them). Bar 0 untouched; no ratchet
+floor moved; **no performance traded — both faces moved the same way.**
+Gates: +1 `G_CONN_CAP` (`engine/page/tests/g_conn_cap.rs`) — a local origin that serves 6 concurrently
+and STALLS the rest, which is the mechanism rather than an imitation of it; capped and uncapped arms
+in one process, plus a vacuity guard.
+WIKI: `docs/wiki/networking.md` — "the connection cap: a page's images are lost to our own stampede".
+PATTERN: `docs/loop/WEB-PATTERNS.md` — subresource stampede vs. a per-client-throttling origin.
+
+**⚠ THE HONEST HALF: THIS TICK DOES NOT GET TO CLAIM `mangago.me`.** Re-measured end to end, its
+fidelity did **not** improve (visual 2.2% → 0.2%, load 85s → 109s, both within that site's very wide
+run-to-run spread; it is bot-walled and Chromium is scored against a different page than we get).
+The images now arrive and the page is still slow, **for a different reason this tick did not touch.**
+Same discipline as t608, one tick later and on a different surface: *do not book "site X works now"
+from "one of site X's defects is gone."*
+
+NEXT, and it is already measured rather than guessed — the 85s breaks down as ~3.4s fetch+parse,
+~8s `load_async` enhancements, 12s `finish_loading` (the budget, exact), and **~30s draining the JS
+event loop to its 20,000-task ceiling.** `MAX_TASKS_PER_DRAIN` is a *count*, and a count is a bad
+proxy for time: it costs 0.2s on a converging page and 30s here. Worse, `run_with_fetcher` — the
+other drain, used by `run()` and by `dom_bindings` — has **no ceiling at all**. Neither has a
+wall-clock bound. That is the largest single remaining segment of this site's load and it is a
+Bar-0-class hang on our own clock. ⚠ Any bound there must be proven not to cut a slow-but-*converging*
+page, which is the same trap this tick had to disarm.
+
+ALSO NOTED, not fixed: `manuk-wpt firstpaint` panics on `.expect("prefetch")` (`tests/wpt/src/main.rs:194`)
+when the document fetch fails, which on a bot-walled site is intermittent. That is the instrument
+being brittle rather than the engine crashing — no Bar 0 — but a measurement tool that aborts on a
+network failure loses the run it was measuring.
