@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **379** | ticks 1–619 |
-| median tick cycle | **21m** | 378 intervals |
-| median, last 10 | **29m** | 10 intervals |
+| ticks landed | **380** | ticks 1–620 |
+| median tick cycle | **21m** | 379 intervals |
+| median, last 10 | **28m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.03** | 367.8h elapsed |
-| median verify wall | **67s** | 318 ticks |
+| **ticks per hour** | **1.03** | 368.2h elapsed |
+| median verify wall | **67s** | 319 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**191 of 379 ticks** (50%) moved a
+**191 of 380 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -476,5 +476,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **617** | 2026-07-26 12:15 | 28m | capability | 63s | +534/−16 | 311 | 81 | 56.0% · | an external module resolved its imports against the DOCUMENT, and welt.de went from blank  |
 | **618** | 2026-07-26 12:24 | 9m | reliability | 63s | +264/−62 | 311 | 81 | 56.0% · | SURFACE AUDIT #34: the map claimed `works` for a capability that does not exist (2026-07-2 |
 | **619** | 2026-07-26 12:53 | 29m | capability | 63s | +550/−5 | 313 | 81 | 56.0% · | web fonts had NO gate, and building one found a bug whose blast radius is smaller than I e |
+| **620** | 2026-07-26 13:14 | 21m | measurement | 63s | +121/−2 | 313 | 81 | 56.0% · | dynamic `import()`: the host hook installs and every step succeeds, and the promise still  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

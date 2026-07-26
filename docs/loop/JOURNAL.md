@@ -27261,3 +27261,67 @@ NEXT: the map row for web fonts can come off `unknown` now that a gate exists �
 `partial`, not `works`: nothing yet asserts `font-display`, unicode-range subsetting, or the FOUT/FOIT
 swap behaviour, and t563's Lora finding (Chromium resolves a webfont we fall back on) is still
 unexplained by this tick, since that page's sheet was external.
+
+## Tick 620 — dynamic `import()`: the host hook installs and every step succeeds, and the promise still rejects (2026-07-26)
+
+t618's audit found the map claiming `works` for `ES modules + dynamic import()` when `import()` was
+not implemented at all. This tick went at it, got most of the way, and **is parked with a clean tree**
+— nothing half-built is committed. What follows is the state reached, so the next attempt starts from
+a narrowed problem instead of from scratch.
+
+**WHAT IS NOW KNOWN, AND IT IS MOST OF THE WORK:**
+
+* `SetModuleDynamicImportHook` / `FinishDynamicModuleImport` are **available** in the generated
+  `jsapi` bindings (not in the published `.rs`, so a source grep says otherwise — they appear in
+  `target/*/out/build/jsapi.rs`). Installing a hook removes the *"Dynamic module import is disabled or
+  not supported in this context"* rejection entirely.
+* The hook can reuse `module_resolve_hook`'s specifier+base extraction **verbatim**, which it must:
+  a dynamic import that resolved differently from a static one would make `import('./a.js')` and
+  `import './a.js'` name different modules from the same file.
+* **A synchronous hook is the right shape here.** The spec's hook starts an async operation, but we
+  have no synchronous network on the JS thread, so the module must already be in hand — and the page
+  already pre-fetches the reachable graph. Extending `scan_static_import_specifiers` to also collect
+  **literal** `import("…")` specifiers puts them in that map (it deliberately skipped `import(`, which
+  was correct while nothing could execute one). A computed specifier still can't be seen by a textual
+  scan and must reject, which the page's own `.catch()` already handles.
+* Instrumented, every step of the happy path **succeeds**:
+
+```text
+  DYNIMPORT resolved=Some("http://…/app/chunk.js")  keys=[…/app/chunk.js, …]
+  DYNIMPORT compiled=true linked=true evaluated=true is_obj=true in_registry=true pending_exc=false
+  …and the page still sees   rejected:undefined
+```
+
+  Specifier resolved, source found in the graph, module compiled, private set, registered,
+  `ModuleLink` true, `ModuleEvaluate` true returning a promise object, the module findable by the
+  resolve hook at finish time, and **no pending exception** — and `FinishDynamicModuleImport` still
+  completes the caller's promise as a rejection whose reason is `undefined`.
+* **The rejection path already works correctly**: an un-prefetched specifier rejects rather than
+  hanging, which is the outcome that matters most (a promise that never settles is strictly worse
+  than one that rejects).
+* Passing a **null** evaluation promise instead makes the caller's promise never settle at all — so
+  handing `ModuleEvaluate`'s promise to `Finish` is the correct half; the defect is elsewhere.
+
+**WHAT IS LEFT** is one question, and it is now a narrow one: *why does
+`FinishDynamicModuleImport` reject when the module is linked, evaluated, registered and
+exception-free?* The likely suspects, in order: the module needs to be registered in SpiderMonkey's
+own module map rather than only ours; `ModuleEvaluate`'s returned promise may already be settled in a
+state `Finish` reads differently; or the `referencingPrivate` handle must be the *exact* value the
+engine passed rather than a re-rooted copy.
+
+**WHY IT IS PARKED RATHER THAN LANDED.** ATOMICITY: a subsystem that does not work does not get
+committed, and the scanner half is not independently useful — without a working hook it would fetch
+modules nothing can import, which is pure waste. `git checkout` back to HEAD, `g_esm_page_graph`
+re-verified green. **The cost of this tick is the wall-clock; the output is that the next attempt
+starts at "why does Finish reject" instead of "how do dynamic imports work here".**
+
+TICK SHAPE: measurement/negative result (a subsystem scoped, its API confirmed present, its happy path
+proven to reach the final call, and the remaining unknown reduced to one question). Bar 0 untouched;
+no ratchet floor moved; **no engine source changed** — the tree is HEAD plus this entry.
+Gates: none — a gate for a capability that does not work would be a gate that cannot pass.
+WIKI: none [forced] — nothing landed to describe; the finding's home is this entry.
+PATTERN: [no-pattern] — no browser capability changed.
+
+NEXT: the one question above. Everything else needed is written down here and reproducible in about
+twenty minutes. Also still open and cheaper: `document.fonts` is `undefined` (welt.de's remaining
+error), and t563's Lora finding on an external sheet.
