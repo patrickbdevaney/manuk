@@ -415,3 +415,61 @@ not idle, so 65s is if anything a slight over-read.
 
 **Admissible optimisations found: none.** Coverage unchanged, no gate dropped, no floor widened, nothing
 moved to CI.
+
+---
+
+## Audit #18 — tick 627 (wall 67s warm, and that number is the problem)
+
+**The script's answer: the wall is lean.** 67s total — `T` crate tests 23s (34%), `P` parity 14s (21%),
+`G6` 7s, `B` 6s, `D` 5s, `G1` 4s, `F` 2s. Nothing redundant, nothing accidentally serialised, nothing
+recomputed. **Nothing was trimmed and nothing should be.**
+
+**AND THAT IS THE WRONG NUMBER, WHICH IS THE FINDING.** A wall audit measures a warm re-run. This
+session banked **18 real wall readings** across 17 landed ticks, and they are bimodal:
+
+```text
+  docs-only ticks        gate  64 · 65 · 65 · 67 · 67 · 70 s
+  any engine touch       gate 512 · 515 · 516 · 545 · 678 · 687 · 691 · 708 · 710 · 716 s
+  the SAME tree, re-run  gate 64s      ← t610: 692s then 64s · t613: 512s then 64s · t615: 515s then 64s
+```
+
+**The median engine tick pays ~10x the audited wall**, and the audit cannot see it because by the time
+it runs, the thing that cost the time has already been paid for.
+
+**THE CAUSE, ISOLATED AT t610 AND CONFIRMED NINE TIMES SINCE.** The gate phase runs
+`cargo run -p manuk-wpt --release` four times (parity, G1, G6, F). The workspace release profile is:
+
+```toml
+[profile.release]
+opt-level = "s"
+lto = true            # FULL fat LTO
+codegen-units = 1
+```
+
+`manuk-wpt` is a **51MB** binary linking the whole engine. Any change to a crate beneath it invalidates
+that link, and the relink lands **inside the gate phase**, where it is attributed to gate runtime —
+`build_seconds: 33`, `unattributed_seconds: 692`.
+
+**Three things this window proved about the trigger, each of which surprised me:**
+1. **A test-only file counts.** t621/t622 touched `engine/page/tests/*.rs` and paid 710s / 691s.
+2. **A REVERT counts.** t620 changed no engine source in its final tree — it reverted a parked
+   subsystem — and paid 708s. Cargo sees a changed file, not a changed meaning.
+3. **The second run is free.** Same tree, immediately after: 64s. Which is what makes the first reading
+   look like a regression and is how t610 nearly had a ratchet mark loosened over it.
+
+**THE RIGOR-PRESERVING SUGGESTION, and it is squarely in the audit's admissible list (#4, SCOPE).**
+`manuk-wpt` is a **test harness**, not a shipped artifact. `lto = true` + `codegen-units = 1` is a
+size/speed trade for the **browser**; the harness inherits it and pays the link cost on every engine
+tick, for no shipped benefit. A `[profile.release.package.manuk-wpt]` override with `lto = "thin"` (or
+off) and default `codegen-units` **changes no assertion, drops no gate, widens no floor, and moves
+nothing to CI** — the four things the audit forbids. It buys the same checks for fewer seconds, which
+is exactly what the audit asks for.
+
+⚠ `Cargo.toml` and the profile are **harness/build configuration** — the observer's. This is a
+measured recommendation with 18 data points, not an edit. **Two candidate confounders I could not
+rule out and that should be checked before acting:** whether the parity/G1/G6/F numbers themselves
+depend on release codegen quality (F1/F2 are perf floors — a slower harness binary could move them,
+which would be a real trade rather than a free win), and whether `opt-level = "s"` alone already
+dominates the link time.
+
+**Nothing trimmed. LAST_WALL_AUDIT → 627. Next due: tick 647.**

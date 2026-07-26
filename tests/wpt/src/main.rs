@@ -580,16 +580,37 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                                 .map(|s| css_display_name(s.display))
                                 .unwrap_or("none")
                                 .to_string();
-                            // The COMPUTED FONT that produced this box, in the same
-                            // `"<family>/<px>"` shape Chromium's probe emits — resolved family name
-                            // (not the declared stack) and used size, so the two are comparable. See
-                            // `oracle::Seen::font`: by t562 every remaining text-metric lead was
-                            // blocked on a rect that could not say which face or size made it.
+                            // **THE FIRST DECLARED FAMILY — because that is what the other side of
+                            // the diff records, and a diff of two different quantities is not a diff.**
+                            //
+                            // This used to report the RESOLVED family, under a comment asserting "so
+                            // the two are comparable". They were not. Chromium's probe emits
+                            // `getComputedStyle(e).fontFamily.split(',')[0]`, which is the first
+                            // **declared** entry of the stack — `getComputedStyle` cannot report the
+                            // face actually used, and no DOM API can. So the field compared a
+                            // DECLARATION against a RESOLUTION and therefore differed on essentially
+                            // every element of every page that ships a font stack, which is every page.
+                            //
+                            // The visible result was `{-apple-system/17} vs {sans-serif/17}` in the
+                            // root-cause clusters, which reads as "Chromium used the system font and we
+                            // fell back" and means no such thing: Chromium on Linux has no
+                            // `-apple-system` either and falls back exactly as we do. t563 added this
+                            // field to ATTRIBUTE text-metric divergences and it could not — the one job
+                            // it was built for.
+                            //
+                            // What it can honestly answer is "did the two engines' CASCADES arrive at
+                            // the same font-family declaration for this element", which is a real
+                            // question with a real failure mode, and is now what it asks. Attributing a
+                            // metric difference to a FACE needs a channel Chromium does not expose;
+                            // pretending otherwise is what made the field misleading rather than merely
+                            // limited.
                             let font = styles
                                 .get(&n)
                                 .map(|st| {
-                                    let fam = fonts
-                                        .resolved_family_name(&st.font_family)
+                                    let fam = st
+                                        .font_family
+                                        .first()
+                                        .map(|f| f.trim().trim_matches(['"', '\'']).to_string())
                                         .unwrap_or_else(|| "?".to_string());
                                     format!("{fam}/{}", st.font_size.round() as i64)
                                 })

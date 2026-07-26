@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **386** | ticks 1–626 |
-| median tick cycle | **21m** | 385 intervals |
-| median, last 10 | **21m** | 10 intervals |
+| ticks landed | **387** | ticks 1–627 |
+| median tick cycle | **21m** | 386 intervals |
+| median, last 10 | **19m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.04** | 372.0h elapsed |
-| median verify wall | **67s** | 325 ticks |
+| **ticks per hour** | **1.04** | 372.1h elapsed |
+| median verify wall | **67s** | 326 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**192 of 386 ticks** (50%) moved a
+**192 of 387 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -483,5 +483,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **624** | 2026-07-26 14:40 | 45m | capability | 63s | +482/−17 | 315 | 81 | 56.0% · | dynamic `import()` works, and the thing that parked it was a LIFETIME (2026-07-26) |
 | **625** | 2026-07-26 16:43 | 2.1h | reliability | 63s | +351/−4 | 315 | 81 | 56.0% · | one stuck child process costs the WHOLE corpus, and nothing was bounded (2026-07-26) |
 | **626** | 2026-07-26 17:01 | 17m | measurement | 63s | +135/−2 | 315 | 81 | 56.0% · | the certificate, re-measured: the constraint has MOVED from measurability to scope (2026-0 |
+| **627** | 2026-07-26 17:12 | 11m | reliability | 63s | +299/−11 | 315 | 81 | 56.0% · | the diff's font field compared a DECLARATION to a RESOLUTION (2026-07-26) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

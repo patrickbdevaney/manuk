@@ -1194,3 +1194,54 @@ Serving the snapshot from a local `http://127.0.0.1` origin would satisfy both a
 candidate — but it changes what **every past number meant**, so it needs its own tick with a
 before/after on the same corpus, not a quiet swap. Until then the honest position is the printed one:
 those sites are UNMEASURED, with a reason. [[certification-redesign]]
+
+## A diff field must measure the same quantity on both sides (tick 627)
+
+t563 added a font field to `oracle::Seen` so a rect could say which face and size produced it —
+*"`[74x16] vs [76x18]` is unattributable without it"*. The two sides recorded different things:
+
+```text
+  Chromium   getComputedStyle(e).fontFamily.split(',')[0]     the first DECLARED family
+  Manuk      fonts.resolved_family_name(&st.font_family)      the RESOLVED family
+```
+
+`getComputedStyle` **cannot** report the face actually used, and no DOM API can. So the field compared
+a declaration against a resolution, and therefore differed on essentially every element of every page
+that ships a font stack — which is every page. The output looked like a finding:
+
+```text
+  {-apple-system/17}  vs  {sans-serif/17}
+```
+
+and reads as *"Chromium used the system font, we fell back"*. Chromium on Linux has no `-apple-system`
+either and falls back exactly as we do. **The field manufactured a plausible false cause and put it at
+the top of the ranked root-cause list — which is exactly where the next tick looks.**
+
+The comment above it asserted the property the code did not have: *"resolved family name (not the
+declared stack) and used size, **so the two are comparable**."*
+
+### The fix, and what the field can honestly answer
+
+Report the first **declared** family on our side too. The field now answers *"did the two engines'
+CASCADES arrive at the same font-family declaration for this element?"* — a real question with a real
+failure mode. It does **not** answer *"did they use the same face"*, and cannot: that needs a channel
+Chromium does not expose.
+
+After the change, every one of those clusters reads `{-apple-system/14}` on both sides, and the cause
+that was underneath becomes visible:
+
+```text
+  30 hit(s)  geometry/mis-sized: height ~8px  (<path>)
+    …svg/path:nth-child(2): [40 649 10×9]  vs  [40 744 0×22]
+```
+
+A zero-width SVG `<path>` — specific, attributable, and previously hidden behind a font signal that
+does not exist.
+
+⚠ **Retroactive:** t563's `{Lora/13} vs {serif/13}` is the same shape. The box widths there (293 vs
+619) were a genuine divergence, but the attribution *"a webfont Chromium loads and we do not"* rested
+on this field and must be re-derived rather than inherited.
+
+**The general rule:** before trusting a per-element diff field, check that both producers compute the
+same quantity. A field that is cheap to add on one side and approximated on the other does not fail
+loudly — it fails by generating confident, wrong, well-ranked leads.

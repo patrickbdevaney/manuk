@@ -27690,3 +27690,86 @@ t614 named and did not close.
 **(3) The oracle's `file://` limitation** (`comix`, `naukri` still shell-only), which t614 deliberately
 left open and which caps what this corpus can ever say about JS-rendered sites.
 Bot-walls are NOT on that list, by scope.
+
+## Tick 627 — the diff's font field compared a DECLARATION to a RESOLUTION (2026-07-26)
+
+t626 ranked placement as the largest remaining gap, so I went to the root-cause clusters. The top ones
+were dominated by a font signal:
+
+```text
+  4 site(s) · 28 hit(s)  geometry/mis-sized: height ~16px  (<div>)
+    …div:nth-child(1): [0 4152 1160×483]  {-apple-system/17}  vs  [0 4228 1160×537]  {sans-serif/17}
+```
+
+Which reads as *"Chromium used the system font and we fell back to sans-serif"* — the shape of t563's
+Lora finding, and a tempting, concrete lead. **It means no such thing.**
+
+**THE TWO SIDES OF THAT FIELD WERE MEASURING DIFFERENT QUANTITIES.** Chromium's probe emits
+`getComputedStyle(e).fontFamily.split(',')[0]` — the first **declared** entry of the stack, because
+`getComputedStyle` cannot report the face actually used and **no DOM API can**. Our side emitted
+`resolved_family_name(...)` — the **resolved** family. So the field compared a declaration against a
+resolution and therefore differed on essentially every element of every page shipping a font stack,
+which is every page. Chromium on Linux has no `-apple-system` either and falls back exactly as we do.
+
+**The comment above it asserted the opposite in so many words** — *"resolved family name (not the
+declared stack) and used size, so the two are comparable"* — which is the same failure as t617's module
+base URL and t624's registry lifetime: **a comment stating the property the code does not have.** Fifth
+instance this session of a doc comment being the most confident wrong thing in the file.
+
+**t563 ADDED THIS FIELD TO ATTRIBUTE TEXT-METRIC DIVERGENCES, AND IT COULD NOT DO THE ONE JOB IT WAS
+BUILT FOR.** Worse than useless: it manufactured a plausible false cause and put it at the top of the
+ranked cluster list, which is exactly where the next tick looks. **That is `[[symptom-names-wrong-organ]]`
+with the instrument doing the naming.**
+
+**FIXED** by having our side report the first declared family too. The field now honestly answers *"did
+the two engines' CASCADES arrive at the same font-family declaration for this element"* — a real
+question with a real failure mode — and no longer pretends to answer *"did they use the same face"*,
+which needs a channel Chromium does not expose.
+
+**MEASURED, and the correction is visible immediately.** Re-running `desitales2`, every one of those
+clusters now reads `{-apple-system/14}` on **both** sides — identical, confirming the divergence was
+the instrument. And the real cause underneath, previously buried:
+
+```text
+  30 hit(s)  geometry/mis-sized: height ~8px  (<path>)
+    …svg:nth-child(1)/path:nth-child(2): [40 649 10×9]  vs  [40 744 0×22]
+```
+
+**`<path>` elements: `10×9` in Chromium, `0×22` here.** A zero-width SVG path is a real, specific,
+attributable bug — and it was sitting underneath a font signal that does not exist.
+
+RED-PROVEN: restoring `resolved_family_name` reinstates `{-apple-system} vs {sans-serif}` on every
+text element of the page. (No engine behaviour changes either way — this is the instrument's own
+output, which is precisely why it went unchallenged for 64 ticks.)
+
+**THE WALL-TIME AUDIT WAS ALSO DUE (#18), and it found the wall lean at 67s warm — which is the wrong
+number, and that is its finding.** This session banked 18 real readings and they are bimodal: a
+docs-only tick's gate phase is **64-70s**; any tick touching `engine/` is **512-716s**; and the SAME
+tree re-run immediately after is **64s**. The cause was isolated at t610 and has now confirmed nine
+more times — `manuk-wpt` is a 51MB binary built under `lto = true, codegen-units = 1`, four
+`cargo run --release` invocations sit inside the gate phase, and the relink is attributed to gate
+runtime (`build_seconds: 33`, `unattributed_seconds: 692`). Three things the window proved about the
+trigger: **a test-only file counts** (t621/t622 paid 710s/691s for `engine/page/tests/*.rs`), **a
+REVERT counts** (t620's final tree changed no engine source and paid 708s), and **the second run is
+free** — which is precisely what made the first reading look like a regression and nearly had a ratchet
+mark loosened over it. The recommendation is a per-package profile override for the harness
+(`lto = "thin"`), which changes no assertion and drops no gate; `Cargo.toml` is observer-owned, so it
+is recorded with its two unruled-out confounders rather than applied. Nothing trimmed. Full entry:
+`docs/loop/WALL-AUDIT.md` #18.
+
+TICK SHAPE: reliability/measurement (the diff's font attribution stops manufacturing a false cause and
+starts answering a question it can actually answer). Bar 0 untouched; no ratchet floor moved; **no
+engine source changed**.
+Gates: none added — the change is to what the instrument RECORDS, and its correctness is the
+declared-vs-declared identity now visible on live output.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "a diff field must measure the same quantity on both
+sides".
+PATTERN: [no-pattern] — no browser capability changed.
+
+⚠ **RETROACTIVE:** t563's `{Lora/13} vs {serif/13}` finding is the same shape and its FONT attribution
+is not safe. The box widths there (293 vs 619) were a real divergence, so something was genuinely
+wrong; the claim that it was *a webfont Chromium loads and we do not* rested on this field and should
+be re-derived, not inherited.
+
+NEXT: the SVG `<path>` zero-width cluster is now the top honestly-attributed cause on desitales2 —
+30 hits on one site, and `path` sizing is a bounded thing to fix.

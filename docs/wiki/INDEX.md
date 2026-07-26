@@ -175,6 +175,8 @@
   - L1153 · Naming it, not fixing it
   - L1168 · The vacuous rows were inflating the headline
   - L1189 · The open question, stated rather than smuggled
+  - L1198 · A diff field must measure the same quantity on both sides (tick 627)
+  - L1223 · The fix, and what the field can honestly answer
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1080,4 +1082,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-995 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+997 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
