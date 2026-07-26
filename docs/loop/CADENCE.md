@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **352** | ticks 1–591 |
-| median tick cycle | **21m** | 351 intervals |
+| ticks landed | **353** | ticks 1–592 |
+| median tick cycle | **21m** | 352 intervals |
 | median, last 10 | **19m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.99** | 353.0h elapsed |
-| median verify wall | **67s** | 291 ticks |
+| **ticks per hour** | **1.00** | 353.6h elapsed |
+| median verify wall | **67s** | 292 ticks |
 | wall trend | 39s → 85s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **287**
+* **live gates**: 27 → **288**
 * **✅ rows in the capability ledger**: 144 → **338**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**177 of 352 ticks** (50%) moved a
+**178 of 353 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **177** capability ticks, median cycle **21m**
-* median diff per tick: **+226 / −34** lines across 9 files
+* **178** capability ticks, median cycle **21m**
+* median diff per tick: **+227 / −34** lines across 9 files
 
 ## Every tick
 
@@ -449,5 +449,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **589** | 2026-07-25 21:05 | 34m | capability | 85s | +287/−33 | 286 | 81 | 56.0% · | `navigator.plugins` was undefined, and the argument for fixing it was already in the file  |
 | **590** | 2026-07-25 21:23 | 18m | measurement | 85s | +204/−33 | 287 | 81 | 56.0% · | the highest-usage item on the board was worth much less than its number (2026-07-25) |
 | **591** | 2026-07-25 22:00 | 37m | capability-honesty | 85s | +292/−35 | 287 | 81 | 56.0% · | `CSS.supports('filter')` said YES, and t576's fix was one category too narrow (2026-07-25) |
+| **592** | 2026-07-25 22:42 | 42m | capability | 85s | +1654/−518 | 288 | 81 | 56.0% · | `filter` for real: the pipeline reaches the pixels, and the blur nearly shipped as a fade  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

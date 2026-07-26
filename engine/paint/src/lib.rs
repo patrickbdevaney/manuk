@@ -11,6 +11,9 @@
 //! The intermediate [`DisplayList`] is the hand-off the compositor also consumes,
 //! so the GPU tier and damage tracking share one representation.
 
+mod filters;
+use filters::apply_filters;
+
 use anyhow::Result;
 use manuk_css::Rgba;
 use manuk_layout::{BoxContent, LayoutBox, Rect, TextStyle};
@@ -45,58 +48,65 @@ impl DisplayList {
                 None => r,
             });
         };
-        let item_rect = |it: &DisplayItem| -> Rect {
-            match it {
-                DisplayItem::Rect { rect, .. }
-                | DisplayItem::Image { rect, .. }
-                | DisplayItem::MaskedRect { rect, .. }
-                | DisplayItem::Gradient { rect, .. }
-                | DisplayItem::BackgroundImage { rect, .. }
-                | DisplayItem::RoundRect { rect, .. } => *rect,
-                DisplayItem::TextLine {
-                    x,
-                    y,
-                    width,
-                    thickness,
-                    ..
-                } => Rect {
-                    x: *x,
-                    y: *y,
-                    width: *width,
-                    height: *thickness,
-                },
-                // A shadow bleeds `blur` px past its rect — grow the damage box so it repaints.
-                DisplayItem::Shadow { rect, blur, .. } => Rect {
-                    x: rect.x - blur,
-                    y: rect.y - blur,
-                    width: rect.width + blur * 2.0,
-                    height: rect.height + blur * 2.0,
-                },
-                DisplayItem::Text {
-                    x, baseline, style, ..
-                } => Rect {
-                    x: *x,
-                    y: baseline - style.line_height,
-                    // Text has no stored width; a generous box keeps the damage a superset.
-                    width: 4096.0,
-                    height: style.line_height * 2.0,
-                },
-            }
-        };
         let n = self.items.len().max(prev.items.len());
         for i in 0..n {
             let a = self.items.get(i);
             let b = prev.items.get(i);
             if a != b {
                 if let Some(it) = a {
-                    add(item_rect(it));
+                    add(item_bounds(it));
                 }
                 if let Some(it) = b {
-                    add(item_rect(it));
+                    add(item_bounds(it));
                 }
             }
         }
         dmg
+    }
+}
+
+/// The rect an item can ink, in page coordinates — a deliberate **over**-approximation.
+///
+/// Two callers depend on that direction and neither tolerates the other one: damage tracking must
+/// cover every pixel that changed or the compositor leaves stale content on screen, and a filter's
+/// offscreen group must cover every pixel the group paints or the filtered element is cropped. So
+/// there is one definition, and it is allowed to be loose but never tight — including the 4096px
+/// text box, which is a superset stand-in for a width the display list does not carry.
+fn item_bounds(it: &DisplayItem) -> Rect {
+    match it {
+        DisplayItem::Rect { rect, .. }
+        | DisplayItem::Image { rect, .. }
+        | DisplayItem::MaskedRect { rect, .. }
+        | DisplayItem::Gradient { rect, .. }
+        | DisplayItem::BackgroundImage { rect, .. }
+        | DisplayItem::RoundRect { rect, .. } => *rect,
+        DisplayItem::TextLine {
+            x,
+            y,
+            width,
+            thickness,
+            ..
+        } => Rect {
+            x: *x,
+            y: *y,
+            width: *width,
+            height: *thickness,
+        },
+        // A shadow bleeds `blur` px past its rect — grow the box so it repaints.
+        DisplayItem::Shadow { rect, blur, .. } => Rect {
+            x: rect.x - blur,
+            y: rect.y - blur,
+            width: rect.width + blur * 2.0,
+            height: rect.height + blur * 2.0,
+        },
+        DisplayItem::Text {
+            x, baseline, style, ..
+        } => Rect {
+            x: *x,
+            y: baseline - style.line_height,
+            width: 4096.0,
+            height: style.line_height * 2.0,
+        },
     }
 }
 
@@ -390,13 +400,14 @@ impl DisplayList {
             captions,
         );
         DisplayList {
-            items: groups.into_iter().flat_map(|(_, _, it)| it).collect(),
+            items: groups.into_iter().flat_map(|g| g.items).collect(),
         }
     }
 
-    /// The paint groups in stacking order: `(z, clip, items)` per box, stably sorted by `z`.
+    /// The paint groups in stacking order: `(z, clip, filters, items)` per box, stably sorted by `z`.
     /// `clip` is the intersection of any `overflow`-clipping ancestors' boxes (from
-    /// `clip_map`), applied to this box's items at paint time.
+    /// `clip_map`), applied to this box's items at paint time. `filters` is the composed `filter`
+    /// chain from the root down to this box (see [`PaintGroup`]).
     #[allow(clippy::type_complexity)]
     pub(crate) fn layered_groups(
         root: &LayoutBox,
@@ -404,7 +415,7 @@ impl DisplayList {
         z_index: &std::collections::HashMap<manuk_dom::NodeId, i32>,
         clip_map: &std::collections::HashMap<manuk_dom::NodeId, Rect>,
         captions: &CaptionMap,
-    ) -> Vec<(i32, Option<Rect>, Vec<DisplayItem>)> {
+    ) -> Vec<PaintGroup> {
         // One group of paint items per box, tagged with its layer (effective z).
         //
         // **An anonymous box has no node, and therefore was falling out of its own subtree's layer.**
@@ -420,14 +431,15 @@ impl DisplayList {
         // clip lookup means an anonymous box also escaped every `overflow: hidden` above it.
         //
         // So z and clip are INHERITED down the tree, and a node's own entry (when it has one) wins.
-        let mut groups: Vec<(i32, Option<Rect>, Vec<DisplayItem>)> = Vec::new();
+        let mut groups: Vec<PaintGroup> = Vec::new();
         fn visit(
             b: &LayoutBox,
             inherited_z: i32,
             inherited_clip: Option<Rect>,
+            inherited_filters: &[manuk_css::FilterOp],
             z_index: &std::collections::HashMap<manuk_dom::NodeId, i32>,
             clip_map: &std::collections::HashMap<manuk_dom::NodeId, Rect>,
-            emit: &mut impl FnMut(&LayoutBox, i32, Option<Rect>),
+            emit: &mut impl FnMut(&LayoutBox, i32, Option<Rect>, &[manuk_css::FilterOp]),
         ) {
             let z = b
                 .node
@@ -439,343 +451,378 @@ impl DisplayList {
                 .and_then(|n| clip_map.get(&n))
                 .copied()
                 .or(inherited_clip);
-            emit(b, z, clip);
+            // `filter` applies to the element AND its subtree, so it accumulates downwards the way
+            // `clip` does — but it CONCATENATES rather than overriding: a blurred card inside a
+            // grayscale section is both.
+            let filters: Vec<manuk_css::FilterOp> = if b.filters.is_empty() {
+                inherited_filters.to_vec()
+            } else {
+                inherited_filters
+                    .iter()
+                    .copied()
+                    .chain(b.filters.iter().copied())
+                    .collect()
+            };
+            emit(b, z, clip, &filters);
             if let BoxContent::Block(children) = &b.content {
                 for c in children {
-                    visit(c, z, clip, z_index, clip_map, emit);
+                    visit(c, z, clip, &filters, z_index, clip_map, emit);
                 }
             }
         }
-        let mut push_group = |b: &LayoutBox, z: i32, clip: Option<Rect>| {
-            let mut items = Vec::new();
-            // `visibility: hidden` / `opacity: 0` — the box still occupies its space (layout already
-            // accounted for it) but paints NOTHING. Without this, every dropdown, modal and tooltip
-            // the modern web hides this way renders on top of the page.
-            if b.hidden || b.opacity <= 0.01 {
-                return;
-            }
-            // A radius can never exceed half the shorter side (CSS clamps overlapping corners).
-            let radius = b
-                .radius
-                .min(b.rect.width / 2.0)
-                .min(b.rect.height / 2.0)
-                .max(0.0);
-            // Partial opacity: scale every colour's alpha. (A true CSS opacity group would composite
-            // the subtree off-screen; per-item alpha is a close, cheap approximation and is exact
-            // for the overwhelmingly common non-overlapping case.)
-            let fade = |c: Rgba| -> Rgba {
-                if b.opacity >= 0.999 {
-                    c
-                } else {
-                    Rgba {
-                        a: ((c.a as f32) * b.opacity).round().clamp(0.0, 255.0) as u8,
-                        ..c
-                    }
+        let mut push_group =
+            |b: &LayoutBox, z: i32, clip: Option<Rect>, filters: &[manuk_css::FilterOp]| {
+                let mut items = Vec::new();
+                // `visibility: hidden` / `opacity: 0` — the box still occupies its space (layout already
+                // accounted for it) but paints NOTHING. Without this, every dropdown, modal and tooltip
+                // the modern web hides this way renders on top of the page.
+                if b.hidden || b.opacity <= 0.01 {
+                    return;
                 }
-            };
-            // `box-shadow` paints *beneath* the background. A comma list stacks layers (Tailwind's
-            // `shadow-md` is two); the FIRST layer paints on top, so push in reverse. `inset` layers
-            // are honestly skipped (inner painting is not built yet — same as before).
-            for sh in b.shadows.iter().rev() {
-                if sh.inset {
-                    continue;
-                }
-                let color = fade(sh.color);
-                if color.a == 0 {
-                    continue;
-                }
-                // `spread` inflates the shadow rect before offset/blur (negative shrinks it).
-                items.push(DisplayItem::Shadow {
-                    rect: Rect {
-                        x: b.rect.x + sh.dx - sh.spread,
-                        y: b.rect.y + sh.dy - sh.spread,
-                        width: (b.rect.width + 2.0 * sh.spread).max(0.0),
-                        height: (b.rect.height + 2.0 * sh.spread).max(0.0),
-                    },
-                    color,
-                    radius,
-                    blur: sh.blur.max(0.0),
-                });
-            }
-            // An element with `mask-image` whose mask decoded: paint its background through the
-            // mask instead of as a rectangle. (Fetched into the same per-node bitmap map — a
-            // masked element is empty by construction, so it is never also a replaced `<img>`.)
-            let mask = match (&b.mask_image, b.node) {
-                (Some(_), Some(n)) => images.get(&n).cloned(),
-                _ => None,
-            };
-            // `background-image` sits ON TOP of `background-color` (CSS backgrounds paint
-            // colour first, then each image layer). A gradient paints directly; a `url()` is
-            // resolved to a decoded bitmap by the page layer and blitted into the box.
-            if let Some(bg) = b.background.map(fade) {
-                if bg.a > 0 {
-                    if let Some(m) = &mask {
-                        items.push(DisplayItem::MaskedRect {
-                            rect: b.rect,
-                            color: bg,
-                            mask: m.clone(),
-                        });
-                    } else if radius > 0.0 {
-                        items.push(DisplayItem::RoundRect {
-                            rect: b.rect,
-                            color: bg,
-                            radius,
-                        });
+                // A radius can never exceed half the shorter side (CSS clamps overlapping corners).
+                let radius = b
+                    .radius
+                    .min(b.rect.width / 2.0)
+                    .min(b.rect.height / 2.0)
+                    .max(0.0);
+                // Partial opacity: scale every colour's alpha. (A true CSS opacity group would composite
+                // the subtree off-screen; per-item alpha is a close, cheap approximation and is exact
+                // for the overwhelmingly common non-overlapping case.)
+                let fade = |c: Rgba| -> Rgba {
+                    if b.opacity >= 0.999 {
+                        c
                     } else {
-                        items.push(DisplayItem::Rect {
-                            rect: b.rect,
-                            color: bg,
-                        });
+                        Rgba {
+                            a: ((c.a as f32) * b.opacity).round().clamp(0.0, 255.0) as u8,
+                            ..c
+                        }
                     }
+                };
+                // `box-shadow` paints *beneath* the background. A comma list stacks layers (Tailwind's
+                // `shadow-md` is two); the FIRST layer paints on top, so push in reverse. `inset` layers
+                // are honestly skipped (inner painting is not built yet — same as before).
+                for sh in b.shadows.iter().rev() {
+                    if sh.inset {
+                        continue;
+                    }
+                    let color = fade(sh.color);
+                    if color.a == 0 {
+                        continue;
+                    }
+                    // `spread` inflates the shadow rect before offset/blur (negative shrinks it).
+                    items.push(DisplayItem::Shadow {
+                        rect: Rect {
+                            x: b.rect.x + sh.dx - sh.spread,
+                            y: b.rect.y + sh.dy - sh.spread,
+                            width: (b.rect.width + 2.0 * sh.spread).max(0.0),
+                            height: (b.rect.height + 2.0 * sh.spread).max(0.0),
+                        },
+                        color,
+                        radius,
+                        blur: sh.blur.max(0.0),
+                    });
                 }
-            }
-            // `background-image` is a LIST of layers; the FIRST is on top, and CSS paints
-            // back-to-front, so iterate in REVERSE (last layer painted first = bottom).
-            for img in b.background_images.iter().rev() {
-                match img {
-                    manuk_css::BackgroundImage::Linear { angle_deg, stops } => {
-                        items.push(DisplayItem::Gradient {
-                            rect: b.rect,
-                            stops: stops
-                                .iter()
-                                .map(|s| manuk_css::ColorStop {
-                                    color: fade(s.color),
-                                    at: s.at,
-                                })
-                                .collect(),
-                            angle_deg: *angle_deg,
-                            radial: false,
-                            radius,
-                        });
-                    }
-                    manuk_css::BackgroundImage::Radial { stops } => {
-                        items.push(DisplayItem::Gradient {
-                            rect: b.rect,
-                            stops: stops
-                                .iter()
-                                .map(|s| manuk_css::ColorStop {
-                                    color: fade(s.color),
-                                    at: s.at,
-                                })
-                                .collect(),
-                            angle_deg: 0.0,
-                            radial: true,
-                            radius,
-                        });
-                    }
-                    // A `url()` background is keyed by node in the same bitmap map as `<img>` —
-                    // the page layer fetches and decodes it there. It is painted as a BACKGROUND
-                    // (natural size, tiled, honouring `background-size`/`-repeat`), not blitted to
-                    // fill the box like a replaced image.
-                    manuk_css::BackgroundImage::Url(_) => {
-                        if let Some(node) = b.node {
-                            if let Some(bmp) = images.get(&node) {
-                                items.push(DisplayItem::BackgroundImage {
-                                    rect: b.rect,
-                                    image: bmp.clone(),
-                                    size: b.background_size,
-                                    repeat: b.background_repeat,
-                                    position: b.background_position,
-                                    radius,
-                                });
-                            }
+                // An element with `mask-image` whose mask decoded: paint its background through the
+                // mask instead of as a rectangle. (Fetched into the same per-node bitmap map — a
+                // masked element is empty by construction, so it is never also a replaced `<img>`.)
+                let mask = match (&b.mask_image, b.node) {
+                    (Some(_), Some(n)) => images.get(&n).cloned(),
+                    _ => None,
+                };
+                // `background-image` sits ON TOP of `background-color` (CSS backgrounds paint
+                // colour first, then each image layer). A gradient paints directly; a `url()` is
+                // resolved to a decoded bitmap by the page layer and blitted into the box.
+                if let Some(bg) = b.background.map(fade) {
+                    if bg.a > 0 {
+                        if let Some(m) = &mask {
+                            items.push(DisplayItem::MaskedRect {
+                                rect: b.rect,
+                                color: bg,
+                                mask: m.clone(),
+                            });
+                        } else if radius > 0.0 {
+                            items.push(DisplayItem::RoundRect {
+                                rect: b.rect,
+                                color: bg,
+                                radius,
+                            });
+                        } else {
+                            items.push(DisplayItem::Rect {
+                                rect: b.rect,
+                                color: bg,
+                            });
                         }
                     }
                 }
-            }
-            if let Some(border) = &b.border {
-                use manuk_css::BorderStyle as BS;
-                let r = b.rect;
-                let [t, rr, bb, l] = border.widths;
-                let c = border.color;
-                let style = border.style;
-                let mut rect = |x: f32, y: f32, w: f32, h: f32| {
-                    if w > 0.0 && h > 0.0 {
-                        items.push(DisplayItem::Rect {
-                            rect: Rect {
-                                x,
-                                y,
-                                width: w,
-                                height: h,
-                            },
-                            color: c,
-                        });
-                    }
-                };
-                // One edge strip (`horizontal` = a top/bottom bar, else a left/right bar). `thick` is
-                // the strip's short dimension; `len` its long one. Solid emits one rect (byte-identical
-                // to before); dashed/dotted emit segments along `len`; double splits `thick` into two
-                // lines with a gap.
-                let mut edge = |x: f32, y: f32, w: f32, h: f32, horizontal: bool| {
-                    if w <= 0.0 || h <= 0.0 {
-                        return;
-                    }
-                    let (thick, len) = if horizontal { (h, w) } else { (w, h) };
-                    match style {
-                        BS::Solid => rect(x, y, w, h),
-                        BS::Dashed | BS::Dotted => {
-                            let (dash, gap) = if matches!(style, BS::Dashed) {
-                                (3.0 * thick, 3.0 * thick)
-                            } else {
-                                (thick, thick) // dotted: square dots, one-thickness gap
-                            };
-                            let period = (dash + gap).max(0.5);
-                            let mut pos = 0.0;
-                            while pos < len {
-                                let seg = dash.min(len - pos);
-                                if horizontal {
-                                    rect(x + pos, y, seg, h);
-                                } else {
-                                    rect(x, y + pos, w, seg);
+                // `background-image` is a LIST of layers; the FIRST is on top, and CSS paints
+                // back-to-front, so iterate in REVERSE (last layer painted first = bottom).
+                for img in b.background_images.iter().rev() {
+                    match img {
+                        manuk_css::BackgroundImage::Linear { angle_deg, stops } => {
+                            items.push(DisplayItem::Gradient {
+                                rect: b.rect,
+                                stops: stops
+                                    .iter()
+                                    .map(|s| manuk_css::ColorStop {
+                                        color: fade(s.color),
+                                        at: s.at,
+                                    })
+                                    .collect(),
+                                angle_deg: *angle_deg,
+                                radial: false,
+                                radius,
+                            });
+                        }
+                        manuk_css::BackgroundImage::Radial { stops } => {
+                            items.push(DisplayItem::Gradient {
+                                rect: b.rect,
+                                stops: stops
+                                    .iter()
+                                    .map(|s| manuk_css::ColorStop {
+                                        color: fade(s.color),
+                                        at: s.at,
+                                    })
+                                    .collect(),
+                                angle_deg: 0.0,
+                                radial: true,
+                                radius,
+                            });
+                        }
+                        // A `url()` background is keyed by node in the same bitmap map as `<img>` —
+                        // the page layer fetches and decodes it there. It is painted as a BACKGROUND
+                        // (natural size, tiled, honouring `background-size`/`-repeat`), not blitted to
+                        // fill the box like a replaced image.
+                        manuk_css::BackgroundImage::Url(_) => {
+                            if let Some(node) = b.node {
+                                if let Some(bmp) = images.get(&node) {
+                                    items.push(DisplayItem::BackgroundImage {
+                                        rect: b.rect,
+                                        image: bmp.clone(),
+                                        size: b.background_size,
+                                        repeat: b.background_repeat,
+                                        position: b.background_position,
+                                        radius,
+                                    });
                                 }
-                                pos += period;
-                            }
-                        }
-                        BS::Double => {
-                            // Two lines each ~1/3 of the thickness, at the outer edges. Below 3px the
-                            // thirds collapse and it reads as solid — the honest degradation.
-                            let unit = (thick / 3.0).floor().max(1.0);
-                            if horizontal {
-                                rect(x, y, w, unit);
-                                rect(x, y + h - unit, w, unit);
-                            } else {
-                                rect(x, y, unit, h);
-                                rect(x + w - unit, y, unit, h);
                             }
                         }
                     }
-                };
-                edge(r.x, r.y, r.width, t, true); // top
-                edge(r.x, r.y + r.height - bb, r.width, bb, true); // bottom
-                edge(r.x, r.y, l, r.height, false); // left
-                edge(r.x + r.width - rr, r.y, rr, r.height, false); // right
-            }
-            // **This blit is for REPLACED elements, and only for them.**
-            //
-            // It stretches the bitmap to fill the box, which is exactly right for an `<img>` and
-            // exactly wrong for a `background-image: url()` — and a `url()` background's bitmap is
-            // stored in the SAME `images` map, keyed by the same node. So every element with a CSS
-            // background image got its correctly-tiled `BackgroundImage` item painted first, and
-            // then this one stretched over the top of it. Every sprite, texture, pattern and icon
-            // on the web was scaled to the size of its element; old.reddit.com's small header art
-            // became a page-sized blob covering the content.
-            //
-            // A `url()` background on the box is the signal that this node's bitmap belongs to the
-            // background layer, which already painted it properly.
-            let bg_is_url = b
-                .background_images
-                .iter()
-                .any(|i| matches!(i, manuk_css::BackgroundImage::Url(_)));
-            if let Some(node) = b.node.filter(|_| mask.is_none() && !bg_is_url) {
-                if let Some(img) = images.get(&node) {
-                    let (rect, content_clip) = object_fit_geometry(
-                        b.object_fit,
-                        b.object_position,
-                        b.rect,
-                        img.width,
-                        img.height,
-                    );
-                    items.push(DisplayItem::Image {
-                        rect,
-                        image: img.clone(),
-                        content_clip,
-                    });
                 }
-            }
-            // Captions paint OVER the video's own bitmap, and therefore after it — a cue behind the
-            // frame is a cue nobody can read, which is the state this whole arc was stuck in.
-            if let Some(node) = b.node {
-                if let Some(cues) = captions.get(&node) {
-                    items.extend(caption_items(b.rect, cues));
+                if let Some(border) = &b.border {
+                    use manuk_css::BorderStyle as BS;
+                    let r = b.rect;
+                    let [t, rr, bb, l] = border.widths;
+                    let c = border.color;
+                    let style = border.style;
+                    let mut rect = |x: f32, y: f32, w: f32, h: f32| {
+                        if w > 0.0 && h > 0.0 {
+                            items.push(DisplayItem::Rect {
+                                rect: Rect {
+                                    x,
+                                    y,
+                                    width: w,
+                                    height: h,
+                                },
+                                color: c,
+                            });
+                        }
+                    };
+                    // One edge strip (`horizontal` = a top/bottom bar, else a left/right bar). `thick` is
+                    // the strip's short dimension; `len` its long one. Solid emits one rect (byte-identical
+                    // to before); dashed/dotted emit segments along `len`; double splits `thick` into two
+                    // lines with a gap.
+                    let mut edge = |x: f32, y: f32, w: f32, h: f32, horizontal: bool| {
+                        if w <= 0.0 || h <= 0.0 {
+                            return;
+                        }
+                        let (thick, len) = if horizontal { (h, w) } else { (w, h) };
+                        match style {
+                            BS::Solid => rect(x, y, w, h),
+                            BS::Dashed | BS::Dotted => {
+                                let (dash, gap) = if matches!(style, BS::Dashed) {
+                                    (3.0 * thick, 3.0 * thick)
+                                } else {
+                                    (thick, thick) // dotted: square dots, one-thickness gap
+                                };
+                                let period = (dash + gap).max(0.5);
+                                let mut pos = 0.0;
+                                while pos < len {
+                                    let seg = dash.min(len - pos);
+                                    if horizontal {
+                                        rect(x + pos, y, seg, h);
+                                    } else {
+                                        rect(x, y + pos, w, seg);
+                                    }
+                                    pos += period;
+                                }
+                            }
+                            BS::Double => {
+                                // Two lines each ~1/3 of the thickness, at the outer edges. Below 3px the
+                                // thirds collapse and it reads as solid — the honest degradation.
+                                let unit = (thick / 3.0).floor().max(1.0);
+                                if horizontal {
+                                    rect(x, y, w, unit);
+                                    rect(x, y + h - unit, w, unit);
+                                } else {
+                                    rect(x, y, unit, h);
+                                    rect(x + w - unit, y, unit, h);
+                                }
+                            }
+                        }
+                    };
+                    edge(r.x, r.y, r.width, t, true); // top
+                    edge(r.x, r.y + r.height - bb, r.width, bb, true); // bottom
+                    edge(r.x, r.y, l, r.height, false); // left
+                    edge(r.x + r.width - rr, r.y, rr, r.height, false); // right
                 }
-            }
-            // The list marker — generated content, so it rides on the box, not the tree.
-            if let Some(m) = &b.marker {
-                items.push(DisplayItem::Text {
-                    x: m.x,
-                    baseline: m.baseline,
-                    text: m.text.clone(),
-                    style: m.style,
-                });
-            }
-            if let BoxContent::Inline(frags) = &b.content {
-                for f in frags {
+                // **This blit is for REPLACED elements, and only for them.**
+                //
+                // It stretches the bitmap to fill the box, which is exactly right for an `<img>` and
+                // exactly wrong for a `background-image: url()` — and a `url()` background's bitmap is
+                // stored in the SAME `images` map, keyed by the same node. So every element with a CSS
+                // background image got its correctly-tiled `BackgroundImage` item painted first, and
+                // then this one stretched over the top of it. Every sprite, texture, pattern and icon
+                // on the web was scaled to the size of its element; old.reddit.com's small header art
+                // became a page-sized blob covering the content.
+                //
+                // A `url()` background on the box is the signal that this node's bitmap belongs to the
+                // background layer, which already painted it properly.
+                let bg_is_url = b
+                    .background_images
+                    .iter()
+                    .any(|i| matches!(i, manuk_css::BackgroundImage::Url(_)));
+                if let Some(node) = b.node.filter(|_| mask.is_none() && !bg_is_url) {
+                    if let Some(img) = images.get(&node) {
+                        let (rect, content_clip) = object_fit_geometry(
+                            b.object_fit,
+                            b.object_position,
+                            b.rect,
+                            img.width,
+                            img.height,
+                        );
+                        items.push(DisplayItem::Image {
+                            rect,
+                            image: img.clone(),
+                            content_clip,
+                        });
+                    }
+                }
+                // Captions paint OVER the video's own bitmap, and therefore after it — a cue behind the
+                // frame is a cue nobody can read, which is the state this whole arc was stuck in.
+                if let Some(node) = b.node {
+                    if let Some(cues) = captions.get(&node) {
+                        items.extend(caption_items(b.rect, cues));
+                    }
+                }
+                // The list marker — generated content, so it rides on the box, not the tree.
+                if let Some(m) = &b.marker {
                     items.push(DisplayItem::Text {
-                        x: f.x,
-                        baseline: f.baseline,
-                        text: f.text.clone(),
-                        style: f.style,
+                        x: m.x,
+                        baseline: m.baseline,
+                        text: m.text.clone(),
+                        style: m.style,
                     });
-                    // `text-decoration`: a line ACROSS the run, not part of the glyphs.
-                    let d = f.style.decoration;
-                    if d.any() && f.width > 0.0 {
-                        // `text-decoration-thickness` defaults to `auto` (font-derived); a length
-                        // overrides it (Tailwind `decoration-2`, thick brand underlines).
-                        let thickness = d
-                            .thickness
-                            .filter(|t| *t > 0.0)
-                            .unwrap_or((f.style.font_size / 14.0).max(1.0));
-                        // `text-decoration-color` defaults to `currentColor` — the text color —
-                        // but a colored underline (hover states, brand links) sets its own.
-                        let line_color = fade(d.color.unwrap_or(f.style.color));
-                        let mut line = |y: f32| {
-                            items.push(DisplayItem::TextLine {
-                                x: f.x,
-                                y,
-                                width: f.width,
-                                thickness,
-                                color: line_color,
+                }
+                if let BoxContent::Inline(frags) = &b.content {
+                    for f in frags {
+                        items.push(DisplayItem::Text {
+                            x: f.x,
+                            baseline: f.baseline,
+                            text: f.text.clone(),
+                            style: f.style,
+                        });
+                        // `text-decoration`: a line ACROSS the run, not part of the glyphs.
+                        let d = f.style.decoration;
+                        if d.any() && f.width > 0.0 {
+                            // `text-decoration-thickness` defaults to `auto` (font-derived); a length
+                            // overrides it (Tailwind `decoration-2`, thick brand underlines).
+                            let thickness = d
+                                .thickness
+                                .filter(|t| *t > 0.0)
+                                .unwrap_or((f.style.font_size / 14.0).max(1.0));
+                            // `text-decoration-color` defaults to `currentColor` — the text color —
+                            // but a colored underline (hover states, brand links) sets its own.
+                            let line_color = fade(d.color.unwrap_or(f.style.color));
+                            let mut line = |y: f32| {
+                                items.push(DisplayItem::TextLine {
+                                    x: f.x,
+                                    y,
+                                    width: f.width,
+                                    thickness,
+                                    color: line_color,
+                                });
+                            };
+                            if d.underline {
+                                // `text-underline-offset` pushes the underline further below the text.
+                                line(
+                                    f.baseline
+                                        + (f.style.font_size * 0.12).max(1.0)
+                                        + d.underline_offset,
+                                );
+                            }
+                            if d.overline {
+                                line(f.baseline - f.style.font_size * 0.9);
+                            }
+                            if d.line_through {
+                                line(f.baseline - f.style.font_size * 0.30);
+                            }
+                        }
+                    }
+                }
+                // `outline` paints OUTSIDE the border box and never affects layout — which is exactly
+                // what makes it usable as a focus ring.
+                if let Some((ow, oc)) = b.outline {
+                    let oc = fade(oc);
+                    if ow > 0.0 && oc.a > 0 {
+                        let r = b.rect;
+                        let mut edge = |x: f32, y: f32, w: f32, h: f32| {
+                            items.push(DisplayItem::Rect {
+                                rect: Rect {
+                                    x,
+                                    y,
+                                    width: w,
+                                    height: h,
+                                },
+                                color: oc,
                             });
                         };
-                        if d.underline {
-                            // `text-underline-offset` pushes the underline further below the text.
-                            line(
-                                f.baseline
-                                    + (f.style.font_size * 0.12).max(1.0)
-                                    + d.underline_offset,
-                            );
-                        }
-                        if d.overline {
-                            line(f.baseline - f.style.font_size * 0.9);
-                        }
-                        if d.line_through {
-                            line(f.baseline - f.style.font_size * 0.30);
-                        }
+                        edge(r.x - ow, r.y - ow, r.width + ow * 2.0, ow);
+                        edge(r.x - ow, r.y + r.height, r.width + ow * 2.0, ow);
+                        edge(r.x - ow, r.y, ow, r.height);
+                        edge(r.x + r.width, r.y, ow, r.height);
                     }
                 }
-            }
-            // `outline` paints OUTSIDE the border box and never affects layout — which is exactly
-            // what makes it usable as a focus ring.
-            if let Some((ow, oc)) = b.outline {
-                let oc = fade(oc);
-                if ow > 0.0 && oc.a > 0 {
-                    let r = b.rect;
-                    let mut edge = |x: f32, y: f32, w: f32, h: f32| {
-                        items.push(DisplayItem::Rect {
-                            rect: Rect {
-                                x,
-                                y,
-                                width: w,
-                                height: h,
-                            },
-                            color: oc,
-                        });
-                    };
-                    edge(r.x - ow, r.y - ow, r.width + ow * 2.0, ow);
-                    edge(r.x - ow, r.y + r.height, r.width + ow * 2.0, ow);
-                    edge(r.x - ow, r.y, ow, r.height);
-                    edge(r.x + r.width, r.y, ow, r.height);
+                if !items.is_empty() {
+                    groups.push(PaintGroup {
+                        z,
+                        clip,
+                        filters: filters.to_vec(),
+                        items,
+                    });
                 }
-            }
-            if !items.is_empty() {
-                groups.push((z, clip, items));
-            }
-        };
-        visit(root, 0, None, z_index, clip_map, &mut push_group);
+            };
+        visit(root, 0, None, &[], z_index, clip_map, &mut push_group);
         // Stable sort keeps tree (document) order within each layer.
-        groups.sort_by_key(|(z, _, _)| *z);
+        groups.sort_by_key(|g| g.z);
         groups
     }
+}
+
+/// One box's paint items, tagged with everything the rasterizer needs that is not in the items
+/// themselves: its stacking layer, its inherited `overflow` clip, and its composed `filter` chain.
+///
+/// **A group is the unit a `filter` is applied to, and that is an approximation with a name.** CSS
+/// says the filter applies to the element and its subtree *composited as one group*; here each box
+/// in that subtree is filtered separately, because the display list is flat and z-sorted and a real
+/// group would have to survive that sort. For the colour filters the two are identical wherever the
+/// group's own pixels do not overlap each other — a colour transform is per-pixel — and for `blur`
+/// they differ only across an internal edge. The case it gets right is the one that matters: the
+/// element and everything in it is blurred, rather than nothing being blurred at all.
+pub(crate) struct PaintGroup {
+    pub z: i32,
+    pub clip: Option<Rect>,
+    pub filters: Vec<manuk_css::FilterOp>,
+    pub items: Vec<DisplayItem>,
 }
 
 /// An owned RGBA raster surface backed by a `tiny-skia` pixmap.
@@ -1014,128 +1061,209 @@ impl CpuPainter<'_> {
             self.clip.unwrap_or(&empty_c),
             self.captions.unwrap_or(&empty_cap),
         );
-        for (_z, clip, items) in &groups {
+        for g in &groups {
             // A group's clip is an `overflow` ancestor's box; shift it by the scroll.
-            let clip = clip.map(|c| Rect {
+            let clip = g.clip.map(|c| Rect {
                 x: c.x,
                 y: c.y - scroll_y,
                 width: c.width,
                 height: c.height,
             });
-            for item in items {
-                match item {
-                    DisplayItem::Rect { rect, color } => {
-                        let mut r = *rect;
-                        r.y -= scroll_y;
-                        if let Some(cl) = clip {
-                            r = r.intersect(&cl);
-                        }
-                        fill_rect(&mut pixmap, r, *color);
-                    }
-                    DisplayItem::RoundRect {
-                        rect,
-                        color,
-                        radius,
-                    } => {
-                        let mut r = *rect;
-                        r.y -= scroll_y;
-                        fill_round_rect(&mut pixmap, r, *color, *radius, clip);
-                    }
-                    DisplayItem::Shadow {
-                        rect,
-                        color,
-                        radius,
-                        blur,
-                    } => {
-                        let mut r = *rect;
-                        r.y -= scroll_y;
-                        fill_shadow(&mut pixmap, r, *color, *radius, *blur, clip);
-                    }
-                    DisplayItem::Text {
-                        x,
-                        baseline,
-                        text,
-                        style,
-                    } => self.draw_text(&mut pixmap, *x, *baseline - scroll_y, text, style, clip),
-                    DisplayItem::Image {
-                        rect,
-                        image,
-                        content_clip,
-                    } => {
-                        let mut r = *rect;
-                        r.y -= scroll_y;
-                        // `object-fit: cover`/`none` may paint the bitmap larger than its box; crop
-                        // the overflow to the content box, intersected with any ancestor overflow clip.
-                        let eff_clip = match content_clip {
-                            Some(cc) => {
-                                let mut cc = *cc;
-                                cc.y -= scroll_y;
-                                Some(clip.map_or(cc, |a| a.intersect(&cc)))
-                            }
-                            None => clip,
-                        };
-                        blit_image(&mut pixmap, image, r, eff_clip);
-                    }
-                    DisplayItem::MaskedRect { rect, color, mask } => {
-                        let mut r = *rect;
-                        r.y -= scroll_y;
-                        blit_masked(&mut pixmap, mask, *color, r, clip);
-                    }
-                    DisplayItem::BackgroundImage {
-                        rect,
-                        image,
-                        size,
-                        repeat,
-                        position,
-                        radius,
-                    } => {
-                        let mut r = *rect;
-                        r.y -= scroll_y;
-                        blit_background(
-                            &mut pixmap,
-                            image,
-                            r,
-                            *size,
-                            *repeat,
-                            *position,
-                            *radius,
-                            clip,
-                        );
-                    }
-                    DisplayItem::Gradient {
-                        rect,
-                        stops,
-                        angle_deg,
-                        radial,
-                        radius,
-                    } => {
-                        let mut r = *rect;
-                        r.y -= scroll_y;
-                        fill_gradient(&mut pixmap, r, stops, *angle_deg, *radial, *radius, clip);
-                    }
-                    DisplayItem::TextLine {
-                        x,
-                        y,
-                        width,
-                        thickness,
-                        color,
-                    } => {
-                        let mut r = Rect {
-                            x: *x,
-                            y: *y - scroll_y,
-                            width: *width,
-                            height: *thickness,
-                        };
-                        if let Some(cl) = clip {
-                            r = r.intersect(&cl);
-                        }
-                        fill_rect(&mut pixmap, r, *color);
-                    }
+            if g.filters.is_empty() {
+                for item in &g.items {
+                    self.draw_item(&mut pixmap, item, clip, 0.0, -scroll_y);
                 }
+                continue;
             }
+            self.draw_filtered_group(&mut pixmap, g, clip, scroll_y);
         }
 
         Canvas { pixmap }
+    }
+
+    /// Paint one `filter`ed group: rasterize its items into a transparent offscreen surface, run the
+    /// filter pipeline over that surface, then composite the result back.
+    ///
+    /// The surface is sized to the group's own ink box (grown for blur bleed and clamped to the
+    /// canvas), **not** to the viewport — a page with fifty drop-shadowed icons must not pay fifty
+    /// full-screen buffers. Everything is translated so the box's top-left is the surface origin,
+    /// which is the only reason `draw_item` takes an offset pair instead of just the scroll.
+    fn draw_filtered_group(
+        &self,
+        pixmap: &mut tiny_skia::Pixmap,
+        g: &PaintGroup,
+        clip: Option<Rect>,
+        scroll_y: f32,
+    ) {
+        // The blur radii in the chain decide how far ink escapes the item bounds. Sum them: two
+        // blurs in series spread further than either alone, and a drop-shadow also offsets.
+        let mut bleed = 0.0f32;
+        for f in &g.filters {
+            match f {
+                manuk_css::FilterOp::Blur(r) => bleed += r * 3.0,
+                manuk_css::FilterOp::DropShadow { dx, dy, blur, .. } => {
+                    bleed += dx.abs().max(dy.abs()) + blur * 3.0
+                }
+                _ => {}
+            }
+        }
+        let Some(ink) = g.items.iter().map(item_bounds).reduce(|a, b| a.union(&b)) else {
+            return;
+        };
+        // Page → device coordinates, grown by the bleed, then clamped to the canvas.
+        let x0 = (ink.x - bleed).floor().max(0.0);
+        let y0 = (ink.y - scroll_y - bleed).floor().max(0.0);
+        let x1 = (ink.x + ink.width + bleed)
+            .ceil()
+            .min(pixmap.width() as f32);
+        let y1 = (ink.y + ink.height - scroll_y + bleed)
+            .ceil()
+            .min(pixmap.height() as f32);
+        if x1 <= x0 || y1 <= y0 {
+            return; // entirely off-screen
+        }
+        let (sw, sh) = ((x1 - x0) as u32, (y1 - y0) as u32);
+        let Some(mut scratch) = tiny_skia::Pixmap::new(sw.max(1), sh.max(1)) else {
+            return; // absurd extent — drop the filter rather than abort the frame
+        };
+        // **Two different coordinate spaces arrive here and only one of them still owes the
+        // scroll.** The ITEMS are in page space, so their offset carries both the scroll and the
+        // shift that puts the group's top-left at the scratch origin. The CLIP was already
+        // converted to device space by the caller, so it owes only the shift — adding the scroll a
+        // second time would slide every `overflow: hidden` clip off a filtered element the moment
+        // the page is scrolled, which is invisible in any gate that renders at scroll 0.
+        let (dx, dy) = (-x0, -scroll_y - y0);
+        let clip = clip.map(|c| Rect {
+            x: c.x - x0,
+            y: c.y - y0,
+            width: c.width,
+            height: c.height,
+        });
+        for item in &g.items {
+            self.draw_item(&mut scratch, item, clip, dx, dy);
+        }
+        apply_filters(&mut scratch, &g.filters);
+        pixmap.draw_pixmap(
+            x0 as i32,
+            y0 as i32,
+            scratch.as_ref(),
+            &tiny_skia::PixmapPaint::default(),
+            tiny_skia::Transform::identity(),
+            None,
+        );
+    }
+
+    /// Rasterize one display item into `pixmap`, translated by `(dx, dy)` device px. `clip` is
+    /// already in the destination surface's coordinates.
+    fn draw_item(
+        &self,
+        pixmap: &mut tiny_skia::Pixmap,
+        item: &DisplayItem,
+        clip: Option<Rect>,
+        dx: f32,
+        dy: f32,
+    ) {
+        let shift = |rect: &Rect| Rect {
+            x: rect.x + dx,
+            y: rect.y + dy,
+            width: rect.width,
+            height: rect.height,
+        };
+        match item {
+            DisplayItem::Rect { rect, color } => {
+                let mut r = shift(rect);
+                if let Some(cl) = clip {
+                    r = r.intersect(&cl);
+                }
+                fill_rect(pixmap, r, *color);
+            }
+            DisplayItem::RoundRect {
+                rect,
+                color,
+                radius,
+            } => fill_round_rect(pixmap, shift(rect), *color, *radius, clip),
+            DisplayItem::Shadow {
+                rect,
+                color,
+                radius,
+                blur,
+            } => fill_shadow(pixmap, shift(rect), *color, *radius, *blur, clip),
+            DisplayItem::Text {
+                x,
+                baseline,
+                text,
+                style,
+            } => self.draw_text(pixmap, *x + dx, *baseline + dy, text, style, clip),
+            DisplayItem::Image {
+                rect,
+                image,
+                content_clip,
+            } => {
+                // `object-fit: cover`/`none` may paint the bitmap larger than its box; crop
+                // the overflow to the content box, intersected with any ancestor overflow clip.
+                let eff_clip = match content_clip {
+                    Some(cc) => {
+                        let cc = shift(cc);
+                        Some(clip.map_or(cc, |a| a.intersect(&cc)))
+                    }
+                    None => clip,
+                };
+                blit_image(pixmap, image, shift(rect), eff_clip);
+            }
+            DisplayItem::MaskedRect { rect, color, mask } => {
+                blit_masked(pixmap, mask, *color, shift(rect), clip)
+            }
+            DisplayItem::BackgroundImage {
+                rect,
+                image,
+                size,
+                repeat,
+                position,
+                radius,
+            } => blit_background(
+                pixmap,
+                image,
+                shift(rect),
+                *size,
+                *repeat,
+                *position,
+                *radius,
+                clip,
+            ),
+            DisplayItem::Gradient {
+                rect,
+                stops,
+                angle_deg,
+                radial,
+                radius,
+            } => fill_gradient(
+                pixmap,
+                shift(rect),
+                stops,
+                *angle_deg,
+                *radial,
+                *radius,
+                clip,
+            ),
+            DisplayItem::TextLine {
+                x,
+                y,
+                width,
+                thickness,
+                color,
+            } => {
+                let mut r = Rect {
+                    x: *x + dx,
+                    y: *y + dy,
+                    width: *width,
+                    height: *thickness,
+                };
+                if let Some(cl) = clip {
+                    r = r.intersect(&cl);
+                }
+                fill_rect(pixmap, r, *color);
+            }
+        }
     }
 }
 
@@ -1710,17 +1838,21 @@ mod bg_tests {
         // Find the layer of the group that actually carries the text.
         let text_layer = groups
             .iter()
-            .find(|(_, _, items)| {
-                items
+            .find(|g| {
+                g.items
                     .iter()
                     .any(|i| matches!(i, DisplayItem::Text { text, .. } if text.contains("Title")))
             })
-            .map(|(z, _, _)| *z)
+            .map(|g| g.z)
             .expect("the text must be somewhere in the display list");
         let card_layer = groups
             .iter()
-            .find(|(_, _, items)| items.iter().any(|i| matches!(i, DisplayItem::Rect { .. })))
-            .map(|(z, _, _)| *z)
+            .find(|g| {
+                g.items
+                    .iter()
+                    .any(|i| matches!(i, DisplayItem::Rect { .. }))
+            })
+            .map(|g| g.z)
             .expect("the card background");
 
         assert_eq!(

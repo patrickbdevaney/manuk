@@ -2132,7 +2132,12 @@ const PARSE_ONLY_LONGHANDS: &[&str] = &[
 /// over. Delete a line here the moment its property is genuinely rendered; `G_SUPPORTS_HONESTY` holds
 /// the answer either way.
 const UNRENDERED_LONGHANDS: &[&str] = &[
-    "filter",
+    // `filter` LEFT THIS LIST at tick 592 — it is rendered now (`stylo_map` reads the computed
+    // list, `manuk-paint` runs the pipeline over an offscreen group). The list is meant to shorten
+    // exactly this way, one entry per landed capability, each with its own evidence.
+    //
+    // `backdrop-filter` stays, and the distinction is not pedantry: it filters what is painted
+    // BEHIND the element, which is a different input we do not have at group-paint time.
     "backdrop-filter",
     "clip-path",
     "mix-blend-mode",
@@ -2266,20 +2271,30 @@ mod tests {
         //    `layout.unimplemented` set and was one category too narrow — `filter` is on 51.9% of page
         //    loads and answered YES, which is the costliest possible wrong answer here because there
         //    is no cascade-level workaround for a blur.
-        assert!(!supports_condition("filter: blur(4px)"));
+        //
+        //    **`filter` LEFT THIS SET AT TICK 592** — it is rendered now, so the honest answer
+        //    flipped a second time and its assertion moved down to the rendered group. Two flips in
+        //    two ticks is not churn: t591 corrected a lie, t592 removed the reason for it.
         assert!(!supports_condition("clip-path: circle(50%)"));
         assert!(!supports_condition("mix-blend-mode: multiply"));
         assert!(!supports_condition("isolation: isolate"));
         assert!(!supports_condition("writing-mode: vertical-rl"));
-        // …and composition still resolves through Stylo for the new list too.
-        assert!(supports_condition("not (filter: blur(4px))"));
+        // …and composition still resolves through Stylo for the remaining list too.
+        assert!(supports_condition("not (clip-path: circle(50%))"));
         assert!(!supports_condition(
+            "(display: flex) and (clip-path: circle(50%))"
+        ));
+        assert!(supports_condition(
+            "(display: flex) or (clip-path: circle(50%))"
+        ));
+        // ── …and the properties that ARE rendered must keep answering yes, or the fix has traded a
+        //    false yes for a worse false no. Three of them arrive through the MinimalCascade
+        //    recovery block rather than a `clone_*` accessor.
+        assert!(supports_condition("filter: blur(4px)"));
+        assert!(supports_condition(
             "(display: flex) and (filter: blur(4px))"
         ));
-        assert!(supports_condition("(display: flex) or (filter: blur(4px))"));
-        // ── …and the FOUR from the same pref set that ARE rendered must keep answering yes, or the
-        //    fix has traded a false yes for a worse false no. Three of them arrive through the
-        //    MinimalCascade recovery block rather than a `clone_*` accessor.
+        assert!(!supports_condition("not (filter: blur(4px))"));
         assert!(supports_condition("user-select: none"));
         assert!(supports_condition("color-scheme: dark"));
         assert!(supports_condition("mask-image: url(a.svg)"));

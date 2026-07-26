@@ -740,6 +740,45 @@ pub struct BoxShadow {
     pub color: Rgba,
 }
 
+/// One `filter` function, computed. The list is applied **in source order**: `filter: grayscale(1)
+/// blur(2px)` desaturates first and blurs the desaturated result, which is not the same picture as
+/// the reverse.
+///
+/// The variants are exactly Filter Effects 1's shorthand functions minus `url()` (an SVG filter
+/// reference, which needs an SVG filter graph and is not representable in Stylo's servo build
+/// either). `backdrop-filter` is deliberately NOT modelled here: it filters what is painted
+/// *behind* the element, a different input, and it is still an honest "no".
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FilterOp {
+    /// `blur(<length>)` — the Gaussian standard deviation in px.
+    Blur(f32),
+    /// `brightness(<number|percentage>)` — 1.0 is the identity.
+    Brightness(f32),
+    /// `contrast(<number|percentage>)` — 1.0 is the identity.
+    Contrast(f32),
+    /// `grayscale(<number|percentage>)` — 0..1, 1 = fully desaturated.
+    Grayscale(f32),
+    /// `hue-rotate(<angle>)` — degrees.
+    HueRotate(f32),
+    /// `invert(<number|percentage>)` — 0..1.
+    Invert(f32),
+    /// `opacity(<number|percentage>)` — 0..1, multiplies alpha.
+    Opacity(f32),
+    /// `saturate(<number|percentage>)` — 1.0 is the identity.
+    Saturate(f32),
+    /// `sepia(<number|percentage>)` — 0..1.
+    Sepia(f32),
+    /// `drop-shadow(<offset-x> <offset-y> [<blur>] [<color>])` — a shadow of the element's **alpha
+    /// silhouette**, not of its box. That is what separates it from `box-shadow` and why icons and
+    /// cut-out PNGs use it.
+    DropShadow {
+        dx: f32,
+        dy: f32,
+        blur: f32,
+        color: Rgba,
+    },
+}
+
 /// A `text-shadow` layer: `offset-x offset-y [blur] [color]`. Like `box-shadow` but with no spread and
 /// no `inset` — it paints the run's glyphs a second time, offset and (eventually) blurred, behind the
 /// text. `text-shadow` is inherited.
@@ -914,6 +953,15 @@ pub struct ComputedStyle {
     /// `text-shadow` — a single shadow behind the text (inherited). `None` == no shadow. A comma list
     /// of shadows is parsed to its first layer (multi-shadow is residue).
     pub text_shadow: Option<TextShadow>,
+    /// `filter` — the ordered function list applied to this element **and its subtree**, as a group.
+    /// Empty == `none`. This is the element's OWN value; paint composes it with its ancestors' (a
+    /// filter forms a containing block and applies to everything inside it), which is why it is not
+    /// folded here the way `opacity` is.
+    ///
+    /// It is on **51.9% of page loads** (Blink use counters, surface audit #32) and, unlike most
+    /// visual effects, has no cascade-level fallback: a page that asks for a blur and gets a sharp
+    /// image is not degraded, it is wrong — the frosted bar it drew its text over is now opaque.
+    pub filter: Vec<FilterOp>,
     pub width: Dim,
     /// The **intrinsic sizing keyword** on `width`, if any. `width` itself collapses to `Dim::Auto`
     /// for length resolution (an intrinsic width is content-driven, not a length), but unlike a plain
@@ -1086,6 +1134,7 @@ impl ComputedStyle {
             has_animation: false,
             box_shadows: Vec::new(),
             text_shadow: None,
+            filter: Vec::new(),
             width: Dim::Auto,
             width_keyword: None,
             width_stretch: false,
@@ -4211,6 +4260,7 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         }
         "box-shadow" => s.box_shadows = parse_box_shadows(v, s.font_size),
         "text-shadow" => s.text_shadow = parse_text_shadow(v, s.font_size),
+        "filter" | "-webkit-filter" => s.filter = parse_filters(v, s.font_size),
         "mask-image" | "-webkit-mask-image" => {
             let v = v.trim();
             if let Some(rest) = v.strip_prefix("url(") {
@@ -4932,6 +4982,118 @@ fn parse_box_shadows(v: &str, fs: f32) -> Vec<BoxShadow> {
         });
     }
     out
+}
+
+/// Parse a `filter` value into its ordered function list.
+///
+/// A malformed *function* is dropped on its own rather than voiding the whole declaration. That is a
+/// deliberate divergence from CSS's all-or-nothing declaration parsing, and it is the safer failure
+/// here: the list is applied as a pipeline, so keeping the eight functions we understood and dropping
+/// the one we did not renders closer to the author's intent than rendering nothing at all.
+fn parse_filters(v: &str, fs: f32) -> Vec<FilterOp> {
+    let v = v.trim();
+    if v.is_empty() || v.eq_ignore_ascii_case("none") {
+        return Vec::new();
+    }
+    let b = v.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while i < b.len() {
+        while i < b.len() && b[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        let start = i;
+        while i < b.len() && b[i] != b'(' && !b[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i >= b.len() || b[i] != b'(' {
+            break; // a bare ident (or `url(...)`-less garbage) — nothing further is parseable
+        }
+        let name = &v[start..i];
+        // Walk to the MATCHING close paren: `drop-shadow(0 1px 2px rgba(0,0,0,.4))` nests.
+        let args_start = i + 1;
+        let mut depth = 0i32;
+        while i < b.len() {
+            match b[i] {
+                b'(' => depth += 1,
+                b')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        if i >= b.len() {
+            break; // unbalanced
+        }
+        let args = &v[args_start..i];
+        i += 1;
+        if let Some(op) = parse_filter_fn(name, args, fs) {
+            out.push(op);
+        }
+    }
+    out
+}
+
+/// `<number> | <percentage>` as a plain factor — `0.5` and `50%` are the same amount.
+fn parse_amount(s: &str) -> Option<f32> {
+    let s = s.trim();
+    if let Some(p) = s.strip_suffix('%') {
+        return p.trim().parse::<f32>().ok().map(|n| n / 100.0);
+    }
+    s.parse::<f32>().ok()
+}
+
+/// One `name(args)` chunk. An omitted argument means **1** for every amount filter (`grayscale()`
+/// == `grayscale(1)`), which is why the defaults are not 0.
+fn parse_filter_fn(name: &str, args: &str, fs: f32) -> Option<FilterOp> {
+    let n = name
+        .trim()
+        .trim_start_matches("-webkit-")
+        .to_ascii_lowercase();
+    let a = args.trim();
+    let amount = || {
+        if a.is_empty() {
+            1.0
+        } else {
+            parse_amount(a).unwrap_or(1.0)
+        }
+    };
+    Some(match n.as_str() {
+        "blur" => FilterOp::Blur(values::parse_length_px(a, fs).unwrap_or(0.0).max(0.0)),
+        "brightness" => FilterOp::Brightness(amount().max(0.0)),
+        "contrast" => FilterOp::Contrast(amount().max(0.0)),
+        "grayscale" => FilterOp::Grayscale(amount().clamp(0.0, 1.0)),
+        "hue-rotate" => FilterOp::HueRotate(parse_angle_deg(a).unwrap_or(0.0)),
+        "invert" => FilterOp::Invert(amount().clamp(0.0, 1.0)),
+        "opacity" => FilterOp::Opacity(amount().clamp(0.0, 1.0)),
+        "saturate" => FilterOp::Saturate(amount().max(0.0)),
+        "sepia" => FilterOp::Sepia(amount().clamp(0.0, 1.0)),
+        "drop-shadow" => {
+            let mut lens: Vec<f32> = Vec::new();
+            let mut color: Option<Rgba> = None;
+            for tok in tokens_keeping_parens(a) {
+                if let Some(px) = values::parse_length_px(&tok, fs) {
+                    lens.push(px);
+                } else if let Some(c) = values::parse_color(&tok) {
+                    color = Some(c);
+                }
+            }
+            if lens.len() < 2 {
+                return None; // both offsets are required
+            }
+            FilterOp::DropShadow {
+                dx: lens[0],
+                dy: lens[1],
+                blur: lens.get(2).copied().unwrap_or(0.0).max(0.0),
+                color: color.unwrap_or(Rgba::BLACK),
+            }
+        }
+        _ => return None,
+    })
 }
 
 /// Parse a `text-shadow` value to its FIRST layer: `offset-x offset-y [blur] [color]`. A comma list of

@@ -24884,3 +24884,98 @@ subsystem tick in a while, now that the honest "no" is in place to fall back on 
 `mix-blend-mode`, each **measured first** per §VI.3's new clause. Then the `interpolate-size` SIGSEGV,
 re-priced from exotic to one-page-load-in-twelve.
 Cadences: self-audit 594; surface 598; const 599; wall 607.
+
+## Tick 592 — `filter` for real: the pipeline reaches the pixels, and the blur nearly shipped as a fade (2026-07-25)
+
+t590 named `filter` the board's #1 by usage with impact that *transfers*; t591 measured it and found we
+were answering **yes** to `CSS.supports('filter', 'blur(4px)')` about a capability that painted nothing,
+and made that answer honest. This tick removes the reason for the honest no.
+
+**THE CHAIN, AND EVERY LINK OF IT IS ORDINARY.** `stylo_map::clone_filter` → `ComputedStyle.filter:
+Vec<FilterOp>` → `LayoutBox.filters` (12 literal sites, mirroring `shadows`) → `PaintGroup.filters` →
+`manuk-paint::filters` over an offscreen `Pixmap`. All ten Filter Effects 1 shorthand functions render:
+blur, brightness, contrast, grayscale, hue-rotate, invert, opacity, saturate, sepia, drop-shadow.
+(`url()` is `Impossible` in Stylo's servo build — the variant cannot be constructed, so there is no arm
+to forget.)
+
+**THE ONE DESIGN DECISION: a filter needs a GROUP, and our display list is flat.** `opacity`'s
+established trick here — fold the effective value into every box, scale each item's alpha — does not
+transfer, because a blur is not a per-item operation and `blur(4px)` twice is not `blur(8px)`. So
+`filter` is composed at *group-build* time, where `visit` already carries `z` and `clip` down the tree,
+and it **concatenates** rather than overrides: a blurred card inside a greyscale section is both. The
+rasterizer then splits at one `if` — an unfiltered group draws onto the canvas exactly as before; a
+filtered one draws into a scratch sized to its **own ink box** (fifty drop-shadowed icons must not cost
+fifty full-screen buffers), runs the pipeline, and composites back. Extracting the per-item match into
+`draw_item(pixmap, item, clip, dx, dy)` is what makes that possible: the offset pair generalises the
+`scroll_y` shift that was already threaded through every arm.
+
+**THE APPROXIMATION IS NAMED, IN THE TYPE'S OWN DOC.** Each paint group in the subtree is filtered
+separately rather than the subtree being composited first. Exact for the colour filters wherever a
+group does not overlap itself; for blur it differs only across an internal edge. The case it gets right
+is the one that decides whether a page is readable.
+
+**THE BLUR LOST 84% OF ITS INK.** Three box passes (the SVG spec's own Gaussian recipe) with a sliding
+window, on premultiplied samples — and plain integer division of the window sum. Six passes each biased
+downward by up to 1/window, and a blurred region came out **dimmer, not softer**: 255 → 41 on the first
+measurement. Rounding makes the error unbiased instead of cumulative. **An integer filter kernel that
+truncates is a fade, not a blur**, and it is invisible in a screenshot of one element — you have to sum
+the alpha to see it.
+
+**AND THE TEST THAT CAUGHT IT WAS ITSELF WRONG FIRST.** It was written on a single lit pixel. An 8-bit
+surface *cannot* represent a delta spread over a few hundred pixels, so no correct implementation could
+have conserved its energy — the assertion was measuring the format's rounding, not the blur. Rewritten
+on a filled block it pins three failure modes at once (interior stays opaque, ink escapes the edge, the
+edge becomes a ramp) and it kept the real defect. **A test whose subject cannot exhibit the property
+being asserted is a false RED, and it costs the same as a false green.** Both halves of this session's
+recurring lesson showed up here: the first sepia expectation was a *remembered* row sum (240) and the
+computed one is 239 — a gate whose expected value comes from memory tests the memory.
+
+**COLOUR MATRICES ARE SPEC CONSTANTS AND ARE ASSERTED EXACTLY.** `grayscale(1)` of `#f00` is
+`(54,54,54)` — Filter Effects 1's *legacy* 0.213/0.715/0.072 row, not Rec.709's. `grayscale(a)` is
+derived as `saturate(1-a)` because the spec defines it that way and two hand-written copies drift.
+`G_FILTER_RENDER` opens with a **vacuity guard** (the unfiltered control must paint pure red): without
+it every claim after would be satisfiable by a canvas on which nothing painted at all.
+
+**THE HONEST "NO" BECOMES A TRUE "YES", AND THE ROW IS SPLIT RATHER THAN PROMOTED WHOLE.** `filter`
+leaves `UNRENDERED_LONGHANDS` and its `G_SUPPORTS_HONESTY` term moves from `flt:false` to `flt:true`,
+now sitting with the guards — so losing the rendering goes red in two places, not one. `backdrop-filter`
+(34.3%) stays a no and got its **own constellation row** (audit #28's lumping rule): it filters what is
+painted *behind* the element, which a group rasterized in isolation does not have. That is a
+compositor-order change, not another entry in the pipeline, and carrying it along would have been the
+t591 lie re-told.
+
+**A SECOND BUG, FOUND BY RE-READING RATHER THAN BY A TEST, AND IT IS THE SAME SHAPE AS THE FIRST.**
+Two coordinate spaces arrive at `draw_filtered_group`: the display items are in **page** space and
+still owe the scroll, the clip has **already** been converted to device space by the caller and does
+not. The first cut applied the same offset to both, double-subtracting the scroll and sliding every
+`overflow` clip clean off a filtered element — and it is **invisible to every gate that renders at
+scroll 0**, which is what the whole rest of the file does. The gate now scrolls; RED-proven by
+restoring the shared offset (`inside=(255,255,255)` against an expected `(18,18,18)` — the element
+vanishes entirely). Twice in one tick the defect was *a value that looks like it belongs to the
+space it is being combined with*, and both times the cheap catch was asking what units each side is
+already in.
+
+RED-PROVEN: bypass the filtered-group branch (`if g.filters.is_empty()` → `if true`) → `gray=(255,0,0)`
+against an expected `(54,54,54)`; and the clip case above. `manuk-paint` 22/22 green (5 new), `manuk-css --features stylo` 42/42,
+`g_filter_render` / `g_supports_honesty` / `g_css_supports` green, full workspace `--all-targets` clean.
+
+TICK SHAPE: capability (a subsystem — CSS `filter` renders end-to-end on 51.9% of page loads, where
+before the computed value was thrown away) + the honest-failure row it retires. Bar 0 untouched; no
+ratchet floor moved; the unfiltered paint path is byte-identical (the `draw_item` extraction is a pure
+refactor and every existing paint gate still passes).
+Gates: `G_FILTER_RENDER` (`engine/page/tests/g_filter_render.rs`, two tests — vacuity-guarded
+pixels at scroll 0, and the `overflow`-clip-at-scroll case; both RED-proven);
+`G_SUPPORTS_HONESTY` term flipped with the capability; 5 unit gates in `engine/paint/src/filters.rs`.
+WIKI: docs/wiki/box-layout.md — "CSS `filter` — an offscreen GROUP is the whole mechanism, and the
+blur's integer division is where it nearly died".
+PATTERN: [no-pattern] — no new cross-cutting pattern; this is the `opacity`/`shadows` plumbing shape
+already in the ledger, applied to a property that needed a group instead of a per-item fold.
+
+NEXT: **`clip-path` (43.8%) and `mix-blend-mode` (12.9%)**, each MEASURED FIRST per §VI.3 — `clip-path`
+now has somewhere to land (the offscreen group is exactly the surface a clip mask applies to, so it is
+much cheaper after this tick than before it), and `mix-blend-mode` needs the group's *backdrop*, which
+is the same missing input as `backdrop-filter` — measure whether one mechanism buys both before pricing
+either. Then `font-display`/`unicode-range` (cheap, adjacent to the t557/t558 font arc). Then the
+`getComputedStyle().filter` CSSOM half, which folds into whichever CSSOM tick comes next. Then the
+`interpolate-size` SIGSEGV, re-priced from exotic to one page load in twelve.
+Cadences: self-audit 594; surface 598; const 599; wall 607.

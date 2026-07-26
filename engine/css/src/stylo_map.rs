@@ -514,6 +514,42 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         })
         .collect();
 
+    // `filter` — the function list, in SOURCE ORDER, because the list is a pipeline: `grayscale(1)
+    // blur(2px)` and `blur(2px) grayscale(1)` are different pictures. Stylo's servo build parses and
+    // computes this correctly and always has; the defect (t591) was that nothing ever *read* it, so
+    // `@supports` answered yes to a capability that painted nothing.
+    //
+    // `Filter::Url` is `Impossible` in the servo build — the variant cannot be constructed, so there
+    // is no arm to write and none to forget.
+    {
+        use stylo::values::computed::effects::Filter as SFilter;
+        s.filter = cv
+            .clone_filter()
+            .0
+            .iter()
+            .filter_map(|f| {
+                Some(match f {
+                    SFilter::Blur(l) => crate::FilterOp::Blur(l.0.px().max(0.0)),
+                    SFilter::Brightness(n) => crate::FilterOp::Brightness(n.0.max(0.0)),
+                    SFilter::Contrast(n) => crate::FilterOp::Contrast(n.0.max(0.0)),
+                    SFilter::Grayscale(n) => crate::FilterOp::Grayscale(n.0.clamp(0.0, 1.0)),
+                    SFilter::HueRotate(a) => crate::FilterOp::HueRotate(a.degrees()),
+                    SFilter::Invert(n) => crate::FilterOp::Invert(n.0.clamp(0.0, 1.0)),
+                    SFilter::Opacity(n) => crate::FilterOp::Opacity(n.0.clamp(0.0, 1.0)),
+                    SFilter::Saturate(n) => crate::FilterOp::Saturate(n.0.max(0.0)),
+                    SFilter::Sepia(n) => crate::FilterOp::Sepia(n.0.clamp(0.0, 1.0)),
+                    SFilter::DropShadow(sh) => crate::FilterOp::DropShadow {
+                        dx: sh.horizontal.px(),
+                        dy: sh.vertical.px(),
+                        blur: sh.blur.0.px().max(0.0),
+                        color: abs_to_rgba(&sh.color.clone().resolve_to_absolute(&current)),
+                    },
+                    _ => return None,
+                })
+            })
+            .collect();
+    }
+
     // Position mode — drives whether the insets below are actually applied by layout.
     use stylo::values::computed::{
         Clear as SClear, Float as SFloat, Overflow as SOverflow, PositionProperty, ZIndex,

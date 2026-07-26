@@ -74,6 +74,10 @@
   - L1096 · List markers follow the HTML "ordinal value" algorithm — a running counter, not a sibling index (tick 411)
   - L1116 · justify-content: normal is NOT flex-start — it is what makes an auto grid track stretch (tick 569)
   - L1152 · repeat(auto-fill, …) is a shape the cascade must NOT resolve (tick 570)
+  - L1194 · CSS filter — an offscreen GROUP is the whole mechanism, and the blur's integer division is where it nearly died (tick 592)
+  - L1232 · The blur lost 84% of its ink, and the test that caught it was itself wrong first
+  - L1249 · Two coordinate spaces meet at the scratch surface, and only one of them still owes the scroll
+  - L1259 · Colour matrices are spec constants, so they are asserted EXACTLY
 
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
@@ -1009,4 +1013,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-924 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+928 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

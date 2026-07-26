@@ -1190,3 +1190,89 @@ absolute placement **0.0% → 100.0%** (dx=dy=dw=dh=0 across all 20 paths). Gate
 (`fillx:0,207,413 w:187` → `fillx:0,0,0 w:600`). The integer-`repeat()` guard stayed **green under the
 RED patch**, which is what makes it a guard: the rewrite had to fix the auto- forms without breaking the
 count that already worked.
+
+## CSS `filter` — an offscreen GROUP is the whole mechanism, and the blur's integer division is where it nearly died (tick 592)
+
+`filter` is on **51.9% of page loads** and it had reached exactly nothing: Stylo's servo build parsed
+and computed it correctly and always had, `ComputedStyle` had no field for it, and so
+`CSS.supports('filter', 'blur(4px)')` answered **yes** about a capability that painted nothing (t591
+made that answer honest; this tick removed the reason for it). The chain that closes it is four links
+long and every one of them is ordinary:
+
+```text
+stylo_map.rs  clone_filter()  →  ComputedStyle.filter: Vec<FilterOp>   (OWN value, not folded)
+layout        LayoutBox.filters                                        (12 literal sites, like `shadows`)
+paint         PaintGroup.filters                                       (COMPOSED down the tree)
+paint         manuk-paint::filters over an offscreen Pixmap            (the pixels)
+```
+
+**The one design decision is that a filter needs a GROUP, and our display list is flat.** CSS applies
+`filter` to the element *and its subtree, composited as one group* — which is why `opacity`'s
+established trick here (fold the effective value into every box and scale each item's alpha) does not
+transfer: a blur is not a per-item operation, and `blur(4px)` applied twice is not `blur(8px)`. So the
+filter is **not** folded into descendants the way opacity is. It is composed at *group-build* time,
+where `visit` already carries `z` and `clip` down the tree, and it **concatenates** rather than
+overrides — a blurred card inside a greyscale section is both.
+
+Rasterization then splits in two at one `if`: an unfiltered group draws straight onto the canvas
+exactly as before, and a filtered one draws into a scratch `Pixmap`, runs the pipeline over it, and
+composites the result back. Two things make that affordable. The scratch is sized to the **group's own
+ink box** (grown by the chain's blur bleed, clamped to the canvas), not to the viewport — fifty
+drop-shadowed icons must not cost fifty full-screen buffers. And extracting the per-item match into
+`draw_item(pixmap, item, clip, dx, dy)` is what lets the same code draw into a surface whose origin is
+not the page's; the offset pair generalises the `scroll_y` shift that was already threaded through
+every arm.
+
+**THE APPROXIMATION, NAMED.** Each paint group in the subtree is filtered separately rather than the
+subtree being composited and then filtered. For the colour filters the two are identical wherever a
+group's pixels do not overlap each other (a colour transform is per-pixel); for `blur` they differ only
+across an internal edge. The case it gets right is the one that decides whether a page is readable: the
+element **and everything inside it** is blurred, instead of nothing being.
+
+### The blur lost 84% of its ink, and the test that caught it was itself wrong first
+
+Blur is three box passes — the SVG filter spec's own Gaussian recipe, `d = floor(σ·3·√(2π)/4 + 0.5)` —
+run with a sliding window so the cost is O(pixels) regardless of radius, on **premultiplied** samples
+(blur is linear; that is what premultiplication is for). The first cut divided the window sum with
+plain integer division. Six passes each biased downward by up to 1/window, and a blurred region came out
+**dimmer**, not softer: 255 → 41 on the first measurement. Rounding (`(sum + win/2) / win`) makes the
+error unbiased instead of cumulative. **An integer filter kernel that truncates is a fade, not a blur**,
+and it is invisible in a screenshot of a single element — you have to sum the alpha to see it.
+
+The test that found it was written on a **single lit pixel**, and that premise was wrong: an 8-bit
+surface cannot represent a delta spread over a few hundred pixels, so *no* correct implementation could
+have conserved its energy, and the assertion was measuring the format's rounding. Rewritten on a filled
+block it pins three separate failure modes at once — the interior stays opaque, ink escapes the edge,
+the edge becomes a ramp — and it kept the real defect. **A test whose subject cannot exhibit the
+property being asserted is a false RED, and it costs the same as a false green.**
+
+### Two coordinate spaces meet at the scratch surface, and only one of them still owes the scroll
+
+`draw_filtered_group` receives display items in **page** space and a clip the caller has **already**
+converted to device space. Applying the same offset to both — the obvious thing, since one variable
+looks like it should serve — double-subtracts the scroll and slides every `overflow` clip off the
+filtered element, which at scroll 0 is a perfect no-op. So it survives every gate that renders an
+unscrolled page, which was all of them. `G_FILTER_RENDER`'s second test scrolls 150px over a 40px
+`overflow: hidden` window and asserts both halves: the filtered block paints inside it, and its
+overflow below it is gone. **A filter must not launder an element out of its ancestor's clip.**
+
+### Colour matrices are spec constants, so they are asserted EXACTLY
+
+`grayscale(1)` of `#f00` is `(54, 54, 54)` — Filter Effects 1's **legacy** 0.213/0.715/0.072 luminance
+row, not Rec.709's 0.2126/0.7152/0.0722. `grayscale(a)` is derived as `saturate(1 - a)` because the spec
+defines it that way and two hand-written copies drift. An engine that lands "approximately grey" is a
+shade off in every screenshot diff forever, so `G_FILTER_RENDER` asserts the integer and not a range —
+and it opens with a **vacuity guard** (the unfiltered control must paint pure red), because every claim
+after it would otherwise be satisfiable by a canvas on which nothing painted at all.
+
+`drop-shadow` is the one function that is not a colour or a convolution: it casts the surface's **alpha
+silhouette**, offset and blurred, behind the source. That silhouette is the entire difference from
+`box-shadow` — a cut-out PNG or an icon glyph casts the shape of its ink, not the shape of its box.
+
+**RESIDUE, and it is deliberately not carried:** `backdrop-filter` (34.3% of page loads) stays a
+honest no and its constellation row was **split out** rather than promoted along with this one. It
+filters what is painted *behind* the element, which a group rasterized in isolation does not have —
+that is a compositor-order change, not another entry in the pipeline. Also open: `getComputedStyle(el)
+.filter` is still `undefined` (the CSSOM half of the t576/t590 class), `url()` SVG filter references
+need an SVG filter graph, and a filter does not yet establish a containing block for its fixed/abspos
+descendants.

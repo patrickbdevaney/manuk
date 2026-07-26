@@ -63,10 +63,10 @@ const HTML: &str = r##"<!doctype html><html><head><style>
   R.push('bdf:' + s('backdrop-filter: blur(4px)'));
   R.push('op:'  + s('offset-path: none'));
   // ── The SECOND category (t591): parsed NATIVELY, behind no pref, still not rendered.
-  R.push('flt:' + s('filter: blur(4px)'));
   R.push('clip:' + s('clip-path: circle(50%)'));
   R.push('wm:' + s('writing-mode: vertical-rl'));
-  // ── The guard: the four that are genuinely rendered must still answer yes.
+  // ── The guard: the ones that are genuinely rendered must still answer yes.
+  R.push('flt:'  + s('filter: blur(4px)'));
   R.push('us:'   + s('user-select: none'));
   R.push('csch:' + s('color-scheme: dark'));
   R.push('mi:'   + s('mask-image: url(a.svg)'));
@@ -117,13 +117,14 @@ fn supports_answers_for_what_we_render_not_for_what_stylo_parses() {
         ),
         ("op:false", "`offset-path` — same class, a third unread property"),
         (
-            "flt:false",
-            "THE SECOND CATEGORY, and the costliest member of it. `filter` needs NO pref — Stylo's \
-             servo build parses it natively and we simply never read the computed value. t576 scoped \
-             its denylist to the `layout.unimplemented` set and was one category too narrow, so \
-             `filter` — 51.9% of page loads — kept answering YES. There is no cascade-level \
-             workaround for a blur, so a page told yes drops the opaque fallback it shipped and puts \
-             its text unreadably over a photograph",
+            "flt:true",
+            "**THE ENTRY THAT CHANGED SIDES.** `filter` was the costliest member of the second \
+             category — parsed natively, never read, 51.9% of page loads told YES about a blur we \
+             could not draw. t591 made it an honest no; **tick 592 made it a true yes** (the \
+             computed list reaches `manuk-paint`, which runs it over an offscreen group — see \
+             G_FILTER_RENDER for the pixels). It sits with the guards now, and if the rendering is \
+             ever lost this goes red HERE as well as there. `backdrop-filter` stays a no: it filters \
+             what is painted BEHIND the element, a different input",
         ),
         ("clip:false", "`clip-path` (43.8% of page loads) — parsed natively, never read"),
         ("wm:false", "`writing-mode` — the same, and the axis the CJK story stops short of"),

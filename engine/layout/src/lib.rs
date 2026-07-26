@@ -234,6 +234,12 @@ pub struct LayoutBox {
     pub radius: f32,
     /// `box-shadow` layers (source order, first on top), painted beneath the box.
     pub shadows: Vec<manuk_css::BoxShadow>,
+    /// `filter` — this box's OWN function list, empty == `none`. Unlike [`Self::opacity`] it is not
+    /// folded with its ancestors' here: a filter applies to the whole subtree *as one group*, and a
+    /// group is a paint-time concept, so paint composes the ancestor chain when it builds the
+    /// stacking groups. Folding it into every descendant would be the wrong model in the one case
+    /// that matters — `blur(4px)` twice is not `blur(8px)`.
+    pub filters: Vec<manuk_css::FilterOp>,
     /// `visibility: hidden|collapse` — the box still OCCUPIES its space but is not painted.
     pub hidden: bool,
     /// `mask-image: url(...)` — the icon shape. The background is painted THROUGH this mask's
@@ -733,6 +739,7 @@ pub fn layout_document(
             border: None,
             radius: 0.0,
             shadows: Vec::new(),
+            filters: Vec::new(),
             hidden: false,
             mask_image: None,
             background_images: Vec::new(),
@@ -2198,6 +2205,7 @@ impl Ctx<'_> {
             border: border_of(&s),
             radius: s.border_radius,
             shadows: s.box_shadows.clone(),
+            filters: s.filter.clone(),
             hidden: s.visibility != manuk_css::Visibility::Visible,
             mask_image: s.mask_image.clone(),
             background_images: s.background_images.clone(),
@@ -2417,6 +2425,7 @@ impl Ctx<'_> {
                     border: None,
                     radius: 0.0,
                     shadows: Vec::new(),
+                    filters: Vec::new(),
                     hidden: false,
                     mask_image: None,
                     background_images: Vec::new(),
@@ -2622,6 +2631,7 @@ impl Ctx<'_> {
             border: border_of(&s),
             radius: s.border_radius,
             shadows: s.box_shadows.clone(),
+            filters: s.filter.clone(),
             hidden: s.visibility != manuk_css::Visibility::Visible,
             mask_image: s.mask_image.clone(),
             background_images: s.background_images.clone(),
@@ -3128,6 +3138,7 @@ impl Ctx<'_> {
                 border: rs.and_then(border_of),
                 radius: rs.map(|s| s.border_radius).unwrap_or(0.0),
                 shadows: rs.map(|s| s.box_shadows.clone()).unwrap_or_default(),
+                filters: rs.map(|s| s.filter.clone()).unwrap_or_default(),
                 hidden: rs
                     .map(|s| s.visibility != manuk_css::Visibility::Visible)
                     .unwrap_or(false),
@@ -3169,6 +3180,7 @@ impl Ctx<'_> {
             border: border_of(&s),
             radius: s.border_radius,
             shadows: s.box_shadows.clone(),
+            filters: s.filter.clone(),
             hidden: s.visibility != manuk_css::Visibility::Visible,
             mask_image: s.mask_image.clone(),
             background_images: s.background_images.clone(),
@@ -3414,6 +3426,7 @@ impl Ctx<'_> {
                 border: border_of(&s),
                 radius: s.border_radius,
                 shadows: s.box_shadows.clone(),
+                filters: s.filter.clone(),
                 hidden: s.visibility != manuk_css::Visibility::Visible,
                 mask_image: s.mask_image.clone(),
                 background_images: s.background_images.clone(),
@@ -3516,6 +3529,7 @@ impl Ctx<'_> {
                         border: None,
                         radius: 0.0,
                         shadows: Vec::new(),
+                        filters: Vec::new(),
                         hidden: false,
                         mask_image: None,
                         background_images: Vec::new(),
@@ -3800,6 +3814,7 @@ impl Ctx<'_> {
             border: border_of(&s),
             radius: s.border_radius,
             shadows: s.box_shadows.clone(),
+            filters: s.filter.clone(),
             hidden: s.visibility != manuk_css::Visibility::Visible,
             mask_image: s.mask_image.clone(),
             background_images: s.background_images.clone(),
@@ -3880,6 +3895,7 @@ impl Ctx<'_> {
             border: None,
             radius: 0.0,
             shadows: Vec::new(),
+            filters: Vec::new(),
             hidden: false,
             mask_image: None,
             background_images: Vec::new(),
@@ -4015,6 +4031,7 @@ impl Ctx<'_> {
                 border: border_of(s),
                 radius: s.border_radius,
                 shadows: s.box_shadows.clone(),
+                filters: s.filter.clone(),
                 hidden: s.visibility != manuk_css::Visibility::Visible,
                 mask_image: s.mask_image.clone(),
                 background_images: s.background_images.clone(),
@@ -4053,6 +4070,7 @@ impl Ctx<'_> {
                 border: None,
                 radius: 0.0,
                 shadows: Vec::new(),
+                filters: Vec::new(),
                 // `visibility` and `opacity`-as-folded ARE readable off a text node in both
                 // cascades, and they must be: a hidden container's text stays hidden.
                 hidden: s.visibility != manuk_css::Visibility::Visible,
