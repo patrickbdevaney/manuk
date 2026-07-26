@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# ops-check.sh — VERIFY THE OPERATIONAL INVARIANTS of the loop substrate, and auto-heal the safe ones.
+#
+# docs/loop/RELIABILITY-DOCTRINE.md Category B ("the substrate's state is ASSUMED, not VERIFIED"). Every
+# paid-for operational incident — dead crons, disk creep, stale systemd scopes, uncontained/double-spawned
+# agent, a poisoned wall-bank — becomes a STANDING checked invariant instead of a thing the observer
+# happens to notice. This is the "verify every post-condition, assume nothing" half of the doctrine, made
+# mechanical. Run by cron (*/15) AND by every observer heartbeat.
+#
+# FAIL-SAFE BY CONSTRUCTION — a bug in this file must NEVER touch the loop:
+#   * it only READS, performs a WHITELIST of provably-safe auto-heals, and ALERTS to a log;
+#   * it NEVER kills the live agent or supervisor, NEVER pkills by pattern, NEVER edits engine/ / STATUS /
+#     the tick flow, NEVER re-baselines the wall (that is an observer judgement — it only ALERTS);
+#   * every action is best-effort and it always `exit 0`, so ops-check can never fail a tick or a cron.
+set -uo pipefail
+cd "$(dirname "$0")/.." 2>/dev/null || exit 0
+LOG=.git/manuk-ops-check.log
+now(){ date -u +%H:%M:%S 2>/dev/null || echo "--:--:--"; }
+note(){ printf '%s %s\n' "$(now)" "$*" >> "$LOG" 2>/dev/null; [ -t 2 ] && printf '  %s\n' "$*" >&2; }
+heal=0; alert=0
+grind_pids(){ for p in $(ps -C claude -o pid= 2>/dev/null); do tr '\0' ' ' </proc/"$p"/cmdline 2>/dev/null | grep -q 'model claude-opus' && echo "$p"; done; }
+scope_of(){ grep -oE 'run-r[0-9a-f]+\.scope' /proc/"$1"/cgroup 2>/dev/null | head -1; }
+
+# 1. CRON INTEGRITY — a `crontab -l | … | crontab -` round-trip once double-escaped the quotes, so cron
+#    ran `bash -lc \'` and died with "unexpected EOF" EVERY fire; hygiene + the watchdog were dead for
+#    hours, silently. AUTO-HEAL: un-escape \' back to '. Then confirm the two critical crons are present.
+CT=$(crontab -l 2>/dev/null || true)
+nesc=$(printf '%s' "$CT" | grep -c "\\\\'" 2>/dev/null); nesc=${nesc:-0}
+if [ -n "$CT" ] && [ "$nesc" -ne 0 ]; then
+  if printf '%s' "$CT" | sed "s/\\\\'/'/g" | crontab - 2>/dev/null; then note "HEALED: un-escaped corrupted crontab quotes (the silent-cron-death bug)"; heal=$((heal+1)); fi
+fi
+for c in disk-hygiene.sh loop-watchdog.sh; do
+  printf '%s' "$CT" | grep -q "$c" || { note "ALERT: cron '$c' is MISSING from the crontab"; alert=$((alert+1)); }
+done
+
+# 2. HYGIENE LIVENESS — it prints 'now NNG free' every run; a stale log means the reaper is dead and disk
+#    creeps monotonically. (>90m stale is well past its */3-min cron.)
+if [ -f .git/manuk-hygiene.log ]; then
+  age=$(( $(date +%s 2>/dev/null || echo 0) - $(stat -c %Y .git/manuk-hygiene.log 2>/dev/null || echo 0) ))
+  [ "$age" -gt 5400 ] && { note "ALERT: disk-hygiene log stale ${age}s (>90m) — the reaper may be dead"; alert=$((alert+1)); }
+fi
+
+# 3. DISK — df on /HOME (the repo's mount). `df /` once produced a wrong-mount misdiagnosis that burned a
+#    10-minute verify; always measure the repo's own mount.
+DP=$(df --output=pcent /home 2>/dev/null | tail -1 | tr -dc '0-9' || echo 0)
+[ "${DP:-0}" -ge 92 ] && { note "ALERT: /home is ${DP}% used (>=92%) — hygiene is behind"; alert=$((alert+1)); }
+
+# 4. systemd HEALTH + STALE-SCOPE AUTO-CLEAN. Empty claude scopes accumulate on every agent relaunch (and
+#    en masse a 'degraded' systemd is what forces the UNCONTAINED fallback). reset-failed + stop the empties.
+#    (systemctl --user needs the user session; from cron it may no-op — that is fine, the observer run does it.)
+if command -v systemctl >/dev/null 2>&1; then
+  st=$(systemctl --user is-system-running 2>/dev/null || echo unknown)
+  if [ "$st" != "running" ] && [ "$st" != "unknown" ]; then systemctl --user reset-failed 2>/dev/null && { note "HEALED: systemd --user was '$st' → reset-failed"; heal=$((heal+1)); }; fi
+  LIVE=""; for p in $(grind_pids); do LIVE=$(scope_of "$p"); [ -n "$LIVE" ] && break; done
+  for s in $(systemctl --user list-units --type=scope --no-legend 2>/dev/null | awk '/claude/{print $1}'); do
+    [ "$s" = "$LIVE" ] && continue
+    cg="/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/$s/cgroup.procs"
+    if [ -z "$(cat "$cg" 2>/dev/null)" ]; then systemctl --user stop "$s" 2>/dev/null && heal=$((heal+1)); fi
+  done
+fi
+
+# 5. AGENT: SINGLE + CONTAINED. Double-spawn (a resurrection daemon launching a duplicate) and an
+#    uncontained agent (systemd-run unavailable at launch → OOM/machine-hang risk) are both ALERT-ONLY:
+#    bouncing the live agent is disruptive and must be done at a wall-free moment — the observer's call,
+#    never automated here.
+NG=$(grind_pids | wc -l | tr -dc '0-9'); NG=${NG:-0}
+if [ "$NG" -gt 1 ]; then note "ALERT: ${NG} grind agents running (DOUBLE-SPAWN?) — observer must investigate by PID"; alert=$((alert+1)); fi
+if [ "$NG" -eq 1 ]; then
+  gp=$(grind_pids | head -1)
+  [ -z "$(scope_of "$gp")" ] && { note "ALERT: grind agent $gp is UNCONTAINED — observer bounce at a wall-free moment (systemd recovered ⇒ relaunch is contained)"; alert=$((alert+1)); }
+fi
+if [ "$NG" -eq 0 ]; then
+  pgrep -f 'bash .*/scripts/loop-forever.sh' >/dev/null 2>&1 || { note "ALERT: NO grind agent AND NO supervisor — the loop is DOWN"; alert=$((alert+1)); }
+fi
+
+# 6. WALL-BANK STALENESS (never auto-fix; ALERT). A poisoned LAST_WALL_TIME (banked high under load) makes
+#    the ratchet refuse every later tick. If the LAST receipt was green on a QUIET box (load<1.5) yet its
+#    real seconds are <½ the banked wall, the bank is stale-high and needs an observer re-baseline.
+WB=$(grep -oP '^LAST_WALL_TIME:\s*\K[0-9]+' STATUS.md 2>/dev/null || echo 0)
+RS=$(grep -oP '^seconds:\s*\K[0-9]+' .git/manuk-verify-receipt 2>/dev/null || echo 0)
+RL=$(grep -oP '^load1:\s*\K[0-9.]+' .git/manuk-verify-receipt 2>/dev/null | awk '{printf "%d",$1*10}' || echo 99)
+RR=$(grep -oP '^result:\s*\K\w+' .git/manuk-verify-receipt 2>/dev/null || echo "?")
+if [ "$RR" = green ] && [ "${RL:-99}" -lt 15 ] && [ "${WB:-0}" -gt 0 ] && [ "${RS:-0}" -gt 0 ] && [ $(( RS * 2 )) -lt "${WB:-0}" ]; then
+  note "ALERT: LAST_WALL_TIME=${WB}s but a QUIET green receipt ran in ${RS}s — the bank is stale-high; re-baseline by hand"; alert=$((alert+1))
+fi
+
+# Summary line (the observer reads the tail of $LOG each heartbeat).
+note "ops-check: ${heal} healed, ${alert} alert(s) [disk ${DP:-?}% · grind ${NG} · systemd ${st:-n/a}]"
+[ "$alert" -gt 0 ] && exit 0   # alerts are informational; ops-check NEVER fails anything.
+exit 0

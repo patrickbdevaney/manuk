@@ -116,9 +116,15 @@ agent's staged work); **stale systemd-scope accumulation**; **CI/env drift** (Ch
 toolchain). Root: **the substrate's state is ASSUMED, not VERIFIED.** Fix theme: idempotency + fail-safe
 defaults + **post-condition verification** — verify the cron actually ran (log heartbeat), the scope was
 created (containment check), the wall env was valid *at bank time* (not during the gate phase), the commit
-isolated the intended paths — never assume. Status: handled **reactively** + self-healing crons/watchdogs;
-**not yet structurally prevented.** This is the largest uncovered surface, and several items (the wall-bank
-env-stamp timing, cron-heartbeat self-checks, auto scope-clean) are observer-buildable now.
+isolated the intended paths — never assume. Status: **BUILT (t601, `scripts/ops-check.sh`)** — the
+consolidated OPERATIONAL-INVARIANTS self-check runs from cron (*/15) AND every observer heartbeat, and
+turns each incident above into a standing checked invariant: it AUTO-HEALS the safe ones (un-escapes a
+corrupted crontab — the silent-cron-death bug; `reset-failed` + stops empty stale scopes) and ALERTS on the
+rest (hygiene-log stale ⇒ reaper dead; /home ≥92%; double-spawn; uncontained agent; a stale-high wall-bank
+needing re-baseline). Fail-safe by construction: it only READS + a whitelist of safe heals + logs, NEVER
+kills the live agent/supervisor, NEVER re-baselines the wall (observer's call), and always `exit 0` so it
+can never fail a tick. Residual (still reactive): the git-race discipline (commit-immediately + pathspec)
+and CI/env drift (external) — both are DISCIPLINE, hard to gate mechanically.
 
 **Category C — OBSERVER reliability (me).** *The overseer itself drifts.* This session: I relayed in-flight
 findings as conclusions ~5× (the "quantised", "class-failure", and RSS-thesis reversals), and the project

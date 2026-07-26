@@ -92,6 +92,12 @@ and v1.0.0 is pinned — same discipline as the release itself.
 3. `scripts/agent-doctor.sh` for the landing-vs-liveness picture; `scripts/agent-stream.sh
    --no-follow --last 20` to see what the agent is actually doing; `scripts/unblock.sh` if
    anything looks jammed.
+3b. `scripts/ops-check.sh` — the OPERATIONAL-INVARIANTS self-check (RELIABILITY-DOCTRINE Cat B):
+   verifies + auto-heals the substrate (crontab quote-corruption, hygiene liveness, disk, stale
+   systemd scopes, agent single+contained, wall-bank staleness). It also runs from cron every 15m;
+   the observer runs it each heartbeat and reads `tail .git/manuk-ops-check.log`. It NEVER kills the
+   live agent or re-baselines the wall — ALERT lines (double-spawn / uncontained / stale-wall) are the
+   observer's cue to act by PID at a wall-free moment (see the bounce recipe below).
 
 ## Cadence — sparse by default, decisive when needed
 
