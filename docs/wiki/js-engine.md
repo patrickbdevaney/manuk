@@ -1687,3 +1687,44 @@ one implementation registered in one of two places.
 
 `G_DYNAMIC_IMPORT` names all three in its assertion messages, because the first and third are easy to
 mistake for each other and the second looks like nothing.
+
+## Top-level await interleaves, and a cycle links with live bindings (tick 636)
+
+`? ESM top-level await + cyclic module records` sat on the constellation as a named **Interop 2026**
+web-compat item. Surface audit #34 had refused to book it `works` on the t608 probe, on the grounds
+that *"async/await PARSES"* is not the claim — top-level await is module-only syntax and
+multiple-TLA ordering needs a real module graph. That refusal was right, and this is the evidence it
+was holding out for: **both halves already worked end-to-end on the real page path.**
+
+**The first draft of the probe nearly published a false absence, and the CONTROL is the only reason
+it did not.** Driven with `Page::load` + `take_fetches`, the graph printed `-` — nothing ran, which
+reads exactly like *"top-level await is unsupported"*. Running the identical graph with every
+`await` deleted **also** printed `-`. Same instrument, no TLA, same nothing: so the instrument was
+wrong, not the subject. An external module graph is pre-fetched by **`Page::load_async` and by
+nothing else**.
+
+> A negative result feels like it needs no confirmation, and that asymmetry is the defect. The cheap
+> version of "name the code path that would deliver this" is **run the control**: the same
+> measurement with the feature under test removed. If the control fails too, you were measuring the
+> harness.
+
+**Asserting "the module ran" would have been vacuous, and the fix is an ORDER INVERSION.** An engine
+that ignored `await` at module scope, or ran modules synchronously in declaration order, satisfies
+every "it didn't throw" check. So the two async modules carry **different numbers of awaits** and
+stamp a shared counter on completion:
+
+| module | import order | awaits | finishes |
+|---|---|---|---|
+| `/tla.js` | first | 3 | **second** (`tick:2`) |
+| `/tla2.js` | second | 1 | **first** (`two:1`) |
+
+Real async-module semantics interleave them, so the module imported *second* completes *first* —
+the reverse of declaration order. The RED probe gives both modules three awaits and the record reads
+`tick:1 two:2` while **every other claim in the gate stays green**. That inversion is the entire
+discriminating power of the gate.
+
+**The cycle** (`a` imports `b`, `b` imports back) returns `a+A`, which is evidence of **live
+bindings**: `b()` reads `marker` from a module that was still evaluating when `b` was linked. A
+cycle that was refused throws; one linked by value-snapshot gives `a+undefined`.
+
+**Gate:** `engine/page/tests/g_esm_tla_cycle.rs`, 5 claims, 2 RED mutations tabulated in its header.

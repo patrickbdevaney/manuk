@@ -28337,3 +28337,65 @@ none; `audiopus`/`opus` are C bindings, so it is a real dependency decision). Th
 media class also still lists `requestVideoFrameCallback` and the audio output device. Still open
 from earlier: our own latency on the placement half, and t629's `getBoundingClientRect()` on an SVG
 child.
+
+## Tick 636 — ESM top-level await and cyclic module records: probe first (2026-07-26)
+
+HYPOTHESIS: the constellation's `app` class lists `? ESM top-level await + cyclic module records`
+as a named **Interop 2026 web-compat item** — *"real sites break when multiple top-level awaits or
+cyclic module records resolve in the wrong order"*. It sits directly on the ESM subsystem this
+project built (t512-520) and last touched at t624, when dynamic `import()` was closed by moving a
+registry clear that had been running too early.
+
+`?` outranks `✗` on this board, and an unknown here has produced a phantom absence six times. So
+this tick PROBES before it plans: multiple TLAs in one graph, a TLA whose value a dependent reads,
+and a genuine import cycle — with a RED-shaped expectation for each, so a pass means something.
+
+**BOTH ALREADY WORKED.** `tla:resolved`, `tick:2 two:1`, `cycle:a+A` — top-level await interleaves
+correctly and a genuine import cycle links with live bindings, end-to-end on the real page path. The
+deliverable is therefore the GATE, not a fix. Surface audit #34 (t608) had *refused* to book this
+`works` off the earlier probe because that only established async/await **parses**, which is not the
+claim; that refusal was right, and this is the evidence it was holding out for. Constellation cell
+`unknown` -> `gated`, and the `app` class now has no `?` left.
+
+**THE PROBE'S FIRST DRAFT NEARLY PUBLISHED A FALSE ABSENCE, AND THE CONTROL IS THE ONLY REASON IT
+DID NOT.** Driven with `Page::load` + `take_fetches`, the graph printed `-`. Nothing ran. That reads
+exactly like *"top-level await is unsupported"* and I was one step from writing it down. Running the
+identical graph with **every `await` deleted** also printed `-` — same instrument, no feature under
+test, same nothing.
+
+> **RUN THE CONTROL.** It is the cheap form of the standing rule *"before publishing an absence,
+> name the code path that would deliver it and show it ran"*: re-run the measurement with the
+> feature under test REMOVED. If it still fails, you were measuring the harness. Naming a code path
+> is work and gets skipped; deleting the feature from your own fixture takes thirty seconds.
+
+The path, once named: an external module graph is pre-fetched by **`Page::load_async` and by nothing
+else**. `take_fetches` never sees it. That is the fifth false absence this loop has caught in a
+handful of sessions and the first one caught by a control rather than by the next tick.
+
+**AND THE GATE WOULD HAVE BEEN VACUOUS WITHOUT AN ORDER INVERSION.** "The module ran" is satisfied by
+an engine that ignores `await` at module scope entirely, or runs modules synchronously in
+declaration order. So the two async modules carry **different await counts** — `/tla.js` imported
+first with three, `/tla2.js` imported second with one — and stamp a shared counter. Real
+async-module semantics interleave them, so the module imported SECOND finishes FIRST: `tick:2
+two:1`, the reverse of declaration order. The RED probe gives both three awaits and the record reads
+`tick:1 two:2` **while every other claim in the file stays green**. That inversion is the gate's
+entire discriminating power.
+
+> **A capability assertion must be able to fail the FAKE version of the capability**, not merely the
+> absent one. Absence is easy to detect and is rarely what ships; a plausible-but-wrong
+> implementation is what ships.
+
+TICK SHAPE: measurement (measure-and-pin — an unmeasured `?` on a named Interop 2026 item resolved
+to a gated capability, with the vacuity of the obvious assertion identified and designed out). No
+engine source changed and deliberately so: nothing was broken. Bar 0 untouched; no ratchet floor
+moved.
+Gates: **G_ESM_TLA_CYCLE** (`engine/page/tests/g_esm_tla_cycle.rs`, 5 claims, 2 RED mutations run
+and tabulated).
+WIKI: `docs/wiki/js-engine.md` — "Top-level await interleaves, and a cycle links with live bindings".
+PATTERN: `docs/loop/WEB-PATTERNS.md` — "The bundler-free module graph — top-level await and cycles".
+
+NEXT: the `app` class's remaining holes are all honest `✗` (SharedWorker, scroll-driven animations,
+scoped custom element registries). The cheapest remaining `?`s are in `doc` (CSS `ic`/`ric` units)
+and `cross`. Media's narrowest blocker is still an **Opus decoder** — a real dependency decision,
+not a wiring tick. Still open: our own latency on the placement half, and t629's
+`getBoundingClientRect()` on an SVG child.

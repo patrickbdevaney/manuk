@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **394** | ticks 1–634 |
-| median tick cycle | **21m** | 393 intervals |
-| median, last 10 | **14m** | 10 intervals |
+| ticks landed | **395** | ticks 1–635 |
+| median tick cycle | **21m** | 394 intervals |
+| median, last 10 | **9m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.05** | 374.7h elapsed |
-| median verify wall | **66s** | 333 ticks |
+| **ticks per hour** | **1.05** | 374.9h elapsed |
+| median verify wall | **66s** | 334 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **317**
+* **live gates**: 27 → **318**
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**195 of 394 ticks** (49%) moved a
+**196 of 395 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **195** capability ticks, median cycle **21m**
+* **196** capability ticks, median cycle **21m**
 * median diff per tick: **+234 / −34** lines across 8 files
 
 ## Every tick
@@ -491,5 +491,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **632** | 2026-07-26 17:50 | 6m | measurement | 63s | +149/−3 | 315 | 81 | 56.0% · | the load budget moves COVERAGE and SHAPE in opposite directions (2026-07-26) |
 | **633** | 2026-07-26 18:36 | 46m | capability | 63s | +1454/−120 | 316 | 81 | 56.0% · | WebM/Matroska demux: the container half of the VP9 ladder (2026-07-26) |
 | **634** | 2026-07-26 19:48 | 71m | capability | 63s | +575/−100 | 317 | 81 | 56.0% · | AV1-in-WebM: the join was already complete, and both answers said no (2026-07-26) |
+| **635** | 2026-07-26 19:55 | 7m | capability | 63s | +337/−4 | 318 | 81 | 56.0% · | `navigator.mediaCapabilities.decodingInfo()`: the rendition chooser, and a THIRD consumer  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

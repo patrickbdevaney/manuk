@@ -705,6 +705,7 @@
   - L1663 · Why a synchronous hook is honest here
   - L1672 · ⚠ A hook installed at one of two sites looks exactly like no hook at all
   - L1680 · The three symptoms, and what each one means
+  - L1691 · Top-level await interleaves, and a cycle links with live bindings (tick 636)
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1092,4 +1093,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1007 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1008 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

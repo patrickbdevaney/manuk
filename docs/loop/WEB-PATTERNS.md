@@ -5376,3 +5376,31 @@ other at runtime over inputs that are not all the same answer — never each aga
 wrote down. Giving the new surface its own plausible codec test turned the agreement claim red and
 left every per-answer assertion green. Per-answer assertions cannot see a second implementation;
 that is what a second implementation *is*.
+
+## The bundler-free module graph — top-level await and cycles (tick 636)
+
+**The class:** every `<script type="module">` graph shipped without a bundler — which is now most
+modern app code in development, all of Vite's dev server, and a growing share of production. Two
+things in it are load-bearing and easy to get subtly wrong: **multiple top-level awaits** (a module
+that awaits before exporting, and the dependents that read those exports) and **cyclic module
+records** (two modules importing each other, legal because bindings are live rather than snapshots).
+Both are named Interop 2026 web-compat items precisely because real sites break when they resolve in
+the wrong order.
+
+Probed, and **both already worked**. The deliverable was the gate, not a fix — unmeasured-and-working
+is one regression away from unmeasured-and-broken, with nothing to say so.
+
+**The generalisation, and it is about probes rather than modules: RUN THE CONTROL.** The first probe
+printed nothing and looked exactly like "top-level await is unsupported". The same graph with every
+`await` removed printed nothing too — so the harness was wrong (an external module graph is
+pre-fetched by `load_async`, never by the page fetch queue). **The control is the cheap form of
+"name the code path that would deliver this absence": re-run the measurement with the feature under
+test removed, and if it still fails, you were measuring the harness.** A negative result feels like
+it needs no confirmation, which is exactly why absences get published at a price positives never
+would.
+
+**And the second-order rule: a capability assertion must be able to fail the FAKE version.** "The
+module ran" is satisfied by an engine that ignores `await` at module scope entirely. Give two async
+modules **different await counts** and the shorter one must finish first — the reverse of
+declaration order. That inversion is what distinguishes real async-module semantics from modules run
+in the order they were written, and it is the only claim in the gate that can tell them apart.
