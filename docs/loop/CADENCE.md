@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **377** | ticks 1–617 |
-| median tick cycle | **21m** | 376 intervals |
-| median, last 10 | **32m** | 10 intervals |
+| ticks landed | **378** | ticks 1–618 |
+| median tick cycle | **21m** | 377 intervals |
+| median, last 10 | **29m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.02** | 367.2h elapsed |
-| median verify wall | **67s** | 316 ticks |
+| **ticks per hour** | **1.03** | 367.4h elapsed |
+| median verify wall | **67s** | 317 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**190 of 377 ticks** (50%) moved a
+**190 of 378 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -474,5 +474,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **615** | 2026-07-26 11:23 | 28m | capability | 63s | +401/−4 | 309 | 81 | 56.0% · | the feature-detect that THREW, plus constitution check #43 (2026-07-26) |
 | **616** | 2026-07-26 11:47 | 25m | capability | 63s | +424/−8 | 310 | 81 | 56.0% · | a 404 page is a document to RENDER, not JavaScript to EXECUTE (2026-07-26) |
 | **617** | 2026-07-26 12:15 | 28m | capability | 63s | +534/−16 | 311 | 81 | 56.0% · | an external module resolved its imports against the DOCUMENT, and welt.de went from blank  |
+| **618** | 2026-07-26 12:24 | 9m | reliability | 63s | +264/−62 | 311 | 81 | 56.0% · | SURFACE AUDIT #34: the map claimed `works` for a capability that does not exist (2026-07-2 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

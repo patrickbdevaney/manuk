@@ -1765,3 +1765,74 @@ console**. `OURS IS SLOW` fires on wall-clock alone and cannot tell a slow boot 
 **ADDED:** 4 rows (interface objects `gated`; container style queries `missing`; `scrollend`
 `missing`; ESM TLA `unknown`). **CORRECTED:** welt.de's failure re-attributed from *timing* to
 *aborted boot*. **CARRIED:** the 26 map-reconcile drift rows, unclosed and owned by a later tick.
+
+---
+
+## Audit #34 — tick 618
+
+**What this audit measured:** the map, against the tree, twice — once by diffing `engine/page/tests/`
+against `CONSTELLATION.tsv` (the standing first step since audit #31), and once with
+`scripts/map-reconcile.sh`, whose 26 drift rows were the observer's live CO-#1 ask since t601.
+
+### The instrument was wrong FIRST, twice, and both times in my favour to believe it
+
+**262 of 311 gate files "unreferenced".** That is what the naive check said. It matched gate FILENAMES
+against the map, and the map cites `G_*` CONSTANTS. Keyed correctly the answer is **6** — and all six
+are **this session's own new gates** (t612/613/615/616/617), which I added across five ticks and never
+mapped. Audit #31's rule held perfectly; the drift was entirely mine and entirely recent.
+
+**`G_CAP_TOUCH_PROBE` reported as a DANGLING gate, and it is not.** It exists at
+`tests/wpt/tests/g_cap_touch_probe.rs`; `map-reconcile.sh` scans only `engine/page/tests/`. I was one
+edit from downgrading a real gate's claim on an instrument's say-so. Every other dangling report was
+re-verified with a repo-wide `grep -rl` before anything moved — six of the seven are genuinely absent:
+`G_AVIF_PAINT`, `G_AUDIO_PUMP`, `G_AUDIO_JOIN`, `G_TAB_DISCARD_RELEASES_TO_OS`, `G_FIDELITY`, `G_RATE`.
+
+**Suspect the instrument before the subject — fourth time in this session** (t611's `[id]` message,
+t613's grep-derived getter-only list, t614's oracle shell, and now both halves of this audit).
+
+### The headline finding: the map claimed `works` for a capability that does not exist
+
+> **`ES modules + dynamic import()` — status `works`, gate `-`.**
+
+Static ESM is real and now gated four ways. **Dynamic `import()` is not implemented at all**:
+SpiderMonkey answers *"Dynamic module import is disabled or not supported in this context"*, and a
+direct probe confirms the module never completes. The row asserted **two** capabilities and reported
+the stronger one's verdict for both. It is now split, with `import()` at `missing` and the evidence in
+its receipt.
+
+A second row was false in the same way: **`fetch / XHR / AbortController — works`, with no gate**,
+while `xhr.addEventListener` was a `TypeError` for as long as anyone had looked (t613, 8 of 16 HEAD
+sites construct an XHR). **A bare `works` is not a weak claim — it is an unfalsifiable one**, and two
+of the twenty were provably false the moment a gate was written.
+
+### Drift 26 → 0
+
+| action | rows | how it was decided |
+|---|---|---|
+| cited a REAL backing gate | 11 | each verified to *assert* the claim, not merely to have a plausible filename — `pushState` appears 4× in `G_DOCUMENT_LOCATION`, `contrast-color` 12× in `G_CONTRAST_COLOR` |
+| set `unknown` (no gate exists) | 14 | `@font-face` has **zero** occurrences in the whole gate directory; `ResizeObserver` appears only in presence lists, and *"the global exists"* is not *"the observer fires"* |
+| split a two-capability row | 1 | ES modules vs `import()` |
+| new rows for this session's gates | 5 | t612/613/615/616/617 |
+
+`unknown`, not `missing`: `G_CONSTELLATION_WELLFORMED` rejected my first vocabulary (`unmeasured`) and
+was right to — but `missing` would have been **a new lie in the opposite direction**, since most of
+these capabilities probably do work. "We have not measured it" is the honest state and the map has a
+word for it.
+
+### ⚠ FOUR RATCHET MARKS LOWERED, DELIBERATELY, WITH THE EVIDENCE
+
+`CONST:doc 24→22 · CONST:media 11→10 · CONST:cross 17→16 · MEASURED 362→356`
+
+Those marks counted capabilities as **gated** whose named gate **has no test file anywhere in the
+repo**. A gated count that includes phantoms was never a measurement of gating. The constitution's
+provision — *"explain in the journal why the mark itself was wrong and lower it deliberately"* — is
+exactly this case, and the test I applied before doing it: **would I make this change if it did not
+help me land?** Yes: a map claiming `gated` for a gate that does not exist is the precise false
+presence the reliability doctrine names as defect #1, and keeping it to protect a number is the worst
+available reason. Each downgrade was verified independently of the reconciler that reported it.
+
+The five capability marks that went UP in the same pass — `app 80→81, dom 19→20, js 1→3, net 5→7` —
+are this session's real gates, and they are banked at the same moment. The correction is not a net
+retreat; it is a *truer* number in both directions.
+
+**Next audit due: tick 628.**

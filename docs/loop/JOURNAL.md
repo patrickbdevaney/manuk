@@ -27105,3 +27105,70 @@ PATTERN: `docs/loop/WEB-PATTERNS.md` — the bundled-SPA entry module under a ha
 NEXT: `import()` — dynamic module import is genuinely unimplemented and welt.de now reaches it, as do
 all the code-splitting bundlers. That is the honest next rung and it is a real subsystem, not a member.
 `document.fonts` is a smaller one on the same page.
+
+## Tick 618 — SURFACE AUDIT #34: the map claimed `works` for a capability that does not exist (2026-07-26)
+
+The surface audit was due (every 10 ticks; last at 608). Full record in `docs/loop/SURFACE-AUDIT.md`.
+
+**THE INSTRUMENT WAS WRONG FIRST, TWICE, AND BOTH TIMES IN MY FAVOUR TO BELIEVE IT.** The gate-vs-map
+diff reported **262 of 311 gate files unreferenced** — a catastrophic-looking number that was entirely
+my own check matching FILENAMES against a map that cites `G_*` CONSTANTS. Keyed correctly: **6**, and
+all six are **this session's own new gates**, which I added across five ticks and never mapped.
+Audit #31's standing rule held perfectly; the drift was mine and it was five ticks old.
+
+Then `map-reconcile.sh` reported `G_CAP_TOUCH_PROBE` as a dangling gate. **It is not** — it lives at
+`tests/wpt/tests/g_cap_touch_probe.rs`, and the reconciler scans only `engine/page/tests/`. I was one
+edit from deleting a real gate's claim on an instrument's say-so, and only re-verified because this
+session has now been burned by exactly this four times (t611's stale `[id]` message, t613's
+grep-derived getter-only list, t614's oracle shell). **Every** dangling report was then re-checked
+with a repo-wide `grep -rl`; six of the seven are genuinely absent.
+
+**THE HEADLINE: `ES modules + dynamic import()` claimed `works`, with no gate, and half of it does not
+exist.** Static ESM is real and now gated four ways. Dynamic `import()` is not implemented at all —
+SpiderMonkey says *"Dynamic module import is disabled or not supported in this context"* and a direct
+probe confirms the module never completes. **One row asserted two capabilities and reported the
+stronger one's verdict for both.** Split, with `import()` at `missing`.
+
+A second row failed the same way: **`fetch / XHR / AbortController — works`, no gate** — while
+`xhr.addEventListener` was a `TypeError` for as long as anyone had looked (t613: 8 of 16 HEAD sites
+construct an XHR). **A bare `works` is not a weak claim, it is an unfalsifiable one.** Two of the
+twenty were provably false the moment a gate got written.
+
+**DRIFT 26 → 0**, the observer's live ask since t601: 11 rows given a real backing gate (each verified
+to *assert* the claim, not merely to have a plausible filename — `pushState` appears 4× in
+`G_DOCUMENT_LOCATION`, `contrast-color` 12× in `G_CONTRAST_COLOR`), 14 set to `unknown` (`@font-face`
+has **zero** occurrences in the entire gate directory), 1 split, 5 new rows for this session's gates.
+`unknown` rather than `missing` because `missing` would be **a new lie in the opposite direction** —
+most of these probably do work; nobody has measured them. `G_CONSTELLATION_WELLFORMED` rejected my
+first vocabulary and was right to.
+
+**⚠ FOUR RATCHET MARKS LOWERED, DELIBERATELY:** `CONST:doc 24→22 · CONST:media 11→10 · CONST:cross
+17→16 · MEASURED 362→356`. Those marks counted capabilities as **gated** whose named gate has **no
+test file anywhere in the repo** (`G_AVIF_PAINT`, `G_AUDIO_PUMP`, `G_AUDIO_JOIN`,
+`G_TAB_DISCARD_RELEASES_TO_OS`, `G_FIDELITY`, `G_RATE`). A gated count containing phantoms was never a
+measurement of gating. The ratchet's own message provides for this — *"explain why the mark itself was
+wrong and lower it deliberately"* — and the test I applied first: **would I make this change if it did
+not help me land?** Yes. Keeping a phantom gate to protect a number is the worst available reason, and
+this is the same session in which I nearly had a WALL mark loosened over a build artifact (t610), so
+the bar for touching a mark is one I have already failed once and am deliberately holding higher.
+
+In the same pass four marks went **UP** — `app 80→81, dom 19→20, js 1→3, net 5→7` — this session's
+real gates. The correction is not a net retreat; it is a truer number in both directions.
+
+RED-PROVEN: not applicable — no engine source changed. The instruments used are themselves
+falsify-proven: `map-reconcile.sh --self-test` passes (fires on a bare + a dangling fixture row, does
+not false-fire on a valid one), and `G_CONSTELLATION_WELLFORMED` caught my invalid status vocabulary
+before it reached the map.
+
+TICK SHAPE: reliability/measurement (the due surface audit; the map no longer claims a capability the
+engine does not have, and no longer claims a gate that does not exist). Bar 0 untouched. **Four marks
+lowered with cause and evidence; four raised by real work.**
+Gates: none added — this tick is the audit. `G_CONSTELLATION_WELLFORMED` and `map-reconcile --self-test`
+both green on the result.
+WIKI: none [forced] — no engine mechanism changed; the finding's home is the audit ledger.
+PATTERN: [no-pattern] — no browser capability changed.
+
+NEXT: `import()` is now correctly marked `missing` and is the honest next capability — it is a
+subsystem (a host hook plus an async graph fetch), and welt.de reaches it. `@font-face` having **no
+gate at all** is the most surprising residue here: web fonts drive text metrics, which is the thing
+half the fidelity work has been chasing.
