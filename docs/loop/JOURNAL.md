@@ -26669,3 +26669,104 @@ NEXT: the two named missing surfaces are cheap and both are TypeErrors of the sa
 whatever object welt.de calls `addEventListener` on. And the getter-only sweep found the rest of the
 class worth pricing: `nodeValue` (spec-settable), `style` and `classList` (both `[PutForwards=]`, so
 `el.style = 'color:red'` and `el.classList = 'a b'` throw here), and `document.body`.
+
+## Tick 613 — `XMLHttpRequest` had the legacy half of its API and none of the EventTarget half (2026-07-26)
+
+t612 left a named residue: welt.de's adblock check advanced one rung to `TypeError: a.addEventListener
+is not a function`. This tick asked **which object** — and the answer is worth far more than the site.
+
+**BUT FIRST, A CORRECTION TO t612's OWN RESIDUE LIST, BECAUSE IT WAS WRONG.** t612 closed by naming
+`nodeValue`, `style`, `classList`, `document.body` and `selectionDirection` as "spec-settable and still
+throwing here". I had derived that by **grepping** `prop_guarded!(prop, …, None)`. Probing it instead:
+
+```text
+  nodeValue        ok      (writable — and the Attr half too)
+  data             ok      className ok · textContent ok · innerHTML/outerHTML ok · value/checked ok
+  style            THROWS  classList THROWS  document.body THROWS  selectionDirection THROWS
+```
+
+**`nodeValue` was already writable**, from a setter registered on another prototype that my grep never
+saw. The list was an artifact of the instrument, not a property of the engine — *the same shape as the
+stale `[id]` message t611 deleted, made by me one tick later.* **A grep over a registration macro
+cannot answer "is this writable"; only a write can.** [[board-and-constellation-stale]]
+
+**AND THE USAGE MEASUREMENT KILLED THREE OF THE FOUR SURVIVORS.** Scanning the HEAD corpus (HTML + up
+to 12 bundles per site) for each write: `.classList =` **0 sites**, `document.body =` **0 sites**,
+`.selectionDirection =` **0 sites**. `.style =` looked alive at 15 hits across 4 sites — until I read
+the matches, and all six sampled were **React props objects** (`R.style=d({},t.style,{},O.style)`),
+not `element.style`. So the entire remaining getter-only class has **no demonstrated usage**, and
+building it off the spec would have been building for nobody. t590's lesson, paid again: *measure in
+your own engine, against real code, before pricing.*
+
+**THE REAL FIND, from probing `addEventListener` across object types:**
+
+```text
+  window ✓  document ✓  element ✓  text ✓  fragment ✓  img ✓  audio/video ✓  form ✓  iframe ✓  …
+  xhr ✗     performance ✗     screen.orientation ✗
+```
+
+**`XMLHttpRequest` is not an EventTarget.** `addEventListener`, `removeEventListener` and
+`dispatchEvent` are all `undefined`; `xhr instanceof EventTarget` is false; the prototype chain is
+`? > Object`. It has the **legacy** half — `onload`, `onerror`, `onreadystatechange`, `onabort`,
+`onloadend` — and none of the modern half. Calling an undefined method is a **`TypeError` that kills
+the calling frame**, so a request set up the ordinary way never even reaches `send()`, and everything
+else that frame was doing dies with it.
+
+**MEASURED, and it is not a corner:**
+
+```text
+  use `new XMLHttpRequest`                 8 of 16 sites   (50%)
+  addEventListener within 500ch of one     4 of 16 sites   (25%)
+  XHR-specific event names in listeners    readystatechange 9 · progress 4 · loadend 3 · timeout 2
+```
+
+Half the HEAD stratum constructs an XHR; a quarter attaches listeners to one. `readystatechange` and
+`loadend` are names essentially nothing else fires, so those 12 are XHR by construction.
+
+**AND THE SIX OPEN-CODED DISPATCH SITES HAD ALREADY DRIFTED — the session's signature defect, a fifth
+time.** Every event was fired by hand at each site, across three delivery paths, and the streaming
+path fired `loadend` while the buffered `__deliverXhr` **did not**. So whether `onloadend` ran was a
+function of **whether the response happened to arrive in chunks** — a spec event whose delivery
+depended on transport framing. Every site now routes through one `__xhrFire`, which fires the `on*`
+handler and then the listeners; there is no longer a place to fire an event from. `onprogress` was
+also *fired* by the streaming path but never *declared* on the object, so `'onprogress' in xhr` — the
+ordinary feature test — answered NO about an event we actually deliver.
+
+RED-PROVEN THREE WAYS, EACH A DIFFERENT MECHANISM:
+  · remove `addEventListener` again        -> RED — the whole gate, welt.de's exact TypeError
+  · stop the BUFFERED path firing `loadend` -> RED `once:0` — precisely the drift found above, and it
+    fails while the streaming half stays green, which is why BOTH paths are gated
+  · drop the duplicate-registration rule    -> RED `dupes:2` — an EventTarget degraded to a callback array
+
+⚠ **ONE #[test] PER JS GATE, RE-LEARNED AT THE COST OF A RUN.** Two `#[test]`s in one file SIGSEGV'd —
+`PageContext` is per-PROCESS. The gate is split in two, which turned out to be the right shape anyway:
+the two halves gate the two delivery paths that had diverged.
+
+**HONESTY: welt.de STILL DOES NOT RENDER.** Two rungs are now cleared and the third is visible:
+
+```text
+  t612 before:  ... adblock: TypeError: setting getter-only property "innerText"
+  t613 before:  ... adblock: TypeError: a.addEventListener is not a function
+  t613 after:   ... adblock: Error: Failed to execute packing script
+```
+
+Still open on that chain: `TypeError: HTMLScriptElement.supports is not a function`, and a module
+request answered with HTML (`SyntaxError: expected expression, got '<'`). **What this tick claims is
+the XHR EventTarget surface at 8-of-16/4-of-16 sites — not the site.**
+
+TICK SHAPE: capability (a network API half the measured corpus uses went from *throwing* on the modern
+idiom to working, and one spec event stopped depending on transport chunking). Bar 0 untouched; no
+ratchet floor moved; no capability traded.
+Gates: +2 `G_XHR_EVENTTARGET` (`g_xhr_eventtarget.rs` buffered · `g_xhr_eventtarget_stream.rs`
+streaming) — the surface exists, `on*` and listeners BOTH run in order, duplicate registration
+collapses, `once` removes before invoking, a removed listener stays removed, a throwing listener does
+not block the rest, the event object is real, and both delivery paths fire the same set.
+WIKI: `docs/wiki/networking.md` — "XMLHttpRequest had the legacy half of its API and none of the
+EventTarget half".
+PATTERN: [no-pattern] — the pattern this belongs to (`a site that detects a broken DOM write and blanks
+itself`) was written at t612 and this is its second instance, not a new one.
+
+NEXT: `HTMLScriptElement.supports` is the next rung and is trivial (`'classic'`/`'module'`/
+`'importmap'`). `performance` and `screen.orientation` are also not EventTargets, but neither showed
+usage in the corpus scan and neither should be built until it does. The module-answered-with-HTML
+error is the more interesting one: it means a `<script type=module>` URL resolved to a document.

@@ -1533,3 +1533,76 @@ already exists to refuse.
 and for the reason `g_load_document.rs` documents at its head: `G_CONN_CAP` has to run its capped and
 uncapped arms in one process to show that the cap is what moves the number, and a `OnceLock` would
 let whichever arm ran first decide for both.
+
+## XMLHttpRequest had the legacy half of its API and none of the EventTarget half (tick 613)
+
+```text
+  xhr.onload            function      xhr.addEventListener      undefined
+  xhr.onerror           function      xhr.removeEventListener   undefined
+  xhr.onreadystatechange function     xhr.dispatchEvent         undefined
+  xhr.onabort/onloadend function      xhr instanceof EventTarget false
+                                      prototype chain           ? > Object
+```
+
+`XMLHttpRequest` is defined in the JS prelude as a plain object with `on*` handler properties. It was
+never an EventTarget, so `xhr.addEventListener('load', fn)` — the idiom essentially all modern code
+uses — was **`TypeError: ... is not a function`**, which under strict mode kills the calling frame. The
+request is not merely un-listened-to; it is **never sent**, and whatever else that frame was doing dies
+with it.
+
+### The population, measured
+
+Across the 20 HEAD sites of `corpus-v2.tsv` (each site's HTML plus up to 12 of its external bundles):
+
+```text
+  use `new XMLHttpRequest`               8 of 16 sites   (50%)
+  addEventListener within 500ch of one   4 of 16 sites   (25%)
+  XHR-specific listener event names      readystatechange 9 · progress 4 · loadend 3 · timeout 2
+```
+
+`readystatechange` and `loadend` are names essentially nothing else fires, so those are XHR by
+construction. This is also `www.welt.de`'s second failure rung, behind t612's `innerText`.
+
+### Six open-coded dispatch sites, and they had already drifted
+
+Every XHR event was fired by hand at each site, across three delivery paths — and the two disagreed:
+
+| event | streaming (`__deliverEnd`) | buffered (`__deliverXhr`) |
+|---|---|---|
+| `readystatechange` | fired | fired |
+| `load` / `error` | fired | fired |
+| **`loadend`** | **fired** | **NOT fired** |
+
+So whether `onloadend` ran was a function of **whether the response happened to arrive in chunks** — a
+spec event whose delivery depended on transport framing. Everything now goes through a single
+`__xhrFire(x, type, ev)` that runs the `on*` handler and then the listener list, so there is no longer
+a place to fire an event *from*. Both delivery paths are gated separately, because a gate on one path
+would have called the divergence green.
+
+`onprogress` had the mirror-image bug: the streaming path *fired* it, but the constructor never
+*declared* it, so `'onprogress' in xhr` — the ordinary feature test — answered NO about an event we
+genuinely deliver. **A capability we have and deny is the same class of lie as one we claim and lack.**
+
+### What the listener list must do to be an EventTarget rather than an array
+
+Listeners live in JS on the instance (an XHR has no node reflector for the Rust EventTarget bindings to
+operate on), so the observable contract is what carries the weight:
+
+- **duplicate registration collapses** — same callback twice registers once
+- **`once` removes before invoking**, not after
+- **the list is copied before dispatch**, so removing during dispatch does not skip the next listener
+- **a throwing listener does not prevent the others** — one page's bug must not become a dead request
+  for everything else listening
+- the event object is real: `type`, `target`, `currentTarget` are set
+
+### Still missing on XHR, named rather than implied
+
+`upload` (the progress object for uploads), `timeout`/`ontimeout`, `withCredentials`,
+`overrideMimeType`, and `responseXML`. Also not EventTargets: `performance` and `screen.orientation` —
+neither showed any usage in the corpus scan, and neither should be built until one does.
+
+⚠ **A grep over a registration macro cannot tell you what is writable or callable.** t612 closed by
+listing `nodeValue` as an unwritable property, derived by grepping `prop_guarded!(prop, …, None)`.
+Probing found `nodeValue` **already writable** from a setter on another prototype the grep never saw.
+The same instrument-artifact shape as the stale `[id]` message deleted at t611. **Probe; do not grep.**
+[[board-and-constellation-stale]]

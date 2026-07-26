@@ -5181,3 +5181,38 @@ bytes is more likely a page that *decided* not to render than a pipeline that fa
 advanced to the next rung (`Error: Failed to execute packing script`), with `HTMLScriptElement.supports`
 and an `addEventListener` on some object still missing behind it. Expect a chain, and do not claim the
 site on the strength of clearing one link of it.
+
+## AJAX set up the modern way: `xhr.addEventListener`, not `xhr.onload` (tick 613)
+
+**The class:** every page whose data layer is `XMLHttpRequest` driven through **EventTarget** rather
+than the `on*` handler properties. That is analytics beacons, ad SDKs, consent managers, older
+jQuery/axios-era app code, upload widgets, and anything that needs more than one listener per event —
+which is the entire reason the EventTarget form exists.
+
+We had the **legacy half only**. `onload`, `onerror`, `onreadystatechange`, `onabort`, `onloadend`
+worked; `addEventListener`, `removeEventListener` and `dispatchEvent` were `undefined` and
+`xhr instanceof EventTarget` was false. Calling an undefined method is a **`TypeError` that kills the
+calling frame**, so such a request was not merely unobserved — **it was never sent**, along with
+whatever else that frame was doing.
+
+**Measured across the 20 HEAD sites of `corpus-v2.tsv`** (HTML + up to 12 bundles each):
+
+```text
+  use `new XMLHttpRequest`               8 of 16 sites   (50%)
+  addEventListener within 500ch of one   4 of 16 sites   (25%)
+  XHR-specific listener event names      readystatechange 9 · progress 4 · loadend 3 · timeout 2
+```
+
+**Half the stratum uses XHR; a quarter attaches listeners to one.**
+
+**The generalisation worth keeping:** a web API with a legacy form and a modern form is **two**
+surfaces, and shipping only the legacy one is not "partial support" — it is a **TypeError** on the
+form the ecosystem actually converged on. The legacy form working is what makes it invisible: the
+capability probe says `XMLHttpRequest: function`, the constructor works, `open`/`send` work, and the
+one method real code reaches for is missing. Check both forms of any dual-form API — `on*` vs
+`addEventListener`, `callback` vs `Promise`, `attribute` vs `property`.
+
+**And the corollary that bit here:** when the same event is dispatched from several hand-written call
+sites, they drift. `loadend` was fired by the streaming delivery path and not by the buffered one, so
+a spec event's delivery depended on **whether the response arrived in chunks**. One dispatch function,
+or the copies will disagree — the fifth instance of that shape in five ticks.

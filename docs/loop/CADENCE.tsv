@@ -371,3 +371,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 610	738ea8f1	1785067163	2026-07-26T07:59:23-04:00	8673	capability	63	11	653	34	305	81	3896	6960	0	341	31	the drain's ceiling was a task COUNT, and the harm it defends against is a CLOCK (2026-07-26)
 611	29380f28	1785072800	2026-07-26T09:33:20-04:00	5637	reliability	63	8	1042	53	305	81	3896	6960	0	341	31	the certificate cannot see an HTTP status, so a bot-wall and a document are the same thing (2026-07-26)
 612	be62161e	1785074765	2026-07-26T10:06:05-04:00	1965	capability	63	8	522	12	306	81	3896	6960	0	341	31	`innerText` had no setter, and a getter-only accessor is a THROW, not a gap (2026-07-26)
+613	01310098	1785076591	2026-07-26T10:36:31-04:00	1826	capability	63	9	577	23	308	81	3896	6960	0	341	31	`XMLHttpRequest` had the legacy half of its API and none of the EventTarget half (2026-07-26)

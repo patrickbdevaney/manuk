@@ -898,6 +898,11 @@
   - L1404 · Two failure directions, and they point opposite ways
   - L1422 · An HTTP error status is a DOCUMENT, and its body is what the site chose to say
   - L1466 · The connection cap — a page's images are lost to our own stampede, not to the network (t609)
+  - L1537 · XMLHttpRequest had the legacy half of its API and none of the EventTarget half (tick 613)
+  - L1553 · The population, measured
+  - L1566 · Six open-coded dispatch sites, and they had already drifted
+  - L1586 · What the listener list must do to be an EventTarget rather than an array
+  - L1598 · Still missing on XHR, named rather than implied
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -1053,4 +1058,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-968 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+973 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

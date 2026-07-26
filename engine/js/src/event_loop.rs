@@ -702,7 +702,7 @@ const PRELUDE: &str = r#"
         x.responseText = ""; x.response = "";
         x._dec = new globalThis.TextDecoder();
         x.readyState = 2;                      // HEADERS_RECEIVED
-        if (typeof x.onreadystatechange === 'function') { try { x.onreadystatechange(); } catch (e) {} }
+        globalThis.__xhrFire(x, 'readystatechange');
     };
     globalThis.__deliverChunk = function(id, str) {
         var s = globalThis.__streamCtl[id];
@@ -713,11 +713,8 @@ const PRELUDE: &str = r#"
         x.responseText += x._dec.decode(globalThis.__bytesFromLatin1(str), { stream: true });
         if (x.responseType !== "json") { x.response = x.responseText; }
         x.readyState = 3;                      // LOADING — more is coming
-        if (typeof x.onreadystatechange === 'function') { try { x.onreadystatechange(); } catch (e) {} }
-        if (typeof x.onprogress === 'function') {
-            try { x.onprogress({ type: 'progress', target: x, loaded: x.responseText.length, lengthComputable: false }); }
-            catch (e) {}
-        }
+        globalThis.__xhrFire(x, 'readystatechange');
+        globalThis.__xhrFire(x, 'progress', { loaded: x.responseText.length, lengthComputable: false });
     };
     globalThis.__deliverEnd = function(id) {
         var s = globalThis.__streamCtl[id];
@@ -729,13 +726,9 @@ const PRELUDE: &str = r#"
             try { x.response = JSON.parse(x.responseText); } catch (e) { x.response = null; }
         }
         x.readyState = 4;                      // DONE
-        if (typeof x.onreadystatechange === 'function') { try { x.onreadystatechange(); } catch (e) {} }
-        if (x.status === 0) {
-            if (typeof x.onerror === 'function') { try { x.onerror(new Error("network")); } catch (e) {} }
-        } else if (typeof x.onload === 'function') { try { x.onload(); } catch (e) {} }
-        if (typeof x.onloadend === 'function') {
-            try { x.onloadend({ type: 'loadend', target: x }); } catch (e) {}
-        }
+        globalThis.__xhrFire(x, 'readystatechange');
+        globalThis.__xhrFire(x, x.status === 0 ? 'error' : 'load');
+        globalThis.__xhrFire(x, 'loadend');
     };
 
     // Flatten a request's headers to "name\x02value\x02name\x02value" for the host to replay onto
@@ -841,7 +834,72 @@ const PRELUDE: &str = r#"
         this.responseText = ""; this.response = ""; this.responseType = "";
         this.onload = null; this.onerror = null; this.onreadystatechange = null;
         this.onabort = null; this.onloadend = null;
+        // `onprogress` was FIRED by the streaming path but never declared here, so
+        // `'onprogress' in xhr` — the ordinary way a library asks whether progress is available —
+        // answered NO about an event we actually deliver. A capability we have and deny is the same
+        // class of lie as one we claim and lack.
+        this.onprogress = null; this.onloadstart = null; this.ontimeout = null;
+        this._ls = null;
         this._m = "GET"; this._u = ""; this._id = null; this._h = []; this._respHeaders = [];
+    };
+    // **XMLHttpRequest IS AN EventTarget, and it was not one.**
+    //
+    // `addEventListener`, `removeEventListener` and `dispatchEvent` were all `undefined` here, and
+    // `xhr instanceof EventTarget` was false. Only the legacy `xhr.onload = fn` half existed — so
+    // `xhr.addEventListener('load', fn)`, which is the idiom essentially all modern code uses, was a
+    // `TypeError: ... is not a function` that KILLS THE CALLING FRAME. Measured across the 20 HEAD
+    // sites of `corpus-v2.tsv` (HTML + up to 12 bundles each): **8 of 16 construct an
+    // `XMLHttpRequest`, and 4 of 16 call `addEventListener` within 500 characters of one.** The
+    // XHR-specific event names appear 18 times (`readystatechange` 9, `progress` 4, `loadend` 3,
+    // `timeout` 2). This is also `www.welt.de`'s second failure, after t612's `innerText`:
+    // `TypeError: a.addEventListener is not a function`.
+    //
+    // Listeners live in JS on the instance rather than on the Rust EventTarget, because an XHR has no
+    // node reflector for those bindings to operate on. The observable contract is what matters and it
+    // is the spec's: same-callback registration is idempotent, `once` removes before invoking,
+    // removal during dispatch does not disturb the run (the list is copied), and a throwing listener
+    // does not prevent the others — an uncaught handler must not turn one page's bug into a dead
+    // request for everyone else listening.
+    XMLHttpRequest.prototype.addEventListener = function(type, fn, opts) {
+        if (fn == null) return;
+        if (typeof fn !== 'function' && typeof fn.handleEvent !== 'function') return;
+        if (!this._ls) this._ls = {};
+        var t = String(type);
+        var arr = this._ls[t] || (this._ls[t] = []);
+        for (var i = 0; i < arr.length; i++) { if (arr[i].fn === fn) return; }   // spec: duplicates ignored
+        arr.push({ fn: fn, once: !!(opts && typeof opts === 'object' && opts.once) });
+    };
+    XMLHttpRequest.prototype.removeEventListener = function(type, fn) {
+        if (!this._ls) return;
+        var arr = this._ls[String(type)]; if (!arr) return;
+        for (var i = 0; i < arr.length; i++) { if (arr[i].fn === fn) { arr.splice(i, 1); return; } }
+    };
+    XMLHttpRequest.prototype.dispatchEvent = function(ev) {
+        if (!ev || ev.type == null) return true;
+        globalThis.__xhrFire(this, String(ev.type), ev);
+        return !ev.defaultPrevented;
+    };
+    // **ONE dispatch point for every XHR event**, so the `on*` handler and the listener list can
+    // never drift apart. Before this there were SIX open-coded `if (typeof x.onfoo === 'function')`
+    // sites across three delivery paths, and they had already diverged: the streaming path fired
+    // `loadend`, the buffered `__deliverXhr` did not, so whether `onloadend` ran depended on whether
+    // the response happened to arrive in chunks. Same rule, two implementations, one of them wrong —
+    // the recurring defect of this whole session.
+    globalThis.__xhrFire = function(x, type, ev) {
+        ev = ev || {};
+        if (ev.type == null) ev.type = type;
+        if (ev.target == null) { ev.target = x; }
+        if (ev.currentTarget == null) { ev.currentTarget = x; }
+        var h = x['on' + type];
+        if (typeof h === 'function') { try { h.call(x, ev); } catch (e) {} }
+        var arr = x._ls && x._ls[type];
+        if (!arr || !arr.length) return;
+        var list = arr.slice();                       // removal during dispatch must not skip anyone
+        for (var i = 0; i < list.length; i++) {
+            var L = list[i];
+            if (L.once) { x.removeEventListener(type, L.fn); }
+            try { (typeof L.fn === 'function' ? L.fn : L.fn.handleEvent).call(x, ev); } catch (e) {}
+        }
     };
     XMLHttpRequest.prototype.open = function(m, u) { this._m = m || "GET"; this._u = u || ""; this._h = []; this.readyState = 1; };
     XMLHttpRequest.prototype.setRequestHeader = function(k, v) { if (k != null) this._h.push([k, v == null ? "" : v]); };
@@ -869,10 +927,9 @@ const PRELUDE: &str = r#"
         this.status = 0; this.statusText = ""; this.responseText = ""; this.response = "";
         this._respHeaders = [];
         this.readyState = 4; // DONE while the events fire...
-        if (typeof this.onreadystatechange === 'function') { try { this.onreadystatechange(); } catch (e) {} }
-        var ev = { type: 'abort', target: this };
-        if (typeof this.onabort === 'function') { try { this.onabort(ev); } catch (e) {} }
-        if (typeof this.onloadend === 'function') { try { this.onloadend({ type: 'loadend', target: this }); } catch (e) {} }
+        globalThis.__xhrFire(this, 'readystatechange');
+        globalThis.__xhrFire(this, 'abort');
+        globalThis.__xhrFire(this, 'loadend');
         this.readyState = 0; // ...then back to UNSENT (XHR standard's abort() steps).
     };
     XMLHttpRequest.prototype.send = function(body) {
@@ -904,9 +961,12 @@ const PRELUDE: &str = r#"
                     ? new globalThis.Blob([text])
                     : text;
         x.readyState = 4;
-        if (typeof x.onreadystatechange === 'function') { try { x.onreadystatechange(); } catch (e) {} }
-        if (status === 0) { if (typeof x.onerror === 'function') { try { x.onerror(new Error("network")); } catch (e) {} } }
-        else if (typeof x.onload === 'function') { try { x.onload(); } catch (e) {} }
+        globalThis.__xhrFire(x, 'readystatechange');
+        globalThis.__xhrFire(x, status === 0 ? 'error' : 'load');
+        // **`loadend` fires HERE TOO.** It did not: the streaming path fired it and this one did not,
+        // so `onloadend` ran or did not depending on whether the response happened to arrive in
+        // chunks — a spec event whose delivery was a function of transport chunking.
+        globalThis.__xhrFire(x, 'loadend');
     };
 
     // Kind-agnostic delivery: the host settles a request by id without tracking whether it was
