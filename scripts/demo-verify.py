@@ -38,8 +38,14 @@ PORT = 8901
 CDP = 9222
 
 
-def wait_for_cdp(chrome, timeout=40):
+def wait_for_cdp(chrome, timeout=60):
     """Wait for Chrome to actually open its debug port.
+
+    Hit 127.0.0.1, NOT `localhost`: Chrome's `--remote-debugging-port` binds to 127.0.0.1 (IPv4),
+    but on the current ubuntu-latest image `localhost` resolves to ::1 (IPv6) first — so the probe hit
+    ::1:9222, got a refused connection, and reported "the port never opened" on a Chrome that was
+    running perfectly. That is the same instrument-broke-the-build failure as the fixed-sleep version:
+    the endpoint was right, the address was wrong. (This flipped green→red when the runner image bumped.)
 
     The first version slept 3 seconds and then connected. On my laptop Chrome was up in well under
     that; on a GitHub runner it was not, so the probe hit `Connection refused` and **failed the demo
@@ -56,7 +62,7 @@ def wait_for_cdp(chrome, timeout=40):
             err = (chrome.stderr.read() or b"").decode(errors="replace")[-800:]
             fail(f"the browser exited before opening its debug port (rc={chrome.returncode}).\n{err}")
         try:
-            with urllib.request.urlopen(f"http://localhost:{CDP}/json", timeout=1) as r:
+            with urllib.request.urlopen(f"http://127.0.0.1:{CDP}/json", timeout=1) as r:
                 if json.load(r):
                     return
         except Exception:
@@ -65,7 +71,7 @@ def wait_for_cdp(chrome, timeout=40):
 
 
 async def probe():
-    tabs = json.load(urllib.request.urlopen(f"http://localhost:{CDP}/json"))
+    tabs = json.load(urllib.request.urlopen(f"http://127.0.0.1:{CDP}/json"))
     ws_url = next(t for t in tabs if t["type"] == "page")["webSocketDebuggerUrl"]
     import websockets
 
@@ -82,7 +88,7 @@ async def probe():
                     return msg
 
         await call("Runtime.enable")
-        await call("Page.navigate", {"url": f"http://localhost:{PORT}/"})
+        await call("Page.navigate", {"url": f"http://127.0.0.1:{PORT}/"})
 
         # Poll rather than sleep a fixed time: the whole point is not to guess when it is done.
         for _ in range(40):
