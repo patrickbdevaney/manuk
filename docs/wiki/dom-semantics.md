@@ -1608,3 +1608,37 @@ would otherwise pass every other claim in the gate.
 `getBoundingClientRect` rather than user-space geometry, and `getBBox`/`ownerSVGElement` are absent —
 so charting code that *measures* SVG nodes still fails. That is SVG layout, a subsystem, and it is
 named rather than half-built.
+
+## `getBBox()` is USER SPACE, and that is the whole reason it exists (tick 604)
+
+`getBBox` was `undefined`, so `node.getBBox().width` was a `TypeError` that killed the caller's
+frame — the same throw-class shape as the `getComputedStyle` defect, and it lands on the same code:
+D3, Chart.js's SVG paths, and every hand-rolled label placer measures shapes this way.
+
+**The alternative a page reaches for is worse than the missing method.**
+`getBoundingClientRect` on an SVG child answers in **CSS-box** coordinates — a *wrong* number, not an
+absent one, because SVG children are not CSS boxes here. `getBBox` is defined in the element's **own**
+coordinate system: unaffected by where the `<svg>` sits on the page, by the viewport, or by scroll.
+
+That is why it is computed from the element's geometry **attributes** rather than from the layout
+snapshot, and the gate proves the distinction rather than asserting it: a `<rect x="10" y="20">`
+inside an `<svg style="margin-left:40px">` reports bbox `x = 10` while its
+`getBoundingClientRect().x` is `48`. Two numbers, two coordinate systems, both correct for what they
+answer.
+
+Exact for `rect`/`image`/`use`, `circle`, `ellipse`, `line`, `polygon`/`polyline`, and containers
+(`g`/`svg`/`a`/`switch`) as the union of their measurable children. Two details worth keeping: a
+**horizontal `<line>` has zero height** (a bbox routine that takes a max instead of an extent, or
+clamps degenerate axes, fails exactly there), and `points` accepts commas *or* whitespace as
+separators.
+
+### `<text>` and `<path>` report zero size on purpose
+
+Both need work this function cannot do — shaping, and path-data parsing. **A plausible-looking guess
+silently mis-places every label that trusts it; a zero is visible.** That is the same choice
+`clip-path` made when it left `shape()` unclipped rather than approximating it, and it is the
+conclusion this project keeps arriving at from different directions: **a wrong answer costs more than
+an obviously missing one.**
+
+Stroke width is excluded, which is *correct* — `getBBox` is specified on fill geometry. `transform`
+is not applied, which is a real gap, named here rather than hidden.

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **364** | ticks 1–603 |
-| median tick cycle | **21m** | 363 intervals |
-| median, last 10 | **20m** | 10 intervals |
+| ticks landed | **365** | ticks 1–604 |
+| median tick cycle | **21m** | 364 intervals |
+| median, last 10 | **19m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.02** | 357.4h elapsed |
-| median verify wall | **67s** | 303 ticks |
+| **ticks per hour** | **1.02** | 357.7h elapsed |
+| median verify wall | **67s** | 304 ticks |
 | wall trend | 39s → 85s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **299**
+* **live gates**: 27 → **300**
 * **✅ rows in the capability ledger**: 144 → **338**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**182 of 364 ticks** (50%) moved a
+**182 of 365 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -461,5 +461,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **601** | 2026-07-26 02:02 | 21m | measurement | 85s | +321/−41 | 297 | 81 | 56.0% · | one probe, two honesty corrections, pointing OPPOSITE ways (2026-07-26) |
 | **602** | 2026-07-26 02:09 | 7m | measurement | 85s | +236/−40 | 298 | 81 | 56.0% · | the unknowns reach ZERO, and two rows are pinned for what makes them MISLEADING (2026-07-2 |
 | **603** | 2026-07-26 02:28 | 19m | capability | 85s | +281/−35 | 299 | 81 | 56.0% · | one hardcoded namespace disabled the parser's whole foreign-content mode (2026-07-26) |
+| **604** | 2026-07-26 02:46 | 18m | the | 85s | +376/−34 | 300 | 81 | 56.0% · | SELF-AUDIT (due) + `getBBox()`: the geometry call every chart makes, and it threw (2026-07 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

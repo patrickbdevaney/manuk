@@ -25716,3 +25716,57 @@ than user-space ones, and `getBBox`/`ownerSVGElement` are absent, so charting co
 nodes still fails. Measured this tick, named as residue, and it is the natural follow-on now that the
 subtree is correctly namespaced. Then `isolation` (18.0%). The self-audit is due at 604.
 Cadences: self-audit 604 (NEXT TICK); wall 607; const 607; surface 608.
+
+## Tick 604 — SELF-AUDIT (due) + `getBBox()`: the geometry call every chart makes, and it threw (2026-07-26)
+
+**SELF-AUDIT (due at 604).** One finding, unchanged from t594 and still **observer-owned**: the verify
+wall (696s on the landing cycle) against a 300s target, whose standing diagnosis is already banked
+(WALL AUDIT #16 — parity is 76% of the wall, a serial loop of ~30 Chrome launches; the fix is bounded
+concurrency). `scripts/` is not mine. Everything else green: every gate declares how to break it, the
+falsifier list is derived rather than copied, the process-defect ledger names a closing mechanism per
+entry, the cadence hooks are wired, the journal has no gaps.
+
+**THE CAPABILITY — and it came out of the measuring, for the third tick running.** t602/t603 found,
+while *pinning* the SVG rows, that `getBBox` was `undefined`. `node.getBBox().width` is therefore a
+**TypeError that kills the caller's frame** — the throw-class shape again, landing on exactly the
+code that most needs it: D3, Chart.js's SVG paths, every hand-rolled label placer.
+
+**AND THE ALTERNATIVE A PAGE REACHES FOR IS WORSE THAN THE MISSING METHOD.**
+`getBoundingClientRect` on an SVG child answers in **CSS-box** coordinates — a *wrong* number, not an
+absent one, because SVG children are not CSS boxes here. `getBBox` is defined in the element's **own**
+coordinate system, so it is computed from geometry **attributes**, not from the layout snapshot. The
+gate proves that rather than asserting it: a `<rect x="10" y="20">` inside an
+`<svg style="margin-left:40px">` reports bbox `x=10` while its `getBoundingClientRect().x` is `48`.
+Two numbers, two coordinate systems, both correct for what they answer — and a page that reaches for
+the wrong one gets no warning.
+
+Exact for `rect`/`image`/`use`, `circle`, `ellipse`, `line`, `polygon`/`polyline` and the containers
+as a union of children. Two details the gate pins because they are where a bbox routine goes wrong:
+a **horizontal `<line>` has zero height** (a max instead of an extent, or a degenerate-axis clamp,
+fails exactly there), and `points` takes commas *or* whitespace.
+
+**`<text>` AND `<path>` REPORT ZERO SIZE ON PURPOSE.** Both need work this function cannot do —
+shaping, path-data parsing. A plausible-looking guess **silently mis-places every label that trusts
+it**; a zero is visible. Same choice t593 made leaving `shape()` unclipped, and the same conclusion
+this project keeps reaching from different directions: **a wrong answer costs more than an obviously
+missing one.** Stroke is excluded (correct — `getBBox` is fill geometry); `transform` is not applied,
+which is a real gap and is named, not hidden.
+
+RED-PROVEN: drop the method registration → `threw=false` fails. Both feature configurations compile;
+`G_FOREIGN_CONTENT_NS` and `G_CLIENT_RECTS` green under the change.
+
+TICK SHAPE: the DUE self-audit (one finding, observer-owned, journaled) + capability (a throw-class
+geometry API that every SVG charting library calls). Bar 0 untouched; no ratchet floor moved.
+Gates: `G_SVG_BBOX` (`engine/page/tests/g_svg_bbox.rs` — seven shapes, the zero-height line, the
+container union, the honest zeros, the throwing idiom, and the user-space-vs-CSS-box contrast;
+RED-proven).
+WIKI: docs/wiki/dom-semantics.md — "`getBBox()` is USER SPACE, and that is the whole reason it
+exists".
+PATTERN: [no-pattern] — no rendering capability changed.
+
+NEXT: `isolation` (18.0%) is the last `UNRENDERED_LONGHANDS` row with real usage; it needs a NESTED
+paint group (the model is per-box), so measure the cost before committing. Otherwise the honest
+remaining work is the CERTIFICATION line the observer made the authority at t581 — the corpus-v2
+tiered sweep and the per-site render∧function certificate — now that every board CO-#1 letter is
+built or measured and the map has zero unknowns.
+Cadences: wall 607; const 607; surface 608; self-audit 614.

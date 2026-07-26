@@ -2364,6 +2364,7 @@ unsafe fn define_members(
         def_guarded!(def, c"elementFromPoint", doc_element_from_point, 2);
         def_guarded!(def, c"getBoundingClientRect", el_get_bounding_rect, 0);
         def_guarded!(def, c"getClientRects", el_get_client_rects, 0);
+        def_guarded!(def, c"getBBox", el_get_bbox, 0);
         prop_guarded!(
             prop,
             c"scrollTop",
@@ -2995,6 +2996,129 @@ unsafe fn el_get_bounding_rect(cx: *mut RawJSContext, _argc: u32, vp: *mut Value
         None => *vp = NullValue(),
     }
     true
+}
+
+/// `SVGGraphicsElement.getBBox()` → the element's **user-space** bounding box.
+///
+/// **This is the geometry call every charting library makes, and it was `undefined`** — so
+/// `node.getBBox().width` was a `TypeError` that killed the frame, the same throw-class shape as the
+/// `getComputedStyle` defect (t596/t597). D3, Chart.js's SVG paths, and every hand-rolled label
+/// placer measure text and shapes this way; the alternative they reach for,
+/// `getBoundingClientRect`, answers in CSS-box coordinates for an SVG child and is therefore the
+/// wrong number rather than a missing one.
+///
+/// **User space, not CSS pixels, and that distinction is the whole point.** `getBBox` is defined in
+/// the element's own coordinate system — unaffected by where the `<svg>` sits on the page, by the
+/// viewport, or by scroll. So it is computed from the element's own geometry ATTRIBUTES, which is
+/// both correct for the shapes below and the only thing available without an SVG layout pass.
+///
+/// Honest bounds, and they are why this returns geometry rather than pretending to be complete:
+/// `<text>` has no attribute-derived extent (it needs shaping) and reports its origin with a zero
+/// size; `<path>` needs the path data parsed and reports zero; a container (`<g>`, `<svg>`) returns
+/// the union of the children this function can measure. Stroke width, transforms and markers are not
+/// included — `getBBox` is specified on the *fill* geometry, so excluding stroke is correct, but the
+/// missing `transform` handling is a real gap and is named here rather than hidden.
+unsafe fn el_get_bbox(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let [x, y, w, h] = this_node(vp)
+        .and_then(|(dom, n)| svg_bbox(dom, n))
+        .unwrap_or([0.0, 0.0, 0.0, 0.0]);
+    let js = format!("({{x:{x},y:{y},width:{w},height:{h}}})");
+    match eval_in_current_global(cx, &js) {
+        Some(v) => *vp = v,
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// The user-space bbox of one SVG element, from its geometry attributes; containers union their
+/// children. Returns `None` for a node that is not an SVG element at all.
+unsafe fn svg_bbox(dom: *mut Dom, node: NodeId) -> Option<[f32; 4]> {
+    {
+        let dom: &manuk_dom::Dom = &*dom;
+        fn num(dom: &manuk_dom::Dom, n: manuk_dom::NodeId, name: &str) -> Option<f32> {
+            dom.element(n)
+                .and_then(|e| e.attr(name))
+                .and_then(|v| v.trim().parse::<f32>().ok())
+        }
+        fn one(dom: &manuk_dom::Dom, n: manuk_dom::NodeId) -> Option<[f32; 4]> {
+            let tag = dom.tag_name(n)?.to_ascii_lowercase();
+            let g = |name: &str| num(dom, n, name).unwrap_or(0.0);
+            let shape = match tag.as_str() {
+                "rect" | "image" | "foreignobject" | "use" => {
+                    Some([g("x"), g("y"), g("width"), g("height")])
+                }
+                "circle" => {
+                    let r = g("r");
+                    Some([g("cx") - r, g("cy") - r, r * 2.0, r * 2.0])
+                }
+                "ellipse" => {
+                    let (rx, ry) = (g("rx"), g("ry"));
+                    Some([g("cx") - rx, g("cy") - ry, rx * 2.0, ry * 2.0])
+                }
+                "line" => {
+                    let (x1, y1, x2, y2) = (g("x1"), g("y1"), g("x2"), g("y2"));
+                    Some([x1.min(x2), y1.min(y2), (x2 - x1).abs(), (y2 - y1).abs()])
+                }
+                "polygon" | "polyline" => {
+                    // `points="x,y x,y"` — commas and whitespace are both separators.
+                    let pts: Vec<f32> = dom
+                        .element(n)
+                        .and_then(|e| e.attr("points"))
+                        .map(|v| {
+                            v.split(|c: char| c == ',' || c.is_whitespace())
+                                .filter_map(|t| t.trim().parse::<f32>().ok())
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    if pts.len() < 4 {
+                        None
+                    } else {
+                        let xs: Vec<f32> = pts.iter().step_by(2).copied().collect();
+                        let ys: Vec<f32> = pts.iter().skip(1).step_by(2).copied().collect();
+                        let (x0, x1) = (
+                            xs.iter().cloned().fold(f32::MAX, f32::min),
+                            xs.iter().cloned().fold(f32::MIN, f32::max),
+                        );
+                        let (y0, y1) = (
+                            ys.iter().cloned().fold(f32::MAX, f32::min),
+                            ys.iter().cloned().fold(f32::MIN, f32::max),
+                        );
+                        Some([x0, y0, x1 - x0, y1 - y0])
+                    }
+                }
+                // A container's bbox is the UNION of its children's — which is also the honest answer
+                // for `<g>`, whose own geometry is nothing but its contents.
+                "g" | "svg" | "a" | "switch" => {
+                    let mut acc: Option<[f32; 4]> = None;
+                    for c in dom.children(n) {
+                        let Some([cx, cy, cw, ch]) = one(dom, c) else {
+                            continue;
+                        };
+                        if cw <= 0.0 && ch <= 0.0 {
+                            continue;
+                        }
+                        acc = Some(match acc {
+                            None => [cx, cy, cw, ch],
+                            Some([ax, ay, aw, ah]) => {
+                                let (x0, y0) = (ax.min(cx), ay.min(cy));
+                                let (x1, y1) = ((ax + aw).max(cx + cw), (ay + ah).max(cy + ch));
+                                [x0, y0, x1 - x0, y1 - y0]
+                            }
+                        });
+                    }
+                    acc.or(Some([0.0, 0.0, 0.0, 0.0]))
+                }
+                // `<text>` needs shaping and `<path>` needs the `d` data parsed: both report their
+                // origin with a zero extent rather than a plausible-looking guess, because a wrong
+                // bbox silently mis-places a label while a zero one is visible.
+                "text" | "tspan" => Some([g("x"), g("y"), 0.0, 0.0]),
+                "path" => Some([0.0, 0.0, 0.0, 0.0]),
+                _ => None,
+            };
+            shape
+        }
+        one(dom, node)
+    }
 }
 
 /// `element.getClientRects()` → a DOMRectList of the element's border boxes. A laid-out element yields

@@ -353,6 +353,8 @@
   - L1553 · The image an <img> wants is chosen, not read (tick 582)
   - L1572 · One hardcoded namespace in a four-line function disabled the parser's whole foreign-content mode (tick 603)
   - L1595 · The claim that matters is not "is it right" but "do the two ways agree"
+  - L1612 · getBBox() is USER SPACE, and that is the whole reason it exists (tick 604)
+  - L1635 · <text> and <path> report zero size on purpose
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1030,4 +1032,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-945 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+947 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
