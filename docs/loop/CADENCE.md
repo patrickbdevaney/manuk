@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **357** | ticks 1–596 |
-| median tick cycle | **21m** | 356 intervals |
-| median, last 10 | **25m** | 10 intervals |
+| ticks landed | **358** | ticks 1–597 |
+| median tick cycle | **21m** | 357 intervals |
+| median, last 10 | **22m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.00** | 355.1h elapsed |
-| median verify wall | **67s** | 296 ticks |
+| **ticks per hour** | **1.00** | 355.4h elapsed |
+| median verify wall | **67s** | 297 ticks |
 | wall trend | 39s → 85s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **292**
+* **live gates**: 27 → **293**
 * **✅ rows in the capability ledger**: 144 → **338**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**180 of 357 ticks** (50%) moved a
+**180 of 358 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **180** capability ticks, median cycle **21m**
-* median diff per tick: **+229 / −34** lines across 9 files
+* median diff per tick: **+230 / −34** lines across 9 files
 
 ## Every tick
 
@@ -454,5 +454,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **594** | 2026-07-25 23:31 | 24m | self-audit | 85s | +778/−356 | 290 | 81 | 56.0% · | SELF-AUDIT #? (due) + `mix-blend-mode`: the composite-back IS the backdrop (2026-07-25) |
 | **595** | 2026-07-25 23:51 | 20m | capability | 85s | +430/−83 | 291 | 81 | 56.0% · | `backdrop-filter`: the bundle closes, and the property that was LAST is the one that justi |
 | **596** | 2026-07-26 00:09 | 19m | capability-honesty | 85s | +452/−35 | 292 | 81 | 56.0% · | the bundle reads back as STRINGS: `undefined` from `getComputedStyle` is a thrown exceptio |
+| **597** | 2026-07-26 00:29 | 20m | measurement | 85s | +669/−37 | 293 | 81 | 56.0% · | 86 of 95: the throw-class defect was never four properties wide (2026-07-26) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

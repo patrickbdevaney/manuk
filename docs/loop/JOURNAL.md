@@ -25245,3 +25245,67 @@ load-bearing because three of the bundle's four properties are live and none is 
 stacking context that asks to contain it. Then `border-radius` on the backdrop region (a rounded
 frosted panel currently filters a square). Then `font-display`/`unicode-range`.
 Cadences: surface 598; const 599; wall 607; self-audit 604.
+
+## Tick 597 — 86 of 95: the throw-class defect was never four properties wide (2026-07-26)
+
+t596 closed `undefined`-from-`getComputedStyle` for the four visual-effects properties. Before
+building anything this tick I asked the cheap question it should have asked: **how many properties
+are in this state?** A probe of 95 commonly-read properties found **86 still returning `undefined`**.
+
+**t596 FIXED 4 OF ~86.** That is this session's recurring failure at its widest yet — *a fix scoped
+to the shape the bug presented in is one category too narrow* — and the correction cost one probe
+and about four minutes. The rule now has a sixth collection and a sharper form: **when you fix an
+instance, measure the population before you write the commit message.**
+
+Almost every one of the 86 already had a true computed value sitting in `ComputedStyle`. **The engine
+was rendering them and refusing to say so.** ~40 more are exposed now: the per-side
+`border-*-width/-color/-style`, `border-radius`, `outline-*`, `box-shadow`, `text-decoration`,
+`text-transform`, `text-indent`, `text-overflow`, `letter-spacing`, `word-spacing`, `word-break`,
+`overflow-wrap`, `direction`, `vertical-align`, `list-style-type`, `background-image`,
+`background-repeat`, `object-fit`, `mask-image`, `float` (+ the legacy `cssFloat` spelling every
+framework actually reads), `clear`, `table-layout`, `border-collapse`, `aspect-ratio`, `gap`.
+
+**THE STRUCTURAL HALF IS THE PART THAT KEEPS PAYING.** These properties used to live in **three**
+places — the 60-argument `format!`, the `STD` name array behind `length`/`item(i)`, and the dash→camel
+map — and those drift independently. They already had: `length` was once a hand-maintained `50`
+against a list of 52, so two properties were unreachable through `item(i)` and nothing failed loudly.
+Everything added here is emitted from **one** function that produces the object slots *and* the
+enumeration names, so a property added there **cannot** be enumerable-invisible. That is why the gate
+can assert `lenMatchesNames` as a general property instead of spot-checking.
+
+**TWO SERIALIZATIONS THE OBVIOUS IMPLEMENTATION GETS WRONG, both found while writing it and both
+gated.** (1) `border-*-style` is **not** readable off `BorderStyle`: that enum has no `none`/`hidden`
+— the cascade collapses both to a **zero width** — so a naive `match` reports `solid` for *every
+element on the page*, including the vast majority with no border. It is recovered from the width.
+That is the two-cascades hazard in miniature: **the enum is not the source of truth for the question
+being asked.** (2) An unset `letter-spacing` is `normal`, not `0px`, and the difference is observable
+— `normal` permits the font's own kerning, `0px` suppresses it — so printing the `f32`
+unconditionally reports a value the author never wrote.
+
+**AND THE RESIDUE IS NOW MEASURED RATHER THAN ASSUMED.** What is still `undefined` is what this
+engine genuinely does not compute (grid shorthand forms, `transition`/`animation`, `contain`, the
+logical-property spellings, `perspective`, `zoom`, `clip`). **An honest `undefined` for an
+unimplemented property is a different thing from an `undefined` for a rendered one**, and only the
+second kind was ever this bug.
+
+RED-PROVEN: empty `extra_computed_props` → `notString:0` fails on the first claim. Workspace
+`--all-targets` clean; `G_COMPUTED_VISUAL_EFFECTS` and `G_COMPUTED_CUSTOM_PROPERTIES` both still green
+under the change (the latter is the guard for the list-drift this restructured).
+
+TICK SHAPE: measurement (the population, which corrected the previous tick's scope) + capability-
+honesty (~40 rendered properties become readable; a throw-class defect closed broadly rather than
+by instance). Bar 0 untouched; no ratchet floor moved; no rendering changed.
+Gates: `G_COMPUTED_COMPLETENESS` (`engine/page/tests/g_computed_completeness.rs` — 28 properties
+typed on an UNSTYLED element, the throwing idiom run for real, resolved values, the two
+easy-to-get-wrong serializations, and enumeration/`getPropertyValue`/`length` agreement; RED-proven).
+WIKI: docs/wiki/css-cascade.md — "86 of 95 — the throw-class defect was never four properties wide".
+PATTERN: [no-pattern] — no rendering capability changed.
+
+NEXT: **`isolation` (18.0%)** — the last `UNRENDERED_LONGHANDS` row with real usage, and now
+load-bearing rather than cosmetic: three of the visual-effects bundle's four properties are live and
+none of them is confined to a stacking context that asks to contain it. It needs a NESTED group (the
+paint model is per-box, not per-subtree), so measure the cost before committing to it — that is a
+real restructure, unlike the last three. Then `border-radius` on the backdrop region (a rounded
+frosted panel currently filters a square). Then `font-display`/`unicode-range`. Surface audit is due
+at 598 — and it should start, per the standing rule, by diffing `engine/page/tests/` against the map.
+Cadences: surface 598 (NEXT TICK); const 599; wall 607; self-audit 604.

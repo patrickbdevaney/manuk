@@ -728,6 +728,314 @@ fn blend_mode_css(m: manuk_css::BlendMode) -> &'static str {
     }
 }
 
+/// **The properties added at tick 597, as ONE list that every consumer is derived from.**
+///
+/// The existing `getComputedStyle` object is assembled by a single 60-argument `format!`, a `STD`
+/// name array behind `length`/`item(i)`, and a dash→camel map — *three* places one set of properties
+/// lives, which is why `length` was once a hand-maintained `50` against a list of 52 and why t596
+/// had to add each new property in three spots. Everything below is emitted from this one function:
+/// the object slots, the enumeration names, and (via the auto-camelCase fallback) the
+/// `getPropertyValue` route. **A property added here cannot be enumerable-invisible.**
+///
+/// Why this batch: a probe of 95 commonly-read properties found **86 returning `undefined`**, and
+/// `undefined` from `getComputedStyle` is not a gap — `cs.borderRadius.split(' ')` is a TypeError
+/// that kills the caller's frame (t596). Every property here already has a true computed value in
+/// `ComputedStyle`; the engine was rendering them and refusing to say so.
+fn extra_computed_props(cs: &manuk_css::ComputedStyle) -> Vec<(&'static str, String)> {
+    use manuk_css::*;
+    let px = |v: f32| {
+        let r = (v * 1e4).round() / 1e4;
+        if r == r.trunc() {
+            format!("{}px", r as i64)
+        } else {
+            format!("{r}px")
+        }
+    };
+    // `BorderStyle` has no `none`/`hidden` variant: the cascade collapses both to a ZERO WIDTH
+    // (`stylo_map` does exactly that), so the style keyword has to be recovered from the width or
+    // every element on the page reports `solid` for a border it does not have.
+    let bstyle = |w: f32| {
+        if w <= 0.0 {
+            "none"
+        } else {
+            match cs.border_style {
+                BorderStyle::Solid => "solid",
+                BorderStyle::Dashed => "dashed",
+                BorderStyle::Dotted => "dotted",
+                BorderStyle::Double => "double",
+            }
+        }
+    };
+    let td = {
+        let mut parts: Vec<&str> = Vec::new();
+        if cs.text_decoration.underline {
+            parts.push("underline");
+        }
+        if cs.text_decoration.overline {
+            parts.push("overline");
+        }
+        if cs.text_decoration.line_through {
+            parts.push("line-through");
+        }
+        if parts.is_empty() {
+            "none".to_string()
+        } else {
+            parts.join(" ")
+        }
+    };
+    vec![
+        // ── Box decoration the engine paints and scripts read constantly.
+        ("border-radius", px(cs.border_radius)),
+        ("border-top-left-radius", px(cs.border_radius)),
+        ("border-top-right-radius", px(cs.border_radius)),
+        ("border-bottom-right-radius", px(cs.border_radius)),
+        ("border-bottom-left-radius", px(cs.border_radius)),
+        ("border-top-width", px(cs.border_width.top)),
+        ("border-right-width", px(cs.border_width.right)),
+        ("border-bottom-width", px(cs.border_width.bottom)),
+        ("border-left-width", px(cs.border_width.left)),
+        ("border-top-color", rgba_css(&cs.border_color)),
+        ("border-right-color", rgba_css(&cs.border_color)),
+        ("border-bottom-color", rgba_css(&cs.border_color)),
+        ("border-left-color", rgba_css(&cs.border_color)),
+        ("border-top-style", bstyle(cs.border_width.top).into()),
+        ("border-right-style", bstyle(cs.border_width.right).into()),
+        ("border-bottom-style", bstyle(cs.border_width.bottom).into()),
+        ("border-left-style", bstyle(cs.border_width.left).into()),
+        ("outline-width", px(cs.outline_width)),
+        ("outline-color", rgba_css(&cs.outline_color)),
+        ("box-shadow", box_shadow_css(&cs.box_shadows)),
+        // ── Text.
+        ("text-decoration", td.clone()),
+        ("text-decoration-line", td),
+        (
+            "text-transform",
+            match cs.text_transform {
+                TextTransform::None => "none",
+                TextTransform::Uppercase => "uppercase",
+                TextTransform::Lowercase => "lowercase",
+                TextTransform::Capitalize => "capitalize",
+            }
+            .into(),
+        ),
+        // CSS serializes an unset `letter-spacing`/`word-spacing` as `normal`, not `0px` — and the
+        // difference is observable: `normal` permits the font's own kerning, `0px` does not.
+        (
+            "letter-spacing",
+            if cs.letter_spacing == 0.0 {
+                "normal".into()
+            } else {
+                px(cs.letter_spacing)
+            },
+        ),
+        (
+            "word-spacing",
+            if cs.word_spacing == 0.0 {
+                "normal".into()
+            } else {
+                px(cs.word_spacing)
+            },
+        ),
+        ("text-indent", dim_css(&cs.text_indent)),
+        (
+            "text-overflow",
+            match cs.text_overflow {
+                TextOverflow::Clip => "clip",
+                TextOverflow::Ellipsis => "ellipsis",
+            }
+            .into(),
+        ),
+        (
+            "word-break",
+            match cs.word_break {
+                WordBreak::Normal => "normal",
+                WordBreak::BreakAll => "break-all",
+                WordBreak::KeepAll => "keep-all",
+            }
+            .into(),
+        ),
+        (
+            "overflow-wrap",
+            match cs.overflow_wrap {
+                OverflowWrap::Normal => "normal",
+                OverflowWrap::BreakWord => "break-word",
+                OverflowWrap::Anywhere => "anywhere",
+            }
+            .into(),
+        ),
+        (
+            "direction",
+            match cs.direction {
+                Direction::Ltr => "ltr",
+                Direction::Rtl => "rtl",
+            }
+            .into(),
+        ),
+        (
+            "vertical-align",
+            match cs.vertical_align {
+                VerticalAlign::Baseline => "baseline",
+                VerticalAlign::Top => "top",
+                VerticalAlign::Middle => "middle",
+                VerticalAlign::Bottom => "bottom",
+                VerticalAlign::TextTop => "text-top",
+                VerticalAlign::TextBottom => "text-bottom",
+                VerticalAlign::Sub => "sub",
+                VerticalAlign::Super => "super",
+            }
+            .into(),
+        ),
+        (
+            "list-style-type",
+            match cs.list_style_type {
+                ListStyleType::Disc => "disc",
+                ListStyleType::Circle => "circle",
+                ListStyleType::Square => "square",
+                ListStyleType::Decimal => "decimal",
+                ListStyleType::LowerAlpha => "lower-alpha",
+                ListStyleType::UpperAlpha => "upper-alpha",
+                ListStyleType::LowerRoman => "lower-roman",
+                ListStyleType::UpperRoman => "upper-roman",
+                ListStyleType::None => "none",
+            }
+            .into(),
+        ),
+        // ── Backgrounds and replaced content.
+        (
+            "background-image",
+            if cs.background_images.is_empty() {
+                "none".into()
+            } else {
+                // The resolved form is a `url(...)`/gradient list; we serialize the LAYER COUNT
+                // faithfully but not each gradient's full stop list, so a page can detect that a
+                // background image exists (the overwhelmingly common read) without being told a
+                // stop list we would have to reconstruct.
+                cs.background_images
+                    .iter()
+                    .map(|b| match b {
+                        BackgroundImage::Url(u) => format!("url(\"{u}\")"),
+                        BackgroundImage::Linear { .. } => "linear-gradient(…)".to_string(),
+                        BackgroundImage::Radial { .. } => "radial-gradient(…)".to_string(),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            },
+        ),
+        (
+            "background-repeat",
+            match cs.background_repeat {
+                BackgroundRepeat::Repeat => "repeat",
+                BackgroundRepeat::NoRepeat => "no-repeat",
+            }
+            .into(),
+        ),
+        (
+            "object-fit",
+            match cs.object_fit {
+                ObjectFit::Fill => "fill",
+                ObjectFit::Contain => "contain",
+                ObjectFit::Cover => "cover",
+                ObjectFit::None => "none",
+                ObjectFit::ScaleDown => "scale-down",
+            }
+            .into(),
+        ),
+        (
+            "mask-image",
+            cs.mask_image
+                .as_ref()
+                .map(|u| format!("url(\"{u}\")"))
+                .unwrap_or_else(|| "none".into()),
+        ),
+        // ── Layout keywords.
+        (
+            "float",
+            match cs.float {
+                Float::None => "none",
+                Float::Left => "left",
+                Float::Right => "right",
+            }
+            .into(),
+        ),
+        (
+            "clear",
+            match cs.clear {
+                Clear::None => "none",
+                Clear::Left => "left",
+                Clear::Right => "right",
+                Clear::Both => "both",
+            }
+            .into(),
+        ),
+        (
+            "table-layout",
+            match cs.table_layout {
+                TableLayout::Auto => "auto",
+                TableLayout::Fixed => "fixed",
+            }
+            .into(),
+        ),
+        (
+            "border-collapse",
+            if cs.border_collapse {
+                "collapse"
+            } else {
+                "separate"
+            }
+            .into(),
+        ),
+        (
+            "aspect-ratio",
+            cs.aspect_ratio
+                .map(|r| format!("{r}"))
+                .unwrap_or_else(|| "auto".into()),
+        ),
+        ("gap", format!("{} {}", px(cs.row_gap), px(cs.column_gap))),
+    ]
+}
+
+/// `box-shadow` as its resolved list, or `"none"`.
+fn box_shadow_css(list: &[manuk_css::BoxShadow]) -> String {
+    if list.is_empty() {
+        return "none".into();
+    }
+    list.iter()
+        .map(|sh| {
+            let mut s = format!(
+                "{} {}px {}px {}px {}px",
+                rgba_css(&sh.color),
+                sh.dx,
+                sh.dy,
+                sh.blur,
+                sh.spread
+            );
+            if sh.inset {
+                s.push_str(" inset");
+            }
+            s
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// `border-radius` → `borderRadius`. Used to key the object slots off the CSS names, so the two can
+/// never disagree.
+fn camel(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    let mut up = false;
+    for ch in name.chars() {
+        if ch == '-' {
+            up = true;
+        } else if up {
+            out.extend(ch.to_uppercase());
+            up = false;
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
 fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> String {
     use manuk_css::{
         AlignItems, BoxSizing, Display, FlexDirection, FlexWrap, JustifyContent, Overflow,
@@ -962,6 +1270,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
             "clip-path",
             "mix-blend-mode",
         ];
+        let extra = extra_computed_props(cs);
         let mut arr = String::from("[");
         for (i, n) in STD.iter().enumerate() {
             if i > 0 {
@@ -969,12 +1278,17 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
             }
             arr.push_str(&js_string_literal(n));
         }
+        // DERIVED, not copied — the whole point of `extra_computed_props` being one list.
+        for (n, _) in &extra {
+            arr.push(',');
+            arr.push_str(&js_string_literal(n));
+        }
         for (name, _) in cs.custom_properties.iter() {
             arr.push(',');
             arr.push_str(&js_string_literal(name));
         }
         arr.push(']');
-        (arr, STD.len() + cs.custom_properties.len())
+        (arr, STD.len() + extra.len() + cs.custom_properties.len())
     };
     // **`length` is DERIVED, not a literal.** It used to be the constant `50`, and the `STD` list
     // above had since grown to 52 — so `getComputedStyle(el).length` under-reported by two and
@@ -997,7 +1311,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
           boxSizing:{}, minWidth:{}, maxWidth:{}, minHeight:{}, maxHeight:{}, \
           scrollSnapType:{}, scrollSnapAlign:{}, \
           filter:{}, webkitFilter:{}, backdropFilter:{}, webkitBackdropFilter:{}, \
-          clipPath:{}, webkitClipPath:{}, mixBlendMode:{}, __custom:{}, \
+          clipPath:{}, webkitClipPath:{}, mixBlendMode:{}, {} __custom:{}, \
           getPropertyValue:function(p){{\
           if(p.charCodeAt(0)===45&&p.charCodeAt(1)===45){{var cvv=this.__custom[p];return cvv===undefined?'':String(cvv);}}\
           var m={{'background-color':'backgroundColor','font-size':'fontSize',\
@@ -1104,6 +1418,24 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         q(&clip_path_css(cs.clip_path.as_ref())),
         q(&clip_path_css(cs.clip_path.as_ref())),
         q(blend_mode_css(cs.mix_blend_mode)),
+        // The tick-597 batch, emitted from `extra_computed_props` so the object slots and the
+        // enumeration names above are the SAME list. `cssFloat` is aliased because `float` is the
+        // legacy CSSOM spelling every framework still reads.
+        {
+            let mut out = String::new();
+            for (name, val) in extra_computed_props(cs) {
+                out.push_str(&camel(name));
+                out.push(':');
+                out.push_str(&js_string_literal(&val));
+                out.push(',');
+                if name == "float" {
+                    out.push_str("cssFloat:");
+                    out.push_str(&js_string_literal(&val));
+                    out.push(',');
+                }
+            }
+            out
+        },
         // `__custom` — the computed CSS custom properties (`--foo`), as a JS object literal keyed by the
         // full `--name`. `getPropertyValue` short-circuits to it for any name starting with `--`, so
         // `getComputedStyle(el).getPropertyValue('--foo')` returns the cascaded/var()-expanded value.

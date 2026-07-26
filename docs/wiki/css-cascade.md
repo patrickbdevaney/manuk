@@ -1320,3 +1320,44 @@ bug wearing new clothes: whichever the page consults, it gets a different browse
 
 Prefixed aliases resolve to the *same* value rather than to a duplicate serialization, so a page that
 feature-detects on `webkitFilter` and then reads `filter` (or the reverse) cannot find a hole.
+
+## 86 of 95 — the throw-class defect was never four properties wide (tick 597)
+
+t596 closed `undefined`-from-`getComputedStyle` for `filter`, `backdrop-filter`, `clip-path` and
+`mix-blend-mode`. A probe of **95 commonly-read properties then found 86 still returning
+`undefined`** — t596 had fixed **4 of ~86**. This session's recurring failure at its widest yet: *a
+fix scoped to the shape the bug presented in is one category too narrow — grep for the class.* The
+cheap version of the question was always "how many properties are in this state?", and it takes one
+probe to answer.
+
+Almost every one of those 86 already had a true computed value sitting in `ComputedStyle`. **The
+engine was rendering them and refusing to say so.**
+
+### One list, three consumers — the structural half
+
+The properties used to live in **three** places: the 60-argument `format!`, the `STD` name array
+behind `length`/`item(i)`, and the dash→camel map for `getPropertyValue`. Those drift independently,
+and they had: `length` was once a hand-maintained `50` against a list of 52, so the last two
+properties were unreachable through `item(i)` and nothing failed loudly.
+
+Everything added at t597 is emitted from **one** function that produces the object slots *and* the
+enumeration names. A property added there **cannot** be enumerable-invisible, which is why the gate
+can assert `lenMatchesNames` as a general property rather than spot-checking names.
+
+### Two serializations the obvious implementation gets wrong
+
+**`border-*-style` is not readable off `BorderStyle`.** That enum has no `none` or `hidden` variant —
+the cascade collapses both to a **zero width** (`stylo_map` does exactly that). A naive `match` on the
+enum therefore reports `solid` for *every element on the page*, including the overwhelming majority
+with no border at all. It has to be recovered from the width. This is the `two-cascades` hazard in
+miniature: the enum is not the source of truth for the question being asked.
+
+**An unset `letter-spacing` is `normal`, not `0px`.** The difference is observable — `normal` permits
+the font's own kerning and `0px` suppresses it — so printing the `f32` unconditionally reports a value
+the author never wrote. Same for `word-spacing`.
+
+The properties that remain `undefined` are now *measured* rather than assumed: they are the ones this
+engine genuinely does not compute (grid shorthand forms, `transition`/`animation`, `contain`, the
+logical-property spellings, `perspective`, `zoom`, `clip`). An honest `undefined` for an unimplemented
+property is a different thing from an `undefined` for a rendered one — and only the second kind was
+ever the bug.

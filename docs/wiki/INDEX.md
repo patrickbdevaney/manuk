@@ -245,6 +245,9 @@
   - L1268 · Why filter is the costliest member, and worse than t576's cases
   - L1284 · The lesson, which this session paid for four times
   - L1292 · undefined from getComputedStyle is not a missing feature — it is a thrown exception in the caller (tick 596)
+  - L1324 · 86 of 95 — the throw-class defect was never four properties wide (tick 597)
+  - L1336 · One list, three consumers — the structural half
+  - L1347 · Two serializations the obvious implementation gets wrong
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1020,4 +1023,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-935 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+938 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
