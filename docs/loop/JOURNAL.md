@@ -27325,3 +27325,51 @@ PATTERN: [no-pattern] — no browser capability changed.
 NEXT: the one question above. Everything else needed is written down here and reproducible in about
 twenty minutes. Also still open and cheaper: `document.fonts` is `undefined` (welt.de's remaining
 error), and t563's Lora finding on an external sheet.
+
+## Tick 621 — measure-and-pin: two of the map's `works` claims were false, and one was an inert stub (2026-07-26)
+
+Audit #34 moved 14 rows to `unknown` because nothing measured them. This is the follow-through, and
+it is the board's CO-#1 item (2) — *probe the genuinely-open unknowns*. Five measured in one probe:
+
+```text
+  constructable stylesheets   new CSSStyleSheet() ok · replaceSync fn · adoptedStyleSheets = [] ok   → WORKS
+  forced reflow               40 -> 140   (a mid-script write is visible to the NEXT read)          → WORKS
+  list markers                li.left 48 vs ul.left 8 — 40px of marker indent, Chrome's default     → WORKS
+  overflow-anchor             getComputedStyle(...).overflowAnchor is UNDEFINED                     → MISSING
+  ResizeObserver              constructs · observe() accepts · callback NEVER CALLED                → INERT
+```
+
+**THE TWO THAT WERE FALSE ARE WHY THE AUDIT WAS WORTH RUNNING.** Both had `works` in the map with no
+gate. `overflow-anchor` is not partially implemented — the property is **not computed at all**. And
+`ResizeObserver` is the `G_MUTATION` shape exactly: an object that constructs, accepts `.observe()`,
+and calls your callback never. **"The global exists" is not "the observer fires"**, and only a probe
+that mutates the observed element and then waits for delivery can tell them apart — the first version
+of my own probe reported `fired:0` synchronously, which proves nothing, since ResizeObserver is
+asynchronous by design. It took mutating the box and draining to make the zero mean something.
+
+`ResizeObserver` is pinned at **`partial`**, not `missing`: the surface is real and only DELIVERY is
+absent, and saying `missing` would be a new inaccuracy in the other direction.
+
+**AND THE RECONCILER CAUGHT ME REINTRODUCING THE EXACT DEFECT I HAD JUST SPENT A TICK REMOVING.**
+`partial` with `gate = -` is a bare assertion — unfalsifiable, which is what audit #34 was about. So
+the negative is now **pinned as an assertion**: `roCtor:function` + `roFired:0` live in the gate.
+⚠ **That assertion is a NEGATIVE and it is the one that rots** — the moment delivery lands it goes
+RED, and that is the signal to re-price the map row, **not** to retune the line. An honest "no" that
+nobody updates becomes a lie exactly when the capability arrives. `[[honest-answer-is-not-a-fixed-answer]]`
+
+RED-PROVEN: making `adoptedStyleSheets` getter-only again (both registration sites) → RED
+`adoptSet:TypeError` — the throw, not a no-op, which is the t612 class. Map drift back to **0**, and
+`G_CONSTELLATION_WELLFORMED` green on the result.
+
+TICK SHAPE: measurement (four capabilities the map asserted without evidence now have verdicts and a
+gate; two of the assertions were false). Bar 0 untouched; no ratchet floor moved. **No engine source
+changed** — this tick measures, it does not build.
+Gates: +1 `G_UNKNOWNS_PINNED` (`engine/page/tests/g_unknowns_pinned.rs`) — constructable stylesheets
+end to end, forced reflow, marker indent, and the ResizeObserver negative.
+WIKI: none [forced] — no engine mechanism changed; the findings' home is the map's receipts.
+PATTERN: [no-pattern] — no browser capability changed.
+
+NEXT: `ResizeObserver` delivery is now a named, measured gap with a gate that will flip when it lands —
+and it is worth more than its row suggests, since `IntersectionObserver` already fires (t59) and every
+responsive component library reaches for RO. The remaining `unknown` rows from audit #34 (web fonts'
+`font-display`/`unicode-range`, `ic`/`ric` units, test262) are each a probe of this shape.
