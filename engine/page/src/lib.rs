@@ -2161,6 +2161,16 @@ impl Page {
     /// stated rather than discovered: the embed renders, but it does not scroll, and it does not update.
     /// A rendered embed you cannot scroll is enormously better than a 300×150 hole, and it is a fraction
     /// of the work of a live nested browsing context — which is where this goes next.
+    /// The URLs of the subframes that actually **rendered**, in no particular order.
+    ///
+    /// This is the observable an anti-framing check needs: a frame refused by `X-Frame-Options` or
+    /// CSP `frame-ancestors` never reaches `render_iframe`, so it is absent here. A frame's own
+    /// document is otherwise reachable only through `contentDocument`, i.e. from JS — which a Rust
+    /// gate would have to stand up a script context to read.
+    pub fn rendered_iframe_urls(&self) -> Vec<String> {
+        self.iframes.values().cloned().collect()
+    }
+
     pub fn render_iframe(
         &mut self,
         node: manuk_dom::NodeId,
@@ -2238,15 +2248,32 @@ impl Page {
         // One round of fetches, concurrently. A frame inside a frame is handled by the child's own
         // load — `MAX_IFRAME_DEPTH` is the fork-bomb guard.
         let fetches = pending.into_iter().map(|(node, url, _w, _h)| async move {
-            let (html, final_url) = fetch_html(&url).await.ok()?;
-            Some((node, html, final_url))
+            let (html, final_url, headers) = fetch_html_with_headers(&url).await.ok()?;
+            Some((node, html, final_url, headers))
         });
         let got: Vec<_> = futures_util::future::join_all(fetches)
             .await
             .into_iter()
             .flatten()
             .collect();
-        for (node, html, final_url) in got {
+        // The embedder is THIS document — the origin the framed page is being asked to trust.
+        let embedder = Url::parse(&self.final_url).ok();
+        for (node, html, final_url, headers) in got {
+            // **A site that says "do not frame me" must not be framed.** `X-Frame-Options` and CSP
+            // `frame-ancestors` are the only clickjacking defence a page has, and ignoring them is
+            // silent: the frame renders, the user interacts with it believing it is the outer site,
+            // and nothing anywhere reports that a stated policy was overruled. It matters more here
+            // than in an ordinary browser, because an agentic browser composes pages it did not
+            // author and acts inside them.
+            if let Ok(framed) = Url::parse(&final_url) {
+                if !framing_allowed(&headers, embedder.as_ref(), &framed) {
+                    tracing::warn!(url = %final_url, "framing refused by X-Frame-Options / frame-ancestors");
+                    // The frame element stays, with no document — which is what a refusal looks
+                    // like. Rendering the body anyway "so the user sees something" would be
+                    // precisely the failure the header exists to prevent.
+                    continue;
+                }
+            }
             self.render_iframe(node, &html, &final_url, fonts, 0);
         }
     }
@@ -7253,6 +7280,13 @@ pub async fn fetch_document(url: &str) -> Result<Loaded> {
 }
 
 pub async fn fetch_html(url: &str) -> Result<(String, String)> {
+    fetch_html_with_headers(url).await.map(|(t, u, _)| (t, u))
+}
+
+/// As [`fetch_html`], but also hands back the response headers — which the iframe path needs and the
+/// document path does not. Split rather than widened so the ~dozen `fetch_html` call sites stay
+/// unchanged: a framing decision is the only caller that cares.
+pub async fn fetch_html_with_headers(url: &str) -> Result<(String, String, Vec<(String, String)>)> {
     if url.starts_with("http://") || url.starts_with("https://") {
         // The document gets the long deadline; its subresources get the short one. See
         // `manuk_net::fetch_document`.
@@ -7263,14 +7297,100 @@ pub async fn fetch_html(url: &str) -> Result<(String, String)> {
             anyhow::bail!("server returned HTTP {} for {}", resp.status, url);
         }
         // WHATWG charset sniff (D4) instead of lossy UTF-8.
-        Ok((resp.decoded_text(), resp.final_url.to_string()))
+        Ok((
+            resp.decoded_text(),
+            resp.final_url.to_string(),
+            resp.headers.clone(),
+        ))
     } else if let Some(rest) = url.strip_prefix("data:") {
-        Ok((decode_data_url(rest)?, url.to_string()))
+        Ok((decode_data_url(rest)?, url.to_string(), Vec::new()))
     } else {
         let path = url.strip_prefix("file://").unwrap_or(url);
         let html =
             std::fs::read_to_string(path).with_context(|| format!("reading local file {path}"))?;
-        Ok((html, url.to_string()))
+        Ok((html, url.to_string(), Vec::new()))
+    }
+}
+
+/// **May `embedder` frame a document served with these headers?**
+///
+/// Two mechanisms answer one question, and the spec is explicit that they are not equals: when CSP
+/// `frame-ancestors` is present it **overrides `X-Frame-Options` entirely** (CSP3 §7.4.1), including
+/// overriding a `DENY`. Checking both and taking the stricter answer is the intuitive
+/// implementation and it is wrong — a site migrating from the legacy header to the modern directive
+/// deliberately leaves a stale `X-Frame-Options: DENY` behind, and honouring it would break the
+/// framing the site has just decided to allow.
+///
+/// Returns `true` when framing is permitted (which is the answer for the overwhelming majority of
+/// responses, since neither header is present).
+fn framing_allowed(headers: &[(String, String)], embedder: Option<&Url>, framed: &Url) -> bool {
+    let get = |name: &str| {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    };
+    let same_origin = |a: &Url, b: &Url| {
+        a.scheme() == b.scheme()
+            && a.host_str() == b.host_str()
+            && a.port_or_known_default() == b.port_or_known_default()
+    };
+
+    // ── CSP `frame-ancestors` first, and if it is present nothing else is consulted.
+    let csp_directive = get("content-security-policy").and_then(|csp| {
+        csp.split(';')
+            .map(str::trim)
+            .find(|d| d.to_ascii_lowercase().starts_with("frame-ancestors"))
+            .map(|d| d["frame-ancestors".len()..].trim().to_ascii_lowercase())
+    });
+    if let Some(sources) = csp_directive {
+        let Some(embedder) = embedder else {
+            return true; // a top-level document is not framed at all
+        };
+        return sources.split_whitespace().any(|src| match src {
+            "'none'" => false,
+            "*" => true,
+            "'self'" => same_origin(embedder, framed),
+            // A host source: `https://example.com`, `example.com`, `https://*.example.com`. Anything
+            // this cannot parse is treated as NOT matching — for `frame-ancestors` that is the
+            // direction the page asked for ("only these may frame me"), so an unrecognised source
+            // must not become a wildcard.
+            other => {
+                let other = other.trim_matches('\'');
+                let (scheme, host) = match other.split_once("://") {
+                    Some((s, h)) => (Some(s), h),
+                    None => (None, other),
+                };
+                if let Some(s) = scheme {
+                    if s != embedder.scheme() {
+                        return false;
+                    }
+                }
+                let host = host.split('/').next().unwrap_or(host);
+                let host = host.split(':').next().unwrap_or(host);
+                let Some(eh) = embedder.host_str() else {
+                    return false;
+                };
+                match host.strip_prefix("*.") {
+                    Some(suffix) => eh.ends_with(suffix) && eh.len() > suffix.len(),
+                    None => eh.eq_ignore_ascii_case(host),
+                }
+            }
+        });
+    }
+
+    // ── Legacy `X-Frame-Options`, consulted only when there is no `frame-ancestors`.
+    match get("x-frame-options").map(|v| v.trim().to_ascii_lowercase()) {
+        Some(v) if v == "deny" => false,
+        Some(v) if v == "sameorigin" => match embedder {
+            None => true,
+            Some(e) => same_origin(e, framed),
+        },
+        // `ALLOW-FROM` was removed from every engine (it could not express the origin the
+        // navigation actually came from) and an unrecognised value is ignored, per the HTML spec's
+        // handling of a header it does not understand — NOT treated as `DENY`, which would block
+        // frames on the strength of a typo.
+        _ => true,
     }
 }
 

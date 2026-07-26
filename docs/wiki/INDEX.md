@@ -869,6 +869,9 @@
   - L1282 · The passkey feature-detect surface exists and DEGRADES gracefully (tick 485)
   - L1315 · @import chains are fetched — an unfetched import DELETES a stylesheet (tick 564)
   - L1341 · Subresource Integrity — the check belongs at the fetch choke point, on the RAW bytes (tick 599)
+  - L1380 · Anti-framing — two mechanisms, one enforcement point, and frame-ancestors WINS (tick 600)
+  - L1396 · The thing an implementation written from intuition gets wrong
+  - L1404 · Two failure directions, and they point opposite ways
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -1024,4 +1027,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-939 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+942 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

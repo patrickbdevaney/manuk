@@ -1376,3 +1376,45 @@ test while making the browser useless.
 `<script src>` is the dominant SRI carrier and the only one routed through this choke point today.
 `X-Frame-Options` / CSP `frame-ancestors` remain **missing** (measured, not unknown); their
 enforcement point is the iframe document load, and the two share it.
+
+## Anti-framing — two mechanisms, one enforcement point, and `frame-ancestors` WINS (tick 600)
+
+`X-Frame-Options` and CSP `frame-ancestors` are the only clickjacking defence a page has: they are
+how a bank says its transfer form may not be loaded invisibly on top of someone's game. Both were
+absent (t599 measured it; the map had carried the row as `unknown` while `csp.rs`'s own header
+already documented `frame-ancestors` as unimplemented — the source knew and the map did not).
+
+Ignoring them is **silent**, and that is what makes it this engine's recurring shape: the frame
+renders, the user interacts with it believing it is the outer site, and nothing anywhere reports that
+a stated policy was overruled. It matters more here than in an ordinary browser, because an agentic
+browser composes pages it did not author and then *acts inside them*.
+
+Both are enforced at one point — the async subframe pass, which is where the response headers are
+still in hand. `fetch_html` was split rather than widened (`fetch_html_with_headers`) so its dozen
+other callers stay unchanged: a framing decision is the only one that cares.
+
+### The thing an implementation written from intuition gets wrong
+
+**`frame-ancestors` overrides `X-Frame-Options` entirely** (CSP3 §7.4.1) — *including* overriding a
+`DENY`. Checking both and taking the stricter answer is the natural thing to write and it is wrong: a
+site migrating from the legacy header to the modern directive deliberately leaves a stale
+`X-Frame-Options: DENY` behind, and honouring it breaks the framing the site has just decided to
+allow. That is the normal migration path, so the "safe" reading breaks working sites at scale.
+
+### Two failure directions, and they point opposite ways
+
+- An **unrecognised `X-Frame-Options` value** is *ignored*, not treated as `DENY`. The header has one
+  meaningful value the spec still defines; a typo must not silently un-frame a working embed.
+- An **unrecognised `frame-ancestors` source** does *not* match. There the page said "only these may
+  frame me", so an unparseable source must not become a wildcard.
+
+Same "we don't understand this token" input, opposite correct answers — because the two headers make
+opposite default claims. Getting this from a single "fail open" or "fail closed" instinct is how one
+of them ends up wrong.
+
+A refused frame renders **nothing** and the element stays empty. Rendering the body anyway "so the
+user sees something" is precisely the outcome the header exists to prevent.
+
+⚠ Residue: no error page inside the refused frame (Chrome draws one), `ALLOW-FROM` unsupported (it
+was removed from every engine because it could not express the origin the navigation came from), and
+no violation reporting.

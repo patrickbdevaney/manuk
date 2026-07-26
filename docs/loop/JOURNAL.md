@@ -25464,3 +25464,65 @@ Orientation, File System Access/OPFS, `@counter-style`. Then `isolation` (18.0%)
 `UNRENDERED_LONGHANDS` row with real usage, and still needing a nested paint group, so measure before
 committing.
 Cadences: self-audit 604; wall 607; const 607; surface 608.
+
+## Tick 600 — anti-framing: two mechanisms, one enforcement point, and `frame-ancestors` WINS (2026-07-26)
+
+t599 measured `X-Frame-Options` and CSP `frame-ancestors` as absent — and found the map had carried
+the row as `unknown` while `engine/net/src/csp.rs`'s own header *already documented*
+`frame-ancestors` as unimplemented. **The source knew and the map did not**, which is a small,
+precise instance of the thing surface audit #33 was about.
+
+Both are now enforced at one point — the async subframe pass, which is where the response headers are
+still in hand. `fetch_html` was **split** rather than widened (`fetch_html_with_headers`) so its
+dozen other callers stay unchanged: a framing decision is the only caller that cares about headers.
+
+**THE THING AN IMPLEMENTATION WRITTEN FROM INTUITION GETS WRONG, and the gate exists mostly for it.**
+`frame-ancestors` **overrides** `X-Frame-Options` entirely (CSP3 §7.4.1) — *including* overriding a
+`DENY`. Checking both and taking the stricter answer is the natural thing to write, and it breaks
+every site that migrated to the directive and left the legacy header behind — which **is** the normal
+migration path. So the "safe" reading breaks working sites at scale, and only the spec-faithful one
+is actually safe.
+
+**TWO FAILURE DIRECTIONS THAT POINT OPPOSITE WAYS, from the same input.** An unrecognised
+`X-Frame-Options` *value* is **ignored** (the header has one meaningful value; a typo must not
+silently un-frame a working embed). An unrecognised `frame-ancestors` *source* does **not match**
+(there the page said "only these may frame me", so an unparseable source must not become a wildcard).
+Same "we don't understand this token" situation, opposite correct answers, because the two headers
+make opposite default claims. A single fail-open or fail-closed instinct gets one of them wrong.
+
+A refused frame renders **nothing**. Rendering the body anyway "so the user sees something" is
+precisely the outcome the header exists to prevent.
+
+**AND THE GATE TOOK THREE ATTEMPTS TO MEASURE ANYTHING, which is worth recording.** First it asserted
+on the outer document's `textContent` — a framed document lives in its own document, so that was
+always empty. Second, it read the frames through `contentDocument` from JS — but `eval_for_test`
+appended nothing under `from_prefetched`, and I confirmed that with a throwaway diagnostic rather
+than guessing. Third: `from_prefetched` **does not fetch subframes at all** (`load_async` does), so
+the first two versions were asserting about frames that had never been requested. **A gate written on
+the wrong load path passes its "was it blocked?" claims for the emptiest possible reason** — every
+frame is absent because none was ever fetched. It now runs `load_async` and asserts on
+`rendered_iframe_urls()`, a small accessor added for exactly this: the observable is *which frames
+rendered*, and a refused one never reaches `render_iframe`.
+
+The vacuity guard matters for the same reason and is stated first: a header-less frame **must still
+render**, or an implementation that blocked everything would pass every "was it blocked?" claim while
+making the browser useless.
+
+RED-PROVEN: bypass the check → all seven test frames render instead of four. Both feature
+configurations of `manuk-page` compile (the t599 lesson applied), `manuk-agent` 126 green,
+`G_IFRAME`/`G_CSP`/`G_SRI` green under the change.
+
+TICK SHAPE: capability (a security control landed — the second half of the pair t599 measured; the
+clickjacking defence a page cannot otherwise have). Bar 0 untouched; no ratchet floor moved.
+Gates: `G_FRAMING` (`engine/page/tests/g_framing.rs` — vacuity guard, DENY, SAMEORIGIN cross-origin,
+`'none'`, `*`, the OVERRIDE case, and unknown-value-is-ignored; RED-proven).
+WIKI: docs/wiki/networking.md — "Anti-framing — two mechanisms, one enforcement point, and
+`frame-ancestors` WINS".
+PATTERN: [no-pattern] — a security control landed; no rendering capability changed.
+
+NEXT: the rest of (D)'s unknowns, which audit #33 established is the only genuinely open CO-#1
+letter. Cheapest first and all measure-and-pin: Reporting API, `window.screen` + Screen Orientation,
+`@counter-style`, File System Access/OPFS. Then `isolation` (18.0%) — still the last
+`UNRENDERED_LONGHANDS` row with real usage, still needing a nested paint group, so measure the cost
+before committing to it.
+Cadences: self-audit 604; wall 607; const 607; surface 608.
