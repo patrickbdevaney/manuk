@@ -90,10 +90,17 @@ fi
 #    agent to cite a gate / set status; false drift ⇒ fix map-reconcile's search. This is reconciliation
 #    made STANDING (the doctrine's goal) without the wall-brick risk.
 if [ -x scripts/map-reconcile.sh ]; then
-  _mout=$(bash scripts/map-reconcile.sh 2>/dev/null)
+  # Judge the COMMITTED map (HEAD), not the worktree — else this fires on the agent's transient mid-tick
+  # map edits (WIP), which is noise. A standing alert should flag only LANDED drift. Gate search stays
+  # worktree (a committed row citing a just-added gate is correctly backed).
+  _hm=$(mktemp)
+  if git show HEAD:docs/loop/CONSTELLATION.tsv > "$_hm" 2>/dev/null && [ -s "$_hm" ]; then
+    _mout=$(MANUK_MAP="$_hm" bash scripts/map-reconcile.sh 2>/dev/null)
+  else _mout=$(bash scripts/map-reconcile.sh 2>/dev/null); fi
+  rm -f "$_hm"
   if printf '%s' "$_mout" | grep -q 'RECONCILED'; then MD=0     # drift 0 prints "RECONCILED", not "DRIFT TOTAL: 0"
   else MD=$(printf '%s' "$_mout" | grep -oE 'DRIFT TOTAL: [0-9]+' | grep -oE '[0-9]+' | head -1); fi
-  [ "${MD:-0}" -gt 0 ] && { note "ALERT: map drift ${MD} row(s) — a capability claims a gate that doesn't exist (real ⇒ steer agent; false ⇒ fix map-reconcile search)"; alert=$((alert+1)); }
+  [ "${MD:-0}" -gt 0 ] && { note "ALERT: map drift ${MD} row(s) in the COMMITTED map — a landed capability claims a gate that doesn't exist (real ⇒ steer agent; false ⇒ fix map-reconcile search)"; alert=$((alert+1)); }
 fi
 
 # Summary line (the observer reads the tail of $LOG each heartbeat).
