@@ -350,3 +350,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 588	450f72a9	1785025895	2026-07-25T20:31:35-04:00	1213	instrument	85	6	259	42	285	81	3896	6960	0	337	31	SURFACE AUDIT #32: the map had been ranking by roadmap, not by usage (2026-07-25)
 589	9529f6d0	1785027959	2026-07-25T21:05:59-04:00	2064	capability	85	8	287	33	286	81	3896	6960	0	338	31	`navigator.plugins` was undefined, and the argument for fixing it was already in the file (2026-07-25)
 590	949ecf17	1785029016	2026-07-25T21:23:36-04:00	1057	measurement	85	6	204	33	287	81	3896	6960	0	338	31	the highest-usage item on the board was worth much less than its number (2026-07-25)
+591	9e513c68	1785031228	2026-07-25T22:00:28-04:00	2212	capability-honesty	85	10	292	35	287	81	3896	6960	0	338	31	`CSS.supports('filter')` said YES, and t576's fix was one category too narrow (2026-07-25)

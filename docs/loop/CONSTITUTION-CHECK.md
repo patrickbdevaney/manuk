@@ -1781,3 +1781,60 @@ starting with the throw-class killers (IndexedDB, the observer trio). (4) **the 
 the new certificate and the orders say so explicitly.
 
 **Next check due: tick 591.**
+
+## Check #40 — tick 591
+
+**HORIZON: H0 — Pareto Web Parity**, under the tick-581 certification redesign
+(`docs/loop/DAILY-DRIVER-CERTIFICATION.md`): **daily-driver-pass(site) = renders(site) ∧ functions(site)**
+over a fixed-denominator 400-site corpus.
+
+**GATE OR SCOREBOARD? — GATE, and the window is unusually legible because the observer's CO-#1 was a
+numbered list.** Items (1) falsify the certificate, (2) fixed-denominator corpus, (3) compose FUNCTION,
+(4) reconciliation: **all four landed** (t583–t586), each verify-gated and RED-proven. Then t587–t591 went
+back to capability on the strength of what the instruments found. `WPT:TOTAL` remains flat and remains
+irrelevant, exactly as #37 and #38 argued.
+
+**THE INVARIANT THAT MOVED THIS WINDOW IS I5, AND IT MOVED IN AN UNUSUAL DIRECTION.** I5 names the
+differential oracle as the discovery engine. This window it was **turned on itself** — t583 proved every
+certificate term can go red; t584 made a dropped site impossible rather than discouraged — and then, twice,
+**the instrument found engine defects that no conformance test would have**: t586's capability probe could
+not wrap `localStorage` (→ t587: assignment silently discarded), and t591's `filter` probe found
+`CSS.supports` answering **yes** for a property we do not render. **Building the measuring tool out of the
+same primitives the web uses is what made both visible.** That belongs in the constitution's reading of I5:
+the oracle is not only a corpus differ, it is anything that exercises the engine the way a page does.
+
+**PART VI CORRECTION — §VI.3's north star needs a second clause.** VI.3 says: optimise *usage-weighted
+breadth*, not subtest count. Correct, and this window proved it incomplete. t588 pulled the Blink use
+counters and found the map ranking by standards-roadmap; t590 then took the resulting **#1 by usage
+(`appearance`, 60.5% of page loads)**, measured it, and found it a **no-op for this engine** — our form
+controls are UA CSS, not native widgets, so the effect authors want is already achieved by the cascade.
+**A tick that "implemented appearance" would have been theatre, and the usage number would have justified
+it.** So VI.3 becomes:
+
+> **Rank by usage-weighted breadth — then price each candidate by measuring it IN THIS ENGINE.** A use
+> counter measures what pages *ask for*; what it costs *us* depends on what we would otherwise do.
+> *A capability's name is not its shape* (#588) and *a capability's usage is not its impact* (#590).
+
+**INVARIANTS.** I4 (Pareto): held and sharpened by the above. I2: held — nothing vendored or patched; the
+`UNRENDERED_LONGHANDS` list added this tick is our own denylist, not a Stylo edit. I3: discharged at t574
+and not reopened; the FUNCTION leg (t585/t586) is arguably I3 work in the certificate's clothing.
+
+**A DEFECT CLASS THIS CHECK WANTS ON RECORD, because it has now recurred at three widths.** t576 fixed
+`@supports` lying for the 35 `layout.unimplemented` properties. t591 found the identical lie for properties
+Stylo parses **natively, behind no pref at all** — `filter` (51.9% of page loads), `clip-path`,
+`mix-blend-mode`, `writing-mode`. The 2026-07 pattern is: **a fix scoped to the shape the bug presented in
+is one category too narrow.** t578 (three text-assembly consumers, not one), t581 (seven gate directories,
+not one), t588's own standing rule (which had the blind spot it was written to cure) are the same shape.
+**When a defect is found, ask what class it is an instance of before scoping the fix** — and the cheap
+version of that question is *"what else reads this / is in this state, and does it have the same problem?"*
+
+**STEER.** The observer's CO-#1 list is complete, so the next ordering comes from t588's usage ranking as
+corrected by t590's pricing rule: (1) **`filter`** — 51.9%, and unlike `appearance` its impact **does**
+transfer, because there is no cascade-level workaround for a blur; a real paint subsystem and the first in
+a while. (2) `font-display` / `unicode-range` — cheap, and adjacent to the t557/t558 font arc that was this
+project's largest fidelity win. (3) `clip-path` and `mix-blend-mode`, each **measured first** per VI.3's new
+clause. (4) The `interpolate-size` SIGSEGV, re-priced from exotic to one-page-load-in-twelve. Standing:
+the certificate's FUNCTION terms are falsified as they are added, which `G_CERT_FALSIFIABLE`'s term-count
+assertion enforces mechanically.
+
+**Next check due: tick 599.**

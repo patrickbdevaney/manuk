@@ -231,6 +231,9 @@
   - L1197 · The :has() supplement re-filtered the stylesheets for every element (tick 580)
   - L1209 · The measurement, and the first attempt varied the wrong n
   - L1232 · The hoist's real hazard is ORDERING, and the gate that caught it caught itself first
+  - L1245 · The SECOND category of @supports lie: parsed natively, never rendered (tick 591)
+  - L1268 · Why filter is the costliest member, and worse than t576's cases
+  - L1284 · The lesson, which this session paid for four times
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1006,4 +1009,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-921 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+924 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -2105,6 +2105,42 @@ const PARSE_ONLY_LONGHANDS: &[&str] = &[
     "zoom",
 ];
 
+/// **Properties Stylo's servo build parses NATIVELY and this engine still does not render.**
+///
+/// t576 closed this defect for the 35 longhands behind the `layout.unimplemented` pref, and scoped the
+/// fix to that pref's property set — which was the shape of the bug as it presented, and one category
+/// too narrow. **The general defect is "Stylo parses it, we never consume it, and `@supports` says
+/// yes"**, and the pref is only one reason a property can land in that state. These need no pref at
+/// all: Stylo computes them correctly and nothing reads the result.
+///
+/// Found by surface audit #32 (t588) pulling the Blink use counters, and each verified here by all
+/// three routes a computed value can reach us — no `clone_*` in `stylo_map.rs`, no `ComputedStyle`
+/// field, and no entry in the MinimalCascade recovery block:
+///
+/// | property | % of page loads |
+/// |---|---|
+/// | `filter` | **51.9%** |
+/// | `clip-path` | **43.8%** |
+/// | `backdrop-filter` | 34.3% |
+/// | `isolation` | 18.0% |
+/// | `mix-blend-mode` | 12.9% |
+/// | `writing-mode` | 8.3% (+5.4% prefixed) |
+///
+/// `filter` is the expensive one to get wrong: **there is no cascade-level workaround for a blur**, so
+/// a page told yes drops the opaque fallback it shipped for engines that cannot blur and puts its text
+/// unreadably over a photograph — the exact scenario t576 was written about, still live, one category
+/// over. Delete a line here the moment its property is genuinely rendered; `G_SUPPORTS_HONESTY` holds
+/// the answer either way.
+const UNRENDERED_LONGHANDS: &[&str] = &[
+    "filter",
+    "backdrop-filter",
+    "clip-path",
+    "mix-blend-mode",
+    "isolation",
+    "writing-mode",
+    "text-orientation",
+];
+
 /// A declaration that no engine supports, substituted for a parse-only one so that **Stylo** — not
 /// hand-rolled boolean logic — resolves the surrounding `and`/`or`/`not`.
 const NEVER_SUPPORTED: &str = "-manuk-not-a-property: 1";
@@ -2144,8 +2180,12 @@ fn rewrite_parse_only(
             // `Declaration` holds the raw `prop: value` slice; the property is everything before
             // the first colon. Compared case-insensitively, as CSS property names are.
             let name = d.0.split(':').next().unwrap_or("").trim();
+            // Both lists answer the same question — *do we RENDER this?* — and differ only in why the
+            // property became parseable. Kept separate so each carries its own evidence and can be
+            // shortened independently as capabilities land.
             if PARSE_ONLY_LONGHANDS
                 .iter()
+                .chain(UNRENDERED_LONGHANDS.iter())
                 .any(|p| name.eq_ignore_ascii_case(p))
             {
                 (
@@ -2221,6 +2261,22 @@ mod tests {
         assert!(!supports_condition("backdrop-filter: blur(4px)"));
         assert!(!supports_condition("offset-path: none"));
         assert!(!supports_condition("mask-repeat: no-repeat"));
+        // ── The SECOND category (t591): properties Stylo's servo build parses NATIVELY, behind no
+        //    pref at all, that this engine still does not render. t576 scoped its fix to the
+        //    `layout.unimplemented` set and was one category too narrow — `filter` is on 51.9% of page
+        //    loads and answered YES, which is the costliest possible wrong answer here because there
+        //    is no cascade-level workaround for a blur.
+        assert!(!supports_condition("filter: blur(4px)"));
+        assert!(!supports_condition("clip-path: circle(50%)"));
+        assert!(!supports_condition("mix-blend-mode: multiply"));
+        assert!(!supports_condition("isolation: isolate"));
+        assert!(!supports_condition("writing-mode: vertical-rl"));
+        // …and composition still resolves through Stylo for the new list too.
+        assert!(supports_condition("not (filter: blur(4px))"));
+        assert!(!supports_condition(
+            "(display: flex) and (filter: blur(4px))"
+        ));
+        assert!(supports_condition("(display: flex) or (filter: blur(4px))"));
         // ── …and the FOUR from the same pref set that ARE rendered must keep answering yes, or the
         //    fix has traded a false yes for a worse false no. Three of them arrive through the
         //    MinimalCascade recovery block rather than a `clone_*` accessor.

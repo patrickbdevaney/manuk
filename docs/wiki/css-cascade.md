@@ -1241,3 +1241,50 @@ which happens to be the right answer. The RED patch left the gate green. Moving 
 and sheet 2's to index 0 makes the stride the only thing that can order them, and the RED patch then fails
 with the earlier sheet winning. **An assertion whose fixture cannot reach the mechanism is green for a
 reason unrelated to the claim** — met here while writing the gate meant to catch exactly that.
+
+## The SECOND category of `@supports` lie: parsed natively, never rendered (tick 591)
+
+Tick 576 fixed `@supports` for the 35 longhands behind Stylo's `layout.unimplemented` pref, and scoped the
+denylist to **that pref's property set** — the shape the bug presented in, and **one category too narrow.**
+
+The general defect is *"Stylo parses it, we never consume it, and `@supports` says yes."* The pref is only
+**one** reason a property lands in that state. These need no pref at all — the servo build parses and
+computes them natively, and nothing reads the result:
+
+| property | % of page loads |
+|---|---|
+| `filter` | **51.9%** |
+| `clip-path` | **43.8%** |
+| `backdrop-filter` | 34.3% |
+| `isolation` | 18.0% |
+| `mix-blend-mode` | 12.9% |
+| `writing-mode` | 8.3% (+5.4% prefixed) |
+
+Each verified by **all three routes** a computed value can reach us: no `clone_*` in `stylo_map.rs`, no
+`ComputedStyle` field, and no entry in the MinimalCascade recovery block. Checking one route would have
+under-counted — `mask-image` and `text-overflow` arrive through the recovery block, which is exactly how
+t576's own honest set was nearly got wrong.
+
+### Why `filter` is the costliest member, and worse than t576's cases
+
+**There is no cascade-level workaround for a blur.** `appearance: none` turned out to be a no-op in this
+engine because plain author CSS already achieves what it asks for (tick 590) — a page loses nothing by our
+saying no. A page that wants a frosted-glass bar has no such path: it writes
+`@supports (backdrop-filter: blur(8px))`, is told **yes**, drops the opaque background it shipped for
+engines that cannot blur, and puts its text unreadably over a photograph.
+
+> **A false "yes" is strictly worse than a "no"**, because a "no" keeps a working page. Stated at t576,
+> still true, and still being discovered in new places.
+
+`UNRENDERED_LONGHANDS` is deliberately **separate** from `PARSE_ONLY_LONGHANDS`. Both answer the same
+question — *do we render this?* — and differ only in *why* the property became parseable, so each carries
+its own evidence and can be shortened independently as capabilities land. Delete a line the moment its
+property is genuinely rendered; `G_SUPPORTS_HONESTY` holds the answer either way.
+
+### The lesson, which this session paid for four times
+
+**A fix scoped to the shape the bug presented in is one category too narrow.** t578: the
+break-opportunity bug was in *three* text-assembly consumers, not one. t581: gates live in *seven*
+directories, not one. t588's own standing rule had the blind spot it was written to cure. t591: t576's
+denylist covered one of *two* categories. The cheap version of the question is **"what else reads this, or
+is in this state, and does it have the same problem?"** — a grep for the **class**, not the symptom.

@@ -62,6 +62,10 @@ const HTML: &str = r##"<!doctype html><html><head><style>
   R.push('vtn:' + s('view-transition-name: none'));
   R.push('bdf:' + s('backdrop-filter: blur(4px)'));
   R.push('op:'  + s('offset-path: none'));
+  // ── The SECOND category (t591): parsed NATIVELY, behind no pref, still not rendered.
+  R.push('flt:' + s('filter: blur(4px)'));
+  R.push('clip:' + s('clip-path: circle(50%)'));
+  R.push('wm:' + s('writing-mode: vertical-rl'));
   // ── The guard: the four that are genuinely rendered must still answer yes.
   R.push('us:'   + s('user-select: none'));
   R.push('csch:' + s('color-scheme: dark'));
@@ -112,6 +116,17 @@ fn supports_answers_for_what_we_render_not_for_what_stylo_parses() {
              photo. A false yes is strictly worse than a no, because a no keeps a working page",
         ),
         ("op:false", "`offset-path` — same class, a third unread property"),
+        (
+            "flt:false",
+            "THE SECOND CATEGORY, and the costliest member of it. `filter` needs NO pref — Stylo's \
+             servo build parses it natively and we simply never read the computed value. t576 scoped \
+             its denylist to the `layout.unimplemented` set and was one category too narrow, so \
+             `filter` — 51.9% of page loads — kept answering YES. There is no cascade-level \
+             workaround for a blur, so a page told yes drops the opaque fallback it shipped and puts \
+             its text unreadably over a photograph",
+        ),
+        ("clip:false", "`clip-path` (43.8% of page loads) — parsed natively, never read"),
+        ("wm:false", "`writing-mode` — the same, and the axis the CJK story stops short of"),
         (
             "us:true",
             "THE GUARD, and it is why this cannot be fixed by simply not flipping the pref: \

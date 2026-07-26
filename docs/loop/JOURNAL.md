@@ -24806,3 +24806,81 @@ renders, because "nothing" and "the unfiltered content" are different failures w
 `font-display`/`unicode-range` — adjacent to the t557/t558 font arc and cheap by comparison. The CSSOM half
 of `appearance` folds naturally into whichever CSSOM tick comes next.
 Cadences: const 591 (NEXT TICK); self-audit 594; surface 598; wall 607.
+
+## Tick 591 — `CSS.supports('filter')` said YES, and t576's fix was one category too narrow (2026-07-25)
+
+t590 named `filter` the board's #1 and said to measure before pricing. Measured — and the measurement found
+a different, cheaper, more urgent defect than the one I went looking for.
+
+**THE FINDING.** `getComputedStyle(el).filter` is `undefined` (expected — t588 verified we never read the
+property), but:
+
+```text
+CSS.supports('filter', 'blur(4px)')  →  true
+```
+
+**We were telling every page that we can blur.** t576 fixed exactly this lie for the 35 longhands behind
+`layout.unimplemented` — and scoped the fix to *that pref's property set*, which was the shape the bug
+presented in and **one category too narrow**. `filter` needs no pref at all: Stylo's servo build parses it
+natively, computes it correctly, and we simply never read the result. The general defect is *"Stylo parses
+it, we never consume it, and `@supports` says yes"*, and the pref is only one reason a property lands in
+that state.
+
+**IT IS THE COSTLIEST POSSIBLE WRONG ANSWER, and more so than t576's cases.** There is **no cascade-level
+workaround for a blur.** `appearance: none` turned out to be a no-op here because author CSS already
+achieves the effect (t590); a page that wants a frosted-glass bar has no such fallback path — it writes
+`@supports (backdrop-filter: …)`, is told yes, drops the opaque background it shipped for engines that
+cannot blur, and lands its text unreadably over a photograph. **A false yes is strictly worse than a no**,
+and this one was live on 51.9% of page loads.
+
+**SEVEN PROPERTIES, EACH VERIFIED BY ALL THREE ROUTES a computed value can reach us** — no `clone_*` in
+`stylo_map.rs`, no `ComputedStyle` field, no entry in the MinimalCascade recovery block: `filter` (51.9%),
+`clip-path` (43.8%), `backdrop-filter` (34.3%), `isolation` (18.0%), `mix-blend-mode` (12.9%),
+`writing-mode` (8.3%), `text-orientation`. `UNRENDERED_LONGHANDS` is kept **separate** from
+`PARSE_ONLY_LONGHANDS` deliberately: both answer *"do we render this?"* and differ only in *why* the
+property became parseable, so each carries its own evidence and can be shortened independently as
+capabilities land.
+
+**THE CLASS, AND IT HAS NOW RECURRED AT THREE WIDTHS IN ONE SESSION.** t578: the break-opportunity bug was
+in **three** text-assembly consumers, not one. t581: gates live in **seven** directories, not one. t588's
+own standing rule had the blind spot it was written to cure. And now t576's denylist covered one of **two**
+categories.
+
+> **A fix scoped to the shape the bug presented in is one category too narrow.** The cheap version of the
+> question is: *what else reads this, or is in this state, and does it have the same problem?* — a grep for
+> the **class**, not the symptom. This session has paid for that lesson four times and collected on it
+> four times.
+
+**`filter` remains `missing`** — this tick did not implement it, and says so. What changed is that it no
+longer **lies** about being missing, which is the difference between a page rendering unstyled and a page
+rendering broken.
+
+CONSTITUTION CHECK #40 (due 591): the observer's CO-#1 list (falsify → fixed denominator → FUNCTION →
+reconciliation) is **complete**, t583–t586. **PART VI §VI.3 corrected**: "rank by usage-weighted breadth"
+gains a second clause — *then price each candidate by measuring it IN THIS ENGINE*, because t590 showed a
+correctly-measured 60.5% usage number can be worth nothing here. Recorded that **I5 moved in an unusual
+direction this window**: the instrument was turned on itself, and then twice found engine defects no
+conformance test would have (t587's unpatchable `localStorage`, this tick's `filter`) — *building the
+measuring tool out of the same primitives the web uses is what made both visible*, which belongs in the
+constitution's reading of I5.
+
+RED-PROVEN: drop `filter` from `UNRENDERED_LONGHANDS` → `expected flt:false` fails. Full `manuk-page`
+suite: 289 binaries green, zero red; `manuk-css --features stylo` 42/42 with 9 new assertions.
+
+TICK SHAPE: capability-honesty (a page's progressive-enhancement branch is no longer decided by a lie about
+blur, on 51.9% of page loads) + the DUE constitution check. Bar 0 untouched; no ratchet floor moved.
+Gates: `G_SUPPORTS_HONESTY` extended to the second category, RED-proven; `supports_condition`'s unit test
+gains the natively-parsed set and its composition cases.
+WIKI: docs/wiki/css-cascade.md — "The SECOND category of `@supports` lie: parsed natively, never
+rendered". ⚠ The first attempt at this commit claimed the wiki *carried* the mechanism without revising the
+file, and the pre-flight refused. It was right to: **a trailer naming a file is a claim like any other**,
+and "the existing section covers it" is exactly the reasoning that lets documentation fall behind the code
+it describes. The section is now written.
+PATTERN: [no-pattern] — no rendering capability changed; the honest-failure row moves.
+
+NEXT: **`filter` for real** — a separable-Gaussian pass over the composited layer, the first genuine paint
+subsystem tick in a while, now that the honest "no" is in place to fall back on while it is built. Then
+`font-display`/`unicode-range` (cheap, adjacent to the t557/t558 font arc). Then `clip-path` and
+`mix-blend-mode`, each **measured first** per §VI.3's new clause. Then the `interpolate-size` SIGSEGV,
+re-priced from exotic to one-page-load-in-twelve.
+Cadences: self-audit 594; surface 598; const 599; wall 607.
