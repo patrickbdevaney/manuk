@@ -95,6 +95,49 @@ must, or the tick fails:
 A number that doesn't add up is the single most reliable defect detector this project has. Wiring it in is
 how "the instruments cannot lie" stops being a hope and becomes a property.
 
+## Is this ALL the loop's failure modes? No — there are THREE categories, one deeper principle
+
+Honest audit (the doctrine above covered only the first): the four named failure modes are the
+**MEASUREMENT-TRUTH** category. The loop has two more categories this had not yet named.
+
+**Category A — MEASUREMENT TRUTH (the four above).** *The loop lies about progress.* Root: assertion vs
+computation. Coverage: false-RED **built** (t600); falsify / fixed-denominator / reconciliation **designed,
+partly built** (the certificate).
+
+**Category B — OPERATIONAL / SUBSTRATE reliability.** *The mechanical substrate fails under real load /
+disk / concurrency / a changed environment — independent of any measurement.* The paid-for incidents:
+poisoned **wall-bank** (a green wall measured under load1≥3 / disk≥93% / a live compiler gets banked and
+sticks, blocking every commit — and the gate phase itself stamps load 4.5–6.5, so the current guard *still
+misses it*); **ramdisk `--flush`** deleting incremental under a live compiler → bistable wall + false-RED;
+**disk-hygiene prune** eating a live gate binary → false-RED; **silently-dead crons** (an escaped-quote
+crontab round-trip killed hygiene + the watchdog for hours); **uncontained agent** (systemd-run unavailable
+→ OOM/hang); **git races** (atomicity `checkout` wipes uncommitted observer work; a bare commit sweeps the
+agent's staged work); **stale systemd-scope accumulation**; **CI/env drift** (Chrome's IPv6 bind, the musl
+toolchain). Root: **the substrate's state is ASSUMED, not VERIFIED.** Fix theme: idempotency + fail-safe
+defaults + **post-condition verification** — verify the cron actually ran (log heartbeat), the scope was
+created (containment check), the wall env was valid *at bank time* (not during the gate phase), the commit
+isolated the intended paths — never assume. Status: handled **reactively** + self-healing crons/watchdogs;
+**not yet structurally prevented.** This is the largest uncovered surface, and several items (the wall-bank
+env-stamp timing, cron-heartbeat self-checks, auto scope-clean) are observer-buildable now.
+
+**Category C — OBSERVER reliability (me).** *The overseer itself drifts.* This session: I relayed in-flight
+findings as conclusions ~5× (the "quantised", "class-failure", and RSS-thesis reversals), and the project
+has caught observer wrong-mount reads (`df /` vs `/home`) and observer contention (uncapped work OOMing the
+box). Root: **the observer ASSERTS from a partial read instead of waiting for the settled/committed truth.**
+Fix: report only committed/settled facts, label hypotheses as hypotheses, cap all heavy work, measure the
+right mount. Status: acknowledged and disciplined; not mechanically guarded (an overseer is hard to gate —
+the honest mitigation is the discipline, stated).
+
+### THE DEEPER PRINCIPLE that unifies all three: **DON'T ASSUME — VERIFY, with a falsify-proven check.**
+- Measurement-truth: don't *assert* capability, *compute* it from a gate.
+- Operational: don't *assume* an operation succeeded or a condition holds, *verify* its post-condition.
+- Observer: don't *conclude* from a partial read, *wait* for the committed number.
+
+No belief — about the engine, the substrate, or the progress — is trusted until it is VERIFIED against
+reality by a check that can itself detect the failure it guards against. The reconciliation backbone is
+that principle made mechanical. "Truth is computed, not asserted" is its measurement-facing half; "verify
+every post-condition, assume nothing" is its operational half. Same law.
+
 ## Honest scope
 
 "Conclusively extinct" — stated precisely: **no failure mode ever SURFACES as a wrong conclusion.** The
