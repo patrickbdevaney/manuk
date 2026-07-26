@@ -381,3 +381,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 620	4f251945	1785086075	2026-07-26T13:14:35-04:00	1242	measurement	63	3	121	2	313	81	3896	6960	0	341	31	dynamic `import()`: the host hook installs and every step succeeds, and the promise still rejects (2026-07-26)
 621	643d8123	1785087323	2026-07-26T13:35:23-04:00	1248	measurement	63	5	212	7	314	81	3896	6960	0	341	31	measure-and-pin: two of the map's `works` claims were false, and one was an inert stub (2026-07-26)
 622	a0d09d83	1785088305	2026-07-26T13:51:45-04:00	982	correction	63	5	159	21	314	81	3896	6960	0	341	31	ResizeObserver is NOT an inert stub, and t621 said it was (2026-07-26)
+623	1a15ea84	1785088537	2026-07-26T13:55:37-04:00	232	the	63	5	171	4	314	81	3896	6960	0	341	31	constitution check #44, and re-verifying the other negative under t622's new rule (2026-07-26)

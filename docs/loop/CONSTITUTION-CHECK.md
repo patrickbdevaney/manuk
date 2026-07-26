@@ -2035,3 +2035,69 @@ counting them as coverage. This is `[[gates-not-in-the-wall]]` applied to the ce
 `scripts/` is observer-owned; one line closes it.
 
 **Next check due: tick 623.**
+
+---
+
+## Check #44 — tick 623
+
+**Horizon:** H0 — the Phase-0 daily-driver certificate (`docs/loop/DAILY-DRIVER-CERTIFICATION.md`).
+Gate: `daily-driver-pass(site) = renders(site) ∧ functions(site)` over the fixed-denominator
+corpus-v2 — not a WPT percentage (PART VII.1).
+
+**Gate or scoreboard?** t616-623 is eight ticks: error subresources (616), module base URLs (617),
+surface audit #34 (618), web fonts (619), dynamic `import()` parked (620), measure-and-pin (621), a
+correction (622), and this check. **Gate** — and the window's shape is unusual and worth naming:
+**four of the eight produced no capability at all.** One audit, one parked negative result, one
+pinning pass and one retraction. That is not drift; it is what happens when an instrument is finally
+pointed at the map, and PART VII.1's *"the certificate IS the gate"* makes those ticks the main line
+rather than overhead.
+
+**THE WINDOW'S HEADLINE IS t617, AND IT IS THE ONE CAPABILITY RESULT THAT MATTERS.** `www.welt.de`
+went **COVERAGE 0.0% → 94.9%**, blank white page → rendered front page, because an external
+`<script type=module>` resolved its relative imports against the DOCUMENT instead of against itself.
+That is the shape of **every** Vite/Rollup/esbuild build, and it was invisible to every test whose
+modules sit beside the document — which is every tutorial, example and dev server. **A rule whose two
+cases coincide in the common configuration will be written for whichever case the author had in front
+of them, and the comment will state the general rule correctly while the code implements the special
+one.** Both halves of that bug sat under comments stating the rule correctly.
+
+**§VI.3.5 IS EARNED AGAIN AND NEEDS A SECOND CLAUSE.** Check #43 added *"before believing a
+measurement, establish whether it is a property of the ENGINE or of the INSTRUMENT."* This window
+fired it **four more times**: audit #34's "262 unreferenced gate files" (truth: 6) and its dangling
+`G_CAP_TOUCH_PROBE` (which exists), t619's web-font blast radius (predicted broad, measured zero
+sites), and t622's `ResizeObserver` (published as an inert stub; **it fires**).
+
+The second clause, from t622 and cheap to apply:
+
+> **Before publishing an ABSENCE, name the code path that WOULD deliver it and show that path ran.**
+> If you cannot name it, you have measured your harness, not the capability.
+
+**And the asymmetry underneath it is the real finding: a negative result feels like it needs no
+confirmation.** `fired:0` was accepted at face value; a surprising *positive* would have been re-run
+twice. Every false claim this window — the wall at t610, the getter-only list at t613, the oracle
+shell at t614, RO at t622 — was a NEGATIVE accepted cheaply. **The loop is systematically
+under-sceptical of bad news about itself**, which is the opposite of the failure mode this project
+was built expecting, and worth more attention than any single row.
+
+**§VI.3's fourth clause (one rule, N implementations) ran to NINE consecutive ticks** before pausing —
+610 through 617, plus t616's variant where **all six copies were wrong the same way**, which teaches
+that agreement between copies is not evidence the rule is present.
+
+**INVARIANTS.** I2: held — nothing vendored or patched. I4 (Pareto): held, and unusually well
+evidenced: t613 measured `.classList =`/`document.body =`/`.selectionDirection =` at **zero** corpus
+usage and declined to build them; t619 measured its own fix's blast radius at **zero sites** and said
+so in the commit rather than claiming the class. I3: no new rendered construct owed exposure. I5:
+strengthened — every capability tick here came from the certificate traversing a real site.
+
+**PART VII / V1-SCOPE: held.** No stealth/fingerprint work was taken even though **5 of 20 HEAD sites
+bot-wall us**, which is the single largest measured blocker on the corpus and explicitly out of scope.
+
+**⚠ STANDING FOR THE OBSERVER, unchanged since t611 and now with a second item:**
+1. `manuk-wpt`'s tests are **not in the wall** (`_crate_suite` lists seven crates; `manuk-wpt` is not
+   one). `G_CERT_FALSIFIABLE`, whose doc comment says *"re-run on every wall"*, has never run on one.
+   54 tests, **14s**.
+2. `map-reconcile.sh` scans only `engine/page/tests/`, so a real gate under `tests/wpt/tests/` reads
+   as dangling. That single false positive is the whole of the remaining drift and is what blocks
+   `--strict`.
+
+**Next check due: tick 631.**

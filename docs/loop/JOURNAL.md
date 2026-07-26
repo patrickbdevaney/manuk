@@ -27434,3 +27434,48 @@ re-checked against the same standard and stands. The unexamined risk this tick e
 one row: **every other `unknown`→verdict I pin from a probe needs the delivering code path named before
 the verdict is written**, and the same question should be asked of the three `works` verdicts pinned at
 t621 — those were positives, so a path exists by construction, which is why the asymmetry matters.
+
+## Tick 623 — constitution check #44, and re-verifying the other negative under t622's new rule (2026-07-26)
+
+The constitution re-read was due (every 8 ticks; last at 615). **Check #44 is written.**
+
+**ITS FINDING IS ABOUT THE SHAPE OF THE WHOLE WINDOW.** t616-623 is eight ticks and **four produced no
+capability at all** — an audit, a parked negative result, a pinning pass and a retraction. That is not
+drift: PART VII.1 makes the certificate the gate, so pointing the instrument at the map *is* the main
+line. The one capability result that matters is t617 (`welt.de` 0.0% → 94.9% coverage), and its lesson
+generalises: **a rule whose two cases coincide in the common configuration gets written for whichever
+case the author had in front of them** — and both halves of that bug sat under comments stating the
+general rule correctly.
+
+**§VI.3.5 GAINS ITS SECOND CLAUSE, and the asymmetry under it is the real finding.** Check #43 added
+*"establish whether a measurement is a property of the ENGINE or of the INSTRUMENT."* This window fired
+it four more times, so t622's rule joins it:
+
+> **Before publishing an ABSENCE, name the code path that WOULD deliver it and show that path ran.**
+
+And underneath: **a negative result feels like it needs no confirmation.** Every false claim in this
+window — the bricked wall (t610), the getter-only list (t613), the oracle shell (t614), ResizeObserver
+(t622) — was a NEGATIVE accepted cheaply, while a surprising positive would have been re-run twice.
+**The loop is systematically under-sceptical of bad news about itself**, which is the opposite of the
+failure mode this project was built expecting.
+
+**SO I APPLIED THE NEW RULE TO THE OTHER NEGATIVE I PUBLISHED THIS WINDOW.** t621 also declared
+`overflow-anchor` missing. Re-verified by naming the path: **Stylo's generated property table**, where
+`overflow-anchor` appears **zero times across all four built variants** (it carries `overflow-block`,
+`overflow-clip-margin`, `overflow-inline`, `overflow-wrap`, `overflow-x`, `overflow-y` — not this one).
+The property cannot be parsed or computed, so the negative stands **on a named mechanism** rather than
+on a probe that returned nothing. That is the exact difference from ResizeObserver, where the
+delivering path existed and my probe never called it — and checking took one grep.
+
+TICK SHAPE: the due constitution check + a re-verification that upgrades an existing negative from
+"the probe saw nothing" to "the mechanism is absent, here it is". Bar 0 untouched; no ratchet floor
+moved; **no engine source changed**.
+Gates: none — this tick is the cadence item and a receipt correction.
+WIKI: none [forced] — no engine mechanism changed.
+PATTERN: [no-pattern] — no browser capability changed.
+
+NEXT: unchanged and both still standing for the observer — `manuk-wpt`'s tests (incl.
+`G_CERT_FALSIFIABLE`) are not in the wall at 14s, and `map-reconcile.sh` scans only
+`engine/page/tests/` so a real gate under `tests/wpt/tests/` reads as dangling, which is the whole of
+the remaining drift and what blocks `--strict`. On capability: dynamic `import()` is parked one
+question from working (t620), and `document.fonts` is undefined at 1-of-16 measured sites.
