@@ -67,6 +67,7 @@ const HTML: &str = r##"<!doctype html><html><head><style>
   // ── The guard: the ones that are genuinely rendered must still answer yes.
   R.push('flt:'  + s('filter: blur(4px)'));
   R.push('clip:' + s('clip-path: circle(50%)'));
+  R.push('mbm:'  + s('mix-blend-mode: multiply'));
   R.push('us:'   + s('user-select: none'));
   R.push('csch:' + s('color-scheme: dark'));
   R.push('mi:'   + s('mask-image: url(a.svg)'));
@@ -133,6 +134,13 @@ fn supports_answers_for_what_we_render_not_for_what_stylo_parses() {
              and, notably, the same MECHANISM: the offscreen group t592 built for `filter` is \
              exactly the surface a clip mask applies to, which is why the second capability cost a \
              fraction of the first",
+        ),
+        (
+            "mbm:true",
+            "`mix-blend-mode` (12.9%) crossed at tick 594 — and it crossed CHEAPLY, out of the same \
+             offscreen group t592 built for `filter`: a blend needs the group's own pixels separate \
+             from the backdrop beneath them, which is exactly what that surface is. See \
+             G_MIX_BLEND_MODE",
         ),
         ("wm:false", "`writing-mode` — the same, and the axis the CJK story stops short of"),
         (

@@ -25052,3 +25052,72 @@ adjacent to the t557/t558 font arc). Then the CSSOM half of the visual-effects b
 (`getComputedStyle().filter` / `.clipPath`, the t576/t590 `undefined`-not-a-string class), which is
 now three properties deep and worth one tick together. Then the `interpolate-size` SIGSEGV.
 Cadences: self-audit 594 (NEXT TICK); surface 598; const 599; wall 607.
+
+## Tick 594 — SELF-AUDIT #? (due) + `mix-blend-mode`: the composite-back IS the backdrop (2026-07-25)
+
+**SELF-AUDIT (due at 594, hook-enforced).** `scripts/self-audit.sh` reports **one** prescribed-but-not-
+executed item, and it is **observer-owned**: *"verify wall: 785s EXCEEDS the 300s target — Part 21.2
+item 1 has regressed."* That 785s is the tick-593 landing cycle, which rebuilt the whole gate suite
+after a paint-crate change; `STATUS.LAST_WALL_TIME` is 85s on a warm tree. The standing diagnosis is
+already banked (WALL AUDIT #16: parity is 76% of the wall, a serial loop of ~30 Chrome launches; the
+fix is bounded concurrency). Per scope, `scripts/` is the observer's and I do not touch it — recorded
+here and continuing with browser work. **Everything else is green**: 30/30 gates declare how to break
+them, the falsifier list is derived from `verify.sh` rather than copied, 49 process defects each name
+a closing mechanism, the cadence hooks are wired, journal has no gaps.
+
+**THE CAPABILITY — and it is the answer to the question t593 left open.** t593 asked whether
+`mix-blend-mode` (12.9%) and `backdrop-filter` (34.3%) share **one** mechanism, since both need the
+group's *backdrop*, and whether that makes them a 47% row rather than two. **They do, and t592
+already built it:** the backdrop a blend needs is exactly what is already on the canvas under the
+group's ink box, and the group's own pixels are exactly what the offscreen surface holds. The blend
+is then **one field on the composite-back `draw_pixmap`.** All 16 CSS modes map 1:1 onto
+`tiny-skia`'s, separable and non-separable, so nothing is approximated (`plus-lighter` has no
+counterpart and maps honestly to `normal` — a wrong blend is harder to spot than none).
+
+**THREE CAPABILITIES OUT OF ONE TICK'S INFRASTRUCTURE, AND THE GENERALISABLE CLAIM IS NOT "THESE ARE
+EASY".** It is: *when a property needs the element's pixels considered apart from the page's, the
+expensive part is the separation, not the operation.* `filter` paid for the separation; `clip-path`
+and now `mix-blend-mode` are operations on a surface that already existed. `backdrop-filter` is the
+fourth and needs exactly one more piece — reading the canvas region *before* the group is drawn over
+it — which is now an addition rather than a design.
+
+`mix-blend-mode` propagates down the subtree like the other two but **overrides** rather than
+composing: blending is not a pipeline, there is one backdrop and one formula.
+
+**ONE NUMBER IS RECORDED AND DELIBERATELY NOT ASSERTED.** `luminosity` measures **(207,0,0)**;
+working Compositing-1's `SetLum`+`ClipColor` by hand gives ≈**(94,0,0)**, and 207/255 is exactly the
+*un-clipped* intermediate — which suggests `tiny-skia` skips `ClipColor`. **That derivation is a
+reading of the spec, not a measurement.** I attempted a headless-Chrome cross-check; it did not
+reproduce the layout (the blue squares never painted in the screenshot), so **no third-party number
+is claimed.** The gate therefore asserts the *separable* modes to the exact integer — `#f00 × #00f`
+has no rounding slack, and a blend gate that only checks "the pixel changed" passes for a wrong
+formula — and asserts `luminosity` only on the observed shape (mode applied, backdrop hue survives,
+source luma darkens). **Pinning 207 as correct would bank a possible upstream divergence as an
+intended value**, which is exactly how a wrong constant becomes permanent. This session has twice
+been bitten by an expectation that came from memory (t592's sepia row sum, t592's single-pixel blur
+premise); this is the same trap declined rather than walked into.
+
+RED-PROVEN: force `SourceOver` on the composite-back → multiply/screen/difference/luminosity all
+collapse to the raw source colour and the gate fails on the first exact claim. `manuk-css --features
+stylo` 42/42, the four affected page gates green, workspace `--all-targets` clean.
+
+TICK SHAPE: self-audit (DUE, one finding, observer-owned and journaled) + capability
+(`mix-blend-mode` renders on 12.9% of page loads, third capability out of t592's offscreen group).
+Bar 0 untouched; no ratchet floor moved; a `normal` element never leaves the direct-to-canvas path.
+Gates: `G_MIX_BLEND_MODE` (`engine/page/tests/g_mix_blend_mode.rs`, vacuity-guarded + unblended
+control + three exact separable answers + one non-separable shape assertion; RED-proven);
+`G_SUPPORTS_HONESTY` gains `mbm:true`.
+WIKI: docs/wiki/box-layout.md — "`mix-blend-mode` — the offscreen group's *composite-back* is the
+backdrop, and that is the third capability out of one mechanism".
+PATTERN: [no-pattern] — no new cross-cutting pattern; the reusable observation (separate the pixels
+once, then the operations are cheap) is in the wiki.
+
+NEXT: **`backdrop-filter` (34.3%) — the fourth and last piece of the bundle**, and the only one that
+needs new code rather than a new field: copy the canvas region under the group's ink box BEFORE the
+group composites, run the filter pipeline over that copy, draw it beneath the group's own content.
+The honest-no row retires with it. Then **`isolation` (18.0%)**, which is now load-bearing rather
+than cosmetic: without it a blend is not confined to the stacking context that asked to contain it.
+Then the CSSOM half of the whole bundle in one tick — `getComputedStyle()` returns `undefined` for
+`filter`, `clipPath` and `mixBlendMode`, the t576/t590 `undefined`-not-a-string class, now three
+properties deep. Then `font-display`/`unicode-range`.
+Cadences: surface 598; const 599; wall 607; self-audit 604.

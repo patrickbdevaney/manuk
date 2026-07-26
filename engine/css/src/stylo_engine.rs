@@ -2145,7 +2145,6 @@ const UNRENDERED_LONGHANDS: &[&str] = &[
     // yes and `@supports (clip-path: path(...))` is honestly-yes-but-unrendered. Taking the yes is
     // the right trade — the basic shapes are what pages branch on.
     "backdrop-filter",
-    "mix-blend-mode",
     "isolation",
     "writing-mode",
     "text-orientation",
@@ -2281,22 +2280,23 @@ mod tests {
         //    flipped a second time and its assertion moved down to the rendered group. Two flips in
         //    two ticks is not churn: t591 corrected a lie, t592 removed the reason for it.
         // `clip-path` moved to the rendered set at t593 (basic shapes).
-        assert!(!supports_condition("mix-blend-mode: multiply"));
+        // `mix-blend-mode` moved to the rendered set at t594.
         assert!(!supports_condition("isolation: isolate"));
         assert!(!supports_condition("writing-mode: vertical-rl"));
         // …and composition still resolves through Stylo for the remaining list too.
-        assert!(supports_condition("not (mix-blend-mode: multiply)"));
+        assert!(supports_condition("not (isolation: isolate)"));
         assert!(!supports_condition(
-            "(display: flex) and (mix-blend-mode: multiply)"
+            "(display: flex) and (isolation: isolate)"
         ));
         assert!(supports_condition(
-            "(display: flex) or (mix-blend-mode: multiply)"
+            "(display: flex) or (isolation: isolate)"
         ));
         // ── …and the properties that ARE rendered must keep answering yes, or the fix has traded a
         //    false yes for a worse false no. Three of them arrive through the MinimalCascade
         //    recovery block rather than a `clone_*` accessor.
         assert!(supports_condition("filter: blur(4px)"));
         assert!(supports_condition("clip-path: circle(50%)"));
+        assert!(supports_condition("mix-blend-mode: multiply"));
         assert!(supports_condition(
             "(display: flex) and (filter: blur(4px))"
         ));

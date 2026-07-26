@@ -1322,3 +1322,46 @@ ancestor's box subtree by `position_absolutes`, so a paint-time tree walk cannot
 clip-path one. Also open: `getComputedStyle().clipPath` is `undefined`, and `@supports (clip-path:
 path(…))` is now a yes about a form we do not draw — a narrower lie than the one retired, named here
 so it is not mistaken for coverage.
+
+## `mix-blend-mode` — the offscreen group's *composite-back* is the backdrop, and that is the third capability out of one mechanism (tick 594)
+
+t593 closed with an open question: `mix-blend-mode` (12.9%) and `backdrop-filter` (34.3%) both need
+the group's **backdrop** — an input the paint path did not have — so is there **one** mechanism that
+buys both, and is it therefore a 47% row rather than two 13%/34% ones?
+
+**Yes, and t592 already built it.** The realisation is small enough to state in one line: *the
+backdrop a blend needs is exactly what is already on the canvas under the group's ink box, and the
+group's own pixels are exactly what the offscreen surface holds.* The blend then costs one field on
+the composite-back `draw_pixmap`. All 16 CSS modes — separable **and** non-separable — have a
+`tiny-skia` counterpart, so nothing is approximated. (`plus-lighter` has none and maps honestly to
+`normal`; a wrong blend is harder to spot than none.)
+
+That is three capabilities out of one tick's infrastructure — `filter`, `clip-path`, now
+`mix-blend-mode`. The generalisable claim is **not** "blend modes are easy". It is: *when a property
+needs the element's pixels considered apart from the page's, the expensive part is the separation,
+not the operation.* `backdrop-filter` is the fourth and needs one more piece — reading the canvas
+region *before* the group is drawn over it — and that is now a small addition rather than a design.
+
+`mix-blend-mode` propagates down the subtree in the same paint sense as `filter` and `clip-path`, but
+it **overrides** rather than composing: blending is not a pipeline, there is one backdrop and one
+formula, so a descendant declaring its own mode replaces the ancestor's rather than stacking with it.
+
+### One number is recorded and NOT asserted, on purpose
+
+`luminosity` measures **(207, 0, 0)** on a red backdrop with a blue source. Working Compositing-1's
+`SetLum` + `ClipColor` by hand gives ≈ **(94, 0, 0)**, and 207/255 is exactly the *un-clipped*
+intermediate — which suggests `tiny-skia` skips `ClipColor`. **That derivation is a reading of the
+spec, not a measurement**, and this repo has twice shipped a gate whose expected value came from
+memory and which therefore tested the memory. A headless-Chrome cross-check was attempted and did not
+reproduce the layout, so no third-party number is claimed.
+
+So the gate asserts the **separable** modes to the exact integer — their answers on `#f00 × #00f`
+have no rounding slack, and a gate that only checks "the pixel changed" passes for a wrong formula —
+and asserts `luminosity` only on what was observed: the mode is applied, the backdrop's hue survives,
+the source's luma darkens it. **Pinning 207 as correct would bank a possible upstream divergence as
+an intended value**, which is precisely how a wrong constant becomes permanent. The exact
+non-separable answer is an open item for the parity harness, which is the tool built for it.
+
+⚠ Also open: `isolation` (18.0%) is still unread, so a blend is not confined to a stacking context
+that asked to contain it; and `getComputedStyle().mixBlendMode` is `undefined` — the CSSOM half of
+this bundle is now three properties deep and worth one tick together.

@@ -80,6 +80,8 @@
   - L1259 · Colour matrices are spec constants, so they are asserted EXACTLY
   - L1280 · clip-path — the second capability out of the same offscreen group, at a fraction of the price (tick 593)
   - L1306 · inset(50%) must be allowed to clip everything, and it is the one place the module's default is wrong
+  - L1326 · mix-blend-mode — the offscreen group's *composite-back* is the backdrop, and that is the third capability out of one mechanism (tick 594)
+  - L1349 · One number is recorded and NOT asserted, on purpose
 
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
@@ -1015,4 +1017,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-930 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+932 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

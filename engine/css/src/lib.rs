@@ -829,6 +829,42 @@ pub enum ClipShape {
     },
 }
 
+/// `mix-blend-mode` — how an element composites against its **backdrop** (what is already painted
+/// beneath it), rather than simply covering it.
+///
+/// Every one of these is a real formula from Compositing and Blending 1, and `tiny-skia` implements
+/// all of them — which is the whole reason this capability is cheap: the work was never the maths,
+/// it was having an offscreen group to composite *from* (tick 592). `plus-lighter` is the one CSS
+/// keyword with no `tiny-skia` counterpart and is mapped honestly to `Normal`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum BlendMode {
+    #[default]
+    Normal,
+    Multiply,
+    Screen,
+    Overlay,
+    Darken,
+    Lighten,
+    ColorDodge,
+    ColorBurn,
+    HardLight,
+    SoftLight,
+    Difference,
+    Exclusion,
+    Hue,
+    Saturation,
+    Color,
+    Luminosity,
+}
+
+impl BlendMode {
+    /// `true` for every mode that actually needs the backdrop — i.e. everything but `normal`.
+    /// An element with `normal` must stay on the cheap direct-to-canvas paint path.
+    pub fn is_blending(self) -> bool {
+        self != BlendMode::Normal
+    }
+}
+
 /// A `text-shadow` layer: `offset-x offset-y [blur] [color]`. Like `box-shadow` but with no spread and
 /// no `inset` — it paints the run's glyphs a second time, offset and (eventually) blurred, behind the
 /// text. `text-shadow` is inherited.
@@ -1018,6 +1054,11 @@ pub struct ComputedStyle {
     ///
     /// 43.8% of page loads (Blink use counters, surface audit #32).
     pub clip_path: Option<ClipShape>,
+    /// `mix-blend-mode` — 12.9% of page loads (Blink use counters, surface audit #32). The gradient
+    /// scrim over a hero image, the duotone photo treatment, and `difference` text that stays legible
+    /// over anything are all this property; without it the overlay simply covers what it was meant to
+    /// tint.
+    pub mix_blend_mode: BlendMode,
     pub width: Dim,
     /// The **intrinsic sizing keyword** on `width`, if any. `width` itself collapses to `Dim::Auto`
     /// for length resolution (an intrinsic width is content-driven, not a length), but unlike a plain
@@ -1192,6 +1233,7 @@ impl ComputedStyle {
             text_shadow: None,
             filter: Vec::new(),
             clip_path: None,
+            mix_blend_mode: BlendMode::Normal,
             width: Dim::Auto,
             width_keyword: None,
             width_stretch: false,

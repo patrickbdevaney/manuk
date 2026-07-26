@@ -624,6 +624,35 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         };
     }
 
+    // `mix-blend-mode` — a straight keyword map. Exhaustive on purpose: a catch-all arm here would
+    // turn a future keyword into a silent `normal`, which is the "renders unblended and says
+    // nothing" failure this bundle exists to remove.
+    {
+        use stylo::properties::longhands::mix_blend_mode::computed_value::T as SBlend;
+        s.mix_blend_mode = match cv.clone_mix_blend_mode() {
+            SBlend::Normal => crate::BlendMode::Normal,
+            SBlend::Multiply => crate::BlendMode::Multiply,
+            SBlend::Screen => crate::BlendMode::Screen,
+            SBlend::Overlay => crate::BlendMode::Overlay,
+            SBlend::Darken => crate::BlendMode::Darken,
+            SBlend::Lighten => crate::BlendMode::Lighten,
+            SBlend::ColorDodge => crate::BlendMode::ColorDodge,
+            SBlend::ColorBurn => crate::BlendMode::ColorBurn,
+            SBlend::HardLight => crate::BlendMode::HardLight,
+            SBlend::SoftLight => crate::BlendMode::SoftLight,
+            SBlend::Difference => crate::BlendMode::Difference,
+            SBlend::Exclusion => crate::BlendMode::Exclusion,
+            SBlend::Hue => crate::BlendMode::Hue,
+            SBlend::Saturation => crate::BlendMode::Saturation,
+            SBlend::Color => crate::BlendMode::Color,
+            SBlend::Luminosity => crate::BlendMode::Luminosity,
+            // `plus-lighter` has no `tiny-skia` counterpart (it is additive with a clamp, close to
+            // `Plus` but defined on premultiplied values). Honestly `normal` rather than a
+            // near-miss: a wrong blend is harder to spot than none.
+            SBlend::PlusLighter => crate::BlendMode::Normal,
+        };
+    }
+
     // Position mode — drives whether the insets below are actually applied by layout.
     use stylo::values::computed::{
         Clear as SClear, Float as SFloat, Overflow as SOverflow, PositionProperty, ZIndex,
