@@ -1245,3 +1245,34 @@ on this field and must be re-derived rather than inherited.
 **The general rule:** before trusting a per-element diff field, check that both producers compute the
 same quantity. A field that is cheap to add on one side and approximated on the other does not fail
 loudly — it fails by generating confident, wrong, well-ranked leads.
+
+## The load budget trades COVERAGE against SHAPE (tick 632)
+
+`keirin.jp`, the same tree, the same corpus, one environment variable apart:
+
+```text
+                       default (12s)        MANUK_LOAD_BUDGET_MS=60000
+  load                 17.8s                27.9s          (chromium 6.0s)
+  SHAPE                10.4%                34.3%
+  median dx / dw       202 / 175            0 / 0
+  COVERAGE             83.3%                58.0%
+```
+
+**More time buys placement and costs presence.** With 60s the stylesheets apply — the median x and
+width offsets collapse to **zero** and shape more than triples. With 60s the document also ends up with
+**174 fewer boxes**, because more of the page's own JavaScript runs (on this site, plausibly its
+unsupported-environment path hiding content: 「現在お使いの環境では当ページを正常に表示することができません」
+is in the served HTML).
+
+**So the budget cannot be tuned to improve the certificate — only to choose which half to flatter.**
+A short budget under-reports placement; a long one under-reports presence. There is no setting that is
+honest for both, which means **neither number is a pure property of the engine's layout**.
+
+t602 promoted performance to *"a fidelity input, not a comfort metric"* on the evidence that a page
+painted incomplete scores as a layout failure. This is that claim measured, with its opposite half
+attached. Practical consequence: **`MEAN SHAPE` should be read as a lower bound contaminated by our own
+latency** until the latency is fixed — we take 17-28s where Chromium takes 6, and `OURS IS SLOW` fired
+on 10 of 14 sites at t606.
+
+⚠ **Do not "fix" this by raising the budget.** It would raise shape, lower coverage, and settle nothing
+— the definition of tuning an instrument to produce a preferred number.

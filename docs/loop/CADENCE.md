@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **391** | ticks 1–631 |
-| median tick cycle | **21m** | 390 intervals |
-| median, last 10 | **14m** | 10 intervals |
+| ticks landed | **392** | ticks 1–632 |
+| median tick cycle | **21m** | 391 intervals |
+| median, last 10 | **9m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.05** | 372.7h elapsed |
-| median verify wall | **67s** | 330 ticks |
+| **ticks per hour** | **1.05** | 372.8h elapsed |
+| median verify wall | **67s** | 331 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**193 of 391 ticks** (49%) moved a
+**193 of 392 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **193** capability ticks, median cycle **21m**
-* median diff per tick: **+233 / −34** lines across 8 files
+* median diff per tick: **+232 / −34** lines across 8 files
 
 ## Every tick
 
@@ -488,5 +488,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **629** | 2026-07-26 17:21 | 5m | measurement | 63s | +118/−2 | 315 | 81 | 56.0% · | SVG geometry children have no box: `getBBox` knows, `getBoundingClientRect` does not (2026 |
 | **630** | 2026-07-26 17:40 | 19m | capability | 63s | +510/−5 | 315 | 81 | 56.0% · | `<path>` had no bbox arm at all, and now has an EXACT one (2026-07-26) |
 | **631** | 2026-07-26 17:43 | 3m | the | 63s | +179/−3 | 315 | 81 | 56.0% · | constitution check #45: four false absences, zero false presences (2026-07-26) |
+| **632** | 2026-07-26 17:50 | 6m | measurement | 63s | +149/−3 | 315 | 81 | 56.0% · | the load budget moves COVERAGE and SHAPE in opposite directions (2026-07-26) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
