@@ -55,7 +55,7 @@ if command -v systemctl >/dev/null 2>&1; then
   for s in $(systemctl --user list-units --type=scope --no-legend 2>/dev/null | awk '/claude/{print $1}'); do
     [ "$s" = "$LIVE" ] && continue
     cg="/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/$s/cgroup.procs"
-    if [ -z "$(cat "$cg" 2>/dev/null)" ]; then systemctl --user stop "$s" 2>/dev/null && heal=$((heal+1)); fi
+    if [ -z "$(cat "$cg" 2>/dev/null)" ]; then systemctl --user stop "$s" 2>/dev/null && { note "HEALED: stopped empty stale scope $s (superseded agent launch)"; heal=$((heal+1)); }; fi
   done
 fi
 
