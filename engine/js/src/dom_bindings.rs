@@ -2337,7 +2337,12 @@ unsafe fn define_members(
             el_get_outer_html,
             Some(el_set_outer_html)
         );
-        prop_guarded!(prop, c"innerText", el_get_inner_text, None);
+        prop_guarded!(
+            prop,
+            c"innerText",
+            el_get_inner_text,
+            Some(el_set_inner_text)
+        );
         // `outerText` reads the SAME rendered text as `innerText` (the spec defines its getter that way);
         // the two are asserted together across the whole innerText suite, so an undefined `outerText`
         // failed every one of those subtests regardless of how right `innerText` was. The setter replaces
@@ -6290,18 +6295,64 @@ unsafe fn el_get_outer_html(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -
 /// are `<br>` elements; that run replaces the element in its parent. An empty string is a single empty
 /// text node (no `<br>`). We skip the spec's sibling-text merging and the parentless `throw` — a no-op on
 /// a detached node is friendlier than a crash and the tests exercise the attached path.
+/// `el.innerText = s` — replace the element's children with the rendered text.
+///
+/// **This was `None`, and a missing SETTER is not a missing feature — it is a THROW.** Assigning to an
+/// accessor that has only a getter raises `TypeError: setting getter-only property "innerText"` in
+/// strict mode, which kills the assigning frame and everything it was going to do. Found on
+/// `www.welt.de`, where the failure is worse than a lost assignment: its own anti-adblock check writes
+/// through `innerText`, catches the throw, concludes a blocker is present, and **deliberately blanks
+/// the page**. We rendered 1 of 3,182 elements — a WHITE SCREEN on a top-1000 site — from one absent
+/// setter. `MISSING by tag: div×940 a×447 li×390 span×346` was the whole document.
+///
+/// The sibling directly below it, `outerText`, HAS had a setter the entire time. Same rule, two
+/// implementations, one of them written — the third instance of that shape in three ticks (t591's
+/// `@supports` list, t610's `run_with_fetcher`, t611's fixed denominator).
+///
+/// Per the HTML spec this is the *rendered text fragment*: normalise `\r\n`/`\r` to `\n`, then split
+/// on `\n` into text nodes separated by `<br>` elements, and replace all children with them. That is
+/// the same construction `el_set_outer_text` performs — the difference is only whether the result
+/// replaces the element's CHILDREN or the element ITSELF, so the line-splitting lives in one shared
+/// helper rather than being written twice and drifting.
+unsafe fn el_set_inner_text(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let raw = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        let new_nodes = rendered_text_fragment(dom, &raw);
+        let kids: Vec<NodeId> = (*dom).children(node).collect();
+        for &k in &kids {
+            (*dom).detach(k);
+        }
+        for &n in &new_nodes {
+            (*dom).append_child(node, n);
+        }
+        record_mutation(cx, dom, "childList", node, None, None, &new_nodes, &kids);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// The HTML spec's **rendered text fragment**, shared by the `innerText` and `outerText` setters.
+///
+/// `\r\n` and `\r` normalise to `\n`; the string then splits on `\n` into text nodes with a `<br>`
+/// between each pair. Written once because the two setters differ ONLY in what they attach the result
+/// to, and a second copy is how the two answers drift apart.
+unsafe fn rendered_text_fragment(dom: *mut manuk_dom::Dom, raw: &str) -> Vec<NodeId> {
+    let text = raw.replace("\r\n", "\n").replace('\r', "\n");
+    let mut out: Vec<NodeId> = Vec::new();
+    for (i, line) in text.split('\n').enumerate() {
+        if i > 0 {
+            out.push((*dom).create_element("br"));
+        }
+        out.push((*dom).create_text(line));
+    }
+    out
+}
+
 unsafe fn el_set_outer_text(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let raw = arg_string(cx, vp, argc, 0).unwrap_or_default();
-        let text = raw.replace("\r\n", "\n").replace('\r', "\n");
         if let Some(parent) = (*dom).parent(node) {
-            let mut new_nodes: Vec<NodeId> = Vec::new();
-            for (i, line) in text.split('\n').enumerate() {
-                if i > 0 {
-                    new_nodes.push((*dom).create_element("br"));
-                }
-                new_nodes.push((*dom).create_text(line));
-            }
+            let new_nodes = rendered_text_fragment(dom, &raw);
             for &n in &new_nodes {
                 (*dom).insert_before(parent, n, node);
             }

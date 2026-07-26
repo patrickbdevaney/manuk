@@ -360,6 +360,11 @@
   - L1595 · The claim that matters is not "is it right" but "do the two ways agree"
   - L1612 · getBBox() is USER SPACE, and that is the whole reason it exists (tick 604)
   - L1635 · <text> and <path> report zero size on purpose
+  - L1646 · A getter-only accessor is a TypeError, not a gap — and one site turns it into a white screen (tick 612)
+  - L1661 · The failure www.welt.de builds on top of it
+  - L1679 · The population, measured rather than assumed
+  - L1692 · The rest of the class, from the same sweep
+  - L1706 · The setter itself
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1048,4 +1053,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-963 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+968 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -5143,3 +5143,41 @@ must vary the mechanism, not the threshold.**
 runaway Bar 0 forbids ran forever there. Its `did_io` arm was actively hostile: *"a delivered result
 may have scheduled more work"* `continue`d past the task check unconditionally. Third consecutive
 session in which the defect was a rule implemented more than once with the copies disagreeing.
+
+## A site that detects a broken DOM write and BLANKS ITSELF (tick 612)
+
+**The pattern:** a page probes the DOM for tampering, and on a *thrown* result concludes it is under
+attack and refuses to render. `www.welt.de` writes through `innerText`, catches the exception, and
+blanks the document:
+
+```text
+  ERROR page.console: Failed to load website due to adblock:
+                      TypeError: setting getter-only property "innerText"
+  structural: 0.0% (3182 paths, 3181 missing)
+```
+
+**Why this deserves a pattern entry rather than a bug entry.** The usual failure shape here is *we
+render less than Chrome*. This one inverts: the page renders nothing **on purpose**, and does so
+because our DOM genuinely was wrong. Debugging it from the outside — the screenshot is white, the
+box diff says 3,181 elements missing — points at layout, cascade, or the fetch. All three are fine.
+The evidence was one console line, and the engine had emitted it the first time it was asked.
+
+**The generalisation, which is what to carry forward:**
+
+> **An anti-tamper check is a CONSUMER of our error behaviour, not just of our features.** A missing
+> setter, a getter that returns `undefined`, a method that throws the wrong exception type — these
+> are not silent gaps to such a page. They are *positive evidence of an adversary*, and the site's
+> response to that evidence can be worse than the missing feature ever was.
+
+So the blast radius of a wrong-shaped failure is not bounded by what uses the API. Sites in this
+class include ad-block detectors, bot detectors, paywall enforcers and fraud/BOT SDKs — and they are
+disproportionately on exactly the news and commerce sites a daily driver has to open.
+
+**Corollary for triage:** when a page renders BLANK while the fetch, parse and cascade all look
+healthy, read the console before measuring anything. A blank page that Chromium fills from the same
+bytes is more likely a page that *decided* not to render than a pipeline that failed to.
+
+**And the layers peel one per fix.** Fixing the setter did not make welt.de render — its check simply
+advanced to the next rung (`Error: Failed to execute packing script`), with `HTMLScriptElement.supports`
+and an `addEventListener` on some object still missing behind it. Expect a chain, and do not claim the
+site on the strength of clearing one link of it.

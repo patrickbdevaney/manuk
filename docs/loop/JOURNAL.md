@@ -26578,3 +26578,94 @@ measurability, not the sweep, was the binding constraint.
 WIKI: `docs/wiki/conformance-and-oracles.md` — "`curl` exits 0 on a 403, so the certificate could not
 tell a bot wall from a document".
 PATTERN: [no-pattern] — no browser capability changed; this is the instrument.
+
+## Tick 612 — `innerText` had no setter, and a getter-only accessor is a THROW, not a gap (2026-07-26)
+
+t611's sweep left a ranked residue and named the only rendering item on it: **`www.welt.de`, 3,181 of
+3,182 elements missing.** Not a fidelity gap — a **white screen** on a top-1000 site, from a document
+Chromium renders completely out of the same bytes. This tick went at that, and the oracle was
+controlled by construction (both engines score the *same* fetched snapshot), so a divergence that
+large could not be the corpus.
+
+**THE ENGINE SAID WHAT WAS WRONG, IN ONE LINE, THE FIRST TIME IT WAS ASKED:**
+
+```text
+  ERROR page.console: Failed to load website due to adblock:
+                      TypeError: setting getter-only property "innerText"
+  structural: 0.0% (3182 paths, 3181 missing, 1 misplaced)
+  MISSING by tag: div×940  a×447  li×390  span×346  h4×103  ul×100  article×98  svg×89
+```
+
+`innerText` was registered `prop_guarded!(prop, c"innerText", el_get_inner_text, None)` — **getter,
+no setter.** And the sibling on the very next line, `outerText`, has had a setter the whole time. One
+rule, two implementations, only one of them written: the **fourth** instance of that shape in four
+ticks (t591's `@supports` second list, t610's `run_with_fetcher`, t611's fixed denominator, this).
+
+**A MISSING SETTER IS NOT A MISSING FEATURE — IT IS AN EXCEPTION**, and that distinction is the whole
+tick. Assigning to a getter-only accessor **throws `TypeError` in strict mode**, killing the assigning
+frame and everything it was going to do. Then welt.de makes it worse than a lost assignment: its own
+anti-adblock check writes through `innerText`, **catches the throw**, concludes a blocker is present,
+and deliberately blanks the document. We were not failing to render welt.de. **welt.de was refusing to
+render for us**, and it was right to think something was wrong with the DOM.
+
+**MEASURED THE POPULATION BEFORE WRITING THIS UP** (the standing lesson, and it moved the claim from
+one site to a class). Scanning each HEAD site's HTML **plus up to 12 of its external bundles** for
+`.innerText =`:
+
+```text
+  bbs.ruliweb.com   9      www.welt.de     2
+  www.desitales2    6      www.aparat.com  1
+  → 4 of 16 scanned sites WRITE innerText
+```
+
+**A quarter of the HEAD stratum writes through a property this engine made unwritable**, and that is a
+LOWER bound three ways: only 12 bundles per site, minified aliasing (`t.innerText=`) is counted but
+computed access (`el[p]=`) is not, and five of the twenty sites answered with a bot-wall page carrying
+none of their real scripts. The single-site finding was a class finding.
+
+**⚠ THE GATE'S HEADLINE ASSERTION WAS VACUOUS, AND THE RED PROBE IS THE ONLY REASON I KNOW IT.**
+I wrote `threw:false` as the load-bearing claim — the exact branch welt.de blanks itself in — put the
+assignment at script top level, and it **passed with the bug still present**. Top-level script is
+**sloppy mode**, where assigning to a getter-only accessor *silently no-ops instead of throwing*. Every
+other assertion in the gate went correctly red; the one the entire doc comment is about could not fail.
+Real bundles are strict (a module body always is; every minifier emits `'use strict'`), so the fix is
+an IIFE with `'use strict'` — not decoration, but the only thing that makes the assertion falsifiable.
+**t610's lesson, in my own gate, one tick later: a gate can be green because a SECOND mechanism
+produces the same observable.**
+
+RED-PROVEN THREE WAYS, EACH A DIFFERENT MECHANISM:
+  · restore `None` as the setter          -> RED `threw:true` — welt.de's exact state, plus 8 others
+  · make the setter parse markup          -> RED `noParse:1` — an `<img>` appeared; innerText became
+    innerHTML, which is a SECURITY property, since innerText is where pages put untrusted text
+  · drop CR/CRLF normalisation from the   -> RED `crBr:0` — and it fires through the SHARED helper,
+    shared rendered-text-fragment helper     so it also covers the `outerText` setter that reuses it
+
+**HONESTY: welt.de STILL DOES NOT RENDER, AND THIS TICK DOES NOT CLAIM IT DOES.** With the setter in
+place the `innerText` TypeError is gone and its adblock check advances to the *next* rung:
+
+```text
+  before:  Failed to load website due to adblock: TypeError: setting getter-only property "innerText"
+  after:   Failed to load website due to adblock: Error: Failed to execute packing script
+```
+
+That is the aljazeera pattern this project already has a name for — *one layer peels per fix* — and the
+remaining layers are recorded rather than implied, from the same run: `TypeError: a.addEventListener is
+not a function`, `TypeError: HTMLScriptElement.supports is not a function`, and `a page module failed
+SyntaxError: expected expression, got '<'` (a module request answered with HTML — an error page served
+where JavaScript was expected). **What this tick claims is the SETTER and the class**, measured at 4 of
+16 sites; it does not claim the site.
+
+TICK SHAPE: capability (a DOM write surface a quarter of the measured corpus uses went from *throwing*
+to working). Bar 0 untouched; no ratchet floor moved; no capability traded.
+Gates: +1 `G_INNER_TEXT_SET` (`engine/page/tests/g_inner_text_set.rs`) — the strict-mode assignment does
+not throw, replace-all semantics, the rendered-text-fragment `<br>` splitting agreeing across LF/CRLF/CR,
+the no-markup security property, and the `outerText` sibling still replacing the ELEMENT.
+WIKI: `docs/wiki/dom-semantics.md` — "a getter-only accessor is a TypeError, and one site turns it into
+a white screen".
+PATTERN: `docs/loop/WEB-PATTERNS.md` — a site that detects a broken DOM write and blanks itself.
+
+NEXT: the two named missing surfaces are cheap and both are TypeErrors of the same class —
+`HTMLScriptElement.supports` (a static feature-detect: `'classic'`/`'module'`/`'importmap'`) and
+whatever object welt.de calls `addEventListener` on. And the getter-only sweep found the rest of the
+class worth pricing: `nodeValue` (spec-settable), `style` and `classList` (both `[PutForwards=]`, so
+`el.style = 'color:red'` and `el.classList = 'a b'` throw here), and `document.body`.

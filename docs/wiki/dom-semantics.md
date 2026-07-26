@@ -1642,3 +1642,82 @@ an obviously missing one.**
 
 Stroke width is excluded, which is *correct* — `getBBox` is specified on fill geometry. `transform`
 is not applied, which is a real gap, named here rather than hidden.
+
+## A getter-only accessor is a TypeError, not a gap — and one site turns it into a white screen (tick 612)
+
+`innerText` was registered with a getter and `None` for its setter:
+
+```rust
+prop_guarded!(prop, c"innerText", el_get_inner_text, None);
+```
+
+The reflex reading of that is *"writes are unsupported, so they do nothing."* **They do not do
+nothing.** Assigning to an accessor that has only a getter raises `TypeError: setting getter-only
+property "innerText"` under **strict mode** — so the assignment takes the assigning frame down with
+it, along with everything that frame was going to do. Under sloppy mode it silently no-ops. Real
+bundles are strict: a module body always is, and every minifier emits `'use strict'`. So the failure
+mode a page actually experiences is the throw.
+
+### The failure `www.welt.de` builds on top of it
+
+```text
+  ERROR page.console: Failed to load website due to adblock:
+                      TypeError: setting getter-only property "innerText"
+  structural: 0.0% (3182 paths, 3181 missing)
+  MISSING by tag: div×940  a×447  li×390  span×346  h4×103  ul×100  article×98  svg×89
+```
+
+welt.de's anti-adblock check writes through `innerText`, **catches the throw**, concludes an ad
+blocker is present, and **deliberately blanks its own document**. We were not failing to render the
+page; the page was refusing to render for us — and on the evidence it had, it was right to conclude
+something was wrong with the DOM. Chromium renders the same fetched bytes completely.
+
+**This is a distinct and nastier class than a missing feature.** A missing feature degrades the thing
+that uses it. A missing *setter* on a widely-written property is an exception that (a) kills unrelated
+work in the same frame and (b) is a signal some sites deliberately interpret as hostile.
+
+### The population, measured rather than assumed
+
+Scanning each HEAD site's HTML **plus up to 12 of its external bundles** for `.innerText =`:
+
+```text
+  bbs.ruliweb.com   9      www.welt.de     2
+  www.desitales2    6      www.aparat.com  1
+  → 4 of 16 scanned sites WRITE innerText
+```
+
+A quarter of the stratum, and a **lower** bound: 12 bundles per site, computed access (`el[p] = v`)
+uncounted, and five sites answered with bot-wall pages carrying none of their real scripts.
+
+### The rest of the class, from the same sweep
+
+`innerText`'s sibling `outerText` had a setter the entire time — one rule, two implementations. Of the
+61 getter-only DOM properties, most are correctly read-only (`childNodes`, `tagName`, `firstChild`),
+but these are **spec-settable and still throw here**:
+
+| Property | Why it is settable |
+|---|---|
+| `nodeValue` | writes character data, like `data` |
+| `style` | `[PutForwards=cssText]` — `el.style = 'color:red'` |
+| `classList` | `[PutForwards=value]` — `el.classList = 'a b'` |
+| `document.body` | replaces the body element |
+| `selectionDirection` | on `<input>`/`<textarea>` |
+
+### The setter itself
+
+The HTML spec calls it the **rendered text fragment**: normalise `\r\n` and `\r` to `\n`, split on
+`\n` into text nodes separated by `<br>`, then replace all children. That is the same construction
+`outerText` performs — the two differ *only* in whether the result replaces the element's CHILDREN or
+the ELEMENT — so the splitting lives in one shared helper. Two copies is how the two answers drift.
+
+⚠ **`innerText` must never parse markup.** It is the safe sibling of `innerHTML` and is precisely
+where pages put untrusted text. `G_INNER_TEXT_SET` asserts an assigned `<img src=x onerror=1>` yields
+zero `<img>` elements; a RED probe that routed the setter through `set_inner_html` turns that into
+`noParse:1`, which would be a stored-XSS sink wearing a safe name.
+
+⚠⚠ **The gate's own headline assertion was vacuous on the first draft, and only the RED probe said so.**
+`threw:false` was written at script top level — **sloppy mode** — where the getter-only assignment
+no-ops instead of throwing, so it **passed with the bug still present** while every other assertion in
+the same gate went correctly red. The claim the whole gate exists for could not fail. The fix is an
+IIFE with `'use strict'`. *A gate can be green because a SECOND mechanism produces the same
+observable* — vary the mechanism, not the threshold. [[honest-answer-is-not-a-fixed-answer]]
