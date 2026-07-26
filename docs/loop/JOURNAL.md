@@ -27950,3 +27950,54 @@ NEXT: t629's part **(1)**, unchanged and now the larger of the two — `getBound
 SVG child still returns `0×19`, an empty inline box, because `svg_bbox` lives in the JS binding layer
 and the CSS box comes from layout. That is the subsystem; this tick makes sure it will have correct
 geometry to consume for the commonest element when it lands.
+
+## Tick 631 — constitution check #45: four false absences, zero false presences (2026-07-26)
+
+The constitution re-read was due (every 8 ticks; last at 623). **Check #45 is written.**
+
+**THE BINDING CONSTRAINT HAS CHANGED CLASS.** t606 named it measurability; that is now largely closed
+(13 of 14 unscored sites carry a named cause). What replaces it is neither a measurement nor a
+rendering problem: **5 of 20 HEAD sites bot-wall us, and V1-SCOPE puts that explicitly out of scope**,
+so the achievable ceiling on this corpus is **15/20**. The constitution should carry that sentence, or
+a deliberate scope decision reads forever as unfinished work. After it, what is left is **placement,
+not presence** — coverage 85.2% against shape 40.0%, and shape ≥0.75 on *zero* of the six scoreable
+sites against a 95% bar.
+
+**§VI.3.5 GAINS A THIRD CLAUSE, and it is the inverse of a rule we already had.** t630 found
+`<path>`'s `0×0` bbox was a **deliberate** honest refusal — the gate's own doc said *"on purpose"* —
+made when no exact answer was available. It stayed after one became available:
+
+> **An honest "we cannot know" must be re-priced when the ability to know arrives.**
+> `[[honest-answer-is-not-a-fixed-answer]]` covers a "no" that becomes a lie once the CAPABILITY
+> lands. This is the mirror: a "no" becomes a **ceiling** once the ANSWER becomes computable — and it
+> rots invisibly, because it is documented as intentional.
+
+**THE TALLY, and it is the finding I would carry out of this whole session.** Check #44 named the
+asymmetry; here it is counted across t610-631:
+
+```text
+  FALSE ABSENCES  4   the "bricked" wall · ResizeObserver · scroll anchoring + forced reflow ·
+                      <path>'s outlived refusal
+  FALSE PRESENCES 0   of my own making
+```
+
+Every one was a **negative** accepted at a price a positive would never have been sold at. That is not
+a run of bad luck — it is a systematic mis-calibration, now measured three separate ways (check #44,
+surface audit #35, this). **The loop is well calibrated for good news about itself and badly
+calibrated for bad news**, which is the opposite of the failure mode this project was built expecting
+and is worth more attention than any single capability on the board.
+
+**A fourth probe-discipline clause, earned at t630:** a NEGATIVE assertion needs a RED probe that
+produces **a different wrong answer**, not a differently-shaped absence.
+
+TICK SHAPE: the due constitution check. Bar 0 untouched; no ratchet floor moved; **no engine source
+changed**.
+Gates: none — this tick is the cadence item.
+WIKI: none [forced] — no engine mechanism changed.
+PATTERN: [no-pattern] — no browser capability changed.
+
+NEXT: unchanged and both concrete — t629's part (1), `getBoundingClientRect()` on an SVG child (the
+layer join, a subsystem), and placement on the six scoreable sites, where `agoda` at 0.0% with n=13 is
+the cheapest thread. Standing for the observer: `manuk-wpt`'s tests are still not in the wall (54
+tests, 14s), and wall audit #18's finding that any `engine/` touch costs 512-716s against a 67s warm
+wall.

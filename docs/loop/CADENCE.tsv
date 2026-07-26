@@ -389,3 +389,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 628	f928007c	1785100602	2026-07-26T17:16:42-04:00	281	reliability	63	5	161	6	315	81	3896	6960	0	341	31	SURFACE AUDIT #35: audit #34 was wrong, and its own first step caught it (2026-07-26)
 629	f6d0bca5	1785100895	2026-07-26T17:21:35-04:00	293	measurement	63	3	118	2	315	81	3896	6960	0	341	31	SVG geometry children have no box: `getBBox` knows, `getBoundingClientRect` does not (2026-07-26)
 630	56005b0d	1785102020	2026-07-26T17:40:20-04:00	1125	capability	63	8	510	5	315	81	3896	6960	0	341	31	`<path>` had no bbox arm at all, and now has an EXACT one (2026-07-26)
+631	37fb2c28	1785102225	2026-07-26T17:43:45-04:00	205	the	63	4	179	3	315	81	3896	6960	0	341	31	constitution check #45: four false absences, zero false presences (2026-07-26)

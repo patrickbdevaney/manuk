@@ -2101,3 +2101,73 @@ bot-wall us**, which is the single largest measured blocker on the corpus and ex
    `--strict`.
 
 **Next check due: tick 631.**
+
+---
+
+## Check #45 — tick 631
+
+**Horizon:** H0 — the Phase-0 daily-driver certificate. Gate: `daily-driver-pass(site) = renders(site)
+∧ functions(site)` over the fixed-denominator corpus-v2, not a WPT percentage (PART VII.1).
+
+**Gate or scoreboard?** t624-631 is eight ticks: dynamic `import()` (624), the sweep's subprocess
+deadline (625), the certificate re-measured (626), the oracle's font field (627), surface audit #35
+(628), the SVG measurement (629), `<path>` bbox (630), this check. **Gate** — and for the first time
+this session the window contains a *complete* exit measurement rather than a partial one, which is
+what t625 existed to make possible.
+
+**THE NUMBER, and it is the one PART VII.1 says we are scored on:**
+```text
+  sites 20 · scored 6 · shape >=0.75 on 0 (bar 95%) · COVERAGE 85.2% · SHAPE 40.0% · VISUAL 66.0%
+```
+
+**AND THE BINDING CONSTRAINT HAS CHANGED CLASS, WHICH IS THIS CHECK'S FINDING.** t606 named it
+measurability. That is now largely closed — **13 of 14 unscored sites carry a named cause**. What
+replaces it is not a measurement problem and not a rendering problem:
+
+> **5 of 20 HEAD sites bot-wall us, and `V1-SCOPE` puts bot-detection explicitly OUT OF SCOPE.**
+
+The achievable ceiling on this corpus is **15/20, not 20/20**. That is not an argument to change the
+denominator — a fixed denominator is exactly what stops the hard sites vanishing — but the constitution
+should say plainly that a quarter of the representative HEAD is unreachable **by a decision this
+project made deliberately**, or it reads forever as unfinished work. **PART VII should carry that
+sentence.** After it, what remains is **placement, not presence**: coverage 85.2% against shape 40.0%,
+shape ≥0.75 on *zero* of the six scoreable sites.
+
+**§VI.3.5 GAINS A THIRD CLAUSE, and it is the inverse of a rule we already had.** t630 found
+`<path>`'s `0×0` bbox was a **deliberate** honest refusal — the gate's own doc said *"on purpose"* —
+made when no exact answer was available. It stayed after one became available, and for 26 ticks the
+commonest SVG element reported no geometry *because a correct decision was never re-priced*.
+
+> **An honest "we cannot know" must be re-priced when the ability to know arrives.**
+> `[[honest-answer-is-not-a-fixed-answer]]` covers the case where a "no" becomes a lie once the
+> CAPABILITY lands. This is the mirror: a "no" becomes a ceiling once the ANSWER becomes computable.
+> Both rot; the second rots invisibly, because it is documented as intentional.
+
+**THE SESSION'S ASYMMETRY, now with a fourth instance and a count.** Check #44 named it: *a negative
+result feels like it needs no confirmation.* Final tally across t610-631 — **four false absences**
+(the "bricked" wall, ResizeObserver, scroll anchoring + forced reflow, and `<path>`'s outlived
+refusal) against **zero false presences of my own making**. Every one was a *negative* accepted at a
+price a positive would never have been sold at. That is not a run of bad luck; it is a systematic
+mis-calibration, and it is now measured three separate ways (check #44, audit #35, this).
+
+**A FOURTH PROBE-DISCIPLINE CLAUSE, cheap and earned at t630:** a NEGATIVE assertion needs a RED probe
+that produces **a different wrong answer**, not a differently-shaped absence. The first probe for the
+arc refusal guessed `(0,0)` — indistinguishable from "no answer" — and the gate stayed green.
+
+**INVARIANTS.** I2: held. I4 (Pareto): held and repeatedly evidenced — t625's deadline set generously
+because *a deadline is not a latency budget*; t630 declining to bound arcs rather than guessing. I3: no
+new rendered construct owed exposure. I5: strengthened — every capability tick in this window
+(624/630) descended from the certificate traversing a real site.
+
+**PART VII / V1-SCOPE: held**, and now load-bearing: the largest single measured blocker on the corpus
+is one the scope forbids touching, and it was not touched.
+
+**⚠ STANDING FOR THE OBSERVER — one closed, two open:**
+1. ✅ `map-reconcile.sh` now searches `tests/` (fixed by the observer at `f9882e98`). Drift is 0.
+2. `manuk-wpt`'s tests are **still not in the wall** — 54 tests, **14s**, and `G_CERT_FALSIFIABLE`'s own
+   doc comment says *"re-run on every wall"*.
+3. **NEW (wall audit #18):** the wall is **67s warm and 512-716s on any tick touching `engine/`** — a
+   51MB `manuk-wpt` under `lto = true, codegen-units = 1`, relinked inside the gate phase. A
+   per-package `lto = "thin"` for the harness changes no assertion and drops no gate.
+
+**Next check due: tick 639.**
