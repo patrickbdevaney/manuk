@@ -207,8 +207,7 @@ implementation does, for exactly this reason.
   registry and still says **no**. Knowing where the H.264 is and being able to decode it are
   different claims, and `g_media_buffered` asserts the honest `false` so this landing cannot start
   over-promising. Advertising MSE we cannot honour turns a working YouTube into a black rectangle.
-- **WebM/Matroska is not demuxed.** `sniff` recognises EBML and returns a named `Unsupported`, so the
-  failure is "this is WebM and we only demux MP4" rather than a parse error blaming the bytes.
+- ~~**WebM/Matroska is not demuxed.**~~ **Closed at tick 633 — see M3b below.**
 - **The demuxer re-parses the accumulated buffer per append**, rather than being incremental. The
   `SourceBuffer` retains every chunk anyway (eviction is its own spec'd algorithm), and an
   incremental parser buys latency there is no decoder downstream to spend yet.
@@ -219,6 +218,97 @@ over a real socket, appended, read back through `sb.buffered` / `sb.videoTracks`
 
 **Next:** M4 — AAC decode via `symphonia` (audio only, per the trap-list) plus `cpal` for output,
 and M5 video decode. Both consume the decoder-configuration record this step already extracts.
+
+## M3b — WebM/Matroska demux (tick 633): the second ladder's missing rung 1
+
+`engine/media/src/webm.rs`. The MP4 ladder went demux → AAC → H.264 → playback, one rung per tick,
+and each decoder step could *be* a decoder step because a container step had already produced a
+sample table. **WebM had no rung 1 at all**, so a VP9 or Opus decoder would have had nothing to
+feed: no tracks, no timestamps, no byte ranges. Everything a page could observe about a WebM —
+duration, dimensions, `buffered` — was structurally unavailable however good a decoder turned out
+to be. WebM is what YouTube ships and what most non-MP4 `<video>` on the open web is.
+
+**Borrow, do not build.** `matroska-demuxer` 0.8 is the EBML reader the way `re_mp4` is the box
+reader, and it is the one dependency here that is **not** feature-gated. That is a cost decision,
+not an oversight: `manuk-js → manuk-media` drags this crate's tree into ~25 gate binaries, which is
+why symphonia and openh264 are opt-in — and `matroska-demuxer` has **zero transitive dependencies**
+(`cargo add` locks exactly one package), so it costs the wall nothing. It was chosen over
+symphonia's `mkv` reader (audio-only, and behind the feature that must stay out of that link) and
+over `matroska`/`webm-iterable` (metadata/element readers with no frame pass).
+
+### The two places it does real work rather than forwarding
+
+**1. Byte offsets are recovered and VERIFIED — and the obvious check does not see the bug.**
+`Sample` carries an offset into the parsed buffer because that is the coordinate space a decoder
+reads from; `matroska-demuxer` returns a frame's *copied bytes* and no offset. The natural recovery
+is "the reader's position minus the frame length", which is right for a plain `SimpleBlock` and
+wrong for **lacing** (several frames read in one pass) and for **`BlockGroup`** (a `BlockDuration`
+element read after the data). Measured on `bear-vp9-opus.webm`: 217 of 218 frames land on the fast
+path and one does not. So the fast path is a *hint*, every offset is confirmed by comparing
+`bytes[offset..offset+size]` against the frame the demuxer returned, and a mismatch triggers a
+forward scan bounded by the previous frame's end. **A frame that cannot be located is a hard
+`Invalid`**, never a plausible offset — a wrong offset decodes into a green frame, one layer below
+where anyone looks.
+
+> **The generalisable finding, and it cost a gate rewrite.** The wrong answer here is not
+> out-of-range and it is not overlapping — the bad frame comes out **shifted by six bytes**, inside
+> the buffer and disjoint from its neighbours. `byte_range().end <= bytes.len()` passes on it; so
+> does a pairwise non-overlap check across the whole file. **Containment and disjointness are
+> properties of the sample TABLE, not of the BYTES.** Only a check against the codec's own framing
+> sees it — a VP9 frame marker (`10`, a spec constant) and an Opus TOC byte (constant across one
+> file because one file has one encoder configuration). The first draft of the gate had only the two
+> checks that pass, and **the RED probe is what said so, not review**: a gate written to catch a bug
+> can be structurally incapable of catching it while its doc claims otherwise.
+
+**2. Frame durations, which Matroska mostly does not store.** MP4's `stts` gives every sample a
+duration; a WebM `SimpleBlock` gives a timestamp and nothing else. Without durations every sample's
+presentation span is empty, `Track::buffered` filters them all out, and `buffered.length` is 0 — the
+"append loop cannot advance" failure `buffered` exists to prevent. Three sources in order of
+authority: the block's own duration, the track's `DefaultDuration`, then the **delta to the next
+frame on the same track** (last frame reuses the previous delta). `bear-vp9-opus.webm` needs two of
+the three: its video track has a `DefaultDuration` and its Opus track has none, so the audio
+timeline exists *only* because of the delta arm.
+
+**Nanosecond timescale, on purpose.** The bear fixtures' `DefaultDuration` is `33_366_666` ns — not
+an integer number of milliseconds — so expressing samples in the file's own 1 ms `TimecodeScale`
+tick would round every frame and drift ~30 ms over 82 frames. `Track::timescale` is 1,000,000,000
+and timestamps are nanoseconds, exact for both quantities and for any `TimecodeScale` a file can
+declare. The honest limit that remains: a track with no `DefaultDuration` is timed by the
+container's own block timestamps, so an Opus packet comes out 20 **or 21** ms and never finer.
+
+### The line: a container claim is not a decode claim
+
+`isTypeSupported` now answers **true** to the *bare* `video/webm` / `audio/webm` form — which means
+for WebM what it has always meant for `video/mp4`: we can open this container. Every `codecs=` form
+stays **false**, because there is no VP9 decoder and no Opus decoder in the tree. Two things
+deliberately did not move with it:
+
+- **`HTMLMediaElement.canPlayType` still answers `''` for webm.** If it moved, a `<video>` listing a
+  `.webm` `<source>` before its `.mp4` one would select the WebM we cannot decode over the MP4 we
+  can — a regression traded for a capability, which the ratchet refuses.
+- Every real adaptive player (hls.js, dash.js, shaka) probes **with** codecs, so none is steered by
+  the bare form. It is feature-detection code that reads it.
+
+Widening the bare form is not cosmetic: `addSourceBuffer` is the **only** door into `__demux`, so
+without it the demuxer would be machinery no page could call.
+
+**Codec strings are the container's, not a guess.** `V_VP9` → `vp9`, not `vp09.00.10.08`: the RFC
+6381 long form encodes profile/level/depth that a WebM track carries only in a `CodecPrivate`
+neither bear fixture has, and a fabricated string is one a player string-compares and branches on.
+`V_AV1` is the exception *because* its `CodecPrivate` **is** an `av1C` record — `av01.0.01M.08` comes
+out of the bytes.
+
+**Gates:** `engine/media/tests/webm_demux.rs` (the demuxer against two real Chromium fixtures; three
+RED mutations run and recorded in its header) and `engine/page/tests/g_media_webm.rs` (the
+JS-observable surface: a real VP9/Opus WebM over a real socket, appended, read back through
+`sb.buffered` / `sb.videoTracks` / `ms.duration` — and asserting `canPlayType` and the `codecs=`
+answers have **not** moved). Note it needs no `__mseCodecs.push` escape hatch, unlike
+`g_media_buffered`; that is the difference between a reachable capability and machinery no page can
+call.
+
+**Next on this ladder:** a VP9 decoder (libvpx bindings — the same "a working pipeline with zero
+system dependencies" trade openh264 already represents) and an Opus decoder, at which point the
+`codecs=` answers may move and not before.
 
 ## M4 — AAC decode (tick 235): sound-shaped numbers, not yet sound
 

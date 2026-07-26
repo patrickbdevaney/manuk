@@ -28061,3 +28061,86 @@ NEXT: our own latency is now the named blocker on the placement half — **17-28
 on keirin.jp**, and `OURS IS SLOW` fired on 10 of 14 sites at t606. That is a performance arc, and t602
 already ranked it as a fidelity input rather than a comfort metric. The other open thread is unchanged:
 t629's part (1), `getBoundingClientRect()` on an SVG child.
+
+## Tick 633 — WebM/Matroska demux: the container half of the VP9 ladder (2026-07-26)
+
+HYPOTHESIS: `manuk_media::demux` answers `Unsupported(WebM)` for every EBML stream, and the module
+doc says so plainly — "[`sniff`] recognises it … but there is no EBML reader here". WebM is what
+YouTube, and every `<video>` on the open web that is not MP4, actually ships. The MP4 ladder ran
+M3 demux → M4 AAC → M5 H.264 → M6 playback; the WebM ladder has no rung 1 at all, so a VP9 decoder
+would have nothing to feed it.
+
+Borrow, do not build: `matroska-demuxer` 0.8 (Zlib OR MIT OR Apache-2.0, **zero transitive
+dependencies**) is the EBML reader, the way `re_mp4` is the box reader. This tick is the container
+step ONLY — no decoder, so `isTypeSupported('video/webm; codecs="vp9"')` must stay **false**, and
+that staying-false is itself an assertion in the gate.
+
+**LANDED.** `bear-vp9-opus.webm` — VP9 320x240 + Opus 48kHz stereo, the pair YouTube serves — opens:
+2 tracks, 218 frames, one contiguous `buffered` span 0.00-2.74s, `MediaSource.duration` 2.74 from the
+Segment's `Info`. AV1-in-WebM reports `av01.0.01M.08` derived from its `av1C`. From page JS, through
+the public API only, with **no `__mseCodecs.push` escape hatch** — `addSourceBuffer('video/webm')`
+succeeds on its own merits, which is the difference between a reachable capability and machinery no
+page can call.
+
+**THE FINDING, AND IT IS ABOUT GATES, NOT MEDIA.** `matroska-demuxer` returns a frame's copied bytes
+and no offset, so `Sample.offset` has to be recovered; the natural recovery ("the reader's position
+minus the frame length") is wrong for lacing and for `BlockGroup`. I wrote the gate to catch that,
+documented that it caught it, **and the RED probe said it did not**:
+
+```text
+  RED: delete the forward-scan arm of webm::locate     -> 7 passed. GREEN.
+```
+
+The wrong answer is not out-of-range and it is not overlapping. The bad frame comes out **shifted by
+six bytes** — inside the buffer, disjoint from its neighbours. `byte_range().end <= bytes.len()` (the
+MP4 gate's check, which I had copied) passes on it. A pairwise non-overlap check across the whole
+file, which I then added *believing it was the fix*, **also** passes on it.
+
+> **Containment and disjointness are properties of the sample TABLE. Neither is a property of the
+> BYTES.** Only a check against the *codec's own framing* sees it: a VP9 frame marker (`10`, a spec
+> constant) and an Opus TOC byte (`0xfc` across all 136 packets, because one file has one encoder
+> configuration). With that, RED lands on the exact frame the probe predicted — *"sample 216 at
+> offset 99597 has TOC byte 0xe4 where every other packet has 0xfc"* — and on nothing else.
+
+This is the fourth-clause rule from check #45 arriving from the other direction. t630's version was
+*a NEGATIVE assertion needs a RED probe producing a different wrong answer*. This is: **a POSITIVE
+assertion needs a RED probe too, because a gate can be structurally incapable of catching the bug its
+own doc claims it catches — and the doc is written by the same person who wrote the blind spot.** I
+would have shipped both the code and a paragraph asserting it was gated. Two green checks and a
+confident comment; one mutation to disprove all three.
+
+**Two stale tests were the tick's own honesty check.** `webm_is_named_not_blamed` and
+`webm_is_recognised_and_honestly_refused` both asserted `Unsupported(WebM)` — the *correct* answer
+while there was no reader. Both went red, both were re-pointed at the new truth (`Incomplete`, with
+an explicit `assert_ne!(Unsupported)` so unwiring the arm is still caught). That is
+`[[honest-answer-is-not-a-fixed-answer]]` firing on schedule rather than rotting.
+
+**AND A COMPILE ERROR ONLY ONE FEATURE COMBINATION SAW.** `can_decode_video` takes `&Track`, not a
+codec string; under default features the call is `#[cfg(feature = "video")]`-ed out and the tree is
+green. `--features audio,video,av1,avif` is where it appears. Fixed by asking the decoder about the
+**real demuxed track** instead of a string the test invented — strictly better — plus the
+non-vacuity half: the same decoder must answer *yes* to the AV1 track, or a decoder that refuses
+everything would make the VP9 `false` prove nothing.
+
+THE LINE, held in three places at once: `isTypeSupported('video/webm')` -> **true** (bare container,
+what Chrome answers, and the only door to `__demux`); `isTypeSupported('video/webm; codecs="vp9"')`
+-> **false** (no VP9 decoder, no Opus decoder); `canPlayType('video/webm')` -> **''**, deliberately
+unmoved — if it moved, a `<video>` listing a `.webm` `<source>` before its `.mp4` one would select
+the WebM we cannot decode over the MP4 we can. That is a regression traded for a capability, and
+trades are refused.
+
+TICK SHAPE: capability (the second media ladder's missing rung 1: WebM/Matroska demux, reachable
+from page JS, with the decode claim explicitly held at false). Bar 0 untouched; no ratchet floor
+moved.
+Gates: **G_MEDIA_WEBM** (`engine/media/tests/webm_demux.rs`, 7 assertions, 3 RED mutations run and
+tabulated in its header) and **`engine/page/tests/g_media_webm.rs`** (18 claims through the public
+API, 2 RED mutations run). Neither is in `verify.sh`'s launch list — `manuk-media` is not in its
+crate loop and the page gates it runs are enumerated by name. Harness-owned; noted, not touched.
+WIKI: `docs/wiki/media-pipeline.md` — new section "M3b — WebM/Matroska demux: the second ladder's
+missing rung 1", including the containment-vs-bytes finding as a pull-quote.
+PATTERN: `docs/loop/WEB-PATTERNS.md` — "The WebM `<video>` — every non-MP4 video on the open web".
+
+NEXT: the rung above this one is a **VP9 decoder** (libvpx bindings — the same "a working pipeline
+with zero system dependencies" trade openh264 already represents) and an **Opus decoder**; the
+`codecs=` answers may move then and not before. Unchanged and still open: our own latency on the
+placement half (17-28s vs Chromium's 6s), and t629's `getBoundingClientRect()` on an SVG child.

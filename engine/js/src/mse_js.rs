@@ -62,8 +62,29 @@ pub const MSE_JS: &str = r#"
     // Baseline-profile H.264 (`avc1.42……` — the profile byte is the pair after "avc1.", 0x42;
     // High/Main are refused exactly as `video::can_decode` refuses them), and the AAC path
     // (`mp4a.40.*`) demuxes+decodes to PCM (G_MEDIA_AAC), and AV1-in-MP4 (`av01.*`) decodes via
-    // re_rav1d in the shell lane (tick 354). WebM/VP9 stay false — no demuxer, no decoder, and a
-    // YES here without one steers a player onto a path that hangs (module doc).
+    // re_rav1d in the shell lane (tick 354).
+    //
+    // ── WebM, and the line is drawn at the CONTAINER (tick 633).
+    //
+    // `manuk_media::webm` now opens EBML: tracks, codec strings, a verified sample table and
+    // `buffered`. No VP9 and no Opus DECODER exists anywhere in the tree, so every `codecs=` form
+    // stays **false** — that is the line MEDIA.md draws, and saying yes to `codecs="vp9"` is
+    // precisely the black-rectangle failure it warns about. What changes is the **bare** container
+    // form, which now means for WebM exactly what it has always meant for MP4 on the line below:
+    // *we can open this container*. That is `isTypeSupported`'s documented contract for a type with
+    // no codecs parameter, it is what Chrome answers, and it is what makes the demuxer reachable
+    // from a page at all — `addSourceBuffer` is the only door to `__demux`, and it consults this
+    // function.
+    //
+    // Two things deliberately do NOT move with it, and both are load-bearing:
+    //   * `HTMLMediaElement.canPlayType` still answers `''` for webm (event_loop.rs). If it said
+    //     otherwise, a `<video>` with a `.webm` <source> before its `.mp4` one would select the
+    //     WebM we cannot decode over the MP4 we can — a REGRESSION traded for a capability, which
+    //     the ratchet refuses.
+    //   * every real adaptive player (hls.js, dash.js, shaka) probes WITH codecs, so none of them
+    //     is steered here by the bare form. It is feature-detection code that reads it.
+    if (/^(video|audio)\/webm$/.test(want)) { return true; }
+    if (/^(video|audio)\/webm;/.test(want)) { return false; }
     var m = /^(video|audio)\/mp4($|;codecs=)/.exec(want);
     if (!m) { return false; }
     var q = want.indexOf('codecs=');

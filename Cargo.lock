@@ -3302,6 +3302,7 @@ name = "manuk-media"
 version = "0.1.0"
 dependencies = [
  "avif-parse",
+ "matroska-demuxer",
  "openh264",
  "re_mp4",
  "re_rav1d",
@@ -3492,6 +3493,12 @@ checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
 dependencies = [
  "regex-automata 0.4.15",
 ]
+
+[[package]]
+name = "matroska-demuxer"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7037404c874fc7a465dd0356d7d8f9f3237b425511942eb64dbe956e6adc7c01"
 
 [[package]]
 name = "memchr"

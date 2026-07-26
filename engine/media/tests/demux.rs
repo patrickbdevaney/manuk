@@ -175,18 +175,24 @@ fn sync_flags_are_not_inverted() {
     }
 }
 
-/// A container we can name but not read reports itself as such. "This is WebM and we only demux
-/// MP4" is a debuggable failure; "invalid stream" blames the bytes for our own gap.
+/// **Tick 633 changed this test's subject, and the change is the point.** It used to assert
+/// `Unsupported(WebM)` — "this is WebM and we only demux MP4", which was the honest answer while
+/// there was no EBML reader. There is one now (`engine/media/src/webm.rs`), so an EBML *header* is
+/// no longer a container we decline; it is a container we read, handed too few bytes of. The answer
+/// a truncated stream must get is `Incomplete`, because an MSE append is incremental and a player
+/// retries that and gives up on anything else.
+///
+/// `Unsupported(WebM)` coming back would now mean the WebM arm had been unwired — so it is asserted
+/// against explicitly rather than left to the equality above.
 #[test]
-fn webm_is_recognised_and_honestly_refused() {
+fn a_webm_header_alone_is_incomplete_not_an_unsupported_container() {
     // A real EBML header, as a WebM initialization segment begins.
     let mut bytes = vec![0x1A, 0x45, 0xDF, 0xA3];
     bytes.extend([0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x23]);
     assert_eq!(sniff(&bytes), Container::WebM);
-    assert_eq!(
-        demux(&bytes).unwrap_err(),
-        DemuxError::Unsupported(Container::WebM)
-    );
+    let err = demux(&bytes).unwrap_err();
+    assert_eq!(err, DemuxError::Incomplete);
+    assert_ne!(err, DemuxError::Unsupported(Container::WebM));
 }
 
 /// An MSE append is incremental, so "not enough bytes yet" is a normal answer and must be

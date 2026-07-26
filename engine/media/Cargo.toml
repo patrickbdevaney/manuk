@@ -37,6 +37,20 @@ avif = ["av1", "dep:avif-parse"]
 
 [dependencies]
 re_mp4 = "0.4"
+
+# WebM/Matroska demux (tick 633). The EBML reader, the way `re_mp4` is the box reader.
+#
+# **NOT optional, and that is the point of choosing this one.** Every other decoder dependency here
+# is opt-in because `manuk-js -> manuk-media` drags this crate's tree into ~25 gate binaries and a C
+# compile or a symphonia build costs the wall minutes. `matroska-demuxer` has **zero transitive
+# dependencies** (`cargo add` locks exactly one package), so demux — which is browser work, not
+# codec work — stays always-available the way MP4 demux is.
+#
+# Chosen over the alternatives for reasons MEDIA.md's trap-list already names: symphonia's `mkv`
+# reader is audio-only AND lives behind the feature that must stay out of the js/page link;
+# `matroska`/`webm-iterable` are metadata/element readers with no frame pass. Zlib OR MIT OR
+# Apache-2.0.
+matroska-demuxer = "0.8"
 # AAC decode (M4). `default-features = false` + `aac` only: symphonia ships a dozen demuxers and
 # codecs we must not silently acquire, and its ISO-MP4 demuxer in particular is AUDIO-ONLY (its
 # video `SampleEntry` is commented out — MEDIA.md trap #1), which is exactly why demux is re_mp4's

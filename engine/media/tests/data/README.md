@@ -66,3 +66,18 @@ All three are from the Chromium `media/test/data` corpus, which is BSD-licensed 
 
 - `sfx_s16le.wav` — RIFF/WAVE, 16-bit PCM mono 44.1k, from `chromium/media/test/data/` (Chromium,
   BSD-3, same provenance rule). The stream-seam WAV rung's fixture.
+
+- `bear-vp9-opus.webm` — **the first WebM fixture** (tick 633): VP9 320×240 video and Opus 48 kHz
+  stereo audio in one EBML container, 2.736 s, 218 frames (82 video + 136 Opus packets). From
+  `chromium/media/test/data/` (Chromium, BSD-3 — test DATA with attribution, per the tick-235
+  observer steer). **The VP9+Opus pair is what YouTube actually serves**, which is why this one and
+  not a video-only WebM. Two properties make it the right gate fixture rather than merely a WebM:
+  its Opus track has **no `DefaultDuration`**, so the audio timeline exists only if frame durations
+  are derived from timestamp deltas; and one of its Opus blocks is **laced**, so 217 of its 218
+  frames end exactly at the reader's position and one does not — which is the case that breaks the
+  naive byte-offset recovery, and the case a synthesised file would not have.
+
+- `bear-av1-480x360.webm` — AV1 in WebM (tick 633), 480×360, 82 frames, video only, same Chromium
+  provenance. Its `CodecPrivate` is a real 4-byte `av1C` record (`81 01 0c 00`), which is what makes
+  `av01.0.01M.08` **derivable from the bytes** rather than a guess — the one codec whose RFC 6381
+  long form a WebM track carries enough information to state.

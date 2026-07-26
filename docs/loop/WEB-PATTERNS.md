@@ -5293,3 +5293,31 @@ same map, so the hook resolves from memory and finishes immediately. **A compute
 runtime already has a `.catch()`, and telling it "no" is far better than a promise that never settles.
 
 `www.welt.de`: VISUAL 82.8% → 91.1%, COVERAGE 94.9% → 95.7%.
+
+## The WebM `<video>` — every non-MP4 video on the open web (tick 633)
+
+**The class:** WebM is the container YouTube ships, and it is what most `<video>` that is not MP4
+actually is — VP9 or AV1 video, Opus or Vorbis audio, in an EBML/Matroska wrapper. Every adaptive
+player that streams it (dash.js, shaka, YouTube's own) drives its fetch loop by `SourceBuffer.buffered`.
+
+`manuk_media::demux` answered `Unsupported(WebM)` for every EBML stream, and `isTypeSupported`
+refused every WebM MIME type, so `addSourceBuffer` threw `NotSupportedError` and there was no door
+into the demuxer at all. **The MP4 ladder went demux → AAC → H.264 → playback, one rung per tick;
+WebM had no rung 1**, so a VP9 decoder would have had nothing to feed it — no tracks, no timestamps,
+no byte ranges.
+
+**What is now true, and the boundary is the point.** A page can open a WebM: two tracks with their
+real codec strings (`vp9`, `opus`, and `av01.0.01M.08` derived from an `av1C`), real dimensions and
+sample rate, one contiguous `buffered` span over the whole stream, and a `MediaSource.duration` from
+the file's own `Info`. **Nothing decodes.** `isTypeSupported('video/webm; codecs="vp9"')` is still
+`false` and `canPlayType('video/webm')` is still `''` — the second deliberately, because a `<video>`
+listing a `.webm` `<source>` before its `.mp4` one must keep selecting the MP4 we can actually play.
+Only the *bare* container form moved, and only because `addSourceBuffer` is the sole door to the
+demuxer.
+
+**The generalisation, and it is about gates rather than media:** the wrong answer this work could
+produce was a sample offset **shifted by six bytes** — inside the buffer, disjoint from its
+neighbours, and invisible to both structural checks a sample table admits. Containment and
+disjointness are properties of the TABLE, not of the BYTES. It took a check against the *codec's*
+framing to see it, and the RED probe — not review — is what revealed that the gate's first draft
+could not fail on the bug its own doc claimed it caught.

@@ -39,12 +39,18 @@
 //! frame rather than playing a video. Flipping it on a partial pipeline is the black-rectangle
 //! failure, so it flips at M6, not here.
 //!
-//! **WebM/Matroska is not demuxed yet.** [`sniff`] recognises it — so the failure is a named
-//! `Unsupported`, not a parse error blamed on the bytes — but there is no EBML reader here. Saying
-//! "I know what this is and I cannot read it" is a different and much more debuggable failure than
-//! "invalid stream".
+//! **WebM/Matroska IS demuxed, as of tick 633** — see [`webm`]. It was the missing rung 1 of the
+//! second ladder: MP4 went demux → AAC → H.264 → playback, one rung per tick, and WebM had no
+//! container step at all, so a VP9 or Opus decoder would have had nothing to feed it. It reports
+//! tracks, codec strings, a sample table with verified byte offsets, and `buffered` — and it
+//! decodes nothing, which is why `isTypeSupported` still says no to every `video/webm; codecs="…"`.
 
 use std::ops::Range;
+
+/// WebM / Matroska demux (tick 633). **Not feature-gated**, and that is a deliberate cost decision:
+/// `matroska-demuxer` has zero transitive dependencies, so unlike symphonia or openh264 it can ride
+/// into the ~25 gate binaries that reach this crate through `manuk-js` without adding a compile.
+pub mod webm;
 
 #[cfg(feature = "audio")]
 pub mod audio;
@@ -374,7 +380,7 @@ impl std::error::Error for DemuxError {}
 pub fn demux(bytes: &[u8]) -> Result<Movie, DemuxError> {
     match sniff(bytes) {
         Container::Mp4 => {}
-        Container::WebM => return Err(DemuxError::Unsupported(Container::WebM)),
+        Container::WebM => return webm::demux_webm(bytes),
         Container::Unknown => {
             return if bytes.len() < 8 {
                 Err(DemuxError::Incomplete)
@@ -551,12 +557,18 @@ mod tests {
         assert_eq!(sniff(&[0, 0]), Container::Unknown);
     }
 
+    /// **This test asserted `Unsupported(WebM)` until tick 633, and the reason it is kept rather
+    /// than deleted is that its subject changed and its shape did not.** A WebM prefix is no longer
+    /// a container we decline to read — it is a container we read, handed too few bytes of. So the
+    /// honest answer moved from "I know what this is and cannot read it" to "come back with more",
+    /// which is a strictly better answer and is the one an MSE append actually needs.
+    ///
+    /// What must NOT come back is `Unsupported`: that would mean the WebM arm had been unwired.
     #[test]
-    fn webm_is_named_not_blamed() {
-        // The point: a container we recognise and cannot read reports itself, rather than
-        // surfacing as a parse failure that reads like corrupt bytes.
+    fn a_webm_prefix_asks_for_more_rather_than_refusing_the_container() {
         let err = demux(&[0x1A, 0x45, 0xDF, 0xA3, 1, 2, 3, 4]).unwrap_err();
-        assert_eq!(err, DemuxError::Unsupported(Container::WebM));
+        assert_eq!(err, DemuxError::Incomplete);
+        assert_ne!(err, DemuxError::Unsupported(Container::WebM));
     }
 
     #[test]
