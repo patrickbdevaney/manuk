@@ -2578,3 +2578,77 @@ the PRIORITY inversion; it is blocked on the nine gate files that call `load_asy
 `finish_loading`, so size it as a full tick and do not smuggle it.
 
 **Next check due: tick 688.**
+
+## Check #52 — tick 688
+
+**Horizon:** H0 — the Phase-0 daily-driver certificate, and as of the observer's t684 USER DIRECTIVE the
+gate is stated as a number: **drive COVERAGE and SHAPE to 95%**, attacking `docs/loop/CLUSTERS.md`
+top-down, one shared root cause per tick, naming the cluster each tick shrinks.
+
+**The window:** t681–t688 — the owed HEAD-20 sweep (681), the retraction of its own collapse rule (682),
+the per-navigation negative cache (683), naukri's 89,905px body diagnosed to four eliminations
+(684/685/686), the repeat plan retired where it measures nothing (687), and this.
+
+**Gate or scoreboard? — HONESTLY: NEITHER, for four of these eight ticks, and the board said so before
+I did.** The observer's t684/t685 blocks name the exact failure: *"the last ~20 ticks were floor-gates +
+instrument-hardening — real work, but they do NOT move the bar"*, and *"the geometry NEAR-MISS lever is
+UNTOUCHED after 2 post-steer ticks (both perf/measurement)."* By t687 it was four. The steer was right and
+I was not obeying it.
+
+⚠⚠ **AND THE REASON IS RECORDED, BECAUSE IT IS STRUCTURAL, NOT A LAPSE OF WILL.** My in-context launch
+prompt says verbatim *"Do NOT grind the CSS-layout tail — it is in diminishing returns"* and lists
+media/OAuth/canvas as CO-#1 — all long done. The observer found and fixed both that prompt and the board's
+own tick-159 anti-layout block, but **a launch-prompt fix only lands on the next relaunch**, so the running
+agent keeps the stale instruction in context and it OUTRANKS a board steer. The board now carries the
+correction explicitly (*"this tick-159 anti-CSS-layout steer is DEAD… layout is NO LONGER the tail to
+avoid; it is the MAIN LINE"*). **Standing rule for me, not just the observer: when the board and the launch
+prompt conflict, the board is newer — and re-read the board's TOP block each tick rather than grepping it
+for familiar markers, which is precisely how I missed three consecutive new blocks.**
+
+**PART VI stands as corrected at #51** (the instrumented log is the discovery engine). This window is more
+evidence for it: every finding in t683–t686 came from a log line or a per-site diag line.
+
+### THE MEASUREMENT THIS CHECK EXISTS TO PRODUCE — the board's own hypothesis, tested
+
+The mandate's item (2) hypothesises *"ONE shared constant (font-metrics / line-height / margin /
+border-box rounding) likely snaps MANY boxes into 8px tolerance at once."* The sweep already computes the
+per-site median delta, and across the scored HEAD-20 rows it says:
+
+```text
+  site           dx    dy    dw    dh    absolute PLACEMENT
+  comix.to        0     0     0     7    100.0%
+  desitales2      0    91     0     3      1.2%
+  www.welt.de     0  3077     0     0      2.8%
+  www.agoda.com   1    14     1     1      3.1%
+  keirin.jp       2   206     0     1      0.3%
+  www.ikea.com    0   145     0     0      9.9%
+  playhop.com     0     0    10     7     14.3%
+```
+
+⚠⚠ **`dx` is 0–2 everywhere and `dw`/`dh` are 0 on the WORST sites. The dominant term is `dy` — 91, 145,
+206, 3077 — a pure VERTICAL displacement of correctly-sized boxes.** A box of the right size at the wrong
+`y` is not a per-box metric error: **something ABOVE it has the wrong height**, and everything below
+inherits the shift. The two sites that DO show a text-metric term (`comix` dh=7, `playhop` dw=10 dh=7) are
+the two with the HIGHEST placement scores — so the metric term is the residual, not the lever.
+
+**So the board's hypothesis is measurably not the dominant cause, and the FIRST-DIVERGENCE instrument
+already points at the real one:**
+
+```text
+  keirin.jp    after …/nav:1/…/a:1/img:1  → …/nav:1/div:2   off by dy=70
+  desitales2   after …/nav:3/div:1/div:2  → …/div:5/div:2   off by dy=-73
+  welt.de      after …/p:2                → …/article:1     off by dy=285
+  agoda        after body/div:23/div:5    → body/div:23/div:9 off by dy=631
+```
+
+keirin's divergence begins **immediately after an `<img>`** — and `Cc4e6 geometry: <img>` is a 67-site
+cluster, with a memory of an `<img>` laying out **784×0**. An image whose height is wrong shifts every
+sibling after it, on 67 sites.
+
+**THE STEER, and it is one tick, not a category:** the next tick is **the height of a box above the
+content, starting with `<img>`** — take one site's first divergence, find the element whose height is
+wrong, and name the cluster (`Cc4e6 <img>` 67 sites, `C7eb9 <body>` 93 sites, `C01ca <div>` 111 sites) whose
+site-count must shrink in the following sweep. No more measurement ticks until a geometry cluster moves;
+the measurement needed to aim is now done and written down here.
+
+**Next check due: tick 696.**

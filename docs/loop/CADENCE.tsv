@@ -444,3 +444,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 685	be130b31	1785190004	2026-07-27T18:06:44-04:00	786	measurement	63	6	132	35	334	81	3896	6960	0	353	31	the phase is the external stylesheet, and a third mechanism is eliminated (2026-07-27)
 686	043290fc	1785190481	2026-07-27T18:14:41-04:00	477	measurement	63	7	153	36	334	81	3896	6960	0	353	31	Chrome's DOM lays out correctly here; ours does not (2026-07-27)
 687	bae7f17c	1785191381	2026-07-27T18:29:41-04:00	900	infrastructure	63	7	270	33	334	81	3896	6960	0	353	31	a repeat that measured nothing is not paid for twice (2026-07-27)
+688	c2fdf257	1785192100	2026-07-27T18:41:40-04:00	719	measurement	63	7	248	34	334	81	3896	6960	0	353	31	SHAPE is not a per-box metric error; it is one wrong HEIGHT above the content (2026-07-27)

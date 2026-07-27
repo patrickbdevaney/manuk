@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **445** | ticks 1–687 |
-| median tick cycle | **21m** | 444 intervals |
-| median, last 10 | **27m** | 10 intervals |
+| ticks landed | **446** | ticks 1–688 |
+| median tick cycle | **21m** | 445 intervals |
+| median, last 10 | **20m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 397.4h elapsed |
-| median verify wall | **63s** | 384 ticks |
+| **ticks per hour** | **1.12** | 397.6h elapsed |
+| median verify wall | **63s** | 385 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **353**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**216 of 445 ticks** (49%) moved a
+**216 of 446 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -542,5 +542,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **685** | 2026-07-27 18:06 | 13m | measurement | 63s | +132/−35 | 334 | 81 | 56.0% · | the phase is the external stylesheet, and a third mechanism is eliminated (2026-07-27) |
 | **686** | 2026-07-27 18:14 | 8m | measurement | 63s | +153/−36 | 334 | 81 | 56.0% · | Chrome's DOM lays out correctly here; ours does not (2026-07-27) |
 | **687** | 2026-07-27 18:29 | 15m | infrastructure | 63s | +270/−33 | 334 | 81 | 56.0% · | a repeat that measured nothing is not paid for twice (2026-07-27) |
+| **688** | 2026-07-27 18:41 | 12m | measurement | 63s | +248/−34 | 334 | 81 | 56.0% · | SHAPE is not a per-box metric error; it is one wrong HEIGHT above the content (2026-07-27) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -97,6 +97,8 @@
   - L1562 · Two mechanisms ELIMINATED, so the next attempt does not re-derive them
   - L1577 · The PHASE is now named: the external stylesheet (tick 685)
   - L1605 · The bisection ran, and it narrowed the question again (tick 686)
+  - L1635 · SHAPE is not a per-box metric error — it is one wrong HEIGHT above the content (tick 688)
+  - L1661 · FIRST DIVERGENCE already points at the cause
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1210,4 +1212,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1121 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1123 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

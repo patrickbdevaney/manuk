@@ -32477,3 +32477,95 @@ single substitution and every cheaper one is eliminated. **(2) THE PER-CALL LOAD
 (t678/t679/#51) — the priority inversion; `initial images+masks` (an enhancement) runs before
 `dynamic scripts` (which builds the DOM), and it is blocked on nine gate files that call `load_async`
 without `finish_loading`. Size it as a full tick. **(3)** `<link>.sheet`, the honest remainder of t665.
+
+## Tick 688 — SHAPE is not a per-box metric error; it is one wrong HEIGHT above the content (2026-07-27)
+
+HYPOTHESIS: the board's CO-#1 mandate item (2), tested rather than assumed. It says *"ONE shared constant
+(font-metrics / line-height / margin / border-box rounding) likely snaps MANY boxes into 8px tolerance at
+once."* The sweep already computes the per-site median delta, so this costs a grep, not a build.
+
+⚠⚠ **AND FIRST, THE THING THIS CHECK EXISTS TO CATCH: I HAD NOT BEEN OBEYING THE STEER.** The observer's
+t684/t685 board blocks say it plainly — *"the last ~20 ticks were floor-gates + instrument-hardening — real
+work, but they do NOT move the bar"* and *"the geometry NEAR-MISS lever is UNTOUCHED after 2 post-steer
+ticks (both perf/measurement)."* By t687 it was four. **The reason is structural and worth recording:** my
+in-context launch prompt says verbatim *"Do NOT grind the CSS-layout tail — it is in diminishing returns"*
+and lists long-finished work as CO-#1. The observer fixed both that prompt and the board's own tick-159
+anti-layout block, but **a launch-prompt fix only lands on the next relaunch** — so the running agent keeps
+the stale instruction, and it outranks a board steer. Standing rule for me: **the board is newer than my
+prompt, and I must READ its top block each tick rather than grep it for familiar markers** — which is
+exactly how I missed three consecutive new blocks. Full record in `CONSTITUTION-CHECK.md` #52.
+
+### THE MANDATE'S HYPOTHESIS, MEASURED
+
+```text
+  site           dx    dy    dw    dh    absolute PLACEMENT
+  comix.to        0     0     0     7    100.0%
+  desitales2      0    91     0     3      1.2%
+  www.welt.de     0  3077     0     0      2.8%
+  www.agoda.com   1    14     1     1      3.1%
+  keirin.jp       2   206     0     1      0.3%
+  www.ikea.com    0   145     0     0      9.9%
+  playhop.com     0     0    10     7     14.3%
+```
+
+⚠⚠ **`dx` is 0–2 everywhere and `dw`/`dh` are 0 on the WORST sites. The dominant term is `dy` — 91, 145,
+206, 3077 — a pure VERTICAL displacement of correctly-sized boxes.** A box of the right size at the wrong
+`y` is not a per-box metric error: **something ABOVE it has the wrong height**, and everything below
+inherits the shift. The two sites that DO carry a text-metric term (`comix` dh=7, `playhop` dw=10 dh=7) are
+the two with the **highest** placement scores, so the metric constant is the residual, not the lever.
+
+That does not say our font metrics are perfect. It says they are not what holds SHAPE at ~6%, and a tick
+spent tuning a tolerance constant would have moved nothing — which is what this measurement bought.
+
+### AND FIRST DIVERGENCE ALREADY POINTS AT THE CAUSE
+
+```text
+  keirin.jp    after …/nav:1/…/a:1/img:1   → …/nav:1/div:2      off by dy=70
+  desitales2   after …/nav:3/div:1/div:2   → …/div:5/div:2      off by dy=-73
+  welt.de      after …/p:2                 → …/article:1/div:2  off by dy=285
+  agoda        after body/div:23/div:5     → body/div:23/div:9  off by dy=631
+```
+
+`keirin`'s divergence begins **immediately after an `<img>`**; `desitales2`'s is **NEGATIVE** — ours is 73px
+*higher*, so we are missing content above rather than adding it. `Cc4e6 geometry: <img>` is a **67-site**
+cluster and this project has already recorded an `<img>` laying out at **784×0**.
+
+TICK SHAPE: measurement (the mandate's own hypothesis tested and refuted with its own instrument, the real
+term identified, and the aiming data written down) + the due constitution check. Bar 0 untouched; **no
+source changed.**
+Gates: none — nothing changed. A gate on a tolerance constant would have ratcheted in the wrong lever.
+WIKI: `docs/wiki/box-layout.md` — "SHAPE is not a per-box metric error — it is one wrong HEIGHT above the
+content".
+
+### WALL-TIME AUDIT — DUE THIS TICK (every 20; last at t668)
+
+```text
+  175s  P  (parity, 72/72 vs headless Chrome)   ███████████████████ 77%
+   23s  T  (crate tests)                        ██ 10%
+   16s  B  (build)                              █  7%
+    8s  G6 · 5s G1 · 4s D · 2s F · everything else 0s
+```
+
+**`P` is 77% of the wall, and the cause is item 2 of the audit's own list — PARALLELISM, serialised by a
+false dependency.** `tests/wpt/src/parity.rs` loops the 72 committed fixtures and calls
+`chrome::capture_boxes(&html, …)` **once per fixture, serially**, each spawning a full headless Chrome
+(~2.4s of process startup). The captures are completely independent: nothing in fixture *n* informs
+fixture *n+1*. Bounded-concurrent captures would take **175s → ~25s with the identical assertion** — same
+live Chrome, same 72 comparisons, no caching, no sampling. `parity.rs` is agent territory, so this is
+takeable; it is a real change to the wall's core gate and it is sized as its own tick, not smuggled into
+a measurement one.
+
+⚠ **CACHING Chrome's answers is REJECTED, and the reason is a lesson already on file.** The fixtures are
+committed and static, so Chrome's boxes for them look like a constant worth memoising — but that converts
+a LIVE oracle into a RECORDED one, and *"a gate whose expected value came from MEMORY tests the memory."*
+A Chrome update that changed a box would then be invisible, which is the one thing the parity gate exists
+to notice. Rejected on rigor, not on effort — recorded here so the next audit does not re-derive it as a
+good idea.
+
+Nothing was trimmed this audit. `LAST_WALL_AUDIT` set to 688.
+PATTERN: none — a measurement. [no-pattern]
+
+NEXT — **ONE TICK, NAMED, AND NO MORE MEASUREMENT UNTIL A CLUSTER MOVES:** take `keirin.jp`'s first
+divergence (`after …/a:1/img:1`, dy=70), find the element whose HEIGHT is wrong, fix it, and name the
+cluster whose site-count must shrink in the next sweep — `Cc4e6 <img>` (67 sites), `C7eb9 <body>` (93), or
+`C01ca <div>` (111). The aiming is done; the next tick is a fix.

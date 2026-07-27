@@ -1631,3 +1631,48 @@ five-minute probe killing a good-sounding mechanism; the cost of *publishing* th
 paragraph and it is what makes the next attempt cheap.
 
 [[subpixel-error-compounds]] [[symptom-names-wrong-organ]]
+
+## SHAPE is not a per-box metric error — it is one wrong HEIGHT above the content (tick 688)
+
+The rendering-gap mandate hypothesises that *"ONE shared constant (font-metrics / line-height / margin /
+border-box rounding) likely snaps MANY boxes into 8px tolerance at once."* The sweep already computes the
+per-site median delta, so the hypothesis is testable without building anything:
+
+```text
+  site           dx    dy    dw    dh    absolute PLACEMENT
+  comix.to        0     0     0     7    100.0%
+  desitales2      0    91     0     3      1.2%
+  www.welt.de     0  3077     0     0      2.8%
+  www.agoda.com   1    14     1     1      3.1%
+  keirin.jp       2   206     0     1      0.3%
+  www.ikea.com    0   145     0     0      9.9%
+  playhop.com     0     0    10     7     14.3%
+```
+
+⚠⚠ **`dx` is 0–2 everywhere, and `dw`/`dh` are 0 on the worst sites. The dominant term is `dy`** — 91, 145,
+206, 3077 — a pure **vertical displacement of correctly-sized boxes.**
+
+A box of the right size at the wrong `y` is not a per-box metric error. **Something ABOVE it has the wrong
+height**, and every box below inherits the shift. The two sites that *do* carry a text-metric term
+(`comix.to` dh=7, `playhop` dw=10 dh=7) are the two with the **highest** placement scores — so the metric
+constant is the residual, not the lever. This does not say font metrics are perfect; it says they are not
+what is holding SHAPE at ~6%.
+
+### FIRST DIVERGENCE already points at the cause
+
+```text
+  keirin.jp    after …/nav:1/…/a:1/img:1   → …/nav:1/div:2      off by dy=70
+  desitales2   after …/nav:3/div:1/div:2   → …/div:5/div:2      off by dy=-73
+  welt.de      after …/p:2                 → …/article:1/div:2  off by dy=285
+  agoda        after body/div:23/div:5     → body/div:23/div:9  off by dy=631
+```
+
+`keirin`'s divergence begins **immediately after an `<img>`**, and `desitales2`'s is **negative** — ours is
+73px *higher* than Chrome's, i.e. we are missing content above rather than adding it. `Cc4e6 geometry:
+<img>` is a **67-site** cluster, and this project has already recorded an `<img>` laying out at **784×0**.
+An image whose height is wrong shifts every sibling after it.
+
+**The lever, therefore, is the height of a box above the content — starting with `<img>` — and not a
+tolerance constant.** Measured before building, which is the only reason it is one tick instead of several.
+
+[[subpixel-error-compounds]] [[symptom-names-wrong-organ]] [[default-object-size-not-ua-width]]
