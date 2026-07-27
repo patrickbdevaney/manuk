@@ -692,6 +692,84 @@ pub fn rows_from_tsv(path: &Path) -> Result<Vec<Fidelity>> {
         .collect())
 }
 
+/// **The SHAPE spread of every site this file measured more than once** — `(name, min, max, runs)`,
+/// worst spread first, and only for sites with a real repeat and a real score.
+///
+/// [`rows_from_tsv`] collapses repeats to the last row, which is the right tie-break for a resumed
+/// sweep and **throws away the only evidence of the instrument's own error bar.** That mattered:
+/// tick 657 re-ran two live sites three times each on ONE unchanged tree and measured
+///
+/// ```text
+///   keirin.jp      0.3673 .. 0.4044   Δ 3.7 pts over 3 runs
+///   www.ikea.com   0.5158 .. 0.5186   Δ 0.3 pts over 3 runs
+/// ```
+///
+/// — so a 0.7-point per-site "regression" the loop was about to attribute to a code change was five
+/// times inside one site's own noise. A live page is not a fixture: its ads, its prices and its node
+/// count move between runs. **A per-site delta smaller than that site's own spread is not a small
+/// result; it is not a result.** The number exists now instead of being rediscovered by hand, which
+/// is the difference between an instrument and a habit.
+pub fn shape_spreads(rows_text: &str) -> Vec<(String, f64, f64, usize)> {
+    let mut by_site: std::collections::HashMap<String, Vec<f64>> = std::collections::HashMap::new();
+    let mut order: Vec<String> = Vec::new();
+    for line in rows_text.lines() {
+        let line = line.trim_end();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let f: Vec<&str> = line.split('\t').collect();
+        if f.len() < 3 {
+            continue;
+        }
+        // An unscored row contributes NOTHING to a spread. A site that rendered once and bot-walled
+        // once has not been measured twice — reading `-` as a score would manufacture a spread of
+        // the site's whole range out of a row that never had a number.
+        let Some(shape) = f[2].parse::<f64>().ok() else {
+            continue;
+        };
+        let name = f[0].to_string();
+        if !by_site.contains_key(&name) {
+            order.push(name.clone());
+        }
+        by_site.entry(name).or_default().push(shape);
+    }
+    let mut out: Vec<(String, f64, f64, usize)> = order
+        .into_iter()
+        .filter_map(|n| {
+            let v = by_site.remove(&n)?;
+            if v.len() < 2 {
+                return None;
+            }
+            let min = v.iter().cloned().fold(f64::INFINITY, f64::min);
+            let max = v.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+            Some((n, min, max, v.len()))
+        })
+        .collect();
+    // Worst spread first: the site whose number is least trustworthy is the one to read first.
+    out.sort_by(|a, b| (b.2 - b.1).total_cmp(&(a.2 - a.1)));
+    out
+}
+
+/// Print the spread block, if this file has one. Deliberately printed ABOVE the certificate: a
+/// reader who sees the headline first has already formed an opinion about a delta.
+pub fn spread_report(rows_text: &str) {
+    let spreads = shape_spreads(rows_text);
+    if spreads.is_empty() {
+        return;
+    }
+    println!("\n  ⚠ INSTRUMENT SPREAD — sites this file measured more than once:");
+    for (name, min, max, runs) in &spreads {
+        println!(
+            "      {name:<28} {min:.4} .. {max:.4}   Δ {:.1} pts over {runs} runs",
+            (max - min) * 100.0
+        );
+    }
+    println!(
+        "    A per-site delta smaller than that site's own spread is NOISE, not a result. Live \n\
+         \x20   pages move between runs; only a fixture is entitled to a single reading."
+    );
+}
+
 /// Print the certificate block — the one place a sweep's headline is allowed to come from.
 pub fn certificate_report(rows: &[Fidelity]) {
     let c = certificate(rows);
@@ -2368,5 +2446,71 @@ mod falsify_tests {
                 f.break_desc, f.term
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod spread_tests {
+    use super::shape_spreads;
+
+    /// The rows a real repeated sweep writes: `name \t coverage \t shape \t ...`.
+    const ROWS: &str = "\
+#name\tcoverage\tshape\th_overflow\toverlap\treading_order\tdead_target\tshape_n\treason
+www.ikea.com\t1.000000\t0.518625\t0\t5\t19\t0\t698\t
+keirin.jp\t0.714489\t0.404427\t3\t5\t27\t0\t497\t
+www.ikea.com\t1.000000\t0.515759\t0\t5\t19\t0\t698\t
+keirin.jp\t0.712000\t0.367347\t3\t5\t32\t0\t490\t
+www.desitales2.com\t1.000000\t0.637124\t0\t0\t10\t0\t598\t
+supjav.com\t-\t-\t0\t0\t0\t0\t0\tbot-wall-403
+supjav.com\t-\t-\t0\t0\t0\t0\t0\tbot-wall-403
+";
+
+    /// The measurement this exists for: **a site measured twice on one tree has a range, and the
+    /// range is the error bar every per-site delta must clear.** These are tick 657's real readings.
+    #[test]
+    fn a_site_measured_twice_reports_its_range_worst_first() {
+        let got = shape_spreads(ROWS);
+        let names: Vec<&str> = got.iter().map(|(n, ..)| n.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["keirin.jp", "www.ikea.com"],
+            "expected exactly the two repeated SCORED sites, worst spread first — got {got:?}"
+        );
+
+        let (_, min, max, runs) = &got[0];
+        assert_eq!(*runs, 2);
+        assert!(
+            (*min - 0.367347).abs() < 1e-9 && (*max - 0.404427).abs() < 1e-9,
+            "keirin's range is not its measured min..max: {min}..{max}"
+        );
+        // 3.7 points — five times the 0.7-point "regression" tick 657 was about to attribute to a
+        // code change. If this ever computes as ~0, the spread has stopped being reported and every
+        // per-site comparison silently loses its error bar again.
+        assert!(
+            (max - min) * 100.0 > 3.0,
+            "the spread collapsed to {:.2} pts — a spread of zero is how a noisy number starts \
+             looking like a precise one",
+            (max - min) * 100.0
+        );
+    }
+
+    /// **An unscored row is not a measurement**, and must never widen a spread. A site that rendered
+    /// once and bot-walled once was measured ONCE; reading `-` as a score would manufacture a spread
+    /// covering the site's whole range out of a row that never carried a number.
+    #[test]
+    fn unscored_rows_and_single_readings_produce_no_spread() {
+        let got = shape_spreads(ROWS);
+        assert!(
+            !got.iter().any(|(n, ..)| n == "supjav.com"),
+            "a site with two UNSCORED rows was given a spread — `-` was parsed as a number"
+        );
+        assert!(
+            !got.iter().any(|(n, ..)| n == "www.desitales2.com"),
+            "a site measured ONCE was given a spread"
+        );
+        assert!(
+            shape_spreads("").is_empty() && shape_spreads("#only a header\n").is_empty(),
+            "an empty or header-only file must yield no spread rows"
+        );
     }
 }

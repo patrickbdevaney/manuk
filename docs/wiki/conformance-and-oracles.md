@@ -1603,3 +1603,74 @@ the point: `ThinOverlap` is **ours**, and reads as a coverage failure wearing an
 t650 and `thin-overlap` at t653. So the gate asserts against the **recorded** numbers from the sweep
 row, never a re-fetch: *a gate whose expected value comes from today's network is a gate that measures
 the network.*
+
+## A live site's fidelity score has an error bar, and it is bigger than most of our deltas (tick 657)
+
+**Every per-site fidelity comparison this loop has made was a single reading against a single
+reading.** Tick 657 measured what that is worth. Two live HEAD sites, re-rendered three more times
+each on **one unchanged tree**:
+
+```text
+  keirin.jp      0.4044  ->  0.3972  ->  0.3673      spread 3.7 pts    n 497 / 496 / 490
+  www.ikea.com   0.5186  ->  0.5158  ->  0.5158      spread 0.3 pts    n 698 / 698 / 698
+```
+
+`keirin.jp` varies by **3.7 SHAPE points between consecutive runs of the same binary.** The tick was
+one paragraph from reporting a 0.7-point "regression" caused by the previous two ticks — a number
+five times inside the site's own noise.
+
+### Why a live site is not a fixture
+
+A fixture is entitled to a single reading; a live site is not. Its content, its ads, its A/B bucket
+and its node count move underneath the measurement — `keirin`'s scored population drifted 497 → 490
+across three consecutive runs, and `welt.de` has read 2957 / 3060 / 3092 / 3149 across four sweeps.
+The score's denominator is *the thing being measured*, so a page that changes changes the score
+without anything in the engine changing at all.
+
+**The rule this yields, and it is not "run more sweeps":**
+
+> **A per-site delta smaller than that site's own spread is not a small result. It is not a result.**
+
+The site's spread is not a global constant either — `ikea` is 0.3 points and `keirin` is 3.7 on the
+same day. The error bar is **per site**, and it has to be measured on the same tree as the delta.
+
+### This does not retract the deltas that were real
+
+Tick 654 moved `keirin` **+38.6 points**. That is ten times the spread measured here, which is
+precisely what makes it a result and the three sub-point deltas after it not. The distinction was
+always the error bar; the loop simply did not have one, so it could not tell a finding from a
+fluctuation and had no way to know which it was looking at.
+
+### The instrument now carries it
+
+`rows_from_tsv` collapses repeated rows for a site to the **last** one. That is the right tie-break
+for a resumed or chunked sweep (see its own doc comment — the denominator must not grow every time a
+run is resumed) and it **throws away the only evidence of the spread**, which is why the number above
+had to be rediscovered by hand from a file that already contained it.
+
+`fidelity::shape_spreads` reads the accumulated rows and `certificate --rows` prints the block
+**above** the certificate — deliberately, because a reader who sees the headline first has already
+formed an opinion about a delta:
+
+```text
+  ⚠ INSTRUMENT SPREAD — sites this file measured more than once:
+      keirin.jp                    0.3673 .. 0.4044   Δ 3.7 pts over 4 runs
+      www.ikea.com                 0.5158 .. 0.5186   Δ 0.3 pts over 4 runs
+    A per-site delta smaller than that site's own spread is NOISE, not a result.
+```
+
+**An unscored row contributes nothing.** A site that rendered once and bot-walled once was measured
+*once*; parsing `-` as a score would manufacture a spread covering the site's entire range out of a
+row that never carried a number. `spread_tests` asserts both halves — the range is the measured
+min..max, and unscored rows and single readings yield nothing — and is RED-proven by collapsing the
+repeat check, at which point every site reports a range of zero. **A spread that silently becomes
+zero is a noisy number starting to look like a precise one**, which is the failure this whole block
+exists to make impossible.
+
+### The general form, which is the fourth time this project has paid for it
+
+> **Every number has a harness, and the harness is part of the number** (`STATUS.md`, Lesson 4).
+
+This is that lesson in its measurement-noise form. The earlier three were about *whose* time a
+metric charged; this one is about *how precise* a metric is entitled to sound. Both are the same
+question — what else moved? — and the answer here was: the website did.

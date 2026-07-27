@@ -30003,3 +30003,114 @@ suite; **it is not this tick's** (the function and its test are byte-identical t
 from the nearest hunk). It is a real ESM-graph defect and it is **not in the wall**, which is the more
 interesting half — `gates-not-in-the-wall` again. **(3)** the other `join_all` fan-outs t655 named and
 deliberately left: `pump_page_fetches` and the script pass.
+
+## Tick 657 — the sweep three ticks owed, and what it says about them (2026-07-27)
+
+HYPOTHESIS: constitution check #48 (t656) named this tick out loud, and the finding it acted on was
+that I had written the same debt into three consecutive NEXT lists without paying it once:
+
+> t654, t655 and t656 are three independent placement root causes, each measured on ONE page, landed
+> against a SHAPE number nobody has re-measured. t654 changed what a budget-exhausted site renders;
+> t655 changed what it renders it *with*; t656 changed where every picture on it sits.
+
+Each is individually well-founded — RED-proven gate, control run, named mechanism. The *aggregate*
+claim ("placement fidelity is improving") is unmeasured, and check #47's standing clause is explicit
+that **a fix argued in terms of "a large fraction of the web" owes a CORPUS measurement, not a
+library one.** So: the 20 HEAD sites of `corpus-v2.tsv`, the same slice as t650/t653, on this tree.
+
+The falsifiable question, stated before the numbers arrive so it cannot be revised into a success:
+**did SHAPE move on sites other than the one each fix was found on, and did the unscored/failed rate
+move at all?** t602 named the binding constraint as the 64% unscored/failed rate, not the score — and
+three ticks of load-deadline work went straight at the timing half of that. If the corpus does not
+move, that is the finding, and it is worth more than a fourth mechanism.
+
+**IT DID NOT MOVE, AND THE CONTROL SAYS I COULD NOT HAVE SEEN IT IF IT HAD.**
+
+Twenty HEAD sites, this tree, chunked five at a time so one stuck site costs one chunk:
+
+```text
+  sites 20 · scored 4 · shape >=0.75 on 0 (0.0%)
+  16 of 20 UNSCORED — 5x bot-wall-403, 4x unreachable, 2x timeout-300s, 1x empty-202,
+                      1x probe-blocked, 1x render-failed, 2x shell-only
+```
+
+Against t654's post-fix reading of the same four scored sites:
+
+```text
+                   t654      t657        delta
+  keirin.jp       0.4070    0.3996      -0.7 pts
+  www.welt.de     0.6719    0.6708      -0.1 pts
+  www.ikea.com    0.5215    0.5158      -0.6 pts
+  www.desitales2  0.6371    0.6371       0.0     <- byte-identical, third sweep running
+```
+
+I was one paragraph away from writing *"t655 and t656 cost 0.7 points on keirin"*. **Then I ran the
+control the t654 lesson demands** — the same two live sites, three more times, on this one unchanged
+tree:
+
+```text
+  keirin.jp      0.4044  ->  0.3972  ->  0.3673      spread 3.7 pts   (n 497 / 496 / 490)
+  www.ikea.com   0.5186  ->  0.5158  ->  0.5158      spread 0.3 pts   (n 698 / 698 / 698)
+```
+
+**keirin's own run-to-run spread is 3.7 points — five times the "regression" I was about to report,
+on a tree that did not change between the readings.** A live page is not a fixture: its content, its
+ads and its node count move underneath the measurement. So the honest statement of the result is not
+*"t655 and t656 regressed keirin"*; it is:
+
+> **Three placement mechanisms landed, and the corpus moved by less than one site's noise.** On the
+> only byte-reproducible site in the slice, it moved by nothing at all.
+
+That is a real finding and it is not a comfortable one. It also does **not** retract t654: +38.6
+points on keirin is ten times the spread measured here, which is exactly what makes that a result and
+these three not. The distinction is the error bar, and until this tick the loop did not have one.
+
+### THE UNSCORED RATE IS THE CONSTRAINT, AND NOTHING I BUILT WENT AT IT
+
+t602 named the binding constraint as the 64% unscored/failed rate, not the score. It is **80%** here,
+and **2 of the 16 unscored rows are timeouts.** The other fourteen are bot walls, dead hosts, an empty
+202, a blocked probe and app shells that render three nodes. Three consecutive ticks of load-deadline
+work attacked *timing* — the one category that accounts for an eighth of the problem. The mechanisms
+were real; the targeting was not, and no instrument said so because nobody had asked the corpus since
+t626.
+
+### SO THE INSTRUMENT NOW CARRIES ITS OWN ERROR BAR
+
+`rows_from_tsv` collapses repeats to the last row — the right tie-break for a resumed sweep, and it
+**throws away the only evidence of the spread.** I had to rediscover by hand a number the file
+already contained. It does not any more: `shape_spreads` reads the accumulated rows and
+`certificate --rows` prints, above the headline where an opinion has not yet formed,
+
+```text
+  ⚠ INSTRUMENT SPREAD — sites this file measured more than once:
+      keirin.jp                    0.3673 .. 0.4044   Δ 3.7 pts over 4 runs
+      www.ikea.com                 0.5158 .. 0.5186   Δ 0.3 pts over 4 runs
+    A per-site delta smaller than that site's own spread is NOISE, not a result.
+```
+
+An unscored row contributes nothing to a spread — a site that rendered once and bot-walled once was
+measured *once*, and reading `-` as a score would manufacture a spread covering the site's whole
+range out of a row that never carried a number.
+
+TICK SHAPE: measurement (the HEAD-20 certificate on this tree, the debt three ticks owed), plus the
+one instrument change the measurement itself demanded — the error bar it needed and did not have.
+Bar 0 untouched; no engine source changed.
+Gates: `fidelity::spread_tests` — two tests over tick 657's real readings, RED-proven by collapsing
+the repeat check (both fail: the sites report a range of zero, and single-reading sites appear). The
+first asserts the range is the measured min..max and that it exceeds 3 points, so a spread that
+silently collapses to zero — a noisy number starting to look like a precise one — stops the run. The
+second asserts that unscored rows and single readings produce **no** spread.
+⚠ STANDING, SEVENTH REPORT: `manuk-wpt`'s own tests are not in the wall (`verify.sh` is
+harness-owned), so these two run only when something runs them.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "a live site's score has an error bar".
+PATTERN: none — this tick measures, it does not unlock a class. [no-pattern]
+
+NEXT: **(1) THE UNSCORED RATE, aimed at the population that actually makes it up.** 14 of 16 unscored
+rows are not timing: 5 bot-wall-403, 4 unreachable, 1 empty-202, 1 probe-blocked, 2 shell-only, 1
+render-failed. t626 already ruled the bot walls a deliberate ceiling (15/20), which leaves the four
+`unreachable` hosts, `empty-202`, `probe-blocked` and the two `shell-only` rows — and each needs a
+diagnosis before a fix, not after. **(2) `agoda` renders 13 nodes and books `render-failed`** — t652
+named its cause (injected scripts fetched after the event loop has already spun to its 20,000-task
+ceiling) and did not fix it; it is the one unscored row with a mechanism already written down.
+**(3) `scan_static_import_specifiers` still has a failing unit test on `main`** (t656), and it is
+still not in the wall.

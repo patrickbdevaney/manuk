@@ -196,6 +196,11 @@
   - L1501 · The remembered reproducer that no longer reproduces (tick 650)
   - L1529 · 100% of nothing is 100% (tick 651)
   - L1575 · The rule could name the oracle failing us, and had no word for us failing (tick 653)
+  - L1607 · A live site's fidelity score has an error bar, and it is bigger than most of our deltas (tick 657)
+  - L1622 · Why a live site is not a fixture
+  - L1637 · This does not retract the deltas that were real
+  - L1644 · The instrument now carries it
+  - L1670 · The general form, which is the fourth time this project has paid for it
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1124,4 +1129,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1039 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1044 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

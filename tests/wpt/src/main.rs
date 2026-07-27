@@ -101,6 +101,12 @@ fn run() {
                     "certificate over {} accumulated site row(s) from {p}",
                     rows.len()
                 );
+                // The spread FIRST — `rows_from_tsv` keeps the last row per site, so by the time the
+                // certificate prints, the evidence that a site was measured three times with a
+                // 3.7-point range is already gone. See `fidelity::shape_spreads`.
+                if let Ok(text) = std::fs::read_to_string(&p) {
+                    manuk_wpt::fidelity::spread_report(&text);
+                }
                 manuk_wpt::fidelity::certificate_report(&rows);
             }
             Err(e) => {
