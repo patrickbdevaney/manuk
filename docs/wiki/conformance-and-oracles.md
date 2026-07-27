@@ -1525,3 +1525,49 @@ ASAN.* It is not covered by any current reproducer.
 > remembered.** Signature-matching against a parked ticket is how a live crash gets filed as an old
 > one; the reproducer is the only part of the note that can be checked, so check it before inheriting
 > the verdict. Four matching marks argued for the memory. One command falsified it.
+
+## 100% of nothing is 100% (tick 651)
+
+`www.agoda.com`, a top-100k HEAD site, renders as a **completely blank white page** in this engine.
+The certificate reported it as:
+
+```text
+  page                       visual   COVERAGE  missing misplaced verdict
+  www.agoda.com               69.9%   100.0%        0        13      ok
+```
+
+Four independent guards were in position and every one of them missed it, each for its own reason:
+
+| guard | why it missed |
+|---|---|
+| **COVERAGE 100%** | computed against the oracle's `file://` probe, which built a **13-element shell**. We had all 13. |
+| **`ShellOnly`** | counts the oracle's SAMPLE SIZE, and 13 clears the floor — the guard written for this shape of lie missed it by a threshold. |
+| **VISUAL 69.9%** | most of a page is background either way. The instrument's own caveat (*"an absent sidebar moved it <1 point"*) arriving as a false PASS. |
+| **SHAPE 0.0%** | did fire — but it is reported as a *placement* number, so it sends you hunting a layout bug on a page that has no layout. |
+
+> **They are all DOM-side measurements, and the DOM was fine.** The elements exist, they have boxes,
+> they compare. No amount of care on that side can see that the paint is empty.
+
+The fix is not a better DOM check; it is the **other population**, which §6.4 already asks for and
+which was sitting unused: both screenshots are in hand when `compare()` runs. **Ink** — the fraction
+of blocks differing from the image's own modal block colour — is deliberately *self-relative*, so it
+asks *"did this engine draw anything"* rather than *"is this page white"*: a dark theme is not blank,
+and a wrong background is not blank.
+
+The thresholds are **measured, not chosen** (t650 HEAD-20): `agoda` **0.00%** against every genuine
+render at **≥1.07%** (`aparat` 1.07 · `keirin` 8.11 · `desitales2` 22.0 · `ebay` 25.6 · `ikea` 33.6 ·
+`welt` 76.1). A gap that wide either side of the line is what makes it a constant instead of a knob.
+
+**The two guard cases carry the design, and a blank-detector without them is worse than none:**
+
+- The **oracle** must clear 10% ink for our 0% to mean anything — `comix` (0.00% Chrome-side) and
+  `naukri` (1.92%) are oracle shells, and reporting those as our render failures is a false accusation.
+- A page rendered **badly** is not a page rendered **not at all**: `keirin` at 8.11% ink / 2.2% shape
+  must stay SCORED. **Excusing our worst real renders as unmeasurable is how a certificate launders
+  its own failures** — the same disease as the false pass, pointed the other way.
+
+**The general shape:** when a metric's denominator comes from the thing being measured, it can be
+satisfied by measuring less. Coverage over the oracle's shell, a ratio over 13 elements, a pixel
+score dominated by background — each is a number that gets *easier* as the page gets *emptier*. The
+only reliable defence is a second population that fails differently, not a stricter threshold on the
+first.

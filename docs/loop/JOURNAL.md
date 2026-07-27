@@ -29412,3 +29412,113 @@ now the top Bar-0, no longer coverable by t126's dead reproducer, needs an ASAN 
 and most stubborn gap, and `keirin` 2.2% / `agoda` 0.0% are the cheapest threads.
 **(3) A corpus that can see a library fix**, since HEAD-20 provably cannot. Carried from t648: the
 MSRV question (observer call) and Opus against the RFC vectors.
+
+## Tick 651 — the certificate said `verdict ok` about a blank white page (2026-07-27)
+
+HYPOTHESIS: t650 ranked PLACEMENT as the largest remaining gap — shape ≥0.75 on **0 sites at t611,
+t626 and t650** — and named `agoda` (0.0%) and `keirin` (2.2%) as the cheapest threads. Start with
+`agoda`.
+
+**I opened the side-by-side first, per the instrument's own instruction — `THE SCORE GATES; THE
+EYEBALL DIAGNOSES` — and there was no placement bug to find. Our render of `agoda` is a completely
+blank white page.** Chrome renders the full site. And the certificate's own table says:
+
+```text
+  page                       visual   COVERAGE  missing misplaced verdict
+  www.agoda.com               69.9%   100.0%        0        13      ok
+```
+
+> **`verdict ok`, `COVERAGE 100.0%`, `missing 0` — on a page of which we drew nothing at all.**
+
+### Why every existing guard let it through
+
+Not one of the four non-delusion guards is positioned to see this, and each fails for its own reason:
+
+- **COVERAGE** is computed against the oracle's `file://` probe, which built a **13-element shell**
+  (t614's known limitation). We had all 13. **100% of nothing is 100%.**
+- **`ShellOnly`** counts the oracle's SAMPLE, and 13 clears the floor — so the guard written for
+  exactly this shape of lie is one threshold away from catching it and does not.
+- **VISUAL** scored **69.9%**, because most of a page is background either way. The instrument prints
+  the warning itself — *"an entirely absent sidebar moved it <1 point"* — and here that caveat
+  arrives as a **false pass** rather than a caveat.
+- **SHAPE** did fire (0.0%, n=13), which is why `agoda` was on the work list at all. But it is
+  reported as a *placement* number, so it sent me to look for a layout bug on a page with no layout.
+
+**Every one of them is a DOM-side measurement, and the DOM was fine.** The elements exist, they have
+boxes, they compare. Nothing on that side can see that the paint is empty.
+
+### The check was available for free, in the other population
+
+`DAILY-DRIVER-CERTIFICATION.md` §6.4 already asks for it — *measure each headline two independent
+ways, and a disagreement means one of them is lying, so investigate before believing either.* Both
+screenshots are already in hand when `compare()` runs. The DOM paths said 100%; the **pixels** say we
+drew nothing; the pixels are right.
+
+So `compare()` now measures **ink** — the fraction of blocks differing from the image's own modal
+block colour. Self-relative on purpose: it asks *"did this engine draw anything on this page"*, never
+*"is this page white"*, so a dark-themed site is not blank and a wrong background colour is not
+blank. **The thresholds are measured, not chosen** — across the t650 HEAD-20 renders:
+
+```text
+  manuk_ink   0.00%   chrome_ink  35.41%   www.agoda.com      <-- drew NOTHING
+  manuk_ink   1.07%   chrome_ink   0.91%   www.aparat.com
+  manuk_ink   8.11%   chrome_ink  83.04%   keirin.jp
+  manuk_ink  22.00% … 76.11%                desitales2 · ebay · ikea · welt
+  manuk_ink   0.00%   chrome_ink   1.92%   www.naukri.com     <-- the ORACLE's shell
+  manuk_ink   0.00%   chrome_ink   0.00%   comix.to           <-- both shells
+```
+
+`agoda` at **0.00%** against every genuine render at **≥1.07%**. The gap either side of the line is
+the whole reason it is a constant and not a knob — and it is classified `RenderFailed`, which already
+documents itself as *"our own bug rather than a property of the origin, and the one that most
+deserves to count against the score."*
+
+⚠ **THE TWO GUARD CASES ARE THE POINT OF THE GATE, NOT DECORATION.** A blank-detector that fires too
+eagerly launders our worst work as unmeasurable, which is the same disease pointed the other way:
+
+- `comix`/`naukri` — **the ORACLE drew nothing.** That is `ShellOnly`'s job; reporting it as our
+  render failure would be a false accusation, so the oracle must clear 10% ink for our 0% to mean
+  anything.
+- `keirin` — **8.11% ink, SHAPE 2.2%.** A terrible render, and it must stay SCORED. *Excusing our
+  worst real renders as unmeasurable is how a certificate launders its own failures.*
+
+Verified end-to-end on the pair it was found on, not just on fixtures:
+
+```text
+  www.agoda.com    verdict ok  ->  UNMEAS [render-failed]
+  www.ikea.com     verdict ok  ->  verdict ok   SHAPE 52.0% (n=698), unchanged
+```
+
+### What is actually wrong with agoda, measured and NOT fixed here
+
+Named because a diagnosis left in a session's head is a diagnosis that did not happen:
+
+```text
+  (timeout: https://cdn6.agoda.net/.../5035-368209fd64ed.js)
+  Unhandled promise rejection ChunkLoadError: Loading chunk 5035 failed.
+  event loop hit its task ceiling — the page is not converging   ×10, ~2.2s each
+  load budget of 12.0s exhausted — painting without images
+```
+
+**A webpack chunk fetch times out → the app never converges → ~22s of spin eats the 12s load budget
+→ blank.** Two hypotheses were tested and *falsified* rather than assumed: no dynamic script fetch
+failed (instrumented: zero failures), and `script.src = url` **does** reflect to the attribute (probed
+directly — a minimal page injects and we fetch it). So it is neither the silent-fetch path nor a
+reflection gap. That is the next tick, and it is an ENGINE tick.
+
+TICK SHAPE: reliability/measurement (a false pass removed from the certificate — the instrument could
+not distinguish a rendered page from a blank one). No engine source changed. Bar 0 untouched.
+**One certificate term moves in the honest direction: `scored` 5 → 4 on HEAD-20, because `agoda`'s
+0.0% shape row was never a measurement.** No ratchet floor was moved to accommodate it, and no floor
+is met by this change.
+Gates: `G_BLANK_RENDER_CANNOT_SCORE` (`fidelity::shape_tests::a_page_we_drew_nothing_of_cannot_score`),
+RED-proven by mutation and verified end-to-end against the real `agoda`/`ikea` pairs.
+⚠ STANDING, FIFTH REPORT: `manuk-wpt`'s tests are not in the wall, so this gate is *gated but not
+watched*. `verify.sh` is harness-owned.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "100% of nothing is 100%".
+PATTERN: [no-pattern] — no browser capability changed.
+
+NEXT: **(1) agoda's chunk timeout / non-converging event loop** — an engine tick, now that the
+certificate can no longer report the page as fine. **(2) Re-read the other `verdict ok` rows against
+ink** — `agoda` was found by eye, and being found by eye means the population was never swept.
+**(3) The live unattributed mozjs heap corruption** (t650) and PLACEMENT, unchanged.

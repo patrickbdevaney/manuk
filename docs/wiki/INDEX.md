@@ -189,6 +189,7 @@
   - L1411 · An unverified MSRV is a claim with teeth (tick 648)
   - L1443 · The instrument must survive the engine dying under it (tick 650)
   - L1501 · The remembered reproducer that no longer reproduces (tick 650)
+  - L1529 · 100% of nothing is 100% (tick 651)
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1107,4 +1108,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1022 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1023 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

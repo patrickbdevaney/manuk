@@ -732,6 +732,55 @@ fn block_means(rgba: &[u8], w: u32, h: u32) -> Vec<[f64; 3]> {
     out
 }
 
+/// **How much of the image is not background** — the fraction of blocks whose colour differs from
+/// the image's own most common block colour.
+///
+/// Deliberately *self-relative*: it asks "did this engine draw anything on this page", never "is
+/// this page white", so a dark-themed site is not blank and a page whose background we got wrong is
+/// not blank either. The modal block is whatever the image itself is mostly made of.
+fn ink(means: &[[f64; 3]]) -> f64 {
+    if means.is_empty() {
+        return 0.0;
+    }
+    // The modal block, quantised so near-identical background blocks count as one colour.
+    let key = |c: &[f64; 3]| {
+        [
+            (c[0] / 8.0) as i64,
+            (c[1] / 8.0) as i64,
+            (c[2] / 8.0) as i64,
+        ]
+    };
+    let mut counts: std::collections::HashMap<[i64; 3], usize> = std::collections::HashMap::new();
+    for m in means {
+        *counts.entry(key(m)).or_default() += 1;
+    }
+    let modal = counts
+        .iter()
+        .max_by_key(|(k, v)| (**v, **k))
+        .map(|(k, _)| *k)
+        .unwrap_or([0; 3]);
+    let n = means
+        .iter()
+        .filter(|m| {
+            let k = key(m);
+            (0..3).any(|i| (k[i] - modal[i]).abs() > 1)
+        })
+        .count();
+    n as f64 / means.len() as f64
+}
+
+/// Below this, an engine drew **nothing** on the page. Measured, not chosen: across the t650 HEAD-20
+/// renders, `agoda` came in at **0.00%** while every site we genuinely rendered was **≥1.07%**
+/// (`aparat` 1.07 · `keirin` 8.11 · `desitales2` 22.0 · `ebay` 25.6 · `ikea` 33.6 · `welt` 76.1).
+/// The gap either side of this line is the whole reason it can be a constant rather than a knob.
+const BLANK_INK: f64 = 0.005;
+
+/// …and the oracle must have drawn enough for "we drew nothing" to mean anything. Below this the
+/// ORACLE is the one that rendered a shell, which is [`Unmeasurable::ShellOnly`]'s job, not this
+/// one: `comix` (0.00%) and `naukri` (1.92%) are Chrome-side shells and must NOT be reported as our
+/// render failures.
+const ORACLE_MIN_INK: f64 = 0.10;
+
 fn load_rgba(path: &Path) -> Result<(Vec<u8>, u32, u32)> {
     let img = image::open(path).with_context(|| format!("opening {}", path.display()))?;
     let rgba = img.to_rgba8();
@@ -772,9 +821,27 @@ pub fn compare(manuk: &Path, chrome: &Path, name: &str) -> Result<Fidelity> {
         probed: 0,
         jarring: [0; 4],
         shape_n: 0,
-        // The PIXEL compare succeeded, so nothing here is unmeasurable. The structural probe runs
-        // separately and sets this if it cannot reach the page.
-        unmeasurable: None,
+        // ── **A PAGE WE DREW NOTHING OF MUST NOT BE ABLE TO SCORE** (certification §6.3: *"a page we
+        // render nothing of scores 0, not 100"*).
+        //
+        // t650's HEAD-20 run reported `www.agoda.com` as **`visual 69.9% · COVERAGE 100.0% ·
+        // missing 0 · verdict ok`** — and the render is a **completely blank white page**. Nothing on
+        // the DOM side could see it: coverage is computed against the oracle's `file://` probe, which
+        // built a 13-element shell, and we "rendered" all 13 of them. 100% of nothing is 100%.
+        // `ShellOnly` did not catch it either, because that guard counts the oracle's SAMPLE and 13 is
+        // over the floor.
+        //
+        // So the check has to come from the other population. §6.4 asks for exactly this — *measure
+        // each headline two independent ways, and a disagreement means one of them is lying.* The DOM
+        // paths said 100%; the PIXELS say we drew nothing; the pixels are right. That disagreement is
+        // available for free here, because both screenshots are already in hand.
+        //
+        // Classified `RenderFailed` rather than a new variant, because it is precisely what that
+        // variant already documents: *"we fetched the page and FAILED TO PAINT IT — the only reason
+        // on this list that is our own bug rather than a property of the origin, and the one that most
+        // deserves to count against the score."*
+        unmeasurable: (ink(&ma) < BLANK_INK && ink(&mb) >= ORACLE_MIN_INK)
+            .then_some(Unmeasurable::RenderFailed),
     })
 }
 
@@ -1325,6 +1392,76 @@ mod shape_tests {
         // An EMPTY sweep never holds. A certificate over zero sites is the most flattering possible
         // reading of an engine and the least informative.
         assert!(!certificate(&[]).holds(), "zero sites is not a pass");
+    }
+
+    /// **G_BLANK_RENDER_CANNOT_SCORE — 100% of nothing is not 100%.**
+    ///
+    /// t650's HEAD-20 run scored `www.agoda.com` as `visual 69.9% · COVERAGE 100.0% · missing 0 ·
+    /// verdict ok` on a render that is a **blank white page**. Coverage is computed against the
+    /// oracle's `file://` probe, which built a 13-element shell; we had all 13, so we "covered" the
+    /// page completely. Visual scored 69.9% because most of a page is background either way — which
+    /// is the instrument's own warning (*"an entirely absent sidebar moved it <1 point"*) arriving as
+    /// a false pass instead of a caveat.
+    ///
+    /// The synthetic images here are built to the same shape as the real pair: ours uniform, the
+    /// oracle's inked. The thresholds are measured (see `BLANK_INK`), and the two guard cases below
+    /// are the two real sites that must NOT trip it.
+    #[test]
+    fn a_page_we_drew_nothing_of_cannot_score() {
+        let dir = std::env::temp_dir().join("manuk-blank-render-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // `frac` of the image gets content; the rest is background. `frac == 0.0` is a blank render.
+        let write = |name: &str, frac: f64| -> std::path::PathBuf {
+            let (w, h) = (256u32, 256u32);
+            let mut buf = image::RgbaImage::from_pixel(w, h, image::Rgba([255, 255, 255, 255]));
+            let rows = (h as f64 * frac) as u32;
+            for y in 0..rows {
+                for x in 0..w {
+                    buf.put_pixel(x, y, image::Rgba([10, 20, 30, 255]));
+                }
+            }
+            let p = dir.join(name);
+            buf.save(&p).unwrap();
+            p
+        };
+
+        // The agoda shape: we drew nothing, the oracle drew a third of the page.
+        let blank = write("blank.png", 0.0);
+        let full = write("full.png", 0.35);
+        let f = super::compare(&blank, &full, "agoda.example").unwrap();
+        assert_eq!(
+            f.unmeasurable,
+            Some(super::Unmeasurable::RenderFailed),
+            "a blank render against an inked oracle is a RENDER FAILURE, whatever the pixel score says"
+        );
+        assert_eq!(
+            certificate(&[f]).scored,
+            0,
+            "and it must not be able to enter the scored set — this is the whole defect: agoda \
+             scored `verdict ok` on a blank page"
+        );
+
+        // GUARD 1 — the ORACLE is the blank one (`comix` 0.00% / `naukri` 1.92% Chrome-side). That is
+        // ShellOnly's job; blaming our renderer for the oracle's shell would be a false accusation.
+        assert_eq!(
+            super::compare(&blank, &write("shell.png", 0.0), "comix.example")
+                .unwrap()
+                .unmeasurable,
+            None,
+            "an oracle that drew nothing either is a SHELL, not our render failure"
+        );
+
+        // GUARD 2 — a page we render BADLY is not a page we failed to render. `keirin.jp` came in at
+        // 8.11% ink with SHAPE 2.2%: terrible, and it must still be SCORED, because excusing our
+        // worst real renders as unmeasurable is how a certificate launders its own failures.
+        let bad = super::compare(&write("sparse.png", 0.081), &full, "keirin.example").unwrap();
+        assert_eq!(
+            bad.unmeasurable, None,
+            "8% ink is a bad render, not an absent one — it must stay in the denominator AND in the \
+             scored set"
+        );
     }
 
     /// **G_CERT_CRASH_LEDGER — a sweep that dies mid-corpus must lose ONE site, not the run.**
