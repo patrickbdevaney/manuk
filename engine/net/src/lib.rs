@@ -876,6 +876,52 @@ pub fn fetch_stats() -> (usize, usize) {
         FETCH_DUPES.load(std::sync::atomic::Ordering::Relaxed),
     )
 }
+/// **START A NAVIGATION: forget what the LAST one could not fetch.**
+///
+/// The per-navigation state here is `FAILED` (the negative cache), `NETWORKED` and `SEEN` (wire
+/// accounting) and `INFLIGHT` (the single-flight locks). `FAILED`'s own doc comment has said
+/// *"Cleared per navigation, so a reload really does retry"* since it was written — and **nothing on
+/// the navigation path ever cleared it.** The only callers of `reset_fetch_stats` were one gate and
+/// one unrelated `manuk-wpt` subcommand, so in the shell, in `Page::load_async` and in the fidelity
+/// sweep the negative cache was effectively **per-PROCESS**.
+///
+/// **What that costs, measured on `www.agoda.com` (tick 683).** Three consecutive navigations in one
+/// process, same document, and the pattern is 100% reproducible:
+///
+/// ```text
+///   draw 1   external scripts ms=1072   ->  65 paths shared with Chrome   SHAPE 50.8%
+///   draw 2   external scripts ms=   9   ->  10 paths shared               SHAPE 10.0%
+///   draw 3   external scripts ms=   4   ->  10 paths shared               SHAPE 10.0%
+/// ```
+///
+/// The first load exhausts its budget on some script fetches, those URLs land in `FAILED`, and **every
+/// later navigation in that process refuses to retry them** — 9ms instead of 1072ms, the app never
+/// boots, and 55 of 65 shared elements vanish. Silently: not one warning is logged, because from the
+/// fetch layer's point of view this is the feature working.
+///
+/// Beyond the sweep it is worse: **pressing reload on a page that half-loaded gives you the same half
+/// load, for the life of the process.** That is precisely what the doc comment promised would not
+/// happen.
+///
+/// Separate from [`reset_fetch_stats`] on purpose: the COUNTERS are what `G_DEDUP` reads, and a
+/// navigation that zeroed them would erase the measurement of itself. This clears caches, not
+/// accounting. The POSITIVE HTTP cache is deliberately untouched — a navigation should still be served
+/// what it already has; only the record of failure is per-navigation.
+pub fn begin_navigation() {
+    if let Some(m) = NETWORKED.get() {
+        m.lock().unwrap().clear();
+    }
+    if let Some(m) = INFLIGHT.get() {
+        m.lock().unwrap().clear();
+    }
+    if let Some(m) = SEEN.get() {
+        m.lock().unwrap().clear();
+    }
+    if let Some(m) = FAILED.get() {
+        m.lock().unwrap().clear();
+    }
+}
+
 pub fn reset_fetch_stats() {
     FETCHES.store(0, std::sync::atomic::Ordering::Relaxed);
     FETCH_DUPES.store(0, std::sync::atomic::Ordering::Relaxed);

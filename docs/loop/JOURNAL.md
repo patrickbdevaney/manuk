@@ -32155,3 +32155,81 @@ bytes, same tree, two outcomes. Diff the two runs' logs rather than theorising. 
 BUDGET** (t678/t679/#51) — the priority inversion, blocked on nine gate files. **(3)** the repeat plan
 should key on whether a site's variance is REPRODUCIBLE within a sweep: three of four repeated sites
 returned byte-identical rows, so six live renders per sweep buy an error bar of zero.
+
+## Tick 683 — a reload inherited the previous load's failures, for the life of the process (2026-07-27)
+
+HYPOTHESIS: t682's NEXT #1 — `agoda`'s render is bimodal on one document (65 shared paths on one draw,
+10 on the next), a 40-point certificate cost, and the instruction was explicit: **diff the two runs'
+logs rather than theorising.** So I ran agoda three times in one process with the phase ledger on.
+
+### THE DIFF, and it is one line
+
+```text
+  draw 1   external scripts ms=1072   ->  65 paths shared with Chrome   SHAPE 50.8%
+  draw 2   external scripts ms=   9   ->  10 paths shared               SHAPE 10.0%
+  draw 3   external scripts ms=   4   ->  10 paths shared               SHAPE 10.0%
+```
+
+100% reproducible, and **not one warning is logged** for the collapse. The first navigation in a process
+works; every one after it is degraded.
+
+### WHAT THAT LED TO — a real bug, hermetically proven
+
+`manuk_net::FAILED` is the per-navigation negative cache, and its own doc comment says *"Cleared per
+navigation, so a reload really does retry."* **Nothing on the navigation path ever cleared it.**
+`reset_fetch_stats()` — the only function that does — had exactly two callers: `g_dedup` itself and one
+unrelated `manuk-wpt` subcommand. So in the shell, in `Page::load_async` and in the fidelity sweep the
+negative cache, and the `NETWORKED`/`SEEN`/`INFLIGHT` sets with it, was effectively **per-PROCESS**.
+
+**The user-visible consequence is the opposite of dedup: pressing reload on a page that half-loaded
+gives you the same half-load, for the life of the process.** A dead CDN at 9am is a dead CDN until the
+browser restarts. This is *the* most common recovery action a person takes, and it did not work.
+
+⚠ Another bug that was written down accurately and never triaged — the comment described the intended
+behaviour, so every reader (me included) assumed it happened. **A doc comment is a claim, and an
+unmeasured claim is a hypothesis with tenure.**
+
+### WHAT LANDED
+
+`manuk_net::begin_navigation()` clears `FAILED`/`NETWORKED`/`SEEN`/`INFLIGHT`, called at the top of
+`Page::load_async`. Three deliberate scoping decisions:
+
+- **Not `Page::load`** — `render_iframe` calls it for a SUBFRAME, and resetting there would clear the
+  parent navigation's state in the middle of it.
+- **Separate from `reset_fetch_stats`** — the COUNTERS are what `G_DEDUP` reads, and a navigation that
+  zeroed them would erase the measurement of itself. This clears caches, not accounting.
+- **The POSITIVE HTTP cache is untouched.** A navigation should still be served what it already has;
+  only the record of FAILURE is per-navigation.
+
+### ⚠ AND IT DID NOT FIX AGODA. SAYING SO IS THE POINT.
+
+Re-measured, three draws: `external scripts` still 4–10ms on draws 2 and 3. **The negative cache was not
+agoda's cause.** The positive HTTP cache serving those scripts is the more likely story and it is not
+yet explained.
+
+⚠ **And agoda is a poor lever for the next attempt** — worth writing down rather than rediscovering:
+across runs the **ORACLE's** own population for that site ranges from **13 paths to 808**. It serves
+Chrome a shell sometimes and a full application other times, so *both sides* of the comparison move.
+t682's retraction established that the oracle was stable at 808 *within one sweep*; across sweeps it is
+not, and t682's wording should be read with that qualification. **A site unstable on both sides cannot
+settle a question about our render** — which also means the 40-point "spread" that opened this thread is
+not cleanly ours either.
+
+So: a genuine, general, hermetically-gated capability fix, found by chasing a site it does not fix. That
+is a better outcome than the reverse, and the honest accounting is that the site remains open.
+
+TICK SHAPE: capability (the reload path — `engine/net` + one call site in `engine/page`). Bar 0 untouched.
+Gates: `G_DEDUP`, extended with both halves of the claim — a second navigation must reach the network
+again (**0 requests without the fix**, RED-proven) and must still make ZERO duplicates within itself,
+because the two are opposites and a retry bought by turning dedup off trades the nytimes bug back in.
+Both lanes checked (`--no-default-features` too).
+WIKI: `docs/wiki/networking.md` — "a reload inherited the previous load's failures, for the life of the
+process".
+PATTERN: `docs/loop/WEB-PATTERNS.md` — the user reloads a page that half-loaded.
+
+NEXT: **(1) WHY IS `external scripts` 9ms ON THE SECOND NAVIGATION AND 1072ms ON THE FIRST, given the
+negative cache is now cleared?** The positive HTTP cache is the remaining suspect and it is a
+hermetic question — a loopback origin, two navigations, count the wire. Do NOT use agoda to answer it.
+**(2) THE PER-CALL LOAD BUDGET** (t678/t679/#51) — the priority inversion, blocked on nine gate files
+that call `load_async` without `finish_loading`. **(3)** the repeat plan should key on whether a site's
+variance is REPRODUCIBLE within a sweep; three of four repeated sites returned byte-identical rows.

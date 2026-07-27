@@ -137,4 +137,48 @@ fn g_dedup_no_duplicate_work_for_one_navigation() {
         "G_DEDUP: {cascades} full cascades for one navigation — the `last_cascade` fingerprint is not \
          holding."
     );
+
+    // ── (3) **A SECOND NAVIGATION MUST RETRY WHAT THE FIRST ONE COULD NOT FETCH** (tick 683). ─────
+    //
+    // The negative cache (`manuk_net::FAILED`) is what keeps this gate's `net_dupes` at zero: a dead
+    // tracker is not asked for again *within a navigation*. Its own doc comment has always said
+    // *"Cleared per navigation, so a reload really does retry"* — and **nothing on the navigation path
+    // ever cleared it.** The only callers of `reset_fetch_stats` were this gate and one unrelated
+    // `manuk-wpt` subcommand, so in the shell, in `Page::load_async` and in the fidelity sweep the
+    // negative cache was effectively **per-PROCESS**.
+    //
+    // The consequence is the opposite of dedup and it is the user-visible one: **pressing reload on a
+    // page that half-loaded gives you the same half-load for the life of the process.** Measured on
+    // `www.agoda.com` — three consecutive navigations, `external scripts` 1072ms → 9ms → 4ms — and
+    // silently, because from the fetch layer's side that is the feature working.
+    //
+    // Every URL in this fixture is on `dedup.invalid`, so every one of them FAILS. A second navigation
+    // must therefore go back to the network; today it did not go at all.
+    let net_after_first = manuk_net::NET_REQUESTS.load(Ordering::Relaxed);
+    let dupes_after_first = manuk_net::NET_DUPES.load(Ordering::Relaxed);
+    let _second = rt.block_on(async {
+        let mut p =
+            manuk_page::Page::load_async(HTML, "http://dedup.invalid/", &fonts, 800.0).await;
+        p.finish_loading(&fonts, 800.0).await;
+        p
+    });
+    let net_second = manuk_net::NET_REQUESTS.load(Ordering::Relaxed) - net_after_first;
+    let dupes_second = manuk_net::NET_DUPES.load(Ordering::Relaxed) - dupes_after_first;
+    eprintln!("  second navigation: NETWORK {net_second} (dupes {dupes_second})");
+    assert!(
+        net_second >= 2,
+        "G_DEDUP: a SECOND navigation to the same page issued {net_second} network requests. The \
+         per-navigation negative cache is not being cleared, so every load after the first inherits \
+         the previous load's failures — a reload of a half-loaded page returns the same half-load for \
+         the life of the process, which is exactly what `FAILED`'s doc comment promises will not \
+         happen."
+    );
+    // ...and dedup still HOLDS within that second navigation. Clearing the negative cache must not
+    // buy the retry by re-fetching everything N times — the two claims are opposites and a fix that
+    // satisfied one by breaking the other would pass a gate that only asserted the first.
+    assert_eq!(
+        dupes_second, 0,
+        "G_DEDUP: the second navigation made {dupes_second} duplicate network requests. The retry was \
+         bought by turning dedup off, which trades the nytimes bug back in for the reload bug."
+    );
 }

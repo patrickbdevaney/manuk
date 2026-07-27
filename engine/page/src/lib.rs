@@ -1831,6 +1831,16 @@ impl Page {
         // Same event shape as the budgeted phases (`load phase done`, `phase`/`ms`/`gave_up`), so
         // `RUST_LOG=manuk_page=info` prints ONE continuous ledger for the whole navigation and every
         // existing grep keeps working. `info`, so asking the question again needs no rebuild.
+        // **A NAVIGATION FORGETS WHAT THE LAST ONE COULD NOT FETCH** (tick 683). The per-navigation
+        // negative cache in `manuk-net` was cleared by exactly two callers, neither of them on the
+        // navigation path, so it was per-PROCESS: the second load of a site inherited every subresource
+        // failure of the first. Measured on `www.agoda.com`, three consecutive loads in one process —
+        // `external scripts` 1072ms → 9ms → 4ms, and 65 shared paths → 10 → 10. Silently, because from
+        // the fetch layer's side that is the feature working. See `manuk_net::begin_navigation`.
+        //
+        // Here and not in `Page::load`, deliberately: `render_iframe` calls `load` for a SUBFRAME, and
+        // resetting there would clear the parent navigation's state in the middle of it.
+        manuk_net::begin_navigation();
         let nav_started = std::time::Instant::now();
         let mut nav_at = nav_started;
         let mut nav_accounted_ms = 0u64;

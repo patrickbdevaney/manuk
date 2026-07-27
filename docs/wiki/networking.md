@@ -1828,3 +1828,51 @@ a client built from `manuk_net::HTTP2_MAX_HEADER_LIST_SIZE`.
   hands the constant to the process client, because a cleartext loopback socket negotiates HTTP/1.1
   and that is a different limit and a different defect. Saying so is cheaper than a gate that quietly
   claims more than it tests.
+
+## A reload inherited the previous load's failures, for the life of the process (tick 683)
+
+`manuk_net::FAILED` is the per-navigation negative cache: a dead tracker is not asked for again while
+one page loads, which is half of what keeps `G_DEDUP` at zero duplicate network requests. Its own doc
+comment has said, since it was written:
+
+> *"Cleared per navigation, so a reload really does retry."*
+
+**Nothing on the navigation path ever cleared it.** `reset_fetch_stats()` — the only function that
+does — had exactly two callers: `g_dedup` itself, and one unrelated `manuk-wpt` subcommand. So in the
+shell, in `Page::load_async` and in the fidelity sweep, the negative cache (and the `NETWORKED` /
+`SEEN` / `INFLIGHT` sets with it) was effectively **per-PROCESS**.
+
+The user-visible consequence is the opposite of dedup: **pressing reload on a page that half-loaded
+gives you the same half-load, for the life of the process.** A dead CDN at 9am is a dead CDN until the
+browser restarts. And it is silent — from the fetch layer's point of view, this is the feature working.
+
+`manuk_net::begin_navigation()` clears `FAILED` / `NETWORKED` / `SEEN` / `INFLIGHT`, and is called at
+the top of `Page::load_async`.
+
+- **Not `Page::load`**, deliberately: `render_iframe` calls `load` for a SUBFRAME, and resetting there
+  would clear the parent navigation's state in the middle of it.
+- **Separate from `reset_fetch_stats`**, deliberately: the COUNTERS are what `G_DEDUP` reads, and a
+  navigation that zeroed them would erase the measurement of itself. This clears caches, not accounting.
+- **The POSITIVE HTTP cache is untouched.** A navigation should still be served what it already has;
+  only the record of *failure* is per-navigation.
+
+`G_DEDUP` now asserts both halves, because they are opposites and a fix could buy one with the other:
+a second navigation must issue network requests again (**0 without the fix — RED**), *and* it must
+still make zero duplicates within itself (a retry bought by turning dedup off trades the nytimes bug
+back in for the reload bug).
+
+### What it did NOT fix, stated plainly
+
+This was found while chasing `www.agoda.com`'s bimodal render — 65 paths shared with Chrome on the
+first navigation in a process, 10 on every one after, with `external scripts` going 1072ms → 9ms → 4ms.
+**The fix did not move it.** Draws 2 and 3 still take 4–10ms in that phase, so the negative cache was
+not the cause there; the positive HTTP cache serving those scripts is the more likely story and it is
+not yet explained.
+
+⚠ And agoda is a poor lever for the next attempt, which is worth writing down rather than rediscovering:
+across runs the **ORACLE's** own population for that site ranges from **13 paths to 808**. The site
+serves Chrome a shell sometimes and a full application other times, so both sides of the comparison
+move. Tick 682's retraction established that within one sweep the oracle was stable at 808; across
+sweeps it is not. A site that is unstable on both sides cannot settle a question about our render.
+
+[[reliability-doctrine]] [[conformance-and-oracles]]

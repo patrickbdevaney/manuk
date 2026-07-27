@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **440** | ticks 1–682 |
-| median tick cycle | **22m** | 439 intervals |
-| median, last 10 | **29m** | 10 intervals |
+| ticks landed | **441** | ticks 1–683 |
+| median tick cycle | **22m** | 440 intervals |
+| median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 396.0h elapsed |
-| median verify wall | **63s** | 379 ticks |
+| **ticks per hour** | **1.11** | 396.6h elapsed |
+| median verify wall | **63s** | 380 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **334**
-* **✅ rows in the capability ledger**: 144 → **352**
+* **✅ rows in the capability ledger**: 144 → **353**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**215 of 440 ticks** (49%) moved a
+**216 of 441 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **215** capability ticks, median cycle **22m**
+* **216** capability ticks, median cycle **22m**
 * median diff per tick: **+240 / −34** lines across 8 files
 
 ## Every tick
@@ -537,5 +537,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **680** | 2026-07-27 15:48 | 1.8h | capability | 63s | +518/−46 | 334 | 81 | 56.0% · | the hang guard was firing on our own clock, and it blamed the page (2026-07-27) |
 | **681** | 2026-07-27 16:36 | 48m | measurement | 63s | +431/−34 | 334 | 81 | 56.0% · | `scored 5 → 6`, and the repeat machinery's first real use exposed two defects (2026-07-27) |
 | **682** | 2026-07-27 17:00 | 24m | measurement | 63s | +267/−125 | 334 | 81 | 56.0% · | a rule whose justification is falsified by the run that motivated it (2026-07-27) |
+| **683** | 2026-07-27 17:40 | 40m | capability | 63s | +266/−33 | 334 | 81 | 56.0% · | a reload inherited the previous load's failures, for the life of the process (2026-07-27) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

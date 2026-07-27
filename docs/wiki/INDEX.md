@@ -1027,6 +1027,8 @@
   - L1787 · The finding underneath the finding: a bucket that assigned blame
   - L1800 · The cheap discriminator, and what it found
   - L1817 · Gating a transport setting honestly
+  - L1832 · A reload inherited the previous load's failures, for the life of the process (tick 683)
+  - L1864 · What it did NOT fix, stated plainly
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -1201,4 +1203,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1112 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1114 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
