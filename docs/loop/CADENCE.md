@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **419** | ticks 1–660 |
-| median tick cycle | **21m** | 418 intervals |
-| median, last 10 | **32m** | 10 intervals |
+| ticks landed | **420** | ticks 1–661 |
+| median tick cycle | **21m** | 419 intervals |
+| median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.08** | 385.6h elapsed |
-| median verify wall | **63s** | 358 ticks |
+| **ticks per hour** | **1.09** | 385.9h elapsed |
+| median verify wall | **63s** | 359 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **346**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**207 of 419 ticks** (49%) moved a
+**207 of 420 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **207** capability ticks, median cycle **21m**
-* median diff per tick: **+237 / −34** lines across 8 files
+* median diff per tick: **+236 / −34** lines across 8 files
 
 ## Every tick
 
@@ -516,5 +516,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **658** | 2026-07-27 05:59 | 27m | capability | 63s | +401/−36 | 330 | 81 | 56.0% · | `unreachable` was four causes wearing one word, and one of them was ours (2026-07-27) |
 | **659** | 2026-07-27 06:26 | 27m | measurement | 63s | +227/−33 | 330 | 81 | 56.0% · | surface audit #38: six gates off the map, and a missing newline that hid a row from every  |
 | **660** | 2026-07-27 06:36 | 10m | measurement | 63s | +115/−32 | 330 | 81 | 56.0% · | the hang guard fires five times per page, so it bounds a drain and not the harm (2026-07-2 |
+| **661** | 2026-07-27 06:57 | 20m | reliability | 63s | +106/−32 | 330 | 81 | 56.0% · | I published "five firings per page" one tick ago, and a Page-level gate says it is ONE (20 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

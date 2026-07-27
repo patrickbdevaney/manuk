@@ -30365,3 +30365,76 @@ its gate — assert the ceiling fires **once**, not five times, for one render. 
 same page and has never been triaged; a page script that throws is a `G_SILENT_FAIL`-class lead with
 a real stack behind it. **(3) `scan_static_import_specifiers`'s failing unit test**, still on `main`,
 still not in the wall — third report.
+
+## Tick 661 — I published "five firings per page" one tick ago, and a Page-level gate says it is ONE (2026-07-27)
+
+HYPOTHESIS: implement t660's named fix — stop the dynamic-script round loop once a round reports the
+page did not converge — with t660's six-line spinner as its gate.
+
+**THE GATE REFUSED THE FIX, AND THEN REFUSED THE FINDING BEHIND IT.**
+
+The signal and the round-loop break were written, compiled and passed. Then the RED-proof, which is
+the step that exists for exactly this:
+
+```text
+  fix enabled    a NON-converging page gave up 1 time(s)   PASS
+  fix DISABLED   a NON-converging page gave up 1 time(s)   PASS      <- it cannot go red
+  control        a CONVERGING page gave up 0 time(s)
+```
+
+**One `Page::load_async` + `finish_loading` of t660's own fixture gives up exactly ONCE, with or
+without the change.** The round loop was never the source: the spinner injects no `<script src>`, so
+`fetch_and_run_dynamic_scripts` breaks on its first round at `pending.is_empty()` and the loop I
+"fixed" is not even entered.
+
+### SO WHERE DID THE FIVE COME FROM? THE HARNESS.
+
+t660 counted `WARN` lines in the output of `manuk-wpt render`, and `manuk-wpt` performs a page load at
+**more than twenty distinct call sites** — `Page::load` then `load_async`, per width, per pass. Five
+log lines were five *loads*, not five rounds of one load. agoda's ten were the fidelity probe's own
+repeated renders.
+
+> **`STATUS.md` Lesson 4, verbatim, and I wrote it into the ledger one tick ago: *every number has a
+> harness, and the harness is part of the number*.** t660 did the right thing in reducing agoda to a
+> six-line fixture — that removed the *site* from the number. It did not remove the *harness*, and the
+> harness was the whole number. A reproducer that shrinks the subject while keeping the instrument has
+> only halved the question.
+
+**t660's claim is RETRACTED**: there is no evidence that the drain's bound fails to bound a
+navigation. `MAX_TASKS_PER_DRAIN` is per drain, one navigation of a self-rescheduling page performs
+one give-up, and the promise beside the constant holds. The `100,000 tasks` and `~20s` figures in
+t660's entry are harness aggregates and should not be read as page cost. What survives from t660 is
+only the part that was measured at the right level and independently: `shell-only` is a
+measurement-architecture ceiling (already documented in the tree), and agoda throws a real
+`TypeError: can't access property "length", t is undefined`.
+
+**Nothing landed from the attempt.** The tree is reverted to t660's commit; the signal, the round-loop
+break and the gate are all gone rather than kept "since they are harmless". A mechanism with no
+demonstrated effect is not harmless — it is a future reader's evidence that something was proven.
+
+### WHY THIS COST A TICK AND WHY THAT IS THE CHEAP OUTCOME
+
+The alternative was landing a Bar-0-adjacent event-loop change, a public API on `manuk_js`, and a
+gate that **passes whether or not the fix is present**, into the file that decides what gets built
+next. The RED-proof is a one-command step and it is the only thing standing between "I implemented
+the fix" and "I implemented something". It has now caught: a false regression report (t654), a wrong
+observable (t656 via a control), a noise-sized delta read as a result (t657), and a fix for a defect
+that does not exist (here).
+
+TICK SHAPE: reliability (a published finding retracted at the level it was claimed, and the change
+built on it reverted rather than landed). Bar 0 untouched; no engine source changed — the tree is
+byte-identical to t660 outside the ledger.
+Gates: none. The gate written this tick was **deleted**, because a gate that cannot go red is worse
+than no gate: it is coverage that reports green forever, which is this project's own definition of
+vacuous (see `G_SPAWN`/`G_POOL_ISOLATION`, retired for the same reason).
+WIKI: none [forced] — the correction belongs in the ledger next to the claim it corrects, and there is
+now no mechanism to document.
+PATTERN: none. [no-pattern]
+
+NEXT: **(1) IF the per-navigation question is worth re-asking, ask it at the PAGE level from the
+start** — `drain_ceiling_hits()` across one `load_async` + `finish_loading` of a page that both spins
+AND injects scripts, which is the only shape that would enter the round loop at all. On today's
+evidence it is not worth asking. **(2) `agoda`'s thrown `TypeError`** is measured, real, and still
+untriaged — a page script that throws is a `G_SILENT_FAIL`-class lead with a stack behind it, and it
+is now the best-evidenced item on this thread. **(3) `scan_static_import_specifiers`'s failing unit
+test**, still on `main`, still not in the wall — fourth report.
