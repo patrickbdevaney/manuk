@@ -1316,3 +1316,36 @@ declaration the parser must reject.
 **Recorded as `partial`, with the re-pricing condition named**: a proportional CJK face where
 水 ≠ 1em is what would make this measurable. An honest *"cannot know"* rots invisibly precisely
 because it is documented as intentional, so it must carry the condition that brings it back.
+
+## Two citation dialects, and each instrument was blind to one (surface audit #36, tick 638)
+
+The map (`CONSTELLATION.tsv`) cites the gate backing each capability claim. Two instruments check
+that citation, and between them they left a hole that eleven claims sat in:
+
+* `map-reconcile.sh` validates only tokens matching `G_[A-Z0-9_]+`. A row citing **`g_a11y_roles`**
+  in lowercase is not a token it recognises, so it filed the row as `descriptive-floor` — prose.
+* The gate-directory diff (`ls engine/page/tests/`, uppercased, against the map's `G_*` tokens)
+  compares uppercase, so it counted **the same gate** as unmapped.
+
+Each instrument's blind spot was the other's input format. Uppercasing the citations moved
+machine-validated claims **259 → 271** with drift still 0 — and that zero is the evidence they were
+real all along: a wrong citation surfaces as drift the moment it becomes visible.
+
+> **A claim no instrument can read is not a weak claim, it is an unaudited one.** From every
+> direction anyone actually checks, it is indistinguishable from a strong one.
+
+**Two further blind spots worth keeping in view:**
+
+1. **`map-reconcile.sh` searches `engine agent tests`, not `shell/`.** Seven gates live as
+   `#[test] fn` inside `shell/src/media.rs` (`g_avif_paint`, `g_av1_drive`, `g_media_drive`,
+   `g_mp3_drive`, `g_muted_out`, `g_idl_feed`, `g_webm_av1_drive`). A row citing one of them is
+   **true and unverifiable at the same time**. Handled by naming an engine-side equivalent where one
+   exists; the script itself is harness-owned.
+2. **A capability can have no row at all.** `URLPattern` had a passing gate and zero occurrences in
+   the map. That is not a wrong claim but an *absent* one — the failure mode a map structurally
+   cannot report on itself, and the reason the gate-directory direction of the diff is not optional.
+
+**And the timing lesson.** Three media rows were stale by the same author, from the same session, and
+none was caught by anything that reads the map — all three surfaced from the gate side. Landing a
+capability and updating the map are two actions, and the second is skipped **by the person who just
+performed the first**, because to them the capability is now obviously present.

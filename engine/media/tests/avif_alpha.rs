@@ -1,4 +1,10 @@
-//! # avif_alpha — the transparent hero's alpha survives to the A channel
+//! # G_AVIF_ALPHA (`avif_alpha`) — the transparent hero's alpha survives to the A channel
+//!
+//! Named `G_AVIF_ALPHA` here at tick 638 so the map can CITE it. Surface audit #36 found the AVIF
+//! row citing `G_AVIF_PAINT`, which is real but lives as a `#[test] fn` inside `shell/src/media.rs`
+//! — and `map-reconcile.sh` searches `engine agent tests` only, so it cannot see any of the six
+//! gates in that file. The row was true and unverifiable at the same time. This is the engine-side
+//! AVIF gate that always existed; it just had no canonical name to be cited by.
 //!
 //! The t355 residue closed (tick 368): the alpha auxiliary image decodes through the same dav1d
 //! path and lands in the A channel as STRAIGHT alpha. The claims are on CONTENT: the mask fixture

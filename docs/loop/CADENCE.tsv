@@ -395,3 +395,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 634	f721ac28	1785109686	2026-07-26T19:48:06-04:00	4288	capability	63	7	575	100	317	81	3896	6960	0	341	31	AV1-in-WebM: the join was already complete, and both answers said no (2026-07-26)
 635	8a74c28a	1785110116	2026-07-26T19:55:16-04:00	430	capability	63	7	337	4	318	81	3896	6960	0	341	31	`navigator.mediaCapabilities.decodingInfo()`: the rendition chooser, and a THIRD consumer of one codec rule (2026-07-26)
 636	dffe098b	1785111175	2026-07-26T20:12:55-04:00	1059	measurement	63	5	111	5	318	81	3896	6960	0	341	31	ESM top-level await and cyclic module records: probe first (2026-07-26)
+637	dfa9185a	1785111656	2026-07-26T20:20:56-04:00	481	measurement	63	8	301	21	319	81	3896	6960	0	341	31	the `ic` unit: I wrote the fix, then declined to ship it (2026-07-26)

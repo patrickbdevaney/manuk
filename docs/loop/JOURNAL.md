@@ -28464,3 +28464,65 @@ NEXT: the remaining `?`s are `media` (audio output device, audible playbackRate)
 (100-tab RSS, test262) — the last two are almost certainly the same map drift AVIF was, since both
 were measured in earlier sessions; a surface audit is due at t638 and is the right place for them.
 Media's narrowest real blocker is still an **Opus decoder**.
+
+## Tick 638 — SURFACE AUDIT #36: the map had two citation dialects, and each instrument was blind to one (2026-07-26)
+
+HYPOTHESIS: surface audit due (last #35 at t628). The standing first step since audit #31 is to diff
+`engine/page/tests/` against the map, and audit #35 sharpened it: search the **gate directory** for
+the capability, never the map for the gate.
+
+**THE FINDING.** Both directions ran and disagreed about the same eleven rows for opposite reasons.
+`map-reconcile.sh` validates only `G_[A-Z0-9_]+` tokens, so a row citing **`g_a11y_roles`** in
+lowercase was filed as `descriptive-floor` — prose, checked by nothing. My gate-directory diff
+compares uppercase, so it counted **the same gate** as unmapped. Eleven capability claims lived in
+that gap: a11y roles, canvas `fillText` and `drawImage`, View Transitions, the Navigation API, the
+Sanitizer API, `scheduler.postTask`, `ToggleEvent.source`, two Baseline-2024 JS rows, `<video>`
+layout.
+
+> **A claim that no instrument can read is not a weak claim, it is an UNAUDITED one** — and from
+> every direction anyone actually checks, it looks exactly like a strong one.
+
+Uppercasing the citations moved machine-validated claims **259 -> 271** with drift still 0, and that
+zero is the proof they were real: a wrong citation would have surfaced as drift the instant it
+became visible. This is the reliability doctrine's own sentence — truth **computed**, not asserted —
+applied to the instrument that enforces it.
+
+**A CAPABILITY WITH NO ROW AT ALL.** `URLPattern` — `g_urlpattern.rs` exists and passes, and the map
+contained zero occurrences of the string. Not a wrong claim, an **absent** one, which is the failure
+mode a map structurally cannot report on itself.
+
+**THREE MEDIA ROWS WERE STALE BY MY OWN HAND, FROM THIS SESSION.** `decodingInfo()` still said
+`missing` three ticks after I landed it; the demux row cited only the MP4-era gate after t633 added
+WebM; the video-decode row predated t634's AV1-in-WebM. **Not one was caught by anything that reads
+the map** — all three came from the gate-directory side.
+
+> Landing a capability and updating the map are two actions, and the second is the one skipped **by
+> the person who just performed the first**, because to them the capability is now obviously present.
+> That is not carelessness; it is the same asymmetry as a false absence, pointed the other way.
+
+**A THIRD BLIND SPOT, AND IT IS HARNESS-OWNED.** `map-reconcile.sh` searches `engine agent tests`
+and not `shell/`, so it cannot see the seven gates living as `#[test] fn` in `shell/src/media.rs`.
+The AVIF row was therefore **true and unverifiable at once**, reported as a dangling gate. Handled on
+my side by naming the engine-side gate that always existed (`engine/media/tests/avif_alpha.rs` ->
+`G_AVIF_ALPHA`). The script is the observer's: noted, not touched.
+
+**AND THE FIRST DRIFT THIS AUDIT FOUND WAS THE TWO ROWS I WROTE LAST TICK** — the cadence working as
+designed. `CSS ic/ric` was `partial` with `gate='-'`, a status claiming a capability with nothing
+behind it. It now cites **`G_IC_UNIT_PARSES`**, which asserts only the falsifiable half: `ic`/`ric`
+are RECOGNISED units, proved against a bogus-unit control (`width: 10zz` must drop to `auto` and
+fill the container), and explicitly NOT that the value is the real 水 advance — which t637 showed is
+unprovable on any font here. Two RED mutations run: point `#ic` at the bogus unit (red), and make
+the control valid (red, so the control is doing work).
+
+TICK SHAPE: reliability (surface audit #36 — map drift driven to 0, twelve unverifiable claims made
+machine-checkable, one absent capability row added, and two instrument blind spots named). Bar 0
+untouched; no ratchet floor moved.
+Gates: **G_IC_UNIT_PARSES** (`engine/page/tests/g_ic_unit_parses.rs`, 2 RED mutations run) — added
+because the audit demanded it, not because the capability is new.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "two citation dialects" appended to the t637 section.
+PATTERN: [no-pattern] — no browser capability changed.
+
+NEXT: constitution check is due at t639. The remaining `?` cells are `media` (audio output device,
+audible playbackRate) and `cross` (100-tab RSS, test262); the last two were measured in earlier
+sessions and are very likely the same map drift AVIF was. Media's narrowest real blocker is still an
+**Opus decoder**.

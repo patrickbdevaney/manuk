@@ -1888,3 +1888,73 @@ is now measured rather than suspected.
 Drift **0** after the corrections; `G_CONSTELLATION_WELLFORMED` green.
 
 **Next audit due: tick 638.**
+
+## Audit #36 — tick 638
+
+**This audit's finding is that the map had TWO CITATION DIALECTS, and each instrument was blind to
+exactly one of them.** Both directions of the standing gate-vs-map diff ran, and they disagreed
+about the same rows for opposite reasons:
+
+- `scripts/map-reconcile.sh` validates only tokens matching `G_[A-Z0-9_]+`. A row citing
+  **`g_a11y_roles`** in lowercase is not a token it recognises, so the row was filed as
+  `descriptive-floor` — *prose*, validated by nothing.
+- The gate-directory diff (`ls engine/page/tests/` uppercased, against the map's `G_*` tokens)
+  compares uppercase, so it counted **the very same gate** as UNMAPPED.
+
+**Eleven rows sat in that blind spot** — a11y interactive roles, canvas `fillText`, canvas
+`drawImage`, View Transitions, the Navigation API, the Sanitizer API, `scheduler.postTask`,
+`ToggleEvent.source`, two Baseline-2024 JS rows and `<video>` element layout. Every one *had* its
+gate; not one was *checked*. Uppercasing the citations moved validated claims **259 → 271** with
+drift still 0, which is the proof they were real all along: a wrong citation would have surfaced as
+drift the moment it became visible.
+
+> **A claim that no instrument can read is not a weak claim, it is an unaudited one** — and it looks
+> exactly like a strong claim from every direction anyone actually checks.
+
+**A capability with NO ROW AT ALL: `URLPattern`.** `engine/page/tests/g_urlpattern.rs` has existed
+and passed, and the map had zero occurrences of the string. Not a wrong claim — an **absent** one,
+which is the failure mode a map structurally cannot report on itself, and the reason this audit
+exists. Added as a gated `app` row.
+
+**Three media rows were stale by my own hand, from this same session:**
+
+| row | said | reality |
+|---|---|---|
+| `navigator.mediaCapabilities.decodingInfo()` | `missing` | **landed at t635**, three ticks earlier |
+| container demux (MP4/WebM) | cited the MP4-era gate alone | WebM demux landed t633 (`G_MEDIA_WEBM`) |
+| video decode (H.264/VP9/AV1) | `video_decode` only | AV1-in-WebM landed t634 (`G_MEDIA_WEBM_AV1`, `G_WEBM_AV1_DRIVE`) |
+
+**None of these were caught by anything that reads the map.** All three surfaced from the
+gate-directory side — a gate file with no citing row. Landing a capability and updating the map are
+two actions, and the second one is the one that gets skipped *by the person who just did the first*,
+because to them the capability is obviously present.
+
+**A THIRD instrument blind spot, and it is the observer's to fix.** `map-reconcile.sh` searches
+`engine agent tests` and **not `shell/`** — so it cannot see the seven gates that live as `#[test]
+fn` inside `shell/src/media.rs` (`g_avif_paint`, `g_av1_drive`, `g_media_drive`, `g_mp3_drive`,
+`g_muted_out`, `g_idl_feed`, and t634's `g_webm_av1_drive`). The AVIF row citing `G_AVIF_PAINT` was
+therefore **true and unverifiable at the same time**, and reported as a DANGLING GATE. Handled on
+the agent side by naming the engine-side gate that always existed — `engine/media/tests/avif_alpha.rs`
+is now `G_AVIF_ALPHA` — so the decode half is machine-checkable and the paint half is named for a
+human. **The scripts are harness-owned: noted, not touched.**
+
+**The two rows I created last tick were themselves the first drift this audit found**, which is the
+cadence working as designed rather than an embarrassment: `CSS ic/ric` was `partial` with `gate='-'`
+(a bare assertion — a status claiming capability with nothing behind it) and AVIF was the dangling
+citation above. The `ic` row now cites **`G_IC_UNIT_PARSES`**, which asserts *only* the falsifiable
+half — that `ic`/`ric` are RECOGNISED units, proved against a bogus-unit control (`width: 10zz` must
+drop to `auto` and fill the container) — and explicitly **not** that the value is the styled face's
+real 水 advance, which t637 established is unprovable on any available font.
+
+**Gate-vs-map diff (the standing step), both directions:**
+```text
+  gate files under engine/page/tests/ : 318
+  map rows                            : 371  (was 370; +1 URLPattern)
+  map -> gate drift                   : 2 -> 0     (bare assertion, dangling gate)
+  gate -> map, no citing row          : 18 -> 9
+  of those 9: 2 are prefix-matched (G_POPOVER_RENDER, G_WEBFONT_RELAYOUT_EXTERNAL)
+              2 are reliability gates with no capability row by design (G_DEFER, G_SILENT_FAIL)
+              5 are redundant siblings of rows that cite a different gate for the same capability
+  claims machine-validated            : 259 -> 271
+  descriptive-floor (unvalidated)     : 24 -> 12
+```
