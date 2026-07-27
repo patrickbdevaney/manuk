@@ -1537,3 +1537,45 @@ only route to a value, check whether the value is cheap to own.*
 Its own preconditions are asserted as well (the external sheet DID cascade; the `fetch` DID resolve),
 so it cannot pass by never reaching a re-cascade — which is precisely how this bug hid: at
 `load_async` the image is correctly sized, and a test that stopped there would have been green.
+
+## `www.naukri.com`: our `<body>` is 89,905px wide and Chrome's is 1,200 (tick 684, OPEN)
+
+The site is the marginal scored row of the certificate, and — unlike `agoda` — it is a *good* lever:
+the ORACLE's population is stable at **57 paths in every draw**, so the gap is ours alone. The §3b
+root-cause cluster:
+
+```text
+  MISSING by tag: div×36  input×3  span×3  button×2  section×2  footer×1  ul×1
+  geometry/mis-sized: width ~65536px  (<body>)  [median 88705px]
+      body:nth-child(2)                    [0 0 89905×352]  vs  [0 0 1200×1513]
+  geometry/mis-sized: width ~65536px  (<div>)   ×5
+      body/div:nth-child(2)/div:nth-child(1)   [0 0 89905×0]    vs  [0 0 1200×0]
+  geometry/displaced: x (horizontal) ~32768px
+      body/div:2/div:4/div:2                   [44392 0 1120×72] vs [40 0 1120×72]
+```
+
+**The displaced element proves the mechanism.** Its width is 1120 in BOTH engines, and its x is 44392
+here against 40 in Chrome. `(89905 − 1120) / 2 = 44392.5`. It is being **centred inside an 89905px
+parent** — so the child is fine and the parent's width is the whole bug. Everything downstream of that
+(36 missing `<div>`s, the 0.0% shape) is a consequence.
+
+### Two mechanisms ELIMINATED, so the next attempt does not re-derive them
+
+1. **"A block box takes its content's max-content width instead of its containing block's."** A hermetic
+   fixture — a 5000px child, a 4000px flex row, a 160-character unbreakable string, and an
+   `margin: 0 auto` box, all in an 800px viewport — gives **body 784**, the wide child overflowing
+   correctly at w=5000, and the centred box at x=200 = (784−400)/2 + 8. Exactly right. Not this.
+2. **"Something in the document does it."** The same document fetched to a local file with a
+   `<base href>` and rendered here gives **body 1008** in a 1024 viewport — correct, and no oversized
+   descendant at all (`WIDEST <DIV> w=1008`).
+
+So the condition is **specific to the LIVE load** and not to the markup: something that only happens
+when the document comes from the origin — a stylesheet that only resolves there, a subresource-driven
+relayout, or a script path that only runs with real cookies/redirects. That is the next experiment, and
+it is a bisection over the live load rather than a hypothesis about layout.
+
+⚠ Recorded as OPEN, with the eliminations, deliberately. Two of this session's ticks were saved by a
+five-minute probe killing a good-sounding mechanism; the cost of *publishing* the eliminations is one
+paragraph and it is what makes the next attempt cheap.
+
+[[subpixel-error-compounds]] [[symptom-names-wrong-organ]]

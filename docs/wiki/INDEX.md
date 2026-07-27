@@ -93,6 +93,8 @@
   - L1494 · Why no instrument saw it
   - L1502 · The fix: a standing input belongs between the cascade and the layout
   - L1526 · The gate asserts three things, and two of them are not decoration
+  - L1541 · www.naukri.com: our <body> is 89,905px wide and Chrome's is 1,200 (tick 684, OPEN)
+  - L1562 · Two mechanisms ELIMINATED, so the next attempt does not re-derive them
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1203,4 +1205,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1114 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1116 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -440,3 +440,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 681	331821c1	1785184587	2026-07-27T16:36:27-04:00	2852	measurement	63	8	431	34	334	81	3896	6960	0	352	31	`scored 5 → 6`, and the repeat machinery's first real use exposed two defects (2026-07-27)
 682	f7a6a3ab	1785186042	2026-07-27T17:00:42-04:00	1455	measurement	63	8	267	125	334	81	3896	6960	0	352	31	a rule whose justification is falsified by the run that motivated it (2026-07-27)
 683	33a30767	1785188435	2026-07-27T17:40:35-04:00	2393	capability	63	10	266	33	334	81	3896	6960	0	353	31	a reload inherited the previous load's failures, for the life of the process (2026-07-27)
+684	b73835a0	1785189218	2026-07-27T17:53:38-04:00	783	measurement	63	6	142	33	334	81	3896	6960	0	353	31	naukri's `<body>` is 89,905px wide, and two mechanisms are eliminated (2026-07-27)

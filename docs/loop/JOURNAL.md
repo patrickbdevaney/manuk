@@ -32233,3 +32233,67 @@ hermetic question — a loopback origin, two navigations, count the wire. Do NOT
 **(2) THE PER-CALL LOAD BUDGET** (t678/t679/#51) — the priority inversion, blocked on nine gate files
 that call `load_async` without `finish_loading`. **(3)** the repeat plan should key on whether a site's
 variance is REPRODUCIBLE within a sweep; three of four repeated sites returned byte-identical rows.
+
+## Tick 684 — naukri's `<body>` is 89,905px wide, and two mechanisms are eliminated (2026-07-27)
+
+HYPOTHESIS: t683 established that `agoda` is a poor lever — the ORACLE's own population for it ranges
+13..808 across runs, so both sides of the comparison move. `www.naukri.com` is the opposite and it is the
+**marginal scored row** of the certificate: the oracle builds **57 paths in every draw**, so the gap is
+ours alone. So: diagnose naukri instead.
+
+### THE MEASUREMENT, and the displaced element proves the mechanism
+
+```text
+  MISSING by tag: div×36  input×3  span×3  button×2  section×2  footer×1  ul×1
+  body:nth-child(2)                  [0 0 89905×352]   vs  [0 0 1200×1513]
+  body/div:2/div:1                   [0 0 89905×0]     vs  [0 0 1200×0]      (x5 divs)
+  body/div:2/div:4/div:2             [44392 0 1120×72] vs [40 0 1120×72]
+```
+
+**Our `<body>` is 89,905px wide; Chrome's is 1,200.** The displaced child settles what is wrong with
+what: its width is **1120 in BOTH engines** and its x is 44392 here against 40 in Chrome —
+`(89905 − 1120) / 2 = 44392.5`. It is being **centred inside an 89905px parent.** The child is correct;
+the parent's width is the entire bug, and the 36 missing `<div>`s and the 0.0% shape are downstream of it.
+
+### TWO MECHANISMS ELIMINATED — this is the deliverable
+
+**(1) "A block box takes its content's max-content width instead of its containing block's."** A hermetic
+fixture in an 800px viewport — a 5000px child, a 4000px flex row, a 160-character unbreakable string, and
+a `margin: 0 auto` box — gives **body 784**, the wide child overflowing at w=5000, and the centred box at
+**x=200 = (784−400)/2 + 8**. Exactly right. **Not this.**
+
+**(2) "Something in the document does it."** The same document fetched to a local file with a `<base href>`
+and rendered here gives **body 1008** in a 1024 viewport, with no oversized descendant at all
+(`WIDEST <DIV> w=1008`). **Not the markup.**
+
+So the condition is **specific to the LIVE load**: something that only happens when the document comes
+from the origin — a stylesheet that only resolves there, a subresource-driven relayout, or a script path
+that only runs with real cookies and redirects. The next experiment is a **bisection over the live load**,
+not another hypothesis about layout.
+
+⚠ Recorded as OPEN with the eliminations attached, deliberately. **Four derived mechanisms died to a
+five-minute probe this session** (the post-load drain at t676, `@import` and React's MessageChannel at
+t677, and both of these) — and each time the probe was cheaper than the tick would have been. The cost of
+PUBLISHING an elimination is one paragraph, and it is the difference between the next attempt starting
+where this one finished and starting where it began.
+
+TICK SHAPE: measurement (a root-cause diagnosis with the cheap explanations eliminated and the evidence
+banked). Bar 0 untouched; **no source changed** — the two probes were scratch files and are deleted.
+Gates: none — nothing changed, and adding one here would be a gate on a bug that is still open. The
+evidence is the deliverable; asserting a broken number would ratchet the bug in.
+WIKI: `docs/wiki/box-layout.md` — "`www.naukri.com`: our `<body>` is 89,905px wide and Chrome's is 1,200",
+with both eliminations.
+
+⚠ HARNESS NOTE (observer-owned, not touched): `scripts/fidelity-progress.sh` carries an uncommitted
+observer change (a guard that treats a sweep with under ~80% of the corpus as unusable — the killed-partial
+case the live-process and mtime checks both miss). `tick.sh` stages with `git add -A`, so it lands under
+this tick's message. Reported rather than intervened in: un-staging it would mean the agent doing index
+surgery around the observer's in-flight work, which is the documented way that work gets lost.
+PATTERN: none — an open diagnosis. [no-pattern]
+
+NEXT: **(1) BISECT NAUKRI'S LIVE LOAD.** The document is identical; the live load is not. Order to try,
+cheapest first: render the live URL with images/masks disabled, then with external CSS disabled, then with
+scripts disabled — the first one that gives `body ≈ 1200` names the phase. **(2) THE PER-CALL LOAD BUDGET**
+(t678/t679/#51) — the priority inversion, still blocked on nine gate files that call `load_async` without
+`finish_loading`. **(3)** the repeat plan should key on whether a site's variance is REPRODUCIBLE within a
+sweep; three of four repeated sites returned byte-identical rows, so six live renders buy nothing.
