@@ -40,7 +40,14 @@ read -r SCOR TOT COVM COVP PLM VISM MISS MISP < <(awk -F'\t' '
     else     printf "0 %d 0 0 0 0 0 0", tot
   }' "$SRC")
 SWEEP_ISO=$(date -d "@$SRC_EPOCH" '+%Y-%m-%dT%H:%M:%S' 2>/dev/null || echo "?")
-AGE_DAYS=$(( ( $(date +%s) - SRC_EPOCH ) / 86400 ))
+NOW_EPOCH=$(date +%s 2>/dev/null || echo "$SRC_EPOCH")
+AGE_DAYS=$(( ( NOW_EPOCH - SRC_EPOCH ) / 86400 ))
+# A sweep is written INCREMENTALLY per-site over ~90min (fidelity-sweep.sh appends row by row). A mid-write
+# partial has garbage aggregates, so NEVER record one: record only a SETTLED results.tsv — no live
+# manuk-wpt run AND mtime stable for >=180s. Otherwise the 15-min ops-check cadence banks partial junk.
+SWEEP_ACTIVE=0
+pgrep -x manuk-wpt >/dev/null 2>&1 && SWEEP_ACTIVE=1
+[ $(( NOW_EPOCH - SRC_EPOCH )) -lt 180 ] && SWEEP_ACTIVE=1
 
 # ── prior row (for trend + trap detection) ────────────────────────────────────────────────────────────
 PREV=""; [ -f "$LEDGER" ] && PREV=$(grep -vE '^(iso|#)' "$LEDGER" 2>/dev/null | tail -1)
@@ -48,7 +55,9 @@ p_scor=$(echo "$PREV" | cut -f2); p_covp=$(echo "$PREV" | cut -f5); p_pl=$(echo 
 p_sweep=$(echo "$PREV" | cut -f1)
 
 # ── record-if-changed: append only when THIS sweep (by its own timestamp) is new to the ledger ─────────
-if [ "$MODE" != "--check" ]; then
+if [ "$MODE" != "--check" ] && [ "$SWEEP_ACTIVE" = 1 ]; then
+  echo "sweep in progress (results.tsv still being written) — not recording a partial"
+elif [ "$MODE" != "--check" ]; then
   [ -f "$LEDGER" ] || printf 'iso_sweep\tscorable\ttotal\tcov_mean\tcov_pooled\tplace_mean\tvis_mean\tmissing\tmisplaced\tsource\n' > "$LEDGER"
   if [ "$SWEEP_ISO" != "$p_sweep" ]; then
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$SWEEP_ISO" "$SCOR" "$TOT" "$COVM" "$COVP" "$PLM" "$VISM" "$MISS" "$MISP" "$SRC" >> "$LEDGER"
