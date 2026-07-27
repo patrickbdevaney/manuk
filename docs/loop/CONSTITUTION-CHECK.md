@@ -2370,3 +2370,78 @@ will say whether it moved. The wall is harness-owned; t655 ran at 252s warm and 
 carried silently.
 
 **Next check due: tick 664.**
+
+---
+
+## Check #49 — tick 664
+
+**Horizon:** H0 — the Phase-0 daily-driver certificate. Gate:
+`daily-driver-pass(site) = renders(site) ∧ functions(site)` over fixed-denominator corpus-v2
+(PART VII.1).
+
+**The window:** t657–t663 — the HEAD-20 sweep three ticks owed (657), `unreachable` split into four
+causes and the h2 header limit fixed (658), surface audit #38 (659), the drain measurement (660) and
+its retraction (661), located script errors (662), the CSSOM surface probe (663).
+
+**Gate or scoreboard? — GATE, and check #48's steer was obeyed within one tick.** #48 said, in bold,
+that the next tick was the HEAD-20 sweep and not another mechanism. t657 ran it. What it found is the
+substance of this check, and it is not flattering:
+
+> **Three placement mechanisms (t654/655/656) moved the corpus by less than one site's noise.** The
+> one byte-reproducible site moved by nothing at all. And the run-to-run spread of a live site's SHAPE
+> is **3.7 points on an unchanged tree** — five times the "regression" t657 was one paragraph from
+> reporting.
+
+**THE CORRECTION THIS CHECK MAKES, AND IT IS ABOUT TARGETING, NOT EFFORT.** Every one of those three
+ticks was well-founded in isolation: a measured defect, a RED-proven gate, a named mechanism. They were
+aimed by *what the last tick's log happened to show* — a load-deadline thread that ran three ticks deep
+because each fix surfaced the next. Then t658 asked the certificate what the corpus was actually made
+of, spent one `curl` per host, found `playhop.com` was **ours** (our h2 client refusing a 16 KiB
+response header block), and moved the certificate: **scored 4 → 5, unreachable 4 → 3.** One tick, one
+transport setting, the first corpus-level movement of the session.
+
+> **A thread that keeps producing defects is not the same as a thread that is worth pulling.** The
+> load-deadline arc produced three real fixes and no measurable corpus movement; a fifteen-minute
+> diagnostic pass over the unscored rows produced one. **Rank by what the DENOMINATOR is made of, not
+> by what the last fix uncovered.** The certificate says 15 of 20 sites are unscored and only 2 of
+> those are timing — and three consecutive ticks had gone at timing.
+
+**PART VII.1 gains no new clause, and that is deliberate.** #47 added one and #48 found it violated
+three ticks running. The gap is not a missing rule; it is that a NEXT list is written by the tick that
+just ended, and therefore always argues from the last thing seen. The mechanism that actually
+corrected it was **running the measurement** — so the standing answer is the one already in the file:
+*a fix argued as "a large fraction of the web" owes a corpus measurement*, and this window paid it.
+
+**TWO RETRACTIONS IN SEVEN TICKS, AND BOTH ARE THE INSTRUMENT WORKING.** t661 retracted t660's
+published claim (the hang guard's five firings were five *harness page-loads*, not five rounds of one
+navigation) and reverted the change built on it **entirely** rather than keeping it as harmless. t657
+retracted a 0.7-point regression before publishing it. Neither was caught by a reviewer or a gate on
+the subject — both were caught by **a control run on an unchanged tree**, which is now the third
+distinct thing that discipline has saved this session (t654's false regression was the first).
+*Measurement/capability balance is the wrong thing to count; what matters is whether the capability
+ticks ran ahead of the instrument's last reading, and for t654-656 they did.*
+
+**NO INVARIANT BENT.** t658's 256 KiB is Chrome's announced value, taken because the North Star says
+Chromium is the ceiling to MATCH, not tuned until one site worked. t655's commit reserve came **out**
+of the load budget rather than extending a Bar 0 bound. t663 declined to make `.sheet` return `null`,
+because for an applied `<style>` that is a lie that reads as honest. t656's pre-existing failing unit
+test was reported, not absorbed. The one gate written this window that could not go red was **deleted**
+(t661), on the project's own precedent for `G_SPAWN`/`G_POOL_ISOLATION`.
+
+**THE STEER.** The next capability tick is the **CSSOM `.sheet` bridge**, and for the first time it is
+aimed by evidence rather than by WPT mass: t662's located stack (`insertRules` → `getTag` →
+`this.sheet`) names it as what blanks `agoda`, and t663's probe maps the surface exactly — `.sheet`
+`undefined` (not the spec's `null`, so every standard guard passes and the page dies one line later),
+`document.styleSheets` `undefined`, and `typeof CSSStyleSheet === "function"` **already true**, which
+is the false-presence shape this project's reliability doctrine names. **It is all-or-nothing**: a
+half-built `.sheet` returning an object without a working `insertRule` gets a CSS-in-JS runtime *past*
+its guard and fails worse than today, which is the `IndexedDB` lesson (*keep ABSENT until done*). Its
+falsifiable bar is **agoda renders**, not a subtest count.
+
+**STANDING, UNMOVED:** t626's bot-wall ceiling (5 of 20 HEAD sites; 15/20 by deliberate decision) —
+now measured rather than assumed, since t658 checked every unreachable host by hand and three of four
+were genuinely not ours. `manuk-wpt`'s own tests are still not in the wall (seventh report), and
+`scan_static_import_specifiers` still fails on `main` (sixth report). Both harness-owned or
+wall-scoped; reported, not touched.
+
+**Next check due: tick 672.**

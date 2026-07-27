@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **422** | ticks 1–663 |
-| median tick cycle | **21m** | 421 intervals |
-| median, last 10 | **28m** | 10 intervals |
+| ticks landed | **423** | ticks 1–664 |
+| median tick cycle | **21m** | 422 intervals |
+| median, last 10 | **27m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.09** | 386.5h elapsed |
-| median verify wall | **63s** | 361 ticks |
+| **ticks per hour** | **1.09** | 386.6h elapsed |
+| median verify wall | **63s** | 362 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **347**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**208 of 422 ticks** (49%) moved a
+**208 of 423 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -519,5 +519,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **661** | 2026-07-27 06:57 | 20m | reliability | 63s | +106/−32 | 330 | 81 | 56.0% · | I published "five firings per page" one tick ago, and a Page-level gate says it is ONE (20 |
 | **662** | 2026-07-27 07:26 | 29m | capability | 63s | +358/−35 | 331 | 81 | 56.0% · | the engine knew where the page broke and had nobody to tell (2026-07-27) |
 | **663** | 2026-07-27 07:31 | 5m | measurement | 63s | +95/−32 | 331 | 81 | 56.0% · | `typeof CSSStyleSheet === "function"` and `.sheet` is `undefined` (2026-07-27) |
+| **664** | 2026-07-27 07:36 | 5m | process | 63s | +146/−33 | 331 | 81 | 56.0% · | constitution check #49: a thread that keeps producing defects is not a thread worth pullin |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

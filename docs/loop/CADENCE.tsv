@@ -421,3 +421,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 661	3375d90c	1785149831	2026-07-27T06:57:11-04:00	1222	reliability	63	4	106	32	330	81	3896	6960	0	346	31	I published "five firings per page" one tick ago, and a Page-level gate says it is ONE (2026-07-27)
 662	d6ab01fd	1785151577	2026-07-27T07:26:17-04:00	1746	capability	63	10	358	35	331	81	3896	6960	0	347	31	the engine knew where the page broke and had nobody to tell (2026-07-27)
 663	a57948d8	1785151905	2026-07-27T07:31:45-04:00	328	measurement	63	4	95	32	331	81	3896	6960	0	347	31	`typeof CSSStyleSheet === "function"` and `.sheet` is `undefined` (2026-07-27)
+664	b58f3be3	1785152213	2026-07-27T07:36:53-04:00	308	process	63	5	146	33	331	81	3896	6960	0	347	31	constitution check #49: a thread that keeps producing defects is not a thread worth pulling (2026-07-27)

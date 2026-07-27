@@ -30571,3 +30571,40 @@ t283 JS shim was reverted for wanting a **native accessor**, so that is the shap
 falsifiable bar: it renders, rather than a WPT count. **(2)** `scan_static_import_specifiers`'s
 failing unit test, still on `main`, still not in the wall — sixth report. **(3)** the other `join_all`
 fan-outs t655 named and deliberately left.
+
+## Tick 664 — constitution check #49: a thread that keeps producing defects is not a thread worth pulling (2026-07-27)
+
+HYPOTHESIS: the constitution check is due (last #48 at t656) and this window has real material for it.
+
+**THE FINDING, and it is about targeting rather than effort.** t654/655/656 were three placement root
+causes — each a measured defect, a RED-proven gate, a named mechanism — and the HEAD-20 sweep says
+they moved the corpus **by less than one site's noise**. t658 then spent one `curl` per unreachable
+host, found `playhop.com` was ours (our h2 client refusing a 16 KiB response header block), and moved
+the certificate: **scored 4 → 5, unreachable 4 → 3**, the first corpus-level movement of the session.
+
+> **A thread that keeps producing defects is not the same as a thread that is worth pulling.** Each of
+> those three ticks was aimed by what the previous tick's log happened to show. Rank by what the
+> DENOMINATOR is made of — 15 of 20 sites unscored, only 2 of them timing — not by what the last fix
+> uncovered.
+
+**No new clause**, deliberately: #47 added one and #48 found it violated three ticks running. The gap
+is not a missing rule but that a NEXT list is written by the tick that just ended and therefore always
+argues from the last thing seen. What corrected it was running the measurement.
+
+Also recorded: two retractions in seven ticks (t657's 0.7-point regression, t661's whole finding and
+the change built on it), both caught by **a control run on an unchanged tree** rather than by a gate
+on the subject — the third time that discipline has paid this session.
+
+TICK SHAPE: process (the eight-tick constitution check, on cadence). Bar 0 untouched; no engine source
+changed.
+Gates: none — this is the instrument that reads CONSTITUTION.MD, not a test.
+WIKI: none [forced] — a constitution check belongs in `docs/loop/CONSTITUTION-CHECK.md`, which is where
+the cadence reads it; copying it to the capability wiki would duplicate it into the wrong file.
+PATTERN: none. [no-pattern]
+
+NEXT: **THE CSSOM `.sheet` BRIDGE**, aimed by evidence for the first time rather than by WPT mass —
+t662's located stack names it as what blanks `agoda`, t663's probe maps the surface exactly, and its
+falsifiable bar is **agoda renders**, not a subtest count. **It is all-or-nothing**: a half-built
+`.sheet` returning an object without a working `insertRule` gets a CSS-in-JS runtime *past* its guard
+and fails worse than today (the `IndexedDB` lesson — *keep ABSENT until done*), so it wants a whole
+budget, not the tail of one.
