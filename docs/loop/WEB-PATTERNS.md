@@ -5404,3 +5404,31 @@ module ran" is satisfied by an engine that ignores `await` at module scope entir
 modules **different await counts** and the shorter one must finish first — the reverse of
 declaration order. That inversion is what distinguishes real async-module semantics from modules run
 in the order they were written, and it is the only claim in the gate that can tell them apart.
+
+## The library that refuses to boot on a proxy check (tick 640)
+
+**The class:** a third-party library's `isSupported()` / `isBrowserSupported()` predicate. Every
+major player, framework and SDK has one, it runs before anything else, and a `false` from it means
+the site shows its fallback — not a degraded experience, *no* experience.
+
+**These predicates are rarely a list of what the library needs.** They are **proxies**, chosen years
+ago, for a class of browser. shaka-player 4.11 refuses to run unless `window.MediaKeys`,
+`navigator.requestMediaKeySystemAccess` and `MediaKeySystemAccess.prototype.getConfiguration` all
+exist — **EME, which it does not need to play unencrypted content.** It uses EME's presence to mean
+*"modern desktop browser"*. Measured, not inferred: hls.js and dash.js both boot here; shaka does
+not, and every MSE predicate it checks is green.
+
+> **The cost of omitting an interface is not bounded by the feature that interface names.** It cannot
+> be reasoned about from the spec, because the spec does not know that a popular library uses your
+> absence as a signal about something else entirely. It has to be measured against the code that
+> reads it.
+
+**The method that produced this, and it is cheap enough to be routine:** fetch the real minified
+library, run its real boot path, and when it says no, **grep its own source for the predicate**. The
+answer is right there in the bundle. Three libraries, 1.8MB, one run — after three ticks of
+fixture-only evidence had said nothing about any of them.
+
+**And the corollary for gates: assert deliberate absences too.** The EME triple is now asserted
+*absent* in a gate, so the day it appears, the gate goes red and forces the question to be answered
+rather than discovered. An absence that is a decision should be as load-bearing as a presence that is
+a capability.

@@ -28586,3 +28586,65 @@ PATTERN: [no-pattern] — no browser capability changed.
 NEXT, and it is now owed rather than optional: **a real-site measurement for the media arc** — the
 corpus sweep, or at minimum a live YouTube/adaptive-player page through the oracle, before any
 further media rung. After that the narrowest real media blocker is still an **Opus decoder**.
+
+## Tick 640 — the media arc's owed real-code measurement: two players boot, shaka refuses (2026-07-26)
+
+HYPOTHESIS: check #46 made a real-site measurement for the media arc **owed rather than optional** —
+t633-635 built three rungs on fixtures alone and the claim *"this unblocks YouTube"* was never
+measured. This tick pays that debt with the strongest cheap evidence available: **the real shipped
+libraries**, fetched from jsDelivr and run through their own boot paths — hls.js 1.5.17 (414KB),
+shaka-player 4.11.2 (660KB), dash.js 4.7.4 (794KB). 1.8MB of production code, not a fixture I wrote.
+
+**THE RESULT.**
+
+```text
+  hls.js   isSupported():true · new Hls() ok · attachMedia(<video>) ok
+  dash.js  MediaPlayer().create() ok · initialize(<video>) ok
+  shaka    isBrowserSupported():FALSE
+```
+
+**AND THE CAUSE IS NAMED, FROM SHAKA'S OWN SOURCE, NOT INFERRED:**
+
+```js
+!(window.MediaKeys && window.navigator && window.navigator.requestMediaKeySystemAccess &&
+  window.MediaKeySystemAccess && window.MediaKeySystemAccess.prototype.getConfiguration) ? !1 : …
+```
+
+Shaka reads the **EME interface objects as a proxy for "is this a real browser"** and refuses to run
+at all without them — **including for unencrypted content.** Every MSE predicate it checks was
+already green: `MediaSource`, `isTypeSupported`, `SourceBuffer.prototype.appendBuffer` **and**
+`.changeType`.
+
+> **NOTHING t633-635 BUILT IS IMPLICATED.** The media arc's three rungs are real and shaka is blocked
+> one layer up, by three interface objects we omit because EME *playback* is a permanent non-goal.
+> That is exactly the kind of thing a fixture cannot tell you and 660KB of somebody else's shipped
+> code tells you in one run — and it is the answer to check #46's complaint, arriving in the
+> uncomfortable direction the complaint predicted.
+
+**THE SCOPE QUESTION IS NAMED AND DELIBERATELY NOT ANSWERED HERE.** `STATUS.md` makes EME/Widevine
+permanently out of scope, and that is about **CDM playback**, which is genuinely unreachable. Whether
+the *interfaces* should exist and honestly reject every key system — which is precisely what Chrome
+without a CDM does, and what STATUS.md's own "everything else in media … adaptive bitrate … honestly
+labelled" sentence would seem to permit — is a **different question**, and answering it inside a
+measurement tick is how scope decisions get smuggled. It gets its own tick or none.
+
+**THE GATE PINS THE MEASURED STATE WITHOUT VENDORING 1.8MB**, and its second half is the unusual
+part: the EME triple is asserted **ABSENT, on purpose**, so that the day any of it appears the gate
+goes RED and forces the shaka question to be answered deliberately rather than discovered. RED probes
+run: delete `SourceBuffer.prototype.changeType` (red — and worth noting nothing in this repo calls
+it, so it is the easiest of these to lose); define `window.MediaKeys` (red — the tripwire firing
+exactly as designed).
+
+TICK SHAPE: measurement (the media arc's first evidence from real third-party production code, with
+the one refusal traced to a named clause of its own source; plus the predicate set pinned as a gate
+including a deliberate absence-tripwire). No engine source changed. Bar 0 untouched; no ratchet floor
+moved.
+Gates: **G_PLAYER_BOOT_PREDICATES** (`engine/page/tests/g_player_boot_predicates.rs`, 9 claims, 2 RED
+mutations run).
+WIKI: `docs/wiki/media-pipeline.md` — "what the real players actually check".
+PATTERN: `docs/loop/WEB-PATTERNS.md` — "the library that refuses to boot on a proxy check".
+
+NEXT: the named-and-unanswered scope question — **should the EME interface objects exist and reject
+honestly?** It is worth a tick of its own because it is the difference between shaka-player working
+for clear content and not, and shaka is one of the three libraries that plays adaptive video on the
+open web. After that, the Opus decoder.

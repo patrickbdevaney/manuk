@@ -421,6 +421,47 @@ is invisible to every per-answer assertion, which is precisely how the drift M3c
 | invalid config | **rejects** with `TypeError` | a player must be able to tell *"you told me no"* from *"you did not understand the question"*; collapsing them hides its own bugs |
 | a MIXED config (decodable video + Opus audio) | `false` | pairing a stream we can show with one we cannot hear is not playable — the same trade `av1opus:false` refuses |
 
+## What the real players actually check (tick 640)
+
+Three ticks of the media ladder (M3b/M3c/M3d) were evidenced entirely by fixtures. Constitution check
+#46 called that out — PART VII.1 ranks by *real sites moved*, and *"this unblocks YouTube"* was
+plausible rather than measured. So the three libraries that actually play adaptive video on the open
+web were fetched from jsDelivr and run through their own boot paths: **hls.js 1.5.17, dash.js 4.7.4,
+shaka-player 4.11.2 — 1.8MB of production code.**
+
+```text
+  hls.js   isSupported():true · new Hls() ok · attachMedia(<video>) ok
+  dash.js  MediaPlayer().create() ok · initialize(<video>) ok
+  shaka    isBrowserSupported():FALSE
+```
+
+**The refusal is one clause of shaka's own minified source, not an inference:**
+
+```js
+!(window.MediaKeys && window.navigator && window.navigator.requestMediaKeySystemAccess &&
+  window.MediaKeySystemAccess && window.MediaKeySystemAccess.prototype.getConfiguration) ? !1 : …
+```
+
+It reads the **EME interface objects as a proxy for "is this a real browser"** and will not run
+without them — *even for unencrypted content*. Every MSE predicate it checks was already green:
+`MediaSource`, `MediaSource.isTypeSupported`, `SourceBuffer.prototype.appendBuffer` and
+`SourceBuffer.prototype.changeType`.
+
+> **Nothing M3b/M3c/M3d built is implicated.** The rungs are real; shaka is blocked one layer up. A
+> fixture could never have said so, and 660KB of somebody else's shipped code said it in one run.
+
+**The lesson about support checks generally.** A library's "is this browser supported" predicate is
+rarely a list of what it needs — it is a **proxy**, chosen years ago, for a class of browser. Shaka
+does not need EME to play clear content; it uses EME's presence to mean *"modern desktop browser"*.
+So the cost of omitting an interface is not bounded by the feature that interface names, and cannot
+be reasoned about from the spec — it has to be measured against the code that reads it.
+
+`G_PLAYER_BOOT_PREDICATES` pins the measured state without vendoring the 1.8MB. Its second half is
+deliberate: the EME triple is asserted **absent**, so the day any of it appears the gate goes red and
+forces the shaka question to be answered rather than discovered. (EME *playback* is a permanent
+non-goal; whether the *interfaces* should exist and honestly reject every key system — what Chrome
+without a CDM does — is a separate, open question.)
+
 ## M4 — AAC decode (tick 235): sound-shaped numbers, not yet sound
 
 `engine/media/src/audio.rs`. M3 could find the audio and name it (`mp4a.67`, 44100 Hz, stereo) and
