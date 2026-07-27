@@ -43,7 +43,10 @@ fi
 # 3. DISK — df on /HOME (the repo's mount). `df /` once produced a wrong-mount misdiagnosis that burned a
 #    10-minute verify; always measure the repo's own mount.
 DP=$(df --output=pcent /home 2>/dev/null | tail -1 | tr -dc '0-9' || echo 0)
-[ "${DP:-0}" -ge 92 ] && { note "ALERT: /home is ${DP}% used (>=92%) — hygiene is behind"; alert=$((alert+1)); }
+# Alert at 93%, not 92%: disk safely hovers at ~92% (the 86G debug tree is the LIVE gate suite, not
+# reclaimable cruft — hygiene is NOT behind). 93% is the real action point: status-update stops banking the
+# wall at disk>=93 (wall-bank-guard), so THAT is when to act (scheduled cold-clean on an idle box, or nextest).
+[ "${DP:-0}" -ge 93 ] && { note "ALERT: /home is ${DP}% used (>=93%) — wall-bank guard territory; cold-clean target/debug on an idle box or flag it"; alert=$((alert+1)); }
 
 # 4. systemd HEALTH + STALE-SCOPE AUTO-CLEAN. Empty claude scopes accumulate on every agent relaunch (and
 #    en masse a 'degraded' systemd is what forces the UNCONTAINED fallback). reset-failed + stop the empties.
