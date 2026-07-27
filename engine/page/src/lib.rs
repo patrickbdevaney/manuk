@@ -336,6 +336,7 @@ async fn fetch_images(
         base,
         &std::collections::HashSet::new(),
         &mut std::collections::HashMap::new(),
+        None,
     )
     .await
     .0
@@ -395,22 +396,79 @@ pub async fn fetch_image_urls_with_raw(
     (out, raw)
 }
 
+/// **Drive a fan-out of fetches against a DEADLINE and return whatever completed** — the partial
+/// result, not the empty one.
+///
+/// `join_all` is a single future that yields a single vector when the *last* member settles. Under a
+/// cancelling deadline that makes a fan-out all-or-nothing: one host that accepts the connection and
+/// never answers discards every response that had already arrived, decoded, in memory, paid for. The
+/// phase does not lose the work it had not done yet — it loses the work it had.
+///
+/// That is not what the budget promises. `finish_loading` says *"whatever has arrived is what the page
+/// gets"*, and this is the primitive that makes the sentence true: a `FuturesUnordered` polled item by
+/// item, so each answer is **banked as it lands**, and the deadline ends the waiting rather than the
+/// results.
+///
+/// `None` is the un-budgeted case and behaves exactly as `join_all` did: run to completion.
+async fn collect_before_deadline<F, T>(
+    futs: impl IntoIterator<Item = F>,
+    deadline: Option<std::time::Instant>,
+) -> Vec<T>
+where
+    F: std::future::Future<Output = T>,
+{
+    use futures_util::stream::StreamExt;
+    let mut pending: futures_util::stream::FuturesUnordered<F> = futs.into_iter().collect();
+    let mut out = Vec::with_capacity(pending.len());
+    let Some(deadline) = deadline else {
+        while let Some(v) = pending.next().await {
+            out.push(v);
+        }
+        return out;
+    };
+    let deadline = tokio::time::Instant::from_std(deadline);
+    let wanted = pending.len();
+    loop {
+        match tokio::time::timeout_at(deadline, pending.next()).await {
+            Ok(Some(v)) => out.push(v),
+            // Every member settled with time to spare — the ordinary case.
+            Ok(None) => break,
+            Err(_) => {
+                tracing::debug!(
+                    got = out.len(),
+                    of = wanted,
+                    "load budget reached mid fan-out — keeping what arrived"
+                );
+                break;
+            }
+        }
+    }
+    out
+}
+
 async fn fetch_images_except(
     dom: &Dom,
     base: &str,
     attempted: &std::collections::HashSet<(manuk_dom::NodeId, String)>,
     cache: &mut std::collections::HashMap<String, Option<std::rc::Rc<manuk_paint::DecodedImage>>>,
+    deadline: Option<std::time::Instant>,
 ) -> (
     std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
     Vec<(manuk_dom::NodeId, String)>,
 ) {
     let known: std::collections::HashSet<String> = cache.keys().cloned().collect();
-    let (by_url, tried) = fetch_images_owned(dom, base, attempted, &known).await;
+    let (by_url, tried) = fetch_images_owned(dom, base, attempted, &known, deadline).await;
 
     // Fold the answers into the page's URL cache. **A URL we asked for and did not get back is a
     // FAILURE, and it is recorded as `None`.** Remembering the "no" is the difference between one
     // fetch and one fetch per render round forever — that was the nytimes storm (507 duplicates
     // of 813 fetches), and it is what G_DEDUP exists to keep dead.
+    //
+    // ⚠ `tried` now contains only the URLs that actually SETTLED. A request the deadline interrupted
+    // did not answer "no"; nobody asked it to finish. Recording it here as a remembered failure would
+    // turn a slow host into a permanently blank image for the rest of the navigation — the deadline
+    // deciding a capability question it was never asked. Those URLs stay absent from the cache, so
+    // the next round asks again.
     for (url, img) in by_url {
         cache.insert(url, Some(std::rc::Rc::new(img)));
     }
@@ -438,6 +496,7 @@ async fn fetch_images_owned(
     base: &str,
     attempted: &std::collections::HashSet<(manuk_dom::NodeId, String)>,
     known_urls: &std::collections::HashSet<String>,
+    deadline: Option<std::time::Instant>,
 ) -> (
     std::collections::HashMap<String, manuk_paint::DecodedImage>,
     Vec<(manuk_dom::NodeId, String)>,
@@ -484,8 +543,6 @@ async fn fetch_images_owned(
             Some((n, url))
         })
         .collect();
-    let tried: Vec<(manuk_dom::NodeId, String)> = targets.clone();
-
     // **Fetch by URL, not by node.** A browser does not fetch the same sprite nine times because nine
     // elements point at it — but that is exactly what this did, keyed by `(node, url)`. G_DEDUP caught
     // it the moment it was written: a page naming one image from nine elements issued **14 duplicate
@@ -501,12 +558,27 @@ async fn fetch_images_owned(
     }
 
     // Concurrent (I/O-bound; the shared client pools + multiplexes), then decode sequentially (CPU).
-    let fetched = futures_util::future::join_all(
+    //
+    // **Against the load deadline, not to completion.** This was `join_all`, and `join_all` yields its
+    // vector only when the LAST fetch settles — so under `finish_loading`'s cancelling deadline a
+    // single stalled image host discarded every image that had already arrived. On a page whose
+    // pictures are the content that is not a lost enhancement; it is the page. See
+    // [`collect_before_deadline`].
+    let fetched = collect_before_deadline(
         wanted
             .into_iter()
             .map(|url| async move { (url.clone(), fetch_image_bytes(&url).await, url) }),
+        deadline,
     )
     .await;
+    // Only the URLs that actually answered — see `fetch_images_except`, which turns this into the
+    // "we already asked" record. A fetch the deadline interrupted must not be remembered as a failure.
+    let settled: std::collections::HashSet<String> =
+        fetched.iter().map(|(k, _, _)| k.clone()).collect();
+    let tried: Vec<(manuk_dom::NodeId, String)> = targets
+        .into_iter()
+        .filter(|(_, url)| known_urls.contains(url) || settled.contains(url))
+        .collect();
     for (node, bytes, url) in fetched {
         let Some(bytes) = bytes else {
             continue;
@@ -588,17 +660,27 @@ fn decode_bitmap(bytes: &[u8], url: &str) -> Option<manuk_paint::DecodedImage> {
 /// every icon should be. Owned data only, no `Rc`: this runs off the UI thread.
 async fn fetch_masks_owned(
     targets: Vec<(String, String)>,
-) -> HashMap<String, manuk_paint::DecodedImage> {
-    let fetched = futures_util::future::join_all(
+    deadline: Option<std::time::Instant>,
+) -> (
+    HashMap<String, manuk_paint::DecodedImage>,
+    std::collections::HashSet<String>,
+) {
+    let fetched = collect_before_deadline(
         targets
             .into_iter()
             .map(|(raw, abs)| async move { (raw, fetch_image_bytes(&abs).await, abs) }),
+        deadline,
     )
     .await;
-    fetched
+    // The second half is the URLs that ACTUALLY ANSWERED — success or honest failure. The caller
+    // records those as asked-and-answered; a request the deadline interrupted is not one of them, and
+    // marking it would retire an icon nobody ever declined to send.
+    let settled = fetched.iter().map(|(raw, _, _)| raw.clone()).collect();
+    let decoded = fetched
         .into_iter()
         .filter_map(|(raw, bytes, abs)| Some((raw, decode_bitmap(&bytes?, &abs)?)))
-        .collect()
+        .collect();
+    (decoded, settled)
 }
 
 /// Rasterize an SVG document to a [`DecodedImage`] (non-premultiplied RGBA) at its
@@ -1296,7 +1378,26 @@ pub struct Page {
     /// Those are exactly the loads an XSS payload makes, so a policy that only covered the initial
     /// parse would be enforcing on the half that matters least.
     csp: manuk_net::csp::Csp,
+    /// **When the load budget runs out — the instant the subresource fan-outs must stop WAITING and
+    /// commit whatever arrived.** `None` outside a budgeted load (a script round, the shell's own
+    /// re-fetch), where the caller owns the clock and a fan-out runs to completion.
+    ///
+    /// This exists because the budget's enforcement and its bookkeeping were the same future. See
+    /// [`collect_before_deadline`].
+    load_deadline: Option<std::time::Instant>,
 }
+
+/// **The slice of the load budget reserved for COMMITTING what the network already delivered.**
+///
+/// The budget is enforced by a `tokio::time::timeout` around the whole phase sequence, so the instant
+/// it expires the future is dropped — including the decode-and-apply that would have banked the
+/// bytes. A fan-out that stops fetching at exactly the deadline therefore still lands nothing. So the
+/// fan-outs stop this much *earlier* and spend the remainder committing.
+///
+/// It is deliberately taken out of the budget rather than added to it: the page's outer deadline is a
+/// Bar 0 promise about how long a tab can be busy, and buying correctness by extending it would be
+/// trading the floor for the capability. Nothing about the total load time changes.
+const COMMIT_RESERVE: std::time::Duration = std::time::Duration::from_millis(400);
 
 /// E1 full-page zoom bounds (matching what mainstream browsers offer).
 pub const MIN_ZOOM: f32 = 0.25;
@@ -1744,6 +1845,11 @@ impl Page {
         // is what a browser actually promises: Chromium does not wait for the last tracking pixel
         // before showing you the story.
         let budget = load_budget();
+        // The fan-outs inside stop WAITING here and spend what is left committing — see
+        // `COMMIT_RESERVE`. Without it the `timeout` below drops the decode-and-apply along with the
+        // fetch, and the images this phase already downloaded never reach the page.
+        page.load_deadline =
+            Some(std::time::Instant::now() + budget.saturating_sub(COMMIT_RESERVE));
         let enhancements = async {
             page.fetch_and_apply_images(fonts, viewport_width).await;
             page.fetch_and_apply_masks().await;
@@ -1755,6 +1861,7 @@ impl Page {
                 budget.as_secs_f32()
             );
         }
+        page.load_deadline = None;
         page
     }
 
@@ -1806,6 +1913,9 @@ impl Page {
     async fn finish_loading_inner(&mut self, fonts: &FontContext, viewport_width: f32) {
         let budget = load_budget();
         let started = std::time::Instant::now();
+        // The instant the fan-outs must stop waiting, held back by `COMMIT_RESERVE` so what already
+        // arrived is decoded and applied INSIDE the `timeout` that wraps this whole sequence.
+        self.load_deadline = Some(started + budget.saturating_sub(COMMIT_RESERVE));
         let mut phase = |name: &'static str| -> bool {
             let left = budget.saturating_sub(started.elapsed());
             if left.is_zero() {
@@ -1865,6 +1975,7 @@ impl Page {
         if phase("background images") {
             self.fetch_and_apply_background_images().await;
         }
+        self.load_deadline = None;
     }
 
     /// Perform the `fetch()`/XHR requests the page's scripts issued, settle them, and repeat — because
@@ -2039,6 +2150,7 @@ impl Page {
             &self.final_url,
             &self.image_attempts,
             &mut self.image_by_url,
+            self.load_deadline,
         )
         .await;
         self.image_attempts.extend(tried);
@@ -3995,10 +4107,12 @@ impl Page {
         if targets.is_empty() {
             return 0;
         }
-        for (raw, _) in &targets {
-            self.fetched_urls.insert(raw.clone());
-        }
-        let owned = fetch_masks_owned(targets).await;
+        // **Marked AFTER the fetch, and only for what answered.** This ran before it, over every
+        // target, which was harmless while the whole phase died together — the mutation was dropped
+        // with the future. Now the phase survives its deadline, so marking a mask nobody ever
+        // declined to send would retire that icon for the rest of the navigation.
+        let (owned, settled) = fetch_masks_owned(targets, self.load_deadline).await;
+        self.fetched_urls.extend(settled);
         let rc: HashMap<String, std::rc::Rc<manuk_paint::DecodedImage>> = owned
             .into_iter()
             .map(|(u, i)| (u, std::rc::Rc::new(i)))
@@ -4037,10 +4151,11 @@ impl Page {
         if targets.is_empty() {
             return 0;
         }
-        let fetched = futures_util::future::join_all(
+        let fetched = collect_before_deadline(
             targets
                 .into_iter()
                 .map(|(n, url)| async move { (n, fetch_image_bytes(&url).await, url) }),
+            self.load_deadline,
         )
         .await;
         let mut count = 0usize;
@@ -4283,6 +4398,7 @@ impl Page {
             child_pages: std::collections::HashMap::new(),
             last_cascade: None,
             csp,
+            load_deadline: None,
         }
     }
 
@@ -5965,13 +6081,21 @@ impl Page {
             // clone of a multi-megabyte script.
             .filter(|url| !self.external_css.contains_key(url))
             .collect();
-        let fetched = futures_util::future::join_all(ext_urls.into_iter().map(|url| async move {
-            let text = manuk_net::fetch(&url)
-                .await
-                .ok()
-                .and_then(|r| subresource_text(&r));
-            (url, text)
-        }))
+        // Against the load deadline (tick 655). Tick 654 fixed this phase's ORDER — apply the sheets
+        // where they are complete, before the phase goes back to the network for `@import`/`@font-face`
+        // — but left the fan-out itself all-or-nothing: one slow CSS host and `join_all` still yields
+        // nothing, so the sheets that DID arrive are discarded before they can be applied at all. Same
+        // rule, one implementation lower down.
+        let fetched = collect_before_deadline(
+            ext_urls.into_iter().map(|url| async move {
+                let text = manuk_net::fetch(&url)
+                    .await
+                    .ok()
+                    .and_then(|r| subresource_text(&r));
+                (url, text)
+            }),
+            self.load_deadline,
+        )
         .await;
         // Start from what we already have — a re-entry must ADD sheets, never rebuild the set from
         // scratch (which would drop the ones it just decided not to re-fetch).
@@ -6058,13 +6182,16 @@ impl Page {
             if want.is_empty() {
                 break;
             }
-            let got = futures_util::future::join_all(want.into_iter().map(|(_, url)| async move {
-                let text = manuk_net::fetch(&url)
-                    .await
-                    .ok()
-                    .and_then(|r| subresource_text(&r));
-                (url, text)
-            }))
+            let got = collect_before_deadline(
+                want.into_iter().map(|(_, url)| async move {
+                    let text = manuk_net::fetch(&url)
+                        .await
+                        .ok()
+                        .and_then(|r| subresource_text(&r));
+                    (url, text)
+                }),
+                self.load_deadline,
+            )
             .await;
             for (url, text) in got {
                 match text {
@@ -7433,7 +7560,8 @@ async fn prepare_prefetched(html: String, final_url: String, mut csp: Csp) -> Re
             .filter(|(raw, _)| seen.insert(raw.clone()))
             .collect()
     };
-    let masks = fetch_masks_owned(mask_targets).await;
+    // The prefetch path has no page-level budget of its own (the caller owns the clock), so no deadline.
+    let (masks, _settled) = fetch_masks_owned(mask_targets, None).await;
 
     Ok(Loaded::Prefetched(Box::new(Prefetched {
         dom,

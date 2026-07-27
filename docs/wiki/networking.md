@@ -1658,3 +1658,91 @@ the rest of the pipeline would try to run an empty script.
 construction and it passed **with the fix disabled**. `Page::load_async` is the path the shell and the
 renderer take and the one that fetches subresources. A network gate written against the sync
 constructor measures nothing. [[page-gates-need-features]]
+
+## `join_all` is one future — a fan-out under a cancelling deadline delivers all or nothing (tick 655)
+
+**The load budget is enforced as a hard `tokio::time::timeout` around the whole subresource phase
+sequence.** The justification written above it is that cancelling mid-phase is safe by construction:
+*"each phase fetches everything it needs and only then applies it to the DOM, so a dropped future
+loses that phase's ENHANCEMENT and never a half-mutated document."*
+
+That is true of a phase and **false of a fan-out**, and the difference is the whole bug:
+
+```rust
+// the shape, five times over: images, external CSS, @import rounds, background images, masks
+let fetched = futures_util::future::join_all(urls.map(|u| async move { (u, fetch(&u).await) })).await;
+for (url, bytes) in fetched { /* decode, cache, apply */ }
+```
+
+`join_all` is a **single** future. It yields its vector when the *last* member settles — so under a
+cancelling deadline, one host that accepts the connection and never answers discards every response
+that had already arrived, decoded, in memory, paid for. The phase does not lose the work it had not
+done yet; **it loses the work it had.** On a page whose pictures are the content, that is not a lost
+enhancement — it is the page.
+
+### The primitive
+
+```rust
+async fn collect_before_deadline<F, T>(futs: impl IntoIterator<Item = F>, deadline: Option<Instant>)
+    -> Vec<T> where F: Future<Output = T>
+{
+    let mut pending: FuturesUnordered<F> = futs.into_iter().collect();
+    let mut out = Vec::with_capacity(pending.len());
+    let Some(deadline) = deadline else {                    // un-budgeted: exactly as join_all
+        while let Some(v) = pending.next().await { out.push(v) }
+        return out;
+    };
+    loop {
+        match tokio::time::timeout_at(deadline.into(), pending.next()).await {
+            Ok(Some(v)) => out.push(v),   // banked AS IT LANDS
+            Ok(None)    => break,         // everything settled, with time to spare
+            Err(_)      => break,         // the deadline ends the WAITING, not the RESULTS
+        }
+    }
+    out
+}
+```
+
+`FuturesUnordered` polled item by item is the entire difference: each answer leaves the future's
+stack and lands in `out` the moment it arrives, so a cancellation costs only what had not arrived.
+
+### Three things that are easy to get wrong
+
+**1. The deadline must be held back from the budget's end, and taken OUT of the budget.** A fan-out
+that stops fetching at exactly the deadline still lands nothing, because the outer `timeout` drops the
+decode-and-apply along with the fetch. `COMMIT_RESERVE` (400ms) is subtracted from the budget for
+precisely that window. Adding it to the budget instead would buy correctness by extending how long a
+tab can be busy — trading a Bar 0 promise for a capability, which the ratchet refuses.
+
+**2. `settled` ≠ `attempted`.** Every one of these phases keeps a *"we already asked"* set so a dead
+endpoint is asked once and remembered (the nytimes storm: 507 duplicates of 813 fetches, and why
+`G_DEDUP` exists). A request the deadline interrupted **did not answer "no"** — nobody asked it to
+finish. Recording it there turns a slow host into a permanently blank image for the rest of the
+navigation: the deadline deciding a capability question it was never asked. So the bookkeeping is
+filtered to what actually settled — and the mask phase's marking had to **move to after the fetch**,
+where writing it early was harmless only while the whole phase died together with it.
+
+**3. The cancellation was itself a duplicate-fetch source.** `load_async` runs a budgeted image pass
+and `finish_loading` runs another. When the first was cancelled it lost the *record* along with the
+bytes, so the second re-fetched everything: measured **4 responses for 2 images**, a `G_DEDUP`-class
+storm caused by the cancellation rather than by the dedup logic. Banking what arrived banks the
+bookkeeping, and the count falls to 2. `G_IMAGES_SURVIVE_BUDGET` asserts that count, so the
+bookkeeping half cannot rot silently behind the visible half.
+
+### Where it is applied, and where it deliberately is not
+
+Applied: `<img>`/`<video poster>` images, external `<link>` stylesheets (the phase tick 654 made
+*ordering*-correct — still all-or-nothing one level down), `@import` rounds, background images, mask
+images. **Not applied:** `pump_page_fetches` and the script fan-out, where a *partial* set has
+ordering semantics this primitive does not answer. Naming the exclusion is the point — the recurring
+failure here is *one rule, N implementations*, and an unlisted N is how it recurs.
+
+### The control that saved the gate
+
+`G_IMAGES_SURVIVE_BUDGET` first asserted on the element's **laid-out width**. It read 784 (the full
+content width) for all three images *with the fix in*, which looked exactly like the fix failing. The
+control — no stall, generous budget, same page — reported `decoded=Some((41, 23))` with
+`rect_w=Some(784)`: the bytes are there and correct, and **the natural size never reaches layout.**
+That is a separate, larger fidelity defect. Without the control this tick would have reported a
+working fix as broken and then gone looking for the wrong organ. *Suspect the instrument before the
+subject; and when a fix and a control disagree, the control is the one that measured something.*

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **413** | ticks 1–654 |
-| median tick cycle | **21m** | 412 intervals |
-| median, last 10 | **29m** | 10 intervals |
+| ticks landed | **414** | ticks 1–655 |
+| median tick cycle | **21m** | 413 intervals |
+| median, last 10 | **34m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.08** | 382.9h elapsed |
-| median verify wall | **64s** | 352 ticks |
+| **ticks per hour** | **1.08** | 383.4h elapsed |
+| median verify wall | **64s** | 353 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **328**
-* **✅ rows in the capability ledger**: 144 → **343**
+* **live gates**: 27 → **329**
+* **✅ rows in the capability ledger**: 144 → **344**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**204 of 413 ticks** (49%) moved a
+**205 of 414 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **204** capability ticks, median cycle **21m**
+* **205** capability ticks, median cycle **21m**
 * median diff per tick: **+236 / −34** lines across 8 files
 
 ## Every tick
@@ -510,5 +510,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **651** | 2026-07-27 02:08 | 41m | reliability | 63s | +458/−42 | 326 | 81 | 56.0% · | the certificate said `verdict ok` about a blank white page (2026-07-27) |
 | **652** | 2026-07-27 02:48 | 40m | capability | 63s | +320/−38 | 326 | 81 | 56.0% · | we ran the injected script and never told the page (2026-07-27) |
 | **654** | 2026-07-27 03:56 | 68m | capability | 63s | +666/−37 | 328 | 81 | 56.0% · | the stylesheets were on this machine the whole time (2026-07-27) |
+| **655** | 2026-07-27 04:27 | 30m | capability | 63s | +602/−62 | 329 | 81 | 56.0% · | `join_all` is one future, so one stalled host discards every image that arrived (2026-07-2 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

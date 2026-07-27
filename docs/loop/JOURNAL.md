@@ -29820,3 +29820,106 @@ is the ninth re-cascade site**, named above, needing the `ReflowCtx` question an
 because this tick changed what every budget-exhausted site in that corpus renders. **(4) PLACEMENT**
 is no longer the oldest unmoved number by default: it moved 38.6 points on one site, and the sweep
 is what says whether that generalises.
+
+## Tick 655 — `join_all` is one future, so one stalled host discards every image that arrived (2026-07-27)
+
+HYPOTHESIS: t654's own NEXT names it — *"the image phase is starved by the same budget; it is the
+same defect one phase down and the fix shape is likely the same."* `keirin.jp`'s coverage went
+98.0% → 74.4% the moment its stylesheets landed, and that drop is made of picture-shaped holes: the
+elements whose content is an image the budget never fetched stop being full-width UA blocks and
+collapse to 0×0. The board's live constraint agrees from the other direction (observer t602): *the
+12s load budget is exhausted so pages paint incomplete and shape is PARTLY a TIMING result.*
+
+**IT IS THE SAME DEFECT, ONE LAYER LOWER THAN THE ORDERING FIX — AND IT IS IN THE PRIMITIVE.**
+
+`finish_loading` enforces the budget as a hard `timeout` around the whole phase sequence, on the
+stated ground that *"each phase fetches everything it needs and only then applies it to the DOM, so a
+dropped future loses that phase's ENHANCEMENT and never a half-mutated document."* For a fan-out that
+sentence says the opposite of what it means:
+
+```text
+  join_all(every distinct image url)  ->  decode  ->  fold into the cache  ->  apply
+```
+
+**`join_all` is ONE future.** It yields its vector only when the *last* member settles, so a single
+host that accepts the connection and never answers takes down every response that had already
+arrived — decoded, in memory, paid for. The phase does not lose the work it had not done yet. It
+loses the work it had.
+
+MEASURED, on a hermetic three-image page whose third image stalls forever:
+
+```text
+                       before            after
+  images on the page   0 of 2      ->    2 of 2   (41×23 and 67×29, each identified by its own dims)
+  the stalled image    absent            absent   (honestly, both times)
+  responses on the WIRE  4          ->    2
+```
+
+**The `4` is the half of this the probe found rather than predicted.** The cancelled fan-out lost the
+*"we already asked"* record along with the bytes, so `load_async`'s budgeted pass and
+`finish_loading`'s each fetched the same two images: a G_DEDUP-class duplicate on the wire caused by
+the cancellation, not by the dedup logic. Banking what arrived also banks the bookkeeping.
+
+### THE FIX IS ONE PRIMITIVE, AND THEN THE OTHER FOUR IMPLEMENTATIONS OF THE SAME RULE
+
+`collect_before_deadline` drives a `FuturesUnordered` item by item against a deadline, so each answer
+is **banked as it lands** and the deadline ends the *waiting* rather than the *results*. `None` is the
+un-budgeted case and behaves exactly as `join_all` did.
+
+The deadline is held on the page (`Page::load_deadline`) and set by both budgeted call sites, pulled
+back by a `COMMIT_RESERVE` of 400ms — taken **out of** the budget, never added to it. Without that
+reserve a fan-out that stops fetching at exactly the deadline still lands nothing, because the outer
+`timeout` drops the decode-and-apply along with the fetch. Buying this by extending the budget would
+have traded a Bar 0 promise for a capability; total load time is unchanged.
+
+`grep join_all` then named the rest, and the standing lesson (**one rule, N implementations**) is why
+they are in this tick and not in a comment: **external CSS top-level sheets** — the phase t654 made
+ordering-correct, still all-or-nothing one level down — **`@import` rounds, background images, and
+mask images**. Left alone deliberately: `pump_page_fetches` and the script fan-out, where a *partial*
+set has ordering semantics that this primitive does not answer.
+
+**AND THE RULE THE PARTIAL RESULT CREATES: settled ≠ attempted.** A request the deadline interrupted
+did not answer *"no"* — nobody asked it to finish. Recording it in the asked-and-answered set would
+turn a slow host into a permanently blank image for the rest of the navigation: the deadline deciding
+a capability question it was never asked. So `tried` is filtered to the URLs that actually settled,
+and the mask phase's `fetched_urls` marking **moved to after the fetch**, where it was harmless only
+while the whole phase died together with its own bookkeeping.
+
+### THE CONTROL KILLED THIS GATE'S FIRST OBSERVABLE BEFORE IT COULD BECOME A FALSE CLAIM
+
+The gate first asserted on the element's laid-out width — 41px and 67px for images that arrived,
+against 784 for ones that did not. It read 784 for all three *with the fix in*, which looked like the
+fix failing. A control run (no stall, generous budget, same page) says:
+
+```text
+  CONTROL a: decoded=Some((41, 23))  rect_w=Some(784)
+  CONTROL b: decoded=Some((67, 29))  rect_w=Some(784)
+```
+
+The bytes are there and correct; **the natural size never reaches layout.** An `<img>` measures the
+full content width whether its pixels arrived or not. That is a real and larger fidelity defect and
+it is **not this one**, so it is recorded as the next thread rather than smuggled in here — and the
+gate now asks the map that holds the bytes (`decoded_images()`), which is the question it is about.
+Without the control this tick would have reported a working fix as broken, or worse, "fixed" the
+wrong organ.
+
+TICK SHAPE: capability (one cancellation-semantics defect in the subresource fan-out primitive, plus
+the four other implementations of the same rule and the settled-vs-attempted bookkeeping it forces).
+Bar 0 untouched — the budget is unchanged and the reserve comes out of it, so nothing waits longer.
+Gates: `G_IMAGES_SURVIVE_BUDGET` (`engine/page/tests/g_images_survive_budget.rs`) — hermetic, one
+local socket serving two hand-built BMPs of unmistakable dimensions instantly and stalling forever on
+a third, so the deadline is guaranteed to fire exactly where the old code lost the other two.
+RED-proven by passing `None` for the deadline: **all three images `None`, 4 responses on the wire**.
+It asserts both preconditions (the fast images WERE served; the load DID return on the budget) so it
+cannot pass by failing to reproduce, and it asserts the wire count so the bookkeeping half cannot
+silently rot.
+WIKI: `docs/wiki/networking.md` — "`join_all` is one future".
+PATTERN: subresource fan-out under a cancelling deadline — partial delivery vs all-or-nothing.
+
+NEXT: **(1) `<img>` NATURAL SIZE NEVER REACHES LAYOUT** — measured above under control, on a page with
+no CSS at all: decoded 41×23, laid out 784 wide. Every unsized image on the web is a full-width block,
+which is a placement-fidelity root cause of exactly the kind the board asks for, and it is the reason
+`keirin`'s coverage reads the way it does in both directions. **(2) `forced_reflow` is still the ninth
+re-cascade site** (t654), needing the `ReflowCtx` aliasing question answered on purpose. **(3) A HEAD-20
+sweep** — owed since t653 and now owed three times over, because t654 changed what every
+budget-exhausted site renders and t655 changed what it renders it *with*.

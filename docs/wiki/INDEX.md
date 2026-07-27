@@ -954,6 +954,11 @@
   - L1610 · A 404 page is a document to RENDER, not code to EXECUTE (tick 616)
   - L1634 · One fact, three consumers, three different correct answers
   - L1650 · The refusal must leave the ESTABLISHED "nothing to run" state
+  - L1662 · join_all is one future — a fan-out under a cancelling deadline delivers all or nothing (tick 655)
+  - L1683 · The primitive
+  - L1709 · Three things that are easy to get wrong
+  - L1732 · Where it is applied, and where it deliberately is not
+  - L1740 · The control that saved the gate
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -1114,4 +1119,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1029 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1034 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
