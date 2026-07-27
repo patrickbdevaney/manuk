@@ -25,19 +25,20 @@ if [ "${1:-}" = "--self-test" ]; then
   FIX=$(mktemp)
   {
     printf 'class\tcapability\twhat\tstatus\tgate\treceipt\n'
-    printf 'test\tOK-row\tx\tworks\tG_SELECTOR\t-\n'                    # real gate -> must be OK
+    printf 'test\tOK-row\tx\tworks\tG_SELECTOR\t-\n'                    # real gate (uppercase) -> OK
+    printf 'test\tLC-OK-row\tx\tworks\tg_selector\t-\n'                 # SAME gate, lowercase dialect -> OK (audit #36)
     printf 'test\tBARE-row\tx\tworks\t-\t-\n'                           # gate '-' + claim -> bare drift
     printf 'test\tDANGLE-row\tx\tgated\tG_DOES_NOT_EXIST_XYZ\t-\n'      # fake gate -> dangling drift
   } > "$FIX"
   OUT=$(MANUK_MAP="$FIX" "$0" 2>&1); rm -f "$FIX"
   got=$(printf '%s\n' "$OUT" | grep -oE 'DRIFT TOTAL: [0-9]+' | grep -oE '[0-9]+' | head -1)
   okc=$(printf '%s\n' "$OUT" | grep -oE 'real gate\): [0-9]+' | grep -oE '[0-9]+' | head -1)
-  echo "self-test: fixture (1 ok + 1 bare + 1 dangling) -> instrument reported DRIFT=${got:-?} OK=${okc:-?}"
-  if [ "${got:-x}" = "2" ] && [ "${okc:-x}" = "1" ]; then
-    echo "✓ SELF-TEST PASS — fires on real drift (bare+dangling), does NOT false-fire on a valid row. Falsify-proven."
+  echo "self-test: fixture (2 ok [upper+lower dialect] + 1 bare + 1 dangling) -> instrument reported DRIFT=${got:-?} OK=${okc:-?}"
+  if [ "${got:-x}" = "2" ] && [ "${okc:-x}" = "2" ]; then
+    echo "✓ SELF-TEST PASS — fires on real drift (bare+dangling), does NOT false-fire on a valid row (either citation case). Falsify-proven."
     exit 0
   fi
-  echo "✗ SELF-TEST FAIL — map-reconcile is BROKEN (expected DRIFT=2 OK=1). Its drift numbers are NOT trustworthy." >&2
+  echo "✗ SELF-TEST FAIL — map-reconcile is BROKEN (expected DRIFT=2 OK=2). Its drift numbers are NOT trustworthy." >&2
   exit 1
 fi
 [ -f "$MAP" ] || { echo "map-reconcile: $MAP not found"; exit 0; }
@@ -53,10 +54,13 @@ gate_backed(){ # $1 = the WHOLE gate cell (may name several: "G_FORM, G_FORMDATA
   # 0 if AT LEAST ONE named G_ gate is backed by a real test — the sound false-presence test is "does
   # ANY real gate back this claim", so tokenize and check each; a cell fails only if NONE resolve.
   local tok lc
-  for tok in $(printf '%s' "$1" | grep -oE 'G_[A-Z0-9_]+'); do
+  # Case-INSENSITIVE: the map cites gates in two dialects — uppercase const `G_FOO` and lowercase file
+  # `g_foo` (surface audit #36). Matching only uppercase filed lowercase citations as unchecked prose.
+  # Extract + resolve both (files are lowercase; consts uppercase → grep -i covers either).
+  for tok in $(printf '%s' "$1" | grep -oiE 'G_[A-Z0-9_]+'); do
     lc=$(printf '%s' "$tok" | tr 'A-Z' 'a-z')
-    printf '%s\n' "$BASENAMES" | grep -qE "^${lc}(_|$)" && return 0        # a test file g_foo*.rs
-    grep -rqlF "$tok" --include='*.rs' engine agent tests 2>/dev/null && return 0  # or the const named in source
+    printf '%s\n' "$BASENAMES" | grep -qiE "^${lc}(_|$)" && return 0        # a test file g_foo*.rs
+    grep -riqlF "$tok" --include='*.rs' engine agent tests 2>/dev/null && return 0  # or the const named in source (either case)
   done
   return 1
 }
@@ -71,7 +75,7 @@ while IFS=$'\t' read -r cls cap brk status gate rest; do
     gated|works|partial)
       if [ "${gate:-}" = "-" ] || [ -z "${gate:-}" ]; then
         bare=$((bare+1)); printf '  %-10s %-34s claims "%s" with NO gate\n' "$status" "${cap:0:34}" "$status" >> "$BAREF"
-      elif printf '%s' "$gate" | grep -qE 'G_[A-Z0-9_]+'; then
+      elif printf '%s' "$gate" | grep -qiE 'G_[A-Z0-9_]+'; then
         if gate_backed "$gate"; then ok=$((ok+1)); else
           nofile=$((nofile+1)); printf '  %-10s %-30s names %-40s — NO test file/const found\n' "$status" "${cap:0:30}" "${gate:0:40}" >> "$NOFILEF"
         fi
