@@ -1030,10 +1030,80 @@ pub fn site_name(url: &str) -> String {
 /// way is two extra renders; the cost of being wrong the other way is a phantom regression aimed at
 /// the previous tick's work, which this project has now nearly published three times.
 pub fn repeat_plan(rows_text: &str) -> Vec<(String, usize, f64)> {
+    // ── **A SITE THAT ALREADY REPEATED AND DREW THE SAME NUMBER THREE TIMES IS NOT REPEATED AGAIN**
+    //    (tick 687, from the first real use of this plan).
+    //
+    // Tick 681's sweep repeated the four sites this function named, and three of them returned rows
+    // that were **byte-identical** across all three renders:
+    //
+    // ```text
+    //   www.agoda.com    0.1000 .. 0.5077   Δ 40.8 pts over 3 runs   <- real, and large
+    //   www.naukri.com   0.0000 .. 0.0000   Δ  0.0 pts over 3 runs
+    //   keirin.jp        0.5717 .. 0.5717   Δ  0.0 pts over 3 runs
+    //   playhop.com      0.1429 .. 0.1429   Δ  0.0 pts over 3 runs
+    //   (naukri's three differ in shape_n only; its SHAPE is identical, which is what votes)
+    // ```
+    //
+    // The document snapshot is cached, so three repeats of such a site are **three renders of the same
+    // bytes** — six extra live renders per sweep, forever, for an error bar of exactly zero. The
+    // variance those sites showed across SWEEPS is in the document, and no amount of repeating inside
+    // one sweep can sample it.
+    //
+    // **This breaks tick 673's monotonicity argument on purpose, and the argument does not survive
+    // contact with the measurement.** t673 said *"a site that has ever drawn wide keeps its repeats,
+    // because the two errors are not symmetric (two renders vs a phantom regression)."* True while the
+    // within-sweep spread was unknown. It is now measured, and where it is ZERO the median of three
+    // identical draws IS the single draw — so the repeats cannot prevent a phantom regression, they can
+    // only cost renders. Asymmetric errors justify paying for information, not for none.
+    let deterministic = within_sweep_deterministic(rows_text);
     shape_spreads(rows_text)
         .into_iter()
         .filter(|(_, min, max, _)| (max - min) * 100.0 > SPREAD_UNSTABLE_PTS)
+        .filter(|(name, ..)| !deterministic.contains(name))
         .map(|(name, min, max, _)| (name, UNSTABLE_REPEATS, (max - min) * 100.0))
+        .collect()
+}
+
+/// Sites whose most recent CONSECUTIVE run in `rows_text` produced an identical SHAPE every time —
+/// i.e. sites that have already been repeated and shown, by measurement, that repeating them samples
+/// nothing. A site with no consecutive run is absent (unknown, not deterministic), so its repeats are
+/// unaffected: this can only ever *retire* a repeat that has already been paid for once.
+pub fn within_sweep_deterministic(rows_text: &str) -> std::collections::HashSet<String> {
+    // Walk the file keeping the maximal consecutive run per site, LAST run wins — the same shape as
+    // `collapse_consecutive_repeats`, so the two cannot disagree about what a "run" is.
+    let mut last_run: std::collections::HashMap<String, Vec<f64>> =
+        std::collections::HashMap::new();
+    let mut cur: Option<(String, Vec<f64>)> = None;
+    let mut flush = |cur: &mut Option<(String, Vec<f64>)>,
+                     map: &mut std::collections::HashMap<String, Vec<f64>>| {
+        if let Some((name, vals)) = cur.take() {
+            map.insert(name, vals);
+        }
+    };
+    for line in rows_text.lines() {
+        let line = line.trim_end();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let f: Vec<&str> = line.split('\t').collect();
+        if f.len() < 3 {
+            continue;
+        }
+        let name = f[0].to_string();
+        if cur.as_ref().is_some_and(|(n, _)| *n != name) {
+            flush(&mut cur, &mut last_run);
+        }
+        let shape = f[2].parse::<f64>().ok();
+        let entry = cur.get_or_insert_with(|| (name, Vec::new()));
+        if let Some(v) = shape {
+            entry.1.push(v);
+        }
+    }
+    flush(&mut cur, &mut last_run);
+    last_run
+        .into_iter()
+        .filter(|(_, v)| v.len() >= UNSTABLE_REPEATS && v.windows(2).all(|w| w[0] == w[1]))
+        .map(|(n, _)| n)
         .collect()
 }
 
@@ -2827,6 +2897,64 @@ supjav.com\t-\t-\t0\t0\t0\t0\t0\tbot-wall-403
             shape_n,
             unmeasurable: None,
         }
+    }
+
+    /// **A REPEAT THAT MEASURED NOTHING IS NOT PAID FOR TWICE** (tick 687). Tick 681's sweep repeated
+    /// the four sites the plan named and three of them returned an IDENTICAL shape on all three renders
+    /// — the document snapshot is cached, so those were three renders of the same bytes. Six extra live
+    /// renders per sweep, forever, for an error bar of exactly zero.
+    ///
+    /// The fixture is those real runs: `keirin.jp` three times identical (retire the repeats),
+    /// `www.agoda.com` three times varying (keep them), and `www.ikea.com` with only ONE reading in its
+    /// run (unknown, so untouched — this rule may only ever retire a repeat already paid for once).
+    ///
+    /// ⚠ **`keirin.jp` needs an EARLIER, DIFFERING reading in the file, and the first draft of this test
+    /// did not have one — which made the plan assertion VACUOUS.** With only the identical run present,
+    /// `shape_spreads` reports Δ 0.0 and the pre-existing `> SPREAD_UNSTABLE_PTS` filter already drops the
+    /// site, so disabling the new guard changed nothing and the mutation stayed GREEN. The guard only bites
+    /// where the file holds BOTH a wide cross-run spread and a flat within-sweep run — which is exactly
+    /// keirin's real state (Δ 52.6 across sweeps, Δ 0.0 within one). Third vacuous assertion caught by
+    /// running the mutation this session.
+    #[test]
+    fn a_repeat_that_measured_nothing_is_not_paid_for_twice() {
+        const ROWS: &str = "\
+#name\tcoverage\tshape\th_overflow\toverlap\treading_order\tdead_target\tshape_n\treason\tinstrument
+keirin.jp\t0.714489\t0.404427\t3\t5\t27\t0\t497\t\tbbbb2222
+www.ikea.com\t0.970793\t0.507163\t0\t5\t19\t0\t698\t\tbbbb2222
+keirin.jp\t0.746408\t0.571704\t3\t4\t27\t0\t1039\t\tbbbb2222
+keirin.jp\t0.746408\t0.571704\t3\t4\t27\t0\t1039\t\tbbbb2222
+keirin.jp\t0.746408\t0.571704\t3\t4\t27\t0\t1039\t\tbbbb2222
+www.agoda.com\t0.080446\t0.507692\t0\t0\t0\t0\t65\t\tbbbb2222
+www.agoda.com\t0.012376\t0.100000\t0\t0\t0\t0\t10\t\tbbbb2222
+www.agoda.com\t0.012376\t0.100000\t0\t0\t0\t0\t10\t\tbbbb2222
+www.ikea.com\t0.970793\t0.507163\t0\t5\t19\t0\t698\t\tbbbb2222
+";
+        let det = super::within_sweep_deterministic(ROWS);
+        assert!(
+            det.contains("keirin.jp"),
+            "keirin drew the SAME number three times in one sweep — repeating it again samples nothing, \
+             because the snapshot is cached and those are three renders of identical bytes. Got {det:?}"
+        );
+        assert!(
+            !det.contains("www.agoda.com"),
+            "agoda's three draws differ by 40.8 points WITHIN one sweep, which is exactly the variance \
+             the repeats exist to median away. Retiring them would hand the certificate a single draw \
+             from the widest distribution in the corpus. Got {det:?}"
+        );
+        assert!(
+            !det.contains("www.ikea.com"),
+            "ikea has ONE reading in its run, so its within-sweep spread is UNKNOWN, not zero. This rule \
+             may only ever retire a repeat that has already been paid for once. Got {det:?}"
+        );
+
+        let plan = super::repeat_plan(ROWS);
+        let names: Vec<&str> = plan.iter().map(|(n, ..)| n.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["www.agoda.com"],
+            "the plan must keep the one site whose repeats measure something and drop the one whose do \
+             not — got {plan:?}"
+        );
     }
 
     /// **AGODA'S AND NAUKRI'S REAL DRAWS, AND THE RETRACTION OF TICK 681** (tick 682).

@@ -32415,3 +32415,65 @@ serialises `outerHTML` for those paths and prints it, run against the LIVE url t
 fetch+`<base>` trick the oracle uses. **(2) THE PER-CALL LOAD BUDGET** (t678/t679/#51) — the priority
 inversion, blocked on nine gate files that call `load_async` without `finish_loading`. **(3)** the repeat
 plan should key on whether a site's variance is REPRODUCIBLE within a sweep.
+
+## Tick 687 — a repeat that measured nothing is not paid for twice (2026-07-27)
+
+HYPOTHESIS: the NEXT item carried since t681 — the repeat plan should key on whether a site's variance is
+REPRODUCIBLE within a sweep. **Also a deliberate stop:** the naukri arc had reached three ticks and
+constitution check #50's rule is explicit — *do not start another single-site arc without naming which
+unscored CATEGORY it converts.* t686 handed that arc a bounded next step (diff our built DOM against
+Chrome's) and this tick takes the unblocked corpus-wide item instead.
+
+### THE MEASUREMENT ALREADY EXISTED
+
+```text
+  www.agoda.com    0.1000 .. 0.5077   Δ 40.8 pts over 3 runs   <- real, and large
+  www.naukri.com   0.0000 .. 0.0000   Δ  0.0 pts over 3 runs
+  keirin.jp        0.5717 .. 0.5717   Δ  0.0 pts over 3 runs
+  playhop.com      0.1429 .. 0.1429   Δ  0.0 pts over 3 runs
+```
+
+Three of the four sites the plan repeats return **byte-identical rows**: the snapshot is cached, so those
+are three renders of the same bytes. **Six extra live renders per sweep, indefinitely, for an error bar of
+exactly zero.**
+
+### WHAT LANDED
+
+`within_sweep_deterministic()` — the sites whose most recent CONSECUTIVE run produced an identical shape
+every time — and `repeat_plan` excludes them. It can only ever **retire a repeat already paid for once**:
+a site with fewer than `UNSTABLE_REPEATS` readings in its run is *unknown*, not deterministic, and keeps
+its repeats. The run-detection walks the file the same way `collapse_consecutive_repeats` does, so the two
+cannot disagree about what a "run" is.
+
+**This breaks t673's monotonicity argument deliberately.** t673: *"a site that has ever drawn wide keeps
+its repeats, because the two errors are not symmetric."* Right while the within-sweep spread was unknown;
+now it is measured, and **where it is zero the median of three identical draws IS the single draw** — the
+repeats cannot prevent a phantom regression, only cost renders. Asymmetric errors justify paying for
+information, not for none.
+
+### ⚠ AND THE GATE'S FIRST DRAFT WAS VACUOUS — THE THIRD TIME THIS SESSION
+
+The fixture held only keirin's identical run. With just that, `shape_spreads` reports Δ 0.0 and the
+pre-existing `> SPREAD_UNSTABLE_PTS` filter already drops the site — so disabling the new guard changed
+nothing and the mutation stayed **GREEN**. The guard only bites where a file holds BOTH a wide cross-run
+spread AND a flat within-sweep run, which is keirin's real state (Δ 52.6 across sweeps, Δ 0.0 within one).
+Adding an earlier differing reading made the mutation red: the plan then keeps keirin at Δ 16.7 pts.
+
+Three vacuous assertions caught by running the mutation in one session — t675's whole-log disjunction,
+t680's flag read from inside a task that always ran first, and this. Each was green, plausible, and
+measuring nothing. **The falsify pass is the only thing that distinguishes a gate from a comment.**
+
+TICK SHAPE: infrastructure (the sweep stops paying for renders that measure nothing — it multiplies every
+future certificate's cost). Bar 0 untouched; `tests/wpt/` only.
+Gates: `spread_tests::a_repeat_that_measured_nothing_is_not_paid_for_twice` — built from the real t681
+rows plus keirin's earlier differing reading. RED-proven by two independent mutations: disabling the guard
+(keirin returns to the plan at Δ 16.7) and removing the `>= UNSTABLE_REPEATS` floor (a site with ONE
+reading reads as deterministic and loses repeats it never had). manuk-wpt lib 68/68.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "a repeat that measured nothing is not paid for twice".
+PATTERN: none — instrument, not a web pattern. [no-pattern]
+
+NEXT: **(1) DIFF OUR BUILT DOM AGAINST CHROME'S** on naukri's 89,905px chain — t686 narrowed it to that
+single substitution and every cheaper one is eliminated. **(2) THE PER-CALL LOAD BUDGET**
+(t678/t679/#51) — the priority inversion; `initial images+masks` (an enhancement) runs before
+`dynamic scripts` (which builds the DOM), and it is blocked on nine gate files that call `load_async`
+without `finish_loading`. Size it as a full tick. **(3)** `<link>.sheet`, the honest remainder of t665.

@@ -2149,3 +2149,46 @@ returning to: **read the output of the change, next to the change.** It took one
 grep to falsify.
 
 [[reliability-doctrine]] [[certification-redesign]] [[honest-answer-is-not-a-fixed-answer]]
+
+## A repeat that measured nothing is not paid for twice (tick 687)
+
+Tick 673 built the per-site repeat plan; tick 681 was its first real use, and the result was that **three
+of the four sites it repeated returned an identical shape on all three renders:**
+
+```text
+  www.agoda.com    0.1000 .. 0.5077   Δ 40.8 pts over 3 runs   <- real, and large
+  www.naukri.com   0.0000 .. 0.0000   Δ  0.0 pts over 3 runs
+  keirin.jp        0.5717 .. 0.5717   Δ  0.0 pts over 3 runs
+  playhop.com      0.1429 .. 0.1429   Δ  0.0 pts over 3 runs
+```
+
+The document snapshot is cached, so those were **three renders of the same bytes** — six extra live
+renders per sweep, indefinitely, for an error bar of exactly zero. The variance those sites showed
+*across* sweeps lives in the document, and no amount of repeating inside one sweep can sample it.
+
+`repeat_plan` now excludes any site whose most recent CONSECUTIVE run was flat. The rule can only ever
+**retire a repeat that has already been paid for once**: a site with fewer than `UNSTABLE_REPEATS`
+readings in its run is *unknown*, not deterministic, and keeps its repeats.
+
+### This breaks tick 673's monotonicity argument on purpose
+
+t673 wrote: *"a site that has ever drawn wide keeps its repeats, because the two errors are not
+symmetric (two renders vs a phantom regression)."* That was right while the within-sweep spread was
+unknown. It is now measured, and **where it is zero the median of three identical draws IS the single
+draw** — so the repeats cannot prevent a phantom regression, they can only cost renders. Asymmetric
+errors justify paying for information, not for none.
+
+### ⚠ And the gate's first draft was vacuous — the third time this session
+
+The fixture held only keirin's identical run. With just that, `shape_spreads` reports Δ 0.0 and the
+pre-existing `> SPREAD_UNSTABLE_PTS` filter already drops the site — so disabling the new guard changed
+nothing and the mutation stayed **green**. The guard only bites where a file holds **both** a wide
+cross-run spread and a flat within-sweep run, which is keirin's actual state (Δ 52.6 across sweeps, Δ 0.0
+within one). Adding an earlier differing reading to the fixture made the mutation red.
+
+Three vacuous assertions caught by running the mutation in one session (t675's whole-log disjunction,
+t680's flag read from inside a task that always ran first, this one). Each was green, plausible, and
+measuring nothing. **The falsify pass is not a formality; it is the only thing that distinguishes a gate
+from a comment.**
+
+[[certification-redesign]] [[reliability-doctrine]]

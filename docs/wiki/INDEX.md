@@ -239,6 +239,9 @@
   - L2106 · What the log said
   - L2125 · Both rules corrected
   - L2139 · The lesson, and it is a sharper form of one already on file
+  - L2153 · A repeat that measured nothing is not paid for twice (tick 687)
+  - L2173 · This breaks tick 673's monotonicity argument on purpose
+  - L2181 · ⚠ And the gate's first draft was vacuous — the third time this session
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1207,4 +1210,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1118 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1121 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
