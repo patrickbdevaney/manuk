@@ -1995,6 +1995,19 @@ mode the whole spread block exists to prevent.
 
 [[certification-redesign]] [[reliability-doctrine]] [[parity-methodology]]
 
+## ~~`scored 5 → 6`~~ — RETRACTED at tick 682; the real reading is `scored 5` (tick 681)
+
+> ⚠⚠ **RETRACTION, read this first.** The `scored 5 → 6` headline below and its "Defect 1" are
+> **wrong**, and the run that produced them says so. `shape_n` is the count of paths **COMMON to both
+> engines**, not the oracle's population — and the oracle built **808 paths in every agoda draw** and
+> **57 in every naukri draw**. The document never changed; the variance is **ours**, which is exactly
+> what the median exists to absorb. The filter that disqualified agoda's thin draws was keeping our best
+> draw and discarding our typical one, and it moved a certificate term on the tick that introduced it.
+> Both rules were reverted at tick 682, the tie-break was re-pointed at the SMALLEST sample, and the
+> honest number is **`scored 5`, unchanged**. See "a rule whose justification is falsified by the run
+> that motivated it" below. The rest of this section — the population growth on naukri, the control, the
+> cached-snapshot finding — stands.
+
 ## `scored 5 → 6`, and the repeat machinery's first real use exposed two defects (tick 681)
 
 The corpus was four ticks stale — t677 (named access on the Window object), t679 (attribution) and t680
@@ -2077,3 +2090,62 @@ fact unchanged between them and t681. Conservative and correct by construction, 
 once — the honest price of a column that did not exist yet.
 
 [[certification-redesign]] [[reliability-doctrine]]
+
+## A rule whose justification is falsified by the run that motivated it (tick 682)
+
+Tick 681 introduced two collapse rules and one of them was wrong. The evidence that falsifies it was in
+the log of the same sweep, four lines away from the numbers that motivated it.
+
+### What t681 claimed
+
+`www.agoda.com`'s three draws carried `shape_n` of 65, 10, 10. t681 read that as *"the ORACLE built 65
+elements on one draw and 10 on the others, so the site served a different document"*, disqualified the
+two thin draws from voting, and the certificate went from `scored 5` to `scored 6` with agoda reading
+0.508 instead of 0.100.
+
+### What the log said
+
+```text
+  www.agoda.com   structural: 8.0% (808 paths, 743 missing, 63 misplaced)   -> shared 65
+  www.agoda.com   structural: 1.2% (808 paths, 798 missing,  9 misplaced)   -> shared 10
+  www.agoda.com   structural: 1.2% (808 paths, 798 missing,  9 misplaced)   -> shared 10
+  www.naukri.com  structural:17.5% ( 57 paths,  47 missing, 10 misplaced)   -> shared 10
+  www.naukri.com  structural:15.8% ( 57 paths,  48 missing,  9 misplaced)   -> shared  9
+```
+
+**808 paths in every agoda draw. 57 in every naukri draw.** `shape_n` is the count of paths COMMON to
+both engines — the intersection, not the oracle's population. The oracle served the *same* document
+every time and **the variance is entirely ours**: our own render shared 65 paths on one draw and 10 on
+the next.
+
+That is precisely the variance `repeat_plan` exists to sample, and precisely what the MEDIAN is for. The
+filter was **keeping our best draw and discarding our typical one** — the flattering direction this
+whole file exists to close — and it moved a certificate term on the tick that introduced it.
+
+### Both rules corrected
+
+- The population-collapse filter is **removed**. The median stands.
+- The tie-break at the median is **re-pointed at the SMALLEST sample.** t681 chose the largest, arguing
+  that more evidence is a better estimate. That is true in general and it is the wrong direction here,
+  because on `www.naukri.com` (n = 10, 9, 9, every draw shape 0.0) the choice decides whether the site
+  clears `CERT_MIN_SHAPE_SAMPLE` at all — so choosing the largest is choosing the draw that helps. **A
+  bar must never be cleared by a convention**, which is the same principle that makes an even-length run
+  take its lower middle.
+
+Honest number, recomputed on the unchanged rows file: **`sites 20 · scored 5 · shape ≥0.75 on 0`.**
+Naukri's population really did grow 2 → 10 (t677 + t680, and that part of t681 stands), and it is
+honestly UNSCORED because its typical draw shares 9 paths and the floor is 10.
+
+### The lesson, and it is a sharper form of one already on file
+
+> **A number's NAME is not its definition.** `shape_n` is documented as the scored sample size and reads
+> like "how big was the page"; it is the size of the *intersection*. One `grep` of the sweep's own
+> `structural:` line — printed immediately above every row it produced — would have settled it before
+> the rule was written.
+
+This is the same class as *"an absent measurement is not a negative measurement"* and *"suspect the
+instrument before the subject"*, and the mechanism that caught it is the one this project keeps
+returning to: **read the output of the change, next to the change.** It took one tick to publish and one
+grep to falsify.
+
+[[reliability-doctrine]] [[certification-redesign]] [[honest-answer-is-not-a-fixed-answer]]

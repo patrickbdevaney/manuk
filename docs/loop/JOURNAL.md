@@ -31970,7 +31970,14 @@ BUDGET** (t678/t679's NEXT #1) — still 12.7s + 12.0s under a stated 12s ceilin
 is still a capability loss because `initial images+masks` (6.2s, an ENHANCEMENT) precedes
 `dynamic scripts`. **(3)** `<link>.sheet`, t665's remainder.
 
-## Tick 681 — `scored 5 → 6`, and the repeat machinery's first real use exposed two defects (2026-07-27)
+## Tick 681 — ~~`scored 5 → 6`~~ RETRACTED at t682; the honest reading is `scored 5` (2026-07-27)
+
+> ⚠⚠ **RETRACTED IN PART, one tick later, by the log of this very sweep.** `shape_n` is the count of
+> paths COMMON to both engines, not the oracle's population — and the oracle built **808 paths in every
+> agoda draw** and **57 in every naukri draw**. The document never changed; the variance is OURS, which
+> is what the median is for. "Defect 1" below is not a defect and its filter was keeping our best draw
+> and discarding our typical one. Reverted at t682; honest number `scored 5`, unchanged. Everything else
+> here — naukri's population growth 2 → 10, the control, the cached-snapshot finding — stands.
 
 HYPOTHESIS: constitution check #51's steer #1, verbatim — **the corpus is four ticks stale and the loop
 is deriving again.** t677 (named access on the Window object), t679 (attribution) and t680 (the
@@ -32066,3 +32073,85 @@ running before `dynamic scripts` (which builds the DOM); the real tick is the PR
 is blocked on nine gate files that call `load_async` without `finish_loading`. **(3) `naukri` is one
 element from unscored** — the cheapest defence of the term that just moved is to grow its population
 again, and its coverage is 17.5%: the oracle builds 57 elements and we share 10.
+
+## Tick 682 — a rule whose justification is falsified by the run that motivated it (2026-07-27)
+
+HYPOTHESIS: t681's NEXT #1 — `playhop.com` carries a `render-failed` reason alongside real scores, and a
+row cannot be both. Chasing that turned out to be nothing (it is a deliberate SECOND-POPULATION check:
+`compare()` sets `RenderFailed` when our screenshot has almost no ink and Chrome's does — pixels
+contradicting the DOM, which is §6.4 of the certification design working as designed, and a *stronger*
+verdict than `thin-overlap`). ⚠ But reading the sweep log to establish that put the `structural:` lines
+in front of me, and they falsify **the rule I landed one tick ago**.
+
+### THE RETRACTION
+
+t681 read `www.agoda.com`'s three draws — `shape_n` 65, 10, 10 — as *"the ORACLE built 65 elements on
+one draw and 10 on the others, so the site served a different document"*, disqualified the two thin
+draws from voting, and published **`scored 5 → 6`** with agoda at 0.508 instead of 0.100.
+
+```text
+  www.agoda.com   structural: 8.0% (808 paths, 743 missing, 63 misplaced)   -> shared 65
+  www.agoda.com   structural: 1.2% (808 paths, 798 missing,  9 misplaced)   -> shared 10
+  www.naukri.com  structural:17.5% ( 57 paths,  47 missing, 10 misplaced)   -> shared 10
+  www.naukri.com  structural:15.8% ( 57 paths,  48 missing,  9 misplaced)   -> shared  9
+```
+
+**808 paths in EVERY agoda draw. 57 in EVERY naukri draw.** `shape_n` is the size of the INTERSECTION,
+not the oracle's population. The document never changed; **the variance is entirely ours** — our own
+render shared 65 paths on one draw and 10 on the next — which is exactly the variance `repeat_plan`
+exists to sample and exactly what the median is for.
+
+So the filter was **keeping our best draw and discarding our typical one**: the flattering direction this
+whole file exists to close, and it moved a certificate term on the tick that introduced it, off a premise
+nobody had checked against the log printed four lines above the numbers that motivated it.
+
+### WHAT LANDED
+
+- The population-collapse filter is **REMOVED**. The median stands.
+- The tie-break at the median is **re-pointed at the SMALLEST sample.** t681 chose the largest, arguing
+  more evidence is a better estimate — true in general, wrong here: on naukri (n = 10, 9, 9, every draw
+  shape 0.0) that choice decides whether the site clears `CERT_MIN_SHAPE_SAMPLE` at all, so the largest
+  is *the draw that helps*. **A bar must never be cleared by a convention** — the same principle that
+  makes an even-length run take its lower middle.
+- The t681 journal entry and wiki section now carry the retraction **inline**, because a wrong
+  explanation that keeps printing retires the question (t674's own lesson, applied to my own text).
+
+**HONEST NUMBER, recomputed on the unchanged rows file: `sites 20 · scored 5 · shape ≥0.75 on 0`.**
+Naukri's population really did grow 2 → 10 (t677 + t680; that part of t681 stands) and it is honestly
+UNSCORED, because its typical draw shares 9 paths and the floor is 10.
+
+### THE LESSON
+
+> **A number's NAME is not its definition.** `shape_n` is documented as the scored sample size and reads
+> like *"how big was the page"*; it is the size of the INTERSECTION. One grep of the sweep's own
+> `structural:` line — printed immediately above every row it produced — would have settled it before the
+> rule was written.
+
+Same class as *an absent measurement is not a negative measurement* and *suspect the instrument before
+the subject*, and it was caught by the mechanism this project keeps returning to: **read the output of
+the change, next to the change.** One tick to publish, one grep to falsify. ⚠ It is the second retraction
+in this project's history (t661 was the first) and the first one aimed at a CERTIFICATE TERM, which is
+the most expensive place a flattering rule can hide.
+
+TICK SHAPE: measurement (a retraction and the correction of a rule that moved a certificate term).
+Bar 0 untouched; `tests/wpt/` only — no engine behaviour changed by either tick.
+Gates: `spread_tests::our_own_variance_is_what_the_median_is_for_and_ties_break_conservatively` — the
+same six real rows, now asserting the OPPOSITE of what they asserted for one tick: agoda must read the
+median 0.100, and naukri's tie must break to n=9 and leave the site honestly unscored. RED-proven by
+flipping the tie-break back to the flattering direction. manuk-wpt lib 67/67.
+WIKI: `docs/wiki/conformance-and-oracles.md` — the t681 section now opens with the retraction, and "a
+rule whose justification is falsified by the run that motivated it" records the mechanism.
+
+⚠ HARNESS NOTE (observer-owned, not touched): the first wall run went RED on the manuk-shell suite for
+the second time this session — the known contention false-RED (`wall-false-red-shell-rebuild`), again
+surviving verify.sh's three quiet retries. **This tick changed `tests/wpt/` and docs ONLY**, so it cannot
+reach manuk-shell at all, which is independent evidence beyond the re-measure. Re-measured serially:
+**74 passed, 0 failed.** Re-ran the wall rather than trusting either verdict.
+PATTERN: none — instrument, not a web pattern. [no-pattern]
+
+NEXT: **(1) `agoda`'s OWN RENDER IS BIMODAL — 65 shared paths on one draw and 10 on the next, on the
+same document.** That is a browser bug with a 40-point certificate cost and it is now isolated: same
+bytes, same tree, two outcomes. Diff the two runs' logs rather than theorising. **(2) THE PER-CALL LOAD
+BUDGET** (t678/t679/#51) — the priority inversion, blocked on nine gate files. **(3)** the repeat plan
+should key on whether a site's variance is REPRODUCIBLE within a sweep: three of four repeated sites
+returned byte-identical rows, so six live renders per sweep buy an error bar of zero.

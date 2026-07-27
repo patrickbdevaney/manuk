@@ -224,11 +224,17 @@
   - L1947 · …and the spread block read all of that as the sites' own noise
   - L1966 · The fix: the version IS the probes' text
   - L1988 · RED-proven from both sides
-  - L1998 · scored 5 → 6, and the repeat machinery's first real use exposed two defects (tick 681)
-  - L2004 · The certificate moved
-  - L2026 · Defect 1 — a draw whose ORACLE population collapsed is a different DOCUMENT
-  - L2050 · Defect 2 — a tie at the median was decided by nothing
-  - L2059 · And the repeats are worthless on three of the four sites they cost
+  - L1998 · ~~scored 5 → 6~~ — RETRACTED at tick 682; the real reading is scored 5 (tick 681)
+  - L2011 · scored 5 → 6, and the repeat machinery's first real use exposed two defects (tick 681)
+  - L2017 · The certificate moved
+  - L2039 · Defect 1 — a draw whose ORACLE population collapsed is a different DOCUMENT
+  - L2063 · Defect 2 — a tie at the median was decided by nothing
+  - L2072 · And the repeats are worthless on three of the four sites they cost
+  - L2094 · A rule whose justification is falsified by the run that motivated it (tick 682)
+  - L2099 · What t681 claimed
+  - L2106 · What the log said
+  - L2125 · Both rules corrected
+  - L2139 · The lesson, and it is a sharper form of one already on file
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1195,4 +1201,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1106 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1112 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -919,57 +919,41 @@ fn collapse_consecutive_repeats(rows: Vec<Fidelity>) -> Vec<Fidelity> {
             run.clear();
             return;
         }
-        // ── **A DRAW WHOSE ORACLE POPULATION COLLAPSED IS A DIFFERENT DOCUMENT, NOT A WORSE RENDER**
-        //    (tick 681, and the numbers are `www.agoda.com`'s real three draws from one sweep).
+        // ── **TICK 681'S POPULATION-COLLAPSE FILTER IS RETRACTED, AND THE RETRACTION IS THE POINT**
+        //    (tick 682).
+        //
+        // t681 read `www.agoda.com`'s three draws — `shape_n` 65, 10, 10 — and concluded that a 6.5×
+        // change in the count meant *the ORACLE had built a different document*, so the two thin draws
+        // were disqualified from voting. The certificate then read 0.508 for agoda instead of 0.100,
+        // and `scored` went 5 → 6.
+        //
+        // **The log of that same sweep falsifies it.** `shape_n` is the count of paths COMMON to both
+        // engines, not the oracle's population, and the oracle's population was identical across all
+        // three draws:
         //
         // ```text
-        //   www.agoda.com  cov=0.080446  shape=0.507692  n=65
-        //   www.agoda.com  cov=0.012376  shape=0.100000  n=10
-        //   www.agoda.com  cov=0.012376  shape=0.100000  n=10
+        //   www.agoda.com   structural: 8.0% (808 paths, 743 missing, 63 misplaced)   -> shared 65
+        //   www.agoda.com   structural: 1.2% (808 paths, 798 missing,  9 misplaced)   -> shared 10
+        //   www.agoda.com   structural: 1.2% (808 paths, 798 missing,  9 misplaced)   -> shared 10
+        //   www.naukri.com  structural:17.5% ( 57 paths,  47 missing, 10 misplaced)   -> shared 10
+        //   www.naukri.com  structural:15.8% ( 57 paths,  48 missing,  9 misplaced)   -> shared  9
         // ```
         //
-        // The oracle built **65** elements on one draw and **10** on the others. `oracle_probe`'s own
-        // doc comment states the rule this violates: *"the oracle must feed ONE identical document to
-        // both engines; fetching independently per engine compares two different documents and calls
-        // the difference a bug."* A 6.5× change in the oracle's element count between draws minutes
-        // apart is the SITE serving something else — and comparing scores across different documents
-        // is comparing strangers, in either direction.
+        // 808 paths in every agoda draw; 57 in every naukri draw. **The document never changed. The
+        // variance is OURS** — our own render shared 65 paths on one draw and 10 on the next — which is
+        // exactly the variance `repeat_plan` exists to sample and exactly what the MEDIAN is for.
         //
-        // So a draw whose `shape_n` is below half the run's maximum does not VOTE. It stays in the
-        // rows file (the evidence is the point) and the collapse says out loud that it was set aside —
-        // a bounded exclusion nobody is told about reads as "everything was included", which is the
-        // silent-truncation failure this project has a standing rule against.
+        // So the filter was discarding our own bad draws and keeping our best one, which is the
+        // flattering direction this whole file exists to close. It moved a certificate term on the tick
+        // that introduced it, off a premise nobody had checked against the log sitting next to it.
+        // **A rule whose justification is falsified by the run that motivated it is not a rule.**
         //
-        // ⚠ Note what this does NOT do: it does not prefer the higher score. Had agoda's thin draw
-        // been the *better* one, it would be set aside just the same, because the disqualifier is the
-        // population change and not the direction of the result.
-        let max_n = scored.iter().map(|&i| run[i].shape_n).max().unwrap_or(0);
-        let representative: Vec<usize> = scored
-            .iter()
-            .copied()
-            .filter(|&i| run[i].shape_n * 2 >= max_n)
-            .collect();
-        if representative.len() < scored.len() {
-            let name = &run[scored[0]].name;
-            let set_aside: Vec<usize> = scored
-                .iter()
-                .copied()
-                .filter(|&i| run[i].shape_n * 2 < max_n)
-                .map(|i| run[i].shape_n)
-                .collect();
-            eprintln!(
-                "  ⚠ {name}: {} of {} draws set aside — the ORACLE built {max_n} elements on its \
-                 best draw and {set_aside:?} on these, so they are a different DOCUMENT rather than a \
-                 worse render. They stay in the rows file and do not vote.",
-                scored.len() - representative.len(),
-                scored.len()
-            );
-        }
-        let mut scored = if representative.is_empty() {
-            scored
-        } else {
-            representative
-        };
+        // The one thing t681 got right is kept, in the CONSERVATIVE direction: draws that tie at the
+        // median shape are ordered by nothing, and on `www.naukri.com` (n = 10, 9, 9, every draw shape
+        // 0.0) that arbitrariness decided whether the site cleared `CERT_MIN_SHAPE_SAMPLE` at all. The
+        // tie now breaks toward the **SMALLEST** sample — the same principle as taking the lower middle
+        // of an even run: *a bar must never be cleared by a convention*, and choosing the largest
+        // sample here is choosing the draw that helps, which is how t681 went wrong in the first place.
         scored.sort_by(|&a, &b| {
             run[a]
                 .shape
@@ -980,19 +964,12 @@ fn collapse_consecutive_repeats(rows: Vec<Fidelity>) -> Vec<Fidelity> {
         // certificate that rounds toward its own bar is the flattering direction, and this file
         // exists to close those.
         let median_at = scored[(scored.len() - 1) / 2];
-        // **Among draws that TIE at the median shape, the one with the LARGER SAMPLE represents the
-        // site.** Among equal point estimates the draw with more evidence is the better estimate — the
-        // same reason `CERT_MIN_SHAPE_SAMPLE` exists at all. Without this, three draws carrying an
-        // identical score are ordered arbitrarily and the middle one may be the smallest sample, which
-        // is exactly how `www.naukri.com` (n = 10, 9, 9, every draw shape 0.0) landed on an n=9 row and
-        // stayed UNSCORED while a draw that cleared the sample floor sat in the same run. It cannot
-        // change WHICH score the certificate reads — only how much evidence stands behind it.
         let median_shape = run[median_at].shape;
         let pick = scored
             .iter()
             .copied()
             .filter(|&i| run[i].shape == median_shape)
-            .max_by_key(|&i| run[i].shape_n)
+            .min_by_key(|&i| run[i].shape_n)
             .unwrap_or(median_at);
         out.push(run[pick].clone());
         run.clear();
@@ -2852,26 +2829,28 @@ supjav.com\t-\t-\t0\t0\t0\t0\t0\tbot-wall-403
         }
     }
 
-    /// **AGODA'S AND NAUKRI'S REAL THREE DRAWS FROM ONE SWEEP** (tick 681). The repeat machinery's
-    /// first real use produced two failures of the collapse rule, and both are in this fixture.
+    /// **AGODA'S AND NAUKRI'S REAL DRAWS, AND THE RETRACTION OF TICK 681** (tick 682).
+    ///
+    /// t681 read agoda's `shape_n` of 65, 10, 10 and concluded the ORACLE had served a different
+    /// document, so the thin draws were disqualified. **The log of that same sweep says otherwise:**
     ///
     /// ```text
-    ///   www.agoda.com   cov=0.080446  shape=0.507692  n=65   <- the oracle built 65 elements
-    ///   www.agoda.com   cov=0.012376  shape=0.100000  n=10   <- and 10 on these two
-    ///   www.agoda.com   cov=0.012376  shape=0.100000  n=10
-    ///   www.naukri.com  cov=0.175439  shape=0.000000  n=10   <- clears the sample floor
-    ///   www.naukri.com  cov=0.157895  shape=0.000000  n=9
-    ///   www.naukri.com  cov=0.157895  shape=0.000000  n=9
+    ///   www.agoda.com   structural: 8.0% (808 paths, 743 missing)  -> shared 65
+    ///   www.agoda.com   structural: 1.2% (808 paths, 798 missing)  -> shared 10
+    ///   www.naukri.com  structural:17.5% ( 57 paths,  47 missing)  -> shared 10
+    ///   www.naukri.com  structural:15.8% ( 57 paths,  48 missing)  -> shared  9
     /// ```
     ///
-    /// A 6.5× change in the ORACLE's element count between draws minutes apart is the site serving a
-    /// different document, and `oracle_probe`'s own doc comment already forbids comparing across
-    /// documents. Under the old rule the two thin draws outvoted the representative one and the
-    /// certificate read 0.100 for agoda. Naukri's three carry an IDENTICAL score, so the middle draw
-    /// was decided arbitrarily and landed on n=9 — below the sample floor — while an n=10 draw sat in
-    /// the same run.
+    /// 808 paths in every agoda draw, 57 in every naukri draw. `shape_n` is the SHARED count, not the
+    /// oracle's population — so the document never changed and **the variance is ours**, which is
+    /// precisely what the median exists to absorb. The filter was keeping our best draw and discarding
+    /// our typical one, and it moved `scored` 5 → 6 on the tick that introduced it.
+    ///
+    /// So this test now asserts the OPPOSITE of what it asserted for one tick: the median stands, and
+    /// ties at the median break toward the SMALLEST sample — a bar must never be cleared by a
+    /// convention, which is the same reason an even-length run takes its lower middle.
     #[test]
-    fn a_draw_whose_oracle_population_collapsed_is_a_different_document() {
+    fn our_own_variance_is_what_the_median_is_for_and_ties_break_conservatively() {
         let rows = vec![
             row_named("www.agoda.com", Some(0.507692), 65),
             row_named("www.agoda.com", Some(0.100000), 10),
@@ -2881,31 +2860,25 @@ supjav.com\t-\t-\t0\t0\t0\t0\t0\tbot-wall-403
             row_named("www.naukri.com", Some(0.0), 9),
         ];
         let got = super::collapse_repeats(rows);
-        assert_eq!(
-            got.len(),
-            2,
-            "two sites, one row each — got {} rows",
-            got.len()
-        );
+        assert_eq!(got.len(), 2, "two sites, one row each — got {}", got.len());
 
         let agoda = &got[0];
         assert!(
-            (agoda.shape.unwrap() - 0.507692).abs() < 1e-9 && agoda.shape_n == 65,
-            "agoda must be represented by the draw the oracle actually built a page for. The two \
-             thin draws are a DIFFERENT DOCUMENT (n=10 against n=65), not a worse render, and letting \
-             them vote hands the certificate 0.100 for a site it measured at 0.508. Got \
-             shape={:?} n={}",
-            agoda.shape,
-            agoda.shape_n
+            (agoda.shape.unwrap() - 0.100000).abs() < 1e-9,
+            "agoda's three draws are OUR OWN variance on one unchanged document (808 oracle paths in \
+             all three), so the certificate must read the MEDIAN — 0.100, the typical draw — and not \
+             the best one. Reading 0.508 here is the flattering direction, and it is the mistake tick \
+             681 made and this test now forbids. Got {:?}",
+            agoda.shape
         );
 
         let naukri = &got[1];
         assert_eq!(
-            naukri.shape_n, 10,
-            "naukri's three draws TIE at shape 0.0, so the tie must break toward the larger sample — \
-             n=10 clears CERT_MIN_SHAPE_SAMPLE and n=9 does not, so an arbitrary middle draw decides \
-             whether the site is SCORED at all. Among equal point estimates the one with more \
-             evidence represents the site."
+            naukri.shape_n, 9,
+            "naukri's three draws TIE at shape 0.0 and differ only in sample size, so the tie must \
+             break toward the SMALLEST — n=9, below CERT_MIN_SHAPE_SAMPLE, leaving the site honestly \
+             UNSCORED. Breaking toward n=10 clears the sample floor by choosing the draw that helps, \
+             which is exactly the convention a bar must never be cleared by."
         );
     }
 
