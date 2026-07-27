@@ -99,6 +99,8 @@
   - L1605 · The bisection ran, and it narrowed the question again (tick 686)
   - L1635 · SHAPE is not a per-box metric error — it is one wrong HEIGHT above the content (tick 688)
   - L1661 · FIRST DIVERGENCE already points at the cause
+  - L1680 · A broken <img> is 16×16 in Chrome and was 784×0 here (tick 689)
+  - L1716 · And a hypothesis Chrome itself killed, before it cost a tick
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1212,4 +1214,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1123 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1125 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

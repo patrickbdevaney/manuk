@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **446** | ticks 1–688 |
-| median tick cycle | **21m** | 445 intervals |
+| ticks landed | **447** | ticks 1–689 |
+| median tick cycle | **21m** | 446 intervals |
 | median, last 10 | **20m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 397.6h elapsed |
-| median verify wall | **63s** | 385 ticks |
+| **ticks per hour** | **1.12** | 398.5h elapsed |
+| median verify wall | **63s** | 386 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **334**
-* **✅ rows in the capability ledger**: 144 → **353**
+* **✅ rows in the capability ledger**: 144 → **354**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**216 of 446 ticks** (48%) moved a
+**217 of 447 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **216** capability ticks, median cycle **21m**
+* **217** capability ticks, median cycle **21m**
 * median diff per tick: **+240 / −34** lines across 8 files
 
 ## Every tick
@@ -543,5 +543,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **686** | 2026-07-27 18:14 | 8m | measurement | 63s | +153/−36 | 334 | 81 | 56.0% · | Chrome's DOM lays out correctly here; ours does not (2026-07-27) |
 | **687** | 2026-07-27 18:29 | 15m | infrastructure | 63s | +270/−33 | 334 | 81 | 56.0% · | a repeat that measured nothing is not paid for twice (2026-07-27) |
 | **688** | 2026-07-27 18:41 | 12m | measurement | 63s | +248/−34 | 334 | 81 | 56.0% · | SHAPE is not a per-box metric error; it is one wrong HEIGHT above the content (2026-07-27) |
+| **689** | 2026-07-27 19:35 | 54m | capability | 63s | +384/−35 | 334 | 81 | 56.0% · | a broken `<img>` is 16×16 in Chrome and was 784×0 here (2026-07-27) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

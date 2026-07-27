@@ -1676,3 +1676,49 @@ An image whose height is wrong shifts every sibling after it.
 tolerance constant.** Measured before building, which is the only reason it is one tick instead of several.
 
 [[subpixel-error-compounds]] [[symptom-names-wrong-organ]] [[default-object-size-not-ua-width]]
+
+## A broken `<img>` is 16×16 in Chrome and was 784×0 here (tick 689)
+
+The tick-688 measurement said the SHAPE gap is a `dy` term — correctly-sized boxes in the wrong place, so
+something above them has the wrong height — and `keirin.jp`'s first divergence begins **immediately after
+an `<img>`**, off by `dy=70`. `Cc4e6 geometry: <img>` is a **67-site** cluster.
+
+Measured on headless Chrome and on this engine, same fixture, 800px viewport:
+
+```text
+                                       Chrome        ours (before)
+  <img src="…/never.png">              16×16         784×0
+  <img width=120 height=70 src=…>      120×70        120×70      ✓
+  <img> with CSS width+height          120×70        120×70      ✓
+  the div AFTER the bare img           y=196         y=168
+```
+
+**784×0 is wrong twice:** an inline replaced element must not take the whole line, and a box whose source
+broke is not zero-height. 16×16 is the placeholder Chrome reserves, and reserving it is what stops the rest
+of the page sliding up.
+
+The layout source even carried the reason it was excluded — *"a sourceless image has no default object size
+in any browser"* — which is true of `<img>` with **no `src`** and not of an `<img src>` whose bytes never
+arrive. That is the case the web is full of: dead CDNs, blocked trackers, lazy-load placeholders, icons
+behind a 403.
+
+Conditioned on `taffy_known.is_none()`, exactly like the `300×150` default-object-size arm next to it, so a
+decoded image, author dimensions, or a derivable aspect ratio are all untouched — all three are resolved
+before this line.
+
+⚠ **The gate asserts the FOLLOWING sibling's `y`, not just the image's box.** A height that is right in
+isolation and does not push its siblings down would satisfy a box-only assertion and fix nothing about the
+`dy` term, which is the entire reason for the change. RED-proven by two independent mutations.
+
+⚠ **NOT covered, named rather than left looking handled:** an `<img alt="text">` whose source failed —
+Chrome sizes that box to the **alt text**, which needs the text measurer here and is its own change.
+
+### And a hypothesis Chrome itself killed, before it cost a tick
+
+I expected `<img width=200 height=100 style="width:100px">` to be **50px** tall here — the attributes map
+to a presentational `aspect-ratio`, so overriding the width should carry the height. **Chrome measures
+100×100.** A broken image has no intrinsic size, so the attribute height wins outright. Measuring the
+oracle first is a standing rule in this project precisely because the spec-reasoned answer and the shipped
+answer differ, and the shipped one is the target.
+
+[[default-object-size-not-ua-width]] [[gate-measured-against-a-standard-chrome-fails]]

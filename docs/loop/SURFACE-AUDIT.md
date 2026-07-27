@@ -2226,3 +2226,60 @@ in `G_ZOOM_AND_PROBE_PINS`, including the over-correction guard.
 **Standing note, sixth audit running:** `map-reconcile.sh` searches `engine agent tests` and not
 `shell/`, so the eight gates living as `#[test] fn` in `shell/src/media.rs` and `shell/src/audio.rs`
 remain invisible to it. Harness-owned; reported, not touched.
+
+## Audit #41 — tick 689
+
+**A SOURCE NO PREVIOUS AUDIT HAD READ**, which is the point of the cadence:
+
+- [Microsoft Edge — 2026 web platform top developer needs](https://microsoftedge.github.io/TopDeveloperNeeds/)
+  — ranked by developer VOTES for features they cannot use, which is a different ordering from Interop's
+  (vendor-agreed test mass) and from ours (oracle cluster mass). Three orderings, three blind spots.
+- [Interop 2026 — web-platform-tests](https://github.com/web-platform-tests/interop/blob/main/2026/README.md)
+  · [WebKit: Improving Web Accessibility with WPT](https://webkit.org/blog/15400/improving-web-accessibility-with-web-platform-tests/)
+  — the accessibility-testing investigation continues from 2024: *consistent accessibility trees from the
+  same DOM and CSS across browsers*. That is our agent-native moat stated as an interop goal, and it is
+  worth knowing the bar will be a WPT suite.
+
+**EIGHT ROWS ADDED, every one with a MEASURED verdict.** Six are honest NOs
+(`appearance: base-select`, `calc-size()`/`interpolate-size()`, `field-sizing`, `justify-self` in block,
+`text-wrap: pretty`, `navigator.virtualKeyboard`) — `CSS.supports` answers false and the computed value is
+absent, so a page's `@supports` fallback still runs. `moveBefore` and `CSSStyleSheet.replaceSync` were
+already present and already on the map.
+
+### ⚠⚠ WHAT WE HAD BEEN WRONG ABOUT — 1: A Bar-0 ITEM WITH NO MAP ROW
+
+`calc-size()` / `interpolate-size()` had **no capability row at all**, while this project carries an **open
+Bar-0 SIGSEGV recorded against exactly those properties** (release-only, not a regression, needs a fresh
+ASAN build). **A Bar-0 item with no capability row is invisible to every audit that reads the map** — and
+the map is what `map-reconcile.sh`, `phase0-progress.sh` and the readiness percentage all read. The crash
+was remembered and the capability was not; the row now carries both.
+
+### ⚠⚠ WHAT WE HAD BEEN WRONG ABOUT — 2: TWO NEW FALSE-YES CANDIDATES
+
+```text
+  customElements.define('x-btn', class extends HTMLButtonElement {}, {extends:'button'})   ACCEPTED
+  new IntersectionObserver(cb, { trackVisibility: true, delay: 100 })                      ACCEPTED
+```
+
+Neither throws. **ACCEPTED IS NOT IMPLEMENTED.** Whether `<button is=x-btn>` upgrades and keeps button
+semantics is unmeasured; whether any entry carries a truthful `isVisible` is unmeasured. An options bag that
+is silently ignored is the worst shape available: the page is told yes and reads `undefined`.
+
+Both are filed **`partial`** rather than works-or-missing, deliberately. This session has now paid four
+times for presence standing in for behaviour — `reportError` pinned `WORKS` by `typeof` (t675), the
+`corner-shape` shorthand answering `true` while unread (audit #40), and these two. **The standing form:
+`typeof`, "no throw", and "the constructor accepted my options" are all statements about PRESENCE. Only a
+measured effect is a statement about BEHAVIOUR.** Verifying these two is a named next probe, not a claim.
+
+**Gate-vs-map diff, both directions:**
+```text
+  map rows                                  : 396   (was 388 at #40; +8)
+  map -> gate drift                         : 0     (map-reconcile.sh: RECONCILED)
+  machine-validated claims                  : 287 -> 289
+  bucket arithmetic (OK+floor+missing==rows): 396/396  ✓
+  constellation unknowns                    : 0     (all eight landed MEASURED; two as honest `partial`)
+```
+
+**Standing note, seventh audit running:** `map-reconcile.sh` searches `engine agent tests` and not `shell/`,
+so the eight gates living as `#[test] fn` in `shell/src/media.rs` and `shell/src/audio.rs` remain invisible
+to it. Harness-owned; reported, not touched.

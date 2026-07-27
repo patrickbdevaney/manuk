@@ -546,3 +546,39 @@ So the honest verdict is **not** "the wall is lean". It is: *the wall's variance
 dominated by a cost no line item measures, and the audit is forbidden from making the number look
 better by cutting coverage.* The instrumentation that would settle it lives in `scripts/verify.sh`,
 which is **observer-owned — reported, not touched**, for the second audit running.
+
+## Audit #21 — tick 689 (227s, and 77% of it is ONE serial loop)
+
+```text
+  175s  P  (parity, 72/72 vs headless Chrome)   ███████████████████ 77%
+   23s  T  (crate tests)                        ██ 10%
+   16s  B  (build)                              █  7%
+    8s  G6 · 5s G1 · 4s D · 2s F · everything else 0s
+```
+
+**This audit does not end in "no line item names it", which is where #19 and #20 both landed.** The
+dominant cost has a name, a file, and a mechanism, and the file is agent territory.
+
+`tests/wpt/src/parity.rs` loops the **72 committed fixtures** and calls
+`chrome::capture_boxes(&html, vw, vh)` **once per fixture, serially**. Each call spawns a full headless
+Chrome; process startup is ~2.4s, and 72 × 2.4s ≈ 175s. The captures are **completely independent** —
+nothing in fixture *n* informs fixture *n+1*, and the comparison against our own boxes happens after each.
+
+That is admissible question **2 (PARALLELISM — "is the slowest section actually parallel, or serialised by a
+false dependency?")**, and the answer is a false dependency. Bounded-concurrent captures take **175s → ~25s
+with the identical assertion**: same live Chrome, same 72 fixtures, same 72 comparisons. No gate dropped, no
+floor widened, no sampling, nothing moved to CI.
+
+**Sized as its own tick, not trimmed here.** It is a change to the wall's core gate, and a wall audit that
+edits the thing it is auditing in the same pass has no control.
+
+### ⚠ CACHING Chrome's answers is REJECTED — on rigor, not on effort
+
+The fixtures are committed and static, so Chrome's boxes for them look like a constant worth memoising, and
+that would take `P` to ~0s. It is refused: it converts a **live** oracle into a **recorded** one, and *"a
+gate whose expected value came from MEMORY tests the memory."* A Chrome update that changed a box would then
+be invisible — which is the one thing the parity gate exists to notice. Written down so the next audit does
+not re-derive it as a good idea.
+
+**Nothing was trimmed. The wall is not lean, and for the first time in three audits the reason has an
+address.**

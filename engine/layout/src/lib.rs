@@ -1992,6 +1992,40 @@ impl Ctx<'_> {
         {
             width = 300.0;
         }
+        // ── **AN `<img>` WHOSE SOURCE DID NOT LOAD IS 16×16, NOT THE FULL LINE × ZERO** (tick 689).
+        //
+        // The comment above says `<img>` is excluded because *"a sourceless image has no default
+        // object size in any browser"* — true of `<img>` with no `src`, and NOT true of the case the
+        // web is full of: an `<img src>` whose bytes never arrive. Measured over headless Chrome on the
+        // same fixture rather than recalled:
+        //
+        // ```text
+        //   <img src="…/never.png">            Chrome  16×16      ours  784×0
+        //   <img width=120 height=70 src=…>    Chrome 120×70      ours 120×70   ✓
+        //   #a3 (the div after the bare img)   Chrome  y=196      ours  y=168
+        // ```
+        //
+        // 16×16 is the broken-image placeholder Chrome reserves, and reserving it is what keeps the
+        // rest of the page from sliding up. Our 784×0 is wrong twice: an INLINE replaced element must
+        // not take the whole line, and a box with a broken source is not zero-height.
+        //
+        // Conditioned on `taffy_known.is_none()` (no natural size ⇒ nothing decoded) exactly like the
+        // arm above, so an image that HAS loaded, or that carries author dimensions, or that has a
+        // ratio to derive from, is untouched — all three already resolved before this line.
+        //
+        // ⚠ NOT covered, and named rather than left to look handled: an `<img alt="text">` whose source
+        // failed. Chrome sizes that box to the ALT TEXT, which needs the text measurer here and is its
+        // own change. This arm is the no-alt case, which is what icon/logo/tracker images are.
+        let is_img = self.dom.tag_name(node) == Some("img");
+        let broken_img_placeholder = is_img
+            && taffy_known.is_none()
+            && s.aspect_ratio.is_none()
+            && s.width == Dim::Auto
+            && !s.width_stretch
+            && s.width_keyword.is_none();
+        if broken_img_placeholder {
+            width = 16.0;
+        }
         // `box-sizing:border-box` — the specified width is the border box, so the content
         // width is that minus padding + border. (`auto` already resolves to content width.)
         let bs_extra_w = if s.box_sizing == BoxSizing::BorderBox {
@@ -2162,6 +2196,11 @@ impl Ctx<'_> {
         // with no viewBox is 200×150, not 200×0).
         if default_object_tag && own_definite_h.is_none() && s.aspect_ratio.is_none() {
             content_height = 150.0;
+        }
+        // The height half of the broken-image placeholder — see the `broken_img_placeholder` comment
+        // above. 16 tall, Chrome-measured, and only when nothing definite was resolved for it.
+        if broken_img_placeholder && own_definite_h.is_none() {
+            content_height = 16.0;
         }
         // Parent↔child BOTTOM margin collapse (CSS2 §8.3.1): an auto-height block with no bottom
         // border/padding, `overflow:visible`, not a BFC, collapses its bottom margin with its last
@@ -5200,6 +5239,57 @@ mod tests {
         let fonts = FontContext::new();
         let root = layout_document(&dom, &styles, &fonts, width);
         (dom, root)
+    }
+
+    /// **AN `<img>` WHOSE SOURCE DID NOT LOAD IS 16×16 — Chrome-measured, not recalled.**
+    ///
+    /// This is the highest-mass shape behind the SHAPE score, and tick 688 measured why: across the
+    /// scored HEAD-20 sites the median `dx` is 0–2 and `dw`/`dh` are 0 on the worst sites, while `dy`
+    /// runs 91 / 145 / 206 / 3077. **The boxes are the right size and in the wrong place**, which means
+    /// something ABOVE them has the wrong height — and `keirin.jp`'s first divergence begins
+    /// *immediately after an `<img>`*, off by `dy=70`. `Cc4e6 geometry: <img>` is a 67-site cluster.
+    ///
+    /// Measured on headless Chrome and on this engine, same fixture, 800px viewport:
+    ///
+    /// ```text
+    ///                                        Chrome        ours (before)
+    ///   <img src="…/never.png">              16×16          784×0
+    ///   <img width=120 height=70 src=…>      120×70         120×70      ✓
+    ///   the div AFTER the bare img            y=196          y=168
+    /// ```
+    ///
+    /// 784×0 is wrong twice: an inline replaced element must not take the whole line, and a box whose
+    /// source broke is not zero-height. 16×16 is the placeholder Chrome reserves, and reserving it is
+    /// what stops the rest of the page sliding up.
+    ///
+    /// ⚠ The gate asserts the FOLLOWING sibling's `y`, not just the image's box — a height that is
+    /// right in isolation and does not push its siblings down would satisfy a box-only assertion and
+    /// fix nothing about `dy`, which is the entire reason this is being changed.
+    #[test]
+    fn a_broken_img_reserves_chromes_16x16_placeholder_and_pushes_its_sibling_down() {
+        let html = r#"<img id="bare" src="http://127.0.0.1:1/never.png"><div id="after"></div>"#;
+        let css = "#after{height:10px}";
+        let (dom, root) = layout_html(html, css, 800.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let img = rects[&by_id("bare")];
+        assert!(
+            (img.width - 16.0).abs() < 0.5 && (img.height - 16.0).abs() < 0.5,
+            "a broken <img> with no dimensions must reserve Chrome's 16×16 placeholder, not the full              line width at zero height (measured: Chrome 16×16, ours was 784×0) — got {}×{}",
+            img.width,
+            img.height
+        );
+        let after = rects[&by_id("after")];
+        assert!(
+            after.y >= img.y + 16.0,
+            "the box AFTER a broken <img> must be pushed down by the placeholder ({} vs img bottom              {}). A height that is right in isolation but does not displace its siblings fixes              nothing about the `dy` term that holds SHAPE at ~6%.",
+            after.y,
+            img.y + 16.0
+        );
     }
 
     /// The daily-driver `calc()` bar, end-to-end through HTML → cascade → flex layout: a

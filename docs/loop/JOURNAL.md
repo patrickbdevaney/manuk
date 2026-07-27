@@ -32569,3 +32569,108 @@ NEXT — **ONE TICK, NAMED, AND NO MORE MEASUREMENT UNTIL A CLUSTER MOVES:** tak
 divergence (`after …/a:1/img:1`, dy=70), find the element whose HEIGHT is wrong, fix it, and name the
 cluster whose site-count must shrink in the next sweep — `Cc4e6 <img>` (67 sites), `C7eb9 <body>` (93), or
 `C01ca <div>` (111). The aiming is done; the next tick is a fix.
+
+## Tick 689 — a broken `<img>` is 16×16 in Chrome and was 784×0 here (2026-07-27)
+
+HYPOTHESIS: t688's NEXT, and it was a written commitment — *"the next tick is a fix, not a measurement."*
+t688 measured that the SHAPE gap is a **`dy`** term (correctly-sized boxes in the wrong place ⇒ something
+ABOVE them has the wrong height) and that `keirin.jp`'s first divergence begins **immediately after an
+`<img>`**, off by `dy=70`. `Cc4e6 geometry: <img>` is a **67-site** cluster. So: probe `<img>` heights, and
+measure CHROME first.
+
+### THE MEASUREMENT — both engines, same fixture, 800px viewport
+
+```text
+                                       Chrome        ours (before)
+  <img src="…/never.png">              16×16         784×0
+  <img width=120 height=70 src=…>      120×70        120×70      ✓
+  <img> with CSS width+height          120×70        120×70      ✓
+  the div AFTER the bare img           y=196         y=168
+```
+
+**784×0 is wrong twice:** an inline replaced element must not take the whole line, and a box whose source
+broke is not zero-height. Chrome reserves a **16×16** broken-image placeholder, and reserving it is what
+stops everything below sliding up.
+
+⚠ The layout source carried the reason it was excluded — *"a sourceless image has no default object size in
+any browser"* — which is true of `<img>` with **no `src`** and false for `<img src>` whose bytes never
+arrive. That is the case the web is full of: dead CDNs, blocked trackers, lazy-load placeholders, icons
+behind a 403. **A correct sentence about the wrong case.**
+
+### WHAT LANDED
+
+The placeholder, conditioned on `taffy_known.is_none()` exactly like the `300×150` default-object-size arm
+beside it — so a decoded image, author dimensions, or a derivable ratio are all untouched (all three
+resolve before that line). Width and height are separate arms, matching the existing structure.
+
+⚠ **The gate asserts the FOLLOWING sibling's `y`, not just the image's box.** A height that is right in
+isolation but does not push its siblings down would satisfy a box-only assertion and fix **nothing** about
+the `dy` term — which is the entire reason for the change. RED-proven by two independent mutations (drop the
+width arm; drop the height arm), and the height mutation fails on the SIBLING assertion specifically.
+
+⚠ **NOT covered, named rather than left looking handled:** an `<img alt="text">` whose source failed —
+Chrome sizes that box to the **alt text**, which needs the text measurer here and is its own change. This
+arm is the no-alt case, which is what icon / logo / tracker images are.
+
+### AND A HYPOTHESIS CHROME ITSELF KILLED BEFORE IT COST A TICK
+
+I expected `<img width=200 height=100 style="width:100px">` to be **50px** tall — the attributes map to a
+presentational `aspect-ratio`, so overriding the width should carry the height. **Chrome measures
+100×100:** a broken image has no intrinsic size, so the attribute height wins outright. Fifth killed
+hypothesis this session, and the cheapest — *measure the oracle first* exists because the spec-reasoned
+answer and the shipped answer differ, and the shipped one is the target.
+
+### THE CLUSTER THIS TICK CLAIMS, per the mandate's RULE
+
+**`Cc4e6 geometry: <img>` — 67 sites, 977 hits.** Its site-count must SHRINK in the next sweep, and the
+`dy`-after-an-image shape (`keirin.jp` dy=70) is the specific instance to re-read. If it does not move, the
+placeholder was not the term and the next candidate is the inline-baseline descent — Chrome's `#a1` sits at
+`y=82` against our `y=78` on this same fixture, a 4px-per-inline-image gap that accumulated to **32px over
+four images**, which is measured and written down here rather than guessed at later.
+
+TICK SHAPE: capability + fidelity (a geometry cluster, on-mandate). Bar 0 untouched; `engine/layout` only.
+Gates: `a_broken_img_reserves_chromes_16x16_placeholder_and_pushes_its_sibling_down` — RED-proven by two
+independent mutations. manuk-layout lib 89/89.
+WIKI: `docs/wiki/box-layout.md` — "a broken `<img>` is 16×16 in Chrome and was 784×0 here", with the
+killed aspect-ratio hypothesis.
+PATTERN: `docs/loop/WEB-PATTERNS.md` — an `<img src>` whose bytes never arrive.
+
+### SURFACE AUDIT #41 — DUE THIS TICK (every 10; last #40 at t679)
+
+Full record in `docs/loop/SURFACE-AUDIT.md`. **A source no previous audit had read:** Microsoft Edge's
+[2026 top developer needs](https://microsoftedge.github.io/TopDeveloperNeeds/), ranked by developer VOTES
+for features they cannot use — a different ordering from Interop's (vendor-agreed test mass) and from ours
+(oracle cluster mass). Three orderings, three blind spots. Also noted: Interop 2026's accessibility-testing
+investigation is *"consistent accessibility trees from the same DOM and CSS across browsers"* — our
+agent-native moat stated as an interop goal, and the bar will be a WPT suite.
+
+**Eight rows added, every one MEASURED.** Six honest NOs (`appearance: base-select`, `calc-size()` /
+`interpolate-size()`, `field-sizing`, `justify-self` in block, `text-wrap: pretty`,
+`navigator.virtualKeyboard`); `moveBefore` and `replaceSync` were already present and already mapped.
+`map-reconcile.sh`: RECONCILED, 0 drift, 396 rows, unknowns still 0.
+
+⚠⚠ **WRONG #1 — A Bar-0 ITEM WITH NO MAP ROW.** `calc-size()` / `interpolate-size()` had **no capability
+row at all**, while this project carries an **open Bar-0 SIGSEGV recorded against exactly those
+properties**. The map is what `map-reconcile.sh`, `phase0-progress.sh` and the readiness percentage read —
+so a Bar-0 item with no row is invisible to every audit that reads it. The crash was remembered; the
+capability was not.
+
+⚠⚠ **WRONG #2 — TWO NEW FALSE-YES CANDIDATES.**
+`customElements.define(…, {extends:'button'})` is **ACCEPTED**; `new IntersectionObserver(cb,
+{trackVisibility:true, delay:100})` is **ACCEPTED**. Neither throws, and neither has any measured effect.
+**ACCEPTED IS NOT IMPLEMENTED** — an options bag that is silently ignored is the worst shape available: the
+page is told yes and reads `undefined`. Both filed `partial` rather than works-or-missing.
+
+> **THE STANDING FORM, fourth occurrence this session:** `typeof`, *"it did not throw"*, and *"the
+> constructor accepted my options"* are all statements about **PRESENCE**. Only a measured effect is a
+> statement about **BEHAVIOUR**. (`reportError` pinned WORKS by `typeof` at t675; the `corner-shape`
+> shorthand answering `true` while unread at audit #40; these two.)
+
+NEXT: **(1) RE-RUN HEAD-20 AND READ `Cc4e6`'s SITE COUNT** — the mandate's rule is that a tick claims a
+cluster and proves it shrinks; this one claims `<img>` and the proof is one sweep. **(2) THE
+INLINE-BASELINE DESCENT** — Chrome's box after an inline image sits 4px lower than ours, accumulating to
+32px over four images on one fixture. That is the next `dy` term and it is already measured.
+**(3) PARALLELISE THE PARITY CAPTURES** — `parity.rs` spawns one headless Chrome per fixture, serially:
+**175s of a 227s wall (77%)**, independent captures, no false dependency. 175s → ~25s with the identical
+assertion (t688's wall audit; caching Chrome's answers is REJECTED — a gate whose expected value came from
+memory tests the memory).
