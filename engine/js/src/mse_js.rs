@@ -621,6 +621,94 @@ pub const MSE_JS: &str = r#"
     },
   };
 
+  // ══ EME: the interfaces exist, and NOTHING is ever granted (tick 641) ═══════════════════════
+  //
+  // **This is not EME.** `CONSTITUTION.MD` PART IV makes *"Widevine/EME HD streaming"* a permanent
+  // non-goal — a licensing wall, correctly never chased — and in the same sentence prescribes how
+  // to hold it: *"Documented, DEGRADED GRACEFULLY, never chased."* Omitting the interface objects
+  // is not graceful degradation. t640 measured what it actually costs:
+  //
+  //   shaka-player 4.11.2 `isBrowserSupported()` → **false**, on this clause of its own source:
+  //     !(window.MediaKeys && window.navigator && window.navigator.requestMediaKeySystemAccess &&
+  //       window.MediaKeySystemAccess && window.MediaKeySystemAccess.prototype.getConfiguration)
+  //
+  // It reads EME's presence as a proxy for *"is this a real browser"* and refuses to run **even for
+  // unencrypted content**. So the absence converted "encrypted video will not play" into
+  // "shaka-player will not run at all" — a hard failure on exactly the case PART IV says to degrade
+  // gracefully into. Every MSE predicate it checks was already green.
+  //
+  // **The honesty guard, and it is the whole design.** `requestMediaKeySystemAccess` **NEVER
+  // RESOLVES.** There is no CDM in this tree, no key system is supported, and a resolved access
+  // object would send a site down a decryption path that ends worse than the refusal did — the
+  // "advertise before it works" failure MEDIA.md names, wearing DRM's clothes. `NotSupportedError`
+  // is the spec's own answer for "no supported configuration", and it is what Chrome without a CDM
+  // returns. Netflix and Spotify remain unreachable; they were unreachable before, and the
+  // difference is that a clear-content player now boots.
+  //
+  // The constructors are defined so `instanceof` and prototype feature-detects behave, and their
+  // methods reject rather than throw — a rejected promise is a path a player handles; a TypeError
+  // from calling a method on `undefined` is the throw-class that takes the page down (t615).
+  function emeRefuse(msg) {
+    return g.Promise.reject(new g.DOMException(msg, 'NotSupportedError'));
+  }
+
+  function MediaKeySession() {
+    throw new g.TypeError('Illegal constructor');
+  }
+  MediaKeySession.prototype.generateRequest = function () {
+    return emeRefuse('no key system is supported');
+  };
+  MediaKeySession.prototype.load = function () { return emeRefuse('no key system is supported'); };
+  MediaKeySession.prototype.update = function () { return emeRefuse('no key system is supported'); };
+  MediaKeySession.prototype.close = function () { return emeRefuse('no key system is supported'); };
+  MediaKeySession.prototype.remove = function () { return emeRefuse('no key system is supported'); };
+
+  function MediaKeys() {
+    throw new g.TypeError('Illegal constructor');
+  }
+  MediaKeys.prototype.createSession = function () {
+    // Synchronous in the spec, so this one THROWS rather than rejecting — and it is unreachable
+    // anyway, because the only way to obtain a MediaKeys is through an access object that is never
+    // handed out.
+    throw new g.DOMException('no key system is supported', 'NotSupportedError');
+  };
+  MediaKeys.prototype.setServerCertificate = function () {
+    return emeRefuse('no key system is supported');
+  };
+
+  function MediaKeySystemAccess() {
+    throw new g.TypeError('Illegal constructor');
+  }
+  // The property shaka names explicitly. It is never called — no instance is ever created — but the
+  // feature-detect reads it off the PROTOTYPE, which is the whole reason this block exists.
+  MediaKeySystemAccess.prototype.getConfiguration = function () {
+    throw new g.DOMException('no key system is supported', 'NotSupportedError');
+  };
+  MediaKeySystemAccess.prototype.createMediaKeys = function () {
+    return emeRefuse('no key system is supported');
+  };
+
+  if (!g.MediaKeys) { g.MediaKeys = MediaKeys; }
+  if (!g.MediaKeySession) { g.MediaKeySession = MediaKeySession; }
+  if (!g.MediaKeySystemAccess) { g.MediaKeySystemAccess = MediaKeySystemAccess; }
+
+  if (g.navigator && !g.navigator.requestMediaKeySystemAccess) {
+    g.navigator.requestMediaKeySystemAccess = function (keySystem, configs) {
+      // The spec's argument validation still runs: a player that passes garbage should learn that
+      // from us, not have it masked by the blanket refusal below.
+      if (typeof keySystem !== 'string' || keySystem === '') {
+        return g.Promise.reject(new g.TypeError('keySystem must be a non-empty string'));
+      }
+      if (!configs || typeof configs.length !== 'number' || configs.length === 0) {
+        return g.Promise.reject(new g.TypeError('supportedConfigurations must be a non-empty list'));
+      }
+      // And then: no key system, ever. Not Widevine (no CDM and no licence), not PlayReady, and not
+      // `org.w3.clearkey` either — Clear Key needs a decryptor this tree does not have, and
+      // answering yes to it would be the same lie in a smaller font.
+      return emeRefuse("no key system is supported: '" + keySystem + "'");
+    };
+  }
+
   if (g.navigator && !g.navigator.mediaCapabilities) {
     Object.defineProperty(g.navigator, 'mediaCapabilities', {
       get: function () { return mediaCapabilities; },

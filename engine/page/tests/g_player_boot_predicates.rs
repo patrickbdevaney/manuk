@@ -20,18 +20,22 @@
 //!
 //! * **PRESENT** — the MSE surface real players gate on. `SourceBuffer.prototype.changeType` in
 //!   particular is read by shaka and is easy to lose, because nothing in this repo calls it.
-//! * **ABSENT, ON PURPOSE** — the EME triple. Asserted as absent so that **the day any of it
-//!   appears, this gate goes red and forces the shaka question to be answered deliberately** rather
-//!   than discovered. EME *playback* is a permanent non-goal (`STATUS.md`); whether the interfaces
-//!   should exist and honestly reject every key system — which is what Chrome without a CDM does —
-//!   is open, and is not a question a stray commit should get to settle by accident.
+//! * **THE EME TRIPLE — and its assertion was INVERTED at t641, which is this gate working.** t640
+//!   asserted the three interface objects ABSENT, so that the day any of them appeared the gate
+//!   would go red and force the shaka question to be answered deliberately rather than discovered.
+//!   **It went red one tick later, at t641, and the question was answered on the constitution's own
+//!   words** — PART IV makes *Widevine/EME HD streaming* a permanent non-goal and in the same
+//!   sentence prescribes *"documented, degraded gracefully"*, which omitting the interfaces is not.
+//!   The interfaces now exist and grant nothing; `G_EME_HONEST_REFUSAL` holds the refusal. This
+//!   half now asserts PRESENCE, and the pairing is the point: shaka's clause is satisfied **and**
+//!   every key system is still refused, which are two claims that must never drift apart.
 //!
 //! ## RED probes run against this gate
 //!
 //! | mutation | result |
 //! |---|---|
 //! | delete `changeType` from the SourceBuffer prototype | RED — `sbChangeType:function` |
-//! | define `window.MediaKeys = function(){}` | RED — `MediaKeys:undefined`, which is the tripwire firing exactly as designed |
+//! | (t640) define `window.MediaKeys` while the triple was asserted absent | RED — the tripwire, which then fired for real at t641 |
 
 use manuk_text::FontContext;
 
@@ -48,7 +52,7 @@ const HTML: &str = r##"<!doctype html><html><body>
     p('sbAppend:' + (SB && SB.prototype ? typeof SB.prototype.appendBuffer : 'n/a'));
     p('sbChangeType:' + (SB && SB.prototype ? typeof SB.prototype.changeType : 'n/a'));
     p('sbRemove:' + (SB && SB.prototype ? typeof SB.prototype.remove : 'n/a'));
-    // ── The EME half — asserted ABSENT, deliberately. See the module note.
+    // ── The EME half — asserted PRESENT since t641 (inverted from t640's tripwire). See the module note.
     p('MediaKeys:' + typeof window.MediaKeys);
     p('rMKSA:' + typeof (navigator && navigator.requestMediaKeySystemAccess));
     p('MediaKeySystemAccess:' + typeof window.MediaKeySystemAccess);
@@ -101,21 +105,20 @@ const CLAIMS: &[(&str, &str)] = &[
         "`remove` too — shaka monkey-patches it on some platforms, which requires it to be there",
     ),
     (
-        "MediaKeys:undefined",
-        "ABSENT ON PURPOSE, and asserted so it cannot change by accident. shaka-player's \
-         isBrowserSupported() reads the EME interface objects as a proxy for `is this a real \
-         browser` and returns FALSE without them, even for unencrypted content — so the day this \
-         becomes defined, shaka's verdict changes and this gate goes red to force that question to \
-         be answered deliberately rather than discovered",
+        "MediaKeys:function",
+        "INVERTED AT t641 — t640 asserted this ABSENT as a tripwire, it fired one tick later, and \
+         the question it was built to force got answered from PART IV's own words (`degraded \
+         gracefully`). shaka reads the EME interface objects as a proxy for `is this a real \
+         browser` and refuses to run without them even on unencrypted content",
     ),
     (
-        "rMKSA:undefined",
+        "rMKSA:function",
         "the second term of the same clause; asserted separately so a partial definition is caught",
     ),
     (
-        "MediaKeySystemAccess:undefined",
-        "and the third. EME PLAYBACK is a permanent non-goal (STATUS.md); whether the INTERFACES \
-         should exist and honestly reject every key system is a separate open question, and not one \
-         a stray commit should settle by accident",
+        "MediaKeySystemAccess:function",
+        "and the third. PRESENCE here is only safe because G_EME_HONEST_REFUSAL asserts that every \
+         key system — Widevine, PlayReady and Clear Key — is still REFUSED. These two gates must be \
+         read together: interfaces without the refusal would be a promise this tree cannot keep",
     ),
 ];

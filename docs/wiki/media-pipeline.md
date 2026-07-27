@@ -462,6 +462,47 @@ forces the shaka question to be answered rather than discovered. (EME *playback*
 non-goal; whether the *interfaces* should exist and honestly reject every key system — what Chrome
 without a CDM does — is a separate, open question.)
 
+## The interfaces exist and grant nothing (tick 641)
+
+t640 measured shaka-player refusing to boot on a clause requiring the **EME interface objects**,
+which it reads as a proxy for *"is this a real browser"* and demands **even for unencrypted
+content**. The scope question was deliberately left open there; it is settled here, from
+`CONSTITUTION.MD` PART IV's own sentence:
+
+> *"**Widevine/EME HD streaming.** Permanent licensing wall. Documented, **degraded gracefully**,
+> never chased."*
+
+The non-goal is **HD streaming** — playback, which needs a proprietary binary CDM and a licensing
+relationship and is genuinely unreachable. The constitution does not merely permit graceful
+degradation, it **prescribes** it. Omitting the interfaces was not that: it converted *"encrypted
+video will not play"* into *"shaka-player will not run at all, including on clear content."*
+
+**What exists now:** `MediaKeys`, `MediaKeySystemAccess` (with `getConfiguration` and
+`createMediaKeys` on the prototype), `MediaKeySession`, and
+`navigator.requestMediaKeySystemAccess`. All are interface objects — `new MediaKeys()` is an
+`Illegal constructor`, as in every real engine.
+
+**What is granted: nothing, ever.** `requestMediaKeySystemAccess` **never resolves**. A resolved
+access object sends a site down a decryption path that ends worse than the refusal did — the
+advertise-before-it-works failure this document names, wearing DRM's clothes. `NotSupportedError` is
+the spec's answer for *"no supported configuration"* and what Chrome without a CDM returns.
+
+**`org.w3.clearkey` is refused too, and it is the interesting one.** Clear Key needs no licence and
+is "just AES", which makes it the plausible concession. It still needs a decryptor this tree does not
+have, so granting it would be **the same lie in a smaller font**. Its RED probe was run separately
+for exactly that reason.
+
+**Measured on the same 660KB library:** `isBrowserSupported(): true`, constructs, and
+`probeSupport()` resolves — 44 media types and 8 DRM key systems probed, every key system refused.
+hls.js and dash.js unmoved. Netflix, Spotify and Disney+ remain unreachable; they were unreachable
+before. What changed is that a clear-content player boots.
+
+**And the process note worth keeping.** t640's gate asserted the EME triple **absent, on purpose**,
+so that the day any of it appeared the gate would go red and force this question. It fired one tick
+later against my own change. *An absence that is a decision should be as load-bearing as a presence
+that is a capability* — otherwise a permanent non-goal erodes not because anyone decided to erode it,
+but because nobody was told a decision was being made.
+
 ## M4 — AAC decode (tick 235): sound-shaped numbers, not yet sound
 
 `engine/media/src/audio.rs`. M3 could find the audio and name it (`mp4a.67`, 44100 Hz, stereo) and

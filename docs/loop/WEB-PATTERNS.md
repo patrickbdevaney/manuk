@@ -5432,3 +5432,33 @@ fixture-only evidence had said nothing about any of them.
 *absent* in a gate, so the day it appears, the gate goes red and forces the question to be answered
 rather than discovered. An absence that is a decision should be as load-bearing as a presence that is
 a capability.
+
+## The absent interface used as a proxy for browserhood (tick 641)
+
+**The class:** an interface object a library reads not because it needs the feature, but as a
+**shibboleth** for a class of browser. shaka-player demands the EME triple (`MediaKeys`,
+`navigator.requestMediaKeySystemAccess`, `MediaKeySystemAccess.prototype.getConfiguration`) before it
+will run **anything**, including unencrypted playback it does not need EME for. Omit them and a
+library that would work perfectly refuses to start.
+
+**The fix is the interfaces without the capability.** They exist, they are not constructible from
+script, and `requestMediaKeySystemAccess` **never resolves** — `NotSupportedError` for Widevine,
+PlayReady and Clear Key alike. That is exactly what Chrome without a CDM does. Measured on the real
+660KB library: `isBrowserSupported()` false → **true**, `probeSupport()` completes, every key system
+refused.
+
+> **The honesty line is the RESOLVE, not the interface.** A missing interface is a lie about what
+> kind of browser this is; a *resolved* access object would be a lie about what it can decrypt, and
+> the second is far worse — it sends the site down a path that fails later and less legibly. Define
+> the shape; refuse the grant.
+
+**Beware the small concession.** Clear Key is the one that looks safe — no licence, "just AES", every
+argument for granting it sounds reasonable. It still needs a decryptor. **A concession that requires
+a capability you do not have is the same lie in a smaller font**, and it deserves its own RED probe
+precisely because it is the one you will talk yourself into.
+
+**And gate the deliberate absence.** Before this landed, a gate asserted those three interfaces
+**absent on purpose**, so that the day any appeared it would go red and force the decision into the
+open. It fired one tick later. An absence that is a decision should be as load-bearing as a presence
+that is a capability — otherwise a permanent non-goal erodes not because anyone decided to, but
+because nobody was told a decision was being made.

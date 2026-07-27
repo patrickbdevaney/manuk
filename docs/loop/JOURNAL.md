@@ -28648,3 +28648,87 @@ NEXT: the named-and-unanswered scope question — **should the EME interface obj
 honestly?** It is worth a tick of its own because it is the difference between shaka-player working
 for clear content and not, and shaka is one of the three libraries that plays adaptive video on the
 open web. After that, the Opus decoder.
+
+## Tick 641 — the EME interfaces exist and reject honestly; shaka-player boots (2026-07-26)
+
+HYPOTHESIS: t640 measured shaka-player refusing to run — `isBrowserSupported(): false` — on a single
+clause requiring the **EME interface objects**, which it reads as a proxy for *"is this a real
+browser"* and demands even for unencrypted content. I deliberately did not settle the scope question
+inside a measurement tick. Settling it now, from the constitution's own words rather than from what
+would be convenient:
+
+> **PART IV — NON-GOALS:** *"**Widevine/EME HD streaming.** Permanent licensing wall. Documented,
+> **degraded gracefully**, never chased."*
+
+The non-goal is **HD streaming** — the playback, which needs a proprietary binary CDM and a licensing
+relationship, and is genuinely unreachable. And the constitution does not merely permit graceful
+degradation, it **prescribes** it. Omitting the interface objects is not graceful degradation: it
+converts *"encrypted video will not play"* into *"shaka-player will not run at all, including on
+clear content"* — a hard failure on the unencrypted case, which is precisely the case PART IV says to
+degrade gracefully into.
+
+So: **the interfaces exist; every key-system request is honestly rejected.** That is exactly what
+Chrome without a CDM does, it chases nothing, and it decrypts nothing. The guard that makes it honest
+rather than a lie is that `requestMediaKeySystemAccess` must **never resolve** — a resolved access
+object would send a site down a decryption path that ends worse than the refusal did.
+
+**LANDED, AND THE MEASUREMENT IS ON THE SAME 660KB OF SHIPPED CODE t640 USED.**
+
+```text
+  shaka  isBrowserSupported():TRUE · new shaka.Player() ok
+         probeSupport() RESOLVES — 44 media types, 8 DRM key systems probed, every one refused
+         navigator.requestMediaKeySystemAccess('com.widevine.alpha', …) → NotSupportedError
+  hls.js / dash.js  unmoved
+```
+
+**THE TRIPWIRE I BUILT ONE TICK AGO FIRED, AND THAT IS THE POINT OF THE TICK.** t640's
+`G_PLAYER_BOOT_PREDICATES` asserted the EME triple **absent, on purpose**, so that *"the day any of
+it appears, this gate goes red and forces the shaka question to be answered deliberately rather than
+discovered."* It went red the very next tick, against my own change, and I answered it in writing
+before re-pointing it.
+
+> **An absence that is a DECISION should be as load-bearing as a presence that is a capability.**
+> Without that assertion, defining `MediaKeys` would have been a silent side effect of a media tick —
+> which is exactly how a permanent non-goal gets eroded: not by anyone deciding to erode it, but by
+> nobody being told a decision was being made.
+
+**THE SCOPE REASONING, FROM PART IV'S OWN SENTENCE.** *"**Widevine/EME HD streaming.** Permanent
+licensing wall. Documented, **degraded gracefully**, never chased."* The non-goal is **HD
+streaming** — the playback, needing a proprietary binary CDM and a licensing relationship, genuinely
+unreachable. And the constitution does not merely *permit* graceful degradation, it **prescribes**
+it. Omitting the interface objects was not that: it turned *"encrypted video will not play"* into
+*"shaka-player will not run at all, including on clear content"*, a hard failure on precisely the
+case PART IV says to degrade into. Nothing here chases Widevine, and nothing decrypts.
+
+**THE HONESTY GUARD IS THE DESIGN, NOT A CAVEAT.** `requestMediaKeySystemAccess` **never resolves** —
+a resolved access object sends a site down a decryption path that ends worse than the refusal did,
+which is MEDIA.md's advertise-before-it-works failure wearing DRM's clothes. The gate weights that
+accordingly: three key systems refused, plus a blanket assertion that no phrasing of "granted"
+appears anywhere in the record. **`org.w3.clearkey` is refused too**, and it is the interesting one —
+it is the plausible concession, because Clear Key needs no licence and is "just AES". It still needs
+a decryptor this tree does not have, so granting it would be **the same lie in a smaller font**. The
+RED probe for it was run separately for that reason.
+
+Argument validation stays **distinguishable** from the refusal (`TypeError` for a bad key system or
+an empty configuration list, `NotSupportedError` for a real one we cannot serve) — a player passing
+garbage should learn that from us rather than have it masked by a blanket refusal, which is the same
+distinction t635 drew for `decodingInfo`.
+
+Netflix, Spotify and Disney+ remain unreachable. They were unreachable before. **What changed is that
+a clear-content player boots** — and shaka is one of the three libraries that plays adaptive video on
+the open web.
+
+TICK SHAPE: capability (the EME interface objects exist and grant nothing, unblocking shaka-player
+for unencrypted content — measured on the real library, not a fixture; scope decided from PART IV's
+own wording and written down before the code). Bar 0 improved (a hard boot-refusal removed); no
+ratchet floor moved; seven media gates and the shell suite re-run green.
+Gates: **G_EME_HONEST_REFUSAL** (`engine/page/tests/g_eme_honest_refusal.rs`, 12 claims + a blanket
+never-granted assertion, 3 RED mutations run) and `G_PLAYER_BOOT_PREDICATES` **re-pointed**, its EME
+half inverted from absent to present with the reasoning recorded in place.
+WIKI: `docs/wiki/media-pipeline.md` — "the interfaces exist and grant nothing".
+PATTERN: `docs/loop/WEB-PATTERNS.md` — "the absent interface used as a proxy for browserhood".
+
+NEXT: the media arc now has real-library evidence at both ends, so the honest next rung is the
+**Opus decoder** (symphonia 0.6 has none; `audiopus`/`opus` are C bindings — a real dependency
+decision). Also open: our own latency on the placement half, and t629's `getBoundingClientRect()` on
+an SVG child.

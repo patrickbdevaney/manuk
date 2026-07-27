@@ -744,103 +744,104 @@
   - L313 · M3c — AV1-in-WebM (tick 634): the join was already complete, and both answers said no
   - L389 · M3d — navigator.mediaCapabilities.decodingInfo() (tick 635): the rendition chooser
   - L424 · What the real players actually check (tick 640)
-  - L465 · M4 — AAC decode (tick 235): sound-shaped numbers, not yet sound
-  - L504 · M5 — H.264 decode: the first real frame
-  - L508 · The trait exists because the backend is known to be temporary
-  - L521 · The format mismatch that is the actual work
-  - L536 · isTypeSupported stays honest
-  - L543 · What makes the gate a decode gate rather than a did-it-run gate
-  - L558 · Isolation, proven in both directions
-  - L567 · Fixture note, and the pin
-  - L581 · The frame reaches the screen by overwriting the poster's map entry (tick 240)
-  - L615 · The drift this exposed: two decode passes, one of them half-blind
-  - L629 · M6 — the presentation clock (tick 249): a still is not playback
-  - L638 · HOLD, never ROUND — the whole correctness of the module
-  - L650 · Presentation order is written before it can matter
-  - L658 · The threshold that was guessed wrong, and what the real numbers were
-  - L673 · The clock does not own the frames
-  - L686 · M6b — audio is master (tick 250), and two numbers that came out of it
-  - L694 · The master clock holds an integer, and the drift is 0.53s/hour
-  - L708 · Sync SNAPS; it does not blend
-  - L720 · 44100 and 30000 are incommensurate — an assertion written wrong first
-  - L732 · One stream ends before the other
-  - L743 · M6b-element — the JS-visible playback clock (tick 521): timeupdate/ended fire
-  - L777 · M6b-seek — writing currentTime is a real seek (tick 522)
-  - L797 · M6b-played — played is the union of watched spans (tick 523)
-  - L814 · M6b-durationchange — the element hears its length (tick 524)
-  - L825 · M7 — captions (tick 255), and a probe that verified the TEST
-  - L831 · active_at returns a LIST
-  - L839 · The failure mode of a strict parser is SILENCE, not rejection
-  - L847 · The probe that stayed GREEN, and why it is the best result of the tick
-  - L866 · M7b — the TextTrack API (tick 256), and the track nobody turned on
-  - L876 · mode is how "captions off" is represented
-  - L884 · The same plural lesson, one layer up
-  - L896 · M7c — the caption timeline fires (tick 257), and the poll nobody was making
-  - L908 · currentTime is not a number, it is the clock
-  - L917 · The comparison is by IDENTITY, and length is the trap
-  - L927 · Three RED probes, three distinct predicted bugs (process rule 3)
-  - L939 · Residue, named honestly
-  - L947 · M7d — the two halves of captions are joined (tick 258b/259), and a limit found by measuring
-  - L962 · The sweep is document-driven, and that is not a detail
-  - L971 · The limit this tick MEASURED and did not remove
-  - L981 · Two RED probes came back GREEN, and the claim was narrowed rather than the probe discarded
-  - L997 · Residue
-  - L1005 · M7e — cue placement is not decoration (tick 260)
-  - L1022 · auto is not 0, and a bare number is not a percentage
-  - L1035 · Probes
-  - L1050 · Residue
-  - L1056 · M7f — the UA paints the caption (tick 261)
-  - L1065 · The three-crate join
-  - L1087 · Three things that are not details
-  - L1110 · RED probes — four, and one of them was VACUOUS
-  - L1132 · Residue
-  - L1146 · Tick 262 — the browser finally asks for the movie, and something owns the clock
-  - L1152 · The front of the chain: <video src> was never requested
-  - L1179 · The back of the chain: three clocks and no player
-  - L1198 · RED probes: five, all fired
-  - L1218 · Residue — stated plainly, because this is the caption trap again
-  - L1233 · Tick 263 — the last link: a <video> on a real page now shows moving pictures
-  - L1242 · The decoder lives in the shell, and only in the shell
-  - L1251 · Why a module and not ten lines in the event loop
-  - L1258 · Three decisions that are not details
-  - L1283 · RED probes: three, all fired
-  - L1297 · Residue
-  - L1314 · Tick 264 — the honest "no" that became a lie
-  - L1333 · The three answers, and why the distinction is real
-  - L1350 · RED probes: three, all fired
-  - L1363 · Residue — one incoherence, deliberately not fixed here
-  - L1382 · Tick 265 — the outcome bridge: video.error stops guessing
-  - L1413 · RED probes: three, all fired
-  - L1426 · Note: the bridge assertion does NOT live in the shell gate
-  - L1435 · Residue
-  - L1443 · Tick 349 — the MSE playback JOIN: appended bytes reach the decoder
-  - L1451 · The channel
-  - L1463 · load_mse is deliberately not load
-  - L1472 · The registry now tells the truth (and only the truth)
-  - L1480 · G_MSE_JOIN (shell suite — which IS in the verify wall, unlike the older media gates)
-  - L1494 · Residue, honestly
-  - L1502 · Tick 350 — audio OUTPUT: the device end, and why the gate never listens
-  - L1509 · The pump/device split IS the gate design
-  - L1521 · Three contracts the gates pin
-  - L1536 · Feature-lane discipline (the wall cares)
-  - L1544 · Residue, honestly
-  - L1550 · Tick 351 — A/V master-slave sync: the device clock owns time
-  - L1559 · Mastery follows the DEVICE, not the existence of a feed
-  - L1569 · Two hand-backs to the wall, both load-bearing
-  - L1578 · G_AV_MASTER (shell suite = IN the verify wall) — each claim RED-proven by edit
-  - L1588 · Tick 352 — muted reaches the device: silent consumption, never pause
-  - L1606 · Tick 353 — AV1 decode: re_rav1d behind the M5 trait
-  - L1638 · Tick 354 — AV1 ships: the shell lane and the three registries flip together
-  - L1661 · Tick 355 — AVIF stills: the hero-image hole, closed in the shell lane
-  - L1681 · Tick 368 — alpha composites
-  - L1695 · Tick 360 — the live media-IDL channel: .muted and .volume reach the device
-  - L1717 · Tick 361 — playbackRate applies: scaled time, honest mute, and who owns the clock at 2x
-  - L1735 · Tick 362 — MP3 stream decode: the podcast organ (join pending)
-  - L1751 · Tick 363 — the MP3 join: <audio> plays, audio-only entries exist
-  - L1766 · Tick 364 — FLAC + Ogg/Vorbis through the seam; Opus refused honestly
-  - L1781 · Tick 370 — the mixer: two playing elements, both audible
-  - L1796 · Tick 375 — the mixer resamples
-  - L1806 · Tick 369 — WAV rung
+  - L465 · The interfaces exist and grant nothing (tick 641)
+  - L506 · M4 — AAC decode (tick 235): sound-shaped numbers, not yet sound
+  - L545 · M5 — H.264 decode: the first real frame
+  - L549 · The trait exists because the backend is known to be temporary
+  - L562 · The format mismatch that is the actual work
+  - L577 · isTypeSupported stays honest
+  - L584 · What makes the gate a decode gate rather than a did-it-run gate
+  - L599 · Isolation, proven in both directions
+  - L608 · Fixture note, and the pin
+  - L622 · The frame reaches the screen by overwriting the poster's map entry (tick 240)
+  - L656 · The drift this exposed: two decode passes, one of them half-blind
+  - L670 · M6 — the presentation clock (tick 249): a still is not playback
+  - L679 · HOLD, never ROUND — the whole correctness of the module
+  - L691 · Presentation order is written before it can matter
+  - L699 · The threshold that was guessed wrong, and what the real numbers were
+  - L714 · The clock does not own the frames
+  - L727 · M6b — audio is master (tick 250), and two numbers that came out of it
+  - L735 · The master clock holds an integer, and the drift is 0.53s/hour
+  - L749 · Sync SNAPS; it does not blend
+  - L761 · 44100 and 30000 are incommensurate — an assertion written wrong first
+  - L773 · One stream ends before the other
+  - L784 · M6b-element — the JS-visible playback clock (tick 521): timeupdate/ended fire
+  - L818 · M6b-seek — writing currentTime is a real seek (tick 522)
+  - L838 · M6b-played — played is the union of watched spans (tick 523)
+  - L855 · M6b-durationchange — the element hears its length (tick 524)
+  - L866 · M7 — captions (tick 255), and a probe that verified the TEST
+  - L872 · active_at returns a LIST
+  - L880 · The failure mode of a strict parser is SILENCE, not rejection
+  - L888 · The probe that stayed GREEN, and why it is the best result of the tick
+  - L907 · M7b — the TextTrack API (tick 256), and the track nobody turned on
+  - L917 · mode is how "captions off" is represented
+  - L925 · The same plural lesson, one layer up
+  - L937 · M7c — the caption timeline fires (tick 257), and the poll nobody was making
+  - L949 · currentTime is not a number, it is the clock
+  - L958 · The comparison is by IDENTITY, and length is the trap
+  - L968 · Three RED probes, three distinct predicted bugs (process rule 3)
+  - L980 · Residue, named honestly
+  - L988 · M7d — the two halves of captions are joined (tick 258b/259), and a limit found by measuring
+  - L1003 · The sweep is document-driven, and that is not a detail
+  - L1012 · The limit this tick MEASURED and did not remove
+  - L1022 · Two RED probes came back GREEN, and the claim was narrowed rather than the probe discarded
+  - L1038 · Residue
+  - L1046 · M7e — cue placement is not decoration (tick 260)
+  - L1063 · auto is not 0, and a bare number is not a percentage
+  - L1076 · Probes
+  - L1091 · Residue
+  - L1097 · M7f — the UA paints the caption (tick 261)
+  - L1106 · The three-crate join
+  - L1128 · Three things that are not details
+  - L1151 · RED probes — four, and one of them was VACUOUS
+  - L1173 · Residue
+  - L1187 · Tick 262 — the browser finally asks for the movie, and something owns the clock
+  - L1193 · The front of the chain: <video src> was never requested
+  - L1220 · The back of the chain: three clocks and no player
+  - L1239 · RED probes: five, all fired
+  - L1259 · Residue — stated plainly, because this is the caption trap again
+  - L1274 · Tick 263 — the last link: a <video> on a real page now shows moving pictures
+  - L1283 · The decoder lives in the shell, and only in the shell
+  - L1292 · Why a module and not ten lines in the event loop
+  - L1299 · Three decisions that are not details
+  - L1324 · RED probes: three, all fired
+  - L1338 · Residue
+  - L1355 · Tick 264 — the honest "no" that became a lie
+  - L1374 · The three answers, and why the distinction is real
+  - L1391 · RED probes: three, all fired
+  - L1404 · Residue — one incoherence, deliberately not fixed here
+  - L1423 · Tick 265 — the outcome bridge: video.error stops guessing
+  - L1454 · RED probes: three, all fired
+  - L1467 · Note: the bridge assertion does NOT live in the shell gate
+  - L1476 · Residue
+  - L1484 · Tick 349 — the MSE playback JOIN: appended bytes reach the decoder
+  - L1492 · The channel
+  - L1504 · load_mse is deliberately not load
+  - L1513 · The registry now tells the truth (and only the truth)
+  - L1521 · G_MSE_JOIN (shell suite — which IS in the verify wall, unlike the older media gates)
+  - L1535 · Residue, honestly
+  - L1543 · Tick 350 — audio OUTPUT: the device end, and why the gate never listens
+  - L1550 · The pump/device split IS the gate design
+  - L1562 · Three contracts the gates pin
+  - L1577 · Feature-lane discipline (the wall cares)
+  - L1585 · Residue, honestly
+  - L1591 · Tick 351 — A/V master-slave sync: the device clock owns time
+  - L1600 · Mastery follows the DEVICE, not the existence of a feed
+  - L1610 · Two hand-backs to the wall, both load-bearing
+  - L1619 · G_AV_MASTER (shell suite = IN the verify wall) — each claim RED-proven by edit
+  - L1629 · Tick 352 — muted reaches the device: silent consumption, never pause
+  - L1647 · Tick 353 — AV1 decode: re_rav1d behind the M5 trait
+  - L1679 · Tick 354 — AV1 ships: the shell lane and the three registries flip together
+  - L1702 · Tick 355 — AVIF stills: the hero-image hole, closed in the shell lane
+  - L1722 · Tick 368 — alpha composites
+  - L1736 · Tick 360 — the live media-IDL channel: .muted and .volume reach the device
+  - L1758 · Tick 361 — playbackRate applies: scaled time, honest mute, and who owns the clock at 2x
+  - L1776 · Tick 362 — MP3 stream decode: the podcast organ (join pending)
+  - L1792 · Tick 363 — the MP3 join: <audio> plays, audio-only entries exist
+  - L1807 · Tick 364 — FLAC + Ogg/Vorbis through the seam; Opus refused honestly
+  - L1822 · Tick 370 — the mixer: two playing elements, both audible
+  - L1837 · Tick 375 — the mixer resamples
+  - L1847 · Tick 369 — WAV rung
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -1097,4 +1098,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1012 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1013 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
