@@ -431,3 +431,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 672	08adb84b	1785164040	2026-07-27T10:54:00-04:00	3905	measurement	63	6	641	26	334	81	3896	6960	0	350	31	a 35-point "regression" that the control cleared in three runs (2026-07-27)
 673	ca900882	1785165379	2026-07-27T11:16:19-04:00	1339	infrastructure	63	6	369	30	334	81	3896	6960	0	350	31	the certificate took ONE draw from a distribution it had already measured as wide (2026-07-27)
 674	0f880524	1785165384	2026-07-27T11:16:24-04:00	5	infrastructure	63	2	31	30	334	81	3896	6960	0	350	31	the oracle's probe never waited for the page to render (2026-07-27)
+675	752cc406	1785166931	2026-07-27T11:42:11-04:00	1547	capability	63	9	458	39	334	81	3896	6960	0	350	31	`reportError()` did not report, and every deferred throw went into a drawer (2026-07-27)

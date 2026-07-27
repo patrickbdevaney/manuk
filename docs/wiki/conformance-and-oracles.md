@@ -1825,3 +1825,96 @@ This one had sat since the reason was introduced, was quoted verbatim in the swe
 every run, and was wrong. It cost nothing to check — one script, two Chrome invocations — and the
 board's own process rule already said to: *re-probe stale unknowns before building them.* The rule
 exists because this project has now paid for it five times.
+
+## Every deferred throw on the app web went into an array only the WPT runner reads (tick 675)
+
+The HEAD-20 sweep's own log named this while it was measuring something else. On `comix.to`:
+
+```text
+WARN page.console: reportError: TypeError: can't access property Symbol.iterator, e.children is undefined
+```
+
+Two defects are visible in that one line, and a third is visible only in what is *missing* from it.
+
+### 1. `reportError()` did not report
+
+`globalThis.reportError(e)` is the WHATWG global whose **entire definition** is *"report the exception
+to the global scope"* — fire `onerror`, dispatch an `error` event. Ours was:
+
+```js
+globalThis.reportError = function(e){ __hostLog('warn', 'reportError: ' + e); };
+```
+
+A console line and nothing else. **The page's own handler never ran.** That handler is every
+telemetry client, every React error boundary, and every retry path on the web: a page that reports an
+exception so it can *recover* from it got no recovery, and a page that reports one so it can *record*
+it recorded nothing.
+
+**And a probe pinned this row `WORKS` at tick 599**, because `typeof reportError` answered `function`.
+Presence standing in for behaviour — the false-YES class, fifth occurrence. `typeof` can only ever
+answer whether a name is bound; it has never been able to answer whether the thing behind the name
+does its job, and a stub is *exactly* the case where the two answers differ.
+
+### 2. `__reportError` — the funnel — stored errors instead of saying them
+
+`__reportError` is where every **deferred** throw on the app web lands: a `setTimeout` callback, a
+microtask, a `MutationObserver` callback, an inline `on*` handler, an event listener. Its body pushed
+the error into `globalThis.__errors` and stopped.
+
+`__errors` is read by **exactly one caller in the tree** — `manuk-wpt`'s diag JSON. So under WPT the
+error was visible and on a real site it was not. That is not a small asymmetry: it means the funnel
+carrying the largest share of app-web failures was silent on precisely the population the browser is
+being built for, and `G_SILENT_FAIL` — the gate whose whole subject is *"an error on the load/render/
+script path must never be swallowed"* — was looking one step upstream of it.
+
+It is also the storage the **unhandled-error harvester** wants (`STATUS.md`'s meta-instrument #1, the
+cheapest and highest-yield instrument on the list). **A harvester cannot harvest what is never
+emitted.**
+
+### 3. Neither carried the address — one rule, three implementations
+
+Tick 666 lifted `fileName` / `lineNumber` / `stack` off an exception on the **native** boundary
+(`pending_exception`) and stopped there. The two **JS** paths kept stringifying the message alone, so
+on minified production code the report read `TypeError: e.children is undefined` — a sentence about
+every variable on the page.
+
+This is the class this project has now been bitten by nine ticks running: **fix one implementation of
+a rule, then grep for the others.** The properties are SpiderMonkey's own on an `Error`, reachable
+from JS as ordinary fields; `__errorAddr` lifts them, and a thrown non-object (`throw 42`) has none
+and degrades to exactly the old string rather than to a lie about its origin.
+
+### What landed
+
+- `__errorAddr(e)` — one place that turns an exception into `{file, line, col}` or `null`.
+- `__reportError` **logs** (`uncaught (reported): <msg> at <file>:<line>:<col>` + stack), and passes
+  the real `filename`/`lineno`/`colno` into both `onerror` and the `ErrorEvent` it dispatches.
+- `globalThis.reportError` **delegates** to `__reportError` rather than growing a second copy of
+  "how to report an exception" that drifts. Late-bound, because `__reportError` is installed further
+  down the same prelude.
+
+**Deduped by `(message, address)`, because this funnel is the one that can flood.** A throwing
+`setInterval` reaches the runaway-timer ceiling at 20,000 tasks, and 20,000 identical stacks in the
+log is the *same* failure as zero of them — the signal is buried instead of missing. First occurrence
+in full; repeats counted and announced at the tenth and every hundredth, so a *rate* stays visible;
+the distinct-key table capped at 200 so a page minting unique messages cannot grow it without bound.
+
+### The honest remainder
+
+The address is real and specific — `inline.js:13:42`, with a stack naming the frame — but the *file*
+is the constant `inline.js`: SpiderMonkey compiles every inline `<script>` under that one name in
+`run_one_script`. On a page with forty inline scripts, `inline.js:13` identifies a line in an unnamed
+one of forty. Chrome reports the document URL here. That is recorded in the gate as a named gap rather
+than asserted away, and it is the next tick on this thread.
+
+### The gate
+
+`G_SILENT_FAIL`'s existing test, extended rather than duplicated — the file already carries two tests
+and a third page-loading `#[test]` in one binary is how this project has produced
+`SpiderMonkey has already been shut down in this process` before. One page now exercises all four
+paths, and the deferred-throw assertion reads the **single log line** rather than asking whether the
+message and the address both appear *somewhere* (two unrelated lines satisfy that, which is the
+accounting error this project keeps catching). RED-proven by three independent mutations: drop the
+delegation → the page's listener never runs (`never-caught`); drop the host log → the deferred throw
+is silent; drop the address → the line is anonymous.
+
+[[reliability-doctrine]] [[honest-answer-is-not-a-fixed-answer]]

@@ -31367,3 +31367,103 @@ never been exercised together on the corpus, and the corpus is the only thing th
 naukri 2. Both mean the oracle built the page and we did not — a coverage failure, not a placement
 one, so it is the `render-failed`/coverage path and not the cascade. **(3)** `<link>.sheet`, the
 honest remainder of t665's bridge.
+
+## Tick 675 — `reportError()` did not report, and every deferred throw went into a drawer (2026-07-27)
+
+HYPOTHESIS: the t674 sweep's OWN LOG named the next lever while it was measuring something else. On
+`comix.to`, the first site of HEAD-20:
+
+```text
+WARN page.console: reportError: TypeError: can't access property Symbol.iterator, e.children is undefined
+```
+
+I first read that as a DOM gap and probed it — `children` is present and iterable on `Element`,
+`Document`, `DocumentFragment`, `ShadowRoot` and a `<template>`'s content, all correct. **The finding
+was not the error. It was the line.** A message with no address on minified code is a sentence about
+every variable on the page, and the shim that printed it turned out to be doing nothing else.
+
+FALSIFIABLE BAR, three claims, all RED on the tree as it stood:
+1. `reportError(new TypeError(...))` must fire the page's OWN `addEventListener('error')` handler,
+   with `filename` and `lineno` set. Today it fires nothing at all.
+2. A throw from a `setTimeout` callback must appear in the log. Today it appears nowhere.
+3. That log line must name `file:line:col` and carry a stack frame.
+
+### WHAT WAS ACTUALLY WRONG — three defects, one mechanism
+
+**(1) `globalThis.reportError` was a console line.** The WHATWG global whose entire definition is
+*"report the exception to the global scope"* never fired `onerror` and never dispatched `error`, so
+**the page's own handler never ran** — every telemetry client, every React error boundary, every retry
+path on the web is that handler. ⚠ **Tick 599's probe pinned this row `WORKS` because
+`typeof reportError` answered `function`.** Presence standing in for behaviour, the false-YES class,
+fifth occurrence: `typeof` can only answer whether a name is bound, and a stub is exactly the case
+where that differs from whether it works.
+
+**(2) `__reportError` — the funnel every DEFERRED throw takes** (`setTimeout`, microtask,
+`MutationObserver` callback, inline `on*` handler, event listener) — **pushed the error into
+`globalThis.__errors` and stopped.** `__errors` is read by exactly ONE caller in this tree:
+`manuk-wpt`'s diag JSON. So the error was visible under WPT and invisible on a real site — the funnel
+carrying the largest share of app-web failures was silent on precisely the population this browser is
+for. `G_SILENT_FAIL` exists for this and was looking one step upstream of it. It is also the storage
+the unhandled-error HARVESTER wants (meta-instrument #1, the cheapest on the list): **a harvester
+cannot harvest what is never emitted.**
+
+**(3) Neither carried the address.** t666 lifted `fileName`/`lineNumber`/`stack` on the NATIVE
+boundary (`pending_exception`) and stopped there, leaving the two JS paths stringifying the message
+alone. **One rule, three implementations — the class that has fired nine ticks running.** Fix one,
+GREP FOR THE OTHERS.
+
+### WHAT LANDED
+
+`__errorAddr(e)` — one place that turns an exception into `{file,line,col}` or `null`. A thrown
+non-object (`throw 42`) has none and degrades to exactly the old string rather than to a lie about its
+origin. `__reportError` logs `uncaught (reported): <msg> at <file>:<line>:<col>` plus the stack, and
+passes the real `filename`/`lineno`/`colno` into both `onerror` and the `ErrorEvent`.
+`globalThis.reportError` **delegates** rather than growing a second copy of "how to report an
+exception" that drifts — the same one-implementation discipline the defect above is an argument for.
+
+**DEDUPED BY (message, address), because this funnel is the one that can flood.** A throwing
+`setInterval` hits the runaway-timer ceiling at 20,000 tasks, and 20,000 identical stacks is the SAME
+failure as zero of them — the signal buried instead of missing. First occurrence in full, repeats
+announced at the tenth and every hundredth so a RATE stays visible, distinct-key table capped at 200.
+
+### THE HONEST REMAINDER, AND THE GATE FOUND IT
+
+My first version of the deferred assertion was `saw("silent.test") || saw(" at ")` — a disjunction
+across the whole log, which two unrelated lines satisfy. Tightening it to read the ONE line that
+names the error turned it red on a green tree and produced the real shape:
+
+```text
+uncaught (reported): DEFERRED_BOOM: a timer callback threw at inline.js:13:42
+```
+
+The line, the column and the stack frame are real. **The FILE is the constant `inline.js`** —
+SpiderMonkey compiles every inline `<script>` under that one name in `run_one_script`, so on a page
+with forty inline scripts `inline.js:13` names a line in an unnamed one of forty. Chrome reports the
+document URL. Recorded in the gate as a named gap rather than asserted away; it is the next tick on
+this thread and it is a smaller one than it looks.
+
+TICK SHAPE: capability (the page's own error-reporting API now reports, and the deferred-throw funnel
+is audible on real sites) — engine/js only. Bar 0 untouched.
+Gates: `G_SILENT_FAIL`'s `a_script_error_is_never_swallowed`, EXTENDED not duplicated — the file
+already carries two page-loading tests and a third `#[test]` in one binary reproduced
+`SpiderMonkey has already been shut down in this process` on the first attempt, so one page now
+exercises all four paths. RED-proven by three independent mutations: drop the delegation → the page's
+listener never runs (`never-caught`); drop the host log → the deferred throw is silent; drop the
+address → the line is anonymous. `g_script_error_has_a_location` still green.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "every deferred throw on the app web went into an array
+only the WPT runner reads", with the three defects and the `typeof`-answered-for-behaviour note.
+PATTERN: an API that is PRESENT and INERT, pinned as working by a `typeof` probe. [no-pattern]
+
+NEXT: **(1) THE HEAD-20 SWEEP IS RUNNING** as this lands — seeded from `head20-rows-t672.tsv` into
+`docs/bench/head20-rows-t675.tsv` on the **t674** binary, so it is the sweep t673 and t674 both owed
+and it reads the tree BEFORE this tick. Report it as a t674 reading, not a t675 one. **(2) NAME THE
+INLINE SCRIPTS** — `run_one_script`'s `c"inline.js"` should be the document URL, which makes every
+report on every real site self-locating and is two compile sites. **(3) SELF-AUDIT IS DUE AT t676**
+(last #? at 665; the hook blocks past 10). **(4)** `<link>.sheet`, the honest remainder of t665.
+
+### SELF-AUDIT — DUE THIS TICK (every 10; last at t665)
+
+`./scripts/self-audit.sh` clean: **methodology and reality agree.** 29 gates each declare how to
+break them, the process-defect ledger is at 49 and every entry names the MECHANISM that closes it
+(not a lesson), 392 clusters, 506 pattern rows, journal entries present for the last five ticks.
+Nothing prescribed-but-not-executed. `LAST_AUDIT_TICK` set to 675.

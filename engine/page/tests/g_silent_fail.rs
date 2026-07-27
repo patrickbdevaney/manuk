@@ -69,6 +69,17 @@ impl Capture {
     fn dump(&self) -> String {
         self.0.lock().unwrap().join("\n  ")
     }
+    /// The first captured line containing `needle`. An assertion that a message and its ADDRESS both
+    /// appear *somewhere* in the log is satisfied by two unrelated lines; this makes the gate ask the
+    /// question it means — *did the line that named the error also name where it happened?*
+    fn line_with(&self, needle: &str) -> Option<String> {
+        self.0
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|l| l.contains(needle))
+            .cloned()
+    }
 }
 
 #[test]
@@ -78,8 +89,28 @@ fn a_script_error_is_never_swallowed() {
 
     // (1) A synchronous throw, and (2) an unhandled rejection from an async function — which is where
     //     every framework's failures actually land, and where React's went for several ticks.
+    // (5) and (6) are tick 675: the two JS-side error funnels, which stored errors instead of saying
+    //     them and threw away the address on the way. See the assertions below for what each one is.
     let html = r#"<!doctype html><html><body>
         <h1 id="headline">The document still renders</h1>
+        <div id="out">-</div>
+        <script>
+          // (5) The page reports its OWN exception. Its own handler must run, and must be told WHERE.
+          var R = [];
+          addEventListener('error', function (ev) {
+            if (!ev || !ev.message || ev.message.indexOf('REPORTED_BOOM') < 0) { return; }
+            R.push('caught=yes');
+            R.push('file=' + (ev.filename ? 'yes' : 'no'));
+            R.push('line=' + (ev.lineno > 0 ? 'yes' : 'no'));
+          });
+          try { throw new TypeError('REPORTED_BOOM: the page reported this itself'); }
+          catch (e) { reportError(e); }
+          // (6) A throw from a QUEUED task — the funnel every deferred framework failure takes.
+          setTimeout(function () { throw new RangeError('DEFERRED_BOOM: a timer callback threw'); }, 0);
+          setTimeout(function () {
+            document.getElementById('out').textContent = R.length ? R.join(' ') : 'never-caught';
+          }, 1);
+        </script>
         <script>
           (async function(){ throw new TypeError('ASYNC_BOOM: this is where framework errors die'); })();
         </script>
@@ -117,6 +148,79 @@ fn a_script_error_is_never_swallowed() {
          ticks this exact hole had 'React renders nothing' recorded as a REACT bug.\n  captured:\n  {}",
         cap.dump()
     );
+
+    // ── (5) `reportError()` MUST REPORT. ────────────────────────────────────────────────────────
+    //
+    // `globalThis.reportError(e)` is the WHATWG API whose entire definition is *"report the
+    // exception to the global scope"*. It was a one-line console shim: it never fired `onerror` and
+    // never dispatched `error`, so **the page's own handler — every telemetry client, every error
+    // boundary, every retry path on the web — did not run.** A probe pinned it `WORKS` at tick 599
+    // because `typeof reportError` said `function`: PRESENCE answered for BEHAVIOUR, which is the
+    // false-YES this project has now paid for five times.
+    let out = manuk_css::query_selector_all(page.dom(), root, "#out");
+    let got = if out.is_empty() {
+        String::from("(no #out)")
+    } else {
+        page.dom().text_content(out[0])
+    };
+    println!("REPORT_ERROR: {got}");
+    for (claim, why) in [
+        (
+            "caught=yes",
+            "`reportError(e)` did not report — the page's own `error` listener never ran. That \
+             listener is Sentry, it is React's error boundary, and it is every retry path on the web.",
+        ),
+        (
+            "file=yes",
+            "the reported error carried no `filename`. Tick 666 lifted `fileName`/`lineNumber` off \
+             an exception on the NATIVE boundary and left the JS paths stringifying the message \
+             alone — one rule, three implementations. On minified code a message with no address is \
+             a sentence about every variable on the page.",
+        ),
+        ("line=yes", "the reported error carried no `lineno`."),
+    ] {
+        assert!(got.contains(claim), "G_SILENT_FAIL: {why}\n  got: {got}");
+    }
+
+    // ── (6) A THROW FROM A QUEUED TASK IS SAID OUT LOUD, WITH ITS ADDRESS. ──────────────────────
+    //
+    // `__reportError` is the single funnel every DEFERRED throw on the app web goes through — a
+    // `setTimeout` callback, a microtask, a `MutationObserver` callback, an inline `on*` handler, an
+    // event listener. It pushed the error into `globalThis.__errors` and stopped, and that array is
+    // read by exactly one caller in the tree (`manuk-wpt`'s diag JSON). So on a **real site** every
+    // one of those throws was *stored* and never *said* — this gate's own subject, one step past
+    // where it was found. It is also the storage the unhandled-error HARVESTER wants
+    // (meta-instrument #1), and a harvester cannot harvest what is never emitted.
+    let deferred = cap.line_with("DEFERRED_BOOM").unwrap_or_else(|| {
+        panic!(
+            "G_SILENT_FAIL: a `setTimeout` callback threw and the engine said NOTHING — the error \
+             went into `globalThis.__errors`, which nothing on the render path ever reads.\n  \
+             captured:\n  {}",
+            cap.dump()
+        )
+    });
+    // ...and the SAME line named the place, with a stack. Asserting the message and the address
+    // separately would pass on two unrelated log lines, which is the accounting error this project
+    // keeps catching. The frame name can only come from the engine's own `Error.stack`, so it cannot
+    // be satisfied by formatting a guess.
+    //
+    // ⚠ The file name is `inline.js`, not the document URL: SpiderMonkey compiles every inline
+    // `<script>` under that one constant name (`run_one_script`), so `inline.js:13` is ambiguous
+    // across a page with forty inline scripts. That is the HONEST REMAINDER of this tick and it is
+    // recorded here rather than asserted away — the line/column and the stack are real and specific,
+    // and the file name is a separate, named gap. Chrome reports the document URL here.
+    assert!(
+        deferred.contains(" at ") && deferred.contains(":13:"),
+        "G_SILENT_FAIL: the deferred throw was logged WITHOUT its address. An error that is \
+         REPORTED but not ATTRIBUTABLE is a status, not a finding — an anonymous `TypeError` sat in \
+         this project's log for ten ticks for exactly this reason.\n  line: {deferred}"
+    );
+    assert!(
+        deferred.contains("setTimeout"),
+        "G_SILENT_FAIL: the deferred throw carries no stack frame, so the report can say WHERE but \
+         not THROUGH WHAT.\n  line: {deferred}"
+    );
+    println!("DEFERRED: {deferred}");
 }
 
 #[test]

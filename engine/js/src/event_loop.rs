@@ -5072,8 +5072,23 @@ const PRELUDE: &str = r#"
       if (typeof globalThis.postMessage === 'undefined') {
         globalThis.postMessage = function(){};
       }
+      // `reportError(e)` — the WHATWG global whose ENTIRE definition is *"report the exception to the
+      // global scope"*, i.e. fire `onerror` and dispatch `error`. This was a console line and nothing
+      // else, so **the page's own handler never ran**: that handler is every telemetry client, every
+      // React error boundary, every retry path on the web. Tick 599's probe pinned this row `WORKS`
+      // because `typeof reportError` answered `function` — PRESENCE standing in for BEHAVIOUR, the
+      // false-YES class, and the reason a page can be told yes and take the degraded path anyway.
+      //
+      // There is exactly one implementation of *reporting an exception* here and it is
+      // `__reportError`; this delegates rather than growing a second copy that drifts. Late-bound on
+      // purpose — `__reportError` is installed further down this same prelude.
       if (typeof globalThis.reportError === 'undefined') {
-        globalThis.reportError = function(e){ try { __hostLog('warn', 'reportError: ' + e); } catch(x){} };
+        globalThis.reportError = function(e){
+          try {
+            if (typeof globalThis.__reportError === 'function') { globalThis.__reportError(e); return; }
+            __hostLog('warn', 'reportError: ' + e);
+          } catch(x){}
+        };
       }
 
       // `crypto.getRandomValues` / `crypto.randomUUID` are everywhere (React keys, request ids,
@@ -6102,18 +6117,76 @@ const PRELUDE: &str = r#"
       // `__errors` is deliberately kept: it is the storage the **unhandled-error harvester** wants,
       // and it means a page's silent breakage is now a thing that can be READ OUT rather than
       // guessed at.
+      //
+      // ── **AND FOR 675 TICKS THAT ARRAY WAS THE ONLY PLACE IT WENT** (tick 675). ────────────────
+      //
+      // This funnel carries every DEFERRED throw on the app web: a `setTimeout` callback, a
+      // microtask, a `MutationObserver` callback, an inline `on*` handler, an event listener. It
+      // pushed the error into `__errors` and stopped — and `__errors` is read by exactly one caller
+      // in this tree, `manuk-wpt`'s diag JSON. So on a real site every one of those throws was
+      // **stored and never said**, which is `G_SILENT_FAIL`'s own subject one step past where that
+      // gate was looking. A harvester cannot harvest what is never emitted.
+      //
+      // **The address comes with it.** Tick 666 lifted `fileName`/`lineNumber`/`stack` off an
+      // exception on the *native* boundary (`pending_exception`) and stopped there, leaving the two
+      // JS paths stringifying the message alone — one rule, three implementations, which is the
+      // class this project has now been bitten by nine ticks running. On minified production code
+      // `"TypeError: e.children is undefined"` is a sentence about every variable on the page.
+      // These properties are SpiderMonkey's own on an `Error`; a thrown non-object (`throw 42`)
+      // has none and degrades to exactly the old string rather than to a lie about its origin.
       globalThis.__errors = [];
+      globalThis.__errorAddr = function (e) {
+        try {
+          if (!e || typeof e !== 'object') { return null; }
+          var f = e.fileName ? String(e.fileName) : '';
+          if (!f) { return null; }
+          var l = (typeof e.lineNumber === 'number' && e.lineNumber > 0) ? (e.lineNumber | 0) : 0;
+          var c = (typeof e.columnNumber === 'number' && e.columnNumber > 0) ? (e.columnNumber | 0) : 0;
+          return { file: f, line: l, col: c };
+        } catch (x) { return null; }
+      };
       globalThis.__reportError = function (e) {
         try {
           var msg = String((e && e.message) ? e.message : e);
-          __errors.push(String((e && e.stack) ? e.stack : msg));
+          var at = globalThis.__errorAddr(e);
+          var stack = (e && typeof e === 'object' && e.stack) ? String(e.stack) : '';
+          __errors.push(stack || msg);
+          // SAID OUT LOUD. The one-line summary stays greppable and the stack goes last, the same
+          // shape `pending_exception` prints on the native side.
+          //
+          // **DEDUPED BY (message, address), because this funnel is the one that can flood.** A
+          // throwing `setInterval` reaches the runaway-timer ceiling at 20,000 tasks, and 20,000
+          // identical stacks in the log is the same failure as zero of them: the signal a developer
+          // needs is buried instead of missing. The first occurrence is printed in full; repeats are
+          // counted and announced once, at the tenth and then every hundredth, so a *rate* is still
+          // visible. The distinct-key table is capped so a page minting unique messages cannot grow
+          // it without bound.
+          try {
+            var where = at ? (' at ' + at.file + ':' + at.line + ':' + at.col) : '';
+            var key = msg + where;
+            var seen = globalThis.__errSeen || (globalThis.__errSeen = {});
+            var n = (seen[key] || 0) + 1;
+            if (Object.keys(seen).length < 200 || seen[key]) { seen[key] = n; }
+            if (n === 1) {
+              __hostLog('warn', 'uncaught (reported): ' + msg + where + (stack ? '\n' + stack : ''));
+            } else if (n === 10 || n % 100 === 0) {
+              __hostLog('warn', 'uncaught (reported) x' + n + ' (same site): ' + msg + where);
+            }
+          } catch (x) {}
           if (typeof globalThis.onerror === 'function') {
-            try { globalThis.onerror(msg, '', 0, 0, e); } catch (x) {}
+            try {
+              globalThis.onerror(msg, at ? at.file : '', at ? at.line : 0, at ? at.col : 0, e);
+            } catch (x) {}
           }
           if (typeof globalThis.dispatchEvent === 'function') {
+            var init = {
+              message: msg, error: e,
+              filename: at ? at.file : '', lineno: at ? at.line : 0, colno: at ? at.col : 0
+            };
             var ev;
-            try { ev = new ErrorEvent('error', { message: msg, error: e }); }
-            catch (x) { ev = { type: 'error', message: msg, error: e }; }
+            try { ev = new ErrorEvent('error', init); }
+            catch (x) { ev = { type: 'error', message: msg, error: e,
+                               filename: init.filename, lineno: init.lineno, colno: init.colno }; }
             try { globalThis.dispatchEvent(ev); } catch (x) {}
           }
         } catch (x) { /* reporting must never itself throw — that would kill the loop again */ }

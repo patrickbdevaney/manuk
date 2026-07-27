@@ -208,6 +208,13 @@
   - L1793 · What it bought, stated honestly
   - L1805 · The gate is on the source, deliberately
   - L1819 · The lesson, and it is an old one wearing new clothes
+  - L1829 · Every deferred throw on the app web went into an array only the WPT runner reads (tick 675)
+  - L1839 · 1. reportError() did not report
+  - L1858 · 2. __reportError — the funnel — stored errors instead of saying them
+  - L1874 · 3. Neither carried the address — one rule, three implementations
+  - L1886 · What landed
+  - L1901 · The honest remainder
+  - L1909 · The gate
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1161,4 +1168,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1076 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1083 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
