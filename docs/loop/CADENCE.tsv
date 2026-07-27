@@ -425,3 +425,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 665	f7a0317d	1785153752	2026-07-27T08:02:32-04:00	1539	capability	63	9	521	34	332	81	3896	6960	0	348	31	the CSSOM bridge did not need the native accessor it was deferred for (2026-07-27)
 666	353442f6	1785154387	2026-07-27T08:13:07-04:00	635	measurement	63	4	104	32	332	81	3896	6960	0	348	31	`finish_loading` promises 12 seconds and takes 39 (2026-07-27)
 668	222f0d83	1785156377	2026-07-27T08:46:17-04:00	1990	measurement	63	3	114	3	333	81	3896	6960	0	349	31	the fix is real at its own site and did not move the site it was built for (2026-07-27)
+669	89bd5394	1785157099	2026-07-27T08:58:19-04:00	722	measurement	63	6	161	33	333	81	3896	6960	0	349	31	`pump_page_fetches` is not the site, it is the victim (2026-07-27)

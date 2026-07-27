@@ -2084,3 +2084,58 @@ reach `engine/net/tests/`, which is how `G_H2_LARGE_RESPONSE_HEADERS` validates 
 `engine/page/tests/` — so the standing "diff `engine/page/tests/` vs the map" step is widened here to
 `engine/{page,net}/tests/`, or a gate landing in any other engine crate would be invisible to the
 audit that exists to see it.
+
+## Audit #39 — tick 669
+
+**Direction 1 (map → gate): clean.** `map-reconcile.sh` reports **drift 0** across 383 rows, and the
+bucket arithmetic **reconciles exactly** — `286 + 14 + 83 = 383` — which is the check audit #38 had to
+invent after a missing trailing newline hid a row from every `while read` consumer. This time the
+append asserted its own row-count delta *and* the trailing newline before writing. **The lesson held
+because it became an assertion, not because it was remembered.**
+
+**Direction 2 (gate → map): three gates uncited, all from this window.**
+
+```text
+  G_SCRIPT_ERROR_HAS_A_LOCATION   t662
+  G_CSSOM_SHEET_BRIDGE            t665
+  G_DRAIN_BOUNDS_THE_PAGE         t667
+```
+
+All three added with real receipts. Remaining uncited and unchanged, by design: `G_DEFER` and
+`G_SILENT_FAIL` (reliability gates with no capability row), `G_WEBFONT_RELAYOUT_EXTERNAL`
+(prefix-matched by a row citing `G_WEBFONT_RELAYOUT`).
+
+### AND A CORRECTION TO AUDIT #38'S OWN FRAMING
+
+#38 found six uncited gates and called them *"audit #37's finding recurring, in a worse form"*, blaming
+a lesson that hardened *how* the map gets edited while nothing made the map get edited. That reading
+was too harsh on the mechanism and too generous about what a fix would look like.
+
+> **The gate→map direction is the ONLY instrument that catches this, it runs every ten ticks, and a
+> ten-tick lag is therefore its designed steady state — not a failure.** Three gates over the ten
+> ticks since #38 is exactly what a healthy loop looks like: gates land, the audit sweeps them in.
+> #38's "six" spanned t652–t658, which is more than one window, so part of that batch was #37's
+> backlog and not a single lapse.
+
+What would actually remove the lag is a landing-time check — the same shape as the journal and
+`WIKI:` trailer checks that already run in one second — and that lives in `scripts/tick.sh`, which is
+**observer-owned**. Reported, not touched, and stated here as a standing request rather than a
+recurring self-criticism: *the cadence is doing its job; the lag is the cost of doing it every ten
+ticks instead of every one.*
+
+**Gate-vs-map diff, both directions:**
+```text
+  gate files under engine/{page,net}/tests/ : 336   (was 331 at #38; +5)
+  map rows                                  : 383   (was 380)
+  map -> gate drift                         : 0
+  gate -> map, no citing row                : 6 -> 2
+  of those 2: 1 prefix-matched (G_WEBFONT_RELAYOUT_EXTERNAL)
+              1 reliability gate with no capability row by design (G_DEFER)
+  machine-validated claims                  : 283 -> 286
+  bucket arithmetic (OK+floor+missing==rows): 383/383  ✓ asserted at write time
+  constellation unknowns                    : 0
+```
+
+**Standing note, fifth audit running:** `map-reconcile.sh` searches `engine agent tests` and not
+`shell/`, so the eight gates living as `#[test] fn` in `shell/src/media.rs` and `shell/src/audio.rs`
+remain invisible to it. Harness-owned; reported, not touched.

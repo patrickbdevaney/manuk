@@ -30903,3 +30903,72 @@ give-ups per loop before touching it: the lesson of this very tick is that a mec
 site is not proven to be the site. **(2) `<link>.sheet`**, the honest remainder of t665's bridge.
 **(3)** `scan_static_import_specifiers`'s failing unit test, still on `main`, still not in the wall —
 tenth report.
+
+## Tick 669 — `pump_page_fetches` is not the site, it is the victim (2026-07-27)
+
+HYPOTHESIS: t668's NEXT said *"`pump_page_fetches` IS agoda's loop"* — and, in the same entry, that
+*"a gate that proves a mechanism does not prove the mechanism is the site's"*, with the instruction to
+**measure the give-ups per loop before touching it.** So: measure. No engine edit needed; the warning
+stream is already time-ordered.
+
+```text
+  12:49:14.74   task ceiling
+  12:49:18.80   task ceiling
+   … 16 firings, unbroken, 12:49:14 → 12:49:51  ≈ 37 seconds …
+  12:49:51.507  load budget exhausted with page fetches still in flight   round=1
+  12:49:51.507  … painting without images        (same millisecond)
+  12:49:51.507  … without icon masks             (same millisecond)
+  12:49:51.507  … without background images      (same millisecond)
+```
+
+**Every one of the sixteen firings happens BEFORE the pump's first round, and the pump's own message
+is the first thing after them.** It checks the budget at the top of round 0, finds it already gone,
+and returns — in the same millisecond as the three phases behind it. `pump_page_fetches` did not spend
+the 37 seconds. **It never ran.** It is the first phase to *notice* the budget is gone, which is
+exactly what made it look like the culprit in a cluster sorted by count rather than by time.
+
+> **A phase that REPORTS the budget is exhausted is the phase that ran FIRST after it was, not the one
+> that exhausted it.** t668 named this failure shape and I walked into its sibling one tick later:
+> reading a warning cluster instead of a timeline. The counts said `pump_page_fetches` once; the
+> timestamps say it never got a turn.
+
+**So the 37 seconds are in the phases ahead of it** — `finish_loading_inner` runs external CSS, then
+dynamic scripts, then **subframes**, then the pump. t667's bound already caps the dynamic-script
+round loop at one non-converging round, and it held (its gate proves it, RED both ways), so sixteen
+drains are not coming from there. The unexamined phase between them is `fetch_and_load_iframes`, where
+**every `<iframe>` is loaded as a child page that runs its own scripts and drains its own event
+loop** — and a booking site is made of third-party frames. That is a hypothesis with a mechanism, and
+it is written here as one: **the next tick measures it before it touches anything**, which is the rule
+this tick exists to obey.
+
+### SURFACE AUDIT #39 — ALSO DUE THIS TICK (every 10; last #38 at t659)
+
+Map → gate: **drift 0** across 383 rows, and the bucket arithmetic reconciles **exactly**
+(`286 + 14 + 83 = 383`) — the check #38 had to invent after a missing trailing newline hid a row from
+every `while read` consumer. This time the append **asserted its own row-count delta and the trailing
+newline before writing**: the lesson held because it became an assertion, not because it was
+remembered.
+
+Gate → map: three uncited, all from this window (`G_SCRIPT_ERROR_HAS_A_LOCATION` t662,
+`G_CSSOM_SHEET_BRIDGE` t665, `G_DRAIN_BOUNDS_THE_PAGE` t667), all added with real receipts.
+
+**And a correction to #38's own framing**, which called six uncited gates *"#37's finding recurring,
+in a worse form"*: the gate→map direction is the **only** instrument that catches this, it runs every
+ten ticks, and **a ten-tick lag is its designed steady state, not a failure.** Three gates over ten
+ticks is what a healthy loop looks like. What would remove the lag is a landing-time check of the same
+shape as the journal and `WIKI:` trailer checks — which lives in `scripts/tick.sh`, observer-owned,
+and is recorded as a standing request rather than a recurring self-criticism.
+
+TICK SHAPE: measurement (a timeline that refutes my own previous NEXT before a line was written for
+it) plus surface audit #39 on cadence. Bar 0 untouched; no engine source changed.
+Gates: none — nothing changed.
+WIKI: none [forced] — the finding is that a candidate was wrong; there is no mechanism to document
+until the real phase is measured, and t660 already showed what writing one early costs.
+PATTERN: none. [no-pattern]
+
+NEXT: **(1) COUNT THE DRAINS PER PHASE, with `drain_ceiling_hits()` read at each phase boundary in
+`finish_loading_inner`** — that is a handful of lines, it is the instrument the last three ticks kept
+needing, and it ends the guessing permanently. Subframes are the leading candidate; the point is that
+the counter will say, not me. **(2) `<link>.sheet`**, the honest remainder of t665's bridge. **(3)**
+`scan_static_import_specifiers`'s failing unit test, still on `main`, still not in the wall —
+eleventh report.
