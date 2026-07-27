@@ -164,3 +164,52 @@ target already satisfied.**
 **cargo-hakari** → split debuginfo. And **do NOT adopt Cranelift for debug builds** — it does not support
 inline assembly and is documented to break on low-level/FFI-heavy code, **which the mozjs/Stylo boundary is
 by definition.**)*
+
+## The phase that reports the budget is not the phase that spent it (tick 670)
+
+`finish_loading` has **one budget and seven phases**, and for a long time the only thing it reported
+was *which phase noticed the budget was gone*. That is the phase that ran **first after** it was
+spent — never, by construction, the one that spent it.
+
+Three consecutive ticks tried to derive the answer for `www.agoda.com` and two got it wrong:
+
+- **t668** sorted the warnings by **count**, saw `pump_page_fetches` named once, and concluded it was
+  the culprit. A cluster cannot answer a question about order.
+- **t669** sorted them by **timestamp**, saw sixteen drain give-ups *before* the pump's message, and
+  concluded the pump *"never ran — it is the victim, not the site."* The evidence was
+  `load budget exhausted … round=1`, read as *"the first round"*. The loop is
+  `for round in 0..MAX_ROUNDS`: **`round=1` is the second.** Round 0 had already run and burned the
+  budget; round 1 reported it.
+
+**An off-by-one in a log message defeats any amount of careful reasoning about ordering.**
+
+### The instrument, and why it is four lines at one site
+
+`phase()` already runs between every phase. It now reports what the **previous** phase cost, in the
+two units that matter:
+
+```text
+  phase="external CSS"      ms=3020    gave_up=0
+  phase="dynamic scripts"   ms=0       gave_up=0
+  phase="subframes"         ms=0       gave_up=0     <- t669's "leading candidate"
+  phase="page fetches"      ms=36061   gave_up=15    <- 36 of the 39 seconds, and every give-up
+```
+
+Emitted at `info`, so `RUST_LOG=manuk_page=info` **is** the instrument — no rebuild to ask again,
+which is the property three ticks kept wishing for while re-deriving instead.
+
+**The ledger closes with a sentinel** so the last phase reports itself and the per-phase times sum to
+`elapsed_ms`. A set of parts that does not sum to its whole is this project's highest-yield instrument
+(*8 of 30 process defects were caught by a number that did not add up, not by any gate*), and it
+should not be possible to read this ledger without noticing a gap.
+
+### What it found, which none of the three guesses had
+
+Fifteen give-ups occur inside **one** round, so they are per **settled fetch**, not per round: the
+pump settles a batch, each settle runs the page's JS, and the drain gives up again. Tick 667's
+between-**rounds** bound cannot reach that — which is precisely why t668's re-measurement of agoda
+showed no movement at all. **That result was correct and its explanation was wrong for two ticks.**
+
+> **Make the thing being argued about report itself.** Both failure modes above are how a *derived*
+> answer fails, and the cure for both is the same instrument — which was four lines, at a site that
+> already existed, and would have been cheaper than either wrong tick.

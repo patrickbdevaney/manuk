@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **427** | ticks 1–669 |
-| median tick cycle | **21m** | 426 intervals |
+| ticks landed | **428** | ticks 1–670 |
+| median tick cycle | **21m** | 427 intervals |
 | median, last 10 | **16m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.10** | 387.9h elapsed |
-| median verify wall | **63s** | 366 ticks |
+| **ticks per hour** | **1.10** | 388.3h elapsed |
+| median verify wall | **63s** | 367 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **349**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**209 of 427 ticks** (49%) moved a
+**210 of 428 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **209** capability ticks, median cycle **21m**
-* median diff per tick: **+235 / −34** lines across 8 files
+* **210** capability ticks, median cycle **21m**
+* median diff per tick: **+234 / −34** lines across 8 files
 
 ## Every tick
 
@@ -524,5 +524,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **666** | 2026-07-27 08:13 | 11m | measurement | 63s | +104/−32 | 332 | 81 | 56.0% · | `finish_loading` promises 12 seconds and takes 39 (2026-07-27) |
 | **668** | 2026-07-27 08:46 | 33m | measurement | 63s | +114/−3 | 333 | 81 | 56.0% · | the fix is real at its own site and did not move the site it was built for (2026-07-27) |
 | **669** | 2026-07-27 08:58 | 12m | measurement | 63s | +161/−33 | 333 | 81 | 56.0% · | `pump_page_fetches` is not the site, it is the victim (2026-07-27) |
+| **670** | 2026-07-27 09:21 | 24m | capability | 63s | +184/−33 | 333 | 81 | 56.0% · | four log lines ended three ticks of inference, and two of them were mine and wrong (2026-0 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

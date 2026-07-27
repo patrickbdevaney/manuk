@@ -30972,3 +30972,60 @@ needing, and it ends the guessing permanently. Subframes are the leading candida
 the counter will say, not me. **(2) `<link>.sheet`**, the honest remainder of t665's bridge. **(3)**
 `scan_static_import_specifiers`'s failing unit test, still on `main`, still not in the wall —
 eleventh report.
+
+## Tick 670 — four log lines ended three ticks of inference, and two of them were mine and wrong (2026-07-27)
+
+HYPOTHESIS: t669's NEXT said to **count the drains per phase** — *"a handful of lines, the instrument
+the last three ticks kept needing, and it ends the guessing permanently. Subframes are the leading
+candidate; the point is that the counter will say, not me."*
+
+Built it at the one place that already runs between every phase — `finish_loading_inner`'s `phase()`
+closure — reporting what the **previous** phase cost in the two units that matter, at `info`, so
+`RUST_LOG=manuk_page=info` is the whole instrument and no rebuild is needed to ask again.
+
+```text
+  phase="external CSS"      ms=3020    gave_up=0
+  phase="dynamic scripts"   ms=0       gave_up=0
+  phase="subframes"         ms=0       gave_up=0
+  phase="page fetches"      ms=36061   gave_up=15     <- 36 of the 39 seconds, and every give-up
+```
+
+**`pump_page_fetches` IS the site.** t668 said so from a count, t669 said it was *"not the site, it is
+the victim"* from a timeline, and **t669 was wrong.** Its evidence was the message
+`load budget exhausted with page fetches still in flight round=1`, which I read as *"the first
+round"*. The loop is `for round in 0..MAX_ROUNDS` — **`round=1` is the SECOND round.** Round 0 had
+already run, settled its fetches, and burned 36 seconds and fifteen give-ups; round 1 checked the
+budget at the top, found it gone, and reported. The firings did precede the message. The inference
+that the phase had not run did not follow.
+
+> **Three ticks of inference, two of them wrong, ended by four log lines.** t668 read a cluster and
+> got the wrong phase. t669 read a timeline and got the wrong phase for a better reason. Neither
+> failure was carelessness — they were the two ways a *derived* answer fails, and the cure for both is
+> the same and was available the whole time: **make the thing being argued about report itself.** An
+> off-by-one in a log message is enough to defeat any amount of careful reasoning about ordering.
+
+**And the shape is not what any of the three guesses assumed.** Fifteen give-ups occur inside **one**
+round, so they are per *settled fetch*, not per round: the pump settles a batch, each settle runs the
+page's JS, and the drain gives up again. t667's between-rounds bound cannot reach that, which is
+exactly why t668's re-measurement of agoda showed no movement — a result that was correct and whose
+explanation was wrong for two ticks.
+
+Subframes, t669's "leading candidate", cost **0ms**.
+
+TICK SHAPE: capability (a permanent per-phase accounting instrument in the load path) plus the
+measurement that settles a question three ticks could not. Bar 0 untouched — the instrument is one
+`tracing::info!` at an existing boundary. The ledger closes with a sentinel so the per-phase times
+**sum to the total**, because a set of parts that does not sum to its whole is this project's
+highest-yield instrument (meta-instrument #3) and it should not be possible to read this ledger
+without noticing a gap.
+Gates: none added — the instrument's own falsifiability is that its parts sum to `elapsed_ms`, which
+is visible in every line it prints. A gate asserting a phase's *duration* would be a gate on a
+machine's speed.
+WIKI: `docs/wiki/performance.md` — "the phase that reports the budget is not the phase that spent it".
+PATTERN: none — this is an instrument, not a class of the web. [no-pattern]
+
+NEXT: **(1) THE PUMP'S INNER LOOP, now located to the line.** Fifteen give-ups inside one round means
+the check belongs between *settles*, not between rounds — the same rule t667 applied one level up, at
+the level the measurement actually points to. **(2) `<link>.sheet`**, the honest remainder of t665's
+bridge. **(3)** `scan_static_import_specifiers`'s failing unit test, still on `main`, still not in the
+wall — twelfth report.

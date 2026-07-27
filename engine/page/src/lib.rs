@@ -1968,7 +1968,42 @@ impl Page {
         // The instant the fan-outs must stop waiting, held back by `COMMIT_RESERVE` so what already
         // arrived is decoded and applied INSIDE the `timeout` that wraps this whole sequence.
         self.load_deadline = Some(started + budget.saturating_sub(COMMIT_RESERVE));
+        // **PER-PHASE ACCOUNTING, because three ticks in a row guessed and two of them guessed wrong.**
+        //
+        // `finish_loading` has one budget and seven phases, and until now the only thing it reported
+        // was *which phase noticed the budget was gone* — which is the phase that ran FIRST AFTER it
+        // was spent, not the one that spent it. Sorting a warning cluster by count named
+        // `pump_page_fetches` as `agoda`'s culprit (t668); the timestamps then showed it never got a
+        // turn at all (t669), because sixteen drain give-ups had already burned 37 seconds ahead of
+        // it. **A cluster cannot answer a question about order.**
+        //
+        // So each boundary reports what the PREVIOUS phase actually cost, in the two units that
+        // matter: wall time, and how many times the event loop gave up inside it. Emitted at `info`,
+        // so `RUST_LOG=manuk_page=info` is the whole instrument — no rebuild to ask the question
+        // again, which is the property the last three ticks kept wishing for.
+        /// Not a phase — the sentinel that makes the LAST phase report itself, so the per-phase times
+        /// sum to the total. A set of parts that does not sum to its whole is the accounting
+        /// reconciliation this project rates as its highest-yield instrument.
+        const LEDGER_CLOSE: &str = "<end of phases>";
+        let mut last_at = std::time::Instant::now();
+        let mut last_name: Option<&'static str> = None;
+        let mut last_hits = manuk_js::event_loop::drain_ceiling_hits();
         let mut phase = |name: &'static str| -> bool {
+            if let Some(prev) = last_name.take() {
+                let hits = manuk_js::event_loop::drain_ceiling_hits();
+                tracing::info!(
+                    phase = prev,
+                    ms = last_at.elapsed().as_millis() as u64,
+                    gave_up = hits.saturating_sub(last_hits),
+                    elapsed_ms = started.elapsed().as_millis() as u64,
+                    "load phase done"
+                );
+                last_hits = hits;
+            }
+            // The sentinel closes the ledger; it is not a phase that could be "painted without".
+            if name == LEDGER_CLOSE {
+                return false;
+            }
             let left = budget.saturating_sub(started.elapsed());
             if left.is_zero() {
                 tracing::warn!(
@@ -1978,6 +2013,8 @@ impl Page {
                 );
                 return false;
             }
+            last_at = std::time::Instant::now();
+            last_name = Some(name);
             true
         };
         if phase("external CSS") {
@@ -2027,6 +2064,10 @@ impl Page {
         if phase("background images") {
             self.fetch_and_apply_background_images().await;
         }
+        // The last phase has no successor to report it, so close the ledger by hand. Without this the
+        // per-phase times would not sum to the total — and a set of parts that does not sum to its
+        // whole is the accounting reconciliation this project rates as its highest-yield instrument.
+        phase(LEDGER_CLOSE);
         self.load_deadline = None;
     }
 
