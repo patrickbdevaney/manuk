@@ -30283,3 +30283,85 @@ mechanism that would explain all three. That is now **three unscored rows with o
 which makes it the best-evidenced target on the board. **(2) `service.smt.docomo.ne.jp`** — legacy TLS
 renegotiation, still needing Chrome's actual behaviour measured before anything is built.
 **(3) `scan_static_import_specifiers`'s failing unit test**, still on `main` and still not in the wall.
+
+## Tick 660 — the hang guard fires five times per page, so it bounds a drain and not the harm (2026-07-27)
+
+HYPOTHESIS: t659's NEXT named the `shell-only` rows as *"three unscored rows with one candidate
+cause"* and called it the best-evidenced target on the board. **Re-probe before building** (PROCESS
+rule 2), and the rule paid for itself in one command: the instrument's own message already explains
+`shell-only`, and the explanation is in the tree, priced, with these exact numbers in a doc comment:
+
+> *the probe feeds both engines ONE fetched document from a `file://` temp copy — deliberately, so
+> the two Chrome probes cannot render different pages. From `file://` the page's own origin is
+> `null`, so a JS-rendered site's fetches and module loads are cross-origin and blocked, and **Chrome
+> builds almost nothing**: comix.to 28 elements from the snapshot vs ~2,643 live.*
+
+`shell-only` is **a measurement-architecture ceiling, not a rendering defect** — and it was already
+diagnosed and documented. My NEXT list steered at finished work. **The board's own standing warning,
+turned on my own ledger.**
+
+### SO I TOOK THE ONE ROW THE INSTRUMENT CALLS OURS, AND FOUND SOMETHING ELSE
+
+`www.agoda.com` books `render-failed`, which the instrument describes as *"the only reason on this
+list that is our own bug rather than a property of the origin."* Its log:
+
+```text
+  a page <script> threw: TypeError: can't access property "length", t is undefined
+  event loop hit its task ceiling … count=20000 elapsed_ms=2358      <- x10, ~20s total
+```
+
+**Ten firings for one site.** Before publishing that as a defect I asked the question this project
+keeps having to re-learn — *every number has a harness* — and reduced it to six lines that owe nothing
+to agoda:
+
+```html
+<div id="d">x</div>
+<script>
+  var n = 0;
+  function tick(){ n++; document.getElementById('d').textContent = 'n=' + n; setTimeout(tick, 0); }
+  tick();
+</script>
+```
+
+**One render of that page fires the ceiling FIVE times.** Hermetic, no network, no site.
+
+### THE CONSTANT IS HONESTLY NAMED AND THAT IS THE BUG
+
+`MAX_TASKS_PER_DRAIN`. It says what it does: it bounds **a drain**. The comment beside it promises
+something else —
+
+> *"Without a ceiling, 'drain to quiescence' means 'never return', and the tab is gone with no
+> recourse — which is precisely the failure Bar 0 exists to forbid."*
+
+— and that promise is about **a page**, not a drain. A navigation runs the loop once at load and
+again per dynamic-script round (`max_rounds = 4`), so a non-converging page pays the bound **five
+times over**: 100,000 tasks on the fixture, ~20 seconds on agoda against a 12-second load budget. The
+guard fires, says *"painting what we have"*, and is then asked the same question again.
+
+**This is t610's lesson one level up.** That tick found the ceiling was *a count where the harm is a
+clock*, and added `max_drain_ms` beside it. Both bounds are still **per drain**, and the harm is
+**per navigation**. Adding a third per-drain bound would repeat the mistake in a new unit.
+
+**THE FIX SHAPE, named so the next tick does not re-derive it:** the round loop in
+`fetch_and_run_dynamic_scripts` must not start another round once a round has reported the page did
+not converge — a page that burned 20,000 tasks without converging will not converge in the next
+20,000. That is a page-side change with no new state, no navigation-reset hook to forget, and no Bar 0
+risk in either direction: it can only *reduce* work, and only for a page the engine has already
+declared non-converging. Deliberately **not** done under the clock left in this session — an
+event-loop bound is the wrong thing to change while rushing, and the reproducer above is what makes
+it a ten-minute tick next time instead of an hour.
+
+TICK SHAPE: measurement (a hermetic reproducer for a Bar-0-adjacent bound that does not bound what it
+claims, plus the refutation of my own previous NEXT). Bar 0 untouched; no engine source changed.
+Gates: none — nothing changed to gate. The reproducer is recorded above rather than committed as a
+test that would assert today's wrong behaviour.
+WIKI: none [forced] — the mechanism is one paragraph and belongs with the fix, not before it; a wiki
+page written now would document a defect as if it were a design.
+PATTERN: none — no class of the web unlocked. [no-pattern]
+
+NEXT: **(1) THE PER-NAVIGATION DRAIN BOUND**, exactly as shaped above, with the six-line fixture as
+its gate — assert the ceiling fires **once**, not five times, for one render. **(2) `agoda`'s thrown
+`TypeError: can't access property "length", t is undefined`** is a second, independent defect on the
+same page and has never been triaged; a page script that throws is a `G_SILENT_FAIL`-class lead with
+a real stack behind it. **(3) `scan_static_import_specifiers`'s failing unit test**, still on `main`,
+still not in the wall — third report.

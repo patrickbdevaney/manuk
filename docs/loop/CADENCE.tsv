@@ -417,3 +417,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 657	ab6da1c3	1785144719	2026-07-27T05:31:59-04:00	1998	measurement	63	9	398	33	330	81	3896	6960	0	345	31	the sweep three ticks owed, and what it says about them (2026-07-27)
 658	382056b3	1785146357	2026-07-27T05:59:17-04:00	1638	capability	63	11	401	36	330	81	3896	6960	0	346	31	`unreachable` was four causes wearing one word, and one of them was ours (2026-07-27)
 659	c322bae0	1785147990	2026-07-27T06:26:30-04:00	1633	measurement	63	7	227	33	330	81	3896	6960	0	346	31	surface audit #38: six gates off the map, and a missing newline that hid a row from every reader (2026-07-27)
+660	379f8351	1785148609	2026-07-27T06:36:49-04:00	619	measurement	63	4	115	32	330	81	3896	6960	0	346	31	the hang guard fires five times per page, so it bounds a drain and not the harm (2026-07-27)
