@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **437** | ticks 1–679 |
-| median tick cycle | **21m** | 436 intervals |
-| median, last 10 | **27m** | 10 intervals |
+| ticks landed | **438** | ticks 1–680 |
+| median tick cycle | **21m** | 437 intervals |
+| median, last 10 | **29m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 392.9h elapsed |
-| median verify wall | **63s** | 376 ticks |
+| **ticks per hour** | **1.11** | 394.8h elapsed |
+| median verify wall | **63s** | 377 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **334**
-* **✅ rows in the capability ledger**: 144 → **351**
+* **✅ rows in the capability ledger**: 144 → **352**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**214 of 437 ticks** (49%) moved a
+**215 of 438 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **214** capability ticks, median cycle **21m**
-* median diff per tick: **+239 / −34** lines across 8 files
+* **215** capability ticks, median cycle **21m**
+* median diff per tick: **+240 / −34** lines across 8 files
 
 ## Every tick
 
@@ -534,5 +534,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **677** | 2026-07-27 12:40 | 31m | capability | 63s | +412/−34 | 334 | 81 | 56.0% · | `window.<id>` IS the element, and it was absent (2026-07-27) |
 | **678** | 2026-07-27 13:10 | 31m | measurement | 63s | +412/−33 | 334 | 81 | 56.0% · | the phase ledger did not sum to the load, and said it did (2026-07-27) |
 | **679** | 2026-07-27 13:58 | 48m | capability | 63s | +380/−42 | 334 | 81 | 56.0% · | every inline script on every page compiled under one name (2026-07-27) |
+| **680** | 2026-07-27 15:48 | 1.8h | capability | 63s | +518/−46 | 334 | 81 | 56.0% · | the hang guard was firing on our own clock, and it blamed the page (2026-07-27) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -330,3 +330,79 @@ not to the page, and the honest place to account for them is the caller. Stated 
 does not have to re-derive the difference.
 
 [[loop-optimization-mandate]] [[conformance-and-oracles]]
+
+## The hang guard was firing on our own clock, and it blamed the page (tick 680)
+
+`MAX_TASKS_PER_DRAIN` fired on real sites and said:
+
+> *"the page is not converging (a self-rescheduling timer, **most likely**)"*
+
+`most likely` is the tell. The engine was holding the entire pending task list and **guessing about its
+contents** — a status, not a finding, and the third instance of that shape in four ticks (an anonymous
+`TypeError` at t666/t675, a source called `inline.js` at t679, this).
+
+### The instrument: name who is spinning
+
+At the ceiling — **once per give-up, never in the steady state** — group the tasks still queued by the
+source text of the page's own callback and report the top three with counts, the number due at the
+current virtual instant, the delay of the soonest, and the virtual clock. Reading the *residue* rather
+than counting as we go keeps the hot path at two comparisons and a splice.
+
+One thing had to change for this to mean anything: the task the loop *runs* is `setTimeout`'s wrapper,
+so grouping by it yields **a histogram of ourselves** — eight identical words, once per line. The
+page's own callback is now carried on the task (`__enqueue`'s `u`), one property per task, and that is
+the difference between a report and a mirror.
+
+### What it said about `playhop.com`, first run
+
+```text
+task ceiling  count=20000  spinning=queued=1 due_now=0
+              next_in_ms=86400000  vclock_ms=13822876800000
+              1x function(){a.fa=Db()}
+```
+
+- **One** task queued, and **not due**. Nothing was spinning.
+- `next_in_ms=86400000` — the page armed a **24-HOUR** timer. A midnight rollover, a daily reset, a
+  cache expiry. Utterly ordinary.
+- `vclock_ms=13822876800000` — the virtual clock had advanced **438 years**.
+
+`__fireLoad` set `__timeBudget = Infinity`, so the clock could jump forward without bound. The loop
+jumped a full day per iteration and ran that one timer **20,000 times — 54 virtual years per drain** —
+burning ~1.5–2s of real CPU each time and tripping the **Bar 0 hang guard on a page that had
+converged**. The page was innocent. A real browser fires a 24-hour timer **zero** times during a load,
+because its clock advances at 1×.
+
+### The fix: a horizon, which is what Chrome's `--virtual-time-budget` already is
+
+`__timeBudget = __now + 60000`. A task due beyond the horizon does not run during load.
+
+**The horizon may not be small, and that constraint decides the number:** `testharness.js` arms a
+**10-second** harness timeout at setup, and a clock that cannot reach it makes every async WPT file
+report TIMEOUT — the exact catastrophe `Infinity` was introduced to fix. 60s clears it by 6× and is
+still 1,440× short of one day. `G_LIFECYCLE`'s own report is armed at 5000ms, so that gate asserts both
+sides of the horizon with one fixture: a far-future task must be refused, and a merely-late one must
+still run.
+
+### Measured on `playhop.com`, before → after
+
+```text
+load event        1330ms  gave_up=1   ->   154ms  gave_up=0     (8.6x)
+dynamic scripts   7697ms  gave_up=3   ->  6048ms  gave_up=0
+page fetches      5294ms  gave_up=2   ->  5250ms  gave_up=0
+TOTAL             31626ms             -> 27273ms
+drain give-ups         6              ->      0
+structural coverage  4.7%             ->    6.5%   (100 missing, was 102)
+```
+
+**Six Bar 0 hang-guard trips became zero on a page that had converged all along**, 4.4s faster, and two
+more elements render. ⚠ Honestly: the site is **still unscored** — `shape_n` went 5 → 7, under the
+10-sample floor either way — and its `SHAPE` reading moved 20.0% → 14.3% over a different (larger)
+population. Neither number is a scored certificate term, and quoting the drop as a regression or the
+rise as a win would be reading noise off a sample of seven.
+
+⚠ **The first version of the gate could not fail.** It read a flag from inside the 5000ms report, and
+tasks run in `(due, seq)` order — so the report *always* precedes an 86,400,000ms timer whether the
+clock is bounded or not. It was testing ordering, and it passed with `Infinity` restored. The
+observation has to happen **after** the drain: the far-future task writes to the DOM and Rust reads it.
+
+[[loop-optimization-mandate]] [[reliability-doctrine]]

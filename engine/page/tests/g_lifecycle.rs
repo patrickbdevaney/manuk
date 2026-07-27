@@ -32,7 +32,7 @@
 
 use manuk_text::FontContext;
 
-const HTML: &str = r#"<!doctype html><html><body><div id="out">-</div>
+const HTML: &str = r#"<!doctype html><html><body><div id="out">-</div><div id="daily"></div>
   <script>
     var R = [];
     var seen = [];
@@ -66,6 +66,25 @@ const HTML: &str = r#"<!doctype html><html><body><div id="out">-</div>
 
     // ── (5) insertAdjacentText — the third sibling.
     R.push('iaText:' + (typeof document.body.insertAdjacentText === 'function'));
+
+    // ── (6b) THE VIRTUAL CLOCK HAS A HORIZON (tick 680). A 24-hour timer is an ORDINARY thing —
+    //    a midnight rollover, a daily reset, a cache expiry — and `playhop.com` ships one. With an
+    //    UNBOUNDED virtual clock the loop jumps a full day per iteration and runs it 20,000 times
+    //    (54 virtual YEARS per drain, ~438 across that navigation), burning the Bar 0 hang guard on a
+    //    page that had already converged. A real browser fires it ZERO times during a page load.
+    //
+    //    This gate is the right home for the claim precisely because its OWN report is armed at
+    //    5000ms: the two sides of the horizon are then asserted by one fixture — a far-future task
+    //    must not run, and a merely-late one must, or the bound was bought by not running the page.
+    //
+    //    ⚠ THE FIRST VERSION OF THIS ASSERTION WAS VACUOUS, and only the RED probe said so. It read
+    //    `dailyRan` from inside the 5000ms report — but tasks run in `(due, seq)` order, so the report
+    //    ALWAYS runs before an 86,400,000ms timer whether the clock is bounded or not. It was testing
+    //    ORDERING and passing with `Infinity` restored. The observation has to happen AFTER the drain
+    //    has finished, which means the far-future task must write to the DOM and Rust must read it.
+    setTimeout(function () {
+      document.getElementById('daily').textContent = 'A 24-HOUR TIMER RAN DURING A PAGE LOAD';
+    }, 86400000);
 
     // ── (6) DOMException exists (every DOM method that FAILS fails by throwing one).
     R.push('domException:' + (typeof DOMException === 'function'));
@@ -138,4 +157,34 @@ fn the_document_lifecycle_fires_the_clock_orders_and_a_throwing_task_does_not_ki
              `seen:` missing `load` means no site's onload handler has ever run here."
         );
     }
+
+    // ── THE VIRTUAL-CLOCK HORIZON, read AFTER the drain rather than from inside it. ──────────────
+    //
+    // A 24-hour timer is an ORDINARY thing — a midnight rollover, a daily reset, a cache expiry — and
+    // `playhop.com` ships one. With an unbounded virtual clock (`__timeBudget = Infinity`) the loop
+    // jumps a full day per iteration and runs it 20,000 times: **54 virtual YEARS per drain, ~438
+    // across that navigation**, ~1.5–2s of real CPU each time, tripping the Bar 0 hang guard on a page
+    // that had already converged. And the guard's message blamed the page — *"a self-rescheduling
+    // timer, most likely"* — which was a guess, and wrong. A real browser fires it ZERO times.
+    //
+    // The other side of the claim is asserted by this same fixture and needs no second element: the
+    // report above is armed at **5000ms** and every assertion in it depends on that task running. A
+    // horizon of zero would satisfy the line below and fail every line above it, which is the shape a
+    // bound bought by not running the page would take.
+    let daily = page
+        .dom()
+        .descendants(page.dom().root())
+        .find(|&n| page.dom().element(n).and_then(|e| e.attr("id")) == Some("daily"))
+        .expect("#daily is in the tree");
+    let daily_text = page.dom().text_content(daily);
+    assert!(
+        daily_text.trim().is_empty(),
+        "G_LIFECYCLE: {daily_text:?} — a 24-HOUR timer fired during a page load. The virtual clock \
+         has no horizon, so it jumps a full day per iteration and burns the Bar 0 hang guard on a \
+         page that has CONVERGED.\n\n  \
+         ⚠ Read from the DOM AFTER the load, deliberately: the first version of this assertion read a \
+         flag from inside the 5000ms report and passed with `Infinity` restored, because tasks run in \
+         `(due, seq)` order and the report always precedes an 86,400,000ms timer. It was testing \
+         ordering. A gate that cannot fail is the failure this project has the falsify pass for."
+    );
 }

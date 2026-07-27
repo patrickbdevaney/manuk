@@ -1042,6 +1042,11 @@
   - L269 · The phase ledger did not sum to the load, and said it did (tick 678)
   - L280 · The ledger now spans the navigation, and it CLOSES WITH THE SUBTRACTION PRINTED
   - L296 · What the complete ledger then said about playhop.com
+  - L334 · The hang guard was firing on our own clock, and it blamed the page (tick 680)
+  - L344 · The instrument: name who is spinning
+  - L356 · What it said about playhop.com, first run
+  - L375 · The fix: a horizon, which is what Chrome's --virtual-time-budget already is
+  - L386 · Measured on playhop.com, before → after
 
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
@@ -1185,4 +1190,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1096 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1101 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -2507,3 +2507,74 @@ are a decided ceiling and the dead hosts are not ours. **Do not start another si
 first naming which unscored CATEGORY it converts.**
 
 **Next check due: tick 680.**
+
+## Check #51 — tick 680
+
+**Horizon:** H0 — the Phase-0 daily-driver certificate. Gate:
+`daily-driver-pass(site) = renders(site) ∧ functions(site)` over the fixed-denominator corpus-v2.
+
+**The window:** t673–t680 — the per-site repeat + median collapse (673), the probe deferred to `load`
+(674), `reportError` made to report (675), the owed HEAD-20 sweep + the instrument-version column
+(676), named access on the Window object (677), the navigation phase ledger that reconciles (678),
+inline scripts named + surface audit #40 (679), and the virtual-clock horizon (680).
+
+**Gate or scoreboard? — GATE, and this window finally obeyed #50's steer in the way #50 meant it.**
+#50 said: *do not start another single-site arc without first naming which unscored CATEGORY it
+converts.* Every capability tick in this window did exactly that. t674 attacked `shell-only` and moved
+naukri to `thin-overlap`. t677 attacked `thin-overlap` and named its cause on playhop —
+`window.__appData__ is undefined`, HTML §7.3.3 absent entirely. t680 attacked the *timing* half of the
+same category and took playhop's Bar 0 hang-guard trips from **6 to 0**.
+
+**AND THE CERTIFICATE STILL SHOWS `scored 5 · shape ≥0.75 on 0`** — but for the first time this
+session the reason is *not* "the win was in the wrong place":
+
+> **The last sweep predates four of these eight ticks.** t676's sweep ran on the t674 tree. t677
+> (named access), t679 (attribution) and t680 (the clock horizon) have never been measured on the
+> corpus at all, and t680 is the first change in five whose mechanism could plausibly move a scored
+> term: it removed every drain give-up on the one site it was measured against.
+
+**That is the steer, and it is a measurement, not a capability:** *the corpus is four ticks stale, and
+the loop is again in the state #50 warned about — deriving what the certificate would say instead of
+asking it.* **RE-RUN HEAD-20 as the next tick.** Three of the five scored rows (`keirin`, `ikea`,
+`welt.de`) have never been read with a bounded clock.
+
+**A CORRECTION TO PART VI, and it is the second entry in VI.2 that the tree has moved past.**
+VI.2 lists *"**I5** the differential oracle is the discovery engine — ⚠ never completed a full crawl
+(`ORACLE_CRAWLED: 0` of 265)"*. That is stale twice over: the crawl completes (265 sites, 392
+clusters), and the discovery engine of this window was **not the crawl** — it was the engine's own log,
+read three times in four ticks:
+
+| tick | the line | what it named |
+|---|---|---|
+| 677 | `TypeError: … window.__appData__ is undefined at inline.js:1:155` | HTML §7.3.3 absent — playhop's whole app |
+| 679 | `inline.js:1:155` itself | one source name for every inline script on every page |
+| 680 | `spinning=queued=1 due_now=0 next_in_ms=86400000 vclock_ms=13822876800000` | our own unbounded virtual clock |
+
+**PART VI should record that the primary discovery mechanism is now the INSTRUMENTED LOG, and that its
+yield comes from attribution rather than volume.** Each of those three was found because the previous
+tick had made the log one degree more specific. That is a compounding instrument, and it is cheaper per
+finding than any sweep this project runs.
+
+**A hazard promoted to a standing rule, because it fired twice in this window.** ⚠ **`most likely` in a
+log message is a confession.** t680's hang guard said *"the page is not converging (a self-rescheduling
+timer, most likely)"* while holding the entire pending task list; the guess was wrong and it had blamed
+the page for six ticks. The general form: **if a message speculates about state the process is holding,
+print the state.** The same shape produced t675 (an error reported without its address) and t679 (an
+address with no file).
+
+**NO INVARIANT BENT — and one nearly was.** t680's horizon is bounded *by a measured constraint*
+(`testharness.js`'s 10s harness timeout) rather than by a number that felt right, and the gate asserts
+both sides so a horizon of zero — a bound bought by not running the page, which would bend I4 — cannot
+pass. ⚠ **Two gates in this window could not fail on their first draft** (t675's whole-log disjunction,
+t680's flag read from inside a 5000ms report that `(due, seq)` ordering always runs first). Both were
+caught by running the mutation instead of trusting the green. The falsify discipline is doing real work
+and the honest reading is that it had to.
+
+**THE STEER.** **(1) RE-RUN HEAD-20** — the corpus is four ticks stale and the loop is deriving again.
+**(2) THEN the per-call load budget**, which is measured, named, and still unfixed: 12.7s + 12.0s under
+a stated 12s ceiling, with `initial images+masks` (6.2s, an *enhancement*) running BEFORE
+`dynamic scripts` (which builds the DOM). The naive scope fix is a capability loss and the real tick is
+the PRIORITY inversion; it is blocked on the nine gate files that call `load_async` without
+`finish_loading`, so size it as a full tick and do not smuggle it.
+
+**Next check due: tick 688.**

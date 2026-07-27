@@ -31871,3 +31871,101 @@ calling `finish_loading`** (`g_error_subresource`, `g_framing`, `g_esm_*`, `g_de
 one. Size it as a full tick; do not smuggle it. **(2) `dynamic scripts` 7.7s with `gave_up=3` is the
 largest single phase and it is NON-CONVERGENCE, not the network.** **(3)** `<link>.sheet`, t665's
 remainder.
+
+## Tick 680 — the hang guard was firing on our own clock, and it blamed the page (2026-07-27)
+
+HYPOTHESIS: t678's and t679's NEXT #2 — `dynamic scripts` is the largest phase of `finish_loading`
+(7.7s, `gave_up=3`) and it is non-convergence, not the network. And the guard that reports it says:
+
+> *"the page is not converging (a self-rescheduling timer, **most likely**)"*
+
+**`most likely` is the tell.** The engine holds the entire pending task list and was GUESSING about its
+contents. That is a status, not a finding — the third instance of this shape in four ticks (an
+anonymous `TypeError` at t666/t675, a source called `inline.js` at t679, this). So: stop deriving, make
+the guard say what it fired on.
+
+FALSIFIABLE BAR: the give-up must name the page's own spinning callback. RED = no summary, and RED
+again = a summary that reports OUR wrapper instead of the page's function.
+
+### THE INSTRUMENT
+
+At the ceiling — once per give-up, never in the steady state — group the tasks still queued by the
+source text of the page's callback, and report the top three with counts, how many are due at the
+current virtual instant, the soonest delay, and the virtual clock. Reading the RESIDUE rather than
+counting as we go keeps the hot path at two comparisons and a splice.
+
+One thing had to change for it to mean anything: the task the loop RUNS is `setTimeout`'s wrapper, so
+grouping by it is **a histogram of ourselves** — eight identical words, once per line. The page's own
+callback is now carried on the task (`__enqueue`'s `u`). That is its own RED mutation.
+
+### AND IT OVERTURNED THE MESSAGE IT WAS ADDED TO EXPLAIN
+
+```text
+task ceiling  count=20000  spinning=queued=1 due_now=0
+              next_in_ms=86400000  vclock_ms=13822876800000
+              1x function(){a.fa=Db()}
+```
+
+**ONE task queued, and NOT DUE. Nothing was spinning.** `playhop.com` armed a **24-HOUR** timer — a
+midnight rollover, a daily reset, a cache expiry, utterly ordinary — and `__fireLoad` set
+`__timeBudget = Infinity`, so the virtual clock could jump forward without bound. The loop advanced a
+full day per iteration and ran that one timer **20,000 times: 54 virtual YEARS per drain, ~438 across
+the navigation**, ~1.5–2s of real CPU each, tripping the **Bar 0 hang guard on a page that had
+converged.** The clock had reached `vclock_ms=13822876800000`.
+
+**The page was innocent, and the guard blamed it for six ticks.** A real browser fires a 24-hour timer
+ZERO times during a load, because its clock advances at 1×.
+
+### THE FIX — a horizon, which is what Chrome's own `--virtual-time-budget` is
+
+`__timeBudget = __now + 60000`. A task due beyond the horizon does not run during load. **The horizon
+may not be small, and that constraint decides the number:** `testharness.js` arms a 10-second harness
+timeout at setup, and a clock that cannot reach it makes every async WPT file report TIMEOUT — which is
+the exact catastrophe `Infinity` was introduced to fix. 60s clears it 6× and is 1,440× short of a day.
+
+### MEASURED, playhop.com, before → after
+
+```text
+load event        1330ms gave_up=1  ->   154ms gave_up=0   (8.6x)
+dynamic scripts   7697ms gave_up=3  ->  6048ms gave_up=0
+page fetches      5294ms gave_up=2  ->  5250ms gave_up=0
+TOTAL            31626ms            -> 27273ms
+drain give-ups         6            ->      0
+coverage            4.7%            ->    6.5%   (100 missing, was 102)
+```
+
+**Six Bar 0 hang-guard trips became zero**, 4.4s faster, two more elements render. ⚠ HONESTLY: the site
+is **still unscored** — `shape_n` 5 → 7, under the 10-sample floor either way — and its SHAPE reading
+moved 20.0% → 14.3% over a larger population. Neither is a scored certificate term, and quoting the
+drop as a regression or the rise as a win would be reading noise off a sample of seven.
+
+### ⚠ AND THE FIRST VERSION OF THE GATE COULD NOT FAIL
+
+It read a flag from inside the 5000ms report — but tasks run in `(due, seq)` order, so the report
+ALWAYS precedes an 86,400,000ms timer whether the clock is bounded or not. It was testing ORDERING, and
+it **passed with `Infinity` restored**. Caught by running the mutation rather than trusting the green.
+The observation has to happen AFTER the drain: the far-future task writes to the DOM and Rust reads it.
+*A gate that cannot fail is the failure this project keeps a falsify pass for* — and this is the second
+time this session the RED probe corrected the assertion rather than the code (t675's whole-log
+disjunction was the first).
+
+⚠ ALSO: `g_drain_bounds_the_page` was the first host tried for the spinner assertion and is the WRONG
+one twice over — its own zero-delay spinners starve any other timer in the fixture, and it takes over
+15 minutes in a debug build (it is NOT in `verify.sh`'s list, so nothing was catching that). Moved to
+`G_RUNAWAY` (in the wall, 8s). ⚠ And I killed my own shell with a `pgrep -f` whose pattern was in its
+own command line — the documented hazard, cost one command.
+
+TICK SHAPE: capability + performance + Bar 0 (all three faces, no trade). `engine/js` only.
+Gates: `G_RUNAWAY` — the give-up must carry `spinning=`, must name the page's callback (not our
+wrapper), and must show tasks due at the current virtual instant; RED-proven by two independent
+mutations. `G_LIFECYCLE` — a 24-hour timer must not fire during a load, read from the DOM after the
+drain; RED-proven by restoring `Infinity`.
+WIKI: `docs/wiki/performance.md` — "the hang guard was firing on our own clock, and it blamed the page".
+PATTERN: `docs/loop/WEB-PATTERNS.md` — a page arms a far-future timer and otherwise converges.
+
+NEXT: **(1) RE-RUN HEAD-20.** Six give-ups → zero on one site is a mechanism, not a corpus result, and
+three of the five scored rows (`keirin`, `ikea`, `welt`) have never been measured with a bounded clock.
+This is the first tick in five whose effect could plausibly move a SCORED term. **(2) THE PER-CALL LOAD
+BUDGET** (t678/t679's NEXT #1) — still 12.7s + 12.0s under a stated 12s ceiling, and the naive scope fix
+is still a capability loss because `initial images+masks` (6.2s, an ENHANCEMENT) precedes
+`dynamic scripts`. **(3)** `<link>.sheet`, t665's remainder.

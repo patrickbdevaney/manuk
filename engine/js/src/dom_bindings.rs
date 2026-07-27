@@ -12561,7 +12561,40 @@ const WINDOW_PRELUDE: &str = r#"
             // armed during load become eligible, in due order, BEHIND the `load` they were always
             // meant to follow. (See `__timeBudget` in event_loop.rs: a clock that outruns the
             // lifecycle fires a 10s timer before `load` and every WPT file reports TIMEOUT.)
-            g.__timeBudget = Infinity;
+            // ⚠⚠ **A HORIZON, NOT `Infinity`** (tick 680, and the finding is measured).
+            //
+            // `Infinity` here meant the virtual clock could jump forward without bound, and a
+            // browser that collapses time has no reason to stop at a plausible moment. Measured on
+            // `playhop.com` by the give-up report this same tick added:
+            //
+            // ```text
+            //   task ceiling  count=20000  spinning=queued=1 due_now=0
+            //                 next_in_ms=86400000  vclock_ms=13822876800000
+            //                 1x function(){a.fa=Db()}
+            // ```
+            //
+            // The page armed a **24-HOUR** timer — a midnight rollover, a daily reset, an utterly
+            // ordinary thing — and one task was pending, not due, at every give-up. The loop jumped
+            // 24 virtual hours per iteration and ran it **20,000 times: 54 virtual YEARS per drain,
+            // ~438 years across the navigation**, burning ~1.5–2s of real CPU each time and tripping
+            // the **Bar 0 hang guard on a page that had converged**.
+            //
+            // And the guard's message blamed the page: *"the page is not converging (a
+            // self-rescheduling timer, most likely)"*. The page was innocent; `most likely` was a
+            // guess, and it was wrong. A real browser fires a 24-hour timer **zero** times during a
+            // page load, because its clock advances at 1×.
+            //
+            // So the budget becomes a finite window, which is exactly what Chrome's
+            // `--virtual-time-budget` is — the flag this project's own oracle passes Chrome at 6000ms.
+            // A task due beyond the horizon simply does not run during load.
+            //
+            // **The horizon may not be small**, and that is the constraint that decides the number:
+            // `testharness.js` arms a **10-second** harness timeout at setup, and if the clock cannot
+            // reach it the WPT suite reports TIMEOUT on every async file — the exact catastrophe the
+            // `Infinity` was introduced to fix (see `__timeBudget` in event_loop.rs). 60s clears that
+            // by 6×, and is still 1,440× short of one day.
+            g.__VCLOCK_HORIZON_MS = 60000;
+            g.__timeBudget = (g.__now || 0) + g.__VCLOCK_HORIZON_MS;
         };
 
         // ---- **PAGE VISIBILITY. `document.visibilityState` and `document.hidden` were ABSENT.** --

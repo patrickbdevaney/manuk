@@ -165,14 +165,18 @@ const PRELUDE: &str = r#"
     // browser does, since real time has barely advanced. `load` opens the budget, and the delayed
     // timers then run in correct order behind it.
     globalThis.__timeBudget = 0;
-    globalThis.__enqueue = function(fn, ms) {
+    // `u` is the PAGE'S OWN callback, carried alongside the wrapper we actually run. Without it the
+    // ceiling report (`SPINNER_SUMMARY`) groups by `String(t.f)` and every task in the queue is the
+    // same eight-word wrapper — a histogram of ourselves. The field costs one property per task and it
+    // is the difference between "the page is not converging" and the name of the function doing it.
+    globalThis.__enqueue = function(fn, ms, user) {
         ms = (typeof ms === 'number' && ms > 0) ? ms : 0;
-        __tasks.push({ f: fn, w: __now + ms, s: ++__seq });
+        __tasks.push({ f: fn, w: __now + ms, s: ++__seq, u: user || fn });
     };
     globalThis.setTimeout = function(cb, ms) {
         if (typeof cb !== 'function') { return 0; }
         var id = ++__timerId;
-        __enqueue(function(){ if (!__cancelled[id]) { cb(); } }, ms);
+        __enqueue(function(){ if (!__cancelled[id]) { cb(); } }, ms, cb);
         return id;
     };
     globalThis.clearTimeout = function(id) { if (id) { __cancelled[id] = true; } };
@@ -183,9 +187,9 @@ const PRELUDE: &str = r#"
             if (__cancelled[id]) { return; }
             cb();
             // Reschedule at +ms from NOW, so an interval is a cadence rather than a tight loop.
-            if (!__cancelled[id]) { __enqueue(tick, ms); }
+            if (!__cancelled[id]) { __enqueue(tick, ms, cb); }
         };
-        __enqueue(tick, ms);
+        __enqueue(tick, ms, cb);
         return id;
     };
     globalThis.clearInterval = function(id) { if (id) { __cancelled[id] = true; } };
@@ -6278,6 +6282,41 @@ const NEXT_TASK: &str = "(function(){ \
      try { t.f(); } catch (e) { __reportError(e); } \
      return true; })()";
 
+/// **WHO IS SPINNING** — the summary printed when a drain hits its ceiling.
+///
+/// *"the page is not converging (a self-rescheduling timer, most likely)"* is a **status, not a
+/// finding**, and it is the same shape this project has now paid for three ticks running: an anonymous
+/// `TypeError` (t666/t675), a source called `inline.js` (t679), and this. `most likely` is the tell —
+/// the engine holds the entire pending task list and was guessing about its contents.
+///
+/// So at the ceiling — once per give-up, never in the steady state — group the tasks still queued by
+/// the SOURCE TEXT of their callback and report the top three with counts, plus how many are due at
+/// the current virtual instant (a `setTimeout(fn, 0)` self-rescheduler is exactly `due == now`, which
+/// is the signature the old message was guessing at). Callback text is truncated hard: this goes in a
+/// log line, and a minified bundle's function body is a page of it.
+///
+/// Reading the REMAINING queue rather than counting as we go is deliberate — it costs nothing per task
+/// (the hot path stays two comparisons and a splice) and the residue is what a spinner leaves behind.
+const SPINNER_SUMMARY: &str = "(function(){ \
+     try { \
+       var byFn = Object.create(null), dueNow = 0, n = __tasks.length, soonest = Infinity; \
+       for (var i = 0; i < __tasks.length && i < 4000; i++) { \
+         var t = __tasks[i]; \
+         if (t.w <= __now) { dueNow++; } \
+         if (t.w - __now < soonest) { soonest = t.w - __now; } \
+         var k = String(t.u || t.f).replace(/\\s+/g, ' ').slice(0, 90); \
+         byFn[k] = (byFn[k] || 0) + 1; \
+       } \
+       var keys = Object.keys(byFn); \
+       keys.sort(function(a, b){ return byFn[b] - byFn[a]; }); \
+       var top = []; \
+       for (var j = 0; j < keys.length && j < 3; j++) { top.push(byFn[keys[j]] + 'x ' + keys[j]); } \
+       return 'queued=' + n + ' due_now=' + dueNow + ' next_in_ms=' \
+              + (soonest === Infinity ? '-' : soonest) + ' vclock_ms=' + __now \
+              + ' distinct=' + keys.length \
+              + ' | ' + top.join(' | '); \
+     } catch (e) { return 'spinner summary failed: ' + e; } })()";
+
 /// Drain the microtask queue completely (microtasks may enqueue more microtasks).
 const DRAIN_MICRO: &str = "(function(){ \
      while (__micro.length) { var m = __micro.shift(); \
@@ -6435,8 +6474,9 @@ pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Resu
                 tracing::warn!(
                     count,
                     elapsed_ms = started.elapsed().as_millis() as u64,
-                    "event loop hit its task ceiling — the page is not converging (a self-rescheduling \
-                     timer, most likely). Painting what we have. The alternative is a frozen tab."
+                    spinning = %spinner_summary(rt, global),
+                    "event loop hit its task ceiling — the page is not converging. Painting what we \
+                     have. The alternative is a frozen tab."
                 );
                 note_drain_stopped_short();
                 break;
@@ -6814,6 +6854,7 @@ where
             tracing::warn!(
                 count,
                 elapsed_ms = started.elapsed().as_millis() as u64,
+                spinning = %spinner_summary(rt, global),
                 "fetcher event loop hit its task ceiling — the page is not converging. Painting what \
                  we have. The alternative is a frozen tab."
             );
@@ -6889,6 +6930,20 @@ fn eval(
 
 /// Evaluate `src` and read its result as a Rust `String`, or `None` if the result is
 /// null/undefined. The value stays rooted across the conversion.
+/// Name the spinner, or say plainly that it could not be named. See [`SPINNER_SUMMARY`].
+///
+/// Never propagates a failure: this runs on a path that is already reporting a problem, and an
+/// instrument that can turn a bounded give-up into a lost drain is worse than no instrument. It also
+/// runs at most once per give-up, so its cost is not on the hot path — the drain loop itself stays two
+/// comparisons and a splice.
+fn spinner_summary(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> String {
+    match eval_string(rt, global, SPINNER_SUMMARY, "event_loop_spinner.js") {
+        Ok(Some(s)) => s,
+        Ok(None) => "(no summary)".to_string(),
+        Err(e) => format!("(summary unavailable: {e})"),
+    }
+}
+
 fn eval_string(
     rt: &mut Runtime,
     global: mozjs::rust::HandleObject,
