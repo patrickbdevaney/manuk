@@ -28399,3 +28399,68 @@ scoped custom element registries). The cheapest remaining `?`s are in `doc` (CSS
 and `cross`. Media's narrowest blocker is still an **Opus decoder** — a real dependency decision,
 not a wiring tick. Still open: our own latency on the placement half, and t629's
 `getBoundingClientRect()` on an SVG child.
+
+## Tick 637 — the `ic` unit: I wrote the fix, then declined to ship it (2026-07-26)
+
+HYPOTHESIS: two `?` cells left in the `doc` class — `images: AVIF` and `CSS ic/ric font-metric
+units`. `?` outranks `✗`, and t636 just showed how cheap a probe with a CONTROL is.
+
+**AVIF was MAP DRIFT, and audit #35's method found it in one command.** Not "does the row cite a
+gate?" but `ls` **the gate directory**: `shell/src/media.rs` has carried `fn g_avif_paint` since
+t355 — it decodes a real AVIF in the shell lane and asserts the PIXELS (the fixture is solid red, so
+a channel swap paints the wrong colour rather than a slightly different one), plus a graceful
+empty-map answer for the 10-bit case the `bitdepth_8` build cannot read. The row said `unknown` for
+~280 ticks while its gate sat in the tree. `unknown` -> `gated`.
+
+**`ic`/`ric`: PROBED TO A VERDICT, AND THE FIX WAS WRITTEN AND THEN REVERTED.** The probe was
+ambiguous in a way worth recording, because the ambiguity is the whole tick. `10ic` measured 160px
+at `font: 16px` — exactly `10em`. Two readings fit: *the unit is unsupported and the declaration was
+dropped*, or *the unit resolved to the spec's own 1em fallback*. A **bogus-unit control** settled it:
+`width: 10zz` is dropped to `auto` (784px, the container), while `width: 10ic` is 160px. So `ic`
+parses and resolves.
+
+Then the mechanism, named rather than guessed: Stylo computes `ic` from `metrics.mIcWidth`, and
+`engine/css/src/stylo_engine.rs` returns `FontMetrics { zero_advance_measure, x_height, cap_height,
+..Default }` — **`ic_width` is never set**, so Stylo assumes 1em unconditionally. That is exactly
+the shape `cap` was in before t507: a stub wearing the spec fallback's clothes. The spec permits
+`1em` only *"where it is impossible or impractical to determine the ideographic advance measure"*,
+and it is neither — the context that measures `0` for `zero_advance_px` measures 水 for the price of
+a different string.
+
+So I wrote it: `manuk_text::ic_width_px`, mirroring `zero_advance_px`. **Then I measured, and
+reverted it, for two reasons.**
+
+**(1) UNPROVABLE.** Every font on this box measures 水 at *exactly* 16.0px at `font-size: 16px` —
+Noto Sans/Serif/Mono CJK JP, sans-serif, DejaVu Sans, all 1em. CJK faces are designed full-width, so
+`1ic == 1em` is not a coincidence, it is the normal case. **A gate asserting `ic == 16.0` passes
+identically against the unfixed engine.** By this session's own rule — *a capability assertion must
+be able to fail the FAKE version* — that gate is vacuous, and a vacuous gate banked as coverage is
+the thing `falsify.sh` exists to find.
+
+**(2) AND IT WOULD HAVE BEEN ACTIVELY WORSE.** `sans-serif` and `DejaVu Sans` returned
+`Some(16.0)` — and those faces **have no 水 glyph**. That number came from the *fontconfig fallback
+chain*, not from a measurement of the styled face. Wiring it would replace Stylo's principled spec
+fallback with a fallback-chain artifact that merely coincides with it today, and would go silently
+wrong the day the chain changed.
+
+> **A fix that cannot be distinguished from its absence is not a small win, it is a claim.** The
+> honest form of "would I make this change if it did not help me land?" is: *what does the gate for
+> it look like?* If the answer is "it passes before the change", the deliverable is the finding.
+
+Recorded on the row as `partial` with the re-pricing condition named: **a proportional CJK face
+where 水 ≠ 1em is what makes this measurable**, and the audit rule that an honest "cannot know" must
+be re-priced when the ability to know arrives is what should bring it back.
+
+TICK SHAPE: measurement (two `doc`-class unknowns resolved — one map drift corrected to its
+long-existing gate, one probed to a `partial` verdict with a written fix explicitly declined and the
+re-pricing condition recorded). **No engine source changed, and that is the result, not a shortfall.**
+Bar 0 untouched; no ratchet floor moved. The `doc` and `app` classes now carry no `?` at all.
+Gates: none — and deliberately. The only gate this tick could have added is one that passes before
+the change it would guard, which is coverage theatre.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "the fix whose gate passes before the fix".
+PATTERN: [no-pattern] — no browser capability changed.
+
+NEXT: the remaining `?`s are `media` (audio output device, audible playbackRate) and `cross`
+(100-tab RSS, test262) — the last two are almost certainly the same map drift AVIF was, since both
+were measured in earlier sessions; a surface audit is due at t638 and is the right place for them.
+Media's narrowest real blocker is still an **Opus decoder**.

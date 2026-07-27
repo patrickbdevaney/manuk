@@ -182,6 +182,7 @@
   - L1198 · A diff field must measure the same quantity on both sides (tick 627)
   - L1223 · The fix, and what the field can honestly answer
   - L1249 · The load budget trades COVERAGE against SHAPE (tick 632)
+  - L1280 · The fix whose gate passes before the fix (tick 637)
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1093,4 +1094,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1008 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1009 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

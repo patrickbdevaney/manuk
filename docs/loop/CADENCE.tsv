@@ -394,3 +394,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 633	bbb2cb2c	1785105398	2026-07-26T18:36:38-04:00	2785	capability	63	16	1454	120	316	81	3896	6960	0	341	31	WebM/Matroska demux: the container half of the VP9 ladder (2026-07-26)
 634	f721ac28	1785109686	2026-07-26T19:48:06-04:00	4288	capability	63	7	575	100	317	81	3896	6960	0	341	31	AV1-in-WebM: the join was already complete, and both answers said no (2026-07-26)
 635	8a74c28a	1785110116	2026-07-26T19:55:16-04:00	430	capability	63	7	337	4	318	81	3896	6960	0	341	31	`navigator.mediaCapabilities.decodingInfo()`: the rendition chooser, and a THIRD consumer of one codec rule (2026-07-26)
+636	dffe098b	1785111175	2026-07-26T20:12:55-04:00	1059	measurement	63	5	111	5	318	81	3896	6960	0	341	31	ESM top-level await and cyclic module records: probe first (2026-07-26)

@@ -1276,3 +1276,43 @@ on 10 of 14 sites at t606.
 
 ⚠ **Do not "fix" this by raising the budget.** It would raise shape, lower coverage, and settle nothing
 — the definition of tuning an instrument to produce a preferred number.
+
+## The fix whose gate passes before the fix (tick 637)
+
+A small correctness fix looked obviously right and was reverted unshipped. The reasoning generalises
+past the unit it was about.
+
+**The setup.** CSS `ic` is defined as the used advance of U+6C34 (水). Stylo computes it from
+`metrics.mIcWidth`; our `FontMetricsProvider` returns `FontMetrics { zero_advance_measure, x_height,
+cap_height, ..Default }` — `ic_width` never set — so Stylo assumes `1em` unconditionally. The spec
+permits `1em` only *"where it is impossible or impractical to determine the ideographic advance
+measure"*, and it is neither: the shaping context that measures `0` for `zero_advance_px` measures
+水 for the price of a different string. This is precisely the shape `cap` was in before t507, when
+filling it stopped `cap`-sized boxes collapsing to zero. Writing `ic_width_px` took minutes.
+
+**Why it was reverted.**
+
+1. **The gate would pass before the change.** Every font on the machine measures 水 at *exactly*
+   1em — CJK faces are designed full-width, so `1ic == 1em` is the normal case, not a coincidence.
+   No available fixture makes computed differ from assumed, so the assertion cannot fail the
+   unfixed engine.
+2. **And it would have been actively worse.** Latin-only faces (`sans-serif`, `DejaVu Sans`)
+   returned `Some(16.0)` — they have **no 水 glyph**, so that number came from the fontconfig
+   *fallback chain*, not from the styled face. Shipping it would replace a principled spec fallback
+   with a fallback-chain artifact that merely coincides with it today.
+
+> **A fix that cannot be distinguished from its absence is not a small win, it is a claim.** The
+> operational form of *"would I make this change if it did not help me land?"* is: **what does its
+> gate look like?** If the honest answer is *"it passes before the change"*, the deliverable is the
+> finding, not the diff.
+
+**The disambiguating control is worth reusing.** `10ic` measuring exactly `10em` is consistent with
+two opposite stories — *the unit is unsupported and the declaration was dropped*, or *the unit
+resolved to the spec's 1em fallback*. A **bogus-unit control** separates them in one line:
+`width: 10zz` is dropped to `auto` (full container width) while `width: 10ic` is 160px, so `ic`
+parses. Whenever a "missing" feature's output coincides with a plausible fallback, the control is a
+declaration the parser must reject.
+
+**Recorded as `partial`, with the re-pricing condition named**: a proportional CJK face where
+水 ≠ 1em is what would make this measurable. An honest *"cannot know"* rots invisibly precisely
+because it is documented as intentional, so it must carry the condition that brings it back.
