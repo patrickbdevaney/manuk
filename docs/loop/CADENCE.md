@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **416** | ticks 1–657 |
-| median tick cycle | **21m** | 415 intervals |
+| ticks landed | **417** | ticks 1–658 |
+| median tick cycle | **21m** | 416 intervals |
 | median, last 10 | **35m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.08** | 384.5h elapsed |
-| median verify wall | **64s** | 355 ticks |
+| **ticks per hour** | **1.08** | 384.9h elapsed |
+| median verify wall | **64s** | 356 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **330**
-* **✅ rows in the capability ledger**: 144 → **345**
+* **✅ rows in the capability ledger**: 144 → **346**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**206 of 416 ticks** (50%) moved a
+**207 of 417 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **206** capability ticks, median cycle **21m**
-* median diff per tick: **+238 / −34** lines across 8 files
+* **207** capability ticks, median cycle **21m**
+* median diff per tick: **+239 / −34** lines across 8 files
 
 ## Every tick
 
@@ -513,5 +513,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **655** | 2026-07-27 04:27 | 30m | capability | 63s | +602/−62 | 329 | 81 | 56.0% · | `join_all` is one future, so one stalled host discards every image that arrived (2026-07-2 |
 | **656** | 2026-07-27 04:58 | 32m | capability | 63s | +596/−62 | 330 | 81 | 56.0% · | the picture's own size was written into the cascade's output, and every cascade after it w |
 | **657** | 2026-07-27 05:31 | 33m | measurement | 63s | +398/−33 | 330 | 81 | 56.0% · | the sweep three ticks owed, and what it says about them (2026-07-27) |
+| **658** | 2026-07-27 05:59 | 27m | capability | 63s | +401/−36 | 330 | 81 | 56.0% · | `unreachable` was four causes wearing one word, and one of them was ours (2026-07-27) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

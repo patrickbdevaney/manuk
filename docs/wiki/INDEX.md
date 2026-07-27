@@ -969,6 +969,11 @@
   - L1709 · Three things that are easy to get wrong
   - L1732 · Where it is applied, and where it deliberately is not
   - L1740 · The control that saved the gate
+  - L1750 · We hung up on it — h2's 16 KiB header limit makes a class of origins unreachable (tick 658)
+  - L1769 · It is a class, and the number is not ours to choose
+  - L1787 · The finding underneath the finding: a bucket that assigned blame
+  - L1800 · The cheap discriminator, and what it found
+  - L1817 · Gating a transport setting honestly
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -1129,4 +1134,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1044 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1049 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

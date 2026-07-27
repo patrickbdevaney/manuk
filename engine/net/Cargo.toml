@@ -61,3 +61,9 @@ adblock = { version = "0.13", optional = true }
 tokio = { workspace = true, features = ["rt", "macros"] }
 # The gate needs a real WebSocket SERVER to talk to — same crate, accept side.
 tokio-tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
+# G_H2_LARGE_RESPONSE_HEADERS needs a real HTTP/2 peer on both ends: a server that answers with a
+# header block larger than h2's 16KiB default, and a client built from the same setting the process
+# client uses. Both crates are already in the workspace build, so this costs no new compilation.
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+http-body-util = { workspace = true }

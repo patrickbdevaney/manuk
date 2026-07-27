@@ -186,8 +186,18 @@ impl Unmeasurable {
     /// The operator-facing sentence: what happened, and which axis owns the fix.
     pub fn explain(&self) -> String {
         match self {
-            Self::Unreachable => "the request never completed (DNS/TLS/connect/timeout) — no HTTP \
-                 status exists, so this is a corpus or network problem, not a rendering one"
+            // ⚠ This used to end "…so this is a corpus or network problem, not a rendering one",
+            // and tick 658 falsified that on the FIRST row it examined. `playhop.com` booked
+            // `unreachable`; curl fetched it in 2.5s and 978KB; the trace read
+            // `REQUEST_HEADER_FIELDS_TOO_LARGE … send_reset(PROTOCOL_ERROR, initiator=Library)` —
+            // OUR h2 client refusing a 16KiB-plus response header block. The bucket is four causes
+            // wide (DNS, TLS, connect, protocol) and at least one of them is always ours, so a
+            // sentence that assigns blame is the instrument charging its own defect to the corpus.
+            // Name what is not known instead of asserting what is.
+            Self::Unreachable => "the request never completed — no HTTP status exists. DNS, TLS, \
+                 connect and PROTOCOL failures are all in this bucket and it does NOT say which: \
+                 an origin we cannot reach may be dead, may be refusing us, or may be answering \
+                 something we reject. Fetch it with curl before believing it is not ours"
                 .into(),
             Self::BotWall(c) => format!(
                 "the origin answered {c} and refused this client — a BOT WALL, not a rendering \

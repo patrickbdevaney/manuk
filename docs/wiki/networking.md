@@ -1746,3 +1746,85 @@ control — no stall, generous budget, same page — reported `decoded=Some((41,
 That is a separate, larger fidelity defect. Without the control this tick would have reported a
 working fix as broken and then gone looking for the wrong organ. *Suspect the instrument before the
 subject; and when a fix and a control disagree, the control is the one that measured something.*
+
+## We hung up on it — h2's 16 KiB header limit makes a class of origins unreachable (tick 658)
+
+**`h2`'s default `SETTINGS_MAX_HEADER_LIST_SIZE` is 16 KiB.** A response whose header block exceeds
+it is not truncated, not downgraded and not retried: the client sends `RST_STREAM(PROTOCOL_ERROR)`
+and the navigation fails. The page does not load slowly or partially. **It does not load, and it is
+indistinguishable from a dead host.**
+
+`playhop.com`, a HEAD site of `corpus-v2.tsv`, booked `unreachable` in the tick-657 certificate
+sweep. `curl` fetched the same URL in 2.5s and 978 KB. `RUST_LOG=trace` named the organ:
+
+```text
+  connecting to [2a02:6b8::549]:443 · connected · TLS ok · h2 ok · request sent
+  h2::proto::streams::recv: stream error REQUEST_HEADER_FIELDS_TOO_LARGE
+                            -- recv_headers: frame is over size; stream=StreamId(1)
+  send_reset(..., reason=PROTOCOL_ERROR, initiator=Library)
+```
+
+**`initiator=Library` is the confession — we reset the stream.**
+
+### It is a class, and the number is not ours to choose
+
+A long `Set-Cookie` ladder, a fat `Content-Security-Policy`, a `Link:` preload list: the ordinary
+output of any session-heavy portal crosses 16 KiB. Chrome announces **256 KiB**, and the North Star
+settles the value without a debate — *on capability, Chromium is the CEILING to MATCH*. This is not a
+knob tuned until one site worked; it is the number the web is built against.
+
+```rust
+Client::builder(TokioExecutor::new())
+    .http2_max_header_list_size(HTTP2_MAX_HEADER_LIST_SIZE)   // 256 KiB, Chrome's announced value
+    .build(connector())
+```
+
+```text
+  before   playhop.com  UNMEASURABLE [unreachable]
+  after    playhop.com  sites 1 · scored 1 · h-overflow clean · dead-target clean
+```
+
+### The finding underneath the finding: a bucket that assigned blame
+
+`Unmeasurable::Unreachable` explained itself as *"the request never completed
+(DNS/TLS/connect/timeout) — no HTTP status exists, so this is a corpus or network problem, **not a
+rendering one**."* That last clause is a **conclusion, not an observation**, and it was false on the
+first row anyone checked. The bucket is four causes wide — DNS, TLS, connect, **protocol** — and the
+protocol one is always potentially ours.
+
+This is `STATUS.md` Lesson 4 in a new place: *an oracle must never be able to charge its own slowness
+to your account.* Here it was charging its own **defect** to the corpus, and the mechanism was a
+sentence rather than a number. The text now names what is not known instead of asserting what is, and
+tells the reader the discriminator: **fetch it with curl before believing it is not ours.**
+
+### The cheap discriminator, and what it found
+
+One `curl` per host with a real Chrome UA separates the whole bucket in about a minute:
+
+```text
+  service.smt.docomo.ne.jp   curl(35)  SSL: unsafe legacy renegotiation disabled   <- open question
+  bill.pitc.com.pk           curl(28)  connection timed out after 20s              <- dead host
+  www.fawanews.sc            curl(60)  cert subject name does not match            <- a browser refuses too
+  playhop.com                http=200  978,840 bytes in 2.5s                       <- OURS
+  www.imdb.com               http=202  0 bytes                                     <- bot wall by another name
+```
+
+Three of four `unreachable` rows really were not rendering work — and they say so now **because they
+were checked**, which is a different epistemic state from a string that said so by default.
+`docomo`'s legacy-renegotiation demand is left as a named question rather than a verdict: a browser
+that accepted unsafe renegotiation to win a site would be trading a security property for a score.
+
+### Gating a transport setting honestly
+
+`G_H2_LARGE_RESPONSE_HEADERS` runs a genuine h2 exchange over loopback (`http2_only` gives prior
+knowledge, so no TLS/ALPN is needed): a hyper h2 server answering with a ~40 KiB header block against
+a client built from `manuk_net::HTTP2_MAX_HEADER_LIST_SIZE`.
+
+- **The control runs FIRST and is asserted** — the same exchange at h2's 16 KiB default must FAIL, so
+  a green can never mean *"the fixture forgot to send big headers"*.
+- **A third assertion pins the constant at ≥256 KiB.** Without it, an edit that shrank the constant
+  *and* the fixture together would still pass the exchange — the gate would move with the bug.
+- **It states its own limit.** It proves the VALUE suffices; it does not prove the one line that
+  hands the constant to the process client, because a cleartext loopback socket negotiates HTTP/1.1
+  and that is a different limit and a different defect. Saying so is cheaper than a gate that quietly
+  claims more than it tests.

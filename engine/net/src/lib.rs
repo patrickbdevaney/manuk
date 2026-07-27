@@ -150,9 +150,40 @@ pub fn runtime() -> &'static tokio::runtime::Runtime {
     })
 }
 
+/// **`SETTINGS_MAX_HEADER_LIST_SIZE` — the largest response header block we will accept.**
+///
+/// `h2`'s default is **16 KiB**, and a response whose headers exceed it is not truncated or
+/// downgraded: the client sends `RST_STREAM(PROTOCOL_ERROR)` and the request fails. The page does not
+/// load slowly or partially. It does not load.
+///
+/// **That is a whole class of sites, and it presented as somebody else's problem.** `playhop.com` — a
+/// HEAD site of `corpus-v2.tsv` — booked `unreachable` in the tick-657 sweep, which the instrument
+/// then attributed out loud to *"a corpus or network problem, not a rendering one"*. `curl` fetched
+/// it in 2.5s and 978 KB. The trace says exactly where it went:
+///
+/// ```text
+///   connected to [2a02:6b8::549]:443 · TLS ok · h2 ok · request sent
+///   h2::proto::streams::recv: stream error REQUEST_HEADER_FIELDS_TOO_LARGE
+///                             -- recv_headers: frame is over size; stream=StreamId(1)
+///   send_reset(reason=PROTOCOL_ERROR, initiator=Library)
+/// ```
+///
+/// `initiator=Library` is the confession: **we** reset the stream. Any origin that answers with a
+/// large header block — a long `Set-Cookie` ladder, a fat CSP, a `Link:` preload list, the ordinary
+/// output of a session-heavy portal — is unreachable to this browser and reads as a dead host.
+///
+/// 256 KiB is **Chrome's announced value**, and the North Star's rule applies unchanged: on
+/// capability, Chromium is the ceiling to MATCH. This is not a tuning knob picked to make one site
+/// work; it is the number the web is built against.
+pub const HTTP2_MAX_HEADER_LIST_SIZE: u32 = 256 * 1024;
+
 fn client() -> &'static NetClient {
     static CLIENT: OnceLock<NetClient> = OnceLock::new();
-    CLIENT.get_or_init(|| Client::builder(TokioExecutor::new()).build(connector()))
+    CLIENT.get_or_init(|| {
+        Client::builder(TokioExecutor::new())
+            .http2_max_header_list_size(HTTP2_MAX_HEADER_LIST_SIZE)
+            .build(connector())
+    })
 }
 
 /// The negotiated HTTP version of a response.

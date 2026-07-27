@@ -30114,3 +30114,85 @@ named its cause (injected scripts fetched after the event loop has already spun 
 ceiling) and did not fix it; it is the one unscored row with a mechanism already written down.
 **(3) `scan_static_import_specifiers` still has a failing unit test on `main`** (t656), and it is
 still not in the wall.
+
+## Tick 658 — `unreachable` was four causes wearing one word, and one of them was ours (2026-07-27)
+
+HYPOTHESIS: t657's certificate says the constraint plainly — **16 of 20 sites UNSCORED**, and only 2
+of those are timeouts. t657's own NEXT named the reachable remainder: 4 `unreachable`, `empty-202`,
+`probe-blocked`, 2 `shell-only`. **Each needs a diagnosis before a fix, not after.** So take the
+biggest bucket and ask, per host, whether the failure is ours — with `curl` and a real Chrome UA,
+which is the cheapest possible discriminator.
+
+```text
+  service.smt.docomo.ne.jp   curl(35)  SSL: unsafe legacy renegotiation disabled
+  bill.pitc.com.pk           curl(28)  connection timed out after 20s        <- dead host, not ours
+  www.fawanews.sc            curl(60)  cert subject name does not match      <- a browser refuses too
+  playhop.com                http=200  978,840 bytes in 2.5s                 <- WE are the problem
+  www.imdb.com               http=202  0 bytes                               <- bot wall by another name
+  www.aparat.com             http=200  88,984 bytes, redirects to /home      <- reachable
+```
+
+**THE INSTRUMENT WAS ASSERTING AN ATTRIBUTION IT NEVER MEASURED.** `Unmeasurable::Unreachable`
+explains itself as *"the request never completed (DNS/TLS/connect/timeout) — no HTTP status exists,
+so this is a corpus or network problem, **not a rendering one**"*. That last clause is a conclusion,
+not an observation, and it was wrong on the very first row examined.
+
+### `playhop.com` — TLS FINE, H2 FINE, REQUEST SENT, AND THEN WE HUNG UP ON IT
+
+```text
+  connecting to [2a02:6b8::549]:443 · connected · TLS ok · h2 ok · request sent
+  h2::proto::streams::recv: stream error REQUEST_HEADER_FIELDS_TOO_LARGE
+                            -- recv_headers: frame is over size; stream=StreamId(1)
+  send_reset(..., reason=PROTOCOL_ERROR, initiator=Library)
+```
+
+**`initiator=Library` is the confession.** `h2`'s default `SETTINGS_MAX_HEADER_LIST_SIZE` is **16
+KiB**, and a response whose header block exceeds it is not truncated, not downgraded and not retried
+— the client sends `RST_STREAM(PROTOCOL_ERROR)` and the navigation fails. The page does not load
+slowly or partially. It does not load, and it looks exactly like a dead host.
+
+That is a **class**, not a site: a long `Set-Cookie` ladder, a fat CSP, a `Link:` preload list — the
+ordinary output of any session-heavy portal. Chrome announces **256 KiB**, and the North Star settles
+the number without a debate: on capability Chromium is the ceiling to MATCH, so this is not a tuning
+knob chosen to make one site work, it is the value the web is built against.
+
+MEASURED, the same URL through the same binary:
+
+```text
+  before   UNMEASURABLE [unreachable] — "a corpus or network problem, not a rendering one"
+  after    sites 1 · scored 1 · h-overflow clean · dead-target clean
+```
+
+**A HEAD site moved from "we cannot measure it" to "measured".** That is the binding constraint
+moving by one, which is the only way it will ever move.
+
+### AND THE OTHER THREE ARE HONESTLY NOT OURS — WHICH IS ALSO A RESULT
+
+`bill.pitc.com.pk` does not answer at all in 20s. `www.fawanews.sc` serves a certificate that does not
+match its own hostname, which a real browser refuses too. `service.smt.docomo.ne.jp` demands legacy
+TLS renegotiation, and *that* one is genuinely open — curl refuses it as unsafe and Chrome reportedly
+loads it, so it is a named question rather than a verdict. Three of four rows are not rendering work,
+and now they say so **because they were checked**, not because a string said so by default.
+
+TICK SHAPE: capability (one HTTP/2 client setting that made a whole class of origins unreachable),
+plus the one-line instrument honesty fix the same measurement falsified. Bar 0 untouched; manuk-net
+suite green (97).
+Gate: `G_H2_LARGE_RESPONSE_HEADERS` (`engine/net/tests/g_h2_large_response_headers.rs`) — a real
+HTTP/2 exchange over loopback: a hyper h2 server answering with a ~40 KiB header block, and a client
+built from `manuk_net::HTTP2_MAX_HEADER_LIST_SIZE`. **Its control runs FIRST and is asserted**: the
+same exchange at h2's 16 KiB default must FAIL, so a green can never mean "the fixture forgot to send
+big headers". RED-proven by lowering the constant to 16 KiB — the exchange dies with
+`GoAway(COMPRESSION_ERROR)`. A third assertion pins the value at ≥256 KiB, because a later edit that
+shrank the constant *and* the fixture together would otherwise still pass.
+⚠ It states its own limit rather than overclaiming: it proves the VALUE suffices through a genuine h2
+handshake, not the one line that hands the constant to the process client — a cleartext loopback
+socket negotiates HTTP/1.1 without ALPN, which has different limits and is not this defect.
+WIKI: `docs/wiki/networking.md` — "we hung up on it".
+PATTERN: origins with large response header blocks.
+
+NEXT: **(1) RE-SWEEP HEAD-20** — one site changed class, and t657's rule says a single reading is not
+a result; the sweep is cheap now that the rows file accumulates and prints its own spread.
+**(2) `service.smt.docomo.ne.jp` — legacy TLS renegotiation**, the one genuinely open question from
+this diagnosis, and it needs Chrome's actual behaviour measured before anything is built (a browser
+that accepts unsafe renegotiation to win a site would be trading a security property for a score).
+**(3) `agoda`'s `render-failed`** still has a mechanism written down at t652 and no fix.
