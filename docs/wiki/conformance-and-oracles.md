@@ -1646,7 +1646,9 @@ fluctuation and had no way to know which it was looking at.
 `rows_from_tsv` collapses repeated rows for a site to the **last** one. That is the right tie-break
 for a resumed or chunked sweep (see its own doc comment — the denominator must not grow every time a
 run is resumed) and it **throws away the only evidence of the spread**, which is why the number above
-had to be rediscovered by hand from a file that already contained it.
+had to be rediscovered by hand from a file that already contained it. *(Tick 673 split that rule: a
+**consecutive** run of repeats now collapses to its median, and last-wins governs only **separated**
+rows. See "the spread was printed for fifteen ticks" below.)*
 
 `fidelity::shape_spreads` reads the accumulated rows and `certificate --rows` prints the block
 **above** the certificate — deliberately, because a reader who sees the headline first has already
@@ -1666,6 +1668,70 @@ min..max, and unscored rows and single readings yield nothing — and is RED-pro
 repeat check, at which point every site reports a range of zero. **A spread that silently becomes
 zero is a noisy number starting to look like a precise one**, which is the failure this whole block
 exists to make impossible.
+
+### The spread was printed for fifteen ticks and nothing consumed it (tick 673)
+
+The block above is a *report*. It sat four lines above a certificate whose per-site rows were still
+single draws, and for fifteen ticks that was fine — until tick 672, when the sweep drew `keirin.jp`
+at **0.048 against a ~0.40 population** and the certificate published it. Three controls on the same
+tree minutes later read 0.400 / 0.351 / 0.402. The next sentence being written was a **35-point
+regression report aimed at the previous tick's own work**, and the only thing that stopped it was a
+human reading the spread block and choosing to run a control.
+
+> **A measurement whose error bar is computed, printed, and not acted on is a decoration.** The
+> instrument knew the number was a draw. Nothing downstream was allowed to know.
+
+**The fix is two halves, and neither works without the other.**
+
+**1. The sweep repeats the sites its own spread says are unstable.** `fidelity::repeat_plan` reads
+the accumulated rows file and names every site whose recorded spread exceeds `SPREAD_UNSTABLE_PTS`
+(**5.0**); `repeat_urls` expands the corpus so those sites are rendered `UNSTABLE_REPEATS` (**3**)
+times **back to back**. On the real HEAD-20 rows that is two sites — `keirin.jp` (Δ 34.9) and
+`www.agoda.com` (Δ 7.7) — for four extra renders on a twenty-site sweep, against a blanket triple-run
+that would cost forty. The five deterministic sites (Δ ≤ 0.3) are left alone.
+
+The threshold sits between two measured populations rather than being tuned: every spread this
+project has recorded is either ≤ 3.7 points or ≥ 7.7. It is deliberately *not* set at keirin's own
+3.7-point calm range, because **a spread only costs the certificate something if it can change a
+term** — all of keirin's calm readings sit the same distance below the 0.75 floor, so repeating that
+site to resolve a 3.7-point wobble would buy precision nobody reads.
+
+The plan is **monotone**: a site that has ever produced a wide draw keeps its repeats. One calm sweep
+is not evidence the tail is gone, and the two costs are not symmetric — being wrong that way costs
+two renders, being wrong the other way costs a phantom regression aimed at the last tick's work.
+
+**2. `rows_from_tsv` collapses a CONSECUTIVE run to its MEDIAN.** This is the half with teeth, and it
+required splitting one rule into two, because *repeat* and *re-measure* are different events that the
+old single rule ran together:
+
+| repeats are… | what they mean | which row survives |
+|---|---|---|
+| **consecutive** (what `repeat_urls` produces) | `n` draws from one distribution, one tree | the **median by shape** |
+| **separated** by other sites (a resumed or crashed sweep) | a **re-measurement** superseding an earlier attempt | the **last** |
+
+Last-wins is still right for the second row — it is how a recovered `crashed` row is superseded once
+the site renders — and it is exactly wrong for the first, where it hands the certificate whichever
+draw the sweep happened to finish on. Only scored draws vote; an even run takes the **lower** middle,
+because a bar must never be cleared by a rounding convention.
+
+**RED-proven, with the real numbers.** `repeat_tests` feeds keirin's three actual readings in the
+order that hurts — `0.400, 0.402, 0.048`, outlier last — and asserts the collapse reads **0.400398**.
+Disabling the median collapse reproduces tick 672's phantom exactly: *"the certificate took 0.047800
+for keirin.jp."* Four of the module's eight tests go red on that one mutation, and the plan half goes
+red independently when the threshold is moved.
+
+**And the change broke the denominator in the same breath.** The first live run of the repeat plan on
+a two-site corpus printed **`sites 4`** — the fixed-denominator rule, cause #1 in the certification
+design's list of historically flattering numbers, broken by the tick that was fixing the numerator.
+The sweep printed its certificate from the rows it had just built while the reader collapsed the
+file, so the two paths disagreed the moment repeats existed. Both now go through one public
+`collapse_repeats`, and a reconciliation test asserts they reach the same denominator and the same
+per-site score.
+
+> Nothing caught that but the accounting. **8 of 30 process defects in this project were caught by a
+> number that did not add up, and not by any gate** — this is the ninth, and it was found by reading
+> the output of the change rather than by trusting that the tests covering the new rule also covered
+> the old one.
 
 ### The general form, which is the fourth time this project has paid for it
 

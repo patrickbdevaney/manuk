@@ -31174,3 +31174,90 @@ exceeds a threshold and take the median, and leave the deterministic five alone.
 the fidelity instrument (agent territory) and it is the difference between a certificate and a draw.
 **(2) `<link>.sheet`**, the honest remainder of t665's bridge. **(3)**
 `scan_static_import_specifiers`'s failing unit test — fourteenth report.
+
+## Tick 673 — the certificate took ONE draw from a distribution it had already measured as wide (2026-07-27)
+
+HYPOTHESIS: t672's NEXT #1 and constitution-check #50's steer #1, verbatim: **make the sweep repeat
+the sites its own spread block says are unstable, and take the median.** t672 measured `keirin.jp` at
+0.048 against a ~0.40 population and I was one paragraph from reporting a 35-point regression against
+my own previous tick; three controls on the same tree read 0.400 / 0.351 / 0.402. The spread block
+(t657) already *computes* which sites those are — it has been printing them for fifteen ticks and
+nothing has ever consumed the number. A certificate whose per-site row is a single draw from a
+distribution the instrument has itself measured as 35 points wide is not a measurement of that site.
+
+Two halves, and the second is the one with teeth:
+
+1. **`repeat_plan`** — the sweep reads its own accumulated rows and renders a site `UNSTABLE_REPEATS`
+   times, consecutively, when that site's recorded spread exceeds `SPREAD_UNSTABLE_PTS`. Every draw
+   still lands in the rows file, so the spread block keeps the evidence that produced the decision.
+2. **`rows_from_tsv` collapses a CONSECUTIVE run to its MEDIAN**, not to its last row. Last-wins is
+   correct *across* runs (a re-measure supersedes a crash) and is exactly wrong *within* one, where
+   it hands the certificate whichever draw the sweep happened to finish on.
+
+FALSIFIABLE BAR: a rows file carrying keirin's three real readings in the order `0.400, 0.402, 0.048`
+must collapse to **0.400**. Under today's last-wins it collapses to 0.048 — the 35-point phantom
+regression, reproduced as a unit test. That is the RED.
+
+### WHAT LANDED
+
+**`repeat_plan` / `repeat_urls`** — the sweep reads its own accumulated rows file and expands the
+corpus so every site with a recorded spread above `SPREAD_UNSTABLE_PTS` (5.0) is rendered
+`UNSTABLE_REPEATS` (3) times **back to back**. On the real HEAD-20 rows that is **two sites** —
+`keirin.jp` (Δ 34.9) and `www.agoda.com` (Δ 7.7) — four extra renders on a twenty-site sweep. A
+blanket triple-run would have cost forty to buy precision on the five sites already at Δ ≤ 0.3.
+
+The threshold is placed between two measured populations, not tuned: every spread this project has
+recorded is either ≤ 3.7 pts or ≥ 7.7. It is deliberately NOT keirin's own 3.7-pt calm range, because
+**a spread only costs the certificate something if it can change a TERM** — all of keirin's calm
+readings sit the same distance below the 0.75 floor. The plan is monotone: a site that has ever drawn
+wide keeps its repeats, because the two errors are not symmetric (two renders vs a phantom regression).
+
+**`rows_from_tsv` collapses a CONSECUTIVE run to its MEDIAN.** One rule had to become two, because
+*repeat* and *re-measure* are different events it was running together: consecutive rows are `n`
+draws from one distribution (median wins); rows separated by other sites are a re-measurement
+superseding an earlier attempt (last wins — it is how a recovered `crashed` row is superseded). Only
+scored draws vote. An even run takes the LOWER middle, because a bar must not be cleared by a
+rounding convention.
+
+**THE RED, and it is tick 672 reproduced.** `repeat_tests` feeds keirin's three real readings in the
+order that hurts — `0.400, 0.402, 0.048`, outlier last — and asserts 0.400398. With the collapse
+disabled: *"the certificate took 0.047800 for keirin.jp."* **4 of 8 tests go red on that one
+mutation**; the plan half goes red independently when the threshold is moved (ikea's 0.29 joins the
+plan). Full manuk-wpt lib suite 62/62. End-to-end wiring proven against a seeded rows file: the
+`⟳ REPEAT-UNSTABLE` line prints and the site is fetched three times, the stable one once.
+
+### AND THE CHANGE BROKE THE DENOMINATOR IN THE SAME BREATH
+
+The first live run printed **`sites 4` for a two-site corpus.** The sweep prints its certificate from
+the `Vec<Fidelity>` it just built; the reader collapses the file — so the two paths disagreed the
+instant repeats existed, and the fixed-denominator rule (cause #1 in the certification design's list
+of historically flattering numbers) was broken *by the tick that was fixing the numerator*.
+
+> **Nothing caught it but the accounting.** Eight of thirty process defects here were caught by a
+> number that did not add up rather than by a gate; this is the ninth. Eight unit tests covering the
+> new rule all passed while the sweep it was built for reported double. It was found by *reading the
+> output of the change* — the same move t670 made when four log lines ended three ticks of inference.
+
+Fixed by making the collapse ONE public function (`collapse_repeats`) that both paths call, plus a
+reconciliation test asserting file-path and in-memory path reach the same denominator, the same
+order, and the same per-site score.
+
+TICK SHAPE: infrastructure (the fidelity instrument — it multiplies every future certificate, and
+this is the term that decides Phase-0 exit). Bar 0 untouched; no engine source changed — the diff is
+`tests/wpt/` only, so the G1 wall gate (no `--rows-out`, hence no accumulated file, hence no plan)
+costs exactly nothing.
+Gates: `repeat_tests` in `tests/wpt/src/fidelity.rs` — 8 tests, RED-proven twice by two independent
+mutations (collapse disabled → 4 red; threshold moved → 1 red). ⚠ **manuk-wpt is NOT in verify.sh's
+`_crate_suite` list**, so its unit gates — including t583-591's falsify pass and t657's spread tests —
+do not run on the wall. Observer-owned; noted, not touched. Run with `cargo test -p manuk-wpt --lib`.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "the spread was printed for fifteen ticks and nothing
+consumed it", with the repeat-vs-re-measure table and the denominator reconciliation.
+PATTERN: measurement instruments that compute an error bar and do not act on it.
+
+NEXT: **(1) RUN THE SWEEP THAT EXERCISES THIS** — the change is proven at the unit and wiring level
+but no live certificate has yet been computed with repeats in it; keirin's row is the falsifiable
+claim and only a real HEAD-20 run settles it. **(2) THEN THE UNSCORED ROWS BY CATEGORY**, per check
+#50's steer #2 — the reachable set is `thin-overlap` (ours, a coverage gap) and `shell-only` (a
+`file://`-origin limit in the probe itself); bot-walls are a decided ceiling and dead hosts are not
+ours. Do not start another single-site arc without naming which unscored CATEGORY it converts.
+**(3)** `<link>.sheet`, the honest remainder of t665's bridge.

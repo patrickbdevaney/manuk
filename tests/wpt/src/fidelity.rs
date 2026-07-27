@@ -643,14 +643,29 @@ pub fn recover_inflight(rows: &Path) -> Option<String> {
 /// this is deliberately NOT a full round-trip of `Fidelity`, because a partial reader that silently
 /// returned zeros for the visual score would let a later report print a number nobody measured.
 ///
-/// **A site appearing twice is ONE site, and the LAST row wins.** The file is append-only and
-/// resumable, so a sweep that crashed at site 11 and was re-run contributes two rows for sites 1-10
-/// — and `certificate()` takes `sites` straight from `rows.len()`, so without this the denominator
-/// would *grow* every time a run was resumed. That is the fixed-denominator rule failing in the
-/// generous direction instead of the flattering one, which is no better: a denominator nobody chose
-/// is the defect, whichever way it moves. Last-wins is the right tie-break because the later row is
-/// the re-measurement — in particular it is how a recovered `crashed` row is superseded once the
-/// site is successfully rendered on a later pass.
+/// **A site appearing twice is ONE site.** The file is append-only and resumable, so a sweep that
+/// crashed at site 11 and was re-run contributes two rows for sites 1-10 — and `certificate()` takes
+/// `sites` straight from `rows.len()`, so without this the denominator would *grow* every time a run
+/// was resumed. That is the fixed-denominator rule failing in the generous direction instead of the
+/// flattering one, which is no better: a denominator nobody chose is the defect, whichever way it
+/// moves.
+///
+/// **Which row survives depends on whether the repeat was a RE-MEASURE or a REPEAT, and those are
+/// two different events that the old single rule ran together.**
+///
+/// * **Across** occurrences — rows separated by other sites — the LAST wins. The later row is the
+///   re-measurement: it is how a recovered `crashed` row is superseded once the site is successfully
+///   rendered on a later pass, and how a resumed sweep's second attempt beats its first.
+/// * **Within** one consecutive run — which is what [`repeat_urls`] deliberately produces for a site
+///   the spread block calls unstable — the **MEDIAN by SHAPE** wins. Those rows are `n` draws from
+///   one distribution on one tree, and last-wins hands the certificate whichever draw the sweep
+///   happened to finish on. Tick 672 measured `keirin.jp` at **0.048 against a ~0.40 population**;
+///   three controls minutes later on the same tree read 0.400 / 0.351 / 0.402. Under last-wins, a
+///   sweep that drew the outlier last would have published a 35-point regression against the
+///   previous tick's own work. The median is the whole point of paying for the repeats.
+///
+/// With an even count there is no middle element and the **LOWER** of the two is taken. A bar must
+/// never be cleared by a rounding convention.
 pub fn rows_from_tsv(path: &Path) -> Result<Vec<Fidelity>> {
     let text = std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
     let mut out = Vec::new();
@@ -686,20 +701,36 @@ pub fn rows_from_tsv(path: &Path) -> Result<Vec<Fidelity>> {
             unmeasurable: f.get(8).and_then(|v| Unmeasurable::from_tag(v)),
         });
     }
-    // Collapse repeats to ONE row per site, keeping the LAST — see this function's doc comment.
+    Ok(collapse_repeats(out))
+}
+
+/// **ONE ROW PER SITE**, by the two rules `rows_from_tsv` documents: a consecutive run collapses to
+/// its median, and what survives that collapses last-wins.
+///
+/// Public, and called by the SWEEP as well as by the reader, because those two used to disagree the
+/// moment repeats existed. The sweep prints its own certificate from the `Vec<Fidelity>` it just
+/// built, and the first live run of [`repeat_urls`] duly reported **`sites 4`** for a two-site
+/// corpus — the fixed-denominator rule broken by the very change that was supposed to make the
+/// numerator honest. Reconciliation caught it, not a gate, which is this project's most informative
+/// statistic and the reason the collapse is a shared function rather than a step in a reader.
+pub fn collapse_repeats(rows: Vec<Fidelity>) -> Vec<Fidelity> {
+    // A CONSECUTIVE run of one site is `n` draws from one distribution: collapse it to its median
+    // BEFORE the last-wins pass ever sees it. Doing it in this order is what keeps the two rules
+    // from fighting — the median settles a repeat, last-wins then settles a re-measure.
+    let rows = collapse_consecutive_repeats(rows);
     // Order follows FIRST appearance, so an accumulated file still reads in sweep order.
     let mut order: Vec<String> = Vec::new();
     let mut latest: std::collections::HashMap<String, Fidelity> = std::collections::HashMap::new();
-    for r in out {
+    for r in rows {
         if !latest.contains_key(&r.name) {
             order.push(r.name.clone());
         }
         latest.insert(r.name.clone(), r);
     }
-    Ok(order
+    order
         .into_iter()
         .filter_map(|n| latest.remove(&n))
-        .collect())
+        .collect()
 }
 
 /// **The SHAPE spread of every site this file measured more than once** — `(name, min, max, runs)`,
@@ -778,6 +809,134 @@ pub fn spread_report(rows_text: &str) {
         "    A per-site delta smaller than that site's own spread is NOISE, not a result. Live \n\
          \x20   pages move between runs; only a fixture is entitled to a single reading."
     );
+}
+
+/// Collapse every MAXIMAL CONSECUTIVE run of one site to a single row: the **median by SHAPE**.
+///
+/// Only the *scored* draws vote. A run of three where one bot-walled was measured twice, and letting
+/// the unscored row take part would either drag the median down by counting a non-number as low or
+/// — worse — let a `-` row win the middle position and erase two real measurements. If a run has no
+/// scored draw at all the LAST row is kept, which is exactly the old behaviour for the population
+/// that never had a number to take a median of.
+fn collapse_consecutive_repeats(rows: Vec<Fidelity>) -> Vec<Fidelity> {
+    let mut out: Vec<Fidelity> = Vec::with_capacity(rows.len());
+    let mut run: Vec<Fidelity> = Vec::new();
+    let flush = |run: &mut Vec<Fidelity>, out: &mut Vec<Fidelity>| {
+        if run.is_empty() {
+            return;
+        }
+        if run.len() == 1 {
+            out.push(run.remove(0));
+            return;
+        }
+        let mut scored: Vec<usize> = (0..run.len()).filter(|&i| run[i].shape.is_some()).collect();
+        if scored.is_empty() {
+            out.push(run.pop().expect("run is non-empty"));
+            run.clear();
+            return;
+        }
+        scored.sort_by(|&a, &b| {
+            run[a]
+                .shape
+                .unwrap_or(f64::NAN)
+                .total_cmp(&run[b].shape.unwrap_or(f64::NAN))
+        });
+        // (k - 1) / 2 is the LOWER middle when k is even. See `rows_from_tsv`'s doc comment: a
+        // certificate that rounds toward its own bar is the flattering direction, and this file
+        // exists to close those.
+        let pick = scored[(scored.len() - 1) / 2];
+        out.push(run[pick].clone());
+        run.clear();
+    };
+    for r in rows {
+        if run.first().is_some_and(|f: &Fidelity| f.name != r.name) {
+            flush(&mut run, &mut out);
+        }
+        run.push(r);
+    }
+    flush(&mut run, &mut out);
+    out
+}
+
+/// The SHAPE spread, **in points**, above which a site's certificate row may not come from one draw.
+///
+/// Placed between two measured populations rather than picked to land a number. Tick 657 re-ran two
+/// live sites three times each on one unchanged tree and got `keirin.jp` Δ**3.7 pts**, `www.ikea.com`
+/// Δ**0.3 pts**; tick 672's eight-site spread block put five of eight sites at Δ ≤ 0.3 and produced
+/// `keirin.jp` Δ**34.9 pts**. So 5.0 is comfortably above every spread that has ever been merely
+/// noisy and a factor of seven below the one that was catastrophic.
+///
+/// The reason it is not set at 3.7 — keirin's own honest run-to-run range — is that a spread only
+/// costs the certificate something if it could change a TERM, and every one of keirin's calm
+/// readings (0.367…0.404) sits the same distance below [`CERT_SHAPE_FLOOR`]. Repeating a site whose
+/// wobble cannot flip a verdict buys precision nobody reads and triples the cost of the sweep.
+pub const SPREAD_UNSTABLE_PTS: f64 = 5.0;
+
+/// How many times an unstable site is rendered in one sweep. Odd on purpose — an even count has no
+/// middle draw, and the whole value of the repeat is that the middle draw exists.
+pub const UNSTABLE_REPEATS: usize = 3;
+
+/// The host key a sweep row is filed under, derived from the URL.
+///
+/// Extracted rather than left inline because [`repeat_plan`] matches accumulated ROW NAMES against
+/// URLs from the corpus file, and a plan whose keys are computed a second, slightly different way is
+/// a plan that silently matches nothing — the failure would read as "no site is unstable", which is
+/// the answer that requires no work and is therefore the one that must not be reachable by accident.
+pub fn site_name(url: &str) -> String {
+    url.trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .split('/')
+        .next()
+        .unwrap_or(url)
+        .to_string()
+}
+
+/// **Which sites this sweep must render more than once, and how many times** — read from the
+/// instrument's own accumulated rows.
+///
+/// [`shape_spreads`] has computed and printed this population since tick 657 and **nothing has ever
+/// consumed it.** That is the gap tick 672 fell into: the block correctly reported `keirin.jp
+/// 0.0478 .. 0.3972  Δ 34.9 pts`, immediately below a certificate whose keirin row was one draw from
+/// that same range.
+///
+/// The plan is **monotone by construction** — a site that has ever produced a wide draw keeps its
+/// repeats, because one calm sweep is not evidence the tail is gone. The cost of being wrong that
+/// way is two extra renders; the cost of being wrong the other way is a phantom regression aimed at
+/// the previous tick's work, which this project has now nearly published three times.
+pub fn repeat_plan(rows_text: &str) -> Vec<(String, usize, f64)> {
+    shape_spreads(rows_text)
+        .into_iter()
+        .filter(|(_, min, max, _)| (max - min) * 100.0 > SPREAD_UNSTABLE_PTS)
+        .map(|(name, min, max, _)| (name, UNSTABLE_REPEATS, (max - min) * 100.0))
+        .collect()
+}
+
+/// Expand a sweep's URL list so every unstable site appears [`UNSTABLE_REPEATS`] times **in a row**.
+///
+/// Consecutive, not scattered: `rows_from_tsv` takes the median of a *consecutive* run and last-wins
+/// across separated ones, so interleaving the repeats would feed them to the wrong rule and the
+/// sweep would have paid for three renders to publish the last of them.
+///
+/// Returns the expanded list and the plan that produced it, so the caller can PRINT what it did. A
+/// sweep that silently rendered one site three times would show up only as a longer wall clock.
+pub fn repeat_urls(urls: &[String], rows_text: &str) -> (Vec<String>, Vec<(String, usize, f64)>) {
+    let plan = repeat_plan(rows_text);
+    if plan.is_empty() {
+        return (urls.to_vec(), plan);
+    }
+    let mut out = Vec::with_capacity(urls.len() + plan.len() * UNSTABLE_REPEATS);
+    for u in urls {
+        let name = site_name(u);
+        let n = plan
+            .iter()
+            .find(|(p, ..)| *p == name)
+            .map(|&(_, n, _)| n)
+            .unwrap_or(1);
+        for _ in 0..n {
+            out.push(u.clone());
+        }
+    }
+    (out, plan)
 }
 
 /// Print the certificate block — the one place a sweep's headline is allowed to come from.
@@ -2522,5 +2681,274 @@ supjav.com\t-\t-\t0\t0\t0\t0\t0\tbot-wall-403
             shape_spreads("").is_empty() && shape_spreads("#only a header\n").is_empty(),
             "an empty or header-only file must yield no spread rows"
         );
+    }
+}
+
+/// **G_UNSTABLE_SITE_IS_MEASURED_NOT_DRAWN** — the certificate may not take one draw from a
+/// distribution this instrument has already measured as wide.
+///
+/// The whole module is one tick-672 reading, reproduced: `keirin.jp` scored **0.048** in a sweep
+/// whose own spread block, printed four lines above the certificate, said that site ranges over
+/// **34.9 points**. Nothing consumed the spread, so the draw became the score, and the next sentence
+/// I was writing was a 35-point regression report aimed at my own previous tick.
+#[cfg(test)]
+mod repeat_tests {
+    use super::{
+        repeat_plan, repeat_urls, rows_from_tsv, Fidelity, Unmeasurable, SPREAD_UNSTABLE_PTS,
+        UNSTABLE_REPEATS,
+    };
+
+    /// Write a rows file the way a sweep does, so the test exercises the real parser and not a
+    /// hand-built `Vec<Fidelity>` that could disagree with what is on disk. Named after the case so
+    /// two tests running in parallel cannot read each other's file — a shared path here would make
+    /// these tests flake in exactly the way they exist to stop the sweep flaking.
+    fn rows_file(case: &str, body: &str) -> std::path::PathBuf {
+        let p =
+            std::env::temp_dir().join(format!("manuk-repeat-{case}-{}.tsv", std::process::id()));
+        std::fs::write(&p, body).expect("write rows");
+        p
+    }
+
+    fn shape_of(rows: &[Fidelity], name: &str) -> Option<f64> {
+        rows.iter().find(|r| r.name == name)?.shape
+    }
+
+    /// **THE RED.** keirin's three real readings, in the order that hurts: the outlier LAST. Under
+    /// the old last-wins collapse the certificate reads 0.048 and the loop publishes a 35-point
+    /// regression. The median is 0.400 — which is where keirin has sat all session (t657 0.3996,
+    /// t659 0.3972, t672's three controls 0.400 / 0.351 / 0.402).
+    #[test]
+    fn a_consecutive_run_collapses_to_its_median_not_its_last_draw() {
+        let p = rows_file(
+            "median-last",
+            "#name\tcoverage\tshape\th\to\tr\td\tshape_n\treason\n\
+             keirin.jp\t0.714\t0.400398\t3\t5\t27\t0\t502\t\n\
+             keirin.jp\t0.712\t0.402000\t3\t5\t27\t0\t500\t\n\
+             keirin.jp\t0.700\t0.047800\t3\t5\t27\t0\t479\t\n",
+        );
+        let rows = rows_from_tsv(&p).expect("parse");
+        assert_eq!(
+            rows.len(),
+            1,
+            "three draws of one site are ONE site, got {}",
+            rows.len()
+        );
+        let got = shape_of(&rows, "keirin.jp").expect("scored");
+        assert!(
+            (got - 0.400398).abs() < 1e-9,
+            "the certificate took {got:.6} for keirin.jp. The median of its three draws is 0.400398; \
+             0.047800 is the LAST draw, and publishing it is the 35-point phantom regression of tick 672."
+        );
+    }
+
+    /// The other order, because a collapse that only happens to be right when the outlier is last is
+    /// not a median. Outlier FIRST must land on the same number.
+    #[test]
+    fn the_median_does_not_depend_on_which_draw_was_unlucky() {
+        let p = rows_file(
+            "median-first",
+            "keirin.jp\t0.700\t0.047800\t3\t5\t27\t0\t479\t\n\
+             keirin.jp\t0.714\t0.400398\t3\t5\t27\t0\t502\t\n\
+             keirin.jp\t0.712\t0.402000\t3\t5\t27\t0\t500\t\n",
+        );
+        let got = shape_of(&rows_from_tsv(&p).expect("parse"), "keirin.jp").expect("scored");
+        assert!(
+            (got - 0.400398).abs() < 1e-9,
+            "median changed to {got:.6} when the outlier moved to the front — that is a position \
+             rule wearing a median's name"
+        );
+    }
+
+    /// **The rule the median must not break.** Rows separated by another site are a RESUME, not a
+    /// repeat: the later row is a re-measurement and supersedes. Collapsing those to a median would
+    /// blend a crashed run's tree with the current one — and would resurrect the exact denominator
+    /// bug `rows_from_tsv` was written to close.
+    #[test]
+    fn separated_rows_are_a_re_measure_and_the_later_one_still_wins() {
+        let p = rows_file(
+            "separated",
+            "a.example\t0.5\t0.100000\t0\t0\t0\t0\t400\t\n\
+             b.example\t0.5\t0.500000\t0\t0\t0\t0\t400\t\n\
+             a.example\t0.9\t0.600000\t0\t0\t0\t0\t400\t\n",
+        );
+        let rows = rows_from_tsv(&p).expect("parse");
+        assert_eq!(rows.len(), 2, "two sites, three rows -> two rows");
+        let got = shape_of(&rows, "a.example").expect("scored");
+        assert!(
+            (got - 0.600000).abs() < 1e-9,
+            "a separated repeat read {got:.6} — the median blended a superseded run into the \
+             current one instead of letting the re-measurement win"
+        );
+    }
+
+    /// A `crashed` row followed immediately by a successful render is ONE measurement, not two, and
+    /// the measurement wins. An unscored draw that could vote in a median would let a bot-wall erase
+    /// two real numbers by sitting in the middle.
+    #[test]
+    fn an_unscored_draw_does_not_vote_in_the_median() {
+        let p = rows_file(
+            "unscored-vote",
+            "a.example\t-\t-\t0\t0\t0\t0\t0\tcrashed\n\
+             a.example\t0.9\t0.600000\t0\t0\t0\t0\t400\t\n\
+             a.example\t-\t-\t0\t0\t0\t0\t0\tbot-wall-403\n",
+        );
+        let rows = rows_from_tsv(&p).expect("parse");
+        assert_eq!(rows.len(), 1);
+        let got = shape_of(&rows, "a.example");
+        assert_eq!(
+            got,
+            Some(0.600000),
+            "the run's only real measurement lost to an unscored row: {got:?}"
+        );
+        // ...and a run with NO number at all keeps the LAST row, which is the old behaviour for the
+        // population that never had a median to take.
+        let p2 = rows_file(
+            "all-unscored",
+            "a.example\t-\t-\t0\t0\t0\t0\t0\tcrashed\n\
+             a.example\t-\t-\t0\t0\t0\t0\t0\tbot-wall-403\n",
+        );
+        let rows2 = rows_from_tsv(&p2).expect("parse");
+        assert_eq!(rows2.len(), 1);
+        assert_eq!(
+            rows2[0].unmeasurable,
+            Some(Unmeasurable::BotWall(403)),
+            "a run of unscored draws must keep the LAST reason, not the first"
+        );
+    }
+
+    /// **An even run takes the LOWER middle.** There is no middle draw to take, and a certificate
+    /// that resolves its own ambiguity upward is one that can be cleared by a rounding convention.
+    #[test]
+    fn an_even_run_rounds_away_from_the_bar() {
+        let p = rows_file(
+            "even-run",
+            "a.example\t0.9\t0.700000\t0\t0\t0\t0\t400\t\n\
+             a.example\t0.9\t0.800000\t0\t0\t0\t0\t400\t\n",
+        );
+        let got = shape_of(&rows_from_tsv(&p).expect("parse"), "a.example").expect("scored");
+        assert!(
+            (got - 0.700000).abs() < 1e-9,
+            "an even run resolved to {got:.6}; 0.80 clears CERT_SHAPE_FLOOR and 0.70 does not, so \
+             taking the upper middle would let a tie decide a certificate term"
+        );
+    }
+
+    /// The plan is read from the instrument's OWN accumulated rows: only the sites whose measured
+    /// spread exceeds the threshold, and nobody else. A blanket triple-run would triple a 30-minute
+    /// sweep to buy precision on the five sites that are already deterministic.
+    #[test]
+    fn only_the_sites_the_spread_block_calls_unstable_are_repeated() {
+        const ROWS: &str = "\
+keirin.jp\t0.714\t0.397200\t0\t0\t0\t0\t500\t
+www.ikea.com\t1.0\t0.518625\t0\t0\t0\t0\t698\t
+keirin.jp\t0.700\t0.047800\t0\t0\t0\t0\t479\t
+www.ikea.com\t1.0\t0.515759\t0\t0\t0\t0\t698\t
+www.desitales2.com\t1.0\t0.637124\t0\t0\t0\t0\t598\t
+";
+        let plan = repeat_plan(ROWS);
+        let names: Vec<&str> = plan.iter().map(|(n, ..)| n.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["keirin.jp"],
+            "the plan must name keirin (Δ 34.9 pts) and NOT ikea (Δ 0.3) or desitales2 (one \
+             reading): {plan:?}"
+        );
+        assert_eq!(plan[0].1, UNSTABLE_REPEATS);
+        assert!(
+            plan[0].2 > SPREAD_UNSTABLE_PTS,
+            "the plan reported a spread of {:.1} pts, which is not above its own threshold",
+            plan[0].2
+        );
+
+        // The expansion is CONSECUTIVE — `rows_from_tsv` medians a consecutive run and last-wins
+        // across separated ones, so scattered repeats would be fed to the wrong rule entirely.
+        let urls: Vec<String> = ["https://keirin.jp/", "https://www.ikea.com/"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let (expanded, _) = repeat_urls(&urls, ROWS);
+        assert_eq!(
+            expanded,
+            vec![
+                "https://keirin.jp/",
+                "https://keirin.jp/",
+                "https://keirin.jp/",
+                "https://www.ikea.com/",
+            ],
+            "keirin must appear {UNSTABLE_REPEATS}× BACK TO BACK and ikea exactly once"
+        );
+
+        // No history, no plan — the two-site wall gate must not start rendering anything three times
+        // because a file happened not to exist.
+        assert!(repeat_plan("").is_empty());
+        assert_eq!(repeat_urls(&urls, "").0, urls);
+    }
+
+    /// **RECONCILIATION: a repeated site is still ONE site in the denominator.**
+    ///
+    /// Found by running the change, not by a gate. The first live sweep under [`repeat_urls`]
+    /// rendered a two-site corpus and printed **`sites 4`** — the fixed-denominator rule, which is
+    /// cause #1 in the certification design's list of historically flattering numbers, broken by the
+    /// tick that was fixing the numerator. The sweep prints its certificate from the rows it just
+    /// built; the reader prints one from the file. **Both must reach the same denominator**, so both
+    /// go through `collapse_repeats` and this test is what keeps them there.
+    #[test]
+    fn repeats_do_not_inflate_the_denominator_on_either_path() {
+        const BODY: &str = "\
+unstable.invalid\t0.7\t0.400398\t0\t0\t0\t0\t500\t
+unstable.invalid\t0.7\t0.402000\t0\t0\t0\t0\t500\t
+unstable.invalid\t0.7\t0.047800\t0\t0\t0\t0\t479\t
+stable.invalid\t1.0\t0.637124\t0\t0\t0\t0\t598\t
+";
+        let p = rows_file("denominator", BODY);
+        let from_file = rows_from_tsv(&p).expect("parse");
+        // The in-process path: the same four draws as the sweep loop accumulates them, in order.
+        let drawn: Vec<Fidelity> = BODY
+            .lines()
+            .filter(|l| !l.is_empty())
+            .map(|l| {
+                let f: Vec<&str> = l.split('\t').collect();
+                let mut r = Fidelity::unmeasured(f[0], Unmeasurable::Crashed);
+                r.shape = f[2].parse().ok();
+                r.unmeasurable = None;
+                r
+            })
+            .collect();
+        let in_memory = super::collapse_repeats(drawn);
+        assert_eq!(
+            (from_file.len(), in_memory.len()),
+            (2, 2),
+            "four draws of two sites must be TWO rows on BOTH paths — got file {} / memory {}. \
+             `sites 4` for a two-site corpus is the fixed-denominator rule failing.",
+            from_file.len(),
+            in_memory.len()
+        );
+        for (a, b) in from_file.iter().zip(in_memory.iter()) {
+            assert_eq!(a.name, b.name, "the two paths disagree about site ORDER");
+            assert_eq!(
+                a.shape, b.shape,
+                "the two paths disagree about {}'s score — one of them is not collapsing",
+                a.name
+            );
+        }
+        assert_eq!(
+            super::certificate(&from_file).sites,
+            2,
+            "the certificate's own `sites` term counted the repeats"
+        );
+    }
+
+    /// The plan's keys come from `site_name`, and so do the sweep's row names. If those two ever
+    /// diverge the plan matches nothing, the sweep repeats nobody, and the failure reads as "no site
+    /// is unstable" — the answer that requires no work.
+    #[test]
+    fn the_plan_keys_the_same_way_the_sweep_names_its_rows() {
+        for (url, want) in [
+            ("https://keirin.jp/", "keirin.jp"),
+            ("http://www.ikea.com/gb/en/", "www.ikea.com"),
+            ("https://a.example", "a.example"),
+        ] {
+            assert_eq!(super::site_name(url), want, "site_name({url})");
+        }
     }
 }

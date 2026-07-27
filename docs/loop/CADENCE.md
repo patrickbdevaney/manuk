@@ -15,7 +15,7 @@
 | median tick cycle | **21m** | 429 intervals |
 | median, last 10 | **25m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.10** | 389.4h elapsed |
+| **ticks per hour** | **1.10** | 389.8h elapsed |
 | median verify wall | **63s** | 369 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **211** capability ticks, median cycle **21m**
-* median diff per tick: **+234 / −34** lines across 8 files
+* median diff per tick: **+236 / −34** lines across 8 files
 
 ## Every tick
 
@@ -526,6 +526,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **669** | 2026-07-27 08:58 | 12m | measurement | 63s | +161/−33 | 333 | 81 | 56.0% · | `pump_page_fetches` is not the site, it is the victim (2026-07-27) |
 | **670** | 2026-07-27 09:21 | 24m | capability | 63s | +184/−33 | 333 | 81 | 56.0% · | four log lines ended three ticks of inference, and two of them were mine and wrong (2026-0 |
 | **671** | 2026-07-27 09:48 | 27m | capability | 63s | +315/−33 | 334 | 81 | 56.0% · | the settle loop had no clock in it at all (2026-07-27) |
-| **672** | 2026-07-27 10:25 | 36m | measurement | 63s | +199/−33 | 334 | 81 | 56.0% · | a 35-point "regression" that the control cleared in three runs (2026-07-27) |
+| **672** | 2026-07-27 10:54 | 65m | measurement | 63s | +641/−26 | 334 | 81 | 56.0% · | a 35-point "regression" that the control cleared in three runs (2026-07-27) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

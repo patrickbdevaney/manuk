@@ -200,7 +200,8 @@
   - L1622 · Why a live site is not a fixture
   - L1637 · This does not retract the deltas that were real
   - L1644 · The instrument now carries it
-  - L1670 · The general form, which is the fourth time this project has paid for it
+  - L1672 · The spread was printed for fifteen ticks and nothing consumed it (tick 673)
+  - L1736 · The general form, which is the fourth time this project has paid for it
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1154,4 +1155,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1069 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1070 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

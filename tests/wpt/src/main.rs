@@ -484,14 +484,41 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
         }
     };
 
-    for url in urls.split(',').map(str::trim).filter(|u| !u.is_empty()) {
-        let name = url
-            .trim_start_matches("https://")
-            .trim_start_matches("http://")
-            .split('/')
-            .next()
-            .unwrap_or(url)
-            .to_string();
+    // ── A SITE THE INSTRUMENT HAS MEASURED AS UNSTABLE DOES NOT GET A SINGLE DRAW.
+    //
+    // The spread block has printed which sites those are since tick 657 and nothing consumed it.
+    // Tick 672 is what that costs: `keirin.jp` read **0.048 against a ~0.40 population** and the
+    // certificate published it as that site's score. Three controls on the same tree minutes later
+    // read 0.400 / 0.351 / 0.402, so the sweep's number was a draw, not a measurement — and it was
+    // one paragraph away from being reported as a 35-point regression against the previous tick.
+    //
+    // The repeats are CONSECUTIVE because `rows_from_tsv` takes the median of a consecutive run and
+    // last-wins across separated ones; scattering them would pay for three renders and publish the
+    // last. And this is deliberately keyed on `--rows-out`: without an accumulated file there is no
+    // spread to read, so the two-site G1 wall gate is untouched and costs nothing.
+    let mut sweep_urls: Vec<String> = urls
+        .split(',')
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .map(str::to_string)
+        .collect();
+    if let Some(p) = &rows_out {
+        if let Ok(text) = std::fs::read_to_string(p) {
+            let (expanded, plan) = manuk_wpt::fidelity::repeat_urls(&sweep_urls, &text);
+            for (name, n, pts) in &plan {
+                eprintln!(
+                    "  ⟳ REPEAT-UNSTABLE: {name} rendered {n}× this sweep (recorded spread {pts:.1} pts > {:.1}); \
+                     the certificate takes the MEDIAN of the run, not the last draw",
+                    manuk_wpt::fidelity::SPREAD_UNSTABLE_PTS
+                );
+            }
+            sweep_urls = expanded;
+        }
+    }
+
+    for url in &sweep_urls {
+        let url = url.as_str();
+        let name = manuk_wpt::fidelity::site_name(url);
         // Everything the previous site earned goes to disk before this one is allowed to touch the
         // engine, and only then do we claim this site as in-flight.
         flush(&rows, &mut flushed);
@@ -991,7 +1018,13 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
     // The certificate, computed by the thing that measured it. Printed on every run — a two-site G1
     // gate run says "2 sites" and is obviously not a corpus read, which is better than a headline that
     // only appears when someone remembers to ask for it.
-    manuk_wpt::fidelity::certificate_report(&rows);
+    //
+    // **Collapsed first, and that is not a formality.** `report` above is per-site diagnostics and
+    // wants every draw; the CERTIFICATE is a fixed denominator and a repeated site is still ONE
+    // site. The first live run of the repeat plan printed `sites 4` for a two-site corpus — the
+    // change meant to make the numerator honest broke the denominator in the same breath, and it
+    // was the accounting that said so. Both certificate paths now go through one collapse.
+    manuk_wpt::fidelity::certificate_report(&manuk_wpt::fidelity::collapse_repeats(rows.clone()));
     // (`--rows-out` is written incrementally by `flush` above, so a 265-site sweep split into
     // timeout-isolated chunks — or interrupted by a crash — still yields ONE certificate via
     // `manuk-wpt certificate --rows FILE` instead of 53 stanzas for a human to add up.)
