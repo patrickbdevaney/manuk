@@ -204,13 +204,17 @@ fn a_script_error_is_never_swallowed() {
     // keeps catching. The frame name can only come from the engine's own `Error.stack`, so it cannot
     // be satisfied by formatting a guess.
     //
-    // ⚠ The file name is `inline.js`, not the document URL: SpiderMonkey compiles every inline
-    // `<script>` under that one constant name (`run_one_script`), so `inline.js:13` is ambiguous
-    // across a page with forty inline scripts. That is the HONEST REMAINDER of this tick and it is
-    // recorded here rather than asserted away — the line/column and the stack are real and specific,
-    // and the file name is a separate, named gap. Chrome reports the document URL here.
+    // The file names the DOCUMENT and this script's own ordinal — `https://silent.test/ inline#N`
+    // (tick 679). It was the constant `inline.js` for every inline script on every page, which this
+    // gate recorded as its honest remainder rather than asserting away: the line, the column and the
+    // stack frames were real and specific, and the FILE named a line in an unnamed one of forty.
+    // `inline.js:1:155` is not an address, it is an address-shaped string.
+    //
+    // Line and column stay SCRIPT-relative — SpiderMonkey compiles each inline script as its own
+    // source, and claiming document-relative numbers we do not compute would be a worse lie than the
+    // one being fixed. See `g_script_error_has_a_location`, which says so explicitly.
     assert!(
-        deferred.contains(" at ") && deferred.contains(":13:"),
+        deferred.contains(" at ") && deferred.contains("silent.test") && deferred.contains(":13:"),
         "G_SILENT_FAIL: the deferred throw was logged WITHOUT its address. An error that is \
          REPORTED but not ATTRIBUTABLE is a status, not a finding — an anonymous `TypeError` sat in \
          this project's log for ten ticks for exactly this reason.\n  line: {deferred}"
@@ -219,6 +223,14 @@ fn a_script_error_is_never_swallowed() {
         deferred.contains("setTimeout"),
         "G_SILENT_FAIL: the deferred throw carries no stack frame, so the report can say WHERE but \
          not THROUGH WHAT.\n  line: {deferred}"
+    );
+    // ...and the name DISTINGUISHES this script from the others in the same document. A source name
+    // shared by every inline script is not an address; the ordinal is what makes it one.
+    assert!(
+        deferred.contains("inline#"),
+        "G_SILENT_FAIL: the reported file does not identify WHICH inline script threw. Every inline \
+         `<script>` on every page compiled under the one constant `inline.js`, so a line number in a \
+         page with forty of them located nothing.\n  line: {deferred}"
     );
     println!("DEFERRED: {deferred}");
 }

@@ -9549,7 +9549,8 @@ pub fn run_scripts(
         } else {
             set_current_script(Some(*node));
             rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
-            let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"inline.js".to_owned(), 1);
+            let opts =
+                CompileOptionsWrapper::new(runtime.cx_no_gc(), inline_script_source_name(*node), 1);
             match evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts) {
                 Ok(()) => {}
                 Err(()) => {
@@ -11700,12 +11701,40 @@ fn run_one_script(
     } else {
         set_current_script(Some(node));
         rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
-        let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"inline.js".to_owned(), 1);
+        let opts =
+            CompileOptionsWrapper::new(runtime.cx_no_gc(), inline_script_source_name(node), 1);
         if evaluate_script(runtime.cx(), global, src, rval.handle_mut(), opts).is_err() {
             tracing::warn!(error = %pending_exception(raw_cx), "a page <script> threw");
         }
         set_current_script(None);
     }
+}
+
+/// **The source name an inline `<script>` compiles under** — the document URL plus this script's own
+/// ordinal, e.g. `https://playhop.com/ inline#12`.
+///
+/// It was the constant `c"inline.js"` for every inline script on every page, which is what tick 675's
+/// gate caught while asserting the opposite claim: the line and column and stack frames were real and
+/// specific, and the FILE named a line in an unnamed one of forty. `inline.js:1:155` is not an
+/// address; it is an address-shaped string. Chrome reports the document URL here, and that is what
+/// makes a minified production stack actionable at all.
+///
+/// The ordinal is the script element's own arena index, so it is stable across a document and a reader
+/// can map a frame back to the element that produced it. Line and column stay **script-relative** —
+/// SpiderMonkey compiles each inline script as its own source, and claiming document-relative numbers
+/// we do not compute would be a worse lie than the one being fixed (see
+/// `g_script_error_has_a_location`, which says so explicitly).
+#[cfg(feature = "_sm")]
+fn inline_script_source_name(node: NodeId) -> std::ffi::CString {
+    let url = DOC_URL.with(|u| u.borrow().clone());
+    let name = if url.is_empty() {
+        format!("inline#{}", node.index())
+    } else {
+        format!("{url} inline#{}", node.index())
+    };
+    // A NUL cannot appear in a URL we produced, but a document URL is attacker-controlled input and
+    // the honest failure here is the old constant, not a panic on the load path.
+    std::ffi::CString::new(name).unwrap_or_else(|_| c"inline.js".to_owned())
 }
 
 /// Publish `window.<id>` for every element the document currently carries. See `__publishNamed` in

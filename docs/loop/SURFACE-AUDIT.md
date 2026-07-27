@@ -2139,3 +2139,90 @@ ticks instead of every one.*
 **Standing note, fifth audit running:** `map-reconcile.sh` searches `engine agent tests` and not
 `shell/`, so the eight gates living as `#[test] fn` in `shell/src/media.rs` and `shell/src/audio.rs`
 remain invisible to it. Harness-owned; reported, not touched.
+
+## Audit #40 — tick 679
+
+**Sources read (2026-07-27, not from memory):**
+
+- [Interop 2026 — web.dev](https://web.dev/blog/interop-2026) — the full list of 20 focus areas and
+  4 investigation efforts, fetched rather than recalled.
+- [Announcing Interop 2026 — WebKit](https://webkit.org/blog/17818/announcing-interop-2026/) ·
+  [Launching Interop 2026 — Mozilla](https://hacks.mozilla.org/2026/02/launching-interop-2026/) ·
+  [Igalia](https://www.igalia.com/news/interop-2026.html)
+- [Baseline 2026 — web.dev](https://web.dev/baseline/2026) plus the monthly digests (Jan/Mar/Apr/May
+  2026) — what is considered safe-to-use TODAY.
+- [This Month in Ladybird — June 2026](https://ladybird.org/newsletter/2026-06-30/) — the independent
+  engine's own account of what is hard, and in what order.
+
+**The frame check, first: is our map inside the right frame?**
+
+All **20 Interop 2026 focus areas** are on `CONSTELLATION.tsv`, with a status:
+
+```text
+anchor positioning · container style queries · dialogs+popovers · scroll-driven animations
+view transitions · attr() · contrast-color() · custom highlights · fetch uploads+ranges
+IndexedDB · JSPI · media pseudo-classes · Navigation API · scoped custom element registries
+scroll snap · shape() · web compat · WebRTC · WebTransport · zoom
+```
+
+…and 3 of the 4 investigation efforts (WebVTT gated, JPEG XL missing, mobile testing out of scope as
+a desktop-first engine). The fourth — **accessibility testing** — is represented by capability rows
+(`a11y node STATES`, `a11y interactive roles`, `accessibility / semantic tree`) but not as a *testing*
+concern, which is the honest reading: we gate a11y *behaviour* and have no a11y *conformance* suite.
+Recorded, not inflated into a row we would not act on.
+
+**Ladybird's account is worth one sentence, because it is the only other team walking this exact
+path:** their hard set is *"complex web apps, WebAssembly-heavy sites, and some modern CSS layouts"*,
+and their named biggest challenge is **web compatibility against undocumented engine quirks** — not
+spec conformance. That is the same ordering this project reached from its own measurements (the app
+web and the certificate's `thin-overlap` rows, not the CSS tail), which is mild corroboration that the
+frame is right. They crossed 90% of all WPT subtests in Oct 2025.
+
+**WHAT WE HAD BEEN WRONG ABOUT — one FALSE YES, and it is a shape, not an instance.**
+
+Probing the five Baseline-2026 CSS features the map did not name turned up a new instance of the
+false-YES class:
+
+```text
+sibling-index() / sibling-count()   calc dropped (784px auto)  ·  supports=false   HONEST no
+random()                            calc dropped (784px auto)  ·  supports=false   HONEST no
+reading-flow                        computed undefined         ·  supports=false   HONEST no
+text-box / -trim / -edge            40px box measured 46px     ·  supports=false   HONEST no
+corner-shape                        computed UNDEFINED         ·  supports=TRUE    ** FALSE YES **
+```
+
+⚠ **All eight `corner-*-shape` LONGHANDS were already on `PARSE_ONLY_LONGHANDS`, and the SHORTHAND was
+not.** `honest_supports` subtracts what this list names and a page asks about whichever spelling it
+writes — so listing every longhand of a property and not its shorthand corrects *nothing for the
+spelling authors actually use*. `mask-position` is the same shape against `mask-position-x`/`-y`.
+
+**The rule, stated so it can be applied rather than remembered:** *a shorthand must answer NO iff
+EVERY one of its longhands is parse-only.* `mask` deliberately does **not** qualify — `mask-image` is
+real (the icon-mask paint phase reads it) — so answering no there would be a **false NO**, which costs
+a page its enhancement branch just as surely as a false yes costs it a fallback. `G_ZOOM_AND_PROBE_PINS`
+now asserts `supMask=true` for exactly that reason: without it, a blanket fix that listed every mask
+shorthand would pass.
+
+This is **"one rule, N implementations — fix one, GREP FOR THE OTHER"**, ninth occurrence.
+
+**ADDED (5 rows, every one with a MEASURED verdict rather than `unknown`):**
+`sibling-index()/sibling-count()` · `random()` · `reading-flow` · `text-box/-trim/-edge` ·
+`corner-shape/mask-position shorthand honesty` (the last one **gated**, since the honesty of the
+answer is what landed — the feature is still missing and says so).
+
+**CORRECTED:** `corner-shape` and `mask-position` added to `PARSE_ONLY_LONGHANDS`; four new assertions
+in `G_ZOOM_AND_PROBE_PINS`, including the over-correction guard.
+
+**Gate-vs-map diff, both directions:**
+```text
+  gate files under engine/{page,net}/tests/ : 335   (was 336 at #39; two scratch probes removed)
+  map rows                                  : 388   (was 383; +5 from this audit)
+  map -> gate drift                         : 0     (map-reconcile.sh: RECONCILED)
+  machine-validated claims                  : 286 -> 287
+  bucket arithmetic (OK+floor+missing==rows): 388/388  ✓
+  constellation unknowns                    : 0     (the five new rows landed MEASURED)
+```
+
+**Standing note, sixth audit running:** `map-reconcile.sh` searches `engine agent tests` and not
+`shell/`, so the eight gates living as `#[test] fn` in `shell/src/media.rs` and `shell/src/audio.rs`
+remain invisible to it. Harness-owned; reported, not touched.

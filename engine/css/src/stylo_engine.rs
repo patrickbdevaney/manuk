@@ -2077,6 +2077,23 @@ const PARSE_ONLY_LONGHANDS: &[&str] = &[
     "animation-range-start",
     "animation-timeline",
     "contain",
+    // ── **THE SHORTHANDS WERE MISSED WHILE ALL EIGHT OF THEIR LONGHANDS WERE LISTED** (surface
+    // audit #34, tick 679). `CSS.supports('corner-shape','squircle')` answered **true** and
+    // `getComputedStyle(el).cornerShape` is `undefined`; same for `mask-position` against
+    // `mask-position-x`/`-y` below. This list names LONGHANDS, `honest_supports` subtracts what it
+    // names, and a page asks about whichever spelling it uses — so listing every longhand of a
+    // property and not the shorthand leaves the false YES fully intact for the spelling authors
+    // actually write.
+    //
+    // **The rule, stated so it can be applied rather than remembered: a shorthand must answer NO iff
+    // EVERY one of its longhands is parse-only.** `mask` deliberately does NOT qualify — `mask-image`
+    // is real (the icon-mask paint phase reads it), so `mask` is partly implemented and answering no
+    // would be a false NO, which costs a page its enhancement branch just as surely.
+    //
+    // This is "one rule, N implementations — fix one, GREP FOR THE OTHER", which is now the ninth
+    // time that class has fired here.
+    "corner-shape",
+    "mask-position",
     "corner-bottom-left-shape",
     "corner-bottom-right-shape",
     "corner-end-end-shape",

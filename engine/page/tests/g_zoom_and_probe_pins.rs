@@ -55,6 +55,18 @@ const HTML: &str = r##"<!doctype html><html><head><style>
   // ── …so the honest answer is YES, and `text-justify` (read by nothing) is NO.
   R.push('supZoom=' + CSS.supports('zoom','2'));
   R.push('supTj=' + CSS.supports('text-justify','inter-word'));
+  // ── **A SHORTHAND MUST ANSWER NO IFF EVERY ONE OF ITS LONGHANDS IS PARSE-ONLY**
+  //    (surface audit #34). All eight `corner-*-shape` longhands were on `PARSE_ONLY_LONGHANDS`
+  //    and the SHORTHAND was not, so `CSS.supports('corner-shape','squircle')` answered TRUE
+  //    while `getComputedStyle(el).cornerShape` is `undefined` — the false YES left fully intact
+  //    for the spelling authors actually write. Same for `mask-position` vs `mask-position-x/-y`.
+  R.push('supCornerShape=' + CSS.supports('corner-shape','squircle'));
+  R.push('supCornerLonghand=' + CSS.supports('corner-top-left-shape','squircle'));
+  R.push('supMaskPosition=' + CSS.supports('mask-position','10px 20px'));
+  //    ...and NOT over-corrected: `mask` does not qualify, because `mask-image` is real (the
+  //    icon-mask paint phase reads it). Answering no there would be a false NO, which costs a page
+  //    its enhancement branch just as surely as a false yes costs it a fallback.
+  R.push('supMask=' + CSS.supports('mask','none'));
   // ── The pins: capabilities measured this tick, so a later audit does not re-derive them.
   R.push('screen=' + (screen && screen.width > 0 && screen.colorDepth > 0));
   R.push('orient=' + (screen && screen.orientation && screen.orientation.type));
@@ -117,6 +129,32 @@ fn zoom_is_real_and_the_supports_answer_now_matches_the_engine() {
             "supTj=false",
             "**THE FALSE YES, CORRECTED**, found by the same probe and pointing the other way. \
              `text-justify` is parsed natively by Stylo and read by nothing here",
+        ),
+        (
+            "supCornerShape=false",
+            "**THE SHORTHAND FALSE YES** (surface audit #34). All eight `corner-*-shape` LONGHANDS \
+             were on `PARSE_ONLY_LONGHANDS` and the SHORTHAND was not, so this answered TRUE while \
+             `getComputedStyle(el).cornerShape` is `undefined` — the false yes left fully intact for \
+             the spelling authors actually write. Listing every longhand of a property and not its \
+             shorthand corrects nothing",
+        ),
+        (
+            "supCornerLonghand=false",
+            "the longhand must stay honest too — this is the assertion that catches a 'fix' that \
+             swapped the shorthand in for the longhands rather than adding it",
+        ),
+        (
+            "supMaskPosition=false",
+            "same shape: `mask-position-x` and `mask-position-y` are both parse-only, so the \
+             shorthand must answer no as well",
+        ),
+        (
+            "supMask=true",
+            "**AND NOT OVER-CORRECTED.** `mask` does NOT qualify for the rule — `mask-image` is real \
+             (the icon-mask paint phase reads it), so `mask` is partly implemented. Answering no here \
+             would be a FALSE NO, which costs a page its enhancement branch just as surely as a false \
+             yes costs it a fallback. Without this assertion, blanket-listing every mask shorthand \
+             would pass",
         ),
         // ── Pins: measured this tick so the next audit does not re-derive them.
         (

@@ -31763,3 +31763,111 @@ outcome to be *playhop gets 12s instead of 26s*, which may make coverage WORSE b
 work makes it better — say which it was. **(2) `dynamic scripts` at 7.7s with gave_up=3 is the largest
 single phase of `finish_loading`** and it is the non-convergence, not the network. **(3) NAME THE
 INLINE SCRIPTS** (`run_one_script`'s `c"inline.js"`), still owed from t675.
+
+## Tick 679 — every inline script on every page compiled under one name (2026-07-27)
+
+HYPOTHESIS: t675's and t678's owed NEXT — `run_one_script`'s `c"inline.js"`. This is the third tick in
+a row whose finding was READ OFF A LOG LINE, and each time the line was less specific than it looked:
+
+```text
+t675  uncaught (reported): DEFERRED_BOOM at inline.js:13:42
+t677  TypeError: … window.__appData__ is undefined at inline.js:1:155
+```
+
+**`inline.js:1:155` is not an address, it is an address-shaped string.** The line, the column and the
+stack frames have been real since t666 (native boundary) and t675 (the JS paths); the FILE named a line
+in an unnamed one of forty. t675's gate recorded that as its honest remainder instead of asserting it
+away, which is exactly why closing it took one edit rather than a re-investigation. **A named residue
+is a work item; an unnamed one is a rediscovery.**
+
+FALSIFIABLE BAR: the reported file must identify the DOCUMENT and WHICH inline script. RED = the
+constant.
+
+### WHAT LANDED
+
+`inline_script_source_name(node)` — the document URL (`DOC_URL`) plus the script element's own arena
+index, at both compile sites (`run_one_script` and the older `run_scripts` path):
+
+```text
+uncaught (reported): DEFERRED_BOOM: a timer callback threw at https://silent.test/ inline#12:13:42
+```
+
+The ordinal is stable across a document, so a frame maps back to the element that produced it. Chrome
+reports the document URL here, which is what makes a minified production stack actionable at all.
+
+⚠ **Line and column stay SCRIPT-relative** — SpiderMonkey compiles each inline script as its own
+source, so `:13:` is that script's thirteenth line, not the document's. Claiming document-relative
+numbers we do not compute would be a worse lie than the one being fixed;
+`g_script_error_has_a_location`'s `:2:`/`:3:` assertion is written against the script-relative
+numbering on purpose and still passes.
+
+A document URL is attacker-controlled input, so a NUL falls back to the old constant rather than
+panicking on the load path. **The honest failure for a source NAME is a worse name, never a dead page.**
+
+### SURFACE AUDIT #40 — DUE THIS TICK (every 10; last #39 at t669)
+
+Full record in `docs/loop/SURFACE-AUDIT.md`. Sources FETCHED, not recalled: Interop 2026 (web.dev +
+WebKit + Mozilla + Igalia), Baseline 2026 and its monthly digests, and Ladybird's June-2026 newsletter.
+
+**The frame check passes.** All **20 Interop 2026 focus areas** are already on `CONSTELLATION.tsv`
+with a status, as are 3 of the 4 investigation efforts. The fourth, *accessibility testing*, is
+represented as a11y BEHAVIOUR rows and not as a conformance-suite concern — which is the honest state
+(we gate a11y behaviour and have no a11y conformance suite), recorded rather than inflated into a row
+we would not act on. `map-reconcile.sh`: **RECONCILED, 0 drift rows** — the 26 the board named are gone.
+
+⚠ **WHAT WE HAD BEEN WRONG ABOUT — a new FALSE YES, and it is a SHAPE, not an instance.** Probing the
+five Baseline-2026 CSS features the map did not name:
+
+```text
+sibling-index()/sibling-count()   calc dropped (784px auto) · supports=false   HONEST no
+random()                          calc dropped (784px auto) · supports=false   HONEST no
+reading-flow                      computed undefined        · supports=false   HONEST no
+text-box / -trim / -edge          40px box measured 46px    · supports=false   HONEST no
+corner-shape                      computed UNDEFINED        · supports=TRUE    ** FALSE YES **
+```
+
+**All eight `corner-*-shape` LONGHANDS were on `PARSE_ONLY_LONGHANDS`; the SHORTHAND was not.**
+`honest_supports` subtracts what that list names, and a page asks about whichever spelling it writes —
+so listing every longhand of a property and not its shorthand corrects **nothing for the spelling
+authors actually use**. `mask-position` is the same shape against `mask-position-x`/`-y`.
+
+**THE RULE, stated so it can be applied rather than remembered: a shorthand answers NO iff EVERY one
+of its longhands is parse-only.** `mask` deliberately does NOT qualify — `mask-image` is real (the
+icon-mask paint phase reads it) — so answering no there would be a FALSE NO, which costs a page its
+enhancement branch just as surely. `G_ZOOM_AND_PROBE_PINS` asserts `supMask=true` for exactly that
+reason: without it a blanket fix listing every mask shorthand would pass. Ninth occurrence of *one
+rule, N implementations — fix one, GREP FOR THE OTHER.*
+
+Five rows ADDED, every one with a **measured** verdict rather than `unknown`; constellation unknowns
+stay at 0.
+
+TICK SHAPE: capability (error attribution — it feeds meta-instrument #1, the unhandled-error
+harvester, which cannot rank by cause if every cause has the same address). `engine/js` only.
+Bar 0 untouched.
+Gates: `G_SILENT_FAIL` — the deferred-throw line must contain the document host AND `inline#` AND the
+script-relative `:13:`, all on the SAME line. RED-proven by restoring the constant.
+`g_script_error_has_a_location` still green, which is the assertion that could have broken.
+WIKI: `docs/wiki/js-engine.md` — "every inline script on every page compiled under one name".
+PATTERN: none — this is attribution, not a web pattern. [no-pattern]
+
+⚠ HARNESS NOTE (observer-owned, not touched): the first wall run of this tick went RED on **G3** and
+**G_INTERACT** while the same run's `T · crate tests` section reported `manuk-shell: 74 passed`. Both
+are the known shell-suite contention false-RED (`wall-false-red-shell-rebuild`), and this time it
+survived all THREE of verify.sh's quiet retries — the box had been carrying back-to-back release LTO
+links and live fidelity sweeps for an hour (load1 2.74). Re-measured serially on a quiet box (load1
+0.33) with the wall's exact invocation, twice: **74 passed, 0 failed** both times. Re-ran the wall
+rather than trusting either verdict, because a RED that clears on a re-measure is only a false RED once
+the re-measure has actually been done.
+
+NEXT: **(1) THE PER-CALL LOAD BUDGET, and it now has a measured shape and a named RISK.** t678's ledger
+showed `load_async` 12.2s + `finish_loading` 13.6s under a stated 12s ceiling, because each call reads
+`load_budget()` and starts its own clock. ⚠ **A naive scope fix is a CAPABILITY LOSS, not a win:**
+`load_async` spends 5.5s of that on `initial images+masks` — an ENHANCEMENT — before `finish_loading`
+gets to run `dynamic scripts`, which is what builds the DOM. Sharing one deadline with the priority
+inverted means playhop renders LESS. The tick is therefore *the enhancement phases must not precede the
+document-building phases*, and the blocker is that **9 gate files call `load_async` without ever
+calling `finish_loading`** (`g_error_subresource`, `g_framing`, `g_esm_*`, `g_defer`,
+`g_error_document`, `g_module_base_url`), so moving them is a nine-gate question and not a two-line
+one. Size it as a full tick; do not smuggle it. **(2) `dynamic scripts` 7.7s with `gave_up=3` is the
+largest single phase and it is NON-CONVERGENCE, not the network.** **(3)** `<link>.sheet`, t665's
+remainder.

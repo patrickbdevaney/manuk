@@ -2007,3 +2007,43 @@ with the page**: the chain stops, and the count stays put while the page tries t
 Bounding the last three means an early-out inside `run_deferred` once the page is already flagged,
 which risks starving a page that spins once and would have converged later. **That is a capability
 trade**, it is not made here, and it is written into the gate as a named residual.
+
+## Every inline script on every page compiled under one name (tick 679)
+
+`run_one_script` passed the constant `c"inline.js"` as the compile-options source name, so a page with
+forty inline `<script>` blocks produced forty sources all called `inline.js`. The reports that come
+out of it read:
+
+```text
+uncaught (reported): DEFERRED_BOOM at inline.js:13:42
+TypeError: can't access property "innerHTML", window.__appData__ is undefined at inline.js:1:155
+```
+
+**`inline.js:1:155` is not an address. It is an address-shaped string.** The line, the column and the
+stack frames were real and specific the whole time — tick 666 lifted them on the native boundary and
+tick 675 in the JS paths — and the file named a line in an unnamed one of forty. This is the honest
+remainder tick 675's gate *recorded* rather than asserted away, which is why it took one edit to close
+instead of a re-investigation.
+
+The name is now the document URL plus the script element's own arena index:
+
+```text
+uncaught (reported): DEFERRED_BOOM: a timer callback threw at https://silent.test/ inline#12:13:42
+```
+
+The ordinal is stable across a document, so a reader can map a frame back to the element that produced
+it. Chrome reports the document URL here, which is what makes a minified production stack actionable.
+
+⚠ **Line and column stay SCRIPT-relative.** SpiderMonkey compiles each inline script as its own
+source, so `:13:` is the thirteenth line *of that script*, not of the document. Claiming
+document-relative numbers we do not compute would be a worse lie than the one being fixed —
+`g_script_error_has_a_location` says so explicitly, and its `:2:`/`:3:` assertion is written against
+the script-relative numbering on purpose.
+
+A document URL is attacker-controlled input, so a NUL in it falls back to the old constant rather than
+panicking on the load path. The honest failure for a source *name* is a worse name, never a dead page.
+
+`G_SILENT_FAIL` asserts the reported file contains both the document host and `inline#`, RED-proven by
+restoring the constant.
+
+[[dom-semantics]] [[conformance-and-oracles]]
