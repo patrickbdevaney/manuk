@@ -48,6 +48,11 @@ AGE_DAYS=$(( ( NOW_EPOCH - SRC_EPOCH ) / 86400 ))
 SWEEP_ACTIVE=0
 pgrep -x manuk-wpt >/dev/null 2>&1 && SWEEP_ACTIVE=1
 [ $(( NOW_EPOCH - SRC_EPOCH )) -lt 180 ] && SWEEP_ACTIVE=1
+# INCOMPLETE sweep (a mid-write partial OR a KILLED partial that settled): treat as not-usable. A killed
+# 146/265 run has no live process and an aged mtime, so the two checks above miss it — guard on ROW COUNT
+# vs the corpus size. Below ~80% of the corpus is not a corpus reading; never record or diff against it.
+EXPECTED=$(grep -cvE '^[[:space:]]*#|^[[:space:]]*$' docs/bench/oracle-corpus.txt 2>/dev/null || echo 265)
+[ "${EXPECTED:-0}" -gt 0 ] && [ "${TOT:-0}" -lt $(( EXPECTED * 8 / 10 )) ] && SWEEP_ACTIVE=1
 
 # ── prior row (for trend + trap detection) ────────────────────────────────────────────────────────────
 PREV=""; [ -f "$LEDGER" ] && PREV=$(grep -vE '^(iso|#)' "$LEDGER" 2>/dev/null | tail -1)
@@ -67,8 +72,13 @@ fi
 
 # ── verdict / alerts (shared by both modes) ────────────────────────────────────────────────────────────
 alerts=""
-[ "$AGE_DAYS" -ge 2 ] && alerts="${alerts}STALE-SWEEP: corpus sweep is ${AGE_DAYS}d old ($SWEEP_ISO) — re-run manuk-wpt fidelity so scorability/coverage trend stays live\n"
-if [ -n "$PREV" ] && [ "$SWEEP_ISO" != "$p_sweep" ]; then
+# STALENESS is measured from the last COMPLETE recorded sweep (the ledger), NOT the raw results.tsv mtime
+# — a mid-write or killed partial makes the mtime look fresh while we actually have no new corpus reading.
+LAST_COMPLETE_EPOCH=$(date -d "$p_sweep" +%s 2>/dev/null || echo 0)
+LEDGER_AGE_DAYS=$(( ( NOW_EPOCH - LAST_COMPLETE_EPOCH ) / 86400 ))
+[ "${LAST_COMPLETE_EPOCH:-0}" -gt 0 ] && [ "$LEDGER_AGE_DAYS" -ge 2 ] && alerts="${alerts}STALE-SWEEP: no COMPLETE corpus sweep in ${LEDGER_AGE_DAYS}d (last recorded $p_sweep) — the AGENT should re-run the full sweep (observer no longer runs it: perf-gate contention)\n"
+# regression/trap only make sense COMPLETE-vs-COMPLETE: never diff a partial (SWEEP_ACTIVE) against the ledger
+if [ "$SWEEP_ACTIVE" = 0 ] && [ -n "$PREV" ] && [ "$SWEEP_ISO" != "$p_sweep" ]; then
   awk "BEGIN{exit !($SCOR < $p_scor)}" && alerts="${alerts}SCORABILITY-REGRESSED: scorable ${p_scor} -> ${SCOR} (fewer sites measurable — investigate, not progress)\n"
   # denominator trap: coverage up while scorability down => the rise is composition, not rendering
   if awk "BEGIN{exit !($COVP > $p_covp && $SCOR < $p_scor)}"; then
