@@ -28873,3 +28873,60 @@ PATTERN: `docs/loop/WEB-PATTERNS.md` — "the second document that was not a nod
 NEXT: **htmx / `XPathEvaluator`** is the named open blocker. The real-library method is now 3-for-3
 on high-blast-radius finds and remains the cheapest instrument on the board — more bundles (Angular,
 Svelte's runtime, Google Tag Manager, a consent manager, Google Maps JS) is the obvious continuation.
+
+## Tick 644 — `document.evaluate` / XPathEvaluator: a real subset that refuses the rest (2026-07-26)
+
+HYPOTHESIS: t643 named htmx 2.0.4 as the one library still dead — `ReferenceError: XPathEvaluator is
+not defined`, thrown during its own evaluation, so `window.htmx` is never defined. Seven more bundles
+run first (marked, handlebars, mustache, moment, preact, d3, quill) and **all seven work**, so the
+real-library method's yield is dropping and the named blocker is the remaining item.
+
+htmx's usage is tight and entirely at module top level:
+`(new XPathEvaluator).createExpression('.//*[@*[ starts-with(name(), "hx-on:") or … ]]')`, then
+`expr.evaluate(el)` and `result.iterateNext()`.
+
+**The EME precedent does NOT transfer, and saying why is the design.** There, the interface could
+exist and *grant nothing*, because "no key system is supported" is a truthful answer a caller
+handles. An XPath evaluator has no equivalent refusal that lets htmx work — it either returns the
+right nodes or it lies. So the honest shape is a **real evaluator over a documented subset that
+THROWS for anything outside it**: a page using unsupported XPath gets a clear error instead of
+silently wrong nodes, which is the same discipline `canPlayType` applies to codecs it cannot decode.
+
+**LANDED. htmx 2.0.4 BOOTS** — `htmx:object`, `version:2.0.4`, `htmx.find('#app')` ok — and its own
+expression selects **exactly the two `hx-on:` elements and not the plain sibling**. `document.evaluate`
+answers `//li`, `//*[@id]`, `//li[@class='a']`, `//li[2]`, relative `.//li`, `not()`, `contains()`,
+and the snapshot/singleNode surfaces. `count(//li)`, `|` unions, `ancestor::`, `position()` and
+arithmetic all throw `SyntaxError`.
+
+**THE REFUSALS ARE HALF THE GATE, AND THEY ARE WHAT MAKE THE REST TRUSTWORTHY.** Without them,
+*"it returned some nodes"* is not evidence of anything.
+
+**THE RED PROBE THAT LANDED IS THE ONE THAT MATTERS:** dropping the attribute step's inner predicate —
+the exact shape a stub takes — gives `hxFinds:3:BUTTON,SPAN,I`. The plain `<i>` joins the set. That
+is why the claim asserts a **count and the names**, not merely "non-empty": a returns-everything
+implementation and a returns-nothing implementation are both caught, and either would have looked
+like success from htmx's side (it would boot, and wire up the wrong handlers or none).
+
+⚠ **THE SECOND RED PROBE WAS NOT RUN, AND IS RECORDED AS UNRUN.** Two attempts to mutate `bad()`
+into returning `[]` were killed mid-build by the harness; the mutation was reverted and the gate
+re-verified green. My expectation for it is *reasoned*, not measured, and the header table says so.
+Writing it up as a probe would be exactly the failure t633 paid for — a tabulated mutation that
+never ran, in a doc written by the person who wanted it to have run.
+
+⚠ Also recorded: the second kill removed my own backup file as part of its cleanup, leaving the
+mutation in the tree. Caught by re-reading the function rather than trusting the restore. **A revert
+that is part of a killable command is not a revert.**
+
+TICK SHAPE: capability (XPath lands as a real subset with an explicit refusal contract, and the last
+dead library from the t642-644 sweep now boots). Bar 0 improved — a ReferenceError that killed a
+whole library removed. No ratchet floor moved; eight DOM/JS gates re-run green.
+Gates: **G_XPATH_SUBSET** (`engine/page/tests/g_xpath_subset.rs`, 16 claims — 11 positive, 5
+refusals, plus a blanket never-returns-a-node-set-for-unparseable-XPath assertion; 1 RED mutation
+run, 1 recorded as unrun).
+WIKI: `docs/wiki/js-engine.md` — "a subset that refuses is not a stub".
+PATTERN: `docs/loop/WEB-PATTERNS.md` — "the top-level ReferenceError that kills a library".
+
+NEXT: every library measured across t642-644 now boots. The real-library method's yield fell to zero
+on its fourth tier (7/7 clean), which is the signal to change instrument rather than run a fifth.
+Still open: the **Opus decoder**, our latency on the placement half, and t629's
+`getBoundingClientRect()` on an SVG child.

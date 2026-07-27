@@ -5524,3 +5524,30 @@ visible.
 **And the design rule.** When a real mechanism for something already exists in the tree, a second
 "lightweight" one beside it is not a shortcut — it is a divergence that will be found by a library,
 not by a test. Route the shim through the real thing and delete it.
+
+## The top-level ReferenceError that kills a library (tick 644)
+
+**The class:** a library that touches a platform global **at module top level**, outside any
+feature-detect. htmx 2.0.4 builds an `XPathEvaluator` expression as a module constant. One missing
+global, and the `ReferenceError` propagates out of the bundle's own evaluation — so it never defines
+`window.htmx`, and nothing on the page reports why. Not a degraded feature: no library.
+
+This is the same silent-total-failure shape as jQuery's node-type guard, reached by a different
+route, and it is why *"does the bundle define its global?"* is the cheapest single question to ask of
+any library.
+
+**The design rule this produced, which generalises past XPath:**
+
+> **"Define the interface, refuse the capability" is honest only where refusal is a valid answer.**
+> It works for EME — *"no key system is supported"* is something a player can act on. It does **not**
+> work for an API whose contract is to *return the right data*: a stub XPath evaluator returning an
+> empty node-set makes the library boot and then wire up nothing, which is strictly worse than the
+> ReferenceError it replaced, because the failure moves from loud to silent.
+>
+> For those APIs the honest partial implementation is **correct over a documented subset, and an
+> explicit error outside it.**
+
+**And gate the refusals as hard as the results.** A partial implementation's refusals are what make
+its answers trustworthy — without them, "it returned some nodes" is not evidence. Assert **counts and
+identities**, never non-emptiness: the two failure modes are *returns everything* and *returns
+nothing*, and only an exact expectation catches both.

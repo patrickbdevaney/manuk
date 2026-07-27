@@ -6099,6 +6099,12 @@ pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<()
     // installing this before `URL` exists would silently drop it and leave `video.src` unable to
     // ever name a MediaSource.
     eval(rt, global, crate::mse_js::MSE_JS, "mse.js")?;
+    // **XPath (tick 644).** After `dom_bindings`' install — it needs `document` and `DOMException`.
+    // htmx builds its `hx-on:` expression at module TOP LEVEL, so an absent `XPathEvaluator` is a
+    // ReferenceError that kills the whole library before it ever defines `window.htmx`.
+    // A real subset that THROWS on anything outside it; see `xpath_js` for why a stub would be
+    // worse than the ReferenceError it replaces.
+    eval(rt, global, crate::xpath_js::XPATH_JS, "xpath.js")?;
     eval(
         rt,
         global,

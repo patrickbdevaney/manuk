@@ -1549,6 +1549,7 @@ pub mod reflect_js;
 pub mod reflect_table;
 #[cfg(feature = "_sm")]
 pub mod traversal_js;
+pub mod xpath_js;
 
 /// N2 (host half) — History API state model; no JS engine dependency, always built.
 pub mod history_host;

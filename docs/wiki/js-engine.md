@@ -1811,3 +1811,42 @@ owned by that document while unattached.
 
 Result: `<img src=x onerror=alert(1)><b>ok</b>` → `<img src="x"><b>ok</b>`. Handler stripped, safe
 content kept.
+
+## A subset that refuses is not a stub (tick 644)
+
+htmx 2.0.4 was completely dead: `ReferenceError: XPathEvaluator is not defined`, thrown during its
+own evaluation, so `window.htmx` was never defined. Its entire use of XPath is **one expression at
+module top level**:
+
+```js
+const Ct = (new XPathEvaluator).createExpression(
+  './/*[@*[ starts-with(name(), "hx-on:") or starts-with(name(), "data-hx-on:") or … ]]');
+```
+
+**The tick-641 EME precedent does not transfer, and the reason is the design.** There, the interface
+could exist while *granting nothing*, because "no key system is supported" is a truthful answer a
+caller can act on. **XPath has no such refusal.** An evaluator either returns the right nodes or it
+lies, and the caller cannot tell which. A stub returning an empty node-set would make htmx boot and
+then silently wire up **zero** `hx-on:` handlers — strictly worse than the ReferenceError, which at
+least said something was wrong.
+
+> **"Interfaces that exist and grant nothing" is honest only where refusal is a valid answer.**
+> Where the API's whole contract is *to return the right data*, the honest partial implementation is
+> **correct over a documented subset, and an error outside it** — the same discipline `canPlayType`
+> applies to a codec it cannot decode. Answer correctly or refuse; never guess.
+
+**Supported:** paths (absolute, relative, `//`), the child / descendant-or-self / attribute / self /
+parent axes, name / `*` / `node()` / `text()` tests, and predicates built from positions, `@x`,
+`@x='v'`, `name()`, `local-name()`, `string()`, `starts-with`, `contains`, `not`, `and`, `or`, `=`,
+`!=`, string literals and nested paths (a node-set is true when non-empty — which is exactly what
+`@*[…]` relies on).
+
+**Refused with `SyntaxError`:** `count()` and other unknown functions, `|` unions, named axes
+(`ancestor::`), `position()`, arithmetic, numeric comparison, namespace prefixes.
+
+**The gate asserts the refusals as hard as the results**, because without them *"it returned some
+nodes"* is not evidence of anything. And the positive claim asserts a **count and the node names**:
+the RED probe that drops the attribute step's inner predicate — the exact shape a stub takes —
+yields `hxFinds:3:BUTTON,SPAN,I` instead of `2:BUTTON,SPAN`. A returns-everything implementation and
+a returns-nothing implementation are both caught, and both would have looked like success from
+htmx's side.

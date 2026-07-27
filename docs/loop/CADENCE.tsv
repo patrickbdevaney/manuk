@@ -401,3 +401,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 640	40f3c176	1785114189	2026-07-26T21:03:09-04:00	1231	measurement	63	9	523	120	321	81	3896	6960	0	341	31	the media arc's owed real-code measurement: two players boot, shaka refuses (2026-07-26)
 641	b0f598cf	1785115735	2026-07-26T21:28:55-04:00	1546	capability	63	8	340	3	322	81	3896	6960	0	341	31	the EME interfaces exist and reject honestly; shaka-player boots (2026-07-26)
 642	6357a6c2	1785117366	2026-07-26T21:56:06-04:00	1631	capability	63	9	349	21	323	81	3896	6960	0	341	31	jQuery was totally dead and totally silent: `document.nodeType` was 8 (2026-07-26)
+643	36c88fe9	1785121134	2026-07-26T22:58:54-04:00	3768	capability	63	10	722	4	324	81	3896	6960	0	341	31	DOMPurify returned the empty string for every HTML input (2026-07-26)
