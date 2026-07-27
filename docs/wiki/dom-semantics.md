@@ -1721,3 +1721,77 @@ no-ops instead of throwing, so it **passed with the bug still present** while ev
 the same gate went correctly red. The claim the whole gate exists for could not fail. The fix is an
 IIFE with `'use strict'`. *A gate can be green because a SECOND mechanism produces the same
 observable* — vary the mechanism, not the threshold. [[honest-answer-is-not-a-fixed-answer]]
+
+## `window.<id>` IS the element — named access on the Window object was absent (tick 677)
+
+HTML §7.3.3 says the Window object exposes a **named property for every element with an `id`**, plus
+the `name=` of a `form` / `img` / `embed` / `object` / `iframe` / `frame`, plus every nested browsing
+context's name. All of it was `undefined` here, and `'myThing' in window` answered **false**.
+
+### What it cost, measured on a HEAD-20 site
+
+`playhop.com` renders **5 of the 107 elements Chrome builds** — 102 missing boxes, its entire
+application subtree. The whole failure is two log lines:
+
+```text
+TypeError: can't access property "innerHTML", window.__appData__ is undefined  at inline.js:1:155
+TypeError: can't access property "gamesStore", window.appData  is undefined    at inline.js:1:1466
+```
+
+The page ships its server state as a **data island** —
+
+```html
+<script id="__appData__" type="mime/invalid">{"advPartnerInfo":…}</script>
+…
+<script>window.appData = JSON.parse(unescape(window.__appData__.innerHTML))</script>
+```
+
+— deliberately a non-JS `type` so the payload is inert, read back through `window.<id>`. No named
+access ⇒ no state ⇒ no app, and the certificate filed it as `thin-overlap`: *a coverage failure
+wearing an unscored label.* **The pattern is not exotic.** It is how server-rendered state has been
+handed to client JS since long before hydration had a name, and it needs no framework.
+
+⚠ **Those two lines are readable at all because of tick 675 and tick 666.** Before the address was
+lifted, this was `TypeError: can't access property "innerHTML", ... is undefined` with no file and no
+line — a status. `inline.js:1:155` is what made it a lever in one run.
+
+### The mechanism, and the three ways it could have been subtly wrong
+
+`__publishNamed()` walks `[id],[name]` and defines an accessor on the global for each new name.
+Incremental (one `querySelectorAll`, only unseen names defined), called at the two script entry
+seams — `run_one_script` **before** each script, and `PageContext::eval` for runtime-fetched code.
+
+1. **A real `Window` property WINS.** In the spec the named properties live on an object in Window's
+   PROTOTYPE CHAIN, so `<div id="location">` must not shadow `window.location`. Here they can only be
+   own properties, so an `if (nm in g) continue` guard enforces the same order. Removing that guard is
+   one of the gate's two RED mutations, and it fails in the dangerous direction: navigation breaks on
+   any page that happens to id an element `location`, `history` or `top`.
+2. **The getter re-resolves by id at ACCESS time**, so it follows a replaced element instead of
+   pinning the node that existed when the name was published. A cached node is a use-after-remove
+   waiting for a framework to re-render.
+3. **`enumerable: false`.** These are own properties here and are *not* in a real browser, where
+   `Object.keys(window)` does not list a page's ids. Code that enumerates the global — feature
+   detection, sandbox shims — must not start seeing every element on the page.
+
+Assignment is honoured: `window.foo = 1` replaces the accessor with a plain value, which pages do
+constantly (`window.appData = …` is the very next line of playhop's boot).
+
+⚠ **RESIDUE, named rather than hidden:** a name becomes reachable at the next script entry, not the
+instant the element is inserted. An element created and read back through `window.<id>` inside ONE
+script still misses. A real browser resolves continuously; this resolves at a seam.
+
+### What it bought, stated honestly
+
+**playhop's two boot throws are GONE** — the site's script log is now empty where it carried two
+TypeErrors. **Its coverage did not move: 4.7%, 102 missing, `thin-overlap-5`.** The blocker moved from
+*"the app cannot start"* to *"the app does not converge inside our task ceiling"*: nine
+`event loop hit its task ceiling · count=20000` warnings and a 12s load budget exhausted against a
+30s load. `naukri` (3.5%) and `agoda` (7.2% / SHAPE 58.6%) are unchanged and carry the same shape —
+`OURS IS SLOW: 23–32s` on all three.
+
+That is a capability win buying a **better failure**, not a scored row, and it is the third time this
+session that distinction has had to be drawn. It is still a ratchet tooth: the capability is general,
+gated, and RED-proven, and the next question is now a *timing* question with an address rather than a
+TypeError with none.
+
+[[frameworks]] [[conformance-and-oracles]]

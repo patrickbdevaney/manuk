@@ -31569,3 +31569,110 @@ ours. **(2) NAME THE INLINE SCRIPTS** — `run_one_script`'s `c"inline.js"` shou
 two compile sites, and it makes every t675 report on every real site self-locating. **(3)** the
 `thin-overlap` trio share a shape: the shell matches and the app does not. Diagnose ONE of them to the
 first divergent path rather than three to a statistic.
+
+## Tick 677 — `window.<id>` IS the element, and it was absent (2026-07-27)
+
+HYPOTHESIS: t676's NEXT #1, verbatim — playhop is a named coverage failure with an address, so
+diagnose ONE `thin-overlap` site to the first divergent path rather than three to a statistic.
+
+The instrument answered in one run. `manuk-wpt fidelity --urls https://playhop.com/`:
+
+```text
+structural: 4.7% (107 paths, 102 missing, 4 misplaced)
+MISSING by tag: div×35 path×19 span×13 a×7 li×4 svg×4 button×3 rect×3
+missing box: <div>  e.g. body:nth-child(2)/div:nth-child(4)/div:nth-child(1)  flex [0 0 1190×713] vs (no box)
+WARN a page <script> threw error=TypeError: can't access property "innerHTML",
+     window.__appData__ is undefined at inline.js:1:155
+WARN a page <script> threw error=TypeError: can't access property "gamesStore",
+     window.appData is undefined at inline.js:1:1466
+```
+
+Every missing box hangs off `body > div:nth-child(4)` — one subtree, the whole app — and two log
+lines name why. ⚠ **Those lines are readable because of t675 and t666.** Without the lifted
+`fileName:line`, this was a message about a variable name on a page with a million bytes of script.
+
+FALSIFIABLE BAR: `window.<id>` must resolve to the element, `<div id="location">` must NOT shadow
+`window.location`, and the data island must round-trip
+(`window.<id>.innerHTML` → `JSON.parse`). All three RED.
+
+### THE ROOT CAUSE — HTML §7.3.3, absent entirely
+
+`playhop.com` ships its server state as a **data island** and boots off it:
+
+```html
+<script id="__appData__" type="mime/invalid">{"advPartnerInfo":…}</script>
+<script>window.appData = JSON.parse(unescape(window.__appData__.innerHTML))</script>
+```
+
+The `type` is deliberately non-JS so the payload is inert; it is read back through **named access on
+the Window object**. `window.<id>` — and bare `<id>`, and the `name=` of a
+form/img/embed/object/iframe/frame — was `undefined` for every element, and `'x' in window` was
+**false**. No named access ⇒ no state ⇒ no app. The pattern needs no framework and predates the word
+hydration; it is simply how server-rendered state has always been handed to client JS.
+
+### WHAT LANDED — and the three ways it could have been subtly wrong
+
+`__publishNamed()` walks `[id],[name]` and defines an accessor per new name. Incremental (one
+`querySelectorAll`; only unseen names defined), called at the two script entry seams:
+`run_one_script` **before** each script — which is what an inert data island needs, since it never
+"runs" — and `PageContext::eval` for runtime-fetched code.
+
+1. **A real `Window` property WINS.** In the spec these live on an object in Window's PROTOTYPE
+   CHAIN; here they can only be own properties, so `if (nm in g) continue` enforces the same order.
+   **Removing that guard is one of the two RED mutations and it fails in the dangerous direction** —
+   navigation breaks on any page that ids an element `location`, `history` or `top`.
+2. **The getter re-resolves by id at ACCESS time**, so it follows a replaced element instead of
+   pinning the node that existed at publish time. A cached node is a use-after-remove waiting for a
+   framework to re-render.
+3. **`enumerable: false`** — these are own properties here and are NOT in a real browser, where
+   `Object.keys(window)` lists no page ids. Code that enumerates the global must not start seeing
+   every element on the page.
+
+Assignment is honoured (`window.appData = …` is literally playhop's next line). ⚠ RESIDUE, named:
+a name becomes reachable at the next script ENTRY, not the instant the element is inserted.
+
+### WHAT IT BOUGHT, STATED HONESTLY — A BETTER FAILURE, NOT A ROW
+
+**playhop's two boot throws are GONE** — its script log is now empty where it carried two TypeErrors.
+**Coverage did not move: 4.7%, 102 missing, `thin-overlap-5`.** The blocker MOVED, from *"the app
+cannot start"* to *"the app does not converge inside our task ceiling"*: nine
+`event loop hit its task ceiling · count=20000` and a 12s budget exhausted against a 30s load.
+`naukri` 3.5% and `agoda` 7.2%/58.6% unchanged, same shape, `OURS IS SLOW: 23–32s` on all three.
+
+Third time this session that distinction has had to be drawn, and it is still a ratchet tooth: the
+capability is general, gated and RED-proven, and the open question is now a TIMING question with an
+address instead of a TypeError with none.
+
+### AND TWO MORE DERIVED HYPOTHESES THAT DIED FOR THE PRICE OF A PROBE
+
+**(a) `Stylo: Saw @import rule, but no way to trigger the load`** looked like whole stylesheets being
+dropped. It is Stylo's internal loader being unwired *on purpose* — t564 walks `@import` out of band
+(three network rounds) and applies the sheets itself. Noise, not a gap.
+
+**(b) React 19's scheduler drives its work loop through `MessageChannel`,** and
+`globalThis.postMessage` is a no-op here — so "React never flushes" was a good story. A ten-line probe
+built the exact scheduler shape (`port1.onmessage`, `port2.postMessage(null)`): **delivered, flushed
+1**. `MessageChannel` is real and the ports work.
+
+Three killed hypotheses in two ticks (post-load drain, @import, MessageChannel), each for a few
+minutes of probe instead of a tick of building. *An absent measurement is not a negative measurement*
+— and the corollary this session keeps earning: **a derived mechanism is worth exactly one probe.**
+
+TICK SHAPE: capability (named access on the Window object — HTML §7.3.3, general to every page that
+reads `window.<id>`). Bar 0 untouched; `engine/js` only.
+Gates: `G_GLOBALS`'s single test, extended — 9 new claims (`namedById`, `namedBare`, `namedIn`,
+`islandParses`, `namedByName`, `realWins`, `assignable`, `liveGetter`, `notEnumerable`), with the data
+island and a `<div id="location">` in the fixture. RED-proven by two independent mutations: dropping
+the publish call (`namedById:undefined`, `islandParses:THREW:TypeError`) and dropping the
+real-property-wins guard (`realWins:false`). One `#[test]` per JS gate, as the file already documents.
+WIKI: `docs/wiki/dom-semantics.md` — "`window.<id>` IS the element", with the data-island mechanism
+and the three subtle-wrongness decisions.
+PATTERN: server state shipped as an inert data island and read through the window's named properties.
+
+NEXT: **(1) THE `thin-overlap` TRIO IS NOW ONE TIMING QUESTION.** playhop / naukri / agoda all load in
+23–32s against a 12s budget and all report `page is not converging` with the drain ceiling at 20,000
+tasks. That is the board's target (2) — *perf is a fidelity INPUT* — and it is now the only thing
+between these three and a scored row. Instrument WHERE the 30s goes before theorising (t670's lesson,
+which has now paid four times). **(2) NAME THE INLINE SCRIPTS** — `run_one_script`'s `c"inline.js"`
+should be the document URL; `inline.js:1:155` identified a line in an unnamed one of forty.
+**(3)** `<link>.sheet`, the honest remainder of t665.

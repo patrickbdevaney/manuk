@@ -94,6 +94,10 @@
   - L1502 · The fix: a standing input belongs between the cascade and the layout
   - L1526 · The gate asserts three things, and two of them are not decoration
 
+## browser-capabilities.md
+`docs/wiki/browser-capabilities.md`
+
+
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
 
@@ -424,6 +428,10 @@
   - L1679 · The population, measured rather than assumed
   - L1692 · The rest of the class, from the same sweep
   - L1706 · The setter itself
+  - L1725 · window.<id> IS the element — named access on the Window object was absent (tick 677)
+  - L1731 · What it cost, measured on a HEAD-20 site
+  - L1758 · The mechanism, and the three ways it could have been subtly wrong
+  - L1783 · What it bought, stated honestly
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1173,4 +1181,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1088 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1092 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

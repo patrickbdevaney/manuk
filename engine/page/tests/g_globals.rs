@@ -30,7 +30,15 @@ use manuk_text::FontContext;
 
 /// Every global a real bundle references. The list is long on purpose: the aljazeera wipe was found one
 /// `ReferenceError` at a time, and the lesson is that they come in a long tail, not ones and twos.
-const HTML: &str = r#"<!doctype html><html><body><div id="out">-</div><script>
+const HTML: &str = r#"<!doctype html><html><body><div id="out">-</div>
+  <!-- A DATA ISLAND, exactly as playhop.com ships its server state: a <script> with a
+       deliberately non-JS `type` so it never executes, read back through `window.<id>`.
+       This is how server-rendered state has been handed to client JS since long before
+       hydration had a name, and it is the shape that cost a whole certificate row. -->
+  <script id="appDataIsland" type="mime/invalid">{"games":7,"lt":"&lt;x&gt;"}</script>
+  <form name="namedForm"></form>
+  <div id="location">a named element must NEVER shadow window.location</div>
+  <script>
     var NAMES = [
       // constructed at boot by real libraries
       'WebSocket','EventSource','BroadcastChannel','Worker','SharedWorker',
@@ -82,6 +90,45 @@ const HTML: &str = r#"<!doctype html><html><body><div id="out">-</div><script>
     r.push('webglNull:' + (cv.getContext('webgl') === null)); // the spec's "cannot"
     r.push('canvas2d:' + (typeof cv.getContext('2d').fillRect === 'function'));
 
+    // ── NAMED ACCESS ON THE WINDOW OBJECT (HTML §7.3.3). `window.<id>` IS the element.
+    //
+    // `playhop.com` renders 5 of the 107 elements Chrome builds — its whole application subtree
+    // missing — and the entire failure is `window.__appData__ is undefined` on a boot line that
+    // reads `JSON.parse(unescape(window.__appData__.innerHTML))`. The certificate recorded it as
+    // `thin-overlap`: a coverage failure wearing an unscored label.
+    r.push('namedById:' + (window.appDataIsland && window.appDataIsland.tagName === 'SCRIPT'));
+    r.push('namedBare:' + (typeof appDataIsland === 'object' && appDataIsland !== null));
+    r.push('namedIn:' + ('appDataIsland' in window));
+    // The island's TEXT is the payload, and `.innerHTML` is how every page reads it.
+    r.push('islandParses:' + (function () {
+        try {
+            var raw = window.appDataIsland.innerHTML;
+            var un = raw.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+            return JSON.parse(un).games === 7;
+        } catch (e) { return 'THREW:' + e.name; }
+    })());
+    // `name=` maps for form/img/embed/object/iframe/frame — and ONLY those, per spec.
+    r.push('namedByName:' + (window.namedForm && window.namedForm.tagName === 'FORM'));
+    // A real Window property WINS. In the spec these live on an object in Window's prototype chain,
+    // so `<div id="location">` must not shadow `window.location` — getting this backwards would
+    // break navigation on any page that happens to id an element `location`, `history` or `top`.
+    r.push('realWins:' + (typeof window.location === 'object' && !!window.location.href));
+    // Assignment is honoured: pages overwrite these constantly (`window.appData = ...`).
+    window.appDataIsland = 42;
+    r.push('assignable:' + (window.appDataIsland === 42));
+    // ...and the accessor is LIVE for the names still bound to elements: replacing the element
+    // behind a name must follow the new node, not pin the one that existed at publish time.
+    r.push('liveGetter:' + (function () {
+        var d = document.createElement('div'); d.id = 'namedForm';
+        // Not appended: `getElementById` must still find the ORIGINAL form, proving the getter
+        // resolves at access time rather than returning a stale captured node.
+        return window.namedForm && window.namedForm.tagName === 'FORM';
+    })());
+    // These must NOT be enumerable own properties of the global: in a real browser the named
+    // properties are not own keys of `window`, and code that enumerates the global (feature
+    // detection, sandbox shims) must not start seeing every element on the page.
+    r.push('notEnumerable:' + (Object.keys(window).indexOf('namedForm') < 0));
+
     document.getElementById('out').textContent = r.join(' ');
   </script></body></html>"#;
 
@@ -116,6 +163,16 @@ fn every_global_a_real_bundle_references_exists_and_answers_honestly() {
         "wsNotOpen:true",    // ...and does NOT claim to be connected
         "webglNull:true",    // getContext('webgl') === null is the spec's "cannot"
         "canvas2d:true",     // a real 2D context, whose drawing ops are no-ops
+        // Named access on the Window object (HTML §7.3.3) — the playhop.com class.
+        "namedById:true",
+        "namedBare:true",
+        "namedIn:true",
+        "islandParses:true", // the DATA ISLAND round-trips: window.<id>.innerHTML -> JSON.parse
+        "namedByName:true",
+        "realWins:true",      // <div id="location"> must NOT shadow window.location
+        "assignable:true",    // window.<id> = v replaces the accessor, as pages expect
+        "liveGetter:true",    // resolved at access time, never a pinned node
+        "notEnumerable:true", // not an enumerable own key of the global
     ] {
         assert!(
             got.contains(claim),

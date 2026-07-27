@@ -9792,6 +9792,9 @@ impl PageContext {
         let raw_cx = unsafe { runtime.cx().raw_cx() };
         rooted!(&in(runtime.cx()) let global = self.global.get());
         let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        // A runtime-fetched script sees the document as it is NOW, including whatever the page has
+        // built since load — so `window.<id>` is refreshed here too (HTML §7.3.3, tick 677).
+        publish_named_globals(runtime, global.handle());
         rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
         let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"dynamic.js".to_owned(), 1);
         if evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts).is_err() {
@@ -11682,6 +11685,13 @@ fn run_one_script(
     src: &str,
     is_module: bool,
 ) {
+    // **Named access on the Window object, refreshed BEFORE every script** (HTML §7.3.3, tick 677).
+    // Before the first script this publishes the parse-time document — which is what a data island
+    // (`<script id="__appData__" type="mime/invalid">`) needs, since it is inert and never "runs".
+    // Before script N it publishes whatever script N-1 inserted, which is the continuous behaviour a
+    // real browser has and this can only approximate at a seam. Incremental: one `querySelectorAll`,
+    // and only names not already seen get defined, so fifty scripts pay fifty cheap sweeps.
+    publish_named_globals(runtime, global);
     if is_module {
         // Modules are never `document.currentScript`, per spec — the thread-local stays -1.
         if !unsafe { run_module(raw_cx, src, Some(node)) } {
@@ -11695,6 +11705,29 @@ fn run_one_script(
             tracing::warn!(error = %pending_exception(raw_cx), "a page <script> threw");
         }
         set_current_script(None);
+    }
+}
+
+/// Publish `window.<id>` for every element the document currently carries. See `__publishNamed` in
+/// the window-surface prelude for the mechanism and the three decisions behind it.
+///
+/// Failure is deliberately silent at this seam: a document with no JS surface yet (or a global that
+/// has not been set up) must not turn a missing convenience into a script error.
+#[cfg(feature = "_sm")]
+fn publish_named_globals(runtime: &mut Runtime, global: mozjs::rust::HandleObject) {
+    rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+    let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"named_globals.js".to_owned(), 1);
+    let _ = evaluate_script(
+        runtime.cx(),
+        global,
+        "globalThis.__publishNamed && globalThis.__publishNamed()",
+        rval.handle_mut(),
+        opts,
+    );
+    unsafe {
+        if mozjs::jsapi::JS_IsExceptionPending(runtime.cx().raw_cx()) {
+            mozjs::jsapi::JS_ClearPendingException(runtime.cx().raw_cx());
+        }
     }
 }
 
@@ -15876,6 +15909,100 @@ const WINDOW_PRELUDE: &str = r#"
                 if (ev.currentTarget == null) { try { ev.currentTarget = g; } catch (e) {} }
                 g.__fireWindowEvent(ev.type, ev);
                 return !ev.defaultPrevented;
+            };
+        }
+
+        // ── **NAMED ACCESS ON THE WINDOW OBJECT** (HTML §7.3.3). `window.<id>` IS the element. ────
+        //
+        // `window.myThing` — and bare `myThing` — resolves to the element carrying `id="myThing"`,
+        // and to the `name=` of a `form`/`img`/`embed`/`object`/`iframe`/`frame`. Every one of those
+        // was `undefined` here, and `'myThing' in window` was `false`.
+        //
+        // **Measured cost, on a HEAD-20 site:** `playhop.com` renders 5 of the 107 elements Chrome
+        // builds — 102 missing boxes, its whole application subtree — and the entire failure is two
+        // log lines:
+        //
+        // ```text
+        //   TypeError: can't access property "innerHTML", window.__appData__ is undefined
+        //   TypeError: can't access property "gamesStore", window.appData is undefined
+        // ```
+        //
+        // The page ships its server state as a DATA ISLAND — `<script id="__appData__"
+        // type="mime/invalid">{…}</script>`, deliberately a non-JS type so it is inert — and boots
+        // with `window.appData = JSON.parse(unescape(window.__appData__.innerHTML))`. No named
+        // access ⇒ no state ⇒ no app, and the certificate recorded it as `thin-overlap`: *a coverage
+        // failure wearing an unscored label.* The pattern is not exotic; it is how server-rendered
+        // state has been handed to client JS since long before hydration had a name.
+        //
+        // **Three decisions, each of which is a way this could be subtly wrong:**
+        //
+        // 1. **A real `Window` property WINS.** In the spec the named properties live on an object in
+        //    Window's PROTOTYPE CHAIN, so `<div id="location">` must not shadow `window.location`.
+        //    Here they must be own properties, so the `in` guard is what enforces the same order.
+        // 2. **The getter re-resolves by id at ACCESS time**, so it follows a replaced element rather
+        //    than pinning the node that existed when the name was published. A cached node would be
+        //    a use-after-remove waiting for a framework to re-render.
+        // 3. **`enumerable: false`**, precisely because these are own properties here and are not in
+        //    a real browser: `Object.keys(window)` does not list a page's ids in Chrome, and code
+        //    that enumerates the global (feature detection, sandbox shims) must not start seeing
+        //    every element on the page.
+        //
+        // Assignment is honoured — `window.foo = 1` replaces the accessor with a plain value, which
+        // pages do constantly — and the pass is INCREMENTAL, so publishing again after each script
+        // costs one `querySelectorAll` and defines only names that are new.
+        //
+        // ⚠ RESIDUE, named rather than hidden: a name becomes reachable at the next script entry
+        // (`run_one_script` / `PageContext::eval`), not the instant the element is inserted. An
+        // element created and read back through `window.<id>` inside ONE script still misses.
+        if (typeof g.__publishNamed === 'undefined') {
+            g.__namedGlobals = Object.create(null);
+            g.__publishNamed = function () {
+                try {
+                    if (!g.document || !g.document.querySelectorAll) { return 0; }
+                    var els = g.document.querySelectorAll('[id],[name]');
+                    var added = 0;
+                    for (var i = 0; i < els.length; i++) {
+                        var e = els[i], names = [];
+                        if (e.id) { names.push(String(e.id)); }
+                        var t = String(e.tagName || '').toLowerCase();
+                        if (t === 'form' || t === 'img' || t === 'embed' || t === 'object'
+                            || t === 'iframe' || t === 'frame') {
+                            var nm2 = e.getAttribute && e.getAttribute('name');
+                            if (nm2) { names.push(String(nm2)); }
+                        }
+                        for (var j = 0; j < names.length; j++) {
+                            var nm = names[j];
+                            if (!nm || g.__namedGlobals[nm]) { continue; }
+                            // A real Window property wins — see decision (1) above.
+                            if (nm in g) { g.__namedGlobals[nm] = true; continue; }
+                            g.__namedGlobals[nm] = true;
+                            (function (nm) {
+                                try {
+                                    Object.defineProperty(g, nm, {
+                                        configurable: true, enumerable: false,
+                                        get: function () {
+                                            var el = g.document.getElementById(nm);
+                                            if (el) { return el; }
+                                            try {
+                                                return g.document.querySelector(
+                                                    '[name="' + nm.replace(/["\\]/g, '\\$&') + '"]')
+                                                    || undefined;
+                                            } catch (x) { return undefined; }
+                                        },
+                                        set: function (v) {
+                                            Object.defineProperty(g, nm, {
+                                                value: v, writable: true,
+                                                enumerable: true, configurable: true
+                                            });
+                                        }
+                                    });
+                                    added++;
+                                } catch (x) {}
+                            })(nm);
+                        }
+                    }
+                    return added;
+                } catch (x) { return 0; }
             };
         }
 
