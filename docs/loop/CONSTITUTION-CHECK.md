@@ -2445,3 +2445,65 @@ were genuinely not ours. `manuk-wpt`'s own tests are still not in the wall (seve
 wall-scoped; reported, not touched.
 
 **Next check due: tick 672.**
+
+---
+
+## Check #50 — tick 672
+
+**Horizon:** H0 — the Phase-0 daily-driver certificate. Gate:
+`daily-driver-pass(site) = renders(site) ∧ functions(site)` over fixed-denominator corpus-v2.
+
+**The window:** t665–t672 — the CSSOM `.sheet` bridge (665), the page-level 39.9s-vs-12s measurement
+(666), the per-navigation drain bound (667), its non-effect on agoda (668), a wrong timeline inference
+(669), the per-phase ledger that ended the argument (670), the settle-loop budget check that took
+agoda 43.6s → 19.0s (671), and this re-sweep.
+
+**Gate or scoreboard? — GATE, and the window's shape is the finding.** #49's steer was the CSSOM
+bridge, aimed for the first time by *evidence* (a located stack) rather than WPT mass. It landed, and
+then the same evidence-first discipline ran a six-tick perf arc to a real 2.3× on a HEAD site. Both
+were driven by instruments this session built: t662's located error report and t670's per-phase
+ledger.
+
+**AND THE CERTIFICATE DID NOT MOVE. Both terms, unchanged: `scored 5`, `shape ≥0.75 on 0`.**
+
+That is the third time this session a genuine capability win has failed to appear in the certificate,
+and the pattern is now clear enough to name:
+
+> **agoda's 2.3× speedup bought a better FAILURE, not a scored row.** It moved `render-failed` →
+> `thin-overlap-5`: *the oracle built the page and we did not.* The clock was never going to fix a
+> coverage gap. Likewise t654–656's three placement fixes moved the corpus by less than one site's
+> noise, and t658's h2 fix moved it by exactly one site — the only corpus movement of the entire
+> session, from a fifteen-minute diagnostic pass.
+
+**The correction, and it is #49's one level deeper.** #49 said to rank by what the denominator is made
+of rather than by what the last fix uncovered. This window obeyed that at the level of *phases* — the
+per-phase ledger is exactly "make the denominator report itself" — and still spent six ticks inside
+one site. The missing question is not *what is slow*, it is **what would make an UNSCORED row
+scoreable**, and for 15 of 20 rows the answer is not performance at all: 5 bot-walls (a decided
+ceiling), 3 unreachable, 2 timeouts, 1 empty-202, 1 probe-blocked, 2 shell-only (a measurement
+architecture limit), 1 thin-overlap.
+
+**A NEW STANDING HAZARD, MEASURED THIS TICK.** `keirin.jp` read **0.048 against a ~0.40 population** in
+this sweep; three controls on the same tree minutes later read 0.400 / 0.351 / 0.402. I was one
+paragraph from reporting a 35-point regression against my own previous tick. **The certificate takes
+ONE reading per site**, and for a high-variance site that is a draw, not a measurement. t657's spread
+instrument caught it the moment two sweeps were concatenated. Five of eight scored sites are
+effectively deterministic (Δ ≤ 0.3 pts) and two are not — so the fix is *per-site repetition where the
+spread demands it*, not a blanket triple-run.
+
+**NO INVARIANT BENT.** t671's budget check takes nothing the budget was not already discarding (past
+the deadline the image/mask/background phases are skipped outright). t667's residual — three fixed
+drain sites it does not bound — is written into its own gate rather than left to be discovered.
+t665's bridge stated its scope (`<style>` only) and refused `null` for `<link>.sheet`, because for an
+applied sheet that is a lie that reads as honest. And t661's retraction stood: the change it reverted
+came back at t667 **only** once t666 produced the page-level evidence and t669–670 located it.
+
+**THE STEER.** Two things, in order. **(1) Make the sweep repeat the sites its own spread block says
+are unstable** — a certificate computed from single draws on a high-variance population is the
+delusion this whole redesign exists to prevent, and it is now measured rather than suspected.
+**(2) Then attack the unscored rows by category, not by site** — the reachable set is `thin-overlap`
+(ours, a coverage gap) and `shell-only` (a `file://`-origin limit in the probe itself); the bot-walls
+are a decided ceiling and the dead hosts are not ours. **Do not start another single-site arc without
+first naming which unscored CATEGORY it converts.**
+
+**Next check due: tick 680.**

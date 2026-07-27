@@ -31092,3 +31092,85 @@ NEXT: **(1) RE-RUN HEAD-20.** agoda went 43.6s → 19.0s and three of its phases
 corpus is the only thing that says whether that changed its class or anyone else's, and t657's rule
 says a single site is not a result. **(2) `<link>.sheet`**, the honest remainder of t665's bridge.
 **(3)** `scan_static_import_specifiers`'s failing unit test — thirteenth report.
+
+## Tick 672 — a 35-point "regression" that the control cleared in three runs (2026-07-27)
+
+HYPOTHESIS: t671's NEXT — agoda went 43.6s → 19.0s and three of its phases now run at all; **the
+corpus is the only thing that says whether that changed its class or anyone else's.** The constitution
+check is also due (last #49 at t664).
+
+```text
+  sites 20 · scored 5 · shape >=0.75 on 0
+  15 UNSCORED — 5x bot-wall-403, 3x unreachable, 2x timeout-300s, 1x empty-202,
+                1x probe-blocked, 2x shell-only, 1x thin-overlap-5
+```
+
+Unchanged from t659 in every term. **agoda moved `render-failed` → `thin-overlap-5`** — the class
+change t665 already recorded — so its 2.3× speedup bought a better *failure*, not a scored row. That
+is the honest reading and it was predictable: `thin-overlap` means the oracle built the page and we
+did not, which is a coverage problem the clock was never going to fix on its own.
+
+### AND THEN keirin.jp READ 0.048, DOWN FROM 0.397
+
+A **34.9-point** fall, far outside the 3.7-point spread t657 measured for it. The ratchet is absolute,
+so before writing a word: **run the control.** Three consecutive runs, same tree, minutes later:
+
+```text
+  keirin.jp   0.400398   ·   0.350731   ·   0.402000        (n = 502 / 479 / 500)
+```
+
+**There is no regression.** keirin is exactly where it has been all session — t657 0.3996, t659
+0.3972, now ~0.40. The sweep's 0.048 was one bad sample.
+
+> **The control has now prevented a false regression report three times this session** — t654
+> (a term that counts sites), t657 (0.7 points), and here (35 points, which I would have believed).
+> Every one of them would have been aimed at my own previous tick.
+
+**And that is a finding about the instrument, not a near-miss to be relieved about.** t657 established
+that a per-site delta below the site's own spread is not a result, and set keirin's spread at 3.7
+points from three runs. This sweep produced **0.048 against a ~0.40 population**: the tail is not 3.7
+points, it is catastrophic. So the certificate — **one reading per site** — is not a measurement of a
+site like keirin; it is a single sample from a wide distribution, and the sweep is the draw most
+likely to be unlucky because it runs each site exactly once under load.
+
+The `certificate --rows` spread block (t657) reports this the moment two sweeps are concatenated, which
+is how it was caught:
+
+```text
+  keirin.jp        0.0478 .. 0.3972   Δ 34.9 pts over 2 runs
+  www.agoda.com    0.0000 .. 0.0769   Δ  7.7 pts
+  www.welt.de      0.6582 .. 0.6657   Δ  0.8 pts
+  playhop.com      0.6360 .. 0.6364   Δ  0.0 pts    <- t658's site, stable
+  ikea / comix / desitales2 / naukri  Δ  0.0-0.3 pts
+```
+
+**Five of eight sites are effectively deterministic and two are not.** That is the real shape, and it
+says the fix is per-site repetition where the spread demands it — not a blanket "run everything three
+times", which would triple a 30-minute sweep to buy precision on the five sites that do not need it.
+
+### CONSTITUTION CHECK #50 — DUE THIS TICK (every 8; last #49 at t664)
+
+Recorded in full in `docs/loop/CONSTITUTION-CHECK.md`. Its finding is that **the certificate did not
+move — both terms, `scored 5` and `shape >=0.75 on 0`** — for the third genuine capability win this
+session, and the pattern now has a name: *agoda's 2.3x speedup bought a better FAILURE, not a scored
+row.* The steer is explicit and in order: **(1) make the sweep repeat the sites its own spread block
+says are unstable** (a certificate computed from single draws on a high-variance population is the
+delusion the redesign exists to prevent, and it is now measured rather than suspected); **(2) then
+attack the unscored rows BY CATEGORY** — and **do not start another single-site arc without first
+naming which unscored category it converts.**
+
+TICK SHAPE: measurement (the corpus re-sweep t671 owed, a controlled non-regression, and the
+constitution check on cadence). Bar 0 untouched; no engine source changed. Rows banked at
+`docs/bench/head20-rows-t672.tsv`.
+Gates: none — nothing changed.
+WIKI: none [forced] — this extends `conformance-and-oracles.md`'s existing "a live site's score has an
+error bar" section rather than adding a mechanism; the per-site-repetition change belongs with the
+tick that implements it.
+PATTERN: none. [no-pattern]
+
+NEXT: **(1) REPEAT THE HIGH-VARIANCE SITES IN THE SWEEP.** `shape_spreads` already computes which
+sites those are from the accumulated rows; the sweep should re-run a site whose recorded spread
+exceeds a threshold and take the median, and leave the deterministic five alone. That is a change to
+the fidelity instrument (agent territory) and it is the difference between a certificate and a draw.
+**(2) `<link>.sheet`**, the honest remainder of t665's bridge. **(3)**
+`scan_static_import_specifiers`'s failing unit test — fourteenth report.

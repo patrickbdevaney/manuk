@@ -1,0 +1,21 @@
+#name	coverage	shape	h_overflow	overlap	reading_order	dead_target	shape_n	reason
+comix.to	0.666667	1.000000	0	0	0	0	2	shell-only-3
+www.desitales2.com	1.000000	0.637124	0	0	10	0	598	
+service.smt.docomo.ne.jp	-	-	0	0	0	0	0	unreachable
+www.welt.de	0.957067	0.665684	0	80	2	0	3054	
+www.naukri.com	0.000000	1.000000	0	0	0	0	0	shell-only-1
+www.tamildhool.tech	-	-	0	0	0	0	0	bot-wall-403
+www.mangago.me	-	-	0	0	0	0	0	bot-wall-403
+www.aparat.com	-	-	0	0	0	0	0	probe-blocked
+www.ebay.com	-	-	0	0	0	0	0	timeout-300s
+supjav.com	-	-	0	0	0	0	0	bot-wall-403
+www.agoda.com	0.384615	0.000000	0	0	0	0	5	thin-overlap-5
+www.imdb.com	-	-	0	0	0	0	0	empty-202
+fdown.net	-	-	0	0	0	0	0	bot-wall-403
+keirin.jp	0.707753	0.047753	79	5	3	0	356	
+bill.pitc.com.pk	-	-	0	0	0	0	0	unreachable
+www.quora.com	-	-	0	0	0	0	0	bot-wall-403
+www.ikea.com	1.000000	0.518625	0	5	19	0	698	
+playhop.com	0.964912	0.636364	0	22	1	0	550	
+bbs.ruliweb.com	-	-	0	0	0	0	0	timeout-300s
+www.fawanews.sc	-	-	0	0	0	0	0	unreachable

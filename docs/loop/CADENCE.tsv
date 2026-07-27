@@ -428,3 +428,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 669	89bd5394	1785157099	2026-07-27T08:58:19-04:00	722	measurement	63	6	161	33	333	81	3896	6960	0	349	31	`pump_page_fetches` is not the site, it is the victim (2026-07-27)
 670	fe276a68	1785158516	2026-07-27T09:21:56-04:00	1417	capability	63	7	184	33	333	81	3896	6960	0	349	31	four log lines ended three ticks of inference, and two of them were mine and wrong (2026-07-27)
 671	3f9347bf	1785160135	2026-07-27T09:48:55-04:00	1619	capability	63	9	315	33	334	81	3896	6960	0	350	31	the settle loop had no clock in it at all (2026-07-27)
+672	c8bcf0a5	1785162303	2026-07-27T10:25:03-04:00	2168	measurement	63	6	199	33	334	81	3896	6960	0	350	31	a 35-point "regression" that the control cleared in three runs (2026-07-27)
