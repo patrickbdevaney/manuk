@@ -1850,3 +1850,36 @@ the RED probe that drops the attribute step's inner predicate — the exact shap
 yields `hxFinds:3:BUTTON,SPAN,I` instead of `2:BUTTON,SPAN`. A returns-everything implementation and
 a returns-nothing implementation are both caught, and both would have looked like success from
 htmx's side.
+
+## A bug with good prose is still a bug (tick 647)
+
+`getBoundingClientRect()` on an SVG child returned `{x:8, y:8, width:0, height:19}` — a zero-width
+inline box at the `<svg>`'s origin, the `19` a default line height. Wrong, plausible-looking, and in
+CSS pixels: a chart library placing a tooltip from it puts the tooltip in the corner.
+
+It had been **described accurately, in a comment, next to the code, for 18 ticks**. `getBBox`'s own
+doc read: *"the alternative they reach for, `getBoundingClientRect`, answers in CSS-box coordinates
+for an SVG child and is therefore the wrong number rather than a missing one."* t629 sized the fix as
+"a subsystem" from the outside and never re-priced it.
+
+> **A defect described accurately in a comment is not a documented limitation — it is an untriaged
+> bug with good prose.** The quality of the description is what makes it feel handled. Both halves of
+> the fix already worked and had simply never been composed: `svg_bbox` for exact user-space
+> geometry, `layout_rect` for the `<svg>`'s own CSS box.
+
+**`viewBox` is the part that stops it being a translation.** Without one the mapping is a
+translation and exact; with one, user space is *scaled* into the viewport, and composing without that
+scale is wrong on exactly the SVGs that have a viewBox — which is most charting output. The default
+`xMidYMid meet` is a uniform `min(vpW/vbW, vpH/vbH)` with the leftover centred. Not applied, and said
+out loud: non-default `preserveAspectRatio` and per-element `transform=`, which need the real SVG
+transform stack.
+
+**And the gate that documented the bug is the gate that caught the fix.** `G_SVG_BBOX` asserted
+`cssX=48` *deliberately* — the svg's origin with the rect's own x ignored — as the contrast that made
+its user-space claim meaningful. It went RED on this fix and now reads `58` (48 + the rect's x). The
+contrast still holds and is now the right one: 58 CSS px against 10 user units, two different
+questions.
+
+> This is the strongest form of `[[honest-answer-is-not-a-fixed-answer]]`: **a gate that deliberately
+> asserted a known-wrong value went red the moment the bug was fixed.** An honest "no" written as
+> prose cannot do that. Written as an assertion, it closed its own loop.

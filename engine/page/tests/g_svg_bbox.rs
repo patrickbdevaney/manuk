@@ -153,11 +153,19 @@ fn getbbox_reports_user_space_geometry() {
              The same choice `<text>` makes above",
         ),
         (
-            "cssX=48",
-            "…and the contrast that makes the user-space claim meaningful: the SAME rect's \
-             `getBoundingClientRect().x` is 48 (the page's 8px body margin + the svg's 40px \
-             margin-left), a CSS-box number in a different coordinate system entirely. A page that \
-             reaches for it instead of `getBBox` gets a WRONG value, not a missing one",
+            "cssX=58",
+            "…and the contrast that makes the user-space claim meaningful — RE-POINTED AT t647, and \
+             the re-point is the interesting part. This asserted **48** and did so correctly: the \
+             page's 8px body margin plus the svg's 40px margin-left, with the rect's own x IGNORED, \
+             because `getBoundingClientRect` on an SVG child answered a zero-width inline box at the \
+             svg's origin. This gate pinned that as the contrast — *a page reaching for it instead \
+             of getBBox gets a WRONG value, not a missing one*. t647 composed the two halves, so it \
+             is now **58** = 48 + the rect's user-space x of 10: the CSS-pixel position of the \
+             actual shape. The contrast it was written to draw still holds, and is now the RIGHT \
+             one — the two calls answer different questions (58 CSS px vs 10 user units) rather \
+             than one of them being broken. `[[honest-answer-is-not-a-fixed-answer]]` firing on a \
+             gate that deliberately asserted a known-wrong value, which is the strongest form: it \
+             went red the moment the bug was fixed",
         ),
     ] {
         assert!(

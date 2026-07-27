@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **405** | ticks 1–645 |
-| median tick cycle | **21m** | 404 intervals |
-| median, last 10 | **18m** | 10 intervals |
+| ticks landed | **406** | ticks 1–646 |
+| median tick cycle | **21m** | 405 intervals |
+| median, last 10 | **19m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.07** | 378.2h elapsed |
-| median verify wall | **66s** | 344 ticks |
+| **ticks per hour** | **1.07** | 378.5h elapsed |
+| median verify wall | **66s** | 345 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **324**
+* **live gates**: 27 → **325**
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**200 of 405 ticks** (49%) moved a
+**201 of 406 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **200** capability ticks, median cycle **21m**
+* **201** capability ticks, median cycle **21m**
 * median diff per tick: **+234 / −34** lines across 8 files
 
 ## Every tick
@@ -502,5 +502,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **643** | 2026-07-26 22:58 | 63m | capability | 63s | +722/−4 | 324 | 81 | 56.0% · | DOMPurify returned the empty string for every HTML input (2026-07-26) |
 | **644** | 2026-07-26 23:05 | 6m | capability | 63s | +126/−11 | 324 | 81 | 56.0% · | `document.evaluate` / XPathEvaluator: a real subset that refuses the rest (2026-07-26) |
 | **645** | 2026-07-26 23:14 | 9m | reliability | 63s | +463/−107 | 324 | 81 | 56.0% · | the last four `?` cells: three were map drift and one was a stale comment (2026-07-26) |
+| **646** | 2026-07-26 23:34 | 20m | capability | 63s | +289/−9 | 325 | 81 | 56.0% · | `playbackRate` reaches the SOUND, and my own gate could not catch its bug (2026-07-26) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

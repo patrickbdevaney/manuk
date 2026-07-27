@@ -29059,3 +29059,55 @@ PATTERN: [no-pattern] — `docs/loop/WEB-PATTERNS.md` already carries the media-
 NEXT: the narrowest remaining media blocker is still an **Opus decoder** (symphonia 0.6 has none;
 `audiopus`/`opus` are C bindings — a real dependency decision, not a wiring tick). Also open: our own
 latency on the placement half, and t629's `getBoundingClientRect()` on an SVG child.
+
+## Tick 647 — the SVG client rect: both halves already worked and had never been composed (2026-07-26)
+
+HYPOTHESIS: t629 left `getBoundingClientRect()` on an SVG child open and called the join "a
+subsystem". Probed rather than inherited: a `<rect x=10 y=20 width=50 height=30>` reported
+`{x:8, y:8, width:0, height:19}` — a **zero-width inline box at the `<svg>`'s origin**, the 19 being
+a default line height — while `getBBox()` on the same element was already **exact**.
+
+**It was not a subsystem. It was a composition of two things that both already worked**, and
+`getBBox`'s own doc had named the defect in place for 18 ticks: *"the alternative they reach for,
+`getBoundingClientRect`, answers in CSS-box coordinates for an SVG child and is therefore the wrong
+number rather than a missing one."*
+
+> **A defect described accurately in a comment next to the code is not a documented limitation, it
+> is an untriaged bug with good prose.** t629 sized it as a subsystem from the outside and never
+> re-priced it; the actual work was `svg_bbox` ∘ `layout_rect`.
+
+**`viewBox` IS APPLIED, and that is the claim that stops this being a translation.** Without one the
+mapping is a translation and exact. With one, user space is scaled into the viewport — and composing
+without the scale would be a confidently wrong box on **exactly the SVGs that have a viewBox**, which
+is most charting output. `xMidYMid meet` (the default) is a uniform `min(vpW/vbW, vpH/vbH)` with the
+leftover centred. Measured: `viewBox="0 0 100 50"` in a 200×100 viewport puts a 20×10 rect at (10,10)
+at **20,120,40×20**. RED probe: dropping the scale gives `10,110,20x10` — and leaves the non-viewBox
+claims green, which is what proves the scaled claim is not riding on the translation.
+
+**Honest bounds, asserted rather than hidden:** non-default `preserveAspectRatio` and per-element
+`transform=` are NOT applied; both need the real SVG transform stack.
+
+**AND THE GATE THAT DOCUMENTED THE BUG IS THE GATE THAT CAUGHT THE FIX.** `G_SVG_BBOX` went RED —
+it asserted `cssX=48`, deliberately, as the *contrast* that made its user-space claim meaningful:
+the svg's origin with the rect's own x **ignored**. It is now `58` = 48 + 10, the CSS-pixel position
+of the actual shape. Re-pointed with the reasoning, not deleted.
+
+> This is `[[honest-answer-is-not-a-fixed-answer]]` in its strongest form: **a gate that deliberately
+> asserted a known-wrong value went red the moment the bug was fixed.** The contrast it existed to
+> draw still holds and is now the right one — 58 CSS px against 10 user units, two different
+> questions, rather than one of them being broken. An honest-no written as prose could not have done
+> that; written as an assertion, it closed its own loop.
+
+TICK SHAPE: capability (SVG geometry children report their real position and size in CSS pixels —
+the number every chart library reaches for to place a label, tooltip or overlay — including the
+viewBox mapping). Bar 0 untouched; no ratchet floor moved; five geometry gates green and one
+re-pointed forward.
+Gates: **G_SVG_CLIENT_RECT** (`engine/page/tests/g_svg_client_rect.rs`, 6 claims incl. the viewBox
+scale and a `getBBox`-stays-user-space guard; 2 RED mutations run) and **G_SVG_BBOX re-pointed**.
+WIKI: `docs/wiki/js-engine.md` — "a bug with good prose is still a bug".
+PATTERN: [no-pattern] — `docs/loop/WEB-PATTERNS.md` already carries the SVG geometry class.
+
+NEXT: the narrowest remaining media blocker is an **Opus decoder** — and the registry now shows
+PURE-RUST candidates (`opus-decoder`, `opus-wave`, `moosicbox_opus` for symphonia), so the t633
+"C bindings only" framing is stale and the dependency decision should be re-taken on current
+evidence. Also open: our own latency on the placement half.

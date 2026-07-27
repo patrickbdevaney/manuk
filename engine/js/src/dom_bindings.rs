@@ -2997,9 +2997,86 @@ unsafe fn set_attribute_impl(
 
 /// `element.getBoundingClientRect()` → a DOMRect-shaped object from the pre-script layout
 /// snapshot (`{x, y, width, height, top, right, bottom, left}`), or all-zero if unlaid-out.
+/// **`getBoundingClientRect()` for an SVG geometry child — the join that was missing (tick 647).**
+///
+/// t629 measured it and t629's own `getBBox` doc named it in place: *"the alternative they reach
+/// for, `getBoundingClientRect`, answers in CSS-box coordinates for an SVG child and is therefore
+/// the wrong number rather than a missing one."* A `<rect x=10 y=20 width=50 height=30>` reported
+/// `{x:8, y:8, w:0, h:19}` — a zero-width inline box at the `<svg>`'s origin, with the `19` being a
+/// default line height. **Wrong, plausible-looking, and in CSS pixels**, which is the worst
+/// combination: a chart library that positions a tooltip from it puts the tooltip in the corner.
+///
+/// The two halves both already worked and had simply never been composed: [`svg_bbox`] gives exact
+/// USER-SPACE geometry, and [`layout_rect`] gives the `<svg>` element's own CSS box. This maps one
+/// through the other.
+///
+/// ## `viewBox` is handled, because ignoring it would be the same class of wrong answer
+///
+/// Without a `viewBox` the mapping is a translation by the `<svg>`'s origin, and is EXACT. With
+/// one, user space is scaled into the viewport — and composing without that scale would produce a
+/// confidently wrong box on exactly the SVGs that have one, which is most charting output. The
+/// default `preserveAspectRatio` is `xMidYMid meet`: a UNIFORM scale of `min(vpW/vbW, vpH/vbH)`,
+/// with the leftover centred on each axis. That default is what is implemented.
+///
+/// **Honest bound, stated rather than hidden:** a non-default `preserveAspectRatio` (`slice`, or a
+/// non-`Mid` alignment) and per-element `transform=` attributes are NOT applied. Both would need
+/// the real SVG transform stack, and both are rarer than the case above — but a caller reading this
+/// should know the number is the viewport mapping, not a full CTM.
+unsafe fn svg_child_client_rect(dom: *mut Dom, node: NodeId) -> Option<[f32; 4]> {
+    let [bx, by, bw, bh] = svg_bbox(dom, node)?;
+
+    // The nearest `<svg>` ANCESTOR — not the node itself. `<svg>` has a real CSS box and must keep
+    // answering from layout; only its geometry children go through this path.
+    let mut anc = (*dom).parent(node)?;
+    loop {
+        if (*dom).node_name(anc).eq_ignore_ascii_case("svg") {
+            break;
+        }
+        anc = (*dom).parent(anc)?;
+    }
+    let [sx, sy, sw, sh] = layout_rect(anc)?;
+
+    // `viewBox="minX minY width height"` — absent, malformed or degenerate means no mapping, which
+    // is the identity rather than a guess.
+    let vb = (*dom)
+        .element(anc)
+        .and_then(|e| e.attr("viewBox"))
+        .and_then(|v| {
+            let n: Vec<f32> = v
+                .split(|c: char| c == ',' || c.is_whitespace())
+                .filter(|t| !t.is_empty())
+                .filter_map(|t| t.parse::<f32>().ok())
+                .collect();
+            (n.len() == 4 && n[2] > 0.0 && n[3] > 0.0).then(|| [n[0], n[1], n[2], n[3]])
+        });
+
+    let (scale, tx, ty) = match vb {
+        Some([vx, vy, vw, vh]) => {
+            // xMidYMid meet: uniform scale, leftover centred.
+            let s = (sw / vw).min(sh / vh);
+            (
+                (s),
+                (sw - vw * s) / 2.0 - vx * s,
+                (sh - vh * s) / 2.0 - vy * s,
+            )
+        }
+        None => (1.0, 0.0, 0.0),
+    };
+
+    Some([
+        sx + tx + bx * scale,
+        sy + ty + by * scale,
+        bw * scale,
+        bh * scale,
+    ])
+}
+
 unsafe fn el_get_bounding_rect(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let node = this_node(vp).map(|(_, n)| n);
-    let [x, y, w, h] = node.and_then(layout_rect).unwrap_or([0.0, 0.0, 0.0, 0.0]);
+    let [x, y, w, h] = this_node(vp)
+        .and_then(|(dom, n)| svg_child_client_rect(dom, n))
+        .or_else(|| node.and_then(layout_rect))
+        .unwrap_or([0.0, 0.0, 0.0, 0.0]);
     let js = format!(
         "({{x:{x},y:{y},width:{w},height:{h},left:{x},top:{y},right:{r},bottom:{b}}})",
         r = x + w,
