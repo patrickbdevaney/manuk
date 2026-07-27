@@ -106,6 +106,18 @@ if [ -x scripts/map-reconcile.sh ]; then
   [ "${MD:-0}" -gt 0 ] && { note "ALERT: map drift ${MD} row(s) in the COMMITTED map — a landed capability claims a gate that doesn't exist (real ⇒ steer agent; false ⇒ fix map-reconcile search)"; alert=$((alert+1)); }
 fi
 
+# 8. FIDELITY PROGRESS (user directive t685: scorability + coverage + placement/shape must keep climbing
+#    to 95%). Record the freshest corpus sweep into the trend ledger and surface its flags: a STALE sweep
+#    (the trend goes blind), a SCORABILITY REGRESSION, or the DENOMINATOR TRAP (coverage rose only because
+#    a hard site dropped out). ALERT-only — fidelity has real run-to-run variance, so this is NEVER a gate.
+if [ -x scripts/fidelity-progress.sh ]; then
+  bash scripts/fidelity-progress.sh >/dev/null 2>&1 || true   # record-if-changed (safe append to its own ledger)
+  fp=$(bash scripts/fidelity-progress.sh --check 2>/dev/null || true)
+  if [ -n "$fp" ]; then
+    while IFS= read -r _l; do [ -n "$_l" ] && { note "ALERT(fidelity): $_l"; alert=$((alert+1)); }; done <<< "$fp"
+  fi
+fi
+
 # Summary line (the observer reads the tail of $LOG each heartbeat).
 note "ops-check: ${heal} healed, ${alert} alert(s) [disk ${DP:-?}% · grind ${NG} · systemd ${st:-n/a} · mapdrift ${MD:-?}]"
 [ "$alert" -gt 0 ] && exit 0   # alerts are informational; ops-check NEVER fails anything.
