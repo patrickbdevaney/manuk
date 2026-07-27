@@ -1728,3 +1728,46 @@ bindings**: `b()` reads `marker` from a module that was still evaluating when `b
 cycle that was refused throws; one linked by value-snapshot gives `a+undefined`.
 
 **Gate:** `engine/page/tests/g_esm_tla_cycle.rs`, 5 claims, 2 RED mutations tabulated in its header.
+
+## The document said it was a comment (tick 642)
+
+`document.nodeType` returned **8** — COMMENT_NODE — where the spec says **9**. The consequence was
+not subtle: **jQuery 3.7.1 was completely and silently dead.** Its `setDocument` is guarded by
+
+```js
+var n = e ? e.ownerDocument || e : ye;
+return n != T && 9 === n.nodeType && n.documentElement && ( … initialise the selector engine … );
+```
+
+With `nodeType === 8` the guard short-circuits, `T` is never assigned, and the first selector call
+throws `can't access property "createElement", T is undefined` — **inside the library's own
+evaluation**, so `window.jQuery` is never defined and **no error surfaces anywhere.** `typeof jQuery
+=== 'undefined'` with a clean console, on a very large fraction of the web.
+
+**How it survived, and this is the reusable part.** `el_get_node_type` was written for React —
+`isValidContainer` checks `nodeType === ELEMENT_NODE` — and then extended one arm at a time by
+whichever framework complained next: `7` for processing instructions, `11` for fragments and shadow
+roots. **Its own comment already said that answering 8 for a fragment "is not a near-miss, because
+every framework's node dispatch branches on this number."** The document had precisely that defect,
+one `else if` away, in a function that had already written down the bug class.
+
+> **A property fixed by chasing the framework that noticed keeps exactly the holes no framework has
+> noticed yet.** When the value is drawn from a small closed set — node types, ready states, event
+> phases, visibility states — **assert the whole set**, not the member that produced the bug report.
+
+**A second bug fell out of the same question.** `document.ownerDocument` returned the document
+itself; the spec returns **null** for a document. It is the same question — *"is this node a
+document?"* — wearing a second name, and it survived because jQuery's own
+`n = e.ownerDocument || e` cannot tell the difference (`document || document` is the document). The
+one library that would have caught the first bug was structurally blind to the second.
+
+**And the debugging chain is worth keeping, because each step needed its own control:** rule out a
+CommonJS-shim leak (`module`/`exports`/`define` all undefined → the plain-browser branch was taken);
+`onerror` silent; **append a marker to the served bytes** and watch `tail:true` for the four working
+libraries and `tail:false` for jQuery — it aborts mid-evaluation; wrap the served bundle in
+`try{…}catch` to capture the throw; then grep the bundle for the variable the message names.
+
+⚠ The marker control's first attempt was a **scripted-edit silent no-op** — the anchor did not match,
+nothing changed, and `tail:false` came back for *every* library. That reads as "the engine drops
+appended script". It was caught only because the working libraries disagreed with the hypothesis.
+`[[scripted-edit-silent-noop]]`: assert every replacement, including in a throwaway probe.

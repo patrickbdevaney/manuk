@@ -28732,3 +28732,76 @@ NEXT: the media arc now has real-library evidence at both ends, so the honest ne
 **Opus decoder** (symphonia 0.6 has none; `audiopus`/`opus` are C bindings — a real dependency
 decision). Also open: our own latency on the placement half, and t629's `getBoundingClientRect()` on
 an SVG child.
+
+## Tick 642 — jQuery was totally dead and totally silent: `document.nodeType` was 8 (2026-07-26)
+
+HYPOTHESIS: t640's real-library method (fetch the shipped bundle, run its real boot path, and when it
+says no, grep its own source for the predicate) was the highest-yield technique of the session.
+Applying it past media, to the bundles that gate whole site CLASSES: jQuery 3.7.1, Vue 3.5.13,
+Chart.js 4.4.7, Sentry 8.42, Stripe.js v3.
+
+**FOUR OF FIVE WORK.** Vue mounts and renders `42` (reactivity live). Chart.js constructs on a real
+canvas 2D context. Sentry `init` + `captureMessage`. Stripe.js `Stripe()` / `.elements()` /
+`.create('card')` — the checkout surface. **jQuery was completely dead**: `typeof jQuery ===
+'undefined'`, and **nothing reported an error**.
+
+**THE CHAIN, AND EVERY STEP NEEDED ITS OWN CONTROL.**
+
+1. `module`/`exports`/`define` all `undefined`, so jQuery took the plain-browser UMD branch and
+   *should* have set `window.jQuery`. Not a CommonJS-shim leak.
+2. `window.onerror` and an `error` listener: **nothing**. Either it did not run, or the error was
+   swallowed.
+3. **The marker control** — append `window.__tail=true` to the served bytes. `tail:true` for the
+   four working libraries, **`tail:false` for jQuery**: it aborted mid-evaluation, silently.
+   ⚠ My first attempt at this control was a **scripted-edit silent no-op** — the anchor did not
+   match, so nothing changed, and `tail:false` came back for *every* library including the working
+   ones. I nearly read that as "the engine drops appended script". `[[scripted-edit-silent-noop]]`,
+   caught by the working libraries disagreeing with the hypothesis.
+4. Wrapping the served bundle in `try{…}catch` produced the answer:
+   **`TypeError: can't access property "createElement", T is undefined`.**
+5. `T` is assigned in jQuery's `setDocument`, guarded by
+   `n != T && 9 === n.nodeType && n.documentElement`. Probing those three terms:
+   **`document.nodeType` was 8.**
+
+**8 IS COMMENT_NODE. THE DOCUMENT WAS REPORTING ITSELF AS A COMMENT.** So jQuery declined to
+initialise its selector engine, left its document handle `undefined`, threw on first use, and never
+defined itself — on a very large fraction of the web.
+
+**AND THE REASON IT SURVIVED IS THE GENERALISABLE PART.** `el_get_node_type` was written for React
+(`isValidContainer` checks `nodeType === ELEMENT_NODE`) and then extended one arm at a time by
+whichever framework complained next — `7` for processing instructions, `11` for fragments and shadow
+roots. **Its own comment says answering 8 for a fragment "is not a near-miss, because every
+framework's node dispatch branches on this number."** The document had that identical defect the
+whole time, one `else if` away, in a function whose docstring already described the bug class.
+
+> **A property fixed by chasing the framework that noticed keeps exactly the holes no framework has
+> noticed yet.** When a value is drawn from a small closed set, **assert the set** — the gate
+> enumerates all eight kinds, deliberately more than the bug.
+
+**A SECOND BUG FELL OUT OF THE SAME QUESTION.** `document.ownerDocument` returned the document
+itself; the spec says **null** for a document. Same question wearing two names — *"is this node a
+document?"* — and `ownerDocument === null` is the second idiom code uses to ask it. It survived
+because jQuery's own `n = e.ownerDocument || e` is insensitive to the difference (`document ||
+document` is still the document), so the one library that would have caught it could not.
+
+**AND A RED PROBE DISPROVED MY OWN DOCUMENTATION, FOR THE THIRD TIME THIS SESSION.** I wrote that
+`comment:8` is reached because the node *is* a comment. Changing the fallback from 8 to 0 gives
+`comment:0` — comments **ride the fallback**; `manuk_dom` has no `is_comment` predicate, so the arm
+cannot be written today. The consequence is recorded rather than glossed: **any node kind this
+function does not recognise reports as a comment.** Correct for comments, a guess for everything
+else.
+
+TICK SHAPE: capability (the single most widely deployed library on the web went from silently,
+totally dead to fully operational, via a one-value DOM identity fix; plus the spec-correct
+`document.ownerDocument === null` found by the same question). Bar 0 improved — a silent
+mid-evaluation abort removed. No ratchet floor moved; the DOM identity gates re-run green.
+Gates: **G_NODE_TYPE_ENUMERATION** (`engine/page/tests/g_node_type_enumeration.rs`, 14 claims across
+all eight node kinds plus jQuery's guard transcribed whole, 2 RED mutations run — one of which
+corrected the gate's own documentation).
+WIKI: `docs/wiki/js-engine.md` — "the document said it was a comment".
+PATTERN: `docs/loop/WEB-PATTERNS.md` — "the library that dies silently on a node-type guard".
+
+NEXT: the real-library method has now found a high-blast-radius bug in each of its two runs, which
+makes it the cheapest instrument on the board — **more bundles** (Angular, Svelte's runtime, Alpine,
+htmx, Google Tag Manager, a consent manager) is the obvious next tick. Still open: the Opus decoder,
+our latency on the placement half, and t629's `getBoundingClientRect()` on an SVG child.

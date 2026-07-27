@@ -5462,3 +5462,37 @@ precisely because it is the one you will talk yourself into.
 open. It fired one tick later. An absence that is a decision should be as load-bearing as a presence
 that is a capability — otherwise a permanent non-goal erodes not because anyone decided to, but
 because nobody was told a decision was being made.
+
+## The library that dies silently on a node-type guard (tick 642)
+
+**The class:** a library that guards its own initialisation on a DOM identity value, and when the
+value is wrong **fails inside its own evaluation** — so it never defines its global, and nothing is
+reported. Not a degraded feature: no library at all, with a clean console.
+
+jQuery 3.7.1's `setDocument` requires `9 === n.nodeType && n.documentElement` before it will
+initialise its selector engine. `document.nodeType` was **8** (COMMENT_NODE), so `T` was never
+assigned, the first selector call threw `can't access property "createElement", T is undefined`, and
+`window.jQuery` was never defined. jQuery is still on a very large fraction of the web.
+
+**The generalisation about how such a bug survives.** The `nodeType` getter was written for React
+(`isValidContainer` checks `nodeType === ELEMENT_NODE`) and extended one arm at a time by whichever
+framework complained next. **Its own comment already said that answering 8 for a fragment "is not a
+near-miss, because every framework's node dispatch branches on this number"** — and the document had
+that identical defect one `else if` away.
+
+> **A property fixed by chasing the framework that noticed keeps exactly the holes no framework has
+> noticed yet.** When the value comes from a small closed set — node types, ready states, event
+> phases, visibility states, key-system names — **assert the whole set**, not the member that
+> produced the bug report. The gate should be deliberately larger than the bug.
+
+**The debugging chain, which is cheap and reusable when a bundle "does nothing":**
+
+1. Rule out a module-shim leak — `typeof module/exports/define`. A stray CommonJS global sends every
+   UMD bundle down the wrong branch and it defines no global at all.
+2. `window.onerror` + an `error` listener. Silence here means *it aborted quietly*, not *it is fine*.
+3. **Append a marker to the served bytes** (`;window.__tail=true`). A working library reaches it; one
+   that aborts mid-evaluation does not. This is the step that turns "nothing happened" into "it died
+   at some point inside".
+4. **Wrap the served bundle in `try{…}catch`** and record the message. Page-level handlers may not
+   see it; this always does.
+5. **Grep the bundle for the variable the message names.** Minified or not, the guard is right there.

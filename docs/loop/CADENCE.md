@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **400** | ticks 1–640 |
-| median tick cycle | **21m** | 399 intervals |
-| median, last 10 | **13m** | 10 intervals |
+| ticks landed | **401** | ticks 1–641 |
+| median tick cycle | **21m** | 400 intervals |
+| median, last 10 | **18m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.06** | 376.0h elapsed |
-| median verify wall | **66s** | 339 ticks |
+| **ticks per hour** | **1.06** | 376.4h elapsed |
+| median verify wall | **66s** | 340 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **321**
+* **live gates**: 27 → **322**
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**196 of 400 ticks** (49%) moved a
+**197 of 401 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **196** capability ticks, median cycle **21m**
+* **197** capability ticks, median cycle **21m**
 * median diff per tick: **+234 / −34** lines across 8 files
 
 ## Every tick
@@ -497,5 +497,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **638** | 2026-07-26 20:24 | 4m | reliability | 63s | +161/−4 | 319 | 81 | 56.0% · | SURFACE AUDIT #36: the map had two citation dialects, and each instrument was blind to one |
 | **639** | 2026-07-26 20:42 | 18m | measurement | 63s | +355/−101 | 320 | 81 | 56.0% · | CONSTITUTION CHECK #46: three media ticks, zero real-site measurements (2026-07-26) |
 | **640** | 2026-07-26 21:03 | 21m | measurement | 63s | +523/−120 | 321 | 81 | 56.0% · | the media arc's owed real-code measurement: two players boot, shaka refuses (2026-07-26) |
+| **641** | 2026-07-26 21:28 | 26m | capability | 63s | +340/−3 | 322 | 81 | 56.0% · | the EME interfaces exist and reject honestly; shaka-player boots (2026-07-26) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

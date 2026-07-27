@@ -399,3 +399,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 638	c5233257	1785111878	2026-07-26T20:24:38-04:00	222	reliability	63	5	161	4	319	81	3896	6960	0	341	31	SURFACE AUDIT #36: the map had two citation dialects, and each instrument was blind to one (2026-07-26)
 639	68722cd9	1785112958	2026-07-26T20:42:38-04:00	1080	measurement	63	7	355	101	320	81	3896	6960	0	341	31	CONSTITUTION CHECK #46: three media ticks, zero real-site measurements (2026-07-26)
 640	40f3c176	1785114189	2026-07-26T21:03:09-04:00	1231	measurement	63	9	523	120	321	81	3896	6960	0	341	31	the media arc's owed real-code measurement: two players boot, shaka refuses (2026-07-26)
+641	b0f598cf	1785115735	2026-07-26T21:28:55-04:00	1546	capability	63	8	340	3	322	81	3896	6960	0	341	31	the EME interfaces exist and reject honestly; shaka-player boots (2026-07-26)

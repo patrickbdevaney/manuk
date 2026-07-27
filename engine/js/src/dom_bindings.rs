@@ -7694,6 +7694,21 @@ unsafe fn el_get_node_type(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) ->
                 // PROCESSING_INSTRUCTION_NODE = 7. Without this it fell through to 8 (comment), so
                 // `pi.nodeType === 7` failed and any framework branching on node type mis-dispatched it.
                 7
+            } else if (*dom).is_document(node) {
+                // **DOCUMENT_NODE = 9, and its absence killed jQuery outright (tick 642).**
+                //
+                // `document` fell through to the `8` below — COMMENT_NODE — and jQuery's
+                // `setDocument` is guarded by `9 === n.nodeType`, so it silently declined to
+                // initialise its selector engine, left its document handle `undefined`, and threw
+                // `can't access property "createElement", T is undefined` on first use. jQuery
+                // never defined `window.jQuery` at all, and **nothing reported an error**.
+                //
+                // The same paragraph three arms down already says answering 8 for a fragment "is
+                // not a near-miss" because every framework's dispatch branches on this number. The
+                // document had that identical defect the whole time, one `else if` away, and the
+                // reason it survived is that `nodeType` was fixed by chasing ONE framework's
+                // failure (React, on element nodes) rather than by enumerating the node kinds.
+                9
             } else if (*dom).is_fragment(node) || (*dom).is_shadow_root(node) {
                 // **A shadow root IS a DocumentFragment (11).** It was answering 8 — "comment" — which
                 // is not a near-miss: `getRootNode().nodeType === 11` is how a component asks whether
@@ -7767,6 +7782,20 @@ unsafe fn el_get_template_content(cx: *mut RawJSContext, argc: u32, vp: *mut Val
 /// applied to every node and not to the document. `globalThis.document` is exactly such a reference
 /// and is already rooted — so read it, and let the collector do its job.
 unsafe fn el_get_owner_document(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    // **A document has NO owner document — the getter returns null for it (DOM §4.4).**
+    //
+    // This returned `window.document` for *every* node, so `document.ownerDocument === document`.
+    // Found alongside the `nodeType` bug at tick 642 and fixed with it because they are the same
+    // question wearing two names: *"is this node a document?"* `ownerDocument === null` is the
+    // second idiom code uses to ask it (`node.ownerDocument || node` is the first, and jQuery's
+    // `setDocument` opens with exactly that expression — it survived the self-reference only
+    // because `document || document` is still the document).
+    if let Some((dom, node)) = this_node(vp) {
+        if (*dom).is_document(node) {
+            *vp = NullValue();
+            return true;
+        }
+    }
     rooted!(in(cx) let global = CurrentGlobalOrNull(&wrap_cx(cx)));
     if !global.get().is_null() {
         rooted!(in(cx) let mut doc = UndefinedValue());
