@@ -1439,3 +1439,89 @@ building it, at which point blocking a dependency is a real trade-off — or set
 actually built and tested, and let resolution reflect reality. Replacing an unverified 1.80 with an
 unverified 1.85 because that is what today's dependency wants is not progress; it is the same defect
 with a newer number.
+
+## The instrument must survive the engine dying under it (tick 650)
+
+The standing debt was a number: **the certificate had not been measured since t626**, while jQuery,
+DOMPurify and htmx went from silently dead to working. Three HEAD-20 runs were started to get it.
+**Two were killed mid-corpus by an engine SIGSEGV** — one at site 5, one at site 11 — and neither
+produced a certificate, a row file, or any record of the ten sites that had already been measured.
+
+The rendering half was not the blocker. **The instrument was.** `--rows-out` appended once, *after*
+the loop, so every completed site was hostage to the survival of the whole run:
+
+```text
+  run 1  crashed at site  5 of 20   →  /tmp/cert-t650-rows.tsv   ABSENT
+  run 2  crashed at site 11 of 20   →  /tmp/cert-t650e-rows.tsv  ABSENT
+```
+
+**This exact harm was already written down, one level out.** `Unmeasurable::Timeout`'s doc comment
+says it: *"the sweep runs sites in ONE process, so an unbounded child stalls the WHOLE corpus and the
+run yields no certificate at all — the sites that already finished are lost with it, which is
+strictly worse than the silent drop the fixed-denominator rule exists to prevent."* t625 closed that
+for a **child process we invoke**, by bounding it. The case where **we** are the process that dies
+was left open, because the fix that worked there — a deadline on somebody else — has no analogue
+when the corpse is your own.
+
+> **A fixed denominator protects you from dropping the hard site. It does nothing about dropping the
+> whole run, and the hard site is exactly the one that drops it.** The two failures are the same
+> failure at different scales, and closing one reads as closing both.
+
+The fix is durability rather than prevention, because the crash is not ours to prevent today:
+
+1. **Append as earned, not at the end.** The flush happens at the **top** of each iteration — the
+   loop body has five `continue` paths and a bottom-of-loop flush would silently skip every one.
+   Invariant: before site N touches the engine, sites 1..N-1 are on disk.
+2. **A crash is a COUNTED outcome** (`Unmeasurable::Crashed`). A process that dies writes nothing, so
+   the crash has to be recorded *before* the work: an in-flight sidecar names the site being
+   rendered, and the **next** run turns a leftover marker into a counted row. Otherwise the site that
+   kills the sweep is the one site guaranteed to escape the denominator — and it is the hardest site
+   in the corpus.
+3. **Resume supersedes, never accumulates.** `certificate()` reads `sites` straight from
+   `rows.len()`, so re-running a crashed sweep would have grown the corpus: 3 sites became 6. Rows
+   dedup by name, **last wins** — which also means a site that crashed once and then rendered stops
+   being `crashed`. A denominator nobody chose is the defect whichever direction it moves; inflating
+   it is not safer than shrinking it.
+
+RED-proven three ways, and the third is the one that matters: the unit gate covers (2) and (3) by
+mutation, but it drives the ledger functions directly and **cannot see the wiring in `main.rs`, which
+is what actually changed.** So that half was proven end-to-end on the real binary — `kill -9` during
+site 2 of 3, then resume:
+
+```text
+  killed mid-site-2  →  rows.tsv holds site 1 · marker names site 2
+  resumed            →  "RECOVERED [crashed]: example.org"
+  file has 5 physical rows  ·  certificate --rows reads  sites 3
+```
+
+**The reusable shape:** when an instrument and its subject share a process, every reliability
+property of the subject silently becomes a *measurability* property of the instrument. The engine's
+crash rate was a rendering concern until it became the reason no number could be produced at all.
+
+## The remembered reproducer that no longer reproduces (tick 650)
+
+The crash above matches `[[calc-size-interpolate-size-segfault]]` on four independent marks:
+release-only, threshold-dependent on allocation churn, every gdb frame `?? ()` inside statically
+linked SpiderMonkey, NaN-boxed GC values (`0xfff9…`/`0xfffe…`) on the faulting stack and **no frame
+of ours anywhere on it**. Four matches is enough to file it under a known, deliberately-parked Bar-0
+and move on.
+
+**The control says otherwise.** That note carries a reproducer described as deterministic, so it was
+run — both named files, plus the six around them:
+
+```text
+  css/css-values/calc-size/animation/interpolate-size-interpolation.html   rc=0
+  css/css-values/calc-size/animation/interpolate-size-computed-*           rc=0
+  …8 files, start=0..7                                                     rc=0  (all)
+```
+
+Every one clean. The reproducer that made t126 actionable **is dead**, so the memory cannot certify
+today's crash as t126's, and "known open Bar-0" is not available as a reason to park it. What is true
+is narrower and worth stating in exactly its own size: *an unattributed mozjs heap-corruption crash
+is live on the real-site path, it takes ~10 sites of allocation churn to fault, and it still needs
+ASAN.* It is not covered by any current reproducer.
+
+> **A parked bug's REPRODUCER rots faster than its diagnosis, and the diagnosis is what gets
+> remembered.** Signature-matching against a parked ticket is how a live crash gets filed as an old
+> one; the reproducer is the only part of the note that can be checked, so check it before inheriting
+> the verdict. Four matching marks argued for the memory. One command falsified it.

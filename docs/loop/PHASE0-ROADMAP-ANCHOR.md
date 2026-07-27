@@ -109,6 +109,29 @@ never WPT count, never a vibe.
   us, which V1-SCOPE puts explicitly out of scope** — so the achievable ceiling on this corpus is
   15/20, not 20/20, and the certificate's denominator should be read with that in mind.
 
+- `corpus-v2 HEAD-20 @tick 650: sites 20 · scored 5 · shape >=0.75 on 0 (bar 95%) · MEAN COVERAGE
+  98.7% · MEAN SHAPE 37.1% · MEAN VISUAL 52.7%. UNSCORED 15, decomposed: 5 unreachable ·
+  4 bot-wall-403 · 2 probe-blocked · 1 empty-202 · 1 shell-only-1 · 1 shell-only-3 · 1 timeout-300s ·
+  **0 with NO recorded reason**.` The decomposition finishes what t611->t626 started: unexplained
+  unscored **4 -> 1 -> 0**, and t626's named residue (`ebay`, *"25 paths probed, only 4 comparable"*)
+  now reports `probe-blocked` — a page-supplied CSP, not an instrument gap.
+  **THREE OF THE FIVE SCORED SITES CAME BACK BIT-IDENTICAL TO t626** — `desitales2` 0.637124 (n=598),
+  `ikea` 0.520057 (n=698), `welt.de` 0.6757 vs 0.6720 (n 2957 vs 2955) — which is the first direct
+  evidence that the scored half of this corpus is REPRODUCIBLE, against t626's warning that
+  live-origin numbers are noisy. The noise lives in the *population*, not the measurement: `aparat`
+  left the scored set (now `probe-blocked`) and `keirin` moved 10.8% -> 2.2%.
+  **NO HEADLINE MOVEMENT IS CLAIMED.** MEAN COVERAGE 85.2% -> 98.7% is a population change (`aparat`
+  dropping out), not an improvement, and `scored` went 6 -> 5. Shape >=0.75 remains **0 sites**, as at
+  t611 and t626 — the placement half has not moved in 39 ticks.
+  **THIS RUN ANSWERS CHECK #47'S STANDING DEBT, AND THE ANSWER IS THAT THIS CORPUS CANNOT SEE IT.**
+  The debt was to measure what jQuery/DOMPurify/htmx going dead->working did to the corpus. It did
+  nothing measurable here, because 15 of 20 sites are unscoreable for reasons that are not about
+  rendering, and the 5 that score are bit-stable. That is *unmeasured*, not *refuted* — and it says
+  the blast-radius question needs a different instrument than HEAD-20, which is the finding.
+  **Two of the three runs needed to produce this line were killed mid-corpus by an engine SIGSEGV**
+  (site 5 and site 11) and lost every completed row; the durable ledger landed this tick is why a
+  number exists at all.
+
 - `test262 @tick 546: 94.14% of 87,009 executed subtests (81,908 passed / 5,101 failed) · honest
   81.41% of the 100,617 the ratified suite defines (13,608 skipped: 10,739 async · 1,642 module ·
   1,225 host-API · 2 measured-hang) · 51,922 files, tc39 rev 7a096c20 · wall 140s · runner

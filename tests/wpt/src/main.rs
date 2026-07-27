@@ -437,6 +437,47 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
     // gate can cluster them into DISTINCT ROOT CAUSES at the end instead of reciting per-site counts.
     let mut all_divs: Vec<manuk_wpt::oracle::Divergence> = Vec::new();
 
+    // ── THE LEDGER IS WRITTEN AS IT IS EARNED, NOT AT THE END.
+    //
+    // `--rows-out` used to append once, after the loop, which made every completed site hostage to
+    // the survival of the whole run. It is not a survivable run: the sweep drives our own engine
+    // over twenty live sites in ONE process, and this session's HEAD-20 attempts died of an engine
+    // SIGSEGV **twice in three runs** — at site 5 and at site 11 — each time discarding every row
+    // already measured. Ten sites of work, and the certificate could not be computed at all.
+    //
+    // That is the identical harm `Unmeasurable::Timeout` documents for an unbounded CHILD, and t625
+    // fixed it there by bounding the child. It could not be fixed the same way here, because the
+    // process that dies is *us*. So the answer is the other half: make the ledger durable, so a
+    // crash costs exactly the site that crashed. `append_rows_tsv` was already append-only and
+    // `certificate --rows` already reads an accumulated file — the durability was one call site away
+    // the whole time.
+    //
+    // Flushing at the TOP of each iteration (rather than the bottom) is deliberate: the body has
+    // five `continue` paths, and a bottom-of-loop flush would silently skip every one of them.
+    // Before site N begins, sites 1..N-1 are on disk. That is the invariant, and it is `continue`-proof.
+    let rows_out = flag(args, "--rows-out").map(PathBuf::from);
+    let mut flushed = 0usize;
+    if let Some(p) = &rows_out {
+        // The previous run's marker, if it died holding one. Recovered FIRST, so the site that
+        // killed it is counted in this run's file rather than dropped by both.
+        if let Some(name) = manuk_wpt::fidelity::recover_inflight(p) {
+            eprintln!(
+                "  RECOVERED [crashed]: {name} — the previous run died while rendering it; counted, not dropped"
+            );
+        }
+    }
+    let mut flush = |rows: &[manuk_wpt::fidelity::Fidelity], flushed: &mut usize| {
+        if let Some(p) = &rows_out {
+            if *flushed < rows.len() {
+                if let Err(e) = manuk_wpt::fidelity::append_rows_tsv(p, &rows[*flushed..]) {
+                    eprintln!("✗ --rows-out {}: {e}", p.display());
+                }
+                *flushed = rows.len();
+            }
+            manuk_wpt::fidelity::clear_inflight(p);
+        }
+    };
+
     for url in urls.split(',').map(str::trim).filter(|u| !u.is_empty()) {
         let name = url
             .trim_start_matches("https://")
@@ -445,6 +486,14 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
             .next()
             .unwrap_or(url)
             .to_string();
+        // Everything the previous site earned goes to disk before this one is allowed to touch the
+        // engine, and only then do we claim this site as in-flight.
+        flush(&rows, &mut flushed);
+        if let Some(p) = &rows_out {
+            if let Err(e) = manuk_wpt::fidelity::mark_inflight(p, &name) {
+                eprintln!("✗ in-flight marker for {name}: {e}");
+            }
+        }
         eprintln!("fidelity: {name}");
 
         // **Time each engine separately, and attribute the cost to whoever actually spent it.**
@@ -917,19 +966,18 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
         }
     }
 
+    // The last site's row, and the in-flight marker it no longer needs. Everything before it is
+    // already durable — this is the tail of the same invariant, not a second mechanism.
+    flush(&rows, &mut flushed);
+
     let ok = manuk_wpt::fidelity::report(&rows, floor);
     // The certificate, computed by the thing that measured it. Printed on every run — a two-site G1
     // gate run says "2 sites" and is obviously not a corpus read, which is better than a headline that
     // only appears when someone remembers to ask for it.
     manuk_wpt::fidelity::certificate_report(&rows);
-    // `--rows-out` APPENDS this chunk's rows, so a 265-site sweep split into timeout-isolated chunks
-    // still yields ONE certificate (`manuk-wpt certificate --rows FILE`) instead of 53 stanzas for a
-    // human to add up — the exact failure `certificate` was written to end.
-    if let Some(p) = flag(args, "--rows-out") {
-        if let Err(e) = manuk_wpt::fidelity::append_rows_tsv(std::path::Path::new(&p), &rows) {
-            eprintln!("✗ --rows-out {p}: {e}");
-        }
-    }
+    // (`--rows-out` is written incrementally by `flush` above, so a 265-site sweep split into
+    // timeout-isolated chunks — or interrupted by a crash — still yields ONE certificate via
+    // `manuk-wpt certificate --rows FILE` instead of 53 stanzas for a human to add up.)
     if !ok && floor > 0.0 {
         std::process::exit(1);
     }

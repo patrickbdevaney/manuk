@@ -29271,3 +29271,144 @@ NEXT unchanged from t648: **(1) the MSRV question** (verify 1.80 in CI or set it
 built — observer call), **(2) Opus against the RFC test vectors**, and check #47's standing debt —
 **the certificate has not been measured since t626**, while jQuery, DOMPurify and htmx went from
 silently dead to working.
+
+## Tick 650 — the certificate could not be measured because the instrument staked twenty sites on surviving all twenty (2026-07-27)
+
+HYPOTHESIS: check #47's standing debt — *the certificate has not been measured since t626, while
+jQuery, DOMPurify and htmx went from silently dead to working* — is a measurement tick. Run the
+HEAD-20 sweep, bank the number.
+
+**THE SWEEP SEGFAULTED AT SITE 5 OF 20 AND PRODUCED NOTHING.** Not a bad number — no number, no
+rows, no record that four sites had already been measured. Re-run under `gdb` to catch the stack: it
+got to **site 11**, crashed again, and again discarded everything.
+
+```text
+  run 1  crashed at site  5 (naukri)  →  /tmp/cert-t650-rows.tsv   ABSENT
+  run 2  crashed at site 11 (agoda)   →  /tmp/cert-t650e-rows.tsv  ABSENT
+```
+
+Neither site crashes alone; nor does 8× the same site in one process; nor did a 6-site prefix. Two
+different victims, both after ~10 minutes of accumulated churn — **it is not the site, it is the
+mileage.**
+
+### The memory that matched on four marks and was wrong anyway
+
+The signature is `[[calc-size-interpolate-size-segfault]]` to the letter: release-only, threshold on
+allocation churn, every `gdb` frame `?? ()` inside statically linked SpiderMonkey, NaN-boxed GC
+values (`0xfff9…`/`0xfffe…`) on the faulting stack, **no frame of ours anywhere on it**. Four
+independent marks, and a note that already says *"needs ASAN, tracked open Bar-0, fix in a fresh
+context."* Every incentive here points at filing it and moving on.
+
+**So I ran the control** — that note carries a reproducer it calls deterministic:
+
+```text
+  css/css-values/calc-size --child --start 0..7      rc=0   ALL EIGHT
+  …including BOTH files the note names as ~100% crashers
+```
+
+**The reproducer is dead.** It does not crash today. So the memory cannot certify this crash as that
+one, and *"known open Bar-0"* is not available as a reason to park it.
+
+> **A parked bug's REPRODUCER rots faster than its DIAGNOSIS, and the diagnosis is what gets
+> remembered.** Signature-matching against a parked ticket is how a live crash gets filed as an old
+> one. The reproducer is the only part of a parked note that can be *checked* — so check it before
+> inheriting its verdict. Four matching marks argued for the memory; one command falsified it.
+
+What is true is narrower than the memory and is stated in exactly its own size: **an unattributed
+mozjs heap-corruption crash is live on the real-site path, it takes roughly ten sites of churn to
+fault, and no current reproducer covers it.** It still needs ASAN, and that is still not this
+context. Reported, not parked-by-association.
+
+### The defect I could fix is the one that made the crash fatal to the measurement
+
+The rendering half was never the blocker. `--rows-out` appended **once, after the loop**, so every
+completed site was hostage to the survival of the whole run.
+
+**And this exact harm was already written down, one level out.** `Unmeasurable::Timeout`'s own doc
+comment says it: *"the sweep runs sites in ONE process, so an unbounded child stalls the WHOLE corpus
+and the run yields no certificate at all — the sites that already finished are lost with it, which is
+strictly worse than the silent drop the fixed-denominator rule exists to prevent."* t625 closed that
+for a **child we invoke**, by bounding it. The case where **we** are the process that dies stayed
+open — because the fix that worked there, a deadline on somebody else, has no analogue when the
+corpse is your own.
+
+> **A fixed denominator protects you from dropping the hard site. It does nothing about dropping the
+> whole run — and the hard site is exactly the one that drops it.** Same failure, two scales; closing
+> one reads as closing both.
+
+Three properties, each the fix to a number that would otherwise be wrong:
+
+1. **Append as earned.** The flush runs at the **top** of each iteration, not the bottom: the loop
+   body has five `continue` paths and a bottom-of-loop flush would silently skip every one of them.
+2. **A crash is a COUNTED outcome** (`Unmeasurable::Crashed`). A process that dies writes nothing, so
+   the crash is recorded *before* the work — an in-flight sidecar names the site being rendered, and
+   the **next** run converts a leftover marker into a counted row. Without it, the one site
+   guaranteed to escape the denominator is the site that killed the sweep, i.e. the hardest one.
+3. **Resume supersedes, never accumulates.** `certificate()` takes `sites` from `rows.len()`, so
+   re-running a crashed sweep grew the corpus 3 → 6. Rows dedup by name, **last wins** — which also
+   retires a `crashed` row once the site renders. An inflated denominator is not safer than a
+   shrunken one; both are denominators nobody chose.
+
+⚠ **THE GATE CANNOT SEE THE PART THAT CHANGED, AND SAYING SO IS THE POINT.** `G_CERT_CRASH_LEDGER`
+drives the ledger functions directly and RED-proves (2) and (3) by mutation (drop the crash row →
+`sites 2, want 3`; drop the dedup → `6, want 3`). But the edit that actually mattered is the **wiring
+in `main.rs`**, and no unit test reaches it. So that half was proven end-to-end on the real binary:
+
+```text
+  kill -9 during site 2 of 3   →  rows.tsv holds site 1 · marker names site 2
+  resume                        →  "RECOVERED [crashed]: example.org"
+  5 physical rows in the file   →  certificate --rows reads  sites 3
+```
+
+The pre-fix RED needed no construction — it was measured live, twice, by the two runs above.
+
+### The number the fix was for
+
+Third run, same twenty sites, durable ledger. It did **not** crash, and it produced the first
+certificate since t626:
+
+```text
+  sites 20 · scored 5 · shape ≥0.75 on 0 (bar 95%)
+  MEAN COVERAGE 98.7%   MEAN SHAPE 37.1%   MEAN VISUAL 52.7%
+  UNSCORED 15 — 5 unreachable · 4 bot-wall-403 · 2 probe-blocked · 1 empty-202 ·
+                1 shell-only-1 · 1 shell-only-3 · 1 timeout-300s · 0 with NO reason
+```
+
+**Unexplained unscored is now 4 → 1 → 0.** t626's named residue (`ebay`: *"25 paths probed, only 4
+comparable"*) reports `probe-blocked` — a page-supplied CSP, not an instrument gap.
+
+**AND THREE OF THE FIVE SCORED SITES CAME BACK BIT-IDENTICAL TO t626**: `desitales2` 0.637124
+(n=598) and `ikea` 0.520057 (n=698) to six decimal places, `welt.de` 0.6757 vs 0.6720 (n 2957 vs
+2955). That is the first direct evidence that the *scored* half of this corpus is reproducible,
+against t626's standing warning that live-origin numbers are noisy. The noise lives in the
+**population**, not the measurement — `aparat` left the scored set, `keirin` moved 10.8% → 2.2%.
+
+**NO HEADLINE MOVEMENT IS CLAIMED.** MEAN COVERAGE 85.2% → 98.7% is `aparat` dropping out, not an
+improvement, and `scored` went 6 → 5. Shape ≥0.75 is **0 sites at t611, t626 and t650** — the
+placement half has not moved in 39 ticks, and that is the honest headline.
+
+**CHECK #47'S DEBT IS PAID, AND THE ANSWER IS THAT THIS CORPUS CANNOT SEE THE QUESTION.** The debt
+was to measure what three libraries going dead→working did to the corpus. Measurably: nothing —
+15 of 20 sites are unscoreable for reasons that are not about rendering, and the 5 that score are
+bit-stable. That is **unmeasured, not refuted**, and it is a finding about the instrument: a
+blast-radius claim phrased as *"a large fraction of the web"* needs a corpus selected for the
+libraries, not the traffic-weighted head that mostly bot-walls us.
+
+TICK SHAPE: reliability/measurement (a sweep that survives its own engine crashing, and the first
+certificate in 24 ticks — which the fix is the reason exists). No engine source changed; the edit is
+in `tests/wpt/`, agent territory per the board. Bar 0 untouched by this change; no ratchet floor moved.
+Gates: `G_CERT_CRASH_LEDGER`
+(`fidelity::shape_tests::a_crashed_sweep_keeps_its_completed_rows_and_counts_the_site_that_killed_it`),
+RED-proven twice by mutation plus once end-to-end on the real binary.
+⚠ STANDING, REPORTED FOR THE FOURTH TIME: `manuk-wpt`'s tests are **not in the wall**, so this gate —
+like `G_CERT_FALSIFIABLE` — is *gated but not watched*. `verify.sh` is harness-owned.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "the instrument must survive the engine dying under
+it" and "the remembered reproducer that no longer reproduces".
+PATTERN: [no-pattern] — no browser capability changed.
+
+NEXT, re-ranked by what this measurement says: **(1) the live unattributed mozjs heap corruption** —
+now the top Bar-0, no longer coverable by t126's dead reproducer, needs an ASAN context.
+**(2) PLACEMENT** — shape ≥0.75 on 0 sites across three measurements spanning 39 ticks is the largest
+and most stubborn gap, and `keirin` 2.2% / `agoda` 0.0% are the cheapest threads.
+**(3) A corpus that can see a library fix**, since HEAD-20 provably cannot. Carried from t648: the
+MSRV question (observer call) and Opus against the RFC vectors.

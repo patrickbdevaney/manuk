@@ -187,6 +187,8 @@
   - L1353 · Ranked by area is not ranked by sites moved (constitution check #46, tick 639)
   - L1377 · Drift concentrates on the oldest question marks (tick 645)
   - L1411 · An unverified MSRV is a claim with teeth (tick 648)
+  - L1443 · The instrument must survive the engine dying under it (tick 650)
+  - L1501 · The remembered reproducer that no longer reproduces (tick 650)
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1105,4 +1107,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1020 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1022 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

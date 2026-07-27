@@ -110,6 +110,21 @@ pub enum Unmeasurable {
     /// of t611's *"unscored with NO recorded reason"* rows — the residue that tick could not explain —
     /// into a stated one, and removes a false number from the certificate.
     ShellOnly(usize),
+    /// **The sweep process itself died while rendering this site** — SIGSEGV, OOM-kill, or an
+    /// operator's `kill`. Recovered on the NEXT run from the in-flight marker, never by the run that
+    /// died, which by definition writes nothing.
+    ///
+    /// [`Self::Timeout`] is the same hazard one level out, and its doc comment states the argument:
+    /// *"the sweep runs sites in ONE process … the sites that already finished are lost with it."*
+    /// t625 closed that for a **child** we invoke, by bounding it. It stayed open for the case where
+    /// **we** are the process that dies, and that case is not hypothetical: of three HEAD-20 runs
+    /// this session, **two** were killed by an engine SIGSEGV mid-corpus — one at site 5, one at site
+    /// 11 — and both discarded every completed row, so the certificate could not be measured at all.
+    ///
+    /// A crash is therefore a COUNTED outcome like every other, and for the same reason: the site
+    /// that kills the sweep is the hardest site in the corpus, and an instrument that drops it is
+    /// flattering itself in precisely the direction §0 names as cause #1.
+    Crashed,
 }
 
 impl Unmeasurable {
@@ -125,6 +140,7 @@ impl Unmeasurable {
             Self::RenderFailed => "render-failed".into(),
             Self::ShellOnly(n) => format!("shell-only-{n}"),
             Self::Timeout(secs) => format!("timeout-{secs}s"),
+            Self::Crashed => "crashed".into(),
         }
     }
 
@@ -135,6 +151,7 @@ impl Unmeasurable {
             "unreachable" => Some(Self::Unreachable),
             "probe-blocked" => Some(Self::ProbeBlocked),
             "render-failed" => Some(Self::RenderFailed),
+            "crashed" => Some(Self::Crashed),
             _ if s.starts_with("timeout-") && s.ends_with('s') => s["timeout-".len()..s.len() - 1]
                 .parse()
                 .ok()
@@ -192,6 +209,11 @@ impl Unmeasurable {
                  fetches are cross-origin and blocked, so a JS-rendered page never builds (comix.to: 28 \
                  elements here vs ~2643 live). Scoring this measures the shell, not the site"
             ),
+            Self::Crashed => "THE SWEEP PROCESS DIED while rendering this site (SIGSEGV/OOM/kill) — \
+                 our own bug, like render-failed, and the most expensive kind: it takes the whole \
+                 corpus down with it. Recovered from the in-flight marker on the following run, so \
+                 the site is COUNTED rather than lost along with the run it killed"
+                .into(),
         }
     }
 }
@@ -541,9 +563,61 @@ pub fn append_rows_tsv(path: &Path, rows: &[Fidelity]) -> Result<()> {
     Ok(())
 }
 
+/// The sidecar naming the site currently being rendered — the only way a crash can be attributed.
+///
+/// A process that dies mid-site writes nothing, so the fact of the crash has to be recorded
+/// *before* the work, by whoever is about to do it. Written before each site and removed once its
+/// row is durable; anything left behind is, by construction, a site that killed the run.
+pub fn inflight_path(rows: &Path) -> std::path::PathBuf {
+    let mut p = rows.as_os_str().to_owned();
+    p.push(".inflight");
+    std::path::PathBuf::from(p)
+}
+
+/// Claim a site as in-flight. Flushed to the OS before returning: a marker still sitting in this
+/// process's buffer when the process dies is a marker that never existed.
+pub fn mark_inflight(rows: &Path, name: &str) -> Result<()> {
+    use std::io::Write;
+    let p = inflight_path(rows);
+    let mut f = std::fs::File::create(&p).with_context(|| format!("create {}", p.display()))?;
+    writeln!(f, "{name}")?;
+    f.flush()?;
+    Ok(())
+}
+
+/// Release the claim — the site's row is on disk, so it did not crash.
+pub fn clear_inflight(rows: &Path) {
+    let _ = std::fs::remove_file(inflight_path(rows));
+}
+
+/// Convert a leftover in-flight marker into a COUNTED [`Unmeasurable::Crashed`] row, and clear it.
+///
+/// Called at the start of a run, so the site that killed the *previous* run enters the denominator
+/// instead of vanishing from it. Returns the recovered site name, if there was one.
+pub fn recover_inflight(rows: &Path) -> Option<String> {
+    let p = inflight_path(rows);
+    let name = std::fs::read_to_string(&p).ok()?.trim().to_string();
+    let _ = std::fs::remove_file(&p);
+    if name.is_empty() {
+        return None;
+    }
+    let row = Fidelity::unmeasured(&name, Unmeasurable::Crashed);
+    append_rows_tsv(rows, std::slice::from_ref(&row)).ok()?;
+    Some(name)
+}
+
 /// Read back what [`append_rows_tsv`] wrote. Only the fields the certificate scores are restored —
 /// this is deliberately NOT a full round-trip of `Fidelity`, because a partial reader that silently
 /// returned zeros for the visual score would let a later report print a number nobody measured.
+///
+/// **A site appearing twice is ONE site, and the LAST row wins.** The file is append-only and
+/// resumable, so a sweep that crashed at site 11 and was re-run contributes two rows for sites 1-10
+/// — and `certificate()` takes `sites` straight from `rows.len()`, so without this the denominator
+/// would *grow* every time a run was resumed. That is the fixed-denominator rule failing in the
+/// generous direction instead of the flattering one, which is no better: a denominator nobody chose
+/// is the defect, whichever way it moves. Last-wins is the right tie-break because the later row is
+/// the re-measurement — in particular it is how a recovered `crashed` row is superseded once the
+/// site is successfully rendered on a later pass.
 pub fn rows_from_tsv(path: &Path) -> Result<Vec<Fidelity>> {
     let text = std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
     let mut out = Vec::new();
@@ -579,7 +653,20 @@ pub fn rows_from_tsv(path: &Path) -> Result<Vec<Fidelity>> {
             unmeasurable: f.get(8).and_then(|v| Unmeasurable::from_tag(v)),
         });
     }
-    Ok(out)
+    // Collapse repeats to ONE row per site, keeping the LAST — see this function's doc comment.
+    // Order follows FIRST appearance, so an accumulated file still reads in sweep order.
+    let mut order: Vec<String> = Vec::new();
+    let mut latest: std::collections::HashMap<String, Fidelity> = std::collections::HashMap::new();
+    for r in out {
+        if !latest.contains_key(&r.name) {
+            order.push(r.name.clone());
+        }
+        latest.insert(r.name.clone(), r);
+    }
+    Ok(order
+        .into_iter()
+        .filter_map(|n| latest.remove(&n))
+        .collect())
 }
 
 /// Print the certificate block — the one place a sweep's headline is allowed to come from.
@@ -1238,6 +1325,109 @@ mod shape_tests {
         // An EMPTY sweep never holds. A certificate over zero sites is the most flattering possible
         // reading of an engine and the least informative.
         assert!(!certificate(&[]).holds(), "zero sites is not a pass");
+    }
+
+    /// **G_CERT_CRASH_LEDGER — a sweep that dies mid-corpus must lose ONE site, not the run.**
+    ///
+    /// This session's HEAD-20 certificate attempts were killed by an engine SIGSEGV in two runs of
+    /// three, at site 5 and at site 11. Both discarded every completed row, because `--rows-out` was
+    /// written once after the loop. The certificate could not be measured at all — not because the
+    /// engine is bad on those sites, but because the *instrument* staked twenty sites of work on the
+    /// process surviving all twenty.
+    ///
+    /// Three properties, each asserted against the number that would be wrong without it:
+    ///
+    /// 1. **Durable as earned** — after N sites, N rows are readable by another process.
+    /// 2. **A crash is COUNTED** — the in-flight marker the dead run left behind becomes a `crashed`
+    ///    row, so the hardest site in the corpus enters the denominator instead of leaving it.
+    /// 3. **Resume does not inflate** — re-running the crashed sweep supersedes rows rather than
+    ///    appending duplicates, so `sites` stays 3 and does not climb to 5.
+    #[test]
+    fn a_crashed_sweep_keeps_its_completed_rows_and_counts_the_site_that_killed_it() {
+        let dir = std::env::temp_dir().join("manuk-cert-crash-ledger-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("rows.tsv");
+
+        // ── The run that dies. Two sites complete and are flushed one at a time, exactly as the
+        // sweep loop does; the third is claimed in-flight and then the process disappears.
+        for r in [
+            row("a.example", Some(0.91), [0; 4]),
+            row("b.example", Some(0.80), [0; 4]),
+        ] {
+            super::mark_inflight(&path, &r.name).unwrap();
+            super::append_rows_tsv(&path, std::slice::from_ref(&r)).unwrap();
+            super::clear_inflight(&path);
+        }
+        super::mark_inflight(&path, "c.example").unwrap();
+        // …SIGSEGV here. Nothing else runs — no final append, no clear.
+
+        // (1) The completed work survived the process that was doing it.
+        let after_crash = super::rows_from_tsv(&path).unwrap();
+        assert_eq!(
+            after_crash.len(),
+            2,
+            "the two sites that finished BEFORE the crash must be on disk — writing rows only at \
+             the end of the run is what cost this session two HEAD-20 sweeps"
+        );
+        assert!(
+            super::inflight_path(&path).exists(),
+            "the marker must outlive the run that held it"
+        );
+
+        // (2) The next run attributes the crash instead of losing the site.
+        let recovered = super::recover_inflight(&path);
+        assert_eq!(recovered.as_deref(), Some("c.example"));
+        assert!(
+            !super::inflight_path(&path).exists(),
+            "and clears the marker, so the NEXT crash is not blamed on this site"
+        );
+        let rows = super::rows_from_tsv(&path).unwrap();
+        assert_eq!(rows.len(), 3, "three sites attempted, three sites counted");
+        assert_eq!(
+            rows[2].unmeasurable,
+            Some(super::Unmeasurable::Crashed),
+            "the site that killed the sweep is UNSCORED-with-a-reason, not absent"
+        );
+        let c = certificate(&rows);
+        assert_eq!(c.sites, 3, "the denominator holds the crashed site");
+        assert_eq!(c.scored, 2, "…and does not score it");
+        assert_eq!(
+            c.unmeasured_by_reason,
+            vec![("crashed".to_string(), 1)],
+            "the reason travels with the row, so the shortfall list can name it"
+        );
+
+        // Nothing is recovered when nothing crashed — a marker-less run must not manufacture a row.
+        assert_eq!(super::recover_inflight(&path), None);
+        assert_eq!(super::rows_from_tsv(&path).unwrap().len(), 3);
+
+        // (3) The resumed run re-measures a.example and b.example and finishes c.example. Without
+        // last-wins dedup this file reads as FIVE sites, and every ratio the certificate computes is
+        // over a denominator nobody chose.
+        for r in [
+            row("a.example", Some(0.91), [0; 4]),
+            row("b.example", Some(0.80), [0; 4]),
+            row("c.example", Some(0.99), [0; 4]),
+        ] {
+            super::append_rows_tsv(&path, std::slice::from_ref(&r)).unwrap();
+        }
+        let rows = super::rows_from_tsv(&path).unwrap();
+        assert_eq!(
+            rows.len(),
+            3,
+            "a resumed sweep supersedes its own rows; it does not grow the corpus"
+        );
+        assert_eq!(
+            rows.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(),
+            ["a.example", "b.example", "c.example"],
+            "and order follows first appearance, so the file still reads in sweep order"
+        );
+        assert_eq!(
+            rows[2].unmeasurable, None,
+            "the LAST row wins — a site that crashed once and then rendered is no longer crashed"
+        );
+        assert_eq!(certificate(&rows).scored, 3);
     }
 
     /// The chunked-sweep round trip. A 265-site sweep runs in timeout-isolated chunks, so the rows
