@@ -31029,3 +31029,66 @@ the check belongs between *settles*, not between rounds — the same rule t667 a
 the level the measurement actually points to. **(2) `<link>.sheet`**, the honest remainder of t665's
 bridge. **(3)** `scan_static_import_specifiers`'s failing unit test, still on `main`, still not in the
 wall — twelfth report.
+
+## Tick 671 — the settle loop had no clock in it at all (2026-07-27)
+
+HYPOTHESIS: t670's ledger located the cost to the line — `phase="page fetches" ms=36061 gave_up=15`,
+fifteen give-ups inside **one** round, so the cost is per **settled fetch** and not per round.
+
+**`pump_page_fetches` settles a round's results in a `for` loop with no clock in it.** Settling one
+runs the page's own promise continuation, which drains the event loop — so a non-converging page pays
+a full drain ceiling *per settled request*, up to `MAX_PER_ROUND` (40) of them, while the outer
+per-round check sees none of it. The budget is consulted before the round and after it, and never
+during the part that spends it.
+
+MEASURED, `www.agoda.com`, against a 12-second budget:
+
+```text
+                            before                       after
+  phase="page fetches"      ms=36061  gave_up=15   ->   ms=13190  gave_up=5
+  finish_loading                     39.9s         ->            15.4s
+  TOTAL                              43.6s         ->            19.0s
+```
+
+**A 2.3× faster load on a real HEAD site**, and the phase now lands near the budget it was always
+supposed to respect. The residual overrun is one settle that cannot be preempted mid-JavaScript, which
+is honest and is the same reason `finish_loading`'s outer `timeout` could never do this job (t666: a
+timeout fires at an await point; these drains are synchronous).
+
+**It takes nothing the budget was not already discarding.** Past the deadline `finish_loading` skips
+images, masks and background images outright — so continuing to settle bought the page nothing and
+cost it those three phases. Stopping is the promise `finish_loading` already makes, *whatever has
+arrived is what the page gets*, applied where the time is actually spent.
+
+### THE ARC, BECAUSE ITS SHAPE IS THE LESSON
+
+```text
+  t666  measured 39.9s vs a 12s budget, at the page level          — right
+  t667  bounded the dynamic-script ROUND loop, gated it, RED-proved — right, and not the site
+  t668  re-measured agoda: no movement. Blamed pump_page_fetches    — right phase, from a COUNT
+  t669  timeline said the pump "never ran"                          — WRONG, off-by-one on `round=1`
+  t670  built the per-phase ledger                                  — four lines ended the argument
+  t671  the settle loop, located to the line                        — 43.6s -> 19.0s
+```
+
+Two wrong inferences, one retraction, and the thing that ended it was **making the subject report
+itself** rather than reasoning harder about it. The instrument cost four lines at a site that already
+existed, and it was cheaper than either wrong tick.
+
+TICK SHAPE: capability + performance (a budget check in the loop that spends the budget). Bar 0
+strictly improved — a page can no longer hold the load path for 3× its stated bound. Suites green.
+Gate: `G_SETTLE_RESPECTS_THE_BUDGET` (`engine/page/tests/g_settle_respects_the_budget.rs`) — hermetic,
+one loopback socket, thirty fetches whose settles each spin. Asserts **wall clock**, because that is
+the promise and what the user feels; deliberately *not* give-up counts, which are one implementation's
+way of spending a budget. RED-proven **1.90s → 7.99s** on the same machine.
+⚠ **The first fixture could not fail**: at twelve settles the gap was 1.9s vs 3.4s, which no ceiling
+loose enough to avoid flaking could straddle. The fixture was made **harder** rather than the
+threshold tighter — *vary the mechanism, not the threshold*, which is this project's own rule and the
+reason the RED-proof is run before the tick lands rather than after.
+WIKI: `docs/wiki/performance.md` — "the loop that spends the budget must be the loop that checks it".
+PATTERN: data-driven pages whose fetch continuations do not converge.
+
+NEXT: **(1) RE-RUN HEAD-20.** agoda went 43.6s → 19.0s and three of its phases now run at all; the
+corpus is the only thing that says whether that changed its class or anyone else's, and t657's rule
+says a single site is not a result. **(2) `<link>.sheet`**, the honest remainder of t665's bridge.
+**(3)** `scan_static_import_specifiers`'s failing unit test — thirteenth report.

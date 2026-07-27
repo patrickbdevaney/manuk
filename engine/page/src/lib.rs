@@ -2191,7 +2191,30 @@ impl Page {
                 return;
             };
 
+            // **THE BUDGET IS CHECKED BETWEEN SETTLES, NOT ONLY BETWEEN ROUNDS.**
+            //
+            // Settling a result runs the page's own promise continuation, which drains the event
+            // loop — so a page that is not converging pays a full drain ceiling **per settled
+            // request**, and this loop settles up to `MAX_PER_ROUND` of them with no clock between.
+            // Measured on `www.agoda.com` with the per-phase ledger (t670): this phase alone is
+            // `ms=36061 gave_up=15` of a 39-second load, against a 12-second budget — **fifteen
+            // give-ups inside ONE round.** The outer loop's per-round check cannot see any of it,
+            // which is why three earlier ticks looked for the cost in three different phases.
+            //
+            // This takes nothing the budget was not already discarding: past the deadline
+            // `finish_loading` skips images, masks and backgrounds outright, so continuing to settle
+            // here buys a page nothing and costs it those phases. Stopping is the same promise
+            // `finish_loading` already makes — *whatever has arrived is what the page gets* — applied
+            // where it is actually spent.
             for (id, status, body, headers) in results {
+                if budget.saturating_sub(started.elapsed()).is_zero() {
+                    tracing::warn!(
+                        round,
+                        "load budget exhausted mid-round — the remaining fetch results are not \
+                         settled. Each settle runs the page's own JS, and this page is not converging."
+                    );
+                    return;
+                }
                 self.resolve_fetch(id, status, &body, &headers, fonts, viewport_width);
             }
         }

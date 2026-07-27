@@ -1008,6 +1008,9 @@
   - L168 · The phase that reports the budget is not the phase that spent it (tick 670)
   - L186 · The instrument, and why it is four lines at one site
   - L206 · What it found, which none of the three guesses had
+  - L217 · The loop that spends the budget must be the loop that checks it (tick 671)
+  - L245 · The arc, because its shape is the lesson
+  - L261 · A gate whose fixture could not fail
 
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
@@ -1151,4 +1154,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1066 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1069 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

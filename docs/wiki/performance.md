@@ -213,3 +213,55 @@ showed no movement at all. **That result was correct and its explanation was wro
 > **Make the thing being argued about report itself.** Both failure modes above are how a *derived*
 > answer fails, and the cure for both is the same instrument — which was four lines, at a site that
 > already existed, and would have been cheaper than either wrong tick.
+
+## The loop that spends the budget must be the loop that checks it (tick 671)
+
+`pump_page_fetches` checks the load budget **before each round** and **after** it. In between, it
+settles that round's results:
+
+```rust
+for (id, status, body, headers) in results {
+    self.resolve_fetch(id, status, &body, &headers, fonts, viewport_width);   // <- runs page JS
+}
+```
+
+**Settling one result runs the page's own promise continuation, which drains the event loop.** A page
+that is not converging therefore pays a full drain ceiling *per settled request*, up to
+`MAX_PER_ROUND` (40) of them — and the per-round check sees none of it. **The budget was consulted
+everywhere except the part that spends it.**
+
+```text
+  www.agoda.com, 12s budget      before                       after
+  phase="page fetches"           ms=36061  gave_up=15   ->   ms=13190  gave_up=5
+  finish_loading                          39.9s         ->            15.4s
+  TOTAL                                   43.6s         ->            19.0s
+```
+
+**It costs nothing the budget was not already discarding.** Past the deadline `finish_loading` skips
+images, masks and background images outright, so continuing to settle bought the page nothing and cost
+it those three phases. And the outer `tokio::time::timeout` could never have done this job: a timeout
+fires at an await point, and these drains are synchronous JavaScript.
+
+### The arc, because its shape is the lesson
+
+```text
+  t666  measured 39.9s vs a 12s budget, at the page level          — right
+  t667  bounded the dynamic-script ROUND loop, gated + RED-proved  — right, and not the site
+  t668  re-measured agoda: no movement. Blamed pump_page_fetches   — right phase, from a COUNT
+  t669  timeline said the pump "never ran"                         — WRONG: off-by-one on `round=1`
+  t670  built the per-phase ledger                                 — four lines ended the argument
+  t671  the settle loop, located to the line                       — 43.6s -> 19.0s
+```
+
+Two wrong inferences and one retraction, ended not by reasoning harder but by **making the subject
+report itself**. The instrument was four lines at a site that already existed and was cheaper than
+either wrong tick. *When two consecutive attempts to derive an answer disagree, stop deriving and
+instrument.*
+
+### A gate whose fixture could not fail
+
+The first version used twelve settles: 1.9s with the check against 3.4s without. **No ceiling loose
+enough to avoid flaking on a busy machine can straddle that**, so the gate passed either way. The
+fixture was made **harder** (thirty settles → 1.90s vs 7.99s), not the threshold tighter — *vary the
+mechanism, not the threshold*. This is why the RED-proof runs before a tick lands: it is the step that
+tells a gate from a decoration, and here it caught one on the first try.
