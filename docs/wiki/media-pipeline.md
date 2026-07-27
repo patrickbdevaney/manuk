@@ -503,6 +503,36 @@ later against my own change. *An absence that is a decision should be as load-be
 that is a capability* — otherwise a permanent non-goal erodes not because anyone decided to erode it,
 but because nobody was told a decision was being made.
 
+## The chunk size is part of the assertion (tick 646)
+
+`playbackRate` reached the presentation clock at t361 and stopped there. Nothing scaled the audio, so
+at 1.5x the timeline and the picture ran half again as fast while the feed consumed at its native
+rate — a podcast at 1.5x drifting against its own sound, permanently and increasingly. t646 gave
+`AudioFeed` a resampling `fill`: `rate` source frames per output frame, linear interpolation, and the
+sub-frame remainder carried in `frac` across buffers.
+
+**Rate 1.0 keeps the original `memcpy` path bit for bit**, and that is not an optimisation. Every
+audio gate here — constant-in/constant-out, sample-exact delivery, the mute and gain contracts — was
+written against that path; moving unity playback onto an interpolating one would trade fidelity for a
+feature. Pitch is not corrected (2x sounds like 2x, as in every engine without `preservesPitch`), and
+rate 0/negative/NaN are refused at the device: rate 0 would read one source frame forever, which is a
+loud constant tone rather than silence.
+
+**The finding is about the gate, not the feature. The RED probe came back GREEN.** The no-drift claim
+compared one 120-frame fill against fifteen 8-frame fills. Deleting `frac` — the exact bug the claim
+exists for — passed.
+
+> **`8 × 1.5 = 12`. An integer.** Each chunk consumed a whole number of source frames, so the
+> sub-frame remainder was zero at every boundary and rounding it away changed nothing. The fixture
+> looked entirely reasonable: chunked, compared against a reference, fractional rate. It was
+> **structurally incapable of catching the bug it was written for.**
+
+Five-frame chunks give 7.5, and the probe then names the exact frame. **For any resampling or
+streaming test, the chunk size is part of the assertion, not part of the scaffolding** — a chunk
+whose product with the rate is an integer silently tests nothing about remainder handling. The same
+trap applies to buffer sizes that divide evenly into a period, and to test durations that are whole
+multiples of a frame interval.
+
 ## M4 — AAC decode (tick 235): sound-shaped numbers, not yet sound
 
 `engine/media/src/audio.rs`. M3 could find the audio and name it (`mp4a.67`, 44100 Hz, stereo) and

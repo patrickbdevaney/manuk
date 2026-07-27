@@ -55,6 +55,24 @@ pub struct AudioFeed {
     /// ways: the master freezes, and unmute resumes stale audio from where it was muted,
     /// desynced by the whole muted interval.
     muted: bool,
+    /// `.playbackRate` at the DEVICE end (tick 646). 1.0 is the identity and takes a separate,
+    /// bit-exact `memcpy` path in [`AudioFeed::fill`] — see the note there on why that matters.
+    ///
+    /// **Why this belongs here and not only on the transport.** t361 routed `playbackRate` to
+    /// `Player::set_rate`, which scales the presentation CLOCK. Nothing scaled the audio, so at
+    /// 1.5x the clock ran half again as fast while the feed consumed at its native rate: the
+    /// picture and the timeline moved and the sound did not, which is the drift a listener hears
+    /// as the track falling behind. The constellation carried that as a `?` for exactly this
+    /// reason, and t645 split it into "clock: gated" and "audible: not implemented".
+    rate: f64,
+    /// Sub-frame remainder of the resampling cursor, in frames, always in `[0, 1)`.
+    ///
+    /// `cursor` stays whole-frame and authoritative — [`AudioFeed::position_seconds`] is the A/V
+    /// master clock and [`AudioFeed::seek_seconds`] writes it — so the fractional part a
+    /// non-integer rate leaves over is carried HERE rather than by rounding the cursor every
+    /// buffer. Rounding it would drop or repeat a frame per callback, which is a periodic click at
+    /// the buffer rate: audible, and exactly the kind of artifact that gets blamed on the decoder.
+    frac: f64,
 }
 
 impl AudioFeed {
@@ -69,6 +87,8 @@ impl AudioFeed {
             playing: true,
             gain: 1.0,
             muted: false,
+            rate: 1.0,
+            frac: 0.0,
         }
     }
 
@@ -81,20 +101,107 @@ impl AudioFeed {
             out.fill(0.0);
             return 0;
         }
-        let n = out.len().min(self.samples.len() - self.cursor);
+        // **Rate 1.0 keeps the original `memcpy` path, bit for bit.** Not an optimisation: the
+        // resampling arm below interpolates, and interpolation at rate 1 would still land exactly
+        // on sample boundaries in exact arithmetic while accumulating float error in practice.
+        // Every existing audio gate — constant-in/constant-out, sample-exact delivery, the mute
+        // and gain contracts — was written against this path, and a capability tick that quietly
+        // moved unity playback onto a lossy one would be trading fidelity for a feature.
+        if self.rate == 1.0 {
+            let n = out.len().min(self.samples.len() - self.cursor);
+            if self.muted {
+                out.fill(0.0);
+            } else {
+                out[..n].copy_from_slice(&self.samples[self.cursor..self.cursor + n]);
+                if self.gain != 1.0 {
+                    for s in &mut out[..n] {
+                        *s *= self.gain;
+                    }
+                }
+                out[n..].fill(0.0);
+            }
+            self.cursor += n;
+            return n;
+        }
+        self.fill_resampled(out)
+    }
+
+    /// The `playbackRate != 1` arm: read the source at `rate` frames per output frame, linearly
+    /// interpolating between neighbours.
+    ///
+    /// **Linear interpolation is a policy choice with a named quality rung**, the same one the
+    /// mixer's rate-matching made (tick 375): it is speech- and effects-grade, and windowed-sinc is
+    /// what to reach for if music artifacts are ever actually reported. Pitch is *not* corrected —
+    /// 2x sounds like 2x, chipmunked, which is what `playbackRate` does in every engine without an
+    /// explicit `preservesPitch`. Claiming pitch preservation would need a phase vocoder and is a
+    /// different capability with a different name.
+    ///
+    /// The **consumed** count it returns is in SOURCE samples, not output samples, and that is what
+    /// keeps `position_seconds` honest: at 2x a device buffer eats twice the source, so media time
+    /// advances twice as fast — which is precisely what the transport clock is being asked to do.
+    fn fill_resampled(&mut self, out: &mut [f32]) -> usize {
+        let ch = self.channels.max(1) as usize;
+        let total_frames = self.samples.len() / ch;
+        let start_frame = self.cursor / ch;
+        let mut pos = start_frame as f64 + self.frac;
+
+        let out_frames = out.len() / ch;
+        let mut produced = 0usize;
+        for f in 0..out_frames {
+            let i0 = pos.floor();
+            let base = i0 as usize;
+            if i0 < 0.0 || base >= total_frames {
+                break;
+            }
+            let t = (pos - i0) as f32;
+            let next = (base + 1).min(total_frames.saturating_sub(1));
+            for c in 0..ch {
+                let a = self.samples[base * ch + c];
+                let b = self.samples[next * ch + c];
+                out[f * ch + c] = a + (b - a) * t;
+            }
+            pos += self.rate;
+            produced = f + 1;
+        }
+
         if self.muted {
             out.fill(0.0);
         } else {
-            out[..n].copy_from_slice(&self.samples[self.cursor..self.cursor + n]);
             if self.gain != 1.0 {
-                for s in &mut out[..n] {
+                for s in &mut out[..produced * ch] {
                     *s *= self.gain;
                 }
             }
-            out[n..].fill(0.0);
+            out[produced * ch..].fill(0.0);
         }
-        self.cursor += n;
-        n
+
+        // Whole frames land on `cursor` (which the master clock and `seek_seconds` own); the
+        // remainder is carried in `frac` rather than rounded away — see the field note.
+        let end_frame = pos.floor().max(0.0) as usize;
+        let clamped = end_frame.min(total_frames);
+        self.frac = if clamped == end_frame {
+            pos - pos.floor()
+        } else {
+            0.0
+        };
+        let consumed_samples = clamped * ch - self.cursor.min(clamped * ch);
+        self.cursor = clamped * ch;
+        consumed_samples
+    }
+
+    /// `.playbackRate` at the device end. Non-finite and non-positive values are refused rather
+    /// than clamped: `rate = 0` is legal on the transport (a playing-but-frozen clock, tick 361)
+    /// and would mean *"read the same source frame forever"* here, which is a stuck buffer of one
+    /// repeated sample — a loud constant tone, not silence. The transport already models a frozen
+    /// clock; the device just keeps its last rate.
+    pub fn set_rate(&mut self, rate: f64) {
+        if rate.is_finite() && rate > 0.0 {
+            self.rate = rate;
+        }
+    }
+
+    pub fn rate(&self) -> f64 {
+        self.rate
     }
 
     pub fn set_playing(&mut self, playing: bool) {
@@ -141,6 +248,10 @@ impl AudioFeed {
         let frame = (t.max(0.0) * self.sample_rate as f64).round() as usize;
         let total_frames = self.samples.len() / self.channels as usize;
         self.cursor = frame.min(total_frames) * self.channels as usize;
+        // A seek lands ON a frame, so any carried sub-frame remainder from a fractional rate is
+        // stale by definition — keeping it would offset every frame after the seek by up to one
+        // sample, silently and permanently.
+        self.frac = 0.0;
     }
 
     /// The stream GREW (an MSE append re-decoded to a longer timeline): take the new PCM but keep
@@ -595,5 +706,152 @@ mod tests {
         let mut e = [f32::NAN; 32];
         assert_eq!(feed.fill(&mut e), 0);
         assert!(e.iter().all(|&s| s == 0.0));
+    }
+
+    /// # G_AUDIO_RATE — `playbackRate` reaches the SOUND, not only the clock (tick 646)
+    ///
+    /// **The failure this gate exists for.** t361 routed `playbackRate` to `Player::set_rate`,
+    /// which scales the presentation clock, and nothing scaled the audio. At 1.5x the timeline and
+    /// the picture ran half again as fast while the feed consumed at its native rate — so the sound
+    /// fell behind, permanently and increasingly. t645 probed it to a split verdict ("clock: gated,
+    /// audible: not implemented") and this is the missing half.
+    ///
+    /// ## The claims, and why each one is not the obvious one
+    ///
+    /// * **Rate 1.0 is BIT-EXACT with the pre-t646 path.** Asserted against the source samples
+    ///   themselves, not against "close enough" — every existing audio gate was written against the
+    ///   `memcpy` arm, and quietly moving unity playback onto an interpolating one would trade
+    ///   fidelity for a feature.
+    /// * **2x consumes twice the source per buffer**, which is what makes `position_seconds`
+    ///   advance at 2x — the A/V master clock is the audio cursor, so this is the assertion that
+    ///   the *picture* stays in sync too.
+    /// * **A CONSTANT stream stays constant at a fractional rate.** Interpolation must not invent
+    ///   wobble; this is the same contract the mixer's resampler was gated on at t375, and the one
+    ///   a naive implementation fails first.
+    /// * **A fractional rate does not drift across buffer boundaries.** The sub-frame remainder is
+    ///   carried in `frac`; rounding it per callback would drop or repeat a frame every buffer,
+    ///   which is a periodic click at the buffer rate. Asserted by filling in MANY SMALL buffers
+    ///   and comparing against one big one.
+    ///
+    /// ## RED probes run against this gate
+    ///
+    /// | mutation | result |
+    /// |---|---|
+    /// | drop `frac` (round the cursor each `fill`) | **RED — but only after the fixture was fixed.** The first draft chunked in 8s at 1.5x, and `8 * 1.5 = 12` is an integer, so the remainder was zero at every boundary and the probe came back GREEN. 5-frame chunks give 7.5 and the drift is visible from the second chunk. **The gate was structurally incapable of catching the bug it was written for, and only the mutation said so.** |
+    /// | make the rate-1.0 arm go through `fill_resampled` | GREEN — interpolation at exactly 1.0 lands on sample boundaries, so this is a fidelity-risk guard rather than a behavioural one, and the doc says so |
+    #[test]
+    fn g_audio_rate() {
+        // A ramp: every frame distinct, so a dropped or repeated frame is visible in the values.
+        let n = 480usize;
+        let ramp: Vec<f32> = (0..n).map(|i| i as f32).collect();
+        let mk = || {
+            AudioFeed::new(Pcm {
+                samples: ramp.clone(),
+                channels: 1,
+                sample_rate: 48_000,
+            })
+        };
+
+        // ── 1. Rate 1.0 is bit-exact with the source.
+        let mut unity = mk();
+        let mut out = vec![0.0f32; 64];
+        assert_eq!(unity.fill(&mut out), 64);
+        assert_eq!(
+            &out[..],
+            &ramp[..64],
+            "rate 1.0 must be BIT-EXACT: it keeps the original memcpy path, and every audio gate \
+             before this tick was written against that path"
+        );
+        assert_eq!(unity.rate(), 1.0, "the default rate is unity");
+
+        // ── 2. 2x consumes twice the source, which is what moves the master clock at 2x.
+        let mut fast = mk();
+        fast.set_rate(2.0);
+        let before = fast.position_seconds();
+        let mut o2 = vec![0.0f32; 64];
+        fast.fill(&mut o2);
+        let advanced = fast.position_seconds() - before;
+        let expected = 128.0 / 48_000.0;
+        assert!(
+            (advanced - expected).abs() < 1e-9,
+            "at 2x, a 64-frame buffer must consume 128 SOURCE frames so the A/V master clock \
+             advances at 2x — got {advanced}, want {expected}"
+        );
+        assert!(
+            (o2[0] - 0.0).abs() < 1e-4 && (o2[1] - 2.0).abs() < 1e-4 && (o2[2] - 4.0).abs() < 1e-4,
+            "and it must actually read every other frame of the ramp: got {:?}",
+            &o2[..3]
+        );
+
+        // ── 3. A CONSTANT stream stays constant at a fractional rate — interpolation may not
+        //    invent wobble (the t375 contract, restated for playbackRate).
+        let flat = vec![0.25f32; n];
+        let mut c = AudioFeed::new(Pcm {
+            samples: flat,
+            channels: 1,
+            sample_rate: 48_000,
+        });
+        c.set_rate(1.5);
+        let mut oc = vec![0.0f32; 100];
+        c.fill(&mut oc);
+        assert!(
+            oc.iter().all(|&s| (s - 0.25).abs() < 1e-6),
+            "a constant input must resample to the same constant; wobble here is the interpolator \
+             inventing signal"
+        );
+
+        // ── 4. NO DRIFT ACROSS BUFFER BOUNDARIES. One big fill vs many small ones must agree —
+        //    this is what the carried `frac` buys, and rounding it costs a frame per callback.
+        let mut single = mk();
+        single.set_rate(1.5);
+        let mut big = vec![0.0f32; 120];
+        single.fill(&mut big);
+
+        let mut chunked = mk();
+        chunked.set_rate(1.5);
+        // ⚠ THE CHUNK SIZE IS THE WHOLE TEST, and my first draft got it wrong. With 8-frame
+        // buffers at 1.5x, each chunk consumes 8 * 1.5 = 12 SOURCE frames exactly — an integer, so
+        // the sub-frame remainder is zero at every boundary and rounding it away changes nothing.
+        // The RED probe (delete `frac`) came back GREEN and said so. 5 frames at 1.5x is 7.5, so
+        // the remainder alternates 0.5 / 0.0 and the rounding is visible from the second chunk on.
+        let mut acc: Vec<f32> = Vec::new();
+        for _ in 0..24 {
+            let mut small = vec![0.0f32; 5];
+            chunked.fill(&mut small);
+            acc.extend_from_slice(&small);
+        }
+        for (i, (a, b)) in big.iter().zip(acc.iter()).enumerate() {
+            assert!(
+                (a - b).abs() < 1e-4,
+                "frame {i} differs between one 120-frame fill ({a}) and twenty-four 5-frame fills \
+                 ({b}): the sub-frame remainder is being rounded away per callback, which is a \
+                 dropped or repeated frame every buffer — a periodic click at the buffer rate"
+            );
+        }
+        assert_eq!(
+            single.position_seconds(),
+            chunked.position_seconds(),
+            "and the master clock must land in the same place either way"
+        );
+
+        // ── 5. A non-positive or non-finite rate is REFUSED, not clamped. `rate = 0` would mean
+        //    "read the same source frame forever" — a loud constant tone, not silence. The
+        //    transport already models a frozen clock (t361); the device keeps its last rate.
+        let mut r = mk();
+        r.set_rate(2.0);
+        r.set_rate(0.0);
+        assert_eq!(
+            r.rate(),
+            2.0,
+            "rate 0 is refused at the device: it would emit a stuck tone"
+        );
+        r.set_rate(-1.0);
+        assert_eq!(
+            r.rate(),
+            2.0,
+            "and a negative rate is refused rather than played backwards"
+        );
+        r.set_rate(f64::NAN);
+        assert_eq!(r.rate(), 2.0, "and NaN");
     }
 }

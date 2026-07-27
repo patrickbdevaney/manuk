@@ -29001,3 +29001,61 @@ WebRTC, SharedWorker, scroll-driven animations, multicol, anchor positioning, sh
 registries, WebTransport, EME playback, dev tools, password vault) plus the named partials. The
 narrowest real media blocker is still an **Opus decoder**; `playbackRate`'s audible half is now a
 named, bounded gap; and t629's `getBoundingClientRect()` on an SVG child is still open.
+
+## Tick 646 — `playbackRate` reaches the SOUND, and my own gate could not catch its bug (2026-07-26)
+
+HYPOTHESIS: t645 split `playbackRate` into *"clock: gated"* and *"audible: not implemented"* and
+named the missing half precisely — `AudioFeed` exposes `new`/`fill`/`set_playing`/`set_muted`/
+`set_gain` and **no rate control**, so at 1.5x the timeline and picture ran half again as fast while
+the feed consumed at its native rate. A podcast at 1.5x drifts against its own sound, permanently and
+increasingly. That is a bounded fix and the mixer already resamples (t375).
+
+**LANDED.** `AudioFeed::fill` reads the source at `rate` frames per output frame with linear
+interpolation, carrying the sub-frame remainder in `frac` across buffers. `apply_prop`'s
+`playbackRate` arm now reaches **both** ends of the same property from one place — the transport
+clock and the device — which is what t361 did halfway.
+
+**RATE 1.0 KEEPS THE ORIGINAL `memcpy` PATH, BIT FOR BIT, AND THAT IS NOT AN OPTIMISATION.** Every
+audio gate in this crate — constant-in/constant-out, sample-exact delivery, the mute and gain
+contracts — was written against that path. Quietly moving unity playback onto an interpolating one
+would be **trading fidelity for a feature**, which is the shape of trade the ratchet refuses even
+when the numbers look fine. All 73 pre-existing shell tests are untouched, which is the evidence.
+
+**Pitch is NOT corrected** — 2x sounds like 2x, chipmunked, which is what `playbackRate` does in
+every engine without an explicit `preservesPitch`. Claiming otherwise needs a phase vocoder and is a
+different capability with a different name. **Rate 0, negative and NaN are REFUSED at the device
+rather than clamped**: `rate = 0` is legal on the *transport* (a playing-but-frozen clock, t361) but
+at the device it would mean "read the same source frame forever" — a loud constant tone, not
+silence.
+
+**AND THE FINDING IS ABOUT MY OWN GATE: THE RED PROBE CAME BACK GREEN.** I wrote the no-drift claim
+by filling one 120-frame buffer and comparing it against fifteen 8-frame fills. Deleting `frac`
+entirely — the exact bug the claim exists for — **passed**.
+
+> `8 × 1.5 = 12`. **An integer.** With 8-frame chunks at 1.5x, each buffer consumes a whole number of
+> source frames, so the sub-frame remainder is zero at every boundary and rounding it away changes
+> nothing. **The gate was structurally incapable of catching the bug it was written for**, and the
+> fixture looked entirely reasonable — it was chunked, it compared against a reference, it used a
+> fractional rate.
+
+Five-frame chunks give 7.5 and the RED probe then lands on the exact frame: *"frame 5 differs between
+one 120-frame fill (7.5) and twenty-four 5-frame fills (7)"*. **A resampling test's CHUNK SIZE is
+part of the assertion, not part of the scaffolding** — any chunk whose product with the rate is an
+integer silently tests nothing about remainder handling.
+
+This is the third time this session a mutation has corrected a gate I had already written and
+documented (t633, t644's unrun probe, this), and the second where the doc was confidently wrong. The
+mutation is the only reader that is not already convinced.
+
+TICK SHAPE: capability (`playbackRate` becomes audible — the podcast/lecture 1.5-2x control every
+player exposes — with unity playback held bit-exact and the pitch claim explicitly not made). Bar 0
+untouched; no ratchet floor moved; all 73 prior shell tests unchanged and green.
+Gates: **G_AUDIO_RATE** (`shell/src/audio.rs`, 5 claims: bit-exact unity, 2x moves the master clock
+at 2x, a constant stays constant, no cross-buffer drift, and non-positive rates refused; 1 RED
+mutation run — which failed to land on the first fixture and drove the fixture's correction).
+WIKI: `docs/wiki/media-pipeline.md` — "the chunk size is part of the assertion".
+PATTERN: [no-pattern] — `docs/loop/WEB-PATTERNS.md` already carries the media-rate class.
+
+NEXT: the narrowest remaining media blocker is still an **Opus decoder** (symphonia 0.6 has none;
+`audiopus`/`opus` are C bindings — a real dependency decision, not a wiring tick). Also open: our own
+latency on the placement half, and t629's `getBoundingClientRect()` on an SVG child.

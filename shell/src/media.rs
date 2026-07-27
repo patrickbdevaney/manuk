@@ -270,6 +270,15 @@ impl MediaSet {
                     if let Some(p) = e.player.as_mut() {
                         p.set_rate(value);
                     }
+                    // **And the AUDIO (tick 646).** t361 scaled the clock here and stopped, so at
+                    // 1.5x the timeline ran half again as fast while the feed consumed at its
+                    // native rate — the sound falling behind the picture, permanently and
+                    // increasingly. Both ends of the same property, set from one place.
+                    if let Some(a) = e.audio.as_ref() {
+                        if let Ok(mut f) = a.lock() {
+                            f.set_rate(value);
+                        }
+                    }
                 }
             }
             _ => {}

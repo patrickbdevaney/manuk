@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **404** | ticks 1–644 |
-| median tick cycle | **21m** | 403 intervals |
+| ticks landed | **405** | ticks 1–645 |
+| median tick cycle | **21m** | 404 intervals |
 | median, last 10 | **18m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.07** | 378.0h elapsed |
-| median verify wall | **66s** | 343 ticks |
+| **ticks per hour** | **1.07** | 378.2h elapsed |
+| median verify wall | **66s** | 344 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**200 of 404 ticks** (50%) moved a
+**200 of 405 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -501,5 +501,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **642** | 2026-07-26 21:56 | 27m | capability | 63s | +349/−21 | 323 | 81 | 56.0% · | jQuery was totally dead and totally silent: `document.nodeType` was 8 (2026-07-26) |
 | **643** | 2026-07-26 22:58 | 63m | capability | 63s | +722/−4 | 324 | 81 | 56.0% · | DOMPurify returned the empty string for every HTML input (2026-07-26) |
 | **644** | 2026-07-26 23:05 | 6m | capability | 63s | +126/−11 | 324 | 81 | 56.0% · | `document.evaluate` / XPathEvaluator: a real subset that refuses the rest (2026-07-26) |
+| **645** | 2026-07-26 23:14 | 9m | reliability | 63s | +463/−107 | 324 | 81 | 56.0% · | the last four `?` cells: three were map drift and one was a stale comment (2026-07-26) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
