@@ -268,3 +268,55 @@ landed). `__scrollTo` now optimistically updates the page-visible position (`scr
 scrollY===40` holds synchronously, as in a real browser); the host's application overwrites with
 the clamped truth, so out-of-range requests over-report only transiently. A future smooth-scroll
 threads its settle notification through the same promise.
+
+## We ran the script and never told the page (tick 652)
+
+A dynamically inserted `<script src>` was fetched and executed correctly — and **no `load` or
+`error` event was ever fired**, on the element or anywhere else. There was no symptom to find: no
+error, no log, no failing gate, because the script itself had run perfectly.
+
+```text
+  ran     200px   <- the injected chunk DID fetch and execute
+  onload   10px   <- `load` never fired
+  onerr    10px   <- `error` never fired, on a src that 404s
+```
+
+**That event IS the contract of a script loader.** webpack's chunk loader is
+`script.onerror = script.onload = onScriptComplete` plus a timer; with neither event it falls through
+to the timer and rejects with `ChunkLoadError`. The class is much wider than bundlers — every
+`loadScript()` helper resolves its promise here: analytics, tag managers, ad tags, reCAPTCHA, payment
+and map SDKs. **A loader with no completion signal does not fail loudly; it waits, and whatever it
+was bootstrapping never starts.**
+
+**The second defect is the instructive one.** Dispatching the event fixed only half the problem, and
+the wrong half:
+
+| form | before | after dispatch fix |
+|---|---|---|
+| `addEventListener('load', …)` | nothing | **fires** |
+| `script.onload = …` | nothing | **still nothing** |
+
+`__dispatchEvent` — the ONE element dispatch point — walked `__listeners` and never invoked the
+`on<type>` **property** handler. So the listener form worked and the property form did not, **which
+is exactly backwards from what real loaders use.** The codebase already states the rule in
+`__xhrFire`: *"ONE dispatch point, so the `on*` handler and the listener list can never drift
+apart."* XHR had been fixed that way; the element path was still drifted. **Finding the same rule
+already written down, obeyed in one place and not the other, is the recurring shape here** — see
+"one rule, N implementations".
+
+⚠ **The double-fire risk was MEASURED, not argued.** Invoking a property handler at the shared
+dispatch point could plausibly fire every inline `onclick=` twice. It cannot: inline handlers compile
+onto a marked expando (`__ih_onclick`) and register via `addEventListener`, leaving `el.onclick`
+`undefined` (`typeof b.onclick` is NOT `'function'` for `<button onclick=…>`, and the handler fires
+exactly once); `<body onload>` migrates to `globalThis.onload` and never sets `body.onload`. The gate
+asserts `once:1` so that invariant is checked rather than remembered.
+
+**`load` fires even when the script THREW** — the event reports that fetching and running happened,
+not that the code succeeded. Gating it on success strands every loader whose chunk has a benign
+error: the same bug with a smaller blast radius.
+
+⚠ **This did NOT fix `www.agoda.com`, which still paints blank.** The events now fire, but **too
+late**: injected scripts are fetched in a later `finish_loading` phase, *after* the page's own event
+loop has spun to its 20,000-task ceiling and webpack's timeout has already fired. A real browser
+fetches an injected script **concurrently with** the event loop. That is a scheduling defect and a
+separate fix — named here rather than absorbed into this one's success.

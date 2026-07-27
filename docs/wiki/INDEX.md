@@ -409,6 +409,7 @@
   - L230 · Hydration works, and only a driven click can prove it (tick 229)
   - L250 · pagereveal — the MPA activation hook (tick 372)
   - L261 · Promise-returning scrolls + the synchronous scrollY contract (tick 378)
+  - L272 · We ran the script and never told the page (tick 652)
 
 ## THE INTERACTION SURFACE — clicks, scroll, focus, and automation
 `docs/wiki/interaction-surface.md`
@@ -1108,4 +1109,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1023 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1024 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

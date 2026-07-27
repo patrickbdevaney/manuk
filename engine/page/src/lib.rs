@@ -2974,10 +2974,6 @@ impl Page {
             for (node, text) in fetched {
                 // Mark it run *first*: a script that throws must not be retried forever.
                 self.dom.remove_attr(node, "src");
-                let Some(src) = text else { continue };
-                if src.trim().is_empty() {
-                    continue;
-                }
                 let Some(ctx) = &self.js else { continue };
                 let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
                     .root_box
@@ -2985,12 +2981,45 @@ impl Page {
                     .into_iter()
                     .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                     .collect();
-                if let Err(e) =
-                    manuk_js::eval_in_page(ctx, &mut self.dom, &src, &rects, &self.styles)
-                {
-                    tracing::warn!("dynamic script: {e}");
+                let fetched_ok = text.is_some();
+                if let Some(src) = &text {
+                    if !src.trim().is_empty() {
+                        if let Err(e) =
+                            manuk_js::eval_in_page(ctx, &mut self.dom, src, &rects, &self.styles)
+                        {
+                            tracing::warn!("dynamic script: {e}");
+                        }
+                        ran += 1;
+                    }
                 }
-                ran += 1;
+                // ── **AND THEN TELL THE PAGE, which is the half that was missing.**
+                //
+                // We fetched injected `<script src>` and ran it correctly — and never fired `load`
+                // or `error` on the element, so no loader on the page could ever learn that its
+                // script had arrived. **Every chunked bundler build depends on exactly this event.**
+                // webpack's `__webpack_require__.l` does `script.onerror = script.onload =
+                // onScriptComplete` and arms a timer; with neither event it falls through to the
+                // timer and rejects with `ChunkLoadError`.
+                //
+                // Measured on `www.agoda.com` (top-100k): chunk 5035 executes fine, webpack is never
+                // told, its timeout fires, the app never converges — **the event loop hit its 20,000
+                // task ceiling ten times (~22s), which exhausted the 12s load budget, and the page
+                // painted BLANK.** One undelivered event, a completely white page.
+                //
+                // The class is much wider than bundlers: every `loadScript()` helper on the web
+                // resolves its promise here — analytics, tag managers, ad tags, reCAPTCHA, payment
+                // and map SDKs. A script loader with no completion signal does not fail loudly; it
+                // waits, and the page it was bootstrapping never starts.
+                //
+                // **`load` fires even if the script THREW.** The event reports that fetching and
+                // running happened, not that the code succeeded — a throw goes to `window.onerror`.
+                // Making `load` conditional on success would strand every loader whose chunk has a
+                // benign error, which is the same bug with a smaller blast radius.
+                let ty = if fetched_ok { "load" } else { "error" };
+                let _ =
+                    manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles);
+                // A handler almost always injects the NEXT script (that is what a chunk loader is
+                // for), so this round counts as progress even when the body itself was empty.
                 any = true;
             }
             if !any {

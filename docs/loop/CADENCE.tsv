@@ -409,3 +409,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 648	18c4d88f	1785123900	2026-07-26T23:45:00-04:00	300	measurement	63	5	151	5	325	81	3896	6960	0	341	31	the Opus decision, re-taken: the blocker is not the codec, it is an unverified MSRV (2026-07-26)
 649	ee5d4f66	1785127755	2026-07-27T00:49:15-04:00	3855	reliability	63	8	543	13	325	81	3896	6960	0	341	31	the ledger entry tick 648 owed (2026-07-26)
 650	c5b66962	1785130009	2026-07-27T01:26:49-04:00	2254	reliability	63	8	372	36	325	81	3896	6960	0	341	31	the certificate could not be measured because the instrument staked twenty sites on surviving all twenty (2026-07-27)
+651	d71f8b56	1785132486	2026-07-27T02:08:06-04:00	2477	reliability	63	11	458	42	326	81	3896	6960	0	341	31	the certificate said `verdict ok` about a blank white page (2026-07-27)

@@ -12129,6 +12129,37 @@ const LISTENER_PRELUDE: &str = r#"
             if (!node || ev._stop) return;
             var key = node.__nodeId + ':' + type + ':' + phase;
             var arr = __listeners[key];
+            // ── **THE `on<type>` PROPERTY HANDLER, which this dispatch point never invoked.**
+            //
+            // `el.onload = fn` is an event-handler IDL attribute: the spec registers it as a listener
+            // on the element, so it must fire here. It did not — only `__listeners` was walked — so
+            // `addEventListener('load', ...)` worked and `s.onload = ...` silently did nothing.
+            //
+            // **That is the property form, and the property form is what script loaders use.**
+            // webpack: `script.onerror = script.onload = onScriptComplete`. Measured on
+            // `www.agoda.com`: the chunk fetched and executed, webpack was never told, its timeout
+            // fired `ChunkLoadError`, the app never converged, and the page painted BLANK.
+            //
+            // Non-capturing by definition, so bubble/at-target phase only. It runs BEFORE the
+            // listener list, matching `__xhrFire` — this file's own rule is *"ONE dispatch point, so
+            // the `on*` handler and the listener list can never drift apart"*, and the element path
+            // was the one that had drifted.
+            //
+            // ⚠ It cannot double-fire an inline `onclick=` handler: those are compiled onto a marked
+            // expando (`__ih_onclick`) and registered via `addEventListener`, leaving `el.onclick`
+            // itself `undefined` — verified directly (`typeof b.onclick === 'function'` is FALSE for
+            // `<button onclick=...>`, and the handler fires exactly once). Likewise `<body onload>`,
+            // which migrates to `globalThis.onload` and never sets `body.onload`.
+            if (phase === 'b') {
+                var oh = node['on' + type];
+                if (typeof oh === 'function') {
+                    ev.currentTarget = node;
+                    try { oh.call(node, ev); } catch (e) {
+                        if (typeof __reportError === 'function') __reportError(e);
+                    }
+                    if (ev._stopImmediate) return;
+                }
+            }
             if (!arr) return;
             ev.currentTarget = node;
             // Iterate a COPY: `once` removes entries mid-walk, and a handler may add or remove others.

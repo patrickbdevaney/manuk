@@ -29522,3 +29522,94 @@ NEXT: **(1) agoda's chunk timeout / non-converging event loop** — an engine ti
 certificate can no longer report the page as fine. **(2) Re-read the other `verdict ok` rows against
 ink** — `agoda` was found by eye, and being found by eye means the population was never swept.
 **(3) The live unattributed mozjs heap corruption** (t650) and PLACEMENT, unchanged.
+
+## Tick 652 — we ran the injected script and never told the page (2026-07-27)
+
+HYPOTHESIS: t651 left `www.agoda.com` diagnosed but unfixed — a webpack chunk load ends in
+`ChunkLoadError`, the app never converges, and the page paints blank. Find why the chunk load fails.
+
+**It does not fail. The chunk fetches and executes perfectly — and we fire NOTHING.** No `load`, no
+`error`, on the script element or anywhere else. Probed directly rather than reasoned about, with the
+result forced into a box width so it cannot be argued with:
+
+```text
+  ran     200px   <- the injected chunk DID fetch and execute
+  onload   10px   <- `load` never fired
+  onerr    10px   <- `error` never fired, on a src that 404s
+```
+
+**That is the entire contract of a script loader, and there was no symptom** — no error, no log, no
+failing gate, because the script itself had run flawlessly. webpack's chunk loader is literally
+`script.onerror = script.onload = onScriptComplete` plus a timer; with neither event it falls through
+to the timer and rejects. The class is much wider than bundlers — every `loadScript()` helper
+resolves its promise on this event: analytics, tag managers, ad tags, reCAPTCHA, payment and map
+SDKs. **A loader with no completion signal does not fail loudly. It waits.**
+
+### TWO defects, one symptom — and the second is the interesting one
+
+Fixing the first (dispatch `load`/`error` after running an injected script) moved the needle only
+half way, and the half that moved was the *wrong* half:
+
+```text
+  addEventListener('load', …)   ->  FIRES   (400px)
+  script.onload = …             ->  still nothing (10px)
+```
+
+`__dispatchEvent` — **the one element dispatch point** — walked `__listeners` and never invoked the
+`on<type>` **property**. So the listener form worked and the property form did not, **which is
+exactly backwards from what the loaders in the wild use.** This file states the rule itself, in
+`__xhrFire`: *"ONE dispatch point, so the `on*` handler and the listener list can never drift apart."*
+The XHR path had been fixed that way; the element path was still drifted.
+
+⚠ **THE DOUBLE-FIRE RISK WAS MEASURED, NOT REASONED ABOUT**, because invoking a property handler at
+the shared dispatch point could plausibly fire every inline `onclick=` twice:
+
+```text
+  typeof b.onclick  for <button onclick="…">   ->  NOT a function
+  inline handler fire count on b.click()       ->  exactly 1
+```
+
+Inline handlers compile onto a marked expando (`__ih_onclick`) and register via `addEventListener`,
+leaving `el.onclick` `undefined`; `<body onload>` migrates to `globalThis.onload` and never sets
+`body.onload`. So the property invocation cannot collide with either — and `once:1` in the gate
+asserts that invariant rather than trusting this paragraph.
+
+**`load` fires even when the script THREW.** The event reports that fetching and running happened,
+not that the code succeeded — a throw goes to `window.onerror`. Gating `load` on success would strand
+every loader whose chunk has a benign error: the same bug with a smaller blast radius.
+
+### ⚠ AND IT DID NOT FIX AGODA, WHICH IS THE POINT OF SAYING SO
+
+```text
+  ChunkLoadError: Loading chunk 5035 failed.        (still)
+  event loop hit its task ceiling ×10               (still)
+```
+
+The events now fire, but **too late**. Our dynamic-script phase runs inside `finish_loading`, *after*
+the page's own event loop has already spun to its 20,000-task ceiling and webpack's timeout has
+already fired. A real browser fetches an injected script **concurrently with** the event loop; we do
+it in a later phase. **That is a scheduling defect, and it is a different tick from this one.**
+
+> I could have shipped this as "fixes agoda" and the commit would have read better. Two named defects
+> are fixed and gated; the site is not. **A fix that is real and insufficient is worth exactly its own
+> size** — and the remaining cause is now named rather than absorbed into a success story.
+
+No corpus claim is made here either, deliberately: check #47's clause binds a fix *argued* as "a
+large fraction of the web", and the honest state is one mechanism fixed, one site measured and still
+broken. The corpus number is owed by the NEXT tick, not claimed by this one.
+
+TICK SHAPE: capability (two engine defects on the script-loading path: no completion event at all,
+and the `on<type>` property handler missing from the one element dispatch point). Bar 0 untouched;
+no ratchet floor moved.
+Gates: `G_SCRIPT_LOAD_EVENT` (`engine/page/tests/g_script_load_event.rs`) — **in the wall**, unlike
+this session's two instrument gates. RED-proven **twice, once per defect**: disabling the property
+invocation leaves only `ael-load:true` (the exact pre-fix asymmetry); disabling the dispatch leaves
+`#out` at `-` (the exact pre-fix silence). Hermetic — served from a local socket, so it cannot
+false-RED on the network.
+WIKI: `docs/wiki/frameworks.md` — "we ran the script and never told the page".
+PATTERN: dynamic-script completion events + `on<type>` property handlers at element dispatch.
+
+NEXT: **(1) injected scripts must load CONCURRENTLY with the event loop**, not in a later phase —
+that is what still blanks agoda, and it is a scheduling change, so it wants its own tick and a
+careful look at the load budget. **(2) The corpus number** for this tick's mechanism. **(3)** the
+live mozjs heap corruption (t650) and PLACEMENT (shape ≥0.75 on 0 sites across 39 ticks), unchanged.
