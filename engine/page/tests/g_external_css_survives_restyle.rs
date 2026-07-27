@@ -35,6 +35,7 @@ const HTML: &str = r##"<!doctype html><html><head>
 <link rel="stylesheet" href="site.css">
 </head><body>
 <div id="box">styled by an EXTERNAL sheet</div>
+<div id="wide"></div>
 <div id="hit">click me</div>
 <div id="out">-</div>
 <script>
@@ -50,7 +51,14 @@ const HTML: &str = r##"<!doctype html><html><head>
 </script>
 </body></html>"##;
 
-const CSS: &str = "#box { width: 321px; height: 40px; }\n";
+/// The external sheet does two jobs. `#box` proves the sheet SURVIVED a re-cascade (the original
+/// subject). `html { width: fit-content }` plus a 5000px child proves the re-cascade still knows the
+/// AVAILABLE WIDTH — see the assertion at the end of the test for what that is measuring and why.
+const CSS: &str = concat!(
+    "#box { width: 321px; height: 40px; }\n",
+    "html { width: -webkit-fit-content; width: fit-content; }\n",
+    "#wide { width: 5000px; height: 10px; }\n"
+);
 const DATA: &str = "ok";
 
 fn serve(path: &str) -> (u16, &'static [u8], &'static str) {
@@ -168,5 +176,37 @@ fn a_recascade_keeps_the_external_stylesheets_it_already_fetched() {
         "G_EXTERNAL_CSS_SURVIVES_RESTYLE: the CLICK path stripped the external stylesheet. One \
          re-cascade rule, eight call sites — fixing the one a gate exercises leaves the rest live, \
          which is why two independent triggers are asserted here."
+    );
+
+    // ── **THE RE-CASCADE MUST STILL KNOW THE AVAILABLE WIDTH** (tick 686).
+    //
+    // The external sheet sets `html { width: fit-content }` and gives `#wide` a 5000px width. `fit-content`
+    // is `min(max-content, max(min-content, available))` — so the root must clamp to the VIEWPORT and let
+    // the 5000px child overflow, exactly as it does when the same declarations arrive in an inline
+    // `<style>` (measured: html and body both 784 in an 800px viewport, child overflowing at 5000).
+    //
+    // The reason this is worth a gate is `www.naukri.com`, whose sheet carries
+    // `@media only screen and (max-width:1270px){html{width:fit-content}}` — matching at any ordinary
+    // viewport — and whose body lays out at **89,905px** against Chrome's 1,200 (t684/t685). Chrome's
+    // built DOM plus that same sheet, rendered here from an inline `<style>`, gives a correct 1200. The
+    // live load differs in exactly one way: the sheet arrives ASYNC and the page re-cascades. If the
+    // relayout that follows does not carry the available width, `fit-content` degrades to `max-content`
+    // and the root grows to its widest descendant — which is the shape of that 89,905.
+    let html_w = width_of(&page, "html");
+    let wide_w = width_of(&page, "#wide");
+    eprintln!("  fit-content after restyle: html={html_w:?} #wide={wide_w:?}");
+    assert_eq!(
+        wide_w,
+        Some(5000),
+        "the gate's own fixture failed: `#wide` is not 5000px, so the external sheet's width never \
+         applied and the clamp below has nothing to clamp."
+    );
+    assert!(
+        html_w.is_some_and(|w| w <= 800),
+        "G_EXTERNAL_CSS_SURVIVES_RESTYLE: the root is {html_w:?} wide in an 800px viewport after an \
+         ASYNC stylesheet applied `html {{ width: fit-content }}`. `fit-content` is \
+         `min(max-content, max(min-content, available))` — a re-cascade that has lost the available \
+         width degrades it to `max-content`, and the root grows to its widest descendant. That is the \
+         shape of `www.naukri.com`'s body laying out at 89,905px against Chrome's 1,200."
     );
 }

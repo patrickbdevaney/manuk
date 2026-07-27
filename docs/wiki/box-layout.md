@@ -1602,8 +1602,29 @@ that declaration plus a 5000px child in an 800px viewport — gives `html` and `
 clamped to the available width, with the wide child overflowing. So it is not a missing `fit-content`
 clamp on its own; it needs something else in that sheet.
 
-**The next experiment is mechanical, not another hypothesis:** apply the REAL 26KB stylesheet to a minimal
-document and bisect it by halves. ~15 renders, and the answer is a declaration rather than a guess.
+### The bisection ran, and it narrowed the question again (tick 686)
+
+**Chrome's own built DOM plus that same stylesheet, rendered here offline, gives `html=1200 body=1200`** —
+and a content height of **352px, which is exactly the height the sweep measured for our 89905×352 body.**
+Same content, same height, correct width. So the sheet and the DOM together are not sufficient to produce
+the bug.
+
+**Fourth mechanism eliminated:** it is not the ASYNC arrival of the sheet either. A loopback-served
+external stylesheet carrying `html { width: fit-content }` and a 5000px child re-cascades and re-lays-out
+to `html=784` in an 800px viewport, with the child overflowing at 5000 — correctly clamped
+(`G_EXTERNAL_CSS_SURVIVES_RESTYLE` now asserts this, with `#wide == 5000` as its vacuity guard).
+
+So the surviving difference is the one thing not yet substituted: **the DOM OUR scripts build.** Chrome's
+DOM lays out correctly here; ours does not. The next step is therefore a DOM diff, not a CSS bisection —
+dump our own built tree and compare it against Chrome's for the elements on the 89,905px chain.
+
+| substituted | result |
+|---|---|
+| the document (our UA vs Chrome's) | byte-identical, 15,222 bytes — **not it** |
+| `html{width:fit-content}` alone, hermetic | html 784, child overflows — **not it** |
+| the sheet arriving ASYNC + re-cascade | html 784, child overflows — **not it** |
+| Chrome's built DOM + the real sheet, offline | html 1200, body 1200×352 — **not it** |
+| **our own built DOM** | ← the only thing left |
 
 ⚠ Recorded as OPEN, with the eliminations, deliberately. Three of this session's ticks were saved by a
 five-minute probe killing a good-sounding mechanism; the cost of *publishing* the eliminations is one

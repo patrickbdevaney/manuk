@@ -96,6 +96,7 @@
   - L1541 · www.naukri.com: our <body> is 89,905px wide and Chrome's is 1,200 (tick 684, OPEN)
   - L1562 · Two mechanisms ELIMINATED, so the next attempt does not re-derive them
   - L1577 · The PHASE is now named: the external stylesheet (tick 685)
+  - L1605 · The bisection ran, and it narrowed the question again (tick 686)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1206,4 +1207,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1117 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1118 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

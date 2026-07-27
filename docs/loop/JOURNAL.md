@@ -32361,3 +32361,57 @@ and it ends with a declaration. **(2) THE PER-CALL LOAD BUDGET** (t678/t679/#51)
 blocked on nine gate files that call `load_async` without `finish_loading`. **(3)** the repeat plan should
 key on whether a site's variance is REPRODUCIBLE within a sweep; three of four repeated sites returned
 byte-identical rows, so six live renders per sweep buy an error bar of zero.
+
+## Tick 686 — Chrome's DOM lays out correctly here; ours does not (2026-07-27)
+
+HYPOTHESIS: t685's NEXT #1 — bisect the 26KB stylesheet mechanically. The bisection's FIRST step made the
+rest unnecessary, which is the good outcome for a bisection.
+
+### THE SUBSTITUTION TABLE
+
+| substituted | result |
+|---|---|
+| the document (our UA vs Chrome's) | **byte-identical**, 15,222 bytes — not it |
+| `html{width:fit-content}` alone, hermetic | html 784, child overflows at 5000 — not it (t685) |
+| the sheet arriving ASYNC + a re-cascade | html 784, child overflows at 5000 — **not it** |
+| **Chrome's built DOM + the real sheet, offline** | **html 1200, body 1200×352** — not it |
+| our own built DOM | ← the only thing left |
+
+**Chrome's built DOM plus naukri's real stylesheet, rendered here with every `<script>` stripped, gives
+`html=1200 body=1200` and a content height of 352px — and 352 is EXACTLY the height the sweep measured for
+our `89905×352` body.** Same content, same height, correct width. The sheet and the DOM together do not
+produce the bug.
+
+**Fourth mechanism eliminated:** not the async arrival either. A loopback-served external sheet carrying
+`html { width: fit-content }` plus a 5000px child re-cascades and re-lays-out to `html=784` in an 800px
+viewport, child overflowing — correctly clamped.
+
+So the surviving difference is the one thing not yet substituted: **the DOM OUR scripts build.** The next
+step is a DOM DIFF, not a CSS bisection.
+
+### AND THE ELIMINATION LEFT A GATE BEHIND
+
+`G_EXTERNAL_CSS_SURVIVES_RESTYLE` now asserts that a re-cascade still knows the AVAILABLE WIDTH: after an
+async sheet applies `html { width: fit-content }`, the root clamps to the viewport and the 5000px child
+overflows. `#wide == 5000` is its vacuity guard — without it the clamp would have nothing to clamp and the
+assertion would pass on a sheet that never applied.
+
+⚠ **NOT RED-PROVEN, and that is stated rather than glossed.** Breaking it requires losing the available
+width inside the layout plumbing, which is not a one-line mutation, so this is an assertion that locks in
+a *correct* behaviour rather than one proven to catch its absence. Weaker than this project's standard, and
+worth having anyway: the naukri investigation is what identified it as load-bearing, and the vacuity guard
+at least proves the path is exercised. Named here so a future falsify pass knows to come back to it.
+
+TICK SHAPE: measurement (a fourth elimination, the question narrowed to one substitution) + one invariant
+locked in. Bar 0 untouched; the only source change is a gate fixture.
+Gates: `G_EXTERNAL_CSS_SURVIVES_RESTYLE`, extended (see the ⚠ above on its RED status). Its two original
+triggers still green.
+WIKI: `docs/wiki/box-layout.md` — the naukri section now carries the substitution table.
+PATTERN: none — an open diagnosis. [no-pattern]
+
+NEXT: **(1) DIFF OUR BUILT DOM AGAINST CHROME'S** on the 89,905px chain (`body/div:2`, `div:2/div:1`,
+`div:2/div:4/div:2`). Our engine has no `--dump-dom`; the cheap equivalent is a probe script that
+serialises `outerHTML` for those paths and prints it, run against the LIVE url through the same
+fetch+`<base>` trick the oracle uses. **(2) THE PER-CALL LOAD BUDGET** (t678/t679/#51) — the priority
+inversion, blocked on nine gate files that call `load_async` without `finish_loading`. **(3)** the repeat
+plan should key on whether a site's variance is REPRODUCIBLE within a sweep.
