@@ -710,6 +710,7 @@
   - L1680 · The three symptoms, and what each one means
   - L1691 · Top-level await interleaves, and a cycle links with live bindings (tick 636)
   - L1732 · The document said it was a comment (tick 642)
+  - L1775 · The sanitizer that returned nothing (tick 643)
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1099,4 +1100,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1014 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1015 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

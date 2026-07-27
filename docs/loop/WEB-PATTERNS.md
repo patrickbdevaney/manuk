@@ -5496,3 +5496,31 @@ that identical defect one `else if` away.
 4. **Wrap the served bundle in `try{…}catch`** and record the message. Page-level handlers may not
    see it; this always does.
 5. **Grep the bundle for the variable the message names.** Minified or not, the guard is right there.
+
+## The second document that was not a node (tick 643)
+
+**The class:** every sanitizer, template engine, markdown renderer and HTML-diffing library parses
+untrusted markup into a **detached document** so nothing in it can run, fetch, or touch the page.
+`DOMParser.parseFromString` and `document.implementation.createHTMLDocument` are the two doors, and
+code reaches the result through node APIs — `ownerDocument`, `createNodeIterator`, `importNode`,
+`adoptNode`.
+
+A parsed document that is an **object literal wearing `nodeType: 9`** answers the handful of
+questions someone happened to need (`documentElement`, `body`, `querySelector`) and fails everything
+that treats it as a node. Combined with an `ownerDocument` that returns the *page's* document for
+every node, DOMPurify's walk — `createNodeIterator.call(root.ownerDocument || root, root, …)` —
+iterated a tree its root was not in and returned **the empty string** for any input containing a
+tag.
+
+> **A duck-typed object passes exactly the checks its author thought of.** The failure is not that
+> it is incomplete — it is that the incompleteness is invisible from the call site, because
+> `nodeType === 9` is what a caller checks and it is precisely what the duck gets right.
+
+**The diagnostic that breaks this open: walk the structure that would make the claim true.** The
+object said `nodeType: 9`; printing the **parent chain** from a parsed child gave `BODY > HTML` with
+an *element* at the root, and no document anywhere. One line of probe, and the whole class is
+visible.
+
+**And the design rule.** When a real mechanism for something already exists in the tree, a second
+"lightweight" one beside it is not a shortcut — it is a divergence that will be found by a library,
+not by a test. Route the shim through the real thing and delete it.

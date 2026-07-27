@@ -28805,3 +28805,71 @@ NEXT: the real-library method has now found a high-blast-radius bug in each of i
 makes it the cheapest instrument on the board — **more bundles** (Angular, Svelte's runtime, Alpine,
 htmx, Google Tag Manager, a consent manager) is the obvious next tick. Still open: the Opus decoder,
 our latency on the placement half, and t629's `getBoundingClientRect()` on an SVG child.
+
+## Tick 643 — DOMPurify returned the empty string for every HTML input (2026-07-26)
+
+HYPOTHESIS: the real-library method found a high-blast-radius bug on each of its first two runs, so
+run it wider — eight more bundles that gate whole site classes: Alpine, htmx, lodash, axios,
+DOMPurify, Swiper, Popper, Bootstrap.
+
+**SIX WORK OUTRIGHT** (lodash, axios, Popper, Swiper, Bootstrap tooltip+modal, and Alpine — which
+renders `42` once `Alpine.start()` runs; it waits for DOMContentLoaded, so the initial blank was my
+probe reading too early, **not a bug**). **TWO DO NOT.**
+
+**`DOMPurify.sanitize('<b>hi</b>')` RETURNED THE EMPTY STRING.** Not escaped, not tag-stripped —
+*nothing*. `<div><p>a</p></div>` → `''`. And `sanitize('plain text')` → `'plain text'`, which is
+exactly the shape that hides the bug from any quick check, because DOMPurify short-circuits input
+with no `<`. **Every site rendering user-supplied HTML through a sanitizer — comment threads, CMS
+bodies, rendered markdown, rich-text fields — displayed blank content, silently.**
+
+**TWO DEFECTS STACKED, AND NEITHER IS VISIBLE FROM THE SANITIZER'S SIDE.**
+
+1. **`DOMParser.parseFromString` returned an object literal wearing `nodeType: 9`** — a duck with
+   `documentElement`/`body`/`querySelector` around a *detached `<html>` element*. Not a node in the
+   arena at all. Meanwhile `document.implementation.createHTMLDocument`, forty lines away, builds
+   the real thing: doctype + html + head + body, a reflector carrying `Document.prototype`, and its
+   identity seeded into the node cache. **Two ways to make a document, one real and one pretend.**
+2. **`ownerDocument` returned `window.document` for every node** — and the arena holds several
+   roots, so a node parsed into a sanitizer's throwaway document claimed to belong to the live page.
+
+DOMPurify's walk is `createNodeIterator.call(root.ownerDocument || root, root, …)`. With the wrong
+document it iterated a tree the root was not in, found no nodes, and emitted nothing.
+
+> **This is t642's bug one layer out, and I walked past it.** t642 fixed `ownerDocument` to return
+> `null` for a document — I was *inside this function* and did not ask the larger question it
+> answers, which is *"does this function know which document a node belongs to at all?"* It did not.
+> **A fix that makes a function correct for the case you are looking at can leave it wrong for the
+> case the function is FOR.**
+
+**FOUR CONSECUTIVE STEPS OF THE DIAGNOSIS NEEDED A CONTROL, AND ONE OF THEM I GOT WRONG TWICE.** The
+`parseFromString` root-cause only became visible after printing the *parent chain* of a parsed node
+(`BODY:1 > HTML:1`, root is an ELEMENT) rather than trusting `d.nodeType === 9`, which the fake
+object reported happily. ⚠ Two more **scripted-edit silent no-ops** on the probe file (anchors
+already consumed by an earlier patch) — the second time producing a "result" I nearly believed. I
+rewrote the probe with `Write` instead of patching it. `[[scripted-edit-silent-noop]]`, three times
+in two ticks.
+
+**AND A RED PROBE DISPROVED MY OWN RATIONALE AGAIN — the fourth time this session.** I documented the
+`cur != root()` guard as *what keeps `el.ownerDocument === document` object-identical*. Removing it
+leaves that claim **green**: the node cache already returns one reflector per node. The guard is
+cheap belt-and-braces over a subtler contract, not the load. Corrected in the code comment and in
+the gate, and the non-landing probe is recorded in the header table rather than quietly deleted.
+
+**NOT FIXED, AND NAMED:** **htmx 2.0.4 is dead** — `ReferenceError: XPathEvaluator is not defined`,
+thrown during its own evaluation, so it never defines `window.htmx`. That is a real subsystem
+(XPath), not a wiring gap, and it gets its own tick or an honest `missing` row rather than a stub.
+
+TICK SHAPE: capability (HTML sanitization went from returning the empty string to correct output —
+`<img src=x onerror=alert(1)><b>ok</b>` → `<img src="x"><b>ok</b>`, handler stripped and safe
+content kept — by making a parsed document a real node and teaching `ownerDocument` which document
+a node is in). Bar 0 improved. No ratchet floor moved; eleven DOM/parsing/traversal gates re-run
+green.
+Gates: **G_SECOND_DOCUMENT_IS_REAL** (`engine/page/tests/g_second_document_is_real.rs`, 11 claims
+including DOMPurify's iterator expression transcribed whole, 2 RED mutations run — one of which did
+not land and corrected the gate's own documentation).
+WIKI: `docs/wiki/js-engine.md` — "the sanitizer that returned nothing".
+PATTERN: `docs/loop/WEB-PATTERNS.md` — "the second document that was not a node".
+
+NEXT: **htmx / `XPathEvaluator`** is the named open blocker. The real-library method is now 3-for-3
+on high-blast-radius finds and remains the cheapest instrument on the board — more bundles (Angular,
+Svelte's runtime, Google Tag Manager, a consent manager, Google Maps JS) is the obvious continuation.

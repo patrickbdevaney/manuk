@@ -1856,23 +1856,39 @@ const PRELUDE: &str = r#"
       if (typeof globalThis.DOMParser === 'undefined') {
         globalThis.DOMParser = function DOMParser() {};
         globalThis.DOMParser.prototype.parseFromString = function (str, type) {
-          // Build a real detached tree by going through the parser we already have.
-          var host = document.createElement('html');
-          host.innerHTML = String(str == null ? '' : str);
-          // Enough of a Document for the things scripts actually do with the result.
-          var doc = {
-            documentElement: host,
-            body: host.querySelector('body') || host,
-            head: host.querySelector('head') || host,
-            querySelector: function (s) { return host.querySelector(s); },
-            querySelectorAll: function (s) { return host.querySelectorAll(s); },
-            getElementById: function (id) { return host.querySelector('#' + id); },
-            getElementsByTagName: function (t) { return host.querySelectorAll(t); },
-            createElement: function (t) { return document.createElement(t); },
-            createTextNode: function (t) { return document.createTextNode(t); },
-            contentType: type || 'text/html',
-            nodeType: 9
-          };
+          // **A REAL second document, not an object literal wearing `nodeType: 9` (tick 643).**
+          //
+          // This used to return a hand-built duck: `{ documentElement, body, head, querySelector,
+          // …, nodeType: 9 }` around a detached `<html>` element. It answered the handful of
+          // questions someone had needed at the time, and it was not a node — which broke
+          // everything that treats the result as one:
+          //
+          //   * `parsed.ownerDocument !== doc`, because the tree's real root was the `<html>`
+          //     ELEMENT and the returned object was not in the arena at all;
+          //   * `doc.createNodeIterator` and the rest of the Document surface were simply absent.
+          //
+          // **DOMPurify is the measured casualty.** Its walk is
+          // `createNodeIterator.call(root.ownerDocument || root, root, …)`, so with a fake document
+          // it iterated a tree the root was not in, found no nodes, and returned **the empty
+          // string** for any input containing a tag: `sanitize('<b>hi</b>')` → `''`. Every site
+          // that renders user-supplied HTML — comments, CMS bodies, rendered markdown — showed
+          // nothing, silently.
+          //
+          // `createHTMLDocument` already builds the real thing (doctype + html + head + body, a
+          // reflector carrying `Document.prototype`, and its identity seeded into the node cache so
+          // `el.ownerDocument === doc` holds). Two ways to make a document, one real and one
+          // pretend, is the one-rule-two-implementations defect; this deletes the pretend one.
+          var doc = document.implementation.createHTMLDocument('');
+          var s = String(str == null ? '' : str);
+          // A full-document string is set on the documentElement so `<head>` content lands in the
+          // head; anything else is a fragment and belongs in the body, which is where an innerHTML
+          // parse would put it anyway.
+          if (/^\s*(<!doctype|<html)/i.test(s)) {
+            doc.documentElement.innerHTML = s.replace(/^\s*<!doctype[^>]*>/i, '');
+          } else {
+            doc.body.innerHTML = s;
+          }
+          try { doc.contentType = type || 'text/html'; } catch (e) {}
           return doc;
         };
       }

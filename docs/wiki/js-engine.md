@@ -1771,3 +1771,43 @@ libraries and `tail:false` for jQuery — it aborts mid-evaluation; wrap the ser
 nothing changed, and `tail:false` came back for *every* library. That reads as "the engine drops
 appended script". It was caught only because the working libraries disagreed with the hypothesis.
 `[[scripted-edit-silent-noop]]`: assert every replacement, including in a throwaway probe.
+
+## The sanitizer that returned nothing (tick 643)
+
+`DOMPurify.sanitize('<b>hi</b>')` returned **the empty string**. Not escaped, not tag-stripped —
+nothing. `<div><p>a</p></div>` → `''`. Meanwhile `sanitize('plain text')` → `'plain text'`, because
+DOMPurify short-circuits input containing no `<` — which is exactly the shape that hides the bug
+from a quick check. **Every site rendering user-supplied HTML through a sanitizer — comment threads,
+CMS bodies, rendered markdown, rich-text fields — displayed blank content, silently.**
+
+**Two defects stacked, neither visible from the sanitizer's side.**
+
+1. **`DOMParser.parseFromString` returned an object literal wearing `nodeType: 9`** — a duck with
+   `documentElement`/`body`/`querySelector` wrapped around a *detached `<html>` element*, not a node
+   in the arena at all. Forty lines away, `document.implementation.createHTMLDocument` built the
+   real thing: doctype + html + head + body, a reflector carrying `Document.prototype`, its identity
+   seeded into the node cache. **Two ways to make a document, one real and one pretend.**
+2. **`ownerDocument` returned `window.document` for every node.** The arena holds several roots, so
+   a node parsed into a throwaway document claimed to belong to the live page.
+
+DOMPurify's walk is `createNodeIterator.call(root.ownerDocument || root, root, …)`. With the wrong
+document it iterated a tree the root was not in, found nothing, and emitted nothing.
+
+> **This was the previous tick's bug one layer out, and I walked past it.** t642 fixed
+> `ownerDocument` to return `null` for a document — *from inside this same function* — without
+> asking the larger question the function exists to answer: **does it know which document a node
+> belongs to at all?** It did not. A fix that makes a function correct for the case you are looking
+> at can leave it wrong for the case the function is *for*.
+
+**The diagnostic step that broke it open** was printing the **parent chain** of a parsed node —
+`BODY:1 > HTML:1`, root is an *element* — rather than trusting `d.nodeType === 9`, which the fake
+document reported happily. When an object claims to be something, walk the structure that would make
+it true.
+
+**Fixed** by routing `parseFromString` through `createHTMLDocument` (deleting the pretend document)
+and by having `ownerDocument` walk to the node's real document root, falling through to the global
+document for detached trees — which is the spec's answer, since `document.createElement('div')` is
+owned by that document while unattached.
+
+Result: `<img src=x onerror=alert(1)><b>ok</b>` → `<img src="x"><b>ok</b>`. Handler stripped, safe
+content kept.

@@ -7795,6 +7795,38 @@ unsafe fn el_get_owner_document(cx: *mut RawJSContext, _argc: u32, vp: *mut Valu
             *vp = NullValue();
             return true;
         }
+        // **A node in a SECOND document must report THAT document (tick 643).**
+        //
+        // This returned `window.document` for every node in the arena, and the arena holds several
+        // roots — `createHTMLDocument`, `DOMParser.parseFromString` and every detached tree live in
+        // it alongside the page. So a node parsed into a sanitizer's throwaway document claimed to
+        // belong to the live page.
+        //
+        // **DOMPurify is the measured casualty, and it fails silently in the worst direction.** Its
+        // node walk is `createNodeIterator.call(root.ownerDocument || root, root, …)`; with the
+        // wrong document it walked a tree the root is not in, found nothing, and returned the
+        // EMPTY STRING for any input containing a tag. `sanitize('<b>hi</b>')` → `''`. Every site
+        // that renders user-supplied HTML — comments, CMS bodies, rendered markdown — displayed
+        // nothing, with no error.
+        //
+        // One arena, several roots (see `doc_create_html_document`), so the owning document is
+        // simply the root of the parent chain. A detached tree has no document root and correctly
+        // falls through to the global document below — which is the spec's answer, since
+        // `document.createElement('div')` is owned by that document while it sits unattached.
+        let mut cur = node;
+        while let Some(p) = (*dom).parent(cur) {
+            cur = p;
+        }
+        if (*dom).is_document(cur) && cur != (*dom).root() {
+            // Restricted to a NON-main document. ⚠ **The RED probe corrected the reason I first
+            // wrote here.** I claimed this guard is what keeps `el.ownerDocument === document`
+            // object-identical; dropping it leaves that assertion GREEN, because the node cache
+            // already returns the same reflector for the main document node. So the guard is cheap
+            // belt-and-braces over a subtler contract (the cache being seeded), *not* the thing
+            // holding identity — and saying so is the difference between a comment and a claim.
+            return_node_or_null(cx, vp, dom, Some(cur));
+            return true;
+        }
     }
     rooted!(in(cx) let global = CurrentGlobalOrNull(&wrap_cx(cx)));
     if !global.get().is_null() {
