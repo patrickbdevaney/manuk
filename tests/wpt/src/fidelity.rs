@@ -110,6 +110,18 @@ pub enum Unmeasurable {
     /// of t611's *"unscored with NO recorded reason"* rows — the residue that tick could not explain —
     /// into a stated one, and removes a false number from the certificate.
     ShellOnly(usize),
+    /// **Both engines rendered, and they have too few elements IN COMMON to compare.** Carries the
+    /// size of the comparable set.
+    ///
+    /// Distinct from [`Self::ShellOnly`], which is about the ORACLE's count, and that distinction is
+    /// the whole reason this exists: `www.ebay.com` at t653 had the oracle produce **25** paths — no
+    /// shell — while only **4** were comparable, because *we* rendered 16% of the page. `ShellOnly`
+    /// could not fire, the sample floor refused to score it, and the row went out **unscored with no
+    /// reason at all** — the certificate's own *"the instrument could not say why"* shortfall, which
+    /// t614 named and t626 carried forward as its one remaining unexplained row.
+    ///
+    /// The reason points at US, not the corpus: the oracle rendered the page and we did not.
+    ThinOverlap(usize),
     /// **The sweep process itself died while rendering this site** — SIGSEGV, OOM-kill, or an
     /// operator's `kill`. Recovered on the NEXT run from the in-flight marker, never by the run that
     /// died, which by definition writes nothing.
@@ -141,6 +153,7 @@ impl Unmeasurable {
             Self::ShellOnly(n) => format!("shell-only-{n}"),
             Self::Timeout(secs) => format!("timeout-{secs}s"),
             Self::Crashed => "crashed".into(),
+            Self::ThinOverlap(n) => format!("thin-overlap-{n}"),
         }
     }
 
@@ -152,6 +165,10 @@ impl Unmeasurable {
             "probe-blocked" => Some(Self::ProbeBlocked),
             "render-failed" => Some(Self::RenderFailed),
             "crashed" => Some(Self::Crashed),
+            _ if s.starts_with("thin-overlap-") => s["thin-overlap-".len()..]
+                .parse()
+                .ok()
+                .map(Self::ThinOverlap),
             _ if s.starts_with("timeout-") && s.ends_with('s') => s["timeout-".len()..s.len() - 1]
                 .parse()
                 .ok()
@@ -208,6 +225,12 @@ impl Unmeasurable {
                  fetched copy from file://, where the site's own origin is null and its scripts' \
                  fetches are cross-origin and blocked, so a JS-rendered page never builds (comix.to: 28 \
                  elements here vs ~2643 live). Scoring this measures the shell, not the site"
+            ),
+            Self::ThinOverlap(n) => format!(
+                "the oracle rendered the page and only {n} element(s) are COMMON to both engines, \
+                 which is below the sample floor — so there is nothing to compute a placement ratio \
+                 over. Unlike shell-only this is OURS: the oracle built the page and we did not, so \
+                 the missing elements are a coverage failure wearing an 'unscored' label"
             ),
             Self::Crashed => "THE SWEEP PROCESS DIED while rendering this site (SIGSEGV/OOM/kill) — \
                  our own bug, like render-failed, and the most expensive kind: it takes the whole \
@@ -767,6 +790,32 @@ fn ink(means: &[[f64; 3]]) -> f64 {
         })
         .count();
     n as f64 / means.len() as f64
+}
+
+/// **Why this site cannot be scored — ONE rule, in one place, for both ways of being unscoreable.**
+///
+/// `probed` is what the ORACLE built; `common` is how many of those elements *both* engines
+/// rendered, i.e. the set a placement ratio is actually computed over. The certificate refuses to
+/// score below [`CERT_MIN_SHAPE_SAMPLE`] either way — this supplies the REASON that refusal never
+/// had, and the two reasons blame opposite parties:
+///
+/// * the **oracle** built almost nothing → [`Unmeasurable::ShellOnly`]. Its `file://` copy has a
+///   `null` origin, so a JS-rendered page never builds. Not our bug, and not evidence about the site.
+/// * the oracle built the page and **we** did not → [`Unmeasurable::ThinOverlap`]. Ours.
+///
+/// The split matters because it was the gap: `www.ebay.com` had `probed 25 · common 4`, so
+/// `ShellOnly` could not fire, the floor refused to score it, and the row went out **unscored with no
+/// reason** — the certificate's own *"the instrument could not say why"* line, open since t614.
+///
+/// Returns `None` when there is enough to compare, so a caller can leave an existing reason alone.
+pub fn unscoreable_reason(probed: usize, common: usize) -> Option<Unmeasurable> {
+    if probed < CERT_MIN_SHAPE_SAMPLE {
+        Some(Unmeasurable::ShellOnly(probed))
+    } else if common < CERT_MIN_SHAPE_SAMPLE {
+        Some(Unmeasurable::ThinOverlap(common))
+    } else {
+        None
+    }
 }
 
 /// Below this, an engine drew **nothing** on the page. Measured, not chosen: across the t650 HEAD-20
@@ -1392,6 +1441,70 @@ mod shape_tests {
         // An EMPTY sweep never holds. A certificate over zero sites is the most flattering possible
         // reading of an engine and the least informative.
         assert!(!certificate(&[]).holds(), "zero sites is not a pass");
+    }
+
+    /// **G_UNSCOREABLE_REASON — an unscored site must say WHICH ENGINE failed it.**
+    ///
+    /// The certificate prints its own shortfall for this: *"N of those UNSCORED sites have NO
+    /// recorded reason — the instrument could not say why, which is an instrument gap, not a
+    /// result."* t611 had 4, t626 had 1, t650 drove it to 0, and **t653 put one back** — because the
+    /// rule only ever looked at what the ORACLE built.
+    ///
+    /// Every case below is a real row from a real sweep, and the middle one is the whole point.
+    #[test]
+    fn an_unscored_site_names_which_engine_failed_it() {
+        use super::{unscoreable_reason, Unmeasurable, CERT_MIN_SHAPE_SAMPLE as FLOOR};
+
+        // `comix.to` — the ORACLE built 3 elements from its `file://` copy. Not our bug, and not
+        // evidence about the site.
+        assert_eq!(unscoreable_reason(3, 2), Some(Unmeasurable::ShellOnly(3)));
+
+        // `www.ebay.com` @t653 — **the gap**. The oracle built 25 (no shell), and only 4 were common
+        // because WE rendered 16% of the page. Deciding on `probed` alone, this returns None and the
+        // row goes out unscored with nothing to say.
+        assert_eq!(
+            unscoreable_reason(25, 4),
+            Some(Unmeasurable::ThinOverlap(4))
+        );
+
+        // `www.ikea.com` — 698 probed, 698 common. Scoreable, so no reason at all: a rule that
+        // manufactures a reason for a healthy site is worse than one that stays quiet.
+        assert_eq!(unscoreable_reason(698, 698), None);
+
+        // The boundary is the certificate's OWN floor, reused rather than invented — so this can
+        // never disagree with the thing that refuses to score.
+        assert_eq!(unscoreable_reason(FLOOR, FLOOR), None);
+        assert_eq!(
+            unscoreable_reason(FLOOR, FLOOR - 1),
+            Some(Unmeasurable::ThinOverlap(FLOOR - 1)),
+            "one element below the floor must be REFUSED and NAMED, not scored"
+        );
+
+        // And the reason survives the process boundary a chunked sweep writes it across.
+        let tag = Unmeasurable::ThinOverlap(4).tag();
+        assert_eq!(tag, "thin-overlap-4");
+        assert_eq!(
+            Unmeasurable::from_tag(&tag),
+            Some(Unmeasurable::ThinOverlap(4)),
+            "a reason that cannot be read back is a reason the certificate loses at exactly the \
+             moment the headline is computed"
+        );
+
+        // The certificate must COUNT it as unscored-with-a-reason — the whole point is that the
+        // shortfall list stops saying "the instrument could not say why".
+        let row = Fidelity {
+            shape: Some(0.0),
+            shape_n: 4,
+            unmeasurable: Some(Unmeasurable::ThinOverlap(4)),
+            ..row("ebay.example", Some(0.0), [0; 4])
+        };
+        let c = certificate(&[row]);
+        assert_eq!(c.sites, 1);
+        assert_eq!(c.scored, 0);
+        assert_eq!(
+            c.unmeasured_by_reason,
+            vec![("thin-overlap-4".to_string(), 1)]
+        );
     }
 
     /// **G_BLANK_RENDER_CANNOT_SCORE — 100% of nothing is not 100%.**

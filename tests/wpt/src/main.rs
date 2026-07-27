@@ -787,11 +787,6 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                     // certificate ALREADY refuses to score a placement ratio over fewer than that many
                     // elements, so this changes no verdict. It supplies the REASON that refusal never
                     // had, which is the whole of t611's unexplained residue.
-                    if probed < manuk_wpt::fidelity::CERT_MIN_SHAPE_SAMPLE {
-                        let reason = manuk_wpt::fidelity::Unmeasurable::ShellOnly(probed);
-                        eprintln!("  UNMEASURABLE [{}]: {}", reason.tag(), reason.explain());
-                        f.unmeasurable = Some(reason);
-                    }
                     if let Some((last_ok, _, first_bad, dy)) =
                         manuk_wpt::fidelity::first_divergence(&cmap, &mboxes, 60)
                     {
@@ -808,6 +803,22 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                     // rows that the certificate counted as passes — one of them a page whose 418 probed
                     // elements were ALL missing. The certificate needs `shape_n` to refuse that.
                     f.shape_n = shape_n;
+                    // **WHY it cannot be scored, decided in ONE place** — and only now, because the
+                    // question needs BOTH numbers: what the oracle built (`probed`) and what the two
+                    // engines share (`shape_n`). Deciding it above, on `probed` alone, could say
+                    // "the oracle rendered a shell" and could not say "the oracle rendered the page
+                    // and we did not" — so `ebay` (probed 25, common 4) fell through both and left
+                    // the certificate's *"the instrument could not say why"* row.
+                    // Never overwrites a reason already established (a bot-wall, a blank render):
+                    // the earlier cause is the true one, and this is the residue.
+                    if f.unmeasurable.is_none() {
+                        if let Some(reason) =
+                            manuk_wpt::fidelity::unscoreable_reason(probed, shape_n)
+                        {
+                            eprintln!("  UNMEASURABLE [{}]: {}", reason.tag(), reason.explain());
+                            f.unmeasurable = Some(reason);
+                        }
+                    }
                     let (dx, dy, dw, dh, within) =
                         manuk_wpt::fidelity::placement_stats(&cmap, &mboxes, 8);
                     eprintln!(

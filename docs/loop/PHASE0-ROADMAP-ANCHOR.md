@@ -132,6 +132,24 @@ never WPT count, never a vibe.
   (site 5 and site 11) and lost every completed row; the durable ledger landed this tick is why a
   number exists at all.
 
+- `corpus-v2 HEAD-20 @tick 653: sites 20 · scored 4 · shape >=0.75 on 0 (bar 95%) · UNSCORED 16 —
+  5 bot-wall-403 · 4 unreachable · 1 empty-202 · 1 probe-blocked · **1 render-failed** ·
+  1 shell-only-1 · 1 shell-only-3 · 1 timeout-300s · **1 with NO recorded reason**.` Run with t650-652
+  in place, so it is the first sweep to exercise the durable ledger, the blank-render guard and the
+  script `load` event on real sites.
+  **THE BLANK-RENDER GUARD FIRED WHERE IT WAS BUILT TO**: `www.agoda.com` moved `verdict ok` ->
+  `render-failed`, and `scored` went 5 -> 4 exactly as t651 predicted. A page we paint entirely white
+  can no longer enter the scored set.
+  **AND THE SWEEP PUT BACK AN UNEXPLAINED ROW, WHICH IS THE FINDING**: `www.ebay.com` came back
+  `probed 25 · common 4` — the ORACLE built the page and *we* rendered 16% of it, so `ShellOnly`
+  (which only ever looked at the oracle's count) could not fire, the sample floor refused to score
+  it, and the row went out with nothing to say. Unexplained unscored 4 -> 1 -> 0 -> **1**. Closed the
+  same tick by `unscoreable_reason()`, which decides both cases in one place; the next sweep is the
+  check, and it is owed rather than claimed.
+  **t652 moved no site**, consistent with the claim made there: the script `load` event is real and
+  insufficient, because injected scripts are still fetched in a later phase than the event loop.
+  Shape >=0.75 remains **0 sites** — t611, t626, t650 and t653.
+
 - `test262 @tick 546: 94.14% of 87,009 executed subtests (81,908 passed / 5,101 failed) · honest
   81.41% of the 100,617 the ratified suite defines (13,608 skipped: 10,739 async · 1,642 module ·
   1,225 host-API · 2 measured-hang) · 51,922 files, tc39 rev 7a096c20 · wall 140s · runner

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **411** | ticks 1–651 |
-| median tick cycle | **21m** | 410 intervals |
-| median, last 10 | **24m** | 10 intervals |
+| ticks landed | **412** | ticks 1–652 |
+| median tick cycle | **21m** | 411 intervals |
+| median, last 10 | **29m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.08** | 381.1h elapsed |
-| median verify wall | **64s** | 350 ticks |
+| **ticks per hour** | **1.08** | 381.8h elapsed |
+| median verify wall | **64s** | 351 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**202 of 411 ticks** (49%) moved a
+**203 of 412 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **202** capability ticks, median cycle **21m**
-* median diff per tick: **+235 / −34** lines across 8 files
+* **203** capability ticks, median cycle **21m**
+* median diff per tick: **+236 / −34** lines across 8 files
 
 ## Every tick
 
@@ -508,5 +508,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **649** | 2026-07-27 00:49 | 64m | reliability | 63s | +543/−13 | 325 | 81 | 56.0% · | the ledger entry tick 648 owed (2026-07-26) |
 | **650** | 2026-07-27 01:26 | 38m | reliability | 63s | +372/−36 | 325 | 81 | 56.0% · | the certificate could not be measured because the instrument staked twenty sites on surviv |
 | **651** | 2026-07-27 02:08 | 41m | reliability | 63s | +458/−42 | 326 | 81 | 56.0% · | the certificate said `verdict ok` about a blank white page (2026-07-27) |
+| **652** | 2026-07-27 02:48 | 40m | capability | 63s | +320/−38 | 326 | 81 | 56.0% · | we ran the injected script and never told the page (2026-07-27) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

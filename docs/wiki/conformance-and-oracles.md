@@ -1571,3 +1571,35 @@ satisfied by measuring less. Coverage over the oracle's shell, a ratio over 13 e
 score dominated by background — each is a number that gets *easier* as the page gets *emptier*. The
 only reliable defence is a second population that fails differently, not a stricter threshold on the
 first.
+
+## The rule could name the oracle failing us, and had no word for us failing (tick 653)
+
+A site is refused a placement score when there are too few elements to compare. There are **two ways**
+to get there, they are refused by the same floor, and only one of them had a name:
+
+| | who failed | named? |
+|---|---|---|
+| the oracle's `file://` copy built almost nothing (`comix.to`: 3 elements) | **the oracle** — not our bug, not evidence about the site | `ShellOnly` ✅ |
+| the oracle built the page and **we** rendered 16% of it (`ebay`: probed 25, common 4) | **us** | *nothing* ❌ |
+
+So `ebay` went out **unscored with no reason**, and the certificate printed its own shortfall about
+it: *"the instrument could not say why, which is an instrument gap, not a result."* That row had been
+open since t614, was carried by t626, was driven to zero at t650 — and came straight back at t653.
+
+**The cause is that the check was asked too early.** It ran at the producer on `probed` alone, before
+the comparable count existed in the function, so it *could not* ask "did we render the page?" — only
+"did the oracle?". A check placed where half the evidence is missing answers the half it can see, and
+looks complete doing it.
+
+> **An asymmetric rule is invisible while the asymmetry matches reality.** The oracle is the thing
+> that usually breaks, so a rule that can only blame the oracle passes review for 39 ticks. It fails
+> the first time *we* are the broken one — which is the case it most needed to catch.
+
+`unscoreable_reason(probed, common)` now decides both in one place, retiring a second implementation
+along the way (*one rule, N implementations* again). The two reasons blame opposite parties, which is
+the point: `ThinOverlap` is **ours**, and reads as a coverage failure wearing an *unscored* label.
+
+⚠ **The live re-run of `ebay` produced a THIRD outcome** — `timeout-300s`, after `probe-blocked` at
+t650 and `thin-overlap` at t653. So the gate asserts against the **recorded** numbers from the sweep
+row, never a re-fetch: *a gate whose expected value comes from today's network is a gate that measures
+the network.*

@@ -29613,3 +29613,67 @@ NEXT: **(1) injected scripts must load CONCURRENTLY with the event loop**, not i
 that is what still blanks agoda, and it is a scheduling change, so it wants its own tick and a
 careful look at the load budget. **(2) The corpus number** for this tick's mechanism. **(3)** the
 live mozjs heap corruption (t650) and PLACEMENT (shape ≥0.75 on 0 sites across 39 ticks), unchanged.
+
+## Tick 653 — the sweep that checked this session's work put back the row it had just closed (2026-07-27)
+
+HYPOTHESIS: t651 owed a follow-up in its own words — *"agoda was found BY EYE, and found-by-eye means
+the population was never swept."* Re-run HEAD-20 with t650-652 in place: the first sweep to exercise
+the durable ledger, the blank-render guard and the script `load` event on real sites at once.
+
+**THE GUARD FIRED WHERE IT WAS BUILT TO.** `www.agoda.com` moved `verdict ok` → `render-failed`, and
+`scored` went 5 → 4, exactly as t651 predicted. A page we paint entirely white can no longer enter the
+scored set. Nothing else in the population tripped it — the sweep is the check that it was a guard
+and not a sledgehammer.
+
+**AND THE SWEEP PUT BACK AN UNEXPLAINED ROW, ONE TICK AFTER I DROVE THAT COUNT TO ZERO:**
+
+```text
+  unexplained unscored:   t611 4   ->   t626 1   ->   t650 0   ->   t653 1
+```
+
+`www.ebay.com` came back `probed 25 · common 4`. **The oracle built the page — no shell — and WE
+rendered 16% of it.** So `ShellOnly` could not fire, because it only ever looked at *the oracle's*
+count; the sample floor refused to score it; and the row went out with nothing to say. The
+certificate printed its own shortfall about it: *"the instrument could not say why."*
+
+> **The rule could name the oracle failing us and had no way to name US failing.** Both are "too few
+> elements to compare", they are refused by the same floor, and only one of them had a word. The
+> asymmetry is invisible while the oracle is the thing that usually breaks — which is exactly how it
+> survived t614, t626 and t650.
+
+`unscoreable_reason(probed, common)` now decides **both** cases in one place, and the two reasons
+blame opposite parties: `ShellOnly` (the oracle's `file://` copy built nothing — not our bug, not
+evidence about the site) and the new `ThinOverlap` (**ours** — the oracle built the page and we did
+not, so the missing elements are a coverage failure wearing an *unscored* label). Consolidating them
+also retires a second implementation: the shell check was decided inline at the producer, on `probed`
+alone, before `shape_n` even existed in the function — which is *why* it could not ask the question.
+
+⚠ **THE LIVE RE-RUN OF `ebay` CAME BACK `timeout-300s` — A THIRD DIFFERENT OUTCOME**, after
+`probe-blocked` at t650 and `thin-overlap` at t653. That is t626's warning about live-origin noise
+arriving as a fact, and it is why the gate asserts against the **recorded** numbers from the sweep row
+rather than re-fetching: *a gate whose expected value comes from today's network is a gate that
+measures the network.* `ikea` re-ran unchanged (`ok`).
+
+**t652 MOVED NO SITE**, which is what I said it would do. The script `load` event is real and
+insufficient; injected scripts are still fetched in a later phase than the event loop. Recording the
+null result rather than quietly hoping the next sweep would show something.
+
+**Shape ≥0.75 is 0 sites at t611, t626, t650 AND t653.** Four measurements, 42 ticks, no movement.
+That is now the oldest unmoved number on the board and it is not an instrument artifact — the
+instrument has been rebuilt around it three times this session and it has not budged.
+
+TICK SHAPE: measurement + reliability (a sweep that validates the session's three fixes on real
+sites, and closes the one gap it surfaced). No engine source changed. Bar 0 untouched; no ratchet
+floor moved. One actuals line appended to `PHASE0-ROADMAP-ANCHOR.md` per the standing rule.
+Gates: `G_UNSCOREABLE_REASON` (`fidelity::shape_tests::an_unscored_site_names_which_engine_failed_it`),
+RED-proven by mutation — removing the thin-overlap arm returns `None` for `ebay`'s exact recorded
+numbers, the precise pre-fix silence. Every case in the gate is a real row from a real sweep.
+⚠ STANDING, SIXTH REPORT: `manuk-wpt`'s tests are not in the wall. `verify.sh` is harness-owned.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "the rule could name the oracle failing us, and had no
+word for us failing".
+PATTERN: [no-pattern] — no browser capability changed.
+
+NEXT: **(1) the next sweep must show unexplained unscored back at 0** — owed, not claimed.
+**(2) Injected scripts must load CONCURRENTLY with the event loop** (t652's named remainder; still
+what blanks agoda). **(3) PLACEMENT** — four measurements at 0 sites, now the oldest unmoved number.
+**(4)** the live mozjs heap corruption (t650), still needing an ASAN context.
