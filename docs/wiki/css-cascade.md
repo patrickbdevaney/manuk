@@ -1481,3 +1481,70 @@ reading-order 0 → 2 against the previous sweep, reproducible three times — a
 content minutes apart, showed reading-order 2 **both ways** (and SHAPE 66.6% → 67.2% in the fix's
 favour). `welt.de`'s scored population has read 2957 / 3149 / 3060 across three sweeps: **against a
 live corpus, the previous sweep is not a baseline — only a same-hour control is.**
+
+## The CSSOM as a view over the element's text (tick 665)
+
+**`styleEl.sheet` was `undefined`, and `undefined` is not the spec's absent value.**
+`HTMLStyleElement.sheet` is typed `CSSStyleSheet?`, so the guard every consumer writes is
+`if (el.sheet === null)`. Against `undefined` that guard is **false**, and the code proceeds into the
+thing it just checked for. Worse, `typeof CSSStyleSheet === "function"` was **already true** — the
+false-presence shape, where every feature detect passes and the page walks into the gap one line
+later. `www.agoda.com` rendered blank behind exactly this: `insertRules → getTag → this.sheet`, then
+`.length` on `undefined`.
+
+### Why the deferral was priced wrong
+
+The lever's own note said the tick-283 shim was reverted for wanting a **native accessor to reach the
+cascade**. It does not need one, and that was settled by a probe before a line was written:
+
+```text
+  el.textContent = '#a { width: 222px }'      #a: 111px  ->  222px
+```
+
+**A `<style>`'s own TEXT is the cascade's source of truth** (`collect_style_sources`), so writing
+`textContent` re-cascades through machinery that already exists. That makes the CSSOM a **view over
+the element's text** instead of a parallel data model that has to be kept in sync with one — and the
+parallel model was the subsystem. *When a capability is deferred as "needs X", re-price X: the reason
+was true about one implementation, not about the capability.*
+
+### The two things that are easy to get wrong
+
+**Rule splitting must track brace DEPTH.** `@media screen { #b { … } }` is ONE rule. A naive
+close-brace split reports the right count for flat sheets and silently shreds every responsive one —
+which is the shape of bug that passes a small fixture and fails the web. Validated as a page script at
+zero build cost before it went near the prelude.
+
+**`insertRule` past the end must THROW `IndexSizeError`.** A CSS-in-JS runtime uses that to discover
+its own bookkeeping is wrong; clamping silently hides a library bug inside a browser bug.
+
+### Scope, stated rather than implied
+
+`<style>` only. `<link>.sheet` stays `undefined` — what it is today — and deliberately **not** `null`,
+because for an applied linked sheet `null` is a lie that reads as honest. Same reasoning as tick 663's
+refusal.
+
+### The gate asserts a BOX, and caught its own fixture
+
+An `insertRule` that returns cleanly and changes nothing satisfies every shape test a library performs
+and still renders the wrong page — *a gate that does not measure what the user feels reports green
+while the user suffers*. So `G_CSSOM_SHEET_BRIDGE`'s central assertion is that `#a` is **456px** after
+a rule is inserted at runtime into a `<style>` that did not exist at parse time. It also asserts
+`deleteRule` **un**-cascades (or "the rule applied" could just mean "text was appended and never
+removed") and that the authored sheet is untouched (or a bridge rewriting the wrong element's text
+would pass everything else).
+
+⚠ Its first draft read `document.styleSheets` *before* the injection, got 1, and asserted 2 — the gate
+failed on its own fixture. Reading it after is a strictly stronger claim (**liveness**: a sheet
+appended after load is in the list with no cache to invalidate), and it is now asserted as
+`before == 1 && after == 2`.
+
+### What it did and did not buy
+
+```text
+  agoda   before   render-failed   · TypeError … e/this.sheet<
+          after    thin-overlap-5  · no `this.sheet` throw anywhere in the log
+```
+
+The throw is eliminated and the row changed class — but `thin-overlap-5` means *the oracle built the
+page and we did not*, which the instrument itself labels as still **ours**. One blocker removed and
+the next one visible behind it. That is not "agoda renders", and it is recorded as what it is.

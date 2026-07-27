@@ -5262,6 +5262,140 @@ const PRELUDE: &str = r#"
           }
         });
       }
+      // ── CSSOM: `<style>.sheet` and `document.styleSheets` (tick 665) ─────────────────────────────
+      //
+      // `typeof CSSStyleSheet === 'function'` was ALREADY true while `styleEl.sheet` was `undefined`
+      // (measured, t663) — the false-presence shape: every feature detect ever written for this API
+      // passes, and the page then walks into the gap. And `undefined` is not the spec's absent value:
+      // `HTMLStyleElement.sheet` is `CSSStyleSheet?`, so the standard guard is `if (el.sheet === null)`,
+      // which is FALSE against `undefined` — the code proceeds into the thing it just checked for.
+      // That is exactly what blanks `www.agoda.com`, whose located stack (t662) reads
+      // `insertRules -> getTag -> this.sheet` and then `.length` on undefined.
+      //
+      // **Why this can live in the prelude when tick 283's shim could not.** That attempt was reverted
+      // for wanting a native accessor to reach the CASCADE. It does not need one: a `<style>`'s own
+      // TEXT is the cascade's source of truth (`collect_style_sources`), and writing `textContent`
+      // re-cascades through machinery that already exists — measured before writing a line of this:
+      // `el.textContent = '#a { width: 222px }'` moves the box from 111px to 222px. So the CSSOM here
+      // is a **view over the element's text**, not a parallel data model that would have to be kept in
+      // sync with one.
+      //
+      // Rule splitting tracks brace DEPTH, so `@media screen { ... }` is ONE rule and not three —
+      // verified on a three-rule sheet before this was written, because a naive `split('}')` would
+      // report the right count for flat sheets and silently shred every responsive one.
+      //
+      // Scope, stated rather than implied: **`<style>` only.** `<link>.sheet` stays `undefined`, which
+      // is what it is today — not `null`, because for an applied linked sheet `null` would be a lie
+      // that reads as honest (t663 refused exactly that trade).
+      if (__HP && !Object.getOwnPropertyDescriptor(__HP, 'sheet')) {
+        var __splitRules = function (css) {
+          var out = [], depth = 0, start = 0;
+          for (var i = 0; i < css.length; i++) {
+            var ch = css[i];
+            if (ch === '{') { depth++; }
+            else if (ch === '}') {
+              depth--;
+              if (depth === 0) {
+                var t = css.slice(start, i + 1).trim();
+                if (t) { out.push(t); }
+                start = i + 1;
+              }
+            }
+          }
+          var tail = css.slice(start).trim();
+          if (tail) { out.push(tail); }
+          return out;
+        };
+        var __ruleOf = function (text, sheet) {
+          var i = text.indexOf('{');
+          return {
+            cssText: text,
+            selectorText: i < 0 ? '' : text.slice(0, i).trim(),
+            type: text.charAt(0) === '@' ? 4 : 1,
+            parentStyleSheet: sheet,
+            parentRule: null
+          };
+        };
+        var __makeSheet = function (el) {
+          var sheet = {
+            ownerNode: el,
+            ownerRule: null,
+            type: 'text/css',
+            href: null,
+            title: null,
+            disabled: false,
+            media: { length: 0, mediaText: '' },
+            get cssRules() {
+              var src = el.textContent == null ? '' : String(el.textContent);
+              var parts = __splitRules(src), list = [];
+              for (var i = 0; i < parts.length; i++) { list.push(__ruleOf(parts[i], this)); }
+              list.item = function (n) { return this[n] === undefined ? null : this[n]; };
+              return list;
+            },
+            insertRule: function (text, index) {
+              var src = el.textContent == null ? '' : String(el.textContent);
+              var list = __splitRules(src);
+              var at = (index === undefined || index === null) ? 0 : Number(index);
+              // The spec throws IndexSizeError past the end. A CSS-in-JS runtime relies on that to
+              // discover its own bookkeeping is wrong; silently clamping would hide the bug in the
+              // library inside a bug in the browser.
+              if (!(at >= 0 && at <= list.length)) { throw new Error('IndexSizeError'); }
+              list.splice(at, 0, String(text).trim());
+              el.textContent = list.join('\n');
+              return at;
+            },
+            deleteRule: function (index) {
+              var src = el.textContent == null ? '' : String(el.textContent);
+              var list = __splitRules(src);
+              var at = Number(index);
+              if (!(at >= 0 && at < list.length)) { throw new Error('IndexSizeError'); }
+              list.splice(at, 1);
+              el.textContent = list.join('\n');
+            },
+            // Legacy IE aliases. styled-components and emotion both still probe for them on old
+            // paths, and a runtime that finds neither `insertRule` nor `addRule` gives up entirely.
+            addRule: function (sel, decl, index) {
+              return this.insertRule(sel + ' { ' + (decl || '') + ' }',
+                index === undefined ? this.cssRules.length : index);
+            },
+            removeRule: function (index) { return this.deleteRule(index); }
+          };
+          Object.defineProperty(sheet, 'rules', { configurable: true, get: function () { return this.cssRules; } });
+          return sheet;
+        };
+        Object.defineProperty(__HP, 'sheet', {
+          configurable: true,
+          get: function () {
+            if (!this || this.tagName !== 'STYLE') { return undefined; }
+            // ONE object per element: `el.sheet === el.sheet` is an assumption every CSSOM consumer
+            // makes, and a library that stashes bookkeeping on the sheet loses it otherwise.
+            if (!this.__manukSheet) {
+              Object.defineProperty(this, '__manukSheet', {
+                value: __makeSheet(this), configurable: true, enumerable: false, writable: false
+              });
+            }
+            return this.__manukSheet;
+          }
+        });
+      }
+      // `document.styleSheets` — a live list, rebuilt on read from the document's own <style>
+      // elements, so a sheet appended after load is in it without anything having to invalidate a
+      // cache. It was `undefined`, so `document.styleSheets.length` THREW rather than reporting zero.
+      if (typeof document !== 'undefined' && !Object.getOwnPropertyDescriptor(document, 'styleSheets')) {
+        Object.defineProperty(document, 'styleSheets', {
+          configurable: true,
+          get: function () {
+            var els = this.getElementsByTagName ? this.getElementsByTagName('style') : [];
+            var list = [];
+            for (var i = 0; i < els.length; i++) {
+              var sh = els[i].sheet;
+              if (sh) { list.push(sh); }
+            }
+            list.item = function (n) { return this[n] === undefined ? null : this[n]; };
+            return list;
+          }
+        });
+      }
       if (__HP && typeof __HP.checkValidity === 'undefined') {
         var __isFormControl = function(el) {
           var t = el && el.tagName;

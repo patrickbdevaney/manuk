@@ -30608,3 +30608,86 @@ falsifiable bar is **agoda renders**, not a subtest count. **It is all-or-nothin
 `.sheet` returning an object without a working `insertRule` gets a CSS-in-JS runtime *past* its guard
 and fails worse than today (the `IndexedDB` lesson — *keep ABSENT until done*), so it wants a whole
 budget, not the tail of one.
+
+## Tick 665 — the CSSOM bridge did not need the native accessor it was deferred for (2026-07-27)
+
+HYPOTHESIS: constitution check #49 steered here, and for the first time the lever is aimed by evidence
+rather than by WPT mass — t662's located stack names `insertRules → getTag → this.sheet` as what blanks
+`agoda`, and t663's probe maps the surface exactly.
+
+**THE DEFERRAL WAS PRICED WRONG, AND ONE PROBE SAID SO.** The lever's own note says the tick-283 JS
+shim was reverted for wanting a **native accessor** — to reach the cascade. It does not need one, and
+that is not an argument, it is a measurement taken before a line was written:
+
+```text
+  el.textContent = '#a { width: 222px }'      #a: 111px  ->  222px
+```
+
+**A `<style>`'s own TEXT is the cascade's source of truth** (`collect_style_sources`), so writing
+`textContent` re-cascades through machinery that already exists. The CSSOM can therefore be a **view
+over the element's text** rather than a parallel data model that would have to be kept in sync with
+one — which is what made it a subsystem, and what made it not one.
+
+The rule splitter was validated the same way, as a page script at zero build cost, before it went
+anywhere near the prelude: brace-**depth** tracking, so `@media screen { … }` is ONE rule. A naive
+close-brace split gets the right count for flat sheets and silently shreds every responsive one.
+
+### EVERY ONE OF t663'S SEVEN READINGS FLIPPED
+
+```text
+                                  t663          t665
+  typeof el.sheet                 undefined  ->  object
+  typeof document.styleSheets     undefined  ->  object
+  document.styleSheets.length     THREW      ->  1
+  el.sheet.cssRules.length        THREW      ->  1
+  el.sheet.insertRule(...)        THREW      ->  OK
+```
+
+And the load-bearing one, which is a **box** and not an API shape:
+
+```text
+  a <style> created at runtime, sheet.insertRule('#a { width: 456px }')   ->   #a is 456px
+```
+
+`el.sheet === el.sheet` holds, `<div>.sheet` stays `undefined` (the tag guard), `deleteRule`
+un-cascades, and `insertRule` past the end **throws IndexSizeError** — a CSS-in-JS runtime uses that
+to discover its own bookkeeping is wrong, and clamping silently would hide a library bug inside a
+browser bug.
+
+**Scope, stated rather than implied:** `<style>` only. `<link>.sheet` stays `undefined`, which is what
+it is today — deliberately **not** `null`, because for an applied linked sheet `null` is a lie that
+reads as honest, and t663 refused exactly that trade.
+
+### AGODA: THE THROW IS GONE, AND THE PAGE STILL DOES NOT RENDER
+
+```text
+  before   render-failed   · TypeError … at inline.js:1:4389386  e/this.sheet<
+  after    thin-overlap-5  · no `this.sheet` throw anywhere in the log
+```
+
+**The bar #49 set was "agoda renders", and it does not.** What moved is real and is not that: the
+throw is eliminated, and the row changed class — from `render-failed` (*"we fetched the page and
+FAILED TO PAINT IT"*) to `thin-overlap-5` (*"the oracle built the page and we did not"*). The
+instrument's own words for the new class are that it is still **ours**. One blocker removed, the next
+one now visible behind it; saying so is the whole difference between this entry and a claim.
+
+TICK SHAPE: capability (the CSSOM `.sheet` bridge, `<style>` scope, reaching the real cascade).
+Bar 0 untouched; css/layout/dom/paint suites green.
+Gate: `G_CSSOM_SHEET_BRIDGE` (`engine/page/tests/g_cssom_sheet_bridge.rs`) — hermetic, one inline
+document. RED-proven by disabling the accessor. Its central assertion is a **box width**, because an
+`insertRule` that returns cleanly and changes nothing would satisfy every shape test a library
+performs and still render the wrong page — this project's own first lesson. It also asserts
+`deleteRule` **un**-cascades (or "the rule applied" could just mean "text was appended"), that the
+authored sheet is untouched (or a bridge rewriting the wrong element would pass everything else), and
+that `document.styleSheets` is **live**.
+⚠ **The gate caught its own fixture**: the first draft read `document.styleSheets` *before* the
+injection, reported 1, and asserted 2. Moving the read after the injection is a strictly stronger
+claim — liveness — and is why the check is now `before_1 && after_2`.
+WIKI: `docs/wiki/css-cascade.md` — "the CSSOM as a view over the element's text".
+PATTERN: CSS-in-JS runtime style injection.
+
+NEXT: **(1) `agoda`'s NEXT blocker**, now visible: `thin-overlap-5` says the oracle built the page and
+we did not, so the question is what it builds that we do not — and the located-error report (t662) is
+the instrument to point at it. **(2) `<link>.sheet` and `@import`ed sheets**, the honest remainder of
+this bridge. **(3)** `scan_static_import_specifiers`'s failing unit test, still on `main`, still not
+in the wall — seventh report.

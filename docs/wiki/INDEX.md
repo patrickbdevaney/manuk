@@ -288,6 +288,12 @@
   - L1407 · 1. The load deadline threw away sheets it had already downloaded
   - L1439 · 2. One re-cascade rule, nine implementations, eight of them wrong
   - L1470 · The instrument note: read the ORACLE's column, not the score
+  - L1485 · The CSSOM as a view over the element's text (tick 665)
+  - L1495 · Why the deferral was priced wrong
+  - L1510 · The two things that are easy to get wrong
+  - L1520 · Scope, stated rather than implied
+  - L1526 · The gate asserts a BOX, and caught its own fixture
+  - L1541 · What it did and did not buy
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1138,4 +1144,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1053 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1059 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
