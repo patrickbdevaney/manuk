@@ -1994,3 +1994,86 @@ been satisfied by an instrument that had simply stopped reporting spread at all,
 mode the whole spread block exists to prevent.
 
 [[certification-redesign]] [[reliability-doctrine]] [[parity-methodology]]
+
+## `scored 5 → 6`, and the repeat machinery's first real use exposed two defects (tick 681)
+
+The corpus was four ticks stale — t677 (named access on the Window object), t679 (attribution) and t680
+(the virtual-clock horizon) had never been measured on it. Constitution check #51 named that as the
+steer, and this is the sweep.
+
+### The certificate moved
+
+```text
+              t675 (t674 tree)          t681 (t680 tree)
+  scored              5           ->            6
+  h-overflow clean    4 (20.0%)   ->            5 (25.0%)
+  reading-order       1 ( 5.0%)   ->            2 (10.0%)
+  dead-target         5 (25.0%)   ->            6 (30.0%)
+  shape >= 0.75 on    0           ->            0
+```
+
+`www.naukri.com` is a **scored row** for the first time. Its oracle-shared population went **2 → 10**
+and its coverage **3.5% → 17.5%** — a 5× gain, from t677 (`window.<id>` was `undefined`, so the site's
+data island never became its state) and t680 (the hang guard was tripping on our own unbounded clock).
+
+⚠ **And it lands at exactly the sample floor.** `CERT_MIN_SHAPE_SAMPLE` is 10 and naukri's three draws
+are n = 10, 9, 9. One element either way flips whether the site is scored at all. Stated because a term
+that moved by one element is not a term that has moved.
+
+The control holds: `www.desitales2.com` read 0.6112 against 0.6139, inside its recorded 2.3-point
+spread. `welt.de` 0.6659 → 0.6705 (+14 elements), `keirin` 0.5734 → 0.5717, `ikea` identical.
+
+### Defect 1 — a draw whose ORACLE population collapsed is a different DOCUMENT
+
+`www.agoda.com`'s three draws, minutes apart in one sweep:
+
+```text
+  cov=0.080446  shape=0.507692  n=65     <- the oracle built 65 elements
+  cov=0.012376  shape=0.100000  n=10     <- and 10 on these two
+  cov=0.012376  shape=0.100000  n=10
+```
+
+A 6.5× change in **the oracle's** element count is the site serving something else, and
+`oracle_probe`'s own doc comment already forbids the comparison: *"the oracle must feed ONE identical
+document to both engines; fetching independently per engine compares two different documents and calls
+the difference a bug."* Under the old rule the two thin draws outvoted the representative one and the
+certificate published **0.100 for a site it had measured at 0.508**.
+
+A draw whose `shape_n` is below half the run's maximum now does not VOTE. It stays in the rows file —
+the evidence is the point — and the collapse prints what it set aside, because a bounded exclusion
+nobody is told about reads as *"everything was included"*.
+
+⚠ Note what this does **not** do: it does not prefer the higher score. Had agoda's thin draw been the
+*better* one it would be set aside just the same. The disqualifier is the population change, not the
+direction of the result.
+
+### Defect 2 — a tie at the median was decided by nothing
+
+`www.naukri.com`'s three draws carry an **identical** shape (0.0) and differ only in sample size
+(10, 9, 9). The middle draw was therefore whichever the sort happened to place there — an n=9 row,
+below the floor — while an n=10 draw that clears it sat in the same run. Among draws that tie at the
+median shape, the one with the **larger sample** now represents the site: among equal point estimates
+more evidence is a better estimate, which is the same reason `CERT_MIN_SHAPE_SAMPLE` exists. It cannot
+change *which score* the certificate reads — only how much evidence stands behind it.
+
+### And the repeats are worthless on three of the four sites they cost
+
+```text
+  www.agoda.com    0.1000 .. 0.5077   Δ 40.8 pts over 3 runs   <- real, and large
+  www.naukri.com   0.0000 .. 0.0000   Δ  0.0 pts over 3 runs
+  keirin.jp        0.5717 .. 0.5717   Δ  0.0 pts over 3 runs
+  playhop.com      0.1429 .. 0.1429   Δ  0.0 pts over 3 runs
+```
+
+Three sites returned **byte-identical** rows across three renders, because the document snapshot is
+cached — so the repeats are three renders of the same bytes and measure nothing. Six extra live
+renders per sweep for an error bar of zero. **The variance the repeat plan was built for is in the
+DOCUMENT, not in our render**, which is why only agoda — the site that served two different documents —
+produced a spread at all. Named, not fixed: the plan should key on whether a site's variance is
+reproducible within a sweep, and that is its own tick.
+
+⚠ The t675 rows are untagged, so they are excluded from the error bar even though the probes were in
+fact unchanged between them and t681. Conservative and correct by construction, and it costs the bar
+once — the honest price of a column that did not exist yet.
+
+[[certification-redesign]] [[reliability-doctrine]]

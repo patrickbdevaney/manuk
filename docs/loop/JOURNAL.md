@@ -31969,3 +31969,100 @@ This is the first tick in five whose effect could plausibly move a SCORED term. 
 BUDGET** (t678/t679's NEXT #1) — still 12.7s + 12.0s under a stated 12s ceiling, and the naive scope fix
 is still a capability loss because `initial images+masks` (6.2s, an ENHANCEMENT) precedes
 `dynamic scripts`. **(3)** `<link>.sheet`, t665's remainder.
+
+## Tick 681 — `scored 5 → 6`, and the repeat machinery's first real use exposed two defects (2026-07-27)
+
+HYPOTHESIS: constitution check #51's steer #1, verbatim — **the corpus is four ticks stale and the loop
+is deriving again.** t677 (named access on the Window object), t679 (attribution) and t680 (the
+virtual-clock horizon) had never been measured on it, and t680 was the first change in five whose
+mechanism could plausibly move a scored term. So: ask the certificate instead of predicting it.
+
+FALSIFIABLE BAR: whatever the sweep says. The control (`desitales2`, byte-reproducible) must land inside
+its recorded 2.3-point spread, or the run is not admissible evidence about anything.
+
+### THE CERTIFICATE MOVED — the first term movement of this session
+
+```text
+                  t675 (t674 tree)        t681 (t680 tree)
+  scored                  5        ->             6
+  h-overflow clean        4 (20%)  ->             5 (25%)
+  reading-order           1 ( 5%)  ->             2 (10%)
+  dead-target             5 (25%)  ->             6 (30%)
+  shape >= 0.75 on        0        ->             0
+```
+
+**`www.naukri.com` is a SCORED ROW for the first time.** Oracle-shared population **2 → 10**, coverage
+**3.5% → 17.5%** — a 5× gain, from t677 (`window.<id>` was `undefined`, so the site's data island never
+became its state) and t680 (the hang guard was tripping on our own unbounded clock).
+
+⚠ **And it lands at EXACTLY the sample floor.** `CERT_MIN_SHAPE_SAMPLE` is 10; naukri's three draws are
+n = 10, 9, 9. One element either way flips whether the site is scored. A term that moved by one element
+is not a term that has moved, and saying so is the whole discipline of this file.
+
+Control: `desitales2` 0.6139 → 0.6112, inside its 2.3-pt spread. `welt.de` 0.6659 → 0.6705 (+14
+elements), `keirin` 0.5734 → 0.5717, `ikea` identical. Nothing to attribute anywhere else.
+
+### DEFECT 1 — a draw whose ORACLE population collapsed is a different DOCUMENT
+
+`www.agoda.com`, three draws minutes apart in one sweep:
+
+```text
+  cov=0.080446  shape=0.507692  n=65     <- the oracle built 65 elements
+  cov=0.012376  shape=0.100000  n=10     <- and 10 on these two
+  cov=0.012376  shape=0.100000  n=10
+```
+
+A 6.5× change in **the oracle's** count is the site serving something else. `oracle_probe`'s own doc
+comment already forbids the comparison — *"the oracle must feed ONE identical document to both engines;
+fetching independently per engine compares two different documents and calls the difference a bug"* —
+and the collapse rule was doing exactly that across draws. **The certificate published 0.100 for a site
+it had measured at 0.508.** A draw below half the run's maximum `shape_n` no longer votes; it stays in
+the rows file and the collapse PRINTS what it set aside. ⚠ It does not prefer the higher score — had
+agoda's thin draw been the better one it would be set aside identically. The disqualifier is the
+population change, not the direction.
+
+### DEFECT 2 — a tie at the median was decided by nothing
+
+Naukri's three draws carry an IDENTICAL shape (0.0) and differ only in sample size (10, 9, 9), so the
+middle one was whichever the sort happened to place there — an n=9 row, below the floor, while an n=10
+draw sat in the same run. Among draws that tie at the median, the LARGER SAMPLE now represents the site.
+It cannot change which score the certificate reads, only how much evidence stands behind it.
+
+### AND THE REPEATS ARE WORTHLESS ON THREE OF THE FOUR SITES THEY COST
+
+```text
+  www.agoda.com    Δ 40.8 pts over 3 runs   <- real, and large
+  www.naukri.com   Δ  0.0 pts over 3 runs
+  keirin.jp        Δ  0.0 pts over 3 runs
+  playhop.com      Δ  0.0 pts over 3 runs
+```
+
+Three sites returned **byte-identical rows across three renders** — the document snapshot is cached, so
+the repeats are three renders of the same bytes. Six extra live renders per sweep for an error bar of
+zero. **The variance t673 built the repeats for is in the DOCUMENT, not in our render**, which is why
+only agoda — the one site that served two different documents — produced a spread at all. Named, not
+fixed: the plan should key on whether a site's variance is reproducible *within* a sweep, and that is
+its own tick.
+
+⚠ Also honest: the t675 rows are untagged, so they are excluded from the error bar even though the
+probes were in fact unchanged between them and t681. Conservative by construction; it costs the bar
+once, which is the price of a column that did not exist yet.
+
+TICK SHAPE: measurement (the owed sweep, read honestly) + the two collapse defects it exposed.
+Bar 0 untouched; `tests/wpt/` only, so no engine behaviour changed.
+Gates: `spread_tests::a_draw_whose_oracle_population_collapsed_is_a_different_document` — built from
+agoda's and naukri's REAL six rows. RED-proven by two independent mutations: disabling the population
+filter (agoda collapses to 0.100) and removing the tie-break (naukri lands on n=9 and falls below the
+floor). manuk-wpt lib 67/67. Rows banked at `docs/bench/head20-rows-t681.tsv`.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "`scored 5 → 6`, and the repeat machinery's first real
+use exposed two defects".
+PATTERN: none — instrument, not a web pattern. [no-pattern]
+
+NEXT: **(1) `playhop.com` NOW CARRIES A `render-failed` REASON ALONGSIDE REAL SCORES** (cov=0.065,
+shape=0.143, n=7) — a row cannot be both, and one of the two is wrong. Cheap to find, and it is the kind
+of accounting contradiction this project rates highest. **(2) THE PER-CALL LOAD BUDGET** (t678/t679/#51's
+steer) — still 12.7s + 12.0s under a stated 12s ceiling, with `initial images+masks` (an *enhancement*)
+running before `dynamic scripts` (which builds the DOM); the real tick is the PRIORITY inversion and it
+is blocked on nine gate files that call `load_async` without `finish_loading`. **(3) `naukri` is one
+element from unscored** — the cheapest defence of the term that just moved is to grow its population
+again, and its coverage is 17.5%: the oracle builds 57 elements and we share 10.

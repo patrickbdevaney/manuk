@@ -437,3 +437,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 678	6111fb5c	1785172240	2026-07-27T13:10:40-04:00	1833	measurement	63	8	412	33	334	81	3896	6960	0	351	31	the phase ledger did not sum to the load, and said it did (2026-07-27)
 679	3ecbb0e5	1785175120	2026-07-27T13:58:40-04:00	2880	capability	63	12	380	42	334	81	3896	6960	0	351	31	every inline script on every page compiled under one name (2026-07-27)
 680	9cbbb08d	1785181735	2026-07-27T15:48:55-04:00	6615	capability	63	13	518	46	334	81	3896	6960	0	352	31	the hang guard was firing on our own clock, and it blamed the page (2026-07-27)
+681	331821c1	1785184587	2026-07-27T16:36:27-04:00	2852	measurement	63	8	431	34	334	81	3896	6960	0	352	31	`scored 5 → 6`, and the repeat machinery's first real use exposed two defects (2026-07-27)
