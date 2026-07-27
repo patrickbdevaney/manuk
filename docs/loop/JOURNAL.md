@@ -29111,3 +29111,105 @@ NEXT: the narrowest remaining media blocker is an **Opus decoder** — and the r
 PURE-RUST candidates (`opus-decoder`, `opus-wave`, `moosicbox_opus` for symphonia), so the t633
 "C bindings only" framing is stale and the dependency decision should be re-taken on current
 evidence. Also open: our own latency on the placement half.
+
+## Tick 648 — the Opus decision, re-taken: the blocker is not the codec, it is an unverified MSRV (2026-07-26)
+
+HYPOTHESIS: t633 recorded *"no VP9 and no Opus decoder exists anywhere in the tree"* and t643-647
+carried "Opus needs C bindings (`audiopus`/`opus`)" forward as the reason. **t647 found that framing
+stale from the registry itself**, so the decision gets re-taken on current evidence rather than
+re-derived from a remembered constraint.
+
+**MEASURED, not recalled.** Three pure-Rust candidates now exist:
+
+| crate | created | downloads | license | claim |
+|---|---|---|---|---|
+| `opus-decoder` 0.1.1 | 2026-03-12 | 69,721 | MIT OR Apache-2.0 | *"Pure-Rust Opus decoder — RFC 8251 conformant, no unsafe, no FFI"* |
+| `opus-wave` 3.0.1 | 2026-05-03 | 3,925 | — | pure-Rust decoder |
+| `moosicbox_opus` | 2026-05-20 | — | — | an Opus decoder **for symphonia**, the registry we already use |
+
+**AND THE ATTEMPT FAILED FOR A REASON THAT IS NOT ABOUT OPUS AT ALL:**
+
+```text
+  error: no version of crate `opus-decoder` can maintain manuk-media's rust-version of 1.80
+  help:  pass --ignore-rust-version to select opus-decoder@0.1.1 which requires rustc 1.85
+```
+
+**`rust-version = "1.80"` IS AN UNFALSIFIABLE CLAIM, AND IT IS NOW COSTING A CAPABILITY.** The local
+toolchain is **1.88**. CI uses `dtolnay/rust-toolchain@stable`, which is ≥1.88. **Nothing anywhere
+builds this workspace at 1.80, and nothing checks that it could.** The manifest's own comments give
+it away: the `openh264` pin reads *"0.9.1+ … declare `rust-version = 1.89`; **this workspace is on
+1.88**"*, and the `avif-parse` pin says *"2.x declares rust-version 1.90 (**toolchain here is
+1.88**)"*. **The people reasoning about MSRV in this file are reasoning about 1.88 while the
+manifest declares 1.80.**
+
+> **An unverified `rust-version` is not a conservative promise, it is a claim nothing can falsify —
+> and unlike most such claims it has TEETH.** Cargo enforces it at resolution, so it silently
+> narrows the dependency set for a compatibility nobody tests, nobody ships, and nobody has ever
+> observed. It is the `@supports`-answering-"does it parse" defect (t574-591) wearing a manifest
+> field: a check that runs, and answers a different question than the one everyone reads it as.
+
+**I AM NOT RAISING IT IN THIS TICK, AND THE RESTRAINT IS THE POINT.** The honest number is unknown —
+establishing it means building under old toolchains, which is real work — and picking a new one by
+"what my dependency wants" would replace an unverified 1.80 with an unverified 1.85 and call it
+progress. The two legitimate resolutions are (a) **verify** 1.80 by building it in CI, at which
+point the declaration means something and blocking `opus-decoder` is a real trade-off, or (b) **set
+it to the version actually built and tested** (`stable`/1.88) and let dependency resolution reflect
+reality. Both are workspace-policy decisions with CI consequences, and CI is harness-owned.
+
+**AND THE OPUS EVALUATION ITSELF IS NOT FINISHED, WHICH IS ALSO STATED RATHER THAN ROUNDED UP.** A
+0.1.1 crate four months old claiming **full RFC 8251 conformance** for a codec as large as Opus
+(SILK + CELT + hybrid) is an extraordinary claim, and this project's own rule is to verify a claim
+rather than inherit it. The evaluation that would settle it is the RFC's **own test vectors**, not a
+download count — and it is a tick of its own, unblocked only once the MSRV question is answered.
+
+WALL AUDIT #19 (due at 647, folded into this tick). **Total 722s. Attributed: 258s. So 464s — 64%
+of the wall — is UNATTRIBUTED, and that gap is the finding rather than a footnote.**
+
+```text
+  180s  P (page gates)   25%      35s  B    5%      24s  T    3%
+    8s  G6                1%       4s  G1   1%       4s  D    1%      2s  F      0%
+  ──────────────────────────────────────────────────────────────────────────────
+  attributed 258s  ·  total 722s  ·  UNATTRIBUTED 464s (64%)
+```
+
+> **The wall-time audit's own accounting does not reconcile, which means the instrument built to
+> find where the wall goes cannot see where most of it goes.** That is meta-instrument #3 firing on
+> the instrument itself — *8 of 30 process defects here were caught by a number that did not add up,
+> not by any gate* — and the number that does not add up is this one.
+
+The cause is already named and dated: **WALL AUDIT #18 (t627)** found `manuk-wpt` is 51MB under
+`lto = true, codegen-units = 1`, and any tick touching `engine/` pays a release relink **inside the
+gate phase**, where the section timers do not see it. This session is consistent with that to the
+tick: docs-only ticks landed in **73-83s** (t636, t638, t639) and every `engine/`-touching tick in
+**700-770s**. Same wall, same gates, one variable.
+
+**NOTHING WAS TRIMMED, and that is the correct outcome.** Of the four admissible optimisations the
+audit names — redundancy (shared runtime / `cargo-nextest`), parallelism, caching, scope — every one
+lives in `scripts/verify.sh` and the build configuration, which are **harness-owned**. There is no
+rigor-preserving trim available on the agent side, and the inadmissible ones (drop a gate, widen a
+floor, sample instead of cover, move a check to CI) are not on the table. Reported, not touched —
+for the third audit running.
+
+CONSTITUTION CHECK #47 (due at 647, folded into this tick): **GATE** — the window answers check
+#46 directly, having run ~4MB of real shipped third-party code instead of fixtures. **And the
+finding is that the CERTIFICATE is now the stale number**: three libraries went from silently dead
+to working (jQuery, DOMPurify, htmx) and nobody has looked at what that did to the corpus, last
+measured at t626, 22 ticks ago. #46's own remedy — *one real-site measurement per arc* — was
+satisfied and still did not produce a corpus number, because it binds an ARC and the certificate is
+not an arc. New §VII.1 clause: **a fix whose blast radius is argued in terms of "a large fraction of
+the web" owes a CORPUS measurement, not just a library one.** Also recorded: the real-library method
+went 3-for-3 then 0-for-7 — **saturated on the population it samples**, so change the population or
+the instrument rather than running a fifth tier.
+
+TICK SHAPE: measurement (a stale dependency framing re-priced against the registry, and the real
+blocker identified as an unfalsifiable manifest claim rather than the codec). **No engine source
+changed; the failed `cargo add` left a clean tree.** Bar 0 untouched; no ratchet floor moved.
+Gates: none — and deliberately. There is nothing here to gate that would not be gating a decision I
+have explicitly declined to make.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "an unverified MSRV is a claim with teeth".
+PATTERN: [no-pattern] — no browser capability changed.
+
+NEXT, in order, and the first now blocks the second: **(1) the MSRV question** — verify 1.80 in CI or
+set it to what is actually built (observer call, since it is CI policy). **(2) Opus against the RFC
+test vectors**, which is the only evidence that settles a conformance claim. Also open: our own
+latency on the placement half.

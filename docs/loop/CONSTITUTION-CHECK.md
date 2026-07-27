@@ -2243,3 +2243,64 @@ session's record that the rule cost something real.
 corpus is 15/20 by a deliberate decision) and t632's (our own 17-28s latency against Chromium's 6s
 contaminates the SHAPE half, and the load budget cannot be tuned to fix it — only to choose which
 half to flatter). Neither moved this window, and neither was worked on.
+
+## Check #47 — tick 648
+
+**Horizon:** H0 — the Phase-0 daily-driver certificate. Gate:
+`daily-driver-pass(site) = renders(site) ∧ functions(site)` over fixed-denominator corpus-v2
+(PART VII.1).
+
+**The window:** t640 (the media arc's owed real-code measurement), t641 (EME interfaces exist and
+grant nothing), t642 (jQuery totally dead — `document.nodeType` was 8), t643 (DOMPurify returned the
+empty string), t644 (XPath subset; htmx boots), t645 (the last four `?` cells), t646 (`playbackRate`
+reaches the sound), t647 (SVG client rect), t648 (Opus re-taken → an unverified MSRV).
+
+**Gate or scoreboard? — GATE, and it is the direct answer to check #46.** #46's finding was that
+three media ticks were evidenced entirely by fixtures and that *"this unblocks YouTube"* was
+plausible rather than measured. This window ran **real shipped third-party code** — 20 bundles across
+t640/t642/t643/t644, ~4MB of production JavaScript — and every capability claim in it is backed by
+what that code actually did. PART VII.1 ranks by *real sites moved per fix*; jQuery, DOMPurify and
+htmx are not sites, but they are much closer to sites than a fixture is, and each was **silently,
+totally dead** rather than degraded.
+
+**AND THAT IS EXACTLY WHY THE CERTIFICATE IS NOW THE STALE NUMBER, WHICH IS THIS CHECK'S FINDING.**
+
+> **Three libraries went from silently dead to working, and nobody has looked at what that did to
+> the corpus.** jQuery alone is on a large fraction of the web. DOMPurify blanking every sanitized
+> body is a *rendering* defect on any site with user content. The certificate was last measured at
+> **t626 — 22 ticks ago** — and every fidelity number carried since then predates all three fixes.
+
+This is #46's complaint one level up, and it survived #46's own remedy. That remedy — *"a capability
+arc must produce ONE real-site measurement before its fourth rung"* — was **satisfied** here
+(t640 for media, real bundles throughout t642-644), and the corpus number still did not move,
+because the clause binds an *arc* and the certificate is not an arc. So §VII.1 gains its second
+procedural clause, aimed at the gap the first one left:
+
+> **A fix whose blast radius is argued in terms of "a large fraction of the web" owes a CORPUS
+> measurement, not just a library one.** Per-library evidence establishes that a thing was broken and
+> is now fixed. It says nothing about how many pages changed — and "a large fraction of the web" is a
+> claim about pages.
+
+**The instrument note, because it is falsifiable and dated.** The real-library method went **3-for-3**
+on high-blast-radius finds (t640 shaka, t642 jQuery, t643 DOMPurify) and then **0-for-7** on its
+fourth tier (marked, handlebars, mustache, moment, preact, d3, quill — all clean). An instrument
+whose yield falls to zero is not broken; it is **saturated on the population it samples**. The
+correct response is to change the population (server-rendered frameworks, consent/analytics tags,
+Google Maps, Angular) or change the instrument — not to run a fifth tier of the same tier.
+
+**NO SCOPE DRIFT AGAINST PART IV, AND ONE DECISION EXPLICITLY DECLINED.** The EME interfaces landed
+on PART IV's own *"documented, degraded gracefully"* and grant nothing — Widevine, PlayReady and
+Clear Key all refused. XPath refused rather than stubbed, on the reasoning that *"define the
+interface, refuse the capability" is honest only where refusal is a valid answer*. And t648 **declined
+to raise `rust-version`**, because replacing an unverified 1.80 with an unverified 1.85 is the same
+defect with a newer number. That is PART VII.1's scope discipline operating three times, twice
+against changes already in my hands.
+
+**MEASUREMENT/CAPABILITY BALANCE:** five capability, four measurement. #46 noted the window before it
+was inverted from the historical ~85% capability bias; this one is close to even, which is the shape
+to hold.
+
+**STANDING, UNMOVED AND UNWORKED:** t626's binding constraint (5 of 20 HEAD sites bot-wall us; the
+ceiling on that corpus is 15/20 by deliberate decision) and t632's (our own 17-28s latency against
+Chromium's 6s contaminates the SHAPE half). Neither moved. The wall (734s) remains harness-owned and
+was reported at every audit rather than carried silently.

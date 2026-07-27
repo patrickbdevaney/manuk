@@ -1407,3 +1407,35 @@ code three lines below it.
 That probe produced a **split verdict** rather than a flip, which is usually the honest shape: the
 rate reaches the clock (gated) and not the audio (`AudioFeed` has no rate control), so a podcast at
 1.5x would drift against its own sound. Recorded `partial` with the missing half named, not `gated`.
+
+## An unverified MSRV is a claim with teeth (tick 648)
+
+Re-taking the Opus decision surfaced a blocker that has nothing to do with audio:
+
+```text
+error: no version of crate `opus-decoder` can maintain manuk-media's rust-version of 1.80
+help:  pass --ignore-rust-version to select opus-decoder@0.1.1 which requires rustc 1.85
+```
+
+`rust-version = "1.80"`. The local toolchain is **1.88**. CI uses `dtolnay/rust-toolchain@stable`,
+which is ≥1.88. **Nothing anywhere builds this workspace at 1.80, and nothing checks that it could.**
+The manifest's own comments give it away — the `openh264` pin reasons *"this workspace is on 1.88"*
+and the `avif-parse` pin *"toolchain here is 1.88"*, both in a file that declares 1.80.
+
+> **An unverified `rust-version` is not a conservative promise — it is a claim nothing can falsify,
+> and unlike most such claims it has TEETH.** Cargo enforces it at *resolution*, so it silently
+> narrows the dependency set for a compatibility nobody tests, nobody ships and nobody has ever
+> observed. It is the `@supports`-answering-*"does it parse"* defect wearing a manifest field: a
+> check that genuinely runs, and answers a different question than the one everyone reads it as.
+
+The general shape is worth separating from Rust: **a declared constraint that no build exercises is
+indistinguishable from a comment, right up until a resolver enforces it.** Version floors, feature
+minimums, platform lists and `engines` fields all behave this way. The test is not *"is the number
+plausible?"* but *"what would fail if it were wrong?"* — and if the answer is *nothing*, the number
+is decoration that can still cost you a dependency.
+
+**Two legitimate resolutions, and picking the convenient one is not among them:** verify the floor by
+building it, at which point blocking a dependency is a real trade-off — or set it to the version
+actually built and tested, and let resolution reflect reality. Replacing an unverified 1.80 with an
+unverified 1.85 because that is what today's dependency wants is not progress; it is the same defect
+with a newer number.

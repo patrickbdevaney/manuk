@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **406** | ticks 1–646 |
-| median tick cycle | **21m** | 405 intervals |
+| ticks landed | **407** | ticks 1–647 |
+| median tick cycle | **21m** | 406 intervals |
 | median, last 10 | **19m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.07** | 378.5h elapsed |
-| median verify wall | **66s** | 345 ticks |
+| **ticks per hour** | **1.07** | 378.6h elapsed |
+| median verify wall | **66s** | 346 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**201 of 406 ticks** (50%) moved a
+**202 of 407 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **201** capability ticks, median cycle **21m**
+* **202** capability ticks, median cycle **21m**
 * median diff per tick: **+234 / −34** lines across 8 files
 
 ## Every tick
@@ -503,5 +503,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **644** | 2026-07-26 23:05 | 6m | capability | 63s | +126/−11 | 324 | 81 | 56.0% · | `document.evaluate` / XPathEvaluator: a real subset that refuses the rest (2026-07-26) |
 | **645** | 2026-07-26 23:14 | 9m | reliability | 63s | +463/−107 | 324 | 81 | 56.0% · | the last four `?` cells: three were map drift and one was a stale comment (2026-07-26) |
 | **646** | 2026-07-26 23:34 | 20m | capability | 63s | +289/−9 | 325 | 81 | 56.0% · | `playbackRate` reaches the SOUND, and my own gate could not catch its bug (2026-07-26) |
+| **647** | 2026-07-26 23:40 | 6m | capability | 63s | +200/−4 | 325 | 81 | 56.0% · | the SVG client rect: both halves already worked and had never been composed (2026-07-26) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
