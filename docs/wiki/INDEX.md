@@ -734,6 +734,10 @@
   - L1775 · The sanitizer that returned nothing (tick 643)
   - L1815 · A subset that refuses is not a stub (tick 644)
   - L1854 · A bug with good prose is still a bug (tick 647)
+  - L1887 · An error that cannot be located is a status, not a finding (tick 662)
+  - L1914 · Where this sits relative to G_SILENT_FAIL
+  - L1927 · It paid out on the first real site, in one run
+  - L1948 · Two things the gate does that are not decoration
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1134,4 +1138,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1049 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1053 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

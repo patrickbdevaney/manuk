@@ -1883,3 +1883,76 @@ questions.
 > This is the strongest form of `[[honest-answer-is-not-a-fixed-answer]]`: **a gate that deliberately
 > asserted a known-wrong value went red the moment the bug was fixed.** An honest "no" written as
 > prose cannot do that. Written as an assertion, it closed its own loop.
+
+## An error that cannot be located is a status, not a finding (tick 662)
+
+`pending_exception` stringified the thrown value and stopped:
+
+```text
+  a page <script> threw  error=TypeError: can't access property "length", t is undefined
+```
+
+**A sentence with no address.** On minified production JavaScript — which is what the web ships — `t`
+is every variable on the page. And it was never a shortage of information: SpiderMonkey attaches
+`fileName`, `lineNumber`, `columnNumber` and `stack` to the `Error` object it hands over. All four
+were being discarded by `String::safe_from_jsval`, which sees an object and asks it for a string.
+
+```rust
+if !ex.is_object() { return msg; }          // `throw "x"` / `throw 42` have no location — degrade honestly
+rooted!(in(cx) let obj = ex.to_object());
+let at    = error_field(cx, obj.handle(), c"fileName") … c"lineNumber" … c"columnNumber";
+let stack = error_field(cx, obj.handle(), c"stack");
+```
+
+```text
+  before   TypeError: can't access property "length", t is undefined
+  after    TypeError: can't access property "length", t is undefined at inline.js:2:41
+           theFrameThatThrew@inline.js:2:41
+           @inline.js:3:3
+```
+
+### Where this sits relative to `G_SILENT_FAIL`
+
+`G_SILENT_FAIL` forbids **swallowing** an error on the load/render/script path. This is the step after
+it, and the gap between the two is where several ticks were spent: the error was surfaced and could
+not be acted on.
+
+> **An error that is REPORTED but not ATTRIBUTABLE is a status, not a finding.**
+
+That is the same sentence that made `manuk-wpt diag` necessary — *"TH_TIMEOUT — the async test never
+completed" is a status, and it told me nothing three separate times while I guessed at causes.* The
+two failures are one: an instrument that names the *category* of a problem and not its *location*
+sends the reader to guess, and guessing is what costs ticks.
+
+### It paid out on the first real site, in one run
+
+`www.agoda.com` renders blank and had thrown this exact anonymous `TypeError` for ten ticks. With the
+location attached, and nothing else changed:
+
+```text
+  TypeError: can't access property "length", t is undefined at inline.js:1:4389386
+    e/this.sheet<@inline.js:1:4389386
+    e@inline.js:1:4389449
+    448579/W</t.getTag@inline.js:1:4391320
+    448579/W</t.insertRules@inline.js:1:4391611
+```
+
+**`insertRules` → `getTag` → `this.sheet`** is the CSS-in-JS runtime injection path that
+styled-components and emotion share: it reads `.sheet` off its own `<style>` element, gets
+`undefined`, and asks it for `.length`. The blank page is the **CSSOM `.sheet` bridge** — an already
+named and scoped lever, now with a real site and a real stack behind it instead of a WPT count.
+
+*A throw that had been anonymous for ten ticks became an already-scoped diagnosis in one run, with no
+new probe.* That is the argument for spending a tick on a report rather than on a feature.
+
+### Two things the gate does that are not decoration
+
+`G_SCRIPT_ERROR_HAS_A_LOCATION` asserts on the **rendered `tracing` line** — the channel a developer
+actually reads — rather than on an internal that could drift away from it. And it asserts a **named
+stack frame**, not just a line number: a frame name can only come from the engine's own `Error.stack`,
+so the gate cannot be satisfied by formatting a plausible guess.
+
+⚠ **The numbering is script-relative, and that caught the gate's first draft.** SpiderMonkey compiles
+each inline `<script>` as its own source, so a throw on the document's fourth line is reported at
+`inline.js:2`. The first version asserted document-relative lines — a gate written from an assumption
+about someone else's numbering, which would have been red for a correct implementation.

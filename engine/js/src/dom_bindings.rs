@@ -188,6 +188,41 @@ pub fn take_focus_requests() -> Vec<Option<NodeId>> {
 /// This is also the entire mechanism of the Framework Exception Miner (METHODOLOGY Part 9): load a
 /// framework's starter app and let the framework itself enumerate what we are missing. That only
 /// works if **no** exception is ever discarded — so every catch site in this file reports.
+/// Read one string-ish property off a rooted object, or `None`. Used to lift an `Error`'s location
+/// out of the exception rather than throwing it away with the rest of the object.
+unsafe fn error_field(
+    cx: *mut RawJSContext,
+    obj: mozjs::rust::HandleObject,
+    name: &std::ffi::CStr,
+) -> Option<String> {
+    rooted!(in(cx) let mut v = UndefinedValue());
+    if !unsafe { JS_GetProperty(&mut wrap_cx(cx), obj, name.as_ptr(), v.handle_mut()) } {
+        return None;
+    }
+    if v.is_undefined() || v.is_null() {
+        return None;
+    }
+    let mut c = wrap_cx(cx);
+    match String::safe_from_jsval(&mut c, v.handle(), ()) {
+        Ok(ConversionResult::Success(s)) if !s.trim().is_empty() => Some(s),
+        _ => None,
+    }
+}
+
+/// **The pending exception, WITH the place it happened.**
+///
+/// This used to stringify the exception and stop, which yields `"TypeError: can't access property
+/// \"length\", t is undefined"` — a sentence with no address. On minified production JavaScript that
+/// is unactionable: `t` is every variable on the page. The engine knew exactly where it happened and
+/// had nobody to tell, which is the same shape `G_SILENT_FAIL` exists to forbid one step earlier — an
+/// error that is REPORTED but not ATTRIBUTABLE is a status, not a finding, and `manuk-wpt diag` was
+/// built because a status told me nothing three separate times while I guessed at causes.
+///
+/// Measured on `www.agoda.com`, whose whole page hangs on one throw: before, the log line named the
+/// message and nothing else. `fileName`/`lineNumber` are the spec's own SpiderMonkey-side properties
+/// on an `Error`, and `stack` is what a developer would read first, so all three are lifted when the
+/// thrown value is an object that has them. A thrown non-object (`throw "x"`, `throw 42`) has none,
+/// and degrades to exactly the old string rather than to a lie about its origin.
 fn pending_exception(cx: *mut RawJSContext) -> String {
     unsafe {
         rooted!(in(cx) let mut ex = UndefinedValue());
@@ -196,9 +231,34 @@ fn pending_exception(cx: *mut RawJSContext) -> String {
         }
         mozjs::jsapi::JS_ClearPendingException(cx);
         let mut c = wrap_cx(cx);
-        match String::safe_from_jsval(&mut c, ex.handle(), ()) {
+        let msg = match String::safe_from_jsval(&mut c, ex.handle(), ()) {
             Ok(ConversionResult::Success(s)) => s,
             _ => "(unstringifiable exception)".to_string(),
+        };
+        if !ex.is_object() {
+            return msg;
+        }
+        rooted!(in(cx) let obj = ex.to_object());
+        let at = match (
+            error_field(cx, obj.handle(), c"fileName"),
+            error_field(cx, obj.handle(), c"lineNumber"),
+            error_field(cx, obj.handle(), c"columnNumber"),
+        ) {
+            (Some(f), Some(l), Some(col)) => Some(format!("{f}:{l}:{col}")),
+            (Some(f), Some(l), None) => Some(format!("{f}:{l}")),
+            (Some(f), None, None) => Some(f),
+            _ => None,
+        };
+        // The stack is the developer-facing half and it is multi-line; keep it last so the one-line
+        // summary in front of it stays greppable.
+        let stack = error_field(cx, obj.handle(), c"stack")
+            .map(|s| s.trim_end().to_string())
+            .filter(|s| !s.is_empty());
+        match (at, stack) {
+            (Some(at), Some(stack)) => format!("{msg} at {at}\n{stack}"),
+            (Some(at), None) => format!("{msg} at {at}"),
+            (None, Some(stack)) => format!("{msg}\n{stack}"),
+            (None, None) => msg,
         }
     }
 }

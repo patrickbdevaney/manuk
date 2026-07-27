@@ -30438,3 +30438,74 @@ evidence it is not worth asking. **(2) `agoda`'s thrown `TypeError`** is measure
 untriaged — a page script that throws is a `G_SILENT_FAIL`-class lead with a stack behind it, and it
 is now the best-evidenced item on this thread. **(3) `scan_static_import_specifiers`'s failing unit
 test**, still on `main`, still not in the wall — fourth report.
+
+## Tick 662 — the engine knew where the page broke and had nobody to tell (2026-07-27)
+
+HYPOTHESIS: t661 left `agoda`'s throw as *"measured, real, and still untriaged — the best-evidenced
+item on this thread."* It is reproducible on every run:
+
+```text
+  a page <script> threw  error=TypeError: can't access property "length", t is undefined
+```
+
+**That is a sentence with no address.** On minified production JavaScript — which is what the web is
+— `t` is every variable on the page. Nothing can be done with it, and it is not for want of
+information: `pending_exception` stringified the thrown value and stopped, discarding the `fileName`,
+`lineNumber`, `columnNumber` and `stack` **SpiderMonkey had already attached to the object it was
+handed.**
+
+`G_SILENT_FAIL` forbids swallowing an error on the load/render/script path. This is the step after it,
+and the gap between them is where several ticks have gone: **an error that is REPORTED but not
+ATTRIBUTABLE is a status, not a finding** — the same sentence that made `manuk-wpt diag` necessary,
+after a status told this project nothing three separate times while it guessed at causes.
+
+```text
+  before   TypeError: can't access property "length", t is undefined
+  after    TypeError: can't access property "length", t is undefined at inline.js:2:41
+           theFrameThatThrew@inline.js:2:41
+           @inline.js:3:3
+```
+
+### AND IT PAID OUT ON THE FIRST REAL SITE, IN ONE RUN
+
+The same throw on `www.agoda.com`, unchanged except that it now says where it is:
+
+```text
+  TypeError: can't access property "length", t is undefined at inline.js:1:4389386
+    e/this.sheet<@inline.js:1:4389386
+    e@inline.js:1:4389449
+    448579/W</t.getTag@inline.js:1:4391320
+    448579/W</t.insertRules@inline.js:1:4391611
+```
+
+**`insertRules` → `getTag` → `this.sheet`.** That is the CSS-in-JS runtime injection path — the shape
+styled-components and emotion share — reading `.sheet` off its own `<style>` element and finding
+`undefined`, then `.length` on it. The blank agoda page is the **CSSOM `.sheet` bridge**, which is
+already a named, scoped lever in this project (~944 WPT behind it; the JS-shim attempt was reverted at
+t283 for wanting a native accessor).
+
+A throw that had been anonymous for ten ticks became a specific, already-scoped diagnosis **in one
+run, with no new probe.** That is the whole argument for spending a tick on a report rather than on a
+feature: this did not fix agoda, and it is why the next tick can.
+
+TICK SHAPE: capability (an engine-side error report that carries the location the engine already had).
+Bar 0 untouched; a thrown non-object (`throw "x"`, `throw 42`) has no such fields and degrades to
+exactly the old string rather than to a lie about its origin.
+Gate: `G_SCRIPT_ERROR_HAS_A_LOCATION` (`engine/page/tests/g_script_error_has_a_location.rs`) —
+hermetic, an inline document, no network. It asserts on the **rendered `tracing` line**, the same
+channel a developer reads, rather than on an internal that could drift away from it. Two claims: a
+line number, and a **named stack frame** — the second because a frame name can only come from the
+engine's own `Error.stack`, so the gate cannot be satisfied by formatting a guess. RED-proven by
+returning the bare message: *"the reported error names no line."*
+⚠ Its own numbering note is part of the gate: SpiderMonkey compiles each inline `<script>` as its own
+source, so the lines are **script-relative** (`inline.js:2`), not document-relative. The first draft
+asserted document lines and would have been a gate written from an assumption about someone else's
+numbering.
+WIKI: `docs/wiki/js-engine.md` — "an error that cannot be located".
+PATTERN: uncaught page-script errors on minified production bundles.
+
+NEXT: **(1) THE CSSOM `.sheet` BRIDGE**, now with a real site and a real stack behind it rather than a
+WPT count — `HTMLStyleElement.sheet` returning `undefined` is what breaks agoda's CSS-in-JS runtime,
+and the lever's own note says the JS shim was reverted for wanting a **native accessor**, so that is
+the shape. **(2) `scan_static_import_specifiers`'s failing unit test**, still on `main`, still not in
+the wall — fifth report. **(3)** the other `join_all` fan-outs t655 named and deliberately left.
