@@ -30824,3 +30824,82 @@ the rounds, and the same three-run `--build` measurement is the after. It is the
 and it is cheap. **(2) `<link>.sheet`**, the honest remainder of t665's bridge. **(3)**
 `scan_static_import_specifiers`'s failing unit test, still on `main`, still not in the wall — ninth
 report.
+
+## Tick 668 — the fix is real at its own site and did not move the site it was built for (2026-07-27)
+
+HYPOTHESIS: t667's NEXT said re-measuring `agoda` was *"the first thing to check and it is cheap."*
+t666's before was `finish_loading` 39.9s against a 12s budget. Run the same three-run `--build`
+measurement as the after.
+
+**IT DID NOT MOVE.**
+
+```text
+  t666 (before)   load_async 3717 / 3979 / 3707   finish_loading 39894 / 39208 / 38900
+  t668 (after)    load_async 4019 / 3561 / 3542   finish_loading 40286 / 39760 / 39011
+```
+
+Identical inside the run-to-run spread. **t667's bound is real** — its hermetic gate goes 9 give-ups →
+3 and stops the script chain dead, RED-proven both ways — and **agoda's cost is not at the site it
+bounds.** The round loop t667 fixed is `fetch_and_run_dynamic_scripts`; t666's own warning cluster
+already named a different one, and I read past it: `load budget exhausted with page fetches still in
+flight — round=1`, from `pump_page_fetches`, which has its own `MAX_ROUNDS` and its own settle-then-run
+cycle.
+
+> **"One rule, N implementations" — the ninth time this session's family of bugs has had this shape,
+> and the first time I have hit it from the far side.** t654 found eight re-cascade sites. t655 found
+> five `join_all` fan-outs. Here the *fix* is the thing with N sites: I bounded one round loop, proved
+> it with a gate that can only see that loop, and the page I built it for is driven by another.
+> **A gate that proves a mechanism does not prove the mechanism is the site's.**
+
+Nothing is retracted: t667's gate measures what it says, the bound is a strict improvement, and Bar 0
+is better for it. What is corrected is the *scope of the claim* — t667's NEXT implied agoda would move,
+and it does not.
+
+### WALL-TIME AUDIT #20 — DUE THIS TICK (every 20; last at t648). Full entry: `docs/loop/WALL-AUDIT.md`
+
+```text
+  t662  gate 897s · build 43s   (engine/js edit → release LTO relink)
+  t665  gate 570s · build 33s   (engine/js edit)
+  t667  gate 757s · build 36s   (engine/js + engine/page)
+  332 gate files under engine/page/tests/
+```
+
+Against the four admissible questions, and the answer is **nothing trimmed, for a stated reason**:
+
+1. **Redundancy** — the real cost is not gate overlap, it is that **every one of this session's ticks
+   touched `engine/js` or `engine/page`**, which forces a release-LTO relink *inside* the gate phase.
+   That is a known, recorded artifact (`wall-artifact` memory, t610) and it is a property of what was
+   worked on this session, not of the wall.
+2. **Parallelism** — gates launch concurrently under `CARGO_BUILD_JOBS=8` (mem-guarded from 32 cores);
+   the perf floors are deliberately serial and must stay so.
+3. **Caching** — incrementals are already in RAM; live fetches are snapshot-cached.
+4. **Scope** — the gates that ran are the gates that assert; no gate builds more than it asserts on.
+
+**And the verdict is NOT "the wall is lean".** Audit #19's parting note was that the unattributed
+seconds are *"a number, not a mystery"*, and that until the relink is timed separately from the gate
+phase, *"'the wall is lean' is a claim about 36% of the wall."* This session is the strongest evidence
+for it: **t665's 570s against t662's 897s is 327 seconds of spread inside that same unmeasured
+bucket**, across ticks that ran the same gates. Whatever moved, no line item names it. The
+instrumentation that would settle it lives in `scripts/verify.sh` — observer-owned, reported and not
+touched, for the second audit running. ⚠ **I first wrote this audit into the journal alone**; the
+cadence reads `docs/loop/WALL-AUDIT.md` (`## Audit #N — tick M`), and `status-update.sh` silently
+reverted `LAST_WALL_AUDIT` to 648 until the entry existed there — the ledger is what the cadence
+reads, again.
+
+⚠ **Harness note, one line as the scope rule requires:** t667's push was rejected once with
+`remote: fatal error in commit_refs` — a GitHub-side transient. The commit was already local and a
+plain retry succeeded. No action taken and none needed.
+
+TICK SHAPE: measurement (the after-measurement t667 owed, which corrects the scope of its claim) plus
+the wall-time audit on cadence. Bar 0 untouched; no engine source changed.
+Gates: none — nothing changed.
+WIKI: none [forced] — the correction is to a claim's scope and lives beside the claim; the mechanism
+wiki (t667's `js-engine.md` section) is accurate as written and is not what was wrong.
+PATTERN: none. [no-pattern]
+
+NEXT: **(1) `pump_page_fetches` IS AGODA'S LOOP** — named by its own warning at `round=1`, with its own
+`MAX_ROUNDS` and its own settle-then-run cycle, and it is where t667's bound has no reach. Measure the
+give-ups per loop before touching it: the lesson of this very tick is that a mechanism proven at one
+site is not proven to be the site. **(2) `<link>.sheet`**, the honest remainder of t665's bridge.
+**(3)** `scan_static_import_specifiers`'s failing unit test, still on `main`, still not in the wall —
+tenth report.

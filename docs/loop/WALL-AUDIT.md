@@ -514,3 +514,35 @@ are not on the table at any price. Reported, not touched, for the third audit ru
 the relink separately from the gate phase would move it from 64%-unknown to a named line item, and
 only then can anyone say whether the wall is lean. Until that lands, "the wall is lean" is a claim
 about 36% of the wall.
+
+## Audit #20 — tick 668
+
+```text
+  t662  gate 897s · build 43s   (engine/js edit → release LTO relink)
+  t665  gate 570s · build 33s   (engine/js edit)
+  t667  gate 757s · build 36s   (engine/js + engine/page)
+  332 gate files under engine/page/tests/   (+8 this session)
+```
+
+**Nothing trimmed, and the reason is the finding.** Against the four admissible questions:
+
+1. **Redundancy** — not the cost here. **Every tick of this session touched `engine/js` or
+   `engine/page`**, which forces a release-LTO relink *inside* the gate phase. That is the artifact
+   audit #16 and the t610 journal already named; it is a property of *what was worked on*, not of the
+   wall. A session of `engine/css` ticks would show a different number for the same wall.
+2. **Parallelism** — gates launch concurrently under `CARGO_BUILD_JOBS=8` (mem-guarded down from 32
+   cores); the perf floors are deliberately serial and must stay so.
+3. **Caching** — incrementals live in RAM; live fetches are snapshot-cached. Nothing recomputed.
+4. **Scope** — no gate builds more than it asserts on.
+
+**This audit inherits #19's open item and cannot close it.** #19's parting note was that *"the
+unattributed 464s is a number, not a mystery — time the relink separately from the gate phase, and
+only then can anyone say whether the wall is lean; until then 'the wall is lean' is a claim about 36%
+of the wall."* That remains exactly true, and this session is the strongest evidence for it: the
+spread between t665's 570s and t662's 897s is **327 seconds inside the same unattributed bucket**,
+across ticks that ran the same gates. Whatever moved, no line item names it.
+
+So the honest verdict is **not** "the wall is lean". It is: *the wall's variance this session is
+dominated by a cost no line item measures, and the audit is forbidden from making the number look
+better by cutting coverage.* The instrumentation that would settle it lives in `scripts/verify.sh`,
+which is **observer-owned — reported, not touched**, for the second audit running.
