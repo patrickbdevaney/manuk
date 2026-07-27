@@ -92,23 +92,31 @@ pub enum Unmeasurable {
     ///
     /// The instrument feeds both engines ONE fetched document from a `file://` temp copy — deliberately,
     /// so the two Chrome probes cannot render different pages (Wikipedia's origin injects a banner a
-    /// local copy never sees). The cost of that choice was never priced: from `file://` the page's own
-    /// origin is `null`, so a JS-rendered site's fetches and module loads are cross-origin and blocked,
-    /// and **Chrome builds almost nothing**. Measured:
+    /// local copy never sees). `comix.to` came back as **28 elements · 4 with a box** against ~2643
+    /// tags live: a 94× gap, and the certificate was scoring the small side of it at **coverage
+    /// 66.7% over three elements** — a measurement of comix.to's pre-hydration shell printed in the
+    /// same column, in the same units, as `bbs.ruliweb.com`'s 4,122-path score.
     ///
-    /// ```text
-    ///   comix.to    file:// snapshot     28 elements ·  4 with a box
-    ///               live navigation    ~2643 tags
-    /// ```
+    /// **⚠ THE CAUSE THIS COMMENT ASSERTED WAS WRONG, AND IT WAS NEVER MEASURED (corrected t674).**
+    /// It read: *"from `file://` the page's own origin is `null`, so a JS-rendered site's fetches and
+    /// module loads are cross-origin and blocked, and Chrome builds almost nothing."* Plausible,
+    /// stated as fact, and load-bearing — it would have bought a loopback HTTP server. One probe
+    /// killed it: the **same document served over `http://127.0.0.1` gives a byte-identical dump**
+    /// (comix.to 3 elements either way; naukri.com 4 either way).
     ///
-    /// A 94x gap, and the certificate was scoring the small side of it: `comix.to` reported
-    /// **coverage 66.7%**, computed over **three elements**. That is not a measurement of comix.to — it
-    /// is a measurement of comix.to's pre-hydration shell, printed in the same column, in the same
-    /// units, as `bbs.ruliweb.com`'s 4,122-path score.
+    /// The real cause was in our own probe: it ran **synchronously at end-of-parse**, so it reported
+    /// the DOM before DOMContentLoaded — before any deferred script, module, or hydration.
+    /// `chrome::probe_defer_tail` fixes it, and the correction converted `www.naukri.com`
+    /// **`shell-only-1` → `thin-overlap-2`**: the oracle now builds the page (57 elements) and the
+    /// remaining gap is *ours*, which is an actionable coverage bug rather than an instrument limit.
     ///
-    /// This does NOT fix the oracle; it stops the oracle LYING. Naming the condition converts the last
+    /// A site that still lands here after t674 is one whose scripts do not run for the ORACLE at all.
+    /// Check whether the snapshot fetch was bot-walled before treating the row as evidence about the
+    /// site.
+    ///
+    /// Naming the condition does NOT fix the oracle; it stops the oracle LYING. It converted the last
     /// of t611's *"unscored with NO recorded reason"* rows — the residue that tick could not explain —
-    /// into a stated one, and removes a false number from the certificate.
+    /// into a stated one, and removed a false number from the certificate.
     ShellOnly(usize),
     /// **Both engines rendered, and they have too few elements IN COMMON to compare.** Carries the
     /// size of the comparable set.
@@ -231,10 +239,11 @@ impl Unmeasurable {
                  strictly worse than the silent drop the fixed-denominator rule exists to prevent"
             ),
             Self::ShellOnly(n) => format!(
-                "the ORACLE rendered only {n} element(s) — a shell, not the page. The probe serves one \
-                 fetched copy from file://, where the site's own origin is null and its scripts' \
-                 fetches are cross-origin and blocked, so a JS-rendered page never builds (comix.to: 28 \
-                 elements here vs ~2643 live). Scoring this measures the shell, not the site"
+                "the ORACLE rendered only {n} element(s) — a shell, not the page. Scoring this \
+                 measures the shell, not the site. The parse-time-probe cause was FIXED at t674 (the \
+                 probe now re-reads at DOMContentLoaded/load/T+3s), so a site still landing here is \
+                 one whose scripts do not run for the ORACLE at all — check whether the snapshot \
+                 fetch was bot-walled before treating it as evidence about the site"
             ),
             Self::ThinOverlap(n) => format!(
                 "the oracle rendered the page and only {n} element(s) are COMMON to both engines, \

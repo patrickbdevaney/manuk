@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **430** | ticks 1–672 |
-| median tick cycle | **21m** | 429 intervals |
-| median, last 10 | **25m** | 10 intervals |
+| ticks landed | **431** | ticks 1–673 |
+| median tick cycle | **21m** | 430 intervals |
+| median, last 10 | **23m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.10** | 389.8h elapsed |
-| median verify wall | **63s** | 369 ticks |
+| **ticks per hour** | **1.10** | 390.2h elapsed |
+| median verify wall | **63s** | 370 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **350**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**211 of 430 ticks** (49%) moved a
+**211 of 431 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -527,5 +527,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **670** | 2026-07-27 09:21 | 24m | capability | 63s | +184/−33 | 333 | 81 | 56.0% · | four log lines ended three ticks of inference, and two of them were mine and wrong (2026-0 |
 | **671** | 2026-07-27 09:48 | 27m | capability | 63s | +315/−33 | 334 | 81 | 56.0% · | the settle loop had no clock in it at all (2026-07-27) |
 | **672** | 2026-07-27 10:54 | 65m | measurement | 63s | +641/−26 | 334 | 81 | 56.0% · | a 35-point "regression" that the control cleared in three runs (2026-07-27) |
+| **673** | 2026-07-27 11:16 | 22m | infrastructure | 63s | +369/−30 | 334 | 81 | 56.0% · | the certificate took ONE draw from a distribution it had already measured as wide (2026-07 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

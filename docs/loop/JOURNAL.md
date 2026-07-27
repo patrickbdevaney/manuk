@@ -31261,3 +31261,109 @@ claim and only a real HEAD-20 run settles it. **(2) THEN THE UNSCORED ROWS BY CA
 `file://`-origin limit in the probe itself); bot-walls are a decided ceiling and dead hosts are not
 ours. Do not start another single-site arc without naming which unscored CATEGORY it converts.
 **(3)** `<link>.sheet`, the honest remainder of t665's bridge.
+
+## Tick 674 — the oracle's probe never waited for the page to render (2026-07-27)
+
+HYPOTHESIS: check #50's steer #2 and the board's binding constraint are the same instruction —
+**attack the UNSCORED rows by CATEGORY.** The reachable categories are `shell-only` (2 rows) and
+`thin-overlap` (1); bot-walls are a decided ceiling and dead hosts are not ours. `Unmeasurable::
+ShellOnly`'s doc comment states the mechanism as fact: *"from `file://` the page's own origin is
+`null`, so a JS-rendered site's fetches and module loads are cross-origin and blocked, and Chrome
+builds almost nothing."* If that is right, serving the snapshot over loopback HTTP converts the
+category. **Probe before building** — the board's process rule #2, and the rule this project has paid
+for four times.
+
+### THE HYPOTHESIS WAS WRONG, AND THE PROBE SAID SO IN ONE RUN
+
+Same document, same Chrome, same flags, two origins:
+
+```text
+  comix.to        file://  3 elements  (dom 377625 bytes)
+                  http://127.0.0.1/    3 elements  (dom 377625 bytes)
+  www.naukri.com  file://  4 elements  (dom 112900 bytes)
+                  http://127.0.0.1/    4 elements  (dom 112951 bytes)
+```
+
+**Byte-identical.** The origin is not the mechanism. A doc comment had carried a plausible,
+unmeasured cause for as long as the reason has existed, and it would have bought a loopback server
+that changed nothing.
+
+### WHAT THE FUNNEL SAID INSTEAD
+
+377KB of dumped DOM and **29 elements total** — 26 of them `<script>`/`<meta>`/`<link>`. The bytes
+are inline script text. And the field that ended it: **`readyState: loading`**. The probe is injected
+at the end of the document and runs *synchronously during parse*, so it reports the DOM before
+DOMContentLoaded, before any deferred or module script, before any hydration. `PROBE_JS`'s own doc
+comment says so out loud — *"runs synchronously at end of body, after layout, so it needs no load
+event"* — which is true of the static parity fixtures it was written for and false of every live
+JS-rendered site the fidelity sweep later pointed it at.
+
+Snapshotting the same page at five moments:
+
+```text
+                      PARSE     DCL     LOAD   T+2000   T+5000
+  comix.to                3       4        5        6        7
+  www.naukri.com          4      37       59       60       61     <- 15x
+  www.welt.de          3199    3200     3177     3201     3176     <- flat
+```
+
+`naukri` crosses `CERT_MIN_SHAPE_SAMPLE` (10) by **6x** and becomes a SCOREABLE row. `comix` reaches
+7 and stays honestly unscored — a better *reason*, not a converted row. And **welt.de does not move**,
+which is the result that matters for the ratchet: the server-rendered population currently carrying
+the certificate's five scored rows is untouched by the change.
+
+BAR: the probe emits its answer after `load`, not at parse; `naukri` yields ≥10 scoreable elements
+where it yielded 4; the already-scoring sites move by less than their own spread.
+
+### WHAT LANDED
+
+**`probe_defer_tail!`** — one shared deferral, pasted into both live-site probes
+(`PROBE_ALL_IDS_JS`, `PROBE_ALL_PATHS_JS`). Each now defines `capture()`/`emit()`; the tail runs
+`capture()` at parse **first**, then re-runs it at `DOMContentLoaded`, at `load`, and at `T+3000`,
+overwriting the same `<pre>`. **Monotone by construction**: a page whose `load` never fires emits
+exactly what it emits today. A probe that could emit *nothing* would read as `ProbeBlocked` and cost
+a whole row silently.
+
+`PROBE_JS` is deliberately NOT deferred — it probes committed static fixtures where end-of-parse
+provably IS the final DOM, so deferring it risks a 72/72 green gate to buy nothing. Named as an
+exception in the source rather than left to look like an oversight.
+
+**The sentinel guard, which the deferral itself creates.** Once a probe re-runs, the
+`<pre id="__PARITY__">` it already appended is a rendered element with a box — the probe would start
+measuring itself. Both probes now skip it.
+
+**AND THE PROSE THAT WAS WRONG IS NOW CORRECTED, NOT QUIETLY DROPPED.** `Unmeasurable::ShellOnly`'s
+doc comment and its `explain()` string both asserted the `file://`-null-origin cause, and that string
+is printed in the sweep's output on every run. Both now carry the falsification and the real cause.
+A wrong explanation that keeps printing is worse than no explanation: it retires the question.
+
+### WHAT IT BOUGHT, STATED HONESTLY
+
+`www.naukri.com` moved **`shell-only-1` → `thin-overlap-2`**. That is **not a scored row**, and
+claiming otherwise would repeat the error this session has already named three times. What changed is
+**whose problem it is**: `shell-only` is an instrument limit nobody can act on; `thin-overlap` is
+OURS — the oracle now builds 57 elements of naukri and we render **3.5%** of them. A conversion from
+"unmeasurable" to "a coverage bug with an address" is the currency the unscored rows are paid in, and
+it is the first time this session an unscored CATEGORY has been attacked rather than a site.
+
+`comix.to` reached 7 and stays honestly unscored — its scripts do not run for the oracle at all,
+which points at the snapshot fetch being bot-walled, not at the probe.
+
+TICK SHAPE: infrastructure (the fidelity instrument's ORACLE half — it changes what every future
+certificate can see). Bar 0 untouched; no engine source changed, `tests/wpt/` only.
+Gates: `chrome::tests::live_probes_defer_to_load_and_skip_their_own_sentinel` — asserted on the
+SOURCE, because a live assertion would need the network and would be the flaky gate this project
+refuses to build. RED-proven by two independent mutations: removing the deferral reddens it
+("PROBE_ALL_IDS_JS lost `addEventListener('load',capture`"), and removing the sentinel skip reddens
+it separately. manuk-wpt lib 64/64.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "the oracle's probe never waited for the page to
+render", with the two-origin falsification and the five-moment table.
+PATTERN: instruments that measure the subject before the subject exists. [no-pattern]
+
+NEXT: **(1) RE-RUN HEAD-20 WITH BOTH t673 AND t674 IN** — the repeats and the deferred probe have
+never been exercised together on the corpus, and the corpus is the only thing that says whether the
+`shell-only`/`thin-overlap` split moved for anyone but naukri. This is also t673's owed sweep.
+**(2) THE `thin-overlap` CATEGORY IS NOW THE LARGEST REACHABLE ONE** and it is ours: agoda 5,
+naukri 2. Both mean the oracle built the page and we did not — a coverage failure, not a placement
+one, so it is the `render-failed`/coverage path and not the cascade. **(3)** `<link>.sheet`, the
+honest remainder of t665's bridge.

@@ -1740,3 +1740,88 @@ per-site score.
 This is that lesson in its measurement-noise form. The earlier three were about *whose* time a
 metric charged; this one is about *how precise* a metric is entitled to sound. Both are the same
 question — what else moved? — and the answer here was: the website did.
+
+## The oracle's probe never waited for the page to render (tick 674)
+
+Two of the certificate's twenty rows read `shell-only` — *"the ORACLE rendered a shell, so there is
+nothing to compare against"*. The reason's own doc comment named the cause:
+
+> from `file://` the page's own origin is `null`, so a JS-rendered site's fetches and module loads
+> are cross-origin and blocked, and Chrome builds almost nothing.
+
+Plausible, load-bearing, and **never measured**. It would have bought a loopback HTTP server.
+
+### One probe killed it
+
+Same fetched document, same Chrome, same flags, two origins:
+
+```text
+  comix.to        file://              3 elements   (dom 377625 bytes)
+                  http://127.0.0.1/    3 elements   (dom 377625 bytes)
+  www.naukri.com  file://              4 elements   (dom 112900 bytes)
+                  http://127.0.0.1/    4 elements   (dom 112951 bytes)
+```
+
+Byte-identical. **The origin is not the mechanism.**
+
+### The funnel named the real one in one field
+
+377KB of dumped DOM and **29 elements total**, 26 of them `<script>`/`<meta>`/`<link>` — the bytes
+are inline script text, not content. And the field that ended it: **`readyState: loading`**.
+
+The probe is injected at the end of the document and runs *synchronously during parse*, so it reports
+the DOM before DOMContentLoaded — before any deferred script, module, or hydration. `PROBE_JS`'s own
+doc comment said so out loud: *"runs synchronously at end of body, after layout, so it needs no load
+event."* That is **true** of the static parity fixtures it was written for, and **false** of every
+live JS-rendered site the fidelity sweep later pointed it at. The sentence was correct where it was
+written and became a bug where it was inherited.
+
+Snapshotting one page at five moments:
+
+```text
+                      PARSE     DCL     LOAD   T+2000   T+5000
+  comix.to                3       4        5        6        7
+  www.naukri.com          4      37       59       60       61
+  www.welt.de          3199    3200     3177     3201     3176
+```
+
+The asymmetry is the whole case. `naukri` gains **15×**; `welt.de` — server-rendered, one of the five
+rows currently carrying the certificate — does not move at all. The fix converts the unscoreable
+population and leaves the scored one alone, which is what makes it a ratchet tooth rather than a
+trade.
+
+### What it bought, stated honestly
+
+`www.naukri.com` moved **`shell-only-1` → `thin-overlap-2`**. That is *not* a scored row, and saying
+otherwise would repeat the error this session already named three times. What changed is **whose
+problem it is**: `shell-only` is an instrument limit nobody can act on, `thin-overlap` is ours — the
+oracle now builds 57 elements of naukri and we render 3.5% of them. A category conversion from
+"unmeasurable" to "a coverage bug with an address" is the currency the unscored rows are actually
+paid in.
+
+`comix.to` reached 7 elements and stays honestly unscored; its scripts do not run for the oracle at
+all, which points at the snapshot fetch being bot-walled rather than at the probe.
+
+### The gate is on the source, deliberately
+
+A live assertion would need the network and would be the flaky gate this project refuses to build.
+What is hermetically assertable is that the deferral is **present**, that it is the **same text in
+both** live probes (`probe_defer_tail!` is one definition, not a pattern two constants happen to
+follow), that each probe **skips its own sentinel** — once a probe re-runs, the `<pre id="__PARITY__">`
+it already appended is a rendered element with a box and it would measure itself — and that the
+static-fixture probe is still **not** deferred, so that exception stays a decision instead of
+decaying into a copy-paste. Each assertion is RED-proven by its own mutation.
+
+**Monotone by construction:** `capture()` still runs at parse *first* and later events overwrite the
+same element, so a page whose `load` never fires emits exactly what it emits today. A probe that
+could end up emitting *nothing* would read as `ProbeBlocked` and silently cost a whole row.
+
+### The lesson, and it is an old one wearing new clothes
+
+> **A cause written into a doc comment is an assertion, and an assertion nobody measured is a
+> hypothesis with tenure.**
+
+This one had sat since the reason was introduced, was quoted verbatim in the sweep's own output on
+every run, and was wrong. It cost nothing to check — one script, two Chrome invocations — and the
+board's own process rule already said to: *re-probe stale unknowns before building them.* The rule
+exists because this project has now paid for it five times.

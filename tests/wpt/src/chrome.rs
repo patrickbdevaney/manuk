@@ -29,6 +29,13 @@ pub type Box4 = [i32; 4];
 /// The JS injected before capture: collect `getBoundingClientRect` for every `#p-*` element
 /// into a `<pre id="__PARITY__">` the DOM dump then carries back to us. Runs synchronously at
 /// end of body, after layout, so it needs no load event.
+///
+/// **This one is deliberately NOT deferred, and the exception is named rather than inherited.** It
+/// probes the committed `docs/bench/` parity fixtures — static local HTML with no scripts — where the
+/// DOM at end-of-parse provably *is* the final DOM, so [`PROBE_DEFER_TAIL`] would buy nothing and
+/// would put a 72/72 green gate at risk for it. The sentence above is true here. It was **false** for
+/// the two live-site probes below, which inherited it, and that cost the certificate two rows
+/// (tick 674).
 const PROBE_JS: &str = r#"<script>
 (function(){var out={};
 document.querySelectorAll('[id^="p-"]').forEach(function(e){
@@ -39,20 +46,73 @@ var pre=document.createElement('pre');pre.id='__PARITY__';
 pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})();
 </script>"#;
 
+/// **The shared tail that makes a live-site probe wait for the page to exist.**
+///
+/// Every probe below defines `capture()` and `emit()`; this drives them. It is one string shared by
+/// both live-site probes because *"one rule, N implementations"* is how this project loses a fix —
+/// the deferral has to be a single definition, not a pattern two constants happen to follow.
+///
+/// **The measurement it exists for (tick 674).** The probes ran synchronously at end-of-parse, so
+/// they reported the DOM *before* DOMContentLoaded — before any deferred script, module, or
+/// hydration. On a JS-rendered site that is the shell:
+///
+/// ```text
+///                       PARSE     DCL     LOAD   T+2000   T+5000
+///   comix.to                3       4        5        6        7
+///   www.naukri.com          4      37       59       60       61
+///   www.welt.de          3199    3200     3177     3201     3176
+/// ```
+///
+/// `naukri` gains **15×** and crosses the certificate's sample floor; `welt.de` — server-rendered,
+/// and one of the five rows currently carrying the certificate — does not move. That asymmetry is
+/// the whole case: the deferral converts the unscoreable population and leaves the scored one alone.
+///
+/// **Monotone by construction.** `capture()` runs at parse FIRST and each later event overwrites the
+/// same `<pre>`, so a page whose `load` never fires still emits exactly what it emits today. The
+/// probe can get better and cannot get worse — a `__PARITY__` that went missing would read as
+/// [`Unmeasurable::ProbeBlocked`] and silently cost a row.
+///
+/// The `setTimeout` is belt-and-braces for a page that never fires `load` (a hanging subresource);
+/// under `--virtual-time-budget` its 3s costs no real time.
+///
+/// A macro rather than a `const` only because `concat!` takes literals; the point is that there is
+/// exactly ONE copy of this text and both probes paste it.
+macro_rules! probe_defer_tail {
+    () => {
+        r#"
+capture();
+if(document.readyState!=='complete'){
+  window.addEventListener('DOMContentLoaded',capture,false);
+  window.addEventListener('load',capture,false);
+}
+setTimeout(capture,3000);
+})();
+</script>"#
+    };
+}
+
 /// **Structural probe** (the benchmark's rigorous half). Reports `getBoundingClientRect` for
 /// every element carrying an `id` — real sites have hundreds — plus its tag. This is what catches
 /// what the visual score keeps missing: a MISSING element is a missing BOX, and a whole absent
 /// sidebar barely moves a pixel score but is glaring here.
-const PROBE_ALL_IDS_JS: &str = r#"<script>
-(function(){var out={};
+const PROBE_ALL_IDS_JS: &str = concat!(
+    r#"<script>
+(function(){
+var pre=null;
+function emit(o){
+  if(!pre){pre=document.createElement('pre');pre.id='__PARITY__';document.documentElement.appendChild(pre);}
+  pre.textContent=JSON.stringify(o);
+}
+function capture(){var out={};
 document.querySelectorAll('[id]').forEach(function(e){
+  if(e.id==='__PARITY__')return;             // the probe must not measure its own sentinel
   var r=e.getBoundingClientRect();
   if (r.width===0 && r.height===0) return;   // not rendered: don't demand Manuk render it either
   out[e.id]=[Math.round(r.x),Math.round(r.y),Math.round(r.width),Math.round(r.height)];
 });
-var pre=document.createElement('pre');pre.id='__PARITY__';
-pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})();
-</script>"#;
+emit(out);}"#,
+    probe_defer_tail!()
+);
 
 /// **Structural probe, selector-path keyed** (the fidelity redesign §3a producer). Keys every element
 /// by its selector-PATH (`tag.SIG:nth-child(n)/…` from the root) instead of its `id`, so
@@ -74,15 +134,23 @@ pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})
 /// and — the easy-to-get-wrong part — an element whose parent is not an element (i.e. `<html>`)
 /// contributes NO component, because `e.parentElement` is null there. A path built two different
 /// ways is two different keys, and the diff would then compare strangers.
-const PROBE_ALL_PATHS_JS: &str = r#"<script>
-(function(){var out={};
+const PROBE_ALL_PATHS_JS: &str = concat!(
+    r#"<script>
+(function(){
+var pre=null;
+function emit(o){
+  if(!pre){pre=document.createElement('pre');pre.id='__PARITY__';document.documentElement.appendChild(pre);}
+  pre.textContent=JSON.stringify(o);
+}
 function fnv(str){var h=0x811c9dc5;for(var i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return h>>>0;}
 function sigOf(e){var cls=e.getAttribute('class');if(!cls)return '';var toks=cls.split(/[ \t\n\f\r]+/),a=[];for(var i=0;i<toks.length;i++){if(toks[i])a.push(toks[i].replace(/[A-Z]/g,function(c){return c.toLowerCase();}));}if(!a.length)return '';a.sort();var u=[];for(var j=0;j<a.length;j++){if(j===0||a[j]!==a[j-1])u.push(a[j]);}return '.'+('0000000'+fnv(u.join('.')).toString(16)).slice(-8);}
 function pathOf(e){var p=[];while(e&&e.nodeType===1&&e.parentElement){var i=1,s=e;while((s=s.previousElementSibling))i++;p.unshift(e.tagName.toLowerCase()+sigOf(e)+':nth-child('+i+')');e=e.parentElement;}return p.join('/');}
+function capture(){var out={};
 var all=document.querySelectorAll('*');
 var lim=Math.min(all.length,6000);
 for(var k=0;k<lim;k++){var e=all[k];var t=e.tagName.toLowerCase();
   if(t==='script'||t==='style'||t==='head'||t==='meta'||t==='link'||t==='base'||t==='title'||t==='noscript'||t==='template'||t==='html')continue;
+  if(e.id==='__PARITY__')continue;         // the probe must not measure its own sentinel
   var r=e.getBoundingClientRect();
   if(r.width===0&&r.height===0)continue;   // not rendered: don't demand Manuk render it either
   var cs0=getComputedStyle(e);
@@ -92,9 +160,9 @@ for(var k=0;k<lim;k++){var e=all[k];var t=e.tagName.toLowerCase();
   var fam0=(cs0.fontFamily||'').split(',')[0].trim().replace(/^["']|["']$/g,'');
   var px0=Math.round(parseFloat(cs0.fontSize)||0);
   out[pathOf(e)]=[t,cs0.display,Math.round(r.x+window.scrollX),Math.round(r.y+window.scrollY),Math.round(r.width),Math.round(r.height),fam0+'/'+px0];}
-var pre=document.createElement('pre');pre.id='__PARITY__';
-pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})();
-</script>"#;
+emit(out);}"#,
+    probe_defer_tail!()
+);
 
 /// **The oracle's Chromium half.** Render an *already-fetched snapshot* and report every `[id]`
 /// element's tag, computed `display`, and box.
@@ -929,6 +997,71 @@ mod tests {
         let out = inject_probe("<body><p>hi</p></body>");
         assert!(out.contains("__PARITY__"));
         assert!(out.find("__PARITY__").unwrap() < out.rfind("</body>").unwrap());
+    }
+
+    /// **G_PROBE_WAITS_FOR_THE_PAGE** — the live-site probes must not report the DOM at parse time.
+    ///
+    /// Tick 674's measurement, and the reason this is asserted on the SOURCE rather than left to a
+    /// live run: both live probes ran synchronously at end-of-parse, so on a JS-rendered site they
+    /// reported the pre-hydration shell. Same page, five moments:
+    ///
+    /// ```text
+    ///                       PARSE     DCL     LOAD   T+2000   T+5000
+    ///   comix.to                3       4        5        6        7
+    ///   www.naukri.com          4      37       59       60       61
+    ///   www.welt.de          3199    3200     3177     3201     3176
+    /// ```
+    ///
+    /// A live assertion would need the network and would be exactly the flaky gate this project
+    /// refuses to build. What CAN be asserted hermetically is that the deferral is present, that it
+    /// is the SAME text in both probes, and that the probe skips its own sentinel — the three ways
+    /// this fix silently rots.
+    #[test]
+    fn live_probes_defer_to_load_and_skip_their_own_sentinel() {
+        for (name, probe) in [
+            ("PROBE_ALL_IDS_JS", PROBE_ALL_IDS_JS),
+            ("PROBE_ALL_PATHS_JS", PROBE_ALL_PATHS_JS),
+        ] {
+            for needle in [
+                "addEventListener('load',capture",
+                "addEventListener('DOMContentLoaded',capture",
+                "setTimeout(capture,3000)",
+            ] {
+                assert!(
+                    probe.contains(needle),
+                    "{name} lost `{needle}`. A live-site probe that runs only at parse reports the \
+                     pre-hydration shell — naukri.com read 4 elements instead of 61."
+                );
+            }
+            // Monotone: the parse-time capture still runs FIRST, so a page whose `load` never fires
+            // emits what it emits today rather than nothing. A missing `__PARITY__` reads as
+            // ProbeBlocked and costs a whole row.
+            assert!(
+                probe.contains("\ncapture();"),
+                "{name} no longer captures at parse time. The deferral must ADD later readings, \
+                 never replace the one a hanging page would otherwise give us."
+            );
+            assert!(
+                probe.contains("'__PARITY__'") && probe.contains("__PARITY__')continue;")
+                    || probe.contains("e.id==='__PARITY__')return;"),
+                "{name} does not skip its own sentinel. Once the probe re-runs, the `<pre>` it \
+                 already appended is a rendered element with a box and it would measure itself."
+            );
+        }
+        // One definition, pasted — not two that happen to agree today.
+        let tail = probe_defer_tail!();
+        assert!(
+            PROBE_ALL_IDS_JS.ends_with(tail) && PROBE_ALL_PATHS_JS.ends_with(tail),
+            "a live probe stopped using the shared deferral tail. 'One rule, N implementations' is \
+             how this project loses a fix: the next edit would land in one probe and not the other."
+        );
+        // ...and the static-fixture probe is deliberately NOT deferred. If that ever changes it
+        // should be a decision, not a copy-paste.
+        assert!(
+            !PROBE_JS.contains("setTimeout(capture"),
+            "PROBE_JS was deferred. It probes committed static fixtures where end-of-parse IS the \
+             final DOM; deferring it risks a 72/72 green gate to buy nothing."
+        );
     }
 
     #[test]
