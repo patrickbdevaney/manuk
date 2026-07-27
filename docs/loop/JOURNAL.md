@@ -29677,3 +29677,146 @@ NEXT: **(1) the next sweep must show unexplained unscored back at 0** — owed, 
 **(2) Injected scripts must load CONCURRENTLY with the event loop** (t652's named remainder; still
 what blanks agoda). **(3) PLACEMENT** — four measurements at 0 sites, now the oldest unmoved number.
 **(4)** the live mozjs heap corruption (t650), still needing an ASAN context.
+
+## Tick 654 — the stylesheets were on this machine the whole time (2026-07-27)
+
+HYPOTHESIS: SHAPE ≥0.75 on 0 sites is the oldest unmoved number on the board — four measurements,
+42 ticks, and the board's PHASE MANDATE says to *"pick the placement-fidelity root-cause the sweep
+surfaces."* So take the worst SCORED site instead of the average: `keirin.jp`, **SHAPE 2.2%** at
+t650 and **2.19%** at t653, reproducible to three digits across two sweeps.
+
+**THE ROOT CAUSE WAS NOT A LAYOUT BUG. WE HAD DOWNLOADED THE SITE'S CSS AND THROWN IT AWAY.**
+
+Read the divergence examples rather than the score, and the Chromium column names the organ:
+
+```text
+  chrome [21 612 210×0] {Meiryo UI/20}   vs   ours [8 2854 1184×0] {serif/16}
+  chrome [261 448 530×0] {Meiryo UI/16}  vs   ours [8 5103 1184×0] {serif/16}
+```
+
+`x=8` is the UA body margin, `1184` is `1200 − 16`, `serif/16` is the initial value of two
+properties nobody sets by hand. **Every one of our boxes was an unstyled full-width block**, the
+document three times too tall — and coverage was **97.8%**, because we rendered every element
+Chromium did. *That is the shape a certificate cannot see: a 98%-covered page can be a naked one.*
+
+And the engine's own log said so, in order:
+
+```text
+  stylesheet applied  ×9   (375KB: bootstrap, font-awesome, jquery-ui, P_base, PJ0101 …)  +0.2s
+  load budget of 12.0s exhausted mid-phase — painting now                                +12.0s
+```
+
+`finish_loading` enforces the load budget as a **hard deadline, dropped wherever it runs out,
+including in the middle of a fetch** — on the stated ground that *"a dropped future loses that
+phase's ENHANCEMENT and never a half-mutated document."* For the stylesheet phase that sentence was
+FALSE, and the phase's own order is the proof:
+
+```text
+  fetch every <link> sheet  →  @import walk (3 network rounds)  →  @font-face src fetches
+  (a SEQUENTIAL loop, per source, per face)  →  ...and only THEN cascade
+```
+
+So the cancellation landed eleven and a half seconds later, inside font-awesome's per-face `src`
+ladder — **two stages above the cascade** — and took all nine fully-downloaded sheets with it.
+The apply was at the bottom of the phase; the primary artifact was hostage to the enhancements.
+
+> **A page with no author CSS is not a degraded page. It is a different page.** The budget's safety
+> story is sound for imports and webfonts, which really are enhancements. It was applied to the one
+> thing in the phase that is not one, and the sheets were on this machine the whole time.
+
+FIX: `apply_stylesheets` is called where the top-level sheets are COMPLETE, before the phase goes
+back to the network. Imports and fonts then arrive as the enhancements they are, and the apply at
+the bottom re-cascades **only if they moved the fingerprint** — so a page with no `@import` and no
+new face pays one hash, not a second cascade. A page that does get a late face pays one more
+cascade, which is what a real browser does when a webfont lands (FOUT is the web's own model) and a
+far better trade than rendering the site naked.
+
+MEASURED, on the live site, and it is the largest single fidelity move on this board:
+
+```text
+  keirin.jp SHAPE   2.1%  ->  40.7%      (+38.6 points)
+  dead-target          5  ->      2       reading-order  34  ->  29
+```
+
+The side-by-side stops being an argument: the race table, the LIVE/投票 buttons, the day tabs, the
+login form and the pickup panel all land where Chromium puts them.
+
+### AND THE SAME RULE HAD EIGHT WRONG IMPLEMENTATIONS, found by grepping for the class
+
+`external_css` exists precisely so a LATER cascade can rebuild the full sheet list — and the comment
+at the tree-grew restyle already stated the rule (*"rebuilding from it would strip every `<link>`ed
+stylesheet from the page, which is a far worse bug than the one being fixed"*). **It was the only
+site that was right.** Eight others rebuilt from `MinimalCascade::collect_style_elements`, which
+sees inline `<style>` and nothing else:
+
+```text
+  resolve_fetch · dispatch_click · deliver_ws_event · deliver_fetch_stream
+  deliver_message · fire_popstate · run_deferred_scripts · relayout_incremental
+```
+
+A resolved `fetch`, **a click**, a WebSocket frame, a streamed chunk, `postMessage`, `popstate` —
+**any interaction at all, on any page whose CSS is in a `<link>`** — re-styled the document against
+UA defaults. All nine now go through one `Page::all_sheets()`. *One rule with N implementations is
+one rule that is wrong N−1 times.*
+
+⚠ **THE NINTH SITE IS NAMED, NOT FIXED, AND IT IS A DIFFERENT TICK.** `forced_reflow` — the
+synchronous layout a JS geometry read (`offsetWidth`, `getBoundingClientRect`) forces mid-script —
+has the same defect, so those reads answer from UA-default styles. It cannot use `all_sheets()`:
+it runs off a `*mut ReflowCtx` installed at **19 call sites** with no path to `external_css`, and
+threading a raw pointer to a `self` field across those sites while `&mut self.dom` is live is an
+aliasing question that does not belong inside a layout-correctness tick.
+
+### THE CONTROL RUN CAUGHT ME ABOUT TO REPORT A FALSE REGRESSION AGAINST A CERTIFICATE TERM
+
+The three other scored sites came back `welt.de` reading-order **0 → 2** against t653 — a term that
+counts SITES, so it would have dropped `reading-order clean` by one. Three re-runs said 2 every
+time, so it was not noise. It was also **not mine**: with the one line disabled, on the same live
+content, minutes apart —
+
+```text
+                       control (fix off)      with fix
+  welt.de  SHAPE          66.6%          ->    67.2%
+           missing          141           ->      137
+           overlap           80                   80
+           reading-order      2                    2      <- NOT the tick. today's welt.de.
+```
+
+`welt.de`'s `shape_n` has read 2957 / 3149 / 3060 across three sweeps: the population changes under
+us, so **t653 was never a valid baseline for this term** and only a same-hour control could say so.
+Full ratchet check, all four scored sites:
+
+```text
+  keirin.jp     0.0219  ->  0.4070     +38.6 pts
+  welt.de       0.6767  ->  0.6719     (control-verified +0.6 on today's content)
+  ikea.com      0.5172  ->  0.5215     overlap 6 -> 5
+  desitales2    0.6371  ->  0.6371     byte-identical, every invariant unchanged
+```
+
+**Nothing regressed.** `keirin`'s coverage 98.0% → 74.4% is the honest cost of a real layout and is
+recorded as such rather than smoothed: unstyled, every div was a nonzero-width block and therefore
+COUNTED; correctly styled, the elements whose content is an image the budget never fetched collapse
+to 0×0 and book as missing. The images are still starved — that is the same budget-starvation family
+as this tick, one phase further down, and it is the next thing on this thread.
+
+TICK SHAPE: capability (one engine defect in the stylesheet phase's ordering, plus eight call sites
+of the same re-cascade rule). Bar 0 untouched; no ratchet floor moved; css/layout/dom suites green
+(28 + 2 + 11 + 88).
+Gates: `G_CSS_SURVIVES_BUDGET` (`engine/page/tests/g_css_survives_budget.rs`) — hermetic, one local
+socket that serves the sheet instantly and then **stalls the font forever**, so the deadline is
+guaranteed to fire exactly where it used to lose the sheet. RED-proven by disabling the one call:
+`#box` 275px → **784px**, the naked-UA-block width. It asserts its own two preconditions (the sheet
+WAS served; the load DID return on the budget) so it cannot pass by failing to reproduce.
+`G_EXTERNAL_CSS_SURVIVES_RESTYLE` (`engine/page/tests/g_external_css_survives_restyle.rs`) — RED at
+784px before the fix, and it asserts **two independent triggers** (a resolved `fetch` and a click),
+because a rule with eight implementations is not proven by the one a gate happens to touch.
+WIKI: `docs/wiki/css-cascade.md` — "the stylesheets were on this machine the whole time".
+PATTERN: external-stylesheet delivery under a load deadline + re-cascade sheet-set completeness.
+
+NEXT: **(1) the image phase is starved by the same budget** — `keirin` paints without images, which
+is what the coverage 98→74 drop is made of; it is the same defect one phase down and the fix shape
+is likely the same (commit each phase's primary artifact where it is complete). **(2) `forced_reflow`
+is the ninth re-cascade site**, named above, needing the `ReflowCtx` question answered on purpose.
+**(3) A HEAD-20 sweep** — owed since t653 for `unexplained unscored = 0`, and now owed twice over,
+because this tick changed what every budget-exhausted site in that corpus renders. **(4) PLACEMENT**
+is no longer the oldest unmoved number by default: it moved 38.6 points on one site, and the sweep
+is what says whether that generalises.

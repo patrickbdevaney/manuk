@@ -2045,6 +2045,44 @@ impl Page {
         self.apply_images(images, fonts, viewport_width)
     }
 
+    /// **Every stylesheet that styles this document** — inline `<style>` blocks *and* the
+    /// `<link>`ed sheets already fetched into [`external_css`](Self::external_css), each wrapped in
+    /// its own `media` condition.
+    ///
+    /// ⚠ **This is the ONLY correct way to rebuild a sheet list for a re-cascade, and it exists
+    /// because eight call sites did it wrong.** They rebuilt from
+    /// `MinimalCascade::collect_style_elements`, which sees inline `<style>` and **nothing else** —
+    /// so a resolved `fetch`, a click, a WebSocket frame, a streamed chunk, `postMessage`,
+    /// `popstate`, the deferred-script pass and the incremental relayout each silently deleted every
+    /// external stylesheet on the page and re-styled the document against UA defaults. On a page
+    /// whose CSS lives in a `<link>` — essentially every page on the web — the first interaction
+    /// threw the design away: every element a full-width block in the default serif, stacked, the
+    /// document several times too tall.
+    ///
+    /// `keirin.jp` measured exactly that: nine author sheets (375KB) logged as *applied*, then a
+    /// resolved `fetch()` re-cascaded them away. Coverage 97.8% — we render every element Chromium
+    /// does — against SHAPE **2.2%**, because we place almost none of them where Chromium does.
+    ///
+    /// The comment at the tree-grew restyle already stated the rule (*"rebuilding from it would strip
+    /// every `<link>`ed stylesheet from the page, which is a far worse bug than the one being
+    /// fixed"*). One rule with N implementations is one rule that is wrong N−1 times; this is the
+    /// implementation, and there is now only one.
+    fn all_sheets(&self) -> Vec<Stylesheet> {
+        collect_style_sources(&self.dom, &self.final_url)
+            .iter()
+            .filter_map(|src| match src {
+                StyleSource::Inline(css, m) => Some(Stylesheet::parse(&wrap_media(css, m))),
+                // A sheet that has not arrived (or never will) contributes nothing — the same
+                // outcome as before for a genuinely missing sheet, and `failed_css` is what
+                // records that it was asked for.
+                StyleSource::External(url, m) => self
+                    .external_css
+                    .get(url)
+                    .map(|css| Stylesheet::parse(&wrap_media(css, m))),
+            })
+            .collect()
+    }
+
     /// **Run the scripts that do not block first paint** — `defer`, `async`, `type="module"`.
     ///
     /// The shell calls this *after* the document is on screen; `Page::load` and `from_prefetched` call
@@ -2100,7 +2138,7 @@ impl Page {
         self.drain_element_scrolls();
         if ran > 0 {
             tracing::debug!(scripts = ran, "executed deferred page scripts");
-            let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
+            let sheets: Vec<Stylesheet> = self.all_sheets();
             (self.styles, self.root_box) =
                 restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
             self.reapply_scroll_offsets();
@@ -4551,7 +4589,7 @@ impl Page {
         // the caller re-applies zoom on its next relayout).
         let root = self.dom.root();
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
-            let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
+            let sheets: Vec<Stylesheet> = self.all_sheets();
             (self.styles, self.root_box) =
                 restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
             self.reapply_scroll_offsets();
@@ -4650,7 +4688,7 @@ impl Page {
         }
         let root = self.dom.root();
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
-            let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
+            let sheets: Vec<Stylesheet> = self.all_sheets();
             (self.styles, self.root_box) =
                 restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
             self.reapply_scroll_offsets();
@@ -4967,7 +5005,7 @@ impl Page {
         }
         let root = self.dom.root();
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
-            let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
+            let sheets: Vec<Stylesheet> = self.all_sheets();
             (self.styles, self.root_box) =
                 restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
             self.reapply_scroll_offsets();
@@ -5009,7 +5047,7 @@ impl Page {
         }
         let root = self.dom.root();
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
-            let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
+            let sheets: Vec<Stylesheet> = self.all_sheets();
             (self.styles, self.root_box) =
                 restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
             self.reapply_scroll_offsets();
@@ -5118,7 +5156,7 @@ impl Page {
         }
         let root = self.dom.root();
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
-            let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
+            let sheets: Vec<Stylesheet> = self.all_sheets();
             (self.styles, self.root_box) =
                 restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
             self.reapply_scroll_offsets();
@@ -5166,7 +5204,7 @@ impl Page {
         }
         let root = self.dom.root();
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
-            let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
+            let sheets: Vec<Stylesheet> = self.all_sheets();
             (self.styles, self.root_box) =
                 restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
             self.reapply_scroll_offsets();
@@ -5300,17 +5338,10 @@ impl Page {
     /// Extracted rather than inlined because `:active` and `:focus` are the same shape and are the
     /// obvious next fills — they should not each rediscover this.
     fn recascade_all_sources(&mut self, viewport_width: f32) {
-        let mut sources = collect_style_sources(&self.dom, &self.final_url);
-        let sheets: Vec<Stylesheet> = sources
-            .iter()
-            .filter_map(|src| match src {
-                StyleSource::Inline(css, m) => Some(Stylesheet::parse(&wrap_media(css, m))),
-                StyleSource::External(url, m) => self
-                    .external_css
-                    .get(url)
-                    .map(|css| Stylesheet::parse(&wrap_media(css, m))),
-            })
-            .collect();
+        // The THIRD hand-rolled copy of [`Page::all_sheets`]'s body when it was written — this one
+        // correct, like the tree-grew site, and both of them being correct in private is how the
+        // other eight stayed wrong. There is one implementation now.
+        let sheets: Vec<Stylesheet> = self.all_sheets();
         self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
         // `@container` conditions answer from the previous pass's geometry — same one-frame
         // model as `relayout_incremental`; the caller's next layout uses the sized styles.
@@ -5355,20 +5386,10 @@ impl Page {
                 styled = self.styles.len(),
                 "tree grew since the last cascade — restyling before layout"
             );
-            // With the EXTERNAL sheets, not just the inline ones. `collect_style_elements` sees only
-            // `<style>` blocks; rebuilding from it would strip every `<link>`ed stylesheet from the
-            // page, which is a far worse bug than the one being fixed.
-            let sources = collect_style_sources(&self.dom, &self.final_url);
-            let sheets: Vec<Stylesheet> = sources
-                .iter()
-                .filter_map(|src| match src {
-                    StyleSource::Inline(css, m) => Some(Stylesheet::parse(&wrap_media(css, m))),
-                    StyleSource::External(url, m) => self
-                        .external_css
-                        .get(url)
-                        .map(|css| Stylesheet::parse(&wrap_media(css, m))),
-                })
-                .collect();
+            // With the EXTERNAL sheets, not just the inline ones — see [`Page::all_sheets`], which is
+            // this rule's ONE implementation. This site had its own copy of it, and being the only
+            // site that was right is how the other eight stayed wrong.
+            let sheets: Vec<Stylesheet> = self.all_sheets();
             self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
             container_query_recascade(
                 &self.dom,
@@ -5415,7 +5436,7 @@ impl Page {
             return RestyleDamage::None;
         }
 
-        let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
+        let sheets: Vec<Stylesheet> = self.all_sheets();
         let mut new_styles = cascade_styles(&self.dom, &sheets, viewport_width);
         // `@container` conditions answer from the PREVIOUS pass's geometry (`self.root_box`) —
         // the spec's own one-frame model; the damage classification below then decides whether
@@ -5973,6 +5994,39 @@ impl Page {
                 }
             }
         }
+        // ── **BANK THE SHEETS THAT ARE ALREADY IN HAND, BEFORE CHASING THE ENHANCEMENTS.**
+        //
+        // Everything below this line — the `@import` walk (up to three network rounds) and the
+        // `@font-face` `src` fetches (a SEQUENTIAL loop over every source of every face) — is more
+        // network, and `finish_loading` wraps this whole phase in the load budget as a **hard
+        // deadline, enforced wherever it runs out, including in the middle of a fetch.** The budget's
+        // safety story is that "a dropped future loses that phase's *enhancement* and never a
+        // half-mutated document". For this phase that story was FALSE: the apply lived at the very
+        // bottom, so a cancellation threw away every top-level stylesheet we had already fully
+        // downloaded — and a page with no author CSS is not a lost enhancement, it is the entire
+        // design of the site gone.
+        //
+        // `keirin.jp` is the measured case, and the log reads like the bug's own confession: nine
+        // sheets, 375KB, all nine logged `stylesheet applied` at +0.2s — then eleven and a half
+        // seconds inside font-awesome's per-face `src` ladder, then `load budget of 12.0s exhausted
+        // mid-phase`, and the future died two stages above the cascade. Coverage **98%** (we render
+        // every element Chromium does) against SHAPE **2.1%** — every box a full-width UA block in
+        // `serif/16` where Chromium had `{Meiryo UI/…}`, the document three times too tall. The
+        // stylesheets were on this machine the whole time.
+        //
+        // So the primary artifact is committed here, where it is complete: the sheets go into
+        // `external_css` (so any later re-cascade can find them — see `all_sheets`) and the cascade
+        // runs on them. The imports and the fonts then arrive as what they actually are —
+        // enhancements — and the apply at the bottom re-cascades **only if they changed the
+        // fingerprint**, so a page with no `@import` and no new face pays one hash, not one cascade.
+        // A page that does get a late face pays a second cascade, which is exactly what a real
+        // browser does when a webfont lands (FOUT is the web's own model), and it is a far better
+        // trade than rendering the site naked.
+        //
+        // `apply_stylesheets` is what banks `external_css` (its first statement), so this one call
+        // does both halves — the map and the cascade — and there is no second copy of either.
+        self.apply_stylesheets(&external, fonts, viewport_width);
+
         // ── `@import`ED SHEETS (tick 564). An unfetched import drops a WHOLE STYLESHEET.
         //
         // `@import url(https://fonts.googleapis.com/css?family=Lora:400,700)` inside an external sheet

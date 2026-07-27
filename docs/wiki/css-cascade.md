@@ -457,7 +457,7 @@ again): the code compiles, reads as complete, and does nothing.
 | path | when it recascades | how it fails a hover |
 |---|---|---|
 | `relayout` | only when the **tree GREW** (node count vs `styles.len()`) | a hover adds no nodes → re-lays-out the OLD styles. `:hover` matches, `hovered` is set, every piece of wiring is correct, **not one pixel moves.** |
-| `relayout_incremental` | on the dirty bits — correct trigger | rebuilds its sheet list from `MinimalCascade::collect_style_elements`, which sees inline `<style>` and **not `<link>`ed sheets**. Hover any link on any site with external CSS and **every external stylesheet drops out of the cascade.** |
+| `relayout_incremental` | on the dirty bits — correct trigger | rebuilds its sheet list from `MinimalCascade::collect_style_elements`, which sees inline `<style>` and **not `<link>`ed sheets**. Hover any link on any site with external CSS and **every external stylesheet drops out of the cascade.** *(FIXED t654 — and it was not one path, it was eight; see "the stylesheets were on this machine the whole time" below.)* |
 
 The second one had **no production callers** (tests only), so nothing had ever paid for that
 limitation, and it is invisible to any fixture written with an inline `<style>` — which the first
@@ -1396,3 +1396,88 @@ properties assumed unimplemented *as a group*, because the pref that ungated the
 four others. The list was right about 29 of them (`counter-increment`/`counter-reset` were re-checked
 behaviourally in the same tick — `content: counter(x)` renders nothing, so they stay). It took a
 measurement to find the one it was wrong about.
+
+## The stylesheets were on this machine the whole time (tick 654)
+
+Two defects in how external CSS reaches the cascade. Both had the same visible result — **the page
+renders naked**, every box a full-width UA block in `serif/16`, the document several times too tall —
+and neither had a symptom, because *nothing failed*: the sheets downloaded fine, and the layout of an
+unstyled document is a perfectly successful layout of the wrong input.
+
+### 1. The load deadline threw away sheets it had already downloaded
+
+`finish_loading` wraps the whole phase sequence in the load budget as a **hard deadline, dropped
+wherever it runs out, including in the middle of a fetch.** The justification is explicit and, for
+most phases, correct: *"a dropped future loses that phase's ENHANCEMENT and never a half-mutated
+document."* The stylesheet phase's internal order made that false:
+
+```text
+  fetch every <link> sheet  →  @import walk (up to 3 network rounds)
+                            →  @font-face `src` fetches (SEQUENTIAL, per source, per face)
+                            →  ...and only THEN cascade
+```
+
+The apply sat at the bottom, so the phase's **primary artifact was hostage to its enhancements.**
+
+`keirin.jp` is the measured case, and the log is the confession: nine sheets, 375KB, all nine
+`stylesheet applied` at **+0.2s** — then eleven and a half seconds inside font-awesome's per-face
+`src` ladder — then `load budget of 12.0s exhausted mid-phase`, with the future dying two stages
+above the cascade. Result: coverage **98%** against SHAPE **2.1%**. *We rendered every element
+Chromium did, and put almost none of them where Chromium put them.*
+
+**Fix:** call `apply_stylesheets` where the top-level sheets are COMPLETE, before the phase returns
+to the network. Imports and fonts then arrive as the enhancements they are, and the apply at the
+bottom re-cascades only if they moved the fingerprint — so a page with no `@import` and no new face
+pays one hash rather than a second cascade, and a page that gets a late face pays one more cascade,
+which is exactly what a browser does when a webfont lands. **SHAPE 2.1% → 40.7%.**
+
+> **A page with no author CSS is not a degraded page; it is a different page.** When a phase is
+> cancellable, ask which of its outputs is the *artifact* and which are the *enhancements*, and commit
+> the artifact at the point where it is complete. "Fetch everything, then apply once" is only safe if
+> the phase cannot be interrupted — and this one is designed to be.
+
+### 2. One re-cascade rule, nine implementations, eight of them wrong
+
+`Page::external_css` exists so that a **later** cascade can rebuild the full sheet list. Nine sites
+rebuild one. Two of them did it right, in private, each with its own hand-rolled copy of the body —
+and the comment at one of them already stated the rule in full: *"rebuilding from it would strip every
+`<link>`ed stylesheet from the page, which is a far worse bug than the one being fixed."*
+
+The other seven, plus `relayout_incremental`, rebuilt from
+`MinimalCascade::collect_style_elements` — which sees inline `<style>` and **nothing else**:
+
+```text
+  resolve_fetch · dispatch_click · deliver_ws_event · deliver_fetch_stream
+  deliver_message · fire_popstate · run_deferred_scripts · relayout_incremental
+```
+
+A resolved `fetch`/XHR, **a click**, a WebSocket frame, a streamed body chunk, `postMessage`,
+`popstate` — any interaction at all, on any page whose CSS lives in a `<link>`, which is essentially
+every page on the web — re-styled the document against UA defaults. All nine now call
+`Page::all_sheets()`, which is the rule's only implementation.
+
+*One rule with N implementations is one rule that is wrong N−1 times*, and the two that were right
+are why it survived: a correct private copy fixes nothing and removes the pressure to find the
+others. **When a comment states a rule, the rule wants to be a function.**
+
+⚠ **The ninth site, named and not fixed.** `forced_reflow` — the synchronous layout a JS geometry
+read (`offsetWidth`, `getBoundingClientRect`) forces mid-script — has the same defect, so those reads
+answer from UA-default styles. It cannot use `all_sheets()`: it runs off a `*mut ReflowCtx` installed
+at **19 call sites** with no route to `external_css`, and threading a raw pointer to a `self` field
+across those while `&mut self.dom` is live is an aliasing question that deserves its own tick rather
+than a ride on this one.
+
+### The instrument note: read the ORACLE's column, not the score
+
+The score said *"placement is bad on keirin"* for 42 ticks. The thing that named the organ in one
+reading was the divergence text — `{Meiryo UI/20}` on Chromium's side against `{serif/16}` on ours,
+with `x=8` and `width=1184` — because `serif/16` and the UA body margin are not values anybody
+*writes*. They are what you get when no author sheet applied at all. **A per-element font column
+turned a fidelity percentage into a named subsystem**, which is the job t563 added it for.
+
+And the control run earned its keep on the same tick: the three other scored sites showed `welt.de`
+reading-order 0 → 2 against the previous sweep, reproducible three times — a term that counts
+*sites*, so it read as a real regression. Re-running with the one line disabled, on the same live
+content minutes apart, showed reading-order 2 **both ways** (and SHAPE 66.6% → 67.2% in the fix's
+favour). `welt.de`'s scored population has read 2957 / 3149 / 3060 across three sweeps: **against a
+live corpus, the previous sweep is not a baseline — only a same-hour control is.**

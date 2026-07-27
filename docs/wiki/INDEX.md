@@ -274,6 +274,10 @@
   - L1336 · One list, three consumers — the structural half
   - L1347 · Two serializations the obvious implementation gets wrong
   - L1365 · A FALSE NO costs a page its enhancement, exactly as a false yes costs it its fallback (tick 601)
+  - L1400 · The stylesheets were on this machine the whole time (tick 654)
+  - L1407 · 1. The load deadline threw away sheets it had already downloaded
+  - L1439 · 2. One re-cascade rule, nine implementations, eight of them wrong
+  - L1470 · The instrument note: read the ORACLE's column, not the score
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1110,4 +1114,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1025 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1029 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
