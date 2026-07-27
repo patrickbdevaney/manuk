@@ -167,8 +167,13 @@ fn restyle_and_layout(
     sheets: &[Stylesheet],
     fonts: &FontContext,
     viewport_width: f32,
+    images: &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
 ) -> (StyleMap, LayoutBox) {
     let mut styles = cascade_styles(dom, sheets, viewport_width);
+    // **BETWEEN the cascade and the layout, every time.** See `apply_natural_sizes`: a decoded
+    // image's intrinsic size is not in any stylesheet, so a cascade that rebuilds the style map
+    // erases it, and the picture becomes a full-width strip of zero height.
+    apply_natural_sizes(&mut styles, images);
     let mut root_box = layout_document(dom, &styles, fonts, viewport_width);
     if container_query_recascade(dom, sheets, viewport_width, &mut styles, &root_box) {
         root_box = layout_document(dom, &styles, fonts, viewport_width);
@@ -747,6 +752,40 @@ fn data_url_image_bytes(url: &str) -> Option<Vec<u8>> {
 ///
 /// Shared by the async subresource pass and the inline-`data:` pass so the two cannot drift into
 /// sizing the same image two different ways depending on how its bytes arrived.
+/// **Re-state every decoded image's intrinsic size into a freshly cascaded style map.**
+///
+/// An image's natural size is the one geometry input that is **not in any stylesheet** — it arrives
+/// from the network, long after the cascade that will be asked to lay it out. So it was written
+/// straight into the cascade's *output*, once, by `apply_images` — and every later cascade rebuilt
+/// that map from the stylesheets and erased it.
+///
+/// Measured, on a page with no CSS at all and one 41×23 image:
+///
+/// ```text
+///   after load_async (image applied)     width=Px(41)  ar=Some(1.78)  rect 41×23
+///   after finish_loading (re-cascaded)   width=Auto    ar=None        rect 784×0
+/// ```
+///
+/// 784×0 is the full content width and **no height** — the picture occupies no space at all and
+/// everything below it slides up. It never recovered, either: the image phase's own dedup means the
+/// second pass has nothing to re-apply, so the size was applied exactly once and any cascade after it
+/// was final. A page whose images are its content laid out as a stack of zero-height strips is the
+/// picture-shaped-hole signature the fidelity sweep records.
+///
+/// Which is why this runs *inside* [`restyle_and_layout`] — the one join every restyle path shares —
+/// rather than at the call sites. The intrinsic size is a **standing** input to layout, not an event
+/// that happened once.
+fn apply_natural_sizes(
+    styles: &mut StyleMap,
+    images: &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
+) {
+    for (node, img) in images {
+        if let Some(style) = styles.get_mut(node) {
+            apply_natural_size(style, img);
+        }
+    }
+}
+
 fn apply_natural_size(style: &mut manuk_css::ComputedStyle, img: &manuk_paint::DecodedImage) {
     if img.width > 0 && img.height > 0 {
         style.aspect_ratio = Some(img.width as f32 / img.height as f32);
@@ -1197,6 +1236,9 @@ struct ReflowCtx {
     laid_out_at: u64,
     rects: HashMap<NodeId, [f32; 4]>,
     styles: HashMap<NodeId, manuk_css::ComputedStyle>,
+    /// The decoded images as of this script round — a standing layout input the cascade cannot
+    /// supply. See `apply_natural_sizes`.
+    images: HashMap<NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
 }
 
 /// The reflow itself, called up from the JS bindings when a geometry read finds a dirtied DOM.
@@ -1215,7 +1257,7 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     // pass can never disagree about the same tree.
     let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(dom);
     let root_box;
-    (c.styles, root_box) = restyle_and_layout(dom, &sheets, fonts, c.viewport_width);
+    (c.styles, root_box) = restyle_and_layout(dom, &sheets, fonts, c.viewport_width, &c.images);
     c.rects = root_box
         .node_rects(dom)
         .into_iter()
@@ -1241,13 +1283,23 @@ struct ReflowScope {
 
 impl ReflowScope {
     /// `dom`/`fonts`/`viewport_width` must describe the layout currently published to JS.
-    fn install(dom: &Dom, fonts: &FontContext, viewport_width: f32) -> ReflowScope {
+    fn install(
+        dom: &Dom,
+        fonts: &FontContext,
+        viewport_width: f32,
+        images: &HashMap<NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
+    ) -> ReflowScope {
         let mut ctx = Box::new(ReflowCtx {
             fonts: fonts as *const FontContext,
             viewport_width,
             laid_out_at: dom.mutation_seq(),
             rects: HashMap::new(),
             styles: HashMap::new(),
+            // Cheap: an `Rc` clone per decoded image, no pixels copied. Without it the reflow a JS
+            // geometry read forces mid-script re-cascades the document and erases every image's
+            // intrinsic size — the ninth re-cascade site, and it needs the same standing input the
+            // other eight get.
+            images: images.clone(),
         });
         let p = &mut *ctx as *mut ReflowCtx as *mut std::ffi::c_void;
         let prev_maps = manuk_js::view_maps();
@@ -2252,7 +2304,7 @@ impl Page {
             tracing::debug!(scripts = ran, "executed deferred page scripts");
             let sheets: Vec<Stylesheet> = self.all_sheets();
             (self.styles, self.root_box) =
-                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
+                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width, &self.images);
             self.reapply_scroll_offsets();
             self.content_height = self.root_box.rect.height;
         }
@@ -3215,7 +3267,7 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
-        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
         let proceed = match manuk_js::dispatch_event(
             ctx,
             &mut self.dom,
@@ -3267,7 +3319,7 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
             for ty in ["input", "change"] {
                 if let Err(e) =
                     manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles)
@@ -3312,7 +3364,7 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
             let proceed = match manuk_js::dispatch_drop(
                 ctx,
                 &mut self.dom,
@@ -3364,7 +3416,7 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
             let proceed = match manuk_js::dispatch_drag(
                 ctx,
                 &mut self.dom,
@@ -3431,7 +3483,7 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
             let proceed = match manuk_js::dispatch_mouse(
                 ctx,
                 &mut self.dom,
@@ -3487,7 +3539,7 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
             let proceed = match manuk_js::dispatch_mouse(
                 ctx,
                 &mut self.dom,
@@ -3573,7 +3625,7 @@ impl Page {
                     .into_iter()
                     .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                     .collect();
-                let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+                let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
                 for ty in ["input", "change"] {
                     if let Err(e) =
                         manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles)
@@ -3647,7 +3699,7 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
             for ty in ["input", "change"] {
                 if let Err(e) =
                     manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles)
@@ -3688,7 +3740,7 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
             if let Err(e) =
                 manuk_js::dispatch_event(ctx, &mut self.dom, node, "input", &rects, &self.styles)
             {
@@ -3857,7 +3909,7 @@ impl Page {
             } else {
                 &["blur"]
             };
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
             for ty in events {
                 if let Err(e) =
                     manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles)
@@ -4324,7 +4376,7 @@ impl Page {
             // A geometry read during these scripts must see the DOM they have built so far, not
             // the snapshot above — `measure -> mutate -> measure` in one round is how every
             // virtualized list sizes its rows.
-            let _reflow = ReflowScope::install(&dom, fonts, viewport_width);
+            let _reflow = ReflowScope::install(&dom, fonts, viewport_width, &inline_images);
             // **The inline images decoded above are publishable RIGHT NOW, before the first script.**
             // `Page` does not exist yet at this point — it is constructed below — so the ordinary
             // `publish_image_sources` hook cannot have run, and a BLOCKING script that draws a `data:`
@@ -4338,8 +4390,13 @@ impl Page {
                     if n > 0 {
                         tracing::debug!(scripts = n, "executed page scripts");
                         let sheets2: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
-                        (styles, root_box) =
-                            restyle_and_layout(&dom, &sheets2, fonts, viewport_width);
+                        (styles, root_box) = restyle_and_layout(
+                            &dom,
+                            &sheets2,
+                            fonts,
+                            viewport_width,
+                            &inline_images,
+                        );
                     }
                     Some(ctx)
                 }
@@ -4466,7 +4523,7 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
-            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
             // (type, buttons-held-during-this-event)
             for (ty, buttons) in [("mousedown", 1u32), ("mouseup", 0u32)] {
                 if let Err(e) = manuk_js::dispatch_mouse_buttons(
@@ -4514,7 +4571,7 @@ impl Page {
             .collect();
         // Covers every dispatch below, including the nested `dispatch_click` a <label> forwards
         // into — a handler that mutates and then measures must see what it just built.
-        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
         // ── A <label> forwards its click to the control it labels. ─────────────────────────
         // This is how most checkboxes on the web are actually clicked: the visible target is the
         // text, not the 12px box. Without forwarding, clicking "Remember me" does nothing at all.
@@ -4707,7 +4764,7 @@ impl Page {
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
             let sheets: Vec<Stylesheet> = self.all_sheets();
             (self.styles, self.root_box) =
-                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
+                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width, &self.images);
             self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
@@ -4806,7 +4863,7 @@ impl Page {
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
             let sheets: Vec<Stylesheet> = self.all_sheets();
             (self.styles, self.root_box) =
-                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
+                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width, &self.images);
             self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
@@ -5112,7 +5169,7 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
-        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
         if let Err(e) =
             manuk_js::deliver_ws_event(ctx, &mut self.dom, id, event, &rects, &self.styles)
         {
@@ -5123,7 +5180,7 @@ impl Page {
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
             let sheets: Vec<Stylesheet> = self.all_sheets();
             (self.styles, self.root_box) =
-                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
+                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width, &self.images);
             self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
@@ -5154,7 +5211,7 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
-        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
         if let Err(e) =
             manuk_js::deliver_fetch_stream(ctx, &mut self.dom, id, event, &rects, &self.styles)
         {
@@ -5165,7 +5222,7 @@ impl Page {
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
             let sheets: Vec<Stylesheet> = self.all_sheets();
             (self.styles, self.root_box) =
-                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
+                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width, &self.images);
             self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
@@ -5274,7 +5331,7 @@ impl Page {
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
             let sheets: Vec<Stylesheet> = self.all_sheets();
             (self.styles, self.root_box) =
-                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
+                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width, &self.images);
             self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
@@ -5311,7 +5368,7 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
-        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
         if let Err(e) =
             manuk_js::fire_popstate(ctx, &mut self.dom, state_json, url, &rects, &self.styles)
         {
@@ -5322,7 +5379,7 @@ impl Page {
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
             let sheets: Vec<Stylesheet> = self.all_sheets();
             (self.styles, self.root_box) =
-                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
+                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width, &self.images);
             self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
@@ -5459,6 +5516,9 @@ impl Page {
         // other eight stayed wrong. There is one implementation now.
         let sheets: Vec<Stylesheet> = self.all_sheets();
         self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
+        // The intrinsic size of a decoded image is not in any stylesheet, so a rebuilt style
+        // map has lost it. Restate it here, before the layout that consumes it.
+        apply_natural_sizes(&mut self.styles, &self.images);
         // `@container` conditions answer from the previous pass's geometry — same one-frame
         // model as `relayout_incremental`; the caller's next layout uses the sized styles.
         container_query_recascade(
@@ -5507,6 +5567,9 @@ impl Page {
             // site that was right is how the other eight stayed wrong.
             let sheets: Vec<Stylesheet> = self.all_sheets();
             self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
+            // The intrinsic size of a decoded image is not in any stylesheet, so a rebuilt style
+            // map has lost it. Restate it here, before the layout that consumes it.
+            apply_natural_sizes(&mut self.styles, &self.images);
             container_query_recascade(
                 &self.dom,
                 &sheets,
@@ -5554,6 +5617,9 @@ impl Page {
 
         let sheets: Vec<Stylesheet> = self.all_sheets();
         let mut new_styles = cascade_styles(&self.dom, &sheets, viewport_width);
+        // The intrinsic size of a decoded image is not in any stylesheet, so a rebuilt style
+        // map has lost it. Restate it here, before the layout that consumes it.
+        apply_natural_sizes(&mut new_styles, &self.images);
         // `@container` conditions answer from the PREVIOUS pass's geometry (`self.root_box`) —
         // the spec's own one-frame model; the damage classification below then decides whether
         // the sized styles warrant a relayout exactly as for any other style delta.
@@ -5748,7 +5814,7 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
-        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width, &self.images);
 
         // Leaving, then entering — see the note above on why the order is not cosmetic.
         if let Some(old) = previous.filter(|n| self.dom.is_alive(*n)) {
@@ -6013,6 +6079,9 @@ impl Page {
             })
             .collect();
         let mut new_styles = cascade_styles(&self.dom, &sheets, viewport_width);
+        // The intrinsic size of a decoded image is not in any stylesheet, so a rebuilt style
+        // map has lost it. Restate it here, before the layout that consumes it.
+        apply_natural_sizes(&mut new_styles, &self.images);
         // External sheets are the main `@container` carrier. Conditions answer from the
         // pre-external geometry here (the only layout that exists yet) — the previous-pass
         // model, one cascade generation behind until the next restyle re-evaluates them.

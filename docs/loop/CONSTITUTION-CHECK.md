@@ -2304,3 +2304,69 @@ to hold.
 ceiling on that corpus is 15/20 by deliberate decision) and t632's (our own 17-28s latency against
 Chromium's 6s contaminates the SHAPE half). Neither moved. The wall (734s) remains harness-owned and
 was reported at every audit rather than carried silently.
+
+---
+
+## Check #48 — tick 656
+
+**Horizon:** H0 — the Phase-0 daily-driver certificate. Gate:
+`daily-driver-pass(site) = renders(site) ∧ functions(site)` over fixed-denominator corpus-v2
+(PART VII.1).
+
+**The window:** t649–t656 — t650/651 (the cert scored a blank white page `ok`; a parked reproducer had
+rotted), t652 (an injected script ran and no `load` was ever fired), t653 (a sweep re-opened the row it
+had just closed), t654 (the stylesheet phase discarded nine fully-downloaded sheets on the load
+deadline), t655 (`join_all` is one future — one stalled host discarded every image that arrived),
+t656 (an image's intrinsic size erased by every re-cascade; `784×0`).
+
+**Gate or scoreboard? — GATE on the mechanism, and DRIFTING on the measurement. That is this check's
+finding, and it is check #47's finding again, one window later and worse.**
+
+#47 said, in bold: *"the certificate is now the stale number."* It named a 22-tick gap and added a
+procedural clause — *a fix argued in terms of "a large fraction of the web" owes a CORPUS
+measurement.* The clause was correct and **it has now been violated three ticks running**, by me,
+with the debt written into each tick's own NEXT and then not paid:
+
+> **t654, t655 and t656 are three independent placement root causes, each measured on one page, landed
+> against a SHAPE number nobody has re-measured.** t654 changed what a budget-exhausted site renders.
+> t655 changed what it renders it *with*. t656 changed where every picture on it sits. The last real
+> corpus reading is older than all three, and the last certificate is older still.
+
+Each tick is individually well-founded — RED-proven gate, control run, named mechanism — and the *set*
+is exactly the shape PART VII.1 exists to prevent: a run of plausible-blast-radius fixes with no
+page-level number behind them. The per-tick evidence is honest; the aggregate claim ("placement
+fidelity is improving") is currently **unmeasured**, and I have written "the sweep is owed" three
+times instead of running it once. **Writing the debt down is not paying it.** A NEXT list is not an
+instrument.
+
+**No new clause.** #47's is the right rule and adding a fourth one would be the drift wearing process
+as a costume. What is missing is not a rule; it is one sweep.
+
+**THE STEER, and it is unambiguous: the next tick is the HEAD-20 SWEEP.** Not another mechanism, even
+a well-surfaced one — and t656's own NEXT list has two live candidates (a failing ESM-scanner unit
+test that is not in the wall; the two `join_all` fan-outs t655 deliberately left). Both wait. The
+binding constraint named at t602 was never *"find more placement bugs"*; it was the **64%
+unscored/failed rate** and the fact that perf contaminates SHAPE — and three ticks of load-deadline
+work have gone straight at exactly that, which makes the sweep the measurement that says whether any
+of it generalised. If it did not, that is the more valuable finding, and it is one I currently cannot
+get.
+
+**PART VI/VII still hold; no invariant bent.** The ratchet was honoured — t656 found a pre-existing
+failing unit test while running the page suite and did **not** absorb it into the tick (the function
+and its test are byte-identical to HEAD, 3,000 lines from the nearest hunk); it is recorded as its own
+thread, along with the observation that it is **not in the wall**. t655 took its `COMMIT_RESERVE` out
+of the load budget rather than adding it, explicitly refusing to buy a capability by extending a Bar 0
+promise. t656 declined to smuggle in the natural-size finding that t655's control surfaced, and made
+it its own tick with its own gate.
+
+**MEASUREMENT/CAPABILITY BALANCE:** three capability (654/655/656), four reliability/measurement
+(650/651/652/653) — even on its face, which is why the drift is *not* visible in the balance ratio.
+The reliability ticks were about the **instrument**, and the capability ticks then ran ahead of the
+instrument's last reading. Balance was the wrong thing to count.
+
+**STANDING, UNMOVED:** t626's bot-wall ceiling (5 of 20 HEAD sites; 15/20 by deliberate decision) and
+t632's latency contamination — the latter is precisely what t654/655 attacked, and the sweep is what
+will say whether it moved. The wall is harness-owned; t655 ran at 252s warm and is reported, not
+carried silently.
+
+**Next check due: tick 664.**

@@ -29923,3 +29923,83 @@ which is a placement-fidelity root cause of exactly the kind the board asks for,
 re-cascade site** (t654), needing the `ReflowCtx` aliasing question answered on purpose. **(3) A HEAD-20
 sweep** — owed since t653 and now owed three times over, because t654 changed what every
 budget-exhausted site renders and t655 changed what it renders it *with*.
+
+## Tick 656 — the picture's own size was written into the cascade's output, and every cascade after it was final (2026-07-27)
+
+HYPOTHESIS: t655's control run found this and refused to smuggle it in. On a page with **no CSS at
+all** and one 41×23 image, measured either side of the same load:
+
+```text
+  after load_async     (image applied)     width=Px(41)  ar=Some(1.78)   rect  41×23
+  after finish_loading (re-cascaded)       width=Auto    ar=None         rect 784×0
+```
+
+**784×0 is the full content width and no height.** The board's mandate is *"pick the
+placement-fidelity root-cause the sweep surfaces"*, and this is one measured on a page with nothing
+on it: every unsized image on the web lays out as a zero-height full-width strip, and everything
+below it slides up into the space it should have taken.
+
+### AN IMAGE'S SIZE IS THE ONE GEOMETRY INPUT THAT IS IN NO STYLESHEET
+
+It arrives from the network long after the cascade that has to lay it out, so `apply_images` wrote it
+straight into the cascade's **output** — the style map — and every later cascade rebuilt that map
+from the stylesheets and erased it. `self.styles = cascade_styles(...)` is wholesale, at more than a
+dozen sites.
+
+**And it never recovered**, which is the half that makes this permanent rather than transient: the
+image phase dedups per `(node, url)`, so the second budgeted pass finds nothing to fetch, calls
+`apply_images` with an empty map, returns early — and the natural size is never restated. The size
+was applied exactly once, and whichever cascade ran after it was final.
+
+That is why it is invisible to coverage. Every one of those elements is present, probed and counted;
+they are simply all 0px tall. *A 98%-covered page can be a naked one* (t654) — and it can also be one
+whose every picture is a hairline.
+
+### THE FIX PUTS IT WHERE A STANDING INPUT BELONGS
+
+`apply_natural_sizes(styles, images)` restates every decoded image's intrinsic size **between the
+cascade and the layout**, inside `restyle_and_layout` — documented in the tree as *"the one join
+every restyle path shares"* — plus the four sites that call `cascade_styles` directly. An intrinsic
+size is a standing input to layout, not an event that happened once.
+
+**`forced_reflow` is included, and that closes the site t654 had to name and leave.** It is the ninth
+re-cascade site — the synchronous layout a JS `offsetWidth` read forces mid-script — and t654 could
+not reach it because it runs off a `*mut ReflowCtx` with no route to the page. It does not need one
+here: `ReflowCtx` now carries the image map itself, cloned in at `ReflowScope::install` (17 sites, an
+`Rc` clone per image, no pixels copied). The aliasing question t654 correctly refused to answer inside
+a layout tick did not have to be answered — the context owns the data instead of pointing at it.
+
+MEASURED, same page, after the fix:
+
+```text
+  image rect      784×0   ->   41×23
+  paragraph y        24   ->      47      <- it is BELOW the picture now, not on top of it
+```
+
+TICK SHAPE: capability (one lifetime defect — a standing layout input stored in a rebuilt map —
+closed at the one shared join plus the four direct-cascade sites and the reflow context). Bar 0
+untouched; css/layout/dom/paint suites green (28 + 2 + 11 + 88 + 22).
+Gate: `G_IMAGE_NATURAL_SIZE_SURVIVES_RESTYLE`
+(`engine/page/tests/g_image_natural_size_survives_restyle.rs`) — hermetic, one loopback socket.
+RED-proven by emptying `apply_natural_sizes`: **784×0 against 41×23**. It asserts **three** things,
+and the second and third are not decoration: that the image is its own size; that the paragraph after
+it is pushed **below** it (a size nothing consumes is not a fixed size, and asserting the image's own
+box alone cannot tell those apart); and that both still hold after a **second, independent**
+re-cascade trigger — a click — because the map is rebuilt at more than a dozen sites and a rule with
+N implementations is not proven by the one a gate happens to touch. Its own preconditions are
+asserted too: the external sheet DID cascade (`#marker` is 321px) and the fetch DID resolve, so it
+cannot pass by never reaching a re-cascade.
+WIKI: `docs/wiki/box-layout.md` — "an image's size is in no stylesheet".
+PATTERN: replaced-element intrinsic sizing across a restyle.
+
+NEXT: **(1) A HEAD-20 SWEEP, now owed four times over** — t654 changed what a budget-exhausted site
+renders, t655 changed what it renders it *with*, and t656 changes where every picture on it sits.
+Three placement mechanisms have landed against a SHAPE number nobody has re-measured; the sweep is
+what says whether they generalise, and running more fixes ahead of it is exactly the drift the
+STEP-2 reminder warns about. **(2) `scan_static_import_specifiers` has a FAILING unit test on `main`**
+— `tests::static_import_scanner_finds_specifiers_and_skips_the_rest`, "comments, strings, dynamic
+`import()` and `import.meta` must not be scanned as static imports". Found while running the page
+suite; **it is not this tick's** (the function and its test are byte-identical to HEAD, 3,000 lines
+from the nearest hunk). It is a real ESM-graph defect and it is **not in the wall**, which is the more
+interesting half — `gates-not-in-the-wall` again. **(3)** the other `join_all` fan-outs t655 named and
+deliberately left: `pump_page_fetches` and the script pass.

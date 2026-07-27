@@ -88,6 +88,11 @@
   - L1420 · The curve is the whole difficulty
   - L1443 · Elliptical arcs REFUSE, and that is the design
   - L1455 · What this does NOT fix
+  - L1462 · An image's size is in no stylesheet — so a re-cascade erases it (tick 656)
+  - L1488 · Why it was permanent rather than transient
+  - L1494 · Why no instrument saw it
+  - L1502 · The fix: a standing input belongs between the cascade and the layout
+  - L1526 · The gate asserts three things, and two of them are not decoration
 
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
@@ -1119,4 +1124,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1034 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1039 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

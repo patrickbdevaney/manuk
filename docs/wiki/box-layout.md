@@ -1458,3 +1458,82 @@ the endpoint, giving `0,0,10,10`, which the gate does catch.
 line height — because `svg_bbox` lives in the JS binding layer and the CSS box comes from layout.
 That is a separate subsystem (t629); this makes sure it will have correct geometry to consume for the
 commonest element when it lands.
+
+## An image's size is in no stylesheet — so a re-cascade erases it (tick 656)
+
+**Every other geometry input to layout comes from the cascade.** A replaced element's *intrinsic*
+size does not: it arrives from the network, long after the cascade that will be asked to lay it out.
+So the natural size was written straight into the cascade's **output** — the style map — by
+`apply_images`:
+
+```rust
+for (&node, img) in &images {
+    if let Some(style) = self.styles.get_mut(&node) { apply_natural_size(style, img) }
+}
+self.relayout(fonts, viewport_width);
+```
+
+That is correct exactly until the next cascade, and `self.styles = cascade_styles(...)` is
+**wholesale**, at more than a dozen call sites. Measured on a page with no CSS at all and one 41×23
+image, either side of the same load:
+
+```text
+  after load_async     (image applied)     width=Px(41)  ar=Some(1.78)   rect  41×23
+  after finish_loading (re-cascaded)       width=Auto    ar=None         rect 784×0
+```
+
+**784 is the full content width; 0 is no height at all.** The picture occupies no space and every
+element below it slides up into the space it should have taken.
+
+### Why it was permanent rather than transient
+
+The image phase dedups per `(node, url)`, so the *second* budgeted pass finds nothing to fetch, calls
+`apply_images` with an empty map and returns early. The natural size is applied **exactly once** —
+whichever cascade runs after it is final. There is no self-healing pass.
+
+### Why no instrument saw it
+
+Coverage asks *"is the node there?"* Every one of those images is there: parsed, styled, probed,
+counted. They are simply all zero pixels tall. This is the same shape as tick 654's naked page from
+the other direction — **a 98%-covered page can be one whose every picture is a hairline.** Only a
+structural/placement score can see it, which is why it surfaced from a *control run* rather than from
+a gate.
+
+### The fix: a standing input belongs between the cascade and the layout
+
+```rust
+fn restyle_and_layout(dom, sheets, fonts, vw, images) -> (StyleMap, LayoutBox) {
+    let mut styles = cascade_styles(dom, sheets, vw);
+    apply_natural_sizes(&mut styles, images);   // <- restated on EVERY route to a new box tree
+    let mut root_box = layout_document(dom, &styles, fonts, vw);
+    ...
+}
+```
+
+`restyle_and_layout` is documented in the tree as *"the one join every restyle path shares"*, which
+makes it the right home; the four sites that call `cascade_styles` directly restate it themselves,
+immediately before their own `layout_document`.
+
+**`forced_reflow` is included, and it is the site tick 654 had to name and leave.** The synchronous
+layout that a JS `offsetWidth`/`getBoundingClientRect` read forces mid-script is the ninth re-cascade
+site, and t654 could not reach it: it runs off a `*mut ReflowCtx` installed at 17 call sites with no
+route to the page, and threading a raw pointer to a `self` field while `&mut self.dom` is live is an
+aliasing question that does not belong inside a layout tick. It never had to be answered — **the
+context OWNS the data instead of pointing at it.** `ReflowCtx` carries the image map, cloned in at
+`ReflowScope::install`: an `Rc` clone per decoded image, no pixels copied. *When a raw pointer is the
+only route to a value, check whether the value is cheap to own.*
+
+### The gate asserts three things, and two of them are not decoration
+
+`G_IMAGE_NATURAL_SIZE_SURVIVES_RESTYLE`:
+
+1. the image's box is its own size;
+2. **the paragraph after it starts below it** — a width the layout ignores is not a fixed bug, and an
+   assertion on the image's own box cannot tell "sized" from "sized and consumed" apart;
+3. both still hold after a **second, independent** re-cascade trigger (a click), because the map is
+   rebuilt at more than a dozen sites and *one rule with N implementations is not proven by the one a
+   gate happens to touch* — the lesson tick 654 paid for with eight of them.
+
+Its own preconditions are asserted as well (the external sheet DID cascade; the `fetch` DID resolve),
+so it cannot pass by never reaching a re-cascade — which is precisely how this bug hid: at
+`load_async` the image is correctly sized, and a test that stopped there would have been green.
