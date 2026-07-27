@@ -1918,3 +1918,79 @@ delegation → the page's listener never runs (`never-caught`); drop the host lo
 is silent; drop the address → the line is anonymous.
 
 [[reliability-doctrine]] [[honest-answer-is-not-a-fixed-answer]]
+
+## A step change in the instrument is not an error bar on the subject (tick 676)
+
+The HEAD-20 sweep tick 673 and 674 both owed ran on the t674 tree, seeded from
+`head20-rows-t672.tsv` into `head20-rows-t675.tsv`. The certificate's headline did not move —
+**sites 20 · scored 5 · shape ≥0.75 on 0** — and everything interesting is in what moved underneath
+it.
+
+### What t674's deferred probe did to the ORACLE'S POPULATION
+
+| site | t672 (probe at parse) | t675 (probe at `load`) | |
+|---|---|---|---|
+| `keirin.jp` | 0.708 / 0.048 · n=356 | 0.744 / **0.573** · n=**1036** | 3× the population, h-overflow 79 → 3 |
+| `www.agoda.com` | 0.385 / — · n=5 `thin-overlap-5` | 0.073 / **0.586** · n=58 | **newly SCORED** |
+| `www.naukri.com` | — · `shell-only-1` | — · `thin-overlap-2` | t674's claim, confirmed on the corpus |
+| `playhop.com` | 0.965 / 0.636 · n=550 | 0.047 / 0.200 · n=**5** `thin-overlap-5` | **scored row LOST** |
+| `www.welt.de` | 0.957 / 0.6657 | 0.957 / 0.6659 | server-rendered: unmoved, as designed |
+
+**`playhop.com`'s 0.636 was a SHELL score.** Its pre-`load` DOM agreed with Chrome's on 550 elements;
+its post-`load` app agrees on 5. That is tick 614's finding — *the oracle renders a shell for JS-built
+pages and the certificate was scoring it* — recurring on a site the certificate was actively counting,
+and the instrument getting more honest is what took the row away. **Losing a row this way is a ratchet
+ADVANCE on the instrument face, not a regression:** the term the Phase-0 exit hangs on
+(`shape ≥0.75 on N sites`) was 0 before and is 0 after, and one of the five rows behind it has stopped
+being a claim about a page nobody was looking at.
+
+### …and the spread block read all of that as the sites' own noise
+
+```text
+www.naukri.com    0.0000 .. 1.0000   Δ 100.0 pts over 2 runs
+www.agoda.com     0.0000 .. 0.5862   Δ  58.6 pts over 2 runs
+keirin.jp         0.0478 .. 0.5734   Δ  52.6 pts over 2 runs
+playhop.com       0.2000 .. 0.6364   Δ  43.6 pts over 2 runs
+```
+
+Every genuine per-site spread this project has ever recorded is ≤ 3.7 points. These four are the
+**instrument changing under the file**, and the rows file — append-only, accumulated across ticks —
+had no way to say so. Two consequences, and the second is the expensive one:
+
+1. A reader (including me) sizes a real delta against a fabricated error bar.
+2. **`repeat_plan` consumes this function.** Tick 673 made the sweep re-render any site whose recorded
+   spread exceeds 5 points, three times, to take a median. All four sites above would have been
+   rendered three times on *every future sweep, forever*, to re-measure a variance that is not
+   variance — eight extra live renders per sweep, paid indefinitely, for nothing.
+
+### The fix: the version IS the probes' text
+
+`chrome::instrument_tag()` is a stable 8-hex digest of `PROBE_ALL_IDS_JS` + `PROBE_ALL_PATHS_JS`, and
+`append_rows_tsv` writes it as a tenth column. `shape_spreads` takes the **last** tag in the file as
+the current instrument and forms the error bar from those rows only.
+
+**Derived, not declared.** A hand-maintained version constant is the exact thing that gets forgotten
+on the tick that changes the probe — the edit lands, the bump does not, and two instruments pool while
+everything downstream believes they did not. The gate therefore asserts that the tag *is* the digest of
+the probe sources and that editing a probe *moves* it, rather than merely that a tag exists.
+
+**Backward compatible by construction.** A file with no tags — every sweep already banked in
+`docs/bench/` — has no "current" tag, so the filter is skipped and the old behaviour holds exactly.
+That is asserted, because a fix that silently discarded the banked error bars would have cost more
+than the defect.
+
+**And the mixture is DISCLOSED.** `spread_report` prints every version present with its row count when
+there is more than one. An older row still counts in the certificate for a site the current instrument
+never reached — dropping it would shrink the denominator, which is cause #1 in the certification
+design's list of historically flattering numbers — so both facts are printed rather than one being
+quietly true. A bounded exclusion nobody is told about reads as "everything was included".
+
+### RED-proven from both sides
+
+Removing the version filter reddens it (keirin's step change is printed as a 52.6-point error bar).
+**Over-suppressing** — dropping every tagged row instead of every *older* tagged row — reddens it
+separately, on `ikea`'s two genuine current-instrument readings. A one-sided assertion here would have
+been satisfied by an instrument that had simply stopped reporting spread at all, which is the failure
+mode the whole spread block exists to prevent.
+
+[[certification-redesign]] [[reliability-doctrine]] [[parity-methodology]]

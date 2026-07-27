@@ -215,6 +215,11 @@
   - L1886 · What landed
   - L1901 · The honest remainder
   - L1909 · The gate
+  - L1922 · A step change in the instrument is not an error bar on the subject (tick 676)
+  - L1929 · What t674's deferred probe did to the ORACLE'S POPULATION
+  - L1947 · …and the spread block read all of that as the sites' own noise
+  - L1966 · The fix: the version IS the probes' text
+  - L1988 · RED-proven from both sides
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1168,4 +1173,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1083 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1088 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

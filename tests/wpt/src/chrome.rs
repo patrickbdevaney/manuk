@@ -164,6 +164,31 @@ emit(out);}"#,
     probe_defer_tail!()
 );
 
+/// **WHICH VERSION OF THE ORACLE PRODUCED A ROW** — a stable fingerprint of the two live-site
+/// probes, so a rows file can say that two readings of one site came from two different instruments.
+///
+/// Named by a measurement that would otherwise have been mis-read. Tick 674 deferred both live
+/// probes to `load`, which is a change to the ORACLE'S POPULATION: on the HEAD-20 corpus keirin's
+/// element count went 356 → 1036 and playhop's intersection went 550 → 5. The spread block then
+/// printed those as *this site's own noise* — naukri Δ100.0 pts, agoda Δ58.6, keirin Δ52.6, playhop
+/// Δ43.6 — and `repeat_plan` would have paid for three renders of each of those four sites on every
+/// future sweep, forever, to re-measure a variance that is not variance. **A step change in the
+/// instrument is not an error bar on the subject.**
+///
+/// It is the probes' OWN TEXT, so it cannot be forgotten: any edit to what the oracle collects
+/// changes the tag, and no separate version constant has to be remembered. ⚠ It covers the
+/// **population** half only — a change to the SCORING math (`shape_stats`'s tolerance, the sample
+/// floor) moves numbers without moving this tag. That is a named limitation, not an oversight;
+/// hashing the whole scoring module would discard the error bar on every comment edit, which costs
+/// more than it buys.
+pub fn instrument_tag() -> &'static str {
+    static TAG: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    TAG.get_or_init(|| {
+        let both = format!("{PROBE_ALL_IDS_JS}\u{1}{PROBE_ALL_PATHS_JS}");
+        stable_tag(&both)[..8].to_string()
+    })
+}
+
 /// **The oracle's Chromium half.** Render an *already-fetched snapshot* and report every `[id]`
 /// element's tag, computed `display`, and box.
 ///
@@ -1061,6 +1086,38 @@ mod tests {
             !PROBE_JS.contains("setTimeout(capture"),
             "PROBE_JS was deferred. It probes committed static fixtures where end-of-parse IS the \
              final DOM; deferring it risks a 72/72 green gate to buy nothing."
+        );
+    }
+
+    /// **THE INSTRUMENT'S VERSION MUST BE THE PROBES' OWN TEXT, NOT A CONSTANT SOMEONE BUMPS.**
+    ///
+    /// A hand-maintained version number is the thing this project has been bitten by every time:
+    /// the edit lands, the bump does not, and downstream pools two instruments' readings while
+    /// believing it did not. So the assertion is not "the tag exists" — it is that the tag is a
+    /// FUNCTION OF the probe sources, which is what makes forgetting impossible.
+    #[test]
+    fn the_instrument_tag_is_derived_from_the_probes_not_declared() {
+        let tag = instrument_tag();
+        assert_eq!(tag.len(), 8, "the tag must be a short stable digest: {tag}");
+        assert!(
+            tag.chars().all(|c| c.is_ascii_hexdigit()),
+            "the tag must be hex so it is safe in a TSV column: {tag}"
+        );
+        // Derived: the digest of the two probes IS the tag...
+        let both = format!("{PROBE_ALL_IDS_JS}\u{1}{PROBE_ALL_PATHS_JS}");
+        assert_eq!(
+            &stable_tag(&both)[..8],
+            tag,
+            "the tag is not the digest of the probes — it has become a declaration, and a \
+             declaration is a thing that can be forgotten on the tick that changes the probe"
+        );
+        // ...and ANY edit to what the oracle collects moves it. This is the property that makes the
+        // spread block's version filter mechanical rather than remembered.
+        let edited = format!("{both}// one more line of probe\n");
+        assert_ne!(
+            &stable_tag(&edited)[..8],
+            tag,
+            "editing a probe did not change the tag, so two oracles would share one version"
         );
     }
 

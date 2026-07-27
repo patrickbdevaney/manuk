@@ -577,7 +577,7 @@ pub fn append_rows_tsv(path: &Path, rows: &[Fidelity]) -> Result<()> {
     if fresh {
         writeln!(
             f,
-            "#name\tcoverage\tshape\th_overflow\toverlap\treading_order\tdead_target\tshape_n\treason"
+            "#name\tcoverage\tshape\th_overflow\toverlap\treading_order\tdead_target\tshape_n\treason\tinstrument"
         )?;
     }
     for r in rows {
@@ -587,7 +587,7 @@ pub fn append_rows_tsv(path: &Path, rows: &[Fidelity]) -> Result<()> {
         };
         writeln!(
             f,
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             r.name,
             num(r.structure),
             num(r.shape),
@@ -599,7 +599,11 @@ pub fn append_rows_tsv(path: &Path, rows: &[Fidelity]) -> Result<()> {
             // The reason travels WITH the row. A chunked sweep writes rows and a later
             // `certificate --rows` reads them back, so a reason that lived only in the running
             // process would vanish at exactly the moment the headline is computed.
-            r.unmeasurable.as_ref().map(|u| u.tag()).unwrap_or_default()
+            r.unmeasurable.as_ref().map(|u| u.tag()).unwrap_or_default(),
+            // ...and so does WHICH INSTRUMENT measured it. Two readings of one site from two
+            // different oracle probes are not two draws from one distribution, and without this
+            // column nothing downstream could tell those apart — see `chrome::instrument_tag`.
+            crate::chrome::instrument_tag()
         )?;
     }
     Ok(())
@@ -760,6 +764,27 @@ pub fn collapse_repeats(rows: Vec<Fidelity>) -> Vec<Fidelity> {
 /// result; it is not a result.** The number exists now instead of being rediscovered by hand, which
 /// is the difference between an instrument and a habit.
 pub fn shape_spreads(rows_text: &str) -> Vec<(String, f64, f64, usize)> {
+    // ── **ONLY ROWS FROM THE SAME INSTRUMENT ARE DRAWS FROM THE SAME DISTRIBUTION** (tick 676).
+    //
+    // The rows file is append-only and accumulates ACROSS ticks, so it can hold readings taken by
+    // two different oracles. Tick 674 deferred both live probes to `load` — a change to the
+    // population the oracle collects, not to the page — and this block then printed the step change
+    // as the site's own noise: naukri Δ100.0 pts, agoda Δ58.6, keirin Δ52.6, playhop Δ43.6, on a
+    // corpus whose real per-site spreads had every previous reading at ≤3.7 pts. Worse, it is not
+    // only a mis-read: `repeat_plan` reads this function, so all four sites would have been rendered
+    // three times on every future sweep, forever, to re-measure a variance that is not variance.
+    //
+    // The LAST tag in the file is the current instrument (the sweep appends). Rows carrying any other
+    // tag — including the empty tag of a file written before this column existed — are **history**,
+    // not draws: they still supersede one another for `rows_from_tsv`'s last-wins, and they
+    // contribute nothing to an error bar. A file with no tags at all keeps the old behaviour exactly,
+    // which is what makes this safe on the sweeps already banked in `docs/bench/`.
+    let current: Option<&str> = rows_text
+        .lines()
+        .filter(|l| !l.trim_end().is_empty() && !l.starts_with('#'))
+        .filter_map(|l| l.trim_end().split('\t').nth(9))
+        .filter(|t| !t.is_empty())
+        .last();
     let mut by_site: std::collections::HashMap<String, Vec<f64>> = std::collections::HashMap::new();
     let mut order: Vec<String> = Vec::new();
     for line in rows_text.lines() {
@@ -770,6 +795,11 @@ pub fn shape_spreads(rows_text: &str) -> Vec<(String, f64, f64, usize)> {
         let f: Vec<&str> = line.split('\t').collect();
         if f.len() < 3 {
             continue;
+        }
+        if let Some(cur) = current {
+            if f.get(9).copied().unwrap_or("") != cur {
+                continue;
+            }
         }
         // An unscored row contributes NOTHING to a spread. A site that rendered once and bot-walled
         // once has not been measured twice — reading `-` as a score would manufacture a spread of
@@ -800,9 +830,54 @@ pub fn shape_spreads(rows_text: &str) -> Vec<(String, f64, f64, usize)> {
     out
 }
 
+/// Every instrument version present in a rows file, in FIRST-APPEARANCE order, with its row count.
+/// The last entry is the current one (the sweep appends). An untagged row — written before the
+/// column existed — is its own version, named `""`, because "unknown instrument" is a fact about the
+/// row and not a licence to pool it with today's.
+pub fn instrument_mix(rows_text: &str) -> Vec<(String, usize)> {
+    let mut order: Vec<String> = Vec::new();
+    let mut count: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for line in rows_text.lines() {
+        let line = line.trim_end();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let tag = line.split('\t').nth(9).unwrap_or("").to_string();
+        if !count.contains_key(&tag) {
+            order.push(tag.clone());
+        }
+        *count.entry(tag).or_insert(0) += 1;
+    }
+    order
+        .into_iter()
+        .map(|t| {
+            let n = count[&t];
+            (t, n)
+        })
+        .collect()
+}
+
 /// Print the spread block, if this file has one. Deliberately printed ABOVE the certificate: a
 /// reader who sees the headline first has already formed an opinion about a delta.
 pub fn spread_report(rows_text: &str) {
+    // **SAY WHEN THE FILE HOLDS MORE THAN ONE INSTRUMENT.** `shape_spreads` now excludes the older
+    // ones from the error bar, and an exclusion nobody is told about reads as "everything was
+    // included" — which is the silent-truncation failure this project has a standing rule against.
+    // The certificate still counts a superseded row for a site the current instrument never reached:
+    // that is a reading, and dropping it would shrink the denominator. Both facts are printed.
+    let tags = instrument_mix(rows_text);
+    if tags.len() > 1 {
+        println!("\n  ⚠ THIS FILE HOLDS {} INSTRUMENT VERSIONS:", tags.len());
+        for (tag, n) in &tags {
+            let label = if tag.is_empty() { "(untagged)" } else { tag };
+            println!("      {label:<12} {n} row(s)");
+        }
+        println!(
+            "    Only the LAST version's rows form the error bar below — a step change in the \n\
+             \x20   instrument is not an error bar on the subject. Rows from an older version still \n\
+             \x20   count in the certificate for any site the current one never reached."
+        );
+    }
     let spreads = shape_spreads(rows_text);
     if spreads.is_empty() {
         return;
@@ -2689,6 +2764,69 @@ supjav.com\t-\t-\t0\t0\t0\t0\t0\tbot-wall-403
         assert!(
             shape_spreads("").is_empty() && shape_spreads("#only a header\n").is_empty(),
             "an empty or header-only file must yield no spread rows"
+        );
+    }
+
+    /// **THE STEP CHANGE TICK 674 PUT IN THE FILE, REPRODUCED.** These are the real readings: the
+    /// same four sites, measured once by the pre-`load` oracle probe (`aaaa1111`) and once by the
+    /// deferred one (`bbbb2222`). Under the old rule the block printed keirin at Δ 52.6 pts and
+    /// naukri at Δ 100.0 on a corpus whose every genuine per-site spread had been ≤ 3.7 — and
+    /// `repeat_plan` reads this function, so all four would have been rendered three times on every
+    /// sweep from then on to re-measure a variance that is not variance.
+    ///
+    /// The claim is exact: with two instruments in the file, the error bar comes from the LAST one
+    /// only, so keirin — measured once by the current instrument — has **no spread at all**.
+    #[test]
+    fn a_step_change_in_the_instrument_is_not_an_error_bar_on_the_subject() {
+        const MIXED: &str = "\
+#name\tcoverage\tshape\th_overflow\toverlap\treading_order\tdead_target\tshape_n\treason\tinstrument
+keirin.jp\t0.707753\t0.047753\t79\t5\t3\t0\t356\t\taaaa1111
+playhop.com\t0.964912\t0.636364\t0\t22\t1\t0\t550\t\taaaa1111
+www.ikea.com\t1.000000\t0.518625\t0\t5\t19\t0\t698\t\taaaa1111
+keirin.jp\t0.744253\t0.573359\t3\t4\t27\t0\t1036\t\tbbbb2222
+playhop.com\t0.046729\t0.200000\t0\t0\t0\t0\t5\tthin-overlap-5\tbbbb2222
+www.ikea.com\t0.970793\t0.507163\t0\t5\t19\t0\t698\t\tbbbb2222
+www.ikea.com\t0.970793\t0.505000\t0\t5\t19\t0\t698\t\tbbbb2222
+";
+        let got = shape_spreads(MIXED);
+        assert!(
+            !got.iter().any(|(n, ..)| n == "keirin.jp"),
+            "keirin was measured ONCE by the current instrument and once by the previous one — that \
+             is not a spread, it is a step change. Got {got:?}"
+        );
+        assert!(
+            !got.iter().any(|(n, ..)| n == "playhop.com"),
+            "playhop's 550 -> 5 element collapse is the ORACLE'S population changing, not the \
+             site's noise. Got {got:?}"
+        );
+        // ...and the real within-instrument spread SURVIVES. A fix that suppressed every spread
+        // would pass both assertions above and destroy the error bar this block exists for.
+        let ikea = got.iter().find(|(n, ..)| n == "www.ikea.com").expect(
+            "ikea's two readings on the CURRENT instrument are a real spread and must survive",
+        );
+        assert_eq!(
+            ikea.3, 2,
+            "ikea's spread must come from exactly its two current-instrument rows"
+        );
+        assert!(
+            (ikea.1 - 0.505).abs() < 1e-9 && (ikea.2 - 0.507163).abs() < 1e-9,
+            "ikea's range must be its two CURRENT rows (0.505..0.507163), not the older one: {ikea:?}"
+        );
+
+        // The mixture is DISCLOSED, not silently dropped: three versions' worth of accounting, in
+        // first-appearance order, with the current one last.
+        let mix = super::instrument_mix(MIXED);
+        assert_eq!(
+            mix,
+            vec![("aaaa1111".to_string(), 3), ("bbbb2222".to_string(), 4)],
+            "the instrument mix must be counted and ordered by first appearance: {mix:?}"
+        );
+
+        // An UNTAGGED file — every sweep already banked in `docs/bench/` — behaves exactly as before.
+        assert_eq!(
+            shape_spreads(ROWS).len(),
+            2,
+            "a file with no instrument column must keep the old behaviour exactly"
         );
     }
 }

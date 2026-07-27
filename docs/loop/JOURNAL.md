@@ -31467,3 +31467,105 @@ report on every real site self-locating and is two compile sites. **(3) SELF-AUD
 break them, the process-defect ledger is at 49 and every entry names the MECHANISM that closes it
 (not a lesson), 392 clusters, 506 pattern rows, journal entries present for the last five ticks.
 Nothing prescribed-but-not-executed. `LAST_AUDIT_TICK` set to 675.
+
+## Tick 676 — a step change in the instrument is not an error bar on the subject (2026-07-27)
+
+HYPOTHESIS: run the HEAD-20 sweep t673 and t674 both owed, and read the output before theorising
+about it. Two claims were outstanding and only the corpus settles them: t673's repeats have never
+computed a live certificate, and t674's deferred probe has never been exercised on anyone but naukri.
+
+FALSIFIABLE BAR: the sweep either moves the certificate's terms or it does not, and whatever it says
+is the reading. Nothing was to be attributed to a code change without first clearing that site's own
+spread — which is the rule that then turned out to be the thing that was broken.
+
+### THE SWEEP — t674 tree, seeded from t672's rows, banked at `docs/bench/head20-rows-t675.tsv`
+
+**The headline did not move: `sites 20 · scored 5 · shape ≥0.75 on 0`.** Everything is underneath it.
+
+```text
+site              t672 (probe at parse)          t675 (probe at load)
+keirin.jp         0.708 / 0.048  n=356           0.744 / 0.573  n=1036   3x population, h-overflow 79->3
+www.agoda.com     0.385 / —      n=5   thin-5    0.073 / 0.586  n=58     NEWLY SCORED
+www.naukri.com    —  shell-only-1                —  thin-overlap-2       t674's claim, confirmed
+playhop.com       0.965 / 0.636  n=550           0.047 / 0.200  n=5      SCORED ROW LOST
+www.welt.de       0.957 / 0.6657                 0.957 / 0.6659          server-rendered: unmoved
+```
+
+⚠ **`playhop.com`'s 0.636 was a SHELL SCORE.** Its pre-`load` DOM agreed with Chrome's on 550
+elements; its post-`load` app agrees on **5**. That is t614's finding — *the oracle renders a shell
+for JS-built pages and the certificate was scoring it* — recurring on a site the certificate was
+actively counting. **Losing a row this way is a ratchet ADVANCE on the instrument face, not a
+regression:** the term Phase-0 exit hangs on was 0 before and is 0 after, and one of the five rows
+behind it has stopped being a claim about a page nobody was looking at. The scored SET is now
+{desitales2, welt, keirin, ikea, agoda}, not {…, playhop}.
+
+`desitales2`, the byte-reproducible control, read **0.6139** against its recorded 0.6139..0.6371.
+Nothing to attribute.
+
+### AND THE SWEEP'S OWN ERROR BAR WAS THE DEFECT
+
+```text
+www.naukri.com    Δ 100.0 pts over 2 runs
+www.agoda.com     Δ  58.6 pts
+keirin.jp         Δ  52.6 pts
+playhop.com       Δ  43.6 pts
+```
+
+Every genuine per-site spread this project has recorded is **≤ 3.7 pts**. These four are the
+INSTRUMENT changing under an append-only file that had no way to say so. And the expensive half is
+not the mis-read: **`repeat_plan` consumes `shape_spreads`**, so t673's machinery would have rendered
+all four sites three times on *every future sweep, forever* — eight extra live renders per sweep, paid
+indefinitely, to re-measure a variance that is not variance. A measurement instrument that cannot tell
+its own version change from its subject's noise pays for that confusion on every run.
+
+### WHAT LANDED
+
+**`chrome::instrument_tag()`** — a stable 8-hex digest of `PROBE_ALL_IDS_JS` + `PROBE_ALL_PATHS_JS`,
+written by `append_rows_tsv` as a tenth column. `shape_spreads` takes the LAST tag in the file as the
+current instrument and forms the error bar from those rows only.
+
+**DERIVED, NOT DECLARED.** A hand-maintained version constant is precisely what gets forgotten on the
+tick that changes the probe — the edit lands, the bump does not, and two instruments pool while
+everything downstream believes they did not. So the gate asserts the tag IS the digest of the probe
+sources and that editing a probe MOVES it, not merely that a tag exists.
+
+**Backward compatible by construction, and asserted:** a file with no tags — every sweep banked in
+`docs/bench/` — has no current tag, so the filter is skipped and the old behaviour holds exactly.
+
+**The mixture is DISCLOSED.** `instrument_mix` + `spread_report` print every version present with its
+row count. An older row still counts in the certificate for a site the current instrument never
+reached (dropping it would shrink the denominator — cause #1 in the certification design's list of
+flattering numbers), so both facts print rather than one being quietly true.
+
+### AND A HYPOTHESIS THAT DIED BEFORE IT COST A TICK
+
+Reading playhop's collapse I derived a mechanism and nearly built it: *`__fireLoad` sets
+`__timeBudget = Infinity` as its LAST act, so the clock opens for a drain that never comes, and every
+`onload`-scheduled task stays armed forever.* It is a good story and it is **wrong twice**:
+`PageContext::eval` runs `run_deferred` after every eval, so the drain happens with the clock open;
+and a five-line probe (`onload` appends a div, which arms a 500ms timer that appends another) showed
+**both nodes in the DOM, both laid out, both with real rects**. Post-load work already works
+end-to-end. *An absent measurement is not a negative measurement* — fifth time, and this time the
+probe cost four minutes instead of a tick.
+
+TICK SHAPE: measurement (the owed HEAD-20 sweep, read honestly) + infrastructure (the instrument
+defect that measurement surfaced). Bar 0 untouched; no engine source changed — `tests/wpt/` only.
+Gates: `spread_tests::a_step_change_in_the_instrument_is_not_an_error_bar_on_the_subject` and
+`chrome::tests::the_instrument_tag_is_derived_from_the_probes_not_declared`. RED-proven from BOTH
+sides — removing the filter reddens (keirin's step change printed as a 52.6-pt bar); OVER-suppressing
+(dropping every tagged row instead of every older one) reddens separately on ikea's two genuine
+readings. A one-sided assertion would have been satisfied by an instrument that stopped reporting
+spread at all. manuk-wpt lib 66/66. End-to-end: a live 1-site sweep appended a tagged row to a copy
+of the t675 file, the mixture block printed `(untagged) 40 · 1feee14c 1`, and the certificate's
+denominator held at `sites 20 · scored 5`.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "a step change in the instrument is not an error bar on
+the subject", with the population table and the playhop-was-a-shell finding.
+PATTERN: measurement files that accumulate across instrument versions and pool them. [no-pattern]
+
+NEXT: **(1) `playhop.com` IS NOW A NAMED COVERAGE FAILURE WITH AN ADDRESS** — Chrome builds ~107
+post-`load` elements and we share 5 selector-paths with it, on a site whose SHELL we matched at 550.
+That is the `thin-overlap` category (agoda, naukri, playhop — the largest reachable one) and it is
+ours. **(2) NAME THE INLINE SCRIPTS** — `run_one_script`'s `c"inline.js"` should be the document URL;
+two compile sites, and it makes every t675 report on every real site self-locating. **(3)** the
+`thin-overlap` trio share a shape: the shell matches and the app does not. Diagnose ONE of them to the
+first divergent path rather than three to a statistic.

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **433** | ticks 1–675 |
-| median tick cycle | **21m** | 432 intervals |
+| ticks landed | **434** | ticks 1–676 |
+| median tick cycle | **21m** | 433 intervals |
 | median, last 10 | **25m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 390.6h elapsed |
-| median verify wall | **63s** | 372 ticks |
+| **ticks per hour** | **1.11** | 391.1h elapsed |
+| median verify wall | **63s** | 373 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **350**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**212 of 433 ticks** (49%) moved a
+**212 of 434 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -530,5 +530,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **673** | 2026-07-27 11:16 | 22m | infrastructure | 63s | +369/−30 | 334 | 81 | 56.0% · | the certificate took ONE draw from a distribution it had already measured as wide (2026-07 |
 | **674** | 2026-07-27 11:16 | 5s | infrastructure | 63s | +31/−30 | 334 | 81 | 56.0% · | the oracle's probe never waited for the page to render (2026-07-27) |
 | **675** | 2026-07-27 11:42 | 26m | capability | 63s | +458/−39 | 334 | 81 | 56.0% · | `reportError()` did not report, and every deferred throw went into a drawer (2026-07-27) |
+| **676** | 2026-07-27 12:09 | 27m | measurement | 63s | +415/−36 | 334 | 81 | 56.0% · | a step change in the instrument is not an error bar on the subject (2026-07-27) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
