@@ -30196,3 +30196,90 @@ a result; the sweep is cheap now that the rows file accumulates and prints its o
 this diagnosis, and it needs Chrome's actual behaviour measured before anything is built (a browser
 that accepts unsafe renegotiation to win a site would be trading a security property for a score).
 **(3) `agoda`'s `render-failed`** still has a mechanism written down at t652 and no fix.
+
+## Tick 659 — surface audit #38: six gates off the map, and a missing newline that hid a row from every reader (2026-07-27)
+
+HYPOTHESIS: the surface audit is due (last #37 at t649), and t658's NEXT asks for a HEAD-20 re-sweep
+because one site changed class and **t657's own rule says a single reading is not a result.** Both,
+in one tick: the audit measures the map, the sweep measures the browser.
+
+### THE RE-SWEEP: ONE CLASS CHANGE, AND IT IS THE ONE t658 PREDICTED
+
+```text
+  sites 20 · scored 5 (was 4) · shape >=0.75 on 0
+  15 of 20 UNSCORED (was 16) — 5x bot-wall-403, 3x unreachable (was 4), 2x timeout-300s,
+                               1x empty-202, 1x probe-blocked, 1x render-failed, 2x shell-only
+
+  playhop.com     - [unreachable]  ->  0.636029 [scored]     <-- CLASS CHANGE
+  every other site: same class, and every delta inside its own spread
+```
+
+`playhop.com` scores **0.636**, which is above the median of the sites we could already see. A
+well-rendering HEAD site was completely invisible because our h2 client hung up on its response
+headers. **This is the first corpus-level movement of the session** — and it came from a transport
+setting, not from any of the three placement mechanisms.
+
+The spread block earns itself immediately. `welt.de` reads 0.6708 → 0.6582, which looks like a
+1.3-point regression and is printed by the instrument as **its own 1.3-point spread**:
+
+```text
+  www.welt.de     0.6582 .. 0.6708   Δ 1.3 pts over 2 runs
+  keirin.jp       0.3972 .. 0.3996   Δ 0.2 pts
+  ikea / desitales2 / agoda / comix / naukri   Δ 0.0 pts — byte-identical
+```
+
+Nobody has to remember the rule now; the number arrives with it attached.
+
+### SURFACE AUDIT #38, DIRECTION 2: SIX GATES ON NO MAP, ALL OF THEM MINE
+
+```text
+  G_SCRIPT_LOAD_EVENT t652 · G_CSS_SURVIVES_BUDGET t654 · G_EXTERNAL_CSS_SURVIVES_RESTYLE t654
+  G_IMAGES_SURVIVE_BUDGET t655 · G_IMAGE_NATURAL_SIZE_SURVIVES_RESTYLE t656
+  G_H2_LARGE_RESPONSE_HEADERS t658
+```
+
+Audit #37 found *one* uncited gate and traced it to a scripted edit that matched nothing and shipped;
+its lesson was *"assert the COUNT on data-file edits."* **This time there was no failed edit to
+assert — I never attempted the map update at all, six ticks running.** Each tick wrote its gate into
+the journal, the wiki and the pattern ledger, and skipped the one place other instruments *read*.
+
+> **A lesson aimed at the MECHANISM of a mistake does not cover the case where the mechanism is never
+> invoked.** #37 hardened *how* the map gets edited. Nothing made the map get edited.
+
+All six rows added with real receipts; map→gate drift stays 0, machine-validated claims 277 → 283.
+
+### AND THE AUDIT'S ARITHMETIC CAUGHT A SECOND DEFECT — ONE MY OWN FIX HAD JUST INTRODUCED
+
+```text
+  rows 380 · OK 282 + descriptive-floor 14 + missing 83 = 379     <- one row in NO bucket
+```
+
+Before the edit those three buckets summed **exactly** to the row count. The missing row was the one
+I had just appended last: **my write left the file with no trailing newline**, and `map-reconcile.sh`
+reads it with `while IFS=$'\t' read -r …`, where `read` returns non-zero on an unterminated final
+line. **The last row of the file is invisible to every consumer that reads it that way** — while
+`grep` finds it perfectly and the reconciler still prints `✓ RECONCILED`. Restoring the newline gives
+`283 + 14 + 83 = 380`, exactly.
+
+**No gate covers a TSV's byte layout, and no search would have shown the row missing.** It was caught
+by *a number that did not add up* — `STATUS.md`'s meta-instrument #3, paying out again — which is the
+strongest argument in the file for printing the parts even when the verdict is green. **A summary
+line whose parts do not sum is a bug report.**
+
+TICK SHAPE: measurement + audit (surface audit #38, two findings; the HEAD-20 re-sweep that confirms
+t658 at corpus level). Bar 0 untouched; no engine source changed.
+Gates: none added — this tick measures the map and the corpus. The audit's own gate→map step is what
+went red, and it is the instrument, not a test.
+WIKI: none [forced] — the two findings are process/audit findings and live in
+`docs/loop/SURFACE-AUDIT.md` §Audit #38, which is where the cadence reads them; the capability wiki
+would be the wrong file and a duplicate.
+PATTERN: none — no class of the web unlocked here. [no-pattern]
+
+NEXT: **(1) THE `shell-only` ROWS.** `comix.to` renders 3 nodes and `naukri.com` renders 1, and both
+book `shape 1.000000` on that sample — a perfect score over nothing, which the sample floor correctly
+refuses to count. They are app shells that never hydrated, and t652's `agoda` diagnosis (injected
+scripts fetched only after the event loop has already burned its 20,000-task ceiling) is a written-down
+mechanism that would explain all three. That is now **three unscored rows with one candidate cause**,
+which makes it the best-evidenced target on the board. **(2) `service.smt.docomo.ne.jp`** — legacy TLS
+renegotiation, still needing Chrome's actual behaviour measured before anything is built.
+**(3) `scan_static_import_specifiers`'s failing unit test**, still on `main` and still not in the wall.

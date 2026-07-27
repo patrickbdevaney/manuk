@@ -2005,3 +2005,82 @@ second time and why.
 `shell/src/media.rs` and `shell/src/audio.rs` — now eight, with t646's `g_audio_rate` — remain
 invisible to it. Rows that depend on them cite an engine-side equivalent and name the shell gates in
 the receipt. Harness-owned; reported, not touched.
+
+## Audit #38 — tick 659
+
+**Direction 1 (map → gate): clean, and it stayed clean without maintenance.** `map-reconcile.sh`
+reports **drift 0**. Audit #36's lowercase-citation fix and #37's re-applied `G_SVG_CLIENT_RECT` row
+both held.
+
+**Direction 2 (gate → map): SIX gates, none of them on the map — and every one is mine, from the last
+seven ticks.**
+
+```text
+  G_SCRIPT_LOAD_EVENT                      t652
+  G_CSS_SURVIVES_BUDGET                    t654
+  G_EXTERNAL_CSS_SURVIVES_RESTYLE          t654
+  G_IMAGES_SURVIVE_BUDGET                  t655
+  G_IMAGE_NATURAL_SIZE_SURVIVES_RESTYLE    t656
+  G_H2_LARGE_RESPONSE_HEADERS              t658
+```
+
+This is audit #37's finding **recurring, in a worse form**. #37 found *one* uncited gate and traced it
+to a scripted edit that matched nothing and shipped — a silent no-op. Its lesson was *"assert the
+COUNT on data-file edits."* This time there was no failed edit to assert: **I never attempted the map
+update at all, six ticks running.** Each tick wrote its gate into the journal, the wiki and the
+pattern ledger — three of the four places — and skipped the one that other instruments *read*.
+
+> **A lesson aimed at the mechanism of a mistake does not cover the case where the mechanism is never
+> invoked.** #37 hardened *how* the map gets edited. Nothing made the map get edited. The gate→map
+> direction of this audit is the only thing in the loop that notices, which is why it runs every ten
+> ticks and why an audit that finds nothing is the suspicious one.
+
+All six rows are added with real receipts. Remaining uncited, unchanged and by design: `G_DEFER` and
+`G_SILENT_FAIL` (reliability gates with no capability row), `G_WEBFONT_RELAYOUT_EXTERNAL`
+(prefix-matched by a row citing `G_WEBFONT_RELAYOUT`).
+
+### AND THE AUDIT'S OWN ARITHMETIC CAUGHT A SECOND DEFECT THE FIRST FIX INTRODUCED
+
+After adding six rows, the reconciler's buckets read
+
+```text
+  rows 380  ·  OK 282 + descriptive-floor 14 + missing 83 = 379      <- one row in NO bucket
+```
+
+Before the edit the same three buckets summed **exactly** to the row count. One row had gone
+somewhere, and the answer was that **my append left the file with no trailing newline**: the
+reconciler reads it with `while IFS=$'\t' read -r …`, and `read` returns non-zero on a final line
+with no terminator, so **the last row of the file is silently invisible to every consumer that reads
+it that way.** `grep` finds the row. `wc -l` under-counts it. The reconciler skips it entirely and
+still prints `✓ RECONCILED`.
+
+Restoring the newline (and dropping a stray blank line the same edit introduced) gives
+`283 + 14 + 83 = 380`, exactly.
+
+> **Nothing else would have caught this.** No gate covers the TSV's byte layout, the row was present
+> to every text search, and the reconciler reported success. It was found by **a number that did not
+> add up** — which is `STATUS.md`'s meta-instrument #3 (*"8 of 30 process defects were caught by a
+> number that did not add up, not by any gate"*) paying out again, and the strongest argument in the
+> file for keeping the buckets printed even when the verdict is green. **A summary line whose parts
+> do not sum is a bug report; print the parts.**
+
+**Gate-vs-map diff, both directions:**
+```text
+  gate files under engine/{page,net}/tests/ : 331   (was 324 at #37; +7 this session)
+  map rows                                  : 380   (was 374)
+  map -> gate drift                         : 0
+  gate -> map, no citing row                : 9 -> 3
+  of those 3: 1 prefix-matched (G_WEBFONT_RELAYOUT_EXTERNAL)
+              2 reliability gates with no capability row by design (G_DEFER, G_SILENT_FAIL)
+  machine-validated claims                  : 277 -> 283
+  bucket arithmetic (OK+floor+missing==rows) : 379/380 -> 380/380
+  constellation unknowns                    : 0
+```
+
+**Standing note, fourth audit running:** `map-reconcile.sh` searches `engine agent tests` and not
+`shell/`, so the eight gates living as `#[test] fn` in `shell/src/media.rs` and `shell/src/audio.rs`
+remain invisible to it. Harness-owned; reported, not touched. **New this audit:** the same search DOES
+reach `engine/net/tests/`, which is how `G_H2_LARGE_RESPONSE_HEADERS` validates from outside
+`engine/page/tests/` — so the standing "diff `engine/page/tests/` vs the map" step is widened here to
+`engine/{page,net}/tests/`, or a gate landing in any other engine crate would be invisible to the
+audit that exists to see it.
