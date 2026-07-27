@@ -25,9 +25,58 @@
 
 use std::io::Read;
 use std::net::TcpListener;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use manuk_text::FontContext;
+use tracing_subscriber::layer::SubscriberExt;
+
+/// Collects every log line the engine emits, so the gate can read the navigation ledger the same way
+/// a developer does. Asserting on the log is deliberate — `RUST_LOG=manuk_page=info` IS the
+/// instrument, and a gate should test the thing a human will actually look at.
+#[derive(Clone, Default)]
+struct Capture(Arc<Mutex<Vec<String>>>);
+
+impl<S> tracing_subscriber::Layer<S> for Capture
+where
+    S: tracing::Subscriber,
+{
+    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        struct V(String);
+        impl tracing::field::Visit for V {
+            fn record_debug(&mut self, f: &tracing::field::Field, v: &dyn std::fmt::Debug) {
+                self.0.push_str(&format!(" {}={:?}", f.name(), v));
+            }
+        }
+        let mut v = V(String::new());
+        event.record(&mut v);
+        self.0.lock().unwrap().push(v.0);
+    }
+}
+
+impl Capture {
+    fn line_with(&self, needle: &str) -> Option<String> {
+        self.0
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|l| l.contains(needle))
+            .cloned()
+    }
+    fn dump(&self) -> String {
+        self.0.lock().unwrap().join("\n  ")
+    }
+}
+
+/// Pull `name=<digits>` out of one captured log line.
+fn field_u64(line: &str, name: &str) -> Option<u64> {
+    let at = line.find(&format!("{name}="))? + name.len() + 1;
+    let rest = &line[at..];
+    let end = rest
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(rest.len());
+    rest[..end].parse().ok()
+}
 
 /// A blackhole: accepts the connection, reads the request, and never replies. Exactly what a dead
 /// ad host does — and far worse for us than a refused connection, which fails fast.
@@ -103,6 +152,10 @@ fn dead_subresources_cannot_hold_the_document_hostage() {
         .build()
         .unwrap();
 
+    let cap = Capture::default();
+    let sub = tracing_subscriber::registry().with(cap.clone());
+    let _guard = tracing::subscriber::set_default(sub);
+
     let started = Instant::now();
     let page = rt.block_on(async {
         let mut p = manuk_page::Page::load_async(&html, "http://localhost/", &fonts, 800.0).await;
@@ -150,6 +203,49 @@ fn dead_subresources_cannot_hold_the_document_hostage() {
         painted, 2,
         "the headline and body text must both be on screen; the dead subresources are irrelevant \
          to whether the user can read the page"
+    );
+
+    // ── 3. **THE PARTS MUST SUM TO THE WHOLE** (tick 678). ──────────────────────────────────────
+    //
+    // The per-phase ledger was built at t670 on the stated principle that its phases sum to the
+    // load — *"a set of parts that does not sum to its whole is the accounting reconciliation this
+    // project rates as its highest-yield instrument"* — and it did not. Measured on `playhop.com` it
+    // accounted for **12.2s of a 27.6s load**: 56% of the time sat outside it, because the ledger only
+    // ever covered `finish_loading` while the navigation also spends `load_async` (the external-script
+    // fetch, the module-graph prefetch, cascade + layout + blocking scripts, the deferred pass,
+    // subframes, the initial image phase).
+    //
+    // So the claim is now CHECKED rather than asserted in a comment, on the log line a developer
+    // reads. A future phase added to `load_async` without a ledger mark makes this go red — which is
+    // the only thing that keeps an accounting instrument honest as the code it accounts for changes.
+    let recon = cap
+        .line_with("navigation phases reconciled")
+        .unwrap_or_else(|| {
+            panic!(
+                "G_LOAD: the navigation ledger printed no reconciliation line, so nothing says \
+                 whether its phases sum to the load.\n  captured:\n  {}",
+                cap.dump()
+            )
+        });
+    let total = field_u64(&recon, "total_ms").expect("total_ms");
+    let unaccounted = field_u64(&recon, "unaccounted_ms").expect("unaccounted_ms");
+    let accounted = field_u64(&recon, "accounted_ms").expect("accounted_ms");
+    println!("LEDGER: {recon}");
+    assert_eq!(
+        accounted + unaccounted,
+        total,
+        "the reconciliation line does not itself reconcile: {recon}"
+    );
+    // The tolerance is on the ONE number that matters — how much of the load has no phase name. A
+    // ceiling of 10% of the load plus 50ms of slack for the marks themselves; playhop's real state
+    // was 56%, so this is not a threshold tuned to pass.
+    assert!(
+        unaccounted * 10 <= total + 500,
+        "G_LOAD: {unaccounted}ms of a {total}ms navigation is OUTSIDE the phase ledger. A phase \
+         exists that the ledger does not name, so its numbers describe part of the load while \
+         reading as though they described all of it — which is how `playhop.com` spent 15 of 27 \
+         seconds nowhere.\n  line: {recon}\n  captured:\n  {}",
+        cap.dump()
     );
 
     manuk_js::shutdown();

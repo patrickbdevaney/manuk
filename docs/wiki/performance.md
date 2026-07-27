@@ -265,3 +265,68 @@ enough to avoid flaking on a busy machine can straddle that**, so the gate passe
 fixture was made **harder** (thirty settles → 1.90s vs 7.99s), not the threshold tighter — *vary the
 mechanism, not the threshold*. This is why the RED-proof runs before a tick lands: it is the step that
 tells a gate from a decoration, and here it caught one on the first try.
+
+## The phase ledger did not sum to the load, and said it did (tick 678)
+
+Tick 670's per-phase ledger was built on an explicit principle, quoted from its own source:
+
+> *"the per-phase times sum to the total. A set of parts that does not sum to its whole is the
+> accounting reconciliation this project rates as its highest-yield instrument."*
+
+Measured on `playhop.com`, it accounted for **12.2s of a 27.6s load**. 56% of the navigation was
+outside the ledger — because the ledger only ever covered `finish_loading`, while a navigation also
+spends `load_async`.
+
+### The ledger now spans the navigation, and it CLOSES WITH THE SUBTRACTION PRINTED
+
+Same event shape (`load phase done`, `phase`/`ms`/`gave_up`), so `RUST_LOG=manuk_page=info` prints one
+continuous ledger and every existing grep keeps working. The new closing line does the arithmetic
+itself:
+
+```text
+navigation phases reconciled  total_ms=12186 accounted_ms=12182 unaccounted_ms=4
+```
+
+An instrument that leaves the subtraction to the reader is one whose parts *claim* to sum. `G_LOAD`
+now asserts `unaccounted_ms * 10 <= total_ms + 500` on that line, RED-proven by removing a single
+`nav_phase` mark: 1602ms of a 1786ms navigation goes unaccounted and the gate fails. A phase added to
+`load_async` in future without a mark makes it red, which is the only thing that keeps an accounting
+instrument honest as the code it accounts for changes.
+
+### What the complete ledger then said about `playhop.com`
+
+```text
+load_async                       12186 ms   (accounted 12182, unaccounted 4)
+  html parse                        11
+  external scripts                2327
+  module graph prefetch              0
+  cascade+layout+blocking scripts 2106
+  deferred scripts                 910
+  DOMContentLoaded                   3
+  subframes (pre-load)               0
+  load event                      1330   gave_up=1
+  initial images+masks            5495   <- the largest single phase
+finish_loading                   13647 ms
+  external CSS                     655
+  dynamic scripts                 7697   gave_up=3
+  subframes                          0
+  page fetches                    5294   gave_up=2
+                                 -----
+                                 25833 ms of the 31626 ms the sweep measured
+```
+
+⚠⚠ **THE 12-SECOND PAGE BUDGET IS PER-CALL, NOT PER-NAVIGATION.** `load_async` and `finish_loading`
+each call `load_budget()` and each start their own clock, and **both run the enhancement phases**. A
+caller that does the documented pair — which is what the fidelity sweep and the shell both do — gets
+**two independent 12s deadlines**, and pays for the image phase twice (5.5s in `load_async`, again
+inside `finish_loading`'s `page fetches`). The budget's docstring promises *"the phases run under one
+overall deadline… this is what a browser actually promises"*; measured, the navigation was busy for
+25.8s under a stated 12s ceiling. That is the Bar 0 promise — *how long may a tab be busy* — and it is
+a scope bug, not a tuning one.
+
+⚠ **RESIDUE, named:** 5.8s of the sweep's 31.6s is still outside both ledgers, in the CALLER — the
+document fetch (`fetch_html`), `paint`, and the PNG encode. Those belong to whoever drives the page,
+not to the page, and the honest place to account for them is the caller. Stated so the next reader
+does not have to re-derive the difference.
+
+[[loop-optimization-mandate]] [[conformance-and-oracles]]

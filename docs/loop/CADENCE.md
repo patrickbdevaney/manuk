@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **435** | ticks 1–677 |
-| median tick cycle | **21m** | 434 intervals |
+| ticks landed | **436** | ticks 1–678 |
+| median tick cycle | **21m** | 435 intervals |
 | median, last 10 | **26m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 391.6h elapsed |
-| median verify wall | **63s** | 374 ticks |
+| **ticks per hour** | **1.11** | 392.1h elapsed |
+| median verify wall | **63s** | 375 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **351**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**213 of 435 ticks** (49%) moved a
+**213 of 436 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **213** capability ticks, median cycle **21m**
-* median diff per tick: **+237 / −34** lines across 8 files
+* median diff per tick: **+238 / −34** lines across 8 files
 
 ## Every tick
 
@@ -532,5 +532,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **675** | 2026-07-27 11:42 | 26m | capability | 63s | +458/−39 | 334 | 81 | 56.0% · | `reportError()` did not report, and every deferred throw went into a drawer (2026-07-27) |
 | **676** | 2026-07-27 12:09 | 27m | measurement | 63s | +415/−36 | 334 | 81 | 56.0% · | a step change in the instrument is not an error bar on the subject (2026-07-27) |
 | **677** | 2026-07-27 12:40 | 31m | capability | 63s | +412/−34 | 334 | 81 | 56.0% · | `window.<id>` IS the element, and it was absent (2026-07-27) |
+| **678** | 2026-07-27 13:10 | 31m | measurement | 63s | +412/−33 | 334 | 81 | 56.0% · | the phase ledger did not sum to the load, and said it did (2026-07-27) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -1451,6 +1451,21 @@ pub struct Page {
 /// trading the floor for the capability. Nothing about the total load time changes.
 const COMMIT_RESERVE: std::time::Duration = std::time::Duration::from_millis(400);
 
+/// How many times the event loop has given up on a non-converging drain — `0` in the headless build,
+/// where there is no event loop to give up. The navigation ledger reports this per phase and must
+/// compile in BOTH lanes: the JS-less `--no-default-features` build is CI's gating lane, and reaching
+/// straight for `manuk_js::event_loop` broke it on the first draft of this ledger.
+fn drain_ceiling_hits_or_zero() -> usize {
+    #[cfg(feature = "spidermonkey")]
+    {
+        manuk_js::event_loop::drain_ceiling_hits()
+    }
+    #[cfg(not(feature = "spidermonkey"))]
+    {
+        0
+    }
+}
+
 /// E1 full-page zoom bounds (matching what mainstream browsers offer).
 pub const MIN_ZOOM: f32 = 0.25;
 pub const MAX_ZOOM: f32 = 5.0;
@@ -1796,6 +1811,47 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> Page {
+        // ── **THE PHASE LEDGER DID NOT SUM TO THE LOAD, AND SAID IT DID** (tick 678). ────────────
+        //
+        // `finish_loading`'s ledger (below) was built at t670 on the stated principle that *"the
+        // per-phase times sum to the total; a set of parts that does not sum to its whole is the
+        // accounting reconciliation this project rates as its highest-yield instrument."* Measured on
+        // `playhop.com` it accounts for **12.2s of a 27.6s load** — 56% of the time is outside the
+        // ledger, because the ledger only ever covered `finish_loading` while the navigation also
+        // spends `load_async`: the external-script fetch, the module-graph prefetch, parse + cascade
+        // + layout + blocking scripts, the deferred pass, and the subframes.
+        //
+        // So the ledger now spans the navigation, and it **closes with the subtraction printed** —
+        // `total_ms` vs `accounted_ms` vs `unaccounted_ms` — rather than leaving a reader to notice
+        // that two numbers on different lines do not agree. That is the difference between an
+        // instrument whose parts sum and one that merely asserts they do; t669 spent a tick on a
+        // cluster that named the phase where time was spent rather than the one that spent it, and
+        // this is the same failure in the other direction.
+        //
+        // Same event shape as the budgeted phases (`load phase done`, `phase`/`ms`/`gave_up`), so
+        // `RUST_LOG=manuk_page=info` prints ONE continuous ledger for the whole navigation and every
+        // existing grep keeps working. `info`, so asking the question again needs no rebuild.
+        let nav_started = std::time::Instant::now();
+        let mut nav_at = nav_started;
+        let mut nav_accounted_ms = 0u64;
+        let mut nav_hits = drain_ceiling_hits_or_zero();
+        let mut nav_phase = |name: &'static str,
+                             at: &mut std::time::Instant,
+                             accounted: &mut u64,
+                             hits_before: &mut usize| {
+            let hits = drain_ceiling_hits_or_zero();
+            let ms = at.elapsed().as_millis() as u64;
+            *accounted += ms;
+            tracing::info!(
+                phase = name,
+                ms,
+                gave_up = hits.saturating_sub(*hits_before),
+                elapsed_ms = nav_started.elapsed().as_millis() as u64,
+                "load phase done"
+            );
+            *hits_before = hits;
+            *at = std::time::Instant::now();
+        };
         // Preload scanner: kick off render-blocking subresource fetches (external CSS,
         // <link rel=preload>) concurrently *before* parse + layout + scripts run, so they
         // land in the HTTP cache by the time apply_stylesheets needs them — overlapping the
@@ -1809,6 +1865,12 @@ impl Page {
         }
         #[allow(unused_mut)]
         let mut dom = manuk_html::parse(html);
+        nav_phase(
+            "html parse",
+            &mut nav_at,
+            &mut nav_accounted_ms,
+            &mut nav_hits,
+        );
         // Where each inlined external script CAME FROM, produced by the fetch inside the block below
         // and read by the module-graph walk after it. Declared out here because the two are in
         // different scopes and a module's imports resolve against the MODULE's url, not the document's.
@@ -1837,6 +1899,12 @@ impl Page {
             let authorized: Vec<NodeId> = Vec::new();
             set_pending_csp_with_authorized(csp, authorized);
         }
+        nav_phase(
+            "external scripts",
+            &mut nav_at,
+            &mut nav_accounted_ms,
+            &mut nav_hits,
+        );
         // **Pre-fetch the ES-module import graph off the UI thread, before any module runs (B3b).** An
         // inline `<script type=module>` may `import` a relative graph of sibling modules; `ModuleLink`
         // (below, inside `run_deferred_scripts`) is synchronous with no network, so the whole reachable
@@ -1849,7 +1917,23 @@ impl Page {
         #[cfg(feature = "spidermonkey")]
         let module_graph_sources =
             prefetch_module_graph(&dom, final_url, &import_map, &script_origins).await;
+        #[cfg(feature = "spidermonkey")]
+        nav_phase(
+            "module graph prefetch",
+            &mut nav_at,
+            &mut nav_accounted_ms,
+            &mut nav_hits,
+        );
         let mut page = Page::from_dom(dom, final_url, fonts, viewport_width);
+        // `from_dom` is parse-to-first-layout AND the scripts that block first paint: cascade,
+        // layout, and every blocking `<script>` with its drain. On an app-web page this is usually
+        // the largest single phase and it was entirely outside the ledger.
+        nav_phase(
+            "cascade+layout+blocking scripts",
+            &mut nav_at,
+            &mut nav_accounted_ms,
+            &mut nav_hits,
+        );
         // Carry the pre-fetched graph + import map onto the page; `run_deferred_scripts` seeds them into
         // the JS layer and clears them after the module pass (the same seam the shell path uses).
         #[cfg(feature = "spidermonkey")]
@@ -1872,17 +1956,42 @@ impl Page {
         // must still run all the scripts.** There is exactly one caller allowed to split them, and it is
         // the shell, because it is the only one with a human waiting.
         page.run_deferred_scripts(fonts, viewport_width);
+        nav_phase(
+            "deferred scripts",
+            &mut nav_at,
+            &mut nav_accounted_ms,
+            &mut nav_hits,
+        );
         // Parsing is done and the deferred scripts have executed — that IS DOMContentLoaded.
         page.fire_lifecycle("DOMContentLoaded");
+        nav_phase(
+            "DOMContentLoaded",
+            &mut nav_at,
+            &mut nav_accounted_ms,
+            &mut nav_hits,
+        );
         // **Subframes load BEFORE `load` fires** — `load` waits for subframes (HTML spec), and a page's
         // `<body onload>` is precisely where it reaches into them. Firing `load` first made the entire
         // `encoding` suite (767k subtests) read a not-yet-loaded frame and throw. Idempotent with the
         // pass in `finish_loading`: `pending_iframes` skips any frame already rendered.
         #[cfg(feature = "spidermonkey")]
         page.fetch_and_load_iframes(fonts, viewport_width).await;
+        #[cfg(feature = "spidermonkey")]
+        nav_phase(
+            "subframes (pre-load)",
+            &mut nav_at,
+            &mut nav_accounted_ms,
+            &mut nav_hits,
+        );
         // The subresource phases have not run yet, but the document and its frames are ready, which is
         // what `load` waits for. The call is idempotent, so `finish_loading` firing it again is harmless.
         page.fire_lifecycle("load");
+        nav_phase(
+            "load event",
+            &mut nav_at,
+            &mut nav_accounted_ms,
+            &mut nav_hits,
+        );
 
         // **The enhancement phases run under the load budget, exactly as they do in `finish_loading`.**
         //
@@ -1913,7 +2022,25 @@ impl Page {
                 budget.as_secs_f32()
             );
         }
+        nav_phase(
+            "initial images+masks",
+            &mut nav_at,
+            &mut nav_accounted_ms,
+            &mut nav_hits,
+        );
         page.load_deadline = None;
+        // **THE SUBTRACTION, PRINTED.** The parts must sum to the whole, and the only way that claim
+        // stays true is if the instrument computes the difference itself and says so on every load.
+        // `unaccounted_ms` above a few milliseconds means a phase exists that this ledger does not
+        // name — which is exactly the state `load_async` was in for eight ticks while
+        // `finish_loading`'s ledger was trusted as the whole picture.
+        let nav_total_ms = nav_started.elapsed().as_millis() as u64;
+        tracing::info!(
+            total_ms = nav_total_ms,
+            accounted_ms = nav_accounted_ms,
+            unaccounted_ms = nav_total_ms.saturating_sub(nav_accounted_ms),
+            "navigation phases reconciled (load_async; finish_loading keeps its own ledger)"
+        );
         page
     }
 

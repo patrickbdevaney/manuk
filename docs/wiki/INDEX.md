@@ -1038,6 +1038,9 @@
   - L217 · The loop that spends the budget must be the loop that checks it (tick 671)
   - L245 · The arc, because its shape is the lesson
   - L261 · A gate whose fixture could not fail
+  - L269 · The phase ledger did not sum to the load, and said it did (tick 678)
+  - L280 · The ledger now spans the navigation, and it CLOSES WITH THE SUBTRACTION PRINTED
+  - L296 · What the complete ledger then said about playhop.com
 
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
@@ -1181,4 +1184,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1092 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1095 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

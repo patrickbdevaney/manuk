@@ -31676,3 +31676,90 @@ between these three and a scored row. Instrument WHERE the 30s goes before theor
 which has now paid four times). **(2) NAME THE INLINE SCRIPTS** — `run_one_script`'s `c"inline.js"`
 should be the document URL; `inline.js:1:155` identified a line in an unnamed one of forty.
 **(3)** `<link>.sheet`, the honest remainder of t665.
+
+## Tick 678 — the phase ledger did not sum to the load, and said it did (2026-07-27)
+
+HYPOTHESIS: t677's NEXT #1 — the `thin-overlap` trio is now one TIMING question, and t670's lesson
+(*instrument, do not derive*, which has now paid four times) says measure WHERE the 30s goes before
+theorising. So the first move was simply to run the existing instrument:
+`RUST_LOG=manuk_page=info manuk-wpt fidelity --urls https://playhop.com/`.
+
+It answered — and the answer was about the instrument.
+
+```text
+external CSS      ms=645   gave_up=0
+dynamic scripts   ms=7459  gave_up=3     <- "page not converging, rounds_run=2"
+subframes         ms=0
+page fetches      ms=4072  gave_up=2     <- budget exhausted mid-round
+                  = 12177 ms accounted
+** OURS IS SLOW: 27611ms **
+```
+
+**12.2 of 27.6 seconds. 56% of the load was outside the ledger** — and t670 built that ledger on the
+stated principle, quoted from its own source: *"the per-phase times sum to the total. A set of parts
+that does not sum to its whole is the accounting reconciliation this project rates as its
+highest-yield instrument."* The cause is scope: the ledger only ever covered `finish_loading`, and a
+navigation also spends `load_async`.
+
+FALSIFIABLE BAR: the ledger must span the navigation and its parts must sum to the whole, checked
+mechanically on the log line rather than claimed in a comment. RED = remove one mark.
+
+### WHAT LANDED
+
+Nine `nav_phase` marks across `load_async` (html parse · external scripts · module graph prefetch ·
+cascade+layout+blocking scripts · deferred scripts · DOMContentLoaded · subframes · load event ·
+initial images+masks), same event shape as the budgeted phases so `RUST_LOG=manuk_page=info` prints ONE
+continuous ledger and every existing grep keeps working.
+
+**And it closes with the subtraction PRINTED** — `total_ms` / `accounted_ms` / `unaccounted_ms`. An
+instrument that leaves the subtraction to the reader is one whose parts merely *claim* to sum; t669
+already spent a tick on a cluster that named the phase where time was spent rather than the one that
+spent it, and this is the same failure in the other direction.
+
+⚠ The first draft broke CI's gating lane: `manuk_js::event_loop::drain_ceiling_hits()` does not exist
+in the JS-less `--no-default-features` build, and unlike t670's closure this ledger is not inside a
+`#[cfg(spidermonkey)]` block. `drain_ceiling_hits_or_zero()` — honest 0 where there is no event loop
+to give up. Both lanes checked before the wall.
+
+### WHAT THE COMPLETE LEDGER THEN SAID
+
+```text
+load_async                       12186 ms   (accounted 12182, unaccounted 4)
+  html parse 11 · external scripts 2327 · module graph 0 · cascade+layout+blocking 2106
+  deferred scripts 910 · DCL 3 · subframes 0 · load event 1330 (gave_up=1)
+  initial images+masks 5495     <- the largest single phase
+finish_loading                   13647 ms
+  external CSS 655 · dynamic scripts 7697 (gave_up=3) · subframes 0 · page fetches 5294 (gave_up=2)
+                                 = 25833 ms of the sweep's 31626 ms
+```
+
+⚠⚠ **THE 12-SECOND PAGE BUDGET IS PER-CALL, NOT PER-NAVIGATION.** `load_async` and `finish_loading`
+each call `load_budget()`, each start their own clock, and **both run the enhancement phases**. A
+caller doing the documented pair — the fidelity sweep and the shell both do — gets **two independent
+12s deadlines** and pays for the image phase twice (5495ms in `load_async`, again inside
+`finish_loading`'s `page fetches`). The budget's own docstring promises *"the phases run under one
+overall deadline… this is what a browser actually promises"*; measured, the tab was busy 25.8s under a
+stated 12s ceiling. **That is the Bar 0 promise — how long may a tab be busy — and it is a SCOPE bug,
+not a tuning one.** Named here, fixed in its own tick: re-scoping a deadline that six phases read is
+not a thing to smuggle into a measurement tick.
+
+⚠ RESIDUE: 5.8s of 31.6s is still outside both ledgers, in the CALLER — `fetch_html`, `paint`, and the
+PNG encode. Those belong to whoever drives the page. Stated so the next reader does not re-derive it.
+
+TICK SHAPE: measurement (the navigation ledger now reconciles, and the reconciliation is gated).
+Bar 0 untouched — but a Bar 0 *promise violation* is now measured and named. `engine/page` only.
+Gates: `G_LOAD`'s `dead_subresources_cannot_hold_the_document_hostage`, extended — it now reads the
+reconciliation line and asserts `unaccounted_ms * 10 <= total_ms + 500`, plus that the line's own
+three numbers add up. RED-proven by removing ONE `nav_phase` mark: 1602ms of a 1786ms navigation goes
+unaccounted. The tolerance is not tuned to pass — playhop's real state was 56%.
+WIKI: `docs/wiki/performance.md` — "the phase ledger did not sum to the load, and said it did", with
+the full per-phase table and the per-call-budget finding.
+PATTERN: none — this is an instrument, not a web pattern. [no-pattern]
+
+NEXT: **(1) THE PER-CALL BUDGET IS THE TICK.** One deadline per NAVIGATION, threaded through both
+entry points, so the 12s promise is the promise. It should also delete the duplicated enhancement
+work: `load_async` spends 5.5s on images and `finish_loading` fetches them again. Expect the honest
+outcome to be *playhop gets 12s instead of 26s*, which may make coverage WORSE before the convergence
+work makes it better — say which it was. **(2) `dynamic scripts` at 7.7s with gave_up=3 is the largest
+single phase of `finish_loading`** and it is the non-convergence, not the network. **(3) NAME THE
+INLINE SCRIPTS** (`run_one_script`'s `c"inline.js"`), still owed from t675.
