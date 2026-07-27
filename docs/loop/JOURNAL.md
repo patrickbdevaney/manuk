@@ -30691,3 +30691,74 @@ we did not, so the question is what it builds that we do not — and the located
 the instrument to point at it. **(2) `<link>.sheet` and `@import`ed sheets**, the honest remainder of
 this bridge. **(3)** `scan_static_import_specifiers`'s failing unit test, still on `main`, still not
 in the wall — seventh report.
+
+## Tick 666 — `finish_loading` promises 12 seconds and takes 39 (2026-07-27)
+
+HYPOTHESIS: t665 removed agoda's `.sheet` throw and the row moved `render-failed` → `thin-overlap-5`
+(*"the oracle built the page and we did not"*). Ask what the next blocker is, with t662's located-error
+instrument pointed at it.
+
+**THERE ARE NO ERRORS LEFT. IT IS ENTIRELY TIME.** Clustering every warning from a full run:
+
+```text
+  17x  event loop hit its task ceiling — the page is not converging
+   1x  load budget exhausted with page fetches still in flight   round=1
+   1x  load budget of 12.0s exhausted — painting without images
+   1x  … without icon masks        1x  … without background images
+```
+
+Not one thrown exception. The page's own `fetch()` calls are still in flight at round **1**, and the
+image, mask and background phases never run at all.
+
+### AND THE NUMBER, MEASURED AT THE PAGE LEVEL — WHICH IS THE WHOLE POINT
+
+```text
+  load_async 3717ms   finish_loading 39894ms   TOTAL 43611ms
+  load_async 3979ms   finish_loading 39208ms   TOTAL 43187ms
+  load_async 3707ms   finish_loading 38900ms   TOTAL 42607ms
+```
+
+**One navigation. `finish_loading` is bounded at 12 seconds and takes 39.** Three consecutive runs
+agree within a second, and this is `Page::load_async` + `Page::finish_loading` on one page — not a
+count of log lines across a harness that loads a page twenty times, which is the mistake t661 caught
+me making six ticks ago.
+
+**The budget is not being enforced, and the reason is that it cannot be.** `finish_loading` wraps its
+phases in `tokio::time::timeout`, and a timeout can only fire **at an await point**. The drains are
+synchronous JavaScript: 17 of them, each running to its own per-drain ceiling of ~2.3s. 17 × 2.3 ≈ 39.
+The outer deadline never gets a chance to observe that its budget is gone.
+
+### THIS RE-OPENS A QUESTION I RETRACTED, AND THE RETRACTION WAS STILL CORRECT
+
+t660 claimed the per-drain bound fails to bound a navigation. t661 refused it, because the hermetic
+fixture — a self-rescheduling `setTimeout` and nothing else — gave up exactly **once**, with the fix
+enabled or disabled. Both were right, and t661 said so precisely in its own NEXT:
+
+> *"IF the per-navigation question is worth re-asking, ask it at the PAGE level with a page that both
+> spins AND injects scripts, which is the only shape that would enter the round loop at all."*
+
+That is agoda, and the experiment t661 specified has now been run: **17 give-ups in one navigation, 39
+seconds against a 12-second promise.** t660's mechanism was right about a shape its fixture could not
+produce; t661's retraction was right that the evidence did not support the claim. What settles it is
+neither argument — it is the page-level measurement on a page of the right shape.
+
+> **A retraction is not a verdict on the hypothesis. It is a verdict on the evidence.** The value of
+> t661 was not that it was sceptical; it was that it wrote down the experiment that would decide.
+
+TICK SHAPE: measurement (a page-level, thrice-reproduced load-time breakdown that settles a question
+retracted six ticks ago, and identifies why the budget's mechanism cannot enforce it). Bar 0
+untouched; no engine source changed.
+Gates: none — nothing changed. The fix wants a hermetic fixture that **both** spins and injects a
+script, which is the shape t661 named and this tick has now justified building.
+WIKI: none [forced] — the mechanism belongs with its fix; t660's premature wiki entry is exactly what
+t661 had to retract, and writing one now would repeat it one tick before the evidence is complete.
+PATTERN: none — nothing unlocked. [no-pattern]
+
+NEXT: **(1) THE PER-NAVIGATION DRAIN BOUND, now with the evidence t661 asked for.** The fixture is a
+local page whose script injects a `<script src>` that itself self-reschedules — spins AND injects, so
+it enters the round loop. The assertion is the one t660 got wrong and t666 has measured right:
+give-ups per **navigation**, not per drain. **⚠ And a timeout cannot be the mechanism** — the drains
+are synchronous, so the bound has to be a decision made *between* rounds, which is what
+`fetch_and_run_dynamic_scripts` is positioned to do. **(2) `<link>.sheet`** — the honest remainder of
+t665's bridge. **(3)** `scan_static_import_specifiers`'s failing unit test, still on `main`, still not
+in the wall — eighth report.
