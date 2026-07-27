@@ -1956,3 +1956,54 @@ so the gate cannot be satisfied by formatting a plausible guess.
 each inline `<script>` as its own source, so a throw on the document's fourth line is reported at
 `inline.js:2`. The first version asserted document-relative lines — a gate written from an assumption
 about someone else's numbering, which would have been red for a correct implementation.
+
+## A bound that is per-drain when the harm is per-page (tick 667)
+
+`MAX_TASKS_PER_DRAIN` and its clock twin are honestly named: they bound **a drain**. The promise
+written beside them is about a **page** — *"'drain to quiescence' means 'never return', and the tab is
+gone with no recourse."* A navigation runs the loop once at load, once for the deferred pass, and again
+per dynamic-script round, so a page that **both spins and injects scripts** pays the bound once per
+round.
+
+Measured at the page level on `www.agoda.com`, three runs within a second of each other:
+
+```text
+  load_async 3717ms   finish_loading 39894ms   TOTAL 43611ms     <- against a 12s budget
+  17 drains, each to its own ~2.3s ceiling.  17 x 2.3 ~= 39.
+```
+
+### The outer timeout was never going to enforce this
+
+`finish_loading` wraps its phases in `tokio::time::timeout`. **A timeout fires at an await point**, and
+these drains are synchronous JavaScript — the deadline never gets a chance to observe that its budget
+is gone. Adding a third per-drain limit (tick 610 added the second, a clock beside the count) would
+repeat the mistake in a new unit. The bound has to be a decision made **between** rounds, which is
+where the round loop already sits.
+
+```text
+                            give-ups   chained scripts served
+  bound disabled (baseline)     9              4
+  bound enabled                 3              1
+```
+
+### The fixture is the whole gate
+
+A page that **only spins** injects no `<script src>`, so `fetch_and_run_dynamic_scripts` breaks on its
+first round at `pending.is_empty()` — the round loop is never entered and the count is the same with
+the fix or without it. Tick 660 claimed this defect from exactly that fixture; tick 661's gate passed
+with the fix **disabled**, the claim was retracted and the change reverted. What made this landable
+was not a better argument, it was t661 writing down the experiment: *a page that both spins AND
+injects*.
+
+> **A retraction is a verdict on the evidence, not on the hypothesis.**
+
+### What it does not buy, named rather than hidden
+
+Three give-ups remain: the document's own scripts, the deferred pass, one dynamic round. Those are the
+navigation's **fixed** drain sites and they are legitimate first executions — refusing them would be
+"bounded" achieved by not running the page. So the gated property is that **the cost does not scale
+with the page**: the chain stops, and the count stays put while the page tries to grow it.
+
+Bounding the last three means an early-out inside `run_deferred` once the page is already flagged,
+which risks starving a page that spins once and would have converged later. **That is a capability
+trade**, it is not made here, and it is written into the gate as a named residual.

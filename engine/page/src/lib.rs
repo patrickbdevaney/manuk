@@ -3134,6 +3134,9 @@ impl Page {
         max_rounds: usize,
     ) -> usize {
         let mut ran = 0usize;
+        // Scoped to this run of rounds, not to the navigation: a flag whose reset lives somewhere
+        // else eventually leaks and silently stops a healthy page from running its scripts.
+        manuk_js::event_loop::clear_convergence_state();
         for _ in 0..max_rounds {
             let csp = &self.csp;
             let pending: Vec<(manuk_dom::NodeId, String)> = self
@@ -3225,6 +3228,29 @@ impl Page {
                 any = true;
             }
             if !any {
+                break;
+            }
+            // **STOP ASKING A PAGE THAT HAS ALREADY ANSWERED.**
+            //
+            // The drain's bounds bound A DRAIN. The promise beside them is about A PAGE, and this loop
+            // is where the difference lived: a page that both spins and injects scripts paid the bound
+            // once per round. Measured at the page level on `www.agoda.com` (t666), three runs within
+            // a second of each other: `finish_loading` 39.9s against its own 12s budget, 17 drains at
+            // ~2.3s each.
+            //
+            // **The `tokio::time::timeout` around the phases cannot enforce that budget**, because a
+            // timeout fires only at an await point and these drains are synchronous JavaScript. So the
+            // bound has to be a decision made BETWEEN rounds — here.
+            //
+            // A page that burned 20,000 tasks without converging will not converge in the next 20,000.
+            // This can only REDUCE work, and only for a page the engine has already declared
+            // non-converging out loud, so it cannot cost a working page a round.
+            if manuk_js::event_loop::page_stopped_converging() {
+                tracing::warn!(
+                    rounds_run = ran,
+                    "a script round ended with the page not converging — not starting another. The \
+                     drain's ceiling bounds one drain; this bounds the NAVIGATION."
+                );
                 break;
             }
             // Those scripts may have injected <style>/<link> and mutated the tree — restyle before

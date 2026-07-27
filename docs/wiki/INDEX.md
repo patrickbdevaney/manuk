@@ -744,6 +744,10 @@
   - L1914 · Where this sits relative to G_SILENT_FAIL
   - L1927 · It paid out on the first real site, in one run
   - L1948 · Two things the gate does that are not decoration
+  - L1960 · A bound that is per-drain when the harm is per-page (tick 667)
+  - L1975 · The outer timeout was never going to enforce this
+  - L1989 · The fixture is the whole gate
+  - L2000 · What it does not buy, named rather than hidden
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1144,4 +1148,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1059 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1063 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -34,6 +34,60 @@ use mozjs::rust::Runtime;
 /// A runaway task chain must not hang the browser. See `run_deferred`.
 const MAX_TASKS_PER_DRAIN: u32 = 20_000;
 
+thread_local! {
+    /// **Did a drain end because the page was not converging, rather than because it was done?**
+    ///
+    /// `MAX_TASKS_PER_DRAIN` and `max_drain_ms` are honest about their scope: they bound **a drain**.
+    /// The promise written beside them is about a **page** — *"'drain to quiescence' means 'never
+    /// return', and the tab is gone with no recourse"*. A navigation runs the loop once at load and
+    /// again per dynamic-script round, so a page that both **spins and injects scripts** pays the
+    /// bound once per round. Measured on `www.agoda.com`, at the page level, three consecutive runs
+    /// agreeing within a second (t666):
+    ///
+    /// ```text
+    ///   load_async 3717ms   finish_loading 39894ms   TOTAL 43611ms      <- a 12s budget
+    ///   17 drains, each to its own ~2.3s ceiling.  17 x 2.3 ~= 39.
+    /// ```
+    ///
+    /// **And `finish_loading`'s `tokio::time::timeout` cannot enforce its own budget here**, because a
+    /// timeout fires only at an await point and these drains are synchronous JavaScript. The bound has
+    /// to be a decision made *between* rounds, which is what the round loop is positioned to make.
+    ///
+    /// ⚠ **Tick 660 claimed this and could not prove it; tick 661 retracted it and named the
+    /// experiment that would decide** — *"ask it at the PAGE level with a page that both spins AND
+    /// injects scripts, which is the only shape that would enter the round loop at all."* t666 ran
+    /// that experiment. A retraction is a verdict on the evidence, not on the hypothesis.
+    static DRAIN_STOPPED_SHORT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static DRAIN_CEILING_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Record that a drain gave up rather than finished. See [`DRAIN_STOPPED_SHORT`].
+fn note_drain_stopped_short() {
+    DRAIN_STOPPED_SHORT.with(|c| c.set(true));
+    DRAIN_CEILING_HITS.with(|c| c.set(c.get() + 1));
+}
+
+/// **Has a drain given up since [`clear_convergence_state`]?** The signal the dynamic-script round
+/// loop uses to stop asking a page that has already answered.
+pub fn page_stopped_converging() -> bool {
+    DRAIN_STOPPED_SHORT.with(|c| c.get())
+}
+
+/// How many drains gave up since [`clear_convergence_state`]. `G_DRAIN_BOUNDS_THE_PAGE` asserts the
+/// number, not the boolean: *bounded* and *bounded five times* are the same boolean and the entire
+/// defect.
+pub fn drain_ceiling_hits() -> usize {
+    DRAIN_CEILING_HITS.with(|c| c.get())
+}
+
+/// Reset both, at the start of a run of rounds. Called by the round loop that reads it rather than by
+/// a navigation hook **on purpose**: a flag whose reset lives somewhere else is a flag that
+/// eventually leaks across navigations and silently stops a healthy page from running its scripts.
+pub fn clear_convergence_state() {
+    DRAIN_STOPPED_SHORT.with(|c| c.set(false));
+    DRAIN_CEILING_HITS.with(|c| c.set(0));
+}
+
 /// **The drain's other bound, and the one that matches the harm.**
 ///
 /// `MAX_TASKS_PER_DRAIN` is a *count*, and a count is a poor proxy for the thing it is defending
@@ -6311,6 +6365,7 @@ pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Resu
                     "event loop hit its task ceiling — the page is not converging (a self-rescheduling \
                      timer, most likely). Painting what we have. The alternative is a frozen tab."
                 );
+                note_drain_stopped_short();
                 break;
             }
             // **The same policy, measured in the unit the user actually feels.** Checked only on the
@@ -6324,6 +6379,7 @@ pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Resu
                     "event loop hit its TIME budget — the page is not converging fast enough to be \
                      worth more of the user's clock. Painting what we have."
                 );
+                note_drain_stopped_short();
                 break;
             }
             continue;
@@ -6688,6 +6744,7 @@ where
                 "fetcher event loop hit its task ceiling — the page is not converging. Painting what \
                  we have. The alternative is a frozen tab."
             );
+            note_drain_stopped_short();
             break;
         }
         if budget > 0 && started.elapsed().as_millis() > budget {
@@ -6697,6 +6754,7 @@ where
                 budget_ms = budget as u64,
                 "fetcher event loop hit its TIME budget — painting what we have."
             );
+            note_drain_stopped_short();
             break;
         }
         if ran {

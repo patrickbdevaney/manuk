@@ -30762,3 +30762,65 @@ are synchronous, so the bound has to be a decision made *between* rounds, which 
 `fetch_and_run_dynamic_scripts` is positioned to do. **(2) `<link>.sheet`** — the honest remainder of
 t665's bridge. **(3)** `scan_static_import_specifiers`'s failing unit test, still on `main`, still not
 in the wall — eighth report.
+
+## Tick 667 — the experiment tick 661 specified, run (2026-07-27)
+
+HYPOTHESIS: t666 measured the real number at the page level — `finish_loading` 39.9s against its own
+12s budget, 17 give-ups, three runs within a second. t661's NEXT named the fixture that would let a
+gate see it: **a page that both SPINS and INJECTS**, because a page that only spins never enters the
+round loop at all.
+
+**BUILT IT, AND IT REPRODUCES.** One loopback socket; each served script starts a self-rescheduling
+timer *and* appends the next `<script src>`, so the chain drives rounds:
+
+```text
+                            give-ups   chained scripts served
+  bound disabled (baseline)     9              4
+  bound enabled                 3              1
+```
+
+The round loop stops after the round in which the page first reported it was not converging, and the
+chain stops with it. **This is the same change tick 661 reverted** — reverted correctly, because at
+that point the evidence did not support it; t660's fixture only spun, so the loop was never entered
+and the gate passed with the fix disabled.
+
+> **A retraction is a verdict on the evidence, not on the hypothesis.** The value of t661 was not the
+> scepticism — it was that it wrote down the experiment that would decide. That experiment is this
+> gate, and it now goes red.
+
+### WHY THE OUTER TIMEOUT WAS NEVER GOING TO DO THIS
+
+`finish_loading` wraps its phases in `tokio::time::timeout`. A timeout fires **at an await point**,
+and these drains are synchronous JavaScript — so the deadline never gets a chance to observe that its
+budget is gone. That is why the bound has to be a decision made *between* rounds, and why adding a
+third per-drain limit (t610 added the second) would have repeated the mistake in a new unit.
+
+### WHAT IT DOES NOT BUY, NAMED RATHER THAN HIDDEN
+
+Three give-ups remain, and they are the navigation's **fixed** drain sites: the document's own
+scripts, the deferred pass, and one dynamic round. Those are legitimate first executions — refusing
+them would be "bounded" achieved by not running the page. So the gate asserts the property that
+actually matters, **the cost does not scale with the page**: the chain stops (`fetched <= 1`, against
+a baseline of 4) and the count stays put while the page tries to grow it.
+
+Bounding those last three means an early-out inside `run_deferred` once the page is already flagged,
+which risks starving a page that spins once and would have converged later. **That is a capability
+trade, and this tick does not make it** — it is written into the gate as a named residual rather than
+left for someone to discover.
+
+TICK SHAPE: capability (a per-navigation bound on a hang guard whose two limits are both per-drain).
+Bar 0 strictly improved: the guard now bounds what it always promised, and the change can only reduce
+work, and only for a page the engine has already declared non-converging out loud. Suites green.
+Gate: `G_DRAIN_BOUNDS_THE_PAGE` (`engine/page/tests/g_drain_bounds_the_page.rs`) — hermetic, one
+loopback socket. Its **control runs first** (a converging page must give up ZERO times, or "bounded"
+would mean "we stopped running scripts"), and it asserts **both** preconditions, because a fixture
+with two halves is vacuous in a different way for each: a chained script WAS served (it injected) and
+the guard DID fire (it spun). RED-proven by disabling the bound: 9 give-ups, 4 scripts.
+WIKI: `docs/wiki/js-engine.md` — "a bound that is per-drain when the harm is per-page".
+PATTERN: pages that spin and inject.
+
+NEXT: **(1) RE-MEASURE `agoda` at the page level** — t666's 39.9s is the before; this bound should cut
+the rounds, and the same three-run `--build` measurement is the after. It is the first thing to check
+and it is cheap. **(2) `<link>.sheet`**, the honest remainder of t665's bridge. **(3)**
+`scan_static_import_specifiers`'s failing unit test, still on `main`, still not in the wall — ninth
+report.
