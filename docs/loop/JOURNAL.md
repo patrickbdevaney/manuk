@@ -28930,3 +28930,74 @@ NEXT: every library measured across t642-644 now boots. The real-library method'
 on its fourth tier (7/7 clean), which is the signal to change instrument rather than run a fifth.
 Still open: the **Opus decoder**, our latency on the placement half, and t629's
 `getBoundingClientRect()` on an SVG child.
+
+## Tick 645 — the last four `?` cells: three were map drift and one was a stale comment (2026-07-26)
+
+HYPOTHESIS: the board's live CO-#1 (2) is *probe the genuinely-open unknowns*. Four `?` cells were
+left after t636-638. `?` outranks `✗`, and audit #35's method is `ls` the GATE DIRECTORY, never read
+the row.
+
+**THREE WERE MAP DRIFT, AND TWO OF THEM BY A WIDE MARGIN.**
+
+| row | said | reality |
+|---|---|---|
+| `test262` | `?` since surface audit **t83** — *"we have NEVER RUN IT"* | **run at t546**, 99 ticks earlier, by a runner in our own tree (`tests/wpt/src/test262.rs`) |
+| `100-tab RSS budget` | `?` — *"the memory thesis rests on zero data"* | **run at t571**, 74 ticks earlier, via `manuk-wpt memtabs` |
+| `audio output device` | `?` | `AudioOut` (cpal) + three gates in `shell/src/` |
+
+**test262: 94.14% of 87,009 executed AND 81.41% of the 100,617 the ratified suite defines** — both
+numbers or neither, because a runner that skips more and reports a higher pass rate is exactly the
+failure that pair exists to expose. **100-tab RSS: median marginal cost 0.90 MB/tab, p90 49.7 MB,
+aggregate 4390 MB** — carried 76% by four sites out of a hundred, which an average would have hidden
+completely.
+
+> **These are the project's two headline external claims** — JS conformance and the memory thesis —
+> and the map said neither had ever been measured, for 99 and 74 ticks respectively. **Map drift is
+> not uniform across a map: it concentrates on the rows that were `?` for a long time**, because a
+> long-standing `?` stops being read as a question. Nobody re-checks the row everybody knows is
+> unknown.
+
+**THE FOURTH WAS NOT DRIFT — IT WAS A STALE COMMENT ON A DELIBERATE NON-IMPLEMENTATION, AND THAT IS
+THE FINDING.** `apply_prop`'s doc read: *"`playbackRate` is accepted and DROPPED here, deliberately:
+its transport/mastery interplay is its own tick."* True when written at t360. **t361 landed the rate
+and the comment stayed** — three lines below it, the code calls `Player::set_rate`.
+
+> **A stale comment describing a deliberate NON-implementation is the hardest kind to notice,
+> because it reads as a decision rather than as an omission.** A comment saying *"this does X"* gets
+> checked against the code by anyone editing nearby. A comment saying *"we deliberately do not do X"*
+> is read as settled and skipped — it is `[[honest-answer-is-not-a-fixed-answer]]` living in a
+> comment instead of an assertion, where nothing can go red.
+
+And the probe produced a **split verdict** rather than a flip, which is the honest shape: the rate
+reaches the **clock** (gated, `G_MEDIA_PLAYBACK_CLOCK` — 2s at 2x advances 4s) and **not the audio**
+(`AudioFeed` exposes `new`/`fill`/`set_playing`/`set_muted`/`set_gain` and **no rate control**, so
+the feed consumes at its native rate while the clock runs faster — a podcast at 1.5x would drift
+against its own audio). Recorded `partial`, with the missing half named.
+
+**AND THE `shell/` BLIND SPOT BIT AGAIN, EXACTLY AS AUDIT #36 PREDICTED.** Citing the three real
+audio gates made `map-reconcile.sh` report a DANGLING GATE, because it searches `engine agent tests`
+and not `shell/`. Same resolution as the AVIF row: the machine-checkable citation is the engine-side
+PCM gate, the shell gate names are recorded in the receipt for a human, and the reason is written on
+the row. **Drift 0; validated claims 275 → 277; unknowns 4 → 0.**
+
+TICK SHAPE: reliability (the constellation's last four unknowns resolved — three map drift on
+long-standing `?` rows including both headline external claims, one split verdict with a stale
+comment corrected in the source). No engine behaviour changed. Bar 0 untouched; no ratchet floor
+moved; the shell suite re-runs green.
+Gates: none new — three of the four rows were resolved by citing gates that already existed, which
+is the point of the audit method.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "drift concentrates on the oldest question marks".
+PATTERN: [no-pattern] — no browser capability changed.
+
+SELF-AUDIT (tick 645, due at 644): **one** prescribed-but-not-executed item, unchanged and
+harness-owned — *"verify wall 734s exceeds the 300s target"*. Same finding as WALL AUDIT #18 (t627)
+and the t634 audit: `manuk-wpt` is 51MB under `lto=true, codegen-units=1`, and any tick touching
+`engine/` pays a release relink inside the gate phase. Every other audit line is green. Noted, not
+touched — and noted **again** rather than silently carried, because an audit item that is someone
+else's to fix still rots if the only place it lives is an exit code.
+
+NEXT: **the constellation now carries no `?` at all.** What remains is the honest `✗` set (WebGL,
+WebRTC, SharedWorker, scroll-driven animations, multicol, anchor positioning, shape(), scoped
+registries, WebTransport, EME playback, dev tools, password vault) plus the named partials. The
+narrowest real media blocker is still an **Opus decoder**; `playbackRate`'s audible half is now a
+named, bounded gap; and t629's `getBoundingClientRect()` on an SVG child is still open.

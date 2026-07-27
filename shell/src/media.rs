@@ -228,9 +228,18 @@ impl MediaSet {
 
     /// A live media-IDL property write (tick 360): the channel end the mute button and volume
     /// slider land on. Values are stored keyed by node (they may precede the bytes) and applied
-    /// to a live feed immediately when one exists. `playbackRate` is accepted and DROPPED here,
-    /// deliberately: its transport/mastery interplay is its own tick, and until the host applies
-    /// it the JS property stays a stored number exactly as before — no new claim.
+    /// to a live feed immediately when one exists.
+    ///
+    /// ⚠ **This doc said `playbackRate` is "accepted and DROPPED here, deliberately" — and that
+    /// stopped being true at tick 361, three lines below it** (`Player::set_rate` is called). Fixed
+    /// at t645. A stale comment describing a *deliberate non-implementation* is the hardest kind to
+    /// notice, because it reads as a decision rather than as an omission.
+    ///
+    /// What is true now: the rate reaches the **clock** (gated by `G_MEDIA_PLAYBACK_CLOCK` — 2s at
+    /// 2x advances 4s). It does **not** reach the audio: `AudioFeed` has no rate control, so the
+    /// feed consumes at its native rate while the clock runs faster. A podcast at 1.5x would drift
+    /// against its own audio, which is why the constellation row for *audible* speed control is
+    /// `partial` and not `gated`.
     pub fn apply_prop(&mut self, node: NodeId, prop: &str, value: f64) {
         match prop {
             "muted" => {

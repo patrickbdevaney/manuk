@@ -1373,3 +1373,37 @@ a row produce a class of work with no corpus evidence behind it.
 The general shape is worth keeping separately from the media case: **a rule that is checked per-unit
 can be satisfied by every unit and violated by the sequence.** Any rule of the form "prefer X
 evidence" needs a cadence attached, or the preference is expressible entirely as intent.
+
+## Drift concentrates on the oldest question marks (tick 645)
+
+The constellation's last four `?` cells were resolved. **Three were map drift, and two of them by a
+wide margin** — they were the project's two headline external claims:
+
+| row | the map said | reality |
+|---|---|---|
+| `test262` | `?` since audit **t83**: *"we have NEVER RUN IT"* | **run at t546**, 99 ticks earlier, by `tests/wpt/src/test262.rs` in our own tree — 94.14% of 87,009 executed, 81.41% of the 100,617 defined |
+| `100-tab RSS` | `?`: *"the memory thesis rests on zero data"* | **run at t571**, 74 ticks earlier — median 0.90 MB/tab, p90 49.7 MB, aggregate 4390 MB |
+| `audio output device` | `?` | `AudioOut` (cpal) plus three gates, all in `shell/src/` |
+
+> **Map drift is not uniform across a map. It concentrates on the rows that have been `?` the
+> longest**, because a long-standing question mark stops being read as a question. Nobody re-checks
+> the row everybody knows is unknown — and the longer it sits, the more it reads as a settled
+> property of the project rather than an open measurement.
+
+The practical consequence for the audit: **sort the unknowns by age and start at the top.** The
+oldest `?` is the most likely to be stale, which is the opposite of the intuition that old unknowns
+are old because they are hard.
+
+**The fourth was a different failure, and a subtler one.** `apply_prop`'s doc said `playbackRate` was
+*"accepted and DROPPED here, deliberately"* — true when written, and **falsified one tick later** by
+code three lines below it.
+
+> **A stale comment describing a deliberate NON-implementation is the hardest kind to notice, because
+> it reads as a decision rather than an omission.** *"This does X"* gets checked by anyone editing
+> nearby. *"We deliberately do not do X"* is read as settled and skipped. It is
+> `[[honest-answer-is-not-a-fixed-answer]]` living in a comment instead of an assertion — where
+> nothing can go red.
+
+That probe produced a **split verdict** rather than a flip, which is usually the honest shape: the
+rate reaches the clock (gated) and not the audio (`AudioFeed` has no rate control), so a podcast at
+1.5x would drift against its own sound. Recorded `partial` with the missing half named, not `gated`.

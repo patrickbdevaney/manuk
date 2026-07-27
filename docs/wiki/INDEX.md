@@ -185,6 +185,7 @@
   - L1280 · The fix whose gate passes before the fix (tick 637)
   - L1320 · Two citation dialects, and each instrument was blind to one (surface audit #36, tick 638)
   - L1353 · Ranked by area is not ranked by sites moved (constitution check #46, tick 639)
+  - L1377 · Drift concentrates on the oldest question marks (tick 645)
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1101,4 +1102,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1016 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1017 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

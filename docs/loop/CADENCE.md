@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **403** | ticks 1–643 |
-| median tick cycle | **21m** | 402 intervals |
-| median, last 10 | **19m** | 10 intervals |
+| ticks landed | **404** | ticks 1–644 |
+| median tick cycle | **21m** | 403 intervals |
+| median, last 10 | **18m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.06** | 377.9h elapsed |
-| median verify wall | **66s** | 342 ticks |
+| **ticks per hour** | **1.07** | 378.0h elapsed |
+| median verify wall | **66s** | 343 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**199 of 403 ticks** (49%) moved a
+**200 of 404 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **199** capability ticks, median cycle **21m**
+* **200** capability ticks, median cycle **21m**
 * median diff per tick: **+234 / −34** lines across 8 files
 
 ## Every tick
@@ -500,5 +500,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **641** | 2026-07-26 21:28 | 26m | capability | 63s | +340/−3 | 322 | 81 | 56.0% · | the EME interfaces exist and reject honestly; shaka-player boots (2026-07-26) |
 | **642** | 2026-07-26 21:56 | 27m | capability | 63s | +349/−21 | 323 | 81 | 56.0% · | jQuery was totally dead and totally silent: `document.nodeType` was 8 (2026-07-26) |
 | **643** | 2026-07-26 22:58 | 63m | capability | 63s | +722/−4 | 324 | 81 | 56.0% · | DOMPurify returned the empty string for every HTML input (2026-07-26) |
+| **644** | 2026-07-26 23:05 | 6m | capability | 63s | +126/−11 | 324 | 81 | 56.0% · | `document.evaluate` / XPathEvaluator: a real subset that refuses the rest (2026-07-26) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
