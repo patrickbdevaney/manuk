@@ -95,6 +95,7 @@
   - L1526 · The gate asserts three things, and two of them are not decoration
   - L1541 · www.naukri.com: our <body> is 89,905px wide and Chrome's is 1,200 (tick 684, OPEN)
   - L1562 · Two mechanisms ELIMINATED, so the next attempt does not re-derive them
+  - L1577 · The PHASE is now named: the external stylesheet (tick 685)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1205,4 +1206,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1116 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1117 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

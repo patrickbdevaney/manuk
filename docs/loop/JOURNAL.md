@@ -32297,3 +32297,67 @@ scripts disabled — the first one that gives `body ≈ 1200` names the phase. *
 (t678/t679/#51) — the priority inversion, still blocked on nine gate files that call `load_async` without
 `finish_loading`. **(3)** the repeat plan should key on whether a site's variance is REPRODUCIBLE within a
 sweep; three of four repeated sites returned byte-identical rows, so six live renders buy nothing.
+
+## Tick 685 — the phase is the external stylesheet, and a third mechanism is eliminated (2026-07-27)
+
+HYPOTHESIS: t684's NEXT #1 — bisect naukri's LIVE load, cheapest first, and let the first phase that
+gives `body ≈ 1200` name itself.
+
+### THE DOCUMENT IS NOT IT — ruled out first, because it was the cheapest
+
+Fetched `https://www.naukri.com/` twice, once with Chrome's User-Agent and once with **ours**
+(`Mozilla/5.0 (X11; Linux; x86_64) Manuk/0.1.0 (+standards)`): **byte-identical, 15,222 bytes.** The origin
+is not serving us a different page, which also retires the whole bot-wall/UA line of thinking for this site.
+
+### THE PHASE: THE EXTERNAL STYLESHEET
+
+```text
+  stylesheet FAILED   ->  body ~0       ("STYLESHEET FAILED — the page will render unstyled")
+  stylesheet applied  ->  body 89905    (the sweep, where the computed font is `Satoshi`)
+```
+
+`//static.naukimg.com/s/7/103/c/main.8c85256c.min.css` is protocol-relative and it is the difference
+between the two readings. So **the 89,905px comes out of the cascade**, and the question is now *which
+declaration* — a bounded question about 26KB of CSS rather than an open one about layout.
+
+Two candidates are visible in that sheet, and both have the runaway-width shape:
+
+```css
+@media only screen and (max-width:1270px) { html { width:-webkit-fit-content; width:-moz-fit-content;
+                                                   width:fit-content; … } }
+.gap-patch .circle { width:1000%; left:-450% }
+```
+
+⚠ The media query is **`max-width`**, not min-width, so at the sweep's 1200px viewport it **matches**: the
+root really is `width: fit-content` on this page.
+
+### THIRD MECHANISM ELIMINATED
+
+`html { width: fit-content }` **alone does not do it.** A hermetic fixture — that declaration plus a 5000px
+child in an 800px viewport — gives `html` and `body` at **784**, correctly clamped to the available width,
+with the wide child overflowing. `fit-content` on the root is implemented correctly; it needs something
+else in that sheet.
+
+**The next experiment is MECHANICAL:** apply the real 26KB stylesheet to a minimal document and bisect it
+by halves. ~15 renders, and the answer is a declaration. That is a procedure, not a hypothesis, which is
+the whole reason to publish the three eliminations rather than carry them in my head.
+
+TICK SHAPE: measurement (the phase named, the document exonerated, a third mechanism eliminated, and the
+next step reduced to a mechanical bisection). Bar 0 untouched; **no source changed** — the probe was a
+scratch file and is deleted.
+Gates: none — the bug is still open, and a gate here would assert a broken number and ratchet it in.
+WIKI: `docs/wiki/box-layout.md` — the naukri section now carries the phase, the two candidate
+declarations, and all three eliminations.
+
+### SELF-AUDIT — DUE THIS TICK (every 10; last at t675)
+
+`./scripts/self-audit.sh` clean: **methodology and reality agree** — no `✗`, no `⚠`. Every gate declares
+how to break it, the process-defect ledger names a MECHANISM per entry, the journal has an entry per tick
+for the last five, and nothing prescribed is unexecuted. `LAST_AUDIT_TICK` set to 685.
+PATTERN: none — an open diagnosis. [no-pattern]
+
+NEXT: **(1) BISECT THE 26KB STYLESHEET BY HALVES** against a minimal document — mechanical, ~15 renders,
+and it ends with a declaration. **(2) THE PER-CALL LOAD BUDGET** (t678/t679/#51) — the priority inversion,
+blocked on nine gate files that call `load_async` without `finish_loading`. **(3)** the repeat plan should
+key on whether a site's variance is REPRODUCIBLE within a sweep; three of four repeated sites returned
+byte-identical rows, so six live renders per sweep buy an error bar of zero.

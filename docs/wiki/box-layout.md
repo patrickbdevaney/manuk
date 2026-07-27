@@ -1574,7 +1574,38 @@ when the document comes from the origin — a stylesheet that only resolves ther
 relayout, or a script path that only runs with real cookies/redirects. That is the next experiment, and
 it is a bisection over the live load rather than a hypothesis about layout.
 
-⚠ Recorded as OPEN, with the eliminations, deliberately. Two of this session's ticks were saved by a
+### The PHASE is now named: the external stylesheet (tick 685)
+
+The document is identical under our User-Agent and under Chrome's (byte-for-byte, 15,222 bytes), so the
+origin is not serving us something else. What differs between the local render and the live one is
+**whether `//static.naukimg.com/s/7/103/c/main.8c85256c.min.css` arrives**:
+
+```text
+  stylesheet FAILED   ->  body ~0        (STYLESHEET FAILED — the page will render unstyled)
+  stylesheet applied  ->  body 89905     (the sweep, where `Satoshi` is the computed font)
+```
+
+So the 89,905px comes **out of the cascade**, from that sheet, and the whole question is now *which
+declaration*. Two candidates are visible in it, and both are the shape that produces a runaway width:
+
+```css
+@media only screen and (max-width:1270px) { html { width:-webkit-fit-content; width:-moz-fit-content;
+                                                   width:fit-content; … } }
+.gap-patch .circle { width:1000%; left:-450% }
+```
+
+⚠ Note the media query is **`max-width`**, so at the sweep's 1200px viewport it **matches** — the root
+really is `width: fit-content` on this page.
+
+**Third mechanism eliminated:** `html { width: fit-content }` alone does NOT do it. A hermetic fixture —
+that declaration plus a 5000px child in an 800px viewport — gives `html` and `body` at **784**, correctly
+clamped to the available width, with the wide child overflowing. So it is not a missing `fit-content`
+clamp on its own; it needs something else in that sheet.
+
+**The next experiment is mechanical, not another hypothesis:** apply the REAL 26KB stylesheet to a minimal
+document and bisect it by halves. ~15 renders, and the answer is a declaration rather than a guess.
+
+⚠ Recorded as OPEN, with the eliminations, deliberately. Three of this session's ticks were saved by a
 five-minute probe killing a good-sounding mechanism; the cost of *publishing* the eliminations is one
 paragraph and it is what makes the next attempt cheap.
 

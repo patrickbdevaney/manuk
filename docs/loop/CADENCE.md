@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **442** | ticks 1–684 |
-| median tick cycle | **22m** | 441 intervals |
+| ticks landed | **443** | ticks 1–685 |
+| median tick cycle | **21m** | 442 intervals |
 | median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 396.8h elapsed |
-| median verify wall | **63s** | 381 ticks |
+| **ticks per hour** | **1.11** | 397.1h elapsed |
+| median verify wall | **63s** | 382 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **353**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**216 of 442 ticks** (49%) moved a
+**216 of 443 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **216** capability ticks, median cycle **22m**
+* **216** capability ticks, median cycle **21m**
 * median diff per tick: **+240 / −34** lines across 8 files
 
 ## Every tick
@@ -539,5 +539,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **682** | 2026-07-27 17:00 | 24m | measurement | 63s | +267/−125 | 334 | 81 | 56.0% · | a rule whose justification is falsified by the run that motivated it (2026-07-27) |
 | **683** | 2026-07-27 17:40 | 40m | capability | 63s | +266/−33 | 334 | 81 | 56.0% · | a reload inherited the previous load's failures, for the life of the process (2026-07-27) |
 | **684** | 2026-07-27 17:53 | 13m | measurement | 63s | +142/−33 | 334 | 81 | 56.0% · | naukri's `<body>` is 89,905px wide, and two mechanisms are eliminated (2026-07-27) |
+| **685** | 2026-07-27 18:06 | 13m | measurement | 63s | +132/−35 | 334 | 81 | 56.0% · | the phase is the external stylesheet, and a third mechanism is eliminated (2026-07-27) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
