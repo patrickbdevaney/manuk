@@ -1958,3 +1958,50 @@ real 水 advance, which t637 established is unprovable on any available font.
   claims machine-validated            : 259 -> 271
   descriptive-floor (unvalidated)     : 24 -> 12
 ```
+
+## Audit #37 — tick 649
+
+**Audit #36's fixes held, and the audit's own method caught MY drift from two ticks earlier.**
+
+**Direction 1 (map → gate): clean.** `map-reconcile.sh` reports **drift 0** across 374 rows, 277
+machine-validated claims. **The lowercase-citation dialect that #36 found is completely gone** — zero
+rows now cite a `g_foo` token that no instrument can read, down from eleven. That fix held without
+maintenance, which is the test of whether it was a fix or a sweep.
+
+**Direction 2 (gate → map): one real finding, and it was mine.** `G_SVG_CLIENT_RECT` — landed at
+**t647, two ticks ago** — appeared **zero times** in the map. The gate existed, passed, and was
+cited in the journal and the wiki; the map did not know about it.
+
+**THE CAUSE IS A SCRIPTED EDIT THAT MATCHED NOTHING AND SHIPPED.** t647's map update anchored on
+`'doc\t`SVGGraphicsElement.getBBox()`…'`. The row's class is **`dom`**. The replacement silently
+matched zero rows, the script exited 0, the tick landed, and I reported the citation as done.
+
+> **`[[scripted-edit-silent-noop]]` — the fourth this session, and the first to reach a commit.** The
+> other three were caught within minutes because they produced a *visibly* wrong measurement (every
+> library reporting `tail:false`; a probe printing nothing). This one produced **no output at all**,
+> which is what made it survive: a no-op edit on a data file has no symptom until something else
+> reads the file. **Assert every replacement — and on a data file, assert the COUNT**, because
+> "matched nothing" and "matched what I meant" are the same silence.
+
+The fix is re-applied with `assert hits == 1`, and the row records that it is being written for the
+second time and why.
+
+**Gate-vs-map diff, both directions:**
+```text
+  gate files under engine/page/tests/ : 324   (was 318 at #36; +6 this session)
+  map rows                            : 374   (was 371)
+  map -> gate drift                   : 0
+  gate -> map, no citing row          : 9 -> 8 after the fix
+  of those 8: 2 prefix-matched (G_POPOVER_RENDER, G_WEBFONT_RELAYOUT_EXTERNAL)
+              2 reliability gates with no capability row by design (G_DEFER, G_SILENT_FAIL)
+              4 redundant siblings of rows citing a different gate for the same capability
+  lowercase-dialect rows              : 11 -> 0   (audit #36's fix, holding)
+  machine-validated claims            : 277
+  constellation unknowns              : 0
+```
+
+**And the standing note, for the third audit running:** `map-reconcile.sh` searches
+`engine agent tests` and **not `shell/`**, so the seven gates living as `#[test] fn` in
+`shell/src/media.rs` and `shell/src/audio.rs` — now eight, with t646's `g_audio_rate` — remain
+invisible to it. Rows that depend on them cite an engine-side equivalent and name the shell gates in
+the receipt. Harness-owned; reported, not touched.

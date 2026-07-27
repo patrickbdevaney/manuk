@@ -473,3 +473,44 @@ which would be a real trade rather than a free win), and whether `opt-level = "s
 dominates the link time.
 
 **Nothing trimmed. LAST_WALL_AUDIT → 627. Next due: tick 647.**
+
+## Audit #19 — tick 648 (722s, and 64% of it is invisible to this instrument)
+
+**The script's answer, and the arithmetic that undoes it:**
+
+```text
+   180s  P (page gates)   25%       35s  B    5%       24s  T    3%
+     8s  G6                1%        4s  G1   1%        4s  D    1%       2s  F   0%
+  ────────────────────────────────────────────────────────────────────────────────
+  attributed 258s   ·   TOTAL 722s   ·   UNATTRIBUTED 464s (64%)
+```
+
+**THE WALL-TIME AUDIT'S OWN ACCOUNTING DOES NOT RECONCILE.** The instrument built to find where the
+wall goes cannot see where **most** of it goes. That is meta-instrument #3 — *"8 of 30 process
+defects were caught by a number that did not add up, not by any gate"* — firing on the instrument
+itself, and it is the same shape audit #18 found from the other direction (a warm re-run measuring
+the wrong thing) one audit earlier.
+
+**The cause is already named and dated, and this session confirms it to the tick.** Audit #18 found
+`manuk-wpt` is 51MB under `lto = true, codegen-units = 1`, and any tick touching `engine/` pays a
+release relink **inside the gate phase**, where the section timers do not observe it. Sixteen ticks
+landed t633-648:
+
+```text
+  docs-only ticks          73 · 74 · 83 s        (t636, t638, t639, t645, t648)
+  any engine/ touch       700 · 709 · 767 · 770 s (t634, t635, t637, t640-644, t646, t647)
+```
+
+Same wall, same gates, one variable — and the split is now three audits old.
+
+**NOTHING WAS TRIMMED, and that is the correct outcome rather than a shrug.** The audit admits
+exactly four optimisations: redundancy (a shared SpiderMonkey runtime / `cargo-nextest`),
+parallelism, caching, and scope. **Every one of them lives in `scripts/verify.sh` or the build
+profile, which are harness-owned.** There is no rigor-preserving trim available on the agent side,
+and the inadmissible ones — drop a gate, widen a floor, sample instead of cover, move a check to CI —
+are not on the table at any price. Reported, not touched, for the third audit running.
+
+**What would make the next audit better:** the unattributed 464s is a *number*, not a mystery. Timing
+the relink separately from the gate phase would move it from 64%-unknown to a named line item, and
+only then can anyone say whether the wall is lean. Until that lands, "the wall is lean" is a claim
+about 36% of the wall.

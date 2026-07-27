@@ -29213,3 +29213,61 @@ NEXT, in order, and the first now blocks the second: **(1) the MSRV question** �
 set it to what is actually built (observer call, since it is CI policy). **(2) Opus against the RFC
 test vectors**, which is the only evidence that settles a conformance claim. Also open: our own
 latency on the placement half.
+
+## Tick 649 — the ledger entry tick 648 owed (2026-07-26)
+
+HYPOTHESIS: none — this is a correction, and the correction is worth one paragraph rather than a
+silent amend.
+
+t648 ran wall audit #19 and wrote its findings **into the journal**, then set `LAST_WALL_AUDIT` in
+`STATUS.md` by hand. Both were wrong in the same way: `STATUS.md` is **generated**, and
+`status-update.sh` derives `LAST_WALL_AUDIT` from `docs/loop/WALL-AUDIT.md`'s
+`## Audit #N — tick M` headers, not from the field I edited. So the hand-edit was overwritten on the
+next regeneration and the field reverted to **627** — the audit had run, its findings were recorded,
+and the cadence machinery could not see any of it.
+
+> **A finding written somewhere the machinery does not read is a finding that did not happen, as far
+> as the loop is concerned.** This is the surface-audit #36 lesson (*a claim no instrument can read
+> is an unaudited one*) applied to my own bookkeeping, one tick after I wrote it down. The journal is
+> for the reasoning; the **ledger** is what the cadence reads, and the ledger is not optional.
+
+Audit #19 is now in `docs/loop/WALL-AUDIT.md` where it belongs, with its numbers intact: **722s
+total, 258s attributed, 464s (64%) UNATTRIBUTED** — the wall-time audit cannot see where most of the
+wall goes. Cause named at audit #18 (`manuk-wpt` relinking under release LTO inside the gate phase),
+and confirmed to the tick across this session's sixteen: **docs-only 73-83s, any `engine/` touch
+700-770s.** Nothing trimmed; every admissible optimisation is harness-owned.
+
+SURFACE AUDIT #37 (due at 648, folded into this tick). **Audit #36's fixes held, and the audit's own
+method caught MY drift from two ticks earlier.**
+
+Direction 1 (map → gate) is **clean**: drift 0 across 374 rows, 277 validated claims, and **the
+lowercase-citation dialect #36 found is completely gone** — 11 rows → 0. It held without maintenance,
+which is the test of whether it was a fix or a sweep.
+
+Direction 2 (gate → map) found one real thing and it was mine. **`G_SVG_CLIENT_RECT`, landed at t647,
+appeared ZERO times in the map.** The gate existed, passed, and was written up in the journal and the
+wiki; the map did not know about it. **Cause: t647's scripted map edit anchored on class `doc` while
+the row is class `dom`** — it matched nothing, exited 0, and shipped.
+
+> **`[[scripted-edit-silent-noop]]` — the FOURTH this session, and the first to reach a commit.** The
+> other three were caught within minutes because they produced a *visibly wrong measurement* (every
+> library reporting `tail:false`; a probe printing nothing at all). This one produced **no output**,
+> which is exactly what let it survive: **a no-op edit on a DATA file has no symptom until something
+> else reads the file.** Assert every replacement — and on a data file, assert the **COUNT**, because
+> *"matched nothing"* and *"matched what I meant"* are the same silence.
+
+Re-applied with `assert hits == 1`, and the row now records that it is being written for the second
+time and why. The standing `shell/` blind spot is reported for the third audit running.
+
+TICK SHAPE: reliability (a cadence ledger entry written to the file the cadence actually reads, and
+the bookkeeping defect that caused it recorded rather than amended away). No engine source changed.
+Bar 0 untouched; no ratchet floor moved.
+Gates: none — the cadence hook IS the gate here, and it worked: it will now correctly report the
+wall audit as current at 648 rather than overdue since 627.
+WIKI: none — `docs/loop/WALL-AUDIT.md` audit #19 is the artifact, and it carries its own reasoning.
+PATTERN: [no-pattern] — no browser capability changed.
+
+NEXT unchanged from t648: **(1) the MSRV question** (verify 1.80 in CI or set it to what is actually
+built — observer call), **(2) Opus against the RFC test vectors**, and check #47's standing debt —
+**the certificate has not been measured since t626**, while jQuery, DOMPurify and htmx went from
+silently dead to working.
