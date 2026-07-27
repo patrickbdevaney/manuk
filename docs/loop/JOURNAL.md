@@ -30509,3 +30509,65 @@ WPT count — `HTMLStyleElement.sheet` returning `undefined` is what breaks agod
 and the lever's own note says the JS shim was reverted for wanting a **native accessor**, so that is
 the shape. **(2) `scan_static_import_specifiers`'s failing unit test**, still on `main`, still not in
 the wall — fifth report. **(3)** the other `join_all` fan-outs t655 named and deliberately left.
+
+## Tick 663 — `typeof CSSStyleSheet === "function"` and `.sheet` is `undefined` (2026-07-27)
+
+HYPOTHESIS: t662's stack named the CSSOM `.sheet` bridge as what blanks `agoda`. The board's live
+priority (3) is *"probing the genuinely-open unknowns"* and PROCESS rule 2 is **re-probe a stale
+unknown before building it** — a rule that has already paid twice this session (t660's `shell-only`
+was documented in the tree; t661's fix was for a defect that did not exist). So: measure the surface
+before scoping the lever.
+
+Hermetic — an inline document, no network, results encoded into element ids so the box dump reports
+them:
+
+```text
+  typeof el.sheet             undefined
+  el.sheet === null           false            <- NOT the spec's absent value
+  typeof document.styleSheets undefined
+  document.styleSheets.length THREW TypeError
+  el.sheet.cssRules.length    THREW TypeError
+  el.sheet.insertRule(...)    THREW TypeError
+  typeof CSSStyleSheet        function         <- the interface is PRESENT
+```
+
+### TWO FINDINGS, AND NEITHER IS "THE BRIDGE IS MISSING"
+
+**1. `CSSStyleSheet` exists and everything behind it does not.** `typeof CSSStyleSheet === "function"`
+passes every feature detect ever written for this API, and then `.sheet` is `undefined`. That is the
+**false-presence** failure this project's reliability doctrine names as one of its four — a library
+asks the question the platform answers honestly nowhere else, gets `yes`, and walks into the gap. It
+is the same shape as `MutationObserver` reporting `function` while observing nothing (`G_MUTATION`)
+and `Range` making `typeof Range === 'function'` true for sixty ticks.
+
+**2. `.sheet` is `undefined`, not `null`, and that difference is the crash.** The spec types
+`HTMLStyleElement.sheet` as `CSSStyleSheet?` — **`null`** when there is no associated sheet — so the
+standard guard is `if (el.sheet === null)`. Against `undefined` that guard is **false**, and the code
+proceeds into the thing it just checked for. That is exactly t662's agoda stack: `insertRules` →
+`getTag` → `this.sheet` → `.length` on `undefined`.
+
+> **An absent property is not the same absence as a null one, and the difference is which line the
+> page dies on.** `undefined` fails the guard *and* the use; `null` fails only the use, which is why
+> every CSSOM consumer on the web is written against it.
+
+**Deliberately NOT "fix" it by returning `null`.** For a `<style>` in a document the sheet genuinely
+exists and is genuinely applied — we simply do not expose it — so `null` would be a *lie that reads
+as honest*, and this project has the lesson already: *"a 'no' stub becomes a lie when the cap lands"*.
+The correct answer is a real `CSSStyleSheet`, which is the lever, not a tick.
+
+TICK SHAPE: measurement (a measure-and-pin probe of an open surface, per the board's live priority 3
+and PROCESS rule 2). Bar 0 untouched; no engine source changed.
+Gates: none — nothing changed. The probe is seven property reads and is reproduced in full above; a
+gate asserting today's answers would be a gate asserting a defect.
+WIKI: none [forced] — the surface map belongs with the bridge that implements it; writing it now would
+document an absence as if it were a design, and t662's `js-engine.md` section already carries the
+stack that motivates it.
+PATTERN: none — nothing unlocked. [no-pattern]
+
+NEXT: **(1) THE CSSOM `.sheet` BRIDGE, now fully scoped by measurement** — `document.styleSheets` as a
+live `StyleSheetList`, `HTMLStyleElement.sheet` / `HTMLLinkElement.sheet` as a real `CSSStyleSheet`
+with `cssRules`, `insertRule` and `deleteRule` that reach the cascade. The lever's own note says the
+t283 JS shim was reverted for wanting a **native accessor**, so that is the shape, and agoda is the
+falsifiable bar: it renders, rather than a WPT count. **(2)** `scan_static_import_specifiers`'s
+failing unit test, still on `main`, still not in the wall — sixth report. **(3)** the other `join_all`
+fan-outs t655 named and deliberately left.
