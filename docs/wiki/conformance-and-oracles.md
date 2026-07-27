@@ -1349,3 +1349,27 @@ real all along: a wrong citation surfaces as drift the moment it becomes visible
 none was caught by anything that reads the map — all three surfaced from the gate side. Landing a
 capability and updating the map are two actions, and the second is skipped **by the person who just
 performed the first**, because to them the capability is now obviously present.
+
+## Ranked by area is not ranked by sites moved (constitution check #46, tick 639)
+
+`CONSTITUTION.MD` PART VII.1 ranks work by **"real sites moved per fix, verified against the oracle
+corpus."** Eight ticks satisfied that rule *in intent* and produced **no site measurement at all**.
+
+Three consecutive media capability ticks — WebM demux, AV1-in-WebM, `mediaCapabilities.decodingInfo`
+— were evidenced entirely by **fixtures**: two `.webm` files and six contentType strings. Media is
+unambiguously the right area (PART VII.1 names depth on the handful of destinations where people
+spend time, and this is the YouTube story). But area is not the ranking term, and *"this unblocks
+YouTube"* is plausible rather than measured.
+
+**The mechanism is compounding local reasons, which is why the existing rule did not catch it.** Each
+tick had a good reason to skip the sweep: it costs ~45 minutes, the capability is obviously present,
+a fixture is more precise than a live site. Every one of those is true in isolation. Three of them in
+a row produce a class of work with no corpus evidence behind it.
+
+> **A capability arc must produce ONE real-site measurement before it produces its fourth rung.** Not
+> per tick — per arc. Otherwise *"ranked by real sites moved"* degrades into *"ranked by which area
+> real sites are in"*, which is a much weaker rule wearing the same words.
+
+The general shape is worth keeping separately from the media case: **a rule that is checked per-unit
+can be satisfied by every unit and violated by the sequence.** Any rule of the form "prefer X
+evidence" needs a cadence attached, or the preference is expressible entirely as intent.

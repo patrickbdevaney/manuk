@@ -2171,3 +2171,75 @@ is one the scope forbids touching, and it was not touched.
    per-package `lto = "thin"` for the harness changes no assertion and drops no gate.
 
 **Next check due: tick 639.**
+
+## Check #46 — tick 639
+
+**Horizon:** H0 — the Phase-0 daily-driver certificate. Gate: `daily-driver-pass(site) =
+renders(site) ∧ functions(site)` over fixed-denominator corpus-v2 (PART VII.1).
+
+**The window:** t632 (the load budget moves coverage and shape in opposite directions), t633 (WebM
+demux), t634 (AV1-in-WebM), t635 (`mediaCapabilities.decodingInfo`), t636 (ESM top-level await,
+measure-and-pin), t637 (the `ic` fix, declined), t638 (surface audit #36), t639 (this check).
+
+**Gate or scoreboard? — SCOREBOARD, and naming it is this check's job.** Three of the four capability
+ticks are media, which is the right *area*: PART VII.1 names depth on "the handful of sites where
+people actually spend time," and WebM + AV1 + the rendition-scan API is the YouTube story. But
+PART VII.1 does not rank by area. It ranks by **"real sites moved per fix, verified against the
+oracle corpus."**
+
+> **Every piece of evidence in t633-635 is a FIXTURE.** `bear-vp9-opus.webm`, `bear-av1-480x360.webm`,
+> six contentType strings. Not one of the three ticks measured a real site, before or after. The
+> claim *"this unblocks YouTube"* is **plausible**, and plausible is exactly the currency PART VII.1
+> forbids ranking in.
+
+This is not an argument that the ticks were wrong — a demuxer needs a fixture, and a fixture-gated
+capability is a real ratchet tooth. It is an argument that **the window bought an unmeasured amount**,
+and that the next media tick owes a corpus number rather than another rung. The honest form: I know
+these capabilities *exist*; I do not know that any site renders differently because of them.
+
+**§VII.1 EARNS A PROCEDURAL CLAUSE.** The rule already says rank by real-sites-moved. What the last
+eight ticks show is that the rule is satisfiable *in intent* while producing no site measurement at
+all, because each individual tick has a good local reason not to run the sweep (it costs ~45min, the
+capability is obviously present, the fixture is more precise). Three good local reasons compound into
+a class of work with no corpus evidence behind it.
+
+> **A capability arc must produce ONE real-site measurement before it produces its fourth rung.**
+> Not per tick — per arc. Otherwise "ranked by real sites moved" degrades into "ranked by which area
+> real sites are in," which is a different and much weaker rule wearing the same words.
+
+**THE WINDOW'S ACTUAL YIELD WAS INSTRUMENT WORK, and that is worth stating because it was not
+planned.** Five separate findings, none about the engine:
+
+| tick | the instrument was wrong |
+|---|---|
+| 634 | the wall's RED matched a **remembered false-RED** exactly; re-running the crate is the only reason a hole did not land |
+| 635 | per-answer assertions **cannot see a second implementation**; only a runtime agreement check can |
+| 636 | the TLA probe printed `-` — and so did the **no-await control**, so the harness was wrong, not the engine |
+| 637 | the `ic` fix's gate **passes before the fix**, which makes the fix a claim rather than a win |
+| 638 | eleven map rows were cited in a dialect **no instrument could read**; validated claims 259 → 271 |
+
+That is five, in eight ticks, against ~three engine capabilities. §VI.3's *"suspect the instrument
+before the subject"* has stopped being a caution and started being the base rate. **Meta-instrument
+#3 (accounting reconciliation) predicted exactly this**: 8 of 30 process defects were caught by a
+number that did not add up rather than by any gate, and audit #36 is that mechanism finding twelve
+more.
+
+**§VI.3.5 GAINS A FOURTH CLAUSE, and it is the constructive form of the previous three.** t622 gave
+*name the code path that would deliver an absence*. t630 gave *a negative assertion needs a RED probe
+producing a different wrong answer*. t633 gave *a positive assertion needs one too*. All three are
+expensive enough to skip. t636 found the cheap version that subsumes them:
+
+> **RUN THE CONTROL — re-run the same measurement with the feature under test REMOVED.** If it still
+> fails, you were measuring the harness. Naming a code path is analysis and gets deferred; deleting
+> the feature from your own fixture takes thirty seconds and cannot be rationalised away.
+
+**NO SCOPE DRIFT AGAINST PART VII.1 OR PART IV.** Nothing in the window was justified by a post-v1
+goal. VP9 stayed deliberately undecoded (observer t235). WebRTC answers an honest `false` as a
+declared non-goal. EME was not touched. The `ic` fix was **declined rather than shipped**, which is
+PART VII.1's scope discipline operating on a change I had already written — the first time in this
+session's record that the rule cost something real.
+
+**STANDING, UNMOVED:** t626's binding constraint (5 of 20 HEAD sites bot-wall us; the ceiling on that
+corpus is 15/20 by a deliberate decision) and t632's (our own 17-28s latency against Chromium's 6s
+contaminates the SHAPE half, and the load budget cannot be tuned to fix it — only to choose which
+half to flatter). Neither moved this window, and neither was worked on.

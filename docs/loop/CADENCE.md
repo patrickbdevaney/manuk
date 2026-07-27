@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **397** | ticks 1–637 |
-| median tick cycle | **21m** | 396 intervals |
+| ticks landed | **398** | ticks 1–638 |
+| median tick cycle | **21m** | 397 intervals |
 | median, last 10 | **8m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **1.06** | 375.3h elapsed |
-| median verify wall | **66s** | 336 ticks |
+| **ticks per hour** | **1.06** | 375.4h elapsed |
+| median verify wall | **66s** | 337 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **341**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**196 of 397 ticks** (49%) moved a
+**196 of 398 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -494,5 +494,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **635** | 2026-07-26 19:55 | 7m | capability | 63s | +337/−4 | 318 | 81 | 56.0% · | `navigator.mediaCapabilities.decodingInfo()`: the rendition chooser, and a THIRD consumer  |
 | **636** | 2026-07-26 20:12 | 18m | measurement | 63s | +111/−5 | 318 | 81 | 56.0% · | ESM top-level await and cyclic module records: probe first (2026-07-26) |
 | **637** | 2026-07-26 20:20 | 8m | measurement | 63s | +301/−21 | 319 | 81 | 56.0% · | the `ic` unit: I wrote the fix, then declined to ship it (2026-07-26) |
+| **638** | 2026-07-26 20:24 | 4m | reliability | 63s | +161/−4 | 319 | 81 | 56.0% · | SURFACE AUDIT #36: the map had two citation dialects, and each instrument was blind to one |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

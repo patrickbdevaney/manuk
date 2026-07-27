@@ -28526,3 +28526,63 @@ NEXT: constitution check is due at t639. The remaining `?` cells are `media` (au
 audible playbackRate) and `cross` (100-tab RSS, test262); the last two were measured in earlier
 sessions and are very likely the same map drift AVIF was. Media's narrowest real blocker is still an
 **Opus decoder**.
+
+## Tick 639 — CONSTITUTION CHECK #46: three media ticks, zero real-site measurements (2026-07-26)
+
+HYPOTHESIS: constitution check due (last #45 at t631). Window t632-639.
+
+**THE FINDING, AND IT IS UNCOMFORTABLE IN THE RIGHT DIRECTION: SCOREBOARD, NOT GATE.** Three of the
+window's four capability ticks are media — the right *area*, since PART VII.1 names depth on "the
+handful of sites where people actually spend time" and WebM + AV1 + the rendition-scan API is the
+YouTube story. But **PART VII.1 does not rank by area. It ranks by real sites moved per fix,
+verified against the oracle corpus.**
+
+> **Every piece of evidence in t633-635 is a FIXTURE** — `bear-vp9-opus.webm`,
+> `bear-av1-480x360.webm`, six contentType strings. Not one of the three measured a real site. The
+> claim *"this unblocks YouTube"* is PLAUSIBLE, and plausible is precisely the currency PART VII.1
+> forbids ranking in.
+
+The ticks were not wrong — a demuxer needs a fixture, and a fixture-gated capability is a real
+ratchet tooth. But the window bought an **unmeasured amount**. I know these capabilities exist; I do
+not know that any site renders differently for them.
+
+**AND THE MECHANISM IS COMPOUNDING LOCAL REASONS, WHICH IS WHY THE EXISTING RULE DID NOT CATCH IT.**
+Each tick had a good reason not to run the sweep: it costs ~45 minutes, the capability is obviously
+present, the fixture is more precise than a live site. Three good local reasons produce a whole class
+of work with no corpus evidence behind it. So §VII.1 gains a procedural clause:
+
+> **A capability arc must produce ONE real-site measurement before it produces its fourth rung.**
+> Not per tick — per arc. Otherwise "ranked by real sites moved" quietly degrades into "ranked by
+> which area real sites are in", which is a much weaker rule wearing the same words.
+
+**THE WINDOW'S ACTUAL YIELD WAS INSTRUMENT WORK — five findings, none about the engine:** the wall's
+RED matched a *remembered* false-RED exactly (t634); per-answer assertions cannot see a second
+implementation (t635); the TLA probe's control failed too, so the harness was wrong (t636); the `ic`
+fix's gate passes before the fix (t637); eleven map rows were cited in a dialect no instrument could
+read (t638). Five in eight ticks against ~three engine capabilities. **§VI.3's "suspect the
+instrument before the subject" has stopped being a caution and become the base rate** — and
+meta-instrument #3 predicted exactly this, since 8 of 30 process defects were historically caught by
+a number that did not add up rather than by any gate.
+
+**§VI.3.5 GAINS A FOURTH CLAUSE, the constructive form of the previous three.** t622 (name the code
+path), t630 (a negative assertion needs a RED probe with a different wrong answer) and t633 (so does
+a positive one) are all expensive enough to skip. t636 found the cheap version that subsumes them:
+**RUN THE CONTROL** — re-run the measurement with the feature under test REMOVED; if it still fails,
+you were measuring the harness. Naming a code path is analysis and gets deferred; deleting the
+feature from your own fixture takes thirty seconds and cannot be rationalised away.
+
+**NO SCOPE DRIFT.** VP9 stayed deliberately undecoded; WebRTC answers an honest `false` as a declared
+non-goal; EME untouched; and the `ic` fix was **declined after being written** — PART VII.1's scope
+discipline operating on a change already in my hands, which is the first time this session it cost
+something real.
+
+TICK SHAPE: measurement (constitution check #46 — the window graded against PART VII.1's actual
+ranking rule rather than its subject matter, one procedural clause added to §VII.1 and one to
+§VI.3.5). Bar 0 untouched; no ratchet floor moved.
+Gates: none — this tick grades the loop, and a gate on it would be the loop grading itself.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "ranked by area is not ranked by sites moved".
+PATTERN: [no-pattern] — no browser capability changed.
+
+NEXT, and it is now owed rather than optional: **a real-site measurement for the media arc** — the
+corpus sweep, or at minimum a live YouTube/adaptive-player page through the oracle, before any
+further media rung. After that the narrowest real media blocker is still an **Opus decoder**.
