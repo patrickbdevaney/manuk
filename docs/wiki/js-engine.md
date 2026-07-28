@@ -2047,3 +2047,37 @@ panicking on the load path. The honest failure for a source *name* is a worse na
 restoring the constant.
 
 [[dom-semantics]] [[conformance-and-oracles]]
+
+## The browser heard the rejection and the page did not (tick 696)
+
+`unhandledrejection` did not exist. The native rejection tracker (t~30, the change that turned Lit and
+Svelte from mysteries into error messages) logged every unhandled rejection to `tracing` and fired
+**nothing at the page**: `PromiseRejectionEvent` was `undefined`, and neither
+`window.onunhandledrejection` nor `addEventListener('unhandledrejection', …)` ever ran.
+
+HTML §8.1.7.5 (*notify about rejected promises*) fires a **cancelable** event at the global carrying
+`reason` and `promise`, and reports to the console only if nobody called `preventDefault()`. Half of
+that was implemented, and it was the half the engine talks to itself with.
+
+**Who installs that listener:** Sentry, Rollbar, Bugsnag, Datadog RUM, and every hand-rolled
+`window.onunhandledrejection = report`. On this engine all of them were silently deaf, so a page whose
+async boot failed could not tell the user, its own telemetry, or us. It is the same shape as the
+`G_PROTOTYPE` finding — *a hook every real page installs, which took effect nowhere.*
+
+Mechanism: the tracker parks the reason and the promise on the global (the `__pendingEvent` pattern
+`dispatchEvent` already uses — **not** a stringified copy, because a handler reads `e.reason.stack`)
+and calls `__fireUnhandledRejection()`, which builds a `PromiseRejectionEvent`, fires it through
+`__fireWindowEvent`, and returns `""` if a handler cancelled. Empty means the host prints nothing.
+
+⚠ **Cancelable that cancels nothing is decoration.** The event must be wired *to* the report, not fired
+beside it — otherwise an app that owns the failure gets a console entry it explicitly asked to suppress,
+and there is no way for the page to tell the difference between a browser that fires the event and one
+that only pretends to. `G_UNHANDLED_REJECTION` asserts the suppression, and that assertion is what
+proves the wiring rather than the firing.
+
+The same call now lifts `reason.stack` (falling back to `fileName:lineNumber`) into the host report.
+The rule from tick 662 applies unchanged: **an error reported but not attributable is a status, not a
+finding.** On `wix.com` the report went from `Error: couldn't get user details` to
+`isLoggedInUser@https://wix.com/ inline#102:94:15` — a message became an address.
+
+[[dom-semantics]] [[conformance-and-oracles]]

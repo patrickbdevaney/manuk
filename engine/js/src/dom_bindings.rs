@@ -11456,11 +11456,54 @@ unsafe extern "C" fn promise_rejection_tracker(
     rooted!(in(cx) let p = promise.get());
     rooted!(in(cx) let mut val = UndefinedValue());
     mozjs::glue::JS_GetPromiseResult(p.handle().into(), val.handle_mut().into());
-    let mut c = wrap_cx(cx);
-    let msg = match String::safe_from_jsval(&mut c, val.handle(), ()) {
-        Ok(ConversionResult::Success(s)) => s,
-        _ => "(unstringifiable rejection)".to_string(),
-    };
+
+    // **Fire the event first, and let the page cancel the report.** HTML §8.1.7.5 makes
+    // `unhandledrejection` cancelable precisely so an app's own error reporter can take ownership of
+    // the failure; logging unconditionally *before* asking is the behaviour that makes a page's
+    // handler decorative. The reason and the promise are parked on the global (the `__pendingEvent`
+    // pattern `dispatchEvent` already uses) rather than stringified, because a handler reads
+    // `e.reason.stack` and a string has none.
+    rooted!(in(cx) let global = CurrentGlobalOrNull(&wrap_cx(cx)));
+    let mut reported: Option<String> = None;
+    if !global.get().is_null() {
+        rooted!(in(cx) let promise_val = mozjs::jsval::ObjectValue(promise.get()));
+        JS_SetProperty(
+            &mut wrap_cx(cx),
+            global.handle(),
+            c"__pendingRejectionReason".as_ptr(),
+            val.handle(),
+        );
+        JS_SetProperty(
+            &mut wrap_cx(cx),
+            global.handle(),
+            c"__pendingRejectionPromise".as_ptr(),
+            promise_val.handle(),
+        );
+        if let Some(v) = eval_in_current_global(cx, "__fireUnhandledRejection()") {
+            rooted!(in(cx) let rv = v);
+            let mut c = wrap_cx(cx);
+            if let Ok(ConversionResult::Success(s)) =
+                String::safe_from_jsval(&mut c, rv.handle(), ())
+            {
+                // "" is the handled case — a listener called `preventDefault()`, so the browser's own
+                // report is exactly what it asked us not to print.
+                if s.is_empty() {
+                    return;
+                }
+                reported = Some(s);
+            }
+        }
+    }
+
+    // The prelude is the normal path; this is the fallback for a global that has none (a bare
+    // realm, or a rejection that beats the prelude's install). Message-only, and honest about it.
+    let msg = reported.unwrap_or_else(|| {
+        let mut c = wrap_cx(cx);
+        match String::safe_from_jsval(&mut c, val.handle(), ()) {
+            Ok(ConversionResult::Success(s)) => s,
+            _ => "(unstringifiable rejection)".to_string(),
+        }
+    });
     tracing::warn!(
         error = %msg,
         "UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every \
@@ -15971,6 +16014,73 @@ const WINDOW_PRELUDE: &str = r#"
                 if (ev.currentTarget == null) { try { ev.currentTarget = g; } catch (e) {} }
                 g.__fireWindowEvent(ev.type, ev);
                 return !ev.defaultPrevented;
+            };
+        }
+
+        // ── **`unhandledrejection` — the event the browser fires when it gives up on a promise.**
+        //
+        // HTML §8.1.7.5 *"notify about rejected promises"*: an unhandled rejection fires a
+        // **cancelable** `unhandledrejection` event at the global, carrying `reason` and `promise`;
+        // `preventDefault()` suppresses the console report. We tracked the rejection natively and
+        // logged it — and fired **nothing**, so `PromiseRejectionEvent` was `undefined` and neither
+        // `window.onunhandledrejection` nor `addEventListener('unhandledrejection', ...)` ever ran.
+        //
+        // **That is where an app's error reporting lives.** Sentry, Rollbar, Bugsnag, Datadog RUM and
+        // every hand-rolled `window.onunhandledrejection = report` install exactly this listener; so
+        // do frameworks that convert a rejected boot promise into a visible fallback UI. On our engine
+        // all of them were silently deaf, which means a page whose async boot fails had **no way to
+        // tell anyone** — not the user, not its own telemetry, and not us.
+        //
+        // It is also the instrument this tick needed. Chasing `C3833` (MISSING BOX `<div>`, the top
+        // cluster by hits) to its worst site, the whole application subtree is deleted by a
+        // `SITE_CONTAINER.innerHTML = ""` and never rebuilt; the only signal the engine produced was
+        // an anonymous `Error: couldn't get user details` with no stack and no way for a probe to
+        // observe it. **An error reported but not attributable is a status, not a finding.**
+        if (typeof g.PromiseRejectionEvent === 'undefined') {
+            g.PromiseRejectionEvent = function PromiseRejectionEvent(type, init) {
+                init = init || {};
+                this.type = String(type);
+                this.reason = init.reason;
+                this.promise = init.promise;
+                this.bubbles = !!init.bubbles;
+                // Per spec the event IS cancelable — `preventDefault()` is the documented way to tell
+                // the browser not to log. Defaulting this to `false` would make the whole mechanism
+                // decorative, since the one thing a handler wants to do is suppress the report.
+                this.cancelable = (init.cancelable === undefined) ? true : !!init.cancelable;
+                this.defaultPrevented = false;
+                this.isTrusted = false;
+            };
+            g.PromiseRejectionEvent.prototype.preventDefault = function () {
+                if (this.cancelable) { this.defaultPrevented = true; }
+            };
+            g.PromiseRejectionEvent.prototype.stopPropagation = function () {};
+            g.PromiseRejectionEvent.prototype.stopImmediatePropagation = function () {};
+
+            // Called by the native rejection tracker with the reason + promise already parked on the
+            // global. Returns "" when a handler cancelled the report, otherwise the diagnostic the
+            // host should log — **including the stack**, which is the difference between a message and
+            // an address.
+            g.__fireUnhandledRejection = function () {
+                var reason = g.__pendingRejectionReason;
+                var promise = g.__pendingRejectionPromise;
+                g.__pendingRejectionReason = undefined;
+                g.__pendingRejectionPromise = undefined;
+                var ev = new g.PromiseRejectionEvent('unhandledrejection',
+                    { reason: reason, promise: promise, cancelable: true });
+                ev.target = g; ev.currentTarget = g; ev.isTrusted = true;
+                try { g.__fireWindowEvent('unhandledrejection', ev); } catch (e) {}
+                if (ev.defaultPrevented) { return ''; }
+                var msg;
+                try { msg = (reason && reason.message) ? String(reason.message) : String(reason); }
+                catch (e) { msg = '(unstringifiable rejection)'; }
+                var loc = '';
+                try {
+                    if (reason && reason.stack) { loc = '\n' + String(reason.stack); }
+                    else if (reason && reason.fileName) {
+                        loc = ' at ' + String(reason.fileName) + ':' + String(reason.lineNumber);
+                    }
+                } catch (e) {}
+                return msg + loc;
             };
         }
 

@@ -33048,3 +33048,89 @@ NEXT: **(1) REAL FONT METRICS IN `close_line`** — `vertical-align: middle` res
 Chrome-divergent rows on this fixture. **(2) THE HEAD-20 SWEEP** — two ticks of geometry have landed
 since t692's rows and the per-site ledger is owed a fresh full slice, not two hand-picked sites.
 **(3) THE PER-CALL LOAD BUDGET** — the priority inversion, blocked on nine gate files.
+
+## Tick 696 — the top MISSING_BOX cluster is a SCRIPT-DRIVEN WIPE, and the browser could not say so (2026-07-27)
+
+HYPOTHESIS: board CO-#1 order (1) — MISSING_BOX first, top-by-hits `C3833 <div> 7544/32`. Chase it to
+ONE root cause on its worst site. Bar: name the mechanism that deletes the boxes, with a
+byte-reproducible snapshot, and land the capability whose absence made it unnameable — the
+`unhandledrejection` event, which `PromiseRejectionEvent === undefined` today.
+
+### WHAT THE CLUSTER ACTUALLY IS
+
+`C3833 MISSING BOX: <div>` is the top cluster by hits (7544 across 32 sites) and the board ordered it
+first because *"a dropped box displaces its whole subtree and tanks coverage hardest"*. On its worst
+site the mechanism is none of the three the board proposed (display-compute, an unsupported property,
+an anonymous/whitespace box). It is **script**, and the chain is short:
+
+```text
+  wix.com, /tmp/manuk-oracle-snapshots/037d7ec9060d999a.html (byte-reproducible)
+    oracle                      3394 of 3775 probed boxes MISSING   (90% of the page)
+    manuk_html::parse alone     5474 elements, #main_MF present with 3 element children
+    at body start (script)      SITE_CONTAINER=2 kids   bodyKids=56   allEls=5477
+    at DOMContentLoaded         SITE_CONTAINER=2 kids                 allEls=5478
+    inside the load event       #SITE_CONTAINER.innerHTML = ""   -> 4917 elements deleted
+    after the wipe              appendChild/insertBefore into SITE_CONTAINER:  ZERO
+    at capture                  SITE_CONTAINER=0 kids                 allEls=562
+```
+
+So the parser is right, the cascade is right, layout never gets the chance to be wrong. **`MISSING BOX`
+on an app-shell site means "script deleted it", and a coverage or geometry tick aimed at this cluster
+would have moved nothing.** Two other top contributors re-measured to **zero** missing boxes on a fresh
+serial run (theverge 944 → 0, vox 872 → 0) — that part of the cluster is a five-day-old crawl artifact,
+and the honest cluster mass is smaller and differently shaped than the registry says.
+
+### AND THE BROWSER COULD NOT SAY WHY
+
+The only thing the engine emitted across that entire collapse was `Error: couldn't get user details` —
+no stack, no source, no way for a probe to observe it, because `unhandledrejection` **did not exist**:
+`PromiseRejectionEvent` was `undefined` and neither handler form ever ran. The native tracker logged to
+`tracing` and fired nothing at the page. That is the half of HTML §8.1.7.5 the engine talks to *itself*
+with, and it left every real error reporter on the web deaf.
+
+### WHAT LANDED
+
+`unhandledrejection` reaches the page: a cancelable `PromiseRejectionEvent` carrying the **reason object**
+(a handler reads `e.reason.stack`; a string has none) and the promise, fired through `__fireWindowEvent`
+so the listener and property forms cannot drift. `preventDefault()` suppresses the host report. And the
+report the host does print now lifts `reason.stack`.
+
+```text
+  before   error=couldn't get user details
+  after    error=couldn't get user details
+           isLoggedInUser@https://wix.com/ inline#102:94:15
+           async*@https://wix.com/ inline#102:19:31
+           @https://wix.com/ inline#102:115:5
+```
+
+⚠ **Cancelable that cancels nothing is decoration.** The event has to be wired *to* the report rather
+than fired beside it — otherwise a page that cancels still gets the console entry, and nothing from the
+outside can distinguish an engine that fires the event from one that pretends to. Assertion (5) is what
+proves the wiring; assertions (1)–(4) only prove the firing.
+
+TICK SHAPE: pattern-class
+CLUSTER: C3833 (re-classified, not shrunk — stated plainly below)
+Gates: `a_page_can_hear_its_own_rejected_promises` (new, engine/page, `--features stylo,spidermonkey`)
+— RED-proven against THREE mutations, each failing a DIFFERENT assertion: (1) do not fire the event ->
+`#listener` never set; (2) ignore `preventDefault()` -> `CANCELLED_BOOM` reaches the log; (3) drop the
+stack -> `deepThrow@` absent from the report. `G_SILENT_FAIL` (the sibling gate, which asserts the
+ENGINE still says something) stays green, and the whole wall runs below.
+WIKI: `docs/wiki/js-engine.md` — "The browser heard the rejection and the page did not".
+PATTERN: **a cluster label names the SYMPTOM's layer, never the cause's.** `MISSING BOX` is computed by
+the absence of a rect, so it collapses "not in the DOM", "no computed style" and "no box generated" into
+one row — three different subsystems — and the registry ranks them as if they were one bug. The
+`--why ID` probe now answers which, in one command; the first thing it said was `NOT IN THE DOM AT ALL`.
+
+⚠ HONEST LEDGER: **this tick did not shrink C3833.** It re-classified it, which is worth more than one
+tick of the wrong fix but is not the board's bar, and I am not claiming the bar. The cluster's remaining
+question — why the client re-render performs zero DOM operations after the wipe — is the next tick, and
+it now has an instrument pointed at it.
+
+NEXT: **(1) WHY THE RE-RENDER DOES NOTHING** — `MessageChannel` delivers, no load listener throws, no
+console error is emitted, so the render is abandoned somewhere that reports nothing; the new
+`unhandledrejection` + stack is the probe to point at it. **(2) `innerHTML` IS ON `Node.prototype`, NOT
+`Element.prototype`** — measured this tick:
+`Object.getOwnPropertyDescriptor(Element.prototype,'innerHTML')` is `undefined`, which is exactly the
+handle every sanitizer and error tracker patches (the `G_PROTOTYPE` class, unfixed for this property).
+**(3) RE-RUN THE FULL CORPUS SWEEP** — the registry is 5 days stale and two of its top rows re-measured
+to zero; the board's own mechanism mass is being read off a crawl that no longer describes the engine.

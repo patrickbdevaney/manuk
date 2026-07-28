@@ -2652,3 +2652,71 @@ site-count must shrink in the following sweep. No more measurement ticks until a
 the measurement needed to aim is now done and written down here.
 
 **Next check due: tick 696.**
+
+## Check #53 — tick 696
+
+**Date:** 2026-07-27. **Horizon:** H0 — Pareto Web Parity. **Gate:** the four binary conditions of §H0,
+scoped by PART VII to the v1 system and operationalised by `docs/loop/DAILY-DRIVER-CERTIFICATION.md`:
+Bar-0 clean + jarring invariants ≥95% + **shape ≥0.75 on ≥95% of sites** + interactivity ≥95%, named
+exceptions only.
+
+### GATE OR SCOREBOARD? — gate, and the previous check's steer is why
+
+Check #52 ended with a hard steer: *"no more measurement ticks until a geometry cluster moves"*, and it
+named the lever from the first-divergence data — **the height of a box above the content, starting with
+`<img>`**. That steer landed:
+
+```text
+  t691  a broken <img> is 16x16 in Chrome (was 784x0) + every line box starts with a STRUT
+        ikea coverage 97.1% -> 100%   keirin dy 206 -> 161   welt dy 3077 -> 2957
+  t695  the half-leading belongs to each INLINE BOX, not to the line
+        22 of 22 probed boxes match Chrome exactly on the mixed text+atomic fixture
+```
+
+Two consecutive gate-condition ticks on the `shape` term, both Chrome-measured, both RED-proven. The
+steer worked because it named **one element and one number**, not a category. That is the reusable part.
+
+### THE CORRECTION TO PART VI — I5's discovery engine is reading a stale instrument
+
+**VI.2's `I5` row needs its third correction, and this one is about TRUST rather than completeness.** The
+row currently says the crawl completes (265 sites, 392 clusters) and that the instrumented log has become
+the depth instrument. Both still hold. What is newly false is the unstated assumption underneath the
+board's own mandate: **that `docs/loop/CLUSTERS.md` describes the engine as it is now.** Measured this
+tick, re-running the oracle serially on three of the top `MISSING BOX: <div>` contributors:
+
+```text
+  site           stale crawl (Jul 22)   fresh serial re-run   
+  theverge.com        944 missing              0 missing
+  vox.com             872 missing              0 missing
+  wix.com            1905 missing           3394 missing   (90% of the page)
+```
+
+Two of the three are **gone**, and the third is far worse than recorded. So the registry's ranking — the
+document the board calls *"the priority ledger… no judgement required"* — is a five-day-old reading whose
+top rows do not survive re-measurement. **Every number has a harness, and the harness is part of the
+number** (Lesson 4, sixth occurrence). A convenience-ordered ledger read as ground truth is precisely the
+Pareto trap I4 exists to prevent, one level up: it does not rank the wrong *area*, it ranks a *phantom*.
+
+**And the label itself merges three subsystems.** `MISSING BOX` is computed from the absence of a layout
+rect, so one ranked row contains: *not in the DOM at all* · *in the DOM with no computed style* · *styled
+and generated no box*. Chasing `C3833` this tick, the answer on its worst site was the first — script
+deletes 4917 elements inside the `load` event and never rebuilds them. A coverage or geometry tick aimed
+at that row would have moved nothing, and the row gave no way to know that in advance.
+
+### THE STEER
+
+1. **RE-CRAWL BEFORE RANKING AGAIN.** The registry is stale and is currently steering the loop. A full
+   corpus sweep is owed before any further tick claims a cluster's mass. This is not a measurement
+   detour — it is the instrument I5 designates as the discovery engine, currently disagreeing with itself.
+2. **SPLIT `MISSING BOX` BY CAUSE, not by tag.** `manuk-wpt boxes --why ID` (landed this tick) answers
+   *DOM / style / box* in one command. A cluster row that names the symptom's layer cannot rank causes,
+   and ranking is the only thing the registry is for.
+3. **The `shape` term keeps the alternating slot** (board refinement t685): the last two geometry ticks
+   both delivered, and `dy` is still the dominant term. Continue there while (1) runs.
+
+**No invariant is being bent.** I3 is not implicated — this tick added a JS-surface capability with no new
+rendered construct, so there is no semantic-model exposure owed. I4 holds: the tick was chosen off the
+usage-weighted cluster ranking, and the finding is that the ranking needs re-measuring, which is I4
+enforcing itself.
+
+**Next check due: tick 704.**

@@ -1160,7 +1160,8 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
     } else {
         let Some(f) = flag(args, "--html") else {
             eprintln!(
-                "usage: manuk-wpt boxes (--html FILE [--url URL] | --fetch URL) [--width W] [--tree ID]"
+                "usage: manuk-wpt boxes (--html FILE [--url URL] | --fetch URL) [--width W] \
+                 [--tree ID] [--why ID]"
             );
             std::process::exit(2);
         };
@@ -1506,6 +1507,58 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
             }
         }
         println!("({n} text item(s) containing {want:?} in the display list)");
+        return;
+    }
+    // `--why ID` — **the MISSING BOX question, answered.** The oracle books a divergence as
+    // `MISSING BOX` whenever a selector-path Chrome produced is absent from our map, and the map drops
+    // any element with no layout rect. That single label covers three completely different bugs:
+    //
+    //   * the element is **not in the DOM at all** (a parse failure, or script deleted it),
+    //   * it is in the DOM with **no computed style** (the cascade never reached it),
+    //   * it has a style and still **generated no box** (the layout bug people assume it always is).
+    //
+    // Those need three different fixes and the cluster registry cannot tell them apart, so every
+    // MISSING_BOX investigation starts by re-deriving which one it is. This prints the element's
+    // ancestor chain with `display`, box and element-child count at each level, so the answer is one
+    // command. Chasing `C3833` it read `main_MF: NOT IN THE DOM AT ALL` — which moved the whole
+    // cluster from "we lay it out wrong" to "script deleted it", in one run.
+    if let Some(want) = flag(args, "--why") {
+        let dom = page.dom();
+        let styles = page.styles_map();
+        let rects = page.root_box.node_rects(dom);
+        let node = dom
+            .descendants(dom.root())
+            .filter(|&n| dom.is_element(n))
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(want));
+        match node {
+            None => println!("{want}: NOT IN THE DOM AT ALL"),
+            Some(n) => {
+                let mut cur = Some(n);
+                let mut chain = Vec::new();
+                while let Some(c) = cur {
+                    if !dom.is_element(c) {
+                        cur = dom.parent(c);
+                        continue;
+                    }
+                    let tag = dom.tag_name(c).unwrap_or("?");
+                    let id = dom.element(c).and_then(|e| e.attr("id")).unwrap_or("");
+                    let d = styles
+                        .get(&c)
+                        .map(|s| format!("{:?}", s.display))
+                        .unwrap_or_else(|| "(NO COMPUTED STYLE)".into());
+                    let bx = rects
+                        .get(&c)
+                        .map(|r| format!("[{:.0} {:.0} {:.0}x{:.0}]", r.x, r.y, r.width, r.height))
+                        .unwrap_or_else(|| "(NO BOX)".into());
+                    let nkids = dom.children(c).filter(|&k| dom.is_element(k)).count();
+                    chain.push(format!("{tag}#{id} display={d} box={bx} elem_kids={nkids}"));
+                    cur = dom.parent(c);
+                }
+                for (i, l) in chain.iter().rev().enumerate() {
+                    println!("{:width$}{l}", "", width = i * 2);
+                }
+            }
+        }
         return;
     }
     // `--tree ID` — print the LAYOUT BOX SUBTREE under one element (tag.class + rect), which is the

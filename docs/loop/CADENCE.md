@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **453** | ticks 1–695 |
-| median tick cycle | **21m** | 452 intervals |
-| median, last 10 | **23m** | 10 intervals |
+| ticks landed | **454** | ticks 1–696 |
+| median tick cycle | **22m** | 453 intervals |
+| median, last 10 | **28m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 401.7h elapsed |
-| median verify wall | **63s** | 392 ticks |
+| **ticks per hour** | **1.12** | 402.7h elapsed |
+| median verify wall | **63s** | 393 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **334**
+* **live gates**: 27 → **335**
 * **✅ rows in the capability ledger**: 144 → **356**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**219 of 453 ticks** (48%) moved a
+**220 of 454 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **219** capability ticks, median cycle **21m**
+* **220** capability ticks, median cycle **22m**
 * median diff per tick: **+240 / −34** lines across 8 files
 
 ## Every tick
@@ -550,5 +550,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **693** | 2026-07-27 21:18 | 8m | measurement | 63s | +137/−33 | 334 | 81 | 56.0% · | the strut's cost is real and `line-height: normal` is exonerated (2026-07-27) |
 | **694** | 2026-07-27 21:37 | 19m | infrastructure | 63s | +184/−35 | 334 | 81 | 56.0% · | the parity captures run concurrently, and the audit's 175s was CONTENTION (2026-07-27) |
 | **695** | 2026-07-27 22:48 | 71m | pattern-class | 63s | +449/−105 | 334 | 81 | 56.0% · | the half-leading belongs to each INLINE BOX, not to the line (2026-07-27) |
+| **696** | 2026-07-27 23:43 | 56m | pattern-class | 63s | +566/−40 | 335 | 81 | 56.0% · | the top MISSING_BOX cluster is a SCRIPT-DRIVEN WIPE, and the browser could not say so (202 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
