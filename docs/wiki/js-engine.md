@@ -2201,3 +2201,46 @@ long as the code had ignored it.
 `appendChild` that created the frame. Read on the very next line, `contentDocument` is still `null`;
 read at `DOMContentLoaded`, `load` or any later task, it is a real document. Chrome has it
 immediately.
+
+## The engine knew the answer and no page could reach it (tick 724)
+
+`CSS.supports()` answered **`false` to everything** — `width:5px`, `display:flex`, `color:red` — on
+the shell's construction path and the agent's. The hook that lets the binding ask the real CSS engine
+was installed in `Page::load` only, the *synchronous* path; `load_async` and `from_prefetched` never
+installed it, so the binding fell back to its default answer.
+
+```text
+  CHROME  width:5px=true   display:flex=true   color:red=true
+  MANUK   width:5px=FALSE  display:flex=FALSE  color:red=FALSE
+```
+
+**`display: flex` is the tell.** `supports_condition` has asserted that exact string true since it was
+written and its unit test passes. The engine knew; the page could not ask.
+
+### Why a false negative is worse than a missing feature
+
+A missing feature degrades where it is used. A false negative on **feature detection** degrades where
+the feature is *guarded* — which is everywhere the author was being careful. `CSS.supports()` is how a
+site chooses grid over floats, scroll-snap over hand-rolled carousel logic, `display:flex` over a
+table. Answering `false` to all of it silently selects the 2015 codepath on a browser that can run the
+2026 one, and **every such page looks like a page that simply preferred the old layout** — including
+to our own fidelity diff, which would then compare its float layout against Chrome's flex one and book
+the difference as a geometry bug.
+
+### The shape, and how it hid
+
+Three consecutive ticks recorded this and moved on, each filing it under a different subject: t721
+*"a false negative on `lh`"*, t722 *"on `lh`/`rlh`"*, t723 *"on `rch`/`rex`"*. Three tickets, three
+units, one line of missing plumbing with nothing to do with units.
+
+> **When a residual keeps reappearing beside different subjects, test it with the most boring input
+> you have.** `color: red` found this in one command. Three ticks of exotic units did not — because
+> an exotic unit failing is a *story*, and `color: red` failing is a *bug*.
+
+The fix is a move, not an addition: `install_supports_hook()` belongs in `Page::from_dom`, the one
+function every construction path goes through. **Three callers is what produced one.**
+
+⚠ The gate drives `load_async`, deliberately: `Page::load` is the single path that always worked, so a
+gate written against it would have passed throughout the entire bug. And it asserts three *negative*
+controls, because a hook answering `true` unconditionally satisfies every positive assertion and is a
+worse bug than the one being fixed.

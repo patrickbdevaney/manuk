@@ -35470,3 +35470,81 @@ it and none has fixed it; the units work and the engine denies them, so every gu
 fallback. **(2)** `ric` — the fourth `r*` unit, untested here because it needs a CJK face.
 **(3)** the synchronous `contentDocument` residual (t717). **(4)** `document.styleSheets` reports 0
 where Chrome reports 9 (t718).
+
+## Tick 724 — `CSS.supports()` said no to everything, and it was never about units (2026-07-28)
+
+HYPOTHESIS: three consecutive ticks (721, 722, 723) each recorded *"`CSS.supports` answers false for
+a unit that demonstrably works"* and each moved on. Bar: find out why, on the assumption that three
+sightings of the same shape is not three bugs.
+
+### IT WAS NEVER ABOUT UNITS
+
+```text
+  CHROME  width:5px=true   width:5em=true   display:flex=true   color:red=true
+  MANUK   width:5px=FALSE  width:5em=FALSE  display:flex=FALSE  color:red=FALSE
+```
+
+**Everything.** `display: flex` is the tell — the Rust-level `supports_condition` has asserted that
+exact string `true` since it was written, and its unit test passes. **The engine knew the answer and
+no page could reach it.**
+
+`install_supports_hook()` was called from **`Page::load` only** — the synchronous path. `load_async`
+(the agent, and every fidelity measurement) and `from_prefetched` (**the shell — the shipping
+browser**) never installed it, so the hook was unset and the binding answered `false` by default.
+
+⚠⚠ **A false NEGATIVE on feature detection is not a missing feature.** It is every
+progressive-enhancement guard on the web taking its fallback: `CSS.supports()` is how a site chooses
+grid over floats, scroll-snap over manual carousel logic, `display:flex` over a table. Answering
+`false` to all of it does not degrade gracefully — it silently selects the 2015 codepath on a browser
+that can run the 2026 one, **and every such page looked to us like a page that simply preferred the
+old layout.**
+
+### WHAT LANDED
+
+A **move**, not an addition: `install_supports_hook()` runs in `Page::from_dom`, the one function
+every construction path goes through (`load`, `load_async`, `from_prefetched_inner`). *Three callers
+is what produced one.*
+
+```text
+                  before   after   Chrome
+  display:flex     false    true    true
+  width:5px        false    true    true
+  width:5lh        false    true    true     <- what t721-723 kept seeing
+  width:5rch       false    true    true
+  unknown prop     false    false   false
+  unknown value    false    false   false
+  not (flex)       false    false   false
+  (flex) and (red) false    true    true
+  width:5cqw       false    false   TRUE     <- a real, separate gap
+```
+
+TICK SHAPE: pattern-class
+CLUSTER: none claimed directly. ⚠ But this is a plausible contributor to `display:`-mechanism
+divergence (423 sites / 5,945 hits): a page told `display:flex` is unsupported may ship the float
+layout, and we then diff its float layout against Chrome's flex one and book it as a geometry bug.
+Not claimed — the next sweep says, and I am naming it as a hypothesis so it can be checked rather
+than assumed.
+Gates: `g_css_supports_hook` (new). ⚠ Driven through **`load_async`, not `Page::load`** — `Page::load`
+is the one path that already installed the hook, so a gate written against it would have passed
+throughout the entire bug. **RED-proven against two mutations, each failing a DIFFERENT assertion**:
+remove the install → all-false (the shipped behaviour); make the hook `|_| true` → the three negative
+controls go true. Assertion (2) exists because *a stub that answers yes is a worse bug than the one
+being fixed* — it makes a page ship a codepath this engine cannot run.
+WIKI: `docs/wiki/js-engine.md` — "The engine knew the answer and no page could reach it".
+PATTERN: **three sightings of the same shape are one bug, and the tell is that each sighting was
+filed under a different subject.** t721 called it *"a false negative on `lh`"*, t722 *"on `lh`/`rlh`"*,
+t723 *"on `rch`/`rex`"* — three tickets, three units, one line of missing plumbing that had nothing to
+do with units and was visible the moment I asked the question with `display: flex` instead of a unit.
+⚠ The operational form: **when a residual keeps reappearing beside different subjects, test it with
+the most boring input you have.** `color: red` found this in one command; three ticks of exotic units
+did not, because an exotic unit failing is a story and `color: red` failing is a bug.
+⚠ Second: this is the FOURTH "one rule, N implementations" of the session (t712 markup-vs-injected
+script `load`, t717 fetch-vs-load work-list, t722/723 the root-relative sibling set, this) — and the
+first where the fix was to **delete two of the implementations and move the third to the junction they
+all pass through.**
+
+NEXT: **(1) RE-RUN HEAD-20** — `CSS.supports` now answers truthfully on the measurement path, and any
+page that branches on it may render differently. This is the largest observable-behaviour change
+since t719 and its blast radius is unmeasured. **(2)** container-query units (`cqw`/`cqh`/`cqi`/
+`cqb`) — the honest `false` pinned by the gate. **(3)** the synchronous `contentDocument` residual
+(t717). **(4)** `document.styleSheets` reports 0 where Chrome reports 9 (t718).

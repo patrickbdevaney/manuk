@@ -816,6 +816,9 @@
   - L2127 · Four ways to get this wrong, all of which look green from outside
   - L2164 · A frame with nothing to fetch still needs a document (tick 717)
   - L2188 · What a page does with a document it makes for itself
+  - L2205 · The engine knew the answer and no page could reach it (tick 724)
+  - L2220 · Why a false negative is worse than a missing feature
+  - L2230 · The shape, and how it hid
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1238,4 +1241,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1149 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1152 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -1804,10 +1804,6 @@ impl Page {
     }
 
     pub fn load(html: &str, final_url: &str, fonts: &FontContext, viewport_width: f32) -> Page {
-        // `CSS.supports()` must answer from the CSS engine, not from JS. Installed here rather than
-        // at binding-registration time because this is the layer that HAS a CSS engine — `manuk-js`
-        // deliberately has no CSS dependency, exactly as with the forced-reflow hook.
-        install_supports_hook();
         let mut page = Page::from_dom(manuk_html::parse(html), final_url, fonts, viewport_width);
         // **Both passes, back to back.** `from_dom` runs only the scripts that block first paint; the
         // deferred ones (`defer`, `async`, `type=module`) run here. So this function behaves exactly as
@@ -4750,6 +4746,31 @@ impl Page {
     /// Build a page from an already-parsed [`Dom`] (shared by [`load`](Self::load) and
     /// [`load_streaming`](Self::load_streaming)).
     pub fn from_dom(dom: Dom, final_url: &str, fonts: &FontContext, viewport_width: f32) -> Page {
+        // ── **`CSS.supports()` must answer from the CSS engine, and it was answering from nowhere.**
+        //
+        // The hook is installed here rather than at binding-registration time because this is the
+        // layer that HAS a CSS engine — `manuk-js` deliberately has no CSS dependency, exactly as
+        // with the forced-reflow hook. ⚠⚠ It used to be installed in **`Page::load` only**, the
+        // synchronous path — so on `load_async` (the agent and every fidelity measurement) and on
+        // `from_prefetched` (**the SHELL**, i.e. the shipping browser) the hook was never set and
+        // `CSS.supports()` answered **false for everything**:
+        //
+        // ```text
+        //   CHROME  width:5px=true  display:flex=true  color:red=true  width:5lh=true
+        //   MANUK   width:5px=FALSE display:flex=FALSE color:red=FALSE width:5lh=FALSE
+        // ```
+        //
+        // `display:flex` is the tell. The Rust-level `supports_condition` has asserted that exact
+        // string true since it was written, and its unit test passes — the engine knew the answer and
+        // no page could reach it. **A false NEGATIVE on feature detection is not a missing feature,
+        // it is every progressive-enhancement guard on the web taking its fallback**: `@supports`-in-JS
+        // is how a site decides whether to ship the grid layout or the float one, the modern
+        // scroll-snap carousel or the manual, `display:flex` or a table.
+        //
+        // `from_dom` is the one function every construction path goes through (`load`, `load_async`,
+        // `from_prefetched_inner`), which is why the call belongs here and not in three callers —
+        // three callers is what produced one.
+        install_supports_hook();
         // Box the DOM up front so its address is stable for the persistent JS context's raw
         // reflector pointers, then style + lay out once and run the document's inline scripts
         // against that layout snapshot (so `getBoundingClientRect` works), letting them mutate
