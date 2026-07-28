@@ -35600,3 +35600,96 @@ gate, and the one remaining Chrome divergence on that probe. **(2)** the synchro
 `contentDocument` residual (t717). **(3)** `document.styleSheets` reports 0 where Chrome reports 9
 (t718). **(4)** the full corpus sweep still needs a ~10h quiet window — three constitution checks have
 now asked for it.
+
+## Tick 726 — the container-query pair: a unit fenced at PARSE, and a rule that cascades out of order (2026-07-28)
+
+HYPOTHESIS: t724's gate pinned `CSS.supports('width','5cqw')` as the one remaining Chrome divergence
+on its probe. Bar: find out whether that `false` is honest, and what it costs.
+
+### (1) THE UNIT IS FENCED AT PARSE, IN THE VENDORED SOURCE
+
+```text
+  400px inline-size container      CHROME   MANUK
+    width: 50cqw                     200      400      (declaration dropped -> auto width)
+    width: 50cqi                     200      400
+    width: 10cqh                      71      400
+    width: 50%     (control)         200      200      exact
+  200px container, width:50cqw       100      200
+```
+
+Every `cq*` declaration is dropped and the control is exact, so this is not a resolution bug. Stylo
+0.19, `values/specified/length.rs:549`:
+
+```rust
+  "cqw" if !in_page_rule && cfg!(feature = "gecko") => LengthUnit::Cqw,
+```
+
+**A compile-time `cfg`, not a pref**, and we build `servo` — so the unit never becomes a token. This
+is the same fence as `:has()` and `flow-root`, but *not* the same escape: t699 closed `flow-root`
+because only the **constant** was gecko-gated while the parser was not, so a public accessor reached
+it with **no fork**. Here the **parser itself** is gated, which closes that route. Priced against
+STATUS.md's own ladder: rung 1 (a pref) does not exist; rung 2 (a named flag delta) requires
+`[patch.crates-io]` and a permanent per-bump tax for one match arm; rung 3 (a supplement) means
+rewriting `cq*` in CSS **text** before Stylo sees it — which is what
+`add_container_supplement`'s scanner already does for the `@container` *at-rule*, so the precedent
+and the machinery both exist. **Rung 3 is the call, and it is a tick, not this tick.**
+
+### (2) ⚠⚠ AND THE FIXTURE FOUND A CASCADE-ORDER BUG NOBODY WAS LOOKING FOR
+
+```text
+                                                        CHROME   MANUK
+  q1  @container rule FIRST, plain rule LATER             red     GREEN  ✗
+  q2  plain rule FIRST, @container rule LATER            green    green  ✓
+  q3  a container query that must NOT match              blue     blue   ✓
+```
+
+Matching works and non-matching works; only the **order** is wrong. A rule inside `@container` beats
+a *later* rule of equal specificity, which the cascade forbids. The line is
+`add_container_supplement`:
+
+```rust
+  let mut order = self.rules.len();     // every container rule sorts as if it came LAST
+```
+
+The supplement appends its rules after every ordinary rule, so a container block's source position is
+discarded. **Every component library that writes its container rules early and overrides them later
+gets the override ignored** — and silently, because the page renders, just wrong.
+
+⚠ **Not fixed here, deliberately.** `CqBlock` carries no source offset, and interleaving the
+supplement with the main index means changing how the index assigns `order` at all — the single
+riskiest edit in this engine, and the one with the worst failure mode: a cascade-order regression is
+invisible until a site looks wrong, and this project has already lost *"every CSS reset on the web"*
+to a missing origin term in that same sort. It gets its own tick, on a fresh session, with the
+three-case fixture above as its gate. Attempting it at the end of a fourteen-tick session is how the
+next revert gets earned.
+
+TICK SHAPE: measurement
+CLUSTER: none claimed. The `@container` order bug is a `display:`/geometry contributor by shape but
+no site is attributed to it yet.
+Gates: none (no code change). The t724 gate already pins `cqw` as honestly `false`, so finding (1)
+needs no new one and the pin flips the day rung 3 lands.
+WIKI: none [forced] — a measurement tick; the engine is unchanged.
+PATTERN: **a fixture built to measure one thing measures everything it contains.** The
+`@container`-order bug was not hypothesised, searched for, or in any ledger — it fell out of a
+control I added only so the unit finding could not be confused with a matching failure (`q3`), beside
+a case I added only to make the fixture symmetric (`q1`). ⚠ The general form worth keeping:
+**when you build a fixture, add the cases that make the RESULT unambiguous, not just the case you are
+testing** — the disambiguating cases cost nothing and they are where the unlooked-for bugs are.
+⚠ Second, on the fence itself: **an escape that worked once does not generalise by its own name.**
+`flow-root` and `cqw` are both *"gecko-gated in Stylo"*, and one was free while the other is not — the
+difference is **which layer** the `cfg` sits on, and only reading the line says which.
+
+### Also this tick: the self-audit (715 → 726), and it is CLEAN
+
+`SELF-AUDIT: methodology and reality agree.` — every item, including the one that was red at t715:
+*"verify wall 589s EXCEEDS the 300s target."* It measures under it now. Nothing was done to the wall;
+what changed is that the recent docs-only ticks completed in **65-66s**, so the banked figure is a
+warm one rather than a contended one. ⚠ Worth stating rather than celebrating: this item went red and
+green again without a line of work, which means it is measuring **when the wall last ran**, not how
+lean it is. The t711 wall audit reached the same conclusion from the other direction (the "714s wall"
+was a ghost of a stale receipt). *A number that flips on the weather is a schedule, not a threshold.*
+
+NEXT: **(1) `@container` CASCADE ORDER** — three-case fixture written, Chrome-measured, one case
+failing, and the responsible line named. **(2)** `cq*` units via rung 3, reusing the scanner that
+already exists. **(3)** the synchronous `contentDocument` residual (t717). **(4)**
+`document.styleSheets` reports 0 where Chrome reports 9 (t718).
