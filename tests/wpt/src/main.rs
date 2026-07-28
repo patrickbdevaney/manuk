@@ -1526,13 +1526,29 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
         let dom = page.dom();
         let styles = page.styles_map();
         let rects = page.root_box.node_rects(dom);
-        let node = dom
-            .descendants(dom.root())
-            .filter(|&n| dom.is_element(n))
-            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(want));
-        match node {
-            None => println!("{want}: NOT IN THE DOM AT ALL"),
-            Some(n) => {
+        // An id OR a full CSS selector. Ids are convenient when a page has them, and the tick-267
+        // finding is that the modern ones do not: an id-keyed probe cannot address a single element
+        // on a React/Astro/Tailwind page, which is exactly the class this instrument is for.
+        let matches: Vec<manuk_dom::NodeId> = {
+            let by_id: Vec<_> = dom
+                .descendants(dom.root())
+                .filter(|&n| dom.is_element(n))
+                .filter(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(want))
+                .collect();
+            if by_id.is_empty() {
+                manuk_css::query_selector_all(dom, dom.root(), want)
+            } else {
+                by_id
+            }
+        };
+        if matches.is_empty() {
+            println!("{want}: NOT IN THE DOM AT ALL");
+        }
+        // Every match, because "the first one is fine and the other four are at the viewport origin"
+        // is itself the finding — a single hit would have hidden it.
+        for (mi, &n) in matches.iter().enumerate().take(8) {
+            println!("── match {} of {}", mi + 1, matches.len());
+            {
                 let mut cur = Some(n);
                 let mut chain = Vec::new();
                 while let Some(c) = cur {
@@ -1542,9 +1558,12 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
                     }
                     let tag = dom.tag_name(c).unwrap_or("?");
                     let id = dom.element(c).and_then(|e| e.attr("id")).unwrap_or("");
+                    // `position` travels with `display`, because the two questions this probe gets
+                    // asked are "why is there no box" and "why is the box somewhere else", and the
+                    // second one is almost always a containing-block answer.
                     let d = styles
                         .get(&c)
-                        .map(|s| format!("{:?}", s.display))
+                        .map(|s| format!("{:?} position={:?}", s.display, s.position))
                         .unwrap_or_else(|| "(NO COMPUTED STYLE)".into());
                     let bx = rects
                         .get(&c)

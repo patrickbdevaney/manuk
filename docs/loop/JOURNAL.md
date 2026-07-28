@@ -33134,3 +33134,109 @@ console error is emitted, so the render is abandoned somewhere that reports noth
 handle every sanitizer and error tracker patches (the `G_PROTOTYPE` class, unfixed for this property).
 **(3) RE-RUN THE FULL CORPUS SWEEP** — the registry is 5 days stale and two of its top rows re-measured
 to zero; the board's own mechanism mass is being read off a crawl that no longer describes the engine.
+
+## Tick 697 — an out-of-flow child neither splits its inline nor escapes it (2026-07-28)
+
+HYPOTHESIS: board alternation (t685) — t696 was capability, so t697 attacks GEOMETRY. Take the top
+geometry cluster `C01ca <div>` (111 sites / 14002 hits) via the first-divergence instrument rather than
+the board's guessed "shared constant", and fix ONE mechanism. Bar: Chrome-measured exact agreement on a
+fixture, and SHAPE up on `desitales2` with its structural terms unmoved.
+
+### THE INSTRUMENT POINTED SOMEWHERE THE HYPOTHESIS DID NOT
+
+Three sites, three first divergences, all ±70–80px — and two of the three sit immediately after an
+inline icon inside a nav link:
+
+```text
+  desitales2   after body/div:5                          div:2/div:2   dy=-80
+  keirin.jp    after nav/div:1/a:1/img:1                 nav/div:2     dy=+70
+  www.ikea.com after …/li:2/astro-island/a/svg:2/path:1  …/li:3        dy=-70
+```
+
+`--why` on ikea's live header (the probe now takes a CSS SELECTOR, because tick-267's finding is that
+modern pages have no ids) printed the answer in one command:
+
+```text
+  a#    display=InlineFlex position=Relative box=[145 30 32x32]
+    span# display=Flex   position=Absolute box=[0 0 1200x96]      <- the HEADER's box, not the link's
+```
+
+Every nav-label span landed at the viewport origin. All four identical, which is what says *"resolved
+against the wrong ancestor"* rather than *"laid out slightly wrong"*.
+
+### THE MECHANISM — two changes, one behaviour
+
+`position: absolute` **blockifies `display`** (CSS Display §2.7), so `<span style="position:absolute">`
+computes to `display: block`. `inline_contains_block` walked that straight into its block-in-inline
+check — but CSS 2.1 §9.2.1.1 splits an inline only around an **in-flow** block; a float or an
+out-of-flow box is removed from the inline formatting context and splits nothing. So the inline was
+**blockified into a full-width block**.
+
+And un-blockifying it alone is not enough. `LayoutBox::walk` descends `BoxContent::Block` only and never
+enters `BoxContent::Inline`, so a boxless inline has no entry in `position_absolutes`' rect map;
+`abs_containing_block` walked past it to the nearest BLOCK-level positioned ancestor, which CSS 2.1
+§10.1 forbids. `node_rects` already computes exactly the union needed, and it is safe *here*: the
+out-of-flow boxes are appended after this pass, so the map is pure in-flow geometry.
+
+```text
+   Chrome --headless=new, 1200x800, margin:0, 16px/normal sans-serif
+   <div class=outer style="position:relative">
+     <p>xxxx <a style="position:relative">LINKTEXT<span class=corner></span></a> yyyy</p>
+
+                        Chrome           before            after
+     #aRel          [36 50 76x17]   [0 68 1200x18]   [36 50 76x19]
+     #cRel          [36 50 10x10]   [0 68 10x10]     [36 50 10x10]   <- exact
+     #cStat (guard) [ 0 16 10x10]   [0 16 10x10]     [ 0 16 10x10]   <- static: unchanged
+     #aRelPlain     [36 16 76x17]   [36 16 76x17]    [36 16 76x17]   <- guard
+```
+
+`<a style="position:relative">…<span style="position:absolute">` is the stretched click target, the
+badge on an icon link, the tooltip anchor, the dropdown under a nav item. Every one of them was taking
+a whole line, forcing a break, and displacing everything below it — a `dy` generator, which is the term
+the sweep has reported as dominant for ticks.
+
+### THE LEDGER
+
+```text
+  layout suite 92/92 (was 91)   ·   the release wall below
+  desitales2 (byte-reproducible control, both readings this session, same box)
+      structural coverage    98.7% -> 98.7%   (597 paths, 8 missing, 582 misplaced — IDENTICAL)
+      SHAPE                  60.6% -> 61.5%
+      absolute median dy       127 ->    80
+  keirin.jp   SHAPE 56.9% (unmoved)  ·  www.ikea.com SHAPE 51.6% (unmoved)
+```
+
+The two live sites did not move, and per this project's own error-bar rule (keirin's recorded 3.7-point
+spread on an unchanged tree) that is **not** a result either way. The control is the result, and its
+structural terms are byte-identical while the geometry term moved in the direction the fixture predicts.
+
+⚠⚠ **THE FIRST VERSION OF THIS GATE PASSED WITH THE FIX REVERTED.** Mutation A — restore the blockify —
+SURVIVED. The unit tests run on `MinimalCascade`, which does not implement CSS Display §2.7, so the
+fixture's abspos span computed `display:inline` and the bug never reproduced in the harness at all. The
+gate was green for the wrong reason and would have banked a fix it could not see. Fixed by stating
+`display:block` explicitly in the fixture, so the gate tests LAYOUT rather than which cascade the
+harness happens to use. *This is the second time in three ticks that running the mutation — rather than
+reasoning about it — was the thing that caught a vacuous assertion.*
+
+TICK SHAPE: pattern-class
+CLUSTER: C01ca (geometry `<div>`, 111 sites / 14002 hits) — and `Cc4e6 <img>` / `C93b0 <path>`, whose
+first divergences are the same shape.
+Gates: `an_out_of_flow_child_neither_splits_its_inline_nor_escapes_it` (new, engine/layout) — RED-proven
+against THREE mutations: (A) restore the blockify -> `#aRel` [0 68 1200x18]; (B) walk-only rect map ->
+`#aRel` [0 16 113x53]; (C) let EVERY ancestor establish a containing block -> `#cStat` at [36 85]
+instead of the `.outer` origin, i.e. the over-correction is caught by the `static` control. Plus the
+full layout suite 92/92 and the release wall.
+WIKI: `docs/wiki/box-layout.md` — "an out-of-flow child neither splits its inline nor escapes it".
+PATTERN: **a unit-test harness that runs a DIFFERENT cascade from the shipping engine can make a gate
+vacuous without anyone touching the gate.** `MinimalCascade` is documented as the two-cascades trap for
+*capability*; this is the same trap for *falsifiability* — the assertion was right, the fixture never
+reached the code path. Any layout gate whose fixture depends on a COMPUTED (rather than specified)
+value must state that value outright.
+
+NEXT: **(1) `node_rects` LIFTS OUT-OF-FLOW DESCENDANTS INTO BOXLESS INLINE ANCESTORS** — measured this
+tick and NOT fixed: with a `position:static` inline, `#aStat` reads [0 16 113x88] where Chrome says
+[36 84 76x17], because the lift unions the abspos child's rect into the inline. That is
+`getBoundingClientRect` on a link, so it is hit-testing as well as fidelity, and it needs an
+out-of-flow marker on `LayoutBox` (which does not exist yet). **(2) RE-CRAWL THE CORPUS** — constitution
+check #53's steer #1, still owed; the registry is 6 days stale and two of its top rows re-measured to
+zero. **(3) WHY WIX'S CLIENT RE-RENDER DOES NOTHING** after its own wipe (t696's open half).

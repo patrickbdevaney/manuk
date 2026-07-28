@@ -930,9 +930,31 @@ fn inline_contains_block(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
         if !is_rendered(dom, styles, k) {
             continue;
         }
-        let Some(d) = styles.get(&k).map(|s| s.display) else {
+        let Some(st) = styles.get(&k) else {
             continue;
         };
+        // ⚠⚠ **ONLY AN IN-FLOW BLOCK SPLITS AN INLINE.** CSS 2.1 §9.2.1.1 is about block-level boxes
+        //    *in the flow*; a float or an out-of-flow positioned box is removed from the inline
+        //    formatting context and cannot split anything. And `position: absolute` **blockifies
+        //    `display`** (CSS Display §2.7) — so `<span style="position:absolute">` computes to
+        //    `display: block`, walked straight into the check below, and **blockified its inline
+        //    ancestor**.
+        //
+        //    `<a style="position:relative">text<span style="position:absolute">…</span></a>` is the
+        //    stretched click target, the badge on an icon link, the tooltip anchor, the dropdown under
+        //    a nav item — and every one of them turned its `<a>` into a FULL-WIDTH BLOCK. That is not
+        //    a subtle metric error: the link takes the whole line, forces a break, changes its
+        //    parent's height, and displaces everything below it. Measured against Chrome
+        //    (`margin:0; 16px/normal sans-serif`), `<p>xx <a>LINK<span abs></span></a> yy</p>`:
+        //    the `<a>` is **[20 84 36×17]** and we made it **[0 102 1200×18]**.
+        //
+        //    It also made the `<a>` the WRONG SHAPE OF CONTAINING BLOCK when it was
+        //    `position: relative`, so the abs child it was holding resolved against a full-width box.
+        //    One cause, both symptoms.
+        if is_float(st) || is_out_of_flow_positioned(st) {
+            continue;
+        }
+        let d = st.display;
         if matches!(
             d,
             Display::Block | Display::Flex | Display::Grid | Display::Table
@@ -3531,12 +3553,32 @@ impl Ctx<'_> {
     /// (DOM order); scroll-based offsets and `sticky` are out of scope here.
     fn position_absolutes(&self, root_el: NodeId, root: &mut LayoutBox, viewport_w: f32) {
         // Border-box rect of every element currently in the fragment tree.
-        let mut rects: HashMap<NodeId, Rect> = HashMap::new();
-        root.walk(&mut |b| {
-            if let Some(n) = b.node {
-                rects.insert(n, b.rect);
-            }
-        });
+        //
+        // ⚠⚠ **AN INLINE ELEMENT IS A CONTAINING BLOCK TOO, AND `walk` CANNOT SEE ONE.**
+        //    `LayoutBox::walk` descends `BoxContent::Block` only — it never enters
+        //    `BoxContent::Inline(frags)` — so a *boxless inline* element has no entry here at all.
+        //    `abs_containing_block` then walks straight past it to the nearest BLOCK-level positioned
+        //    ancestor, or to the viewport. CSS 2.1 §10.1 is explicit that it must not: for an
+        //    absolutely positioned box the containing block is the nearest ancestor with `position`
+        //    other than `static`, and *"if the ancestor is inline-level, the containing block is the
+        //    bounding box around the padding boxes of the first and last inline boxes generated for
+        //    that element."*
+        //
+        //    `<a style="position:relative">text<span style="position:absolute">…</span></a>` is one of
+        //    the most common idioms on the web — the stretched click target, the badge on an icon
+        //    link, the tooltip anchor, the dropdown under a nav item — and every one of them escaped
+        //    to the wrong ancestor. Measured against Chrome (`margin:0; 16px/normal sans-serif`, an
+        //    `.outer{position:relative}` wrapper, `.corner{position:absolute;top:0;left:0;10×10}`):
+        //    the corner belongs at its link's origin **[36 50]** and we put it at **[0 68]** — the
+        //    wrapper's origin, 36px left and 18px down, on every such element on the page.
+        //
+        //    `node_rects` already performs exactly the union this needs, and it is safe to reuse
+        //    HERE specifically: the out-of-flow boxes are appended to `root` *after* this function
+        //    returns, so the map it builds is pure in-flow geometry and an abspos box cannot inflate
+        //    the very ancestor it is about to be positioned against. The `static` case stays correct
+        //    by construction — `abs_containing_block` still requires `position != Static`, so a plain
+        //    inline `<a>` is skipped exactly as before.
+        let mut rects: HashMap<NodeId, Rect> = root.node_rects(self.dom);
         let doc_h = root.content_bottom();
         let viewport = Rect {
             x: 0.0,
@@ -8353,6 +8395,104 @@ mod tests {
              overflow upward: line top {} but inline top {}",
             r("t").y,
             r("c").y
+        );
+    }
+
+    /// **ONLY AN IN-FLOW BLOCK SPLITS AN INLINE — AND AN INLINE IS A CONTAINING BLOCK TOO.**
+    ///
+    /// CSS 2.1 §9.2.1.1 splits an inline box around a block-level box *in the flow*. A float or an
+    /// out-of-flow positioned box is removed from the inline formatting context and splits nothing.
+    /// But `position: absolute` **blockifies `display`** (CSS Display §2.7), so
+    /// `<span style="position:absolute">` computes to `display: block` — and `inline_contains_block`
+    /// walked it straight into the block-in-inline check and **blockified the inline ancestor**.
+    ///
+    /// `<a style="position:relative">text<span style="position:absolute">…</span></a>` is the
+    /// stretched click target, the badge on an icon link, the tooltip anchor, the dropdown under a
+    /// nav item. Every one of them turned its `<a>` into a **full-width block**: the link took the
+    /// whole line, forced a break, changed its parent's height, and displaced everything below it.
+    ///
+    /// ⚠⚠ **TWO CHANGES, ONE BEHAVIOUR — and each alone reads as a near no-op.** Un-blockifying the
+    /// inline is not enough: a boxless inline has no entry in `position_absolutes`' rect map, because
+    /// `LayoutBox::walk` descends `BoxContent::Block` only and never enters `BoxContent::Inline`. So
+    /// `abs_containing_block` still walked past it to the nearest BLOCK-level positioned ancestor —
+    /// CSS 2.1 §10.1 says it must not. Both halves are asserted below, and the mutation that reverts
+    /// either one fails a DIFFERENT row.
+    ///
+    /// Chrome `--headless=new`, 1200×800, `margin:0; font:16px/normal sans-serif`.
+    #[test]
+    fn an_out_of_flow_child_neither_splits_its_inline_nor_escapes_it() {
+        let html = r##"<div class="outer" id="outer">
+              <p>xxxx <a class="rel" id="aRelPlain" href="#">LINKTEXT</a> yyyy</p>
+              <p>xxxx <a class="rel" id="aRel" href="#">LINKTEXT<span class="corner" id="cRel"></span></a> yyyy</p>
+              <p>xxxx <a id="aStat" href="#">LINKTEXT<span class="corner" id="cStat"></span></a> yyyy</p>
+            </div>"##;
+        // ⚠ `display:block` on `.corner` is EXPLICIT, and that is not decoration. `position:absolute`
+        //   blockifies `display` in the SHIPPING (Stylo) cascade, but `MinimalCascade` — which these
+        //   unit tests run on — does not implement CSS Display §2.7. Leaving it implicit made the
+        //   fixture compute `display:inline`, so the bug never reproduced here and the mutation that
+        //   restores the blockify SURVIVED this gate. Stating the computed value keeps the gate
+        //   testing LAYOUT rather than which cascade the harness happens to use.
+        let css = "body{margin:0} div,p,a,span{font-family:sans-serif;font-size:16px;line-height:normal} \
+                   .outer{position:relative;height:200px} a.rel{position:relative} \
+                   .corner{position:absolute;display:block;top:0;left:0;width:10px;height:10px}";
+        let (dom, root) = layout_html(html, css, 1200.0);
+        let rects = root.node_rects(&dom);
+        let r = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            rects[&n]
+        };
+
+        // (1) THE INLINE IS NOT BLOCKIFIED. Chrome puts `#aRel` at x=36 with width 76 — the extent of
+        //     its own text. Blockified it became a full-width box at x=0, width 1200, which is a
+        //     16× error on the width of a link and a forced line break in the paragraph.
+        assert!(
+            (r("aRel").x - 36.0).abs() < 1.5 && (r("aRel").width - 76.0).abs() < 4.0,
+            "#aRel is [{} {} {}x{}]; Chrome says [36 50 76x17]. An out-of-flow child must not \
+             blockify its inline ancestor — a link that becomes a full-width block takes the whole \
+             line and displaces everything below it.",
+            r("aRel").x,
+            r("aRel").y,
+            r("aRel").width,
+            r("aRel").height
+        );
+
+        // (2) THE ABSPOS CHILD RESOLVES AGAINST THAT INLINE. This is the half that `walk` could not
+        //     see, and it is the whole point of `position:relative` on a link.
+        let (dx, dy) = (r("cRel").x - r("aRel").x, r("cRel").y - r("aRel").y);
+        assert!(
+            dx.abs() < 1.5 && dy.abs() < 1.5,
+            "#cRel sits ({dx}, {dy}) from #aRel and must sit at its origin (0, 0): with \
+             `top:0;left:0` an abspos child of a `position:relative` INLINE resolves against that \
+             inline (CSS 2.1 §10.1), not against the nearest block-level positioned ancestor. \
+             Chrome: #aRel [36 50 76x17], #cRel [36 50 10x10]."
+        );
+
+        // (3) CONTROL — `position: static` still establishes NOTHING. The fix must widen which
+        //     ancestors can be a containing block, not which ancestors ARE one; a version that made
+        //     every inline a containing block would pass (1) and (2) and break every real overlay.
+        //     Chrome puts #cStat at the `.outer` origin [0 16], not at its static `<a>`.
+        assert!(
+            r("cStat").x.abs() < 1.5 && (r("cStat").y - r("outer").y).abs() < 1.5,
+            "#cStat is at [{} {}] and Chrome puts it at the `.outer` origin [0 {}] — a \
+             `position:static` inline must NOT become a containing block.",
+            r("cStat").x,
+            r("cStat").y,
+            r("outer").y
+        );
+
+        // (4) GUARD — an inline with no out-of-flow child is untouched. If this moves, every inline
+        //     element on every page moved.
+        assert!(
+            (r("aRelPlain").x - 36.0).abs() < 1.5 && (r("aRelPlain").width - 76.0).abs() < 4.0,
+            "GUARD: #aRelPlain (a plain inline link, no out-of-flow child) is [{} {} {}x{}] and \
+             Chrome says [36 16 76x17].",
+            r("aRelPlain").x,
+            r("aRelPlain").y,
+            r("aRelPlain").width,
+            r("aRelPlain").height
         );
     }
 }

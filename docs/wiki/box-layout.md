@@ -1722,3 +1722,54 @@ oracle first is a standing rule in this project precisely because the spec-reaso
 answer differ, and the shipped one is the target.
 
 [[default-object-size-not-ua-width]] [[gate-measured-against-a-standard-chrome-fails]]
+
+## An out-of-flow child neither splits its inline nor escapes it (tick 697)
+
+Two defects, one behaviour, both about the same boundary: what an **out-of-flow** box does to the
+**inline** it lives in.
+
+**1. It must not split it.** CSS 2.1 §9.2.1.1 splits an inline box around a block-level box *in the
+flow* — the box tree becomes anonymous-block / block / anonymous-block. A float or an absolutely
+positioned box is removed from the inline formatting context and splits nothing. But `position:
+absolute` **blockifies `display`** (CSS Display §2.7), so `<span style="position:absolute">` computes to
+`display: block`, and a blockification check that reads `display` alone walks it straight into the
+split. `inline_contains_block` did exactly that, and **blockified the inline ancestor into a full-width
+block**.
+
+**2. It must be able to use it as a containing block.** For an absolutely positioned box the containing
+block is the nearest ancestor whose `position` is not `static`, and CSS 2.1 §10.1 is explicit that an
+*inline-level* ancestor qualifies: *"the containing block is the bounding box around the padding boxes
+of the first and last inline boxes generated for that element."* `LayoutBox::walk` descends
+`BoxContent::Block` only and never enters `BoxContent::Inline`, so a **boxless inline has no entry** in
+the rect map `position_absolutes` builds — and the walk went past it to the nearest BLOCK-level
+positioned ancestor.
+
+⚠⚠ **Each fix alone reads as a near no-op**, which is why they are one change. Un-blockify without the
+rect map and the abspos child still escapes; fix the rect map without un-blockifying and the inline it
+finds is a full-width block, so the child resolves against the wrong box anyway.
+
+```text
+   Chrome --headless=new, 1200x800, margin:0, 16px/normal sans-serif
+   .outer{position:relative}  a.rel{position:relative}  .corner{position:absolute;top:0;left:0;10x10}
+
+                        Chrome           before            after
+     #aRel          [36 50 76x17]   [0 68 1200x18]   [36 50 76x19]
+     #cRel          [36 50 10x10]   [0 68 10x10]     [36 50 10x10]
+     #cStat (guard) [ 0 16 10x10]   [0 16 10x10]     [ 0 16 10x10]
+```
+
+`<a style="position:relative">text<span style="position:absolute">…</span></a>` is the stretched click
+target, the badge on an icon link, the tooltip anchor and the dropdown under a nav item. Every one of
+them took a whole line, forced a break, changed its parent's height and displaced everything below —
+which makes this a **`dy` generator**, the term the fidelity sweep reports as dominant.
+
+⚠ **`position: static` must still establish nothing.** The fix widens which ancestors *can* be a
+containing block, not which ones *are* — a version that made every inline one passes both positive
+assertions and breaks every real overlay on the web. The gate's `static` control is what separates them.
+
+⚠ Still open: `node_rects` lifts out-of-flow descendants into boxless inline ancestors, so a
+`position:static` inline holding an abspos child reports [0 16 113×88] where Chrome says [36 84 76×17].
+That is `getBoundingClientRect` on a link — hit-testing, not just fidelity — and it needs an
+out-of-flow marker on `LayoutBox`, which does not exist yet.
+
+[[text-layout]] [[conformance-and-oracles]]
