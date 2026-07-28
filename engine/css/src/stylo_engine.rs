@@ -584,6 +584,33 @@ pub fn cascade_via_stylo_sized(
             stylist
                 .device()
                 .set_root_font_size(cv.get_font().clone_font_size().computed_size().px());
+            // **…and `rlh` is root-relative in exactly the same way, which we were not doing.**
+            //
+            // Stylo's own `matching.rs` sets these two together, four lines apart, under the comments
+            // *"Update root font size for rem units"* and *"Update root line height for rlh units"*.
+            // We had the first and not the second, so `rlh` fell back to the device's initial value
+            // and resolved against **neither** the root's line-height nor the element's.
+            //
+            // Chrome-measured, surface audit #44 (t721), root `line-height:2` on `16px` and an
+            // element `line-height:20px`: `width:5rlh` is **160** in Chrome and was **96** here —
+            // `5 x 19.2`, i.e. `5 x (16 x 1.2)`, the INITIAL `normal` line-height. Not root-relative,
+            // not element-relative: initial-relative, which is the one answer no author can predict.
+            //
+            // ⚠ The map called this capability `works` from tick 509 to tick 721 because the probe
+            // behind it tests `width:5lh` and its own receipt says `rlh` was *"not separately
+            // geometry-tested"*. The untested half was the broken half.
+            // Through the DEVICE's `calc_line_height`, not `ComputedValues`': the latter is
+            // gecko-conditional in this build, and the device method is the servo one Stylo itself
+            // calls. ⚠ It returns **0** for `line-height: normal` (`device/servo.rs`: *"TODO: compute
+            // `normal` from the font metrics"*), so a root that never states a line-height leaves
+            // `rlh` at zero rather than at the initial guess — honest, and a named residue, not a
+            // regression: the previous value was wrong for every root.
+            let root_lh = stylist
+                .device()
+                .calc_line_height(cv.get_font(), cv.writing_mode, None)
+                .0
+                .px();
+            stylist.device().set_root_line_height(root_lh);
         }
         let mut cs = timed(&mut ph.computed_ns, || to_computed_style(&cv));
         // `field-sizing` predates stylo 0.19, so it is recovered from MinimalCascade — and it must

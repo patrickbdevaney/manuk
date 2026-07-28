@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **477** | ticks 1–720 |
-| median tick cycle | **22m** | 476 intervals |
+| ticks landed | **478** | ticks 1–721 |
+| median tick cycle | **22m** | 477 intervals |
 | median, last 10 | **37m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 419.2h elapsed |
-| median verify wall | **63s** | 416 ticks |
+| **ticks per hour** | **1.14** | 419.6h elapsed |
+| median verify wall | **63s** | 417 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **338**
-* **✅ rows in the capability ledger**: 144 → **363**
+* **live gates**: 27 → **339**
+* **✅ rows in the capability ledger**: 144 → **364**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**229 of 477 ticks** (48%) moved a
+**229 of 478 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -574,5 +574,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **718** | 2026-07-28 15:54 | 35m | measurement | 63s | +460/−34 | 338 | 81 | 56.0% · | the loop's newest instrument is BLIND until the parked fix lands, and it nearly cost a fab |
 | **719** | 2026-07-28 16:08 | 14m | pattern-class | 63s | +110/−32 | 338 | 81 | 56.0% · | the third design lands it: fetched at parse, waited for nowhere (2026-07-28) |
 | **720** | 2026-07-28 16:14 | 6m | measurement | 63s | +237/−35 | 338 | 81 | 56.0% · | the population read on the landed fix, and the one number that only shows up alone (2026-0 |
+| **721** | 2026-07-28 16:36 | 22m | audit | 63s | +258/−33 | 339 | 81 | 56.0% · | surface audit #44: a `works` row that does not work, and the half nobody tested (2026-07-2 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

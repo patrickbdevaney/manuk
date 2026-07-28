@@ -35352,3 +35352,69 @@ NEXT: **(1) `rlh` RESOLVES AGAINST THE INITIAL LINE-HEIGHT** — a bounded, Chro
 fix with the fixture already written. **(2)** `CSS.supports` false-negative on `lh`/`rlh`. **(3)** the
 synchronous `contentDocument` residual (t717). **(4)** `document.styleSheets` reports 0 where Chrome
 reports 9 (t718).
+
+## Tick 722 — `rem` had a twin nobody set (2026-07-28)
+
+HYPOTHESIS: audit #44's own work item — `rlh` resolves against the initial line-height, Chrome-
+measured, fixture already written. Bar: Chrome-exact on all four cells.
+
+### THE FIX IS A SIBLING OF A CALL THAT WAS ALREADY RIGHT
+
+The cascade calls `Device::set_root_font_size` the instant `<html>` is cascaded, under a comment
+explaining that without it `html{font-size:62.5%}` — the *"1rem = 10px"* idiom half the web is built
+on — silently leaves every `rem` 60% too large. **`rlh` is root-relative in exactly the same way and
+nothing set it.** Stylo's own `matching.rs` sets the two together, four lines apart:
+
+```text
+  // Update root font size for rem units
+  device.set_root_font_size(…)
+  // Update root line height for rlh units
+  device.set_root_line_height(…)
+```
+
+We had the first. So `rlh` fell through to the device's initial value:
+
+```text
+                    CHROME    BEFORE    AFTER
+   width:  5lh        100       100      100
+   height: 5lh        100       100      100
+   width:  5rlh       160        96      160
+   height: 5rlh       160        96      160
+```
+
+`96 = 5 × 19.2 = 5 × (16 × 1.2)` — the initial `normal` line-height. Not the root's `32px`, not the
+element's `20px`: **initial-relative**, which is the one answer no author can predict and the one
+that looks plausible in a screenshot. All four cells are now Chrome-exact.
+
+TICK SHAPE: pattern-class
+CLUSTER: none claimed — `lh`/`rlh` is a unit, not a cluster row; its site count is whatever the next
+sweep says. The honest reason to build it is that it reached **Baseline Widely Available in May
+2026**, which is when authors stop guarding.
+Gates: `g_rlh_unit` (new, `engine/page`, `--features stylo,spidermonkey`). **RED-proven against two
+mutations that fail the SAME assertion with DIFFERENT wrong values** — delete the call → **96**
+(initial-relative); set the root values from every element → **100** (element-relative). That is the
+property worth having: the assertion discriminates all three candidates rather than merely rejecting
+one, and the `lh` cells are asserted alongside as the over-correction guard, because a fix that
+pointed *both* units at the root would satisfy every `rlh` assertion and break `lh`.
+Map: the row goes `works` → (audit #44) `partial` → **`gated`**, in two ticks, which is the shape a
+corrected over-claim should have.
+WIKI: none [forced] — the mechanism is one call and its whole story is in the gate's own header and
+the pattern row; a wiki page would be a third copy.
+PATTERN: **when a rule is root-relative, grep for its siblings — the upstream you borrowed from
+already wrote them next to each other.** This is the third "one rule, N implementations" of the
+session (t712's markup-vs-injected script `load`, t717's fetch-vs-load work-list, this), and it is
+the first where the *vendored dependency's own source* contained the pair, adjacent, with comments
+naming both. ⚠ The cheap operational form: **when you call a `set_root_*` on a borrowed engine, list
+what else that engine sets at the same moment.** Stylo sets three things when the root is cascaded —
+font size, line height, and root font *metrics* for `rcap`/`rch`/`rex`/`ric`. We now do two.
+
+⚠ NAMED RESIDUE, pinned by assertion (3): `Device::calc_line_height` returns **0** for
+`line-height: normal` in this servo build (*"TODO: compute `normal` from the font metrics"*), so a
+root that never states a line-height leaves `rlh` at zero. Honest, and not a regression — the value
+it replaces was wrong for that root too.
+
+NEXT: **(1) `CSS.supports('width','5lh')` IS FALSE** and true in Chrome, for a unit that demonstrably
+works — a false NEGATIVE, the mirror of this project's usual hazard, so a guarded page takes its
+fallback for no reason. **(2)** the root font metrics Stylo sets and we do not (`rcap`/`rch`/`rex`/
+`ric`) — the third member of the sibling set, unmeasured. **(3)** the synchronous `contentDocument`
+residual (t717). **(4)** `document.styleSheets` reports 0 where Chrome reports 9 (t718).
