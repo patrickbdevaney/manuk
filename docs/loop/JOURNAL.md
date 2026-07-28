@@ -32730,3 +32730,63 @@ unchanged at 40. This is the highest-mass `dy` fix on the board and it is now a 
 **(2) RE-RUN HEAD-20 AND READ `Cc4e6 <img>`'s SITE COUNT** — t689 claimed that cluster and the mandate's rule
 is that the claim is proven by a sweep. **(3) PARALLELISE THE PARITY CAPTURES** — 175s of a 227s wall, one
 serial headless Chrome per fixture (wall audit #21).
+
+## Tick 691 — every line box now starts with a strut (2026-07-27)
+
+HYPOTHESIS: t690's NEXT #1, and it was fully specified there — seed CSS 2.1 §10.8's strut from the
+containing block's font, bar `w1: 40 → 44`, guards `top`/`block` stay 40. On-mandate: the geometry clusters
+`C01ca <div>` (111 sites) and `C7eb9 <body>` (93).
+
+### WHAT LANDED — two changes, one behaviour
+
+1. **The strut.** `layout_inline` takes the block's `ComputedStyle` and folds its metrics into every line
+   box as a zero-width fragment — through `text_style`, **not** the raw `ComputedStyle`, because that is the
+   one function that resolves a family list to a `FontKey` and `line-height: normal` to a number; a strut
+   resolved differently from the fragments would compare two notions of the same font. Callers with no block
+   style in hand pass `None` and get a zero strut, i.e. exactly the old behaviour, so no call site changes
+   meaning by accident.
+2. **A baseline-aligned atomic demands `height + descent`.** Its bottom sits ON the baseline and the
+   baseline is not the bottom of the line box.
+
+⚠⚠ **EACH HALF ALONE READS AS A NO-OP, and t690 proved it the expensive way** — it tried half 2, measured
+no change, and reverted. Correctly, on the evidence then: `descent` was 0 on exactly the lines that needed
+it. The gate now asserts the COMBINATION so neither half can later be removed as dead code.
+
+### MEASURED
+
+```text
+                                    Chrome   before   after
+  div > img  (default = baseline)     h=44     h=40     h=43
+  div > img  vertical-align:top       h=40     h=40     h=40   <- guard
+  div > img  display:block            h=40     h=40     h=40   <- guard
+  p  (a plain text line)             --        h=18     h=18   <- guard
+  parity                             --      72/72    72/72    <- 30 pages, the wider net
+```
+
+The **1px** residual against Chrome is a FONT-descent difference (our `sans-serif` resolves to a different
+face than the reference Chrome's), not a logic one — and it sits inside the 8px SHAPE tolerance the
+certificate scores on, where 4px of missing descent *per inline image* did not.
+
+⚠ **The three guards are the point, not decoration.** `top`, `block` and plain text ALREADY agreed with
+Chrome, so a fix that opened *every* line box by the descent would move them too and would be wrong in a
+way a single assertion on `w1` could not see. This is a change to the function that computes **every line
+box in the engine**, so `parity` (72/72, 30 pages) was run before landing rather than discovered by the wall.
+
+### THE CLUSTER THIS TICK CLAIMS, per the mandate's RULE
+
+**`C01ca geometry: <div>` (111 sites) and `C7eb9 geometry: <body>` (93 sites)** — the `dy` clusters. Their
+site counts must fall in the next sweep. If they do not, the descent was not the dominant instance of the
+`dy` term and the next candidate is whatever FIRST DIVERGENCE names on a site with no inline images.
+
+TICK SHAPE: capability + fidelity (a geometry cluster, on-mandate). Bar 0 untouched; `engine/layout` only.
+Gates: `a_line_box_starts_with_a_strut_so_a_baseline_atomic_reserves_its_descent` — RED-proven by zeroing
+EITHER half, with three over-correction guards. manuk-layout lib 90/90; `parity` 72/72 across 30 pages.
+WIKI: `docs/wiki/text-layout.md` (t690 recorded the diagnosis; this tick's mechanism is in the gate's own
+doc comment at the site, which is where the next person changing `close_line` will be standing).
+PATTERN: `docs/loop/WEB-PATTERNS.md` — a baseline-aligned inline `<img>`.
+
+NEXT: **(1) RE-RUN HEAD-20** — two ticks (689, 691) have now claimed clusters (`Cc4e6 <img>`, `C01ca`/`C7eb9`)
+and the mandate's rule is that a claim is proven by a sweep. This is the tick that either banks the movement
+or says the levers were wrong. **(2) PARALLELISE THE PARITY CAPTURES** — 175s of a 227s wall, one serial
+headless Chrome per fixture, independent captures (wall audit #21); it multiplies every future tick.
+**(3) THE PER-CALL LOAD BUDGET** — the priority inversion, blocked on nine gate files.

@@ -2351,7 +2351,8 @@ impl Ctx<'_> {
                 return (BoxContent::Inline(vec![]), 0.0);
             }
             let align = self.style_of(node).text_align;
-            let (frags, _atomics, h) = self.layout_inline(items, cx, cy, cw, align, 0.0, floats);
+            let (frags, _atomics, h) =
+                self.layout_inline(items, cx, cy, cw, align, 0.0, floats, None);
             return (BoxContent::Inline(frags), h);
         }
 
@@ -2374,7 +2375,7 @@ impl Ctx<'_> {
                 break_word: false,
             }];
             let (frags, _atomics, h) =
-                self.layout_inline(items, cx, cy, cw, TextAlign::Left, 0.0, floats);
+                self.layout_inline(items, cx, cy, cw, TextAlign::Left, 0.0, floats, None);
             return (BoxContent::Inline(frags), h);
         }
 
@@ -2441,7 +2442,7 @@ impl Ctx<'_> {
             // percentages resolve against the container width.
             let text_indent = bcs.text_indent.resolve(cw, 0.0);
             let (mut frags, atomics, mut h) =
-                self.layout_inline(items, cx, cy, cw, align, text_indent, floats);
+                self.layout_inline(items, cx, cy, cw, align, text_indent, floats, Some(&bcs));
             // `text-overflow: ellipsis` truncates a clipped, non-wrapping single line with `…`. Only
             // fires on a box that clips (`overflow` ≠ visible) and doesn't wrap (`nowrap`/`pre`); a
             // line that fits is untouched, so nothing without a real overflow changes.
@@ -3961,7 +3962,7 @@ impl Ctx<'_> {
         }
         let start = cur_y + prev_margin;
         let (frags, atomics, h) =
-            self.layout_inline(items, cx, start, cw, TextAlign::Left, 0.0, floats);
+            self.layout_inline(items, cx, start, cw, TextAlign::Left, 0.0, floats, None);
         boxes.push(LayoutBox {
             rect: Rect {
                 x: cx,
@@ -4639,7 +4640,22 @@ impl Ctx<'_> {
         align: TextAlign,
         text_indent: f32,
         floats: &FloatContext,
+        strut_style: Option<&manuk_css::ComputedStyle>,
     ) -> (Vec<TextFragment>, Vec<LayoutBox>, f32) {
+        // The STRUT — the containing block's font metrics and `line-height`, folded into every line box
+        // this IFC produces. See `close_line`. `None` (a caller with no block style in hand) yields a
+        // zero strut, which is exactly the old behaviour, so no call site changes meaning by accident.
+        let strut = strut_style
+            .map(|bcs| {
+                // Through `text_style`, not the raw `ComputedStyle`: that is the one function that
+                // resolves a family list to a `FontKey` and `line-height: normal` to a number, and the
+                // strut must be the SAME resolution the fragments use or the fold below compares two
+                // different notions of the same font.
+                let ts = text_style(bcs, self.fonts);
+                let lm = self.fonts.line_metrics(ts.font_key, ts.font_size);
+                (lm.ascent, lm.descent, ts.line_height)
+            })
+            .unwrap_or((0.0, 0.0, 0.0));
         let items = self.break_overwide_words(items, cw);
         // Usable (left_x, width) at vertical `y` for a line of height `h`: the float
         // exclusions intersected with this container's content box, dropping past
@@ -4762,6 +4778,7 @@ impl Ctx<'_> {
                     line_avail,
                     align,
                     self.fonts,
+                    strut,
                 );
                 first_line = false;
                 pen = 0.0;
@@ -4949,6 +4966,7 @@ impl Ctx<'_> {
                     line_avail,
                     align,
                     self.fonts,
+                    strut,
                 );
                 first_line = false;
                 let (l, w) = open_band(&mut y, est_h);
@@ -4982,6 +5000,7 @@ impl Ctx<'_> {
                 line_avail,
                 align,
                 self.fonts,
+                strut,
             );
         }
 
@@ -5026,13 +5045,38 @@ fn close_line(
     line_avail: f32,
     align: TextAlign,
     _fonts: &FontContext,
+    strut: (f32, f32, f32),
 ) -> f32 {
     // ROUNDED per-part, because that is the content area's rule and it is NOT the line box's rule
     // (`LineMetrics::content_height` documents the measurement that separates them). The max is
     // taken over the *rounded* values so a mixed-font line agrees with the per-fragment boxes below.
-    let ascent = line.iter().map(|f| f.ascent.round()).fold(0.0, f32::max);
-    let descent = line.iter().map(|f| f.descent.round()).fold(0.0, f32::max);
-    let pref = line.iter().map(|f| f.style.line_height).fold(0.0, f32::max);
+    //
+    // ── **EVERY LINE BOX STARTS WITH A STRUT** (CSS 2.1 §10.8, tick 691). *"Each line box starts with
+    //    a zero-width inline box with the element's font and line height properties."* These folds ran
+    //    over the FRAGMENTS PRESENT only, and an atomic or synthetic `LineFrag` carries
+    //    `ascent == descent == 0` by construction — so a line whose only content is an `<img>` had ZERO
+    //    descent and reserved nothing below the baseline. Measured, `margin:0; font:16px/normal
+    //    sans-serif`, a 40×40 `<img>`: `div>img` was **h=40 against Chrome's h=44**, while
+    //    `vertical-align:top` and `display:block` already agreed at 40 — which localised it to the
+    //    baseline case and to the LINE rather than to the atomic's placement.
+    //
+    //    The strut is the CONTAINING BLOCK's font, folded in as if it were a zero-width fragment. On a
+    //    text line in the block's own font it adds nothing (same metrics); on a line of SMALLER inline
+    //    text it correctly holds the line open to the block's height; on a line with only an atomic it
+    //    supplies the descent that was missing. `.round()` matches the existing per-part rule so mixed
+    //    lines still agree with the per-fragment boxes.
+    let ascent = line
+        .iter()
+        .map(|f| f.ascent.round())
+        .fold(strut.0.round(), f32::max);
+    let descent = line
+        .iter()
+        .map(|f| f.descent.round())
+        .fold(strut.1.round(), f32::max);
+    let pref = line
+        .iter()
+        .map(|f| f.style.line_height)
+        .fold(strut.2, f32::max);
     // An inline-block's margin-box height participates in the line height.
     //
     // ⚠⚠ **AND THAT IS NOT ENOUGH FOR A BASELINE-ALIGNED ATOMIC — THE LINE BOX HAS NO STRUT**
@@ -5059,7 +5103,27 @@ fn close_line(
     //    is 0 on exactly the lines that need it. The strut must be seeded from the CONTAINING BLOCK's
     //    font, which `close_line` does not currently receive — a signature change to the function that
     //    computes every line box in the engine, so it is its own tick with `w1: 40 -> 44` as its bar.
-    let tallest_atomic = line.iter().map(|f| f.atomic_h).fold(0.0, f32::max);
+    // A BASELINE-ALIGNED atomic's bottom sits ON the baseline, and the baseline is not the bottom of
+    // the line box — the strut's DESCENT is under it. So such an atomic demands
+    // `height + descent` of line box, not `height`. `top`/`bottom`/`middle` do not sit on the
+    // baseline and demand only their height, which is why those two already agreed with Chrome and
+    // is the guard that this change must not break.
+    //
+    // ⚠ This is HALF a fix on its own, and tick 690 measured that: with `descent` folded only over the
+    // fragments present it is ZERO on exactly the lines that need it (an atomic `LineFrag` carries no
+    // metrics), so `+ descent` added nothing. It works only together with the strut above. Two changes,
+    // one behaviour — recorded because either alone reads as a no-op and would be reverted by the next
+    // person to measure it in isolation.
+    let tallest_atomic = line
+        .iter()
+        .map(|f| {
+            if matches!(f.valign, VerticalAlign::Baseline) && f.atomic_h > 0.0 {
+                f.atomic_h + descent
+            } else {
+                f.atomic_h
+            }
+        })
+        .fold(0.0, f32::max);
     let content_h = ascent + descent;
     // **A tall content area does NOT push the line box open.** `line-height` is the line box, full
     // stop (CSS 2.1 §10.8): with `line-height: 1` on a 16px Liberation face the content area is
@@ -5264,6 +5328,84 @@ mod tests {
         let fonts = FontContext::new();
         let root = layout_document(&dom, &styles, &fonts, width);
         (dom, root)
+    }
+
+    /// **EVERY LINE BOX STARTS WITH A STRUT, AND A BASELINE-ALIGNED ATOMIC SITS ON THE BASELINE.**
+    ///
+    /// CSS 2.1 §10.8: *"each line box starts with a zero-width inline box with the element's font and
+    /// line height properties — the strut."* Ours folded ascent/descent/line-height over **the
+    /// fragments present**, and an atomic or synthetic `LineFrag` carries `ascent == descent == 0` by
+    /// construction — so a line whose only content is an `<img>` had **zero descent** and reserved
+    /// nothing below the baseline. Measured, `margin:0; font:16px/normal sans-serif`, a 40×40 `<img>`:
+    ///
+    /// ```text
+    ///                                     Chrome   before   after
+    ///   div > img  (default = baseline)     h=44     h=40     h=43
+    ///   div > img  vertical-align:top       h=40     h=40     h=40   <- guard
+    ///   div > img  display:block            h=40     h=40     h=40   <- guard
+    ///   p  (a plain text line)              --       h=18     h=18   <- guard
+    /// ```
+    ///
+    /// The 1px residual against Chrome is a FONT-descent difference (our `sans-serif` resolves to a
+    /// different face than the reference Chrome's), not a logic one — and it is inside the 8px SHAPE
+    /// tolerance the certificate scores on, where 4px of missing descent per inline image was not.
+    ///
+    /// ⚠ **TWO CHANGES, ONE BEHAVIOUR, and each alone reads as a no-op.** The strut supplies a non-zero
+    /// `descent`; `tallest_atomic + descent` spends it. Tick 690 tried the second half alone, measured
+    /// no change, and reverted it — correctly, on the evidence available then. This gate asserts the
+    /// combination so neither half can be removed as dead code.
+    ///
+    /// ⚠ The three guards are not decoration: `top`/`block`/text already agreed with Chrome, so a fix
+    /// that opened EVERY line box by the descent would move them too and would be wrong in a way a
+    /// single assertion on `w1` could not see. `parity` (72/72 vs headless Chrome, 30 pages) is the
+    /// wider net and it holds.
+    #[test]
+    fn a_line_box_starts_with_a_strut_so_a_baseline_atomic_reserves_its_descent() {
+        let html = r#"<div id="w1"><img width="40" height="40" src="x.png"></div>
+                      <div id="w2"><img width="40" height="40" style="vertical-align:top" src="x.png"></div>
+                      <div id="w3"><img width="40" height="40" style="display:block" src="x.png"></div>
+                      <p id="p1">plain text line</p>"#;
+        let css = "body{margin:0}";
+        let (dom, root) = layout_html(html, css, 800.0);
+        let rects = root.node_rects(&dom);
+        let h = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            rects[&n].height
+        };
+        assert!(
+            h("w1") > 40.5,
+            "a div holding a baseline-aligned 40px <img> must be TALLER than the image — the strut's \
+             descent sits below the baseline the image rests on (Chrome: 44). Got {}. Without the \
+             strut this is exactly 40 and every inline icon on the web shifts everything below it up.",
+            h("w1")
+        );
+        for (id, why) in [
+            (
+                "w2",
+                "`vertical-align:top` does not sit on the baseline, so it demands only its height",
+            ),
+            (
+                "w3",
+                "a `display:block` image is not an inline atomic at all",
+            ),
+        ] {
+            assert!(
+                (h(id) - 40.0).abs() < 0.5,
+                "OVER-CORRECTION: #{id} is {} and must stay 40 — {why}. A change that opened EVERY \
+                 line box by the descent would move these too, and a single assertion on #w1 could \
+                 not see it.",
+                h(id)
+            );
+        }
+        assert!(
+            h("p1") < 30.0,
+            "a plain text line must not grow: the strut is the block's OWN font, so on a line of that \
+             same font it adds nothing. Got {} — the strut is being double-counted.",
+            h("p1")
+        );
     }
 
     /// **AN `<img>` WHOSE SOURCE DID NOT LOAD IS 16×16 — Chrome-measured, not recalled.**

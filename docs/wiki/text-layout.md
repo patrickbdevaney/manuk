@@ -1094,10 +1094,37 @@ This is the `dy` term tick 688 identified — correctly-sized boxes in the wrong
 them is too short — and it fires on **every baseline-aligned inline image on the web**: icons, logos,
 avatars, spacer gifs. On tick 689's fixture it accumulated to **32px over four images**.
 
-⚠ **The obvious fix is wrong and was tried:** `atomic_h + descent` changes nothing, because `descent` is 0 on
-exactly the lines that need it. The strut has to be seeded from the **containing block's** font, which
-`close_line` does not currently receive — a signature change to the function that computes every line box in
-the engine. Sized as its own tick, with `w1: 40 → 44` as its falsifiable bar and the two already-correct
-rows (`top`, `block`) as its guard against over-correction.
+⚠ **The obvious fix is wrong ALONE and was tried:** `atomic_h + descent` changes nothing on its own, because
+`descent` is 0 on exactly the lines that need it.
+
+### FIXED at tick 691 — two changes, one behaviour
+
+1. **The strut.** `layout_inline` takes the containing block's `ComputedStyle` and folds its metrics into
+   every line box as a zero-width fragment — through **`text_style`**, not the raw `ComputedStyle`, because
+   that is the one function that resolves a family list to a `FontKey` and `line-height: normal` to a number.
+   A strut resolved differently from the fragments would compare two notions of the same font. A caller with
+   no block style passes `None` and gets a zero strut — exactly the old behaviour, so no call site changes
+   meaning by accident.
+2. **A baseline-aligned atomic demands `height + descent`**, because its bottom sits ON the baseline.
+
+```text
+                                    Chrome   before   after
+  div > img  (default = baseline)     h=44     h=40     h=43
+  div > img  vertical-align:top       h=40     h=40     h=40   <- guard
+  div > img  display:block            h=40     h=40     h=40   <- guard
+  p  (a plain text line)             --        h=18     h=18   <- guard
+  parity                             --      72/72    72/72    <- 30 pages, the wider net
+```
+
+The **1px** residual against Chrome is a FONT-descent difference — our `sans-serif` resolves to a different
+face than the reference Chrome's — not a logic one, and it sits inside the 8px SHAPE tolerance the
+certificate scores on, where 4px of missing descent *per inline image* did not.
+
+⚠⚠ **Neither half can be removed as dead code**, which is why the gate asserts the combination: tick 690
+tried half 2 alone, measured no change, and reverted it — correctly, on the evidence available then. And the
+three guards are load-bearing, not decoration: `top`, `block` and plain text already agreed with Chrome, so a
+fix that opened *every* line box by the descent would move them too, in a way a single assertion on `w1`
+could not see. `parity` was run before landing rather than discovered by the wall, because this is the
+function that computes every line box in the engine.
 
 [[subpixel-error-compounds]] [[box-layout]]

@@ -447,3 +447,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 688	c2fdf257	1785192100	2026-07-27T18:41:40-04:00	719	measurement	63	7	248	34	334	81	3896	6960	0	353	31	SHAPE is not a per-box metric error; it is one wrong HEIGHT above the content (2026-07-27)
 689	f43d53c5	1785195318	2026-07-27T19:35:18-04:00	3218	capability	63	11	384	35	334	81	3896	6960	0	354	31	a broken `<img>` is 16×16 in Chrome and was 784×0 here (2026-07-27)
 690	94cde264	1785196994	2026-07-27T20:03:14-04:00	1676	measurement	63	8	154	33	334	81	3896	6960	0	354	31	the line box has no STRUT, and that is the `dy` term (2026-07-27)
+691	05c0dc6d	1785199346	2026-07-27T20:42:26-04:00	2352	capability	63	8	281	46	334	81	3896	6960	0	355	31	every line box now starts with a strut (2026-07-27)
