@@ -1067,3 +1067,37 @@ round does no fetch and forces no relayout.
 `font-display` (FOUT/FOIT swap behaviour), `unicode-range` subsetting, and the `Lora`-shaped finding
 from t563 — Chromium resolving a webfont where we fall back to `serif`, on a page whose sheet was
 **external** and therefore not explained by this tick. The map row should read `partial`, not `works`.
+
+## The line box has no STRUT, and that is the `dy` term (tick 690)
+
+CSS 2.1 §10.8: *"each line box starts with a zero-width inline box with the element's font and line height
+properties — the strut."* `close_line` folds `ascent`, `descent` and `line-height` over **the fragments
+present**, and an atomic or synthetic `LineFrag` carries `ascent == descent == 0` by construction. So a line
+whose only content is an `<img>` has **zero descent**, and nothing is reserved under the baseline.
+
+Measured on headless Chrome and here, same fixture, `margin:0; font:16px/normal sans-serif`, a 40×40 broken
+`<img>`:
+
+```text
+                                        Chrome   ours
+  div > img  (default = baseline)         h=44    h=40    <- the 4px strut descent
+  div > img  vertical-align:top           h=40    h=40    ✓
+  div > img  display:block                h=40    h=40    ✓
+```
+
+**`top` and `block` already agree, which localises it exactly:** the atomic is *placed* correctly
+(`VerticalAlign::Baseline => baseline - h`); the **line** is not opened far enough to hold what sits under
+the baseline. A baseline-aligned atomic's bottom sits ON the baseline, and the baseline is not the bottom of
+the line box.
+
+This is the `dy` term tick 688 identified — correctly-sized boxes in the wrong place because something above
+them is too short — and it fires on **every baseline-aligned inline image on the web**: icons, logos,
+avatars, spacer gifs. On tick 689's fixture it accumulated to **32px over four images**.
+
+⚠ **The obvious fix is wrong and was tried:** `atomic_h + descent` changes nothing, because `descent` is 0 on
+exactly the lines that need it. The strut has to be seeded from the **containing block's** font, which
+`close_line` does not currently receive — a signature change to the function that computes every line box in
+the engine. Sized as its own tick, with `w1: 40 → 44` as its falsifiable bar and the two already-correct
+rows (`top`, `block`) as its guard against over-correction.
+
+[[subpixel-error-compounds]] [[box-layout]]

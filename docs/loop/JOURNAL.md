@@ -32674,3 +32674,59 @@ INLINE-BASELINE DESCENT** — Chrome's box after an inline image sits 4px lower 
 **175s of a 227s wall (77%)**, independent captures, no false dependency. 175s → ~25s with the identical
 assertion (t688's wall audit; caching Chrome's answers is REJECTED — a gate whose expected value came from
 memory tests the memory).
+
+## Tick 690 — the line box has no STRUT, and that is the `dy` term (2026-07-27)
+
+HYPOTHESIS: t689's NEXT #2 — the inline-baseline descent, the next `dy` term, already measured as 4px per
+inline image. On-mandate: it attacks the geometry clusters (`C01ca <div>` 111 sites, `C7eb9 <body>` 93).
+
+### THE MEASUREMENT — both engines, minimal fixture, `margin:0; font:16px/normal sans-serif`
+
+```text
+                                        Chrome   ours
+  div > img  (default = baseline)         h=44    h=40    <- the 4px strut descent
+  div > img  vertical-align:top           h=40    h=40    ✓
+  div > img  display:block                h=40    h=40    ✓
+```
+
+**`top` and `block` already agree, which localises the bug precisely:** the atomic is PLACED correctly
+(`VerticalAlign::Baseline => baseline - h`); the **line** is not opened far enough to hold what sits under
+the baseline. A baseline-aligned atomic's bottom sits ON the baseline, and the baseline is not the bottom of
+the line box.
+
+### THE ROOT CAUSE — CSS 2.1 §10.8's strut is absent
+
+*"Each line box starts with a zero-width inline box with the element's font and line height properties — the
+strut."* `close_line` folds `ascent` / `descent` / `line-height` over **the fragments present**, and an
+atomic or synthetic `LineFrag` carries `ascent == descent == 0` **by construction** (its own doc comment says
+so). So a line whose only content is an `<img>` has **zero descent** and reserves nothing below the baseline.
+
+### ⚠ AND THE OBVIOUS FIX IS WRONG — I TRIED IT AND MEASURED THE RESULT
+
+`tallest_atomic = f.atomic_h + descent` for baseline-aligned atomics. Compiles, 89/89 green, and **changes
+nothing**: `w1` stayed at 40. Because `descent` is **0 on exactly the lines that need it** — that is the bug,
+not the input. Reverted rather than left in as a plausible no-op, which is the shape a future reader would
+have trusted.
+
+**The real fix seeds the strut from the CONTAINING BLOCK's font, which `close_line` does not receive** — a
+signature change to the function that computes **every line box in the engine**, and therefore the
+highest-risk single function for the 72/72 parity gate. Sized as its own tick, with a falsifiable bar already
+known (`w1: 40 → 44`) and two guards against over-correction already measured (`top` and `block` must stay at
+40).
+
+The finding is recorded **at the code site** as well as here, because that is where the next person changing
+`close_line` will be standing.
+
+TICK SHAPE: measurement (a root cause localised to one function, with the expected values and the
+over-correction guards measured, and a plausible-but-wrong fix eliminated by trying it). Bar 0 untouched;
+the only change is a comment at the site.
+Gates: none — nothing behavioural changed. manuk-layout lib 89/89.
+WIKI: `docs/wiki/text-layout.md` — "the line box has no STRUT, and that is the `dy` term".
+PATTERN: none — an open diagnosis with a named next tick. [no-pattern]
+
+NEXT: **(1) SEED THE STRUT.** Thread the containing block's font metrics into `close_line` so every line box
+starts with `ascent`/`descent`/`line-height` from the block's font. Bar: `w1` 40 → 44 with `top` and `block`
+unchanged at 40. This is the highest-mass `dy` fix on the board and it is now a one-function change.
+**(2) RE-RUN HEAD-20 AND READ `Cc4e6 <img>`'s SITE COUNT** — t689 claimed that cluster and the mandate's rule
+is that the claim is proven by a sweep. **(3) PARALLELISE THE PARITY CAPTURES** — 175s of a 227s wall, one
+serial headless Chrome per fixture (wall audit #21).

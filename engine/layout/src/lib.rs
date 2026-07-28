@@ -5034,6 +5034,31 @@ fn close_line(
     let descent = line.iter().map(|f| f.descent.round()).fold(0.0, f32::max);
     let pref = line.iter().map(|f| f.style.line_height).fold(0.0, f32::max);
     // An inline-block's margin-box height participates in the line height.
+    //
+    // ⚠⚠ **AND THAT IS NOT ENOUGH FOR A BASELINE-ALIGNED ATOMIC — THE LINE BOX HAS NO STRUT**
+    //    (measured tick 690, NOT yet fixed). CSS 2.1 §10.8: *"each line box starts with a zero-width
+    //    inline box with the element's font and line height properties — the strut."* `ascent`,
+    //    `descent` and `pref` above are folded over the FRAGMENTS PRESENT, and an atomic or synthetic
+    //    fragment carries `ascent == descent == 0` by construction (see `LineFrag`), so a line whose
+    //    only content is an `<img>` has **zero descent** and nothing is reserved under the baseline.
+    //
+    // ```text
+    //    margin:0; font:16px/normal sans-serif; a 40x40 broken <img>   Chrome   ours
+    //      div > img (default = baseline)                               h=44    h=40   <- 4px descent
+    //      div > img vertical-align:top                                 h=40    h=40   ok
+    //      div > img display:block                                      h=40    h=40   ok
+    // ```
+    //
+    //    `top` and `block` already agree, which localises it exactly: the atomic is PLACED correctly
+    //    (`VerticalAlign::Baseline => baseline - h` below); the LINE is not opened far enough to hold
+    //    what sits under the baseline. This is the `dy` term tick 688 identified, and it fires on every
+    //    baseline-aligned inline image on the web — icons, logos, avatars — each shifting everything
+    //    below it by the descent (32px over four images on tick 689's fixture).
+    //
+    //    ⚠ The fix is NOT `atomic_h + descent`: that was tried and changed nothing, because `descent`
+    //    is 0 on exactly the lines that need it. The strut must be seeded from the CONTAINING BLOCK's
+    //    font, which `close_line` does not currently receive — a signature change to the function that
+    //    computes every line box in the engine, so it is its own tick with `w1: 40 -> 44` as its bar.
     let tallest_atomic = line.iter().map(|f| f.atomic_h).fold(0.0, f32::max);
     let content_h = ascent + descent;
     // **A tall content area does NOT push the line box open.** `line-height` is the line box, full

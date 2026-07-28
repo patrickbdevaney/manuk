@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **447** | ticks 1–689 |
-| median tick cycle | **21m** | 446 intervals |
+| ticks landed | **448** | ticks 1–690 |
+| median tick cycle | **21m** | 447 intervals |
 | median, last 10 | **20m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 398.5h elapsed |
-| median verify wall | **63s** | 386 ticks |
+| **ticks per hour** | **1.12** | 399.0h elapsed |
+| median verify wall | **63s** | 387 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **354**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**217 of 447 ticks** (49%) moved a
+**217 of 448 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -544,5 +544,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **687** | 2026-07-27 18:29 | 15m | infrastructure | 63s | +270/−33 | 334 | 81 | 56.0% · | a repeat that measured nothing is not paid for twice (2026-07-27) |
 | **688** | 2026-07-27 18:41 | 12m | measurement | 63s | +248/−34 | 334 | 81 | 56.0% · | SHAPE is not a per-box metric error; it is one wrong HEIGHT above the content (2026-07-27) |
 | **689** | 2026-07-27 19:35 | 54m | capability | 63s | +384/−35 | 334 | 81 | 56.0% · | a broken `<img>` is 16×16 in Chrome and was 784×0 here (2026-07-27) |
+| **690** | 2026-07-27 20:03 | 28m | measurement | 63s | +154/−33 | 334 | 81 | 56.0% · | the line box has no STRUT, and that is the `dy` term (2026-07-27) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
