@@ -2855,3 +2855,74 @@ construct, so no semantic-model exposure is owed. Same reasoning as check #53.
    hits) has not been touched since t698. Coverage work alone cannot clear the 0.75 bar.
 
 **Next check due: tick 720.**
+
+---
+
+## Check #56 — tick 721
+
+**Horizon:** H0 — Pareto Web Parity. **Gate:** the `DAILY-DRIVER-CERTIFICATION.md` certificate —
+render × function per site, `shape ≥ 0.75` on ≥95% of a fixed-denominator corpus.
+
+**Gate or scoreboard?** **Gate**, and by a wide margin — the reverse of check #55's finding eight
+ticks ago. Ticks 713–721:
+
+```text
+  713  measurement   HEAD-20 re-run; the full sweep priced at ~10h and named unschedulable
+  714  measurement   external CSS applied AFTER `load` — every script on that path measures nothing
+  715  capability    the refusal RETRACTED (welt's 95.6% was our own timeout) — and reverted again
+  716  measurement   the population read; keirin -7.2; the arithmetic that forbids the fix
+  717  capability    a frame with nothing to FETCH got nothing to LOAD  (contentDocument)
+  718  measurement   the probe is BLIND until its own bug is fixed
+  719  capability    the CSS-ordering fix LANDS on the third design
+  720  measurement   the population read on it; ikea 21 missing boxes -> 0 (isolated)
+  721  audit         surface #44 — a `works` row that does not work
+```
+
+Three capability ticks and one of them is the largest correctness fix this session: a page's own
+scripts on the agent/measurement path can now measure the document they are in. Check #55's steer —
+*"an instrument fix is not done until the instrument has RE-RUN"* — was obeyed literally: **every
+capability tick in this window was followed by a HEAD-20 read** (716 after 715, 720 after 719), and
+that is what caught keirin's −7.2 and forced two reverts.
+
+**On I4 (usage-weighted Pareto):** honoured, and sharpened. t719's caller audit corrected a claim the
+loop had published three times — `load_async` has **no shell caller**, so the CSS-ordering bug was
+the **agent's** and the **measurement rig's**, not the shipping browser's. Under I4 that is a *higher*
+priority, not a lower one: PART VII component 2 is the agent surface, and the fidelity instrument
+decides what the loop builds next. But the earlier framing was wrong and is corrected in the record.
+
+**On I5 (the oracle is the discovery engine):** ⚠ **the PART VI correction this check owes.**
+Check #55 named a third instrument class — *a probe that runs inside the page, the only one that can
+see a SCHEDULE.* Tick 718 found it has a blind spot that no other instrument has: **an instrument
+built to find one bug is calibrated BY that bug until it is fixed.** The probe reported a
+spec-citable, top-cluster float-blockification bug across 85 elements of `keirin.jp` that **does not
+exist** — a four-case control fixture blockifies floats exactly like Chrome. So the class is real and
+its rule of use is: *before trusting a new instrument on a new subject, run it on a case where you
+already know the answer.* Recorded in PART VI's spirit rather than its letter: the instrument list is
+not the loop's problem, the instrument's **calibration** is.
+
+**On PART VII / V1-SCOPE:** honoured. Nine ticks, no harness file touched. Two harness observations
+were noted and left: the verify wall exceeds its 300s target (self-audit t715), and
+`map-reconcile.sh` still does not search `shell/` (tenth audit running).
+
+**No invariant is being bent.** The ratchet held **four separate times** in this window and every one
+of them was a real save: t712 cleared of ikea's coverage loss by rebuilding the prior tree; t715's
+refusal retracted by varying a knob the patch did not contain; t716's revert on a −7.2 that two
+isolated runs per tree confirmed; and the `GATES 336 < 337` refusal that made removing a gate a
+deliberate, explained act rather than a silent one.
+
+### THE STEER
+
+1. **A CONTROL THAT VARIES YOUR CHANGE ANSWERS ONLY "DID I DO THIS."** Revert-and-remeasure is this
+   project's standard control and it produced a *wrong* conclusion at t714 — the number moved exactly
+   with the patch and the cause was elsewhere. The second question, *"what else does this?"*, needs a
+   knob the patch does not touch. Make it the second step of every regression attribution, not an
+   afterthought.
+2. **MEASURE A CONDITIONAL CAPABILITY UNDER BOTH CONDITIONS.** t719's fix degrades gracefully, so it
+   reads at its floor in the batch and its ceiling in isolation (`ikea` 97.1% vs 100.0%). Either
+   number alone is a future disagreement with ourselves, filed as "noise".
+3. **THE FULL CORPUS SWEEP IS STILL OWED AND IS STILL UNSCHEDULABLE** — ~10 hours, serial, one Chrome
+   per site, and it cannot share the box with the tick loop. Three checks have now asked for it. It
+   needs a *window*, not another resolution; until then HEAD-20 is the honest substitute and every
+   cluster claim stays a mechanism claim.
+
+**Next check due: tick 729.**

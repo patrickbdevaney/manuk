@@ -2428,3 +2428,72 @@ work items.
 **Standing note, ninth audit running:** `map-reconcile.sh` searches `engine agent tests` and not
 `shell/`, so the eight gates living as `#[test] fn` in `shell/src/media.rs` and `shell/src/audio.rs`
 remain invisible to it. Harness-owned; reported, not touched.
+
+## Audit #44 — tick 721 (2026-07-28)
+
+**Sources (searched, not recalled):**
+- <https://github.com/web-platform-tests/interop/blob/main/2026/README.md> — the canonical Interop
+  2026 list: 20 focus areas + 4 investigation efforts.
+- <https://webkit.org/blog/17818/announcing-interop-2026/> · <https://web.dev/blog/interop-2026>
+- <https://web.dev/blog/baseline-digest-may-2026> · <https://web.dev/baseline/2026>
+- <https://ladybird.org/newsletter/2026-06-30/> — the independent engine's own trajectory.
+
+### GATE-VS-MAP DIFF
+
+```text
+  map rows                                  : 395
+  Interop 2026 focus areas                  : 20    (unchanged from #43)
+  Interop 2026 areas absent from the map    : 0 of 20
+  Interop 2026 INVESTIGATION efforts        : 4     (a11y testing · JPEG XL · mobile testing · WebVTT)
+  ...absent from the map                    : 0 of 4
+  ADDED                                     : nothing
+  CORRECTED                                 : ONE ROW, from `works` to `partial` — see below
+```
+
+### ⚠⚠ WHAT WE HAD BEEN WRONG ABOUT: A `works` ROW THAT DOES NOT WORK
+
+`CSS lh / rlh line-height units` has read **`works`** since tick 509. It is `partial`, and the audit
+found it by testing a property the probe does not.
+
+```text
+  root line-height 2 (=32px) · element line-height 20px      CHROME     MANUK
+    width:  5lh                                                 100       100   ok
+    height: 5lh                                                 100       100   ok
+    width:  5rlh                                                160        96   ✗
+    height: 5rlh                                                160        96   ✗
+    CSS.supports('width','5lh')                                true     FALSE   ✗
+    CSS.supports('height','5lh')                               true     FALSE   ✗
+    CSS.supports('width','5rlh')                               true     FALSE   ✗
+```
+
+**Two distinct defects, and the first one was predicted in writing by the row itself.** The t509
+receipt ends *"`rlh` is the root-relative sibling on the identical Stylo line-height-relative length
+path … **not separately geometry-tested**"* — and the half nobody tested is the half that is broken.
+`96 = 5 × 19.2` is the **initial `normal` line-height** (16 × 1.2), so `rlh` resolves against neither
+the root's computed line-height (5 × 32 = 160) nor the element's (5 × 20 = 100). It is not
+root-relative at all; it is initial-relative.
+
+**The second defect is feature detection, and it points the other way from the usual one.**
+`CSS.supports` returns **false** for `lh`/`rlh` in *every* property tested, while the unit demonstrably
+works. This project's standing hazard is a false *presence* (`@supports` answering "does it parse" →
+31 phantom properties; `typeof null === 'object'` → t717). This is the inverse: **a working
+capability that reports itself absent**, so every page guarding `lh` behind a support check takes its
+fallback path for no reason. `lh`/`rlh` reached **Baseline Widely Available in May 2026**, which is
+precisely the threshold at which authors stop guarding — so the false negative gets *more* expensive
+from here, not less.
+
+### THE LESSON THIS AUDIT PAID FOR
+
+> **A probe that tests one property has measured one property.** `lhunit` is a good behavioural
+> probe — `width:5lh` against `line-height:20px`, passing only on exactly 100, RED-proof against both
+> a 1em fallback and a dropped declaration. It is not wrong. It is *narrow*, and the map recorded its
+> narrow result under a wide name (*"lh / rlh line-height units"*), which is how a `works` row comes
+> to cover a unit that was never tested.
+
+This is the same shape as audit #43's finding one level down: there, a **deferral's price** went
+stale; here, a **probe's scope** was wider in the ledger than in the code. Both are the map describing
+something the instrument never looked at.
+
+**Standing note, tenth audit running:** `map-reconcile.sh` searches `engine agent tests` and not
+`shell/`, so the eight gates living as `#[test] fn` in `shell/src/media.rs` and `shell/src/audio.rs`
+remain invisible to it. Harness-owned; reported, not touched.

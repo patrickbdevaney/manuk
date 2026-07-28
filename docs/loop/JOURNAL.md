@@ -35291,3 +35291,64 @@ disagree with yourself and call it noise.**
 NEXT: **(1) SURFACE AUDIT** — due at tick 720, so it lands next tick. **(2)** the synchronous
 `contentDocument` residual (t717). **(3)** `document.styleSheets` reports **0** where Chrome reports
 9 — external sheets are absent from the CSSOM even once applied (measured on keirin, t718).
+
+## Tick 721 — surface audit #44: a `works` row that does not work, and the half nobody tested (2026-07-28)
+
+HYPOTHESIS: the surface audit is due (last 710). Leave the frame, reconcile against what the world
+says matters now, and find something the map is wrong about — *"an audit that finds nothing is a
+suspicious audit."*
+
+### THE RECONCILIATION FOUND NOTHING, WHICH IS WHY I KEPT GOING
+
+Interop 2026: **20 focus areas, 0 absent from the map**; its **4 investigation efforts** (a11y
+testing, JPEG XL, mobile testing, WebVTT) — **0 absent**. Five audits running with a clean
+reconciliation. So the frame is right, and the interesting question moved from *what is missing* to
+*what is mis-recorded*. Baseline's 2026 digests gave the lead: `lh` / `rlh` reached **Baseline Widely
+Available in May 2026** — the threshold at which authors stop feature-guarding.
+
+### ⚠⚠ AND THE ROW READ `works`
+
+```text
+  root line-height 2 (=32px) · element line-height 20px      CHROME     MANUK
+    width:  5lh                                                 100       100   ok
+    height: 5lh                                                 100       100   ok
+    width:  5rlh                                                160        96   ✗
+    height: 5rlh                                                160        96   ✗
+    CSS.supports('width','5lh') / ('height','5lh') / ('width','5rlh')
+                                                               true     FALSE   ✗
+```
+
+**Two defects, and the first was predicted in writing by the row that claimed the capability.** The
+t509 receipt ends *"`rlh` is the root-relative sibling on the identical Stylo path … **not separately
+geometry-tested**"*. The half nobody tested is the broken half. `96 = 5 × 19.2` is the **initial
+`normal` line-height** (16 × 1.2), so `rlh` resolves against neither the root's 32px nor the element's
+20px — it is not root-relative at all, it is *initial*-relative.
+
+**The second points the opposite way from this project's usual hazard.** `CSS.supports` answers
+**false** for `lh`/`rlh` on every property, while the unit demonstrably works. The standing failure
+here is a false *presence* — `@supports` answering "does it parse" (31 phantom properties), `typeof
+null === 'object'` (t717, four ticks ago). This is a working capability **reporting itself absent**,
+so a page that guards `lh` takes its fallback for no reason — and gets more expensive from here,
+because Widely Available is exactly when the guards come off.
+
+Map corrected `works` → `partial`, with both measurements in the receipt.
+
+TICK SHAPE: audit
+CLUSTER: none — a frame check, which is what this cadence is for.
+Gates: none (no code change). ⚠ The existing `lhunit` probe in `G_PROBE_CAPABILITIES` is **not
+wrong** and is not being weakened: it tests `width:5lh` behaviourally and RED-proves against both a
+1em fallback and a dropped declaration. It is *narrow*, and the ledger recorded its narrow result
+under a wide name.
+WIKI: none [forced] — an audit of the map against the outside world; the engine is unchanged.
+PATTERN: **a probe that tests one property has measured one property.** The row was named *"CSS lh /
+rlh line-height units"* and the probe was `width:5lh`. Nothing lied: the probe reported exactly what
+it checked, the receipt even said which half was untested, and the *name* did the over-claiming. That
+is audit #43's finding one level down — there a deferral's PRICE went stale, here a probe's SCOPE was
+wider in the ledger than in the code — and both are the map describing something no instrument ever
+looked at. ⚠ The operational form, because it is cheap: **when a receipt contains the words "not
+separately tested", the row's status belongs to the tested half only.**
+
+NEXT: **(1) `rlh` RESOLVES AGAINST THE INITIAL LINE-HEIGHT** — a bounded, Chrome-measured geometry
+fix with the fixture already written. **(2)** `CSS.supports` false-negative on `lh`/`rlh`. **(3)** the
+synchronous `contentDocument` residual (t717). **(4)** `document.styleSheets` reports 0 where Chrome
+reports 9 (t718).
