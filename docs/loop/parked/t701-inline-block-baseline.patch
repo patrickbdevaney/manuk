@@ -1,0 +1,154 @@
+diff --git a/engine/layout/src/lib.rs b/engine/layout/src/lib.rs
+index 528e7423..c881ff2f 100644
+--- a/engine/layout/src/lib.rs
++++ b/engine/layout/src/lib.rs
+@@ -1535,6 +1535,21 @@ fn is_atomic_inline_replaced(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool
+         )
+ }
+ 
++/// The absolute y of the **last in-flow line box's baseline** inside `b`, if it has any — the
++/// number CSS 2.1 §10.8.1 makes an `inline-block`'s baseline. `LayoutBox::walk` visits every box
++/// and each box carries its own inline fragments, so the deepest/lowest baseline is simply the max.
++fn last_line_baseline(b: &LayoutBox) -> Option<f32> {
++    let mut best: Option<f32> = None;
++    b.walk(&mut |bx| {
++        if let BoxContent::Inline(frags) = &bx.content {
++            for f in frags {
++                best = Some(best.map_or(f.baseline, |v: f32| v.max(f.baseline)));
++            }
++        }
++    });
++    best
++}
++
+ fn establishes_bfc(s: &ComputedStyle) -> bool {
+     // `flow-root` exists for EXACTLY this: a block box whose only distinguishing property is that it
+     // establishes a BFC, so it contains its floats without `overflow:hidden`'s clipping.
+@@ -4604,10 +4619,34 @@ impl Ctx<'_> {
+                     let r = self.layout_block(node, cw, None, 0.0, 0.0, 0.0, &mut fc);
+                     let advance = ml + r.boxx.rect.width + mr;
+                     let height = r.margin_top + r.boxx.rect.height + r.margin_bottom;
++                    // ⚠⚠ **AN INLINE-BLOCK SITS ON ITS OWN LAST LINE'S BASELINE, NOT ON ITS BOTTOM
++                    //    EDGE** (CSS 2.1 §10.8.1): *"the baseline of an 'inline-block' is the
++                    //    baseline of its last line box in the normal flow, unless it has either no
++                    //    in-flow line boxes or if its 'overflow' property has a computed value other
++                    //    than 'visible', in which case the baseline is the bottom margin edge."*
++                    //
++                    //    We used the bottom margin edge ALWAYS. The difference is the atomic's own
++                    //    descent: the strut's descent then hangs BELOW that edge, so **every line
++                    //    holding a baseline-aligned inline-block was one strut-descent too tall** —
++                    //    4px at a 16px root font, on every nav chip, badge, button, icon+label pair
++                    //    and card grid on the web, accumulating down the page as `dy`.
++                    //
++                    //    Measured, Chrome `--headless=new` 1200x800, `x<span class=ib>Ag</span>y`:
++                    //    the line is **h55** at `font-size:48px` and we made it **h59**; h18 vs h22
++                    //    at 16px. The `overflow:hidden` row is the control — Chrome DOES use the
++                    //    bottom margin edge there, and it already agreed (h59 both).
++                    let baseline = if s.overflow == Overflow::Visible {
++                        last_line_baseline(&r.boxx)
++                            .map(|b| r.margin_top + (b - r.boxx.rect.y))
++                            .unwrap_or(height)
++                    } else {
++                        height
++                    };
+                     out.push(InlineItem::Atomic {
+                         box_: Box::new(r.boxx),
+                         advance,
+                         height,
++                        baseline,
+                         space_before: *pending_space && !*first,
+                         valign: s.vertical_align,
+                         // `white-space` is INHERITED, so the atomic's own computed style already
+@@ -4838,6 +4877,7 @@ impl Ctx<'_> {
+                         report_h: Some(height),
+                         atomic: None,
+                         atomic_h: 0.0,
++                        atomic_baseline: 0.0,
+                         valign: VerticalAlign::Baseline,
+                     });
+                 } else if node.map(|n| self.dom.tag_name(n)) == Some(Some("br")) {
+@@ -4875,6 +4915,7 @@ impl Ctx<'_> {
+                         report_h: Some(height),
+                         atomic: None,
+                         atomic_h: 0.0,
++                        atomic_baseline: 0.0,
+                         valign: VerticalAlign::Baseline,
+                     });
+                 }
+@@ -4943,6 +4984,7 @@ impl Ctx<'_> {
+                             report_h: None,
+                             atomic: None,
+                             atomic_h: 0.0,
++                            atomic_baseline: 0.0,
+                             valign: VerticalAlign::Baseline,
+                         }),
+                     )
+@@ -4951,6 +4993,7 @@ impl Ctx<'_> {
+                     box_,
+                     advance,
+                     height,
++                    baseline: atomic_baseline,
+                     space_before,
+                     valign,
+                     no_wrap,
+@@ -4994,6 +5037,7 @@ impl Ctx<'_> {
+                             report_h: None,
+                             atomic: Some(box_),
+                             atomic_h: height,
++                            atomic_baseline,
+                             valign,
+                         }),
+                     )
+@@ -5047,6 +5091,7 @@ impl Ctx<'_> {
+                             report_h: Some(report_height),
+                             atomic: None,
+                             atomic_h: 0.0,
++                            atomic_baseline: 0.0,
+                             valign: VerticalAlign::Baseline,
+                         }),
+                     )
+@@ -5139,6 +5184,9 @@ struct LineFrag {
+     /// `Some` for an `inline-block`: the box to place, and its margin-box height.
+     atomic: Option<Box<LayoutBox>>,
+     atomic_h: f32,
++    /// Distance from the atomic's margin-box top to the baseline it rests on (CSS 2.1 §10.8.1).
++    /// Meaningless when `atomic_h == 0`; equal to `atomic_h` for the bottom-margin-edge cases.
++    atomic_baseline: f32,
+     valign: VerticalAlign,
+ }
+ 
+@@ -5250,7 +5298,9 @@ fn close_line(
+             // (distance above the baseline, distance below it) for the same placement, and if the
+             // two ever disagree the box is placed outside the line box it asked for.
+             let (a, b) = match f.valign {
+-                VerticalAlign::Baseline => (h, 0.0),
++                // §10.8.1 — the atomic rests on ITS OWN last-line baseline, so the part of it
++                // below that baseline hangs under the line's baseline like a descender.
++                VerticalAlign::Baseline => (f.atomic_baseline, h - f.atomic_baseline),
+                 VerticalAlign::Middle => (h / 2.0 + ascent * 0.25, h / 2.0 - ascent * 0.25),
+                 VerticalAlign::TextTop => (ascent, h - ascent),
+                 VerticalAlign::TextBottom => (h - descent, descent),
+@@ -5308,8 +5358,10 @@ fn close_line(
+                 VerticalAlign::TextBottom => baseline + descent - h,
+                 VerticalAlign::Sub => baseline + ascent * 0.15 - h,
+                 VerticalAlign::Super => baseline - ascent * 0.35 - h,
+-                // baseline: the box's bottom margin edge sits on the baseline.
+-                VerticalAlign::Baseline => baseline - h,
++                // §10.8.1: the atomic's OWN last-line baseline sits on the line's baseline (its
++                // bottom margin edge only when it is replaced, empty, or `overflow != visible` —
++                // in which cases `atomic_baseline == atomic_h` and this reduces to the old form).
++                VerticalAlign::Baseline => baseline - f.atomic_baseline,
+             };
+             b.translate(fx, box_top);
+             atomic_boxes.push(*b);
+@@ -5362,6 +5414,10 @@ enum InlineItem {
+         box_: Box<LayoutBox>,
+         advance: f32,
+         height: f32,
++        /// Distance from this atomic's MARGIN-BOX TOP to the baseline it sits on, per CSS 2.1
++        /// §10.8.1. Equal to `height` (the bottom margin edge) for a replaced box, an empty one, or
++        /// one whose `overflow` is not `visible`; otherwise the baseline of its LAST in-flow line box.
++        baseline: f32,
+         space_before: bool,
+         valign: VerticalAlign,
+         /// `white-space:nowrap` — an atomic inline is a *token in the run*, exactly like a word,

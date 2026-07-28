@@ -33559,3 +33559,86 @@ needs a correction or whether it exposed a separate table-height bug. **This out
 on the board: it is the only outstanding regression.** **(2) THE FULL CORPUS SWEEP IS STILL OWED** —
 this was 13 sites of 265, and the two clusters the recent ticks actually move are not in the slice.
 **(3) `node_rects` LIFTS OUT-OF-FLOW DESCENDANTS INTO BOXLESS INLINE ANCESTORS** (t697's NEXT).
+
+## Tick 701 — the regression's cause is CSS 2.1 §10.8.1, and the fix is a TRADE, so it does not land (2026-07-28)
+
+HYPOTHESIS: t700's NEXT #1 and the only outstanding regression — the rust-lang docs tables, `<td>`
+111 → 124, introduced at t695. Bar: name the mechanism against Chrome, and either fix it or refuse it
+on measured grounds.
+
+### THE CAUSE, AND IT IS NOT TABLES AT ALL
+
+The `<td>` was a red herring twice over. The cell's only child is an `<h3>` that **both engines compute
+as `inline-block`** (the oracle books these rows as `geometry`, not `display`, which is how we know
+they agree), and the `<h3>` itself never appears as a divergence — its box matches Chrome. Only the
+line box around it is 13px too tall.
+
+CSS 2.1 §10.8.1: *"the baseline of an 'inline-block' is the baseline of its last line box in the normal
+flow, unless it has either no in-flow line boxes or if its 'overflow' property has a computed value
+other than 'visible', in which case the baseline is the bottom margin edge."* We used **the bottom
+margin edge always** (`VerticalAlign::Baseline => (h, 0.0)`), so the strut's descent hangs *below* the
+atomic's bottom edge and every line holding a baseline-aligned inline-block is one strut-descent too
+tall.
+
+```text
+   Chrome --headless=new 1200x800, margin:0 16px/normal sans-serif,  x<span class=ib>Ag</span>y
+                                          Chrome   before   with fix
+     inline-block, font-size:48px           h55      h59       h55
+     …plus margin-top:32px                  h87      h91       h87
+     …with overflow:hidden  (control)       h59      h59       h59    <- Chrome DOES use the
+     inline-block, font-size:16px           h18      h22       h18       bottom edge here
+```
+
+**8 of 8 boxes match Chrome with the fix**, including the `overflow:hidden` control that must NOT
+move. This is a general defect, not a table one: every nav chip, badge, button, icon+label pair and
+card grid on the web sits on a line 4px too tall at a 16px root font, accumulating down the page.
+
+### AND THE MEASURED RESULT IS A TRADE, SO IT IS REFUSED
+
+```text
+   10 comparable sites (identical `probed`), pre-session tree vs the fix:
+
+     blog.rust-lang.org      383 -> 13     -370      SHAPE ~77% -> ~99%
+     whitehouse.gov          376 -> 360     -16
+     this-week-in-rust.org    69 -> 66       -3
+     six others                            +0
+     vimeo.com               803 -> 1005   +202   <- BATCH ARTIFACT, see below
+
+   desitales2 — the DETERMINISTIC control, three readings, byte-identical each time:
+     structural 98.7% (597 paths, 8 missing, 582 misplaced)  — IDENTICAL to before
+     SHAPE      61.5%  ->  57.2%            median dy 80 -> 103
+```
+
+**A win beside a regression is not a win.** `desitales2` is the site this project uses precisely
+because its SHAPE and `dy` are reproducible, and it moved 4.3 points the wrong way, stably, on three
+readings. The blog.rust-lang win is nearly thirty times larger in absolute divergences and it does not
+matter: the ratchet does not trade, and I am not going to be the tick that discovers an exception to
+that on the strength of a number I like.
+
+So the patch is **parked, not landed** — `docs/loop/parked/t701-inline-block-baseline.patch`, and in
+`git stash` with the same title. The engine is back at HEAD; the layout suite is 94/94.
+
+⚠ **THE BATCH ARTIFACT REPRODUCED EXACTLY AS t700 PREDICTED.** vimeo read 1005 inside this 13-site
+batch and **803 in an isolated run on the same build**, which is the same 803 it gives on every tree
+tested. t700's PATTERN — *an outlier reading inside a long batch run is a harness reading* — is now
+confirmed on a second, independent batch. Had it not been written down one tick earlier, this run
+would have reported a +202 regression against a change that does not touch vimeo at all.
+
+TICK SHAPE: measurement
+CLUSTER: C01ca (geometry) — cause identified, fix withheld.
+Gates: no engine change. Layout suite 94/94 on the reverted tree.
+WIKI: none [forced] — the mechanism is written up in the journal with its measurements and the patch is
+parked beside it; promoting a rule to the wiki for a fix that did not land would claim a behaviour the
+engine does not have.
+PATTERN: **a spec-correct fix that matches Chrome 8/8 on its own fixture can still regress a real
+site, and the fixture cannot tell you that.** The fixture proves the RULE; only the corpus tells you
+whether the rule interacts badly with something else you have. Both are required, and the corpus is
+the one with the veto.
+
+NEXT: **(1) WHY DOES `desitales2` REGRESS?** The fix is right on its fixture and right on
+blog.rust-lang, so the loss is an interaction — most likely `last_line_baseline` taking the MAX
+baseline over the atomic's whole subtree, which is wrong when the lowest line belongs to a float, an
+out-of-flow descendant, or a nested atomic rather than to the last IN-FLOW line box. Narrow it to the
+in-flow last line and re-measure; the patch is parked and ready. **(2) The rust-lang table regression
+from t695 remains OPEN** and is now fully explained — it is the same mechanism, so (1) closes it.
+**(3) THE FULL CORPUS SWEEP** is still owed (13 of 265).
