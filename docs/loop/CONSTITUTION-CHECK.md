@@ -2774,3 +2774,84 @@ included — `getBBox()` is the fill box) rather than a tolerance to widen.
    registry is stale and is steering the loop. It still is.
 
 **Next check due: tick 712.**
+
+---
+
+## Check #55 — tick 712
+
+**Horizon:** H0 — Pareto Web Parity. **Gate:** the `DAILY-DRIVER-CERTIFICATION.md` certificate —
+render × function per site, `shape ≥ 0.75` on ≥95% of a fixed-denominator corpus.
+
+**Gate or scoreboard?** Neither, for seven of the eight ticks, and that is the finding. Ticks
+705–712 were:
+
+```text
+  705  measurement   the first honest full-corpus certificate on the rebuilt instrument
+  706  measurement   "render-failed" is not a paint bug — the author CSS silently never arrives
+  707  fix           fidelity-progress was parsing a vocabulary the instrument stopped printing at t531
+  708  fetch         a deadline-cut stylesheet is now COUNTED as failed (it used to vanish)
+  709  instrument    three "render-failed" sites were a bot wall wearing HTTP 200
+  710  audit         surface audit #43 — the death-tail's price moved and nobody re-checked it
+  711  measurement   the honest render-failed remainder is the SPA hydration wipe (= C3833)
+  712  capability    a <script src> in the MARKUP that loaded told the page nothing
+```
+
+**One capability tick in eight.** Every one of the other seven was legitimate and several were
+necessary — the instrument was *lying*, in four separate ways, and an instrument that lies outranks
+everything it measures. But the honest accounting is that the H0 exit gate did not move for seven
+ticks, and the loop knew it: `FIDELITY-PROGRESS.tsv` was frozen at 2026-07-20, the last full-corpus
+sweep is **291 hours old**, and `tick.sh`'s own pre-flight has been printing *"a capability tick must
+measure THIS tree"* into every landing.
+
+**So the drift is not "we stopped measuring" — it is the opposite shape, and it is new.** The classic
+failure this check exists to catch is a loop that optimises a number without fixing the instrument.
+What happened here is a loop that **fixed the instrument four times and did not re-run it**. The end
+state is identical from downstream: a correct instrument over stale data decides exactly as badly as
+a broken one, and `CLUSTERS.md` — which PART III's standing rule makes the tie-breaker, and which the
+board makes CO-#1 — is currently being read off a crawl that no longer describes the engine. Two of
+its top rows already re-measured to zero once (t696).
+
+**The correction, and it is this tick's action:** the full-corpus sweep is RUNNING, and no further
+cluster claim is made until it lands. t712 named a mechanism inside `C3833` and moved a per-site
+number (wix DOM inserts after the wipe 6 → 44); it did **not** claim the cluster shrank, because
+only the sweep can say that and the sweep had not run in twelve days.
+
+**On I4 (usage-weighted Pareto):** honoured. t712 was chosen off the oracle's ranked ledger (top
+cluster by hits), and its population was stated as the **floor** it is (8 of 245 corpus snapshots
+carry the idiom in the *served* document) rather than as the number that flatters it.
+
+**On I5 (the oracle is the discovery engine):** ⚠ **sharpened, and this is the PART VI correction.**
+Check #51 recorded that the primary discovery engine had become the *instrumented log* rather than
+the oracle's volume. t712 is the first finding in that arc that the log **started but could not
+finish**: the log said `google is not defined` and stopped there, and the actual defect — a `load`
+event that never fires — emits no line at all, by construction. It was found by a **differential
+probe against headless Chrome on a four-case fixture**, which is the oracle's method applied by hand
+at the size of one behaviour instead of one page. Record that as a third instrument alongside the
+other two: *the oracle is the breadth instrument, the log is the depth one, and a hand-built
+differential fixture is the only one that can see an ABSENCE* — because an absence has no log line
+and no divergent box, only a missing entry in a sequence some other engine produces.
+
+**On PART VII / V1-SCOPE:** honoured. t712 moves component 1 (daily-driver rendering parity) and no
+harness file was touched. The one adjacent finding that is genuinely out of scope was named and
+dropped rather than pursued: `accounts.google.com` answers our honest User-Agent with 403, which is
+the bot-wall track (PART IV, "the hostile bot-walled tier").
+
+**On I3 (semantic model in lockstep):** not implicated — t712 adds a JS event with no new rendered
+construct, so no semantic-model exposure is owed. Same reasoning as check #53.
+
+**No invariant is being bent.**
+
+### THE STEER
+
+1. **AN INSTRUMENT FIX IS NOT DONE UNTIL THE INSTRUMENT HAS RE-RUN.** Four ticks repaired the
+   fidelity rig and none of them re-swept, so the repairs bought nothing the ledger can see. Make the
+   re-run part of the fix, not the next tick's problem.
+2. **NO CLUSTER CLAIM WITHOUT A SWEEP THAT POSTDATES THE CHANGE.** The board's own rule
+   (*"PROVE the cluster's site-count SHRINKS next sweep"*) has been unenforceable for twelve days.
+   It becomes enforceable again when this sweep lands; until it does, every "cluster X moved" is a
+   mechanism claim, not a count claim, and must say so.
+3. **THE NEXT NON-MEASUREMENT TICK IS A GEOMETRY ONE.** The board's t685 refinement requires that
+   every other tick attack GEOMETRY or `display` to move SHAPE, and `C01ca <div>` (111 sites / 14,002
+   hits) has not been touched since t698. Coverage work alone cannot clear the 0.75 bar.
+
+**Next check due: tick 720.**

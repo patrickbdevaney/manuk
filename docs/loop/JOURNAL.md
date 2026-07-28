@@ -34551,3 +34551,124 @@ that can say whether `C3833`'s site count fell. **(2)** the null-target capture 
 **(3)** `Referer` is genuinely absent from the whole engine — hotlink protection and referer
 allowlists are a real, unmeasured gap. **(4)** the oracle crawl (t706) and the parked §10.8.1 patch
 remain owed.
+
+## Tick 713 — the sweep the loop has owed for twelve days, and the half of the HEAD corpus that never reaches us (2026-07-28)
+
+HYPOTHESIS: constitution check #55 is due (last 704), and t712's cluster claim is uncheckable because
+the last corpus sweep is **291 hours old** — `tick.sh`'s own pre-flight has been printing *"a
+capability tick must measure THIS tree"* into every landing for a week. Bar: re-run the sweep, read it
+honestly, and answer whether the loop is climbing the gate or the scoreboard.
+
+### THE FULL-CORPUS SWEEP IS NOT A TICK, AND THAT IS WHY IT IS STALE
+
+Started it first, on the real 265-site corpus, and measured its rate rather than assuming one:
+**3 sites in ~7 minutes ⇒ ~2.3 min/site ⇒ ~10 hours**, single process, serial, one headless Chrome
+per site. It cannot share the box with the tick loop — every landing runs a build and a 758s gate
+wall, and t695 established that contention *manufactures* the `MISSING_BOX` it then ranks. So the
+choice is a ten-hour quiet box or a poisoned number, and "run the full sweep every few ticks" has
+been an instruction with no schedule that admits it. **That is the mechanical reason it is 291h old,
+and it is worth writing down instead of re-resolving to try harder.**
+
+Ran **HEAD-20** instead — the same 20 sites banked at `docs/bench/head20-rows-t692.tsv`, so it is
+differenceable — in ~50 minutes. Banked at `docs/bench/head20-rows-t713.tsv`. ⚠ Deliberately **not**
+banked as `docs/loop/SWEEP-t713-rows.tsv`: that name is what `fidelity-progress.sh` reads as *the
+corpus*, and a 20-site run entered there would be a HEAD-20 number wearing the corpus's clothes.
+
+### THE WINDOW t692 → t713 (18 ticks, NOT one tick — no per-tick attribution is claimed)
+
+```text
+  site                    coverage          shape          scored elements
+  www.desitales2.com   98.7 →  98.7    60.6 →  70.3         589 →  589
+  www.ikea.com        100.0 →  97.1    50.7 →  53.6         698 →  698
+  keirin.jp            74.7 →  74.7    58.7 →  60.2        1042 → 1038
+  www.welt.de          95.6 →  95.6    66.9 →  64.7        3070 → 3118
+  www.agoda.com         1.3 →   8.0    10.0 →  52.3          10 →   65
+  comix.to / naukri / playhop            flat
+
+  MEAN VISUAL 50.8%  ·  MEAN COVERAGE 74.8%  ·  MEAN SHAPE 60.2%
+  CERTIFICATE: sites 20 · scored 5 · shape ≥0.75 on 0 (0.0%)   — NOT MET
+```
+
+`agoda` is the largest move: **6.5× more measurable elements** (10 → 65) and shape 10.0% → 52.3%. It
+is a chunk-loader app and t712 is a script-completion fix, which makes it the obvious story — and the
+window holds eighteen ticks, so the obvious story is exactly the one that needs a control it did not
+get. **Recorded as a window movement, not a tick's.**
+
+### THE ONE NUMBER THAT WENT DOWN, AND THE CONTROL THAT CLEARED IT
+
+`www.ikea.com` coverage **100.0% → 97.1%** — 21 boxes lost (`div×10 br×6 button×3 a×1 h2×1`),
+reproducible across runs, so not the ~0.3pt run-to-run spread this site is known for. The ratchet is
+absolute, so it was isolated rather than argued about: reverted the three t712 source files to
+`423ccc3d`, rebuilt, and measured the same site twice.
+
+```text
+  t711 control   97.1% (719 paths, 21 missing, 628 misplaced)   SHAPE 54.4%
+  t712 HEAD      97.1% (719 paths, 21 missing, 628 misplaced)   SHAPE 54.4%
+```
+
+**Byte-identical.** t712 did not cause it; it entered somewhere in t693–t711 or in ikea's own live
+markup over twenty ticks. Flagged, not attributed — and *the tick that would have been blamed was
+cleared by ten minutes of rebuilding rather than by an argument about variance.*
+
+### ⚠⚠ THE REAL CONSTRAINT ON THE HEAD STRATUM IS REACHABILITY, NOT RENDERING
+
+15 of 20 sites are UNSCORED, and the instrument's own taxonomy says who owns each:
+
+```text
+   5  bot-wall-403      the origin answered 403 and refused this client
+   3  unreachable       the request never completed
+   2  timeout-300s      a child did not return in 300s — ownership UNKNOWN
+   1  empty-202         imdb answered 202 with no document
+   1  probe-blocked
+   1  shell-only-3      3 elements — too thin to score
+   1  thin-overlap-9
+   1  render-failed     ← the ONLY one that is OUR bug (playhop.com)
+```
+
+The instrument's `unreachable` message says *"fetch it with curl before believing it is not ours"*, so
+I did — subject is the ORIGIN here, not our net stack, which is what makes curl admissible:
+
+```text
+  service.smt.docomo.ne.jp   Manuk-UA: no connection   Chrome-UA: no connection
+  bill.pitc.com.pk           Manuk-UA: no connection   Chrome-UA: no connection
+  www.fawanews.sc            Manuk-UA: no connection   Chrome-UA: no connection
+```
+
+**Unreachable from this box for every client, Chrome UA included.** So of 20 HEAD sites, **nine are
+the origin** (5 refuse us, 3 answer nobody here, 1 serves an empty 202) and **one is us**.
+
+**That is a constitutional collision, and it is not a scoring bug.** The certificate's fixed
+denominator counts a bot wall as a failure — correctly, because dropping hard sites is what made
+every past reading optimistic. But **PART IV puts the hostile bot-walled tier OUT of the
+compatibility mission entirely**, and I4 excludes it again by name. Both rules are right and they
+cannot both apply to the same number: a 95% bar over a corpus where 25% of the HEAD stratum refuses
+or cannot reach any client is a thermometer in a wall.
+
+⚠ **The fix is NOT a looser denominator** — that is precisely the tick-650 failure shape (*a metric
+whose denominator comes from the thing measured is satisfied by measuring LESS*). It is **corpus
+hygiene**: `corpus-v2.tsv` was sampled from CrUX on 2026-07-25 and three of its first twenty HEAD
+rows do not resolve from this vantage point at all. A sampling frame that includes unroutable hosts
+is measuring the network, and the exclusion belongs at SAMPLE time with a stated reason, where the
+denominator stays fixed and honest — not at score time.
+
+TICK SHAPE: measurement + the due constitution check
+CLUSTER: none claimed. `C3833`'s site count needs the FULL corpus and the full corpus needs a quiet
+box; t712's mechanism claim stands, its count claim is still owed and is now scheduled rather than
+assumed.
+Gates: none (no engine change). The whole wall runs below.
+WIKI: none [forced] — a measurement tick and a governance check; the engine is unchanged.
+PATTERN: **an instrument fix is not finished until the instrument has RE-RUN.** Ticks 705–711 repaired
+the fidelity rig four separate times — a dead vocabulary, a zero-site sweep, bot walls billed to us,
+a printer's cap read as data — and not one of them re-swept. A correct instrument over twelve-day-old
+data decides exactly as badly as a broken one, and `CLUSTERS.md` is the thing it decides. The
+sharper form, because it is the part that surprised me: **the loop could not have re-swept, and never
+said so.** The full sweep is a ten-hour serial run that structurally cannot coexist with the tick
+loop, so *"re-run the sweep every few ticks"* was an instruction whose cost nobody had measured. An
+owed step with an unmeasured price is an owed step forever.
+
+NEXT: **(1) THE GEOMETRY TICK IS DUE** — the board's t685 refinement requires every other tick to
+attack GEOMETRY or `display`, and `C01ca <div>` (111 sites / 14,002 hits, the top geometry cluster)
+has been untouched since t698. HEAD-20 agrees: SHAPE 60.2% against a 0.75 bar with **0 of 20** sites
+clearing it. **(2)** `playhop.com` is the one honest `render-failed` left in HEAD-20 and it is ours.
+**(3)** the ikea 21-box coverage loss, bisectable across t693–t711 now that t712 is excluded.
+**(4)** the full corpus sweep still needs a ten-hour quiet window — schedule it, do not intend it.
