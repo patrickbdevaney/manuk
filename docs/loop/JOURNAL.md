@@ -35693,3 +35693,62 @@ NEXT: **(1) `@container` CASCADE ORDER** — three-case fixture written, Chrome-
 failing, and the responsible line named. **(2)** `cq*` units via rung 3, reusing the scanner that
 already exists. **(3)** the synchronous `contentDocument` residual (t717). **(4)**
 `document.styleSheets` reports 0 where Chrome reports 9 (t718).
+
+## Tick 727 — `sheet.media` was a constant, and the `<link>` gap is a decision not a defect (2026-07-28)
+
+HYPOTHESIS: t718 measured `document.styleSheets` at **0** on `keirin.jp` where Chrome reports 9. That
+reading was taken by the page-side probe *before* t719 fixed the CSS ordering, so it is suspect on
+t718's own terms. Bar: re-measure honestly and fix what is bounded.
+
+### THE 0-vs-9 WAS TWO DIFFERENT THINGS, AND ONE OF THEM IS A DECISION
+
+Inline `<style>` sheets were already **right**: count, `cssRules`, `ownerNode`, `disabled`,
+`insertRule` all match Chrome. The gap is external sheets — and it is **documented scope, not a
+defect**. From the bridge's own comment (t665):
+
+> *"Scope, stated rather than implied: **`<style>` only.** `<link>.sheet` stays `undefined`, which is
+> what it is today — not `null`, because for an applied linked sheet `null` would be a lie that reads
+> as honest (t663 refused exactly that trade)."*
+
+So `keirin`'s 0-vs-9 is nine `<link>`s, correctly absent from a bridge that has never claimed them.
+⚠ **A gap named in a comment is not the same as a gap** — but it is also not nothing, and t718 filed
+it as a bug. Corrected here and **pinned by a new assertion** so the day linked sheets land, the gate
+says so rather than quietly widening.
+
+### AND THE REAL DEFECT WAS ONE LINE BESIDE IT
+
+```rust
+  media: { length: 0, mediaText: '' },     // a CONSTANT
+```
+
+Every sheet reported no media. Chrome-measured, `<style media="print">`: `print` vs `''`. The idiom
+that breaks is the ordinary one — `[...document.styleSheets].find(s => s.media.mediaText === 'print')`
+finds nothing to toggle, so a print-stylesheet switcher, a dark-mode sheet swapper and every
+"disable the mobile sheet" control silently do nothing. Now a **live getter** over the element's
+attribute, with `length` and `item()`.
+
+TICK SHAPE: pattern-class
+CLUSTER: none claimed.
+Gates: `g_cssom_sheet_bridge` **extended** rather than a new file — this is the third CSSOM finding
+and a third gate would be the drift the one-gate-per-topic rule exists to stop. Four new assertions,
+**RED-proven against two mutations**: restore the constant → the `mediaText`/`length`/`item`
+assertion fires; make it a **snapshot** taken at sheet construction → *only* the liveness assertion
+fires, and every other new assertion still passes. ⚠ That second one is the point: **a snapshot is
+the implementation you write if you are not thinking about it, and it is invisible to every shape
+test.** Also asserted: an unmedia'd sheet must still report the EMPTY list, because a getter that
+invents a value for every sheet is the same bug pointing the other way.
+WIKI: none [forced] — an extension of the CSSOM bridge whose design rationale is already written at
+length in `event_loop.rs` beside the code, and whose scope decision is quoted in this entry.
+PATTERN: **a measurement taken with a broken instrument stays broken after the instrument is fixed,
+unless someone re-takes it.** t718's 0-vs-9 was read by the page-side probe while external CSS still
+arrived after `load` — t718 *itself* named that blind spot in the same tick — and the number went
+into the NEXT list anyway, where it sat through five ticks as a bug. It was two-thirds a decision and
+one-third a real defect, and none of that was visible without re-measuring. ⚠ The operational form:
+**when a tick names an instrument's blind spot, every number that tick recorded inherits it** —
+including the ones it filed as future work.
+
+NEXT: **(1) `@container` CASCADE ORDER** (t726) — fixture written, Chrome-measured, one case failing,
+responsible line named; deferred deliberately to a fresh session as the riskiest edit class.
+**(2)** `cq*` units via rung 3 (t726). **(3)** `<link>.sheet` — now a pinned decision rather than an
+open bug; landing it needs the fetched CSS text published to the JS layer, the same seam shape as
+`set_module_graph_sources`. **(4)** the synchronous `contentDocument` residual (t717).

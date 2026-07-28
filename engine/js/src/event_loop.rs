@@ -5397,7 +5397,32 @@ const PRELUDE: &str = r#"
             href: null,
             title: null,
             disabled: false,
-            media: { length: 0, mediaText: '' },
+            // **`media` is a LIVE view of the element's `media` attribute, not a hard-coded blank.**
+            // It was `{ length: 0, mediaText: '' }` — a constant — so a `<style media="print">`
+            // reported no media at all, and the idiom that toggles a print stylesheet
+            // (`[...document.styleSheets].find(s => s.media.mediaText === 'print')`) found nothing
+            // to toggle. Chrome-measured: `print` vs `''`. A getter rather than a snapshot, because
+            // `MediaList` is live in the spec and a page that sets `media` and reads it back must
+            // not get the value from before the write.
+            // **`media` is a LIVE view of the element's `media` attribute, not a hard-coded blank.**
+            // It was `{ length: 0, mediaText: '' }` — a constant — so a `<style media="print">`
+            // reported no media at all, and the idiom that toggles a print stylesheet
+            // (`[...document.styleSheets].find(s => s.media.mediaText === 'print')`) found nothing
+            // to toggle. Chrome-measured: `print` vs `''`. A getter rather than a snapshot, because
+            // `MediaList` is live in the spec and a page that sets `media` and reads it back must
+            // not get the value from before the write.
+            get media() {
+              var m = el.getAttribute && el.getAttribute('media');
+              m = m == null ? '' : String(m).trim();
+              // `length` is the number of comma-separated media queries — `0` for the empty list,
+              // which is what an absent attribute is.
+              var parts = m === '' ? [] : m.split(',').map(function (x) { return x.trim(); })
+                                            .filter(function (x) { return x !== ''; });
+              var list = { length: parts.length, mediaText: m,
+                           item: function (i) { return parts[i] === undefined ? null : parts[i]; } };
+              for (var i = 0; i < parts.length; i++) { list[i] = parts[i]; }
+              return list;
+            },
             get cssRules() {
               var src = el.textContent == null ? '' : String(el.textContent);
               var parts = __splitRules(src), list = [];

@@ -76,6 +76,32 @@ const HTML: &str = r##"<!doctype html><html><head><style id="authored">#a { widt
   //    bookkeeping is wrong, and silently clamping would hide a library bug inside a browser bug.
   try { injected.sheet.insertRule('#c{width:1px}', 99); mark('T__oob_NOTHROWN'); }
   catch (e) { mark('T__oob_threw'); }
+
+  // 7. `sheet.media` was the CONSTANT `{length:0, mediaText:''}`, so a `<style media="print">`
+  //    reported no media at all and the idiom that finds a print stylesheet to toggle
+  //    (`[...document.styleSheets].find(s => s.media.mediaText === 'print')`) found nothing.
+  //    Chrome-measured on this fixture: `print` vs `''`.
+  var printed = document.createElement('style');
+  printed.setAttribute('media', 'print, (max-width: 600px)');
+  document.head.appendChild(printed);
+  mark('T__mediatext_' + (printed.sheet.media.mediaText === 'print, (max-width: 600px)'));
+  mark('T__medialen_' + printed.sheet.media.length);
+  mark('T__mediaitem_' + (printed.sheet.media.item(1) === '(max-width: 600px)'));
+  //    …and an unmedia'd sheet must still report the EMPTY list, not a spurious one.
+  mark('T__mediaplain_' + (authored.sheet.media.mediaText === '' && authored.sheet.media.length === 0));
+  //    …and it is LIVE: `MediaList` reflects the attribute, so a write must be readable back. A
+  //    snapshot taken at sheet-construction time passes every assertion above and fails this one.
+  printed.setAttribute('media', 'screen');
+  mark('T__medialive_' + (printed.sheet.media.mediaText === 'screen'));
+
+  // 8. THE SCOPE, PINNED. This bridge is `<style>` only: a `<link>`ed sheet is absent from
+  //    `document.styleSheets` and its `.sheet` is `undefined` — deliberately NOT `null`, because for
+  //    an applied linked sheet `null` is a lie that reads as honest (t663 refused exactly that).
+  //    Chrome reports 3 sheets on a 2-link + 1-style document where this engine reports 1.
+  var lnk = document.createElement('link');
+  lnk.rel = 'stylesheet'; lnk.href = 'about:blank';
+  document.head.appendChild(lnk);
+  mark('T__linksheet_' + (typeof lnk.sheet));
 </script>
 </body></html>"##;
 
@@ -145,6 +171,32 @@ fn a_rule_inserted_through_the_sheet_reaches_the_cascade() {
         "`document.styleSheets` is not a LIVE list: it must report the one authored sheet before the \
          injection and BOTH after it, with nothing invalidating a cache in between. It was \
          `undefined`, so reading `.length` THREW rather than reporting a number.\n  marks: {marks:?}"
+    );
+    // ── `media` — a LIVE view of the attribute, not a constant.
+    assert!(
+        has("T__mediatext_true") && has("T__medialen_2") && has("T__mediaitem_true"),
+        "`sheet.media` does not reflect the element's `media` attribute. It was the CONSTANT \
+         `{{length:0, mediaText:''}}`, so a `<style media=\"print\">` reported no media and the \
+         idiom that finds a print stylesheet to toggle found nothing to toggle.\n  marks: {marks:?}"
+    );
+    assert!(
+        has("T__mediaplain_true"),
+        "an UNMEDIA'd sheet must report the empty list — a `media` getter that invents a value for \
+         every sheet is the same bug pointing the other way.\n  marks: {marks:?}"
+    );
+    assert!(
+        has("T__medialive_true"),
+        "`sheet.media` is a SNAPSHOT, not a live view: writing the `media` attribute and reading it \
+         back gave the old value. `MediaList` is live in the spec, and a snapshot passes every \
+         other assertion here.\n  marks: {marks:?}"
+    );
+    // ── THE SCOPE, PINNED — see fixture step 8. If this flips to `object`, `<link>` support landed
+    //    and the gate should assert the linked sheet's rules instead of its absence.
+    assert!(
+        has("T__linksheet_undefined"),
+        "`<link>.sheet` is no longer `undefined`. This bridge is `<style>`-only by decision: for an \
+         APPLIED linked sheet, handing back `null` is a lie that reads as honest, and handing back a \
+         half-built object is worse. If linked sheets landed, update this gate.\n  marks: {marks:?}"
     );
     assert!(
         has("T__oob_threw"),
