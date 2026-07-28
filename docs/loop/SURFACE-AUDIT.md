@@ -2355,3 +2355,76 @@ real usage — `scroll-driven animations` and `anchor positioning` are the two m
 **Standing note, eighth audit running:** `map-reconcile.sh` searches `engine agent tests` and not
 `shell/`, so the eight gates living as `#[test] fn` in `shell/src/media.rs` and `shell/src/audio.rs`
 remain invisible to it. Harness-owned; reported, not touched.
+
+## Audit #43 — tick 710
+
+**Date:** 2026-07-28. **Sources (read today, not recalled):**
+`github.com/web-platform-tests/interop/blob/main/2026/README.md` · `web.dev/blog/interop-2026` ·
+`webkit.org/blog/17818/announcing-interop-2026/` · `ladybird.org/newsletter/2026-06-30/` ·
+Chrome platform status / caniuse usage figures for scroll-driven animations and anchor positioning.
+
+### THE ASSIGNMENT #42 LEFT, ANSWERED: YES, AND IT IS BOTH OF THE TWO IT NAMED
+
+Audit #42 closed with *"the next audit should check whether any of the six [death-tail rows] has
+crossed into real usage — `scroll-driven animations` and `anchor positioning` are the two most likely
+to."* Measured:
+
+```text
+  scroll-driven animations   ~4.695% OF CHROME PAGE LOADS   ·  82.58% global support (caniuse)
+                             Chrome/Edge since 115 (Jul 2023) · Safari 26 (Sep 2025) · Firefox 152 flagged
+  CSS anchor positioning     Chrome/Edge/Opera STABLE and FEATURE-COMPLETE · Safari 18.x partial → full
+```
+
+**One page load in twenty-one uses a feature we have written down as do-not-build.** That is not a
+map error — both rows are present and honestly marked `missing`. It is a **PRICING** error, and the
+standing rule is the one from t654-672: *when a capability is deferred as "needs X", RE-PRICE X.* The
+t543 death-tail priced these when they were experimental and single-engine; they are now shipped in
+three engines with measurable production usage, and 82.58% support means authors ship them
+**unguarded** — so "feature-detect cleanly and degrade" degrades on a real page, not a hypothetical.
+
+⚠ **This is a re-pricing, NOT a scope change, and I am not taking it.** Phase 0 is *"runs almost
+every website"* and the binding constraint is still SHAPE 43% (t706). But the deferral must now be a
+DELIBERATE, dated, priced decision rather than an inherited one, and the next audit should re-check
+the number rather than the list.
+
+### THE INDEPENDENT ENGINE AGREES WITH OUR OWN DOCTRINE, WHICH IS THE USEFUL PART
+
+Ladybird crossed **90% of all WPT subtests** in Oct 2025 and reached 2,078,912 subtests by Jun 2026 —
+and still reports its hardest problems as *web compatibility, real-site quirks, complex web apps and
+modern CSS layouts*, i.e. **not** the conformance number. An independent engine at >90% WPT is not
+daily-drivable for the same reason we are not: *capability% cannot see feature-present-but-site-
+broken.* That is our PROCESS RULE (1) confirmed from outside the frame, which is the only place it
+can be confirmed. Our t706 certificate — 131 scored, shape ≥0.75 on **11** — is the same finding
+measured from the other end, and it is the reason the loop should keep spending on fidelity rather
+than on WPT flips.
+
+### GATE-VS-MAP DIFF
+
+```text
+  map rows                                  : 395   (was 394 at #42; +1)
+  constellation unknowns                    : 0     (fourth audit running)
+  Interop 2026 focus areas                  : 20    (#42 counted 24 — the published list is 20 today)
+  Interop 2026 areas absent from the map    : 0 of 20
+  Interop 2026 areas marked `missing` here  : 8 of 20
+  ...of those 8, on our explicit death-tail : 6     (anchor positioning · custom highlights ·
+                                                     scroll-driven animations · JSPI · scoped custom
+                                                     element registries · WebTransport/HTTP3)
+  ...of those 8, NOT excused by any list    : 2     (container STYLE queries · CSS shape())
+```
+
+**ADDED:** nothing — the map already covers the world's own 2026 priority list, four audits running.
+**CORRECTED:** nothing in the map.
+**WHAT WE HAD BEEN WRONG ABOUT:** the *price* of two death-tail rows, above. And one more, found
+while reconciling — **`constellation unknowns` has been 0 for four audits, yet the agent's LAUNCH
+PROMPT still lists "(D) PROBE the ~35 constellation unknowns" as a CO-#1 item.** There are none and
+there have been none for ~40 ticks. A launch prompt only updates on RELAUNCH, so this is reported for
+the observer and cannot be fixed from here — the same staleness class as the t684 "do NOT grind the
+CSS-layout tail" block, which contradicted the board for three ticks before anyone checked.
+
+**The two genuinely un-excused gaps** — `container STYLE queries` and `CSS shape()` — are small, are
+Interop 2026 focus areas, and are on no deferral list. They are the honest output of this audit as
+work items.
+
+**Standing note, ninth audit running:** `map-reconcile.sh` searches `engine agent tests` and not
+`shell/`, so the eight gates living as `#[test] fn` in `shell/src/media.rs` and `shell/src/audio.rs`
+remain invisible to it. Harness-owned; reported, not touched.

@@ -34269,3 +34269,97 @@ NEXT: **(1) THE SURFACE AUDIT IS DUE** (last 699, due 709) and blocks the next t
 REMAINDER** — theverge/vox/mongodb/kotlinlang/notion receive 250 KB–963 KB of real document and still
 render blank; that is the honest `render-failed` cluster and it is now a clean population to work.
 **(3)** the oracle crawl (t706) and the parked §10.8.1 patch remain owed.
+
+## Tick 710 — surface audit #43: the death-tail's price moved, and nobody re-checked it (2026-07-28)
+
+HYPOTHESIS: the surface audit is due (last 699) and it blocks the tick. Audit #42 left a specific
+assignment rather than a generic one: *"check whether any of the six [death-tail rows] has crossed
+into real usage — `scroll-driven animations` and `anchor positioning` are the two most likely to."*
+Bar: answer THAT question with a number, not re-run the reconciliation #42 already did.
+
+### THE ANSWER IS YES, AND IT IS BOTH OF THE TWO IT NAMED
+
+```text
+  scroll-driven animations   ~4.695% OF CHROME PAGE LOADS  ·  82.58% global support (caniuse)
+  CSS anchor positioning     Chrome/Edge/Opera STABLE, feature-complete · Safari 18.x partial → full
+```
+
+**One page load in twenty-one uses a feature we have written down as do-not-build.** Not a map error
+— both rows are present and honestly `missing`. A **PRICING** error, and there is a standing rule for
+exactly it (t654-672): *when a capability is deferred as "needs X", RE-PRICE X.* The t543 death-tail
+priced these when they were experimental and single-engine. At 82.58% support authors ship them
+**unguarded**, so "feature-detect cleanly and degrade" now degrades on real pages.
+
+⚠ **Recorded as a re-pricing, NOT taken as a scope change.** Phase 0 is *"runs almost every website"*
+and the binding constraint is still SHAPE 43% (t706). But the deferral is now dated and priced
+instead of inherited, and the next audit re-checks the NUMBER rather than the list.
+
+### THE OUTSIDE VIEW CONFIRMS OUR OWN DOCTRINE, WHICH IS WHY THE AUDIT LEAVES THE FRAME
+
+Ladybird crossed **90% of all WPT subtests** (Oct 2025) and reached 2,078,912 by Jun 2026 — and still
+names its hardest problems as web compatibility, real-site quirks and modern CSS layout. An
+independent engine at >90% WPT is not daily-drivable for the same reason we are not: **capability%
+cannot see feature-present-but-site-broken.** That is PROCESS RULE (1) confirmed from the only place
+it can be — outside. Our t706 certificate (131 scored, shape ≥0.75 on 11) is the same finding from
+the other end, and it is the argument for continuing to spend on fidelity over WPT flips.
+
+### AND A STALE INSTRUCTION IN MY OWN LAUNCH PROMPT
+
+`constellation unknowns` has been **0 for four consecutive audits**, yet the agent launch prompt still
+carries *"(D) PROBE the ~35 constellation unknowns"* as a CO-#1 item. There are none, and have been
+none for ~40 ticks. A launch prompt only updates on RELAUNCH, so this is reported for the observer and
+cannot be fixed from here — the same class as the t684 *"do NOT grind the CSS-layout tail"* block that
+contradicted the live board for three ticks before anyone checked. ⚠ **The rule that catches this is
+to reconcile the LAUNCH PROMPT against the measured map, not just the board against the map.**
+
+```text
+  map rows 395 · unknowns 0 · Interop 2026 areas 20, absent from map 0, marked missing 8
+  of those 8: 6 are on the explicit death-tail; 2 are excused by NOTHING —
+      container STYLE queries · CSS shape()
+```
+
+Those two are the audit's honest work-item output: small, Interop 2026 focus areas, on no deferral
+list.
+
+TICK SHAPE: audit
+CLUSTER: none — a frame check, which is what this cadence is for.
+Gates: none (no code change).
+WIKI: none [forced] — an audit of the map against the outside world; the engine is unchanged.
+PATTERN: **a deferral is a decision with a PRICE, and prices go stale in the direction that hurts.**
+The death-tail list has been carried verbatim since t543 and re-read many times; re-reading a list
+confirms the list, never its premise. #42 was right to convert "re-read the six" into "measure whether
+any crossed into usage" — a question with a NUMBER as its answer is the only kind an audit can be
+wrong about, and therefore the only kind worth asking.
+
+NEXT: **(1) THE REAL `render-failed` REMAINDER** — theverge/vox/mongodb/kotlinlang/notion receive
+250 KB–963 KB of real document and still render blank; t709 cleared the bot walls out of that cluster
+so it is now a clean population. **(2)** the oracle crawl (t706) and the parked §10.8.1 patch remain
+owed. **(3)** `container STYLE queries` / `CSS shape()` if a cheap one is wanted.
+
+### Wall-time audit (also due this tick — last 689, now 709)
+
+Total **242s**, and it is one section:
+
+```text
+  172s  P · parity (72/72 vs headless Chrome)   ███████████████ 71%
+   25s  T · crate tests                          10%
+   21s  G6                                        9%
+   16s  B · build                                 7%
+    5s  G1 · fidelity     4s D     2s F     1s F4     0s everything else
+```
+
+**The wall is NOT lean, and the hotspot is a single known shape**: `parity` launches **one headless
+Chrome per fixture, serially** (`tests/wpt/src/parity.rs`). Nothing else on the list is worth a
+second of attention until that is addressed — T, G6 and B together are less than a third of P.
+
+The admissible fix, by the audit's own rules (same assertion, fewer seconds — never a dropped gate, a
+widened floor, or sampling): **reuse ONE Chrome across the fixture set instead of one per fixture.**
+Parity is a CORRECTNESS comparison over LOCAL fixtures, not a benchmark, so the "a benchmark sharing
+the machine is not a benchmark" exclusion that protects the perf floors (F) does not apply to it —
+and each fixture must still fail independently for its own bug, which process reuse does not change.
+
+⚠ **Found and priced, NOT trimmed this tick.** `parity.rs` is agent territory and the change is real
+work with a real chance of introducing cross-fixture state leakage between comparisons; doing it
+badly would corrupt the one gate that certifies us against Chrome. It is named here as the next
+wall tick rather than rushed into an audit tick.
+
