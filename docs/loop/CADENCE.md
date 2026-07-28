@@ -15,7 +15,7 @@
 | median tick cycle | **22m** | 472 intervals |
 | median, last 10 | **30m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 417.8h elapsed |
+| **ticks per hour** | **1.13** | 418.2h elapsed |
 | median verify wall | **63s** | 412 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,8 +27,8 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **336**
-* **✅ rows in the capability ledger**: 144 → **361**
+* **live gates**: 27 → **337**
+* **✅ rows in the capability ledger**: 144 → **362**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
 **227 of 473 ticks** (48%) moved a
@@ -569,6 +569,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **712** | 2026-07-28 12:33 | 48m | pattern-class | 63s | +257/−33 | 336 | 81 | 56.0% · | one rule, two implementations, and the one nobody built is the one that fails silently (20 |
 | **713** | 2026-07-28 13:31 | 57m | measurement | 63s | +216/−33 | 336 | 81 | 56.0% · | the sweep the loop has owed for twelve days, and the half of the HEAD corpus that never re |
 | **715** | 2026-07-28 14:09 | 38m | pattern-class | 63s | +457/−38 | 337 | 81 | 56.0% · | the control said the fix was not guilty: welt's 95.6% was OUR OWN TIMEOUT (2026-07-28) |
-| **716** | 2026-07-28 14:51 | 42m | measurement | 63s | +185/−325 | 336 | 81 | 56.0% · | the population read that eight sites could not give, and the arithmetic that forbids the f |
+| **716** | 2026-07-28 15:13 | 64m | measurement | 63s | +374/−33 | 337 | 81 | 56.0% · | the population read that eight sites could not give, and the arithmetic that forbids the f |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

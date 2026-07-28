@@ -2697,12 +2697,81 @@ impl Page {
         manuk_js::set_iframe_docs(m);
     }
 
+    /// **The frames whose document does not come off the network** — `srcdoc`, `src="about:blank"`,
+    /// and an `<iframe>` with no `src` at all.
+    ///
+    /// `pending_iframes` skips all three, correctly, because it is a *fetch* work-list and there is
+    /// nothing to fetch. Nothing then loaded them either, and that is the bug: HTML §4.8.5 says an
+    /// `<iframe>` with no `src` is **immediately navigated to `about:blank`** and gets a fully-formed,
+    /// same-origin document. Ours got none, so `contentDocument` was `null`.
+    ///
+    /// ⚠ **And `null` is why nothing caught it: `typeof null === 'object'`.** Every feature detect of
+    /// the form `typeof f.contentDocument === 'object'` passed — measured against headless Chrome on
+    /// one fixture, where we answered `object` for all three cases and then threw
+    /// `can't access property "body", f1.contentDocument is null` on the very next line. A `null` that
+    /// types as present is the false-presence class this project already has a gate family for.
+    ///
+    /// **What a page does with a document it makes itself**, which is why this is not a niche:
+    /// a hidden `about:blank` frame is the standard way to get a *pristine* `window` (libraries lift
+    /// unpatched natives out of it), to sandbox untrusted markup, to relay `postMessage`, to host an
+    /// OAuth or payment bridge, and — measured on `www.welt.de` this session — to run an **ad-bait
+    /// test**: create a frame, write ad-shaped markup into `contentDocument`, and measure whether it
+    /// survives. A frame with no document fails that test the same way an ad blocker does.
+    ///
+    /// `srcdoc` is the same mechanism with the markup supplied inline, and it is what sandboxed
+    /// previews, documentation embeds and mail clients ship. It beats `src` per spec; the code had
+    /// said so in a comment for as long as it had ignored it.
+    ///
+    /// ⚠ Named residual: these load on the host's next round, not synchronously inside the
+    /// `appendChild` that created the frame. A script that appends a frame and reads
+    /// `contentDocument` **on the very next line** still sees `null`; one that reads it at
+    /// `DOMContentLoaded`, `load`, or from any later task sees a real document. Closing that means
+    /// building a child document from inside a JS binding, which is a different change.
+    #[cfg(feature = "spidermonkey")]
+    fn load_inline_frames(&mut self, fonts: &FontContext) {
+        let mut work: Vec<(manuk_dom::NodeId, String)> = Vec::new();
+        for n in self.dom.flat_descendants(self.dom.root()) {
+            if self.dom.tag_name(n) != Some("iframe") || self.iframes.contains_key(&n) {
+                continue;
+            }
+            let Some(el) = self.dom.element(n) else {
+                continue;
+            };
+            // `srcdoc` beats `src` (HTML §4.8.5), including a `src` that points somewhere real.
+            if let Some(doc) = el.attr("srcdoc") {
+                work.push((n, doc.to_string()));
+                continue;
+            }
+            let src = el.attr("src").unwrap_or("").trim();
+            if src.is_empty() || src.eq_ignore_ascii_case("about:blank") {
+                work.push((n, String::new()));
+            }
+        }
+        for (node, html) in work {
+            // **The parent's URL, not `about:blank`.** A `srcdoc` document's base URL is the
+            // embedder's (HTML §4.8.5), which is what makes a relative `<img src="logo.png">` inside
+            // one resolve at all; an `about:blank` frame inherits it for the same reason. Passing the
+            // literal `about:` scheme here would make every relative URL in the child unresolvable —
+            // and `render_iframe` is also where the child's own subresource fetches are based.
+            let base = self.final_url.clone();
+            self.render_iframe(node, &html, &base, fonts, 0);
+        }
+    }
+
+    /// Without SpiderMonkey there is no `contentDocument` to hand anyone, so there is nothing to load.
+    #[cfg(not(feature = "spidermonkey"))]
+    fn load_inline_frames(&mut self, _fonts: &FontContext) {}
+
     /// Fetch every `<iframe src>` and load it as a real document.
     ///
     /// **Before `load` fires**, because that is the spec (`load` waits for subframes) and because it is
     /// the whole point: `<body onload="...">` is where a page reaches into its frames. WPT's entire
     /// `encoding` suite — 767,003 subtests, 91% of the measured universe — is exactly that shape.
     async fn fetch_and_load_iframes(&mut self, fonts: &FontContext, _viewport_width: f32) {
+        // **The frames with nothing to fetch, which are not the frames with nothing to load.**
+        // Done first and synchronously — they need no network, and a page that creates a frame in
+        // order to *read* it should not be made to wait on a fetch round that has nothing to do.
+        self.load_inline_frames(fonts);
         let pending = self.pending_iframes();
         if pending.is_empty() {
             return;

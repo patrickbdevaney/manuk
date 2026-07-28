@@ -2160,3 +2160,44 @@ document in the propagation path, not below it.
   Chrome   start;WINLOAD;
   Manuk    start;WINLOAD;capture[t=null];
 ```
+
+## A frame with nothing to fetch still needs a document (tick 717)
+
+`pending_iframes` is a **fetch** work-list. It skips `srcdoc`, `src="about:blank"` and an `<iframe>`
+with no `src`, and its own comment explains why: *"a `src` of `about:blank` has nothing to fetch."*
+That is a complete answer to the question it was asked. Every caller was asking a different one —
+*what must I LOAD?* — and nothing loaded those three categories at all.
+
+HTML §4.8.5: an `<iframe>` with no `src` is **immediately navigated to `about:blank`** and gets a
+fully-formed, same-origin document. Ours got none, so `contentDocument` was `null`.
+
+⚠⚠ **And no feature detect could see it, because `typeof null === 'object'`.** Against headless
+Chrome, before:
+
+```text
+  Chrome  dyn.contentDocument=object  dyn.doc.body=object  late.getById=found
+  Manuk   dyn.contentDocument=object  dyn.doc.body=n/a     late.getById=no-doc
+          THROW: can't access property "body", f1.contentDocument is null
+```
+
+The API answered YES on every `typeof` probe and delivered nothing on the next line. **A `typeof`-
+shaped capability probe cannot find this class; only a probe that USES the value can** — which is
+also why the gate writes into the document and queries the result instead of checking for non-null:
+a documentless stub satisfies the null check and fails the page.
+
+### What a page does with a document it makes for itself
+
+Not a niche. A hidden `about:blank` frame is the standard way to obtain a **pristine `window`**
+(libraries lift unpatched natives out of one), to sandbox untrusted markup, to relay `postMessage`,
+to host an OAuth or payment bridge — and to run an **ad-bait test**: create a frame, write ad-shaped
+markup into its `contentDocument`, and measure whether it survives. A frame with no document fails
+that test the same way an ad blocker does, which is what `www.welt.de` concluded about us at t715.
+
+`srcdoc` is the same mechanism with the markup supplied inline — sandboxed previews, documentation
+embeds, mail clients. It beats `src` per spec, and the comment beside the skip had said so for as
+long as the code had ignored it.
+
+⚠ Residual, pinned by the gate: these load on the host's next round, not synchronously inside the
+`appendChild` that created the frame. Read on the very next line, `contentDocument` is still `null`;
+read at `DOMContentLoaded`, `load` or any later task, it is a real document. Chrome has it
+immediately.

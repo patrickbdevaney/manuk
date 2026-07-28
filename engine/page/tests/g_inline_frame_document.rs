@@ -1,0 +1,144 @@
+//! **G_INLINE_FRAME_DOCUMENT — an `<iframe>` with nothing to FETCH got nothing to LOAD, and
+//! `typeof null === 'object'` is why nobody noticed.**
+//!
+//! `pending_iframes` is a *fetch* work-list, and it skips `srcdoc`, `src="about:blank"` and an
+//! `<iframe>` with no `src` — correctly, because there is nothing to fetch. Nothing then loaded them
+//! either. HTML §4.8.5 says an `<iframe>` with no `src` is **immediately navigated to `about:blank`**
+//! and gets a fully-formed, same-origin document; ours got none, so `contentDocument` was `null`.
+//!
+//! ⚠ **The failure was invisible to feature detection, by construction.** Measured against headless
+//! Chrome on one fixture, before the fix:
+//!
+//! ```text
+//!   Chrome  dyn.contentDocument=object  dyn.doc.body=object  srcdoc.contentDocument=object  late.getById=found
+//!   Manuk   dyn.contentDocument=object  dyn.doc.body=n/a     srcdoc.contentDocument=object  late.getById=no-doc
+//! ```
+//!
+//! Every `typeof f.contentDocument === 'object'` check passed — and the next line threw
+//! `can't access property "body", f1.contentDocument is null`. `typeof null` is `'object'`, so a
+//! `null` document types exactly like a present one. That is the false-presence class this project
+//! keeps meeting: the API answers YES and delivers nothing.
+//!
+//! **Why a document a page makes for itself is not a niche.** A hidden `about:blank` frame is the
+//! standard way to obtain a *pristine* `window` (libraries lift unpatched natives out of one), to
+//! sandbox untrusted markup, to relay `postMessage`, to host an OAuth or payment bridge — and,
+//! measured on `www.welt.de` this session, to run an **ad-bait test**: create a frame, write
+//! ad-shaped markup into its `contentDocument`, and see whether it survives. A frame with no document
+//! fails that test the same way an ad blocker does, and welt blanks itself in response.
+//!
+//! `srcdoc` is the same mechanism with the markup inline, and it is what sandboxed previews,
+//! documentation embeds and mail clients ship. It beats `src` per spec; this file's neighbour had
+//! said so in a comment for as long as the code ignored it.
+//!
+//! ⚠ **NAMED RESIDUAL, PINNED BY ASSERTION (4).** These load on the host's next round, not
+//! synchronously inside the `appendChild` that created the frame — so a script that appends a frame
+//! and reads `contentDocument` **on the very next line** still sees `null`, while one that reads at
+//! `DOMContentLoaded`, `load` or any later task sees a real document. Chrome has it immediately.
+//! Closing that means building a child document from inside a JS binding, which is a different
+//! change; the pin means it cannot land silently or be forgotten.
+
+use manuk_text::FontContext;
+
+const HTML: &str = r#"<!doctype html><html><body>
+<div id="srcdoc-read">-</div>
+<div id="blank-read">-</div>
+<div id="nosrc-read">-</div>
+<div id="sync-read">-</div>
+<iframe id="f-srcdoc" srcdoc="<html><body><p id='inner'>hello from srcdoc</p></body></html>"></iframe>
+<iframe id="f-blank" src="about:blank"></iframe>
+<iframe id="f-nosrc"></iframe>
+<script>
+  // (4) THE RESIDUAL: append a frame and read it on the very next line.
+  var dyn = document.createElement('iframe');
+  document.body.appendChild(dyn);
+  document.getElementById('sync-read').textContent =
+    (dyn.contentDocument && dyn.contentDocument.body) ? 'SYNC-DOC' : 'sync-null';
+
+  window.addEventListener('load', function () {
+    function read(id, fn) {
+      var f = document.getElementById(id);
+      var out = 'no-doc';
+      try { if (f && f.contentDocument) out = fn(f.contentDocument); } catch (e) { out = 'THROW:' + e.message; }
+      return out;
+    }
+    document.getElementById('srcdoc-read').textContent =
+      read('f-srcdoc', function (d) { var p = d.getElementById('inner'); return p ? p.textContent : 'no-element'; });
+    // A blank document is not an empty object: it has a `<body>` you can write into, which is the
+    // whole reason a page makes one.
+    document.getElementById('blank-read').textContent =
+      read('f-blank', function (d) {
+        if (!d.body) return 'no-body';
+        d.body.innerHTML = '<div class="bait">x</div>';
+        return 'bait:' + d.querySelectorAll('.bait').length;
+      });
+    document.getElementById('nosrc-read').textContent =
+      read('f-nosrc', function (d) { return d.body ? 'has-body' : 'no-body'; });
+  });
+</script>
+</body></html>"#;
+
+fn text(page: &manuk_page::Page, sel: &str) -> String {
+    let root = page.dom().root();
+    let hits = manuk_css::query_selector_all(page.dom(), root, sel);
+    assert!(!hits.is_empty(), "{sel} must exist in the document");
+    page.dom().text_content(hits[0])
+}
+
+/// **One test, on purpose** — two SpiderMonkey contexts in one binary tear down messily and the
+/// binary segfaults *sometimes*, which is worse than failing (see `g_defer`).
+#[test]
+fn a_frame_with_nothing_to_fetch_still_gets_a_document() {
+    let fonts = FontContext::new();
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    // Hermetic: not one of these frames touches the network, which is the entire point of them.
+    let page = rt.block_on(async {
+        let mut p =
+            manuk_page::Page::load_async(HTML, "https://frames.test/index.html", &fonts, 800.0)
+                .await;
+        p.finish_loading(&fonts, 800.0).await;
+        p
+    });
+
+    let srcdoc = text(&page, "#srcdoc-read");
+    let blank = text(&page, "#blank-read");
+    let nosrc = text(&page, "#nosrc-read");
+    let sync = text(&page, "#sync-read");
+    println!("INLINE-FRAME  srcdoc={srcdoc} blank={blank} nosrc={nosrc} sync={sync}");
+
+    // (1) **`srcdoc` is a document, not an attribute.** RED: drop the `srcdoc` branch from
+    // `load_inline_frames` → `no-doc`. This is the case the neighbouring comment claimed for ticks.
+    assert_eq!(
+        srcdoc, "hello from srcdoc",
+        "an <iframe srcdoc> must parse its markup into a real, readable document — got {srcdoc:?}"
+    );
+
+    // (2) **`src=\"about:blank\"` is a document you can WRITE INTO**, which is the only reason a page
+    // makes one. Asserting `contentDocument != null` would pass on an empty stub; asserting a write
+    // followed by a query is what proves the document is live. RED: drop the `about:blank` arm →
+    // `no-doc`; return a documentless stub → `no-body`.
+    assert_eq!(
+        blank, "bait:1",
+        "an <iframe src=about:blank> must expose a live document with a writable <body> — got {blank:?}"
+    );
+
+    // (3) **No `src` at all is the same case** (HTML §4.8.5 navigates it to `about:blank`), and it is
+    // the one every hidden-frame idiom actually writes. RED: require a `src` attribute → `no-doc`.
+    assert_eq!(
+        nosrc, "has-body",
+        "an <iframe> with NO src must still be navigated to about:blank and get a document — got {nosrc:?}"
+    );
+
+    // (4) **THE RESIDUAL, PINNED.** Chrome gives the document synchronously inside `appendChild`;
+    // here it arrives on the host's next round. Asserting the honest current value means the day it
+    // is fixed this gate goes red and says so, rather than a half-fix passing quietly. If you are
+    // here because this failed and `sync` now reads `SYNC-DOC`: that is the residual closing. Delete
+    // this assertion and say so in the journal.
+    assert_eq!(
+        sync, "sync-null",
+        "a frame appended and read on the NEXT LINE still has no document — the known residual. \
+         If this now reads SYNC-DOC, that half landed; update the gate."
+    );
+}

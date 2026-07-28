@@ -34993,3 +34993,83 @@ correct form of the t714 finding, costing no budget. Every caller of `load_async
 lifecycle having fired needs auditing first; the gate is `g_css_before_lifecycle`, restored verbatim.
 **(2)** `contentDocument` on a dynamically-created iframe (welt's packing script).
 **(3)** the ikea 21-box coverage loss (t713), bisectable across t693–t711.
+
+## Tick 717 — a frame with nothing to FETCH got nothing to LOAD, and `typeof null` is why nobody noticed (2026-07-28)
+
+HYPOTHESIS: t715 named the capability behind `welt.de`'s `Failed to execute packing script` —
+`contentDocument` on a frame the page makes for itself. Bar: measure it against Chrome, and if it is
+missing, close what is bounded.
+
+### MEASURED FIRST, AGAINST HEADLESS CHROME, ON ONE FIXTURE
+
+```text
+  Chrome  dyn.contentDocument=object  dyn.doc.body=object  srcdoc.contentDocument=object  late.getById=found
+  Manuk   dyn.contentDocument=object  dyn.doc.body=n/a     srcdoc.contentDocument=object  late.getById=no-doc
+          …and the next line: THROW: can't access property "body", f1.contentDocument is null
+```
+
+⚠⚠ **Every feature detect passed and the API delivered nothing, because `typeof null === 'object'`.**
+`contentDocument` was `null` for every frame the page makes for itself, and `null` types exactly like
+a present document. That is the false-presence class again, in the one form no `typeof` probe can
+ever see.
+
+### THE CAUSE IS A WORK-LIST DOING ITS JOB
+
+`pending_iframes` is a **fetch** work-list, and it skips `srcdoc`, `src="about:blank"` and an
+`<iframe>` with no `src` — *correctly*, because there is nothing to fetch. **Nothing then loaded
+them either.** HTML §4.8.5 says an `<iframe>` with no `src` is immediately navigated to `about:blank`
+and gets a fully-formed, same-origin document; ours got none. The `srcdoc` case is the same gap with
+a sharper edge: the comment directly above the skip has read *"`srcdoc` beats `src`, per spec"* for
+as long as the code has ignored `srcdoc` entirely.
+
+### WHAT LANDED
+
+`load_inline_frames` — a second, synchronous work-list for the frames whose document does not come
+off the network. `srcdoc` parses its markup; `about:blank` and a bare `<iframe>` get a real empty
+document with a writable `<body>`. It runs before the fetch round, because a page that creates a
+frame in order to *read* it should not wait on a network round with nothing to do. `render_iframe`
+already took its HTML as a string, so this reuses the whole child-page machinery and adds no
+subsystem.
+
+```text
+  before   late.f2.getById = no-doc
+  after    late.f2.getById = found          (Chrome: found)
+```
+
+**Why a document a page makes for itself is not a niche:** a hidden `about:blank` frame is how you
+get a *pristine* `window` (libraries lift unpatched natives out of one), sandbox untrusted markup,
+relay `postMessage`, host an OAuth or payment bridge — and, measured on `welt.de` at t715, run an
+**ad-bait test**: create a frame, write ad-shaped markup into its `contentDocument`, measure whether
+it survives. A frame with no document fails that test the same way an ad blocker does.
+
+TICK SHAPE: pattern-class
+CLUSTER: `C500e MISSING BOX: <iframe>` (8 sites) directly, and the mechanism behind `welt.de`'s
+`render-failed` — not claimed as shrunk; the next sweep says.
+Gates: `g_inline_frame_document` (new, `engine/page`, `--features stylo,spidermonkey`) — hermetic,
+not one frame touches the network, which is the point of them. **RED-proven against three mutations,
+each failing a DIFFERENT assertion**: drop the `srcdoc` arm → `no-element`; require an explicit `src`
+→ the bare `<iframe>` reads `no-doc`; drop the `about:blank` arm → the write-and-query reads
+`no-doc`. ⚠ Assertion (2) writes into the document and queries the result rather than checking
+`contentDocument != null`, because a documentless stub satisfies the null check and fails the page.
+WIKI: `docs/wiki/js-engine.md` — "A frame with nothing to fetch still needs a document".
+PATTERN: **a work-list named for one job silently becomes the definition of another.**
+`pending_iframes` answers *"what must I fetch?"*, and every caller read it as *"what must I load?"* —
+so three whole categories of frame were skipped by a function that was behaving exactly as
+documented. The tell is in its own comment: it explains why `about:` is skipped (*"nothing to
+fetch"*), which is a complete answer to the question it was asked and no answer at all to the one
+that mattered. ⚠ Second: **`typeof null === 'object'` makes a null API indistinguishable from a
+working one**, so a `typeof`-shaped capability probe can never find this class — only a probe that
+*uses* the value can. That is the third time this session an assertion had to consume a value rather
+than inspect it.
+
+⚠ NAMED RESIDUAL, PINNED BY ASSERTION (4): these load on the host's next round, not synchronously
+inside the `appendChild` that created the frame. A script that appends a frame and reads
+`contentDocument` **on the very next line** still sees `null`; one that reads at `DOMContentLoaded`,
+`load` or any later task now sees a real document. Chrome has it immediately. Closing it means
+building a child document from inside a JS binding — a different change, and the gate goes red the
+day it lands so it cannot arrive silently.
+
+NEXT: **(1) FIRE `DOMContentLoaded`/`load` FROM `finish_loading`** — the correct, budget-free form of
+the t714 CSS-ordering finding (t716 proved no slice fits). Audit `load_async`'s callers first.
+**(2)** the synchronous `contentDocument` residual above. **(3)** the ikea 21-box coverage loss
+(t713), bisectable across t693–t711.
