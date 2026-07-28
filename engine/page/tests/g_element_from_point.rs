@@ -17,7 +17,14 @@ const HTML: &str = r##"<!doctype html><html><body style="margin:0">
   R.push('inner:' + (efp(75, 75) === document.getElementById('inner')));  // deepest box wins
   R.push('outer:' + (efp(10, 10) === document.getElementById('outer')));  // parent where child absent
   R.push('miss:' + (efp(500, 500) === null));                       // outside everything -> null
-  R.push('nan:' + (efp(NaN, 10) === null));                         // non-finite -> null
+  // ⚠ CORRECTED at t729. This read `efp(NaN,10) === null` and was labelled *"(CSSOM-View)"* — a
+  // citation for behaviour the spec does not describe. CSSOM-View types both parameters as `double`,
+  // NOT `unrestricted double`, so WebIDL rejects NaN/Infinity before the method body runs.
+  // Chrome-measured: `TypeError: Failed to execute 'elementFromPoint' on 'Document': The provided
+  // double value is non-finite.` The assertion is now STRICTER, not weaker — it demands a throw of a
+  // named type, where `=== null` was satisfied by any of null, a missed hit, or a stub.
+  try { efp(NaN, 10); R.push('nan:NOTHROWN'); }
+  catch (e) { R.push('nan:' + (e instanceof TypeError)); }
   document.getElementById('out').textContent = R.join(' ');
 </script></body></html>"##;
 
@@ -48,7 +55,10 @@ fn element_from_point_returns_the_deepest_hit_element() {
         ),
         (
             "nan:true",
-            "a non-finite coordinate returns null (CSSOM-View)",
+            "a non-finite coordinate must THROW a TypeError — CSSOM-View types both parameters \
+             as `double`, not `unrestricted double`, so WebIDL rejects NaN/Infinity before the \
+             method runs, and Chrome throws. This assertion previously demanded `null` and cited \
+             CSSOM-View for it; the citation was invented (t729)",
         ),
     ] {
         assert!(

@@ -35825,3 +35825,75 @@ NEXT: **(1) `document.elementsFromPoint`** — the second divergence from this p
 plural sibling. **(2) `@container` CASCADE ORDER** (t726) — deferred to a fresh session as the
 riskiest edit class. **(3)** `cq*` units (t726). **(4)** the scrollbar-gutter residual pinned by this
 tick's gate (`scr` 220 vs Chrome 205).
+
+## Tick 729 — the plural of a working API, and a citation nobody had checked (2026-07-28)
+
+HYPOTHESIS: t728's broad probe left one divergence unfixed — `document.elementsFromPoint` threw
+`TypeError` where Chrome returns 3. Bar: Chrome-exact on a fixture that includes the case the API
+exists for.
+
+### THE SINGULAR ANSWERS "WHAT DID THE USER CLICK?"; THE PLURAL ANSWERS "WHAT IS IN THE WAY?"
+
+`elementFromPoint` has worked for hundreds of ticks. Its plural was absent — and the plural is not a
+convenience, it is a **different question**: drag-and-drop asks it to find the drop target *under a
+drag ghost*, overlay libraries ask it to decide whether they are occluding their own anchor, and
+click-through affordances ask it to forward an event to the layer beneath. The singular collapses the
+stack to its first entry, so none of those can be answered at all.
+
+```text
+                       CHROME                          MANUK (after)
+  stack                target>under>wrap>BODY>HTML     target>under>wrap>BODY>HTML
+  first === singular   true                            true
+  outside              []                              []
+  isArray              true                            true
+  NaN                  TypeError                       TypeError
+```
+
+⚠ `#ghost` — a full-bleed `pointer-events:none` drag ghost over everything — is **absent from both
+stacks**. The plural inherits the singular's filter rather than reimplementing it; a plural that
+reported the ghost would break the exact case it exists for.
+
+### ⚠⚠ AND THE FIXTURE CAUGHT AN INVENTED CITATION — TWICE, IN MY OWN WORDS AND IN A GATE
+
+My first draft returned the empty list for a non-finite coordinate, with the comment *"per
+CSSOM-View"*. Chrome throws:
+
+```text
+  TypeError: Failed to execute 'elementsFromPoint' on 'Document': The provided double value is non-finite.
+```
+
+CSSOM-View types both parameters `double`, **not `unrestricted double`**, so WebIDL rejects
+NaN/Infinity before the method body runs. I had written a citation for a plausible answer.
+
+Then the same sentence turned up in the engine, load-bearing: `doc_element_from_point`'s doc comment
+said *"a non-finite/absent coordinate returns `null`, per CSSOM-View"* — **and `g_element_from_point`
+asserted it**, with the claim string *"a non-finite coordinate returns null (CSSOM-View)"*. A gate had
+been enforcing an invented citation since it was written. Both corrected to throw, and the gate's
+assertion is now **stricter, not weaker**: `=== null` was satisfied by null, by a missed hit, or by a
+stub; `instanceof TypeError` is satisfied by one thing.
+
+TICK SHAPE: pattern-class
+CLUSTER: none claimed — a JS hit-testing API, not a box the oracle diffs. It is agentic-surface work
+(PART VII component 2): occlusion is exactly what an agent must reason about before clicking.
+Gates: `g_elements_from_point` (new), **RED-proven against two mutations**: drop the `pointer-events`
+filter → the ghost appears in the stack; reverse the ordering → the stack inverts *and*
+`first_is_singular` goes false, so assertion (2) is independently load-bearing.
+`g_element_from_point` **corrected** (see above). Also this tick: **constitution check #57**, due at
+729.
+WIKI: none [forced] — the mechanism's rationale is written at length beside both functions in
+`dom_bindings.rs`, and the pattern row carries the consequence.
+PATTERN: **a citation is a claim, and an uncited-in-fact citation is worse than no citation — it
+recruits everyone downstream.** *"per CSSOM-View"* appeared in a comment, was copied into a gate's
+claim string, and then made a wrong behaviour *enforced*. Nobody was careless: the sentence looked
+exactly like the dozens of correct spec references beside it, and that is the property that made it
+spread. ⚠ The operational form, and it is cheap: **when a comment cites a spec for a BEHAVIOUR (not a
+name), the fixture must measure the behaviour in the reference engine.** One line of Chrome output
+falsified a citation that had been enforced for hundreds of ticks.
+⚠ Second, smaller: **the plural of a working API is not a smaller version of it.** `elementFromPoint`
+existed and worked; the missing plural was not 10% of a feature, it was the whole of three library
+patterns.
+
+NEXT: **(1) `@container` CASCADE ORDER** (t726) — fixture written, Chrome-measured, one case failing,
+line named; still deferred as the riskiest edit class and now the oldest open item. **(2)** `cq*`
+units (t726). **(3)** the scrollbar-gutter residual (t728). **(4) THE FULL CORPUS SWEEP** — owed for
+four constitution checks; ~10h and unschedulable beside the loop.

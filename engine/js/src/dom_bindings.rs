@@ -2297,6 +2297,7 @@ unsafe fn define_members(
         def_guarded!(def, c"querySelector", doc_query, 1);
         def_guarded!(def, c"querySelectorAll", doc_query_all, 1);
         def_guarded!(def, c"elementFromPoint", doc_element_from_point, 2);
+        def_guarded!(def, c"elementsFromPoint", doc_elements_from_point, 2);
         def_guarded!(def, c"createElement", doc_create_element, 1);
         def_guarded!(def, c"createElementNS", doc_create_element_ns, 2);
         def_guarded!(def, c"importNode", doc_import_node, 2);
@@ -2441,6 +2442,7 @@ unsafe fn define_members(
         def_guarded!(def, c"querySelector", doc_query, 1);
         def_guarded!(def, c"querySelectorAll", doc_query_all, 1);
         def_guarded!(def, c"elementFromPoint", doc_element_from_point, 2);
+        def_guarded!(def, c"elementsFromPoint", doc_elements_from_point, 2);
         def_guarded!(def, c"getBoundingClientRect", el_get_bounding_rect, 0);
         def_guarded!(def, c"getClientRects", el_get_client_rects, 0);
         def_guarded!(def, c"getBBox", el_get_bbox, 0);
@@ -2684,8 +2686,14 @@ unsafe fn doc_query(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
 /// or `null`. Bridges to the layout-rect snapshot: among laid-out element boxes containing the point, the
 /// deepest wins (smallest area, later document order on a tie) — children paint over their parents.
 /// Honest bounds: the rects are pre-transform, so a `transform`ed hit area is not yet accounted for, and
-/// scroll offset is assumed zero (client ≈ layout coords for an unscrolled page); a non-finite/absent
-/// coordinate returns `null`, per CSSOM-View.
+/// scroll offset is assumed zero (client ≈ layout coords for an unscrolled page).
+///
+/// ⚠ A non-finite coordinate **throws**, and this comment used to say it *"returns `null`, per
+/// CSSOM-View"* — a citation for behaviour the spec does not describe. CSSOM-View types both
+/// parameters as `double`, not `unrestricted double`, so WebIDL rejects NaN/Infinity before the
+/// method body runs; Chrome throws a TypeError naming the non-finite value. Corrected at t729 when
+/// the plural sibling's fixture measured it, because the two must not disagree about their own
+/// arguments.
 unsafe fn doc_element_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, _root)) = this_node(vp) else {
         *vp = NullValue();
@@ -2701,7 +2709,14 @@ unsafe fn doc_element_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
     } else {
         f32::NAN
     };
-    let found = if x.is_finite() && y.is_finite() {
+    if !(x.is_finite() && y.is_finite()) {
+        return throw_type_error(
+            cx,
+            "Failed to execute 'elementFromPoint' on 'Document': The provided double value is \
+             non-finite.",
+        );
+    }
+    let found = if true {
         LAYOUT_RECTS_PTR.with(|c| {
             let p = c.get();
             if p.is_null() {
@@ -2748,6 +2763,103 @@ unsafe fn doc_element_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
         None
     };
     return_node_or_null(cx, vp, dom, found);
+    true
+}
+
+/// `document.elementsFromPoint(x, y)` → **every** element whose border box contains the point, from
+/// topmost to outermost, ending at `<html>`. The plural sibling of `elementFromPoint`, and it was
+/// absent: Chrome returns 3 on an ordinary `<div>` inside `<body>` inside `<html>`, this engine threw
+/// `TypeError`.
+///
+/// **The singular answers "what did the user click?"; the plural answers "what is IN THE WAY?"** —
+/// which is the question a drag-and-drop library asks to find a drop target under the cursor while a
+/// drag ghost sits on top of it, an overlay/tooltip library asks to decide whether it is occluding
+/// its own anchor, and a "click-through" affordance asks to forward an event to the layer beneath.
+/// With only the singular, every one of those gets the topmost element and no way to look past it.
+///
+/// Same hit-test as [`doc_element_from_point`], same honest bounds (pre-transform rects, scroll
+/// assumed zero, `pointer-events: none` skipped) and the **same ordering rule**, applied to the whole
+/// stack rather than only its winner: smaller border-box area first (a child is inside its parent),
+/// and on equal area the later element in document order paints on top. Sharing the ordering matters
+/// more than sharing the filter — `elementsFromPoint(x,y)[0]` must equal `elementFromPoint(x,y)` for
+/// every point, and a library that checks that invariant will find any drift immediately.
+unsafe fn doc_elements_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let arr_ptr = NewArrayObject1(&mut wrap_cx(cx), 0);
+    rooted!(in(cx) let arr = arr_ptr);
+    let Some((dom, _root)) = this_node(vp) else {
+        *vp = ObjectValue(arr.get());
+        return true;
+    };
+    let x = if argc > 0 {
+        (*vp.add(2)).to_number() as f32
+    } else {
+        f32::NAN
+    };
+    let y = if argc > 1 {
+        (*vp.add(3)).to_number() as f32
+    } else {
+        f32::NAN
+    };
+    // **A non-finite coordinate THROWS**, and this is measured rather than assumed: CSSOM-View types
+    // both parameters as `double`, not `unrestricted double`, so WebIDL rejects NaN/Infinity before
+    // the method runs. Chrome:
+    // `TypeError: Failed to execute 'elementsFromPoint' on 'Document': The provided double value is
+    // non-finite.` The first draft of this returned the empty list "per CSSOM-View" — an invented
+    // citation for a plausible answer, and the fixture caught it in one run.
+    if !(x.is_finite() && y.is_finite()) {
+        return throw_type_error(
+            cx,
+            "Failed to execute 'elementsFromPoint' on 'Document': The provided double value is \
+             non-finite.",
+        );
+    }
+    let mut hits: Vec<(NodeId, f32)> = LAYOUT_RECTS_PTR.with(|c| {
+        let p = c.get();
+        if p.is_null() {
+            return Vec::new();
+        }
+        let rects = &*p;
+        let styles = STYLES_PTR.with(|c| c.get());
+        let hittable = |node: NodeId| -> bool {
+            if styles.is_null() {
+                return true;
+            }
+            (*styles).get(&node).map_or(true, |cs| {
+                cs.pointer_events != manuk_css::PointerEvents::None
+            })
+        };
+        let mut out = Vec::new();
+        for (&node, r) in rects.iter() {
+            let (rx, ry, rw, rh) = (r[0], r[1], r[2], r[3]);
+            if x >= rx
+                && x < rx + rw
+                && y >= ry
+                && y < ry + rh
+                && (*dom).is_element(node)
+                && hittable(node)
+            {
+                out.push((node, rw * rh));
+            }
+        }
+        out
+    });
+    // Topmost first: smaller area first, and on a tie the later element in document order.
+    hits.sort_by(|a, b| {
+        a.1.partial_cmp(&b.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(b.0 .0.cmp(&a.0 .0))
+    });
+    let mut idx: u32 = 0;
+    for (node, _) in hits {
+        let refl = new_reflector(cx, dom, node);
+        if refl.is_null() {
+            continue;
+        }
+        rooted!(in(cx) let v = ObjectValue(refl));
+        JS_SetElement(&mut wrap_cx(cx), arr.handle(), idx, v.handle());
+        idx += 1;
+    }
+    *vp = ObjectValue(arr.get());
     true
 }
 

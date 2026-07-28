@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **484** | ticks 1–727 |
-| median tick cycle | **22m** | 483 intervals |
+| ticks landed | **485** | ticks 1–728 |
+| median tick cycle | **22m** | 484 intervals |
 | median, last 10 | **20m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 421.4h elapsed |
-| median verify wall | **63s** | 423 ticks |
+| **ticks per hour** | **1.15** | 421.8h elapsed |
+| median verify wall | **63s** | 424 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **342**
-* **✅ rows in the capability ledger**: 144 → **368**
+* **live gates**: 27 → **343**
+* **✅ rows in the capability ledger**: 144 → **369**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**233 of 484 ticks** (48%) moved a
+**234 of 485 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **233** capability ticks, median cycle **22m**
+* **234** capability ticks, median cycle **22m**
 * median diff per tick: **+240 / −34** lines across 8 files
 
 ## Every tick
@@ -581,5 +581,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **725** | 2026-07-28 17:41 | 4m | measurement | 63s | +127/−33 | 341 | 81 | 56.0% · | the blast radius I flagged as unmeasured measures ZERO, and that is the finding (2026-07-2 |
 | **726** | 2026-07-28 18:02 | 21m | measurement | 63s | +174/−33 | 341 | 81 | 56.0% · | the container-query pair: a unit fenced at PARSE, and a rule that cascades out of order (2 |
 | **727** | 2026-07-28 18:27 | 25m | pattern-class | 63s | +317/−34 | 342 | 81 | 56.0% · | `sheet.media` was a constant, and the `<link>` gap is a decision not a defect (2026-07-28) |
+| **728** | 2026-07-28 18:52 | 25m | pattern-class | 63s | +431/−38 | 343 | 81 | 56.0% · | the client box was the border box for nearly every element (2026-07-28) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

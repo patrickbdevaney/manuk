@@ -2926,3 +2926,64 @@ deliberate, explained act rather than a silent one.
    cluster claim stays a mechanism claim.
 
 **Next check due: tick 729.**
+
+---
+
+## Check #57 — tick 729
+
+**Horizon:** H0 — Pareto Web Parity. **Gate:** the `DAILY-DRIVER-CERTIFICATION.md` certificate —
+render × function per site, `shape ≥ 0.75` on ≥95% of a fixed-denominator corpus.
+
+**Gate or scoreboard?** **Gate**, and the eight ticks since #56 are the densest capability run of the
+session: 722 `rlh`, 723 root font metrics, 724 `CSS.supports`, 727 `sheet.media`, 728 the client box,
+729 `elementsFromPoint` — six capability ticks, two measurement ticks (725, 726) and one audit (721),
+with **no reverts**. That is the opposite composition of check #55's window and it happened without a
+steer, because the work stopped being chosen off a backlog.
+
+**The PART VI correction this check owes is about METHOD, and it is the session's largest.** Ticks
+721–729 found nine defects, and **not one came from `CLUSTERS.md`.** They came from:
+
+```text
+  a probe that left the frame        surface audit #44 -> a `works` row that does not work
+  a sentence in the previous tick    t722's "we now do two" of three -> t723
+  the most BORING possible input     `color: red` -> CSS.supports answering false to everything
+  a fixture built for something else t726's container-unit fixture -> a cascade-order bug
+  24 surfaces diffed at once         t728 -> the client box was the border box everywhere
+```
+
+**The ranked ledger did not point at any of them, and all nine are real.** That is not an argument
+against the ledger — it ranks what the oracle can *see*, which is boxes on 265 home pages. It is an
+argument that **the oracle's ceiling (the tick-42 principle, still in STATUS.md) binds harder than
+its ranking**: `CSS.supports` answering `false` to `display:flex` in the shipping browser is invisible
+to a box diff, because a page that takes its fallback renders *something* and the diff sees a layout
+difference, not a lie. So: **a differential probe against Chrome on a hand-built fixture is a
+first-class discovery instrument, not a verification step**, and it is cheap — t728 cost one fixture
+and found a bug touching every bordered element on the web.
+
+**On I4 (usage-weighted Pareto):** honoured, with one honest qualification recorded at t725. The
+`CSS.supports` fix measured **zero** movement across HEAD-20. That is not a failure of I4 — the
+capability is justified by the capability — but it is evidence that *"usage-weighted"* and
+*"measurable on twenty home pages"* are different sets, and the loop should stop expecting the second
+to confirm the first.
+
+**On PART VII / V1-SCOPE:** honoured. Eighteen ticks, no harness file touched.
+
+**No invariant is being bent.** The ratchet was not invoked in this window because nothing went
+backwards — and two gates were *corrected* rather than weakened: `g_element_from_point`'s NaN
+assertion demanded `null` and cited CSSOM-View for it (an invented citation; Chrome throws), and the
+map's `lh`/`rlh` row read `works` on a probe that tested one property. **Both corrections made the
+assertion stricter.**
+
+### THE STEER
+
+1. **KEEP THE BROAD DIFFERENTIAL PROBE IN THE ROTATION.** One fixture, N surfaces, diffed whole
+   against Chrome. It found the client-box bug in a tick that had no hypothesis, and the backlog it
+   competed against is not sorted by importance.
+2. **WHEN A TICK ENDS BY COUNTING HOW MANY OF A SET IT DID, THE REMAINDER IS THE NEXT HYPOTHESIS.**
+   t722 → t723 took one tick because the sibling had a NAME. The same class has cost this project 310
+   ticks when it did not.
+3. **THE FULL CORPUS SWEEP IS OWED FOR THE FOURTH CHECK RUNNING.** ~10 hours, serial, unschedulable
+   beside the loop. It is now the longest-standing unmet instruction in the log, and every cluster
+   claim stays a mechanism claim until it runs.
+
+**Next check due: tick 737.**
