@@ -33766,3 +33766,114 @@ NEXT: **(1) WHAT MAKES CHROME SAY "NO IN-FLOW LINE BOXES"** for a `<a><svg/></a>
 failing container directly rather than reasoning from the spec, since four spec readings have now
 missed. **(2)** the rust-lang table regression from t695 remains open behind this same patch.
 **(3) THE FULL CORPUS SWEEP** is still owed (13 of 265) and is the oldest debt on the board.
+
+## Tick 704 — the fifth hypothesis was the wrong question, and the answer had been written down for 310 ticks (2026-07-28)
+
+HYPOTHESIS: t703's NEXT #1 — go read the one failing container on `desitales2` instead of generating
+a fifth spec reading of §10.8.1. Bar: name the mechanism from the data, not from the spec.
+
+### READING THE FAILING CASE FOUND A DIFFERENT, BIGGER BUG IN THE SAME REPORT
+
+The container never got diagnosed, because the cluster report it sits in was saying something louder:
+
+```text
+  geometry/mis-sized: width ~8px (<path>)   Chrome [40 2514 12×12]   ours [40 2595  0×22]
+  geometry/displaced  svg/path              Chrome [47 3957  7×12]   ours [40 4010  0×22]
+```
+
+**Every SVG `<path>` on the page was a zero-width box one line-height tall.** Not a near miss — a
+number from the wrong formatting model. `manuk-wpt boxes --why "svg path"` gave the mechanism in one
+run:
+
+```text
+  svg#  display=Block  box=[40 758 14x14]
+    path#  display=Inline  box=[40 758 0x22]
+```
+
+`<path>` computes `display:inline`, has no text, and an inline box with no text is exactly `0 × line-
+height`. We laid the `<svg>` out atomically **and then let CSS layout loose on its subtree.**
+
+That is cluster **`Ccd7f`: 34 sites, 1,658 hits** — third-ranked on the board's own mechanism list.
+
+### AND IT HAD A BUILD SPEC. FROM TICK 393.
+
+`docs/wiki/box-layout.md` L1052: *"BUILD SPEC — inline SVG internals: borrow usvg, don't hand-write
+geometry"*. The paint half landed at t394 and its closing line reads *"Remaining from the spec: child
+geometry mapping…"* — a sentence that sat unread for **310 ticks** while the symptom it predicts sat
+at #3 in the priority ledger, ranked by an instrument that has no idea the spec exists.
+
+⚠ **A build spec whose second half is unbuilt is an UNTRIAGED TICK WITH EXCELLENT PROSE.** Same shape
+as *"a bug described accurately in a comment is an untriaged bug"* (t633-649), one level up: the
+loop's ranking instruments read code and corpora, and nothing re-surfaces a `docs/wiki` line that says
+*remaining* / *the other half* / *named residue*.
+
+### THE BUILD — `engine/page/src/svg_geometry.rs`
+
+Same serialized markup as the raster (one document, two halves), usvg parsed once per svg per decode,
+leaves paired to DOM shape elements in document order, applied **after** layout via a new
+`Page::set_root_box`. Post-layout is not an implementation convenience: the svg's *used* box exists
+only then, and a pass that runs after layout cannot perturb the geometry of anything outside an
+`<svg>` — that is what makes it strictly additive. `set_root_box` exists because there were **three**
+`self.root_box = layout_document(…)` sites and a post-pass wired into two of three is a pass that
+silently does not run on the third.
+
+**The spec said "fall back to document-order pairing". This REFUSES instead** — the counts must match
+exactly, `<foreignObject>` refuses the whole svg (it holds real HTML whose boxes CSS owns, and this
+pass replaces an svg box's children wholesale), and a used box whose aspect does not match the
+document's refuses too (`preserveAspectRatio` letterboxing is unmodelled). A wrong pairing attributes
+one shape's bounds to another element: a plausible-looking false number, which is strictly worse than
+the honest `0×22` it replaces. A refused svg keeps its old boxes, so a site this cannot map is left
+exactly as good as it was.
+
+### THE MEASUREMENTS, AND THE ONE THAT ALMOST LANDED A REGRESSION
+
+```text
+                          HEAD      fill-bbox     stroke-bbox (landed)
+  desitales2  SHAPE       61.5%       70.3%          70.3%      <- the byte-reproducible control
+  desitales2  VISUAL      65.1%       65.1%          65.1%
+  desitales2  COVERAGE    98.7%       98.7%          98.7%
+  en.wikipedia SHAPE      55.8%       55.5%  <-!!     55.8%
+  en.wikipedia VISUAL     88.7%       88.7%          88.7%
+  blog.rust-lang SHAPE    62.9%       62.9%          62.9%
+  layout suite            94/94       94/94          94/94
+```
+
+⚠ **`getBoundingClientRect` IS THE *DECORATED* BOUNDING BOX — IT INCLUDES THE STROKE.** SVG 2 gives
+an element two boxes and the two DOM methods return different ones: `getBBox()` is the fill/geometry
+box, `getBoundingClientRect()` the transformed decorated one. The oracle probes with the latter, so
+`abs_stroke_bounding_box()` is right and `abs_bounding_box()` is not.
+
+**The motivating site could not tell them apart.** desitales2's icons are unstroked, where the two
+boxes are identical — so the fill box matched Chrome *exactly* there (7×12, 10×9, 12×12) and cost
+**−0.3 SHAPE on `en.wikipedia.org`**, whose icons are stroked. Deterministic: wikipedia read 55.8%
+twice at HEAD and 55.5% on the fill build. Three ticks refused a −0.7 on a much larger win; a −0.3 of
+my own gets the same answer, and the answer was a spec question rather than a tolerance.
+
+⚠ Also measured, also not the obvious reading: **`abs_bounding_box()` is in `Tree::size()` canvas
+space, not `viewBox` units** — the viewBox transform is already folded in. The first gate asserted
+otherwise and failed, which is the gate doing its job on its author.
+
+⚠ One VISUAL reading of 64.8 on desitales2 was a **draw, not a regression** — 65.1 on the three
+readings either side. Measuring the spread before attributing it is the standing rule and it paid
+again. Separately, the 67.9% VISUAL seen in this tick's first run was the **parked t701 patch's**
+effect, not this one's; that patch is worth +2.8 VISUAL, a number three parking ticks never recorded.
+
+TICK SHAPE: capability
+CLUSTER: **Ccd7f — `<path>` geometry (34 sites / 1,658 hits)**, the mechanism removed at its source.
+Gates: `svg_geometry` 5/5 (mechanism + three refusals + the canvas-space scale), layout 94/94.
+⚠ Pre-existing RED, present at HEAD and unrelated: `manuk-page` lib test
+`static_import_scanner_finds_specifiers_and_skips_the_rest`. Not touched, not caused here.
+WIKI: `docs/wiki/box-layout.md` — the tick-393 spec's geometry half closed out, with both measured
+corrections to the spec and the refusal list; `INDEX.md` updated.
+PATTERN: **a ranking instrument cannot see a fix that is already written down.** `CLUSTERS.md` ranked
+this symptom #3 for months; `box-layout.md` had said how to fix it since t393; nothing connects the
+two, because the ledger reads corpora and the wiki reads as prose. *Before ranking a cluster, grep the
+wiki for its spec.*
+
+NEXT: **(1) THE FULL CORPUS SWEEP** — owed for five ticks now, and it is the only way to bank
+`Ccd7f`'s real shrinkage across all 34 sites rather than the 3 measured here. It is the oldest debt on
+the board. **(2) THE PARKED §10.8.1 PATCH** is untouched and still parked, and its objection may have
+*changed*: it was −0.7 SHAPE on desitales2 against a tree whose svg interiors were all wrong, and that
+tree no longer exists. Re-measure it against this HEAD before assuming the trade is the same one.
+**(3) A surface audit that greps `docs/wiki/*` for *remaining* / *the other half* / *named residue*** —
+this tick's finding says there is a backlog there that no instrument reads.

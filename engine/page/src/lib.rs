@@ -5,6 +5,9 @@
 //! agent** both drive these functions and diverge only at how they consume the
 //! output — the shell presents to a window, the agent screenshots + reads it.
 
+/// Inline-`<svg>` interior geometry — the tick-393 spec's other half. See the module docs.
+mod svg_geometry;
+
 /// N1 — the one session-history model, shared by the shell, the agent, and BiDi.
 /// Re-export the shared session-history model (moved to `manuk-dom` to break the
 /// page↔js dependency cycle). `manuk_page::history::SessionHistory` still resolves.
@@ -1375,6 +1378,12 @@ pub struct Page {
     /// first decode keeps the stale raster (named residue; re-serialize-on-mutation is the fix).
     inline_svg_cache:
         std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
+    /// The GEOMETRY half of the same spec: each inline `<svg>`'s interior bounding boxes, in the
+    /// user space usvg resolved. Filled from the SAME parse as the raster above, so the two halves
+    /// describe one document; consumed after every layout by [`svg_geometry::apply`], which needs
+    /// the svg's used box and therefore cannot run any earlier. Absent for every svg the pairing
+    /// refuses — see the module docs; those keep their CSS-derived boxes.
+    svg_geometry: svg_geometry::SvgGeometry,
     /// **Per-element scroll offsets** — `overflow: auto|scroll` containers, in CSS px.
     ///
     /// Before tick 67, `element.scrollTop` was not a property at all: reading it gave `undefined`, and
@@ -3304,6 +3313,15 @@ impl Page {
                     markup = format!("<svg xmlns=\"http://www.w3.org/2000/svg\"{rest}");
                 }
             }
+            // ── THE GEOMETRY HALF, from the SAME markup string as the raster.
+            //
+            // Deriving both from one serialization is the point: a `<path>` measured against a
+            // document the painter never saw is a number with nothing behind it. `map_inline_svg`
+            // refuses (returns `None`) far more readily than it answers — see its module docs — and
+            // a refusal is recorded as "no entry", which leaves that svg's CSS-derived boxes alone.
+            if let Some(boxes) = svg_geometry::map_inline_svg(&self.dom, node, &markup) {
+                self.svg_geometry.insert(node, boxes);
+            }
             if let Some(img) = decode_svg(markup.as_bytes(), "inline.svg") {
                 self.inline_svg_cache.insert(node, std::rc::Rc::new(img));
                 new += 1;
@@ -4672,6 +4690,7 @@ impl Page {
             // them here is what lets them PAINT as well as lay out.
             images: inline_images,
             inline_svg_cache: std::collections::HashMap::new(),
+            svg_geometry: svg_geometry::SvgGeometry::new(),
             scroll_offsets: std::collections::HashMap::new(),
             external_css: HashMap::new(),
             failed_css: std::collections::HashSet::new(),
@@ -5726,6 +5745,21 @@ impl Page {
         self.relayout_zoomed(fonts, viewport_width, self.zoom);
     }
 
+    /// **Install a freshly computed fragment tree**, and run the passes that can only see a
+    /// FINISHED one.
+    ///
+    /// There is exactly one of these because there were three `self.root_box = layout_document(…)`
+    /// sites and every one of them feeds `node_rects`. A post-layout pass wired into two of the
+    /// three is a pass that silently does not run on the third — the shape of bug this codebase has
+    /// paid for repeatedly ("one rule, N implementations"). Adding the next such pass here makes it
+    /// run everywhere by construction.
+    fn set_root_box(&mut self, root: LayoutBox) {
+        self.root_box = root;
+        // The inside of an `<svg>` is not laid out by CSS; its boxes come from path data and the
+        // `viewBox` transform, and both need the svg's USED box, which exists only now.
+        svg_geometry::apply(&mut self.root_box, &self.svg_geometry);
+    }
+
     /// **Re-run the cascade over EVERY stylesheet the document has** — inline `<style>` and
     /// `<link>`ed alike — without requiring the tree to have grown.
     ///
@@ -5813,7 +5847,8 @@ impl Page {
             scaled = manuk_css::zoom_styles(&self.styles, self.zoom);
             &scaled
         };
-        self.root_box = layout_document(&self.dom, styles, fonts, viewport_width);
+        let root = layout_document(&self.dom, styles, fonts, viewport_width);
+        self.set_root_box(root);
         self.content_height = self.root_box.content_bottom();
         self.dom.clear_all_dirty();
     }
@@ -5877,7 +5912,8 @@ impl Page {
         // background / border color) updates the fragment tree's paint attributes in place
         // and skips layout entirely — the incremental fast path.
         if damage >= RestyleDamage::Reflow {
-            self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            let root = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            self.set_root_box(root);
             self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
         } else if damage == RestyleDamage::Repaint {
@@ -6334,7 +6370,8 @@ impl Page {
             .styles
             .values()
             .any(|s| s.position == manuk_css::Position::Sticky);
-        self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+        let root = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+        self.set_root_box(root);
         self.content_height = self.root_box.content_bottom();
         self.dom.clear_all_dirty();
         damage

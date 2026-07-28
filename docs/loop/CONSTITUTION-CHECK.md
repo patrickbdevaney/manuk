@@ -2720,3 +2720,57 @@ usage-weighted cluster ranking, and the finding is that the ranking needs re-mea
 enforcing itself.
 
 **Next check due: tick 704.**
+
+---
+
+## Check #54 — tick 704
+
+**Horizon:** H0 — Pareto Web Parity. **Gate:** the `DAILY-DRIVER-CERTIFICATION.md` certificate —
+render × function per site, `shape ≥ 0.75` on ≥95% of a fixed-denominator corpus.
+
+**Gate or scoreboard?** Gate, and for the first time in five ticks by a route that was *written down
+in advance*. Ticks 700–703 were four consecutive measurement ticks on one residual (the §10.8.1
+inline-block baseline), each correctly refusing to land a patch that traded a control site's SHAPE
+for a large win elsewhere. That is the ratchet working. It was also, by t703, a loop: four
+hypotheses, one cause, two no-ops and one regression, and a fifth hypothesis queued.
+
+**The drift this check catches is not in the constitution — it is in the SEARCH.** t703's own PATTERN
+line said it: *"when consecutive hypotheses about the same residual keep missing, stop generating
+hypotheses and go read the failing case."* Reading the failing case this tick did not confirm the
+fifth hypothesis; it surfaced a **completely different and larger mechanism** sitting in the same
+cluster report — every SVG `<path>` on the page reporting `0×22`, a number from the wrong formatting
+model entirely. That is `Ccd7f`: 34 sites, 1,658 hits, and it had a **build spec written at tick 393
+that named this exact gap and was never built** (`docs/wiki/box-layout.md`, *"geometry mapping is the
+other half"* — the paint half landed at t394 and the sentence sat there for 310 ticks).
+
+**So the reusable finding is about the BACKLOG, not the bug:** a deferred half of a landed feature is
+invisible to every ranking instrument the loop has. `CLUSTERS.md` ranked its *symptom* at #3 for
+months without connecting it to the spec that already said how to fix it, and no audit reads
+`box-layout.md` for the word "remaining". **A build spec whose second half is unbuilt is an
+UNTRIAGED TICK with excellent prose** — the same shape as [[a bug described accurately in a comment
+is an untriaged bug]] from t633-649, one level up.
+
+**On I4 (usage-weighted Pareto):** honoured. The tick was chosen off the oracle's own ranked ledger,
+attacked the third-ranked mechanism family, and the deliverable is measured against the site the
+project keeps *because* it is byte-reproducible.
+
+**On PART VII / V1-SCOPE (pure browser capability):** honoured — no harness file touched. The one
+harness observation (a pre-existing RED in `manuk-page`'s `static_import_scanner…` lib test, present
+at HEAD, unrelated to this tick) is recorded in the journal and not acted on.
+
+**No invariant is being bent.** The ratchet held twice in one tick: once when a −0.3 SHAPE reading on
+`en.wikipedia.org` stopped the first implementation from landing, and once when the *fix* for it
+turned out to be a spec question (`getBoundingClientRect` returns the **decorated** box, stroke
+included — `getBBox()` is the fill box) rather than a tolerance to widen.
+
+### THE STEER
+
+1. **BEFORE RANKING A CLUSTER, GREP THE WIKI FOR ITS SPEC.** `Ccd7f` had a build plan for 310 ticks.
+   A cluster row and a `docs/wiki` build spec that describe the same mechanism should never again be
+   discovered independently — the ledger should cite the spec.
+2. **A SURFACE AUDIT SHOULD READ `docs/wiki/*` FOR "remaining"/"the other half"/"named residue".**
+   Those phrases mark work the author bounded and deferred; nothing currently re-surfaces them.
+3. **THE FULL CORPUS SWEEP IS STILL OWED** — four ticks running, and check #N−1's steer #1 said the
+   registry is stale and is steering the loop. It still is.
+
+**Next check due: tick 712.**

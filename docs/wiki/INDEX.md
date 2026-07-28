@@ -71,38 +71,39 @@
   - L1039 · viewBox is an intrinsic ratio — and the default-size model is MEASURED, not recalled (tick 391)
   - L1052 · BUILD SPEC — inline SVG internals: borrow usvg, don't hand-write geometry (tick 393)
   - L1084 · Paint half LANDED (tick 394)
-  - L1096 · List markers follow the HTML "ordinal value" algorithm — a running counter, not a sibling index (tick 411)
-  - L1116 · justify-content: normal is NOT flex-start — it is what makes an auto grid track stretch (tick 569)
-  - L1152 · repeat(auto-fill, …) is a shape the cascade must NOT resolve (tick 570)
-  - L1194 · CSS filter — an offscreen GROUP is the whole mechanism, and the blur's integer division is where it nearly died (tick 592)
-  - L1232 · The blur lost 84% of its ink, and the test that caught it was itself wrong first
-  - L1249 · Two coordinate spaces meet at the scratch surface, and only one of them still owes the scroll
-  - L1259 · Colour matrices are spec constants, so they are asserted EXACTLY
-  - L1280 · clip-path — the second capability out of the same offscreen group, at a fraction of the price (tick 593)
-  - L1306 · inset(50%) must be allowed to clip everything, and it is the one place the module's default is wrong
-  - L1326 · mix-blend-mode — the offscreen group's *composite-back* is the backdrop, and that is the third capability out of one mechanism (tick 594)
-  - L1349 · One number is recorded and NOT asserted, on purpose
-  - L1369 · backdrop-filter — the bundle closes, and the property that was LAST is the one that justifies the split (tick 595)
-  - L1397 · The session's recurring lesson collected a fifth time
-  - L1412 · An exact path bbox is the EXTREMA, not the control-point hull (tick 630)
-  - L1420 · The curve is the whole difficulty
-  - L1443 · Elliptical arcs REFUSE, and that is the design
-  - L1455 · What this does NOT fix
-  - L1462 · An image's size is in no stylesheet — so a re-cascade erases it (tick 656)
-  - L1488 · Why it was permanent rather than transient
-  - L1494 · Why no instrument saw it
-  - L1502 · The fix: a standing input belongs between the cascade and the layout
-  - L1526 · The gate asserts three things, and two of them are not decoration
-  - L1541 · www.naukri.com: our <body> is 89,905px wide and Chrome's is 1,200 (tick 684, OPEN)
-  - L1562 · Two mechanisms ELIMINATED, so the next attempt does not re-derive them
-  - L1577 · The PHASE is now named: the external stylesheet (tick 685)
-  - L1605 · The bisection ran, and it narrowed the question again (tick 686)
-  - L1635 · SHAPE is not a per-box metric error — it is one wrong HEIGHT above the content (tick 688)
-  - L1661 · FIRST DIVERGENCE already points at the cause
-  - L1680 · A broken <img> is 16×16 in Chrome and was 784×0 here (tick 689)
-  - L1716 · And a hypothesis Chrome itself killed, before it cost a tick
-  - L1726 · An out-of-flow child neither splits its inline nor escapes it (tick 697)
-  - L1777 · The clearfix had no box to clear with (tick 698)
+  - L1096 · Geometry half LANDED (tick 704) — and the two things the spec got wrong
+  - L1137 · List markers follow the HTML "ordinal value" algorithm — a running counter, not a sibling index (tick 411)
+  - L1157 · justify-content: normal is NOT flex-start — it is what makes an auto grid track stretch (tick 569)
+  - L1193 · repeat(auto-fill, …) is a shape the cascade must NOT resolve (tick 570)
+  - L1235 · CSS filter — an offscreen GROUP is the whole mechanism, and the blur's integer division is where it nearly died (tick 592)
+  - L1273 · The blur lost 84% of its ink, and the test that caught it was itself wrong first
+  - L1290 · Two coordinate spaces meet at the scratch surface, and only one of them still owes the scroll
+  - L1300 · Colour matrices are spec constants, so they are asserted EXACTLY
+  - L1321 · clip-path — the second capability out of the same offscreen group, at a fraction of the price (tick 593)
+  - L1347 · inset(50%) must be allowed to clip everything, and it is the one place the module's default is wrong
+  - L1367 · mix-blend-mode — the offscreen group's *composite-back* is the backdrop, and that is the third capability out of one mechanism (tick 594)
+  - L1390 · One number is recorded and NOT asserted, on purpose
+  - L1410 · backdrop-filter — the bundle closes, and the property that was LAST is the one that justifies the split (tick 595)
+  - L1438 · The session's recurring lesson collected a fifth time
+  - L1453 · An exact path bbox is the EXTREMA, not the control-point hull (tick 630)
+  - L1461 · The curve is the whole difficulty
+  - L1484 · Elliptical arcs REFUSE, and that is the design
+  - L1496 · What this does NOT fix
+  - L1503 · An image's size is in no stylesheet — so a re-cascade erases it (tick 656)
+  - L1529 · Why it was permanent rather than transient
+  - L1535 · Why no instrument saw it
+  - L1543 · The fix: a standing input belongs between the cascade and the layout
+  - L1567 · The gate asserts three things, and two of them are not decoration
+  - L1582 · www.naukri.com: our <body> is 89,905px wide and Chrome's is 1,200 (tick 684, OPEN)
+  - L1603 · Two mechanisms ELIMINATED, so the next attempt does not re-derive them
+  - L1618 · The PHASE is now named: the external stylesheet (tick 685)
+  - L1646 · The bisection ran, and it narrowed the question again (tick 686)
+  - L1676 · SHAPE is not a per-box metric error — it is one wrong HEIGHT above the content (tick 688)
+  - L1702 · FIRST DIVERGENCE already points at the cause
+  - L1721 · A broken <img> is 16×16 in Chrome and was 784×0 here (tick 689)
+  - L1757 · And a hypothesis Chrome itself killed, before it cost a tick
+  - L1767 · An out-of-flow child neither splits its inline nor escapes it (tick 697)
+  - L1818 · The clearfix had no box to clear with (tick 698)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1226,4 +1227,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1137 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1138 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

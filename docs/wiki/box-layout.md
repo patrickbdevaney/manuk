@@ -1093,6 +1093,47 @@ replaced-sizing model (t389/391) owns the box; the raster paints into it. Pixel-
 G_FIRST_PAINT (`an_inline_svg_paints_its_vectors`, RED-proven: decode severed → white center).
 Remaining from the spec: child geometry mapping, stale-raster-on-mutation, render-at-used-size.
 
+### Geometry half LANDED (tick 704) — and the two things the spec got wrong
+
+`engine/page/src/svg_geometry.rs`. Same serialized markup as the raster (one document, two halves),
+usvg parsed once per svg per decode, leaves paired to DOM shape elements in document order, applied
+**after** layout by `Page::set_root_box` — the svg's *used* box exists only then, and running after
+layout is what makes the pass unable to perturb any geometry outside an `<svg>`.
+
+What it replaced, measured on `www.desitales2.com`: every icon `<path>` reported **`0×22`** against
+Chrome's `12×12` — a zero-width inline box one line-height tall, because `<path>` computes
+`display:inline`, has no text, and CSS gave it the only box that description allows. Not a near miss;
+the wrong formatting model. **`www.desitales2.com` SHAPE 61.5% → 70.3%**, VISUAL and COVERAGE
+unmoved, `en.wikipedia.org` and `blog.rust-lang.org` unmoved.
+
+⚠ **`getBoundingClientRect` is the DECORATED bounding box — it includes the stroke.** SVG 2 gives an
+element two boxes and the two DOM methods return different ones (`getBBox()` = fill/geometry,
+`getBoundingClientRect()` = transformed decorated). The oracle probes with the latter, so
+`abs_stroke_bounding_box()` is the correct usvg accessor and `abs_bounding_box()` is not. This cost a
+measurement to learn because **the motivating site could not tell the two apart**: desitales2's icons
+are unstroked, where the boxes are identical, so the fill box matched Chrome *exactly* there (7×12,
+10×9, 12×12) and quietly cost **−0.3 SHAPE on `en.wikipedia.org`**, whose icons are stroked. A
+fixture that cannot distinguish two candidate rules has not chosen between them.
+
+⚠ **`abs_bounding_box()` is in `Tree::size()` CANVAS space, not `viewBox` units** — the viewBox
+transform is already folded into the absolute transforms. `<svg width="12" viewBox="0 0 24 24">` with
+a path spanning 6..18 reports `[3 3 6×6]`, not `[6 6 12×12]`. So the only scale left is
+`used_box / Tree::size()`, which is exactly 1 whenever the author sized the svg in px.
+
+**The spec's step 3 said "fall back to document-order pairing" — this REFUSES instead.** usvg's tree
+is a rendering tree, not the DOM: it drops `<defs>`, expands `<use>`, synthesises groups. A wrong
+pairing attributes one shape's bounds to another element, which is a plausible-looking false number —
+strictly worse than the honest `0×22` it replaces. So the mapping is emitted only when leaf counts
+match exactly, and is refused outright for `<foreignObject>` (it holds real HTML whose boxes CSS owns,
+and this pass replaces an svg box's children wholesale) and for a used box whose aspect does not match
+the document's (`preserveAspectRatio` letterboxing is unmodelled). A refused svg keeps its old boxes:
+a site this cannot map is left exactly as good as it was. Four gates, one per refusal plus the
+mechanism.
+
+**Named residue:** `padding`/`border` on the `<svg>` itself (the border box is used as the viewport);
+`<use>` cross-references; non-matching `preserveAspectRatio`; stale-geometry-on-mutation (shares the
+raster's cache lifetime, so it inherits that residue exactly).
+
 ## List markers follow the HTML "ordinal value" algorithm — a running counter, not a sibling index (tick 411)
 
 `list_marker` built each `<li>`'s number from `start + (count of preceding <li> siblings)`, with an

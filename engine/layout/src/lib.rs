@@ -326,6 +326,41 @@ impl LayoutBox {
         (w.max(0.0), h.max(0.0))
     }
 
+    /// A box that occupies `rect` on behalf of `node` and **paints nothing** — no background, no
+    /// border, no text, no children.
+    ///
+    /// It exists for geometry that is real but is not produced by CSS layout: the inside of an
+    /// `<svg>`. A `<path>`'s rect comes from path data and the `viewBox` transform, not from a
+    /// formatting context, so nothing in this crate can compute it — but `node_rects` must still
+    /// report it, because that is what `getBoundingClientRect` returns and what the oracle probes.
+    /// See `Page::map_svg_child_geometry`.
+    pub fn inert(rect: Rect, node: NodeId) -> LayoutBox {
+        LayoutBox {
+            rect,
+            background: None,
+            border: None,
+            radius: 0.0,
+            shadows: Vec::new(),
+            filters: Vec::new(),
+            clip_path: None,
+            blend: manuk_css::BlendMode::Normal,
+            backdrop: Vec::new(),
+            hidden: false,
+            mask_image: None,
+            background_images: Vec::new(),
+            background_size: manuk_css::BackgroundSize::Auto,
+            background_position: manuk_css::BackgroundPosition::default(),
+            object_fit: manuk_css::ObjectFit::Fill,
+            object_position: manuk_css::ObjectPosition::default(),
+            background_repeat: manuk_css::BackgroundRepeat::Repeat,
+            outline: None,
+            marker: None,
+            opacity: 1.0,
+            node: Some(node),
+            content: BoxContent::Block(vec![]),
+        }
+    }
+
     /// Find the box for `node`, if it has one.
     pub fn find(&self, node: NodeId) -> Option<&LayoutBox> {
         if self.node == Some(node) {
