@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **474** | ticks 1–717 |
-| median tick cycle | **22m** | 473 intervals |
-| median, last 10 | **30m** | 10 intervals |
+| ticks landed | **475** | ticks 1–718 |
+| median tick cycle | **22m** | 474 intervals |
+| median, last 10 | **37m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 418.3h elapsed |
-| median verify wall | **63s** | 413 ticks |
+| **ticks per hour** | **1.13** | 418.9h elapsed |
+| median verify wall | **63s** | 414 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **337**
-* **✅ rows in the capability ledger**: 144 → **362**
+* **live gates**: 27 → **338**
+* **✅ rows in the capability ledger**: 144 → **363**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**228 of 474 ticks** (48%) moved a
+**228 of 475 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -571,5 +571,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **715** | 2026-07-28 14:09 | 38m | pattern-class | 63s | +457/−38 | 337 | 81 | 56.0% · | the control said the fix was not guilty: welt's 95.6% was OUR OWN TIMEOUT (2026-07-28) |
 | **716** | 2026-07-28 15:13 | 64m | measurement | 63s | +374/−33 | 337 | 81 | 56.0% · | the population read that eight sites could not give, and the arithmetic that forbids the f |
 | **717** | 2026-07-28 15:20 | 6m | pattern-class | 63s | +132/−33 | 337 | 81 | 56.0% · | a frame with nothing to FETCH got nothing to LOAD, and `typeof null` is why nobody noticed |
+| **718** | 2026-07-28 15:54 | 35m | measurement | 63s | +460/−34 | 338 | 81 | 56.0% · | the loop's newest instrument is BLIND until the parked fix lands, and it nearly cost a fab |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

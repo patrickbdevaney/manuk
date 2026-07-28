@@ -35144,3 +35144,91 @@ highest-value item on the board twice over: it fixes what every page measures AN
 loop's own probe. Needs a caller audit of `load_async` first (every caller that relies on the
 lifecycle having fired by return). **(2)** the synchronous `contentDocument` residual (t717).
 **(3)** the ikea 21-box coverage loss (t713).
+
+## Tick 719 — the third design lands it: fetched at parse, waited for nowhere (2026-07-28)
+
+HYPOTHESIS: the CSS-ordering fix has been named the top item twice (t716, t718) and reverted twice.
+Audit `load_async`'s callers, then find a design the arithmetic allows. Bar: the ordering fixed,
+`G_LOAD` green, `keirin.jp` unmoved.
+
+### THE AUDIT CORRECTED THE CLAIM I HAD PUBLISHED THREE TIMES
+
+`load_async` has **no shell caller**. Its users are `manuk-wpt` (boxes, the fidelity sweep, the
+harness) and the gates; the shell navigates through `from_prefetched`, which has *always* applied the
+CSS between `from_dom` and the deferred pass — before both lifecycle events. So the t714 headline,
+*"every script on every page measured a document with no author CSS"*, is **too broad**: it is true on
+the `load_async` path — the **agent** and **every fidelity measurement** — and false on the shell's.
+
+That is a smaller blast radius and a sharper one. The agent surface is PART VII component 2, and the
+fidelity instrument is what decides what the loop builds next.
+
+**It also handed over the design**, because `from_prefetched` does not have this problem for a
+reason: its CSS is fetched **off-thread before the `Page` exists**, so applying it costs no page
+budget at all.
+
+### THE ARITHMETIC, AND THE THREE ATTEMPTS IT ADJUDICATED
+
+```text
+  own budget            load_async spends 2x alone, page 3x   ->  G_LOAD red, 5.4s against 2s   (t715)
+  a shared slice        the phase it shares with starves      ->  keirin SHAPE 60.2 -> 53.0     (t716)
+  concurrent w/ scripts the fixture has dead sheets and NO     ->  G_LOAD red, that phase 0s->2s (here)
+                        scripts — no wait to hide behind
+  fetched at PARSE,     nothing waits, so nothing can starve  ->  G_LOAD 3.51s · keirin 60.2%   ✅
+  taken if FINISHED
+```
+
+The third attempt is the interesting failure: *"run it concurrently with a wait that already
+happens"* is sound reasoning and still wrong, because **the fixture that measures the bound has dead
+sheets and no scripts** — there was no existing wait on that page to hide behind. A concurrency
+argument is only as good as the phase it assumes exists.
+
+### WHAT LANDED
+
+The sheet fetches are spawned immediately after the parse — off the real tree, via
+`collect_style_sources`, so `media`, shadow roots and inline `<style>` are all handled — and at the
+apply point the loop takes only the handles that report `is_finished()`, **never awaiting one**. A
+page's stylesheets get the external-script fetch, the module-graph prefetch, the cascade, layout and
+every blocking script of head start; anything that has not arrived falls through to `finish_loading`
+exactly as before.
+
+```text
+  ordering   dcl/load/timer   block/1184 -> flex/829        (Chrome: flex/829)
+  G_LOAD     3.51s against a 2s budget    (ceiling 4s; it was 3.4s before this tick)
+  keirin.jp  SHAPE 60.2%                  unmoved
+  www.ikea.com  COVERAGE 97.08% -> 100.0%  ·  21 missing boxes -> ZERO  ·  SHAPE 53.6 -> 55.4
+  www.welt.de   95.7%                     unmoved, does NOT collapse
+  desitales2    98.7% / 69.9%             unmoved
+```
+
+⚠⚠ **`ikea`'s 21 missing boxes are the t713 open item, and this closes it.** They were flagged two
+ticks before this fix existed, survived a bisect plan, and were never a layout bug at all: the page's
+scripts measured an unstyled document and built the wrong tree. **A COVERAGE loss whose cause was a
+MEASUREMENT the page took** — which no box-diff could have attributed, because the boxes that are
+missing are the ones the page decided not to create.
+
+And `welt.de` does not collapse, which is the confirmation that t715's diagnosis was right: the
+earlier designs blanked it by *freeing budget* so its anti-adblock guard could reach a verdict. This
+one frees none.
+
+TICK SHAPE: pattern-class
+CLUSTER: `C01ca geometry: <div>` (111 sites) and — unexpectedly — a MISSING_BOX result: `ikea`
+21 → 0. Site counts owed to the next sweep; the per-site numbers above are isolated, twice where they
+moved.
+Gates: `g_css_before_lifecycle` restored and now green on the landed design — four assertions at four
+phases, RED-proven at t714 against two mutations each failing a different one, with assertion (4)
+pinning the parser-blocking script as a named non-claim. `G_LOAD` is the Bar 0 gate that adjudicated
+all three designs and comes in **faster** than before the tick.
+WIKI: `docs/wiki/box-layout.md` — "fetched at parse, waited for nowhere".
+PATTERN: **the bound is not the budget, it is the FIXTURE that measures the budget.** Three designs
+were argued against `load_budget()` arithmetic and the third died on something the arithmetic could
+not see: `G_LOAD`'s page has dead sheets and *no scripts*, so the phase I planned to hide inside did
+not exist there. A cost model that reasons about the average page cannot predict a gate that
+deliberately runs an extreme one. ⚠ Second, and it is the one that unlocked the tick: **the path that
+does not have the bug is the design document.** `from_prefetched` had been doing this correctly for
+its whole life; the answer was not to invent a schedule but to ask why the other path did not need
+one, and the answer — *its CSS is already in hand* — is the entire fix.
+
+NEXT: **(1) RE-RUN HEAD-20** — this changes what every script on the measurement path observes, and
+one site already moved a coverage number 3 points. **(2)** the synchronous `contentDocument` residual
+(t717). **(3)** `document.styleSheets` reports **0** where Chrome reports 9 (measured on keirin at
+t718) — external sheets are absent from the CSSOM even once applied.

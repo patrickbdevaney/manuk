@@ -1895,6 +1895,32 @@ impl Page {
         // <link rel=preload>) concurrently *before* parse + layout + scripts run, so they
         // land in the HTTP cache by the time apply_stylesheets needs them — overlapping the
         // network with the CPU-bound pipeline.
+        //
+        // ── **THE AUTHOR'S STYLESHEETS: FETCHED HERE, WAITED FOR NOWHERE.**
+        //
+        // `from_prefetched` — the SHELL's path — has always applied the CSS between `from_dom` and
+        // the deferred pass, so its lifecycle events and its timers see a styled document.
+        // `load_async` applied it in `finish_loading`, *after* `DOMContentLoaded` and *after*
+        // `load`, so every script on this path measured a document with no author CSS in it. That is
+        // the t714 finding, and its blast radius is this path — the AGENT and every fidelity
+        // measurement — not the shell.
+        //
+        // ⚠⚠ **Two designs were measured and both were reverted, and the arithmetic is why.**
+        // `G_LOAD` bounds the WHOLE page at 2x the load budget; one budget is already spent in
+        // `load_async` and one in `finish_loading`, so a third *waiting* phase has no room: give it
+        // its own budget and the page spends 3x (G_LOAD red at 5.4s against 2s, t715); make it share
+        // one and the phase it shares with starves (`keirin.jp` SHAPE 60.2% -> 53.0%, t716). Even
+        // running it *concurrently* with the script fetch is not free, because the fixture that
+        // measures this has dead sheets and **no scripts** — there was no existing wait to hide
+        // behind, and the phase went 0s -> 2s.
+        //
+        // So the answer is not a better slice, it is **no wait at all**: start the fetches here,
+        // before the parser has run, and at the apply point take only the ones that have ALREADY
+        // FINISHED. A page's stylesheets get parse + cascade + layout + every blocking script of head
+        // start — seconds, on a real site — and a sheet that has not arrived by then simply falls
+        // through to `finish_loading` exactly as it does today. Strictly more capability, zero added
+        // latency, and nothing to starve.
+        let mut css_inflight: Vec<(String, tokio::task::JoinHandle<Option<String>>)> = Vec::new();
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
             for url in scan_preloads(html, final_url) {
                 handle.spawn(async move {
@@ -1904,6 +1930,33 @@ impl Page {
         }
         #[allow(unused_mut)]
         let mut dom = manuk_html::parse(html);
+        // Off the real tree rather than a regex over the bytes: `collect_style_sources` already knows
+        // about `media`, shadow roots and inline `<style>`, and getting the URL list wrong here would
+        // fetch the wrong thing early and still look like it worked. The head start is everything
+        // between here and the apply — the external-script fetch, the module-graph prefetch, the
+        // cascade, layout, and every blocking script — which on a real site is seconds.
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            let mut seen = std::collections::HashSet::new();
+            for url in collect_style_sources(&dom, final_url)
+                .iter()
+                .filter_map(|src| match src {
+                    StyleSource::External(u, _) => Some(u.clone()),
+                    _ => None,
+                })
+                .filter(|u| seen.insert(u.clone()))
+            {
+                let u = url.clone();
+                css_inflight.push((
+                    url,
+                    handle.spawn(async move {
+                        manuk_net::fetch(&u)
+                            .await
+                            .ok()
+                            .and_then(|r| subresource_text(&r))
+                    }),
+                ));
+            }
+        }
         nav_phase(
             "html parse",
             &mut nav_at,
@@ -1915,6 +1968,10 @@ impl Page {
         // different scopes and a module's imports resolve against the MODULE's url, not the document's.
         #[allow(unused_mut)]
         let mut script_origins: HashMap<NodeId, String> = HashMap::new();
+        // The external stylesheets, fetched beside the scripts below and applied right after
+        // construction — the same shape `Prefetched.css` has on the shell path.
+        #[allow(unused_mut)]
+        let mut early_css: HashMap<String, String> = HashMap::new();
         // Fold this document's `<meta>` policy into whatever the caller seeded from the response
         // headers, and leave the result seeded for `from_dom` — the script FETCH below needs it
         // now, and the inline-script check needs it a few lines later.
@@ -1976,6 +2033,33 @@ impl Page {
             &mut nav_accounted_ms,
             &mut nav_hits,
         );
+        // **Applied HERE — after construction, before the deferred pass and before either lifecycle
+        // event — which is exactly where `from_prefetched` has always applied it.** Pure CPU: the
+        // bytes are already in hand from the phase above, so this spends no budget and cannot starve
+        // anything. `finish_loading` still calls `fetch_and_apply_stylesheets`, and it is now a
+        // near-no-op: the URLs are deduped for the navigation and `apply_stylesheets` fingerprints
+        // its inputs, so an unchanged sheet set does not re-cascade.
+        // **Take only what has already landed — `is_finished()`, never `await`.** A handle still in
+        // flight is left alone: it keeps running, warms the HTTP/negative cache, and
+        // `finish_loading` picks the sheet up on its own phase. This loop cannot block.
+        {
+            use futures_util::FutureExt;
+            for (url, handle) in css_inflight {
+                if !handle.is_finished() {
+                    continue;
+                }
+                if let Some(Ok(Some(text))) = handle.now_or_never() {
+                    early_css.insert(url, text);
+                }
+            }
+        }
+        if !early_css.is_empty() {
+            tracing::debug!(
+                sheets = early_css.len(),
+                "author CSS applied before the lifecycle events"
+            );
+            page.apply_stylesheets(&early_css, fonts, viewport_width);
+        }
         // Carry the pre-fetched graph + import map onto the page; `run_deferred_scripts` seeds them into
         // the JS layer and clears them after the module pass (the same seam the shell path uses).
         #[cfg(feature = "spidermonkey")]

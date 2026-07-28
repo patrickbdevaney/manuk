@@ -2004,3 +2004,39 @@ Chrome in all four cases. The 85 elements read `float:none` because the rule had
 ⚠ Consequence for the parked fix: it is not only worth *"pages measure themselves correctly"*. It is
 also **the loop's own newest instrument becoming usable at all** — the same shape as *"raising what
 the instrument can SEE outranks fixing what it already sees."*
+
+### Fetched at parse, waited for nowhere (tick 719 — the design that landed)
+
+Two things had to be true at once: the sheets must be applied before the lifecycle events, and the
+navigation must not spend a third budget. `G_LOAD` bounds the whole page at **2x the load budget**,
+and `load_async` already spends one (enhancements) with `finish_loading` spending another.
+
+```text
+  own budget            page spends 3x                        ->  G_LOAD red, 5.4s against 2s
+  a shared slice        the phase it shares with starves      ->  keirin.jp SHAPE 60.2 -> 53.0
+  concurrent w/ scripts the fixture has dead sheets and NO     ->  G_LOAD red, that phase 0s -> 2s
+                        scripts, so there was no wait to hide behind
+  fetched at PARSE,     nothing waits, so nothing can starve  ->  G_LOAD 3.51s · keirin 60.2%
+  taken if FINISHED                                               ikea 97.1% -> 100.0% coverage
+```
+
+Spawn the sheet fetches right after the parse (off the real tree, via `collect_style_sources`, so
+`media`/shadow/inline are handled), and at the apply point take only the handles reporting
+`is_finished()` — **never await one**. The head start is the external-script fetch, the module-graph
+prefetch, the cascade, layout and every blocking script. Anything late falls through to
+`finish_loading` exactly as before: strictly more capability, zero added latency.
+
+> **The bound is not the budget, it is the FIXTURE that measures the budget.** The third design died
+> on something the arithmetic could not see — `G_LOAD`'s page has dead sheets and *no scripts*, so the
+> phase it planned to hide inside did not exist there.
+
+> **And the path that does not have the bug is the design document.** `from_prefetched` had been
+> applying CSS before the lifecycle events for its whole life. The answer was not to invent a
+> schedule but to ask why it did not need one — its CSS is already in hand — which is the whole fix.
+
+⚠ Blast radius, corrected: `load_async` has **no shell caller**. This bug was the AGENT's and every
+fidelity measurement's, not the shipping browser's page scripts.
+
+⚠ And `ikea`'s 21 missing boxes (open since t713) were never a layout bug: **a COVERAGE loss whose
+cause was a MEASUREMENT the page took.** No box-diff could attribute it, because the missing boxes
+are the ones the page decided not to create.

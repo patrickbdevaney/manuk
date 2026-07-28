@@ -110,6 +110,7 @@
   - L1931 · The retraction (tick 715), and the control that was not enough
   - L1955 · And the arithmetic that forbids the obvious fix (tick 716)
   - L1982 · ⚠ And the instrument is calibrated by the bug until it is fixed (tick 718)
+  - L2008 · Fetched at parse, waited for nowhere (tick 719 — the design that landed)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1237,4 +1238,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1148 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1149 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
