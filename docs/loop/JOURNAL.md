@@ -34672,3 +34672,121 @@ has been untouched since t698. HEAD-20 agrees: SHAPE 60.2% against a 0.75 bar wi
 clearing it. **(2)** `playhop.com` is the one honest `render-failed` left in HEAD-20 and it is ours.
 **(3)** the ikea 21-box coverage loss, bisectable across t693–t711 now that t712 is excluded.
 **(4)** the full corpus sweep still needs a ten-hour quiet window — schedule it, do not intend it.
+
+## Tick 714 — every script on every page was measuring a document with no CSS in it, and the fix is REFUSED (2026-07-28)
+
+HYPOTHESIS: the board's alternation rule (t685) makes this a GEOMETRY tick, and t713's HEAD-20 put
+SHAPE at 60.2% with **0 of 20** sites over the 0.75 bar. Take the first divergence on
+`www.desitales2.com` — the byte-reproducible control — and chase it to one mechanism. Bar: Chrome-
+measured agreement on a fixture.
+
+### THE FIRST DIVERGENCE WAS A SIDEBAR THAT WAS NOT BESIDE ANYTHING
+
+```text
+                            CHROME                    MANUK
+  #page/.site-content     display:flex              display:BLOCK
+  .content-area       [  0 173  830x3989]       [8   402  829x28582]
+  .widget-area        [830 173  356x3989]       [8 28983  355x796]
+```
+
+Right widths, stacked instead of side by side. `.site-content{display:flex}` and
+`.grid-container{max-width:1200px}` live in `generatepress/assets/css/main.css`, which the log says
+in so many words is **`stylesheet applied bytes=29198`**. So the sheet arrives, and its rules do not.
+
+### AND THEN THE ENGINE'S OWN LAYOUT DISAGREED WITH THE ENGINE'S OWN `getComputedStyle`
+
+Reduced to three lines and one `<link>`, and this is the whole bug:
+
+```text
+  boxes (final layout)                 ca [8 8 829 18]   wa [837 8 355 18]   <- flex, CORRECT
+  the page's own script, any phase     display=block  width=1184            <- UA default
+```
+
+**The final painted layout was always right.** Which is why no screenshot, no box dump and no
+fidelity score has ever seen this: they all read the engine's finished answer. What was wrong is what
+the *page* could see while it was running — and the navigation ledger has been printing the reason,
+in order, for eight ticks:
+
+```text
+  cascade+layout+blocking scripts
+  DOMContentLoaded
+  load event                 <- every script the page has has now run
+  initial images+masks
+  external CSS               <- the site's stylesheets are applied HERE
+```
+
+`load_async` — the path the agent, the oracle and **every fidelity measurement** navigate with —
+applies external stylesheets in `finish_loading`, *after* it has fired `DOMContentLoaded` and
+`load`. So for the entire scripted lifetime of the document, `getComputedStyle` and
+`getBoundingClientRect` answer from a page with no author CSS at all: at `sync`, at
+`DOMContentLoaded`, at `load`, and from every timer after them.
+
+**This is not a styling bug. It is a MEASUREMENT bug, and the page is the one measuring.** Every
+carousel, sticky header, virtualised list, masonry grid, chart library and "is this on screen" check
+reads geometry and writes the answer back into the DOM. Fed UA-default geometry they write a wrong
+answer that **no later cascade can undo** — the stylesheet arrives afterwards and restyles a tree the
+page has already mis-built. The spec is not subtle either: a `<link rel=stylesheet>` is
+render-blocking *and* script-blocking, and `load` does not fire until the sheets have loaded.
+
+### THE FIX WAS WRITTEN, GATED, RED-PROVEN — AND IS NOT LANDING
+
+One `await` moved: `page.fetch_and_apply_stylesheets(...)` into `load_async`, before the lifecycle
+events. Gate `g_css_before_lifecycle` (hermetic, one local socket, one sheet) asserted the observation
+at four phases and was RED-proven by two mutations, each failing a different assertion — remove the
+call → `block/1184` everywhere (the exact pre-fix state); move it below `DOMContentLoaded` → DCL red
+while `load` and the timer stay green.
+
+```text
+  www.ikea.com   SHAPE 53.58% -> 55.30%   (698 scored elements, identical)
+  www.welt.de    COVERAGE 95.61% -> 0.03%     3260 of 3261 paths MISSING
+```
+
+⚠⚠ **`welt.de` collapses, and the ratchet is absolute — so the fix is REVERTED, not landed.**
+Controlled properly rather than argued about: reverted the hunk, rebuilt, measured. Control **95.6%
+/ SHAPE 65.1%**; with the fix **0.03% / 0.0%**, twice, at an unchanged load time (30.2s vs 29.5s —
+so not a budget blowout). Post-revert re-measurement: **95.7%**, restored.
+
+**The cause is named, and it is the interesting part.** With the fix in, welt emits one line it never
+emits without it:
+
+```text
+  Failed to load website due to adblock: Error: Failed to execute packing script
+```
+
+welt's own anti-adblock guard. It is a **false positive** — this build has no `adblock` feature — and
+it only fires once the page can measure a styled document. **Our previous blindness was masking a
+second divergence**: the guard was being fed garbage, concluded nothing, and let the page render. Fix
+the measurement and the guard wakes up, measures something it does not like, and blanks the site.
+
+⚠ Moving the apply to *after* the deferred/module pass but *before* `DOMContentLoaded` was tried, on
+the theory that welt's app boots in the module pass — **it collapses identically**, so the guard runs
+later than DCL and no placement before the lifecycle events avoids it. There is no narrow variant;
+it is the whole change or none of it.
+
+TICK SHAPE: measurement (a root cause found, a fix built and measured, and a trade refused)
+CLUSTER: `C01ca geometry: <div>` (111 sites / 14,002 hits) — the first divergence on the control site
+is now explained down to a single scheduling line. Not shrunk: the fix that would shrink it is parked.
+Gates: none landed. `g_css_before_lifecycle` was written, passed, and RED-proven against two
+mutations; it is removed along with the change it gates, because a gate for a reverted fix is a red
+wall, and the fixture is preserved verbatim in `docs/loop/WEB-PATTERNS.md` so restoring it is one
+step and not a re-derivation.
+WIKI: `docs/wiki/box-layout.md` — "The page was measuring a document with no CSS in it".
+PATTERN: **an instrument that reads the FINISHED answer cannot see a bug in the ORDER the answer was
+assembled in.** Every fidelity number this project has ever computed reads our final layout against
+Chrome's final layout, and both are post-CSS — so a defect that only exists *during* the load is
+invisible to all of them, forever, no matter how good they get. It took a page-side probe (a script
+inside the document, asking the same question at four different moments) to see it, and that is a
+third instrument class alongside the oracle and the log: **the oracle diffs the OUTPUT, the log
+reports EVENTS, and only a probe that runs inside the page can observe the SCHEDULE.**
+⚠ Second, and it is the one that changed my mind about landing: **a fix can be correct and still be
+refused, because correctness moved a page from "blind" to "seeing something wrong".** welt did not
+work before — it was *unable to notice* that it did not work. Landing this trades a measured 95.6%
+for an unmeasured hope, on a change whose blast radius is every script on every page and whose
+evidence is eight sites.
+
+NEXT: **(1) WHY WELT'S GUARD FIRES.** It is the gate on landing the CSS-ordering fix, and it is a real
+divergence in its own right — something we report differs from Chrome in a way an anti-adblock check
+can see. The message comes from a module bundle, not the document, so the next step is a probe that
+hooks the bait measurement rather than the console. **(2)** re-land the ordering fix the moment (1)
+is closed — the patch is one `await` and the gate is written out in full below.
+**(3)** the ikea 21-box coverage loss (t713), bisectable across t693–t711.

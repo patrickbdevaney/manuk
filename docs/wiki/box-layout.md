@@ -1870,3 +1870,60 @@ painted block box here would be a second implementation of the same rule.
 does not list it.
 
 [[text-layout]] [[conformance-and-oracles]]
+
+## The page was measuring a document with no CSS in it (tick 714)
+
+An instrument that reads the **finished** answer cannot see a bug in the **order** the answer was
+assembled in. Every fidelity number this project computes diffs our final layout against Chrome's
+final layout; both are post-CSS, so a defect that exists only *during* the load is invisible to all
+of them, permanently, no matter how good they get.
+
+On `load_async`, external stylesheets were applied in `finish_loading` — after `DOMContentLoaded`
+and after `load`:
+
+```text
+  cascade+layout+blocking scripts
+  DOMContentLoaded
+  load event                 <- every script the page has has now run
+  initial images+masks
+  external CSS               <- the site's stylesheets are applied HERE
+```
+
+Reduced to three lines and one `<link>`:
+
+```text
+  boxes (the engine's final layout)   ca [8 8 829 18]  wa [837 8 355 18]   flex, correct
+  the page's own script, any phase    display=block  width=1184           UA default
+```
+
+So `getComputedStyle` and `getBoundingClientRect` answered from an unstyled document at `sync`, at
+`DOMContentLoaded`, at `load`, and from every timer after them — while the painted result was right
+the whole time.
+
+**Why that matters more than it sounds.** A page that measures itself writes the answer back:
+carousels size slides, sticky headers cache offsets, virtualised lists compute row heights, masonry
+grids place columns, chart libraries pick tick counts. Fed UA-default geometry they write a wrong
+answer that **no later cascade can undo** — the stylesheet arrives afterwards and restyles a tree the
+page has already mis-built. The spec agrees in advance: a `<link rel=stylesheet>` is render-blocking
+*and* script-blocking, and `load` does not fire until the sheets have loaded.
+
+### The third instrument class
+
+- the **oracle** diffs the OUTPUT,
+- the **log** reports EVENTS,
+- and only a **probe that runs inside the page** can observe the SCHEDULE.
+
+The probe here is trivial and reusable: one function `obs()` reading a computed style and a rect,
+called at four different moments and written into four different elements — one element each, because
+a single accumulating string hides *which* phase produced what, and the phase is the whole finding.
+
+### And a correct fix that was refused
+
+Moving the apply into `load_async` gained `ikea` SHAPE 53.58% → 55.30% and collapsed `welt.de`
+coverage 95.61% → 0.03%. welt's own anti-adblock guard fires — a false positive, since this build
+has no `adblock` feature — **only once the page can measure a styled document.** The blindness was
+masking a second divergence. Full detail, the exact patch and the gate's fixture: `WEB-PATTERNS.md`.
+
+⚠ The reusable half: **a fix can be correct and still be refused, because correctness moved a page
+from "blind" to "seeing something wrong."** welt was not working before; it was unable to notice that
+it was not working. That is a real improvement to trade away only once the thing it now sees is fixed.

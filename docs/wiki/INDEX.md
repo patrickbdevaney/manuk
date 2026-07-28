@@ -104,6 +104,9 @@
   - L1757 · And a hypothesis Chrome itself killed, before it cost a tick
   - L1767 · An out-of-flow child neither splits its inline nor escapes it (tick 697)
   - L1818 · The clearfix had no box to clear with (tick 698)
+  - L1874 · The page was measuring a document with no CSS in it (tick 714)
+  - L1910 · The third instrument class
+  - L1920 · And a correct fix that was refused
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1229,4 +1232,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1140 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1143 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

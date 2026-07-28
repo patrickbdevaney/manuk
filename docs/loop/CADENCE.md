@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **470** | ticks 1–712 |
-| median tick cycle | **22m** | 469 intervals |
-| median, last 10 | **27m** | 10 intervals |
+| ticks landed | **471** | ticks 1–713 |
+| median tick cycle | **22m** | 470 intervals |
+| median, last 10 | **35m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 415.5h elapsed |
-| median verify wall | **63s** | 409 ticks |
+| **ticks per hour** | **1.13** | 416.5h elapsed |
+| median verify wall | **63s** | 410 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **361**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**226 of 470 ticks** (48%) moved a
+**226 of 471 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -567,5 +567,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **710** | 2026-07-28 10:41 | 9m | audit | 63s | +201/−34 | 335 | 81 | 56.0% · | surface audit #43: the death-tail's price moved, and nobody re-checked it (2026-07-28) |
 | **711** | 2026-07-28 11:45 | 64m | measurement | 63s | +595/−36 | 336 | 81 | 56.0% · | the honest `render-failed` remainder is the hydration wipe, and I nearly reported the prin |
 | **712** | 2026-07-28 12:33 | 48m | pattern-class | 63s | +257/−33 | 336 | 81 | 56.0% · | one rule, two implementations, and the one nobody built is the one that fails silently (20 |
+| **713** | 2026-07-28 13:31 | 57m | measurement | 63s | +216/−33 | 336 | 81 | 56.0% · | the sweep the loop has owed for twelve days, and the half of the HEAD corpus that never re |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
