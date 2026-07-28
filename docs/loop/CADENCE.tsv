@@ -459,3 +459,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 700	3114726f	1785222197	2026-07-28T03:03:17-04:00	4171	measurement	63	2	102	2	335	81	3896	6960	0	359	31	the sweep the board asked for, and it caught one of my own regressions (2026-07-28)
 701	5badb9cf	1785224709	2026-07-28T03:45:09-04:00	2512	measurement	63	3	239	2	335	81	3896	6960	0	359	31	the regression's cause is CSS 2.1 §10.8.1, and the fix is a TRADE, so it does not land (2026-07-28)
 702	8af399d4	1785226840	2026-07-28T04:20:40-04:00	2131	measurement	63	3	93	20	335	81	3896	6960	0	359	31	two of the three suspects were wrong, and the trade shrank 6× (2026-07-28)
+703	f38f87d5	1785228812	2026-07-28T04:53:32-04:00	1972	measurement	63	3	117	32	335	81	3896	6960	0	359	31	four hypotheses, none of them the residual, and the fourth made it worse (2026-07-28)

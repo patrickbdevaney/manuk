@@ -33704,3 +33704,65 @@ lines inside a **float** (a float's box is a Block child, so `walk` descends int
 lines are not in the normal flow). That needs an out-of-flow marker on `LayoutBox`, which is also
 t697's open NEXT — **one marker closes both**. **(2)** the rust-lang table regression from t695 stays
 open and is the same mechanism, so (1) closes it too. **(3) THE FULL CORPUS SWEEP** (13 of 265).
+
+## Tick 703 — four hypotheses, none of them the residual, and the fourth made it worse (2026-07-28)
+
+HYPOTHESIS: t702's NEXT #1 — the parked §10.8.1 patch's last 0.7 SHAPE points on `desitales2` come
+from `last_line_baseline` counting lines inside a **float** (a float's box is an ordinary `Block`
+child, so `walk` descends into it, and a float's lines are not in the normal flow). Bar: close the
+gap, or say plainly that it is not closed.
+
+### THE LEDGER OF WRONG GUESSES, WHICH IS THE POINT
+
+```text
+  desitales2 SHAPE, HEAD baseline 61.5% / median dy 80
+    v1  the rule applied to every atomic                      57.2%   dy 103
+    v2  "last" = MAX over the subtree  ->  document order      57.2%   dy 103   (t702: NO change at all)
+    v2b gate the rule on `display: inline-block` only          60.8%   dy  70   (t702: the real cause)
+    v3  ALSO skip floats + out-of-flow boxes when walking      60.8%   dy  70   (this tick: no change)
+    v4  ALSO ignore synthetic/empty-text fragments             60.1%   dy  86   (WORSE — reverted)
+```
+
+**Four hypotheses; one was the cause, one was a no-op, one was a no-op, and one moved it backwards.**
+The float guess named in t702's NEXT was wrong, and so was the "a synthetic fragment is not a line
+box" guess that replaced it — that one is the instructive failure, because it is *plausible spec
+reasoning* (an empty inline padding fragment really is not a line box) and the corpus said no.
+
+⚠ The float skip is **kept anyway** even though it measured as a no-op here: it is what CSS 2.1 §10.8.1
+says (*"in the normal flow"*), and a rule that happens to be unexercised by one site is not a rule that
+is wrong. It is documented as measured-neutral rather than sold as a fix.
+
+### WHERE IT ACTUALLY STANDS
+
+```text
+  blog.rust-lang.org geometry   442 (HEAD)  ->  16          -426
+  desitales2 SHAPE            61.5% (HEAD)  ->  60.8%       -0.7   <- the whole remaining objection
+  desitales2 median dy           80 (HEAD)  ->  70          BETTER than HEAD
+  desitales2 divergence count   224 (HEAD)  ->  224         IDENTICAL — 5 new, 5 gone
+  the 4-row Chrome fixture      4/4 exact at every version, incl. the overflow:hidden control
+```
+
+The remaining difference is **five elements out of 589**, and it is one container: a row of 46×46
+icons that Chrome lays out on one line (`div` h46) and we double (h92). Chrome is using the bottom
+margin edge for those icons, so it considers them to have **no in-flow line boxes** — and my walk
+finds one. That is the next question, and v4 proves it is not simply "ignore empty text".
+
+**Still parked**, third tick running: `docs/loop/parked/t701-inline-block-baseline.patch` (188 lines)
+and `git stash`. Tree at HEAD, layout suite 94/94. I want the repetition on the record: the win is now
+426 divergences against a 0.7-point control regression, and it is *still* not landing, because the
+rule is "nothing that worked before works less well after" and not "the ratio has to look bad enough."
+
+TICK SHAPE: measurement
+CLUSTER: C01ca (geometry) — fix withheld for the third tick.
+Gates: no engine change; layout suite 94/94 on the reverted tree.
+WIKI: none [forced] — the engine still does not have this behaviour.
+PATTERN: **a plausible spec argument is not evidence, and the corpus is what tells them apart.**
+Every one of the four versions had a defensible reading of §10.8.1 behind it; the fixture passed 4/4
+for all four; and only the corpus separated the one that was right from the two that did nothing and
+the one that was worse. *When consecutive hypotheses about the same residual keep missing, stop
+generating hypotheses and go read the failing case* — which is what the five-element diff finally did.
+
+NEXT: **(1) WHAT MAKES CHROME SAY "NO IN-FLOW LINE BOXES"** for a `<a><svg/></a>` icon — read the one
+failing container directly rather than reasoning from the spec, since four spec readings have now
+missed. **(2)** the rust-lang table regression from t695 remains open behind this same patch.
+**(3) THE FULL CORPUS SWEEP** is still owed (13 of 265) and is the oldest debt on the board.
