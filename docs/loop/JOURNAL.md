@@ -35418,3 +35418,55 @@ works — a false NEGATIVE, the mirror of this project's usual hazard, so a guar
 fallback for no reason. **(2)** the root font metrics Stylo sets and we do not (`rcap`/`rch`/`rex`/
 `ric`) — the third member of the sibling set, unmeasured. **(3)** the synchronous `contentDocument`
 residual (t717). **(4)** `document.styleSheets` reports 0 where Chrome reports 9 (t718).
+
+## Tick 723 — the third sibling, named before it was measured (2026-07-28)
+
+HYPOTHESIS: t722's PATTERN line said it out loud — *"Stylo sets three things when the root is
+cascaded — font size, line height, and root font METRICS for `rcap`/`rch`/`rex`/`ric`. We now do
+two."* Bar: measure the third against Chrome, and close it if it is open.
+
+### IT WAS OPEN, AND THE SHAPE OF THE FAILURE NAMED THE CAUSE
+
+```text
+             CHROME   BEFORE   AFTER        element-relative twin
+   10rch       178      80      178           10ch  =  89   (already exact)
+   10rex       169      73      169           10ex  =  85   (already exact)
+   10rcap      220     105      220           10cap = 110   (already exact)
+```
+
+**Every element-relative unit exact and every root-relative one wrong** is not the signature of a
+broken metric — it is the signature of a root that was never published. `update_root_font_metrics`
+reads `device.root_style`, and nothing in this engine has ever written that field, so all four
+`r*` units measured the device's *default* style.
+
+Two lines beside t722's: `set_root_style(&cv)`, then `update_root_font_metrics()` — gated on
+`used_root_font_metrics()` exactly as Stylo's own `matching.rs` gates it, because the call queries
+the font stack and a page with no `r*` unit should pay a bool read. All six cells Chrome-exact, and
+t722's `rlh` fixture still exact.
+
+TICK SHAPE: pattern-class
+CLUSTER: none claimed — a unit family, not a cluster row.
+Gates: `g_root_font_metric_units` (new). RED-proven against two mutations with **different** wrong
+values — drop `set_root_style` → 80/73/105 (device default); publish every element as the root →
+89/85/110 (element-relative). Plus a third assertion of a different kind: **the RATIO** (each `r*` is
+2× its twin, because the root's font is 2× the element's). The absolute numbers depend on the font
+stack; the ratio does not, so a font change moves the first six assertions together and leaves the
+last three standing. Map: a new row, +1 (395 → 396), which the ratchet rewards and which is the
+audit protocol's own instruction.
+WIKI: none [forced] — two lines in the same function as t722, whose story is already told in that
+tick's gate header and pattern row; a third copy would be the drift this rule exists to prevent.
+PATTERN: **a pattern line that names an unbuilt sibling is a work item, and it should be picked up
+the very next tick or it becomes prose.** t722 ended by writing *"we now do two"* out of three — and
+that sentence is the entire provenance of this tick. This project has a standing lesson that *a bug
+described accurately in a comment is an untriaged bug with good prose* (t633-649) and another that
+*an unbuilt spec half sat 310 ticks while its symptom ranked #3* (t704). This is the same class
+caught at one tick old instead of three hundred, and the only thing that made the difference was
+writing the sibling's NAME rather than "and related units". ⚠ The operational form: **when a tick
+ends by counting how many of a set you did, the remainder is the next tick's hypothesis, already
+written.**
+
+NEXT: **(1) `CSS.supports` FALSE-NEGATIVE** on `lh`/`rlh`/`rch`/`rex` — three ticks have now recorded
+it and none has fixed it; the units work and the engine denies them, so every guarded page takes a
+fallback. **(2)** `ric` — the fourth `r*` unit, untested here because it needs a CJK face.
+**(3)** the synchronous `contentDocument` residual (t717). **(4)** `document.styleSheets` reports 0
+where Chrome reports 9 (t718).

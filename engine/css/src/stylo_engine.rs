@@ -611,6 +611,25 @@ pub fn cascade_via_stylo_sized(
                 .0
                 .px();
             stylist.device().set_root_line_height(root_lh);
+            // **…and the THIRD member of the set, which t722 named and did not build.**
+            //
+            // `rcap` / `rch` / `rex` / `ric` resolve against the ROOT's font METRICS, and Stylo reads
+            // those out of `device.root_style` — a field nothing here ever wrote, so every one of
+            // them was measured against the device's default style instead of the document's root.
+            // Chrome-measured, root `32px` / element `16px` sans-serif: `10rch` **178 vs 80**,
+            // `10rex` **169 vs 73**, `10rcap` **220 vs 105**, while their element-relative twins
+            // `10ch`/`10ex`/`10cap` were already **exact** (89/85/110). Every element-relative unit
+            // right and every root-relative one wrong is the signature of a root that was never
+            // published.
+            //
+            // `update_root_font_metrics` queries the font stack, which is not free — so it runs only
+            // when the document has actually used one of these units, exactly as Stylo's own
+            // `matching.rs` gates it (`used_root_font_metrics()`). A page with no `r*` unit pays a
+            // bool read.
+            stylist.device().set_root_style(&cv);
+            if stylist.device().used_root_font_metrics() {
+                stylist.device().update_root_font_metrics();
+            }
         }
         let mut cs = timed(&mut ph.computed_ns, || to_computed_style(&cv));
         // `field-sizing` predates stylo 0.19, so it is recovered from MinimalCascade — and it must
