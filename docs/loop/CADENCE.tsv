@@ -461,3 +461,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 702	8af399d4	1785226840	2026-07-28T04:20:40-04:00	2131	measurement	63	3	93	20	335	81	3896	6960	0	359	31	two of the three suspects were wrong, and the trade shrank 6× (2026-07-28)
 703	f38f87d5	1785228812	2026-07-28T04:53:32-04:00	1972	measurement	63	3	117	32	335	81	3896	6960	0	359	31	four hypotheses, none of them the residual, and the fourth made it worse (2026-07-28)
 704	031789b3	1785234246	2026-07-28T06:24:06-04:00	5434	capability	63	7	306	43	335	81	3896	6960	0	360	31	the fifth hypothesis was the wrong question, and the answer had been written down for 310 ticks (2026-07-28)
+705	749999a2	1785245832	2026-07-28T09:37:12-04:00	11586	instrument	63	6	458	33	335	81	3896	6960	0	360	31	the Phase-0 sweep swept ZERO sites and printed a certificate (2026-07-28)

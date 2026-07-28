@@ -33943,3 +33943,102 @@ NEXT: **(1) RUN THE SWEEP** — the same command, now that it parses; it is stil
 still the only source of `Ccd7f`'s real site-count. **(2)** bank the result into
 `docs/loop/FIDELITY-PROGRESS.tsv`, whose single row is from 2026-07-20. **(3)** the parked §10.8.1
 patch still wants re-measuring against t704's HEAD.
+
+## Tick 706 — the first full-corpus certificate on the rebuilt instrument, and why the ledger never saw one (2026-07-28)
+
+HYPOTHESIS: t705's NEXT #1 — run the full 265-site sweep, owed for six ticks. Bar: a corpus-wide
+number on the current instrument, with a fixed denominator.
+
+### THE NUMBER
+
+265 sites, one process per site, serial, 180s timeout, ~3h:
+
+```text
+  === PHASE-0 EXIT CERTIFICATE ===
+    sites 265 · scored 131 · shape ≥0.75 on 11 (4.2%)
+    h-overflow     clean on   76 sites (28.7%)
+    overlap        clean on   49 sites (18.5%)
+    reading-order  clean on   36 sites (13.6%)
+    dead-target    clean on  107 sites (40.4%)
+
+  over the 131 SCORED:  cov_mean 86.3%   shape_mean 43.0%   80,088 elements compared
+  shape ≥0.75 on 11 of 131 scored (8.4%) — 4.2% against the certificate's fixed 265 denominator
+
+  134 unscored, every one with a reason:
+    28 bot-wall-403 · 25 "crashed" · 21 render-failed · 14 thin-overlap-1 · 11 probe-blocked
+    ·  5 bot-wall-429 ·  5 thin-overlap-2 ·  4 bot-wall-401 ·  4 unreachable ·  7 shell-only-N · …
+```
+
+Shape is spread, not cliffed: 11 sites under 0.1, a broad mass at 0.2–0.6, 9 at 0.8+.
+
+⚠ **This is a NEW baseline and it is NOT differenceable against the 2026-07-20 ledger row.** That
+row's `place_mean 6.4` is the OLD instrument's *absolute* PLACEMENT; this 43.0% is the rebuilt
+instrument's *parent-relative* SHAPE. Reporting "6.4% → 43.0%" would be a metric swap dressed as
+progress, which is the exact failure the ledger exists to catch. Rows banked at
+`docs/loop/SWEEP-t706-rows.tsv` so the NEXT sweep has something honest to diff against.
+
+### ⚠⚠ THE LEDGER NEVER SAW A SWEEP BECAUSE ITS READER CANNOT READ THE INSTRUMENT
+
+`docs/loop/FIDELITY-PROGRESS.tsv` has exactly ONE row, from 2026-07-20, and the board reports the
+corpus trend as *"BLIND"*. It is not blind because nobody ran a sweep. **`scripts/fidelity-sweep.sh`
+greps for a vocabulary the instrument stopped printing at the t531-537 rebuild:**
+
+```text
+  the script greps                              the instrument prints
+  structural: … (241 ids, …)                    structural: 98.7% (597 paths, …)
+  PLACEMENT: X% within Npx | median offset dx=   SHAPE: 70.3% … | [diag] absolute PLACEMENT 1.2% (median dx=…)
+  MEAN VISUAL: X                                MEAN VISUAL: 65.1%          <- the only one that still matches
+```
+
+Tested against the instrument's verbatim output: **`ids` 0 matches, `PLACEMENT:` 0 matches, `MEAN
+VISUAL` 1 match.** And because `visual` matches while `ids` does not, the classifier takes
+`status=NO_IDS` — *"unprobeable, NOT a pass"* — for **every site that renders**. `fidelity-progress.sh`
+aggregates over `$3=="OK"` only, so `scorable` computes as **0/265** and it refuses to record.
+
+Confirmed end-to-end rather than argued: the script scored `blog.rust-lang.org` as
+`NO_IDS cov=– place=– ids=0`, while a direct run of the same URL on the same binary scored
+`structural 100.0% (1664 paths)` / `SHAPE 62.9%`. **Same site, same binary, two harnesses, and one of
+them says the page is unprobeable.**
+
+`scripts/` is observer-owned and I did not touch it. Reported here, loudly, because it silently
+zeroes the headline metric the board's CO-#1 is steering on. Its old `.git/fidelity-full/results.tsv`
+was already all-`NO_IDS`, so no good baseline was lost when the aborted run truncated it.
+
+⚠ **CORRECTION TO t705.** That entry said *"corpus-v2.tsv is the tab-separated one; whichever sweep
+last worked must have used it."* Wrong: `grep -rn "urls-file" scripts/` returns **nothing** — no
+harness sweep has ever used `--urls-file`. The certificate-over-an-empty-set defect t705 fixed is
+real and stays fixed, but it was not what had been blocking the sweeps. The vocabulary mismatch above
+is.
+
+### ⚠ "CRASHED" IS MOSTLY "TIMED OUT", AND THOSE NEED OPPOSITE WORK
+
+The taxonomy's second-largest bucket reads `25×crashed`. Cross-referencing the per-site exit codes:
+**22 timed out at 180s, 2 segfaulted, 1 other.** A crash is a Bar-0 that outranks everything; a
+timeout is perf, which this board treats as a fidelity *input*. Reading "25 crashed" would have sent
+the next tick hunting a segfault that is 8% of the bucket.
+
+The instrument cannot tell them apart and is not wrong to: `recover_inflight` reports *"the previous
+run died holding a marker"*, and an external `timeout` SIGKILL leaves exactly the marker a SIGSEGV
+does. I know the split only because my runner logged `rc=` per site OUTSIDE the instrument. Naming it
+so the number is not read as 25 crashes.
+
+TICK SHAPE: measurement
+CLUSTER: none shrunk — and this is the honest gap in this tick. `--rows-out` carries the certificate
+terms, not divergence detail, so the sweep produced no cluster registry and **`Ccd7f`'s corpus-wide
+site-count is still unproven.** t704's fix is confirmed on 3 sites by hand (desitales2 61.5→70.3
+SHAPE) and on 0 by ranking. The re-rank needs the oracle crawl, which is a different instrument.
+Gates: none added — no engine change this tick.
+WIKI: none [forced] — a measurement of the engine, not a change to it; nothing new is true of the
+browser that was not true yesterday.
+PATTERN: **an instrument rebuild silently orphans every consumer that parses its output.** t531-537
+re-keyed the probe from `ids` to selector-paths and renamed the metric from PLACEMENT to SHAPE — both
+correct, both load-bearing — and the downstream reader was never told. It did not error; it produced
+a *well-formed, plausible, uniformly-zero* answer for eleven weeks. *When you rename what an
+instrument PRINTS, grep the tree for who READS it* — the same "one rule, N implementations" shape as
+t704's three `layout_document` call sites, across a process boundary instead of within a file.
+
+NEXT: **(1) THE ORACLE CRAWL**, to re-rank `CLUSTERS.md` and settle whether `Ccd7f` shrank — the
+registry is now 6 days older than the tree and check #53's steer #1 is still open. **(2) 21
+render-failed + 11 probe-blocked = 32 sites we fail for reasons the taxonomy names but nobody has
+opened**; that is the largest tractable block in the unscored 134, ahead of the 37 bot-walls, which
+are out of scope. **(3)** the parked §10.8.1 patch still wants re-measuring against t704's HEAD.

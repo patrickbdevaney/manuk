@@ -1,0 +1,266 @@
+#name	coverage	shape	h_overflow	overlap	reading_order	dead_target	shape_n	reason	instrument
+blog.rust-lang.org	1.000000	0.628606	0	0	0	0	1664		1feee14c
+github.com	0.999279	0.343434	19	0	18	0	1386		1feee14c
+apple.com	0.982432	0.475928	127	24	6	2	727		1feee14c
+docs.python.org	1.000000	0.212245	0	0	36	4	245		1feee14c
+amazon.com	-	-	0	0	0	0	0	empty-202	1feee14c
+coinbase.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+old.reddit.com	1.000000	0.848485	0	0	0	0	33		1feee14c
+usa.gov	0.993730	0.258675	0	4	4	0	317		1feee14c
+youtube.com	0.739777	0.000000	0	0	0	0	199	render-failed	1feee14c
+nytimes.com	0.000352	1.000000	0	0	0	0	1	thin-overlap-1	1feee14c
+en.wikipedia.org	0.997998	0.522568	52	4	8	0	997		1feee14c
+stripe.com	0.001371	0.000000	0	0	0	0	2	render-failed	1feee14c
+x.com	0.991228	0.504425	0	1	1	0	113		1feee14c
+archive.ph	0.716667	0.627907	0	4	0	0	43		1feee14c
+booking.com	-	-	0	0	0	0	0	probe-blocked	1feee14c
+this-week-in-rust.org	0.955556	0.244186	0	0	0	0	86		1feee14c
+gitlab.com	0.997743	0.257919	14	4	12	0	884		1feee14c
+microsoft.com	0.005051	0.000000	0	0	0	0	1	thin-overlap-1	1feee14c
+doc.rust-lang.org	0.688312	0.311321	0	0	0	0	106		1feee14c
+ebay.com	-	-	0	0	0	0	0	crashed	1feee14c
+investopedia.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+reddit.com	-	-	0	0	0	0	0	probe-blocked	1feee14c
+whitehouse.gov	-	-	0	0	0	0	0	crashed	1feee14c
+vimeo.com	0.970215	0.670267	12	7	10	0	1759		1feee14c
+theguardian.com	-	-	0	0	0	0	0	crashed	1feee14c
+developer.mozilla.org	0.715040	0.228782	3	3	0	5	271		1feee14c
+twilio.com	-	-	0	0	0	0	0	crashed	1feee14c
+mastodon.social	0.857143	0.166667	0	0	0	0	6	shell-only-7	1feee14c
+web.archive.org	0.974522	0.326797	3	0	4	0	153		1feee14c
+airbnb.com	0.304348	0.563492	1	1	1	0	126		1feee14c
+overreacted.io	0.250000	1.000000	0	0	0	0	1	shell-only-4	1feee14c
+codeberg.org	0.990566	0.595238	0	1	1	0	210		1feee14c
+google.com	0.948276	0.418182	0	0	0	0	55		1feee14c
+docs.oracle.com	-	-	0	0	0	0	0	probe-blocked	1feee14c
+etsy.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+marketwatch.com	-	-	0	0	0	0	0	bot-wall-401	1feee14c
+discourse.org	0.998963	0.481828	47	0	11	1	963		1feee14c
+nasa.gov	0.944373	0.393151	0	1	54	12	730		1feee14c
+twitch.tv	1.000000	0.578947	0	0	0	0	19		1feee14c
+bbc.co.uk	0.292714	0.292576	2	19	43	0	687	render-failed	1feee14c
+w3.org	0.972477	0.268868	0	0	1	0	212		1feee14c
+cloudflare.com	0.997752	0.260478	28	4	21	0	2219		1feee14c
+bsky.app	1.000000	1.000000	0	0	0	0	2	shell-only-2	1feee14c
+regex101.com	0.606884	0.397015	0	5	4	0	335		1feee14c
+expedia.com	-	-	0	0	0	0	0	bot-wall-429	1feee14c
+kentcdodds.com	0.001972	0.000000	0	0	0	0	1	render-failed	1feee14c
+sourceforge.net	-	-	0	0	0	0	0	crashed	1feee14c
+ibm.com	0.160998	0.154930	0	0	1	0	71		1feee14c
+nodejs.org	0.090909	1.000000	0	0	0	0	1	thin-overlap-1	1feee14c
+walmart.com	-	-	0	0	0	0	0	crashed	1feee14c
+finance.yahoo.com	0.996943	0.412877	5	169	7	1	1957		1feee14c
+users.rust-lang.org	1.000000	0.417978	0	0	0	0	445		1feee14c
+noaa.gov	0.666667	0.513986	71	1	7	0	286		1feee14c
+soundcloud.com	-	-	0	0	0	0	0	crashed	1feee14c
+reuters.com	-	-	0	0	0	0	0	bot-wall-401	1feee14c
+whatwg.org	1.000000	0.513514	4	0	0	0	37		1feee14c
+vercel.com	-	-	0	0	0	0	0	probe-blocked	1feee14c
+linkedin.com	0.058824	0.000000	0	0	0	0	1	thin-overlap-1	1feee14c
+jsonformatter.org	0.970052	0.200000	5	5	23	0	745		1feee14c
+tripadvisor.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+css-tricks.com	0.941110	0.592058	0	6	11	0	831		1feee14c
+bitbucket.org	0.985740	0.307414	0	4	6	0	553		1feee14c
+intel.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+reactjs.org	0.943894	0.104895	17	16	116	2	1430		1feee14c
+target.com	0.001898	0.000000	0	0	0	0	2	render-failed	1feee14c
+nerdwallet.com	0.961400	0.436975	40	38	491	1	1071		1feee14c
+discuss.python.org	1.000000	0.319444	0	0	0	0	216		1feee14c
+cdc.gov	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+spotify.com	1.000000	0.815068	0	4	0	0	730		1feee14c
+apnews.com	-	-	0	0	0	0	0	crashed	1feee14c
+rfc-editor.org	0.975728	0.196517	0	12	8	0	402		1feee14c
+netlify.com	0.990412	0.140091	248	5	95	1	1756		1feee14c
+pinterest.com	0.189189	0.500000	0	0	0	0	14		1feee14c
+caniuse.com	0.925926	0.360000	0	5	1	0	150		1feee14c
+yelp.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+smashingmagazine.com	0.997072	0.236417	2	18	76	0	681		1feee14c
+crates.io	-	-	0	0	0	0	0	http-404	1feee14c
+amd.com	0.299910	0.050975	121	4	11	1	667		1feee14c
+vuejs.org	0.001923	0.000000	0	0	0	0	1	thin-overlap-1	1feee14c
+bestbuy.com	-	-	0	0	0	0	0	unreachable	1feee14c
+forum.golangbridge.org	1.000000	0.355120	0	0	0	0	459		1feee14c
+nih.gov	0.990415	0.500000	0	10	9	2	310		1feee14c
+imdb.com	-	-	0	0	0	0	0	empty-202	1feee14c
+npr.org	-	-	0	0	0	0	0	crashed	1feee14c
+stackoverflow.com	-	-	0	0	0	0	0	crashed	1feee14c
+heroku.com	0.933333	0.341151	3	5	7	5	938		1feee14c
+tumblr.com	0.023761	0.595745	0	0	0	0	47		1feee14c
+httpbin.org	-	-	0	0	0	0	0	http-503	1feee14c
+allrecipes.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+a11yproject.com	1.000000	0.438053	2	0	7	0	226		1feee14c
+npmjs.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+nvidia.com	0.474843	0.312362	4	40	7	0	906		1feee14c
+angular.io	0.995413	0.428571	38	4	1	0	217		1feee14c
+ikea.com	0.970793	0.544413	0	5	19	0	698		1feee14c
+community.cloudflare.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+irs.gov	-	-	0	0	0	0	0	unreachable	1feee14c
+rottentomatoes.com	0.000848	0.000000	0	0	0	0	2	thin-overlap-2	1feee14c
+washingtonpost.com	-	-	0	0	0	0	0	crashed	1feee14c
+superuser.com	0.001828	0.000000	0	0	0	0	2	render-failed	1feee14c
+digitalocean.com	-	-	0	0	0	0	0	probe-blocked	1feee14c
+medium.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+example.com	1.000000	0.500000	0	0	0	0	6	shell-only-6	1feee14c
+seriouseats.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+web.dev	0.083333	0.512195	0	0	0	1	41		1feee14c
+pypi.org	0.959596	0.452632	0	3	5	1	190		1feee14c
+oracle.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+svelte.dev	0.900901	0.235000	3	1	728	0	200		1feee14c
+homedepot.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+meta.stackexchange.com	0.000777	0.000000	0	0	0	0	2	render-failed	1feee14c
+europa.eu	0.991935	0.000000	0	1	2	0	123		1feee14c
+metacritic.com	0.000710	0.000000	0	0	0	0	3	render-failed	1feee14c
+aljazeera.com	0.002994	0.000000	0	0	0	0	1	thin-overlap-1	1feee14c
+serverfault.com	0.001838	0.000000	0	0	0	0	2	render-failed	1feee14c
+linode.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+substack.com	0.010870	0.000000	0	0	0	0	1	thin-overlap-1	1feee14c
+w3schools.com	0.097068	0.239583	0	4	30	0	96		1feee14c
+bonappetit.com	0.907765	0.230135	163	9	37	2	2303		1feee14c
+martinfowler.com	1.000000	0.582803	0	3	8	3	314		1feee14c
+rubygems.org	1.000000	0.348624	7	0	1	0	109		1feee14c
+salesforce.com	0.857645	0.045082	0	26	10	0	488	render-failed	1feee14c
+docs.djangoproject.com	1.000000	0.715507	0	28	20	0	819		1feee14c
+newegg.com	0.029648	0.020833	0	0	0	0	48		1feee14c
+quora.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+gov.uk	0.830144	0.195965	0	0	28	0	347		1feee14c
+goodreads.com	-	-	0	0	0	0	0	crashed	1feee14c
+cnn.com	-	-	0	0	0	0	0	crashed	1feee14c
+askubuntu.com	0.001768	0.000000	0	0	0	0	2	render-failed	1feee14c
+fastly.com	0.996750	0.193478	53	20	40	0	920		1feee14c
+dev.to	0.998541	0.590212	0	2	42	0	1369		1feee14c
+codepen.io	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+joelonsoftware.com	0.993333	0.718121	0	1	2	0	149		1feee14c
+packagist.org	1.000000	0.183544	0	1	1	4	158		1feee14c
+adobe.com	-	-	0	0	0	0	0	unreachable	1feee14c
+flask.palletsprojects.com	-	-	0	0	0	0	0	bot-wall-429	1feee14c
+aliexpress.com	-	-	0	0	0	0	0	probe-blocked	1feee14c
+canada.ca	-	-	0	0	0	0	0	unreachable	1feee14c
+letterboxd.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+bloomberg.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+mathoverflow.net	0.001529	0.000000	0	0	0	0	2	render-failed	1feee14c
+auth0.com	0.995996	0.642211	1	19	9	0	995		1feee14c
+hashnode.com	0.250000	1.000000	0	0	0	0	1	shell-only-4	1feee14c
+jsfiddle.net	0.086066	0.047619	2	7	1	0	21		1feee14c
+paulgraham.com	1.000000	0.078431	0	0	0	0	51		1feee14c
+search.maven.org	1.000000	1.000000	0	0	0	0	2	shell-only-2	1feee14c
+samsung.com	0.989080	0.003943	3	9	30	0	1268		1feee14c
+go.dev	-	-	0	0	0	0	0	crashed	1feee14c
+shopify.com	-	-	0	0	0	0	0	probe-blocked	1feee14c
+mit.edu	1.000000	0.306977	0	4	6	0	215		1feee14c
+flickr.com	-	-	0	0	0	0	0	crashed	1feee14c
+ft.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+britannica.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+okta.com	-	-	0	0	0	0	0	bot-wall-429	1feee14c
+replit.com	1.000000	0.386525	14	27	152	0	1410		1feee14c
+danluu.com	1.000000	1.000000	0	0	0	0	605		1feee14c
+news.ycombinator.com	1.000000	0.722565	0	1	0	0	811		1feee14c
+sony.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+kotlinlang.org	0.005618	0.000000	0	0	0	0	2	render-failed	1feee14c
+bigcommerce.com	0.003446	0.000000	0	0	0	0	6	thin-overlap-6	1feee14c
+stanford.edu	0.090909	0.000000	0	0	0	0	1	thin-overlap-1	1feee14c
+unsplash.com	-	-	0	0	0	0	0	bot-wall-401	1feee14c
+economist.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+dictionary.com	0.480916	0.452381	11	0	0	0	126		1feee14c
+datadoghq.com	0.248188	0.408759	0	0	5	0	137		1feee14c
+godbolt.org	0.070461	0.230769	0	1	1	0	26		1feee14c
+jvns.ca	1.000000	0.941292	0	32	0	0	2044		1feee14c
+lobste.rs	0.832664	0.617363	0	0	117	0	622		1feee14c
+tesla.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+swift.org	-	-	0	0	0	0	0	crashed	1feee14c
+wayfair.com	0.090909	0.000000	0	0	0	0	1	thin-overlap-1	1feee14c
+harvard.edu	0.957323	0.543060	14	0	7	2	987		1feee14c
+pexels.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+wsj.com	-	-	0	0	0	0	0	bot-wall-401	1feee14c
+merriam-webster.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+sentry.io	0.994900	0.767350	192	1	4	0	2536		1feee14c
+play.rust-lang.org	-	-	0	0	0	0	0	crashed	1feee14c
+fasterthanli.me	0.867424	0.100437	1	0	31	0	229		1feee14c
+slashdot.org	-	-	0	0	0	0	0	crashed	1feee14c
+mozilla.org	0.075601	0.272727	0	0	0	0	22		1feee14c
+ruby-lang.org	-	-	0	0	0	0	0	probe-blocked	1feee14c
+costco.com	0.001495	0.000000	0	0	0	0	1	thin-overlap-1	1feee14c
+berkeley.edu	0.980874	0.690808	3	1	1	0	359		1feee14c
+behance.net	0.001180	0.000000	0	0	0	0	2	thin-overlap-2	1feee14c
+forbes.com	0.001049	0.000000	0	0	0	0	2	render-failed	1feee14c
+wiktionary.org	1.000000	0.487931	0	0	1425	0	580		1feee14c
+newrelic.com	-	-	0	0	0	0	0	crashed	1feee14c
+matklad.github.io	1.000000	0.003717	0	0	0	0	807		1feee14c
+gnu.org	-	-	0	0	0	0	0	crashed	1feee14c
+php.net	0.791667	0.192105	0	1	0	0	380		1feee14c
+ox.ac.uk	0.995308	0.549502	0	0	10	0	1909		1feee14c
+dribbble.com	0.942765	0.384038	3	0	17	0	1466		1feee14c
+time.com	0.047619	0.000000	0	0	0	0	1	thin-overlap-1	1feee14c
+wikihow.com	0.905626	0.301603	0	15	45	0	998		1feee14c
+pagerduty.com	0.200000	1.000000	0	0	0	0	1	shell-only-5	1feee14c
+without.boats	1.000000	0.975904	0	0	0	0	83		1feee14c
+linuxfoundation.org	0.007823	0.000000	0	0	0	0	6	thin-overlap-6	1feee14c
+perl.org	1.000000	0.566667	1	0	0	0	150		1feee14c
+cam.ac.uk	0.005063	0.000000	0	0	0	0	2	thin-overlap-2	1feee14c
+deviantart.com	0.000547	0.000000	0	0	0	0	1	render-failed	1feee14c
+theatlantic.com	0.002039	0.000000	0	0	0	0	2	render-failed	1feee14c
+archive.org	1.000000	0.000000	0	0	0	0	1	shell-only-1	1feee14c
+atlassian.com	0.990519	0.211149	12	798	8	0	1776		1feee14c
+blog.cloudflare.com	0.984848	0.641538	0	0	5	0	650		1feee14c
+apache.org	1.000000	0.635934	0	9	0	0	423		1feee14c
+haskell.org	0.995012	0.290727	10	1	0	0	399		1feee14c
+ethz.ch	0.006051	0.000000	0	0	0	0	4	thin-overlap-4	1feee14c
+newyorker.com	0.163776	0.247059	41	5	39	0	340		1feee14c
+gutenberg.org	1.000000	0.745704	7	3	3	0	291		1feee14c
+notion.so	0.003168	0.000000	0	0	0	0	3	render-failed	1feee14c
+netflixtechblog.com	-	-	0	0	0	0	0	bot-wall-429	1feee14c
+eclipse.org	0.001412	0.000000	0	0	0	0	1	thin-overlap-1	1feee14c
+clojure.org	1.000000	0.280000	0	0	0	0	200		1feee14c
+vox.com	0.001992	0.000000	0	0	0	0	3	render-failed	1feee14c
+arxiv.org	1.000000	0.831978	0	1	14	0	369		1feee14c
+figma.com	-	-	0	0	0	0	0	probe-blocked	1feee14c
+engineering.fb.com	0.997191	0.259155	0	1	3	0	355		1feee14c
+elixir-lang.org	1.000000	0.719915	3	3	4	0	939		1feee14c
+axios.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+pubmed.ncbi.nlm.nih.gov	0.947566	0.600791	0	1	13	0	253		1feee14c
+linear.app	0.996259	0.673342	22	10	147	0	2397		1feee14c
+julialang.org	0.995946	0.668928	1	6	9	0	737		1feee14c
+politico.com	-	-	0	0	0	0	0	bot-wall-403	1feee14c
+scholar.google.com	0.975089	0.795620	0	2	3	0	274		1feee14c
+slack.com	0.693355	0.570439	0	1	6	0	866		1feee14c
+scala-lang.org	1.000000	0.526882	0	6	8	0	465		1feee14c
+propublica.org	0.677146	0.426786	15	6	63	0	560		1feee14c
+zoom.us	-	-	0	0	0	0	0	probe-blocked	1feee14c
+typescriptlang.org	-	-	0	0	0	0	0	probe-blocked	1feee14c
+theverge.com	0.001712	0.000000	0	0	0	0	3	render-failed	1feee14c
+dropbox.com	0.926298	0.444846	56	1	19	0	1106		1feee14c
+webpack.js.org	0.927273	0.372549	0	1	4	1	102		1feee14c
+arstechnica.com	0.987941	0.333333	0	3	16	0	1065		1feee14c
+box.com	-	-	0	0	0	0	0	crashed	1feee14c
+vitejs.dev	0.985465	0.058997	0	0	57	1	339		1feee14c
+wired.com	0.920270	0.250153	24	8	100	2	1639		1feee14c
+asana.com	-	-	0	0	0	0	0	crashed	1feee14c
+tailwindcss.com	0.090909	0.000000	0	0	0	0	1	thin-overlap-1	1feee14c
+techcrunch.com	0.989202	0.382050	358	31	5	1	1649		1feee14c
+trello.com	0.900726	0.416667	0	4	7	0	372		1feee14c
+getbootstrap.com	0.930605	0.289675	26	6	4	0	1046		1feee14c
+engadget.com	-	-	0	0	0	0	0	crashed	1feee14c
+basecamp.com	0.987374	0.250639	48	14	14	0	391		1feee14c
+jquery.com	-	-	0	0	0	0	0	bot-wall-429	1feee14c
+gizmodo.com	0.000000	1.000000	0	0	0	0	0	thin-overlap-0	1feee14c
+hubspot.com	-	-	0	0	0	0	0	crashed	1feee14c
+lodash.com	1.000000	0.543353	0	0	0	0	173		1feee14c
+zdnet.com	0.994829	0.233888	11	321	4	0	962		1feee14c
+mailchimp.com	0.915423	0.645380	83	1	6	0	736		1feee14c
+d3js.org	0.946667	0.746479	0	0	1	0	71		1feee14c
+cnet.com	0.001164	0.000000	0	0	0	0	2	thin-overlap-2	1feee14c
+squarespace.com	1.000000	0.000000	0	0	0	0	3	shell-only-3	1feee14c
+threejs.org	1.000000	0.556641	0	0	0	0	512		1feee14c
+lite.cnn.com	1.000000	1.000000	0	0	0	0	223		1feee14c
+wix.com	0.044776	0.056604	0	0	0	0	159	render-failed	1feee14c
+docs.docker.com	0.004219	0.000000	0	0	0	0	1	thin-overlap-1	1feee14c
+text.npr.org	1.000000	0.861111	0	0	0	0	72		1feee14c
+webflow.com	0.733963	0.663279	10	22	25	0	1476		1feee14c
+kubernetes.io	0.541966	0.008850	4	2	7	0	226		1feee14c
+terraform.io	0.003040	0.000000	0	0	0	0	2	thin-overlap-2	1feee14c
+ansible.com	0.842593	0.013736	0	0	0	2	364		1feee14c
+nginx.org	1.000000	0.732026	0	0	1	0	153		1feee14c
+httpd.apache.org	1.000000	0.852349	0	0	0	1	149		1feee14c
+postgresql.org	1.000000	0.017804	0	0	5	0	337		1feee14c
+sqlite.org	1.000000	0.401786	0	5	3	0	112		1feee14c
+redis.io	-	-	0	0	0	0	0	crashed	1feee14c
+mongodb.com	0.001488	0.000000	0	0	0	0	2	render-failed	1feee14c
