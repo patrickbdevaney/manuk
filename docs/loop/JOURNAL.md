@@ -35752,3 +35752,76 @@ responsible line named; deferred deliberately to a fresh session as the riskiest
 **(2)** `cq*` units via rung 3 (t726). **(3)** `<link>.sheet` — now a pinned decision rather than an
 open bug; landing it needs the fetched CSS text published to the JS layer, the same seam shape as
 `set_module_graph_sources`. **(4)** the synchronous `contentDocument` residual (t717).
+
+## Tick 728 — the client box was the border box for nearly every element (2026-07-28)
+
+HYPOTHESIS: t726's own lesson — *a fixture built to measure one thing measures everything it
+contains* — generalised deliberately. Instead of taking the next backlog item, put 24 common surfaces
+in one document and diff the whole thing against Chrome, then fix whatever comes back divergent and
+bounded. Bar: pick the fix from evidence, not from the backlog's order.
+
+### 24 SURFACES, 2 DIVERGENCES, AND THE FIRST IS EVERYWHERE
+
+```text
+   clientWidth on width:200px; padding:10px; border:2px     CHROME 220    MANUK 224
+   document.elementsFromPoint                               CHROME   3    MANUK THROW
+```
+
+`scroll_geometry_of` has computed the padding box correctly since it was written
+(`rect.width - bw.left - bw.right`) — and it only maps `overflow: auto|scroll|hidden` containers.
+Everything else takes the getter's **fallback**, which handed back `rect.width`: the border box. **The
+right answer was computed for the minority and the fallback answered for everyone else.**
+
+The fallback's comment was half right, which is why it survived: *"a plain `<div>` still has a
+`clientHeight`, and it is its own box."* True — and **its own box is the BORDER box, while `client*`
+is the PADDING box.**
+
+```text
+                                  CHROME     BEFORE     AFTER
+  plain                           200/100    200/100    200/100
+  padding:10px                    220/120    220/120    220/120
+  border:2px                      200/100    204/104 ✗  200/100
+  padding + border                220/120    224/124 ✗  220/120
+  display:inline + border           0/0        4/16  ✗     0/0
+  offsetWidth (border box)        224/124    224/124    224/124
+```
+
+**Why it is more than four pixels.** `clientHeight` is the viewport half of every virtualised list
+(`scrollHeight - clientHeight` is the divisor), every overflow test (`scrollWidth > clientWidth`),
+every sticky-header offset and every carousel page size. Overstating it by the border makes an
+overflow check answer **no** on a box that is in fact overflowing: a scrollbar that never appears, a
+list that renders the wrong slice.
+
+⚠ And a non-replaced **inline** box reports `0`, per CSSOM. Returning `4x16` there is the same class
+of mistake as returning the border box for a block — *a plausible number where the spec says zero* —
+and `if (!el.clientHeight)` is a standard "is this laid out?" guard that a plausible number defeats.
+
+TICK SHAPE: pattern-class
+CLUSTER: none claimed directly; this is a JS-visible geometry API, not a box the oracle diffs. ⚠ It
+is a plausible upstream of `MISSING_BOX` on virtualised pages — a list told its viewport is taller
+than it is renders fewer rows — and that is a hypothesis, not an attribution.
+Gates: `g_client_box_is_the_padding_box` (new). **RED-proven against two mutations on two different
+assertions**: revert the fallback to `r[2]`/`r[3]` → `204x104` (what shipped); drop the inline arm →
+`4x16`. The `plain` row is the over-correction guard — a fix that subtracted something from every
+element breaks there first — and `offset*` is asserted alongside every `client*` so the two boxes
+cannot be conflated in either direction.
+WIKI: none [forced] — the mechanism is one macro and its rationale is written at length beside it in
+`dom_bindings.rs`; the pattern row carries the consequence.
+PATTERN: **a correct implementation reached by a minority of callers is indistinguishable from no
+implementation.** The padding-box arithmetic was right, tested, and commented — and it ran only for
+`overflow: auto|scroll|hidden`, which is a small fraction of elements. Every other element took a
+fallback written by someone who had already solved the problem correctly ten lines away. ⚠ The tell
+is available before the bug: **a fallback that exists because the main path is CONDITIONAL must
+implement the same rule, not a simpler one** — and here the simpler one had its own comment
+explaining why it was right, which is what made it invisible.
+⚠ Method note, and it is why this tick exists: t726 found a cascade-order bug inside a fixture built
+for container-query units, and named the reason (*"a fixture measures everything it contains"*). This
+tick applied that on purpose — 24 surfaces in one document — and the yield was one bug that touches
+every bordered element on the web. **A broad differential probe is cheap and the backlog is not
+sorted by importance.**
+
+NEXT: **(1) `document.elementsFromPoint`** — the second divergence from this probe, absent
+(TypeError) where Chrome returns 3; the singular `elementFromPoint` already works, so this is its
+plural sibling. **(2) `@container` CASCADE ORDER** (t726) — deferred to a fresh session as the
+riskiest edit class. **(3)** `cq*` units (t726). **(4)** the scrollbar-gutter residual pinned by this
+tick's gate (`scr` 220 vs Chrome 205).

@@ -4312,6 +4312,21 @@ macro_rules! scroll_getter {
     // and it is its own box — so only a real `overflow: auto|scroll|hidden` container consults the
     // scroll geometry. Getting this wrong the other way would make `clientHeight` zero for every
     // ordinary element on the page, which is a far bigger regression than the bug being fixed.
+    //
+    // ⚠⚠ **…but "its own box" is the BORDER box, and `clientWidth`/`clientHeight` are the PADDING
+    // box.** The fallback handed back `rect.width`, so every ordinary element reported its border
+    // width twice over. Chrome-measured on `width:200px; padding:10px; border:2px`:
+    // `offsetWidth` **224 vs 224** (border box — always was right) and `clientWidth` **220 in Chrome
+    // vs 224 here**. `scroll_geometry_of` had it right the whole time (`rect.width - bw.left -
+    // bw.right`) — but it only maps `overflow: auto|scroll|hidden` containers, and **most elements
+    // are not scroll containers**, so the correct value was computed for the minority and the
+    // fallback answered for everyone else.
+    //
+    // The border comes from the published style snapshot via `with_style`, the same seam
+    // `getComputedStyle` reads, so it is as fresh as the rect beside it (`layout_rect` and
+    // `with_style` both force a stale reflow first). A node with no style entry keeps the old
+    // answer rather than inventing a border of zero — an element we did not style is one whose
+    // border we do not know.
     // `$round` — `clientWidth/Height` and `scrollWidth/Height` are `long` (integers), like `offset*`, so
     // `check-layout-th.js`'s `data-expected-client-*` assertions compare against integers and a fractional
     // return fails them. `scrollTop/scrollLeft` are `double` per CSSOM and must stay fractional.
@@ -4335,12 +4350,62 @@ macro_rules! scroll_getter {
         }
     };
 }
+/// As [`scroll_getter`], but the fallback also receives the element's border widths as
+/// `(top, right, bottom, left)` — which is what separates the PADDING box (`client*`) from the
+/// BORDER box (`offset*`). Always rounds: `clientWidth`/`clientHeight` are `long` in CSSOM.
+macro_rules! scroll_getter_styled {
+    ($name:ident, $idx:expr, $fallback:expr) => {
+        unsafe extern "C" fn $name(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+            let v = this_node(vp)
+                .map(
+                    |(_, n)| match SCROLL_GEOM.with(|c| c.borrow().get(&n).copied()) {
+                        Some(g) => g[$idx],
+                        None => {
+                            let r = layout_rect(n).unwrap_or([0.0; 4]);
+                            // No style entry ⇒ no known border ⇒ report the box we do have, rather
+                            // than asserting a zero border we never measured.
+                            // **A non-replaced INLINE box reports 0**, per CSSOM — it has no
+                            // padding box to measure. Chrome-verified on a bordered `<span>`:
+                            // `clientWidth/Height` **0/0** while `offsetWidth/Height` is `8/21`.
+                            // Returning the border-subtracted box there (`4/16`) is the same class
+                            // of mistake as returning the border box for a block: a plausible
+                            // number where the spec says zero, and `if (!el.clientHeight)` is a
+                            // standard "is this laid out?" guard that a plausible number defeats.
+                            if with_style(n, |st| st.display == manuk_css::Display::Inline)
+                                .unwrap_or(false)
+                            {
+                                0.0
+                            } else {
+                                let b = with_style(n, |st| {
+                                    let bw = &st.border_width;
+                                    (bw.top, bw.right, bw.bottom, bw.left)
+                                })
+                                .unwrap_or((0.0, 0.0, 0.0, 0.0));
+                                ($fallback)(r, b)
+                            }
+                        }
+                    },
+                )
+                .unwrap_or(0.0);
+            *vp = mozjs::jsval::DoubleValue((v as f64).round());
+            true
+        }
+    };
+}
 scroll_getter!(el_get_scroll_top, 0, |_r: [f32; 4]| 0.0, false);
 scroll_getter!(el_get_scroll_left, 1, |_r: [f32; 4]| 0.0, false);
 scroll_getter!(el_get_scroll_height, 2, |r: [f32; 4]| r[3], true);
 scroll_getter!(el_get_scroll_width, 3, |r: [f32; 4]| r[2], true);
-scroll_getter!(el_get_client_height, 4, |r: [f32; 4]| r[3], true);
-scroll_getter!(el_get_client_width, 5, |r: [f32; 4]| r[2], true);
+scroll_getter_styled!(
+    el_get_client_height,
+    4,
+    |r: [f32; 4], b: (f32, f32, f32, f32)| (r[3] - b.0 - b.2).max(0.0)
+);
+scroll_getter_styled!(
+    el_get_client_width,
+    5,
+    |r: [f32; 4], b: (f32, f32, f32, f32)| (r[2] - b.1 - b.3).max(0.0)
+);
 
 /// `element.scrollTop = n`. Clamped **here**, so the script reads back the truth on the very next line.
 unsafe fn el_set_scroll_axis(
