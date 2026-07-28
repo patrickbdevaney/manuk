@@ -33459,3 +33459,103 @@ after the correction counts the same set of capabilities it was always meant to 
 ⚠ Standing consequence, for whoever owns `scripts/`: **`MEASURED` is a row count standing in for a
 capability count, and it silently rewards duplicating a row.** A name-vs-name uniqueness check belongs
 next to it. Harness-owned; reported here, not touched.
+
+## Tick 700 — the sweep the board asked for, and it caught one of my own regressions (2026-07-28)
+
+HYPOTHESIS: the board's standing RULE is *"PROVE the cluster's site-count SHRINKS next sweep"*, and
+constitution check #53's steer #1 (re-crawl before ranking again) is now four ticks old. Four fidelity
+ticks landed since — t695, t697, t698, t699. Bar: measure them against a **pre-session tree on the same
+box in the same session over an identical site set**, and report whatever comes back.
+
+### THE METHOD, because the last sweep's numbers were the problem
+
+The stale registry was crawled with parallel jobs, and contention starves fetches into phantom
+`MISSING_BOX` rows (t696). So this sweep does not compare against it at all. It builds **both trees**
+— `e1a1a167` (pre-session) and HEAD — and crawls the **same stratified slice serially, minutes apart,
+on the same box**. Two further guards:
+
+- **The denominator travels with the number.** Three of the 13 sites came back with a different
+  `probed` count (docs.python 319→241, github, microsoft) — live variance in what Chrome built. They
+  are **excluded**, not adjusted. A site whose denominator moved cannot be differenced, and
+  docs.python's headline `missing 74 → 0` is exactly the trap: it is a smaller page, not a fixed one.
+- **The build was verified to be the tree it claimed.** The first before-run silently used the AFTER
+  binary because the before-build had failed on an unrelated compile error, and the crawl launched
+  anyway. Caught and discarded; every subsequent run asserts a tree-specific marker before measuring.
+
+### ⚠⚠ THE FIRST RESULT WAS A FALSE REGRESSION, AND IT WAS THE BIGGEST NUMBER ON THE PAGE
+
+The raw sweep said **geometry +224**, with `vimeo.com` 803 → 1005 supplying +202 of it. That would have
+been a serious regression report against my own four ticks. It is an artifact:
+
+```text
+   vimeo.com geometry, 1919 probed every time
+     pre-session tree   803      (28-site sweep)     803   (isolated re-run)
+     t695               803      t697   803          t698  803
+     HEAD              1005      (28-site sweep)     803   (isolated re-run)   <-- the outlier
+```
+
+**Six readings say 803; one says 1005, and it is the one taken inside the long sweep** — the same run
+that later hung on `nytimes.com`. vimeo's stylesheets are fetched live, so a starved fetch under a
+loaded box inflates its divergence count. *Fourth occurrence of "every number has a harness" in this
+project, and the first time the harness artifact pointed at my own work.* Had I trusted the biggest
+number, I would have reverted four Chrome-verified ticks to chase a fetch timeout.
+
+### AND THEN A REAL ONE, WHICH IS MINE
+
+With vimeo corrected and the three moved-denominator sites excluded, **10 comparable sites**:
+
+```text
+   geometry   2530 -> 2592   (+62)        missing  1479 -> 1479  (+0)      display  738 -> 737  (-1)
+
+     blog.rust-lang.org      383 -> 441   +58   <-- REAL, reproducible on BOTH trees, twice each
+     doc.rust-lang.org        69 ->  75    +6   <-- same signature, same table CSS
+     this-week-in-rust.org    69 ->  66    -3
+     coinbase · ebay · old.reddit · usa.gov · vimeo · whitehouse · youtube   +0/+1
+```
+
+So the four ticks are **net-neutral on 8 of 10 sites and regress the two rust-lang doc sites**, and
+those two share one table. Bisected across all five commits — the divergence appears at **t695** (the
+half-leading) and is stable at t697/t698/HEAD:
+
+```text
+   blog.rust-lang.org geometry:  383/386 (pre-session, twice)  ->  442 (t695)  445 (t697)  438 (t698)  442 (HEAD)
+```
+
+The whole delta is **61 new divergences in ONE table: 33 `<tr>` + 26 `<td>`**, and the cells have a
+single signature — **955×111 in Chrome, 955×124 in ours, 13px too tall each** — accumulating downward
+as a growing `dy`. Before t695 those cells matched Chrome at 111.
+
+⚠ **I am NOT reverting t695, and I want the reason on the record rather than assumed.** t695 is
+Chrome-exact on its own fixture (22 of 22 probed boxes) and its rule is CSS 2.1 §10.8 as written; the
+control site's `dy` improved 127 → 80 across the arc. This looks like a **second mechanism the correct
+line-box model exposed** in table-cell height, not a wrong line-box model — but *that is a hypothesis,
+and until it is measured the honest status is "one site-class regressed and the cause is named."* It is
+tick 701, it is the top NEXT below, and it is not being carried quietly.
+
+### BAR 0 — `nytimes.com` hung, and the watchdog was MINE to lose
+
+The 28-site sweep stopped dead on `nytimes.com` and sat silent for 15+ minutes until killed by PID.
+⚠ **This is not a new Bar-0 regression and must not be filed as one:** I invoked `manuk-wpt oracle`
+directly instead of the observer's crawl driver, and the driver is what wraps each site in its own
+watchdogged process. Under the real harness this is a `TIMEOUT`, attributed to nobody. Recorded because
+the site is worth a look, and because *bypassing the harness removed a protection I then rediscovered.*
+
+TICK SHAPE: measurement
+CLUSTER: C01ca / the geometry band — measured, not shrunk on this slice; the sites where t697/t698 were
+verified to move (`keirin.jp` misplaced 1041→954, `desitales2` dy 127→80) are not in it, which the
+slice's own composition explains and does not excuse.
+Gates: no engine change — docs and measurement only. The wall runs unchanged.
+WIKI: none [forced] — the mechanism content is a measurement protocol, and it belongs in the journal
+next to the numbers it produced; the one durable rule is promoted to PATTERN below.
+PATTERN: **an outlier reading inside a long batch run is a HARNESS reading, and the batch is the
+harness.** Six isolated readings of vimeo said 803 and the one taken inside a 28-site sweep said 1005.
+The rule that generalises: *before believing any single-site delta from a batch, re-run that site
+ALONE on both trees.* A batch amortises setup cost by sharing a machine, and sharing a machine is
+exactly what makes one site's number depend on another site's timing.
+
+NEXT: **(1) THE TABLE-CELL 13px** — `<td>` 111 → 124 on the rust-lang docs tables, introduced by t695,
+reproducible on both trees, 61 divergences in one table. Chrome-first fixture, then decide whether t695
+needs a correction or whether it exposed a separate table-height bug. **This outranks everything else
+on the board: it is the only outstanding regression.** **(2) THE FULL CORPUS SWEEP IS STILL OWED** —
+this was 13 sites of 265, and the two clusters the recent ticks actually move are not in the slice.
+**(3) `node_rects` LIFTS OUT-OF-FLOW DESCENDANTS INTO BOXLESS INLINE ANCESTORS** (t697's NEXT).

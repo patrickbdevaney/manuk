@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **457** | ticks 1–699 |
-| median tick cycle | **22m** | 456 intervals |
-| median, last 10 | **38m** | 10 intervals |
+| ticks landed | **458** | ticks 1–700 |
+| median tick cycle | **22m** | 457 intervals |
+| median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 404.8h elapsed |
-| median verify wall | **63s** | 396 ticks |
+| **ticks per hour** | **1.13** | 406.0h elapsed |
+| median verify wall | **63s** | 397 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **359**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**223 of 457 ticks** (49%) moved a
+**223 of 458 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -554,5 +554,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **697** | 2026-07-28 00:37 | 53m | pattern-class | 63s | +340/−19 | 335 | 81 | 56.0% · | an out-of-flow child neither splits its inline nor escapes it (2026-07-28) |
 | **698** | 2026-07-28 01:16 | 40m | pattern-class | 63s | +303/−3 | 335 | 81 | 56.0% · | the clearfix had no box to clear with (2026-07-28) |
 | **699** | 2026-07-28 01:53 | 37m | pattern-class | 63s | +398/−13 | 335 | 81 | 56.0% · | the catch-all was a bug factory, and it had eaten four values (2026-07-28) |
+| **700** | 2026-07-28 03:03 | 70m | measurement | 63s | +102/−2 | 335 | 81 | 56.0% · | the sweep the board asked for, and it caught one of my own regressions (2026-07-28) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
