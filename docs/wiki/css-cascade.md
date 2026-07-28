@@ -1548,3 +1548,52 @@ appended after load is in the list with no cache to invalidate), and it is now a
 The throw is eliminated and the row changed class — but `thin-overlap-5` means *the oracle built the
 page and we did not*, which the instrument itself labels as still **ours**. One blocker removed and
 the next one visible behind it. That is not "agoda renders", and it is recorded as what it is.
+
+## The catch-all that answers `inline` (tick 699)
+
+`map_display`'s final arm is `_ => Display::Inline`. It has now caused three separate bugs, and the
+comment documenting the first one sits directly above it.
+
+**Why this particular catch-all is expensive.** It never errors and never logs, and `inline` is a
+*plausible* answer — an inline box still participates in layout. So a display keyword nobody mapped
+does not present as "unsupported value"; it presents as a **subtle geometry bug somewhere else on the
+page**, usually as a container that shrank to its content or a subtree that stopped being laid out the
+way its parent expected. `display: contents` was the first (an inline wrapper that stayed in the box
+tree and collapsed every grid using the idiom).
+
+**The fix is not the value you found; it is the sweep.** 23 keywords, one fixture, one Chrome run:
+
+```text
+                          chrome                ours (before)
+    flow-root             flow-root             inline           <- eaten
+    list-item             list-item             inline           <- eaten
+    table-column          table-column          inline           <- eaten
+    table-column-group    table-column-group    inline           <- eaten
+    ruby                  ruby                  block            <- named, post-Phase-0
+    math                  inline                block            <- named, post-Phase-0
+                                                        6 of 23  ->  2 of 23
+```
+
+`table-column` / `table-column-group` had variants in our own enum the whole time and were simply never
+mapped. `list-item` is a **modifier bit** in Stylo (`LIST_ITEM_MASK`), not a distinct display value, so
+it matched no constant and fell straight through — every `<li>` an author re-declares became inline.
+
+### `flow-root` is a gecko-gated CONSTANT, not a gecko-gated FEATURE
+
+`StyloDisplay::FlowRoot` is `#[cfg(feature = "gecko")]` and we build Stylo's *servo* configuration —
+the same shape as the `:has()` finding. But the **parser is not gated**: `"flow-root" =>
+Inside(DisplayInside::FlowRoot)` is in the servo build too, so the computed value arrives correctly and
+only the convenience constant is absent. Reading it through the public `outside()` / `inside()`
+accessors closes the gap with **no fork and no patch**, and a Stylo bump cannot silently revert it —
+the code would fail to compile. Constitution option 1, not option 2; the fork surface stays empty.
+
+⚠ **Before assuming a capability is missing from a vendored dependency, check whether it is the
+FEATURE that is gated or only the ACCESSOR.** Here the difference was one public method call versus
+vendoring Stylo.
+
+`flow-root` then needs two independent halves in layout, and each alone is a no-op: it must be
+**block-level** (`is_block_level`) *and* it must **establish a BFC** (`establishes_bfc`). Block-level
+alone leaves it a plain block, and a plain block does not contain its floats — which is the entire
+reason the value exists.
+
+[[box-layout]] [[conformance-and-oracles]]

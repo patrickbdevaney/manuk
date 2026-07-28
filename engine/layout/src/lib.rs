@@ -895,7 +895,9 @@ fn is_block_level(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
     if let NodeData::Element(_) = dom.data(node) {
         if matches!(
             styles.get(&node).map(|s| s.display),
-            Some(Display::Block | Display::Flex | Display::Grid | Display::Table)
+            Some(
+                Display::Block | Display::FlowRoot | Display::Flex | Display::Grid | Display::Table
+            )
         ) {
             return true;
         }
@@ -957,7 +959,7 @@ fn inline_contains_block(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
         let d = st.display;
         if matches!(
             d,
-            Display::Block | Display::Flex | Display::Grid | Display::Table
+            Display::Block | Display::FlowRoot | Display::Flex | Display::Grid | Display::Table
         ) {
             return true;
         }
@@ -1534,7 +1536,10 @@ fn is_atomic_inline_replaced(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool
 }
 
 fn establishes_bfc(s: &ComputedStyle) -> bool {
-    is_float(s)
+    // `flow-root` exists for EXACTLY this: a block box whose only distinguishing property is that it
+    // establishes a BFC, so it contains its floats without `overflow:hidden`'s clipping.
+    s.display == Display::FlowRoot
+        || is_float(s)
         || is_out_of_flow_positioned(s)
         || s.overflow != Overflow::Visible
         || matches!(
@@ -2664,7 +2669,11 @@ impl Ctx<'_> {
             .filter(|p| {
                 matches!(
                     p.display,
-                    Display::Block | Display::Table | Display::Flex | Display::Grid
+                    Display::Block
+                        | Display::FlowRoot
+                        | Display::Table
+                        | Display::Flex
+                        | Display::Grid
                 )
             })
         {
@@ -8637,6 +8646,64 @@ mod tests {
             (h("o") - 70.0).abs() < 1.5,
             "GUARD: #o (overflow:hidden, a BFC root) is h{} and was already h70.",
             h("o")
+        );
+    }
+
+    /// **`display: flow-root` IS A BLOCK THAT CONTAINS ITS FLOATS — and the catch-all ate it.**
+    ///
+    /// `flow-root` exists for exactly one reason: a block box that establishes a block formatting
+    /// context, so it contains its floats **without** `overflow:hidden`'s clipping and without a
+    /// generated `::after`. `map_display`'s catch-all answers `Inline` for any keyword nobody mapped,
+    /// which is the worst available answer — an inline box still participates in layout, so the
+    /// failure reads as a subtle geometry bug rather than an unsupported value. Measured against
+    /// Chrome: the container came out **[0 0 0x19]** where Chrome says **[0 0 1200x70]**.
+    ///
+    /// A 23-keyword sweep against Chrome found four values sitting in that catch-all — `flow-root`,
+    /// `list-item`, `table-column`, `table-column-group` — the last two having had variants in our
+    /// own enum the whole time. Divergences went **6 of 23 -> 2 of 23**; the remainder is `ruby` and
+    /// MathML's `math`, both on the declared post-Phase-0 list.
+    #[test]
+    fn flow_root_is_a_block_that_contains_its_floats() {
+        let html = r#"<div class="fr" id="r"><div class="f"></div></div>
+                      <div class="fr" id="s">x</div>
+                      <div class="pl" id="p"><div class="f"></div></div>"#;
+        let css = "body{margin:0} div{font-family:sans-serif;font-size:16px;line-height:normal} \
+                   .f{float:left;width:100px;height:70px} .fr{display:flow-root}";
+        let (dom, root) = layout_html(html, css, 1200.0);
+        let rects = root.node_rects(&dom);
+        let r = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            rects[&n]
+        };
+
+        // (1) IT IS BLOCK-LEVEL. Falling through to `Inline` made it shrink to its content: width 0
+        //     for the empty one, and the text's width for the other. Chrome: full containing block.
+        assert!(
+            (r("s").width - 1200.0).abs() < 1.5,
+            "#s is {}px wide and Chrome says 1200 — `flow-root` is BLOCK-level, and the catch-all \
+             that answered `Inline` made it shrink to its content instead of filling its parent.",
+            r("s").width
+        );
+
+        // (2) IT CONTAINS ITS FLOATS. This is the whole reason the value exists.
+        assert!(
+            (r("r").height - 70.0).abs() < 1.5,
+            "#r is h{} and Chrome says h70 — `flow-root` establishes a block formatting context, so \
+             its floated child must be contained. Block-level alone is not enough: without the \
+             `establishes_bfc` half it is just a block, and a plain block does NOT contain floats.",
+            r("r").height
+        );
+
+        // (3) CONTROL — the plain block next to it still does NOT contain its float. If this grew,
+        //     floats are being contained unconditionally rather than by `flow-root`.
+        assert!(
+            r("p").height.abs() < 1.5,
+            "CONTROL: #p is h{} and MUST be h0 — it is a plain block, and only `flow-root` (or a \
+             BFC root) contains floats.",
+            r("p").height
         );
     }
 }

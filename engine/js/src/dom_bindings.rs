@@ -1119,6 +1119,11 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         Display::InlineFlex => "inline-flex",
         Display::InlineGrid => "inline-grid",
         Display::Contents => "contents",
+        // `getComputedStyle(el).display` must round-trip the specified keyword — a feature-detect
+        // that reads back `block` for `flow-root` concludes the value is unsupported and falls back
+        // to a clearfix or `overflow:hidden`, both of which have side effects the author avoided by
+        // choosing `flow-root`.
+        Display::FlowRoot => "flow-root",
         Display::Table => "table",
         Display::TableRow => "table-row",
         Display::TableRowGroup => "table-row-group",

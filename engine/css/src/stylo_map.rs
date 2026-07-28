@@ -14,6 +14,11 @@ use stylo::values::computed::position::Inset;
 use stylo::values::computed::{
     Display as StyloDisplay, LengthPercentage, TextAlign as StyloTextAlign,
 };
+// `DisplayInside`/`DisplayOutside` live on the SPECIFIED module (computed `Display` is a re-export of
+// the specified type), and they are the only route to `flow-root` in the servo build — see `map_display`.
+use stylo::values::specified::box_::{
+    DisplayInside as StyloDisplayInside, DisplayOutside as StyloDisplayOutside,
+};
 
 use crate::{ComputedStyle, Dim, Display, Rgba, Sides, TextAlign};
 
@@ -192,7 +197,44 @@ fn map_display(d: StyloDisplay) -> Display {
         // and the layout silently collapses into a single cell with every element still present and
         // still styled. `display: none` would at least have been visibly wrong.
         Display::Contents
+    } else if d.outside() == StyloDisplayOutside::Block
+        && d.inside() == StyloDisplayInside::FlowRoot
+    {
+        // `display: flow-root` — a block box that **establishes a block formatting context**, which
+        // is the modern, explicit way to say *"contain my floats"* without the side effects of
+        // `overflow: hidden` (which also clips) or a `::after` clearfix. Stylo parses it; we ate it
+        // here, so the element became INLINE: measured [0 0 0x19] against Chrome's [0 0 1200x70].
+        //
+        // ⚠ Read through `outside()`/`inside()` rather than `StyloDisplay::FlowRoot`, because that
+        //   const is `#[cfg(feature = "gecko")]` and we build Stylo's *servo* configuration. The
+        //   **parser is not gated** — `"flow-root" => Inside(DisplayInside::FlowRoot)` is in the
+        //   servo build too — so the value arrives correctly and only the convenience constant is
+        //   missing. This is a build-flag gap read around with public API, not a fork: nothing is
+        //   patched, and a Stylo bump cannot silently revert it (it would fail to compile).
+        Display::FlowRoot
+    } else if d == StyloDisplay::TableColumn {
+        Display::TableColumn
+    } else if d == StyloDisplay::TableColumnGroup {
+        Display::TableColumnGroup
+    } else if d.is_list_item() {
+        // `list-item` is a MODIFIER BIT in Stylo (`LIST_ITEM_MASK`), not a distinct display value, so
+        // it never matched any const above and fell through to the catch-all. Every `<li>` the author
+        // re-declares — and every custom `display: list-item` list on the web — became INLINE.
+        // Block-level is the correct outer display; the marker is generated elsewhere.
+        Display::Block
     } else {
+        // ⚠⚠ **THIS CATCH-ALL IS A BUG FACTORY, AND THIS IS THE THIRD TIME IT HAS BEEN CAUGHT.**
+        //    It silently answers `Inline` for any keyword nobody mapped — which is the *worst*
+        //    available answer, because an inline box still participates in layout and so the failure
+        //    looks like a subtle geometry bug rather than an unsupported value. `display: contents`
+        //    was the first (the comment above it is the post-mortem), and a 23-keyword sweep against
+        //    Chrome found four more sitting here: `flow-root`, `list-item`, `table-column` and
+        //    `table-column-group` — the last two having had variants in our own enum the whole time.
+        //
+        //    Still unmapped, deliberately and named rather than discovered later: `ruby` (Chrome:
+        //    `ruby`) and MathML's `math` (Chrome: `inline`, which this happens to get right). Both
+        //    are on the declared post-Phase-0 list; the point of naming them here is that the next
+        //    person reading this knows the remainder is two values, not "everything else".
         Display::Inline
     }
 }

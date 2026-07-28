@@ -79,6 +79,12 @@ pub enum Display {
     InlineFlex,
     InlineGrid,
     Table,
+    /// `display: flow-root` — a block box that **establishes a block formatting context**. The only
+    /// difference from `Block` is that difference, and it is the whole reason the value exists: it is
+    /// the modern, explicit *"contain my floats"* with none of the side effects of the alternatives
+    /// (`overflow:hidden` also clips; a `::after` clearfix needs a generated box). Treated as
+    /// block-level everywhere `Block` is, and listed in `establishes_bfc`.
+    FlowRoot,
     TableRowGroup,
     TableRow,
     TableCell,
@@ -3854,6 +3860,11 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "table-caption" => Display::TableCaption,
                 "table-column" => Display::TableColumn,
                 "table-column-group" => Display::TableColumnGroup,
+                "flow-root" => Display::FlowRoot,
+                // `list-item` is block-level; the marker is generated elsewhere. Both cascades must
+                // agree here — a keyword one of them knows and the other does not is the
+                // two-cascades trap, and it produces a divergence nobody can reproduce.
+                "list-item" => Display::Block,
                 "contents" => Display::Contents,
                 "none" => Display::None,
                 _ => s.display,

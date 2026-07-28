@@ -33335,3 +33335,127 @@ parsed as a block-level display at all, and `establishes_bfc` does not list it. 
 **(2) `node_rects` LIFTS OUT-OF-FLOW DESCENDANTS INTO BOXLESS INLINE ANCESTORS** (t697's NEXT, still
 open) — `getBoundingClientRect` on a link, so hit-testing as well as fidelity. **(3) RE-CRAWL THE
 CORPUS** — constitution check #53's steer #1, still owed and now three ticks old.
+
+## Tick 699 — the catch-all was a bug factory, and it had eaten four values (2026-07-28)
+
+HYPOTHESIS: t698's NEXT #1 — `display: flow-root` measured **[0 70 0×19]** against Chrome's
+[0 0 1200×70]. Bar: match Chrome on the fixture, and answer the question the symptom implies — *what
+ELSE is the same catch-all eating?* — with a keyword sweep rather than a guess. Plus surface audit #42,
+due this tick.
+
+### THE CATCH-ALL, AND THE COMMENT SITTING RIGHT ABOVE IT
+
+`map_display`'s final arm is `_ => Display::Inline`, and the comment immediately above it is the
+post-mortem of the LAST time that arm caused a bug (`display: contents`, which it turned into an inline
+box that stayed in the box tree and collapsed every grid using the idiom). Same arm, third catch. So
+the tick asked the population question instead of fixing one value — **23 display keywords, one
+fixture, one Chrome run:**
+
+```text
+                       chrome                ours (before)
+    flow-root          flow-root             inline            <- eaten
+    list-item          list-item             inline            <- eaten
+    table-column       table-column          inline            <- eaten
+    table-column-group table-column-group    inline            <- eaten
+    ruby               ruby                  block             <- named, post-Phase-0
+    math               inline                block             <- named, post-Phase-0
+                                                        6 of 23 diverge  ->  2 of 23
+```
+
+`table-column` and `table-column-group` **had variants in our own enum the whole time** — they were
+simply never mapped. `list-item` is a MODIFIER BIT in Stylo (`LIST_ITEM_MASK`), not a distinct value,
+so it matched no const and fell through: every `<li>` an author re-declares became inline.
+
+### `flow-root`, AND A BUILD-FLAG GAP READ AROUND WITH PUBLIC API
+
+`StyloDisplay::FlowRoot` is `#[cfg(feature = "gecko")]` and we build the *servo* configuration — the
+same shape as the `:has()` finding in STATUS.md. But the **parser is not gated**
+(`"flow-root" => Inside(DisplayInside::FlowRoot)` is in the servo build too), so the value arrives
+correctly and only the convenience constant is missing. Read through the public `outside()`/`inside()`
+accessors: **nothing is patched, no fork, and a Stylo bump cannot silently revert it** — it would fail
+to compile. That is constitution option 1, not option 2, and the fork surface stays empty.
+
+```text
+   Chrome --headless=new, 1200x800, margin:0, one float:left 100x70 child
+                            Chrome            before            after
+     #r (flow-root+float)   [0  0 1200x70]   [0 0    0x19]   [0  0 1200x70]
+     #s (flow-root+text)    [0 70 1200x18]   [0 0  100x17]   [0 70 1200x18]
+```
+
+Two halves, both load-bearing and separately RED-proven: **block-level** (`is_block_level`) and
+**establishes a BFC** (`establishes_bfc`). Block-level alone leaves it a plain block, and a plain block
+does not contain floats — which is the entire reason the value exists.
+
+### SURFACE AUDIT #42 — the map already had all 24, and had two capabilities TWICE
+
+Read Interop 2026 (20 focus areas + 4 investigations) and Ladybird's 2026 newsletters. **Nothing was
+missing from `CONSTELLATION.tsv`** — the first audit in a while where the outside world named nothing
+new. What it did find:
+
+- **Two capabilities on the map twice with CONTRADICTORY statuses** — `contrast-color()` and `XPath`,
+  each `missing` on one row and `gated`/`partial` on another. Found only by TOKEN-SET matching the
+  capability name (`CSS contrast-color()` vs `contrast-color() (CSS)` are the same thing in two word
+  orders; exact-match found one of the two). Both gates were **run green before the map was touched**,
+  and the stale rows deleted: **396 → 394, asserted on the edit**. ⚠ `map-reconcile.sh` cannot see this
+  class: it checks map→gate per row, and both capabilities DID have a backing gate — on their *other*
+  row. **A duplicate row is invisible to a per-row reconciler.**
+- **`constellation unknowns` is 0**, so the launch prompt's standing item (D) *"PROBE the ~35
+  constellation unknowns"* is stale by construction. Recorded, not actionable from here.
+- **Interop 2026 names SIX declared death-tail items as top-20 focus areas.** Not an argument to build
+  them — Interop ranks cross-engine developer pain, I4 ranks usage-weighted breadth — but the list
+  should be re-derived from evidence rather than inherited, and this is the note that says so.
+
+TICK SHAPE: pattern-class
+CLUSTER: `C7460 display: none → block (<div>)` (17 sites) and the `display:` mechanism band
+(423 sites / 5945 hits) — this tick is a *computed-display* correctness fix, which is that band's
+root-cause layer.
+Gates: `flow_root_is_a_block_that_contains_its_floats` (new, engine/layout) — RED-proven against TWO
+mutations, each failing a DIFFERENT assertion: (A) drop `flow-root` from `establishes_bfc` -> `#r` h0;
+(B) drop it from `is_block_level` -> `#s` 8px wide instead of 1200. Plus a control: the plain block
+beside it still does NOT contain its float. Layout suite 94/94, css 28/28, and
+`g_contrast_color` + `g_xpath_subset` run green as part of the audit.
+WIKI: `docs/wiki/css-cascade.md` — "the catch-all that answers `inline`".
+PATTERN: **a catch-all arm that returns a PLAUSIBLE value is a bug factory, and the bug it makes is
+always the expensive kind.** `_ => Display::Inline` never errors, never logs, and produces a box that
+participates in layout — so every value it eats presents as a subtle geometry bug somewhere else
+entirely. The fix is not the value you found; it is the SWEEP. One fixture of 23 keywords against
+Chrome turned "flow-root is broken" into four, and named the two that remain.
+
+NEXT: **(1) RE-CRAWL THE CORPUS** — constitution check #53's steer #1, now four ticks old and the
+oldest outstanding debt on the board; the registry is 6 days stale and two of its top rows re-measured
+to zero. **(2) `node_rects` LIFTS OUT-OF-FLOW DESCENDANTS INTO BOXLESS INLINE ANCESTORS** (t697's
+NEXT) — `getBoundingClientRect` on a link, so hit-testing as well as fidelity. **(3) A NAME-VS-NAME
+DUPLICATE CHECK** belongs in `map-reconcile.sh`, which is harness-owned — reported here, not touched.
+
+### ⚠ THE RATCHET REFUSED THIS TICK, AND IT WAS RIGHT TO — the mark was DOUBLE-COUNTING
+
+`MEASURED` went 396 → 394 and `ratchet.sh` stopped the tick with *"a capability that HAD a verdict lost
+it."* That guard is correct in general and I am not weakening it. It is wrong **here**, and the reason
+is exactly the defect the audit found:
+
+```sh
+current_measured() { awk -F'\t' 'NR>1 && $4!="unknown" && $4!=""' CONSTELLATION.tsv | wc -l; }
+```
+
+**It counts ROWS, and two rows described one capability each, twice.** `contrast-color()` and `XPath`
+each appeared on two rows; both rows carried a verdict, so both were counted. Deleting the stale
+duplicates removes two *rows* and zero *verdicts* — and the check has no way to tell those apart,
+because a per-row counter cannot see that two rows are the same capability. That is the same blind spot
+`map-reconcile.sh` has, from the same cause, found in the same audit.
+
+Verified before touching the mark, rather than asserted:
+
+```text
+  contrast-color() (CSS)                       status=gated    gate=G_CONTRAST_COLOR      (green)
+  XPath (document.evaluate / XPathEvaluator)   status=partial  gate=G_XPATH_SUBSET        (green)
+  constellation `unknown` count                0  (unchanged — nothing regressed to unmeasured)
+```
+
+So the mark is lowered **deliberately, to 394**, under the escape hatch `ratchet.sh` prints for exactly
+this case (*"explain in the journal why the mark itself was wrong and lower it deliberately"*). This is
+not retuning a gate to land a tick: no capability lost a verdict, no gate was weakened, and the mark
+after the correction counts the same set of capabilities it was always meant to count — one row each.
+
+⚠ Standing consequence, for whoever owns `scripts/`: **`MEASURED` is a row count standing in for a
+capability count, and it silently rewards duplicating a row.** A name-vs-name uniqueness check belongs
+next to it. Harness-owned; reported here, not touched.

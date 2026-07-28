@@ -2283,3 +2283,75 @@ measured effect is a statement about BEHAVIOUR.** Verifying these two is a named
 **Standing note, seventh audit running:** `map-reconcile.sh` searches `engine agent tests` and not `shell/`,
 so the eight gates living as `#[test] fn` in `shell/src/media.rs` and `shell/src/audio.rs` remain invisible
 to it. Harness-owned; reported, not touched.
+
+## Audit #42 — tick 699
+
+**Date:** 2026-07-28. **Sources read (not remembered):**
+
+- <https://github.com/web-platform-tests/interop/blob/main/2026/README.md> — the authoritative Interop
+  2026 list: **20 focus areas + 4 investigation efforts**.
+- <https://webkit.org/blog/17818/announcing-interop-2026/> · <https://web.dev/blog/interop-2026> —
+  20 areas, **15 of them new**, 5 carried over from 2025.
+- <https://ladybird.org/newsletter/2026-06-30/> · <https://ladybird.org/newsletter/2025-10-31/> —
+  the independent-engine reference point: Ladybird passed **90% of all WPT subtests** (Oct 2025) and
+  sits at ~2,078,912 subtests (Jun 2026). Its own stated hardest problem is **web compat — sites
+  coded to undocumented Blink/WebKit quirks** — not spec conformance.
+
+### RECONCILIATION — the map already had all 24
+
+Every one of the 20 focus areas and all 4 investigation efforts resolves to at least one existing
+`CONSTELLATION.tsv` row. **Nothing was added**, and that is a real (if unexciting) result: this is the
+first audit in a while where the outside world named nothing the map had not.
+
+```text
+  container style queries  · anchor positioning · attr() · contrast-color() · zoom · custom highlights
+  dialogs+popovers · fetch uploads/ranges · IndexedDB · JSPI · media pseudo-classes · Navigation API
+  scoped custom element registries · scroll-driven animations · scroll snap · shape() · view transitions
+  web compat · WebRTC · WebTransport      + a11y testing · JPEG XL · mobile testing · WebVTT
+```
+
+### WHAT WE HAD BEEN WRONG ABOUT
+
+**1. Two capabilities were on the map TWICE, with CONTRADICTORY statuses.** Found by token-set
+matching the capability column rather than exact string (the earlier exact-match check reported one
+duplicate; the real count was two, because `CSS contrast-color()` and `contrast-color() (CSS)` are the
+same capability written in two orders):
+
+```text
+  contrast-color()   status=missing gate=-   ×   status=gated gate=G_CONTRAST_COLOR
+  XPath              status=missing gate=-   ×   status=partial gate=G_XPATH_SUBSET
+```
+
+Both gates were **verified to exist and RUN GREEN** before touching the map
+(`engine/page/tests/g_contrast_color.rs`, `engine/page/tests/g_xpath_subset.rs`, 1 passed each) — a map
+edit that guesses which side is true is worse than the drift it fixes. The two stale `missing` rows are
+deleted; **396 → 394 rows, asserted on the edit.** Contradictory duplicates now **0**.
+
+⚠ The standing `map-reconcile.sh` drift check compares map→gate and could not see this: both
+capabilities DID have a real backing gate on their other row. **A duplicate row is invisible to a
+per-row reconciler** — the check has to be name-vs-name, and it now is.
+
+**2. `constellation unknowns` is 0, and the LAUNCH PROMPT still says "PROBE the ~35 unknowns".**
+Status distribution is **263 gated / 91 missing / 30 partial / 10 works — zero `unknown`**. Item (D) of
+the standing agent prompt is stale by construction and cannot be actioned; noted here because a prompt
+fix only lands on relaunch (the same failure mode recorded at t684).
+
+**3. Interop 2026 names SIX of our declared death-tail items as top-20 focus areas** — anchor
+positioning, custom highlights, scroll-driven animations, JSPI, scoped custom element registries, and
+WebTransport (plus JPEG XL as an investigation). This is **not** an argument to build them: Interop
+ranks by *cross-engine developer pain*, and I4 ranks by *usage-weighted breadth*, which are different
+questions and deliberately so. It is recorded because the death-tail list should be re-derived from
+evidence rather than inherited, and the next audit should check whether any of the six has crossed into
+real usage — `scroll-driven animations` and `anchor positioning` are the two most likely to.
+
+**Gate-vs-map diff:**
+```text
+  map rows                                  : 394   (was 396 at #41; -2, both stale duplicates)
+  contradictory duplicate names             : 2 -> 0
+  constellation unknowns                    : 0
+  Interop 2026 areas absent from the map    : 0 of 24
+```
+
+**Standing note, eighth audit running:** `map-reconcile.sh` searches `engine agent tests` and not
+`shell/`, so the eight gates living as `#[test] fn` in `shell/src/media.rs` and `shell/src/audio.rs`
+remain invisible to it. Harness-owned; reported, not touched.

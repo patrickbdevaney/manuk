@@ -1545,8 +1545,18 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
             println!("{want}: NOT IN THE DOM AT ALL");
         }
         // Every match, because "the first one is fine and the other four are at the viewport origin"
-        // is itself the finding — a single hit would have hidden it.
-        for (mi, &n) in matches.iter().enumerate().take(8) {
+        // is itself the finding — a single hit would have hidden it. The cap is 32 rather than a
+        // handful for the same reason: a probe that silently truncates its own answer is how a
+        // partial list gets read as a complete one (it was 8, and a 23-element display sweep quietly
+        // came back with 8 rows).
+        const WHY_CAP: usize = 32;
+        if matches.len() > WHY_CAP {
+            println!(
+                "(showing {WHY_CAP} of {} matches — TRUNCATED)",
+                matches.len()
+            );
+        }
+        for (mi, &n) in matches.iter().enumerate().take(WHY_CAP) {
             println!("── match {} of {}", mi + 1, matches.len());
             {
                 let mut cur = Some(n);
@@ -2352,6 +2362,7 @@ fn css_display_name(d: manuk_css::Display) -> &'static str {
         D::Grid => "grid",
         D::InlineFlex => "inline-flex",
         D::InlineGrid => "inline-grid",
+        D::FlowRoot => "flow-root",
         D::Table => "table",
         D::TableRow => "table-row",
         D::TableRowGroup => "table-row-group",
