@@ -246,6 +246,7 @@
   - L2153 · A repeat that measured nothing is not paid for twice (tick 687)
   - L2173 · This breaks tick 673's monotonicity argument on purpose
   - L2181 · ⚠ And the gate's first draft was vacuous — the third time this session
+  - L2196 · The claimed clusters moved — ikea coverage 97.1% → 100%, keirin dy 206 → 161 (tick 692)
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1216,4 +1217,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1127 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1128 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

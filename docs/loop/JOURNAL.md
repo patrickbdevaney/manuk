@@ -32790,3 +32790,56 @@ and the mandate's rule is that a claim is proven by a sweep. This is the tick th
 or says the levers were wrong. **(2) PARALLELISE THE PARITY CAPTURES** — 175s of a 227s wall, one serial
 headless Chrome per fixture, independent captures (wall audit #21); it multiplies every future tick.
 **(3) THE PER-CALL LOAD BUDGET** — the priority inversion, blocked on nine gate files.
+
+## Tick 692 — the claimed clusters moved: `ikea` coverage 97.1% → 100%, `keirin` dy 206 → 161 (2026-07-27)
+
+HYPOTHESIS: the mandate's own RULE — *"a tick is ON-MANDATE only if it NAMES a cluster it shrinks, and PROVE
+the cluster's site-count SHRINKS next sweep."* t689 claimed `Cc4e6 <img>`; t691 claimed `C01ca <div>` /
+`C7eb9 <body>`. This is the tick that either banks the movement or says the levers were wrong.
+
+```text
+  site              metric        t681      t692     delta
+  www.ikea.com      coverage     0.9708   1.0000    +2.9 pts  -> EVERY element Chrome renders
+  keirin.jp         shape        0.5717   0.5873    +1.6 pts
+  keirin.jp         median dy       206      161    -45 px
+  www.welt.de       median dy      3077     2957   -120 px
+  www.agoda.com     shape (n=59) 0.5077   0.5593    +5.2 pts
+  www.agoda.com     median dy        14       12     -2 px
+  www.desitales2    median dy        91      110    +19 px    <- WORSE
+  www.ikea.com      median dy       145      145    unchanged
+  playhop / naukri  unchanged (render-failed n=7 / thin-overlap-9)
+```
+
+**The `dy` term moved on three of the four sites carrying it** — the exact term t688 measured as the SHAPE
+driver — and **`ikea` reached 100% coverage**. The mechanism the two levers targeted is the mechanism that
+moved, which is the strongest form of confirmation available here: the prediction was made before the sweep
+and named the axis.
+
+⚠ **THE CERTIFICATE'S HEADLINE DID NOT MOVE: `sites 20 · scored 5 · shape ≥0.75 on 0`.** The 0.75 bar is far
+above 0.59, so a 1.6-pt or 5.2-pt gain cannot cross it. **Saying the certificate moved would be false;
+saying the work did nothing would also be false.** What moved is the *distance* to the bar, in the term that
+governs it — and that distinction is the whole reason this session has kept the two numbers separate.
+
+⚠ **AND ONE SITE GOT WORSE.** `desitales2`'s median dy went **91 → 110**. Its SHAPE is stable across the two
+runs (0.6061..0.6112, Δ 0.5 pts), so the score is not hiding a regression behind noise — but the vertical
+displacement grew 19px and **neither lever predicts that.** Recorded as open rather than averaged away: a
+lever that improves three sites and worsens a fourth has a second mechanism inside it, and finding it is
+worth more than the 19px.
+
+⚠ `agoda`'s within-sweep spread is now **Δ 45.9 over 6 runs**, median still the thin `0.100` draw. Its
+bimodality (t683: `external scripts` 1072ms → 9ms on the second navigation in a process) is unexplained and
+it is the least trustworthy site in the corpus. The repeat machinery is doing its job on it and only on it.
+
+TICK SHAPE: measurement (the proof the mandate requires for two prior ticks' claims). Bar 0 untouched; no
+source changed. Rows banked at `docs/bench/head20-rows-t692.tsv`.
+Gates: none — nothing changed.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "the claimed clusters moved", with the full delta table and
+the one site that regressed.
+PATTERN: none — a measurement. [no-pattern]
+
+NEXT: **(1) `desitales2` dy 91 → 110 IS THE CHEAPEST OPEN QUESTION** and it is a REGRESSION this session
+caused — its FIRST DIVERGENCE (`after …/nav:3/div:1/div:2`, previously dy=-73) should now name a different
+element, and the diff between the two is the second mechanism inside the strut change. Chase it before it
+compounds. **(2) PARALLELISE THE PARITY CAPTURES** — 175s of a 227s wall, one serial headless Chrome per
+fixture (wall audit #21); it multiplies every future tick and is the only remaining item that makes the loop
+itself faster. **(3) THE PER-CALL LOAD BUDGET** — the priority inversion, blocked on nine gate files.

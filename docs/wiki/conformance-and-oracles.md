@@ -2192,3 +2192,41 @@ measuring nothing. **The falsify pass is not a formality; it is the only thing t
 from a comment.**
 
 [[certification-redesign]] [[reliability-doctrine]]
+
+## The claimed clusters moved — `ikea` coverage 97.1% → 100%, `keirin` dy 206 → 161 (tick 692)
+
+Two ticks claimed clusters and the mandate's rule is that a claim is proven by a sweep: t689 (a broken
+`<img>` reserves Chrome's 16×16 placeholder) claimed `Cc4e6 <img>`; t691 (every line box starts with a strut)
+claimed `C01ca <div>` and `C7eb9 <body>`. Same corpus, same instrument tag, t691 tree.
+
+```text
+  site              metric        t681      t692     delta
+  www.ikea.com      coverage     0.9708   1.0000    +2.9 pts  -> EVERY element Chrome renders
+  keirin.jp         shape        0.5717   0.5873    +1.6 pts
+  keirin.jp         median dy       206      161    -45 px
+  www.welt.de       median dy      3077     2957   -120 px
+  www.agoda.com     shape (n=59) 0.5077   0.5593    +5.2 pts
+  www.agoda.com     median dy        14       12     -2 px
+  www.desitales2    median dy        91      110    +19 px    <- WORSE
+  www.ikea.com      median dy       145      145    unchanged
+  playhop / naukri  unchanged (render-failed n=7 / thin-overlap-9)
+```
+
+**The `dy` term moved on three of the four sites that carried it**, which is the term tick 688 measured as
+the SHAPE driver — and `ikea` reached **100% coverage**. The mechanism the two levers targeted is the
+mechanism that moved.
+
+⚠ **The certificate's headline did NOT move: `sites 20 · scored 5 · shape ≥0.75 on 0`.** The 0.75 bar is far
+above 0.59, so a 1.6-point or 5.2-point gain cannot cross it. Saying the certificate moved would be false;
+saying the work did nothing would also be false. **What moved is the distance to the bar, measured in the
+term that governs it.**
+
+⚠ **And one site got worse: `desitales2`'s median dy went 91 → 110.** Its SHAPE is stable across the two
+runs (0.6061..0.6112, Δ 0.5 pts) so the shape score is not noise-hiding a regression, but the vertical
+displacement grew by 19px and neither lever predicts that. Recorded as an open item rather than averaged
+away — a lever that improves three sites and worsens a fourth has a second mechanism in it.
+
+⚠ `agoda`'s within-sweep spread is now **Δ 45.9 pts over 6 runs** and its median row is still the thin
+`0.100` draw. Its bimodality (t683) is unexplained and it remains the least trustworthy site in the corpus.
+
+[[certification-redesign]] [[box-layout]]
