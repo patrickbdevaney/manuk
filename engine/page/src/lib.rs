@@ -1976,84 +1976,6 @@ impl Page {
             &mut nav_accounted_ms,
             &mut nav_hits,
         );
-        // ── **THE AUTHOR'S STYLESHEETS, BEFORE THE DOCUMENT'S OWN SCRIPTS CAN MEASURE ANYTHING.**
-        //
-        // They were applied in `finish_loading`, which runs AFTER this function has already fired
-        // `DOMContentLoaded` **and `load`**. The navigation ledger printed the order plainly and
-        // nobody read it as an ordering:
-        //
-        // ```text
-        //   cascade+layout+blocking scripts
-        //   DOMContentLoaded
-        //   load event                 <- every script the page has has now run
-        //   initial images+masks
-        //   external CSS               <- the site's CSS arrives here
-        // ```
-        //
-        // So for the entire scripted lifetime of the document, `getComputedStyle` and
-        // `getBoundingClientRect` answered from a page with **no author CSS at all**. Measured on a
-        // three-line fixture whose only sheet is one `<link>`: `display` reads `block` where the
-        // engine's own final layout is `flex`, and a `width:70%` child measures the full 1184px —
-        // at `sync`, at `DOMContentLoaded`, at `load`, and from every timer after it.
-        //
-        // **That is not a styling bug, it is a MEASUREMENT bug, and the page is the one measuring.**
-        // Every carousel, sticky header, virtualised list, masonry grid, chart library and
-        // "is this on screen" check reads geometry and then writes the answer back into the DOM. Fed
-        // UA-default geometry, they write a wrong answer that no later cascade can undo — the
-        // stylesheet arrives afterwards and restyles a tree the page has already mis-built.
-        //
-        // The spec is not subtle about it either: a `<link rel=stylesheet>` is render-blocking and
-        // script-blocking, and `load` does not fire until the style sheets have loaded.
-        //
-        // Applied here — after construction, before the deferred pass and before either lifecycle
-        // event. `finish_loading` still calls the same method, and its call is now a no-op unless
-        // something changed: `apply_stylesheets` fingerprints its inputs and skips an identical
-        // re-cascade. The preload scanner at the top of this function has already warmed these
-        // exact URLs into the HTTP cache, so on the common path this awaits a cache hit.
-        //
-        // ⚠ Blocking scripts — the ones inside `from_dom`, above — still run before this. That is
-        // the same order `from_prefetched` has always had, so it is not a new divergence, and
-        // closing it means fetching the sheets before the `Page` exists (the shell path's off-thread
-        // prefetch). Named, not silently left: it is the remaining half.
-        //
-        // ⚠⚠ **UNDER THE LOAD BUDGET, and G_LOAD is why.** The first version of this call was
-        // unbudgeted and `G_LOAD` — a **Bar 0** gate — went red immediately: a page with dead
-        // subresources took **13.4s against a 2s budget**, because `finish_loading` runs every one of
-        // its phases through a `phase()` closure sharing one deadline, and `load_async` had just
-        // acquired a phase that shared nothing. *Whatever bounds one of these phases must bound both,
-        // or the bound is decorative* — the same sentence already written above the enhancement
-        // phases at the end of this function, about the same omission.
-        //
-        // A stylesheet that does not arrive costs the page its styling; a stylesheet we wait FOREVER
-        // for costs the user the tab. `failed_css` records the cut sheets (t708), so the page can
-        // still say what it did not get.
-        //
-        // ⚠ It shares ONE deadline with the enhancement phases below, and does not get a budget of
-        // its own. A second full budget here made `G_LOAD` red at **5.4s against a 2s budget** —
-        // better than the 13.4s of no budget at all, and still a fail, because the gate's ceiling is
-        // 2x the budget for the WHOLE load and `load_async` was spending 2x on its own. A bound that
-        // each phase gets a fresh copy of is not a bound on the page.
-        let nav_deadline = tokio::time::Instant::now() + load_budget();
-        if tokio::time::timeout_at(
-            nav_deadline,
-            page.fetch_and_apply_stylesheets(fonts, viewport_width),
-        )
-        .await
-        .is_err()
-        {
-            tracing::warn!(
-                "load budget of {:.1}s exhausted fetching stylesheets — rendering with what \
-                 arrived. A sheet that does not come is a styling loss; a sheet we wait forever \
-                 for is a frozen tab.",
-                load_budget().as_secs_f32()
-            );
-        }
-        nav_phase(
-            "external CSS",
-            &mut nav_at,
-            &mut nav_accounted_ms,
-            &mut nav_hits,
-        );
         // Carry the pre-fetched graph + import map onto the page; `run_deferred_scripts` seeds them into
         // the JS layer and clears them after the module pass (the same seam the shell path uses).
         #[cfg(feature = "spidermonkey")]
@@ -2129,24 +2051,13 @@ impl Page {
         // The fan-outs inside stop WAITING here and spend what is left committing — see
         // `COMMIT_RESERVE`. Without it the `timeout` below drops the decode-and-apply along with the
         // fetch, and the images this phase already downloaded never reach the page.
-        //
-        // ⚠ `nav_deadline` is the SHARED one the stylesheet phase above already spent against, not a
-        // fresh `now + budget`: two phases in one function each taking a full budget is 2x the bound
-        // the page is supposed to have, and `G_LOAD` measures the page.
-        page.load_deadline = Some(
-            nav_deadline
-                .into_std()
-                .checked_sub(COMMIT_RESERVE)
-                .unwrap_or_else(std::time::Instant::now),
-        );
+        page.load_deadline =
+            Some(std::time::Instant::now() + budget.saturating_sub(COMMIT_RESERVE));
         let enhancements = async {
             page.fetch_and_apply_images(fonts, viewport_width).await;
             page.fetch_and_apply_masks().await;
         };
-        if tokio::time::timeout_at(nav_deadline, enhancements)
-            .await
-            .is_err()
-        {
+        if tokio::time::timeout(budget, enhancements).await.is_err() {
             tracing::warn!(
                 "load budget of {:.1}s exhausted during initial subresource load — painting now. \
                  The article is never the thing we drop.",

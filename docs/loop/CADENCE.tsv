@@ -471,3 +471,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 712	e4e1f8ef	1785256432	2026-07-28T12:33:52-04:00	2895	pattern-class	63	6	257	33	336	81	3896	6960	0	361	31	one rule, two implementations, and the one nobody built is the one that fails silently (2026-07-28)
 713	c41c971b	1785259870	2026-07-28T13:31:10-04:00	3438	measurement	63	7	216	33	336	81	3896	6960	0	361	31	the sweep the loop has owed for twelve days, and the half of the HEAD corpus that never reaches us (2026-07-28)
 715	bfa52c69	1785262177	2026-07-28T14:09:37-04:00	2307	pattern-class	63	9	457	38	337	81	3896	6960	0	362	31	the control said the fix was not guilty: welt's 95.6% was OUR OWN TIMEOUT (2026-07-28)
+716	2b6cdfda	1785264690	2026-07-28T14:51:30-04:00	2513	measurement	63	10	185	325	336	81	3896	6960	0	361	31	the population read that eight sites could not give, and the arithmetic that forbids the fix (2026-07-28)

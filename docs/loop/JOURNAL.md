@@ -34895,3 +34895,101 @@ NEXT: **(1) `contentDocument` ON A DYNAMICALLY-CREATED IFRAME** — the named ca
 **(2) RE-RUN HEAD-20** — the CSS-ordering fix changes what every script on every page measures, and
 8 sites is not a population; `ikea` SHAPE 53.58 → 55.30 is the only movement measured so far.
 **(3)** the ikea 21-box coverage loss (t713), bisectable across t693–t711.
+
+## Tick 716 — the population read that eight sites could not give, and the arithmetic that forbids the fix (2026-07-28)
+
+HYPOTHESIS: t715 landed a change whose blast radius is *every script on every page* and whose
+evidence was **eight sites**. Bar: re-run HEAD-20 on the landed tree and read it honestly.
+
+### THE SWEEP SAID SOMETHING THE SAMPLE COULD NOT
+
+```text
+  site                  cov t713 -> t716     shape t713 -> t716    scored
+  www.desitales2.com      98.66  ->   0.50     70.29 ->  0.00      589 -> 3    <- BATCH ARTIFACT
+  www.welt.de             95.61  ->   0.03     64.69 ->  0.00     3118 -> 1    <- known, t715
+  keirin.jp               74.73  ->  75.38     60.21 -> 52.99     1038 -> 1038 <- REAL, -7.2
+  www.ikea.com            97.08  ->  97.08     53.58 -> 55.30      698 ->  698 <- +1.7
+  www.agoda.com            8.04  ->   7.80     52.31 -> 61.90       65 ->   63 <- +9.6
+```
+
+⚠ **`desitales2` — the byte-reproducible control — read 0.50% in the batch and 98.0% ALONE.** That is
+the tick-695 lesson firing again on the same instrument: *an outlier inside a batch run is a harness
+reading*. Twenty sites run in one process; a per-navigation deadline is not a per-process one. I did
+not revert on it, because the first thing it earned was a second measurement.
+
+### keirin IS REAL, AND THE CAUSE IS NOT THE ORDERING
+
+`keirin.jp` SHAPE **60.2% → 53.0%**, twice isolated on each tree, with coverage, path counts
+(1377/339/954) and scored count (1038) **identical** — the same boxes, moved. Controlled against the
+pre-t715 tree: **60.2%, twice.** So it is a real 7.2-point regression, and the ratchet does not care
+whose fault it is.
+
+One command found whose:
+
+```text
+  t715 binary, keirin, MANUK_LOAD_BUDGET_MS=40000  ->  SHAPE 60.2%   (the control's value, exactly)
+```
+
+**It is BUDGET STARVATION, not the ordering.** The stylesheet phase eats budget the enhancement phase
+needed, the images arrive short, and a few hundred boxes land just outside the 8px tolerance. Same
+knob, same method as t715's retraction — vary something the change does not contain.
+
+### AND THEN THE ARITHMETIC SAID THE FIX CANNOT BE BUDGETED INTO PLACE AT ALL
+
+`G_LOAD`'s ceiling is **2× the load budget for the whole page**, and the navigation already spends
+one budget in `load_async` (enhancements) and one in `finish_loading`. Adding a third budgeted phase
+has exactly two outcomes and no third:
+
+- **give it its own budget** → `load_async` alone spends 2×, page 3× → G_LOAD red at 5.4s/2s (t715).
+- **make it share** → the phase it shares with is starved → keirin −7.2 (this tick).
+
+There is no slice that escapes it: any slice `s > 0` makes the worst case `1 + s` in `load_async`
+plus `1` in `finish_loading`, and the ceiling is `2`. **So "apply the CSS earlier" cannot be made to
+fit, and the tuning loop I was about to enter had no solution in it.**
+
+⚠⚠ **The structurally right fix is the other direction, and the spec was already pointing at it:
+move the LIFECYCLE EVENTS later, not the CSS earlier.** `load` is not supposed to fire until the
+subresources are in — so `load_async` should not be firing `DOMContentLoaded` and `load` at all;
+`finish_loading` should, after its CSS phase. That spends no new budget, needs no slice, and is what
+every other engine does. It is also a real change to what every caller of `load_async` gets back, so
+it is its own tick with its own gate — not a patch smuggled into this one.
+
+TICK SHAPE: measurement (a population read, a controlled regression, and a design corrected)
+CLUSTER: `C01ca geometry: <div>` — the mechanism stands (a page that measures itself is fed
+UA-default geometry); the fix is parked a second time, now with the reason it cannot be budgeted.
+Gates: `g_css_before_lifecycle` removed again with the change it gates. Its fixture and the exact
+patch stay in `docs/loop/WEB-PATTERNS.md`. `G_LOAD` — the Bar 0 gate that caught t715's first two
+attempts — stays green, and is the constraint that decided this tick.
+WIKI: `docs/wiki/box-layout.md` — extended with the budget arithmetic.
+PATTERN: **when two gates disagree, the arithmetic between them is the design, and it is worth
+computing before the tuning loop.** I had a correct fix, a Bar 0 gate that bounded it, and a fidelity
+site that measured what the bound cost — and I was one step from iterating slice sizes against two
+opposed measurements, each costing a rebuild and a live-site run. Writing down `1 + s + 1 ≤ 2` took
+a minute and showed the loop had **no solution**, which is not a tuning result, it is a design one:
+the phase does not belong in that function. ⚠ Second: **an eight-site sample is not a population,
+and the site it missed was the one it should have been chosen to include.** keirin is in the corpus,
+was in the sweep 20 minutes earlier, and was left out of the subset because it was slow.
+
+### ⚠ AND THE RATCHET REFUSED THE REVERT, WHICH IS THE CORRECT BEHAVIOUR
+
+`GATES 336 < 337 — REGRESSED`. t715 banked a gate; this tick removes it along with the change it
+gates, and the ratchet noticed. It offers exactly one escape and it is not a loophole: *"explain in
+the journal why the mark itself was wrong and lower it deliberately."*
+
+**The mark was wrong because it was banked by a tick that is being undone.** 337 recorded
+`g_css_before_lifecycle`, which asserts a behaviour this engine no longer has; leaving the mark at
+337 would demand a gate for a reverted capability, which can only be satisfied by a red wall or a
+gate that asserts nothing. `GATES` is lowered to **336** — the count after t712's
+`g_markup_script_load_event`, which stands — and this paragraph is the deliberate part.
+
+⚠ Stated plainly because the standing rule is *never retune a ratchet mark to land your own tick*:
+this is not a retune. A gate that guards a reverted change is not coverage that was lost, it is
+coverage that was never earned, and the honest count is the one from before t715. The distinction is
+worth keeping sharp — had the gate been for something still in the engine, the answer would have
+been to keep the gate, not to move the mark.
+
+NEXT: **(1) FIRE `DOMContentLoaded` AND `load` FROM `finish_loading`, AFTER THE CSS PHASE** — the
+correct form of the t714 finding, costing no budget. Every caller of `load_async` that relies on the
+lifecycle having fired needs auditing first; the gate is `g_css_before_lifecycle`, restored verbatim.
+**(2)** `contentDocument` on a dynamically-created iframe (welt's packing script).
+**(3)** the ikea 21-box coverage loss (t713), bisectable across t693–t711.

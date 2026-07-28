@@ -108,6 +108,7 @@
   - L1910 · The third instrument class
   - L1920 · And a correct fix that was refused
   - L1931 · The retraction (tick 715), and the control that was not enough
+  - L1955 · And the arithmetic that forbids the obvious fix (tick 716)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1233,4 +1234,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1144 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1145 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

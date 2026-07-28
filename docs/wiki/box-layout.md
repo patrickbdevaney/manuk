@@ -1951,3 +1951,30 @@ could reject us** — coverage achieved by not running the page's script.
 ⚠ And the corollary that is easy to mis-read: **a metric can go DOWN because the engine got more
 honest.** Refusing a correct fix to hold that number would have been preserving the lie the north
 star names by hand — *"fast because we never ran the script"*.
+
+### And the arithmetic that forbids the obvious fix (tick 716)
+
+Landing "apply the CSS earlier" cost `keirin.jp` **7.2 SHAPE points**, twice isolated on each tree,
+with identical coverage and identical box counts — the same boxes, moved. `MANUK_LOAD_BUDGET_MS=40000`
+restored it to the control's value exactly, so the cause is **budget starvation**, not ordering.
+
+`G_LOAD`'s ceiling is **2x the load budget for the whole page**, and a navigation already spends one
+budget in `load_async` (enhancements) and one in `finish_loading`. A third budgeted phase has two
+outcomes and no third:
+
+```text
+  its own budget   ->  load_async spends 2x by itself, page 3x  ->  G_LOAD red (5.4s against 2s)
+  a shared slice   ->  the phase it shares with is starved      ->  keirin -7.2
+```
+
+For any slice `s > 0` the worst case is `1 + s` in `load_async` plus `1` in `finish_loading`, against
+a ceiling of `2`. **There is no slice that fits**, so the tuning loop has no solution in it.
+
+⚠ **The fix is the other direction, and the spec was already pointing at it: move the LIFECYCLE EVENTS
+later, not the CSS earlier.** `load` does not fire until the subresources are in, so `load_async`
+should not be firing `DOMContentLoaded`/`load` at all — `finish_loading` should, after its CSS phase.
+That spends no new budget and needs no slice.
+
+> **When two gates disagree, the arithmetic between them is the design.** Computing `1 + s + 1 <= 2`
+> took a minute and showed a tuning loop — one rebuild and one live-site run per iteration, against
+> two opposed measurements — had no answer in it.
