@@ -34042,3 +34042,87 @@ registry is now 6 days older than the tree and check #53's steer #1 is still ope
 render-failed + 11 probe-blocked = 32 sites we fail for reasons the taxonomy names but nobody has
 opened**; that is the largest tractable block in the unscored 134, ahead of the 37 bot-walls, which
 are out of scope. **(3)** the parked §10.8.1 patch still wants re-measuring against t704's HEAD.
+
+## Tick 707 — "render-failed" is not a paint bug: the author CSS silently never arrives (2026-07-28)
+
+HYPOTHESIS: t706's NEXT #2 — open the 21 `render-failed` sites, the largest tractable block in the
+unscored 134 and the one reason on the taxonomy the instrument calls *"our own bug"*. Bar: name the
+mechanism, or say plainly it is not named.
+
+### IT IS NOT A PAINT BUG, AND IT IS NOT DETERMINISTIC
+
+`render-failed` fires when our screenshot has almost no ink and Chrome's has plenty. Opening the
+family (superuser · serverfault · askubuntu · meta.stackexchange · mathoverflow · theverge · vox ·
+wix · youtube · stripe · notion · mongodb · kotlinlang · …), the first useful fact is a
+**disagreement with my own sweep**:
+
+```text
+  superuser.com   in the t706 sweep   render-failed
+  superuser.com   re-run, same binary  verdict OK   visual 62.3%  coverage 86.4%  SHAPE 15.5%
+```
+
+Four others (theverge, mongodb, kotlinlang, serverfault) DID reproduce, so the sweep's count is
+sound and t706's certificate stands. But at least one flips, so **`render-failed` is intermittent**,
+and any tick that treats it as a fixed list of 21 broken pages is chasing a moving set.
+
+### WHAT THE BLANK PAGE ACTUALLY IS: THE UA STYLESHEET
+
+Comparing the failing site to the passing one from the same platform — same code, same CSS
+architecture, opposite outcomes:
+
+```text
+  serverfault (blank)    html [8 8 1184x7328]   body display=Block   <- 8px is body{margin:8px}, the UA default
+  superuser   (renders)  html [0 0 1200x720]    body display=Flex
+```
+
+The blank page is **the document laid out with UA defaults only** — the author's stylesheets never
+applied, so a 720px flex app-shell becomes a 7,328px unstyled scroll of text, and the viewport
+screenshot catches a region with almost nothing in it. We did not fail to paint; we painted, exactly
+and faithfully, the wrong document.
+
+### THE ELIMINATION, BECAUSE THREE PLAUSIBLE CAUSES WERE WRONG
+
+- **"The `<link>`s are missing from our DOM."** They are — `--why "link"` says *NOT IN THE DOM AT
+  ALL*. But so are superuser's, and superuser renders: our CSS loader consumes the elements, exactly
+  as it strips a `<script>`'s `src` once it has run. **A red herring, and the most convincing one.**
+- **"The origin serves us a degraded page."** No. `curl` with OUR User-Agent returns the same 205 KB
+  document with all 9 `<link>`s that a Chrome UA gets, and parsing those identical bytes through
+  `boxes --html` puts all 9 in the DOM (`match 1 of 9`, head 49 kids).
+- **"The load budget expires."** No. The 12s-budget message is absent from the run; stderr for a
+  failing serverfault load is **one line long** — `<html class="">` — with no net warning, no CSS
+  error, and no budget notice.
+
+The stylesheets themselves are fine: `200 · text/css`, **830 KB + 311 KB ≈ 1.1 MB** for the pair.
+
+### THE ACTIONABLE PART IS THE SILENCE
+
+A render-blocking stylesheet that never applies produces **no diagnostic whatsoever**. The engine
+already counts this (`failed_css`, and a `blocking_css_missing()` whose own comment says *"Non-zero
+means the current layout is (partly) UA-default fallback, NOT this engine's rendering of the author's
+page — a measurement that diffs it against a fully-styled reference is charging us for a
+stylesheet that never arrived"*). That sentence describes this exact tick, and **nothing prints it**.
+
+⚠ *"`most likely` in a log message is a confession — print the state."* This is the same rule one
+level out: the engine KNOWS the layout is UA-default fallback, the number is already computed, and it
+reaches no log, no row and no reason code. So 21 sites are booked against us as *"failed to paint"*
+when the honest label is *"rendered without the author's CSS, cause unlogged"*.
+
+TICK SHAPE: measurement
+CLUSTER: `render-failed` (21 sites / 8% of the corpus) — mechanism narrowed from "we cannot paint" to
+"the author CSS did not apply, silently, intermittently", with three candidate causes eliminated by
+measurement. Not yet fixed, and not claimed as fixed.
+Gates: none — no engine change.
+WIKI: none [forced] — a diagnosis, not a behaviour. The engine does nothing today it did not do
+yesterday, and the wiki must not describe a fix that does not exist.
+PATTERN: **the most convincing wrong answer is the one that reproduces on the failing case and is
+also true of the passing one.** The missing `<link>` elements were absent on serverfault (blank) AND
+on superuser (renders) — a fact that looks like the cause until you run the control. *A difference
+you observe only on the failure is not a cause until you have checked it is not also true of the
+success.*
+
+NEXT: **(1) MAKE THE FALLBACK LOUD** — surface `blocking_css_missing()` at the end of load and give
+the fidelity row a distinct reason (`ua-fallback`) separate from `render-failed`. It is already
+computed; it costs a log line and a branch, and it turns 21 anonymous blanks into a named,
+countable cluster. This is the next tick. **(2) THEN find why the fetch drops** — with (1) landed the
+question becomes answerable, and the 1.1 MB stylesheet pair is the first suspect. **(3)** the oracle
+crawl (t706 NEXT #1) and the parked §10.8.1 patch are both still owed.

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **463** | ticks 1–705 |
-| median tick cycle | **22m** | 462 intervals |
-| median, last 10 | **48m** | 10 intervals |
+| ticks landed | **464** | ticks 1–706 |
+| median tick cycle | **22m** | 463 intervals |
+| median, last 10 | **41m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 412.6h elapsed |
-| median verify wall | **63s** | 402 ticks |
+| **ticks per hour** | **1.12** | 412.8h elapsed |
+| median verify wall | **63s** | 403 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **360**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**224 of 463 ticks** (48%) moved a
+**224 of 464 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -560,5 +560,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **703** | 2026-07-28 04:53 | 33m | measurement | 63s | +117/−32 | 335 | 81 | 56.0% · | four hypotheses, none of them the residual, and the fourth made it worse (2026-07-28) |
 | **704** | 2026-07-28 06:24 | 1.5h | capability | 63s | +306/−43 | 335 | 81 | 56.0% · | the fifth hypothesis was the wrong question, and the answer had been written down for 310  |
 | **705** | 2026-07-28 09:37 | 3.2h | instrument | 63s | +458/−33 | 335 | 81 | 56.0% · | the Phase-0 sweep swept ZERO sites and printed a certificate (2026-07-28) |
+| **706** | 2026-07-28 09:50 | 13m | measurement | 63s | +162/−32 | 335 | 81 | 56.0% · | the first full-corpus certificate on the rebuilt instrument, and why the ledger never saw  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
