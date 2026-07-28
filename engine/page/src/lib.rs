@@ -6419,6 +6419,25 @@ impl Page {
         // — but left the fan-out itself all-or-nothing: one slow CSS host and `join_all` still yields
         // nothing, so the sheets that DID arrive are discarded before they can be applied at all. Same
         // rule, one implementation lower down.
+        // ⚠⚠ **A SHEET THAT NEVER SETTLES MUST STILL BE COUNTED AND SAID OUT LOUD.**
+        //
+        // `collect_before_deadline` returns the futures that FINISHED; the ones the deadline cut off
+        // simply are not in the result. So the `for (url, text) in fetched` loop below — which owns
+        // BOTH the logging and the `failed_css` bookkeeping — never sees them, and a page whose CSS
+        // was cancelled renders in UA-default fallback **in total silence**: no `STYLESHEET FAILED`
+        // line, no `failed_css` entry, and `failed_stylesheet_fetches()` answering ZERO.
+        //
+        // Measured on `serverfault.com` (t707): the page comes out as the UA stylesheet's idea of the
+        // document — `html [8 8 1184x7328]`, `body display=Block` where Chrome has a 720px
+        // `display=Flex` app shell, the 8px being `body{margin:8px}` — and the ENTIRE stderr for that
+        // load is one line. The fidelity sweep books it `render-failed`, *"the only reason on this
+        // list that is our own bug"*, which is true and useless: we painted faithfully, we painted
+        // the wrong document, and nothing in the engine said which. 21 of 265 corpus sites land here.
+        //
+        // `failed_stylesheet_fetches()` exists precisely so a measurement can refuse to score such a
+        // page, and its doc comment says so. It had **zero callers and a structural undercount**: the
+        // cancelled case — the common one on a slow CSS host — was the one it could not see.
+        let requested: Vec<String> = ext_urls.clone();
         let fetched = collect_before_deadline(
             ext_urls.into_iter().map(|url| async move {
                 let text = manuk_net::fetch(&url)
@@ -6430,6 +6449,28 @@ impl Page {
             self.load_deadline,
         )
         .await;
+        {
+            let settled: std::collections::HashSet<&str> =
+                fetched.iter().map(|(u, _)| u.as_str()).collect();
+            let cut: Vec<&String> = requested
+                .iter()
+                .filter(|u| !settled.contains(u.as_str()))
+                .collect();
+            if !cut.is_empty() {
+                // ONE line naming the count and the URLs, not one per sheet: the failure is the
+                // DEADLINE, which is a single event, and N lines would read as N independent faults.
+                tracing::warn!(
+                    cut = cut.len(),
+                    requested = requested.len(),
+                    urls = %cut.iter().map(|u| u.as_str()).collect::<Vec<_>>().join(" "),
+                    "RENDER-BLOCKING STYLESHEETS NEVER SETTLED before the load deadline — this page \
+                     is rendering in UA-DEFAULT FALLBACK, not in the author's design"
+                );
+                for u in cut {
+                    self.failed_css.insert(u.clone());
+                }
+            }
+        }
         // Start from what we already have — a re-entry must ADD sheets, never rebuild the set from
         // scratch (which would drop the ones it just decided not to re-fetch).
         let mut external: HashMap<String, String> = self.external_css.clone();
@@ -9977,6 +10018,50 @@ mod tests {
                 .filter(|s| s.kind == SubresourceKind::Image)
                 .count(),
             1
+        );
+    }
+
+    #[test]
+    /// **A render-blocking stylesheet the load deadline CUT OFF must be COUNTED, not vanish.**
+    ///
+    /// `collect_before_deadline` returns only the futures that finished, so a cancelled sheet never
+    /// reaches the `for (url, text) in fetched` loop that owns both the logging and the `failed_css`
+    /// bookkeeping. The page then renders in UA-default fallback and the engine reports nothing —
+    /// measured on `serverfault.com` (t707), whose entire stderr for such a load is one line, and
+    /// which the fidelity sweep books as `render-failed` ("our own bug") with no way to learn that
+    /// the real fault was an unstyled document. 21 of 265 corpus sites land in that bucket.
+    ///
+    /// The deadline is set in the PAST so the cut is deterministic and needs no network: every
+    /// requested sheet is unsettled by construction, which is exactly the cancelled case.
+    ///
+    /// RED-proof: delete the `cut` block and `failed_stylesheet_fetches()` answers 0 — the state the
+    /// bug is made of, and the state `failed_stylesheet_fetches()` shipped in with zero callers.
+    #[test]
+    fn a_stylesheet_the_deadline_cut_off_is_counted_as_failed() {
+        let fonts = FontContext::new();
+        let html = r#"<head><link rel="stylesheet" href="/slow.css"></head><body><p>x</p></body>"#;
+        let mut page = Page::load(html, "http://ex.test/", &fonts, 800.0);
+        assert_eq!(
+            page.failed_stylesheet_fetches(),
+            0,
+            "nothing has been attempted yet"
+        );
+        // Already expired: `collect_before_deadline` yields an empty set immediately.
+        page.load_deadline = Some(std::time::Instant::now() - std::time::Duration::from_secs(1));
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("rt");
+        let applied = rt.block_on(page.fetch_and_apply_stylesheets(&fonts, 800.0));
+        assert_eq!(
+            applied, 0,
+            "the deadline had already passed — nothing applied"
+        );
+        assert_eq!(
+            page.failed_stylesheet_fetches(),
+            1,
+            "the sheet the deadline cut off must be RECORDED as failed — otherwise the page renders \
+             in UA-default fallback and every downstream measurement reads that as our paint bug"
         );
     }
 

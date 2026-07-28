@@ -34126,3 +34126,72 @@ computed; it costs a log line and a branch, and it turns 21 anonymous blanks int
 countable cluster. This is the next tick. **(2) THEN find why the fetch drops** — with (1) landed the
 question becomes answerable, and the 1.1 MB stylesheet pair is the first suspect. **(3)** the oracle
 crawl (t706 NEXT #1) and the parked §10.8.1 patch are both still owed.
+
+## Tick 708 — a cut stylesheet now counts, and the real cause is that our FETCH gets a different page (2026-07-28)
+
+HYPOTHESIS: t707's NEXT #1 — make the UA-default fallback loud. `failed_stylesheet_fetches()` exists
+to let a measurement refuse to score a page we never styled, and it had **zero callers**. Bar: a cut
+sheet is counted, RED-proven.
+
+### THE FIX, WHICH IS REAL AND IS NOT THE CAUSE
+
+`collect_before_deadline` (the t655 fix) returns the futures that FINISHED. The ones the deadline cut
+off are simply absent from the result — so they never reach the `for (url, text) in fetched` loop
+that owns **both** the logging and the `failed_css` bookkeeping. A page whose CSS was cancelled
+rendered in UA-default fallback with no `STYLESHEET FAILED` line, no `failed_css` entry, and
+`failed_stylesheet_fetches()` answering **0**. The counter's blind spot was the common case.
+
+Now the requested set is diffed against the settled set, every cut URL is recorded, and one warning
+names the count and the URLs (one line, not N — the failure is the DEADLINE, a single event).
+Gated by `a_stylesheet_the_deadline_cut_off_is_counted_as_failed`, deadline set in the PAST so the cut
+is deterministic and needs no network. RED-proven: delete the bookkeeping and it reports 0.
+
+⚠ **AND IT DOES NOT FIRE ON `serverfault.com`.** Built it, ran it against the site that motivated it,
+and the warning is absent:
+
+```text
+  load phase done  phase="external CSS"  ms=0  gave_up=0  elapsed_ms=0
+```
+
+The external-CSS phase found **nothing to fetch**. No sheet was cut, because no sheet was ever
+requested. The fix is correct and stays; it is not this site's bug.
+
+### ⚠⚠ THE CORRECTION: OUR FETCH RECEIVES A DIFFERENT DOCUMENT, AND I ELIMINATED THAT WITH THE WRONG INSTRUMENT
+
+t707 ruled out *"the origin serves us a degraded page"* by fetching with `curl -A "<our UA>"` and
+getting the full 205 KB document with all 9 `<link>`s. **`curl` is not our net stack**, and standing
+one in for the other is the whole error:
+
+```text
+  serverfault.com <head> element children
+    our engine, live fetch      9      <- and not one <link> among them
+    the same URL via curl      49
+```
+
+Same URL, same User-Agent, same moment; 9 children against 49. The document our engine receives is
+**stripped of its head**, which is why `collect_style_sources` finds no external stylesheets, why the
+external-CSS phase costs 0 ms, why the page lays out under `body{margin:8px}` at 7,328px instead of a
+720px flex shell, and why the sweep books it `render-failed`. Every downstream symptom in t707 hangs
+off this one fact, and t707's elimination #2 is **retracted**.
+
+*Suspect the instrument before the subject* — and a stand-in for the subsystem under test IS the
+instrument. The UA is identical, so the negotiated difference is some other request property (Accept,
+Accept-Encoding, HTTP version, TLS fingerprint, cookies); naming which is the next tick and it is now
+a bounded question, because the two responses can be diffed byte for byte.
+
+TICK SHAPE: capability
+CLUSTER: `render-failed` (21 sites) — the counting hole is closed and the real cause is localised to
+the FETCH, one layer below where t707 looked. Not yet fixed; not claimed as fixed.
+Gates: `a_stylesheet_the_deadline_cut_off_is_counted_as_failed`, RED-proven. Page lib 21 passed / 1
+pre-existing failure (`static_import_scanner…`, present at HEAD since before t704).
+WIKI: docs/wiki/box-layout.md — not applicable; this is net/load behaviour. Recorded in WEB-PATTERNS
+instead, where the render-blocking-stylesheet class already belongs.
+PATTERN: **a fix that is right, RED-proven, and aimed at the wrong site is still only half a tick —
+and the half that matters is saying so.** The deadline-cut hole was real and had to be closed; it
+explains zero of the 21 sites I opened it for. Reporting it as "render-failed addressed" would have
+retired a live bug on the strength of a green gate.
+
+NEXT: **(1) DIFF THE TWO RESPONSES** — capture our engine's raw bytes for `serverfault.com` beside
+curl's and find which request property flips the origin into serving a stripped head. That is one
+`tcpdump`-free comparison and it unblocks up to 21 sites. **(2)** the oracle crawl (t706) and the
+parked §10.8.1 patch remain owed.

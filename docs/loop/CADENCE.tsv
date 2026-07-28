@@ -463,3 +463,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 704	031789b3	1785234246	2026-07-28T06:24:06-04:00	5434	capability	63	7	306	43	335	81	3896	6960	0	360	31	the fifth hypothesis was the wrong question, and the answer had been written down for 310 ticks (2026-07-28)
 705	749999a2	1785245832	2026-07-28T09:37:12-04:00	11586	instrument	63	6	458	33	335	81	3896	6960	0	360	31	the Phase-0 sweep swept ZERO sites and printed a certificate (2026-07-28)
 706	d97c1588	1785246620	2026-07-28T09:50:20-04:00	788	measurement	63	5	162	32	335	81	3896	6960	0	360	31	the first full-corpus certificate on the rebuilt instrument, and why the ledger never saw one (2026-07-28)
+707	a62bb6b5	1785247901	2026-07-28T10:11:41-04:00	1281	measurement	63	7	234	32	335	81	3896	6960	0	360	31	"render-failed" is not a paint bug: the author CSS silently never arrives (2026-07-28)
