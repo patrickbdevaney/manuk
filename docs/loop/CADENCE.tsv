@@ -454,3 +454,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 695	6cd5f281	1785206891	2026-07-27T22:48:11-04:00	4232	pattern-class	63	8	449	105	334	81	3896	6960	0	356	31	the half-leading belongs to each INLINE BOX, not to the line (2026-07-27)
 696	f13e9ab6	1785210233	2026-07-27T23:43:53-04:00	3342	pattern-class	63	11	566	40	335	81	3896	6960	0	356	31	the top MISSING_BOX cluster is a SCRIPT-DRIVEN WIPE, and the browser could not say so (2026-07-27)
 697	e253821e	1785213425	2026-07-28T00:37:05-04:00	3192	pattern-class	63	7	340	19	335	81	3896	6960	0	357	31	an out-of-flow child neither splits its inline nor escapes it (2026-07-28)
+698	c388b3a9	1785215807	2026-07-28T01:16:47-04:00	2382	pattern-class	63	6	303	3	335	81	3896	6960	0	358	31	the clearfix had no box to clear with (2026-07-28)

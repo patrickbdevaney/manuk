@@ -33240,3 +33240,98 @@ tick and NOT fixed: with a `position:static` inline, `#aStat` reads [0 16 113x88
 out-of-flow marker on `LayoutBox` (which does not exist yet). **(2) RE-CRAWL THE CORPUS** — constitution
 check #53's steer #1, still owed; the registry is 6 days stale and two of its top rows re-measured to
 zero. **(3) WHY WIX'S CLIENT RE-RENDER DOES NOTHING** after its own wipe (t696's open half).
+
+## Tick 698 — the clearfix had no box to clear with (2026-07-28)
+
+HYPOTHESIS: re-run the first-divergence probe now that t697 changed the layout, and take whatever is at
+the head. It is unchanged on `keirin.jp` — `nav/div:2` off by **dy=+70** — so the nav is a second,
+independent mechanism. Bar: name it, match Chrome on a fixture, and move keirin's misplaced count with a
+SAME-SESSION control run on the stashed tree.
+
+### THE CONTAINER WITH HEIGHT ZERO
+
+The oracle's own rows said it plainly once the nav was dumped side by side:
+
+```text
+  keirin.jp                     chrome              ours
+    div#nav_menus          [0 0 1263x70]      [0 0 1263x0]     <- height ZERO
+    div#navbar            [10 0 1243x70]     [10 0 1243x0]     <- height ZERO
+    nav#menu               [0 0 1263x143]     [0 0 1263x73]    <- 70 short
+```
+
+Both containers are `display:block; position:static` with a 110-tall `<ul>` child, which is impossible
+in normal flow — so the `<ul>` is a **float**, and the parent is not containing it. **70 is exactly the
+`dy` the first-divergence probe reported for the page.**
+
+### THE MECHANISM, BISECTED RATHER THAN GUESSED
+
+Four idioms, one fixture, Chrome `--headless=new` 1200×800:
+
+```text
+                                                     Chrome   before
+    a plain block (must NOT contain its float)         h0       h0     <- already right
+    overflow:hidden                                    h70      h70    <- already right
+    ::after{content:"";display:block;clear:both}       h70      h0     <- BROKEN
+    ::after{content:"";display:table;clear:both}       h70      h0     <- BROKEN
+```
+
+And the second bisection separated the two candidates: a real sibling `<div style="clear:both">`
+cleared **correctly** (h75, matching Chrome), and `::after{content:"XY"}` rendered its text
+**correctly**. So `clear` works and `::after` works — what does not exist is a **block-level** pseudo.
+`collect_inline_group` materialises generated content only as inline WORDS (its own comment says that
+is *"the only place it can enter the flow"*) and drops `content: ""` on top of that, because an empty
+string looked like nothing to render. An empty string is a box with no text; only `content: none`
+suppresses a pseudo-element.
+
+`.cf::after{content:"";display:block;clear:both}` is **the** float-containment idiom of the last fifteen
+years — every Bootstrap-era grid, every WordPress theme, every hand-rolled `.clearfix`. Its entire job
+is to be a box that clears. With no box, nothing cleared, and the parent collapsed to zero, dumping its
+floated children outside itself and pulling every following sibling up.
+
+### THE LEDGER, WITH A SAME-SESSION CONTROL
+
+```text
+  layout suite 93/93 (was 92)
+  keirin.jp — PRE-FIX TREE, stashed and re-measured TWICE in this session, byte-identical both times:
+      structural 74.7% (1396 paths, 353 missing, 1041 misplaced) · SHAPE 56.8% · median dy 124
+  keirin.jp — with the fix:
+      structural 74.7% (1396 paths, 353 missing,  954 misplaced) · SHAPE 59.2% · median dy  38
+      absolute PLACEMENT 0.2% -> 8.5%   ·   first divergence moved OFF the nav entirely
+  desitales2 (deterministic control): 98.7% / 582 misplaced / SHAPE 61.5% / dy 80 — IDENTICAL (this
+      site does not use the idiom, so the correct result is no change, and that is what it shows)
+```
+
+⚠ keirin has a recorded **3.7-point SHAPE spread** on an unchanged tree, and +2.4 sits inside it — so
+the SHAPE number alone would not be a result. **That is why the control was run twice on the stashed
+tree before the claim**: it came back byte-identical both times, which means the page is reproducible
+in this session and the movement is attributable. The load-bearing numbers are the ones that cannot be
+spread: **misplaced 1041 → 954 at an identical path count and identical missing set**, and the first
+divergence relocating.
+
+TICK SHAPE: pattern-class
+CLUSTER: C01ca (geometry `<div>`, 111 sites / 14002 hits) — the same cluster as t697, a different
+mechanism inside it.
+Gates: `a_block_level_after_pseudo_clears_the_floats_its_parent_would_otherwise_drop` (new,
+engine/layout) — RED-proven against THREE mutations: (A) generate no box -> `#c` h0; (B) place the box
+but skip clearance -> `#c` h0; (C) drop the `display` filter so ANY `::after` clears -> `#i` h70 where
+Chrome says h0. Two controls that are not the fix: a plain block still does NOT contain its floats
+(h0), and `overflow:hidden` still does (h70).
+WIKI: `docs/wiki/box-layout.md` — "the clearfix had no box to clear with".
+PATTERN: **BISECT THE IDIOM BEFORE FIXING IT.** "The clearfix does not work" has three candidate
+causes — `::after` does not generate, `content:""` is dropped, `clear` does not clear — and two of the
+three were already correct. One fixture with a real `clear:both` sibling and an `::after{content:"XY"}`
+answered it in a single run and pointed at the only part that was missing. Fixing the wrong two would
+have been invisible: they already worked.
+
+⚠⚠ MUTATION C SURVIVED THE FIRST VERSION OF THIS GATE — again. The fixture had no INLINE `::after`, so
+deleting the `display` filter (making every `::after` contain floats) broke nothing the test could see.
+Added the row after asking Chrome what an inline `::after{clear:both}` does (h0 — `clear` does not apply
+to inline boxes, CSS 2.1 §9.5.2). **Third vacuous assertion caught by running the mutation in four
+ticks**; each time the missing row was a case the fix must NOT change.
+
+NEXT: **(1) `display: flow-root` IS BROKEN** — measured in the same fixture and deliberately not fixed
+here: it comes out **[0 70 0×19]** where Chrome says [0 0 1200×70]. Width zero says it is not being
+parsed as a block-level display at all, and `establishes_bfc` does not list it. Bounded and adjacent.
+**(2) `node_rects` LIFTS OUT-OF-FLOW DESCENDANTS INTO BOXLESS INLINE ANCESTORS** (t697's NEXT, still
+open) — `getBoundingClientRect` on a link, so hit-testing as well as fidelity. **(3) RE-CRAWL THE
+CORPUS** — constitution check #53's steer #1, still owed and now three ticks old.

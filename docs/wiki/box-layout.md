@@ -1773,3 +1773,59 @@ That is `getBoundingClientRect` on a link — hit-testing, not just fidelity —
 out-of-flow marker on `LayoutBox`, which does not exist yet.
 
 [[text-layout]] [[conformance-and-oracles]]
+
+## The clearfix had no box to clear with (tick 698)
+
+`.cf::after { content: ""; display: block; clear: both }` is **the** float-containment idiom of the last
+fifteen years — every Bootstrap-era grid, every WordPress theme, every hand-rolled `.clearfix`. It did
+nothing here, and the reason is that generated content had no block-level form at all.
+
+`collect_inline_group` materialises `::before`/`::after` as inline **words**, and its own comment states
+that is *"the only place [generated content] can enter the flow"*. So a pseudo with `display: block`
+produced **no box**. That path also dropped `content: ""` — `(!text.is_empty()).then(…)` — because an
+empty string looked like nothing to render. It is not: an empty string is a box with no text, and only
+`content: none` suppresses a pseudo-element.
+
+With no box, nothing cleared, and the parent **collapsed to zero**, dumping its floated children outside
+itself and pulling every following sibling up.
+
+**Bisect the idiom before fixing it.** *"The clearfix does not work"* has three candidate causes, and
+two of them were already correct here:
+
+```text
+   a real sibling <div style="clear:both">     h75, matching Chrome   -> `clear` WORKS
+   ::after{content:"XY"}                       renders                -> `::after` WORKS
+   ::after{content:"";display:block}           no box                 -> THIS is the gap
+```
+
+One fixture answered it in a single run. Fixing either of the other two would have been invisible.
+
+```text
+   Chrome --headless=new, 1200x800, margin:0, one float:left 100x70 child
+                                                     Chrome   before   after
+     a plain block (must NOT contain its float)        h0       h0      h0
+     overflow:hidden                                   h70      h70     h70
+     ::after{content:"";display:block;clear:both}      h70      h0      h70
+     ::after{content:"";display:table;clear:both}      h70      h0      h70
+     ::after{content:"";clear:both}  (inline!)         h0       h0      h0
+```
+
+Measured on `keirin.jp`, whose nav is exactly this shape: `#nav_menus` and `#navbar` were **h=0 against
+Chrome's h=70**, and 70 was precisely the `dy` the first-divergence probe reported for that page. After:
+misplaced **1041 → 954** at an identical path count, median `dy` **124 → 38**, first divergence off the
+nav entirely.
+
+⚠ **`clear` does not apply to an inline box** (CSS 2.1 §9.5.2), so the `display` check is load-bearing,
+not a shortcut: an `::after` that omits `display:block` must clear nothing. A version without that check
+contains floats nothing asked it to, and it passes every positive assertion.
+
+⚠ Scope, stated so the next extension knows which half exists: this places the generated box, honours
+`clear`, and gives it its own height and margins — the whole of the idiom's observable effect. It paints
+nothing. A pseudo carrying a background or a border still belongs to the inline path; giving it a
+painted block box here would be a second implementation of the same rule.
+
+⚠ Adjacent and still broken: **`display: flow-root`** comes out [0 70 0×19] where Chrome says
+[0 0 1200×70]. Width zero says it is not parsed as a block-level display at all, and `establishes_bfc`
+does not list it.
+
+[[text-layout]] [[conformance-and-oracles]]

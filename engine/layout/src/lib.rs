@@ -2626,6 +2626,64 @@ impl Ctx<'_> {
             floats,
         );
 
+        // ⚠⚠ **THE CLEARFIX — a BLOCK-LEVEL `::after`, which generated content had no way to be.**
+        //    `collect_inline_group` materialises `::before`/`::after` as inline WORDS, and its own
+        //    comment says that is "the only place [generated content] can enter the flow". So a
+        //    pseudo with `display: block` produced no box at all — and it dropped `content: ""` on
+        //    top of that, because an empty string looked like nothing to render.
+        //
+        //    `.cf::after { content: ""; display: block; clear: both }` is **the** float-containment
+        //    idiom of the last fifteen years — every Bootstrap-era grid, every WordPress theme, every
+        //    hand-rolled `.clearfix`. Its entire job is to be a box that clears, so the parent's
+        //    height grows past its floats. With no box, nothing cleared and **the parent collapsed to
+        //    zero**, dumping its floated children outside it and pulling every following sibling up.
+        //
+        //    Measured on `keirin.jp`, whose nav is exactly this shape: `#nav_menus` and `#navbar` are
+        //    **h=0 against Chrome's h=70**, and 70 is precisely the `dy` the first-divergence probe
+        //    reports for that page. Fixture, Chrome `--headless=new` 1200×800:
+        //
+        //    ```text
+        //                                              Chrome   before   after
+        //      .cf::after{content:"";display:block;clear:both}    h70      h0     h70
+        //      .cfb::after{content:"";display:table;clear:both}   h70      h0     h70
+        //      a plain block (must NOT contain its float)         h0       h0     h0    <- guard
+        //      overflow:hidden (already worked)                   h70      h70    h70   <- guard
+        //    ```
+        //
+        //    ⚠ Deliberately NOT a general generated-block-box implementation: this places the box,
+        //    honours `clear`, and gives it its own height/margins, which is the whole of the idiom's
+        //    observable effect. It paints nothing, because the clearfix has nothing to paint — a
+        //    pseudo carrying a background or a border still belongs to the inline path, and giving it
+        //    a painted block box here would be a second implementation of the same rule. Named so the
+        //    next person extending it knows which half exists.
+        if let Some(p) = self
+            .styles
+            .get(&node)
+            .and_then(|s| s.after.as_ref())
+            .filter(|p| p.content.is_some())
+            .filter(|p| {
+                matches!(
+                    p.display,
+                    Display::Block | Display::Table | Display::Flex | Display::Grid
+                )
+            })
+        {
+            // Clearance first — it is the reason the box exists — then the box's own extent.
+            if p.clear != Clear::None {
+                let base = cur_y + prev_margin;
+                let cleared = floats.clear_to(p.clear, base);
+                if cleared > base {
+                    cur_y = cleared;
+                    prev_margin = 0.0;
+                }
+            }
+            let mt = p.margin.top.resolve(cw, 0.0);
+            let mb = p.margin.bottom.resolve(cw, 0.0);
+            let h = p.height.resolve(pch.unwrap_or(0.0), 0.0);
+            cur_y += prev_margin.max(mt) + h;
+            prev_margin = mb;
+        }
+
         // The last in-flow block's trailing margin still occupies the container.
         (BoxContent::Block(boxes), cur_y + prev_margin - cy)
     }
@@ -8493,6 +8551,92 @@ mod tests {
             r("aRelPlain").y,
             r("aRelPlain").width,
             r("aRelPlain").height
+        );
+    }
+
+    /// **THE CLEARFIX — a block-level `::after` is a box, and `content: ""` is content.**
+    ///
+    /// `.cf::after { content: ""; display: block; clear: both }` is *the* float-containment idiom of
+    /// the last fifteen years: every Bootstrap-era grid, every WordPress theme, every hand-rolled
+    /// `.clearfix`. Generated content was materialised only as inline WORDS
+    /// (`collect_inline_group`), and that path additionally dropped the empty string — so a
+    /// block-level pseudo produced **no box at all**, nothing cleared, and the parent **collapsed to
+    /// zero**, dumping its floated children outside it and pulling every following sibling up.
+    ///
+    /// Measured on `keirin.jp`, whose nav is exactly this shape: `#nav_menus` and `#navbar` were
+    /// **h=0 against Chrome's h=70** — and 70 is precisely the `dy` the first-divergence probe
+    /// reported for that page. After: misplaced 1041 -> 954, median `dy` 124 -> 38, SHAPE
+    /// 56.8% -> 59.2%, and the first divergence moved off the nav entirely.
+    ///
+    /// Chrome `--headless=new`, 1200x800, `margin:0`, a single `float:left` 100x70 child.
+    #[test]
+    fn a_block_level_after_pseudo_clears_the_floats_its_parent_would_otherwise_drop() {
+        let html = r#"<div class="plain" id="p"><div class="f"></div></div>
+                      <div class="ovh" id="o"><div class="f"></div></div>
+                      <div class="cf" id="c"><div class="f"></div></div>
+                      <div class="cfb" id="t"><div class="f"></div></div>
+                      <div class="inl" id="i"><div class="f"></div></div>"#;
+        // `content:""` is stated because it IS the idiom — an empty string is a box with no text,
+        // not an absent pseudo (only `content: none` suppresses one).
+        let css = "body{margin:0} div{font-family:sans-serif;font-size:16px} \
+                   .f{float:left;width:100px;height:70px} \
+                   .ovh{overflow:hidden} \
+                   .cf::after{content:\"\";display:block;clear:both} \
+                   .cfb::after{content:\"\";display:table;clear:both} \
+                   .inl::after{content:\"\";clear:both}";
+        let (dom, root) = layout_html(html, css, 1200.0);
+        let rects = root.node_rects(&dom);
+        let h = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            rects[&n].height
+        };
+
+        // (1) THE FIX. Both spellings of the idiom contain the float.
+        assert!(
+            (h("c") - 70.0).abs() < 1.5,
+            "#c is h{} and Chrome says h70 — `::after{{content:\"\";display:block;clear:both}}` is \
+             the clearfix, and with no box generated nothing clears, so the parent collapses to zero \
+             and drops its floated children outside itself.",
+            h("c")
+        );
+        assert!(
+            (h("t") - 70.0).abs() < 1.5,
+            "#t is h{} and Chrome says h70 — `display:table` is the other common clearfix spelling \
+             (it also suppresses margin collapse) and must behave the same here.",
+            h("t")
+        );
+
+        // (2) CONTROL — a plain block STILL does not contain its floats. That is correct CSS, and a
+        //     fix that simply made every parent contain its floats would pass (1) and silently break
+        //     every intentional float overhang on the web. This is the assertion that separates
+        //     "the clearfix works" from "floats are always contained".
+        assert!(
+            h("p").abs() < 1.5,
+            "CONTROL: #p is h{} and MUST be h0 — a plain block box does not contain its floats. If \
+             this grew, the fix is containing floats unconditionally rather than honouring `clear`.",
+            h("p")
+        );
+
+        // (2b) CONTROL — `clear` DOES NOT APPLY TO AN INLINE BOX (CSS 2.1 §9.5.2), so an `::after`
+        //      that omits `display:block` clears nothing and its parent stays collapsed. Chrome: h0.
+        //      Without this row the `display` filter can be deleted outright and the gate still
+        //      passes — the mutation that does exactly that SURVIVED the first version of this test.
+        assert!(
+            h("i").abs() < 1.5,
+            "CONTROL: #i is h{} and Chrome says h0 — its `::after` has the DEFAULT `display:inline`, \
+             and `clear` does not apply to an inline box. A generated box that clears regardless of \
+             its display would contain floats nothing asked it to.",
+            h("i")
+        );
+
+        // (3) GUARD — `overflow:hidden` already contained its float and must not move.
+        assert!(
+            (h("o") - 70.0).abs() < 1.5,
+            "GUARD: #o (overflow:hidden, a BFC root) is h{} and was already h70.",
+            h("o")
         );
     }
 }

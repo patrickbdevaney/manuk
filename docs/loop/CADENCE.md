@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **455** | ticks 1–697 |
-| median tick cycle | **22m** | 454 intervals |
-| median, last 10 | **34m** | 10 intervals |
+| ticks landed | **456** | ticks 1–698 |
+| median tick cycle | **22m** | 455 intervals |
+| median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 403.6h elapsed |
-| median verify wall | **63s** | 394 ticks |
+| **ticks per hour** | **1.13** | 404.2h elapsed |
+| median verify wall | **63s** | 395 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **335**
-* **✅ rows in the capability ledger**: 144 → **357**
+* **✅ rows in the capability ledger**: 144 → **358**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**221 of 455 ticks** (49%) moved a
+**222 of 456 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **221** capability ticks, median cycle **22m**
+* **222** capability ticks, median cycle **22m**
 * median diff per tick: **+240 / −34** lines across 8 files
 
 ## Every tick
@@ -552,5 +552,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **695** | 2026-07-27 22:48 | 71m | pattern-class | 63s | +449/−105 | 334 | 81 | 56.0% · | the half-leading belongs to each INLINE BOX, not to the line (2026-07-27) |
 | **696** | 2026-07-27 23:43 | 56m | pattern-class | 63s | +566/−40 | 335 | 81 | 56.0% · | the top MISSING_BOX cluster is a SCRIPT-DRIVEN WIPE, and the browser could not say so (202 |
 | **697** | 2026-07-28 00:37 | 53m | pattern-class | 63s | +340/−19 | 335 | 81 | 56.0% · | an out-of-flow child neither splits its inline nor escapes it (2026-07-28) |
+| **698** | 2026-07-28 01:16 | 40m | pattern-class | 63s | +303/−3 | 335 | 81 | 56.0% · | the clearfix had no box to clear with (2026-07-28) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

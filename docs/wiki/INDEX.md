@@ -102,6 +102,7 @@
   - L1680 · A broken <img> is 16×16 in Chrome and was 784×0 here (tick 689)
   - L1716 · And a hypothesis Chrome itself killed, before it cost a tick
   - L1726 · An out-of-flow child neither splits its inline nor escapes it (tick 697)
+  - L1777 · The clearfix had no box to clear with (tick 698)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1223,4 +1224,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1134 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1135 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
