@@ -35897,3 +35897,93 @@ NEXT: **(1) `@container` CASCADE ORDER** (t726) — fixture written, Chrome-meas
 line named; still deferred as the riskiest edit class and now the oldest open item. **(2)** `cq*`
 units (t726). **(3)** the scrollbar-gutter residual (t728). **(4) THE FULL CORPUS SWEEP** — owed for
 four constitution checks; ~10h and unschedulable beside the loop.
+
+## Tick 730 — `document.fonts` (27.72% of page loads), and a gate that has been RED outside the wall (2026-07-28)
+
+HYPOTHESIS: check #57's own steer #1 — *keep the broad differential probe in the rotation*. A second
+one, on a band this session had not touched: forms, validation, selection, editing and text metrics.
+Bar: fix whatever comes back divergent and bounded.
+
+### 24 SURFACES, 22 IDENTICAL TO CHROME, AND ONE OF THE TWO WAS A KNOWN KILLER
+
+`document.caretRangeFromPoint` is absent (Chrome: `function`) — noted. The other was
+**`document.fonts` itself**, and it is not a new discovery: the map has carried it as `missing` since
+surface audit #32 with the usage number and the failure mode already written down —
+**27.72% of page loads** (Blink use-counter), and *"a missing property throws, and a never-resolving
+promise HANGS the app."* t719 had already seen it kill a real boot:
+
+```text
+  www.welt.de:  can't access property "ready", document.fonts is undefined
+                o@module.js:1:8922   init@module.js:1:9205   jo@module.js:39:42277
+```
+
+⚠ **The map named it, the log caught it live, and it still took a probe of an unrelated band to get
+built** — which is the same shape as t704's *"a build spec whose second half is unbuilt is an
+untriaged tick with excellent prose"*, one level up: **a `missing` row with a usage number is a
+ranked work item that no ranking instrument reads.**
+
+### WHAT LANDED, AND WHAT IT DELIBERATELY DOES NOT CLAIM
+
+Chrome-measured on one fixture, and the non-obvious rows are why it was measured rather than guessed:
+
+```text
+                                     CHROME      MANUK
+  status                             loaded      loaded
+  check('16px sans-serif')           true        true
+  check('16px NoSuchFamily')         TRUE        true      <- an UNKNOWN family needs no loading
+  check('notafont')                  SyntaxError SyntaxError
+  ready resolves to the SET          true        true
+  ── stated scope, not parity ─────────────────────────────
+  size (one @font-face declared)     1           0
+  check('16px Fake')  (declared)     false       true
+  typeof FontFace                    function    undefined
+```
+
+`ready` is a **resolved** promise, not one wired to a loading signal this engine does not expose —
+because the map's own row says the dangerous direction is the one that never settles, and faces load
+during the load phase before page script runs. ⚠ `check` answers `true` even for a declared face that
+failed to load: **`false` is the answer that makes a page wait**, and waiting is the failure this
+block exists to remove. `size`/iteration stay empty rather than fabricating entries — a visibly empty
+set is honest; an invented one is believed.
+
+**Verified on the motivating site:** welt's rejection is gone, and its fidelity is unchanged
+(95.6% / 65.1%).
+
+### ⚠⚠ AND A GATE HAS BEEN RED OUTSIDE THE WALL
+
+Running the neighbouring gates turned up `g_webfont_relayout` **failing** — text in a downloaded
+`@font-face` family measures `66.7px` where Ahem guarantees `100px`. Not mine, and bisected rather
+than assumed:
+
+```text
+  t724 (eec613a4)   66.69922px      t719 (a543cd0b)   66.69922px      t718 (a543cd0b^)  66.69922px
+```
+
+Red before this session's CSS-ordering work, so at least twelve ticks, and **nobody knew because
+`verify.sh` runs 19 of ~104 gates** — this is one of the ~85 it does not. The gate even names its own
+fix in its failure message: the relayout guard *"listed `external CSS arrived` and `the tree is
+dirty` as the reasons to re-cascade, and a newly-registered face is a third one."* Left as the next
+tick with the bisect attached rather than fixed at the end of a nineteen-tick session; what matters
+here is that it was FOUND, and that a green wall did not mean a green gate set.
+
+TICK SHAPE: pattern-class
+CLUSTER: none claimed. `document.fonts` is a throw-class fix (the `G_SILENT_FAIL` family), not a box.
+Gates: `g_font_loading_api` (new). ⚠ Its first assertion **awaits** `ready` rather than inspecting it,
+and that is the whole design of the gate: **RED-proven by a `ready` that never settles — a mutation
+that passes every `typeof` assertion in the file** and is precisely the hang the map warned about.
+Second mutation: drop the shorthand validation → `check` answers a confident `true` to `'notafont'`.
+Map row `missing` → **`partial`**, with all three gaps written into the receipt.
+WIKI: none [forced] — the design rationale, the Chrome table and the three stated non-claims are all
+in the gate's header beside the code; a wiki page would be a second copy that can drift.
+PATTERN: **a `missing` row carrying a usage percentage is a ranked work item, and nothing ranks it.**
+`CLUSTERS.md` ranks boxes the oracle can see; `document.fonts` is a throw, so it appears there as
+whatever the page failed to render afterwards — attributed to layout, if at all. The row had the
+number (27.72%), the failure mode (*hangs*) and a live stack trace from t719, and the thing that
+finally built it was a probe of forms and text metrics that happened to include one font line.
+⚠ The operational form: **grep the map for `missing` rows that carry a MEASURED usage number — that
+set is a work queue nobody is reading**, and it is sorted by a better key than the box ledger's.
+
+NEXT: **(1) `g_webfont_relayout` IS RED** — bisected to before t718, fix named in its own failure
+message. **(2)** the ~85 gates outside the wall: if one has been red for twelve ticks, the honest
+question is how many others are, and that is one `cargo test` away. **(3)** `@container` cascade
+order (t726). **(4)** `document.caretRangeFromPoint` (this probe's other divergence).

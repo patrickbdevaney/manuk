@@ -5335,6 +5335,89 @@ const PRELUDE: &str = r#"
           }
         });
       }
+      // ── CSS Font Loading API: `document.fonts` (tick 730) ────────────────────────────────────────
+      //
+      // **`await document.fonts.ready` is on 27.72% of page loads** (Blink use-counter, surface audit
+      // #32) and it was `undefined` here — so the standard "wait for webfonts, THEN measure" prologue
+      // threw. Measured live on `www.welt.de` at t719, as an unhandled rejection that killed its boot:
+      //
+      // ```text
+      //   can't access property "ready", document.fonts is undefined
+      //     o@module.js:1:8922  init@module.js:1:9205  ...
+      // ```
+      //
+      // ⚠ **The dangerous direction is a promise that never settles, not one that settles early.**
+      // The map's own row says so — *"a missing property throws, and a never-resolving promise HANGS
+      // the app"* — which is why `ready` is a RESOLVED promise here rather than one wired to a
+      // loading signal we do not have. This engine loads its faces during the load phase, before page
+      // script runs, so "the fonts are done" is true by the time anything can ask.
+      //
+      // Chrome-measured semantics, one fixture, and the non-obvious ones are the point:
+      //
+      // ```text
+      //   status                              'loaded'
+      //   check('16px sans-serif')            true
+      //   check('16px NoSuchFamily')          TRUE     <- an UNKNOWN family needs no loading
+      //   check('16px Fake')  (@font-face)    false    <- a DECLARED, unloaded face
+      //   check('notafont')                   THROWS SyntaxError
+      //   ready resolves to                   the set itself
+      // ```
+      //
+      // ⚠ **SCOPE, stated rather than implied.** This does not model `FontFace` objects: `size` is 0
+      // and iteration is empty, where Chrome reports one entry per `@font-face`. That is a real gap
+      // and it is the honest one to leave — a page that ENUMERATES the set gets nothing, which is
+      // visibly empty, whereas a fabricated entry would be believed. And `check` answers **true** for
+      // every parseable font, including a declared face we failed to load: false is the answer that
+      // makes a page wait, and waiting is the failure mode this whole block exists to remove.
+      if (typeof document !== 'undefined' && !document.fonts) {
+        var __fontShorthandOk = function (font) {
+          // The argument is a CSS `font` shorthand; Chrome throws SyntaxError on anything that is not
+          // one. The cheap discriminator that matches on every case measured: a size followed by a
+          // family. `notafont` has neither and must throw, or a typo'd call reports a confident
+          // `true` and the page never finds out.
+          return /(^|\s)(\d|\.)+\s*(px|pt|em|rem|%|ex|ch|vw|vh)\s+\S/.test(' ' + String(font)) ||
+                 /(^|\s)(xx?-small|small|medium|large|xx?-large|smaller|larger)\s+\S/.test(' ' + String(font));
+        };
+        var __fontSet = {
+          status: 'loaded',
+          size: 0,
+          onloading: null, onloadingdone: null, onloadingerror: null,
+          check: function (font, _text) {
+            if (!__fontShorthandOk(font)) { throw new SyntaxError("Failed to parse font: " + font); }
+            return true;
+          },
+          load: function (font, _text) {
+            if (!__fontShorthandOk(font)) {
+              return Promise.reject(new SyntaxError("Failed to parse font: " + font));
+            }
+            return Promise.resolve([]);
+          },
+          // Present so a page can register faces without throwing; they are not modelled, so the set
+          // stays empty rather than growing an object we would then have to keep truthful.
+          add: function () { return this; },
+          delete: function () { return false; },
+          clear: function () {},
+          forEach: function () {},
+          keys: function () { return [][Symbol.iterator](); },
+          values: function () { return [][Symbol.iterator](); },
+          entries: function () { return [][Symbol.iterator](); },
+          addEventListener: function () {}, removeEventListener: function () {},
+          dispatchEvent: function () { return true; }
+        };
+        __fontSet[Symbol.iterator] = function () { return [][Symbol.iterator](); };
+        // `ready` resolves to the SET, per spec — `document.fonts.ready.then(s => s.check(...))` is a
+        // real idiom, and resolving to `undefined` breaks it one line after the wait succeeds.
+        Object.defineProperty(__fontSet, 'ready', {
+          configurable: true,
+          get: function () { return Promise.resolve(__fontSet); }
+        });
+        try {
+          Object.defineProperty(document, 'fonts', {
+            configurable: true, enumerable: true, get: function () { return __fontSet; }
+          });
+        } catch (e) { document.fonts = __fontSet; }
+      }
+
       // ── CSSOM: `<style>.sheet` and `document.styleSheets` (tick 665) ─────────────────────────────
       //
       // `typeof CSSStyleSheet === 'function'` was ALREADY true while `styleEl.sheet` was `undefined`
