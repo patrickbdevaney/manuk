@@ -35232,3 +35232,62 @@ NEXT: **(1) RE-RUN HEAD-20** — this changes what every script on the measureme
 one site already moved a coverage number 3 points. **(2)** the synchronous `contentDocument` residual
 (t717). **(3)** `document.styleSheets` reports **0** where Chrome reports 9 (measured on keirin at
 t718) — external sheets are absent from the CSSOM even once applied.
+
+## Tick 720 — the population read on the landed fix, and the one number that only shows up alone (2026-07-28)
+
+HYPOTHESIS: t719 changed what every script on the measurement path observes, and the evidence was
+five isolated sites. t716's lesson is that a sample is not a population. Bar: HEAD-20 on the landed
+tree, read against t713's rows.
+
+### NO REGRESSION, AND THE GAINS ARE MODEST AND REAL
+
+```text
+  site                cov t713 -> t720     shape t713 -> t720     scored
+  www.desitales2.com    98.66 ->  98.67      70.29 ->  69.93      589 -> 592
+  www.welt.de           95.61 ->  95.63      64.69 ->  65.44     3118 -> 3171
+  www.agoda.com          8.04 ->   7.39      52.31 ->  59.32       65 ->   59
+  keirin.jp             74.73 ->  75.38      60.21 ->  60.21     1038 -> 1038
+  www.ikea.com          97.08 ->  97.08      53.58 ->  54.58      698 ->  698
+  comix.to / naukri                     flat
+```
+
+SHAPE up on three (`agoda` **+7.0**, `ikea` +1.0, `welt` +0.75), flat on `keirin` — the site that
+killed t716 — and `desitales2` −0.36 with its path count moving 589 → 592, which is live content, not
+us. **Nothing regressed.** That is what the two reverts were for.
+
+### ⚠⚠ AND THE ONE THAT DOES NOT SURVIVE THE BATCH, WHICH IS A PROPERTY OF THE FIX
+
+`www.ikea.com` measured **100.0% coverage, 0 missing** alone at t719 and **97.1%, 21 missing** in this
+batch — the same 21 boxes, the same tags (`div×10 br×6 button×3 a×1 h2×1`).
+
+That is not the t716 batch artifact repeating; it is the **landed design telling the truth about
+itself**. The fix takes only the stylesheet fetches that have `is_finished()` at the apply point and
+never waits for one. Twenty sites in one process contend for network and CPU, fewer handles are
+finished by then, and the page falls back to exactly the old behaviour — **which is the degradation
+the design promises out loud.** Alone, ikea's sheets land in time and the page builds the right tree;
+under contention it does not.
+
+So the honest form of the t719 claim is: *ikea's 21 missing boxes are recoverable, and are recovered
+whenever the sheets arrive before the lifecycle events.* Not *"fixed unconditionally"*. ⚠ It also
+means **every HEAD-20 number in this table is a lower bound on what the fix buys**, and the isolated
+readings are the upper one. Both are stated rather than the flattering one alone.
+
+TICK SHAPE: measurement
+CLUSTER: none claimed — the corpus-wide site counts still need the full sweep, which t713 measured at
+~10 hours and which still cannot share the box.
+Gates: none (no engine change). Rows banked at `docs/bench/head20-rows-t720.tsv`; the run reached 18
+of 20 sites before it ended, and the two it did not reach (`playhop`, `bbs.ruliweb`) were `UNMEAS` in
+both prior runs, so no scored row is missing from the comparison.
+WIKI: none [forced] — a measurement tick; the engine is unchanged since t719.
+PATTERN: **a fix with a graceful-degradation path degrades in the measurement rig FIRST.** The batch
+is the most contended environment this engine ever runs in, so any capability conditioned on *"if it
+arrived in time"* reads at its floor there and at its ceiling in isolation. Neither number is wrong
+and neither is the answer: the pair is. ⚠ The trap it sets is specific and worth naming — had I
+only run the batch, t719 would read as *"ikea unchanged"* and the 21 boxes would still be an open
+item; had I only run isolated, it would read as *"fixed"* and the next contended sweep would look
+like a regression. **Measure a conditional capability under both conditions, or you will later
+disagree with yourself and call it noise.**
+
+NEXT: **(1) SURFACE AUDIT** — due at tick 720, so it lands next tick. **(2)** the synchronous
+`contentDocument` residual (t717). **(3)** `document.styleSheets` reports **0** where Chrome reports
+9 — external sheets are absent from the CSSOM even once applied (measured on keirin, t718).
