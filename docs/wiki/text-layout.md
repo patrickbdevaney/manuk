@@ -1168,3 +1168,82 @@ term regressed (`scored 5`, `shape ≥0.75 on 0`, both unchanged), so this is no
 not free either, and a lever that helps three sites and hurts a fourth has a second mechanism in it.
 
 [[box-layout]] [[subpixel-error-compounds]]
+
+## The half-leading belongs to each INLINE BOX, not to the line (tick 695)
+
+CSS 2.1 §10.8 builds a line box from **two maxima taken about the baseline** — `max(distance above)`
+and `max(distance below)` over every inline-level box, each box having already added **its own**
+leading to its own font's ascent and descent. We did something that looks equivalent and is not: fold
+`max(ascent)`, `max(descent)` and `max(line-height)` over the line, take
+`line_h = max(line-height, tallest atomic)`, and then **centre the content area inside the result**.
+
+On a line whose tallest box is the one carrying the leading, those two agree *exactly*. That is why
+this survived 690 ticks: a plain paragraph — the overwhelming majority of lines on the web — comes out
+byte-identical either way. They diverge the moment the tallest box on the line is an **atomic**, and
+then the whole line is displaced, text included.
+
+**Chrome-measured** (`--headless=new --dump-dom`, 1280×800, `margin:0`, `16px/normal sans-serif`, a
+40×40 `<img>` followed by a `<span>`; every number relative to the div's own top):
+
+```text
+                                         Chrome   before   after
+  line-height:60px      — the div          h=65     h=60     h=65
+                        — the img top        0        8        0
+                        — the span top      26       34       26
+  vertical-align:top    — the span top       0       24        0
+  vertical-align:bottom — the span top      22        0       22
+  vertical-align:middle — the span top      10       16       10
+  (guards)
+  line-height:normal    — the div          h=44     h=43     h=44
+                        — img / span top  0 / 26   0 / 26   0 / 26
+  a span alone          — the div          h=18     h=18     h=18
+```
+
+Twenty-two of twenty-two probed boxes now match Chrome exactly. **The 1px on the `line-height:normal`
+row was not a font difference** — tick 691 recorded it as one ("our `sans-serif` resolves to a
+different face"), and it was the half-leading's rounding remainder: keeping `above + below ==
+line-height` exactly for the strut puts it back where Chrome puts it.
+
+### `top` and `bottom` are opposites, and only a fixture carrying both can see it
+
+Both are aligned to the **line box's own edges**, which do not exist until everything else has been
+placed, so both are applied after the baseline-relative maxima and both can only make the line taller.
+But `top` grows it **downward** — the baseline stays where the strut put it — while `bottom` grows it
+**upward**: the image pins the line's bottom edge, and the strut's descent still has to fit *under the
+baseline* above that edge, so the baseline moves down and the text with it. The first version of this
+fix treated them alike, passed the `top` row, and left `bottom` **22px** out.
+
+⚠ **Their heights are identical** (both produce a 40px line box) and they differ only in where the
+text inside sits, so a height assertion cannot gate this. The gate asserts positions.
+
+### What it is worth, and the honest ledger
+
+`img { vertical-align: middle }` and `vertical-align: bottom` are CSS-reset material and
+`line-height` + an inline image is the ordinary shape of a nav bar, a card, a byline and an avatar
+row — so this is ordinary-page geometry, not a corner case.
+
+```text
+  parity                          72/72 across 30 pages   (unmoved)
+  layout suite                    91/91
+  desitales2 (byte-reproducible control)
+      structural coverage    98.7% -> 98.7%   (597 paths, 8 missing — IDENTICAL set)
+      misplaced                582 ->   582   (identical)
+      SHAPE                   60.6% -> 60.6%  (identical)
+      absolute median dy         110 ->  127
+  keirin.jp   absolute median dy  161 ->  124     SHAPE 58.8% -> 56.9%
+  www.welt.de absolute median dy 2957 -> 2950
+```
+
+⚠ **The two live movers on `dy` point opposite ways, and `dy` is the metric SHAPE was built to
+replace** — `placement_stats` charges one root cause N times, so a single container displaced at the
+top of the page moves it by that container's error on every element below. keirin's SHAPE fall of
+1.9 points sits inside that site's *recorded 3.7-point spread on an unchanged tree*, so it is not a
+result either. What is not noise is the control: **every certificate term on `desitales2` is
+identical, down to the missing-element set.**
+
+⚠ Still approximate, measured here and left alone: `vertical-align: middle` resolves x-height as
+`ascent / 2` where the real face is nearer `0.52 × em` (2px on this fixture), and `sub`/`super` use
+0.15/0.35 constants (1–2px). All inside the 8px SHAPE tolerance, all wanting real font metrics
+plumbed to `close_line` — which is a separate tick.
+
+[[subpixel-error-compounds]] [[box-layout]]

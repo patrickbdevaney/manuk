@@ -32963,3 +32963,88 @@ NEXT: **(1) READ THIS TICK'S OWN `P` LINE** — it is the only honest measuremen
 audit #21's corrected baseline says to expect much less than 150s. **(2) THE DESCENT HALF ON `desitales2`'s
 ATOMICS** (t693's NEXT) — the last open half of the strut lever: check whether Chrome treats those elements as
 inline atomics at all. **(3) THE PER-CALL LOAD BUDGET** — the priority inversion, blocked on nine gate files.
+
+## Tick 695 — the half-leading belongs to each INLINE BOX, not to the line (2026-07-27)
+
+HYPOTHESIS: t693's NEXT #1 — the descent half of the strut lever on `desitales2`'s atomics. Chrome-first,
+five fixtures, one Chrome run: the divergence is NOT the descent. It is that we apply `line-height`'s
+**half-leading to the whole line box** and then center the content in it, where CSS 2.1 §10.8 gives the
+leading to **each inline box separately** and takes `max(above-baseline)` and `max(below-baseline)` over
+them. Bar: `vertical-align:top` span top 24 -> 0 and `line-height:60px` image top 8 -> 0, both against
+Chrome, with the four already-agreeing cases unmoved.
+
+### WHAT LANDED
+
+`close_line` now builds the line box the way CSS 2.1 §10.8 defines it: **two maxima about the
+baseline**, `max(above)` and `max(below)`, each inline box having added **its own** half-leading.
+Before, we folded `max(ascent)`/`max(descent)`/`max(line-height)` over the line and then **centred
+the content area** in the result. Those agree exactly when the tallest box on the line is the one
+carrying the leading — a plain paragraph, i.e. most of the web, which is why it survived 690 ticks —
+and they diverge the moment the tallest box is an ATOMIC.
+
+```text
+   Chrome --headless=new, 1280x800, margin:0, 16px/normal sans-serif, 40x40 <img> + <span>
+                                            Chrome   before   after
+     line-height:60px      — the div          h=65     h=60     h=65
+                           — the img top        0        8        0
+                           — the span top      26       34       26
+     vertical-align:top    — the span top       0       24        0
+     vertical-align:bottom — the span top      22        0       22
+     vertical-align:middle — the span top      10       16       10
+     line-height:normal    — the div          h=44     h=43     h=44   <- guard
+     a span alone          — the div          h=18     h=18     h=18   <- guard
+```
+
+**22 of 22 probed boxes now match Chrome exactly.** And the 1px on the `line-height:normal` row was
+NOT the font difference tick 691 recorded it as — it was the half-leading's rounding remainder.
+
+### ⚠⚠ `top` AND `bottom` ARE OPPOSITES, AND THE HEIGHTS CANNOT SEE IT
+
+Both align to the LINE BOX's own edges, so both come after the baseline-relative maxima and both can
+only make the line taller. But `top` grows it DOWNWARD (the baseline stays) and `bottom` grows it
+UPWARD (the image pins the bottom edge, the strut's descent must still fit under the baseline above
+it, so the baseline moves down and the text with it). My first version treated them alike, passed the
+`top` row, and left `bottom` **22px out**. Both produce a **40px line box** — identical heights,
+different text position — so only a fixture asserting POSITIONS could catch it.
+
+### THE LEDGER, INCLUDING WHAT MOVED THE WRONG WAY
+
+```text
+  parity                          72/72 across 30 pages (unmoved)   ·   layout suite 91/91
+  desitales2 (byte-reproducible control, control run on the stashed tree, same box, same session)
+      structural coverage    98.7% -> 98.7%   (597 paths, 8 missing — IDENTICAL set, by tag)
+      misplaced                582 ->   582   ·   SHAPE  60.6% -> 60.6%   (identical)
+      absolute median dy         110 ->  127
+  keirin.jp   dy  161 -> 124        SHAPE 58.8% -> 56.9%
+  www.welt.de dy 2957 -> 2950
+```
+
+⚠ **An unlucky first reading said `MEAN COVERAGE` fell 98.7% -> 98.0% and I nearly banked that as a
+ratchet trade.** Re-run with the SAME grep as the control, it is 98.7% on both trees with a
+byte-identical missing set — the 98.0 was live-page variance in the fetched DOM (`597 paths` vs a
+different count), on the site this project calls its deterministic control. *`dy` and SHAPE are
+reproducible on `desitales2`; the coverage denominator is not, and nobody had checked which.*
+
+⚠ The two live movers on `dy` point OPPOSITE ways, and `dy` is exactly the metric SHAPE was built to
+replace — `placement_stats` charges one root cause N times. keirin's -1.9 SHAPE sits inside that
+site's recorded **3.7-point spread on an unchanged tree**. So neither live number is a result; the
+control is, and every certificate term on it is identical.
+
+TICK SHAPE: pattern-class
+CLUSTER: C01ca
+Gates: `the_half_leading_belongs_to_each_inline_box_not_to_the_line` (new, engine/layout) — RED-proven
+against THREE mutations: (1) restore whole-line centring -> `#s1` 50 vs 26; (2) treat `bottom` like
+`top` -> `#s3` 0 vs 22; (3) let atomics back into the text metrics -> `#s6` 16 vs 10. Mutation 3
+initially SURVIVED the gate and the `middle` row was added because of it. Plus `parity` 72/72 (30
+pages, run before landing — this is the function that computes every line box in the engine).
+WIKI: `docs/wiki/text-layout.md` — "the half-leading belongs to each INLINE BOX, not to the line".
+PATTERN: **a metric that is deterministic in one term is not deterministic in all of them** — the
+project has treated `desitales2` as "the byte-reproducible control" for ~40 ticks on the strength of
+SHAPE and `dy` being stable, and its coverage denominator is not. Establish the error bar PER TERM.
+
+NEXT: **(1) REAL FONT METRICS IN `close_line`** — `vertical-align: middle` resolves x-height as
+`ascent / 2` where the face says ~`0.52 x em` (2px here), and `sub`/`super` are 0.15/0.35 constants
+(1-2px). All inside the 8px tolerance, all the same missing plumbing, and they are the last
+Chrome-divergent rows on this fixture. **(2) THE HEAD-20 SWEEP** — two ticks of geometry have landed
+since t692's rows and the per-site ledger is owed a fresh full slice, not two hand-picked sites.
+**(3) THE PER-CALL LOAD BUDGET** — the priority inversion, blocked on nine gate files.

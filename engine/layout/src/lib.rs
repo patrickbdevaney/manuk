@@ -5051,92 +5051,128 @@ fn close_line(
     // (`LineMetrics::content_height` documents the measurement that separates them). The max is
     // taken over the *rounded* values so a mixed-font line agrees with the per-fragment boxes below.
     //
-    // ── **EVERY LINE BOX STARTS WITH A STRUT** (CSS 2.1 §10.8, tick 691). *"Each line box starts with
-    //    a zero-width inline box with the element's font and line height properties."* These folds ran
-    //    over the FRAGMENTS PRESENT only, and an atomic or synthetic `LineFrag` carries
-    //    `ascent == descent == 0` by construction — so a line whose only content is an `<img>` had ZERO
-    //    descent and reserved nothing below the baseline. Measured, `margin:0; font:16px/normal
-    //    sans-serif`, a 40×40 `<img>`: `div>img` was **h=40 against Chrome's h=44**, while
-    //    `vertical-align:top` and `display:block` already agreed at 40 — which localised it to the
-    //    baseline case and to the LINE rather than to the atomic's placement.
-    //
-    //    The strut is the CONTAINING BLOCK's font, folded in as if it were a zero-width fragment. On a
-    //    text line in the block's own font it adds nothing (same metrics); on a line of SMALLER inline
-    //    text it correctly holds the line open to the block's height; on a line with only an atomic it
-    //    supplies the descent that was missing. `.round()` matches the existing per-part rule so mixed
-    //    lines still agree with the per-fragment boxes.
+    // ── **THE TEXT METRICS** — folded over the fragments that HAVE metrics, plus the strut (CSS 2.1
+    //    §10.8, tick 691: *"each line box starts with a zero-width inline box with the element's font
+    //    and line height properties"*). These are the numbers `vertical-align: middle / text-top /
+    //    text-bottom / sub / super` are defined against — **the parent's font**, never the aligned
+    //    box's own — so an ATOMIC must not contribute to them. It used to: an atomic `LineFrag`
+    //    carries `ascent = its own height` (see `LineFrag`), so one 40px inline image made `ascent`
+    //    40 and `vertical-align: middle` aligned that line against a **20px "x-height"**.
     let ascent = line
         .iter()
+        .filter(|f| f.atomic_h <= 0.0)
         .map(|f| f.ascent.round())
         .fold(strut.0.round(), f32::max);
     let descent = line
         .iter()
+        .filter(|f| f.atomic_h <= 0.0)
         .map(|f| f.descent.round())
         .fold(strut.1.round(), f32::max);
-    let pref = line
-        .iter()
-        .map(|f| f.style.line_height)
-        .fold(strut.2, f32::max);
-    // An inline-block's margin-box height participates in the line height.
+
+    // ── **THE LEADING BELONGS TO EACH INLINE BOX, NOT TO THE LINE** (CSS 2.1 §10.8/§10.8.1, tick 695,
+    //    Chrome-measured). The line box is built from two maxima taken *about the baseline*:
     //
-    // ⚠⚠ **AND THAT IS NOT ENOUGH FOR A BASELINE-ALIGNED ATOMIC — THE LINE BOX HAS NO STRUT**
-    //    (measured tick 690, NOT yet fixed). CSS 2.1 §10.8: *"each line box starts with a zero-width
-    //    inline box with the element's font and line height properties — the strut."* `ascent`,
-    //    `descent` and `pref` above are folded over the FRAGMENTS PRESENT, and an atomic or synthetic
-    //    fragment carries `ascent == descent == 0` by construction (see `LineFrag`), so a line whose
-    //    only content is an `<img>` has **zero descent** and nothing is reserved under the baseline.
+    //    > *"The height of each inline-level box is calculated. For replaced/inline-block boxes this
+    //    > is the margin box; for inline boxes it is the leading added to the font's ascent and
+    //    > descent. The boxes are aligned per `vertical-align`, and the line box height is the
+    //    > distance between the uppermost box top and the lowermost box bottom."*
+    //
+    //    What we did instead: fold `max(ascent)`, `max(descent)`, `max(line-height)` over the line,
+    //    take `line_h = max(line-height, tallest atomic)`, then **centre the content area inside it**
+    //    (`leading = (line_h - content_h)/2`). On a line whose tallest thing is a *text* box those two
+    //    agree exactly — which is why it survived 690 ticks. They diverge the moment the line's
+    //    tallest box is NOT the one carrying the leading, and then the whole line is displaced:
     //
     // ```text
-    //    margin:0; font:16px/normal sans-serif; a 40x40 broken <img>   Chrome   ours
-    //      div > img (default = baseline)                               h=44    h=40   <- 4px descent
-    //      div > img vertical-align:top                                 h=40    h=40   ok
-    //      div > img display:block                                      h=40    h=40   ok
+    //    margin:0; font:16px/normal sans-serif; a 40x40 <img> + a <span>   Chrome   before   after
+    //      div>img + span, line-height:60px   — the div                     h=65     h=60     h=65
+    //                                         — the img top                  0        8        0
+    //                                         — the span top                26       34       26
+    //      div>img[vertical-align:top] + span — the span top                 0       24        0
+    //      div>img + span (line-height:normal)— the div                     h=44     h=43     h=44
+    //                                         — img top / span top         0 / 26   0 / 26   0 / 26
+    //      div>span alone                     — the div                     h=18     h=18     h=18
     // ```
     //
-    //    `top` and `block` already agree, which localises it exactly: the atomic is PLACED correctly
-    //    (`VerticalAlign::Baseline => baseline - h` below); the LINE is not opened far enough to hold
-    //    what sits under the baseline. This is the `dy` term tick 688 identified, and it fires on every
-    //    baseline-aligned inline image on the web — icons, logos, avatars — each shifting everything
-    //    below it by the descent (32px over four images on tick 689's fixture).
+    //    The `vertical-align:top` row is the loud one — **24px on every line that carries a
+    //    top-aligned image**, because `ascent` was the *image's* height and the baseline was placed
+    //    from it. `line-height` + an inline image is the ordinary shape of a nav bar, a card, a
+    //    byline and an avatar row, so this is a `dy` on ordinary pages, not on a corner case.
     //
-    //    ⚠ The fix is NOT `atomic_h + descent`: that was tried and changed nothing, because `descent`
-    //    is 0 on exactly the lines that need it. The strut must be seeded from the CONTAINING BLOCK's
-    //    font, which `close_line` does not currently receive — a signature change to the function that
-    //    computes every line box in the engine, so it is its own tick with `w1: 40 -> 44` as its bar.
-    // A BASELINE-ALIGNED atomic's bottom sits ON the baseline, and the baseline is not the bottom of
-    // the line box — the strut's DESCENT is under it. So such an atomic demands
-    // `height + descent` of line box, not `height`. `top`/`bottom`/`middle` do not sit on the
-    // baseline and demand only their height, which is why those two already agreed with Chrome and
-    // is the guard that this change must not break.
+    //    ⚠ `half_leading` FLOORS, and the remainder goes BELOW: that is what the old code did
+    //    (`leading = ((line_h - content_h) / 2.0).floor()`, verified against Chrome across 2 faces ×
+    //    5 sizes × 4 line-heights) and keeping the split identical is what makes a plain text line —
+    //    the overwhelming majority of lines on the web — come out byte-identical to before. It is
+    //    also why `above + below == line_height` exactly for a single-font line, with no float dust.
+    let half_leading = |a: f32, d: f32, lh: f32| ((lh - (a + d)) / 2.0).floor();
+    let hl_s = half_leading(strut.0.round(), strut.1.round(), strut.2);
+    let mut above = strut.0.round() + hl_s;
+    let mut below = if strut.2 > 0.0 {
+        strut.2 - strut.0.round() - hl_s
+    } else {
+        strut.1.round()
+    };
+    // A floor on the line box, applied AFTER the baseline-relative maxima. `vertical-align: top` and
+    // `bottom` are aligned to the LINE BOX's own edges, which do not exist until everything else has
+    // been placed, so per the spec they come last and can only make the line taller. **Which END they
+    // grow is the whole distinction and they are opposites** — Chrome-measured, 40px image + a span on
+    // a `16px/normal` line:
     //
-    // ⚠ This is HALF a fix on its own, and tick 690 measured that: with `descent` folded only over the
-    // fragments present it is ZERO on exactly the lines that need it (an atomic `LineFrag` carries no
-    // metrics), so `+ descent` added nothing. It works only together with the strut above. Two changes,
-    // one behaviour — recorded because either alone reads as a no-op and would be reverted by the next
-    // person to measure it in isolation.
-    let tallest_atomic = line
-        .iter()
-        .map(|f| {
-            if matches!(f.valign, VerticalAlign::Baseline) && f.atomic_h > 0.0 {
-                f.atomic_h + descent
-            } else {
-                f.atomic_h
-            }
-        })
-        .fold(0.0, f32::max);
-    let content_h = ascent + descent;
-    // **A tall content area does NOT push the line box open.** `line-height` is the line box, full
-    // stop (CSS 2.1 §10.8): with `line-height: 1` on a 16px Liberation face the content area is
-    // 17px inside a 16px line box and simply overflows. We used to take `max(line_height,
-    // ascent+descent)`, which silently inflated every tight line — measured against Chrome, a
-    // `line-height:1` paragraph came out 16px where Chrome says 14. An *atomic* inline (an
-    // inline-block's margin box) genuinely does raise the line box, and still does.
-    let line_h = pref.max(tallest_atomic);
-    // NOT clamped at zero: half-leading is negative exactly when the content area is taller than
-    // the line box, and Chrome floors it (verified across 2 faces × 5 sizes × 4 line-heights — 40
-    // points, no exception, including every negative case).
-    let leading = ((line_h - content_h) / 2.0).floor();
-    let baseline = y + leading + ascent;
+    // ```text
+    //                                  line h   img top   span top
+    //   vertical-align: top              40        0          0     <- grows DOWNWARD: baseline stays
+    //   vertical-align: bottom           40        0         22     <- grows UPWARD:   baseline moves
+    // ```
+    //
+    // A `bottom` box pins the line's BOTTOM, so everything the strut demands *below* the baseline
+    // still has to fit under it — the baseline is pushed down to 36 and the span with it. Treating
+    // the two the same leaves `bottom` 22px out on every line that carries one, and
+    // `vertical-align: bottom` on inline media is ordinary CSS-reset material.
+    //
+    // A synthetic reporter (inline padding/border, a `<br>`'s box) carries no metrics and holds the
+    // line open through `line_height` alone; that is preserved exactly, as a floor rather than as
+    // leading, and it grows downward like `top`.
+    let mut min_h_down: f32 = 0.0;
+    let mut min_h_up: f32 = 0.0;
+    for f in line.iter() {
+        if f.atomic_h > 0.0 {
+            let h = f.atomic_h;
+            // Each arm is the inverse of this fragment's `box_top` below — the pair is
+            // (distance above the baseline, distance below it) for the same placement, and if the
+            // two ever disagree the box is placed outside the line box it asked for.
+            let (a, b) = match f.valign {
+                VerticalAlign::Baseline => (h, 0.0),
+                VerticalAlign::Middle => (h / 2.0 + ascent * 0.25, h / 2.0 - ascent * 0.25),
+                VerticalAlign::TextTop => (ascent, h - ascent),
+                VerticalAlign::TextBottom => (h - descent, descent),
+                VerticalAlign::Sub => (h - ascent * 0.15, ascent * 0.15),
+                VerticalAlign::Super => (h + ascent * 0.35, -(ascent * 0.35)),
+                VerticalAlign::Top => {
+                    min_h_down = min_h_down.max(h);
+                    continue;
+                }
+                VerticalAlign::Bottom => {
+                    min_h_up = min_h_up.max(h);
+                    continue;
+                }
+            };
+            above = above.max(a);
+            below = below.max(b);
+        } else if f.ascent > 0.0 || f.descent > 0.0 {
+            let (a, d) = (f.ascent.round(), f.descent.round());
+            let hl = half_leading(a, d, f.style.line_height);
+            above = above.max(a + hl);
+            below = below.max(f.style.line_height - a - hl);
+        } else {
+            min_h_down = min_h_down.max(f.style.line_height);
+        }
+    }
+    // `bottom` first: it moves the baseline, and `top`'s floor is measured from the baseline it
+    // leaves behind.
+    above = above.max(min_h_up - below);
+    below = below.max(min_h_down - above);
+    let line_h = above + below;
+    let baseline = y + above;
 
     // `f.width` already carries any `letter-spacing` (it equals `measure(text)` when spacing is 0),
     // so use it directly for both atomics and text rather than re-measuring — the re-measure would
@@ -5406,6 +5442,142 @@ mod tests {
              same font it adds nothing. Got {} — the strut is being double-counted.",
             h("p1")
         );
+    }
+
+    /// **THE HALF-LEADING BELONGS TO EACH INLINE BOX, NOT TO THE LINE** (CSS 2.1 §10.8/§10.8.1).
+    ///
+    /// The line box is two maxima taken *about the baseline* — `max(distance above)` and
+    /// `max(distance below)` over every inline-level box, each box having contributed its **own**
+    /// leading. We instead folded `max(ascent)`, `max(descent)`, `max(line-height)` over the line and
+    /// then **centred the content area inside the result**. On a line whose tallest box is the one
+    /// carrying the leading those two agree exactly, which is why this survived 690 ticks; they
+    /// diverge the moment the tallest box is an ATOMIC, and then the whole line is displaced.
+    ///
+    /// Chrome-measured (`--headless=new --dump-dom`, 1280×800, `margin:0`, `16px/normal sans-serif`,
+    /// a 40×40 `<img>` followed by a `<span>`), all values relative to the div's own top:
+    ///
+    /// ```text
+    ///                                          Chrome   before   after
+    ///   line-height:60px  — the div              h=65     h=60     h=65
+    ///                     — the img top            0        8        0
+    ///                     — the span top          26       34       26
+    ///   vertical-align:top — the span top          0       24        0
+    ///   vertical-align:bottom — the span top      22        0       22
+    ///   (guards)
+    ///   line-height:normal — the div             h=44     h=43     h=44
+    ///                     — img top / span top  0 / 26   0 / 26   0 / 26
+    ///   a span alone       — the div             h=18     h=18     h=18
+    /// ```
+    ///
+    /// ⚠ **`top` and `bottom` are opposites and that is the point of asserting both.** Both are
+    /// aligned to the line box's own edges, so both are applied after the baseline-relative maxima —
+    /// but `top` grows the line DOWNWARD (the baseline stays) and `bottom` grows it UPWARD (the
+    /// baseline moves, because the strut's descent still has to fit above the pinned bottom edge). A
+    /// fix that treated them alike passed the `top` row and left `bottom` 22px out, and only a
+    /// fixture carrying both could see it. `img { vertical-align: middle|bottom }` is CSS-reset
+    /// material, so this is ordinary-page geometry, not a corner case.
+    ///
+    /// ⚠ The *heights* alone cannot gate this: `top` and `bottom` produce the same 40px line box and
+    /// differ only in where the text inside it sits. The assertions are on POSITIONS.
+    #[test]
+    fn the_half_leading_belongs_to_each_inline_box_not_to_the_line() {
+        let html = r#"<div id="w1" style="line-height:60px"><img width="40" height="40" src="x.png"><span id="s1">Hg</span></div>
+                      <div id="w2"><img width="40" height="40" style="vertical-align:top" src="x.png"><span id="s2">Hg</span></div>
+                      <div id="w3"><img width="40" height="40" style="vertical-align:bottom" src="x.png"><span id="s3">Hg</span></div>
+                      <div id="w4"><img width="40" height="40" src="x.png"><span id="s4">Hg</span></div>
+                      <div id="w5"><span id="s5">Hg</span></div>
+                      <div id="w6"><img width="40" height="40" style="vertical-align:middle" src="x.png"><span id="s6">Hg</span></div>"#;
+        let css = "body{margin:0} div{font-family:sans-serif;font-size:16px;line-height:normal}";
+        let (dom, root) = layout_html(html, css, 1280.0);
+        let rects = root.node_rects(&dom);
+        let r = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            rects[&n]
+        };
+        // The span's top WITHIN its own div — the number the old code got wrong, and the one a
+        // height assertion cannot see.
+        let span_top = |w: &str, s: &str| r(s).y - r(w).y;
+        for (w, s, want, why) in [
+            (
+                "w1", "s1", 26.0,
+                "`line-height:60px` gives the STRUT 21px of half-leading; the 40px image gets NONE. \
+                 Centring the content area in the line instead put the baseline at 48 and everything \
+                 on the line 8px low (Chrome: baseline 40, span top 26).",
+            ),
+            (
+                "w2", "s2", 0.0,
+                "`vertical-align:top` grows the line DOWNWARD — the baseline stays where the strut \
+                 put it, at 14. The atomic used to set the line's `ascent` to its OWN height, which \
+                 put the baseline at 38 and the text 24px low.",
+            ),
+            (
+                "w3", "s3", 22.0,
+                "`vertical-align:bottom` grows the line UPWARD — the image pins the line's bottom at \
+                 40 and the strut's 4px of descent must still fit under the baseline, so the \
+                 baseline moves DOWN to 36. Treating it like `top` leaves the text at 0, 22px out.",
+            ),
+            (
+                "w4", "s4", 26.0,
+                "GUARD: the ordinary baseline case already agreed with Chrome and must not move.",
+            ),
+            (
+                "w5", "s5", 0.0,
+                "GUARD: a plain text line is the overwhelming majority of lines on the web. Its \
+                 half-leading is the line's half-leading, so the two rules coincide exactly here — \
+                 and if this moves, every paragraph on every page moved.",
+            ),
+            (
+                "w6", "s6", 10.0,
+                "`vertical-align: middle` is defined against the PARENT's x-height, and ours is \
+                 approximated as half the line's `ascent` — so an ATOMIC must not contribute to that \
+                 ascent. It used to: a 40px image made `ascent` 40, giving a 20px `x-height` and \
+                 putting the text 6px low. `img { vertical-align: middle }` is in most CSS resets.",
+            ),
+        ] {
+            assert!(
+                (span_top(w, s) - want).abs() < 1.5,
+                "#{s} sits {} below #{w}, Chrome says {want}. {why}",
+                span_top(w, s)
+            );
+        }
+        // The line box heights Chrome reports for the same five rows.
+        for (w, want, why) in [
+            (
+                "w1",
+                65.0,
+                "the strut's leading is BELOW the baseline too: 40 above + 25 below",
+            ),
+            (
+                "w2",
+                40.0,
+                "GUARD: a top-aligned atomic is exactly its own height of line box",
+            ),
+            (
+                "w3",
+                40.0,
+                "GUARD: and so is a bottom-aligned one — same height, different text position",
+            ),
+            ("w4", 44.0, "40 above the baseline + the strut's 4 below it"),
+            (
+                "w5",
+                18.0,
+                "GUARD: `line-height: normal` on this face, unchanged",
+            ),
+            (
+                "w6",
+                40.0,
+                "a middle-aligned atomic straddles the baseline by half its height each way",
+            ),
+        ] {
+            assert!(
+                (r(w).height - want).abs() < 1.5,
+                "#{w} is {} tall, Chrome says {want} — {why}",
+                r(w).height
+            );
+        }
     }
 
     /// **AN `<img>` WHOSE SOURCE DID NOT LOAD IS 16×16 — Chrome-measured, not recalled.**
