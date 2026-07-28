@@ -612,3 +612,43 @@ cores. What the wall actually does is now an open measurement, and the next tick
 ⚠ **The admissible-optimisation list should gain a step 0:** *before optimising a line item, measure that line
 item ALONE on a quiet box.* A contention-inflated slice makes the biggest number look like the biggest cost,
 and those are different things.
+
+## Audit #22 — tick 711 (242s, and the 71% line item costs THREE SECONDS)
+
+The section table says:
+
+```text
+  172s  P · parity (72/72 vs headless Chrome)   ███████████████ 71%
+   25s  T    21s  G6    16s  B    5s  G1    4s  D    2s  F    1s  F4    0s  the rest
+```
+
+**Measured alone, on a quiet box (load 0.27), same tree, same fixtures:**
+
+```text
+  $ time manuk-wpt parity
+    TOTAL: 72/72 probes within tolerance across 30 page(s)
+    elapsed: 3s
+```
+
+**Three seconds against a 172-second line item.** There is no parity optimisation to make. The 71% is
+contention — the parity gate sharing 32 cores with ~25 concurrently-launched gate builds — and the
+audit instrument reports a wall-clock slice of a parallel wall as if it were a line item's cost.
+
+⚠⚠ **THIS IS THE SECOND TIME, AND THE FIRST TIME IT WAS ALREADY WRITTEN DOWN.** Audit #21 (t689) read
+`P` at 175s and attributed it to 72 serial Chrome spawns; the **t694 CORRECTION** measured it at 14s
+serial / 4s parallel and added an explicit *step 0: before optimising a line item, measure that line
+item ALONE on a quiet box.* **Tick 710's wall-audit note repeated the retracted claim verbatim** —
+"parity launches one headless Chrome per fixture, serially, and that is 71% of the wall" — because it
+read the section table and did not run step 0. Retracted here.
+
+The correction was three headers above the one I was appending to. *A ledger only protects you if you
+read the entry above yours before adding the next one* — the same shape as t706's finding that a
+build spec's unbuilt half is invisible to every ranking instrument, except this time the document was
+the one I had open.
+
+**Where the wall actually goes, then:** nowhere in particular. 242s of mostly-parallel gate builds on
+32 cores, no single line item above a few seconds of real work. **The wall is lean and there is
+nothing admissible to trim** — which Audit #21's own rules say is a fine result, and it is the result.
+
+The one number worth watching is not a section but the whole: `LAST_WALL_TIME` 63s on a quiet box
+against a 189s mark. The gate phase's 242s figure is itself a contended reading.

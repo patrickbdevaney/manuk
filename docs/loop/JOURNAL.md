@@ -34348,7 +34348,13 @@ Total **242s**, and it is one section:
     5s  G1 · fidelity     4s D     2s F     1s F4     0s everything else
 ```
 
-**The wall is NOT lean, and the hotspot is a single known shape**: `parity` launches **one headless
+⚠ **RETRACTED AT TICK 711 — see WALL-AUDIT.md Audit #22.** Measured alone on a quiet box, `parity`
+takes **3 seconds**, not 172. The 71% is CONTENTION, and the t694 correction to Audit #21 had already
+said so and added an explicit *step 0: measure the line item ALONE before optimising it*. I read the
+section table and skipped step 0, three headers below the correction. The wall is LEAN; there is
+nothing admissible to trim. The paragraph below is wrong and is kept for the record:
+
+~~**The wall is NOT lean, and the hotspot is a single known shape**~~: `parity` launches **one headless
 Chrome per fixture, serially** (`tests/wpt/src/parity.rs`). Nothing else on the list is worth a
 second of attention until that is addressed — T, G6 and B together are less than a third of P.
 
@@ -34363,3 +34369,65 @@ work with a real chance of introducing cross-fixture state leakage between compa
 badly would corrupt the one gate that certifies us against Chrome. It is named here as the next
 wall tick rather than rushed into an audit tick.
 
+
+## Tick 711 — the honest `render-failed` remainder is the hydration wipe, and I nearly reported the printer's cap as a parser bug (2026-07-28)
+
+HYPOTHESIS: t709 cleared the bot walls out of `render-failed`, leaving a clean population — theverge
+928 KB · vox 963 KB · mongodb 956 KB · kotlinlang 250 KB · notion 417 KB, all of which receive the
+REAL document and still render blank. Bar: name what that population is.
+
+### THE ANSWER: IT IS THE SPA HYDRATION WIPE, ALREADY ON THE BOARD UNDER ANOTHER NAME
+
+`kotlinlang.org` is Next.js SSR — the served bytes carry a fully server-rendered tree (`<div
+id="__next">`, `layout_wrapper`, `sticky-header`, `header`, **220 `<div>`s**). After load:
+
+```text
+  html [0 0 1200x0]   body [0 0 1200x0]  elem_kids=3
+    div#__next [0 0 1200x0]  elem_kids=0        <- 220 divs of served markup, gone
+```
+
+Parsed WITHOUT scripts the same bytes give the whole tree. So the document arrives, parses, and is
+then **emptied by its own client render** — which is exactly `C3833 MISSING BOX: <div>` (32 sites,
+7,544 hits, the top cluster by hits), diagnosed at t696 on `wix.com`: `innerHTML=""` inside the `load`
+event deletes 4,917 elements and the re-render performs **zero** DOM operations.
+
+**So `render-failed` and `C3833` are ONE failure seen by TWO instruments** — the pixel side ("we drew
+nothing") and the DOM side ("the boxes are missing"). They have been ranked and worked as separate
+items. That consolidation is this tick's result: the honest remainder of `render-failed` is not a new
+cluster to open, it is more evidence for the biggest one already open.
+
+### ⚠⚠ AND THE INSTRUMENT CAPPED, AND I READ THE CAP AS DATA
+
+En route I measured "the parser stops after 32 `<div>`s" — stable at **32** across 20 KB, 60 KB and
+120 KB prefixes while the file's own count rose 40 → 130 → 195. A hard stop at a constant, immune to
+input size, is a beautiful bug. It is not a bug:
+
+```text
+  $ boxes --html … --why div
+  (showing 32 of 195 matches — TRUNCATED)
+```
+
+`WHY_CAP = 32` in the `--why` printer, and I had counted `^── match` lines with `grep -c`, which
+discards the very line the tool prints to stop this happening. The parser was correct the whole time
+and I was two commands from journalling a parser bug in the HTML tokenizer.
+
+The comment above that cap reads: *"a probe that silently truncates its own answer is how a partial
+list gets read as a complete one (it was 8, and a 23-element display sweep quietly came back with 8
+rows)."* It does not truncate silently — **I silenced it**, by grepping for the rows and not the
+report. ⚠ **`grep -c` over a tool's output discards that tool's own error and truncation reporting.**
+The constancy of the number across three inputs was the tell, and it is the tell to keep: *a
+measurement that refuses to move when its input triples is measuring the instrument.*
+
+TICK SHAPE: measurement
+CLUSTER: `render-failed` — CONSOLIDATED into `C3833` (SPA client render never completes) rather than
+worked as its own population. No new cluster; one fewer.
+Gates: none — no code change.
+WIKI: none [forced] — a diagnosis that reclassifies an existing cluster; the engine is unchanged.
+PATTERN: **a number that will not move when its input triples is measuring the instrument, not the
+subject.** Three prefixes, 40 → 130 → 195 divs of input, and the answer stayed exactly 32.
+
+NEXT: **(1) C3833 IS NOW THE WHOLE GAME** — it is the top cluster by hits AND the honest half of
+`render-failed`, and t696 left it open with the precise next question: the re-render is abandoned
+somewhere that reports nothing (`MessageChannel` delivers, no listener throws, no console error).
+**(2)** the oracle crawl (t706) and the parked §10.8.1 patch remain owed. **(3)** the wall: parity is
+71% of it (t710).
