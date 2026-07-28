@@ -1,104 +1,89 @@
 #!/usr/bin/env bash
-# fidelity-progress.sh — TRACK the Phase-0 fidelity basket over time so it cannot silently stall, and so a
-# "number went up" reading is checked against the DENOMINATOR TRAP the journal documents repeatedly:
-#   * "MEAN COVERAGE 85.2% -> 98.7% is aparat DROPPING OUT, not an improvement"  (coverage rose on a
-#     SHRINKING denominator — a hard site left the scored set)
-#   * "keirin coverage 98.0% -> 74.4% is the HONEST COST of a real layout"       (coverage FELL because we
-#     attempted MORE boxes — a real gain that looks like a regression)
-# So the two numbers the user asked to drive — SCORABILITY (how many sites we can measure at all) and
-# COVERAGE (of those, how many boxes we render) — are IN TENSION, and neither is trustworthy alone. This
-# records BOTH plus placement(shape)/visual/box-counts every sweep, and flags the trap instead of cheering.
+# fidelity-progress.sh — TRACK the Phase-0 fidelity basket over time from the AGENT's banked corpus sweeps,
+# so it cannot silently stall and a "number went up" reading is checked against the DENOMINATOR TRAP.
 #
-# It is a LEDGER + TREND read, never a gate: fidelity has real run-to-run variance (~3.7pt shape on ONE
-# unchanged tree — reliability-doctrine), so wiring a raw number into the ratchet would false-brick the
-# loop. This ALERTS (via ops-check) and RECORDS; it never refuses a tick. Observer-owned (records the
-# AGENT's manuk-wpt sweep output; does not compute fidelity itself).
-#   usage: scripts/fidelity-progress.sh            # record-if-changed + print trend + verdict
+# ⚠ REBUILT-INSTRUMENT SCHEMA (t531-537 + the t706 sweep-repair). The instrument changed its output at the
+# t531-537 rebuild; the OLD reader here (and scripts/fidelity-sweep.sh) grepped a dead vocabulary
+# ("PLACEMENT: X% within Npx", "ids") the instrument stopped printing, so the ledger sat on ONE stale row
+# (2026-07-20, place_mean 6.4 = the OLD instrument's ABSOLUTE placement) and never saw a real sweep. The
+# agent (tick 706, d7946743) diagnosed this and banks honest rows at docs/loop/SWEEP-t<NNN>-rows.tsv. This
+# reader now reads THOSE. The new per-site columns are:
+#   1 name · 2 coverage(0-1) · 3 shape(0-1, parent-relative) · 4 h_overflow · 5 overlap · 6 reading_order
+#   7 dead_target · 8 shape_n · 9 reason(empty ⇒ SCORED; non-empty ⇒ unscored, e.g. bot-wall/crashed) · 10 instrument
+# ⚠ shape here is PARENT-RELATIVE SHAPE, NOT the old absolute placement — the two are NOT differenceable
+# ("6.4 -> 43.0 would be a metric swap dressed as progress" — the agent). The trend only compares rebuilt-
+# instrument sweeps to each other.
+#
+# The Phase-0 exit metric is shape>=0.75 on >=95% of the corpus, FIXED DENOMINATOR (unscored count as fails,
+# never dropped — that is how a broken engine scores 95%). LEDGER + ALERTS only, never a gate (fidelity has
+# real run-to-run variance; a raw ratchet would false-brick). Observer-owned reader of the AGENT's output.
+#   usage: scripts/fidelity-progress.sh            # record-if-new + print trend + verdict
 #          scripts/fidelity-progress.sh --check    # quiet; emit ALERT lines only (for ops-check)
 set -uo pipefail
 cd "$(dirname "$0")/.." 2>/dev/null || exit 0
 LEDGER=docs/loop/FIDELITY-PROGRESS.tsv
 MODE="${1:-record}"
 
-# Freshest sweep output among the known locations (full corpus preferred; fall back to the smaller sweep).
+# Newest banked corpus sweep with the REBUILT schema (header has a 'shape' and 'reason' column). Skip old
+# pre-rebuild banks / pilots that do not carry the new columns.
 SRC=""; SRC_EPOCH=0
-for f in .git/fidelity-full/results.tsv .git/fidelity-sweep/results.tsv; do
+for f in docs/loop/SWEEP-t*-rows.tsv; do
   [ -f "$f" ] || continue
+  head -1 "$f" | grep -qiE 'shape' && head -1 "$f" | grep -qiE 'reason' || continue
   e=$(stat -c %Y "$f" 2>/dev/null || echo 0)
   [ "$e" -gt "$SRC_EPOCH" ] && { SRC="$f"; SRC_EPOCH="$e"; }
 done
-[ -z "$SRC" ] && { [ "$MODE" != "--check" ] && echo "fidelity-progress: no sweep results.tsv found"; exit 0; }
-
-# Compute the basket from the freshest sweep. Columns (1-based): 3 status · 4 visual · 5 coverage ·
-# 6 placement · 7 ids(matched) · 8 missing · 9 misplaced. Scorable == status OK.
-read -r SCOR TOT COVM COVP PLM VISM MISS MISP < <(awk -F'\t' '
-  NR>1{ tot++
-    if($3=="OK"){ ok++; cv+=$5; pl+=$6; vs+=$4; ids+=$7; ms+=$8; mp+=$9 } }
-  END{
-    covp = (ids+ms>0)? 100*ids/(ids+ms) : 0
-    if(ok>0) printf "%d %d %.1f %.1f %.1f %.1f %d %d", ok, tot, cv/ok, covp, pl/ok, vs/ok, ms, mp
-    else     printf "0 %d 0 0 0 0 0 0", tot
-  }' "$SRC")
+[ -z "$SRC" ] && { [ "$MODE" != "--check" ] && echo "fidelity-progress: no rebuilt-schema SWEEP-t*-rows.tsv found"; exit 0; }
+TICK=$(printf '%s' "$SRC" | grep -oE 't[0-9]+' | head -1)
 SWEEP_ISO=$(date -d "@$SRC_EPOCH" '+%Y-%m-%dT%H:%M:%S' 2>/dev/null || echo "?")
 NOW_EPOCH=$(date +%s 2>/dev/null || echo "$SRC_EPOCH")
-AGE_DAYS=$(( ( NOW_EPOCH - SRC_EPOCH ) / 86400 ))
-# A sweep is written INCREMENTALLY per-site over ~90min (fidelity-sweep.sh appends row by row). A mid-write
-# partial has garbage aggregates, so NEVER record one: record only a SETTLED results.tsv — no live
-# manuk-wpt run AND mtime stable for >=180s. Otherwise the 15-min ops-check cadence banks partial junk.
-SWEEP_ACTIVE=0
-pgrep -x manuk-wpt >/dev/null 2>&1 && SWEEP_ACTIVE=1
-[ $(( NOW_EPOCH - SRC_EPOCH )) -lt 180 ] && SWEEP_ACTIVE=1
-# INCOMPLETE sweep (a mid-write partial OR a KILLED partial that settled): treat as not-usable. A killed
-# 146/265 run has no live process and an aged mtime, so the two checks above miss it — guard on ROW COUNT
-# vs the corpus size. Below ~80% of the corpus is not a corpus reading; never record or diff against it.
-EXPECTED=$(grep -cvE '^[[:space:]]*#|^[[:space:]]*$' docs/bench/oracle-corpus.txt 2>/dev/null || echo 265)
-[ "${EXPECTED:-0}" -gt 0 ] && [ "${TOT:-0}" -lt $(( EXPECTED * 8 / 10 )) ] && SWEEP_ACTIVE=1
 
-# ── prior row (for trend + trap detection) ────────────────────────────────────────────────────────────
+# Aggregate. SCORED = reason empty. shape/coverage means over SCORED. shape>=0.75 % over the FIXED
+# denominator (all sites) — the honest Phase-0 metric. A row < ~80% of the corpus is a partial; skip it.
+read -r SITES SCORED GE75 GE75PCT SHAPEM COVM < <(awk -F'\t' '
+  NR==1{next}
+  { sites++
+    r=$9; gsub(/[ \t]/,"",r)
+    if(r==""){ scored++; sh+=$3; cv+=$2; if($3>=0.75) ge++ } }
+  END{
+    ge75pct = sites>0 ? 100*ge/sites : 0
+    if(scored>0) printf "%d %d %d %.1f %.1f %.1f", sites, scored, ge, ge75pct, 100*sh/scored, 100*cv/scored
+    else         printf "%d 0 0 0 0 0", sites
+  }' "$SRC")
+
 PREV=""; [ -f "$LEDGER" ] && PREV=$(grep -vE '^(iso|#)' "$LEDGER" 2>/dev/null | tail -1)
-p_scor=$(echo "$PREV" | cut -f2); p_covp=$(echo "$PREV" | cut -f5); p_pl=$(echo "$PREV" | cut -f6)
-p_sweep=$(echo "$PREV" | cut -f1)
+p_iso=$(echo "$PREV" | cut -f1); p_tick=$(echo "$PREV" | cut -f2); p_scored=$(echo "$PREV" | cut -f4); p_ge=$(echo "$PREV" | cut -f5); p_sh=$(echo "$PREV" | cut -f7)
 
-# ── record-if-changed: append only when THIS sweep (by its own timestamp) is new to the ledger ─────────
-if [ "$MODE" != "--check" ] && [ "$SWEEP_ACTIVE" = 1 ]; then
-  echo "sweep in progress (results.tsv still being written) — not recording a partial"
-elif [ "$MODE" != "--check" ]; then
-  [ -f "$LEDGER" ] || printf 'iso_sweep\tscorable\ttotal\tcov_mean\tcov_pooled\tplace_mean\tvis_mean\tmissing\tmisplaced\tsource\n' > "$LEDGER"
-  if [ "$SWEEP_ISO" != "$p_sweep" ]; then
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$SWEEP_ISO" "$SCOR" "$TOT" "$COVM" "$COVP" "$PLM" "$VISM" "$MISS" "$MISP" "$SRC" >> "$LEDGER"
-    echo "recorded sweep $SWEEP_ISO"
+# ── record-if-new (by sweep tick) ──────────────────────────────────────────────────────────────────────
+if [ "$MODE" != "--check" ]; then
+  [ -f "$LEDGER" ] || printf '# rebuilt-instrument schema (t706+); shape=parent-relative, NOT the old absolute placement (6.4 pre-2026-07-28 row is a DIFFERENT metric, do not diff)\niso_sweep\tsweep_tick\tsites\tscored\tshape_ge0.75\tshape_ge0.75_pct\tshape_mean\tcov_mean\tsource\n' > "$LEDGER"
+  if [ "$TICK" != "$p_tick" ]; then
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$SWEEP_ISO" "$TICK" "$SITES" "$SCORED" "$GE75" "$GE75PCT" "$SHAPEM" "$COVM" "$SRC" >> "$LEDGER"
+    echo "recorded sweep $TICK ($SWEEP_ISO)"
   fi
 fi
 
-# ── verdict / alerts (shared by both modes) ────────────────────────────────────────────────────────────
+# ── verdict / alerts ───────────────────────────────────────────────────────────────────────────────────
 alerts=""
-# STALENESS is measured from the last COMPLETE recorded sweep (the ledger), NOT the raw results.tsv mtime
-# — a mid-write or killed partial makes the mtime look fresh while we actually have no new corpus reading.
-LAST_COMPLETE_EPOCH=$(date -d "$p_sweep" +%s 2>/dev/null || echo 0)
-LEDGER_AGE_DAYS=$(( ( NOW_EPOCH - LAST_COMPLETE_EPOCH ) / 86400 ))
-[ "${LAST_COMPLETE_EPOCH:-0}" -gt 0 ] && [ "$LEDGER_AGE_DAYS" -ge 2 ] && alerts="${alerts}STALE-SWEEP: no COMPLETE corpus sweep in ${LEDGER_AGE_DAYS}d (last recorded $p_sweep) — the AGENT should re-run the full sweep (observer no longer runs it: perf-gate contention)\n"
-# regression/trap only make sense COMPLETE-vs-COMPLETE: never diff a partial (SWEEP_ACTIVE) against the ledger
-if [ "$SWEEP_ACTIVE" = 0 ] && [ -n "$PREV" ] && [ "$SWEEP_ISO" != "$p_sweep" ]; then
-  awk "BEGIN{exit !($SCOR < $p_scor)}" && alerts="${alerts}SCORABILITY-REGRESSED: scorable ${p_scor} -> ${SCOR} (fewer sites measurable — investigate, not progress)\n"
-  # denominator trap: coverage up while scorability down => the rise is composition, not rendering
-  if awk "BEGIN{exit !($COVP > $p_covp && $SCOR < $p_scor)}"; then
-    alerts="${alerts}DENOMINATOR-TRAP: cov_pooled ${p_covp}->${COVP} ROSE while scorable ${p_scor}->${SCOR} FELL — a hard site likely dropped out; the coverage gain is NOT real\n"
+AGE_DAYS=$(( ( NOW_EPOCH - SRC_EPOCH ) / 86400 ))
+[ "$AGE_DAYS" -ge 3 ] && alerts="${alerts}STALE-SWEEP: newest banked corpus sweep ($TICK) is ${AGE_DAYS}d old — agent should run a fresh full sweep so the trend stays live\n"
+if [ -n "$PREV" ] && [ "$TICK" != "$p_tick" ]; then
+  awk "BEGIN{exit !($SCORED < ${p_scored:-0})}" && alerts="${alerts}SCORABILITY-REGRESSED: scored ${p_scored} -> ${SCORED} (fewer sites measurable — investigate, not progress)\n"
+  # denominator trap: shape_mean up while scored down => a hard site dropped out, not real improvement
+  if awk "BEGIN{exit !($SHAPEM > ${p_sh:-0} && $SCORED < ${p_scored:-0})}"; then
+    alerts="${alerts}DENOMINATOR-TRAP: shape_mean ${p_sh}->${SHAPEM} ROSE while scored ${p_scored}->${SCORED} FELL — likely a hard site dropped out; the gain is NOT real\n"
   fi
 fi
 
-if [ "$MODE" = "--check" ]; then
-  [ -n "$alerts" ] && printf "%b" "$alerts"
-  exit 0
-fi
+if [ "$MODE" = "--check" ]; then [ -n "$alerts" ] && printf "%b" "$alerts"; exit 0; fi
 
-# ── human trend read ───────────────────────────────────────────────────────────────────────────────────
-echo "── FIDELITY PROGRESS (source: $SRC, sweep ${SWEEP_ISO}, ${AGE_DAYS}d old) ─────────"
-printf "  scorable=%s/%s   cov_pooled=%s%%   cov_mean=%s%%   placement(shape)=%s%%   visual=%s%%   missing=%s  misplaced=%s\n" \
-  "$SCOR" "$TOT" "$COVP" "$COVM" "$PLM" "$VISM" "$MISS" "$MISP"
-echo "  TARGET: scorable ↑ toward $TOT · cov_pooled → 95 · placement → 95 · visual → 95  (all four, per the Phase-0 certificate)"
-if [ -n "$PREV" ] && [ "$SWEEP_ISO" != "$p_sweep" ]; then
-  printf "  Δ vs %s: scorable %s→%s · cov_pooled %s→%s · placement %s→%s\n" "$p_sweep" "$p_scor" "$SCOR" "$p_covp" "$COVP" "$p_pl" "$PLM"
+echo "── FIDELITY PROGRESS (rebuilt instrument · sweep $TICK · $SWEEP_ISO · ${AGE_DAYS}d old) ─────────"
+printf "  sites=%s  scored=%s  shape>=0.75 on %s (%s%% of corpus, FIXED denom)   shape_mean=%s%%  cov_mean=%s%%\n" \
+  "$SITES" "$SCORED" "$GE75" "$GE75PCT" "$SHAPEM" "$COVM"
+echo "  TARGET (Phase-0 exit): shape>=0.75 on >=95%% of the corpus · scored up toward $SITES · shape_mean/cov_mean up"
+if [ -n "$PREV" ] && [ "$TICK" != "$p_tick" ]; then
+  printf "  Δ vs %s: scored %s→%s · shape>=0.75%% %s→%s · shape_mean %s→%s\n" "$p_tick" "$p_scored" "$SCORED" "$p_ge" "$GE75PCT" "$p_sh" "$SHAPEM"
 fi
 if [ -n "$alerts" ]; then printf "  ⚠ %b" "$alerts"; else echo "  ✓ no trap/regression/staleness flag"; fi
-echo "  last ${LEDGER} rows:"; tail -4 "$LEDGER" 2>/dev/null | sed 's/^/    /'
+echo "  last ${LEDGER} rows:"; tail -3 "$LEDGER" 2>/dev/null | sed 's/^/    /'
 exit 0

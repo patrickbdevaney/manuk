@@ -1,2 +1,3 @@
-iso_sweep	scorable	total	cov_mean	cov_pooled	place_mean	vis_mean	missing	misplaced	source
-2026-07-20T05:22:06	106	265	84.0	84.8	6.4	53.5	1109	4841	.git/fidelity-full/results.tsv
+# rebuilt-instrument schema (t706+); shape=parent-relative, NOT the old absolute placement (6.4 pre-2026-07-28 row is a DIFFERENT metric, do not diff)
+iso_sweep	sweep_tick	sites	scored	shape_ge0.75	shape_ge0.75_pct	shape_mean	cov_mean	source
+2026-07-28T09:34:48	t706	265	131	11	4.2	43.0	86.3	docs/loop/SWEEP-t706-rows.tsv
