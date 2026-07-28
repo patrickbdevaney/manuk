@@ -33877,3 +33877,69 @@ the board. **(2) THE PARKED §10.8.1 PATCH** is untouched and still parked, and 
 tree no longer exists. Re-measure it against this HEAD before assuming the trade is the same one.
 **(3) A surface audit that greps `docs/wiki/*` for *remaining* / *the other half* / *named residue*** —
 this tick's finding says there is a backlog there that no instrument reads.
+
+## Tick 705 — the Phase-0 sweep swept ZERO sites and printed a certificate (2026-07-28)
+
+HYPOTHESIS: t704's NEXT #1 — run the full corpus sweep, owed for five ticks, and bank `Ccd7f`'s
+shrinkage across all 34 sites rather than the 3 measured by hand. Bar: a live corpus-wide number.
+
+### THE SWEEP DID NOT RUN, AND IT DID NOT SAY SO
+
+```text
+  $ manuk-wpt fidelity --urls-file docs/bench/oracle-corpus.txt
+
+  === PHASE-0 EXIT CERTIFICATE ===
+    sites 0 · scored 0 · shape ≥0.75 on 0 (0.0%)
+    h-overflow     clean on    0 sites (0.0%)
+    ...
+    CERTIFICATE NOT MET — shortfalls, in the order to work them:
+        · shape ≥0.75 on 0.0% of sites (bar 95%)      <- five of these
+  MEAN VISUAL:    NaN%
+```
+
+**Every column is `0.0%` or `NaN`, and not one word says the corpus was empty.** Those shortfall
+lines are byte-identical to the ones a sweep that really ran and really failed would print.
+
+The cause is one character class. `--urls-file` reduces `category<TAB>url` to the URL with
+`rsplit('\t')` — and `docs/bench/oracle-corpus.txt` is **space-aligned**:
+
+```text
+  news         https://nytimes.com/
+```
+
+so every line came back whole, `starts_with("http")` rejected all 265 of them, and the run swept the
+empty set. The file has been in that shape the whole time; `corpus-v2.tsv` is the tab-separated one,
+and whichever sweep last worked must have used it.
+
+⚠⚠ **This is the project's oldest failure shape wearing a new hat.** t650: *"100% of nothing is
+100% — a metric whose denominator comes from the thing measured is satisfied by measuring LESS, and
+the fix is a SECOND POPULATION, never a stricter threshold."* A count of parsed URLs cannot detect
+its own absence. A count of parsed URLs **next to the count of lines they came from** can, and that
+is the whole fix: `parse_corpus` returns `{urls, candidates}`, the caller hard-exits when
+`urls.is_empty() && candidates > 0`, and warns loudly when `urls.len() < candidates` — because a
+sweep of 12 sites reported as *"the corpus"* is how an optimistic number is born.
+
+### THE GATE READS THE REAL FILE, NOT A LITERAL OF WHAT I THINK IT LOOKS LIKE
+
+`the_real_corpus_file_parses_to_urls_not_to_silence` opens `docs/bench/oracle-corpus.txt` from disk
+and asserts `urls.len() == candidates`. A gate written against a string literal of the corpus tests
+my belief about the corpus; this one fails if somebody re-aligns those columns, **here**, in 27
+seconds, instead of three hours into a sweep that quietly measures nothing.
+
+RED-proven by restoring the `'\t'` split: **2 of the 3 gates fail**, including the real-file one.
+
+TICK SHAPE: instrument
+CLUSTER: none directly — this is the instrument that MEASURES cluster shrinkage, and it was returning
+a certificate over the empty set. `Ccd7f`'s corpus-wide confirmation is the sweep this unblocks.
+Gates: `corpus_parse_tests` 3/3, RED-proven 2/3 against the old split.
+WIKI: none [forced] — the mechanism is a corpus-file parse in the harness, not a browser behaviour;
+`docs/wiki` describes what the engine does and this changes nothing it does.
+PATTERN: **a run that measured NOTHING must not be able to print a SCORE.** Zero-over-zero rendered
+as `0.0%` next to a `95%` bar reads exactly like failure, and failure reads exactly like a result.
+Any scorer whose denominator it also computes needs a second, independent count of what it was
+*supposed* to cover — and the honest response to `expected N, got 0` is an exit code, not a row.
+
+NEXT: **(1) RUN THE SWEEP** — the same command, now that it parses; it is still the oldest debt and
+still the only source of `Ccd7f`'s real site-count. **(2)** bank the result into
+`docs/loop/FIDELITY-PROGRESS.tsv`, whose single row is from 2026-07-20. **(3)** the parked §10.8.1
+patch still wants re-measuring against t704's HEAD.

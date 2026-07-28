@@ -1002,6 +1002,46 @@ pub const SPREAD_UNSTABLE_PTS: f64 = 5.0;
 /// middle draw, and the whole value of the repeat is that the middle draw exists.
 pub const UNSTABLE_REPEATS: usize = 3;
 
+/// What a `--urls-file` corpus actually yielded — **the URLs and the number of lines that were
+/// CANDIDATES to be URLs**, which is the second population the caller needs in order to tell a
+/// legitimately small corpus from a parse that ate the whole file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CorpusParse {
+    pub urls: Vec<String>,
+    /// Non-blank, non-comment lines. `urls.len() < candidates` means lines were DROPPED.
+    pub candidates: usize,
+}
+
+/// Parse a corpus file: one URL per line, `#` comments and blanks ignored, and an optional leading
+/// `category<whitespace>url` (the shape of `docs/bench/oracle-corpus.txt`) reduced to the URL.
+///
+/// ⚠ **The whitespace is the bug this exists to hold still.** `oracle-corpus.txt` is SPACE-ALIGNED
+/// (`news` · padding · the URL) and this split was `'\t'`-only, so every line came back whole, the
+/// `http` filter rejected all 265 of them, and the sweep ran over an empty corpus — then printed a
+/// Phase-0 certificate reading `sites 0 · scored 0` with five shortfall lines and not one word
+/// saying the corpus was empty.
+///
+/// `candidates` travels with `urls` for exactly that reason. A count of URLs cannot detect its own
+/// absence; a count of URLs *next to* a count of the lines they came from can. Same shape as the
+/// tick-650 rule — fix a self-satisfying denominator with a SECOND POPULATION, never a threshold.
+pub fn parse_corpus(text: &str) -> CorpusParse {
+    let candidates: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .collect();
+    let urls = candidates
+        .iter()
+        .map(|l| l.rsplit(char::is_whitespace).next().unwrap_or(l).trim())
+        .filter(|u| u.starts_with("http"))
+        .map(str::to_string)
+        .collect();
+    CorpusParse {
+        urls,
+        candidates: candidates.len(),
+    }
+}
+
 /// The host key a sweep row is filed under, derived from the URL.
 ///
 /// Extracted rather than left inline because [`repeat_plan`] matches accumulated ROW NAMES against
@@ -2754,6 +2794,87 @@ pub fn falsify_certificate() -> Vec<Falsification> {
         });
     }
     out
+}
+
+#[cfg(test)]
+mod corpus_parse_tests {
+    use super::*;
+
+    /// **G_CORPUS_NONEMPTY — the corpus file the Phase-0 sweep reads must actually parse.**
+    ///
+    /// This gate exists because the sweep silently swept ZERO sites and reported a certificate: the
+    /// splitter was `'\t'`-only and `docs/bench/oracle-corpus.txt` is space-aligned, so 265 lines
+    /// became 0 URLs and the run printed `sites 0 · scored 0 · shape ≥0.75 on 0 (0.0%)`. Nothing in
+    /// that output said *the corpus was empty* — the shortfall lines look identical to a sweep that
+    /// ran and failed.
+    ///
+    /// The real corpus file is read from disk on purpose. A gate that asserts against a string
+    /// literal of what I *believe* the corpus looks like tests my belief; this tests the file the
+    /// sweep will actually open, so re-aligning the columns in that file fails HERE rather than in a
+    /// three-hour sweep that quietly measures nothing.
+    #[test]
+    fn the_real_corpus_file_parses_to_urls_not_to_silence() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../docs/bench/oracle-corpus.txt"
+        );
+        let text = std::fs::read_to_string(path)
+            .unwrap_or_else(|e| panic!("the Phase-0 corpus must be readable at {path}: {e}"));
+        let got = parse_corpus(&text);
+        assert!(
+            got.candidates > 200,
+            "the corpus is the 265-site frame; {} candidate lines is not it",
+            got.candidates
+        );
+        assert_eq!(
+            got.urls.len(),
+            got.candidates,
+            "EVERY non-comment line must parse as a URL — {} of {} did, so {} sites would be \
+             silently dropped from the certificate's denominator",
+            got.urls.len(),
+            got.candidates,
+            got.candidates - got.urls.len()
+        );
+        assert!(
+            got.urls.iter().all(|u| u.starts_with("http")),
+            "a parsed entry that is not a URL will be fetched as one"
+        );
+    }
+
+    /// **RED-proof, and the actual regression.** Both corpus shapes must reduce to the URL: the
+    /// space-aligned one (`oracle-corpus.txt`) and the tab-separated one (`corpus-v2.tsv`). Restore
+    /// the `'\t'`-only split and the first of these comes back whole and is filtered out — which is
+    /// precisely the bug, reproduced.
+    #[test]
+    fn a_space_aligned_corpus_line_reduces_to_its_url() {
+        let got = parse_corpus(
+            "# a comment\n\nnews         https://nytimes.com/\nshop\thttps://ebay.com/\nhttps://bare.example/\n",
+        );
+        assert_eq!(got.candidates, 3);
+        assert_eq!(
+            got.urls,
+            vec![
+                "https://nytimes.com/".to_string(),
+                "https://ebay.com/".to_string(),
+                "https://bare.example/".to_string(),
+            ],
+            "space-aligned, tab-separated and bare lines must all reduce to the URL"
+        );
+    }
+
+    /// A file with lines but no URLs must report `candidates > 0, urls == 0` — the state the caller
+    /// turns into a hard exit. Without the second number this is indistinguishable from an empty
+    /// file, and both are indistinguishable from a corpus that scored 0%.
+    #[test]
+    fn a_corpus_that_parses_to_nothing_still_reports_its_line_count() {
+        let got = parse_corpus("# header\nnews nytimes.com\nshop ebay.com\n");
+        assert_eq!(
+            (got.urls.len(), got.candidates),
+            (0, 2),
+            "the LINE COUNT is the second population — it is what proves 0 URLs is a parse failure \
+             and not an empty file"
+        );
+    }
 }
 
 #[cfg(test)]

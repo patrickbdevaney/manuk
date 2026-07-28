@@ -404,19 +404,52 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
     // `--urls-file` takes the corpus from a file — one URL per line, `#` comments and blanks
-    // ignored, and a leading `category<TAB>url` (the shape of `docs/bench/oracle-corpus.txt`) has the
-    // category stripped. A 265-site sweep is not expressible as a comma list on a command line
-    // without hitting ARG_MAX and, worse, without any record of WHICH list was swept.
+    // ignored, and a leading `category<WHITESPACE>url` (the shape of `docs/bench/oracle-corpus.txt`)
+    // has the category stripped. A 265-site sweep is not expressible as a comma list on a command
+    // line without hitting ARG_MAX and, worse, without any record of WHICH list was swept.
+    //
+    // ⚠⚠ **THIS SPLIT WAS `\t`-ONLY AND `oracle-corpus.txt` IS SPACE-ALIGNED** (`news` then padding
+    // then the URL), so `rsplit('\t')` returned each line WHOLE, `starts_with("http")` rejected all
+    // 265 of them, and the sweep ran over an EMPTY corpus — and then printed a full Phase-0
+    // certificate reading `sites 0 · scored 0 · shape ≥0.75 on 0 (0.0%)` with five shortfall lines.
+    // Every column was `NaN` or `0.0%` and none of it said *the corpus was empty*.
+    //
+    // That is the project's oldest failure shape wearing a new hat: **a metric whose denominator
+    // comes from the thing being measured is satisfied by measuring LESS**, and the tick-650 lesson
+    // says the fix is never a stricter threshold — it is a SECOND POPULATION that the metric cannot
+    // silently shrink. Here that population is the FILE: it knows how many candidate lines it had,
+    // and a parse that turns N candidates into 0 URLs is an INPUT error, not a 0% score.
+    //
+    // Split on any whitespace so both shapes parse, and refuse loudly rather than sweep nothing.
     let urls = match flag(args, "--urls-file") {
         Some(p) => match std::fs::read_to_string(&p) {
-            Ok(text) => text
-                .lines()
-                .map(str::trim)
-                .filter(|l| !l.is_empty() && !l.starts_with('#'))
-                .map(|l| l.rsplit('\t').next().unwrap_or(l).trim().to_string())
-                .filter(|u| u.starts_with("http"))
-                .collect::<Vec<_>>()
-                .join(","),
+            Ok(text) => {
+                let parsed = manuk_wpt::fidelity::parse_corpus(&text);
+                // A sweep of nothing is not a sweep, and a certificate computed over nothing is a
+                // lie with a clean bill of health. Never let the run reach the scorers.
+                if parsed.urls.is_empty() {
+                    eprintln!(
+                        "✗ --urls-file {p}: {} non-comment line(s), and NOT ONE parsed as a URL. \
+                         The corpus was not swept; no certificate is computable from it. \
+                         Expected `url` or `category<whitespace>url` per line.",
+                        parsed.candidates
+                    );
+                    std::process::exit(2);
+                }
+                if parsed.urls.len() < parsed.candidates {
+                    // A partial parse is the same bug, quieter. Say how much was dropped, because a
+                    // sweep of 12 sites reported as "the corpus" is how an optimistic number is born.
+                    eprintln!(
+                        "⚠ --urls-file {p}: {} of {} non-comment line(s) parsed as URLs — {} DROPPED \
+                         and NOT swept. The certificate below covers the {} that parsed, not the file.",
+                        parsed.urls.len(),
+                        parsed.candidates,
+                        parsed.candidates - parsed.urls.len(),
+                        parsed.urls.len()
+                    );
+                }
+                parsed.urls.join(",")
+            }
             Err(e) => {
                 eprintln!("✗ cannot read --urls-file {p}: {e}");
                 std::process::exit(2);

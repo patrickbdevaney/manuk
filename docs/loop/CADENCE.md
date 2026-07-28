@@ -15,7 +15,7 @@
 | median tick cycle | **22m** | 461 intervals |
 | median, last 10 | **48m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 409.1h elapsed |
+| **ticks per hour** | **1.13** | 409.3h elapsed |
 | median verify wall | **63s** | 401 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -558,6 +558,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **701** | 2026-07-28 03:45 | 42m | measurement | 63s | +239/−2 | 335 | 81 | 56.0% · | the regression's cause is CSS 2.1 §10.8.1, and the fix is a TRADE, so it does not land (20 |
 | **702** | 2026-07-28 04:20 | 36m | measurement | 63s | +93/−20 | 335 | 81 | 56.0% · | two of the three suspects were wrong, and the trade shrank 6× (2026-07-28) |
 | **703** | 2026-07-28 04:53 | 33m | measurement | 63s | +117/−32 | 335 | 81 | 56.0% · | four hypotheses, none of them the residual, and the fourth made it worse (2026-07-28) |
-| **704** | 2026-07-28 06:07 | 74m | capability | 63s | +850/−39 | 335 | 81 | 56.0% · | the fifth hypothesis was the wrong question, and the answer had been written down for 310  |
+| **704** | 2026-07-28 06:24 | 1.5h | capability | 63s | +306/−43 | 335 | 81 | 56.0% · | the fifth hypothesis was the wrong question, and the answer had been written down for 310  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
