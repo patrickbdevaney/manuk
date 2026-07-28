@@ -33642,3 +33642,65 @@ out-of-flow descendant, or a nested atomic rather than to the last IN-FLOW line 
 in-flow last line and re-measure; the patch is parked and ready. **(2) The rust-lang table regression
 from t695 remains OPEN** and is now fully explained — it is the same mechanism, so (1) closes it.
 **(3) THE FULL CORPUS SWEEP** is still owed (13 of 265).
+
+## Tick 702 — two of the three suspects were wrong, and the trade shrank 6× (2026-07-28)
+
+HYPOTHESIS: t701's NEXT #1 — the parked §10.8.1 patch regresses `desitales2` because
+`last_line_baseline` takes the MAX over the atomic's whole subtree instead of the last IN-FLOW line
+box. Bar: close the control's gap without losing `blog.rust-lang`'s 370.
+
+### THE STATED HYPOTHESIS WAS WRONG, AND SAYING SO IS THE RESULT
+
+Rewriting the helper to keep the **last** baseline in tree order rather than the lowest one changed
+`desitales2` by **nothing at all** — 57.2% before and after, to the decimal. The suspect named in
+t701's NEXT was simply not the cause, and one build proved it. Recorded because a hypothesis that
+survives into a second tick unexamined becomes an assumption.
+
+### THE ACTUAL CAUSE — §10.8.1 IS THE `inline-block` RULE, AND ONLY THAT
+
+The patch applied the last-line-baseline rule to **every atomic**, and the atomics are not one thing:
+
+- `inline-block` → the baseline of its last in-flow line box (CSS 2.1 §10.8.1) ✅
+- `inline-flex` → the baseline of its **first flex item** (CSS Flexbox §8.5) ✗
+- `inline-grid` → its first grid item's ✗
+
+Different boxes, different edges. `blog.rust-lang.org` is inline-blocks and `desitales2` has the
+flex/grid ones, which is exactly why one site loved the change and the other hated it. Gating the rule
+on `Display::InlineBlock`:
+
+```text
+                                pre-session   HEAD(t701)   patch v1   patch v2 (this tick)
+  blog.rust-lang.org geometry        383          442          13          16
+  desitales2 SHAPE                     —         61.5%       57.2%       60.8%
+  desitales2 median dy                 —            80         103          70    <- BETTER than HEAD
+  vimeo.com geometry (isolated)      803          803         803         803
+  the 4-row Chrome fixture           4/4 exact at every step, incl. the overflow:hidden control
+```
+
+### STILL PARKED, AND THE REMAINING NUMBER IS 0.7
+
+`desitales2` SHAPE is **60.8% against HEAD's 61.5%** — deterministic on this site, so a real −0.7 —
+even though its median `dy` **improved 80 → 70** and `blog.rust-lang` gains 426 divergences. The trade
+is **6× smaller than t701's and it is still a trade**, so it still does not land. I am aware this is
+the second tick to park the same patch, and that "the win is now enormous" is precisely the argument
+the ratchet exists to refuse.
+
+Patch updated in place at `docs/loop/parked/t701-inline-block-baseline.patch` (165 lines) and in
+`git stash`. Tree at HEAD, layout suite 94/94.
+
+TICK SHAPE: measurement
+CLUSTER: C01ca (geometry) — cause refined, fix still withheld.
+Gates: no engine change; layout suite 94/94 on the reverted tree.
+WIKI: none [forced] — same reason as t701: the engine does not have this behaviour, so the wiki must
+not describe it.
+PATTERN: **"atomic inline" is a category, not a behaviour.** `inline-block`, `inline-flex`,
+`inline-grid` and a replaced `<img>` share one code path here and have *four different* baseline rules.
+A change written against one of them and applied to the `atomic_h > 0` predicate silently retargets the
+other three — and the fixture cannot see it, because a fixture written for inline-block contains no
+flex. When a rule cites a spec section, check whether the section names a DISPLAY TYPE and gate on it.
+
+NEXT: **(1) THE RESIDUAL 0.7** — likeliest remaining cause is that `last_line_baseline` still counts
+lines inside a **float** (a float's box is a Block child, so `walk` descends into it, and a float's
+lines are not in the normal flow). That needs an out-of-flow marker on `LayoutBox`, which is also
+t697's open NEXT — **one marker closes both**. **(2)** the rust-lang table regression from t695 stays
+open and is the same mechanism, so (1) closes it too. **(3) THE FULL CORPUS SWEEP** (13 of 265).

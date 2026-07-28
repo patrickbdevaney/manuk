@@ -1,8 +1,8 @@
 diff --git a/engine/layout/src/lib.rs b/engine/layout/src/lib.rs
-index 528e7423..c881ff2f 100644
+index 528e7423..f68addef 100644
 --- a/engine/layout/src/lib.rs
 +++ b/engine/layout/src/lib.rs
-@@ -1535,6 +1535,21 @@ fn is_atomic_inline_replaced(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool
+@@ -1535,6 +1535,25 @@ fn is_atomic_inline_replaced(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool
          )
  }
  
@@ -10,21 +10,25 @@ index 528e7423..c881ff2f 100644
 +/// number CSS 2.1 §10.8.1 makes an `inline-block`'s baseline. `LayoutBox::walk` visits every box
 +/// and each box carries its own inline fragments, so the deepest/lowest baseline is simply the max.
 +fn last_line_baseline(b: &LayoutBox) -> Option<f32> {
-+    let mut best: Option<f32> = None;
++    // ⚠ **"LAST" IS DOCUMENT ORDER, NOT THE LOWEST ON THE PAGE.** Taking `max` over the whole subtree
++    //   reads the bottom-most baseline anywhere inside the atomic — which is a FLOAT, a nested
++    //   atomic, or any box the flow pushed below the last line whenever one exists. The spec says the
++    //   *last line box in the normal flow*, so this walks in tree order and keeps the LAST one seen.
++    let mut last: Option<f32> = None;
 +    b.walk(&mut |bx| {
 +        if let BoxContent::Inline(frags) = &bx.content {
-+            for f in frags {
-+                best = Some(best.map_or(f.baseline, |v: f32| v.max(f.baseline)));
++            if let Some(f) = frags.last() {
++                last = Some(f.baseline);
 +            }
 +        }
 +    });
-+    best
++    last
 +}
 +
  fn establishes_bfc(s: &ComputedStyle) -> bool {
      // `flow-root` exists for EXACTLY this: a block box whose only distinguishing property is that it
      // establishes a BFC, so it contains its floats without `overflow:hidden`'s clipping.
-@@ -4604,10 +4619,34 @@ impl Ctx<'_> {
+@@ -4604,10 +4623,41 @@ impl Ctx<'_> {
                      let r = self.layout_block(node, cw, None, 0.0, 0.0, 0.0, &mut fc);
                      let advance = ml + r.boxx.rect.width + mr;
                      let height = r.margin_top + r.boxx.rect.height + r.margin_bottom;
@@ -44,7 +48,14 @@ index 528e7423..c881ff2f 100644
 +                    //    the line is **h55** at `font-size:48px` and we made it **h59**; h18 vs h22
 +                    //    at 16px. The `overflow:hidden` row is the control — Chrome DOES use the
 +                    //    bottom margin edge there, and it already agreed (h59 both).
-+                    let baseline = if s.overflow == Overflow::Visible {
++                    // ⚠ **§10.8.1 IS THE `inline-block` RULE, AND ONLY THAT.** An `inline-flex`
++                    //   container's baseline is its FIRST flex item's (CSS Flexbox §8.5), and an
++                    //   `inline-grid`'s its first grid item's — different boxes, different edges.
++                    //   Applying the last-line rule to all atomics regressed `desitales2` by 4.3
++                    //   SHAPE points (23 containers ~10px too tall) while being right on
++                    //   `blog.rust-lang.org`; the two sites differ in exactly this.
++                    let uses_last_line = matches!(disp, Some(Display::InlineBlock));
++                    let baseline = if uses_last_line && s.overflow == Overflow::Visible {
 +                        last_line_baseline(&r.boxx)
 +                            .map(|b| r.margin_top + (b - r.boxx.rect.y))
 +                            .unwrap_or(height)
@@ -59,7 +70,7 @@ index 528e7423..c881ff2f 100644
                          space_before: *pending_space && !*first,
                          valign: s.vertical_align,
                          // `white-space` is INHERITED, so the atomic's own computed style already
-@@ -4838,6 +4877,7 @@ impl Ctx<'_> {
+@@ -4838,6 +4888,7 @@ impl Ctx<'_> {
                          report_h: Some(height),
                          atomic: None,
                          atomic_h: 0.0,
@@ -67,7 +78,7 @@ index 528e7423..c881ff2f 100644
                          valign: VerticalAlign::Baseline,
                      });
                  } else if node.map(|n| self.dom.tag_name(n)) == Some(Some("br")) {
-@@ -4875,6 +4915,7 @@ impl Ctx<'_> {
+@@ -4875,6 +4926,7 @@ impl Ctx<'_> {
                          report_h: Some(height),
                          atomic: None,
                          atomic_h: 0.0,
@@ -75,7 +86,7 @@ index 528e7423..c881ff2f 100644
                          valign: VerticalAlign::Baseline,
                      });
                  }
-@@ -4943,6 +4984,7 @@ impl Ctx<'_> {
+@@ -4943,6 +4995,7 @@ impl Ctx<'_> {
                              report_h: None,
                              atomic: None,
                              atomic_h: 0.0,
@@ -83,7 +94,7 @@ index 528e7423..c881ff2f 100644
                              valign: VerticalAlign::Baseline,
                          }),
                      )
-@@ -4951,6 +4993,7 @@ impl Ctx<'_> {
+@@ -4951,6 +5004,7 @@ impl Ctx<'_> {
                      box_,
                      advance,
                      height,
@@ -91,7 +102,7 @@ index 528e7423..c881ff2f 100644
                      space_before,
                      valign,
                      no_wrap,
-@@ -4994,6 +5037,7 @@ impl Ctx<'_> {
+@@ -4994,6 +5048,7 @@ impl Ctx<'_> {
                              report_h: None,
                              atomic: Some(box_),
                              atomic_h: height,
@@ -99,7 +110,7 @@ index 528e7423..c881ff2f 100644
                              valign,
                          }),
                      )
-@@ -5047,6 +5091,7 @@ impl Ctx<'_> {
+@@ -5047,6 +5102,7 @@ impl Ctx<'_> {
                              report_h: Some(report_height),
                              atomic: None,
                              atomic_h: 0.0,
@@ -107,7 +118,7 @@ index 528e7423..c881ff2f 100644
                              valign: VerticalAlign::Baseline,
                          }),
                      )
-@@ -5139,6 +5184,9 @@ struct LineFrag {
+@@ -5139,6 +5195,9 @@ struct LineFrag {
      /// `Some` for an `inline-block`: the box to place, and its margin-box height.
      atomic: Option<Box<LayoutBox>>,
      atomic_h: f32,
@@ -117,7 +128,7 @@ index 528e7423..c881ff2f 100644
      valign: VerticalAlign,
  }
  
-@@ -5250,7 +5298,9 @@ fn close_line(
+@@ -5250,7 +5309,9 @@ fn close_line(
              // (distance above the baseline, distance below it) for the same placement, and if the
              // two ever disagree the box is placed outside the line box it asked for.
              let (a, b) = match f.valign {
@@ -128,7 +139,7 @@ index 528e7423..c881ff2f 100644
                  VerticalAlign::Middle => (h / 2.0 + ascent * 0.25, h / 2.0 - ascent * 0.25),
                  VerticalAlign::TextTop => (ascent, h - ascent),
                  VerticalAlign::TextBottom => (h - descent, descent),
-@@ -5308,8 +5358,10 @@ fn close_line(
+@@ -5308,8 +5369,10 @@ fn close_line(
                  VerticalAlign::TextBottom => baseline + descent - h,
                  VerticalAlign::Sub => baseline + ascent * 0.15 - h,
                  VerticalAlign::Super => baseline - ascent * 0.35 - h,
@@ -141,7 +152,7 @@ index 528e7423..c881ff2f 100644
              };
              b.translate(fx, box_top);
              atomic_boxes.push(*b);
-@@ -5362,6 +5414,10 @@ enum InlineItem {
+@@ -5362,6 +5425,10 @@ enum InlineItem {
          box_: Box<LayoutBox>,
          advance: f32,
          height: f32,
