@@ -107,6 +107,7 @@
   - L1874 · The page was measuring a document with no CSS in it (tick 714)
   - L1910 · The third instrument class
   - L1920 · And a correct fix that was refused
+  - L1931 · The retraction (tick 715), and the control that was not enough
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1232,4 +1233,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1143 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1144 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

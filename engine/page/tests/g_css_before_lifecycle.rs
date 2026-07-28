@@ -1,0 +1,199 @@
+//! **G_CSS_BEFORE_LIFECYCLE — the author's stylesheets were applied AFTER `load` had already fired,
+//! so every script the page has measured a document with no CSS in it.**
+//!
+//! `load_async` — the path the agent, the oracle and every fidelity measurement navigate with —
+//! fetched and applied external stylesheets in `finish_loading`, which runs *after* `DOMContentLoaded`
+//! and *after* `load`. The navigation ledger printed the order plainly for eight ticks and nobody read
+//! it as an ordering:
+//!
+//! ```text
+//!   cascade+layout+blocking scripts
+//!   DOMContentLoaded
+//!   load event                 <- every script the page has has now run
+//!   initial images+masks
+//!   external CSS               <- the site's CSS arrives HERE
+//! ```
+//!
+//! **This is not a styling bug. It is a MEASUREMENT bug, and the page is the one measuring.**
+//! The final painted layout was always correct — the sheets did arrive, just late — so every
+//! screenshot, every box dump and every fidelity score looked exactly as it should. What was wrong
+//! was what the *page* could see while it was running: on a three-line fixture whose only sheet is
+//! one `<link>`, `getComputedStyle(el).display` read `block` where the engine's own final layout is
+//! `flex`, and a `width:70%` child measured the full `1184px`, at `DOMContentLoaded`, at `load`, and
+//! from every timer after them.
+//!
+//! Every carousel, sticky header, virtualised list, masonry grid, chart library and "is this element
+//! on screen" check reads geometry and writes the answer back into the DOM. Fed UA-default geometry
+//! they write a wrong answer that **no later cascade can undo** — the stylesheet arrives afterwards
+//! and restyles a tree the page has already mis-built.
+//!
+//! The spec is not subtle: a `<link rel=stylesheet>` is render-blocking *and* script-blocking, and
+//! `load` does not fire until the style sheets have loaded.
+//!
+//! ⚠ **Named non-claim, asserted as such below:** a script that BLOCKS the parser (no `defer`, no
+//! `async`) still runs before the sheets are applied — closing that means fetching the sheets before
+//! the `Page` exists, which is the shell path's off-thread prefetch and is its own change. The gate
+//! pins the current honest state so the remaining half cannot be forgotten *or* silently regressed.
+//!
+//! ⚠⚠ **This gate was written at t714, REMOVED with a revert, and restored at t715.** The revert was
+//! made on a false attribution: `www.welt.de` collapses from 95.6% coverage to 0.03% with this fix in,
+//! and that looked like the fix's doing. It is not. The **unmodified** engine reproduces the identical
+//! blank page, and the identical `Failed to load website due to adblock` line, with nothing changed but
+//! `MANUK_LOAD_BUDGET_MS=12000 -> 40000`. welt blanks itself whenever our engine lets its anti-adblock
+//! guard run to a verdict; the 95.6% was **our own 12s timeout cutting the site off before it could
+//! reject us** — coverage achieved by not running the page's script, which is the exact shape of lie
+//! `G_FIRST_PAINT` and `G_DEFER` exist to strip off.
+
+use std::io::{Read, Write};
+use std::net::TcpListener;
+
+use manuk_text::FontContext;
+
+/// Serves ONE stylesheet. Everything else 404s, so a pass cannot come from anywhere but this sheet.
+fn css_origin() -> String {
+    let l = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let addr = l.local_addr().unwrap();
+    std::thread::spawn(move || {
+        for stream in l.incoming() {
+            let Ok(mut s) = stream else { continue };
+            std::thread::spawn(move || {
+                let mut buf = [0u8; 8192];
+                let n = s.read(&mut buf).unwrap_or(0);
+                let req = String::from_utf8_lossy(&buf[..n]);
+                let path = req
+                    .lines()
+                    .next()
+                    .and_then(|l| l.split_whitespace().nth(1))
+                    .unwrap_or("/")
+                    .to_string();
+                let (status, ctype, body): (&str, &str, &str) = match path.as_str() {
+                    "/site.css" => (
+                        "200 OK",
+                        "text/css",
+                        ".shell{display:flex}\n.main{width:70%}\n.side{width:30%}\n",
+                    ),
+                    _ => ("404 Not Found", "text/plain", "no"),
+                };
+                let _ = s.write_all(
+                    format!(
+                        "HTTP/1.1 {status}\r\nContent-Type: {ctype}\r\n\
+                         Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                    .as_bytes(),
+                );
+            });
+        }
+    });
+    format!("http://{addr}")
+}
+
+fn text(page: &manuk_page::Page, sel: &str) -> String {
+    let root = page.dom().root();
+    let hits = manuk_css::query_selector_all(page.dom(), root, sel);
+    assert!(!hits.is_empty(), "{sel} must exist in the document");
+    page.dom().text_content(hits[0])
+}
+
+/// **One test, on purpose** — two SpiderMonkey contexts in one binary tear down messily and the
+/// binary segfaults *sometimes*, which is worse than failing (see `g_defer`).
+#[test]
+fn a_script_measuring_the_page_sees_the_authors_stylesheets() {
+    let fonts = FontContext::new();
+    let origin = css_origin();
+
+    // Each observation is written into its own element the instant it is taken, so a later phase
+    // cannot overwrite an earlier one's evidence — the failure this gate is about is precisely a
+    // phase ordering, and a single accumulating string hides which phase produced what.
+    let html = format!(
+        r#"<!doctype html><html><head><meta charset="utf-8">
+             <link rel="stylesheet" href="{origin}/site.css">
+           </head><body>
+             <div class="shell" id="shell"><div class="main" id="main">M</div><div class="side">S</div></div>
+             <div id="at-blocking">-</div>
+             <div id="at-dcl">-</div>
+             <div id="at-load">-</div>
+             <div id="at-timer">-</div>
+             <script>
+               function obs() {{
+                 var s = getComputedStyle(document.getElementById('shell')).display;
+                 var w = Math.round(document.getElementById('main').getBoundingClientRect().width);
+                 return s + '/' + w;
+               }}
+               document.getElementById('at-blocking').textContent = obs();
+               document.addEventListener('DOMContentLoaded', function () {{
+                 document.getElementById('at-dcl').textContent = obs();
+               }});
+               window.addEventListener('load', function () {{
+                 document.getElementById('at-load').textContent = obs();
+                 setTimeout(function () {{
+                   document.getElementById('at-timer').textContent = obs();
+                 }}, 0);
+               }});
+             </script>
+           </body></html>"#
+    );
+
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    // `load_async` ONLY — deliberately. `finish_loading` is where the sheets used to be applied, so
+    // calling it would let the bug's own late apply satisfy the gate. The whole claim is that the
+    // page is styled by the time `load_async` has fired its lifecycle events.
+    let page = rt.block_on(manuk_page::Page::load_async(
+        &html,
+        &format!("{origin}/index.html"),
+        &fonts,
+        1200.0,
+    ));
+
+    let dcl = text(&page, "#at-dcl");
+    let load = text(&page, "#at-load");
+    let timer = text(&page, "#at-timer");
+    let blocking = text(&page, "#at-blocking");
+    println!("CSS-BEFORE-LIFECYCLE  blocking={blocking} dcl={dcl} load={load} timer={timer}");
+
+    // The engine's own final answer, which was ALWAYS right — this is the value the page should have
+    // been able to read, and quoting it in the failure message is what stops the next reader
+    // concluding the cascade is broken when it is the schedule that is.
+    // `1184` is the 1200px viewport less the UA `body{margin:8px}`; `829` is 70% of it. Both are
+    // MEASURED on this fixture, not derived — a gate whose expected value came from arithmetic in
+    // someone's head tests the arithmetic.
+    let want = "flex/829";
+
+    // (1) **`DOMContentLoaded`.** RED: move the `fetch_and_apply_stylesheets` call in `load_async`
+    // back below `fire_lifecycle("DOMContentLoaded")` → `block/1184` (the UA-default full width).
+    assert_eq!(
+        dcl, want,
+        "at DOMContentLoaded a script must see the AUTHOR's layout, not the UA default \
+         (the engine's own final layout here is {want})"
+    );
+
+    // (2) **`load`.** Separately asserted, because the two lifecycle events are fired from different
+    // places and a fix that reaches one need not reach the other.
+    assert_eq!(
+        load, want,
+        "at `load` a script must see the AUTHOR's layout — the spec does not even let `load` fire \
+         until the style sheets have loaded"
+    );
+
+    // (3) **A timer after `load`.** This is where the real damage lands: a library that defers its
+    // measurement to the next task (which most do, to avoid a forced reflow) was measuring an
+    // unstyled document *after* the page had finished loading.
+    assert_eq!(
+        timer, want,
+        "a task queued after `load` must see the AUTHOR's layout"
+    );
+
+    // (4) **THE NAMED NON-CLAIM, PINNED.** A parser-blocking script still runs before the sheets are
+    // applied. Asserting the honest current value — rather than leaving it unmentioned — means the
+    // day it is fixed this gate goes red and says so, instead of a half-fix passing quietly. If you
+    // are here because this line failed and `blocking` now reads `flex/829`: that is the remaining
+    // half landing. Delete this assertion and say so in the journal.
+    assert_eq!(
+        blocking, "block/1184",
+        "a parser-BLOCKING script still runs before the stylesheets are applied — the known \
+         remaining half. If this now reads {want}, the other half landed; update the gate."
+    );
+}

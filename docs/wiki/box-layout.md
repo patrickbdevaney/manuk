@@ -1927,3 +1927,27 @@ masking a second divergence. Full detail, the exact patch and the gate's fixture
 ⚠ The reusable half: **a fix can be correct and still be refused, because correctness moved a page
 from "blind" to "seeing something wrong."** welt was not working before; it was unable to notice that
 it was not working. That is a real improvement to trade away only once the thing it now sees is fixed.
+
+### The retraction (tick 715), and the control that was not enough
+
+The fix above was **refused at t714** because `www.welt.de` collapsed from 95.6% coverage to 0.03%
+with it in, controlled twice by reverting the hunk and rebuilding. That control was sound and its
+conclusion was wrong.
+
+```text
+  control binary, UNMODIFIED, MANUK_LOAD_BUDGET_MS=40000
+    ERROR  Failed to load website due to adblock: Error: Failed to execute packing script
+    structural: 0.0% (3360 paths, 3359 missing, 1 misplaced)
+```
+
+The unmodified engine blanks welt too. welt's anti-adblock guard blanks the page whenever our engine
+lets it reach a verdict, and the 95.6% was **our own 12-second timeout cutting the site off before it
+could reject us** — coverage achieved by not running the page's script.
+
+> **A control that varies YOUR CHANGE answers *"did my change do this?"*. It does not answer *"is my
+> change the only thing that does this?"*** The second question needs a knob the change does not
+> touch. Here it was the load budget.
+
+⚠ And the corollary that is easy to mis-read: **a metric can go DOWN because the engine got more
+honest.** Refusing a correct fix to hold that number would have been preserving the lie the north
+star names by hand — *"fast because we never ran the script"*.

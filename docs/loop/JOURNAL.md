@@ -34790,3 +34790,108 @@ can see. The message comes from a module bundle, not the document, so the next s
 hooks the bait measurement rather than the console. **(2)** re-land the ordering fix the moment (1)
 is closed — the patch is one `await` and the gate is written out in full below.
 **(3)** the ikea 21-box coverage loss (t713), bisectable across t693–t711.
+
+## Tick 715 — the control said the fix was not guilty: welt's 95.6% was OUR OWN TIMEOUT (2026-07-28)
+
+HYPOTHESIS: t714 refused the CSS-ordering fix because `www.welt.de` collapsed 95.61% → 0.03%, and
+left the blocker as *"why does welt's guard fire"*. Bar: name it — or falsify the attribution.
+
+### IT WAS THE ATTRIBUTION
+
+The ledger for welt on the **control** binary reads `external CSS ms=4042` inside `finish_loading`,
+`dynamic scripts ms=4867 rounds_run=3`, and `load budget of 12.0s exhausted`. Moving the CSS work out
+of `finish_loading` therefore *frees* budget, so welt's own JavaScript gets **further** — and further
+is where its anti-adblock guard reaches a verdict. That is a hypothesis about the budget, not about
+the ordering, and it is one command to test:
+
+```text
+  control binary, unmodified, MANUK_LOAD_BUDGET_MS=40000
+    ERROR  Failed to load website due to adblock: Error: Failed to execute packing script
+    structural: 0.0% (3360 paths, 3359 missing, 1 misplaced)
+```
+
+**The unmodified engine blanks welt too.** Same page, same message, nothing changed but a number in
+the environment. So the fix was never the cause, and **welt's 95.6% coverage was our own 12-second
+timeout cutting the site off before it could reject us.**
+
+⚠⚠ That is *coverage achieved by not running the page's script* — the precise shape of lie the north
+star names twice (*"fast because we never ran the script"*) and that `G_FIRST_PAINT` and `G_DEFER`
+were built to strip off. **Refusing a correct fix to preserve that number would have been preserving
+the lie**, so t714's refusal is RETRACTED and the fix and its gate are restored.
+
+### WHAT THE RETRACTION COST, AND WHY IT WAS STILL THE RIGHT CALL AT t714
+
+Nothing was lost but a tick: the patch and the gate's fixture were written into `WEB-PATTERNS.md`
+verbatim precisely so re-landing would be one step. And the refusal was correct **on the evidence
+available**, which was two controlled runs showing the collapse appear with the change and vanish
+without it. That evidence is real; it is just not sufficient, and the missing step has a name:
+
+> **A CONTROL THAT VARIES THE CHANGE ANSWERS "did my change do this". IT DOES NOT ANSWER "is my
+> change the only thing that does this."** Reverting the patch proved correlation with the patch. It
+> took varying something *else* — a budget the patch is not part of — to find that the collapse has
+> a second, pre-existing cause and the patch merely arrives at it sooner.
+
+### THE REAL BLOCKER, NAMED AND SEPARATED
+
+`welt.de` loads `https://html-load.com/app.js` → **302** → `https://stg.html-load.com/app.js`,
+113,067 bytes, heavily obfuscated, whose own string table contains `cache_adblock_circumvent_score`,
+`banner_ad` and `contentDocument`. welt's guard reports `Failed to execute packing script`. So the
+open question is a **capability** one — a dynamically-created iframe and `contentDocument` — and not
+an ordering one, and it is what would make welt *render* instead of blank. It is now a separate item
+with a 113KB reproduction, not a blocker glued to an unrelated fix.
+
+TICK SHAPE: pattern-class (a retraction, and the fix it unblocks)
+CLUSTER: `C01ca geometry: <div>` (111 sites / 14,002 hits) — the first divergence on the
+byte-reproducible control (`www.desitales2.com`: `.site-content` reading `block` to the page while
+the engine lays it out `flex`) is now fixed at the schedule. Site-count movement is owed to the next
+sweep and is not claimed.
+Gates: `g_css_before_lifecycle` restored (`engine/page`, `--features stylo,spidermonkey`) — four
+assertions at four phases, RED-proven at t714 against two mutations each failing a DIFFERENT one:
+delete the call → `block/1184` everywhere (the exact pre-fix state); move it below
+`fire_lifecycle("DOMContentLoaded")` → DCL red while `load` and the timer stay green. Assertion (4)
+is a PIN, not a claim: a parser-blocking script still runs before the sheets, and the gate says so in
+its own failure message so the remaining half cannot land silently. The whole wall runs below.
+Also this tick: the due **self-audit** (tick 705 → 715). One item red and it is not mine to fix —
+*verify wall 589s exceeds the 300s target* — noted per V1-SCOPE and left to the observer; the t711
+wall audit already measured the wall as lean and retracted its own "parity is 71%" finding.
+WIKI: `docs/wiki/box-layout.md` — "The page was measuring a document with no CSS in it" (t714),
+extended with the retraction.
+PATTERN: **a control that varies YOUR CHANGE cannot tell you your change is the only cause.** Revert-
+and-remeasure is the project's standard control and it is genuinely good — it cleared t712 of the
+ikea coverage loss two ticks ago. But it answers *"did I do this?"*, and when the answer is yes it
+feels final, because the number moves exactly with the patch. The second question — *"what else does
+this?"* — needs a knob the patch does not touch. Here that knob was the load budget, and it turned a
+refused fix into a landed one and a mystery into a 113KB named artifact. ⚠ The corollary is the
+uncomfortable half: **a metric can go DOWN because the engine got more honest.** welt's coverage fell
+when we stopped timing out before the site could say no.
+
+### ⚠⚠ AND THE WALL CAUGHT A BAR 0 REGRESSION THE FIX BROUGHT WITH IT
+
+The restored fix went red on **`G_LOAD`** — *"a dead subresource can hold the document hostage"*, a
+Bar 0 gate — on its first full wall:
+
+```text
+  unbudgeted            page took 13.4s with a 2s budget   (ceiling: 2x the budget)
+  own full budget       page took  5.4s with a 2s budget
+  SHARED deadline       page took  3.9s with a 2s budget   ✅
+```
+
+`finish_loading` runs every one of its phases through a `phase()` closure sharing **one** deadline;
+`load_async` had just acquired a phase that shared **nothing**. The first correction — wrapping the
+call in its own `timeout(load_budget())` — was still wrong and still red, and the reason is worth
+keeping: **a bound that each phase gets a fresh copy of is not a bound on the page.** `load_async`
+was then spending 2× the budget by itself before `finish_loading` had spent any. The fix is one
+`nav_deadline` computed once and shared by the stylesheet phase and the enhancement phases —
+`timeout_at`, not `timeout` — which is what the comment already sitting above those enhancement
+phases has demanded since it was written: *"Whatever bounds one of these phases must bound both, or
+the bound is decorative."* It bounded both; it just did not know about the third.
+
+That is the second time in three ticks that **the thing which caught the error was a gate rather than
+a reading**, and it is the argument for the wall in one line: this change was measured on eight live
+sites and reviewed twice, and neither would ever have found a 2s budget being spent twice.
+
+NEXT: **(1) `contentDocument` ON A DYNAMICALLY-CREATED IFRAME** — the named capability behind welt's
+`Failed to execute packing script`, and the thing that makes welt render rather than blank.
+**(2) RE-RUN HEAD-20** — the CSS-ordering fix changes what every script on every page measures, and
+8 sites is not a population; `ikea` SHAPE 53.58 → 55.30 is the only movement measured so far.
+**(3)** the ikea 21-box coverage loss (t713), bisectable across t693–t711.
