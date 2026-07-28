@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **480** | ticks 1–723 |
-| median tick cycle | **22m** | 479 intervals |
+| ticks landed | **481** | ticks 1–724 |
+| median tick cycle | **22m** | 480 intervals |
 | median, last 10 | **21m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.14** | 420.2h elapsed |
-| median verify wall | **63s** | 419 ticks |
+| **ticks per hour** | **1.14** | 420.6h elapsed |
+| median verify wall | **63s** | 420 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **366**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**231 of 480 ticks** (48%) moved a
+**232 of 481 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **231** capability ticks, median cycle **22m**
+* **232** capability ticks, median cycle **22m**
 * median diff per tick: **+240 / −34** lines across 8 files
 
 ## Every tick
@@ -577,5 +577,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **721** | 2026-07-28 16:36 | 22m | audit | 63s | +258/−33 | 339 | 81 | 56.0% · | surface audit #44: a `works` row that does not work, and the half nobody tested (2026-07-2 |
 | **722** | 2026-07-28 16:56 | 20m | pattern-class | 63s | +217/−32 | 340 | 81 | 56.0% · | `rem` had a twin nobody set (2026-07-28) |
 | **723** | 2026-07-28 17:17 | 21m | pattern-class | 63s | +315/−37 | 341 | 81 | 56.0% · | the third sibling, named before it was measured (2026-07-28) |
+| **724** | 2026-07-28 17:37 | 20m | pattern-class | 63s | +106/−32 | 341 | 81 | 56.0% · | `CSS.supports()` said no to everything, and it was never about units (2026-07-28) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

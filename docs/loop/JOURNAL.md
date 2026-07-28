@@ -35548,3 +35548,55 @@ page that branches on it may render differently. This is the largest observable-
 since t719 and its blast radius is unmeasured. **(2)** container-query units (`cqw`/`cqh`/`cqi`/
 `cqb`) — the honest `false` pinned by the gate. **(3)** the synchronous `contentDocument` residual
 (t717). **(4)** `document.styleSheets` reports 0 where Chrome reports 9 (t718).
+
+## Tick 725 — the blast radius I flagged as unmeasured measures ZERO, and that is the finding (2026-07-28)
+
+HYPOTHESIS: t724 made `CSS.supports()` answer truthfully on the measurement path after it had said
+`false` to everything. Any page that branches on it may now render differently, and I closed that
+tick by writing *"the largest observable-behaviour change since t719 and its blast radius is
+unmeasured."* Bar: measure it.
+
+### IT IS ZERO ON THIS CORPUS
+
+```text
+  site               cov t720 -> t725     shape t720 -> t725     scored
+  keirin.jp            75.38 ->  75.38      60.21 ->  60.21      1038 -> 1038
+  www.ikea.com         97.08 ->  97.08      54.58 ->  54.58       698 ->  698
+  www.agoda.com         7.39 ->   7.39      59.32 ->  59.32        59 ->   59
+  comix.to / naukri                    identical
+  www.welt.de          95.63 ->  95.61      65.44 ->  65.09      3171 -> 3137
+```
+
+Four sites byte-identical on every column. `welt` moves 0.35 with its path count moving 3171 → 3137,
+which is live content. **MEAN VISUAL 55.8% → 61.3%**, which is the only real move and belongs to the
+run composition (`ebay` and `playhop` produced rows this time and did not at t720), not to the fix.
+
+**So a bug that was real, general, spec-visible and shipped in the shell changed nothing measurable
+on twenty of the most-trafficked sites in the corpus.** That is not a reason to doubt the fix — the
+mechanism was proven directly, `display:flex` went `false → true` against Chrome, and the gate
+RED-proves both directions. It is a fact about **where** `CSS.supports` guards live: not on the home
+pages of high-traffic destinations, which ship one codepath and are tested against real browsers, but
+in component libraries, embedded widgets and the long tail that cannot test everywhere.
+
+TICK SHAPE: measurement
+CLUSTER: none. ⚠ And the `display:`-band hypothesis t724 floated — *a page told `display:flex` is
+unsupported may ship floats, and we book its float layout as a geometry bug* — is **not supported by
+this data** on these twenty sites. Recorded as weakened, not disproved: the corpus cannot see a guard
+that is not there.
+Gates: none (no engine change). Rows banked at `docs/bench/head20-rows-t725.tsv`.
+WIKI: none [forced] — a measurement tick; the engine is unchanged since t724.
+PATTERN: **a null result is only worth having if the prediction was written down BEFORE the
+measurement, and it is worth exactly as much as the prediction was specific.** I closed t724 with
+"blast radius unmeasured" precisely so this tick could not be a shrug — and the honest reading is
+narrow: *zero on twenty high-traffic home pages*, which is evidence about **where the pattern lives**
+rather than about whether the bug mattered. ⚠ The trap avoided: it would have been easy to leave t724
+implying a large win and never check, and equally easy to read this table as *"the fix was
+pointless."* Neither is what a `false → true` on `display:flex` against Chrome means. **A capability
+fix is justified by the capability; the corpus tells you who was USING it, which is a different
+question and is allowed to answer zero.**
+
+NEXT: **(1)** container-query units (`cqw`/`cqh`/`cqi`/`cqb`) — the honest `false` pinned by t724's
+gate, and the one remaining Chrome divergence on that probe. **(2)** the synchronous
+`contentDocument` residual (t717). **(3)** `document.styleSheets` reports 0 where Chrome reports 9
+(t718). **(4)** the full corpus sweep still needs a ~10h quiet window — three constitution checks have
+now asked for it.
