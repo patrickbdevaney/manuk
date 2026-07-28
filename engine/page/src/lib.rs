@@ -1710,6 +1710,26 @@ thread_local! {
     /// here: seed it, then construct. See [`set_pending_identity`].
     static PENDING_CSP: std::cell::RefCell<Option<(manuk_net::csp::Csp, Vec<NodeId>)>> =
         const { std::cell::RefCell::new(None) };
+
+    /// The `<script>` nodes the **next** page built on this thread inlined from the network.
+    ///
+    /// Same shape and same reason as `PENDING_CSP` above: the fact is known at FETCH time, it is
+    /// needed while `from_dom` is running the document's scripts, and the fetch destroys the
+    /// evidence on its way past (`src` is removed once the source is inlined). Seed, then construct.
+    /// The JS layer takes ownership of the set at `load_document`, so it is document-scoped from
+    /// there on and this cell holds nothing between navigations.
+    static PENDING_EXTERNAL_SCRIPTS: std::cell::RefCell<std::collections::HashSet<NodeId>> =
+        std::cell::RefCell::new(std::collections::HashSet::new());
+}
+
+/// Seed the `<script>` nodes whose source came from the network, for the next page built on this
+/// thread. They are the ones that owe a `load` event once they run — see
+/// `PageContext::fire_external_script_load`.
+///
+/// Call this **before** constructing the page; `from_dom` takes it exactly once, so a set seeded
+/// here can never fire a `load` in the navigation after it.
+pub fn set_pending_external_scripts(nodes: std::collections::HashSet<NodeId>) {
+    PENDING_EXTERNAL_SCRIPTS.with(|p| *p.borrow_mut() = nodes);
 }
 
 /// Seed the Content-Security-Policy the next page built on this thread will enforce.
@@ -1943,6 +1963,9 @@ impl Page {
             &mut nav_accounted_ms,
             &mut nav_hits,
         );
+        // The external `<script src>` set, seeded before construction because `from_dom` runs the
+        // blocking scripts and each one owes its element a `load` the instant it has executed.
+        set_pending_external_scripts(script_origins.keys().copied().collect());
         let mut page = Page::from_dom(dom, final_url, fonts, viewport_width);
         // `from_dom` is parse-to-first-layout AND the scripts that block first paint: cascade,
         // layout, and every blocking `<script>` with its drain. On an app-web page this is usually
@@ -4492,6 +4515,7 @@ impl Page {
             final_url,
             csp,
             csp_authorized_scripts,
+            external_scripts,
             css,
             images,
             masks,
@@ -4500,8 +4524,10 @@ impl Page {
             import_map,
         } = pre;
         // Seeded before construction, because `from_dom` runs the document's blocking scripts and
-        // the policy has to be in force by then — not after.
+        // the policy has to be in force by then — not after. Same for the external-script set: each
+        // one owes its element a `load` the instant it has executed, which is inside `from_dom`.
         set_pending_csp_with_authorized(csp, csp_authorized_scripts);
+        set_pending_external_scripts(external_scripts.into_iter().collect());
         let mut page = Page::from_dom(dom, &final_url, fonts, viewport_width);
         // Carry the pre-fetched module graph onto the page so `run_deferred_scripts` — which the shell
         // may call much later, after paint — seeds it for the module (deferred) pass. This is the shell
@@ -4630,7 +4656,10 @@ impl Page {
             for (node, img) in &inline_images {
                 manuk_js::publish_image_source(node.0, img.width, img.height, &img.rgba);
             }
-            match manuk_js::load_document(&mut dom, final_url, &rects, &styles) {
+            // Taken, not read: the seed belongs to THIS document, and leaving it in place would let
+            // a node index from this page fire a `load` on the next one built in this thread.
+            let external = PENDING_EXTERNAL_SCRIPTS.with(|p| std::mem::take(&mut *p.borrow_mut()));
+            match manuk_js::load_document(&mut dom, final_url, &rects, &styles, external) {
                 Ok((ctx, n)) => {
                     if n > 0 {
                         tracing::debug!(scripts = n, "executed page scripts");
@@ -7753,6 +7782,16 @@ pub struct Prefetched {
     /// See [`set_pending_csp_with_authorized`] for why the decision has to travel rather than be
     /// re-made.
     pub csp_authorized_scripts: Vec<NodeId>,
+    /// The `<script>` nodes whose source was fetched from the network and inlined into the element
+    /// above. They owe their element a `load` event once they execute on the UI thread, and by then
+    /// the DOM can no longer tell them from an author-written inline script — so, like the CSP
+    /// decision beside them, the fact has to travel. See [`set_pending_external_scripts`].
+    ///
+    /// ⚠ **Not a synonym for `csp_authorized_scripts`, even though today the two sets are equal.**
+    /// One says *"the policy said yes to this URL"* and the other says *"this element was external"*;
+    /// they coincide only because a script that is not fetched is also not inlined. Reusing one for
+    /// the other would make a future CSP change silently delete a load event.
+    pub external_scripts: Vec<NodeId>,
     /// External stylesheet URL → CSS text.
     pub css: HashMap<String, String>,
     /// resolved image URL → decoded bitmap. **Keyed by URL, not node** — for the same reason `masks`
@@ -7942,6 +7981,7 @@ async fn prepare_prefetched(html: String, final_url: String, mut csp: Csp) -> Re
         final_url,
         csp,
         csp_authorized_scripts,
+        external_scripts: script_origins.keys().copied().collect(),
         css,
         images,
         masks,

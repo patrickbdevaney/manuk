@@ -9608,6 +9608,15 @@ pub struct PageContext {
     /// construction — but a blocking script can *insert* a script, and a page can be re-entered, so
     /// "I have run this one" is a fact worth storing rather than a property worth assuming.
     ran: std::cell::RefCell<std::collections::HashSet<NodeId>>,
+    /// **Which `<script>` nodes came from the network** — the set whose `load` event must fire once
+    /// they have executed (HTML §4.12.1, "the end of the script-fetching/execution steps").
+    ///
+    /// It has to be carried rather than read off the DOM, because by the time a script executes the
+    /// evidence is gone: `fetch_external_scripts` inlines the source and REMOVES `src`, so a
+    /// parser-inserted external script and a hand-written inline one are indistinguishable here.
+    /// Owned by the context (not a thread-local) so it is document-scoped by construction — a stale
+    /// node index from the previous document can never fire a `load` in this one.
+    external_scripts: std::collections::HashSet<NodeId>,
 }
 
 impl PageContext {
@@ -9620,6 +9629,7 @@ impl PageContext {
         doc_url: &str,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
         styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        external_scripts: std::collections::HashSet<NodeId>,
     ) -> Result<(Self, usize), String> {
         set_view_maps(layout, styles);
 
@@ -9692,6 +9702,7 @@ impl PageContext {
                 boxed
             },
             ran: std::cell::RefCell::new(ran_set),
+            external_scripts,
         };
 
         let mut ran = 0usize;
@@ -9701,6 +9712,7 @@ impl PageContext {
             }
             run_one_script(runtime, raw_cx, global.handle(), node, &src, is_module);
             ctx.ran.borrow_mut().insert(node);
+            ctx.fire_external_script_load(runtime, raw_cx, global.handle(), dom, node);
             ran += 1;
         }
         // Deferred: load-time fetch/XHR stays queued for the host to perform (see run_deferred);
@@ -9708,6 +9720,62 @@ impl PageContext {
         crate::event_loop::run_deferred(runtime, global.handle())?;
 
         Ok((ctx, ran))
+    }
+
+    /// **Tell the page its `<script src>` arrived** — the other half of running it.
+    ///
+    /// A classic external script fires `load` at the ELEMENT once it has been fetched and executed
+    /// (HTML §4.12.1). Three of the four paths through this engine already did: a 404 on a
+    /// parser-inserted script fires `error` (the node keeps its `src`, so the injected-script drain
+    /// picks it up and reports the failure), and a script-inserted `<script src>` fires both
+    /// (`Page::drain_injected_scripts`). The **success** case for a parser-inserted one fired
+    /// nothing, because `fetch_external_scripts` inlines the source and drops `src` — after which
+    /// nothing in the pipeline remembers the element was ever external.
+    ///
+    /// **The idiom that gap breaks is the ordinary one**, not an exotic one:
+    ///
+    /// ```text
+    ///   <script id="wix-footer-script" src="…/footer.js"></script>
+    ///   document.getElementById('wix-footer-script').onload = function () {
+    ///     window.WixFooter.render({ target: document.querySelector('#WIX_FOOTER'), … })
+    ///   };
+    /// ```
+    ///
+    /// The script arrives, the global is defined, and the render is **never called** — which is
+    /// exactly the shape `C3833` (MISSING BOX: `<div>`, 32 sites) was left in at tick 696: the
+    /// container is emptied by the page's own client render and the re-render then performs *zero*
+    /// DOM operations, with nothing thrown and nothing logged. A completion event that never fires
+    /// is silent by construction; that is what made it hard to find and what makes it worth a gate.
+    ///
+    /// Fired *per script, in place* rather than in a batch after the pass, because a following
+    /// script may depend on what the handler set up — which is the ordering Chrome has.
+    ///
+    /// **`load` fires even if the script THREW**, the same rule `drain_injected_scripts` states: the
+    /// event reports that fetching and running happened, not that the code succeeded.
+    fn fire_external_script_load(
+        &self,
+        runtime: &mut Runtime,
+        raw_cx: *mut mozjs::jsapi::JSContext,
+        global: mozjs::rust::HandleObject,
+        dom: &mut Dom,
+        node: NodeId,
+    ) {
+        if !self.external_scripts.contains(&node) {
+            return;
+        }
+        // Reflect the target (idempotent) so `__dispatchEvent` can resolve it and walk its ancestors.
+        unsafe {
+            let _ = new_reflector(raw_cx, dom as *mut Dom, node);
+        }
+        let script = format!("__dispatchEvent({}, 'load')", node.0);
+        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+        let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"script-load.js".to_owned(), 1);
+        if evaluate_script(runtime.cx(), global, &script, rval.handle_mut(), opts).is_err() {
+            tracing::warn!(
+                error = %pending_exception(raw_cx),
+                "a <script src> load handler threw"
+            );
+        }
     }
 
     /// **The scripts that do NOT block paint** — `defer`, `async`, and `type="module"`.
@@ -9742,6 +9810,7 @@ impl PageContext {
         for (node, src, is_module) in pending {
             run_one_script(runtime, raw_cx, global.handle(), node, &src, is_module);
             self.ran.borrow_mut().insert(node);
+            self.fire_external_script_load(runtime, raw_cx, global.handle(), dom, node);
             ran += 1;
         }
         // `<track src>` load, swept from the DOCUMENT rather than driven by the page.

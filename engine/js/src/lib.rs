@@ -1194,15 +1194,21 @@ pub use dom_bindings::PageContext;
 
 /// Load `dom`'s scripts on a persistent global and return the context to retain for the
 /// document's lifetime, plus the number of scripts that ran.
+///
+/// `external_scripts` names the `<script>` nodes whose source came from the NETWORK and was inlined
+/// into the element (the host fetches them before any JS runs, and drops `src` in the process). They
+/// are the ones that owe the page a `load` event once they have executed; an inline `<script>` owes
+/// none. The DOM cannot answer this by the time the scripts run, which is why it is a parameter.
 #[cfg(feature = "_sm")]
 pub fn load_document(
     dom: &mut manuk_dom::Dom,
     url: &str,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    external_scripts: std::collections::HashSet<manuk_dom::NodeId>,
 ) -> Result<(PageContext, usize), JsError> {
     with_runtime(|rt| {
-        dom_bindings::PageContext::load(rt, dom, url, layout, styles)
+        dom_bindings::PageContext::load(rt, dom, url, layout, styles, external_scripts)
             .map_err(|message| JsError { message })
     })
 }
@@ -1269,6 +1275,7 @@ pub fn load_document(
     _url: &str,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _external_scripts: std::collections::HashSet<manuk_dom::NodeId>,
 ) -> Result<(PageContext, usize), JsError> {
     Ok((PageContext, 0))
 }

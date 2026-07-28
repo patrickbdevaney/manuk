@@ -467,3 +467,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 708	01c66169	1785248699	2026-07-28T10:24:59-04:00	798	capability	63	7	262	32	335	81	3896	6960	0	360	31	a cut stylesheet now counts, and the real cause is that our FETCH gets a different page (2026-07-28)
 709	4223a072	1785249136	2026-07-28T10:32:16-04:00	437	instrument	63	6	257	33	335	81	3896	6960	0	360	31	three of the "render-failed" sites were a bot wall wearing HTTP 200 (2026-07-28)
 710	c8930434	1785249685	2026-07-28T10:41:25-04:00	549	audit	63	6	201	34	335	81	3896	6960	0	360	31	surface audit #43: the death-tail's price moved, and nobody re-checked it (2026-07-28)
+711	c853fa0a	1785253537	2026-07-28T11:45:37-04:00	3852	measurement	63	11	595	36	336	81	3896	6960	0	361	31	the honest `render-failed` remainder is the hydration wipe, and I nearly reported the printer's cap as a parser bug (2026-07-28)

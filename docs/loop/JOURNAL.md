@@ -34431,3 +34431,123 @@ NEXT: **(1) C3833 IS NOW THE WHOLE GAME** — it is the top cluster by hits AND 
 somewhere that reports nothing (`MessageChannel` delivers, no listener throws, no console error).
 **(2)** the oracle crawl (t706) and the parked §10.8.1 patch remain owed. **(3)** the wall: parity is
 71% of it (t710).
+
+## Tick 712 — one rule, two implementations, and the one nobody built is the one that fails silently (2026-07-28)
+
+HYPOTHESIS: t711 ended with *"C3833 IS NOW THE WHOLE GAME"* and t696's precise open question — the
+client re-render performs **zero** DOM operations after the wipe, and it is abandoned somewhere that
+reports nothing (`MessageChannel` delivers, no listener throws, no console error). Bar: name that
+somewhere, and land the capability whose absence made it silent.
+
+### THE ANSWER: A `<script src>` IN THE MARKUP THAT LOADED TOLD THE PAGE NOTHING
+
+HTML §4.12.1 fires `load` at a classic external script's **element** once it has been fetched and
+executed. This engine reaches external scripts by two separate routes, and only one of them was
+built:
+
+```text
+  script-inserted <script src>, 200   ->  load    ✅  g_script_load_event (the agoda ChunkLoadError tick)
+  script-inserted <script src>, 404   ->  error   ✅  same
+  parser-inserted <script src>, 404   ->  error   ✅  by ACCIDENT — see below
+  parser-inserted <script src>, 200   ->  NOTHING ❌
+```
+
+Measured against headless Chrome, one fixture, four cases, scripts from `code.jquery.com`:
+
+```text
+  Chrome   parserOK:load | parser404:error | dynOK:load | dyn404:error | window:load
+  Manuk                    parser404:error | dynOK:load | dyn404:error | window:load
+```
+
+**Only the SUCCESS case was silent, and there is a reason it was exactly that one.**
+`fetch_external_scripts` inlines the fetched source into the element and **removes `src`**. On a
+failed fetch it leaves `src` in place — and that surviving attribute is what makes the
+injected-script drain adopt the node, re-fetch it, fail again and fire `error`. So the failure path
+was reported *by a mechanism written for something else*, and the success path, which destroys the
+only evidence that the element was ever external, reported nothing at all. Three loud outcomes and
+one silent one reads, from outside, exactly like a working feature.
+
+### WHY THAT IS `C3833`
+
+From the served bytes of `wix.com` — the site the cluster was diagnosed on at t696:
+
+```js
+  <script id="wix-footer-script" src="…"></script>
+  document.getElementById('wix-footer-script').onload = function () {
+    window.WixFooter.render({ target: document.querySelector('#WIX_FOOTER'), replaceTarget: true })
+  };
+```
+
+The script arrives, its global is defined, and the render is **never called**. That is the "reports
+nothing" t696 could not locate: not a throw that was swallowed, an event that was never sent.
+
+Measured on the byte-reproducible wix snapshot, same binary, same run shape:
+
+```text
+                       DOM inserts at DCL   at load   elements at capture
+  before                       4              6              560
+  after                       32             44              598
+```
+
+The re-render that performed **zero** operations after the wipe now performs some. ⚠ **wix.com does
+not render.** Its `window.onload` still dies at `google is not defined`, because
+`accounts.google.com/gsi/client` answers our **honest** User-Agent with **403** — verified as a
+User-Agent wall, not a `Referer` one, by three curl requests that differ only in the header (`Referer`
+absent / wix / example all return 200; the Manuk UA returns 403 and a Chrome UA returns 200). That is
+the bot-wall track, which the board puts out of engine scope. The cluster moved; the site did not.
+
+### AND ONE HYPOTHESIS DIED IN ONE COMMAND
+
+The first read of that 403 was *"we never send a `Referer`"* — and the engine genuinely does not:
+**zero occurrences of `Referer` in `engine/`**, so hotlink-protected images and referer-allowlisted
+CDNs are a real open gap. It is just not this gap. Three curl requests said so before a line was
+written. *A difference seen only on the failure is not a cause until you check the success too.*
+
+### WHAT LANDED
+
+`load` fires at a parser-inserted `<script src>` that fetched and executed, in place, per script.
+Because the DOM can no longer answer *"was this external?"* by the time the script runs, the fact is
+**carried** — `PENDING_EXTERNAL_SCRIPTS` → `PageContext::external_scripts` — the same shape as the
+CSP authorization decision seeded beside it, and owned by the `PageContext` so it is document-scoped
+by construction rather than by a `clear()` someone has to remember.
+
+⚠ `Prefetched.external_scripts` is a **new field beside** `csp_authorized_scripts`, not a reuse of
+it, even though the two sets are equal today. One says *"the policy said yes to this URL"*, the other
+says *"this element was external"*; they coincide only because a script that is not fetched is also
+not inlined. Reusing one for the other would let a future CSP change silently delete a load event.
+
+TICK SHAPE: pattern-class
+CLUSTER: **C3833** (MISSING BOX: `<div>`, 32 sites / 7,544 hits — the top cluster by hits, and since
+t711 also the honest half of `render-failed`). Named mechanism removed; site-count movement is owed
+to the next sweep and is NOT claimed here.
+Gates: `g_markup_script_load_event` (new, `engine/page`, `--features stylo,spidermonkey`) —
+**RED-proven against FOUR mutations, each failing a DIFFERENT assertion**: (M1) seed an empty
+external set → no `load` at all; (M2) fire before `run_one_script` → `attr-load:undefined`, the
+handler sees nothing the script defined; (M3) fire at every script → an INLINE script fires `load`;
+(M4) batch the dispatches after the loop → `inline-ran` precedes `attr-load`. The sibling gate
+`g_script_load_event` (the injected route) stays green, and the whole wall runs below.
+WIKI: `docs/wiki/js-engine.md` — "One rule, two implementations, and only one of them was built".
+PATTERN: **when a rule has N implementations, the one nobody built is the one whose failure is
+silent** — and it stays hidden because the OTHER implementations make the feature look present. The
+standing lesson was *"fix one, GREP FOR THE OTHER"*; the sharper version is that the second
+implementation is not merely unbuilt, it is **selected for silence**: a loud gap gets a bug report
+from the first page that hits it, so the gap that survives 700 ticks is the quiet one. Corollary for
+the gate: *"fires a `load` event"* has four implementations that satisfy the sentence and break the
+contract (too early / at every script / batched / property-call-not-dispatch), so the gate asserts
+the contract in four separate ways rather than the sentence once.
+
+⚠ NAMED RESIDUAL, pre-existing and proven not to be mine: the window `load` event leaks into
+document-level **capturing** `load` listeners with `event.target === null`. Measured on a page with
+**zero** external scripts, so this tick cannot have introduced it — Chrome `start;WINLOAD;` vs Manuk
+`start;WINLOAD;capture[t=null];`. Not fixed here; it is a dispatch-path question, not a script one.
+
+⚠ POPULATION, stated as the floor it is: **8 of 245 corpus snapshots** carry a markup-script
+completion handler *in the served document* (`<script src … onload=>` or
+`getElementById(…).onload=`). That is a floor, not the population — the commonest form assigns the
+handler from a separate external script, which a grep of the served bytes cannot see.
+
+NEXT: **(1) RE-RUN THE FULL CORPUS SWEEP** — owed for six ticks now, and it is the only instrument
+that can say whether `C3833`'s site count fell. **(2)** the null-target capture `load` above.
+**(3)** `Referer` is genuinely absent from the whole engine — hotlink protection and referer
+allowlists are a real, unmeasured gap. **(4)** the oracle crawl (t706) and the parked §10.8.1 patch
+remain owed.

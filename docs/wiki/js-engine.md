@@ -2081,3 +2081,82 @@ finding.** On `wix.com` the report went from `Error: couldn't get user details` 
 `isLoggedInUser@https://wix.com/ inline#102:94:15` — a message became an address.
 
 [[dom-semantics]] [[conformance-and-oracles]]
+
+## One rule, two implementations, and only one of them was built (tick 712)
+
+A classic external `<script>` fires `load` at the **element** once it has been fetched and executed
+(HTML §4.12.1). That rule has two implementations here, because this engine reaches external scripts
+by two completely separate routes:
+
+| route | who fetches it | 200 | 404 |
+|---|---|---|---|
+| **script-inserted** — `createElement('script')` → `src` → `appendChild` | `Page::drain_injected_scripts` | `load` ✅ | `error` ✅ |
+| **parser-inserted** — `<script src>` in the served markup | `fetch_external_scripts` | **nothing** ❌ | `error` ✅ |
+
+The injected route was built at the agoda `ChunkLoadError` tick and gated (`g_script_load_event`).
+The parser route was not, and only its **success** case was silent — which is the worst of the four
+outcomes to be missing, because the three loud ones look like a working feature.
+
+**Why exactly the success case.** `fetch_external_scripts` fetches every `<script src>` in the markup
+before any JavaScript runs, then **inlines the source into the element and removes `src`**. On a
+*failed* fetch it leaves `src` alone, and that surviving attribute is what makes the injected-script
+drain adopt the node, re-fetch it, fail again, and fire `error`. So the failure path was reported by
+accident, by a mechanism written for something else — and the success path, which destroys the one
+piece of evidence that the element was ever external, reported nothing at all.
+
+By execution time the DOM cannot answer *"was this external?"*. That is why the fix is a **carried
+fact**, not a lookup: the node set travels from the fetch to the JS layer (`PENDING_EXTERNAL_SCRIPTS`
+→ `PageContext::external_scripts`), exactly as the CSP authorization decision beside it already
+does, and for exactly the same reason. It is owned by the `PageContext` rather than left in a
+thread-local so it is document-scoped by construction — a node index from one document can never fire
+a `load` in the next.
+
+**The idiom this breaks is the ordinary one.** From the served bytes of `wix.com`:
+
+```js
+<script id="wix-footer-script" src="…"></script>
+document.getElementById('wix-footer-script').onload = function () {
+  window.WixFooter.render({ target: document.querySelector('#WIX_FOOTER'), replaceTarget: true })
+};
+```
+
+The script arrives, its global is defined, and the render is never called. Nothing throws; nothing is
+logged. **A completion event that never fires is silent by construction** — the page does not fail,
+it waits.
+
+### Four ways to get this wrong, all of which look green from outside
+
+The gate (`g_markup_script_load_event`) exists because "fire a `load` event" has at least four
+implementations that satisfy the sentence and break the contract, and each is a real temptation:
+
+1. **Fire it before the script runs.** The handler then sees none of what the script defined —
+   `window.WIDGET` is `undefined` inside `onload`. Every assertion about *whether* the event fired
+   still passes.
+2. **Fire it at every script.** An inline `<script>` owes no `load` event. This is invisible to any
+   test that only checks the external case, and it fires spurious events at ~every page on the web.
+3. **Batch them after the pass.** Cheaper and easier to write, and it strands the next script: a page
+   is entitled to have the script *after* the handler see whatever the handler set up. Chrome fires
+   in place, per script, before the parser resumes.
+4. **Call the element's `onload` property directly.** `load` does not bubble, so this is
+   indistinguishable from a real dispatch *unless* someone is listening in the capture phase — which
+   is exactly where a tag manager or a CMS listens, because it did not author the markup and cannot
+   put an attribute on the element.
+
+Chrome's own answer, measured rather than remembered, on a fixture with a capturing document
+listener, an `onload=` attribute, a following inline script and a 404:
+
+```text
+  capture[t=SCRIPT,ct=#document];attr;WINLOAD;
+```
+
+Capture precedes at-target; at-target precedes the next script; the window's `load` comes last.
+
+⚠ **Named residual, pre-existing and NOT introduced by this tick** (measured on a page with zero
+external scripts, so it cannot be): the window `load` event leaks into document-level **capturing**
+`load` listeners with `event.target === null`. Chrome fires nothing there — the window is above the
+document in the propagation path, not below it.
+
+```text
+  Chrome   start;WINLOAD;
+  Manuk    start;WINLOAD;capture[t=null];
+```

@@ -805,6 +805,8 @@
   - L2000 · What it does not buy, named rather than hidden
   - L2011 · Every inline script on every page compiled under one name (tick 679)
   - L2051 · The browser heard the rejection and the page did not (tick 696)
+  - L2085 · One rule, two implementations, and only one of them was built (tick 712)
+  - L2127 · Four ways to get this wrong, all of which look green from outside
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1227,4 +1229,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1138 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1140 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
