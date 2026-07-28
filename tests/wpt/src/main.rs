@@ -1207,6 +1207,29 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
             .unwrap_or_else(|| file_url(f));
         (h, u)
     };
+    // `--dump-html FILE` — **the bytes our own net stack received, before a parser or a script has
+    // touched them.**
+    //
+    // It exists because t708 concluded "the origin serves our engine a stripped document" from a
+    // comparison of `<head>` CHILD COUNTS — 9 live against 49 from `curl` — and that comparison is
+    // not sound: the live number is read AFTER scripts have run and AFTER our CSS loader has
+    // consumed the `<link>` elements (it strips them exactly as it strips a `<script>`'s `src`),
+    // so it measures the post-JS DOM, not the response. Two different documents and one document
+    // rewritten by its own scripts look identical through that lens.
+    //
+    // The only instrument that can separate them is the raw body, and there was no way to get it.
+    // Same lesson the comparison itself violated: a stand-in for the subsystem under test IS the
+    // instrument, and `curl` was never our net stack.
+    if let Some(dest) = flag(args, "--dump-html") {
+        match std::fs::write(dest, html.as_bytes()) {
+            Ok(()) => println!("wrote {} bytes of RESPONSE BODY to {dest}", html.len()),
+            Err(e) => {
+                eprintln!("cannot write {dest}: {e}");
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
     let page = rt.block_on(async {
         let mut p = manuk_page::Page::load_async(&html, &url, fonts, vw as f32).await;
         p.finish_loading(fonts, vw as f32).await;

@@ -282,8 +282,41 @@ pub fn classify_fetch(status: u32, body: &str) -> Option<Unmeasurable> {
         "challenges.cloudflare.com",
         "Attention Required",
     ];
+    // ⚠⚠ **A BOT CHALLENGE ARRIVES WITH HTTP 200, AND WE WERE BILLING IT TO THE ENGINE.**
+    //
+    // Every bot-wall rule above keys off a STATUS — 401/403/429, or a 5xx carrying a challenge
+    // marker. Cloudflare's interstitial is none of those: it is **`200 OK`** with a 5.5 KB body
+    // titled *"Just a moment…"* that renders as a near-empty spinner. So it fell through to
+    // `None` == measurable, painted almost nothing, and the sweep booked it `render-failed` — the
+    // one reason on this list documented as *"our own bug rather than a property of the origin, and
+    // the one that most deserves to count against the score."* It is the exact opposite: it is the
+    // origin refusing us as a client, which is what `BotWall` exists to say.
+    //
+    // Measured (t709, raw response bytes via `boxes --dump-html`, not inferred from the DOM):
+    //
+    // ```text
+    //   serverfault.com    ours 5,491 B  "Just a moment..."   ·  curl 205,345 B  43 scripts
+    //   askubuntu.com      ours 5,489 B  "Just a moment..."
+    //   mathoverflow.net   ours 5,492 B  "Just a moment..."
+    //   theverge / vox / mongodb / kotlinlang / notion   ours 250 KB–963 KB, the REAL document
+    // ```
+    //
+    // That split is the finding: `render-failed` held **two populations**, and only the second is
+    // ours. It also explains the intermittency t707 could not — `superuser.com` scored
+    // `render-failed` in the sweep and `ok` on re-run because it is sometimes served the challenge
+    // and sometimes the page.
+    //
+    // ⚠ The 2xx test uses the INFRASTRUCTURE markers only, never the prose ones. `"Just a moment"`
+    // and `"Attention Required"` are English sentences that a real 200-page may legitimately
+    // contain, and mislabelling a genuine render failure as a bot wall would EXCUSE our own bug —
+    // the more expensive direction of this error, and the one the fixed-denominator rule exists to
+    // prevent. `challenges.cloudflare.com` and `cf-browser-verification` cannot appear by accident.
+    const CHALLENGE_INFRA: &[&str] = &["challenges.cloudflare.com", "cf-browser-verification"];
     match status {
         200..=299 if body.trim().is_empty() => Some(Unmeasurable::EmptyBody(status)),
+        200..=299 if CHALLENGE_INFRA.iter().any(|m| body.contains(m)) => {
+            Some(Unmeasurable::BotWall(status))
+        }
         200..=299 => None,
         401 | 403 | 429 => Some(Unmeasurable::BotWall(status)),
         s if (500..=599).contains(&s) && CHALLENGE.iter().any(|m| body.contains(m)) => {
@@ -2794,6 +2827,59 @@ pub fn falsify_certificate() -> Vec<Falsification> {
         });
     }
     out
+}
+
+#[cfg(test)]
+mod bot_challenge_tests {
+    use super::*;
+
+    /// **A 200-OK bot challenge is a BOT WALL, not a render failure of ours.**
+    ///
+    /// Cloudflare's interstitial arrives as `200 OK` with a ~5.5 KB "Just a moment…" body, so every
+    /// status-keyed bot-wall rule missed it, it painted a near-empty spinner, and the sweep charged
+    /// it to the engine as `render-failed` — the one reason documented as *"our own bug."*
+    /// Measured on the raw response bytes: `serverfault.com` 5,491 B / `askubuntu.com` 5,489 B /
+    /// `mathoverflow.net` 5,492 B, against 205,345 B for the same URL from another client.
+    ///
+    /// RED-proof: drop the 2xx arm and this returns `None` — "measurable", which is how three sites
+    /// became our paint bug.
+    #[test]
+    fn a_200_ok_cloudflare_challenge_is_a_bot_wall() {
+        let body = r#"<!DOCTYPE html><html lang="en-US"><head><title>Just a moment...</title>
+            <meta http-equiv="content-security-policy" content="script-src https://challenges.cloudflare.com">
+            </head><body><div id="challenge-running"></div></body></html>"#;
+        assert_eq!(
+            classify_fetch(200, body),
+            Some(Unmeasurable::BotWall(200)),
+            "a 200 challenge page is the origin refusing us AS A CLIENT — booking it render-failed \
+             bills the engine for someone else's bot policy"
+        );
+    }
+
+    /// **The over-correction guard, and it is the expensive direction.** Mislabelling a real render
+    /// failure as a bot wall EXCUSES our own bug and removes it from the score. A genuine page that
+    /// merely contains the English phrase "Just a moment" must stay measurable — which is why the
+    /// 2xx arm tests only the infrastructure markers, never the prose ones.
+    #[test]
+    fn a_real_page_saying_just_a_moment_is_still_measurable() {
+        let body = "<html><head><title>Blog</title></head><body><p>Just a moment, \
+                    I'll explain. Attention Required for step 3.</p></body></html>";
+        assert_eq!(
+            classify_fetch(200, body),
+            None,
+            "prose is not a bot wall — excusing a render failure is worse than counting one"
+        );
+    }
+
+    /// The 5xx path keeps its wider marker list: a server error carrying challenge prose is a wall
+    /// whichever words it uses, and there is no genuine-content risk at 5xx.
+    #[test]
+    fn a_5xx_challenge_still_matches_on_prose() {
+        assert_eq!(
+            classify_fetch(503, "<html>Attention Required | Cloudflare</html>"),
+            Some(Unmeasurable::BotWall(503))
+        );
+    }
 }
 
 #[cfg(test)]

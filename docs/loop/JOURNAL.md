@@ -34195,3 +34195,77 @@ NEXT: **(1) DIFF THE TWO RESPONSES** — capture our engine's raw bytes for `ser
 curl's and find which request property flips the origin into serving a stripped head. That is one
 `tcpdump`-free comparison and it unblocks up to 21 sites. **(2)** the oracle crawl (t706) and the
 parked §10.8.1 patch remain owed.
+
+## Tick 709 — three of the "render-failed" sites were a bot wall wearing HTTP 200 (2026-07-28)
+
+HYPOTHESIS: t708's NEXT #1 — diff our engine's raw response against another client's and name which
+request property flips the origin. Bar: the answer at the BYTE level, not inferred from the DOM.
+
+### FIRST, THE INSTRUMENT — BECAUSE t708 HAD NONE
+
+t708 concluded *"the origin serves our engine a stripped document"* from `<head>` CHILD COUNTS: 9
+live against 49 via `curl`. **That comparison is not sound**, and I should not have shipped it: the
+live number is read AFTER scripts have run and AFTER our CSS loader consumes the `<link>` elements
+(it strips them exactly as it strips a `<script>`'s `src`, which t707 already established). Two
+different documents and one document rewritten by its own scripts look identical through that lens.
+
+So `boxes --dump-html FILE` — the bytes our own net stack received, before a parser or a script has
+touched them. It is the same lesson the bad comparison broke: *a stand-in for the subsystem under test
+IS the instrument*, and `curl` was never our net stack.
+
+### THE ANSWER, AND t708's CONCLUSION SURVIVES ITS EVIDENCE
+
+```text
+                    OUR net stack          another client (curl)
+  serverfault.com   5,491 B   1 script     205,345 B   43 scripts   9 <link>
+  <title>           "Just a moment..."     "Newest Questions - Server Fault"
+  body contains     challenges.cloudflare.com
+```
+
+**It is a Cloudflare bot challenge, and it arrives as `200 OK`.** Every bot-wall rule in the
+instrument keys off a STATUS — 401/403/429, or a 5xx carrying a challenge marker — so a 200
+interstitial fell through to *measurable*, painted its near-empty spinner, and was booked
+`render-failed`: the one reason the taxonomy documents as *"our own bug rather than a property of the
+origin, and the one that most deserves to count against the score."* It is the precise opposite.
+
+Headers were eliminated first: our exact `Accept` / `Accept-Language` / `Accept-Encoding` set replayed
+through `curl` still returns the full 205 KB document, and we decode gzip/br/deflate. The origin is
+not negotiating on anything we send in headers — it is challenging our client.
+
+### `render-failed` HELD TWO POPULATIONS AND ONLY ONE IS OURS
+
+```text
+  serverfault · askubuntu · mathoverflow      5,489–5,492 B   "Just a moment..."   ← NOT ours
+  theverge 928 KB · vox 963 KB · mongodb 956 KB · kotlinlang 250 KB · notion 417 KB ← OURS, real bug
+```
+
+And this closes t707's loose end: `superuser.com` scored `render-failed` in the t706 sweep and `ok`
+on re-run **because it is sometimes served the challenge and sometimes the page.** The intermittency
+was never in our renderer.
+
+`classify_fetch` now books a 2xx carrying an infrastructure challenge marker as `BotWall(200)`.
+⚠ The 2xx arm tests `challenges.cloudflare.com` / `cf-browser-verification` ONLY — never the prose
+markers `"Just a moment"` / `"Attention Required"`, which are English sentences a real page may
+contain. **Mislabelling a genuine render failure as a bot wall would EXCUSE our own bug**, which is
+the expensive direction of this error and exactly what the fixed-denominator rule exists to stop. The
+5xx path keeps the wider list, where there is no genuine-content risk.
+
+TICK SHAPE: instrument
+CLUSTER: `render-failed` (21 sites) — SPLIT, which is the deliverable. At least 3 are bot walls
+misattributed to the engine; the ~5 confirmed real ones (theverge/vox/mongodb/kotlinlang/notion)
+receive the full document and are the honest remainder to fix.
+Gates: `bot_challenge_tests` 3/3 — the mechanism, the over-correction guard, and the 5xx path —
+RED-proven by dropping the 2xx arm (the challenge returns to "measurable").
+WIKI: none [forced] — a change to the fidelity instrument's classifier, not to the browser. Nothing
+new is true of the engine; what changed is who gets billed for a page it never received.
+PATTERN: **a label that names the SYMPTOM's layer will merge causes that live in different
+subsystems** — the same shape as `MISSING BOX` at t696, one layer out. `render-failed` is computed
+from PIXELS ("we drew nothing"), so it necessarily merges *we cannot paint this page* with *we were
+never given this page*. A reason code derived from an OUTPUT can only ever name the output; to
+separate causes it has to consult an INPUT, and here that input was the response body we had no way
+to look at until this tick.
+
+NEXT: **(1) THE SURFACE AUDIT IS DUE** (last 699, due 709) and blocks the next tick. **(2) THE REAL
+REMAINDER** — theverge/vox/mongodb/kotlinlang/notion receive 250 KB–963 KB of real document and still
+render blank; that is the honest `render-failed` cluster and it is now a clean population to work.
+**(3)** the oracle crawl (t706) and the parked §10.8.1 patch remain owed.
