@@ -1978,3 +1978,29 @@ That spends no new budget and needs no slice.
 > **When two gates disagree, the arithmetic between them is the design.** Computing `1 + s + 1 <= 2`
 > took a minute and showed a tuning loop — one rebuild and one live-site run per iteration, against
 > two opposed measurements — had no answer in it.
+
+### ⚠ And the instrument is calibrated by the bug until it is fixed (tick 718)
+
+The page-side probe above exists *because* external CSS arrives after `load`. So every measurement it
+takes is taken in a document where external CSS has arrived after `load` — and using it to
+investigate anything cascade-shaped returns the founding bug wearing the new subject's clothes.
+
+Measured on `keirin.jp` while chasing an unrelated geometry divergence:
+
+```text
+              Chrome                        Manuk (page-side probe, at `load`)
+  .fl-r x85   float=right  display=block    float=NONE  display=inline-block
+  .searchbox  float=right  width=252px      float=NONE  width=auto
+  styleSheets 9                             styleSheets 0
+```
+
+That reads as a general float-blockification bug on the top geometry cluster — specific, plausible,
+spec-citable (CSS 2.1 §9.7). It is not: a four-line control fixture blockifies floats **exactly** like
+Chrome in all four cases. The 85 elements read `float:none` because the rule had not arrived yet.
+
+> **Before trusting a new instrument on a new subject, run it on a case where you already know the
+> answer.** The control took two minutes and cost the finding its life, which is what a control is for.
+
+⚠ Consequence for the parked fix: it is not only worth *"pages measure themselves correctly"*. It is
+also **the loop's own newest instrument becoming usable at all** — the same shape as *"raising what
+the instrument can SEE outranks fixing what it already sees."*

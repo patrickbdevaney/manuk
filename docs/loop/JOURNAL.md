@@ -35073,3 +35073,74 @@ NEXT: **(1) FIRE `DOMContentLoaded`/`load` FROM `finish_loading`** — the corre
 the t714 CSS-ordering finding (t716 proved no slice fits). Audit `load_async`'s callers first.
 **(2)** the synchronous `contentDocument` residual above. **(3)** the ikea 21-box coverage loss
 (t713), bisectable across t693–t711.
+
+## Tick 718 — the loop's newest instrument is BLIND until the parked fix lands, and it nearly cost a fabricated bug (2026-07-28)
+
+HYPOTHESIS: board alternation — t717 was capability, so t718 attacks GEOMETRY. Take `keirin.jp`'s
+first divergence (`…/form:nth-child(1)/input:nth-child(7)` off by `dy=-64`) with the page-side probe
+t714 introduced. Bar: one Chrome-measured mechanism.
+
+### THE PROBE SAID FLOATS DO NOT APPLY. IT WAS WRONG, AND IT WAS THE INSTRUMENT.
+
+```text
+              Chrome                                   Manuk
+  .fl-r[0]    float=right  display=block               float=NONE  display=block
+  .fl-r[1]    float=right  display=block               float=NONE  display=inline-block
+  .fl-r[2]    float=right  display=block               float=NONE  display=inline-block
+  .searchbox  float=right  display=block  width=252px  float=NONE  display=block  width=auto
+  styleSheets 9  ·  links 9                            styleSheets 0  ·  links 9
+```
+
+All **85** `.fl-r` elements read `float:none`, and the `display` divergence follows from it — CSS 2.1
+§9.7 blockifies a float, so if we do not think it is floated we do not blockify. A general
+blockification bug on the top geometry cluster is a beautiful finding, and I had the fixture half
+written before checking the obvious: **a minimal fixture blockifies floats exactly like Chrome**
+(`float:right` on `inline-block`/`inline`/`table-cell` → `block`, and a non-floated control stays
+`inline-block`). Four cases, four agreements.
+
+**The probe reads at `load`, and t714 measured that external stylesheets are applied AFTER `load`.**
+So every one of those numbers is a document with no author CSS in it — `float:none` because the rule
+has not arrived, `styleSheets 0` for the same reason. The probe was reporting the bug it was invented
+to find, on a page it was being used to investigate something else with.
+
+⚠⚠ **So the page-side probe — the third instrument class t714 named, and the only one that can see a
+SCHEDULE — cannot be used for any GEOMETRY or CASCADE comparison until the ordering fix lands.** It
+is not merely imprecise there; it is systematically wrong in one direction, and the wrongness looks
+exactly like a cascade bug. That is a trap with a name now, before it costs a tick: I got a false
+mechanism, a plausible spec citation and a top-cluster attribution out of it inside twenty minutes,
+and the only thing that stopped it was running the control fixture first.
+
+**Which raises what the parked fix is actually worth.** It was priced as *"pages that measure
+themselves get wrong geometry"*. It is also **the loop's own newest instrument being unusable**, and
+that is a second, compounding reason to land it — the same shape as t654-672's *"raising what the
+instrument can SEE outranks fixing what it already sees."*
+
+### AND THE DESIGN THAT LOOKED FREE IS NOT
+
+t716 proved no budget slice fits. The obvious escape — *apply the sheets that have ALREADY ARRIVED
+and wait for nothing*, since the preload scanner has been fetching them since before parse — costs no
+budget and so escapes the `1 + s + 1 ≤ 2` arithmetic entirely. It does not work as stated:
+`manuk_net`'s HTTP cache stores **only responses carrying an explicit `Cache-Control: max-age`** (its
+own doc comment says so, and names the omissions). A sheet without one is not in the cache, so the
+early apply would fire on an unpredictable subset and any gate over it would be flaky. Recorded as
+tried-and-priced rather than left for the next reader to re-derive.
+
+TICK SHAPE: measurement (an instrument's blind spot, found by nearly publishing its output)
+CLUSTER: `C01ca geometry: <div>` — attacked, and the attack was refused by its own instrument. No
+claim.
+Gates: none — no engine change.
+WIKI: `docs/wiki/box-layout.md` — the probe's blind spot, appended to the t714 entry.
+PATTERN: **an instrument built to find one bug is CALIBRATED BY that bug until it is fixed.** The
+page-side probe exists because external CSS arrives too late; every measurement it takes is therefore
+taken in a document where external CSS has arrived too late. Using it to investigate anything
+cascade-shaped returns the founding bug wearing the new subject's clothes — and it returns it as a
+*specific, plausible, spec-citable mechanism*, which is the dangerous form. ⚠ The general rule, and
+it is the one to keep: **before trusting a new instrument on a new subject, run it on a case where
+you already know the answer.** The four-line float fixture took two minutes and cost the finding its
+life, which is what a control is for.
+
+NEXT: **(1) FIRE `DOMContentLoaded`/`load` FROM `finish_loading`, AFTER THE CSS PHASE** — now the
+highest-value item on the board twice over: it fixes what every page measures AND unblocks the
+loop's own probe. Needs a caller audit of `load_async` first (every caller that relies on the
+lifecycle having fired by return). **(2)** the synchronous `contentDocument` residual (t717).
+**(3)** the ikea 21-box coverage loss (t713).

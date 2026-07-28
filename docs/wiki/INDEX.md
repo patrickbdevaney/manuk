@@ -109,6 +109,7 @@
   - L1920 · And a correct fix that was refused
   - L1931 · The retraction (tick 715), and the control that was not enough
   - L1955 · And the arithmetic that forbids the obvious fix (tick 716)
+  - L1982 · ⚠ And the instrument is calibrated by the bug until it is fixed (tick 718)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1236,4 +1237,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1147 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1148 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
