@@ -582,3 +582,33 @@ not re-derive it as a good idea.
 
 **Nothing was trimmed. The wall is not lean, and for the first time in three audits the reason has an
 address.**
+
+## Audit #21 — CORRECTION (tick 694): the 175s was CONTENTION, not serial cost
+
+Audit #21 read `P` at **175s** from the wall's per-section timing and attributed it to 72 serial headless-Chrome
+spawns at ~2.4s each. The arithmetic worked, the conclusion was actionable, and **the baseline was wrong.**
+
+Measured on a quiet box, same tree, same fixtures, back to back:
+
+```text
+  serial   (as audited)     14s     72/72 probes across 30 pages
+  parallel (8 in flight)     4s     72/72 probes across 30 pages
+```
+
+**14 seconds, not 175.** Inside `verify.sh` the parity gate shares the machine with ~25 concurrently-launched
+gate builds, and the per-section number it reports is that contention — not the cost of the work. The audit
+instrument reads a wall-clock slice of a parallel wall and presents it as a line item, which is the same shape
+as *"I widened the crawl from 4 jobs to 12 to make it finish sooner and watched the hang rate go from 12.5% to
+49% on the same binary in the same hour."*
+
+> **Every number has a harness, and the harness is part of the number.** Fifth occurrence in this project, and
+> the first time it has caught a WALL-AUDIT finding rather than a capability one.
+
+The change still stands on its own measurement — **14s → 4s, a real 3.5×, which is what 8-way concurrency buys
+on a ~2s-per-capture workload** — and 3.5× is a normal number where 44× would have been a red flag worth
+chasing. But the wall will **not** drop 150s, because most of that 150s is other gates competing for the same
+cores. What the wall actually does is now an open measurement, and the next tick's own `P` line answers it.
+
+⚠ **The admissible-optimisation list should gain a step 0:** *before optimising a line item, measure that line
+item ALONE on a quiet box.* A contention-inflated slice makes the biggest number look like the biggest cost,
+and those are different things.

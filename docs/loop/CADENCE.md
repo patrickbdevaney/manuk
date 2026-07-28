@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **451** | ticks 1–693 |
-| median tick cycle | **21m** | 450 intervals |
-| median, last 10 | **14m** | 10 intervals |
+| ticks landed | **452** | ticks 1–694 |
+| median tick cycle | **21m** | 451 intervals |
+| median, last 10 | **17m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 400.3h elapsed |
-| median verify wall | **63s** | 390 ticks |
+| **ticks per hour** | **1.13** | 400.6h elapsed |
+| median verify wall | **63s** | 391 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **355**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**218 of 451 ticks** (48%) moved a
+**218 of 452 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -548,5 +548,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **691** | 2026-07-27 20:42 | 39m | capability | 63s | +281/−46 | 334 | 81 | 56.0% · | every line box now starts with a strut (2026-07-27) |
 | **692** | 2026-07-27 21:10 | 28m | measurement | 63s | +217/−33 | 334 | 81 | 56.0% · | the claimed clusters moved: `ikea` coverage 97.1% → 100%, `keirin` dy 206 → 161 (2026-07-2 |
 | **693** | 2026-07-27 21:18 | 8m | measurement | 63s | +137/−33 | 334 | 81 | 56.0% · | the strut's cost is real and `line-height: normal` is exonerated (2026-07-27) |
+| **694** | 2026-07-27 21:37 | 19m | infrastructure | 63s | +184/−35 | 334 | 81 | 56.0% · | the parity captures run concurrently, and the audit's 175s was CONTENTION (2026-07-27) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

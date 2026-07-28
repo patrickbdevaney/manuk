@@ -450,3 +450,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 691	05c0dc6d	1785199346	2026-07-27T20:42:26-04:00	2352	capability	63	8	281	46	334	81	3896	6960	0	355	31	every line box now starts with a strut (2026-07-27)
 692	7ff0dbd3	1785201014	2026-07-27T21:10:14-04:00	1668	measurement	63	7	217	33	334	81	3896	6960	0	355	31	the claimed clusters moved: `ikea` coverage 97.1% → 100%, `keirin` dy 206 → 161 (2026-07-27)
 693	bb895ad6	1785201515	2026-07-27T21:18:35-04:00	501	measurement	63	6	137	33	334	81	3896	6960	0	355	31	the strut's cost is real and `line-height: normal` is exonerated (2026-07-27)
+694	5afadb23	1785202659	2026-07-27T21:37:39-04:00	1144	infrastructure	63	6	184	35	334	81	3896	6960	0	355	31	the parity captures run concurrently, and the audit's 175s was CONTENTION (2026-07-27)

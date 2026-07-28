@@ -32905,3 +32905,61 @@ CAPTURES** — 175s of a 227s wall, 72 independent serial headless-Chrome spawns
 only remaining item that makes the loop itself faster and it multiplies every future tick. **(3) THE PER-CALL
 LOAD BUDGET** — the priority inversion, blocked on nine gate files that call `load_async` without
 `finish_loading`.
+
+## Tick 694 — the parity captures run concurrently, and the audit's 175s was CONTENTION (2026-07-27)
+
+HYPOTHESIS: wall audit #21's finding — `P` (parity) is 175s of a 227s wall, and `parity.rs` spawns one headless
+Chrome per fixture, serially, over completely independent captures. Bar: the same 72/72 for fewer seconds.
+
+### WHAT LANDED
+
+The **Chrome half only** is parallelised, 8 in flight, in a first pass that fills a
+`HashMap<name, boxes>`; the existing loop then walks the fixtures serially and reads from the map.
+
+⚠ **The asymmetry is the whole design.** The other half of that loop is `manuk_boxes`, which runs OUR engine
+including SpiderMonkey — this project has a standing rule that two JS contexts in one process tear down
+messily and segfault nondeterministically. Chrome is a separate PROCESS, so N of them are safe by
+construction. A fixture missing from the map is a capture that FAILED and takes the same
+`have_reference: false` path the inline failure took, because the count of pages WITH a reference is what the
+wall's page-floor check reads.
+
+### ⚠⚠ AND THE CONTROL CORRECTED THE AUDIT THAT ORDERED THE WORK
+
+The parallel run came in at **4s**, which is 44× — and 8-way concurrency cannot buy 44×. That is a number
+worth disbelieving, so I ran the serial control on the same quiet box:
+
+```text
+  serial   (as audited)     14s     72/72 probes across 30 pages
+  parallel (8 in flight)     4s     72/72 probes across 30 pages
+```
+
+**14 seconds, not 175.** Inside `verify.sh` the parity gate shares the machine with ~25 concurrently-launched
+gate builds, and the per-section number the audit read is **that contention, not the cost of the work.**
+
+> **Every number has a harness, and the harness is part of the number.** Fifth occurrence in this project, and
+> the first time it has caught a WALL-AUDIT finding rather than a capability one — the audit instrument reads a
+> wall-clock slice of a parallel wall and presents it as a line item.
+
+The change still stands on its own measurement — **14s → 4s, a real 3.5×**, which is what 8-way concurrency
+buys on a ~2s-per-capture workload, and 3.5× is a normal number where 44× was a flag. **But the wall will NOT
+drop 150s**, because most of that 150s is other gates competing for the same cores. What the wall actually does
+is an open measurement that **this tick's own `P` line answers.**
+
+⚠ The audit's admissible-optimisation list should gain a **step 0: before optimising a line item, measure that
+line item ALONE on a quiet box.** A contention-inflated slice makes the biggest number look like the biggest
+cost, and those are different things. Recorded as a correction inside `docs/loop/WALL-AUDIT.md` next to the
+finding it corrects, rather than as a fresh audit that leaves the wrong number standing.
+
+TICK SHAPE: infrastructure (the wall's most expensive gate, same assertion, fewer seconds) + a correction to
+the audit that ordered it. Bar 0 untouched; `tests/wpt/` only, so no engine behaviour changed.
+Gates: `parity` itself — **72/72 probes across 30 pages**, run before landing and again by the wall. It is its
+own falsification: a capture that silently stopped happening drops a page and the wall's page floor catches it.
+WIKI: none [forced] — the mechanism is a concurrency change to a test harness with no browser-behaviour
+content; the measurement and its correction belong in `docs/loop/WALL-AUDIT.md`, where the finding they correct
+lives, and are recorded there.
+PATTERN: none — harness. [no-pattern]
+
+NEXT: **(1) READ THIS TICK'S OWN `P` LINE** — it is the only honest measurement of what the wall gained, and
+audit #21's corrected baseline says to expect much less than 150s. **(2) THE DESCENT HALF ON `desitales2`'s
+ATOMICS** (t693's NEXT) — the last open half of the strut lever: check whether Chrome treats those elements as
+inline atomics at all. **(3) THE PER-CALL LOAD BUDGET** — the priority inversion, blocked on nine gate files.

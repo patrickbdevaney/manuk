@@ -236,6 +236,62 @@ pub fn run_parity(
         .unwrap_or_default();
     files.sort();
 
+    // ── **THE CHROME CAPTURES RUN CONCURRENTLY; OUR ENGINE STAYS SERIAL** (tick 694). ───────────────
+    //
+    // Wall audit #21 measured this gate at **175s of a 227s wall — 77%** — and named the cause: the
+    // loop below called `chrome::capture_boxes` once per fixture, serially, each spawning a full
+    // headless Chrome. Startup is ~2.4s and there are 72 fixtures. The captures are **completely
+    // independent**: nothing in fixture *n* informs fixture *n+1*, and the comparison happens after
+    // both sides are in hand. That is a false dependency, which is admissible question 2 of the audit.
+    //
+    // ⚠ **Only the CHROME half is parallelised, and that asymmetry is the whole design.** The other
+    // half of the loop is `manuk_boxes`, which runs OUR engine including SpiderMonkey — this project
+    // has a standing rule that two JS contexts in one process tear down messily and segfault
+    // nondeterministically (see any `g_*` gate's "one #[test] on purpose" note). Chrome is a separate
+    // PROCESS, so N of them are safe by construction. So: capture all of Chrome's answers first, then
+    // walk the fixtures serially exactly as before, reading from the map.
+    //
+    // ⚠ **CACHING these answers across runs is REJECTED** (audit #21, on rigor): the fixtures are
+    // committed and static, so Chrome's boxes look like a memoisable constant — but that converts a
+    // LIVE oracle into a RECORDED one, and *a gate whose expected value came from MEMORY tests the
+    // memory.* A Chrome update that changed a box is exactly what this gate exists to notice. This
+    // change makes the live capture cheap; it does not stop doing it.
+    //
+    // Bounded at 8 in flight. Unbounded would be 72 concurrent Chromes, which is a different Bar-0
+    // problem (the box has 32 cores and this gate shares them with the rest of the wall).
+    const CHROME_JOBS: usize = 8;
+    let mut chrome_boxes: std::collections::HashMap<String, HashMap<String, Box4>> =
+        std::collections::HashMap::new();
+    if have_chrome {
+        let inputs: Vec<(String, String)> = files
+            .iter()
+            .filter_map(|path| {
+                let name = path.file_stem().and_then(|s| s.to_str())?.to_string();
+                let html = std::fs::read_to_string(path).ok()?;
+                Some((name, html))
+            })
+            .collect();
+        for chunk in inputs.chunks(CHROME_JOBS) {
+            let results: Vec<(String, Option<HashMap<String, Box4>>)> =
+                std::thread::scope(|scope| {
+                    let handles: Vec<_> = chunk
+                        .iter()
+                        .map(|(name, html)| {
+                            scope.spawn(move || {
+                                (name.clone(), chrome::capture_boxes(html, vw, vh).ok())
+                            })
+                        })
+                        .collect();
+                    handles.into_iter().filter_map(|h| h.join().ok()).collect()
+                });
+            for (name, boxes) in results {
+                if let Some(b) = boxes {
+                    chrome_boxes.insert(name, b);
+                }
+            }
+        }
+    }
+
     let mut pages = Vec::new();
     for path in files {
         let name = path
@@ -277,7 +333,11 @@ pub fn run_parity(
             });
             continue;
         }
-        match chrome::capture_boxes(&html, vw, vh) {
+        // Read the answer captured above rather than spawning Chrome again. A fixture missing from
+        // the map is one whose capture FAILED, and it takes the same `have_reference: false` path the
+        // inline failure took — the count of pages with a reference is what the wall's page-floor
+        // check reads, so a dropped capture must still be visible as a dropped page.
+        match chrome_boxes.get(&name).cloned().ok_or(()) {
             Ok(chrome_boxes) => {
                 let probes = compare(&manuk, &chrome_boxes);
                 pages.push(PageParity {
@@ -287,12 +347,12 @@ pub fn run_parity(
                     note: None,
                 });
             }
-            Err(e) => {
+            Err(()) => {
                 pages.push(PageParity {
                     name,
                     probes: vec![],
                     have_reference: false,
-                    note: Some(format!("chrome capture failed: {e}")),
+                    note: Some("chrome capture failed".to_string()),
                 });
             }
         }
