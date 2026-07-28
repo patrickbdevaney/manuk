@@ -1128,3 +1128,43 @@ could not see. `parity` was run before landing rather than discovered by the wal
 function that computes every line box in the engine.
 
 [[subpixel-error-compounds]] [[box-layout]]
+
+## The strut's cost: `desitales2` dy 91 → 110, and `line-height: normal` is exonerated (tick 693)
+
+Tick 692's proving sweep showed the strut moved `dy` the right way on three sites and the **wrong way on one**:
+`www.desitales2.com`'s median dy went **91 → 110**. Two things had to be established before attributing it.
+
+**1. Is 19px a result at all?** `desitales2` is the byte-reproducible control, but `dy` — unlike SHAPE — has
+never had a measured error bar. Two consecutive runs on the current tree:
+
+```text
+  run 1   SHAPE 60.6%   median dx=0 dy=110 dw=0 dh=3
+  run 2   SHAPE 60.6%   median dx=0 dy=110 dw=0 dh=3
+```
+
+**Deterministic.** So the 19px is real and this session caused it. (SHAPE went 61.1% → 60.6%, −0.5 pts, which
+is inside that site's recorded 2.3-pt spread — the dy is the sharper instrument here, and it is the one with
+no noise.)
+
+**2. Is it the strut's `line-height` half?** The strut folds in the block's `line-height`, so a
+`line-height: normal` that resolved larger than Chrome's would inflate every line. Measured, both engines:
+
+```text
+             Chrome   ours
+  16px sans    18       18
+  16px serif   18       18
+  13px sans    15       15
+  17px -apple-system  20   20
+```
+
+**Exact agreement — exonerated.** The remaining candidate is the *descent* half applied to this site's
+specific baseline-aligned atomics: either our descent for its faces differs from Chrome's, or some of those
+images are not inline atomics in Chrome's box tree at all (a flex item, or a CSS `vertical-align` this fixture
+did not cover). That is the next probe, and it is narrow.
+
+⚠ **The trade, stated plainly:** the strut is +2.9 coverage points on `ikea`, −45px dy on `keirin`, −120px on
+`welt.de`, +5.2 shape points on `agoda`, and **+19px dy / −0.5 shape points on `desitales2`.** No certificate
+term regressed (`scored 5`, `shape ≥0.75 on 0`, both unchanged), so this is not a ratchet trade — but it is
+not free either, and a lever that helps three sites and hurts a fourth has a second mechanism in it.
+
+[[box-layout]] [[subpixel-error-compounds]]

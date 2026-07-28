@@ -1190,6 +1190,7 @@
   - L1065 · What is still unmeasured
   - L1071 · The line box has no STRUT, and that is the dy term (tick 690)
   - L1100 · FIXED at tick 691 — two changes, one behaviour
+  - L1132 · The strut's cost: desitales2 dy 91 → 110, and line-height: normal is exonerated (tick 693)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1217,4 +1218,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1128 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1129 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

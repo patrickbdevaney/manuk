@@ -32843,3 +32843,65 @@ element, and the diff between the two is the second mechanism inside the strut c
 compounds. **(2) PARALLELISE THE PARITY CAPTURES** — 175s of a 227s wall, one serial headless Chrome per
 fixture (wall audit #21); it multiplies every future tick and is the only remaining item that makes the loop
 itself faster. **(3) THE PER-CALL LOAD BUDGET** — the priority inversion, blocked on nine gate files.
+
+## Tick 693 — the strut's cost is real and `line-height: normal` is exonerated (2026-07-27)
+
+HYPOTHESIS: t692's NEXT #1 — `desitales2`'s dy went 91 → 110 and **this session caused it**. Two questions
+had to be answered in order, and the first is the one this project keeps having to ask itself.
+
+### 1. IS 19px A RESULT AT ALL? — dy had no measured error bar
+
+`desitales2` is the byte-reproducible control, but `dy` (unlike SHAPE) has never had a spread measured. Two
+consecutive runs on the current tree:
+
+```text
+  run 1   SHAPE 60.6%   median dx=0 dy=110 dw=0 dh=3
+  run 2   SHAPE 60.6%   median dx=0 dy=110 dw=0 dh=3
+```
+
+**Deterministic.** So the 19px is real. ⚠ Worth noting which instrument is sharper here: SHAPE went
+61.1% → 60.6% (−0.5 pts), **inside** that site's recorded 2.3-pt spread and therefore unattributable on its
+own; `dy` has no noise and says the same thing louder. *The statistic with an error bar was the less useful
+one — the opposite of the usual lesson, and only measuring both told me which.*
+
+### 2. IS IT THE STRUT'S `line-height` HALF? — no, and that is measured
+
+The strut folds in the block's `line-height`, so a `line-height: normal` resolving larger than Chrome's would
+inflate every line box on the page. Both engines, same fixture:
+
+```text
+             Chrome   ours
+  16px sans    18       18
+  16px serif   18       18
+  13px sans    15       15
+  17px -apple-system  20   20
+```
+
+**Exact agreement on all four — exonerated.** Sixth hypothesis killed by a probe this session.
+
+The remaining candidate is the **descent** half applied to this site's specific baseline-aligned atomics:
+either our descent for its faces differs from Chrome's, or some of those images are not inline atomics in
+Chrome's box tree at all (a flex item, or a `vertical-align` the fixture did not cover). Narrow, and the next
+probe.
+
+### THE TRADE, STATED PLAINLY
+
+`ikea` +2.9 coverage pts · `keirin` −45px dy · `welt.de` −120px dy · `agoda` +5.2 shape pts ·
+**`desitales2` +19px dy and −0.5 shape pts.** No certificate term regressed (`scored 5`, `shape ≥0.75 on 0`,
+both unchanged), so this is **not a ratchet trade** — but it is not free either, and a lever that helps three
+sites and hurts a fourth has a second mechanism inside it. Recorded rather than averaged into the win.
+
+TICK SHAPE: measurement (an error bar established for a statistic that never had one, and one of the two
+candidate mechanisms eliminated). Bar 0 untouched; no source changed.
+Gates: none — nothing changed.
+WIKI: `docs/wiki/text-layout.md` — "the strut's cost: `desitales2` dy 91 → 110, and `line-height: normal` is
+exonerated".
+PATTERN: none — a measurement. [no-pattern]
+
+NEXT: **(1) THE DESCENT HALF ON `desitales2`'s ATOMICS** — dump the elements on its dy chain and check whether
+Chrome treats them as inline atomics at all; `<img>` inside a flex container is not one, and the strut's
+descent must not be charged to it. Narrow and the last open half of this lever. **(2) PARALLELISE THE PARITY
+CAPTURES** — 175s of a 227s wall, 72 independent serial headless-Chrome spawns (wall audit #21); it is the
+only remaining item that makes the loop itself faster and it multiplies every future tick. **(3) THE PER-CALL
+LOAD BUDGET** — the priority inversion, blocked on nine gate files that call `load_async` without
+`finish_loading`.
