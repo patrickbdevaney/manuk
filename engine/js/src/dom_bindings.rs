@@ -12808,6 +12808,12 @@ const WINDOW_PRELUDE: &str = r#"
         g.__fireDOMContentLoaded = function () {
             if (g.__dclFired) { return; }          // idempotent: several load paths may reach it
             g.__dclFired = true;
+            // Navigation timing: the ONLY place these two instants are known is the host calling
+            // this. See `performance.getEntriesByType('navigation')`.
+            if (g.__navTiming) {
+              g.__navTiming.domInteractive = g.performance.now();
+              g.__navTiming.domContentLoadedEventStart = g.__navTiming.domInteractive;
+            }
             // Wire inline `on*` handlers now: the parse is complete, so `<button onclick>` works before
             // any user interaction. Idempotent, and run again at load for elements added late.
             if (g.__wireInlineHandlers) { try { g.__wireInlineHandlers(); } catch (e) {} }
@@ -12819,6 +12825,10 @@ const WINDOW_PRELUDE: &str = r#"
             // `window`, and in a real browser the event bubbles document → window.
             try { document.dispatchEvent(ev); } catch (e) { g.__reportError && g.__reportError(e); }
             try { g.dispatchEvent(ev); } catch (e) { g.__reportError && g.__reportError(e); }
+            // AFTER dispatch, per spec — the handlers run inside the DCL event, and a RUM library
+            // measuring "how long did my DOMContentLoaded handlers take" is measuring exactly this
+            // span. Recording it before dispatch would report zero for every page.
+            if (g.__navTiming) { g.__navTiming.domContentLoadedEventEnd = g.performance.now(); }
         };
         g.__fireLoad = function () {
             if (g.__loadFired) { return; }         // `load` fires exactly once, ever
@@ -12828,6 +12838,7 @@ const WINDOW_PRELUDE: &str = r#"
             // element that never saw DOMContentLoaded (added during the load phases).
             if (g.__wireInlineHandlers) { try { g.__wireInlineHandlers(); } catch (e) {} }
             g.__setReadyState('complete');
+            if (g.__navTiming) { g.__navTiming.loadEventStart = g.performance.now(); }
             var ev;
             try { ev = new Event('load'); } catch (e) { ev = { type: 'load' }; }
             // `g.dispatchEvent` → `__fireWindowEvent` ALREADY invokes both the `addEventListener('load')`
@@ -12839,6 +12850,9 @@ const WINDOW_PRELUDE: &str = r#"
             // `<body onload>` (css-flexbox's checkLayout suite among them). Dispatch once, and only once.
             try { g.dispatchEvent(ev); } catch (e) { g.__reportError && g.__reportError(e); }
             try { document.dispatchEvent(ev); } catch (e) {}
+            // AFTER dispatch — `loadEventEnd` is the instant the load handlers finished, and
+            // `loadEventEnd - startTime` is the number every RUM library reports as "page load time".
+            if (g.__navTiming) { g.__navTiming.loadEventEnd = g.performance.now(); }
             // Cross-document View Transitions lifecycle (tick 372): `pagereveal` fires on
             // EVERY page activation, with `viewTransition: null` unless an inbound cross-doc
             // transition exists — and none does here (the MPA transition ANIMATION is a named

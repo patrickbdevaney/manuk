@@ -4356,10 +4356,47 @@ const PRELUDE: &str = r#"
       // most fall back to `Date.now()`. The ones that don't simply break.
       if (typeof globalThis.performance === 'undefined') {
         var t0 = Date.now();
+        // ── NAVIGATION TIMING: `performance.getEntriesByType('navigation')[0]` ────────────────────
+        //
+        // `getEntriesByType` returned `[]` for everything, so `entries[0]` was `undefined` and the
+        // very next property read THREW. That is the modern, non-deprecated replacement for
+        // `performance.timing`, and it is what **every** RUM/analytics library reads — web-vitals,
+        // Google Analytics, Sentry, Datadog — usually as the first thing they do.
+        // Chrome-measured: `getEntriesByType('navigation').length` is **1**; ours was **0**.
+        //
+        // The instants below are recorded by `__fireDOMContentLoaded` / `__fireLoad`, which the HOST
+        // calls — the only place in the system that knows when those are true — and they are recorded
+        // AFTER dispatch, because the span a library wants is "how long did my handlers take", and
+        // recording before dispatch reports zero for every page.
+        //
+        // ⚠⚠ **The network-phase fields are ABSENT, not zero, and that is deliberate.** We do not
+        // observe `responseStart`/`domainLookupEnd`/`connectEnd` at this layer, and a `0` there is
+        // indistinguishable from a real 0ms — a library would report a confident, wrong TTFB and
+        // nobody would ever find out. `undefined` propagates to `NaN` through the arithmetic every
+        // one of them does, which is LOUD. This project has a name for the alternative: a plausible
+        // value is worse than an honest absence.
+        var __navTiming = {
+          name: (typeof location !== 'undefined' && location.href) || '',
+          entryType: 'navigation',
+          type: 'navigate',
+          startTime: 0,
+          redirectCount: 0
+        };
+        globalThis.__navTiming = __navTiming;
         globalThis.performance = {
           now: function(){ return Date.now() - t0; },
           mark: function(){}, measure: function(){},
-          getEntriesByName: function(){ return []; }, getEntriesByType: function(){ return []; },
+          getEntriesByName: function(){ return []; },
+          getEntriesByType: function(type){
+            if (type === 'navigation') {
+              // `duration` is `loadEventEnd - startTime` per spec, and is 0 until load has fired —
+              // which is exactly what a page reading it DURING load should see.
+              __navTiming.duration = __navTiming.loadEventEnd || 0;
+              return [__navTiming];
+            }
+            return [];
+          },
+          getEntries: function(){ return []; },
           timeOrigin: t0
         };
       }

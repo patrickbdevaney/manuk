@@ -36172,3 +36172,72 @@ t731 measured a rotating out-of-wall sample at ~4 minutes for 13 gates; that is 
 and would have caught this within one. ⚠ Harness-owned, recorded for the observer. **(2)** `@container`
 cascade order (t726). **(3)** `document.caretRangeFromPoint` (t730). **(4)** the full corpus sweep,
 owed for four constitution checks.
+
+## Tick 733 — `entries[0]` was `undefined`, and that is the first line of every analytics script (2026-07-28)
+
+HYPOTHESIS: check #57's steer #1 — keep the broad differential probe in rotation. A third band, on
+navigation, history, storage and network. Bar: fix whatever comes back divergent and bounded.
+
+### 30 SURFACES, 27 IDENTICAL, AND THE ONE THAT MATTERS IS A THROW
+
+```text
+  cookieStore                            object / undefined     (Chrome-only, not Baseline — noted)
+  ReportingObserver                    function / undefined     (same — noted)
+  getEntriesByType('navigation').length      1 / 0              <- this one
+```
+
+`getEntriesByType` answered `[]` for **every** argument, so `entries[0]` was `undefined` and the next
+property read threw. That is the modern, non-deprecated replacement for `performance.timing`, and
+reading `[0]` of it is usually the *first thing* web-vitals, Google Analytics, Sentry and Datadog do.
+With the stub, every one of them throws on its own first line — and a throw inside an analytics
+snippet takes whatever else that snippet was going to do with it.
+
+### THE INSTANTS EXIST; NOTHING WAS COLLECTING THEM
+
+`__fireDOMContentLoaded` and `__fireLoad` are called **by the host**, which is the only part of the
+system that knows when *"the document finished parsing"* and *"the subresources finished"* are true.
+Recording there costs three assignments. ⚠ **After dispatch, not before** — the span a library wants
+is *"how long did my handlers take"*, and recording before dispatch reports zero for every page.
+
+```text
+                             CHROME     MANUK
+  length                       1          1
+  entryType / type       navigation / navigate  same
+  domContentLoadedEventEnd   > 0        > 0
+  loadEventEnd               > 0        > 0
+  monotonically ordered     true       true
+  duration                   > 0        > 0
+  ── the deliberate divergence ──────────────
+  typeof responseStart     number    undefined
+```
+
+⚠⚠ **The network-phase fields are ABSENT, not zero.** We do not observe
+`responseStart`/`domainLookupEnd`/`connectEnd` at this layer, and a `0` there is indistinguishable
+from a real 0ms — a library would report a confident, wrong TTFB and **nobody could ever tell**.
+`undefined` propagates to `NaN` through the arithmetic all of them do, which is loud. That is this
+project's own doctrine applied to a field rather than an API: *a plausible value is worse than an
+honest absence*, and it is pinned by an assertion so a future "fill in the zeros" cannot land quietly.
+
+TICK SHAPE: pattern-class
+CLUSTER: none claimed — a throw-class fix (`G_SILENT_FAIL` family), not a box.
+Gates: `g_navigation_timing` (new). **RED-proven against two mutations**: return `[]` → `len=0` and
+`TypeError` on every read, *exactly what shipped*; add `responseStart: 0` → the non-claim assertion
+fires. ⚠ The ordering assertion (`domInteractive ≤ dclEnd ≤ loadEventEnd`) is the one that separates
+**recorded instants from plausible constants** — a stub returning fixed positive numbers satisfies
+every `> 0` check and only accidentally satisfies monotonicity across three separately-recorded
+moments. And the gate reads from a task *after* `load`, because `loadEventEnd` does not exist yet
+inside a load handler; reading it there would have passed on a constant.
+WIKI: none [forced] — the rationale is beside the code in `event_loop.rs` and the pattern row carries
+the consequence.
+PATTERN: **the first line of a script is a load-bearing surface, and it is the one a capability
+audit is least likely to reach.** `getEntriesByType` was a stub that returned `[]` — a *correct
+shape*, a *plausible answer*, and `typeof performance.getEntriesByType === 'function'` was true the
+whole time. Every feature detect passed; the failure was one index away. That is the same false-
+presence family as `typeof null === 'object'` (t717) and `CSS.supports` answering false (t724), and
+the discriminator each time was the same: **a probe that USES the value rather than inspecting it.**
+⚠ The session's count for that rule is now four.
+
+NEXT: **(1) `@container` cascade order** (t726) — still the oldest open item, deliberately deferred as
+the riskiest edit class. **(2)** `cq*` units via rung 3 (t726/audit #45). **(3)**
+`caretRangeFromPoint`/`caretPositionFromPoint` — mapped at audit #45, needs point→text-offset mapping
+over the layout's text fragments. **(4)** the full corpus sweep, owed for four constitution checks.

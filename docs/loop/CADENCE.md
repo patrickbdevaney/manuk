@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **488** | ticks 1–731 |
-| median tick cycle | **22m** | 487 intervals |
-| median, last 10 | **23m** | 10 intervals |
+| ticks landed | **489** | ticks 1–732 |
+| median tick cycle | **22m** | 488 intervals |
+| median, last 10 | **24m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 423.5h elapsed |
-| median verify wall | **63s** | 427 ticks |
+| **ticks per hour** | **1.15** | 423.9h elapsed |
+| median verify wall | **63s** | 428 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **344**
-* **✅ rows in the capability ledger**: 144 → **371**
+* **live gates**: 27 → **345**
+* **✅ rows in the capability ledger**: 144 → **372**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**236 of 488 ticks** (48%) moved a
+**237 of 489 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **236** capability ticks, median cycle **22m**
+* **237** capability ticks, median cycle **22m**
 * median diff per tick: **+240 / −34** lines across 8 files
 
 ## Every tick
@@ -585,5 +585,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **729** | 2026-07-28 19:17 | 25m | pattern-class | 63s | +351/−33 | 344 | 81 | 56.0% · | the plural of a working API, and a citation nobody had checked (2026-07-28) |
 | **730** | 2026-07-28 20:07 | 50m | pattern-class | 63s | +104/−32 | 344 | 81 | 56.0% · | `document.fonts` (27.72% of page loads), and a gate that has been RED outside the wall (20 |
 | **731** | 2026-07-28 20:31 | 24m | measurement | 63s | +260/−34 | 344 | 81 | 56.0% · | how many gates outside the wall are red? A sample says: this one (2026-07-28) |
+| **732** | 2026-07-28 20:54 | 23m | pattern-class | 63s | +340/−34 | 345 | 81 | 56.0% · | a trigger is only as good as what it triggers (2026-07-28) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

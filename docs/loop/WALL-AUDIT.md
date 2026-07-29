@@ -652,3 +652,44 @@ nothing admissible to trim** — which Audit #21's own rules say is a fine resul
 
 The one number worth watching is not a section but the whole: `LAST_WALL_TIME` 63s on a quiet box
 against a 189s mark. The gate phase's 242s figure is itself a contended reading.
+
+## Audit #23 — tick 733 (the wall is 75s; the number we quote is a BUILD)
+
+```text
+   24s  T · crate tests        ███████ 32%        5s  D · disk
+   21s  G6 · clickability      ██████  28%        4s  P · parity
+    5s  G1 · fidelity                             2s  F · perf floors
+                                                  1s  B · build
+                                              ≈ 75s of measured sections
+```
+
+**Nothing admissible to trim, and the protocol's four questions all come back empty.**
+*Redundancy* — the two largest are `T` (crate unit tests, one binary per crate, already shared) and
+`G6` (clickability over the fixture corpus); neither stands up a duplicate SpiderMonkey runtime the
+other could share. *Parallelism* — the gates already launch concurrently and the perf floors are
+serial **on purpose** (a benchmark sharing the machine is not a benchmark). *Caching* — incrementals
+are in RAM, live fetches are snapshot-cached. *Scope* — no gate builds more than it asserts on.
+Against a 300s target, at 75s, there is no candidate.
+
+### ⚠⚠ AND THE NUMBER THE LOOP QUOTES IS NOT THIS NUMBER
+
+The walls in this session ran **760–806s**. The sections above total **75s**. The difference is
+**compiling and linking gate binaries after an engine edit** — a tick touching `engine/js` relinks
+every affected test binary against mozjs. The docs-only ticks in the same session came in at
+**65–66s**, which is this same wall doing no compilation.
+
+So *"the wall"* is a **build measurement wearing a gate measurement's name**, and two things follow:
+
+1. The self-audit item that went **red at t715 (589s) and green at t726** with not one line of work
+   in between was never measuring leanness — it was measuring whether the previous tick had touched
+   the engine. t726 said so at the time: *a number that flips on the weather is a schedule, not a
+   threshold.*
+2. Trimming *gates* cannot move it. The lever is the build, and the build is harness-owned.
+
+⚠ `P · parity` measures **4 seconds** here. That is the **third independent confirmation** of Audit
+#21's correction and Audit #22's retraction — the *"172s parity, 71% of the wall"* reading was
+contention from a co-running fidelity sweep, never parity's cost. Three audits have now measured it
+alone and got 3s, 3s and 4s. **It should stop being re-derived.**
+
+**Trimmed: nothing. Found: the wall is lean and the metric is mis-named.** Harness-owned; recorded,
+not acted on (V1-SCOPE PART VII).
