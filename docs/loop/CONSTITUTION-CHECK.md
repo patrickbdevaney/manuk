@@ -2987,3 +2987,60 @@ assertion stricter.**
    claim stays a mechanism claim until it runs.
 
 **Next check due: tick 737.**
+
+---
+
+## Check #58 — tick 737
+
+**Horizon:** H0 — Pareto Web Parity. **Gate:** the `DAILY-DRIVER-CERTIFICATION.md` certificate.
+
+**Gate or scoreboard?** Gate. Ticks 730–737: six capability ticks (`document.fonts`, the webfont
+relayout, navigation timing, ARIA reflection, `adoptNode`, shadow-root identity, `composedPath`), one
+measurement (the out-of-wall gate sample), no reverts, and **every one of the six came from a broad
+differential probe against Chrome** rather than from a ledger.
+
+**The PART VI correction this check owes is a NAME for what the probes keep finding.** Across
+ticks 717–737 the same bug shape appeared **five** times, and none of it was reachable by feature
+detection:
+
+```text
+  typeof null === 'object'         contentDocument "present", null on the next line     t717
+  CSS.supports(…) === false        a correct boolean, false for `display:flex`          t724
+  getEntriesByType() -> []         a correct Array; entries[0] is undefined             t733
+  root.host -> "example.com:8080"  a correct string; the WRONG host                     t736
+  composedPath() ends at document  a correct Array, one entry short                     t737
+```
+
+**A wrong answer of the right TYPE.** Every `typeof` check passes; every "is the API there?" audit
+says yes; the failure is one index, one property or one boolean away. `G_CAPABILITY` — the ledger as
+executable assertions — cannot see this class either, because it asserts *presence*. The only
+instrument that finds it is **a probe that knows what the answer should be**, which in practice means
+running the same fixture in Chrome.
+
+So, added to PART VI's instrument list as a fourth entry: *the oracle diffs the OUTPUT, the log
+reports EVENTS, a page-side probe observes the SCHEDULE, and **a hand-built differential fixture is
+the only one that can check a VALUE.***
+
+**On I4:** honoured. The picks were ranked by *what happens on absence* — a throw (`document.fonts`,
+`adoptNode`, navigation timing), a contract libraries branch on (`closed` shadow roots,
+`composedPath`), or the project's own moat (ARIA reflection is I3). Not by popularity.
+
+**On PART VII / V1-SCOPE:** honoured; twenty-six ticks, no harness file touched.
+
+**No invariant is being bent.** ⚠ And one gate nearly shipped **vacuous** this tick:
+`has("det=I")` passed against the output `det=I>window`, because a substring is not a value. Caught by
+running the mutation, which is the only reason it was caught at all.
+
+### THE STEER
+
+1. **ASSERT TO A FIELD BOUNDARY, NEVER A PREFIX.** `has("det=I")` matched `det=I>window` — the exact
+   bug the assertion existed to catch. This is the *"assert the COUNT on data-file edits"* lesson in a
+   new place, and the general form is: **a `contains` check is only as strong as what cannot follow
+   it.**
+2. **KEEP THE PROBE IN ROTATION, AND VARY THE BAND.** Four bands so far (DOM/CSSOM, forms/text,
+   navigation/storage, events/shadow) — every one yielded at least one real defect, and the yield has
+   not fallen off.
+3. **THE FULL CORPUS SWEEP IS OWED FOR THE FIFTH CHECK RUNNING.** ~10 hours, unschedulable beside the
+   loop. It is the longest-standing unmet instruction in the log.
+
+**Next check due: tick 745.**

@@ -14184,6 +14184,18 @@ const WINDOW_PRELUDE: &str = r#"
                 this.composedPath = function () {
                     var p = [];
                     for (var n = this.target; n; n = n.parentNode) { p.push(n); }
+                    // **The path ends at the WINDOW, and it was stopping at the document.**
+                    // Chrome-measured on three shapes, and the condition is the point:
+                    //   connected   t > BODY > HTML > document > window   (we gave 4 of 5)
+                    //   detached    I                                     (already right)
+                    //   in a fragment  U > #document-fragment             (already right)
+                    // So the global is appended only when the walk actually REACHED the document —
+                    // a detached node's path is itself, and appending `window` to that would be a
+                    // worse bug than the missing entry, because the standard idiom
+                    // `path[path.length - 1] === window` would then answer "connected" for a node
+                    // that is in no document at all. Event-delegation libraries use exactly that
+                    // test to decide whether an event escaped their root.
+                    if (p.length && p[p.length - 1] === document) { p.push(globalThis); }
                     return p;
                 };
             };

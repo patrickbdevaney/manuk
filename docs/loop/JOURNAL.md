@@ -36423,7 +36423,83 @@ string, which is exactly what `host` returns.
 The old comment's argument was sound within its frame (secrecy) and wrong outside it (observability),
 and that distinction is only visible if the original words are on the page.
 
+### Also this tick: the self-audit (726 → 737), and its one red is the metric wall audit #23 named
+
+`✗ verify wall: 773s EXCEEDS the 300s target`. **Third flip of this item in eleven ticks** — red at
+t715 (589s), green at t726, red again now — and not one line of work in between moved it. Wall audit
+#23 (t733) took it apart four ticks ago: the gate sections total **≈75s** (T 24s, G6 21s, G1 5s,
+P **4s**), and the 589/773 readings are **compiling and linking gate binaries after an engine edit**.
+The docs-only ticks in this same session came in at **65–66s**.
+
+So the item is measuring *"did the previous tick touch the engine?"* and reporting it as *"is the
+wall lean?"*. It is red now because t736 and t737 both touched `engine/js`. Nothing is admissible to
+trim — audit #23 asked all four rigor-preserving questions and found no candidate — and the lever is
+the build, which is harness-owned (PART VII / V1-SCOPE).
+
+⚠ Recorded rather than acted on, and recorded *again* deliberately: an item that flips on what the
+previous tick happened to touch will keep costing an audit cycle until its definition changes, and
+saying so once did not stop it.
+
 NEXT: **(1) COMPOSED-EVENT RETARGETING** — `event.target` reads the inner node where Chrome reads the
 host, leaking shadow internals to every outside listener; the largest of the four residues and its
 own change. **(2)** `root.getElementById` / `activeElement`. **(3)** a second `attachShadow` must
 throw `NotSupportedError`. **(4)** `@container` cascade order (t726), the oldest open item.
+
+## Tick 737 — one entry short of the window, and a gate that nearly shipped vacuous (2026-07-28)
+
+HYPOTHESIS: t736 left four measured shadow/event residues. Take the contained one — `composedPath`
+returned 4 entries where Chrome returns 5 — and leave retargeting, which is a dispatch-path change.
+
+### THREE SHAPES, AND THE THIRD IS WHY IT IS A CONDITION AND NOT AN APPEND
+
+```text
+                        CHROME                          BEFORE                  AFTER
+  connected   t > BODY > HTML > document > window   …> document (4 of 5)      matches
+  detached    I                                     I                          I
+  in fragment U > #document-fragment                U > #document-fragment     unchanged
+```
+
+`path[path.length - 1] === window` is the standard test an event-delegation library uses to ask *"did
+this escape my root / is this node connected?"*. Missing the window answers **no** for every connected
+node — and appending it unconditionally answers **yes** for a node in no document at all, which is
+worse. So the global is pushed only when the walk actually reached the document.
+
+### ⚠⚠ AND THE GATE NEARLY SHIPPED VACUOUS
+
+The unconditional-append mutation **passed**. The assertion was `has("det=I")` and the mutated output
+was `det=I>window` — **which contains it.** A prefix is not a value, and the gate went green on the
+exact bug it was written to catch.
+
+It was caught only because the mutation was run. The fix is to match through to the next field's
+name (`det=I frag=`), which pins the end of the field; both mutations now fail as intended.
+
+⚠ This is the *"assert the COUNT on data-file edits"* lesson in a new place, and the general form is
+worth keeping: **a `contains` check is only as strong as what cannot follow it.** Every
+substring-based assertion in this session's gates has the same exposure, and the ones that survive
+scrutiny do so because a delimiter or a following field happens to bound them.
+
+TICK SHAPE: pattern-class
+CLUSTER: none claimed.
+Gates: `g_composed_path` (new), **RED-proven against two mutations** — drop the append →
+`lastIsWindow=false`; append unconditionally → `det=I>window`, *after the assertion was tightened to
+catch it*. Also this tick: **constitution check #58**, due at 737.
+WIKI: none [forced] — the condition and its reasoning are beside the code; the pattern row carries
+the consequence.
+PATTERN: **a mutation that PASSES is more informative than one that fails.** A failing mutation
+confirms what you already believed; a passing one tells you the assertion is not measuring what its
+message claims. This one cost nothing to run and would otherwise have shipped a gate whose stated
+purpose — *"appending the window there is worse than the bug being fixed"* — was enforced by nothing.
+⚠ The operational form: **when a mutation passes, do not move on until you can say why** — the answer
+is either "the mutation was wrong" or "the gate is."
+
+⚠ CONSTITUTION CHECK #58 names the session's dominant bug shape, five instances in twenty ticks:
+**a wrong answer of the RIGHT TYPE** (`typeof null === 'object'`, `CSS.supports` false,
+`getEntriesByType` → `[]`, `root.host` → a URL, `composedPath` one short). Every `typeof` check
+passes and every presence audit says yes; only a probe that knows the expected value finds it. Added
+to PART VI's instrument list: *a hand-built differential fixture is the only instrument that can
+check a VALUE.*
+
+NEXT: **(1) COMPOSED-EVENT RETARGETING** — `event.target` reads the inner node where Chrome reads the
+host; the largest remaining shadow residue and a dispatch-path change of its own. **(2)**
+`root.getElementById` / `activeElement`; a second `attachShadow` must throw. **(3)** `@container`
+cascade order (t726), the oldest open item. **(4)** the full corpus sweep, owed for five checks.
