@@ -35987,3 +35987,74 @@ NEXT: **(1) `g_webfont_relayout` IS RED** — bisected to before t718, fix named
 message. **(2)** the ~85 gates outside the wall: if one has been red for twelve ticks, the honest
 question is how many others are, and that is one `cargo test` away. **(3)** `@container` cascade
 order (t726). **(4)** `document.caretRangeFromPoint` (this probe's other divergence).
+
+## Tick 731 — how many gates outside the wall are red? A sample says: this one (2026-07-28)
+
+HYPOTHESIS: t730 found `g_webfont_relayout` red and bisected it to before t718 — red for at least
+twelve ticks, unnoticed, because `verify.sh` runs 19 of ~104 gates. The honest follow-up is not to
+fix that gate, it is to ask **how many others**. Bar: a number, with its sample stated.
+
+### THE FIRST ATTEMPT WAS THE WRONG INSTRUMENT, AND THE COST SAID SO
+
+`cargo test -p manuk-page --no-fail-fast` — run everything. **344 test files**, each its own binary,
+each linking mozjs, on a disk at **93%**. It ran fifteen minutes without completing a single result
+line and was killed. ⚠ *"Run them all"* is the obvious design and it is unaffordable by two orders of
+magnitude; the wall runs 19 of them for exactly this reason, and I had just re-derived the reason
+from the other side.
+
+### THE SAMPLE: 13 GATES, DETERMINISTICALLY CHOSEN, ALL GREEN
+
+Every 28th gate alphabetically — a fixed rule, stated before the run, so the sample cannot be the
+result of picking:
+
+```text
+  g_a11y_roles · g_ce_attr_changed · g_contain_native · g_details_accordion ·
+  g_elements_from_point · g_filter_render · g_iface_surface · g_load_budget ·
+  g_node_ergonomics · g_reflect_numeric · g_settle_respects_the_budget · g_traversal ·
+  g_width_stretch
+                                                              13 of 13 GREEN
+```
+
+**So `g_webfont_relayout` is an isolated red, not a symptom of mass rot.** That is the answer the
+tick existed for, and it is worth as much as a red result would have been: the ~85 out-of-wall gates
+are not silently rotting, so the wall's 19 is a *coverage* problem rather than a *decay* problem, and
+the response is "watch more of them", not "audit everything".
+
+⚠ Honest bound on the claim: 13 of 344 is **3.8%** of the set. A red rate of 5% would have a ~50%
+chance of showing nothing in this sample. So the finding is *"not broadly rotten"*, not *"clean"*,
+and it is stated that way rather than rounded up.
+
+### AND ONE MORE OBSERVATION THE SAMPLE HANDED OVER FREE
+
+One gate in the thirteen took **343 seconds**. The other twelve took 0.36–3.7s. Nothing in the wall's
+budget is affected (it is not one of the 19) but a six-minute gate is a thing to know about before
+someone widens the wall to include it.
+
+### `g_webfont_relayout` — NARROWED, NOT FIXED
+
+The guard the failure message blames is **already correct**: `count > 0 || self.dom.has_dirty() ||
+registered_webfont` — the third reason is there, with the comment explaining why. And the input is
+fine: the Ahem fixture exists (1,624 bytes) and the gate serves it from a local socket. So the fault
+is between *"the face was fetched"* and *"the document was laid out with it"* — most likely
+`has_webfont_face` short-circuiting the registration that sets `registered_webfont`. Narrowed to
+that span and left there, with the bisect (red at t718, t719, t724) attached.
+
+TICK SHAPE: measurement
+CLUSTER: none — a gate-coverage question.
+Gates: none changed. 13 run, 13 green.
+WIKI: none [forced] — a measurement of our own test set; the engine is unchanged.
+PATTERN: **"how many others?" is almost always answerable by a SAMPLE, and the exhaustive version is
+often unaffordable by two orders of magnitude.** I reached for `--no-fail-fast` over 344 binaries
+before pricing it, and the price was fifteen minutes of nothing on a 93%-full disk. A fixed-rule
+sample of 13 answered the same question in four minutes with a stated error bar. ⚠ The sharper half:
+**a null result from a sample is only worth having if the sampling rule was fixed BEFORE the run** —
+"every 28th alphabetically" cannot be steered, and "13 gates I picked" could have been.
+⚠ Second: **a green wall means the wall's gates are green.** It has never meant more than that, and
+t730 is the proof — twelve ticks of green walls over a red gate. The number that matters is 19/104,
+and it is in `docs/loop/GATE-COVERAGE.md` where nothing reads it.
+
+NEXT: **(1) `g_webfont_relayout`** — narrowed to the registration/relayout span, bisect attached.
+**(2)** widen the wall, or at least run a rotating sample of out-of-wall gates per tick — the sample
+proved that is cheap (13 gates, ~4 minutes, most of it linking). ⚠ Harness-owned; recorded for the
+observer, not acted on. **(3)** `@container` cascade order (t726). **(4)**
+`document.caretRangeFromPoint` (t730's other divergence).

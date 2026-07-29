@@ -485,3 +485,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 727	8e18a1c2	1785277623	2026-07-28T18:27:03-04:00	1486	pattern-class	63	7	317	34	342	81	3896	6960	0	368	31	`sheet.media` was a constant, and the `<link>` gap is a decision not a defect (2026-07-28)
 728	92a2260d	1785279145	2026-07-28T18:52:25-04:00	1522	pattern-class	63	9	431	38	343	81	3896	6960	0	369	31	the client box was the border box for nearly every element (2026-07-28)
 729	b0e9548a	1785280641	2026-07-28T19:17:21-04:00	1496	pattern-class	63	8	351	33	344	81	3896	6960	0	370	31	the plural of a working API, and a citation nobody had checked (2026-07-28)
+730	b6fabbdf	1785283637	2026-07-28T20:07:17-04:00	2996	pattern-class	63	4	104	32	344	81	3896	6960	0	370	31	`document.fonts` (27.72% of page loads), and a gate that has been RED outside the wall (2026-07-28)
