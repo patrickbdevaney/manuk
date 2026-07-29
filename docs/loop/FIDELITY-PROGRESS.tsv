@@ -1,3 +1,4 @@
 # rebuilt-instrument schema (t706+); shape=parent-relative, NOT the old absolute placement (6.4 pre-2026-07-28 row is a DIFFERENT metric, do not diff)
-iso_sweep	sweep_tick	sites	scored	shape_ge0.75	shape_ge0.75_pct	shape_mean	cov_mean	source
-2026-07-28T09:34:48	t706	265	131	11	4.2	43.0	86.3	docs/loop/SWEEP-t706-rows.tsv
+# f6 shape_ge0.75_pct = LEGACY fixed-265 denom. f12 inscope_pass_pct = the winnable Phase-0 headline (denom excludes bot-wall/unreachable per DAILY-DRIVER-CERTIFICATION.md §3). Exit = f12 >= 95.
+iso_sweep	sweep_tick	sites	scored	shape_ge0.75	shape_ge0.75_pct	shape_mean	cov_mean	source	excluded	inscope	inscope_pass_pct
+2026-07-28T09:34:48	t706	265	131	11	4.2	43.0	86.3	docs/loop/SWEEP-t706-rows.tsv	56	209	5.3
