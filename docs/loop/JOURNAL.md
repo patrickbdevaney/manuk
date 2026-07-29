@@ -36835,3 +36835,142 @@ href="#sym">` reports NO geometry (Chrome 20×20) and `<symbol>`/`<defs>` conten
 not — the SVG *referencing* model, and the icon-sprite idiom depends on it. **(3)** the SVG `<text>`
 baseline: `y=20` puts our box at the svg's top, Chrome 6px down. **(4)** the full corpus sweep, owed
 for six constitution checks.
+
+## Tick 743 — the icon-sprite `<use href="#icon">` resolved to nothing: the icon was never drawn (2026-07-29)
+
+HYPOTHESIS (board CO-#1, cluster-named): t742's own NEXT list said `<use href="#sym">` reports no
+geometry and `<symbol>`/`<defs>` content gets a box it should not — the SVG *referencing* model,
+filed under `Ccd7f MISSING BOX: <path>` (34 sites / 1658 hits), `C93b0 geometry: <path>` (61 sites),
+`C7a60 geometry: <g>` (37) and `C0165 geometry: <svg>` (49). ⚠ **That filing was wrong and is
+retracted below** — the mechanism is real and the cluster attribution was not.
+
+### IT WAS NOT A GEOMETRY BUG. THE ICON WAS NOT RASTERISED.
+
+`Page::decode_inline_svgs` serialises **one `<svg>` element** and hands that string to usvg. The
+sprite idiom puts the `<symbol>` sheet in one `<svg>` and the `<use href="#check">` in another — so
+every such reference named an id **that was not in the document usvg was given**, by construction.
+usvg drops an unresolvable `<use>`. Not a wrong box: an absent drawing, on the markup pattern that
+ships most of the icons on the open web, with every geometry number underneath it measuring a blank.
+
+Population, fetched fresh over 67 corpus sites: **8 (12%) ship `<use href="#…">` in their initial
+HTML, 454 references total** — apnews.com 314, samsung 55, zdnet 39, engadget 18, webpack 13,
+nvidia 11. A FLOOR, not a ceiling — static markup only; `www.welt.de` reaches 102 the same way and
+JS-injected sheets are invisible to this count.
+
+### TWO CHANGES, ONE BEHAVIOUR — AND EACH ALONE IS A REGRESSION
+
+1. `svg_geometry::external_use_defs` follows every `<use>`'s `href`/`xlink:href` to its target
+   *anywhere in the document*, transitively, cycle-bounded, and appends the targets inside a
+   `<defs>` before `</svg>` — `<defs>` because they must be reachable by id and render nothing.
+2. `use_leaf_count` resolves the same reference in the DOM and counts the shape leaves the target
+   contributes, starting **at** the target (a referenced `<symbol>` renders its children even
+   though a written one does not). The `<use>` is pushed once per leaf into the positional pairing,
+   and its box is that run's **union**.
+
+⚠⚠ **The first two RED probes print IDENTICAL output.** With the injection but not the counting,
+usvg emits leaves the walk does not count; with the counting but not the injection, the walk counts
+leaves usvg never emitted. Either way the count-pairing guard refuses the **whole** `<svg>` — so
+`c-rect`, an ordinary `<rect>` with nothing wrong with it, goes `0,80 24x24` → `0,80 0x19` because
+of the `<use>` beside it. Landing half of this would have made every sprite page worse. Third
+session running that this shape has appeared (t690, t742, now).
+
+⚠⚠ **The obvious implementation mis-attributes boxes, silently.** "One leaf per `<use>`" passes
+four of the gate's six assertions. What it does to the other two is the point: `u4` (a two-shape
+`<g>`) reports only the first shape at `1,105 6x6`, and the **dangling** `u5` beside it is handed
+the *circle's* bounds, `10,105 6x6` — a real box, plausibly sized, belonging to a different
+element. Exactly what the count-pairing guard exists to prevent, and invisible without the control.
+
+⚠ **A wrong box traded for a missing one is not a fix.** The first version dropped the dangling
+`<use>` entirely; it read as tidy and was a MISSING_BOX where the page previously had a (wrong) one,
+which the ledger ranks as the worse of the two. Chrome gives a dangling `<use>` zero area at the
+svg's origin, so that is what it gets — measured, not reasoned.
+
+### THE HEADLINE CLAIM, ASSERTED ON PIXELS — AND THE CORPUS A/B THAT FOUND NOTHING
+
+*"usvg drops an unresolvable `<use>`, so the icon never rasterised"* is a statement about a
+dependency, and the whole tick rests on it. Reasoning about it is not measuring it, so the gate
+samples the centre of a `<use>`-drawn icon: **`rgb(255,0,0)` with the fix, `rgb(255,255,255)` — a
+blank white square — without.** Measured, not inferred.
+
+⚠⚠ **AND THE SITE-LEVEL A/B MOVED NOTHING, WHICH IS REPORTED HERE BECAUSE IT IS THE RESULT.** Two
+release builds, five sprite-using sites, 2 scorable (3 lost to `2×timeout-300s` + `1×unreachable`):
+
+```text
+                     BEFORE                        AFTER
+  nvidia.com         24.8% vis · 47.5% cov         25.7% vis · 47.5% cov
+                     1002 missing · 899 misplaced  1002 missing · 899 misplaced
+  webpack.js.org     22.4% vis · 92.7% cov         22.4% vis · 92.7% cov
+                     8 missing · 102 misplaced     8 missing · 102 misplaced
+```
+
+Coverage, missing and misplaced are **byte-identical on both sides**. The one number that moved —
+nvidia's visual, +0.9 — **is not a reading**: three runs on the UNCHANGED tree gave 24.8 / 25.7 /
+23.9, a 1.8-point spread wider than the delta. The control was run *because* a single flattering
+number is exactly what this project keeps catching itself on, and it refuted the claim before it
+reached this entry.
+
+⚠ **So the CLUSTER claim I opened this tick with is NOT supported, and I am retracting it rather
+than letting the header stand.** The reasoning that made it look obvious, and where it breaks: on a
+sprite page the DOM element at the icon's position is a `<use>`, and the `<path>` lives inside the
+`<symbol>`, where **Chrome itself reports 0×0**. So the `<path>`/`<g>`/`<svg>` rows this was filed
+under were never going to move from it — there is no `<use>` row in the ledger's top 34, and the
+population that changed is one the ranking does not name. *A cluster is a claim about what the
+instrument counts, not about what the mechanism touches.*
+
+What is proven: a capability (the icon is drawn instead of blank) on a **measured** population —
+8 of 67 corpus sites, 454 references — with an exact-geometry gate. What is not: any movement in
+the fidelity numbers, on the two sites that could be scored.
+
+### AND THE CADENCE CHECK THAT LANDED WITH IT — SURFACE AUDIT #46
+
+The audit was due (last: t732) and it is recorded in full in `docs/loop/SURFACE-AUDIT.md`. The short
+version, because it is about **this** tick's own findings and not a separate subject:
+
+⚠⚠⚠ **AN AGGREGATE ROW CANNOT GO RED OR GREEN.** Audit #45 found five measured gaps with no row in
+`CONSTELLATION.tsv`. This audit asked why they had *nowhere to go*, and the answer was already
+written on the map, in the map's own words, since tick 602: *"rows 16/166 carry ONE flat `partial`
+for all of SVG — inline, `<img>`, namespaces, filters, patterns and SMIL together."* Filed as
+context. It is the defect. **A whole format recorded as one flat `partial` has no state a measurement
+can change** — so the two capabilities this session PROVED with RED-proven gates (t742's viewBox
+ratio, this tick's `<use>` resolution) landed into a map that still reads `partial` for SVG, and the
+three still open (`<text>` baseline 6px, `<symbol>`/`<defs>` boxes, cross-svg `url(#id)`) had no home
+but a NEXT list. **A capability the loop has proven and cannot find is indistinguishable, to every
+ranking instrument it owns, from one it never built.**
+
+Six rows added (400 → 406), two aggregate rows rescoped. ⚠ One of the six exists to **STOP a fix**:
+`<symbol>`/`<defs>` content is `0x0` in Chrome and absent here, and the ledger ranks absence as
+MISSING_BOX — so part of `Ccd7f MISSING BOX: <path>` (34 sites / 1658 hits) is content that **must
+not be drawn**. And one came from outside: Ladybird's 2026 newsletters name *"inline flex or grid
+containers derive their baseline from their child's first line box"* — no row, no gate, never
+measured here, and the same class as the §10.8.1 inline-block baseline work that was Chrome-exact on
+its fixture and **still a refused trade**.
+
+TICK SHAPE: root-cause
+CLUSTER: **none claimed** — see the retraction above. The population is 8/67 corpus sites shipping
+`<use href="#…">` (454 references, apnews 314), measured by fetch; the fidelity effect on the two
+scorable sprite sites is nil and the visual delta is inside their own spread.
+Gates: **`g_svg_use_reference`** (new), 2 tests / 8 assertions, **RED-proven against five
+mutations** — drop the defs injection (geometry); drop the defs injection (PIXELS → a blank white
+square); drop `use_leaf_count`; one-leaf-per-`<use>`; drop the dangling zero-box. Both columns
+Chrome-measured on the exact gate fixture, not adjusted by arithmetic from a similar one.
+Neighbours re-run green: `g_svg_bbox`, `g_svg_client_rect`, `g_svg_auto_sizing`, `g_first_paint`,
+`g_foreign_content_ns`, `svg_geometry` unit tests.
+PERF: the `<use>` resolver is document-wide, and `apnews.com` has 314 of them — a per-reference
+`descendants(root).find(…)` is `O(uses × nodes)` on exactly the pages this exists for. Built as a
+one-per-pass `IdIndex` instead, with an early return when the pass has no new `<svg>`.
+WIKI: docs/wiki/box-layout.md
+PATTERN: ⚠⚠⚠ **A SERIALISATION BOUNDARY IS A SEMANTIC ONE.** `serialize_outer(dom, svg)` looks like
+a faithful copy of the element and is one — and the SVG reference model is *document*-scoped, so the
+copy is a document in which half the references dangle. Nothing in the code was wrong about the
+element it named; the bug lives in the gap between "this element" and "what this element can see".
+The general form, and it is the sharper version of t742's second-channel lesson: **when you hand a
+subtree to a parser as a standalone document, you have silently answered a question about scope**
+— and every id-based mechanism the format has (`<use>`, `clip-path`, `fill="url(#g)"`, `mask`,
+`filter`) is decided by that answer.
+
+NEXT: **(1)** the same boundary for `fill="url(#grad)"` / `clip-path="url(#c)"` / `mask` / `filter`
+naming a def in another `<svg>` — `external_use_defs` handles `<use>` only, and those references
+have exactly the same scope problem; measure whether a cross-svg gradient paints. **(2)** the four
+ikea `<span>` ⇄ `<svg>` reading-order pairs (t742's residue). **(3)** the SVG `<text>` baseline:
+`y=20` puts our box at the svg's top, Chrome 6px down. **(4)** `<symbol>`/`<defs>` content is `0x0`
+in Chrome and absent here. **(5)** the full corpus sweep, owed for six constitution checks.

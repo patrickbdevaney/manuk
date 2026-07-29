@@ -42,8 +42,9 @@
 //!
 //! **Named residue** (not modelled, deliberately): `padding`/`border` on the `<svg>` itself (the
 //! mapping uses the border box as the viewport, which is the same rect for every `<svg>` on the web
-//! that has neither); `<use>` cross-references; and `preserveAspectRatio` other than a matching
-//! aspect.
+//! that has neither) and `preserveAspectRatio` other than a matching aspect. **`<use>`
+//! cross-references LANDED at t743** — see [`external_use_defs`] and [`use_leaf_count`]; they were
+//! listed here as unmodelled for 350 ticks.
 
 use manuk_dom::{Dom, NodeId};
 use manuk_layout::{BoxContent, LayoutBox, Rect};
@@ -58,9 +59,13 @@ const SHAPE_TAGS: &[&str] = &[
     "path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "image", "text",
 ];
 
-/// Subtrees usvg never renders. Their shapes produce no leaf, so a DOM walk that descended into
-/// them would count more shapes than usvg has and the whole svg would (correctly, but needlessly)
-/// be refused.
+/// Subtrees usvg never renders **in place**. Their shapes produce no leaf where they are written,
+/// so a DOM walk that descended into them would count more shapes than usvg has and the whole svg
+/// would (correctly, but needlessly) be refused.
+///
+/// ⚠ *In place* is the whole qualification: `<use href="#sym">` renders a `<symbol>`'s contents at
+/// the `<use>`'s position. Referenced, they are leaves; written, they are not. That is why
+/// [`count_referenced_leaves`] starts **at** the target and does not consult this list for it.
 const NON_RENDERED_CONTAINERS: &[&str] = &[
     "defs",
     "clippath",
@@ -73,6 +78,165 @@ const NON_RENDERED_CONTAINERS: &[&str] = &[
     "filter",
     "metadata",
 ];
+
+fn lower_tag(dom: &Dom, n: NodeId) -> String {
+    dom.tag_name(n).unwrap_or("").to_ascii_lowercase()
+}
+
+fn is_use(dom: &Dom, n: NodeId) -> bool {
+    dom.is_element(n) && lower_tag(dom, n) == "use"
+}
+
+/// Every `id` in the document, resolved once.
+///
+/// ⚠ **Built rather than scanned because the population makes it quadratic.** A `<use>` resolves
+/// against the *whole document*, and the sites that use the idiom use it hundreds of times —
+/// `apnews.com` ships **314** `<use href="#…">` in its initial HTML. A per-reference
+/// `descendants(root).find(…)` is `O(uses × nodes)` on exactly the pages this feature exists for,
+/// which is how a fidelity fix turns into a load-time regression. Keys are owned so the index does
+/// not hold a borrow of the DOM across the caller's own mutations.
+pub struct IdIndex(HashMap<String, NodeId>);
+
+impl IdIndex {
+    pub fn build(dom: &Dom) -> Self {
+        let mut map = HashMap::new();
+        for n in dom.descendants(dom.root()) {
+            if let Some(id) = dom.element(n).and_then(|e| e.id()) {
+                // First wins, which is what every id-based resolver on the web does with a
+                // duplicate.
+                map.entry(id.to_string()).or_insert(n);
+            }
+        }
+        Self(map)
+    }
+
+    fn get(&self, id: &str) -> Option<NodeId> {
+        self.0.get(id).copied()
+    }
+}
+
+/// Follow a `<use>`'s `href` (or the legacy `xlink:href`) to the element it names, **anywhere in
+/// the document**.
+///
+/// Document-wide is the point, and it is the whole bug: the sprite idiom puts the definitions in
+/// one `<svg>` and the `<use>` in another, so a resolver scoped to the referencing `<svg>` finds
+/// nothing on the exact markup the web ships icons in.
+fn resolve_use_target(dom: &Dom, ids: &IdIndex, use_node: NodeId) -> Option<NodeId> {
+    let el = dom.element(use_node)?;
+    let href = el.attr("href").or_else(|| el.attr("xlink:href"))?;
+    let id = href.trim().strip_prefix('#')?;
+    if id.is_empty() {
+        return None;
+    }
+    // An external file reference (`icons.svg#check`) is a fetch this pass does not do; `strip_prefix`
+    // already excluded it, and a same-document id is what the sprite idiom uses.
+    ids.get(id)
+}
+
+/// How deep a `<use>` → `<use>` chain is followed before the reference is abandoned. The SVG spec
+/// forbids cycles; a hostile or generated document does not have to obey, and an unbounded walk
+/// here is a hang, which outranks every geometry number on the board.
+const MAX_USE_DEPTH: u32 = 8;
+
+/// How many usvg leaves the element `target` contributes when it is *referenced*.
+///
+/// Starts **at** `target`: a referenced `<symbol>` or `<g>` renders its children even though the
+/// same element renders nothing where it is written.
+fn count_referenced_leaves(dom: &Dom, ids: &IdIndex, target: NodeId, depth: u32) -> usize {
+    if depth > MAX_USE_DEPTH || !dom.is_element(target) {
+        return 0;
+    }
+    let tag = lower_tag(dom, target);
+    if tag == "foreignobject" {
+        // Refusing is `dom_shapes`'s job; contributing a count we cannot honour is not this one's.
+        return 0;
+    }
+    if SHAPE_TAGS.contains(&tag.as_str()) {
+        return 1;
+    }
+    if tag == "use" {
+        return match resolve_use_target(dom, ids, target) {
+            Some(t) => count_referenced_leaves(dom, ids, t, depth + 1),
+            None => 0,
+        };
+    }
+    dom.children(target)
+        .filter(|&c| dom.is_element(c))
+        .map(|c| {
+            let ct = lower_tag(dom, c);
+            if NON_RENDERED_CONTAINERS.contains(&ct.as_str()) {
+                0
+            } else {
+                count_referenced_leaves(dom, ids, c, depth)
+            }
+        })
+        .sum()
+}
+
+/// The leaves one `<use>` element expands to — `0` for a dangling reference, which is exactly what
+/// usvg emits for one and is the reason this cannot be "one leaf per `<use>`".
+fn use_leaf_count(dom: &Dom, ids: &IdIndex, use_node: NodeId) -> usize {
+    match resolve_use_target(dom, ids, use_node) {
+        Some(t) => count_referenced_leaves(dom, ids, t, 1),
+        None => 0,
+    }
+}
+
+/// The `<defs>` block an inline `<svg>` needs appended before usvg can resolve its `<use>`
+/// references — the definitions that live **outside** this `<svg>` element.
+///
+/// ⚠⚠ **This is the half that makes the icon PAINT, not merely measure.** `decode_inline_svgs`
+/// serialises one `<svg>` element and hands that string to usvg, so a `<use href="#check">` naming
+/// a `<symbol>` in the page's sprite block is dangling *by construction* — usvg drops it, the
+/// raster is empty, and the icon is not drawn at all. Every geometry number downstream is then a
+/// measurement of a blank.
+///
+/// Returns `None` when nothing needs injecting, so the overwhelmingly common `<use>`-free `<svg>`
+/// pays one subtree scan and no string work.
+pub fn external_use_defs(dom: &Dom, ids: &IdIndex, svg: NodeId) -> Option<String> {
+    let mut queue: Vec<NodeId> = dom.descendants(svg).filter(|&n| is_use(dom, n)).collect();
+    if queue.is_empty() {
+        return None;
+    }
+    // Everything already serialised as part of this `<svg>`, plus everything already injected —
+    // emitting a node twice would put a duplicate id in front of usvg, and a duplicate id makes the
+    // *resolver* pick one arbitrarily. Same reason a nested target is skipped: its ancestor carried
+    // it in.
+    let mut covered: std::collections::HashSet<NodeId> = dom.descendants(svg).collect();
+    covered.insert(svg);
+    let mut emitted: Vec<NodeId> = Vec::new();
+    let mut steps = 0u32;
+    while let Some(u) = queue.pop() {
+        steps += 1;
+        if steps > 1024 {
+            break;
+        }
+        let Some(t) = resolve_use_target(dom, ids, u) else {
+            continue;
+        };
+        if covered.contains(&t) {
+            continue;
+        }
+        for d in dom.descendants(t) {
+            covered.insert(d);
+            if is_use(dom, d) {
+                queue.push(d);
+            }
+        }
+        covered.insert(t);
+        emitted.push(t);
+    }
+    if emitted.is_empty() {
+        return None;
+    }
+    let body: String = emitted
+        .iter()
+        .map(|&n| manuk_html::serialize_outer(dom, n))
+        .collect();
+    // `<defs>` is what keeps the injection invisible: the definitions must be reachable by id and
+    // must render NOTHING where they are pasted, or every sprite would paint its whole sheet.
+    Some(format!("<defs>{body}</defs>"))
+}
 
 /// One `<svg>` element's interior, resolved.
 #[derive(Clone, Debug)]
@@ -131,18 +295,31 @@ fn usvg_leaves(group: &resvg::usvg::Group, out: &mut Vec<Rect>) {
 /// elements with the index range of the shapes they contain (so a `<g>` can take their union).
 ///
 /// Returns `None` if the subtree holds a `<foreignObject>` — see the module note.
+///
+/// The third list is the elements that render **nothing** and still have a box: a `<use>` whose
+/// reference does not resolve. Chrome gives it a zero-area box at the `<svg>`'s origin, and
+/// reporting that is not a formality — dropping it entirely would trade a wrong number for a
+/// missing one, which the cluster ledger ranks as the worse of the two.
 fn dom_shapes(
     dom: &Dom,
+    ids: &IdIndex,
     svg: NodeId,
-) -> Option<(Vec<NodeId>, Vec<(NodeId, std::ops::Range<usize>)>)> {
+) -> Option<(
+    Vec<NodeId>,
+    Vec<(NodeId, std::ops::Range<usize>)>,
+    Vec<NodeId>,
+)> {
     let mut shapes = Vec::new();
     let mut containers = Vec::new();
+    let mut zero = Vec::new();
     let mut ok = true;
     fn walk(
         dom: &Dom,
+        ids: &IdIndex,
         n: NodeId,
         shapes: &mut Vec<NodeId>,
         containers: &mut Vec<(NodeId, std::ops::Range<usize>)>,
+        zero: &mut Vec<NodeId>,
         ok: &mut bool,
     ) {
         for c in dom.children(n) {
@@ -162,23 +339,46 @@ fn dom_shapes(
                 // A `<text>`'s children are tspans usvg folds into the one leaf; do not descend.
                 continue;
             }
+            if tag == "use" {
+                // ⚠ **A `<use>` is not one leaf, and that is not a detail.** usvg expands the
+                // reference, so a `<use>` naming a two-shape `<g>` emits TWO leaves and one naming
+                // nothing emits none. Pushing the `<use>`'s own id once per leaf keeps the pairing
+                // positional — which is the invariant this whole module is built on — and lets the
+                // rect builder fold the run into the union `getBoundingClientRect` returns.
+                let k = use_leaf_count(dom, ids, c);
+                if k == 0 {
+                    zero.push(c);
+                }
+                for _ in 0..k {
+                    shapes.push(c);
+                }
+                continue;
+            }
             let start = shapes.len();
-            walk(dom, c, shapes, containers, ok);
+            walk(dom, ids, c, shapes, containers, zero, ok);
             if !*ok {
                 return;
             }
             containers.push((c, start..shapes.len()));
         }
     }
-    walk(dom, svg, &mut shapes, &mut containers, &mut ok);
-    ok.then_some((shapes, containers))
+    walk(
+        dom,
+        ids,
+        svg,
+        &mut shapes,
+        &mut containers,
+        &mut zero,
+        &mut ok,
+    );
+    ok.then_some((shapes, containers, zero))
 }
 
 /// Resolve one inline `<svg>`'s interior from its serialized markup.
 ///
 /// `markup` is the same string `decode_inline_svgs` hands to the rasteriser, so the two halves can
 /// never disagree about what document they are describing.
-pub fn map_inline_svg(dom: &Dom, svg: NodeId, markup: &str) -> Option<SvgBoxes> {
+pub fn map_inline_svg(dom: &Dom, ids: &IdIndex, svg: NodeId, markup: &str) -> Option<SvgBoxes> {
     let tree =
         resvg::usvg::Tree::from_data(markup.as_bytes(), &resvg::usvg::Options::default()).ok()?;
     let size = tree.size();
@@ -189,7 +389,7 @@ pub fn map_inline_svg(dom: &Dom, svg: NodeId, markup: &str) -> Option<SvgBoxes> 
 
     let mut leaves = Vec::new();
     usvg_leaves(tree.root(), &mut leaves);
-    let (shapes, containers) = dom_shapes(dom, svg)?;
+    let (shapes, containers, zero) = dom_shapes(dom, ids, svg)?;
 
     // **The pairing guard.** Not a heuristic with a fallback — a fallback here is precisely the
     // "plausible value" that turns one wrong box into thirty.
@@ -197,11 +397,25 @@ pub fn map_inline_svg(dom: &Dom, svg: NodeId, markup: &str) -> Option<SvgBoxes> 
         return None;
     }
 
-    let mut rects: Vec<(NodeId, [f32; 4])> = shapes
-        .iter()
-        .zip(leaves.iter())
-        .map(|(&n, r)| (n, [r.x, r.y, r.width, r.height]))
-        .collect();
+    // One rect per DOM element, not per leaf: a `<use>` occupies a RUN of the pairing (one entry
+    // per leaf its expansion emitted) and its box is that run's union — which is the box Chrome
+    // reports for a `<use>` of a multi-shape group. For every other element the run is length 1 and
+    // this is the zip it replaced.
+    let mut rects: Vec<(NodeId, [f32; 4])> = Vec::new();
+    let mut i = 0;
+    while i < shapes.len() {
+        let n = shapes[i];
+        let mut j = i + 1;
+        while j < shapes.len() && shapes[j] == n {
+            j += 1;
+        }
+        let mut acc = leaves[i];
+        for r in &leaves[i + 1..j] {
+            acc = acc.union(r);
+        }
+        rects.push((n, [acc.x, acc.y, acc.width, acc.height]));
+        i = j;
+    }
     // A container's box is the union of the shapes it holds — which is what `getBoundingClientRect`
     // on a `<g>` returns, and it costs one fold over a range we already have.
     for (n, range) in containers {
@@ -216,6 +430,9 @@ pub fn map_inline_svg(dom: &Dom, svg: NodeId, markup: &str) -> Option<SvgBoxes> 
             rects.push((n, [a.x, a.y, a.width, a.height]));
         }
     }
+    // A `<use>` that resolves to nothing renders nothing and still HAS a box — Chrome-measured,
+    // zero-area at the viewport origin. See `dom_shapes`.
+    rects.extend(zero.into_iter().map(|n| (n, [0.0, 0.0, 0.0, 0.0])));
     Some(SvgBoxes {
         user_size: (uw, uh),
         rects,
@@ -295,7 +512,8 @@ mod tests {
             .find(|&n| dom.tag_name(n) == Some("path"))
             .expect("path in the tree");
 
-        let boxes = map_inline_svg(&dom, svg, markup).expect("a one-path svg must map");
+        let boxes = map_inline_svg(&dom, &IdIndex::build(&dom), svg, markup)
+            .expect("a one-path svg must map");
         assert_eq!(
             boxes.rects.len(),
             1,
@@ -357,7 +575,7 @@ mod tests {
             .descendants(dom.root())
             .find(|&n| dom.tag_name(n) == Some("svg"))
             .expect("svg");
-        let boxes = map_inline_svg(&dom, svg, markup)
+        let boxes = map_inline_svg(&dom, &IdIndex::build(&dom), svg, markup)
             .expect("a defs sibling must not stop the visible path from mapping");
         assert_eq!(
             boxes.rects.len(),
@@ -382,9 +600,12 @@ mod tests {
             .descendants(dom.root())
             .find(|&n| dom.tag_name(n) == Some("svg"))
             .expect("svg");
-        let geom: SvgGeometry = [(svg, map_inline_svg(&dom, svg, markup).expect("map"))]
-            .into_iter()
-            .collect();
+        let geom: SvgGeometry = [(
+            svg,
+            map_inline_svg(&dom, &IdIndex::build(&dom), svg, markup).expect("map"),
+        )]
+        .into_iter()
+        .collect();
         let mut square = LayoutBox::inert(
             Rect {
                 x: 0.0,
@@ -424,7 +645,7 @@ mod tests {
             .find(|&n| dom.tag_name(n) == Some("svg"))
             .expect("svg");
         assert!(
-            map_inline_svg(&dom, svg, markup).is_none(),
+            map_inline_svg(&dom, &IdIndex::build(&dom), svg, markup).is_none(),
             "an svg holding HTML must be refused outright — its <div> has a CSS box this pass \
              would otherwise delete"
         );
@@ -443,7 +664,7 @@ mod tests {
             .descendants(dom.root())
             .find(|&n| dom.tag_name(n) == Some("g"))
             .expect("g");
-        let boxes = map_inline_svg(&dom, svg, markup).expect("map");
+        let boxes = map_inline_svg(&dom, &IdIndex::build(&dom), svg, markup).expect("map");
         let (_, r) = boxes
             .rects
             .iter()

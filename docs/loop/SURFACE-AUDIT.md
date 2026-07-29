@@ -2553,3 +2553,96 @@ were sitting in journal entries the whole time.
 **Standing note, eleventh audit running:** `map-reconcile.sh` searches `engine agent tests` and not
 `shell/`, so the eight gates living as `#[test] fn` in `shell/src/media.rs` and `shell/src/audio.rs`
 remain invisible to it. Harness-owned; reported, not touched.
+
+## Audit #46 — tick 743 (2026-07-29)
+
+**Sources (searched, not recalled):**
+- <https://webkit.org/blog/17818/announcing-interop-2026/>, <https://web.dev/blog/interop-2026>,
+  <https://github.com/web-platform-tests/interop/tree/main/2026> — the 20 focus areas + the four
+  investigation efforts (accessibility testing, JPEG XL, mobile testing, WebVTT).
+- <https://web.dev/baseline/2026> + the monthly digests (Jan/Mar/Apr/May/Jun 2026) — what crossed
+  into Baseline this year: `:active-view-transition`, `font-family: math`, `contrast-color()`,
+  `field-sizing`.
+- <https://ladybird.org/newsletter/2026-01-31/>, <https://ladybird.org/newsletter/2026-02-28/>,
+  <https://ladybird.org/newsletter/2026-04-30/> — **the productive source this cycle.** What an
+  independent engine had to build, in the order it chose.
+- **This loop's own measurements, t741–t743** — the second productive source, and the one the
+  protocol still does not name.
+
+**THE EXTERNAL RECONCILIATION IS CLEAN FOR THE SEVENTH AUDIT RUNNING.** Every Interop 2026 focus
+area, every investigation effort, and every 2026 Baseline crossing already has a row (`anchor
+position`, `view transition`, `WebTransport`, `popover="hint"`, `:open`, `attr()`, `field-sizing`,
+`contrast-color()`, `:active-view-transition`, JPEG XL, WebVTT — checked by grep, not by memory).
+That leg of the protocol has stopped paying, and audit #45 already said why: the map is fed by lists
+of *what the world thinks matters* and is structurally blind to *what we just measured ourselves*.
+
+### ⚠⚠⚠ THE FINDING: AN AGGREGATE ROW CANNOT GO RED OR GREEN
+
+Audit #45 found five measured gaps with **no row**. This audit asked the next question — *why did
+they have nowhere to go* — and the answer is on the map in the map's own words. The row
+`css / SVG filters, patterns, and SMIL animation` describes its own neighbours like this:
+
+> *"rows 16/166 carry ONE flat `partial` for all of SVG — inline, `<img>`, namespaces, filters,
+> patterns and SMIL together"*
+
+That sentence has been sitting in the receipt column since **tick 602**, filed as context. It is not
+context; it is the defect. **A capability recorded as one flat `partial` over a whole format has no
+state that any measurement can change.** Every finding lands inside it and it still reads `partial`
+afterwards — so the ledger's status column is *satisfied in advance*, and the only place a specific
+result can live is a journal NEXT list, which is exactly where these five were:
+
+```text
+  MEASURED against Chrome, t741-t743                      row in the map?   verdict
+  <svg viewBox> is a RATIO not a SIZE                          NO            landed t742
+  <use href="#icon"> across two <svg> elements                 NO            landed t743
+  SVG <text>: y is the BASELINE, ours is the box TOP           NO            open, 6px
+  <symbol>/<defs> content: Chrome 0x0, we emit nothing         NO            open
+  cross-<svg> url(#id) for fill/clip-path/mask/filter          NO            UNMEASURED
+```
+
+Two of those **shipped, with RED-proven gates, into a map that still says `partial` for SVG.** A
+capability the loop has proven and cannot find is indistinguishable, to every ranking instrument it
+owns, from one it never built. This is the project's own recurring shape — *a number's NAME is not
+its definition*, *a `works` row whose receipt tested one property* — one level up: **a row's SCOPE
+is part of its assertion, and a wide name over a narrow (or absent) measurement is a lie with a
+true word in it.**
+
+⚠ And the fifth line is the one that matters most, because it is the mechanism t743 proved broken
+and fixed **for one property only**. `external_use_defs` injects defs for `<use>`; `fill="url(#g)"`,
+`clip-path`, `mask` and `filter` still dangle across the same serialisation boundary by the same
+construction. It is filed `unknown`, not `missing`, because nobody has run it — the honest absence
+is of a *measurement*.
+
+### THE ONE THING THE WORLD KNEW THAT WE DID NOT
+
+Ladybird's 2026 newsletters, read for *what did they have to build*: **"inline flex or grid
+containers now derive their baseline from their child's first line box."** No row, no gate, never
+measured here. It is the same class as t695–t701's §10.8.1 inline-block baseline work — which was
+spec-correct, Chrome-exact 8/8 on its fixture, and **still a refused TRADE** (blog.rust-lang
+383→13, desitales2 SHAPE 61.5→57.2). So its price is known to be real before the first line of it
+is written. Filed `unknown`. Their `dominant-baseline`-for-SVG-text item independently corroborates
+that our measured 6px `<text>` offset is a distinct capability and not a rounding residue.
+
+**ADDED (6 rows, 400 → 406):** the five SVG sub-capabilities above, each carrying its Chrome
+measurement or an explicit *unmeasured*, plus inline-flex/grid baseline. Ranked by **what happens on
+absence**, not popularity (I4): `<text>` baseline ranks ABOVE filters/patterns because absence is a
+*wrong position on text that is present*, which the fidelity instrument scores, where a missing
+filter is a decoration it does not.
+
+⚠ One of the new rows exists to **STOP a fix**: `<symbol>`/`<defs>` content is 0x0 in Chrome and
+absent here, and the ledger ranks absence as MISSING_BOX — so part of the `Ccd7f MISSING BOX:
+<path>` mass (34 sites / 1658 hits) is content that **must not be drawn**. A row whose job is to
+prevent work is still a row.
+
+**CORRECTED (2 rows):** `SVG (inline + <img>)` and `SVG filters, patterns, and SMIL animation`. The
+first now says outright that it is an umbrella and that the verdicts live in the sub-rows; the second
+is **rescoped to the three things it names** instead of standing in for the whole format. Neither
+status changed, and that is deliberate — this was wrong about SHAPE, not about state.
+
+**WHAT WE HAD BEEN WRONG ABOUT:** that a missing row is a *gap in coverage* of the map. It was a gap
+in the map's **resolution** — the row existed, was too wide to hold an answer, and had been
+confessing that in its own receipt text for 141 ticks.
+
+**Standing note, twelfth audit running:** `map-reconcile.sh` searches `engine agent tests` and not
+`shell/`, so the eight gates living as `#[test] fn` in `shell/src/media.rs` and `shell/src/audio.rs`
+remain invisible to it. Harness-owned; reported, not touched.

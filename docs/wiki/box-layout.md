@@ -2090,7 +2090,72 @@ a 16-unit viewBox as pixels gave an icon a 16×16 box, which looks like an icon,
 alone moved the nav icon 16×16 → 300×300 and displaced its label. Landing either half by itself
 reads as a regression.
 
-**Residue, measured and open:** `<use href="#sym">` reports no geometry (Chrome 20×20),
+**Residue, measured and open:** ~~`<use href="#sym">` reports no geometry~~ (LANDED t743, below),
 `<symbol>`/`<defs>` content still gets a box it should not, an SVG `<text>` box sits at the svg's
 top rather than following its baseline, and `www.ikea.com` holds 4 extra `<span>` ⇄ `<svg>`
 reading-order pairs that the flex half made Chrome-exact on the fixture without clearing live.
+
+## The icon-sprite `<use href="#icon">` resolved to NOTHING — the reference model (tick 743)
+
+`Page::decode_inline_svgs` serialises **one `<svg>` element** with `serialize_outer` and hands that
+string to usvg. The sprite idiom — the way most icons on the open web ship — puts the `<symbol>`
+sheet in one `<svg>` and the `<use href="#check">` in another:
+
+```html
+<svg style="display:none"><symbol id="check" viewBox="0 0 24 24"><path d="…"/></symbol></svg>
+…
+<a class="nav"><svg width="20" height="20" viewBox="0 0 24 24"><use href="#check"/></svg> Basket</a>
+```
+
+So the id the `<use>` names was **not in the document usvg was given**, every time. usvg drops an
+unresolvable `<use>`, which means this was not a wrong box — **the icon did not rasterise at all**,
+and the geometry pass underneath was measuring a blank. Population, measured on 67 corpus sites
+fetched fresh: **8 (12%) ship `<use href="#…">` in their initial HTML, 454 references** — apnews.com
+alone 314, samsung 55, zdnet 39. A floor, not a ceiling: it counts static markup only, and
+`www.welt.de` reaches 102 the same way.
+
+**Two halves, and each alone is a regression** (RED-proven both ways — the outputs are identical):
+
+1. **Inject what the subtree reaches outside itself.** `svg_geometry::external_use_defs` follows
+   every `<use>`'s `href`/`xlink:href` to its target *anywhere in the document*, transitively, and
+   emits the targets inside a `<defs>` appended before `</svg>` — `<defs>` because the definitions
+   must be reachable by id and must render nothing where they are pasted.
+2. **Count what usvg expands them into.** The leaf↔DOM pairing is positional and refuses the whole
+   `<svg>` on a count mismatch. usvg *expands* `<use>`: a one-path symbol is one leaf, a two-shape
+   `<g>` is two, a dangling reference is none — while the DOM walk saw an element with no element
+   children and counted zero for all three. `use_leaf_count` resolves the reference in the DOM and
+   counts the shape leaves the target contributes (starting **at** the target, since a referenced
+   `<symbol>` renders its children even though a written one does not). The `<use>` is pushed once
+   per leaf, and its box is that run's **union**, which is what `getBoundingClientRect` returns.
+
+⚠ **Fixing either half alone makes a sprite page WORSE.** With the injection but not the counting,
+usvg emits leaves the walk does not count; with the counting but not the injection, the walk counts
+leaves usvg never emitted. Either way the pairing guard refuses the whole `<svg>` — so an ordinary
+`<rect>` sharing the element goes from correct to `0×19`, a zero-width inline box one line-height
+tall, because of the `<use>` beside it.
+
+⚠⚠ **"One leaf per `<use>`" is the obvious implementation and it silently mis-attributes boxes.**
+Measured as a mutation: a `<use>` of a two-shape `<g>` reported only the first shape, and the
+*dangling* `<use>` next to it was handed the **circle's** bounds — a real box, plausibly sized,
+belonging to a different element. That is precisely the failure the count-pairing guard exists to
+prevent, and it passes four of the gate's six assertions.
+
+**A dangling `<use>` still has a box.** Chrome gives it zero area at the `<svg>`'s origin. Dropping
+it reads as a tidy result and is a MISSING_BOX where the page used to have a wrong one — the ledger
+ranks missing as the worse of the two — so it is carried deliberately.
+
+Chrome-measured, `g_svg_use_reference`:
+
+```text
+                                             CHROME        BEFORE       AFTER
+  <use> of a <symbol> (24-unit vb at 20px)   3,25 13x10    0,20 0x19    3,25 13x10
+  <use> of a <defs> path, x/y offset         3,43 17x17    0,40 0x19    3,43 17x17
+  <use> of a multi-shape <g>                 1,105 15x6    0,104 0x19   1,105 15x6
+  <use> beside an ordinary <rect>            24,84 10x10   NO-BOX       24,84 10x10
+  a DANGLING <use href="#nope">              0,104 0x0     0,104 0x19   0,104 0x0
+```
+
+**Residue, unchanged:** `<symbol>`/`<defs>` content is `0x0` in Chrome and absent here (the
+non-rendered-container skip, which predates this and is its own mechanism); an external-file
+reference (`icons.svg#check`) is a fetch this pass does not do and reads as dangling; the SVG
+`<text>` baseline still sits at the svg's top.

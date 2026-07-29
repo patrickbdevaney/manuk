@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **498** | ticks 1–741 |
-| median tick cycle | **22m** | 497 intervals |
+| ticks landed | **499** | ticks 1–743 |
+| median tick cycle | **22m** | 498 intervals |
 | median, last 10 | **23m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.16** | 427.8h elapsed |
-| median verify wall | **63s** | 437 ticks |
+| **ticks per hour** | **1.11** | 446.8h elapsed |
+| median verify wall | **63s** | 438 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **351**
+* **live gates**: 27 → **352**
 * **✅ rows in the capability ledger**: 144 → **380**
-* **Bar 0 — oracle hangs**: 31 of 265 sites
+* **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**245 of 498 ticks** (49%) moved a
+**245 of 499 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **245** capability ticks, median cycle **22m**
-* median diff per tick: **+243 / −34** lines across 8 files
+* median diff per tick: **+244 / −34** lines across 8 files
 
 ## Every tick
 
@@ -595,5 +595,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **739** | 2026-07-28 23:18 | 23m | pattern-class | 63s | +303/−35 | 350 | 81 | 56.0% · | retargeting, landed as the ONE change t738 said it had to be (2026-07-28) |
 | **740** | 2026-07-28 23:41 | 23m | pattern-class | 63s | +164/−32 | 350 | 81 | 56.0% · | the method was correct and homeless (2026-07-28) |
 | **741** | 2026-07-29 00:50 | 69m | pattern-class | 63s | +461/−39 | 351 | 81 | 56.0% · | "idempotent" was hiding a component's own bug (2026-07-28) |
+| **743** | 2026-07-29 19:50 | 19.0h | root-cause | 63s | +894/−64 | 352 | 81 | 56.0% · | the icon-sprite `<use href="#icon">` resolved to nothing: the icon was never drawn (2026-0 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -3495,6 +3495,13 @@ impl Page {
             .filter(|&n| self.dom.tag_name(n) == Some("svg"))
             .filter(|n| !self.inline_svg_cache.contains_key(n))
             .collect();
+        if svgs.is_empty() {
+            return 0;
+        }
+        // Built once for the whole pass, not once per `<use>`: see `IdIndex`. This is also why the
+        // early return above is not cosmetic — this function is called again on every dynamic-script
+        // round, and most of those rounds have no new `<svg>` to decode.
+        let ids = svg_geometry::IdIndex::build(&self.dom);
         let mut new = 0usize;
         for node in svgs {
             let mut markup = manuk_html::serialize_outer(&self.dom, node);
@@ -3503,13 +3510,24 @@ impl Page {
                     markup = format!("<svg xmlns=\"http://www.w3.org/2000/svg\"{rest}");
                 }
             }
+            // ⚠⚠ **THE SPRITE IDIOM WAS DANGLING BY CONSTRUCTION.** This serialises ONE `<svg>`
+            // element, and the way icons ship is a `<symbol>` sheet in one `<svg>` and
+            // `<use href="#icon">` in another — so every such reference named an id that was not in
+            // the string usvg was handed. usvg drops an unresolvable `<use>`, so the icon did not
+            // paint at all and the geometry pass was measuring a blank. Inject the definitions the
+            // subtree reaches outside itself, inside a `<defs>` so they stay invisible.
+            if let Some(defs) = svg_geometry::external_use_defs(&self.dom, &ids, node) {
+                if let Some(cut) = markup.rfind("</svg>") {
+                    markup.insert_str(cut, &defs);
+                }
+            }
             // ── THE GEOMETRY HALF, from the SAME markup string as the raster.
             //
             // Deriving both from one serialization is the point: a `<path>` measured against a
             // document the painter never saw is a number with nothing behind it. `map_inline_svg`
             // refuses (returns `None`) far more readily than it answers — see its module docs — and
             // a refusal is recorded as "no entry", which leaves that svg's CSS-derived boxes alone.
-            if let Some(boxes) = svg_geometry::map_inline_svg(&self.dom, node, &markup) {
+            if let Some(boxes) = svg_geometry::map_inline_svg(&self.dom, &ids, node, &markup) {
                 self.svg_geometry.insert(node, boxes);
             }
             if let Some(img) = decode_svg(markup.as_bytes(), "inline.svg") {
