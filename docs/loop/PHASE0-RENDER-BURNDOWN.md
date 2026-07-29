@@ -117,22 +117,20 @@ width.
    is positive and steady, Phase-0-render has a finite ETA. Flat/negative slope = escalate (the primitive
    list is wrong, or a second mechanism is hiding — instrument deeper before grinding).
 
-## 5. Two structural forks — the OWNER's call (they change what "done" is measured on)
+## 5. Two structural forks — DECIDED by the owner (2026-07-29)
 
-These are larger than a tick and redefine scope; the observer flags, the owner decides:
+Both settled; the sequencing below is now authoritative, not advisory:
 
-- **Corpus: migrate to `corpus-v2.tsv` (representative CrUX/Tranco HEAD+TAIL) or stay on the biased 265?**
-  corpus-v2 was built t581 but the sweeps still run on the convenience 265, which is self-described as
-  biased toward easy-to-load sites. The cert's finiteness/representativeness argument assumes corpus-v2.
-  Migrating changes the denominator and the number; staying is faster but the "95% of the web" claim is
-  weaker. **Recommendation: finish the render burndown on the 265 (fast iteration, known anchors), then
-  re-certify on corpus-v2 for the headline claim.**
-- **Function-on-real-sites: build the BiDi per-site function leg now, or defer to Phase-1 entry?**
-  "Daily driver = render ∧ function" but function is measured only on fixtures — we do not actually know
-  the corpus sites *work*, only that isolated capabilities do. The per-site function harness (cert §4
-  Layer C-function) is unbuilt. **Recommendation: land the render burndown first (it is the visible,
-  binding gap), then build the function leg as the final Phase-0 gate — the capability breadth to pass it
-  is largely already there per `PHASE0-BOUNDED-REMAINDER.md`.**
+- **Corpus — DECIDED: burn down on the 265 now, re-certify on `corpus-v2.tsv` at the end.** Fast iteration
+  on stable anchors (hackernews/wikipedia/…) while the slope is being established; once in-scope-pass
+  crosses ~50%, re-run the certificate on the representative CrUX/Tranco corpus-v2 (built t581, currently
+  unused) for the headline "95% of the web" claim. Do NOT switch the working corpus mid-burndown.
+- **Function-on-real-sites — DECIDED: build the BiDi per-site function leg AFTER the render burndown, as
+  the final Phase-0 gate.** Render is the visible binding gap and goes first; function-on-real-sites
+  (cert §4 Layer C-function) is the last gate before certification. The capability breadth to pass it is
+  largely already there per `PHASE0-BOUNDED-REMAINDER.md` — this is a measurement build, not a big new
+  capability arc. Until then, function remains fixture-tested only (a known, named Phase-0 gap, not a
+  silent one).
 
 ## 6. Division of labour (unchanged doctrine)
 
