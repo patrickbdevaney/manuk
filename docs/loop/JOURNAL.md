@@ -36058,3 +36058,117 @@ NEXT: **(1) `g_webfont_relayout`** — narrowed to the registration/relayout spa
 proved that is cheap (13 gates, ~4 minutes, most of it linking). ⚠ Harness-owned; recorded for the
 observer, not acted on. **(3)** `@container` cascade order (t726). **(4)**
 `document.caretRangeFromPoint` (t730's other divergence).
+
+## Tick 732 — a trigger is only as good as what it triggers (2026-07-28)
+
+HYPOTHESIS: `g_webfont_relayout` has been red since before t718 (t730, bisected) and t731 showed it
+is an isolated red, not mass rot. Bar: green, with the cause named.
+
+### THREE WRONG ANSWERS FIRST, AND EACH WAS CHEAP BECAUSE THE GATE ANSWERED
+
+The failure message blames the relayout guard for not listing an arriving face as a reason to
+re-cascade. **It already does** — `count > 0 || self.dom.has_dirty() || registered_webfont`, with the
+comment explaining why. So the message was written for a fix that landed, and the bug moved.
+
+```text
+  1. "the early return inside the branch doesn't know about fonts"   -> fixed it, still 66.7px
+  2. "the font caches hold the fallback under this family's key"     -> cleared them, still 66.7px
+  3. instrument instead of theorise                                  -> count=0 dirty=false registered=TRUE
+```
+
+The third told me the branch **was** entered with `registered_webfont` true. So the trigger fired,
+and the thing it triggered did nothing.
+
+### THE CAUSE: A FONT IS NOT A STYLE INPUT
+
+The relayout lives *inside* `apply_stylesheets`, behind a fingerprint of **the cascade's inputs** —
+the style sources and the shape of the tree. A newly-arrived face changes neither: the same inline
+`<style>` that declared `@font-face` was there before the bytes came back. The fingerprint matches,
+`apply_stylesheets` returns `RestyleDamage::None`, and **it skips the layout as well as the
+cascade** — correct for every input it knows about, wrong for the one it does not.
+
+The guard had learned that an arriving face is a third reason to redo the work. It then handed that
+reason to a function that answers a different question. **A trigger is only as good as what it
+triggers, and the two were one call apart.**
+
+Fixed by relaying out explicitly when a face arrived and the cascade reported no damage.
+`g_webfont_relayout` and `g_webfont_relayout_external` both green; the `@font-face` in an inline
+`<style>` — what every *"inline your critical CSS"* build produces — now measures Ahem at **100px**
+instead of 66.7px.
+
+### ⚠ AND ONE CHANGE WAS REMOVED FOR LACK OF EVIDENCE
+
+Attempt 2 (clearing the font-resolution, measure and shape caches on registration) is a *plausible*
+correctness fix and reads well. With the real fix in, **removing it leaves both gates green** — so it
+is unproven, and unproven changes do not land, however good the story is. It costs re-measures on
+every registration and buys nothing I can demonstrate. Recorded as tried-and-priced so the next
+reader does not re-derive it.
+
+TICK SHAPE: pattern-class
+CLUSTER: none claimed. Webfont metrics feed every geometry cluster, but the sites that would move are
+whichever ones ship `@font-face` in inline CSS, and the next sweep says which.
+Gates: `g_webfont_relayout` **turns GREEN after 12+ ticks red** — no new gate; the gate existed and
+was correct, which is why the tick is short. **RED-proven against two mutations, each necessary**:
+drop the `!registered_webfont` term from the early return → 66.7px (the early return fires before the
+relayout is reached); drop the explicit relayout → 66.7px. Neither alone is sufficient, which is why
+attempt 1 looked like a failure when it was half the answer.
+WIKI: none [forced] — the mechanism is fifteen lines with its reasoning beside it, and the pattern
+row carries the consequence.
+PATTERN: **when a failure message names a fix that has already landed, the message is describing the
+BUG'S PREVIOUS SHAPE.** This one had been correct once, the guard was fixed, the guard's *consumer*
+was not, and the message stayed. It cost two wrong attempts because it reads as a diagnosis and it is
+a fossil. ⚠ The operational form: **a failure message that names a mechanism should name the
+MEASUREMENT that would confirm it** — "the guard does not list fonts" is a claim about code and I
+believed it; `count=0 dirty=false registered=true` is a claim about a run and it ended the search in
+one build.
+⚠ Second, and it is the session's fifth: **one rule, two places.** The entry condition and the early
+return are the same question — *"is there a reason to redo the layout?"* — and the third reason was
+taught to one of them.
+
+### Also this tick: surface audit #45, and it found the MAP'S blind spot
+
+Six audits running, the reconciliation against Interop 2026 comes back clean — 20 of 20 mapped. So I
+reconciled against a source the protocol does not name: **our own measurements from the last ten
+ticks.** Five of six capabilities this session measured against Chrome had **no row at all**
+(`caretRangeFromPoint`/`caretPositionFromPoint`, CSS Typed OM, container-query length units, the
+`@container` cascade-order defect, and `elementsFromPoint` before t729 built it).
+
+The map is fed by external lists — Interop, Baseline, the Blink use-counter dump — which are
+excellent at *"what does the world think matters"* and **structurally blind to *"what did we just
+measure ourselves."*** A probe finding has no filing path, so it lives in a journal entry and a NEXT
+list until someone re-reads them. Four rows added, each carrying its Chrome measurement.
+
+⚠ And the re-ranking rule the audit made explicit: **the discriminator is not popularity, it is what
+happens on ABSENCE — a throw, a hang, or a fallback.** `document.fonts` ranked high and was built at
+t730 because absence is a *throw*; Typed OM ranks low despite being a real gap because every library
+ships a string-parsing fallback, so absence degrades to *slower*.
+
+### And the wall-time audit (711 → 732): lean, and the number people quote is not the wall
+
+```text
+   24s  T  (crate tests)   32%      5s  G1      4s  P (parity)      1s  B
+   21s  G6                 28%      5s  D       2s  F              ~75s of sections
+```
+
+Nothing admissible to trim. Every rigor-preserving question the protocol asks — redundancy,
+parallelism, caching, scope — comes back with no candidate at 24s and 21s for the two largest, and
+the target is 300s.
+
+⚠ **But the walls this session ran 760–806s, not 75s, and the difference is not gate runtime.** It is
+**compiling and linking gate binaries after an engine edit**: a tick touching `engine/js` relinks
+every affected test binary against mozjs. The docs-only ticks in the same session came in at
+**65–66s**, which is the same wall doing no compilation. So the *"wall"* number the loop quotes is a
+BUILD measurement wearing a gate measurement's name, and it explains the self-audit item that went
+red at t715 and green at t726 with no work in between (t726 said so at the time: *a number that flips
+on the weather is a schedule, not a threshold*).
+
+⚠ `P · parity` measures **4s** here — the third independent confirmation of t711's retraction that
+the "172s parity / 71% of the wall" reading was contention, not parity.
+
+Harness-owned; recorded, not acted on.
+
+NEXT: **(1) A GATE THAT WAS RED FOR 12+ TICKS IS AN ARGUMENT ABOUT THE WALL, NOT ABOUT FONTS** —
+t731 measured a rotating out-of-wall sample at ~4 minutes for 13 gates; that is affordable per tick
+and would have caught this within one. ⚠ Harness-owned, recorded for the observer. **(2)** `@container`
+cascade order (t726). **(3)** `document.caretRangeFromPoint` (t730). **(4)** the full corpus sweep,
+owed for four constitution checks.

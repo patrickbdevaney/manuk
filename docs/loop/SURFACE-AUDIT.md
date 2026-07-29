@@ -2497,3 +2497,59 @@ something the instrument never looked at.
 **Standing note, tenth audit running:** `map-reconcile.sh` searches `engine agent tests` and not
 `shell/`, so the eight gates living as `#[test] fn` in `shell/src/media.rs` and `shell/src/audio.rs`
 remain invisible to it. Harness-owned; reported, not touched.
+
+## Audit #45 — tick 732 (2026-07-28)
+
+**Sources (searched, not recalled):**
+- <https://web.dev/baseline/2026> and the 2026 monthly digests — Baseline movement.
+- <https://blog.mozilla.org/netpolicy/2026/03/23/competition-innovation-and-the-future-of-the-web/>,
+  <https://techcrunch.com/2026/07/03/...> — the engine landscape and what trails where.
+- Interop 2026 re-checked against #44's list: **20 focus areas, 0 absent from the map** (six audits).
+- **This session's own differential probes** (t726, t728, t729, t730) — see below, because they are
+  the finding.
+
+### ⚠⚠ THE FINDING IS ABOUT THE MAP'S SOURCES, NOT ITS CONTENTS
+
+Six audits running, the reconciliation against the world's own lists comes back **clean**: every
+Interop 2026 focus area and investigation effort is on the map. So I reconciled against a source the
+audit protocol does not name — **our own measurements from the last ten ticks** — and found this:
+
+```text
+  capability                                          measured vs Chrome     row in the map?
+  document.caretRangeFromPoint / caretPositionFromPoint   function / undefined     NO
+  CSS Typed OM (computedStyleMap, CSSNumericValue)        function / undefined     NO
+  container-query length units (cqw/cqi/…)                200px    / 400px         NO
+  @container rule CASCADE ORDER (a defect)                red      / green         NO
+  document.elementsFromPoint                              3        / TypeError     NO  (built t729)
+  document.fonts                                          object   / undefined     yes (`missing`)
+```
+
+**Five of six were absent, and every one of them was measured against Chrome by this loop before this
+audit ran.** The map is fed by external lists — Interop, Baseline, the Blink use-counter dump — and
+those are excellent at *"what does the world think matters"* and structurally blind to *"what did we
+just measure ourselves."* A probe finding has no filing path, so it lives in a journal entry and a
+NEXT list until someone re-reads them.
+
+That is the tick-42 principle (*"raising what the instrument can SEE outranks fixing what it already
+sees"*) pointing at the ledger instead of the engine: **the oracle's ceiling binds the MAP too.**
+
+**ADDED (4 rows, 395 → 399+):** `caretRangeFromPoint`/`caretPositionFromPoint` · CSS Typed OM ·
+container-query length units · `@container` cascade order (as a *defect* row, since container queries
+themselves are gated). `elementsFromPoint` needed no row — it landed at t729 before this audit.
+Every one carries its Chrome measurement and, where known, the reason it is hard.
+
+**CORRECTED:** nothing this cycle. #44's `lh`/`rlh` correction was built at t722–723 and the row is
+now `gated`.
+
+**RE-RANKED, with the reason written down so it is not re-derived:** Typed OM is ranked **low**
+despite being a real absence, because it has a universal string-parsing fallback that every library
+still ships — absence degrades to *slower*, not *broken*. `document.fonts` was ranked high for the
+opposite reason and built at t730. **The discriminator is not popularity, it is what happens on
+absence: a THROW, a HANG, or a fallback.**
+
+**WHAT WE HAD BEEN WRONG ABOUT:** that a clean reconciliation means a clean map. Five measured gaps
+were sitting in journal entries the whole time.
+
+**Standing note, eleventh audit running:** `map-reconcile.sh` searches `engine agent tests` and not
+`shell/`, so the eight gates living as `#[test] fn` in `shell/src/media.rs` and `shell/src/audio.rs`
+remain invisible to it. Harness-owned; reported, not touched.

@@ -6866,8 +6866,55 @@ impl Page {
             // **nine** full-document layouts for one navigation at 257ms each — over two seconds of
             // relaying-out a tree that had not changed.
             let damage = self.apply_stylesheets(&external, fonts, viewport_width);
-            if damage == RestyleDamage::None && !self.dom.has_dirty() {
+            // ⚠⚠ **…and `registered_webfont` belongs HERE TOO, which is where it was missing.**
+            //
+            // The condition above learned that an arriving face is a third reason to re-cascade. This
+            // early return — inside the branch that condition opens — did not, and it is the one that
+            // decides whether the RELAYOUT happens. For the case the gate is named for (an
+            // `@font-face` in an INLINE `<style>`, which every "inline your critical CSS" build
+            // produces) the numbers line up exactly wrong: `count == 0`, the tree is clean, so the
+            // branch is entered *only* because of `registered_webfont` — and then `apply_stylesheets`
+            // fingerprints its inputs, finds the style SOURCES unchanged (the same inline `<style>`
+            // as before; a font is not a source), returns `RestyleDamage::None`, and this line
+            // returns before the relayout it was entered for.
+            //
+            // The font downloads, decodes, registers and resolves correctly — `manuk-text` measures
+            // Ahem at exactly 100.0px for 5 chars at 20px — and the document keeps the layout it
+            // computed with the FALLBACK: 66.7px. `g_webfont_relayout` has been RED on this since
+            // before t718 and nothing said so, because it is one of the ~85 gates the wall does not
+            // run (t730/t731).
+            //
+            // **One rule, two places.** The entry condition and the early return are the same
+            // question asked twice — *"is there a reason to redo the layout?"* — and only one of them
+            // was taught the third reason.
+            if damage == RestyleDamage::None && !self.dom.has_dirty() && !registered_webfont {
                 return count;
+            }
+            // ⚠⚠ **A FONT IS NOT A STYLE INPUT, AND THAT IS THE WHOLE BUG.**
+            //
+            // The relayout lives inside `apply_stylesheets`, behind a fingerprint of *the cascade's
+            // inputs* — the style sources and the shape of the tree. A newly-arrived face changes
+            // neither: the same inline `<style>` that declared `@font-face` was there before the
+            // bytes came back. So the fingerprint matches, `apply_stylesheets` returns
+            // `RestyleDamage::None`, and **it skips the layout as well as the cascade** — which is
+            // correct for every input it knows about and wrong for the one it does not.
+            //
+            // The guard above had already learned that an arriving face is a third reason to re-do
+            // the work; it just handed that reason to a function that answers a different question.
+            // **A trigger is only as good as what it triggers**, and the two were one call apart.
+            //
+            // Measured: `g_webfont_relayout` — an `@font-face` in an INLINE `<style>`, which is what
+            // every "inline your critical CSS" build produces — measured **66.7px** where Ahem
+            // guarantees exactly **100px** for 5 characters at 20px. The font downloaded, decoded,
+            // registered and resolved correctly the whole time; nothing ever asked the document to
+            // measure itself again. RED since before t718 and unnoticed because this gate is one of
+            // the ~85 the wall does not run (t730/t731).
+            if registered_webfont && damage == RestyleDamage::None {
+                let sheets: Vec<Stylesheet> = self.all_sheets();
+                (self.styles, self.root_box) =
+                    restyle_and_layout(&self.dom, &sheets, fonts, viewport_width, &self.images);
+                self.reapply_scroll_offsets();
+                self.content_height = self.root_box.rect.height;
             }
         } else {
             // **Nothing arrived and nothing is dirty — so there is nothing to do.**

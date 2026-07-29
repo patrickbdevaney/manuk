@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **487** | ticks 1–730 |
-| median tick cycle | **22m** | 486 intervals |
-| median, last 10 | **21m** | 10 intervals |
+| ticks landed | **488** | ticks 1–731 |
+| median tick cycle | **22m** | 487 intervals |
+| median, last 10 | **23m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 423.1h elapsed |
-| median verify wall | **63s** | 426 ticks |
+| **ticks per hour** | **1.15** | 423.5h elapsed |
+| median verify wall | **63s** | 427 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **344**
-* **✅ rows in the capability ledger**: 144 → **370**
+* **✅ rows in the capability ledger**: 144 → **371**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**236 of 487 ticks** (48%) moved a
+**236 of 488 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -584,5 +584,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **728** | 2026-07-28 18:52 | 25m | pattern-class | 63s | +431/−38 | 343 | 81 | 56.0% · | the client box was the border box for nearly every element (2026-07-28) |
 | **729** | 2026-07-28 19:17 | 25m | pattern-class | 63s | +351/−33 | 344 | 81 | 56.0% · | the plural of a working API, and a citation nobody had checked (2026-07-28) |
 | **730** | 2026-07-28 20:07 | 50m | pattern-class | 63s | +104/−32 | 344 | 81 | 56.0% · | `document.fonts` (27.72% of page loads), and a gate that has been RED outside the wall (20 |
+| **731** | 2026-07-28 20:31 | 24m | measurement | 63s | +260/−34 | 344 | 81 | 56.0% · | how many gates outside the wall are red? A sample says: this one (2026-07-28) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
