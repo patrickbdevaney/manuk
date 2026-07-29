@@ -489,3 +489,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 731	e9eedda8	1785285082	2026-07-28T20:31:22-04:00	1445	measurement	63	8	260	34	344	81	3896	6960	0	371	31	how many gates outside the wall are red? A sample says: this one (2026-07-28)
 732	cbe886ae	1785286464	2026-07-28T20:54:24-04:00	1382	pattern-class	63	9	340	34	345	81	3896	6960	0	372	31	a trigger is only as good as what it triggers (2026-07-28)
 733	d1767b12	1785288238	2026-07-28T21:23:58-04:00	1774	pattern-class	63	8	273	33	346	81	3896	6960	0	373	31	`entries[0]` was `undefined`, and that is the first line of every analytics script (2026-07-28)
+734	8d3ebc85	1785289596	2026-07-28T21:46:36-04:00	1358	pattern-class	63	7	291	32	347	81	3896	6960	0	374	31	0 of 42: the ARIA IDL surface, which is how the modern web WRITES to the a11y tree (2026-07-28)

@@ -36309,3 +36309,60 @@ NEXT: **(1)** `document.adoptNode` — THROWS where Chrome returns the node; use
 template/iframe-content move. **(2)** `attachShadow().mode` is `undefined` (shadow DOM is otherwise
 partial). **(3)** `composedPath` is off by one — `window` is missing from the end. **(4)**
 `@container` cascade order (t726), still the oldest open item.
+
+## Tick 735 — `adoptNode`, and a mutation that did not merely answer wrong (2026-07-28)
+
+HYPOTHESIS: t734's probe left four divergences unfixed. Take `document.adoptNode` — it **threw
+`TypeError`** where Chrome returns the node. Bar: Chrome-exact, with the cross-document limit stated
+rather than faked.
+
+### THE SIBLING OF `importNode`, AND THE OPPOSITE TRADE
+
+`importNode` returns a **clone** and leaves the original alone; `adoptNode` returns **the same node**,
+detached. Code depends on the difference: a library that adopts and then compares
+`adopted === original`, or that has already stashed the node in a `Map`, gets the wrong answer from a
+clone. Its callers are the ones that cannot route around it — moving `template.content` children into
+the live tree, and pulling a node out of an `<iframe>`'s document.
+
+```text
+                     CHROME    BEFORE    AFTER
+  adoptNode(p)          P      TypeError    P
+  identity            true     TypeError   true
+  ownerDocument       true     TypeError   true
+  detaches            true     TypeError   true
+  adoptNode(null)  TypeError   TypeError  TypeError
+```
+
+### ⚠⚠ AND THE CROSS-DOCUMENT MUTATION DID NOT JUST GIVE A WRONG ANSWER
+
+Each document owns its own `Dom` arena and a `NodeId` is only meaningful inside one — `node_and_dom`
+exists precisely because reading an iframe's node #7 in the parent's arena returned *the parent's*
+node #7 "with total confidence". So cross-arena adoption is refused, loudly, and the gate pins that.
+
+Proving the refusal RED was the interesting part. Removing it — silently allowing the adoption —
+made the gate fail **not on its cross-document assertion but on `#out must exist`**: detaching a node
+by an id that means something else in this arena **destroyed the document**. The mutation does not
+produce a wrong value; it produces no page.
+
+⚠ That is the whole argument for refusing rather than approximating, made by the code instead of by
+me: *"silently returning a node the other document still owns"* sounds like a small inaccuracy and is
+in fact a tree corruption. The gate now holds that in place.
+
+TICK SHAPE: pattern-class
+CLUSTER: none claimed — a DOM method, not a box.
+Gates: `g_adopt_node` (new). **RED-proven against two mutations**: return without detaching →
+`detaches=false` (the node lives in two places at once); allow cross-arena → the *document* is gone.
+⚠ The cross-document case is reachable to test only because t717 gave `srcdoc` frames a real
+document — a gate written eighteen ticks ago made this one's non-claim testable.
+WIKI: none [forced] — the mechanism is thirty lines with its reasoning beside it; the pattern row
+carries the consequence.
+PATTERN: **the best proof that a refusal is right is a mutation that removes it and breaks something
+UNRELATED.** I expected the cross-document mutation to fail its own assertion and argue about
+severity. It failed the fixture's *existence* check instead, which is an argument nobody has to
+accept on my word. ⚠ The general form: **when you are deciding between refusing and approximating,
+implement the approximation for exactly one test run.** It is cheap, and what it breaks is the real
+severity — which is otherwise a judgement call written by the person who wants to ship.
+
+NEXT: **(1)** `attachShadow().mode` is `undefined` (t734). **(2)** `composedPath` is off by one —
+`window` missing from the end (t734). **(3)** `attachInternals` / form-associated custom elements
+(t734). **(4)** `@container` cascade order (t726), the oldest open item.

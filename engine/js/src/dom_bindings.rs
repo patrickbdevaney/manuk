@@ -2301,6 +2301,7 @@ unsafe fn define_members(
         def_guarded!(def, c"createElement", doc_create_element, 1);
         def_guarded!(def, c"createElementNS", doc_create_element_ns, 2);
         def_guarded!(def, c"importNode", doc_import_node, 2);
+        def_guarded!(def, c"adoptNode", doc_adopt_node, 1);
         def_guarded!(def, c"createComment", doc_create_comment, 1);
         def_guarded!(
             def,
@@ -2886,6 +2887,60 @@ unsafe fn doc_import_node(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> b
     let deep = argc > 1 && (*vp.add(3)).is_boolean() && (*vp.add(3)).to_boolean();
     let clone = clone_node(dom, src, deep);
     *vp = ObjectValue(new_reflector(cx, dom, clone));
+    true
+}
+
+/// `document.adoptNode(node)` — move a node into this document, **keeping its identity**.
+///
+/// The sibling of `importNode` and the opposite trade: `importNode` returns a CLONE and leaves the
+/// original where it was; `adoptNode` returns **the same node**, detached from wherever it was. Code
+/// depends on that difference — a library that adopts and then compares `adopted === original`, or
+/// that has already stashed the node in a map, gets the wrong answer from a clone.
+///
+/// It was absent, so the call **threw `TypeError`** and took its caller with it. The usual callers
+/// are exactly the ones that cannot route around it: moving `template.content` children into the
+/// live tree, and pulling a node out of an `<iframe>`'s document.
+///
+/// **Chrome-measured semantics, one fixture** — all four are asserted in `g_adopt_node`:
+///
+/// ```text
+///   adoptNode(p)         returns the SAME node (identity, not a clone)
+///   .ownerDocument       becomes this document
+///   .parentNode          becomes null — adoption DETACHES
+///   adoptNode(null)      throws TypeError
+/// ```
+///
+/// ⚠ **NAMED NON-CLAIM: a node from ANOTHER document's arena is refused, loudly.** Each document owns
+/// its own `Dom` arena and a `NodeId` is only meaningful inside one — `node_and_dom` exists precisely
+/// because reading an iframe's node #7 in the parent's arena returns the parent's node #7 *"with
+/// total confidence"*. Moving a node between arenas is a real transplant (subtree copy + reflector
+/// re-binding), and the honest answer until it is built is a throw that says so. Silently returning
+/// the node still owned by the other document is the failure this refusal exists to prevent: the
+/// caller would append it and get a node that no longer resolves.
+unsafe fn doc_adopt_node(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, _)) = this_node(vp) else {
+        return throw_type_error(cx, "adoptNode called on a non-document");
+    };
+    // Chrome throws TypeError for a missing/non-node argument rather than returning null, and a page
+    // that passes `null` by accident should find out on that line.
+    let Some((src_dom, src)) = arg_object(vp, argc, 0).and_then(|o| node_and_dom(o)) else {
+        return throw_type_error(
+            cx,
+            "Failed to execute 'adoptNode' on 'Document': parameter 1 is not of type 'Node'.",
+        );
+    };
+    if src_dom != dom {
+        return throw_type_error(
+            cx,
+            "Failed to execute 'adoptNode' on 'Document': cross-document adoption is not supported \
+             by this engine — each document owns its own node arena and moving a node between them \
+             is a transplant, not a re-parent. Use importNode(node, true) for a copy.",
+        );
+    }
+    // Same arena ⇒ the ownerDocument is already this one, so adoption is exactly the detach. `detach`
+    // is a no-op for a node that has no parent, which is the `template.content` case.
+    (*dom).detach(src);
+    *vp = ObjectValue(new_reflector(cx, dom, src));
     true
 }
 
