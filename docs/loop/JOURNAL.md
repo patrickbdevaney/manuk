@@ -36366,3 +36366,64 @@ severity — which is otherwise a judgement call written by the person who wants
 NEXT: **(1)** `attachShadow().mode` is `undefined` (t734). **(2)** `composedPath` is off by one —
 `window` missing from the end (t734). **(3)** `attachInternals` / form-associated custom elements
 (t734). **(4)** `@container` cascade order (t726), the oldest open item.
+
+## Tick 736 — a shadow root could not say what it was, whose it was, or that it was closed (2026-07-28)
+
+HYPOTHESIS: t734's probe found `attachShadow({mode:'open'}).mode` undefined. Probe the whole shadow
+surface first — 15 rows against Chrome — then fix what is bounded.
+
+### 15 ROWS, 7 WRONG, AND THE CAUSE OF THE FIRST ONE IS A NAME COLLISION
+
+```text
+                                       CHROME    BEFORE    AFTER
+  root.mode                             open    undefined   open
+  root.host === theElement              true      FALSE     true
+  closedHost.shadowRoot === null        true      FALSE     true
+  ── measured, NOT fixed (each its own change) ─────────────────────
+  root.getElementById                function  undefined
+  'activeElement' in root               true      false
+  second attachShadow        NotSupportedError   returns the root
+  composed event target                    h       in       <- the big one
+```
+
+⚠⚠ **`host` was wrong because it is TWO properties sharing one name.** On an `<a>` it is URL
+decomposition (`hostname:port`); on a **ShadowRoot** it is the element the shadow is attached to —
+the most-used property on a root, since it is how a component reaches its own host from inside. They
+share a reflector surface, so the URL getter answered for both. Resolved by node kind, shadow root
+first; a shadow root is never an `<a>`, so the cases cannot overlap, and the gate asserts
+`link.host === 'example.com:8080'` as the collision control.
+
+### ⚠⚠ AND ONE FIX SUPERSEDES A DELIBERATE EARLIER POSITION
+
+`element.shadowRoot` returned a `closed` root, under a comment that argued: *"hiding it is a
+follow-on and would only obscure the page from itself."* **That is right about secrecy and wrong
+about the contract.** `closed` is not a security boundary and nothing here is protected by it — but
+the property is **observable**, and libraries branch on it: `el.shadowRoot === null` is the standard
+test for *"is this root closed / not mine?"*. Answering with the root sends that branch down a path
+that works **here and nowhere else**, which is the worse failure — the kind that only appears in
+production, on a real browser.
+
+TICK SHAPE: pattern-class
+CLUSTER: none claimed — shadow DOM is a JS/semantic surface. It is I3/agentic territory: an agent
+reasoning about a component's internals needs `mode` and `host` to be true.
+Gates: `g_shadow_root_identity` (new). **RED-proven against two mutations**: drop the shadow-root
+branch of `host` → `host=false` (what shipped); stop hiding closed roots → `closedNull=false`. ⚠ The
+gate carries **two controls that a careless fix would break**: `link.host` must still be the URL
+authority, and `mode` must stay `undefined` on elements that are not shadow roots.
+WIKI: none [forced] — the collision and the superseded position are documented at both call sites;
+the pattern row carries the consequence.
+PATTERN: **a property name is not a property.** `host` has meant two unrelated things on one
+reflector surface for as long as both existed, and the second one silently lost — not because anyone
+chose it, but because the first implementation had no reason to ask what kind of node it was on.
+⚠ The general form, and this session has now hit it four times in different clothes (`typeof null`,
+`CSS.supports`, `getEntriesByType` returning `[]`, and this): **a wrong answer of the right TYPE is
+invisible to every check except one that knows what the answer should be.** `root.host` returned a
+string, which is exactly what `host` returns.
+⚠ Second, smaller and worth keeping: **when superseding a deliberate earlier decision, quote it.**
+The old comment's argument was sound within its frame (secrecy) and wrong outside it (observability),
+and that distinction is only visible if the original words are on the page.
+
+NEXT: **(1) COMPOSED-EVENT RETARGETING** — `event.target` reads the inner node where Chrome reads the
+host, leaking shadow internals to every outside listener; the largest of the four residues and its
+own change. **(2)** `root.getElementById` / `activeElement`. **(3)** a second `attachShadow` must
+throw `NotSupportedError`. **(4)** `@container` cascade order (t726), the oldest open item.

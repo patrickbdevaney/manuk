@@ -2615,6 +2615,7 @@ unsafe fn define_members(
         prop_guarded!(prop, c"hostname", el_get_hostname, Some(el_set_hostname));
         prop_guarded!(prop, c"port", el_get_port, Some(el_set_port));
         prop_guarded!(prop, c"host", el_get_host, Some(el_set_host));
+        prop_guarded!(prop, c"mode", el_get_shadow_mode, None);
         prop_guarded!(prop, c"pathname", el_get_pathname, Some(el_set_pathname));
         prop_guarded!(prop, c"search", el_get_search, Some(el_set_search));
         prop_guarded!(prop, c"hash", el_get_hash, Some(el_set_hash));
@@ -5811,12 +5812,24 @@ unsafe fn el_attach_shadow(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> 
     true
 }
 
-/// `element.shadowRoot` — the attached shadow root, or `null`. (An `closed` root is still
-/// returned here; hiding it is a follow-on and would only obscure the page from itself.)
+/// `element.shadowRoot` — the attached shadow root, or `null`. **A `closed` root reads `null`.**
+///
+/// ⚠ This supersedes a deliberate earlier position, and the reasoning is worth keeping because it was
+/// nearly right: *"hiding it is a follow-on and would only obscure the page from itself."* True as
+/// far as secrecy goes — `closed` is an encapsulation contract, not a security boundary, and nothing
+/// here is protected by it. But the property is **observable**, and libraries BRANCH on it:
+/// `el.shadowRoot === null` is the standard test for *"is this root closed / not mine?"*. Answering
+/// with the root sends that branch down a path that works **here and nowhere else** — which is the
+/// worse failure, because it is the one that only shows up in production on a real browser.
+/// Chrome-measured: `d.attachShadow({mode:'closed'}); d.shadowRoot` is `null`.
 unsafe fn el_get_shadow_root(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp).and_then(|(dom, n)| (*dom).shadow_root(n).map(|sr| (dom, sr))) {
-        Some((dom, sr)) => *vp = ObjectValue(new_reflector(cx, dom, sr)),
-        None => *vp = NullValue(),
+        Some((dom, sr))
+            if (*dom).shadow_root_mode(sr) != Some(manuk_dom::ShadowRootMode::Closed) =>
+        {
+            *vp = ObjectValue(new_reflector(cx, dom, sr))
+        }
+        _ => *vp = NullValue(),
     }
     true
 }
@@ -9018,7 +9031,40 @@ macro_rules! url_part {
 url_part!(el_get_protocol, "protocol");
 url_part!(el_get_hostname, "hostname");
 url_part!(el_get_port, "port");
-url_part!(el_get_host, "host");
+/// ⚠ **`host` is TWO properties on one name, and the collision is why `shadowRoot.host` was wrong.**
+///
+/// On an `<a>`/`<area>` it is URL decomposition (`hostname:port`). On a **ShadowRoot** it is the
+/// ELEMENT the shadow is attached to — the single most-used property on a shadow root, since it is
+/// how a web component reaches its own host from inside. They share a reflector surface here, so the
+/// URL getter answered for both and `root.host === el` was **false** against Chrome's `true`.
+///
+/// Resolved by node kind, shadow root first: a shadow root is never an `<a>`, so the two cases
+/// cannot overlap and the URL behaviour is untouched (`g_anchor_url_setters` covers it).
+unsafe extern "C" fn el_get_host(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, n)) = this_node(vp) {
+        if (*dom).is_shadow_root(n) {
+            match (*dom).shadow_host(n) {
+                Some(h) => *vp = ObjectValue(new_reflector(cx, dom, h)),
+                None => *vp = NullValue(),
+            }
+            return true;
+        }
+    }
+    anchor_url_part(cx, vp, "host")
+}
+
+/// `shadowRoot.mode` — `"open"` or `"closed"`. Every web-component library reads it to decide
+/// whether it may reach into a root it did not create; it was `undefined`, which is neither.
+unsafe extern "C" fn el_get_shadow_mode(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let m = this_node(vp).and_then(|(dom, n)| (*dom).shadow_root_mode(n));
+    match m {
+        Some(manuk_dom::ShadowRootMode::Open) => return_string(cx, vp, "open"),
+        Some(manuk_dom::ShadowRootMode::Closed) => return_string(cx, vp, "closed"),
+        // Not a shadow root ⇒ the property does not apply. `undefined`, not `"open"`.
+        None => *vp = UndefinedValue(),
+    }
+    true
+}
 url_part!(el_get_pathname, "pathname");
 url_part!(el_get_search, "search");
 url_part!(el_get_hash, "hash");

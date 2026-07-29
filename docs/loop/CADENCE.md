@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **491** | ticks 1–734 |
-| median tick cycle | **22m** | 490 intervals |
+| ticks landed | **492** | ticks 1–735 |
+| median tick cycle | **22m** | 491 intervals |
 | median, last 10 | **24m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 424.7h elapsed |
-| median verify wall | **63s** | 430 ticks |
+| **ticks per hour** | **1.16** | 425.1h elapsed |
+| median verify wall | **63s** | 431 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **347**
-* **✅ rows in the capability ledger**: 144 → **374**
+* **live gates**: 27 → **348**
+* **✅ rows in the capability ledger**: 144 → **375**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**239 of 491 ticks** (49%) moved a
+**240 of 492 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **239** capability ticks, median cycle **22m**
-* median diff per tick: **+242 / −34** lines across 8 files
+* **240** capability ticks, median cycle **22m**
+* median diff per tick: **+243 / −34** lines across 8 files
 
 ## Every tick
 
@@ -588,5 +588,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **732** | 2026-07-28 20:54 | 23m | pattern-class | 63s | +340/−34 | 345 | 81 | 56.0% · | a trigger is only as good as what it triggers (2026-07-28) |
 | **733** | 2026-07-28 21:23 | 30m | pattern-class | 63s | +273/−33 | 346 | 81 | 56.0% · | `entries[0]` was `undefined`, and that is the first line of every analytics script (2026-0 |
 | **734** | 2026-07-28 21:46 | 23m | pattern-class | 63s | +291/−32 | 347 | 81 | 56.0% · | 0 of 42: the ARIA IDL surface, which is how the modern web WRITES to the a11y tree (2026-0 |
+| **735** | 2026-07-28 22:08 | 22m | pattern-class | 63s | +282/−37 | 348 | 81 | 56.0% · | `adoptNode`, and a mutation that did not merely answer wrong (2026-07-28) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
