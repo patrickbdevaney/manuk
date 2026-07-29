@@ -5872,6 +5872,56 @@ unsafe fn el_attach_shadow(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> 
         }
         None => manuk_dom::ShadowRootMode::Open,
     };
+    // ── **`attachShadow` THROWS in two cases, and it silently succeeded in both.** ───────────────
+    //
+    // Chrome-measured: `NotSupportedError` when the element **already has** a shadow root, and when
+    // the element is **not a valid shadow host**. This engine returned the existing root for the
+    // first (documented as *"idempotent"*) and happily attached one to a `<br>` for the second.
+    //
+    // ⚠ Idempotence sounds harmless and is not: attaching twice is a real bug in a component — two
+    // initialisations racing over one element, usually a lifecycle callback firing twice — and the
+    // throw is how the author finds out. Handing back the first root makes the second initialiser
+    // silently overwrite the first one's content, which is a bug that reproduces as *"my component
+    // renders empty sometimes."*
+    if (*dom).shadow_root(host).is_some() {
+        return throw_dom(
+            cx,
+            "NotSupportedError",
+            "Failed to execute 'attachShadow' on 'Element': Shadow root cannot be created on a host \
+             which already hosts a shadow tree.",
+        );
+    }
+    // The spec's valid-host set: a fixed list of HTML elements, plus **any custom element** — whose
+    // defining feature is a hyphen in the name. That hyphen rule is why the list can stay short and
+    // still admit every `<my-widget>` on the web.
+    let tag = (*dom).tag_name(host).unwrap_or("");
+    const SHADOW_HOSTS: &[&str] = &[
+        "article",
+        "aside",
+        "blockquote",
+        "body",
+        "div",
+        "footer",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "header",
+        "main",
+        "nav",
+        "p",
+        "section",
+        "span",
+    ];
+    if !tag.contains('-') && !SHADOW_HOSTS.contains(&tag) {
+        return throw_dom(
+            cx,
+            "NotSupportedError",
+            "Failed to execute 'attachShadow' on 'Element': This element does not support attachShadow",
+        );
+    }
     let sr = (*dom).attach_shadow(host, mode);
     *vp = ObjectValue(new_reflector(cx, dom, sr));
     true

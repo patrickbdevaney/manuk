@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **496** | ticks 1–739 |
-| median tick cycle | **22m** | 495 intervals |
+| ticks landed | **497** | ticks 1–740 |
+| median tick cycle | **22m** | 496 intervals |
 | median, last 10 | **23m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.16** | 426.3h elapsed |
-| median verify wall | **63s** | 435 ticks |
+| **ticks per hour** | **1.16** | 426.6h elapsed |
+| median verify wall | **63s** | 436 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **350**
-* **✅ rows in the capability ledger**: 144 → **378**
+* **✅ rows in the capability ledger**: 144 → **379**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**243 of 496 ticks** (49%) moved a
+**244 of 497 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **243** capability ticks, median cycle **22m**
-* median diff per tick: **+243 / −34** lines across 8 files
+* **244** capability ticks, median cycle **22m**
+* median diff per tick: **+242 / −34** lines across 8 files
 
 ## Every tick
 
@@ -593,5 +593,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **737** | 2026-07-28 22:34 | 4m | pattern-class | 63s | +96/−32 | 349 | 81 | 56.0% · | one entry short of the window, and a gate that nearly shipped vacuous (2026-07-28) |
 | **738** | 2026-07-28 22:55 | 21m | measurement | 63s | +183/−37 | 349 | 81 | 56.0% · | two blockers found by trying, not by planning (2026-07-28) |
 | **739** | 2026-07-28 23:18 | 23m | pattern-class | 63s | +303/−35 | 350 | 81 | 56.0% · | retargeting, landed as the ONE change t738 said it had to be (2026-07-28) |
+| **740** | 2026-07-28 23:41 | 23m | pattern-class | 63s | +164/−32 | 350 | 81 | 56.0% · | the method was correct and homeless (2026-07-28) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -76,6 +76,17 @@ const HTML: &str = r#"<!doctype html><html><body>
        }),
        // …and the SECOND HALF: `composedPath()` must stay FULL for the outside listener, which it
        //    cannot be if it is derived from a retargeted `target`.
+       // ── attachShadow VALIDATION (t741). Both spec throws, and the exception NAME matters:
+       //    libraries catch and check `e.name === 'NotSupportedError'`.
+       T('twice', function () { h.attachShadow({ mode: 'open' }); return 'NOTHROWN'; }),
+       T('badTag', function () {
+         document.createElement('br').attachShadow({ mode: 'open' }); return 'NOTHROWN';
+       }),
+       T('customOk', function () {
+         // A custom element (hyphenated) IS a valid host — the rule that keeps the short spec list
+         // usable, and the one an over-strict check would break.
+         return document.createElement('my-widget').attachShadow({ mode: 'open' }).mode;
+       }),
        T('outPath', function () {
          var p = null;
          var inner2 = root.querySelector('#in');
@@ -166,6 +177,24 @@ fn a_shadow_root_knows_its_mode_its_host_and_when_to_hide() {
         has("outPath=in>#document-fragment>h>BODY>HTML>document>window"),
         "composedPath() must stay the FULL composed path for a listener outside the shadow tree, \
          even though its `target` was retargeted — got {got:?}"
+    );
+
+    // (8) **`attachShadow` THROWS where the spec says so, with the RIGHT NAME.** RED: drop either
+    // guard → `NOTHROWN`. ⚠ *Idempotence* on a second attach sounds harmless and is not: attaching
+    // twice is a real bug in a component (a lifecycle callback firing twice), and the throw is how
+    // the author finds out — handing back the first root lets the second initialiser overwrite the
+    // first's content, which reproduces as "my component renders empty sometimes".
+    assert!(
+        has("twice=NotSupportedError") && has("badTag=NotSupportedError"),
+        "attachShadow must throw NotSupportedError on a second attach and on an element that is not \
+         a valid shadow host — and the NAME matters, because libraries catch and check it — got \
+         {got:?}"
+    );
+    // …and the control for the over-strict version: a CUSTOM element is always a valid host.
+    assert!(
+        has("customOk=open"),
+        "a hyphenated custom element IS a valid shadow host — a host check that only allows the \
+         spec's short HTML list breaks every web component — got {got:?}"
     );
 
     // (5) **The tree is real.** Without this, every assertion above could hold over an object that

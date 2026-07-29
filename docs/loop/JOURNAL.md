@@ -36693,3 +36693,51 @@ hurry?" — then running it.
 NEXT: **(1)** `root.activeElement`; a second `attachShadow` must throw `NotSupportedError`.
 **(2)** `attachInternals` / form-associated custom elements (t734). **(3)** `@container` cascade
 order (t726), the oldest open item. **(4)** the full corpus sweep, owed for five constitution checks.
+
+## Tick 741 — "idempotent" was hiding a component's own bug (2026-07-28)
+
+HYPOTHESIS: two shadow residues remain from t736's probe. Take `attachShadow`'s two spec throws.
+
+### BOTH THROWS WERE SILENT SUCCESSES
+
+```text
+                                      CHROME               BEFORE      AFTER
+  a SECOND attachShadow         NotSupportedError      returns the root  NotSupportedError
+  attachShadow on <br>          NotSupportedError      attaches one      NotSupportedError
+  attachShadow on <my-widget>   works                  works             works
+```
+
+⚠⚠ **The first was documented behaviour: *"Idempotent: a host that already has a shadow root returns
+the existing one."*** That sounds harmless and is not. Attaching twice is a **real bug in the
+component** — a lifecycle callback firing twice, two initialisers racing over one element — and the
+throw is how the author finds out. Handing back the first root lets the second initialiser overwrite
+the first one's content, and the symptom is *"my component renders empty sometimes"*, at the other end
+of the codebase from the cause.
+
+⚠ **The exception NAME is part of the fix**, not decoration: libraries `catch` and check
+`e.name === 'NotSupportedError'` before deciding whether to retry or re-use. A `TypeError` there is a
+different branch. The first version of this threw `TypeError` and was measured against Chrome before
+it landed — `throw_dom` already existed for exactly this.
+
+⚠ And the **over-strict** direction is the one worth guarding: the spec's valid-host list is short
+(`div`, `span`, `section`, …) and admits **any custom element**, which is the hyphen rule. A host
+check that only allows the HTML list rejects every `<my-widget>` on the web — so the gate asserts a
+custom element succeeds, and the mutation that drops the hyphen clause fails on exactly that.
+
+TICK SHAPE: pattern-class
+CLUSTER: none claimed.
+Gates: `g_shadow_root_identity` extended with three assertions, **RED-proven against two mutations** —
+drop the already-attached guard → `NOTHROWN`; drop the hyphen clause → `customOk=NotSupportedError`,
+i.e. the over-correction that would break every web component.
+WIKI: none [forced] — the reasoning is beside the code; the pattern row carries the consequence.
+PATTERN: **"idempotent" is a design word, and on an API that the spec makes throw it is a bug wearing
+one.** The comment said idempotent, meant *"returns the existing root"*, and made a component's
+double-initialisation unobservable. ⚠ The general form, and it is the same shape as t736's `closed`
+root: **when this engine is more permissive than the spec, the cost is not a wrong value — it is a
+bug the page can no longer detect.** A throw is a feature when the thing it reports is the caller's
+mistake, and every one of those we soften moves the failure to somewhere it cannot be traced.
+
+NEXT: **(1)** `shadowRoot.activeElement` — the last of t736's four residues; the `ShadowRoot.prototype`
+link now exists (t740) so it has a home, but it needs the focus tracking checked rather than a `null`
+returned. **(2)** `attachInternals` / form-associated custom elements (t734). **(3)** `@container`
+cascade order (t726), the oldest open item. **(4)** the full corpus sweep, owed for five checks.
