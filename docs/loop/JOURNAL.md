@@ -36503,3 +36503,66 @@ NEXT: **(1) COMPOSED-EVENT RETARGETING** — `event.target` reads the inner node
 host; the largest remaining shadow residue and a dispatch-path change of its own. **(2)**
 `root.getElementById` / `activeElement`; a second `attachShadow` must throw. **(3)** `@container`
 cascade order (t726), the oldest open item. **(4)** the full corpus sweep, owed for five checks.
+
+## Tick 738 — two blockers found by trying, not by planning (2026-07-28)
+
+HYPOTHESIS: t736/t737 left the shadow surface with four measured residues. Take the two that looked
+bounded — composed-event **retargeting** and `shadowRoot.getElementById` — and build them. Bar: both,
+or a named reason.
+
+### NEITHER IS BOUNDED, AND BOTH REASONS ARE STRUCTURAL
+
+**Retargeting.** The plan was straightforward and I had it written: `path` is built by walking
+`parentNode`, and a shadow root's parent link points at its host, so the path already crosses the
+boundary as `[in, shadowRoot, host, body, html, document]`. Precompute a parallel `targets[]` — the
+effective target becomes the host the moment the walk passes a shadow root — and set `ev.target` per
+path index inside `invoke`. Twelve lines.
+
+⚠ **Then reading the surrounding code found the interaction that stops it:** this engine's
+`composedPath()` is not captured at dispatch, it is **derived from `this.target`** (`for (var n =
+this.target; n; n = n.parentNode)`). Retarget the target and `composedPath()` silently gets
+*shorter* for every listener outside the shadow tree — Chrome returns the full composed path
+regardless of who is listening. So retargeting is not a twelve-line change to `ev.target`; it is
+that **plus** capturing the path at dispatch time, which is a second change to the most
+depended-upon function in the engine.
+
+That is a real finding and it was not visible from the plan. **Both halves land together or the fix
+trades one wrong answer for another** — and t690 is the precedent for what "half of a two-part
+change" looks like when measured (a no-op that was later reverted).
+
+**`shadowRoot.getElementById`.** `doc_get_by_id` is *already generic* — it roots at `this_node(vp)`
+and walks descendants, so it would work on a shadow root unchanged. The blocker is where it is
+installed: the reflector surfaces are **prototypes** (`EventTarget → Node → Document`), and a shadow
+root is a Node, so it gets `Node.prototype`. Adding `getElementById` there puts it on **every
+element**, which is wrong — per spec it lives on `NonElementParentNode`: Document and
+DocumentFragment. Doing it right means a **DocumentFragment prototype tier**, which is an addition to
+the chain that `instanceof` and every reflector creation path runs through.
+
+### WHAT THIS TICK IS
+
+A **refusal with two named reasons**, and the analysis banked so the next session starts from it.
+Both were found by starting the work, not by planning it — and neither is visible from the outside:
+`ev.target = targets[i]` looks like a complete fix, and `getElementById` looks like one `def_guarded!`
+line.
+
+TICK SHAPE: measurement (two designs priced; nothing built, and that is the result)
+CLUSTER: none.
+Gates: none changed; the full suite for the touched area was re-run green before stopping.
+WIKI: none [forced] — no engine change.
+PATTERN: **the price of a change is not visible until you start it, and "twelve lines" is a plan, not
+a measurement.** Both of today's refusals came from reading the code the change would land in —
+`composedPath` deriving from `target`, and the prototype chain having no fragment tier — and neither
+was findable from the fixture, the ledger, or the spec. ⚠ The operational form, which is cheap:
+**before deferring OR committing to a change, spend one read on the code it lands in.** Twenty
+minutes here turned "two small fixes" into "two structural changes", and the same twenty minutes
+would otherwise have been spent halfway through the first one.
+⚠ And the honest note on the pattern of this session: I have deferred retargeting three times. The
+first two were *"dispatch is risky"*, which is a category, not a reason. This one is a reason, and it
+is the one that should have been found first — **a deferral without a mechanism is a delay; with a
+mechanism it is a plan.**
+
+NEXT: **(1) RETARGETING + CAPTURED `composedPath`, as ONE change** — the analysis above is the design;
+`g_composed_path` and `g_shadow_root_identity` are the fixtures it must satisfy, plus a new assertion
+that an outside listener sees the HOST as `event.target`. **(2)** a `DocumentFragment` prototype tier,
+which also gives `getElementById` on `<template>.content`. **(3)** `@container` cascade order (t726),
+the oldest open item. **(4)** the full corpus sweep, owed for five constitution checks.
