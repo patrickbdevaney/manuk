@@ -60,7 +60,33 @@ const HTML: &str = r#"<!doctype html><html><body>
        // The collision control: `host` on an <a> must STILL be the URL authority.
        T('anchorHost', function () { return document.getElementById('link').host; }),
        // …and `mode` is not invented for elements that are not shadow roots.
-       T('elMode', function () { return String(h.mode); })
+       T('elMode', function () { return String(h.mode); }),
+       // ── RETARGETING (t739). A listener OUTSIDE the shadow tree must see the HOST as
+       //    `event.target`; a listener ON the root still sees the inner node. Without it, a
+       //    component leaks its internals to every outside listener and the ordinary delegation
+       //    test `event.target.closest('.item')` searches a tree it is not in.
+       T('retarget', function () {
+         var r = {};
+         var inner = root.querySelector('#in');
+         document.addEventListener('rt', function (e) { r.out = e.target.id; });
+         root.addEventListener('rt', function (e) { r.root = e.target.id; });
+         inner.addEventListener('rt', function (e) { r.at = e.target.id; });
+         inner.dispatchEvent(new Event('rt', { bubbles: true, composed: true }));
+         return r.out + '/' + r.root + '/' + r.at;
+       }),
+       // …and the SECOND HALF: `composedPath()` must stay FULL for the outside listener, which it
+       //    cannot be if it is derived from a retargeted `target`.
+       T('outPath', function () {
+         var p = null;
+         var inner2 = root.querySelector('#in');
+         document.addEventListener('rt2', function (e) {
+           p = e.composedPath().map(function (n) {
+             return n === window ? 'window' : (n === document ? 'document' : (n.id || n.nodeName));
+           }).join('>');
+         });
+         inner2.dispatchEvent(new Event('rt2', { bubbles: true, composed: true }));
+         return p;
+       })
      ].join(' ');
    });
  </script>
@@ -122,6 +148,24 @@ fn a_shadow_root_knows_its_mode_its_host_and_when_to_hide() {
     assert!(
         has("closedNull=true"),
         "a `closed` root must read `null` from element.shadowRoot — got {got:?}"
+    );
+
+    // (6) **RETARGETING.** RED: drop the `targets` table → `retarget=in/in/in`, and every outside
+    // listener sees the component's internals. Chrome measures `h/in/in`.
+    assert!(
+        has("retarget=h/in/in"),
+        "a listener OUTSIDE the shadow tree must see the HOST as event.target, while one ON the root \
+         still sees the inner node — got {got:?}"
+    );
+
+    // (7) **THE SECOND HALF, and it is why this is one change and not two.** `composedPath()` is
+    // derived from `this.target` unless it is captured at dispatch — so retargeting ALONE silently
+    // hands the outside listener a SHORTER path than Chrome does. RED: remove the capture → the
+    // path starts at `h` instead of `in`, and (6) still passes.
+    assert!(
+        has("outPath=in>#document-fragment>h>BODY>HTML>document>window"),
+        "composedPath() must stay the FULL composed path for a listener outside the shadow tree, \
+         even though its `target` was retargeted — got {got:?}"
     );
 
     // (5) **The tree is real.** Without this, every assertion above could hold over an object that

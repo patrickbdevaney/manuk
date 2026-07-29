@@ -36566,3 +36566,61 @@ NEXT: **(1) RETARGETING + CAPTURED `composedPath`, as ONE change** — the analy
 that an outside listener sees the HOST as `event.target`. **(2)** a `DocumentFragment` prototype tier,
 which also gives `getElementById` on `<template>.content`. **(3)** `@container` cascade order (t726),
 the oldest open item. **(4)** the full corpus sweep, owed for five constitution checks.
+
+## Tick 739 — retargeting, landed as the ONE change t738 said it had to be (2026-07-28)
+
+HYPOTHESIS: t738 refused this and left the design. Build it — **both halves together**, because the
+refusal's whole content was that either alone is a trade.
+
+### WHAT LANDED
+
+A listener **outside** a shadow tree now sees the HOST as `event.target`; a listener **on the root**
+still sees the inner node; and `composedPath()` stays the **full** composed path for everyone.
+
+```text
+                                     CHROME                                  BEFORE      AFTER
+  target at document listener        h                                       in          h
+  target at the shadow root          in                                      in          in
+  target at the node itself          in                                      in          in
+  composedPath at document   in>#document-fragment>h>BODY>HTML>document>window  (short)   matches
+  light-DOM event (control)  p2 · p2>BODY>HTML>document>window                unchanged  unchanged
+```
+
+Retargeting is a parallel `targets[]` built beside the path — the effective target becomes the host
+the moment the walk passes a shadow root, assigned **before** the step, so a listener on the root
+still sees the inner node. `composedPath` is captured at dispatch and preferred by the accessor.
+
+### ⚠⚠ AND THE PREDICTED TRADE, DEMONSTRATED
+
+t738 refused the twelve-line version because `composedPath()` derives from `this.target`. Removing
+just the capture proves it exactly:
+
+```text
+  M2 (retarget only)   retarget=h/in/in   ✅      outPath=h>BODY>HTML>document>window   ❌ short
+```
+
+The retargeting is *right* and the path is *wrong* — one bug swapped for another, silently, and only
+visible to a listener that asks for the path. **A refusal that names a mechanism can be tested; the
+same refusal as "dispatch is risky" could not have been.**
+
+TICK SHAPE: pattern-class
+CLUSTER: none claimed — dispatch/agentic surface (PART VII component 2).
+Gates: `g_shadow_root_identity` extended with two assertions, **each RED-proven by its own mutation**:
+drop the `targets` table → `retarget=in/in/in`; drop the capture → the path shortens while
+retargeting still passes. Ten dispatch-dependent gates re-run green before and after
+(`g_event_surface`, `g_click_activation`, `g_pointer_events`, `g_mutation`, `g_markup_script_load_event`,
+`g_script_load_event`, `g_elements_from_point`, `g_a11y_state`, `g_composed_path`, plus the wall).
+WIKI: none [forced] — the mechanism and its second half are documented at both sites in
+`dom_bindings.rs`; the pattern row carries the consequence.
+PATTERN: **a refusal is worth keeping only if it names the mechanism, because a named mechanism is a
+design and a category is a delay.** t738 deferred this with *"`composedPath` derives from `target`"*
+and that sentence WAS the plan — the build took one pass, and the mutation that proves the second
+half is the same sentence run as an experiment. The two earlier deferrals said *"dispatch is risky"*
+and produced nothing reusable. ⚠ The general form: **when you defer, write the sentence that would
+let someone else start.** If you cannot, you have not finished understanding it — which is itself the
+most useful thing the attempt told you.
+
+NEXT: **(1)** a `DocumentFragment` prototype tier — gives `shadowRoot.getElementById` and
+`template.content.getElementById` (t738's other blocker, still standing). **(2)** a second
+`attachShadow` must throw `NotSupportedError`; `root.activeElement`. **(3)** `@container` cascade
+order (t726), the oldest open item. **(4)** the full corpus sweep, owed for five constitution checks.

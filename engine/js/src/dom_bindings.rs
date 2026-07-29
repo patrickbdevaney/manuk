@@ -12593,6 +12593,29 @@ const LISTENER_PRELUDE: &str = r#"
         // Ancestor path: target, parent, ... root.
         var path = [];
         for (var cur = target; cur; cur = cur.parentNode) path.push(cur);
+        // ── **EVENT RETARGETING (DOM §retargeting), and its second half.** ────────────────────────
+        //
+        // A listener OUTSIDE a shadow tree must see the HOST as `event.target`, not the node inside
+        // it. Chrome-measured: a `composed` event dispatched on `<b>` inside a shadow root reads
+        // `target.id === 'h'` (the host) on a `document` listener; this engine read `'in'` and so
+        // leaked the component's internals to every outside listener — and broke the ordinary
+        // delegation test `event.target.closest('.item')`, which is looking in its OWN tree.
+        //
+        // The walk already crosses the boundary (a shadow root's parent link points at its host), so
+        // the retarget is a parallel array: the effective target becomes the host the moment the walk
+        // passes a shadow root. A listener ON the root still sees the inner node — the root is inside
+        // the tree — which is why the assignment happens BEFORE the step, not after.
+        var targets = [];
+        {
+            var eff = target;
+            for (var ti = 0; ti < path.length; ti++) {
+                targets[ti] = eff;
+                var pn = path[ti];
+                // nodeType 11 with a `host` is a ShadowRoot (a DocumentFragment has no host).
+                if (pn && pn.nodeType === 11 && pn.host) { eff = pn.host; }
+            }
+        }
+
         // The argument is either a type string (a trusted event the engine synthesised) or an
         // Event the PAGE constructed and passed to `dispatchEvent`. In the second case the object
         // is the event: its `detail`, its key, its coordinates all have to survive.
@@ -12612,6 +12635,12 @@ const LISTENER_PRELUDE: &str = r#"
         if (supplied) ev.__dispatchFlag = true;   // set for the duration of the dispatch; cleared below
         ev.type = type;
         ev.target = target;
+        // ⚠⚠ **THE SECOND HALF, WITHOUT WHICH RETARGETING IS A TRADE, NOT A FIX.** `composedPath()`
+        // is DERIVED from `this.target`, so retargeting alone would silently make it *shorter* for
+        // every listener outside a shadow tree — Chrome returns the full composed path to everyone.
+        // Captured here, at dispatch, and preferred by the accessor. t690 is the precedent for
+        // landing half of a two-part change: a measured no-op, later reverted.
+        try { ev.__composedPath = path.slice(); } catch (e) {}
         ev.currentTarget = null;
         ev.eventPhase = 0;
         if (ev.bubbles === undefined) ev.bubbles = true;
@@ -12642,8 +12671,10 @@ const LISTENER_PRELUDE: &str = r#"
         ev.preventDefault = function () { if (this.cancelable) this.defaultPrevented = true; };
         ev.stopPropagation = function () { this._stop = true; };
         ev.stopImmediatePropagation = function () { this._stop = true; this._stopImmediate = true; };
-        var invoke = function (node, phase) {
+        var invoke = function (node, phase, idx) {
             if (!node || ev._stop) return;
+            // Retarget for THIS listener's position in the path — see `targets` above.
+            if (idx !== undefined && targets[idx] !== undefined) { ev.target = targets[idx]; }
             var key = node.__nodeId + ':' + type + ':' + phase;
             var arr = __listeners[key];
             // ── **THE `on<type>` PROPERTY HANDLER, which this dispatch point never invoked.**
@@ -12694,13 +12725,13 @@ const LISTENER_PRELUDE: &str = r#"
         };
         // Capture: root → target's parent.
         ev.eventPhase = 1;
-        for (var i = path.length - 1; i >= 1; i--) invoke(path[i], 'c');
+        for (var i = path.length - 1; i >= 1; i--) invoke(path[i], 'c', i);
         // At target (both capture- and bubble-registered).
         ev.eventPhase = 2;
-        invoke(path[0], 'c'); invoke(path[0], 'b');
+        invoke(path[0], 'c', 0); invoke(path[0], 'b', 0);
         // Bubble: target's parent → root.
         ev.eventPhase = 3;
-        if (ev.bubbles) for (var i = 1; i < path.length; i++) invoke(path[i], 'b');
+        if (ev.bubbles) for (var i = 1; i < path.length; i++) invoke(path[i], 'b', i);
         if (supplied) ev.__dispatchFlag = false;   // clear: the event may be dispatched again later
         if (__uaActivates) __uaState.active = __uaPrevActive;   // transient activation ends with the dispatch
         return !ev.defaultPrevented;
@@ -14182,6 +14213,14 @@ const WINDOW_PRELUDE: &str = r#"
                     this.__initialized = true;   // now dispatchable (clears createEvent's uninit flag)
                 };
                 this.composedPath = function () {
+                    // Prefer the path CAPTURED at dispatch: `this.target` is retargeted per listener,
+                    // so deriving from it here would hand an outside listener a shorter path than
+                    // Chrome gives it. Falls back to the walk for an event that was never dispatched.
+                    if (this.__composedPath) {
+                        var c = this.__composedPath.slice();
+                        if (c.length && c[c.length - 1] === document) { c.push(globalThis); }
+                        return c;
+                    }
                     var p = [];
                     for (var n = this.target; n; n = n.parentNode) { p.push(n); }
                     // **The path ends at the WINDOW, and it was stopping at the document.**
