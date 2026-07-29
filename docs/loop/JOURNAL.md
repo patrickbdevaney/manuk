@@ -36241,3 +36241,71 @@ NEXT: **(1) `@container` cascade order** (t726) — still the oldest open item, 
 the riskiest edit class. **(2)** `cq*` units via rung 3 (t726/audit #45). **(3)**
 `caretRangeFromPoint`/`caretPositionFromPoint` — mapped at audit #45, needs point→text-offset mapping
 over the layout's text fragments. **(4)** the full corpus sweep, owed for four constitution checks.
+
+## Tick 734 — 0 of 42: the ARIA IDL surface, which is how the modern web WRITES to the a11y tree (2026-07-28)
+
+HYPOTHESIS: a fourth broad differential probe (check #57 steer #1) on events, observers, animation
+and the agentic surface. Bar: fix whatever comes back divergent and bounded.
+
+### 28 SURFACES, 5 DIVERGENCES, AND ONE OF THEM IS THE MOAT
+
+```text
+  composedPath           5 / 4          (off by one — `window` missing from the path)
+  attachInternals   function / undefined (form-associated custom elements)
+  attachShadow().mode   open / undefined
+  document.adoptNode       I / THROW
+  el.ariaLabel = 'hi'     hi / null      <- 0 of 42 ARIA IDL properties present
+```
+
+**The ARIA IDL surface is I3 territory, not a conformance detail.** The constitution's third
+invariant is *"a first-class accessibility tree, load-bearing, never allowed to lag the renderer"* —
+the stated moat. The ARIA IDL properties are how a modern component library **writes** to it: React,
+Vue, Radix, Headless UI and every design system set `el.ariaExpanded = true` on a disclosure rather
+than calling `setAttribute`, because the property is the typed, minifier-friendly, framework-bound
+form. With the surface absent, every one of those writes landed on a plain JS own-property and **the
+agent and the screen reader saw the state from before the interaction.**
+
+Chrome: **42 of 42**, reflecting both ways. Here: **0 of 42**.
+
+### ⚠⚠ AND THE NAME MAPPING IS THE TRAP
+
+```text
+  ariaValueNow         -> aria-valuenow            NOT aria-value-now
+  ariaPosInSet         -> aria-posinset            NOT aria-pos-in-set
+  ariaRoleDescription  -> aria-roledescription     NOT aria-role-description
+  ariaMultiSelectable  -> aria-multiselectable     NOT aria-multi-selectable
+  role                 -> role                     (no prefix at all)
+```
+
+camelCase→kebab is the obvious derivation and it is wrong for **every multi-word name**. Written as
+42 explicit table rows, not a rule. ⚠ The mutation proves the shape: deriving the names leaves
+`present=42/42` — assertion (1) still passes — while every write goes to an attribute no
+accessibility tree reads. **A property that exists and writes to the wrong place is the exact
+false-presence this project keeps meeting**, and it is invisible to any "is the API there?" check.
+
+⚠ These are `DOMString?`: absent is **`null`**, not `""`. `el.ariaChecked ?? computeDefault()` and
+`if (el.role === null)` are how a library asks *"did the author set this?"*, and `""` answers **yes**
+to both. Needed a new `nullable string` reflect type — `= null` REMOVES the attribute, `= ''` leaves
+it present-and-empty, and stringifying `null` would have written the literal `"null"` into an
+attribute a screen reader then announces.
+
+TICK SHAPE: pattern-class
+CLUSTER: none claimed — an agentic/a11y surface (PART VII component 2, invariant I3), not a box.
+Gates: `g_aria_reflection` (new). **RED-proven against two mutations, each failing a DIFFERENT
+assertion while EARLIER ones still pass**: derive the attribute names → `present=42/42`, `fwd=null`,
+`map=,,,`; use the plain `string` type → `absent=""` instead of `null` and `= null` writes `"null"`.
+The four other divergences from the probe are recorded above and unfixed.
+WIKI: none [forced] — the mechanism is 42 table rows plus one reflect type, with the mapping trap
+documented at both sites; the pattern row carries the consequence.
+PATTERN: **the reflect TABLE is a mechanism, and a mechanism's value is the rows nobody has added
+yet.** `G_REFLECT` landed ~38,000 WPT subtests by building the generic attribute-reflection machine;
+this tick is 42 rows in that machine's table and a five-line type, and it closes the surface the
+project's own top invariant depends on. The machine has been sitting there able to do this since
+tick ~200. ⚠ The operational form: **when a generic mechanism exists, the audit question is not "does
+it work" but "what is NOT in its table"** — and the answer is a list, which is cheap to diff against
+a reference engine.
+
+NEXT: **(1)** `document.adoptNode` — THROWS where Chrome returns the node; used by every
+template/iframe-content move. **(2)** `attachShadow().mode` is `undefined` (shadow DOM is otherwise
+partial). **(3)** `composedPath` is off by one — `window` is missing from the end. **(4)**
+`@container` cascade order (t726), still the oldest open item.

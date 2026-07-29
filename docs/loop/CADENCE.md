@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **489** | ticks 1–732 |
-| median tick cycle | **22m** | 488 intervals |
+| ticks landed | **490** | ticks 1–733 |
+| median tick cycle | **22m** | 489 intervals |
 | median, last 10 | **24m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.15** | 423.9h elapsed |
-| median verify wall | **63s** | 428 ticks |
+| **ticks per hour** | **1.15** | 424.3h elapsed |
+| median verify wall | **63s** | 429 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **345**
-* **✅ rows in the capability ledger**: 144 → **372**
+* **live gates**: 27 → **346**
+* **✅ rows in the capability ledger**: 144 → **373**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**237 of 489 ticks** (48%) moved a
+**238 of 490 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **237** capability ticks, median cycle **22m**
-* median diff per tick: **+240 / −34** lines across 8 files
+* **238** capability ticks, median cycle **22m**
+* median diff per tick: **+241 / −34** lines across 8 files
 
 ## Every tick
 
@@ -586,5 +586,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **730** | 2026-07-28 20:07 | 50m | pattern-class | 63s | +104/−32 | 344 | 81 | 56.0% · | `document.fonts` (27.72% of page loads), and a gate that has been RED outside the wall (20 |
 | **731** | 2026-07-28 20:31 | 24m | measurement | 63s | +260/−34 | 344 | 81 | 56.0% · | how many gates outside the wall are red? A sample says: this one (2026-07-28) |
 | **732** | 2026-07-28 20:54 | 23m | pattern-class | 63s | +340/−34 | 345 | 81 | 56.0% · | a trigger is only as good as what it triggers (2026-07-28) |
+| **733** | 2026-07-28 21:23 | 30m | pattern-class | 63s | +273/−33 | 346 | 81 | 56.0% · | `entries[0]` was `undefined`, and that is the first line of every analytics script (2026-0 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

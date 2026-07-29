@@ -122,6 +122,15 @@ pub const REFLECT_JS: &str = r#"
       return raw === null ? '' : raw;
     }
 
+    // **`DOMString?` — absent is `null`, not `""`.** The ARIA IDL attributes (`ariaLabel`,
+    // `ariaChecked`, `role`, …) are nullable by spec, and the distinction is load-bearing rather
+    // than pedantic: `el.ariaChecked ?? computeDefault()` and `if (el.role === null)` are how a
+    // component library asks *"did the author set this?"*, and `""` answers **yes** to both.
+    // Chrome-measured: `document.createElement('div').ariaLabel` is `null` with `typeof` `object`.
+    if (t === 'nullable string') {
+      return raw;
+    }
+
     if (t === 'url') {
       // Absent is `""`. Present is RESOLVED against the document base — `a.href` on `<a href="x">` is an
       // absolute URL, and code comparing it to `"x"` was never going to work in any browser.
@@ -202,6 +211,13 @@ pub const REFLECT_JS: &str = r#"
       // "false" — which is what stringifying does — leaves the element disabled, and the page has no
       // way to tell.
       if (v) el.setAttribute(a, ''); else el.removeAttribute(a);
+      return;
+    }
+    // **`= null` REMOVES; `= ''` sets an empty attribute.** Chrome-measured, and the two are
+    // different states a page can observe (`hasAttribute` false vs true). Stringifying `null` here
+    // would write the literal `"null"` — which an accessibility tree would then read out.
+    if (t === 'nullable string') {
+      if (v === null || v === undefined) el.removeAttribute(a); else el.setAttribute(a, String(v));
       return;
     }
     if (t === 'long' || t === 'unsigned long' || t === 'limited long'
