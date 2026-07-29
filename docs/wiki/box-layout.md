@@ -2040,3 +2040,57 @@ fidelity measurement's, not the shipping browser's page scripts.
 ⚠ And `ikea`'s 21 missing boxes (open since t713) were never a layout bug: **a COVERAGE loss whose
 cause was a MEASUREMENT the page took.** No box-diff could attribute it, because the missing boxes
 are the ones the page decided not to create.
+
+## The outermost `<svg>` is sized by a RATIO, never by its viewBox numbers (tick 742)
+
+`viewBox="0 0 100 25"` on an `<svg>` with no `width`/`height` attributes is an intrinsic **ratio**
+(4:1) and *no intrinsic size* — SVG2 §8.2 plus the CSS-Images §5.3.2 default sizing algorithm. So
+`width:auto` fills the containing block and the height follows the ratio. Chrome, measured:
+
+```text
+  <div style="width:400px"><svg viewBox="0 0 100 25">      400×100
+  <div style="width:250px"><svg viewBox="0 0 100 25">      250×63
+  <svg>                              (no viewBox)          300×150   ← default object size
+  <svg viewBox="0 0 100 25" height="10">                    40×10    ← ratio runs backwards too
+```
+
+We laid all of those out at **100×25 / 100×100 / 100×10** — the viewBox's own coordinate numbers,
+read as pixels — and every `<path>`, `<g>`, `<rect>` and `<circle>` in the tree was measured against
+a canvas four times too small.
+
+**Where it came from.** `Page::images` is the map the painter reads, and the inline-svg raster cache
+is merged into it. `apply_natural_sizes` reads the same map and applies each decoded image's size as
+an intrinsic size — and usvg's `Tree::size()` falls back to the viewBox when the dimension
+attributes are absent. The merge site carried the intent in a comment (*"inline svgs are
+deliberately NOT natural-sized: the measured replaced-sizing model owns their geometry"*), which was
+true of the function beside it and false of the map. The exclusion now lives in
+`apply_natural_sizes` itself, where every restyle path shares it.
+
+⚠ **The block path already implemented this correctly, and a unit test proved it — under
+`MinimalCascade`,** which never runs the natural-size pass. The shipping Stylo path did. See
+`live-cascade-is-stylo-not-minimal`: a green unit test is evidence about the cascade it ran under.
+
+### A replaced element has no children, so measuring them reports ZERO
+
+`measure_intrinsic` is the flex/grid measure seam: it sizes an item by laying its subtree out and
+reading how far the content reached. For `<canvas>`/`<video>`/`<svg>` there is no subtree, so the
+honest content extent is 0 — an unsized `<canvas>` flex item came out **0×150**, and the same for
+`<video>`. `replaced_default_size` answers from the replaced model instead: author width wins; a
+definite height plus a ratio derives the width; a ratio with `auto` width takes the available width;
+otherwise the default object size 300×150.
+
+⚠⚠ **The max-content probe passes `avail_width: None`, and the answer there is the UNBOUNDED one.**
+Returning the default object width (300) instead reads to the flex algorithm as *a preference for
+300px*, and it is honoured: measured, that put a nav-bar icon at 300×300 beside a 56px label where
+Chrome gives it the 544px the label leaves. Taffy shrinks the unbounded answer down to the free
+space, which is what makes it the Chrome answer rather than a runaway one.
+
+⚠ **These two halves are one behaviour.** The flex hole was hidden *behind* the sizing bug: reading
+a 16-unit viewBox as pixels gave an icon a 16×16 box, which looks like an icon, so fixing the sizing
+alone moved the nav icon 16×16 → 300×300 and displaced its label. Landing either half by itself
+reads as a regression.
+
+**Residue, measured and open:** `<use href="#sym">` reports no geometry (Chrome 20×20),
+`<symbol>`/`<defs>` content still gets a box it should not, an SVG `<text>` box sits at the svg's
+top rather than following its baseline, and `www.ikea.com` holds 4 extra `<span>` ⇄ `<svg>`
+reading-order pairs that the flex half made Chrome-exact on the fixture without clearing live.

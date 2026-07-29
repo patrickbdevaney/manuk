@@ -176,7 +176,7 @@ fn restyle_and_layout(
     // **BETWEEN the cascade and the layout, every time.** See `apply_natural_sizes`: a decoded
     // image's intrinsic size is not in any stylesheet, so a cascade that rebuilds the style map
     // erases it, and the picture becomes a full-width strip of zero height.
-    apply_natural_sizes(&mut styles, images);
+    apply_natural_sizes(dom, &mut styles, images);
     let mut root_box = layout_document(dom, &styles, fonts, viewport_width);
     if container_query_recascade(dom, sheets, viewport_width, &mut styles, &root_box) {
         root_box = layout_document(dom, &styles, fonts, viewport_width);
@@ -778,11 +778,29 @@ fn data_url_image_bytes(url: &str) -> Option<Vec<u8>> {
 /// Which is why this runs *inside* [`restyle_and_layout`] — the one join every restyle path shares —
 /// rather than at the call sites. The intrinsic size is a **standing** input to layout, not an event
 /// that happened once.
+/// ⚠⚠ **An inline `<svg>` is EXCLUDED, and the exclusion is the whole point of taking `dom` here.**
+///
+/// The inline-svg raster cache is merged into `self.images` so the painter can find it — and this
+/// pass reads that same map, so a `<svg viewBox="0 0 100 25">` with no width/height silently
+/// acquired an **intrinsic size of 100×25**: usvg's `Tree::size()` falls back to the viewBox when
+/// the dimension attributes are absent. That is exactly the sizing input CSS says an outermost svg
+/// does **not** have. `viewBox` is an intrinsic **RATIO**, never a size (SVG2 §8.2 + CSS-Images
+/// §5.3.2 default sizing), so `width:auto` must fill the containing block and the height follow the
+/// ratio — Chrome-measured 400×100 in a 400px block, 250×63 in a 250px one. We rendered 100×25 in
+/// both, i.e. the icon-sized-by-its-own-coordinates bug, and every child `<path>`/`<g>`/`<rect>`
+/// inherited the wrong scale while the page below it slid up by the missing height.
+///
+/// The size half of `apply_natural_size` is the harm; the ratio half is redundant here (the cascade
+/// already derives the same ratio from `viewBox`), so the honest exclusion is the whole call.
 fn apply_natural_sizes(
+    dom: &Dom,
     styles: &mut StyleMap,
     images: &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
 ) {
     for (node, img) in images {
+        if dom.tag_name(*node) == Some("svg") {
+            continue;
+        }
         if let Some(style) = styles.get_mut(node) {
             apply_natural_size(style, img);
         }
@@ -5982,7 +6000,7 @@ impl Page {
         self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
         // The intrinsic size of a decoded image is not in any stylesheet, so a rebuilt style
         // map has lost it. Restate it here, before the layout that consumes it.
-        apply_natural_sizes(&mut self.styles, &self.images);
+        apply_natural_sizes(&self.dom, &mut self.styles, &self.images);
         // `@container` conditions answer from the previous pass's geometry — same one-frame
         // model as `relayout_incremental`; the caller's next layout uses the sized styles.
         container_query_recascade(
@@ -6033,7 +6051,7 @@ impl Page {
             self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
             // The intrinsic size of a decoded image is not in any stylesheet, so a rebuilt style
             // map has lost it. Restate it here, before the layout that consumes it.
-            apply_natural_sizes(&mut self.styles, &self.images);
+            apply_natural_sizes(&self.dom, &mut self.styles, &self.images);
             container_query_recascade(
                 &self.dom,
                 &sheets,
@@ -6084,7 +6102,7 @@ impl Page {
         let mut new_styles = cascade_styles(&self.dom, &sheets, viewport_width);
         // The intrinsic size of a decoded image is not in any stylesheet, so a rebuilt style
         // map has lost it. Restate it here, before the layout that consumes it.
-        apply_natural_sizes(&mut new_styles, &self.images);
+        apply_natural_sizes(&self.dom, &mut new_styles, &self.images);
         // `@container` conditions answer from the PREVIOUS pass's geometry (`self.root_box`) —
         // the spec's own one-frame model; the damage classification below then decides whether
         // the sized styles warrant a relayout exactly as for any other style delta.
@@ -6547,7 +6565,7 @@ impl Page {
         let mut new_styles = cascade_styles(&self.dom, &sheets, viewport_width);
         // The intrinsic size of a decoded image is not in any stylesheet, so a rebuilt style
         // map has lost it. Restate it here, before the layout that consumes it.
-        apply_natural_sizes(&mut new_styles, &self.images);
+        apply_natural_sizes(&self.dom, &mut new_styles, &self.images);
         // External sheets are the main `@container` carrier. Conditions answer from the
         // pre-external geometry here (the only layout that exists yet) — the previous-pass
         // model, one cascade generation behind until the next restyle re-evaluates them.

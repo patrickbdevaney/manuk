@@ -36741,3 +36741,97 @@ NEXT: **(1)** `shadowRoot.activeElement` — the last of t736's four residues; t
 link now exists (t740) so it has a home, but it needs the focus tracking checked rather than a `null`
 returned. **(2)** `attachInternals` / form-associated custom elements (t734). **(3)** `@container`
 cascade order (t726), the oldest open item. **(4)** the full corpus sweep, owed for five checks.
+
+## Tick 742 — an `<svg viewBox="0 0 100 25">` was laid out at 100×25: its own coordinates, read as pixels (2026-07-29)
+
+HYPOTHESIS (board CO-#1, cluster-named): the SVG rows in `CLUSTERS.md` are a big shared mass —
+`geometry: <path>` 61 sites, `geometry: <svg>` 49, `geometry: <g>` 37, `MISSING BOX: <path>` 34,
+plus `<rect>`/`<circle>`. Probe whether one mechanism sits under them.
+
+### THE ICON IDIOM WAS SIZED BY ITS OWN COORDINATE SYSTEM
+
+Chrome-measured on one fixture, every row of it:
+
+```text
+                                           CHROME    BEFORE    AFTER
+  viewBox 100x25, in a 400px block         400x100   100x25    400x100
+  viewBox 100x25, in a 250px block         250x63    100x25    250x63
+  the <path> filling that viewBox          400x100   100x25    400x100
+  no viewBox at all                        300x150   100x100   300x150
+  viewBox + height="10"                     40x10    100x10     40x10
+  viewBox + CSS width:60px                  60x15     60x15     60x15
+  unsized <canvas> as a FLEX ITEM          300x150     0x150    300x150
+  ratio'd <svg> as a FLEX ITEM (nav bar)   544x544    16x16     544x544
+  the 56px label beside it                  56x18     56x18      56x18
+```
+
+**`viewBox` is an intrinsic RATIO, never an intrinsic SIZE** (SVG2 §8.2 + CSS-Images §5.3.2). An
+outermost `<svg>` with `width:auto` fills its containing block and takes its height from the ratio.
+Two container widths in the table, not one: 400 and 250 are what separate *"fills the containing
+block"* from *"some constant that happened to match"*.
+
+⚠⚠ **The size arrived through a SECOND CHANNEL, behind a comment saying it would not.** The
+inline-svg raster cache is merged into `Page::images` so the painter can find it — and
+`apply_natural_sizes` reads that same map, so usvg's `Tree::size()`, which falls back to the viewBox
+when the dimension attributes are absent, arrived as an intrinsic size. The merge site says in as
+many words: *"Inline svgs are deliberately NOT natural-sized: the measured replaced-sizing model
+owns their geometry."* **True of the function it was written beside, false of the map it wrote to.**
+
+⚠⚠ **The block path had this right and a unit test proved it — under `MinimalCascade`.**
+`an_unsized_svg_gets_the_default_object_size` asserts exactly the 400px case and passes, because the
+unit-test cascade never runs the natural-size pass at all. The shipping Stylo path did. Same
+two-cascades trap as t698, in the other direction: **a green unit test is evidence about the cascade
+it ran under**, so the new gate runs the real one.
+
+### THE SECOND HALF, AND WHY IT COULD NOT BE A SEPARATE TICK
+
+A replaced element has no children, so the flex/grid measure seam — which sizes an item by laying
+its subtree out and reading how far the content reached — measured **zero**. An unsized `<canvas>`
+flex item was 0px wide, and `<video>` with it, *before any of this*. That hole was **hidden behind
+the bug being fixed**: reading a 16-unit viewBox as pixels gave an icon a 16×16 box, which looks
+like an icon. Fixing only the first half moved the nav-bar icon 16×16 → 0×0 → 300×300 and
+**displaced the label**. Two changes, one behaviour — the third time this session that shape has
+appeared.
+
+### THE COST, MEASURED, NOT CLEARED
+
+A/B on the same tree, two runs each side, `www.ikea.com`:
+
+```text
+              BASE            THIS TICK
+  coverage    97.08           97.08 / 100.00
+  shape       51.43           51.72     (+0.29, stable both runs)
+  reading_order  19              23     (+4, stable both runs)
+```
+
+The four extra pairs are `<span>` ⇄ `<svg>` inside a flex `<a>` — the nav-icon shape. Making the
+fixture Chrome-exact did **not** clear them. ⚠ I wrote *"and that count is back to its baseline"*
+into the gate before re-measuring; the re-measurement said 23 and the sentence was deleted. Named as
+the cost, not smoothed: reading-order is not a ratchet mark, coverage and shape both moved the right
+way, and the remaining placement is the top follow-on. `www.agoda.com` moved coverage 7.30 → 8.02
+with `shape_n` 59 → 64 — its shape swings 52.3/53.1/57.6/59.3 across four runs, a spread wider than
+any delta here, so its shape column is **not a reading**.
+
+TICK SHAPE: root-cause
+CLUSTER: `C93b0 geometry:<path>` (61 sites), `C0165 geometry:<svg>` (49), `C7a60 geometry:<g>` (37),
+`Cd6e3 <rect>` / `C4bbd <circle>`, and the displacement they push into `C01ca geometry:<div>` (111,
+the #1 row) — one mechanism under all of them. Bar: those rows shrink on the next full sweep.
+Gates: **`g_svg_auto_sizing`** (new), RED-proven against **three** mutations — M1 let the raster back
+into `apply_natural_sizes` → `a=100x25 b=100x25`; M2 dropped `replaced_default_size` from
+`measure_intrinsic` → `fc=0x150`; M3 gave the max-content probe the default object width → the
+nav icon reads `300x300`. Rows banked at `docs/bench/head20-rows-t742.tsv`.
+WIKI: docs/wiki/box-layout.md
+PATTERN: ⚠⚠⚠ **A GATE THAT MEASURES BEFORE THE BUG HAPPENS CANNOT FAIL.** The first draft asked the
+page for `getBoundingClientRect` from a `load` handler and passed with the fix reverted — the leak is
+in the *post-load* subresource pass, so at load-event time the boxes are still right. It took two
+RED-proofs to find, and it was invisible in the green: the gate ran, printed plausible numbers, and
+asserted them. The general form is worse than "test the wrong thing" — **an observation has a TIME as
+well as a subject**, and a fixture that reads the page at the wrong moment is testing a state the bug
+has not reached yet.
+
+NEXT: **(1)** the four ikea `<span>` ⇄ `<svg>` reading-order pairs — the remaining placement of a
+ratio'd replaced element in a flex row, now the only measured cost of this tick. **(2)** `<use
+href="#sym">` reports NO geometry (Chrome 20×20) and `<symbol>`/`<defs>` content gets a box it should
+not — the SVG *referencing* model, and the icon-sprite idiom depends on it. **(3)** the SVG `<text>`
+baseline: `y=20` puts our box at the svg's top, Chrome 6px down. **(4)** the full corpus sweep, owed
+for six constitution checks.

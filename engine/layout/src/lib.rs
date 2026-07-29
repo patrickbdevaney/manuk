@@ -3118,6 +3118,43 @@ impl Ctx<'_> {
         pref.max(0.0)
     }
 
+    /// The size a **replaced element with a default object size** wants to be, for the taffy
+    /// measure seam — `None` for everything else, which is every ordinary box.
+    ///
+    /// The tag list and the rules are the block path's, restated at the seam rather than re-derived:
+    /// an author width wins; a definite height plus an intrinsic ratio derives the width; a ratio
+    /// with an auto width fills the available width (CSS2 §10.3.2's last resort); and with neither
+    /// it is the default object size, 300×150 (CSS-Images §4.4).
+    ///
+    /// ⚠⚠ `avail_width` is `None` for taffy's **max-content** probe, and the answer there is the
+    /// unbounded one — a ratio'd replaced element's preferred width is "as much as it can get".
+    /// Falling back to the default object width (300) instead reads as a *preference* for 300px and
+    /// the flex algorithm honours it: measured, that put a nav-bar icon at 300×300 next to a 56px
+    /// label where Chrome gives it the 544px the label leaves. Taffy shrinks the 1e6 down to the
+    /// free space, which is what makes this the Chrome answer rather than an unbounded one.
+    fn replaced_default_size(&self, node: NodeId, avail_width: Option<f32>) -> Option<(f32, f32)> {
+        if !matches!(
+            self.dom.tag_name(node),
+            Some("svg" | "canvas" | "video" | "object" | "embed")
+        ) {
+            return None;
+        }
+        let s = self.style_of(node);
+        let ratio = s.aspect_ratio.filter(|r| *r > 0.0);
+        let width = match (s.width, ratio, s.height) {
+            (Dim::Px(w), ..) => w,
+            (_, Some(r), Dim::Px(h)) => h * r,
+            (_, Some(_), _) => avail_width.filter(|a| a.is_finite()).unwrap_or(1.0e6),
+            _ => 300.0,
+        };
+        let height = match (s.height, ratio) {
+            (Dim::Px(h), _) => h,
+            (_, Some(r)) => width / r,
+            _ => 150.0,
+        };
+        Some((width.max(0.0), height.max(0.0)))
+    }
+
     /// The intrinsic **content** size `(width, height)` of `node` for taffy's flex/grid
     /// measure seam (Blitz model): shrink-to-fit the width against `avail_width` (max-content
     /// clamped to available), then lay the content out at that width to get its height. This
@@ -3131,6 +3168,26 @@ impl Ctx<'_> {
         let key = (node, avail.round().min(u32::MAX as f32) as u32);
         if let Some(&cached) = self.measure_cache.borrow().get(&key) {
             return cached;
+        }
+        // ⚠⚠ **A REPLACED ELEMENT HAS NO CHILDREN TO MEASURE, so measuring them reports ZERO.**
+        //
+        // This seam answers "how big does this flex/grid item want to be?" by laying the subtree out
+        // and reading how far the content reached. For `<canvas>`/`<video>`/`<svg>` there IS no
+        // subtree, so the honest content extent is 0 — and an unsized `<canvas>` flex item came out
+        // **0×150** where Chrome measures 300×150. The block path already owns the default-object /
+        // ratio model (see `an_unsized_svg_gets_the_default_object_size`); taffy simply never asked
+        // it. Chrome-measured on one fixture, all four in a 400px container:
+        //
+        // ```text
+        //                                    CHROME     BEFORE
+        //   flex  <canvas>                   300×150     0×150
+        //   flex  <video>                    300×150     0×150
+        //   flex  <svg viewBox="0 0 100 25"> 400×100     0×0
+        //   grid  <svg viewBox="0 0 100 25"> 400×100   400×100  ← the grid path already stretched
+        // ```
+        if let Some(sz) = self.replaced_default_size(node, avail_width) {
+            self.measure_cache.borrow_mut().insert(key, sz);
+            return sz;
         }
         let width = self.shrink_to_fit(node, avail);
         let mut fc = FloatContext::new(0.0, width.max(1.0));
