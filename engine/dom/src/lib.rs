@@ -783,6 +783,17 @@ impl Dom {
         self.nodes[host.index()].shadow_root
     }
 
+    /// A **ShadowRoot or a DocumentFragment** — the two node kinds that carry
+    /// `NonElementParentNode` (`getElementById`) and must therefore get the fragment prototype
+    /// rather than the element one. Named for what the JS layer needs to decide, not for a spec
+    /// interface, because that is the only question it is asked.
+    pub fn is_fragment_like(&self, id: NodeId) -> bool {
+        matches!(
+            self.nodes.get(id.index()).map(|n| &n.data),
+            Some(NodeData::ShadowRoot { .. }) | Some(NodeData::Fragment)
+        )
+    }
+
     pub fn is_shadow_root(&self, id: NodeId) -> bool {
         matches!(
             self.nodes.get(id.index()).map(|n| &n.data),

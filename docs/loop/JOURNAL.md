@@ -36624,3 +36624,72 @@ NEXT: **(1)** a `DocumentFragment` prototype tier — gives `shadowRoot.getEleme
 `template.content.getElementById` (t738's other blocker, still standing). **(2)** a second
 `attachShadow` must throw `NotSupportedError`; `root.activeElement`. **(3)** `@container` cascade
 order (t726), the oldest open item. **(4)** the full corpus sweep, owed for five constitution checks.
+
+## Tick 740 — the method was correct and homeless (2026-07-28)
+
+HYPOTHESIS: t738's second named blocker. `shadowRoot.getElementById` threw, and the reason was not the
+method — `doc_get_by_id` is already generic, rooting at `this_node(vp)` and walking descendants. It
+was **where to put it**.
+
+### A LINK, NOT A METHOD
+
+`getElementById` is `NonElementParentNode`: **Document** and **DocumentFragment** (which every
+ShadowRoot is), and **not Element**. The reflector surfaces are prototypes —
+`EventTarget → Node → Element → HTMLElement`, with `Document` branching off `Node` — and a shadow
+root is a Node, so it got `Node.prototype`. Adding the method there would have defined it on **every
+element in the document**.
+
+So: `DocumentFragment.prototype → Node.prototype`, and `ShadowRoot.prototype →
+DocumentFragment.prototype` (the real spec hierarchy), with one member on the new tier.
+`doc_get_by_id` was not touched.
+
+```text
+                                     CHROME     BEFORE     AFTER
+  template.content.getElementById   function   undefined   function
+  fragment.getElementById('ku')     U          TypeError   U
+  shadowRoot.getElementById('si')   i          TypeError   i
+  a miss                            null       TypeError   null
+  element.getElementById            undefined  undefined   undefined
+  document.getElementById           works      works       works
+```
+
+`this.shadowRoot.getElementById(...)` is the idiom of every hand-written web component;
+`template.content.getElementById(...)` is how compilers address their own template before cloning it.
+
+### ⚠⚠ AND THE MUTATION THAT MAKES THE CASE FOR THE CONTROL
+
+The tempting shortcut is one line on the Node tier. Run as a mutation, it makes **every positive
+assertion pass**:
+
+```text
+  M2 (getElementById on Node.prototype)
+     tplWorks=t  fragWorks=U  shadowWorks=i  miss=null      ← all green
+     elementHasNot=function                                  ← only the CONTROL catches it
+```
+
+A gate written to check *"does the feature work?"* would have shipped it, and every element on every
+page would carry a method the spec does not give it — invisible until something enumerates or
+feature-detects on an element.
+
+TICK SHAPE: pattern-class
+CLUSTER: none claimed.
+Gates: `g_fragment_get_element_by_id` (new). **RED-proven against two mutations**: skip the fragment
+prototype → `TypeError` everywhere (what shipped); put the method on `Node.prototype` → every positive
+assertion passes and only the control fails. It also asserts the new link did not **cost** anything —
+`querySelector`/`addEventListener` still inherit — because a prototype inserted in the wrong place
+shadows rather than extends.
+WIKI: none [forced] — the tier and its one member are documented where they are defined; the pattern
+row carries the consequence.
+PATTERN: **when a method is correct and still fails, the bug is in the SHAPE of the surface, not the
+behaviour.** `doc_get_by_id` had been right and reachable-in-principle the whole time; what was
+missing was a place in the prototype chain that meant *"documents and fragments, not elements."*
+⚠ The reusable half: **a member set is a claim about which objects have it**, and an engine whose
+surfaces are one flat list cannot make that claim — which is also why `Element.prototype` here is
+still empty and honestly labelled. This tick added the first tier that exists purely to *exclude*.
+⚠ Second: **the shortcut that passes every positive assertion is the one worth writing the control
+for**, and you find it by asking "what is the version of this I would have written if I were in a
+hurry?" — then running it.
+
+NEXT: **(1)** `root.activeElement`; a second `attachShadow` must throw `NotSupportedError`.
+**(2)** `attachInternals` / form-associated custom elements (t734). **(3)** `@container` cascade
+order (t726), the oldest open item. **(4)** the full corpus sweep, owed for five constitution checks.

@@ -1937,6 +1937,13 @@ enum Tier {
     Node,
     /// `Document.prototype`.
     Document,
+    /// `DocumentFragment.prototype` — and `ShadowRoot.prototype` below it.
+    ///
+    /// It exists for one member set: **`NonElementParentNode`**, i.e. `getElementById`. That method
+    /// is on `Document` and `DocumentFragment` and **not** on `Element`, so there was nowhere to put
+    /// it — a shadow root is a Node, so it got `Node.prototype`, and adding `getElementById` there
+    /// would have put it on every element in the document.
+    DocumentFragment,
 }
 
 /// Build (once per global) the DOM prototype chain, and hand back its three links.
@@ -2022,18 +2029,53 @@ unsafe fn dom_protos(cx: *mut RawJSContext) -> Option<(*mut JSObject, *mut JSObj
     }
     define_members(cx, &doc, Tier::Document);
 
+    // DocumentFragment.prototype → Node.prototype, and ShadowRoot.prototype → DocumentFragment's,
+    // which is the real spec hierarchy (`ShadowRoot extends DocumentFragment`). A shadow root and a
+    // `<template>`'s content share exactly one member the element surface must NOT have —
+    // `getElementById` — and that is the whole reason this link exists.
+    rooted!(in(cx) let frag = JS_NewObjectWithGivenProto(&mut wrap_cx(cx), &NODE_CLASS, node.handle()));
+    if frag.get().is_null() {
+        return None;
+    }
+    define_members(cx, &frag, Tier::DocumentFragment);
+    rooted!(in(cx) let shadow = JS_NewObjectWithGivenProto(&mut wrap_cx(cx), &NODE_CLASS, frag.handle()));
+    if shadow.get().is_null() {
+        return None;
+    }
+
     for (name, obj) in [
         (c"__protoEventTarget", et.handle()),
         (c"__protoNode", node.handle()),
         (c"__protoElement", el.handle()),
         (c"__protoHTMLElement", html_el.handle()),
         (c"__protoDocument", doc.handle()),
+        (c"__protoDocumentFragment", frag.handle()),
+        (c"__protoShadowRoot", shadow.handle()),
     ] {
         rooted!(in(cx) let v = ObjectValue(obj.get()));
         JS_SetProperty(&mut wrap_cx(cx), g.handle(), name.as_ptr(), v.handle());
     }
 
     Some((html_el.get(), doc.get()))
+}
+
+/// Read one of the named prototypes `dom_protos` parked on the global. Returns `None` before the
+/// chain exists — the caller then falls back to the element prototype, which is the pre-existing
+/// behaviour and never worse than it.
+unsafe fn proto_by_name(cx: *mut RawJSContext, name: &std::ffi::CStr) -> Option<*mut JSObject> {
+    let _ = dom_protos(cx)?; // build-once; also proves a global exists
+    let global = CurrentGlobalOrNull(&wrap_cx(cx));
+    if global.is_null() {
+        return None;
+    }
+    rooted!(in(cx) let g = global);
+    rooted!(in(cx) let mut v = UndefinedValue());
+    if JS_GetProperty(&mut wrap_cx(cx), g.handle(), name.as_ptr(), v.handle_mut()) && v.is_object()
+    {
+        Some(v.to_object())
+    } else {
+        None
+    }
 }
 
 /// The per-global reflector identity map, as a **real object** rather than a string of JavaScript.
@@ -2115,12 +2157,26 @@ unsafe fn new_reflector(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId) -> *
 
     // Every element reflector inherits from `Node.prototype` and carries **no own members at all**.
     // See [`Tier`] for why that is a correctness fix and not merely a diet.
-    let obj_ptr = match dom_protos(cx) {
-        Some((node_proto, _)) => {
+    // **A ShadowRoot / DocumentFragment gets the fragment prototype, not the element one.** Its only
+    // extra member is `getElementById` (`NonElementParentNode`), which must NOT be on elements — see
+    // `Tier::DocumentFragment`. Everything else it needs (`querySelector`, `children`,
+    // `addEventListener`) it inherits from `Node.prototype` exactly as before, so this is a strictly
+    // narrower change than it looks: one link inserted for one method.
+    let frag_proto = if (*dom).is_fragment_like(node) {
+        proto_by_name(cx, c"__protoShadowRoot")
+    } else {
+        None
+    };
+    let obj_ptr = match (frag_proto, dom_protos(cx)) {
+        (Some(fp), _) => {
+            rooted!(in(cx) let proto = fp);
+            JS_NewObjectWithGivenProto(&mut wrap_cx(cx), &NODE_CLASS, proto.handle())
+        }
+        (None, Some((node_proto, _))) => {
             rooted!(in(cx) let proto = node_proto);
             JS_NewObjectWithGivenProto(&mut wrap_cx(cx), &NODE_CLASS, proto.handle())
         }
-        None => JS_NewObject(&mut wrap_cx(cx), &NODE_CLASS),
+        (None, None) => JS_NewObject(&mut wrap_cx(cx), &NODE_CLASS),
     };
     rooted!(in(cx) let obj = obj_ptr);
     let node_val = Int32Value(node.0 as i32);
@@ -2267,6 +2323,15 @@ unsafe fn define_members(
         def_guarded!(def, c"addEventListener", el_add_event_listener, 2);
         def_guarded!(def, c"removeEventListener", el_remove_event_listener, 2);
         def_guarded!(def, c"dispatchEvent", el_dispatch_event, 1);
+        return;
+    }
+
+    // `NonElementParentNode` — `getElementById` on a Document OR a DocumentFragment (which includes
+    // every ShadowRoot). `doc_get_by_id` was already generic: it roots at `this_node(vp)` and walks
+    // descendants, so it needed no change — only somewhere correct to live. `this.shadowRoot
+    // .getElementById('x')` is the idiom of every hand-written web component, and it threw.
+    if tier == Tier::DocumentFragment {
+        def_guarded!(def, c"getElementById", doc_get_by_id, 1);
         return;
     }
 
