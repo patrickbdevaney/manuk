@@ -64,18 +64,30 @@ else CORPUS=265; fi
 # t706 row and all history stay diff-able — a column that silently changes meaning is the metric-swap lie).
 # Three columns are ADDED: excluded(f10), inscope(f11), inscope_pass_pct(f12 = the winnable Phase-0 headline).
 # A row < ~80% of the corpus is a partial; skip it.
-read -r SITES SCORED GE75 GE75PCT SHAPEM COVM EXCL INSCOPE INPASS < <(awk -F'\t' '
+# M1 = the FULL visual bar (DAILY-DRIVER-CERTIFICATION.md §4), not shape alone: shape>=0.75 AND the JARRING
+# invariants clean — no horizontal-overflow (f4), no overlap (f5), reading-order preserved (f6), no dead
+# click-target (f7), each a Chrome-divergence COUNT. TOL=2 forgives single-element measurement noise; a real
+# jarring page (ikea: overlap 6, reading-order 22) still fails. inpass(f12)=shape-only (kept for continuity);
+# m1pass(f15)=shape AND jarring = the TRUE M1 gate. jc/m1 divide by in-scope (a crashed site is not clean).
+read -r SITES SCORED GE75 GE75PCT SHAPEM COVM EXCL INSCOPE INPASS JARCLEAN JCPCT M1CNT M1PCT < <(awk -F'\t' -v TOL=2 '
   NR==1{next}
   { sites++
     r=$9; gsub(/[ \t]/,"",r)
     if(r ~ /^bot-wall/ || r=="probe-blocked" || r=="unreachable" || r=="http-404" || r=="http-503" || r ~ /^empty-/){ excl++; next }
     inscope++
-    if(r==""){ scored++; sh+=$3; cv+=$2; if($3>=0.75) ge++ } }
+    if(r==""){ scored++; sh+=$3; cv+=$2
+      shape_ok = ($3>=0.75)
+      jar_ok = (($4+0)<=TOL && ($5+0)<=TOL && ($6+0)<=TOL && ($7+0)<=TOL)
+      if(shape_ok) ge++
+      if(jar_ok) jc++
+      if(shape_ok && jar_ok) m1++ } }
   END{
     ge75pct = sites>0 ? 100*ge/sites : 0          # LEGACY fixed-265 denom (unchanged meaning)
-    inpass  = inscope>0 ? 100*ge/inscope : 0       # the winnable in-scope headline
-    if(scored>0) printf "%d %d %d %.1f %.1f %.1f %d %d %.1f", sites, scored, ge, ge75pct, 100*sh/scored, 100*cv/scored, excl, inscope, inpass
-    else         printf "%d 0 0 0 0 0 %d %d 0", sites, excl, inscope
+    inpass  = inscope>0 ? 100*ge/inscope : 0       # shape-only, in-scope
+    jcpct   = inscope>0 ? 100*jc/inscope : 0       # jarring-clean, in-scope
+    m1pct   = inscope>0 ? 100*m1/inscope : 0       # THE M1 GATE: shape AND jarring, in-scope
+    if(scored>0) printf "%d %d %d %.1f %.1f %.1f %d %d %.1f %d %.1f %d %.1f", sites, scored, ge, ge75pct, 100*sh/scored, 100*cv/scored, excl, inscope, inpass, jc, jcpct, m1, m1pct
+    else         printf "%d 0 0 0 0 0 %d %d 0 0 0 0 0", sites, excl, inscope
   }' "$SRC")
 
 # PREV = last COMPLETE ledger row for a DIFFERENT tick (skip a same-tick partial we are about to supersede),
@@ -110,9 +122,9 @@ SETTLED=1; { [ "$SWEEP_LIVE" = 1 ] || [ "${SITES:-0}" -lt "$MINROWS" ]; } && SET
 
 # ── record-if-new (by sweep tick) ──────────────────────────────────────────────────────────────────────
 if [ "$MODE" != "--check" ]; then
-  [ -f "$LEDGER" ] || printf '# rebuilt-instrument schema (t706+); shape=parent-relative, NOT the old absolute placement (6.4 pre-2026-07-28 row is a DIFFERENT metric, do not diff)\n# f6 shape_ge0.75_pct = LEGACY fixed-265 denom. f12 inscope_pass_pct = the winnable Phase-0 headline (denom excludes bot-wall/unreachable per DAILY-DRIVER-CERTIFICATION.md §3). Exit = f12 >= 95. f13 corpus = driving corpus (265 curated | crux representative) — slope only diffs SAME corpus.\niso_sweep\tsweep_tick\tsites\tscored\tshape_ge0.75\tshape_ge0.75_pct\tshape_mean\tcov_mean\tsource\texcluded\tinscope\tinscope_pass_pct\tcorpus\n' > "$LEDGER"
+  [ -f "$LEDGER" ] || printf '# rebuilt-instrument schema (t706+); shape=parent-relative, NOT the old absolute placement (6.4 pre-2026-07-28 row is a DIFFERENT metric, do not diff)\n# f12 inscope_pass_pct = shape-only (kept for continuity). f13 corpus. f14 jarring_clean_pct. f15 m1_pass_pct = THE M1 GATE (shape>=0.75 AND jarring-clean, DAILY-DRIVER-CERTIFICATION.md §4). Phase-0 M1 exit = f15 >= 95. slope only diffs SAME corpus.\niso_sweep\tsweep_tick\tsites\tscored\tshape_ge0.75\tshape_ge0.75_pct\tshape_mean\tcov_mean\tsource\texcluded\tinscope\tinscope_pass_pct\tcorpus\tjarring_clean_pct\tm1_pass_pct\n' > "$LEDGER"
   EXIST_SITES=$(awk -F'\t' -v t="$TICK" '$2==t{print $3+0; exit}' "$LEDGER")
-  ROW=$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$SWEEP_ISO" "$TICK" "$SITES" "$SCORED" "$GE75" "$GE75PCT" "$SHAPEM" "$COVM" "$SRC" "$EXCL" "$INSCOPE" "$INPASS" "$CORPUS")
+  ROW=$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$SWEEP_ISO" "$TICK" "$SITES" "$SCORED" "$GE75" "$GE75PCT" "$SHAPEM" "$COVM" "$SRC" "$EXCL" "$INSCOPE" "$INPASS" "$CORPUS" "$JCPCT" "$M1PCT")
   if [ "$SETTLED" != 1 ]; then
     echo "fidelity-progress: sweep $TICK NOT settled (live=$SWEEP_LIVE, $SITES/$EXPECT sites) — not banking a mid-write partial"
   elif [ -z "$EXIST_SITES" ]; then
@@ -148,11 +160,13 @@ NEED=$(( TARGET - GE75 )); [ "$NEED" -lt 0 ] && NEED=0
 echo "── FIDELITY PROGRESS (rebuilt instrument · sweep $TICK · corpus=${CORPUS} · $SWEEP_ISO · ${AGE_DAYS}d old) ─────────"
 [ "$SETTLED" != 1 ] && printf "  ⏳ SWEEP IN PROGRESS: %s/%s sites so far (live=%s) — numbers below are a PARTIAL, NOT banked until complete\n" "$SITES" "$EXPECT" "$SWEEP_LIVE"
 [ -z "$PREV" ] && [ "$SETTLED" = 1 ] && printf "  🆕 NEW %s-CORPUS BASELINE — no same-corpus prior sweep, so NO slope this time (a different site set is not diffable; the slope resumes at the next %s sweep)\n" "$CORPUS" "$CORPUS"
-printf "  ⭐ IN-SCOPE PASS: %s/%s = %s%% (shape>=0.75)   TARGET 95%% = %s sites  →  NEED +%s more\n" \
-  "$GE75" "$INSCOPE" "$INPASS" "$TARGET" "$NEED"
+M1_NEED=$(( TARGET - ${M1CNT:-0} )); [ "$M1_NEED" -lt 0 ] && M1_NEED=0
+printf "  ⭐ M1 GATE (shape>=0.75 AND jarring-clean · the TRUE visual bar): %s/%s = %s%%   TARGET 95%% = %s sites  →  NEED +%s\n" \
+  "${M1CNT:-0}" "$INSCOPE" "${M1PCT:-0}" "$TARGET" "$M1_NEED"
+printf "     ├─ shape>=0.75: %s/%s = %s%%      └─ jarring-clean (no overlap/h-overflow/reorder/dead-target, TOL2): %s/%s = %s%%\n" \
+  "$GE75" "$INSCOPE" "$INPASS" "${JARCLEAN:-0}" "$INSCOPE" "${JCPCT:-0}"
 printf "     EXCLUDED (bot-wall/unreachable, watched·capped): %s/%s = %s%%   ·   scored %s/%s   shape_mean=%s%%  cov_mean=%s%%\n" \
   "$EXCL" "$SITES" "$(awk "BEGIN{printf \"%.0f\",100*$EXCL/$SITES}")" "$SCORED" "$INSCOPE" "$SHAPEM" "$COVM"
-printf "     (legacy fixed-265 denom for history: shape>=0.75 on %s%%)\n" "$GE75PCT"
 if [ -n "$PREV" ] && [ "$SETTLED" = 1 ] && [ -n "${p_inpass:-}" ]; then
   DPP=$(awk "BEGIN{printf \"%+.1f\", $INPASS - ${p_inpass:-0}}")
   printf "  Δ vs %s: IN-SCOPE PASS %s%%→%s%% (%s pts) · scored %s→%s · excluded %s→%s\n" \
