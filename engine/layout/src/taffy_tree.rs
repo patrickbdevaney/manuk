@@ -12,8 +12,8 @@
 //! wrapper, trait impls, and geometry extraction build on it in this module.
 
 use manuk_css::{
-    AlignItems as CssAlign, BoxSizing, ComputedStyle, Dim, Display as CssDisplay,
-    FlexDirection as CssDir, FlexWrap as CssWrap, GridLine as CssGridLine,
+    AlignItems as CssAlign, BoxSizing, ComputedStyle, Dim, Direction as CssDirection,
+    Display as CssDisplay, FlexDirection as CssDir, FlexWrap as CssWrap, GridLine as CssGridLine,
     JustifyContent as CssJustify, Position as CssPosition, TrackComponent as CssTrackComponent,
     TrackSize as CssTrackSize, TrackUnit,
 };
@@ -95,12 +95,26 @@ fn map_position(p: CssPosition) -> TaffyPosition {
     }
 }
 
-fn map_direction(d: CssDir) -> FlexDirection {
-    match d {
-        CssDir::Row => FlexDirection::Row,
-        CssDir::RowReverse => FlexDirection::RowReverse,
-        CssDir::Column => FlexDirection::Column,
-        CssDir::ColumnReverse => FlexDirection::ColumnReverse,
+/// **`row` is a LOGICAL direction, and taffy only speaks physical.** The flex main axis for `row` runs
+/// along the *inline* axis, which under `direction: rtl` points RIGHT-TO-LEFT (CSS Flexbox §5.1) — so an
+/// RTL flex row starts at the container's right edge and `justify-content: flex-start` packs to the
+/// right. Taffy has no `direction` property at all, so the mapping has to carry it: RTL swaps
+/// `row` ⇄ `row-reverse`, which produces exactly that geometry.
+///
+/// Measured against live Chromium (`<html dir=rtl>`, a 600px flex row of three 100px items, x relative
+/// to the container): Chrome **500 / 400 / 300**, ours was **0 / 100 / 200** — every RTL nav bar, toolbar
+/// and card row ran backwards, which is the `reading_order` invariant firing on `mobile.ir` (874) and
+/// `ta3lemkonline.com` (817).
+///
+/// `column`/`column-reverse` are unchanged: their main axis is the BLOCK axis, which `direction` does not
+/// flip. (RTL does flip a column's *cross*-axis start edge, which taffy cannot express — recorded in
+/// `CONSTELLATION.tsv` rather than approximated here.)
+fn map_direction(d: CssDir, rtl: bool) -> FlexDirection {
+    match (d, rtl) {
+        (CssDir::Row, false) | (CssDir::RowReverse, true) => FlexDirection::Row,
+        (CssDir::RowReverse, false) | (CssDir::Row, true) => FlexDirection::RowReverse,
+        (CssDir::Column, _) => FlexDirection::Column,
+        (CssDir::ColumnReverse, _) => FlexDirection::ColumnReverse,
     }
 }
 
@@ -270,7 +284,7 @@ pub fn to_taffy_style(cs: &ComputedStyle, calc: &mut Vec<(f32, f32)>) -> Style {
             width: length(cs.column_gap),
             height: length(cs.row_gap),
         },
-        flex_direction: map_direction(cs.flex_direction),
+        flex_direction: map_direction(cs.flex_direction, cs.direction == CssDirection::Rtl),
         flex_wrap: map_wrap(cs.flex_wrap),
         flex_grow: cs.flex_grow,
         flex_shrink: cs.flex_shrink,
@@ -839,6 +853,68 @@ mod tests {
         assert!((s1.width - 150.0).abs() < 1.0, "got {s1:?}");
         assert!(s1.x >= s0.width - 1.0, "second is to the right");
         assert!(!placed[0].container, "block child is a leaf");
+    }
+
+    /// **An RTL flex ROW runs right-to-left** — `row` is a LOGICAL direction and taffy speaks only
+    /// physical, so `direction: rtl` has to reach it as `row-reverse` (CSS Flexbox §5.1).
+    ///
+    /// Measured against live Chromium (`<html dir=rtl>`, a 600px flex row of three 100px items, x
+    /// relative to the container):
+    ///
+    /// | item | Chrome | was |
+    /// |---|---|---|
+    /// | 1st | `500` | `0` ❌ |
+    /// | 2nd | `400` | `100` ❌ |
+    /// | 3rd | `300` | `200` ❌ |
+    ///
+    /// Every RTL nav bar, toolbar, breadcrumb and card row ran backwards. On `mobile.ir` the fix moved
+    /// shape **0.174 → 0.320**, `h_overflow` **268 → 1** and `reading_order` 874 → 820, with coverage
+    /// and `shape_n` unchanged; `marktplaats.nl` (LTR) was byte-identical.
+    ///
+    /// RED, run: drop the `rtl` argument from `map_direction` — the items read 0 / 100 / 200.
+    #[test]
+    fn an_rtl_flex_row_runs_right_to_left() {
+        use manuk_dom::Dom;
+        use std::collections::HashMap;
+
+        let mut dom = Dom::new();
+        let container = dom.create_element("div");
+        dom.append_child(dom.root(), container);
+        let kids: Vec<_> = (0..3)
+            .map(|_| {
+                let k = dom.create_element("div");
+                dom.append_child(container, k);
+                k
+            })
+            .collect();
+
+        let mut styles: HashMap<_, _> = HashMap::new();
+        let mut cc = ComputedStyle::initial();
+        cc.display = CssDisplay::Flex;
+        cc.direction = CssDirection::Rtl;
+        cc.width = Dim::Px(600.0);
+        styles.insert(container, cc);
+        for &k in &kids {
+            let mut cs = ComputedStyle::initial();
+            cs.display = CssDisplay::Block;
+            cs.direction = CssDirection::Rtl;
+            cs.width = Dim::Px(100.0);
+            cs.flex_shrink = 0.0;
+            styles.insert(k, cs);
+        }
+
+        let placed = solve_subtree(&dom, &styles, container, 600.0, None, |_n, _k, _a| Size {
+            width: 0.0,
+            height: 0.0,
+        });
+        assert_eq!(placed.len(), 3);
+        let xs: Vec<f32> = placed.iter().map(|p| p.slot.x).collect();
+        assert!(
+            (xs[0] - 500.0).abs() < 1.0
+                && (xs[1] - 400.0).abs() < 1.0
+                && (xs[2] - 300.0).abs() < 1.0,
+            "the FIRST item is at the RIGHT edge and the row packs leftwards: {xs:?}"
+        );
     }
 
     /// **`flex-wrap: wrap` on an auto-height COLUMN container must not wrap** — an indefinite main

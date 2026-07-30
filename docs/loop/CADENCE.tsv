@@ -511,3 +511,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 759	9fd2e58b	1785419461	2026-07-30T09:51:01-04:00	2362	root-cause	63	5	92	33	353	81	3896	6960	0	386	0	`&nbsp;` was collapsed like a space, so a spacer element had no line box: `char::is_whitespace` is Unicode's set, not CSS's (2026-07-30)
 761	e7147eef	1785423614	2026-07-30T11:00:14-04:00	4153	root-cause	63	9	275	33	353	81	3896	6960	0	388	0	the phantom line box under every empty wrapper, and a spec sentence that is wider than Chrome (2026-07-30)
 762	04b4f7cf	1785425487	2026-07-30T11:31:27-04:00	1873	root-cause	63	11	343	54	353	81	3896	6960	0	389	0	`flex-wrap: wrap` on an auto-height COLUMN container put the whole page in four side-by-side columns (2026-07-30)
+764	5b1988ea	1785427419	2026-07-30T12:03:39-04:00	1932	root-cause	63	10	304	44	353	81	3896	6960	0	390	0	the two worst `reading_order` sites in the corpus are both RTL, and a flex row ran backwards (2026-07-30)

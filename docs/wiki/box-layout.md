@@ -2280,3 +2280,51 @@ restoring `AvailableSpace::MinContent` — the two items land at x=0 / x=600 in 
 **Residue, un-fixed and named:** a percentage height on a child of an indefinite-height column container
 (`height:50%`) measures 9px here against Chrome's 18px (content height). The control proves it predates
 this tick; it is a percentage-resolution question, not a wrapping one.
+
+---
+
+## `row` is a LOGICAL direction, and taffy only speaks physical (tick 764)
+
+Taffy has **no `direction` property**. Its `FlexDirection::Row` means *left-to-right*, full stop. CSS's
+`flex-direction: row` means *along the inline axis*, which under `direction: rtl` runs **right-to-left**
+(CSS Flexbox §5.1). So the mapping is where the logical→physical resolution has to happen:
+
+```rust
+fn map_direction(d: CssDir, rtl: bool) -> FlexDirection {
+    match (d, rtl) {
+        (CssDir::Row, false) | (CssDir::RowReverse, true) => FlexDirection::Row,
+        (CssDir::RowReverse, false) | (CssDir::Row, true) => FlexDirection::RowReverse,
+        (CssDir::Column, _) => FlexDirection::Column,          // main axis is the BLOCK axis
+        (CssDir::ColumnReverse, _) => FlexDirection::ColumnReverse,
+    }
+}
+```
+
+`row-reverse` under RTL swaps back to `Row`, which is the case that makes this a *mapping* rather than a
+conditional. `column` is untouched: `direction` does not flip the block axis.
+
+Measured against live Chromium (`<html dir=rtl>`, a 600px flex row of three 100px items, x within the
+row): Chrome **500 / 400 / 300**; ours was 0 / 100 / 200.
+
+**Real-site effect.** `mobile.ir` — the worst `reading_order` in the 200-site CrUX sample — went shape
+**0.174 → 0.320**, `h_overflow` **268 → 1**, `reading_order` 874 → 820, with `coverage` and `shape_n`
+identical across both runs. The LTR control (`marktplaats.nl`) was byte-identical.
+
+**Gate.** `an_rtl_flex_row_runs_right_to_left`, RED-proven by dropping the `rtl` argument.
+
+**What RTL still gets wrong, measured on the same fixture and recorded in `CONSTELLATION.tsv` rather than
+left to be re-discovered:**
+
+| | Chrome | ours |
+|---|---|---|
+| `body{width:600px}` in a 1200px viewport — the block's own x | **600** | 0 |
+| `<li>` in a default `<ul>` (600px RTL body) | **x=0 w=560** | x=40 w=560 |
+| RTL grid column order | reversed | not reversed (taffy has no grid equivalent) |
+
+The first is the over-constrained block rule: in RTL the margin that gives is `margin-left`, so a block
+narrower than its containing block sits flush **right**. The second is a logical-property question in the
+UA sheet (`padding-inline-start`), and it is the same two-cascades surface as every other UA default.
+
+**And the half that was already correct** — bidi shaping, intra-run reordering, mixed Arabic+Latin, two
+spans on one line, `text-align: start` resolving to `right` — is Chrome-exact. That asymmetry is what let
+`G_BIDI_BASE` stand in for the whole RTL web on the capability map for 549 ticks (surface audit #48).

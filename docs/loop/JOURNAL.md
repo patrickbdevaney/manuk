@@ -38575,3 +38575,63 @@ page. The generalisation is sharper than "one rule, N implementations": when a f
 green for as long as the idiom was broken. **Grep the vendored parser for `cfg(feature = "gecko")` next
 to every property we recover: a recovered property whose ACTIVATING value is on the other side of that
 same cfg is dead in exactly the same way.**
+
+## Tick 764 — the two worst `reading_order` sites in the corpus are both RTL, and a flex row ran backwards (2026-07-30)
+
+Following my own steer from constitution check #61 — *rank on the jarring invariants, not on shape* — the
+worst `reading_order` values in the CrUX sweep are `mobile.ir` **874** and `ta3lemkonline.com` **817**.
+Both are RTL sites. So I built `<html dir=rtl>` and measured it against live Chromium before touching
+anything.
+
+```text
+  (600px body in a 1200px viewport, x relative to the container)   Chrome         ours
+  flex row of three 100px items                                500/400/300     0/100/200  ✗
+  body{width:600px} — the block's own x                                600              0  ✗
+  <li> inside a default <ul>                                     x=0 w=560      x=40 w=560  ✗
+  two <span>s on one line                                          548/575        548/575  ✓
+  <p> of mixed Arabic + Latin                                       matches        matches  ✓
+```
+
+The text half is right; everything that places a BOX is wrong. This tick takes the first, which is the one
+the `reading_order` invariant is actually measuring.
+
+### `row` IS A LOGICAL DIRECTION AND TAFFY ONLY SPEAKS PHYSICAL
+
+The flex main axis for `row` runs along the *inline* axis, which under `direction: rtl` points
+right-to-left (CSS Flexbox §5.1). **Taffy has no `direction` property at all**, so the mapping has to
+carry it: RTL swaps `row` ⇄ `row-reverse`, which produces exactly Chrome's geometry. `column` is
+untouched — its main axis is the block axis, which `direction` does not flip.
+
+MEASURED ON REAL SITES (fidelity scorer, same binary; before = the t758 sweep row):
+`mobile.ir` shape **0.174 → 0.320**, `h_overflow` **268 → 1**, `reading_order` 874 → 820, with
+`coverage` 0.999 and `shape_n` 1186 unchanged in both runs. Control `marktplaats.nl` **0.708642 →
+0.708642**, byte-identical. (`ta3lemkonline.com` came back unscorable this run — `thin-overlap-1` — so it
+is not claimed either way.)
+
+TICK SHAPE: root-cause
+CLUSTER: `reading_order` — the invariant, per check #61's steer, not shape.
+Gates: `an_rtl_flex_row_runs_right_to_left` (`engine/layout/src/taffy_tree.rs`) — the first item is at the
+right edge and the row packs leftwards. **RED-proven by running the mutation**: dropping the `rtl`
+argument reads `[0.0, 100.0, 200.0]`. Regression: manuk-layout 99/99; the LTR row-wrap and grid fixtures
+from t762 are byte-identical.
+PERF: one enum comparison per element in the style mapping.
+WIKI: `docs/wiki/box-layout.md` — "`row` is a logical direction, and taffy only speaks physical".
+SURFACE AUDIT #48 (due this tick) — and it is not a formality, it found the map lying: the row
+`bidi (Arabic/Hebrew) … gated … G_BIDI_BASE` claimed a receipt for the whole RTL web while the gate
+asserts only the paragraph base direction inside `engine/text`. **Downgraded to `partial`**, receipt
+enumerated, and the three measured-missing primitives added as their own rows.
+⚠ THE RATCHET REFUSED THIS TICK ONCE, AND IT WAS RIGHT TO. Downgrading `bidi (Arabic/Hebrew)` from
+`gated` to `partial` took `CONST:doc` from 32 gated capabilities to 31, and *a class cannot lose a gated
+capability*. The arithmetic, stated plainly rather than quietly restored: the coarse row was **split**.
+One half is a POPULATION (`bidi (Arabic/Hebrew)`) and is honestly `partial` with its receipt enumerated;
+the other half is a MECHANISM (`RTL flex-row axis`) that landed this tick with a RED-proven gate and is
+genuinely `gated`. The count returns to 32 because a real gated capability was added, not because the
+downgrade was walked back — and the three still-missing RTL primitives are `missing` rows, so the class
+total does not flatter them either.
+
+PATTERN: ⚠⚠⚠ **A CAPABILITY ROW NAMED FOR A SCRIPT, LANGUAGE OR REGION IS A SUSPECT ROW.** "bidi
+(Arabic/Hebrew)" names a *population*, and a population needs every mechanism it touches — shaping, inline
+reordering, box placement, logical padding, flex/grid axis order. A row named for a MECHANISM can be
+gated by one test honestly; a row named for a population cannot, and its `gated` is an average pretending
+to be a verdict. What kept it alive is that the half the gate is named for is the half you notice in a
+screenshot: the Arabic text shapes and reads correctly, and the boxes around it are in the wrong places.

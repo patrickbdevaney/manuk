@@ -116,6 +116,7 @@
   - L2098 · The icon-sprite <use href="#icon"> resolved to NOTHING — the reference model (tick 743)
   - L2163 · A blockified inline is the spec's ANONYMOUS BLOCK — and the margin-collapse predicates could not see it (tick 746)
   - L2227 · An indefinite MAIN size is INFINITE available main space, not zero (tick 762)
+  - L2286 · row is a LOGICAL direction, and taffy only speaks physical (tick 764)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1280,4 +1281,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1191 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1192 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

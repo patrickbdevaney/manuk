@@ -2695,3 +2695,69 @@ re-crawl is a re-rank of an artefact.
 
 **Sources:** live Chromium 16px fixtures (`/tmp/adv*.html`, `/tmp/fsa.html`, `/tmp/flex.html`),
 `fc-match`, `docs/loop/SWEEP-t752-rows.tsv`, and the site stylesheets of the 24 worst-shape corpus sites.
+
+## Audit #48 — tick 764 (2026-07-30)
+
+**Method.** Same door as #47 — reconcile the map against what a *measurement* just turned up, not against
+what the world names. The trigger was the CrUX sweep's `reading_order` column: the two worst sites in the
+whole corpus (`mobile.ir` **874**, `ta3lemkonline.com` **817**) are both RTL, so I built a `<html dir=rtl>`
+fixture, measured it against live Chromium, and then went to the map to see what it claimed.
+
+### ⚠ THE FINDING: A GATE NAMED FOR A SCRIPT COVERED ONE PRIMITIVE OF SEVERAL
+
+The map's row read:
+
+```text
+doc   bidi (Arabic/Hebrew)   RTL web is unreadable   gated   G_BIDI_BASE   tick 215
+```
+
+`gated` — i.e. done, with a receipt. What `G_BIDI_BASE` actually asserts is the **paragraph base
+direction inside `engine/text`**: that a run of Arabic shapes and reorders right-to-left. That is one
+primitive. `direction: rtl` is a *layout* property, and the fixture found three more, each of which
+misplaces boxes on every RTL page:
+
+| markup (`<html dir=rtl>`, 600px body in a 1200px viewport) | Chrome | ours |
+|---|---|---|
+| flex row of three 100px items (x within the row) | **500 / 400 / 300** | 0 / 100 / 200 ❌ |
+| `body{width:600px}` — the block's own x | **600** | 0 ❌ |
+| `<li>` inside a default `<ul>` | **x=0 w=560** | x=40 w=560 ❌ |
+| two `<span>`s on one line | 548 / 575 | 548 / 575 ✅ |
+| `<p>` of mixed Arabic + Latin | matches | matches ✅ |
+
+The two ✅ rows are why this survived: the *text* half — the half the gate is named for, and the half a
+human eyeballing a screenshot notices first — is correct. Everything the gate does not name is wrong.
+
+**The row is DOWNGRADED `gated` → `partial`**, its receipt now says what it covers, and the three
+measured-missing primitives are individual map rows (block inline-start edge, list/UA logical padding,
+grid column order) so none of them can be re-discovered as a surprise.
+
+### THE RULE THIS ADDS
+
+> **A capability row whose name is a SCRIPT, a LANGUAGE or a REGION is a suspect row.** "bidi
+> (Arabic/Hebrew)" names a population, not a mechanism, and a population needs *every* mechanism it
+> touches — text shaping, inline reordering, box placement, logical padding, flex/grid axis order. A row
+> named for a mechanism (`flex-wrap on a column container`) can be gated by one test honestly; a row named
+> for a population cannot, and its `gated` is an average pretending to be a verdict.
+
+Same family as audit #45's ranking rule and #47's "the map had no row at all": the failure is never that a
+row is wrong, it is that a row is **coarser than the thing it is standing in for**.
+
+### ADDED / CHANGED
+
+| class | capability | status | note |
+|---|---|---|---|
+| doc | bidi (Arabic/Hebrew) | `gated` → **`partial`** | receipt now enumerates built vs missing |
+| doc | RTL: block box inline-start edge | **`missing`** | Chrome 600, ours 0 |
+| doc | RTL: `ul`/`ol` UA padding is inline-start | **`missing`** | Chrome x=0, ours x=40 |
+| doc | RTL: grid column order reverses | **`missing`** | named when the flex half was built, not later |
+| doc | %-height child of an indefinite-height column flex container | **`missing`** | tick 762's control residue (9 vs 18) |
+| doc | `-webkit-box-orient:horizontal` (legacy flex row) | **`missing`** | tick 763's deliberate narrowing |
+
+### NOT ADDED, AND WHY
+
+The `overlap` invariant's worst sites (`razaoautomovel` 71, `puentedemando` 18) were not opened. `overlap`
+has no fixture yet and I will not guess a capability row from a number I have not reproduced — that is
+exactly the "rank from the artefact" mistake check #60 caught. It is the next fixture to build.
+
+**Sources:** `/tmp/rtl.html` measured against live Chromium 1200×800, `docs/loop/SWEEP-t758-rows.tsv`,
+`engine/layout/src/taffy_tree.rs`, `engine/text/tests/g_bidi_base_direction.rs`.
