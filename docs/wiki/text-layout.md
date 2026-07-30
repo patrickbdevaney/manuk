@@ -1247,3 +1247,84 @@ identical, down to the missing-element set.**
 plumbed to `close_line` — which is a separate tick.
 
 [[subpixel-error-compounds]] [[box-layout]]
+
+## A family declares four faces; the loop fetched one, and resolved its URL against the wrong document (tick 747)
+
+Two information losses in one ~20-line block (`engine/page/src/lib.rs`, the "Web fonts" section of
+`fetch_and_apply_stylesheets`). Both were found by READING the block, not by a sweep row, and both
+present identically to a user: *the page is in a different font and nothing says so*.
+
+### A — the idempotence key was the FAMILY, so only the first weight ever loaded
+
+```rust
+fonts.declare_webfont_family(&ff.family);
+if fonts.has_webfont_face(&ff.family) { continue; }     // <- wrong grain
+```
+
+A real site does not declare one `@font-face` per family. It declares one **per weight and style**,
+all under one name — this is verbatim from `a11yproject.com/css/screen.min.css`, and it is what
+every "self-host your Google font" download emits:
+
+```css
+@font-face{font-family:Noto Serif;font-weight:400;font-style:normal; src:url(…regular.woff2)}
+@font-face{font-family:Noto Serif;font-weight:400;font-style:italic; src:url(…italic.woff2)}
+@font-face{font-family:Noto Serif;font-weight:700;font-style:normal; src:url(…700.woff2)}
+@font-face{font-family:Noto Serif;font-weight:700;font-style:italic; src:url(…700italic.woff2)}
+```
+
+The first block registered; the other three hit `continue` and were **never fetched**. Every bold and
+every italic run on such a page was then measured and painted in the **regular** face — and there is
+no synthetic bold anywhere in `engine/text`, so the advances were byte-identical to regular text, not
+merely a bit light. Measured on the gate fixture, "Handgloves" at 40px: **211.25px (regular) where
+the real bold face is 226.72px** — a 7% width error on every bold run, which re-wraps prose and turns
+into a whole-line height cascade.
+
+⚠ **The consumer was already built and could never fire.** `FontContext::face_id` searches the
+family's registered ids for the matching weight/style — *"picking the bold/italic variant when
+present"*, in its own comment — over a `Vec<ID>` that `register_named_font` extends. Storage and
+selector both finished; the producer delivered exactly one face, forever, so the search was dead code
+and the `ids.first()` fallback was the only reachable path. *The orphaned-reader shape: when a
+capability looks half-built, check which half.*
+
+**The guard's purpose was real; only its grain was wrong.** `fetch_and_apply_stylesheets` re-runs
+after every round of dynamic scripts and a newly registered face forces a full-document relayout, so
+an unkeyed loop costs a relayout per round. The key is now `(family, the block's first src URL)`:
+stable across re-runs (same idempotence) and distinct per face (all four load).
+
+Three details that are each a bug if got wrong:
+
+- **Key the BLOCK, not each src.** A block lists one face in several formats
+  (`url(x.woff2), url(x.woff)`) and stops at the first that works. Claiming per-src leaves `.woff`
+  unclaimed, and the next script round fetches the fallback format of a face that already loaded.
+- **The family belongs in the key.** Two families may legitimately point at the same file (an alias,
+  a `Foo`/`Foo Text` pair). URL-only keying silently starves the second one — caught by the fixture,
+  which reaches the same bold bytes through a second single-face family.
+- **Claim on the ATTEMPT, not on success.** A 404 retried every script round is the same per-round
+  cost the key exists to prevent.
+
+### B — a relative `src` resolved against the DOCUMENT, not the stylesheet
+
+```rust
+let url = resolve_url(&self.final_url, src);    // self.final_url is the DOCUMENT
+```
+
+CSS Values §4.2: a relative URL in a stylesheet resolves against **the stylesheet's** URL. The
+enclosing loop iterates `sources` and literally holds it (`StyleSource::External(url, _)`), then
+discards it one line later.
+
+```text
+  sheet                      src                    CORRECT                 WAS
+  /css/screen.min.css        url(../fonts/x.woff2)  /fonts/x.woff2          /fonts/x.woff2   (agrees)
+  /assets/css/main.css       url(../fonts/x.woff2)  /assets/fonts/x.woff2   /fonts/x.woff2   404
+```
+
+The first row is why this survived: a site with `/css/` at the root resolves the same both ways, so
+the nearest real page (a11yproject) is a **coincidence, not a confirmation**. The second row is the
+standard Jekyll/Hugo/webpack output. An inline `<style>` correctly keeps the document as its base.
+
+**Gate.** `engine/page/tests/g_webfont_family_weights.rs` serves the sheet from `/assets/css/` and
+**404s everything under `/fonts/`**, so B cannot pass by accident, and asserts `#bold.width ==
+#ctl.width != #reg.width` where `#ctl` is the same bold bytes reached through a one-face family — a
+control built from the fixture rather than a hard-coded metric. RED-proven twice: **M1** restore the
+family-grained key (bold measures 211.25, the regular face); **M2** restore the document-relative
+base (everything 404s, all three spans equal, the vacuity guard fires first).

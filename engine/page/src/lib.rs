@@ -6841,9 +6841,18 @@ impl Page {
         // out with yet — see the relayout guard below.
         let mut registered_webfont = false;
         for s in &sources {
-            let css = match s {
-                StyleSource::Inline(c, _) => c.clone(),
-                StyleSource::External(url, _) => external.get(url).cloned().unwrap_or_default(),
+            // ⚠ **A RELATIVE `src` RESOLVES AGAINST THE STYLESHEET, NOT THE DOCUMENT** (CSS Values
+            // §4.2). This loop is iterating `sources` and holds the sheet's own URL, and it used to
+            // throw it away one line later and resolve against `self.final_url`. That is right for
+            // an inline `<style>` and wrong for every external sheet not sitting at the site root:
+            // `/assets/css/main.css` + `url(../fonts/x.woff2)` is `/assets/fonts/x.woff2`, but
+            // against the document it is `/fonts/x.woff2` — a 404, and a webfont that 404s does not
+            // announce itself, it just looks like a page in a different font.
+            let (css, base) = match s {
+                StyleSource::Inline(c, _) => (c.clone(), self.final_url.clone()),
+                StyleSource::External(url, _) => {
+                    (external.get(url).cloned().unwrap_or_default(), url.clone())
+                }
             };
             for ff in Stylesheet::parse(&css).font_faces() {
                 // ── DECLARE FIRST, FETCH SECOND (tick 561). CSS Fonts' shadowing rule is about the
@@ -6855,18 +6864,34 @@ impl Page {
                 // martinfowler.com, where a failed webfont looked like a different font rather than
                 // like a failure.
                 fonts.declare_webfont_family(&ff.family);
-                // **Already have a face for this family? Then there is nothing new to lay out with.**
-                // This function runs again after EVERY round of dynamic scripts, so without this the
-                // same font is re-fetched and re-registered each round — and because a new face now
-                // forces a relayout, that would be a full-document relayout per round: exactly the
-                // waste the guard below exists to prevent. The fix must not reintroduce the cost the
-                // thing it fixes was protecting against.
-                if fonts.has_webfont_face(&ff.family) {
-                    continue;
+                // **Idempotence is keyed on the SRC URL, not on the family.** This function runs
+                // again after EVERY round of dynamic scripts, so without a key the same font is
+                // re-fetched and re-registered each round — and because a new face forces a
+                // relayout, that would be a full-document relayout per round: exactly the waste the
+                // guard below exists to prevent.
+                //
+                // ⚠ The key used to be `has_webfont_face(&ff.family)`, and a family is the WRONG
+                // grain: a real site declares one `@font-face` block per weight and style, all under
+                // one name (regular / italic / 700 / 700-italic — what every self-hosted Google font
+                // ships). The first block registered and the other three hit `continue`, so **every
+                // bold and italic run on the page was measured in the regular face**, with no
+                // synthetic bold to soften it — while `FontContext::face_id`'s weight/style search
+                // over the family's face list sat there unable to ever fire. The src URL is stable
+                // across re-runs (same idempotence) and distinct per face (all four now load).
+                //
+                // The claim is on `(family, the block's FIRST src)`, which identifies the BLOCK — not
+                // on each src in turn. A block lists the same face in several formats
+                // (`url(x.woff2), url(x.woff)`) and stops at the first that works, so claiming
+                // per-src would leave the later formats unclaimed and the next script round would
+                // fetch the `.woff` fallback of a face that already loaded as `.woff2`. The family is
+                // in the key because two families may legitimately point at the same file.
+                let urls: Vec<String> = ff.srcs.iter().map(|s| resolve_url(&base, s)).collect();
+                let Some(first) = urls.first() else { continue };
+                if !fonts.claim_webfont_src(&ff.family, first) {
+                    continue; // this block was already tried this load — arrived or 404'd
                 }
-                for src in &ff.srcs {
-                    let url = resolve_url(&self.final_url, src);
-                    if let Some(data) = fetch_font_bytes(&url).await {
+                for url in &urls {
+                    if let Some(data) = fetch_font_bytes(url).await {
                         fonts.register_named_font(&ff.family, data);
                         // **A FONT THAT ARRIVES IS A REASON TO RE-LAY-OUT, and it was not one.**
                         // Every text box was measured with the fallback face; the new face has

@@ -225,6 +225,22 @@ pub struct FontContext {
     /// that had loaded the real webfont. **A failed download must look failed, not like a different
     /// font.**
     declared_webfonts: RefCell<std::collections::HashSet<String>>,
+    /// **Every `@font-face` `src` URL this context has already tried**, absolute and resolved.
+    ///
+    /// The page layer needs an idempotence key because `fetch_and_apply_stylesheets` re-runs after
+    /// every round of dynamic scripts, and a newly registered face forces a full-document relayout —
+    /// so without one the same font is re-fetched and the whole document re-laid-out per round.
+    ///
+    /// ⚠ **That key must be the SRC, not the family.** A real site declares one `@font-face` block
+    /// per weight and style, all under one family name (regular / italic / 700 / 700-italic — the
+    /// shape every self-hosted Google font ships). Keyed on the family, the first block registered
+    /// and the other three were skipped, so **every bold and italic run on the page was measured in
+    /// the regular face** — and there is no synthetic bold here to soften it. The src URL is stable
+    /// across re-runs (same idempotence) and distinct per face (all four now load).
+    ///
+    /// Recorded on the ATTEMPT, not on success: a 404 that is retried every script round is the same
+    /// per-round cost the key exists to prevent.
+    attempted_webfont_srcs: RefCell<std::collections::HashSet<String>>,
     /// swash's reusable scaling context (glyph rasterization). `RefCell` because scaling
     /// takes `&mut`; single-threaded like the rest of the context.
     scale_ctx: RefCell<swash::scale::ScaleContext>,
@@ -391,6 +407,7 @@ impl FontContext {
             family_ids: RefCell::new(HashMap::new()),
             webfonts: RefCell::new(HashMap::new()),
             declared_webfonts: RefCell::new(std::collections::HashSet::new()),
+            attempted_webfont_srcs: RefCell::new(std::collections::HashSet::new()),
             scale_ctx: RefCell::new(swash::scale::ScaleContext::new()),
             shape_ctx: RefCell::new(swash::shape::ShapeContext::new()),
             measure_cache: RefCell::new(LruCache::new(
@@ -454,6 +471,23 @@ impl FontContext {
             .borrow()
             .get(&family.to_ascii_lowercase())
             .is_some_and(|ids| !ids.is_empty())
+    }
+
+    /// Claim one `@font-face` block for fetching: `true` the first time this `(family, url)` pair is
+    /// seen, `false` on every later call. This is the per-face idempotence key described on
+    /// [`attempted_webfont_srcs`] — it replaces a per-FAMILY check that skipped every weight and
+    /// style after the first.
+    ///
+    /// ⚠ **The family is part of the key, not decoration.** Two different families legitimately name
+    /// the same file — an alias, a `Foo`/`Foo Text` pair, or a build that points several declarations
+    /// at one subsetted face. Keyed on the URL alone, the second family silently gets no face at all,
+    /// which trades one bug for a narrower one.
+    ///
+    /// [`attempted_webfont_srcs`]: FontContext::attempted_webfont_srcs
+    pub fn claim_webfont_src(&self, family: &str, url: &str) -> bool {
+        self.attempted_webfont_srcs
+            .borrow_mut()
+            .insert(format!("{}\u{1}{url}", family.to_ascii_lowercase()))
     }
 
     pub fn register_named_font(&self, family: &str, data: Vec<u8>) {

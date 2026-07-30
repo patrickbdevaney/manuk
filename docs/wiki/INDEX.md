@@ -1226,6 +1226,9 @@
   - L1172 · The half-leading belongs to each INLINE BOX, not to the line (tick 695)
   - L1207 · top and bottom are opposites, and only a fixture carrying both can see it
   - L1219 · What it is worth, and the honest ledger
+  - L1251 · A family declares four faces; the loop fetched one, and resolved its URL against the wrong document (tick 747)
+  - L1257 · A — the idempotence key was the FAMILY, so only the first weight ever loaded
+  - L1305 · B — a relative src resolved against the DOCUMENT, not the stylesheet
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1253,4 +1256,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1164 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1167 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

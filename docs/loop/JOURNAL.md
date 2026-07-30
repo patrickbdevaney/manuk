@@ -37336,3 +37336,132 @@ whole idiom to break. Grep `engine/layout` for bare `display == Display::Block` 
 blockified inline is invisible again. (t745's corollary, one tick apart: there the correct cascade was
 overwritten downstream; here the correct classification was never consulted. Both are *"the right
 answer existed and the caller computed its own"*.)
+## Tick 748 — a family declares four faces and only ONE was ever fetched: every bold and italic run on the page was measured in the regular face (2026-07-29)
+
+Two defects in one ~20-line block — `fetch_and_apply_stylesheets`, the "Web fonts" section of
+`engine/page/src/lib.rs`. Both are the same mistake: **the registration loop discarded which FACE and
+which SHEET it was looking at**, and both losses surface identically — *the webfont silently did not
+apply.* Found by reading the block, not by a sweep row.
+
+### A — IDEMPOTENCE WAS KEYED ON THE FAMILY, AND A FAMILY IS THE WRONG GRAIN
+
+```rust
+fonts.declare_webfont_family(&ff.family);
+if fonts.has_webfont_face(&ff.family) { continue; }   // <- keyed on the FAMILY
+for src in &ff.srcs { … fonts.register_named_font(&ff.family, data); break; }
+```
+
+A real site does not declare one `@font-face` per family. It declares one per **weight and style**, all
+under one name — verbatim from `https://www.a11yproject.com/css/screen.min.css`, and the default output
+of every "self-host your Google font" download:
+
+```css
+@font-face{font-family:Noto Serif;font-style:normal;font-weight:400;src:…regular.woff2}
+@font-face{font-family:Noto Serif;font-style:italic;font-weight:400;src:…italic.woff2}
+@font-face{font-family:Noto Serif;font-style:normal;font-weight:700;src:…700.woff2}
+@font-face{font-family:Noto Serif;font-style:italic;font-weight:700;src:…700italic.woff2}
+```
+
+The first block registered `regular`; the next three hit `has_webfont_face("noto serif") == true` and
+`continue` — **never fetched, never registered.** There is no synthetic bold anywhere in `engine/text`
+(grepped: no `embolden`, no `synth`), so this is not a slightly-wrong weight: **bold text had
+byte-identical advances to regular text**, and so did italic.
+
+⚠ **The consumer for the missing faces was already built and could never fire.** `FontContext::face_id`
+searches the family's registered ids for the matching weight/style — *"picking the bold/italic variant
+when present"*, in its own comment — over a `Vec<fontdb::ID>` that `register_named_font` `.extend`s.
+Storage and selector both finished; the producer delivered one face, forever. So the `find` was dead
+code and `ids.first()` was the only reachable path. **The orphaned-reader shape** (MEMORY, t704–710):
+when a search over a collection is written, check that anything ever puts a second element in it.
+
+The guard's *purpose* is real and must survive: this function re-runs after **every** round of dynamic
+scripts, and a newly registered face forces a full-document relayout, so an unkeyed loop is a
+re-fetch and a full relayout per round. Only its KEY was wrong. FIX: `claim_webfont_src(family, url)`
+— a `(family, resolved-src)` claim on the `FontContext`. A re-run sees the same URLs, so idempotence
+is preserved *exactly*, while four distinct faces of one family are all admitted.
+
+Three details in that key, each load-bearing:
+
+- **It claims the block's FIRST src, not every src.** A block lists one face in several formats
+  (`url(x.woff2), url(x.woff)`) and stops at the first that works; claiming per-src would leave the
+  later formats unclaimed and the next script round would fetch the `.woff` fallback of a face that
+  already loaded as `.woff2`.
+- **The family is in the key.** Two families legitimately name the same file (an alias, a `Foo`/`Foo
+  Text` pair, a build pointing several declarations at one subsetted face). Keyed on the URL alone the
+  second family silently gets no face — one bug traded for a narrower one.
+- **It records the ATTEMPT, not the success.** A 404 retried every script round is the same per-round
+  cost the key exists to prevent.
+
+`FontFace` (`engine/css/src/lib.rs`) carries only `family` + `srcs` — no `font-weight`/`font-style`
+descriptors — and does **not need them here**: `fontdb::load_font_data` reads weight and style out of
+the face's own OS/2 table, which is exactly what `face_id` matches on. Honouring the *descriptors*
+(they can disagree with the file, and `unicode-range` subsetting needs them) is a separate, larger
+tick and is not claimed.
+
+### B — A RELATIVE `src` RESOLVED AGAINST THE DOCUMENT, NOT THE STYLESHEET
+
+```rust
+let url = resolve_url(&self.final_url, src);   // self.final_url is the DOCUMENT
+```
+
+CSS Values §4.2: a relative URL in a stylesheet resolves against **the stylesheet's** URL. The
+enclosing loop is iterating `sources` and is *holding* it (`StyleSource::External(url, _)`), then threw
+it away one line later. Right for an inline `<style>`, wrong for every external sheet not sitting at
+the site root:
+
+| sheet | `src` | correct | ours |
+|---|---|---|---|
+| `/css/screen.min.css` | `url(../fonts/x.woff2)` | `/fonts/x.woff2` | `/fonts/x.woff2` ✅ *coincidence* |
+| `/assets/css/main.css` | `url(../fonts/x.woff2)` | `/assets/fonts/x.woff2` | `/fonts/x.woff2` → **404** |
+
+a11yproject.com is the first row, which is why this never showed there — **a coincidence, not a
+confirmation.** The second row is the more common build output: Jekyll, Hugo and webpack all emit
+`assets/css` beside `assets/fonts`. FIX: carry the base per source — the sheet's own URL for
+`External`, the document URL for `Inline`.
+
+### ONE TICK, BECAUSE IT IS ONE SENTENCE AND ONE GATE PROVES BOTH
+
+TICK SHAPE: root-cause
+CLUSTER: `geometry/mis-sized: width` on text runs in bold/italic faces, and the `line-height:normal`
+height error that rides with a wrong resolved face. ⚠ **HONEST GAP, stated rather than claimed:** the
+anchor ledger's top two primitives (`C0a94 width ~16px <a>`, 4 sites/64 hits; `C9b2d width ~8px <a>`,
+3 sites/131 hits — a11yproject sampled as `[413 1499 286×22]` vs `[413 1934 260×26]`) are *narrower AND
+taller*, which is the signature of a different resolved face — but the sampled `<a>` is not obviously
+bold, so **this defect is not established as that band's cause.** Both defects are confirmed from the
+source and stand on their own population; the attribution is left for the next sweep to settle
+(MEMORY: when two derivations disagree, stop deriving and instrument).
+Gates: new `engine/page/tests/g_webfont_family_weights.rs`
+(`every_declared_face_of_a_family_is_registered_not_just_the_first`) — a `TcpListener` on `127.0.0.1:0` serves
+the sheet from **`/assets/css/main.css`** with faces at `../fonts/`, and answers **404 on `/fonts/*`**,
+so defect B cannot pass by accident. Bytes already in the repo (`demo/fonts/LiberationSans-Regular.ttf`
+OS/2 weight 400, `-Bold.ttf` weight 700). Three spans of identical text: `#bold.width == #ctl.width`
+(the control reaches the same bold bytes through a single-face family, so the expected value is built
+from the fixture, not a magic constant), `#bold.width != #reg.width` by a real margin, and
+`#reg.width != 0` so a total webfont failure cannot read as a pass. One `#[test]` per file — a
+`PageContext` is per-PROCESS and two in one binary SIGSEGV (MEMORY).
+**RED-proven by running both mutations, restored between:** **M1** restore
+`if fonts.has_webfont_face(&ff.family) { continue; }` → `#bold.width == #reg.width`. **M2** restore
+`resolve_url(&self.final_url, src)` → the fonts 404, all three spans fall back, and they read equal.
+Regression check: `g_webfont_relayout`, `g_webfont_relayout_external` and `g_font_loading_api` all green
+(run at landing, alongside the new gate).
+⚠ **NAMED GAP, because I checked instead of assuming:** those three assert that a font which arrives
+**does** force a relayout — they do **not** count relayouts, and the `count` in their prose is a
+*stylesheet* count, not a relayout one. So **nothing in the wall would catch a regression that made
+this loop re-fetch and re-lay-out once per script round**; the only thing standing between us and that
+cost is the src key this tick installed, and it is unguarded. That is the honest state, and it is a
+gate-shaped hole: *"a relayout per round of dynamic scripts"* is precisely a
+`G_ALLOC`/`G_INTERACT`-class cost (the user feels it as a page that keeps reflowing), so the missing
+gate is a **relayout-count assertion across two script rounds** — the next instrument tick, written
+down here rather than left as a belief that the existing gates cover it.
+PERF: one `HashSet<String>` insert per `@font-face` block per script round, replacing a `HashMap` lookup.
+The saved work is larger and is the point: three faces that used to be skipped are now fetched **once**
+each instead of a family re-fetch per round.
+WIKI: `docs/wiki/text-layout.md` — "a family is a set of faces, and the idempotence key must name the
+face"; and the stylesheet-relative base for `url()`.
+PATTERN: ⚠⚠ **A GUARD WHOSE PURPOSE IS RIGHT CAN STILL HAVE THE WRONG KEY, AND IT FAILS AS A SILENT
+SKIP.** `has_webfont_face(family)` was not a wrong *idea* — de-duplicating work across re-entrant
+passes is necessary — it was the right idea at the wrong grain, and the symptom of a too-coarse
+idempotence key is never an error: it is work that quietly does not happen. Grep for the class: any
+`if already_have(X) { continue }` where the loop body varies over something FINER than `X`. Second
+half, from defect B: **when a loop is already holding the base a URL must resolve against, resolving
+against a field of `self` instead is the bug** — and it hides wherever the two happen to agree.
