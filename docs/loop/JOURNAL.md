@@ -37465,3 +37465,137 @@ idempotence key is never an error: it is work that quietly does not happen. Grep
 `if already_have(X) { continue }` where the loop body varies over something FINER than `X`. Second
 half, from defect B: **when a loop is already holding the base a URL must resolve against, resolving
 against a field of `self` instead is the bug** — and it hides wherever the two happen to agree.
+
+## Tick 749 — `system-ui` was aliased to `sans-serif`, and four aliases at the FRONT of every modern font stack short-circuited it: every line 4px short (2026-07-30)
+
+Found by following the fresh t745 sweep down to a primitive, and it took two refuted hypotheses to get
+there. Both refutations are recorded, because each was a plausible story that a control killed.
+
+### HYPOTHESIS 1, REFUTED: "the low-shape pages never got their CSS"
+
+The sweep's most striking rows are fully-covered and totally mis-placed — `postgresql.org`
+cov **1.000** / shape **0.018** over 337 nodes, `flask` 1.000/0.063, `packagist` 1.000/0.184,
+`docs.python.org` 1.000/0.212. Every box drawn, almost none in the right place. Running the oracle on
+`https://www.postgresql.org/` returned **`DISCARDED — 3 author stylesheet(s) never arrived (starved
+engine fetch; the layout is UA fallback, not ours)`**, and `europa.eu` discarded the same way. That is a
+complete explanation of the signature — no author CSS means every element exists and nothing is
+positioned — and it would have meant the render gap was a FETCH bug, not layout math.
+
+⚠ **The control refuted it: 0 of 24 worst-shape sites lack author CSS.** Re-running the same 24 at
+their *corpus* URLs, every one diffed — including `europa.eu`, with the identical URL that had just
+discarded. The two discards were **intermittent**. I had a corpus-wide redirection of the burndown
+resting on a single reading of a slightly different URL (`www.` vs bare), which is the harness lesson
+this project has now had four times: *an outlier inside a batch run is a harness reading.* The
+intermittent starvation is real and worth its own tick; it is **not** the dominant mechanism.
+
+### HYPOTHESIS 2, REFUTED: "our text advance is systematically wrong"
+
+With the 24 sites diffing, the mechanism-keyed ledger (t744's key, first use in anger) ranks:
+
+```
+16 sites 104 hits  geometry/mis-sized: width ~32px   (<a>)
+14 sites 222 hits  geometry/mis-sized: width ~64px   (<a>)
+13 sites 215 hits  geometry/mis-sized: width ~16px   (<a>)
+13 sites  67 hits  geometry/mis-sized: height ~256px (<div>)
+```
+
+`<a>` WIDTH is the #1 primitive, on 16 of 21 diffed sites — and `matklad.github.io`'s footer links
+sample as ours `62x27` vs Chrome `50x27`: same height, **24% too wide**, which is what a wrong text
+advance looks like. So: measure the advance. A fixture of 10 strings across sans/serif/mono/Arial and
+14/16px, ours vs live Chromium:
+
+```
+sans "source"            48   vs 48.03      serif 42 vs 41.77      mono 58 vs 57.80
+sans 43-char sentence   317   vs 316.61     serif 292 vs 292.38    Arial 317 vs 316.61
+```
+
+**Our advance is exact**, including 317 vs 316.61 over 43 characters. Refuted.
+
+### WHAT THE FIXTURE ACTUALLY CAUGHT — and it was in the one row I had not predicted
+
+One row of ten diverged, and it diverged in BOTH axes:
+
+```
+font: 16px system-ui   ours 48x18      Chrome 50.23x22
+```
+
+`resolve_family` had **five names sharing one arm**, all returning the sans generic:
+
+```rust
+"sans-serif" | "system-ui" | "ui-sans-serif" | "-apple-system" | "blinkmacsystemfont"
+    => return FontFamily::SansSerif,
+```
+
+Two distinct bugs live in that line, and the second is the larger one.
+
+**(a) `system-ui` IS NOT `sans-serif`.** `sans-serif` deliberately resolves to Arial→Liberation Sans,
+because that is the family *Chrome itself* asks for — the comment above `resolve_generic_families` says
+so and warns that Noto's line box is 1.362em against Liberation's 1.150em, *"an 18% error on the height
+of every line on every page"*. `system-ui` is the **platform UI font**: `fc-match system-ui` answers
+**Noto Sans** here and Chromium measures exactly Noto Sans. So the file already documented the precise
+metric difference that this alias was silently inflicting. `LineMetrics::height`'s own verification
+table has the two numbers side by side: Liberation Sans **18**, Noto Sans **22**. **Every line on a
+`system-ui` page was 4px short**, and a line height is a `dy` term — it charges every line below it too.
+
+**(b) THE SHORT-CIRCUIT, which is why all four real stacks were wrong.** Every one of those five names
+sits at the FRONT of a real-world stack, so returning a generic there **ended the search** and the
+family Chrome actually picks was never reached. Measured against live Chromium, 16px `"source"` — all
+four came out `48x18` for us:
+
+| stack | Chrome | ours (was) | ours (now) |
+|---|---|---|---|
+| `system-ui` | `50.23x22` Noto Sans | `48x18` | **`50x22`** ✅ |
+| Bootstrap 5 `system-ui,-apple-system,…` | `50.23x22` | `48x18` | **`50x22`** ✅ |
+| GitHub `-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",…` | `50.23x22` (**4th** entry) | `48x18` | **`50x22`** ✅ |
+| Tailwind `ui-sans-serif,system-ui,sans-serif` | `50.23x22` (2nd entry) | `48x18` | **`50x22`** ✅ |
+| Bootstrap 4 `-apple-system,…,Roboto,"Helvetica Neue",…` | `48.34x19` (**Roboto**) | `48x18` | **`48x19`** ✅ |
+
+⚠ **`-apple-system` and `BlinkMacSystemFont` are Blink's macOS-only aliases for San Francisco.** They
+name nothing on Linux, and Chrome here treats them as unknown and *moves on* — which is exactly why
+Bootstrap 4 lands on Roboto and not on a sans generic. Giving them no arm at all (so they fall through
+the named-family path, fail to match, and continue) is what reproduces Chrome. Bootstrap 4 landing on
+Roboto is the assertion that proves the short-circuit is gone, and nothing else in the tick proves it.
+
+FIX: `"sans-serif"` alone keeps the generic arm. `system-ui` / `ui-sans-serif` resolve to a new
+`FontContext::system_ui_family` (env-overridable `MANUK_FONT_SYSTEM_UI`, candidates ordered as
+fontconfig answers `system-ui`: Noto Sans → Cantarell → Ubuntu → DejaVu → Liberation → Arial). The
+macOS aliases get no arm. No new `FontFamily` variant: the UI font is reached as `Named`, so `FontKey`,
+paint and the caches are untouched — the smallest change that expresses the rule.
+⚠ Interned in its **ORIGINAL case**: `face_id` re-queries fontdb with that exact string and
+`fontdb::Family::Name` is case-SENSITIVE (t557). Lowering it would have resolved `system-ui` to nothing
+at all — the same miss, one call later. I wrote the lowercase version first; the t557 comment three
+lines away is what caught it.
+
+RESIDUE, named not fixed: `"Segoe UI"` / `"Helvetica Neue"` / `-apple-system` used **alone** still give
+`48x18` where Chrome gives `41.77x18`. That is a *different* primitive — Chrome's fallback for a stack
+where nothing matches is its **standard font** (Times→Liberation Serif); ours is sans. Pre-existing and
+untouched by this tick (they measured `48x18` before it too), and changing the universal
+no-family-matched fallback is its own tick with its own corpus risk.
+
+TICK SHAPE: root-cause
+CLUSTER: `geometry/mis-sized: width (<a>)` — the ledger's #1, #2, #3 rows (16/14/13 sites of 21) — plus
+the `line-height` term under every `<div>` height row. Post-t744 mechanism keys, so this is a
+*primitive* claim. ⚠ It is NOT claimed that this closes those rows: the fixture proves the font
+resolution, and the next sweep prices how much of the band it was.
+Gates: `system_ui_is_not_the_sans_generic_and_the_macos_aliases_do_not_short_circuit`
+(`engine/text/src/lib.rs`) — asserts `system-ui` resolves to the platform UI family, that it differs
+from `sans-serif` in *measured `line-height: normal`* and not merely in identity, that Tailwind and
+Bootstrap 5 reach the UI font, and that Bootstrap 4 walks PAST the macOS aliases to Roboto. Written
+against the context's own resolved UI family rather than a hardcoded "Noto Sans", and self-skipping
+where a box installs only one of the two faces, so it states the invariant anywhere.
+**RED-proven by running BOTH mutations, restored between:** **M1** restore the five-name arm → `system-ui`
+reads `SansSerif` where `Named(0)` is required. **M2** restore only `-apple-system|blinkmacsystemfont`
+→ the Bootstrap-4 assertion fails (`SansSerif` vs `Named(1)`), which is the half M1 cannot reach
+because the test aborts at its first assertion. Regression: manuk-text 8, manuk-layout 95, manuk-css 43.
+PERF: one extra candidate scan at `FontContext::new` (six name probes, once per process). Resolution
+itself is unchanged — one match arm.
+WIKI: `docs/wiki/text-layout.md` — "`system-ui` is a different font from `sans-serif`, and an alias at
+the front of a stack decides the whole stack".
+PATTERN: ⚠⚠⚠ **AN ALIAS THAT RETURNS A GENERIC ENDS THE SEARCH, SO PUTTING THE WRONG NAME IN A MATCH
+ARM DOES NOT MIS-RESOLVE ONE FAMILY — IT DISCARDS THE REST OF THE LIST.** A `font-family` stack is a
+*fallback chain*, and every one of these five names is written FIRST in one. That is why a single
+too-generous match arm was wrong on 100% of the real stacks tested while each individual name looked
+harmlessly approximate. The general form, and it is the reusable half: **when a lookup walks an
+author-ordered list, an over-eager early match is not a small error — it is a decision made on the
+author's behalf about every entry that follows.** Grep for the class: match arms that return a default
+from inside a loop over author-supplied alternatives.

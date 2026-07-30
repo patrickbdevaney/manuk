@@ -1328,3 +1328,80 @@ standard Jekyll/Hugo/webpack output. An inline `<style>` correctly keeps the doc
 control built from the fixture rather than a hard-coded metric. RED-proven twice: **M1** restore the
 family-grained key (bold measures 211.25, the regular face); **M2** restore the document-relative
 base (everything 404s, all three spans equal, the vacuity guard fires first).
+
+## `system-ui` is a different font from `sans-serif`, and an alias at the FRONT of a stack decides the whole stack (tick 749)
+
+`resolve_family` walks the author's `font-family` list and returns on the first entry it can satisfy.
+Five names shared one match arm:
+
+```rust
+"sans-serif" | "system-ui" | "ui-sans-serif" | "-apple-system" | "blinkmacsystemfont"
+    => return FontFamily::SansSerif,
+```
+
+Two independent defects sit in that line.
+
+### 1. The two generics need two different faces, and this file already said so
+
+`resolve_generic_families` points `sans-serif` at **Arial → Liberation Sans**, and its comment explains
+why that is not fontconfig's answer: *"Chrome never asks fontconfig for the bare generic. It asks for
+its own default family, Arial, and fontconfig substitutes the metric-compatible Liberation Sans… Noto's
+line box is 1.362em against Liberation's 1.150em, an 18% error on the height of every line on every
+page."*
+
+`system-ui` is the other thing — the **platform UI font**. `fc-match system-ui` answers **Noto Sans**
+here, and Chromium's `system-ui` measures exactly Noto Sans. So the alias was inflicting precisely the
+error the sans list was written to avoid, and `LineMetrics::height`'s verification table had both
+numbers already:
+
+```text
+                  ascent  descent    gap     sum    → us   Chrome
+Liberation Sans   14.484    3.391  0.523  18.398      18     18
+Noto Sans         17.104    4.688  0      21.792      22     22
+```
+
+**Every line of a `system-ui` page was 4px short.** A line height is a `dy` term: the error is not
+per-page, it is per-line, and it accumulates down the document.
+
+Because `fontdb` has no `set_system_ui_family`, the resolved name lives on the `FontContext` and the UI
+font is reached as `FontFamily::Named` — no new enum variant, so `FontKey`, the paint path and the three
+caches are untouched.
+
+⚠ **Intern the ORIGINAL case.** `face_id` re-queries fontdb with the interned string and
+`fontdb::Family::Name` matching is case-SENSITIVE (tick 557). Lowercasing the UI family name here
+resolves `system-ui` to *nothing* — the same miss the case fix removed, one call later.
+
+### 2. An early match discards the rest of the author's list
+
+This is the larger half. Each of those five names is written **first** in a real stack, so answering
+"sans generic" there ends the search — the family Chrome actually picks is never reached. Measured
+against live Chromium, `16px "source"`:
+
+| stack | Chrome | was |
+|---|---|---|
+| `system-ui` | `50.23x22` (Noto Sans) | `48x18` |
+| Bootstrap 5 `system-ui,-apple-system,…` | `50.23x22` | `48x18` |
+| GitHub `-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",…` | `50.23x22` (**4th** entry) | `48x18` |
+| Tailwind `ui-sans-serif,system-ui,sans-serif` | `50.23x22` (2nd entry) | `48x18` |
+| Bootstrap 4 `-apple-system,…,Roboto,"Helvetica Neue",…` | `48.34x19` (**Roboto**) | `48x18` |
+
+⚠ **`-apple-system` and `BlinkMacSystemFont` are Blink's macOS-only aliases for San Francisco.** They
+name nothing on Linux; Chrome treats them as unknown and moves on, which is exactly why Bootstrap 4
+lands on Roboto rather than on a sans generic. They therefore get **no arm at all** — they fall through
+the named-family path, fail to match, and continue. On macOS the right answer is the system UI font, so
+this wants a platform-conditional alias; the Linux answer is the one that is measured.
+
+Bootstrap 4 reaching Roboto is the only assertion that proves the short-circuit is gone; the `system-ui`
+assertions all pass with the short-circuit intact for the other four names.
+
+### The reusable rule
+
+**A `font-family` list is a fallback chain, and an over-eager match arm does not mis-resolve one family
+— it makes a decision on the author's behalf about every entry that follows.** Each of these five names
+looked harmlessly approximate on its own line, and the arm was wrong on 100% of the real stacks tested.
+The same shape exists anywhere a lookup walks an author-ordered list of alternatives and a default is
+returned from inside the loop.
+
+**Residue, named:** a stack where *nothing* matches still falls back to sans here, where Chrome uses its
+**standard font** (Times → Liberation Serif) — `"Segoe UI"` alone is `48x18` for us and `41.77x18` for
+Chrome. Pre-existing, a different primitive, and its own tick.

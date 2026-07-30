@@ -1229,6 +1229,10 @@
   - L1251 · A family declares four faces; the loop fetched one, and resolved its URL against the wrong document (tick 747)
   - L1257 · A — the idempotence key was the FAMILY, so only the first weight ever loaded
   - L1305 · B — a relative src resolved against the DOCUMENT, not the stylesheet
+  - L1332 · system-ui is a different font from sans-serif, and an alias at the FRONT of a stack decides the whole stack (tick 749)
+  - L1344 · 1. The two generics need two different faces, and this file already said so
+  - L1374 · 2. An early match discards the rest of the author's list
+  - L1397 · The reusable rule
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1256,4 +1260,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1167 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1171 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

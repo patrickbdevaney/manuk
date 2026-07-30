@@ -241,6 +241,18 @@ pub struct FontContext {
     /// Recorded on the ATTEMPT, not on success: a 404 that is retried every script round is the same
     /// per-round cost the key exists to prevent.
     attempted_webfont_srcs: RefCell<std::collections::HashSet<String>>,
+    /// **The platform UI font — the face `system-ui` names, which is NOT `sans-serif`'s face.**
+    ///
+    /// `None` only if none of the candidates is installed, in which case `system-ui` falls back to
+    /// the sans generic (the old behaviour) rather than to nothing.
+    ///
+    /// ⚠ These are two different fonts on purpose, and conflating them is a **line-height** bug, not
+    /// a glyph-shape nicety. `sans-serif` deliberately resolves to Arial→Liberation Sans because that
+    /// is the family *Chrome itself* asks for (see `resolve_generic_families`), whose line box is
+    /// 1.150em. `system-ui` goes to the platform UI font — `fc-match system-ui` answers **Noto Sans**
+    /// here, and Chromium returns exactly that — whose line box is 1.375em. Measured, 16px "source":
+    /// Chrome `50.23x22`, ours `48x18`. **Every line on the page was 4px short.**
+    system_ui_family: Option<String>,
     /// swash's reusable scaling context (glyph rasterization). `RefCell` because scaling
     /// takes `&mut`; single-threaded like the rest of the context.
     scale_ctx: RefCell<swash::scale::ScaleContext>,
@@ -359,6 +371,46 @@ fn resolve_generic_families(db: &mut fontdb::Database) {
     }
 }
 
+/// Resolve **`system-ui`** — the platform's own UI font, which is a *different family* from
+/// `sans-serif` and must not be aliased onto it.
+///
+/// `fontdb` has no `set_system_ui_family`, so the resolved name is stored on the `FontContext` and
+/// reached as a named family. The candidate order is fontconfig's answer for `system-ui` on a
+/// desktop Linux box — verified, not guessed: `fc-match system-ui` reports **Noto Sans** here and
+/// Chromium's `system-ui` measures exactly Noto Sans (16px "source" → `50.23x22`). `Cantarell` and
+/// `Ubuntu` come next because they are the GNOME and Ubuntu desktop UI fonts respectively, and a box
+/// carrying one of those is a box whose UI font it is.
+///
+/// ⚠ The sans list must NOT be reused here even though it ends in the same fonts: it deliberately
+/// starts at `Arial`/`Liberation Sans` because that is what *Chrome* asks for when a page says
+/// `sans-serif`. Starting `system-ui` there would reproduce the very bug this function exists to fix.
+/// `MANUK_FONT_SYSTEM_UI` overrides, like its three siblings.
+fn resolve_system_ui_family(db: &fontdb::Database) -> Option<String> {
+    let installed = |name: &str| {
+        db.faces().any(|f| {
+            f.families
+                .iter()
+                .any(|(fam, _)| fam.eq_ignore_ascii_case(name))
+        })
+    };
+    if let Ok(v) = std::env::var("MANUK_FONT_SYSTEM_UI") {
+        if !v.is_empty() {
+            return Some(v);
+        }
+    }
+    [
+        "Noto Sans",
+        "Cantarell",
+        "Ubuntu",
+        "DejaVu Sans",
+        "Liberation Sans",
+        "Arial",
+    ]
+    .into_iter()
+    .find(|n| installed(n))
+    .map(str::to_string)
+}
+
 impl FontContext {
     /// Build a context populated with the system's installed fonts.
     pub fn new() -> Self {
@@ -395,7 +447,12 @@ impl FontContext {
         // that was working, and left the real bug in place. The wall was not an obstacle to route
         // around; it was the finding.
         resolve_generic_families(&mut db);
+        let system_ui_family = resolve_system_ui_family(&db);
+        if std::env::var("MANUK_FONT_DEBUG").is_ok() {
+            eprintln!("[fonts] system-ui={system_ui_family:?}");
+        }
         FontContext {
+            system_ui_family,
             db: RefCell::new(db),
             cache: RefCell::new(HashMap::new()),
             faces: RefCell::new(Vec::new()),
@@ -563,8 +620,45 @@ impl FontContext {
             let orig = raw.trim().trim_matches(['"', '\'']);
             let n = orig.to_ascii_lowercase();
             match n.as_str() {
-                "sans-serif" | "system-ui" | "ui-sans-serif" | "-apple-system"
-                | "blinkmacsystemfont" => return FontFamily::SansSerif,
+                "sans-serif" => return FontFamily::SansSerif,
+                // ── `system-ui` IS NOT `sans-serif`, AND THE MACOS ALIASES ARE NOT GENERICS AT ALL.
+                //
+                // These five names used to share this arm and return `SansSerif`, which broke every
+                // modern font stack in the same way: they all sit at the FRONT of one, so returning a
+                // generic here SHORT-CIRCUITED the whole list and the font Chrome actually picks was
+                // never reached. Measured against Chromium, 16px "source" — all four of these stacks
+                // came out `48x18` for us:
+                //
+                //   Bootstrap 5  `system-ui,-apple-system,…`            Chrome `50.23x22` (Noto Sans)
+                //   GitHub       `-apple-system,…,"Noto Sans",…`        Chrome `50.23x22` (4th entry)
+                //   Tailwind     `ui-sans-serif,system-ui,sans-serif`   Chrome `50.23x22` (2nd entry)
+                //   Bootstrap 4  `-apple-system,…,Roboto,…`            Chrome `48.34x19` (**Roboto**)
+                //
+                // `system-ui` resolves to the platform UI font (`fc-match system-ui` → Noto Sans, and
+                // Chromium agrees). `ui-sans-serif` is its CSS-Fonts-4 spelling and resolves the same
+                // way — Chrome does not recognise it and falls back to its default font, so a page
+                // using it ALONE diverges; every real stack pairs it with `system-ui`, where the two
+                // readings agree, and being spec-correct beats reproducing a gap.
+                //
+                // ⚠ `-apple-system` / `BlinkMacSystemFont` are Blink's **macOS-only** aliases for San
+                // Francisco. They are not families on Linux, and Chrome here treats them as unknown
+                // and moves on — which is why Bootstrap 4 lands on Roboto. So they get NO arm: they
+                // fall through to the named-family path, fail to match, and continue to the next
+                // entry, exactly as Chrome does. **On macOS the correct answer is the system UI font,
+                // so this wants a platform-conditional alias** — named here rather than pretended
+                // otherwise, because the Linux answer is the one that is measured.
+                "system-ui" | "ui-sans-serif" => {
+                    return match &self.system_ui_family {
+                        // ⚠ The ORIGINAL case, never lowered: `face_id` re-queries fontdb with this
+                        // exact string and `fontdb::Family::Name` matching is case-SENSITIVE (t557).
+                        // Lowering it here would resolve `system-ui` to nothing at all — the same
+                        // miss, one call later.
+                        Some(f) => FontFamily::Named(self.intern_family(f)),
+                        // Nothing installed to be the UI font: the old behaviour, which is at least
+                        // a real face, rather than no font at all.
+                        None => FontFamily::SansSerif,
+                    };
+                }
                 "serif" | "ui-serif" | "cursive" | "fantasy" => return FontFamily::Serif,
                 "monospace" | "ui-monospace" => return FontFamily::Monospace,
                 "" => continue,
@@ -1370,6 +1464,123 @@ mod tests {
             f2.resolve_family(&["MyWebFont".to_string(), "serif".to_string()]),
             FontFamily::Serif,
             "a declared-but-unloaded family falls through to the next entry, whatever that entry is"
+        );
+    }
+
+    /// **`system-ui` is a DIFFERENT FONT from `sans-serif`, and the macOS aliases are not generics —
+    /// so neither may short-circuit a font stack.**
+    ///
+    /// Five names shared one arm and all returned `SansSerif`. Every one of them sits at the FRONT of
+    /// a real-world stack, so returning a generic there ended the search and the family Chrome
+    /// actually picks was never reached. Measured against live Chromium, 16px `"source"` — all four of
+    /// these came out `48x18` here:
+    ///
+    /// | stack | Chrome | was |
+    /// |---|---|---|
+    /// | `system-ui` | `50.23x22` (Noto Sans) | `48x18` |
+    /// | Bootstrap 5 `system-ui,-apple-system,…` | `50.23x22` | `48x18` |
+    /// | GitHub `-apple-system,…,"Noto Sans",…` | `50.23x22` (4th entry) | `48x18` |
+    /// | Tailwind `ui-sans-serif,system-ui,sans-serif` | `50.23x22` (2nd entry) | `48x18` |
+    /// | Bootstrap 4 `-apple-system,…,Roboto,…` | `48.34x19` (**Roboto**) | `48x18` |
+    ///
+    /// The **line box** is the load-bearing half: 22 vs 18 is 4px on *every line of the page*, and a
+    /// line height is a `dy` term, so it charges every line below it too.
+    ///
+    /// Asserted against the context's OWN resolved UI family rather than a hardcoded "Noto Sans", so
+    /// the test states the invariant on any box; it self-skips where a box cannot tell the two apart.
+    ///
+    /// RED, run: restore the single arm
+    /// `"sans-serif" | "system-ui" | "ui-sans-serif" | "-apple-system" | "blinkmacsystemfont" =>
+    /// FontFamily::SansSerif` — the first assertion fails (`system-ui` == `sans-serif`), and so does
+    /// the Bootstrap-4 one (the stack short-circuits instead of reaching Roboto).
+    #[test]
+    fn system_ui_is_not_the_sans_generic_and_the_macos_aliases_do_not_short_circuit() {
+        let f = FontContext::new();
+        let fam = |names: &[&str]| {
+            f.resolve_family(&names.iter().map(|s| s.to_string()).collect::<Vec<_>>())
+        };
+        let Some(ui) = f.system_ui_family.clone() else {
+            eprintln!("no UI-font candidate installed — nothing to distinguish; skipping");
+            return;
+        };
+        let sysui = fam(&["system-ui"]);
+        let sans = fam(&["sans-serif"]);
+
+        // 1. `system-ui` resolves to the platform UI family by NAME, not to the sans generic.
+        assert_eq!(
+            sysui,
+            fam(&[&ui]),
+            "`system-ui` must resolve to the platform UI family ({ui})"
+        );
+        // Only meaningful where the UI font and the sans generic are actually different faces —
+        // which is the whole point, but a minimal container may install only one of them.
+        let key = |family| FontKey {
+            family,
+            bold: false,
+            italic: false,
+        };
+        if f.primary_face(key(sysui)) != f.primary_face(key(sans)) {
+            assert_ne!(
+                sysui, sans,
+                "`system-ui` and `sans-serif` are different families and must not be aliased: \
+                 aliasing them is a line-box error on every line of the page"
+            );
+            // The measured consequence, not just the identity: a different face means a different
+            // `line-height: normal` and a different advance. Chrome: 22 vs 18, 50.23 vs 48.03.
+            let lh = |fam| f.line_metrics(key(fam), 16.0).height();
+            assert_ne!(
+                lh(sysui),
+                lh(sans),
+                "the two faces must produce different `line-height: normal` box heights \
+                 (Chrome measured 22 for system-ui vs 18 for sans-serif at 16px)"
+            );
+        }
+
+        // 2. Tailwind: `ui-sans-serif` is the same UI font, so the stack lands there either way.
+        assert_eq!(
+            fam(&["ui-sans-serif", "system-ui", "sans-serif"]),
+            sysui,
+            "the Tailwind stack must resolve to the UI font"
+        );
+        // 3. Bootstrap 5 / GitHub reach the UI font too — GitHub only by *skipping* three aliases.
+        assert_eq!(
+            fam(&[
+                "system-ui",
+                "-apple-system",
+                "Segoe UI",
+                "Roboto",
+                "sans-serif"
+            ]),
+            sysui,
+            "Bootstrap 5's stack starts at system-ui"
+        );
+
+        // 4. ⚠ THE ONE THAT PROVES THE SHORT-CIRCUIT IS GONE. `-apple-system` and
+        //    `BlinkMacSystemFont` are macOS-only aliases and are not families here, so Bootstrap 4's
+        //    stack must walk PAST them to the first installed entry — Chrome lands on Roboto.
+        let roboto_installed = fam(&["Roboto"]) != fam(&["NoSuchFontXYZ"]);
+        if roboto_installed {
+            assert_eq!(
+                fam(&[
+                    "-apple-system",
+                    "BlinkMacSystemFont",
+                    "Segoe UI",
+                    "Roboto",
+                    "Helvetica Neue",
+                    "Arial",
+                    "sans-serif"
+                ]),
+                fam(&["Roboto"]),
+                "the macOS aliases must NOT short-circuit the stack — Bootstrap 4 lands on Roboto \
+                 (Chrome measured 48.34x19, and we measured 48x18 while this bug stood)"
+            );
+        }
+        // …and they must not resolve to the UI font either, which would be the same bug wearing a
+        // new name: on THIS platform they name nothing.
+        assert_ne!(
+            fam(&["-apple-system", "Roboto"]),
+            sysui,
+            "`-apple-system` names no family on Linux; it must fall through, not become system-ui"
         );
     }
 }
