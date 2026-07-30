@@ -38016,3 +38016,36 @@ The honest result is: **lean, no action.** ⚠ Worth noting for the next audit t
 this window (`engine/text`, `engine/layout`, `engine/css`) each force a full release LTO relink outside
 this measurement — that cost (~500s) dominates a real tick and is invisible to this histogram, which only
 sees the warm wall. That is not wall bloat, but it is the number a tick actually waits on.
+
+## Tick 755 — the wall audit was recorded where its counter does not look (2026-07-30)
+
+Bookkeeping, and it is worth a line because it is the third instance of one shape. I performed the
+wall-time audit due at t754, wrote it into `JOURNAL.md`, and set `LAST_WALL_AUDIT` by hand in `STATUS.md`
+— and `status-update.sh` regenerated the field straight back to **733**, because it derives from
+`## Audit #N — tick M` headers in **`docs/loop/WALL-AUDIT.md`**. The audit had genuinely been done and was
+about to come due again on the very next tick, which is the worst of both: the work spent and the counter
+unmoved.
+
+Moved to `WALL-AUDIT.md` as **Audit #24**, where the counter reads. Substance unchanged: wall **65s**
+against a 300s ceiling, all four admissible questions empty, **nothing trimmed** — and it has got *faster*
+since #23 (75s → 65s) while gaining gates.
+
+⚠ The finding inside that audit which is worth more than the histogram: **it cannot see what a tick
+actually waits on.** Every engine tick this window forced a full release LTO relink *before* the wall ran
+— measured, this session: `total 937s` / `839s` for engine ticks against `78s` / `132s` for
+instrument-only ones. The 65s is honest and blameless, and the number a tick waits on is >10× it. Nothing
+to trim; recorded so a future reader does not conclude a tick is cheap. If tick latency ever needs to
+come down, the lever is the relink.
+
+TICK SHAPE: process
+CLUSTER: none.
+Gates: none — no engine or instrument behaviour changed. Verified the mechanical way: re-ran
+`status-update.sh` and confirmed `LAST_WALL_AUDIT` now reads **754** from the ledger rather than reverting.
+PERF: none.
+WIKI: none — no engine source changed.
+PATTERN: ⚠ **THE CADENCE READS A LEDGER, NOT THE JOURNAL AND NOT `STATUS.md`.** `STATUS.md` is generated,
+so anything hand-written into it is erased at the next tick — and the audit counters each derive from
+their OWN file (`SURFACE-AUDIT.md`, `CONSTITUTION-CHECK.md`, `WALL-AUDIT.md`). Writing an audit into the
+journal is writing it where nothing counts it. Same family as the two ledger gotchas already recorded for
+the surface audit; the general form is **when a process step has a counter, find what the counter reads
+BEFORE doing the work, not after.**

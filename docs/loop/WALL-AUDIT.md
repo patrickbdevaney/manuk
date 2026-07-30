@@ -693,3 +693,49 @@ alone and got 3s, 3s and 4s. **It should stop being re-derived.**
 
 **Trimmed: nothing. Found: the wall is lean and the metric is mis-named.** Harness-owned; recorded,
 not acted on (V1-SCOPE PART VII).
+
+## Audit #24 — tick 754 (the wall is 65s; the audit's cost is now invisible to the audit)
+
+```text
+   23s  T · crate tests        ████████ 35%       4s  P · parity
+   14s  G6 · clickability      █████    22%       4s  D · disk
+   13s  B · build              █████    20%       2s  F · perf floors
+    5s  G1 · fidelity          █         8%       1s  F4
+                                                  0s  every remaining gate
+                                              ≈ 65s of measured sections
+```
+
+**Nothing trimmed, and the four questions come back empty again** — the same verdict as #23, on a wall
+that has since got *faster* (75s → 65s) with three more gates in it.
+
+*Redundancy* — the shell gates already share one `manuk-shell` invocation (t118 collapsed four concurrent
+`cargo test -p manuk-shell` processes into one); `T` is the workspace suite, which is the assertion, not
+overhead. *Parallelism* — gate sections launch concurrently and `F` is *deliberately* serial, because a
+benchmark sharing the machine is not a benchmark; at 2s of 65s nothing has become accidentally serial.
+*Caching* — `G1`'s live fetches are snapshot-cached (`.verify-cache`), incrementals are in RAM, and `B` at
+13s is incremental. *Scope* — nothing builds more than it asserts on beyond `B`, which every later section
+consumes.
+
+At 65s the wall is **4.6× under its 300s Tier-0 ceiling**. Every candidate optimisation would buy a few
+seconds in exchange for touching coverage, which the protocol forbids — and `scripts/` is observer
+territory in any case.
+
+### ⚠ THE FINDING WORTH CARRYING: THIS HISTOGRAM CANNOT SEE WHAT A TICK ACTUALLY WAITS ON
+
+Every engine tick in the 745–754 window (`engine/css`, `engine/layout`, `engine/text`) forced a **full
+release LTO relink**, and the wall runs *after* it: measured on this session's ticks, `total 937s` and
+`total 839s` for engine ticks against `total 78s` and `total 132s` for instrument-only ones. The
+histogram above reports the 65s and is blameless — but the number a tick waits on is dominated by a
+rebuild the audit does not measure, and the ratio is **>10×**.
+
+That is not wall bloat and there is nothing here to trim: it is the shape of the cost, recorded so a
+future audit reading "65s, lean" does not conclude that a tick is cheap. If the loop ever wants tick
+latency down, the lever is the **relink**, not this list.
+
+### PROCESS NOTE (the reason this entry exists at all)
+
+I first recorded this audit in `JOURNAL.md` and set `LAST_WALL_AUDIT` by hand in `STATUS.md` — and
+`status-update.sh` immediately regenerated it back to 733, because the field derives from
+`## Audit #N — tick M` headers **in this file**. The audit had been *done* and was about to come due
+again on the next tick. Same shape as the ledger gotchas already recorded for the surface audit: **the
+cadence reads a ledger, not the journal and not STATUS.** Record audits where their counter looks.
