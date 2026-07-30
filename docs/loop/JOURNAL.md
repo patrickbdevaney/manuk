@@ -38520,3 +38520,58 @@ point while the page is unusable. Two lessons, and the second is the one to keep
 normalises away the common-mode term cannot see a common-mode failure, so **the jarring invariants
 (`h_overflow`, `overlap`, `reading_order`) are not decoration next to shape — they are the only channel
 in the instrument that sees a whole-page error**, and the ranked burndown should read them FIRST.
+
+## Tick 763 — the clamp we already built could never fire: `display:-webkit-box` was rejected outright (2026-07-30)
+
+The same mechanism-oracle run that produced t762 had a second row I did not spend: on `momon-ga.com`,
+**48 hits of `display: -webkit-box → inline (<span>)`** — Chrome's computed display against ours.
+
+`display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:N; overflow:hidden` is THE card /
+excerpt / product-title truncation idiom. We **implement the clamp** (`apply_line_clamp`, t~?; recovered
+through the Stylo merge because stylo 0.19 gates `-webkit-line-clamp` to `engine="gecko"`). We had never
+implemented the display keyword that switches it on — and it is gated `#[cfg(feature = "gecko")]` in the
+very same file (`stylo-0.19.0/values/specified/box.rs:474`), so the servo build **rejects the whole
+declaration** and the element keeps its default `inline`. The clamp only ever runs on a block.
+
+**TWO HALVES OF ONE BEHAVIOUR, and we had shipped exactly one of them** — the fourth sighting of that
+shape in this project. The recovery line for `line_clamp` sits four lines above where the display
+recovery now goes; it has been a dead letter on every site it was written for.
+
+Measured vs live Chromium (200px card, `font:16px/20px sans-serif`, the SPAN's box):
+
+```text
+                                      Chrome                       was            now
+  -webkit-box + line-clamp:2   200×40  (computes flow-root)      195×57  ✗      200×40  ✓
+  -webkit-box alone            200×60  (computes -webkit-box)    182×57  ✗      200×60  ✓
+  -webkit-inline-box           108×20  (shrink-to-fit)           108×17  ✗      108×20  ✓
+```
+
+All three Chrome-exact. `momon-ga.com` shape **0.509 → 0.565** (+5.6 pts, outside the ±3.7 spread;
+`shape_n` 572 unchanged, coverage 1.000 both runs). Control: `marktplaats.nl` 0.7086 → 0.7086, identical.
+
+### THE MARKER, NOT THE DISPLAY
+
+The recovery copies a dedicated `legacy_webkit_box: Option<Display>` marker, **not** `m.display`. Copying
+the MinimalCascade's display wholesale would hand the shipping path the weaker cascade's opinion on every
+element in the document — the two-cascades trap, verbatim. The marker is set only by the two legacy
+keywords and **cleared by any other recognised `display` value**, so `display:-webkit-box;display:flex`
+computes `flex` (asserted). An unrecognised value is an invalid declaration and leaves both alone.
+
+TICK SHAPE: root-cause
+CLUSTER: `display: -webkit-box → inline (<span>)` — 48 hits on momon-ga in the t762 oracle run.
+Gates: `webkit_box_display_recovers_through_the_stylo_cascade` (`engine/css/src/stylo_engine.rs`) — the
+two keywords, the later-declaration-wins case, and an untouched span. **RED-proven by running the
+mutation**: neutering the recovery reads `Inline` where the assertion wants `Block`. manuk-css 45/45.
+PERF: one `Option` test per element in a merge loop that already copies ~25 fields.
+WIKI: `docs/wiki/css-cascade.md` — "the servo build rejects `-webkit-box`, and the clamp it gates".
+RESIDUE, named in `CONSTELLATION.tsv`: the legacy flex-container half (`-webkit-box-orient:horizontal`
+laying element children in a ROW) is deliberately not implemented — the dominant idiom is text-only or
+`orient:vertical`, and the pre-fix behaviour for the row case was `inline`, which stacked them anyway.
+PATTERN: ⚠⚠⚠ **A CAPABILITY GATED BEHIND A KEYWORD THE PARSER REJECTS IS NOT A CAPABILITY.** The clamp
+had a recovery line, a test, and a passing gate; what it did not have was any way to be reached on a real
+page. The generalisation is sharper than "one rule, N implementations": when a feature is switched on by
+*another property's value*, the feature's gate must assert the SWITCH, not the mechanism — our
+`line_clamp_caps_lines_and_appends_ellipsis` test sets the clamp on a `<div>` (already block) and was
+green for as long as the idiom was broken. **Grep the vendored parser for `cfg(feature = "gecko")` next
+to every property we recover: a recovered property whose ACTIVATING value is on the other side of that
+same cfg is dead in exactly the same way.**

@@ -3194,3 +3194,68 @@ commit rather than hidden or destroyed.
    produces it twice.
 
 **Next check due: tick 762.**
+
+## Check #61 — tick 763
+
+**Horizon:** H0 — Pareto Web Parity, PART VII component **1 (daily-driver rendering parity)**.
+**Gate:** `DAILY-DRIVER-CERTIFICATION.md`, milestone **M1 RENDER** — shape ≥ 0.75 on ≥ 95% of the
+in-scope **representative CrUX** corpus. Ledger: t752 **3.8%** → t758 **5.4%** (7/130), target 124,
+**need +117**. Slope **+1.6 pts/sweep on the CrUX population**, six engine ticks apart.
+
+**Gate or scoreboard?** Gate. Ticks 755–763 were: the wall-audit counter (755), a *correction* retracting
+t749's reading of its own samples (756), CSS nesting's `&` resolving to `<html>` (757), the CrUX sweep
+(758), `&nbsp;` collapsed as white space (759), a measure-and-pin of three defects under one fixture
+(760), the phantom line box under every empty wrapper (761), column flex-wrap (762), and
+`display:-webkit-box` rejected outright (763).
+
+**Seven of nine are engine, and all seven are usage-weighted breadth:** CSS nesting is *41% of the corpus
+in inline `<style>` alone*; `&nbsp;`, the empty wrapper, the sticky-footer page shell and the line-clamp
+card excerpt are each idioms that appear on a large fraction of ordinary pages rather than deep in a spec
+tail. That is I4 as written. The measured movement: t757 alone carried the sweep +1.6 pts; t763 moved
+`momon-ga` shape 0.509 → 0.565 on the same instrument with a byte-identical control site.
+
+**⚠ THE CORRECTION THIS CHECK OWES — the headline metric is BLIND to the worst class of failure.**
+t762's defect put marktplaats.nl's header, nav, entire page body and footer in **four side-by-side
+1200px columns** (`#page-wrapper` at x=2201). Fixing it moved **shape by one point**. Shape is
+*parent-relative* by construction — every descendant is displaced *with* its container, so the
+common-mode term cancels and a catastrophically wrong page scores like a good one. PART VI is corrected
+accordingly:
+
+> **The jarring invariants (`h_overflow`, `overlap`, `reading_order`) are not decoration beside shape —
+> they are the only channel in the instrument that can see a whole-page error.** The ranked burndown
+> reads them FIRST; `shape` ranks the residue after they are clean.
+
+This is the same family as check #60's "look at the cluster's shallowest member": a summary statistic
+computed in the wrong frame is confident and wrong. It is also the fifth entry in the I5 instrument list.
+
+**On I2 (never patch dependencies).** Two of this window's fixes were around a vendored parser's build
+flags, and neither forked it. stylo 0.19 gates `display:-webkit-box` and `-webkit-line-clamp` to
+`#[cfg(feature = "gecko")]`; the answer was option 3 of `STATUS.md`'s borrowed-engine ladder — a
+supplement in **our** cascade, recovered through the existing merge, recording a marker rather than
+copying the weaker cascade's `display`. The fork surface is still empty.
+
+**On I3 (semantic model in lockstep).** Held: every one of these is a geometry/computed-style fix, and
+both channels the agent reads — `node_rects` and computed `display` — are the things being corrected.
+t761 explicitly *refused* to drop reporter fragments because that would take elements out of
+`node_rects`, i.e. it paid a small cost to keep the semantic model whole.
+
+**On PART VII / V1-SCOPE:** honoured. No `scripts/` file authored this window.
+
+**No invariant is being bent.**
+
+### THE STEER
+
+1. **RANK ON THE JARRING INVARIANTS, NOT ON SHAPE.** The next render ticks come from the sweep's
+   `h_overflow` / `overlap` / `reading_order` columns. Named and open right now: `aftenbladet.no` 521,
+   `mobile.ir` 259 (and `reading_order` **874**), `alphanews.live` 235, `razaoautomovel` overlap 71,
+   `ta3lemkonline` reading_order 817. Each is a whole-page error that shape will barely register.
+2. **THE MECHANISM ORACLE IS NOW THE ENTRY POINT, AND IT PAID TWICE IN ONE RUN.** One
+   `oracle --urls a,b,c,d` over four fully-covered near-bar sites produced *both* t762 and t763 — the
+   second row of the same output was the second tick. Run it on a batch, spend every row that names a
+   mechanism, and do not re-run it per tick.
+3. **A RECOVERED PROPERTY WHOSE ACTIVATING VALUE IS BEHIND THE SAME `cfg` IS DEAD.** t763's clamp had a
+   recovery line, a test and a green gate, and could not fire on any real page. Audit the ~25-property
+   recovery merge in `stylo_engine.rs` against the vendored parser's `cfg(feature = "gecko")` arms — this
+   is a bounded, one-tick grep with a real chance of a second dead capability.
+
+**Next check due: tick 771.**

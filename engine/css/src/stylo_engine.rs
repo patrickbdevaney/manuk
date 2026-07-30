@@ -781,6 +781,20 @@ pub fn cascade_via_stylo_sized(
                 // 0.19, so the servo build never parses it — without this the shipping path shows every
                 // line of a clamped card/excerpt instead of N + `…`.
                 cs.line_clamp = m.line_clamp;
+                // ⚠ **And the DISPLAY that switches that clamp on is dropped by the same build**, which
+                // is what made the line above a dead letter on the sites it was written for.
+                // `display:-webkit-box` / `-webkit-inline-box` are `#[cfg(feature = "gecko")]` in stylo
+                // 0.19's display parser, so the servo build rejects the whole declaration and a clamped
+                // `<span>` stays `inline` — the clamp only ever runs on a block, so every card excerpt
+                // showed all of its lines. Measured vs live Chromium on a 200px card, `line-height:20px`,
+                // `-webkit-line-clamp:2`: Chrome `200×40`, ours `195×57`.
+                //
+                // The MARKER, not `m.display`, is what is read here: display is a property Stylo
+                // resolves correctly, and copying the MinimalCascade's answer wholesale would hand the
+                // shipping path the weaker cascade's opinion on every element (the two-cascades trap).
+                if let Some(d) = m.legacy_webkit_box {
+                    cs.display = d;
+                }
                 // `overflow-wrap`/`word-wrap` and `word-break` recovered from MinimalCascade so the
                 // shipping path also breaks long unbreakable tokens (a URL in a narrow column) instead
                 // of letting them overflow. Stylo's servo build models these as keyword enums we don't
@@ -2733,6 +2747,66 @@ mod tests {
             map[&id("b")].line_clamp,
             None,
             "unset stays None (not inherited)"
+        );
+    }
+
+    /// **`display: -webkit-box` reaches the SHIPPING cascade** — and it is the half that switches on
+    /// the `-webkit-line-clamp` recovery directly above it. Both keywords are
+    /// `#[cfg(feature = "gecko")]` in stylo 0.19's display parser, so the servo build rejects the
+    /// declaration outright and a clamped `<span>` stays `inline`; the clamp only ever fires on a
+    /// block, so the card-excerpt idiom showed every one of its lines.
+    ///
+    /// Measured vs live Chromium (200px card, `font:16px/20px sans-serif`, the SPAN's box):
+    ///
+    /// | markup | Chrome | was |
+    /// |---|---|---|
+    /// | `-webkit-box` + `-webkit-line-clamp:2` | `200×40` (computes `flow-root`) | `195×57` ❌ |
+    /// | `-webkit-box` alone | `200×60` (computes `-webkit-box`) | `182×57` ❌ |
+    /// | `-webkit-inline-box` | `108×20`, shrink-to-fit | `108×17` ❌ |
+    ///
+    /// All three are Chrome-exact after the fix. On `momon-ga.com` (48 hits of
+    /// `display: -webkit-box → inline` in the mechanism oracle) shape went 0.509 → 0.565.
+    ///
+    /// RED, run: delete the `m.legacy_webkit_box` recovery in the merge loop — `a` reads `Inline`.
+    ///
+    /// ⚠ The last assertion is the load-bearing one: the recovery must copy the MARKER, not the
+    /// MinimalCascade's `display`, or the shipping path silently adopts the weaker cascade's opinion
+    /// on every element that has one (the two-cascades trap). A later `display` declaration that wins
+    /// the cascade clears the marker and must survive.
+    #[test]
+    fn webkit_box_display_recovers_through_the_stylo_cascade() {
+        let dom = manuk_html::parse(
+            r#"<span id="a" style="display:-webkit-box">x</span>
+               <span id="b" style="display:-webkit-inline-box">y</span>
+               <span id="c" style="display:-webkit-box;display:flex">z</span>
+               <span id="d">w</span>"#,
+        );
+        let sheet = Stylesheet::parse("");
+        let map = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 800.0, 600.0);
+        let id = |v: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(v))
+                .unwrap()
+        };
+        assert_eq!(
+            map[&id("a")].display,
+            crate::Display::Block,
+            "-webkit-box is BLOCK-level — the clamp only runs on a block"
+        );
+        assert_eq!(
+            map[&id("b")].display,
+            crate::Display::InlineBlock,
+            "-webkit-inline-box is inline-level and shrink-to-fit"
+        );
+        assert_eq!(
+            map[&id("c")].display,
+            crate::Display::Flex,
+            "a later display declaration WINS — the recovery must not resurrect the legacy value"
+        );
+        assert_eq!(
+            map[&id("d")].display,
+            crate::Display::Inline,
+            "an untouched span is unaffected (the recovery is not a blanket display copy)"
         );
     }
 

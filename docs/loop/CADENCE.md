@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **511** | ticks 1–761 |
-| median tick cycle | **22m** | 510 intervals |
-| median, last 10 | **39m** | 10 intervals |
+| ticks landed | **512** | ticks 1–762 |
+| median tick cycle | **22m** | 511 intervals |
+| median, last 10 | **35m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 462.0h elapsed |
-| median verify wall | **63s** | 450 ticks |
+| **ticks per hour** | **1.10** | 462.5h elapsed |
+| median verify wall | **63s** | 451 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **353**
-* **✅ rows in the capability ledger**: 144 → **388**
+* **✅ rows in the capability ledger**: 144 → **389**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**245 of 511 ticks** (48%) moved a
+**245 of 512 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -608,5 +608,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **757** | 2026-07-30 09:11 | 2.3h | root-cause | 63s | +294/−32 | 353 | 81 | 56.0% · | every `&` in every stylesheet matched `<html>`: CSS nesting was indexed but never resolved |
 | **759** | 2026-07-30 09:51 | 39m | root-cause | 63s | +92/−33 | 353 | 81 | 56.0% · | `&nbsp;` was collapsed like a space, so a spacer element had no line box: `char::is_whites |
 | **761** | 2026-07-30 11:00 | 69m | root-cause | 63s | +275/−33 | 353 | 81 | 56.0% · | the phantom line box under every empty wrapper, and a spec sentence that is wider than Chr |
+| **762** | 2026-07-30 11:31 | 31m | root-cause | 63s | +343/−54 | 353 | 81 | 56.0% · | `flex-wrap: wrap` on an auto-height COLUMN container put the whole page in four side-by-si |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

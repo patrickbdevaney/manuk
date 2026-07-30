@@ -973,6 +973,17 @@ pub struct ComputedStyle {
     /// (`display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:N; overflow:hidden`).
     /// `None` = unclamped (initial); a non-inherited box property, so it never leaks to descendants.
     pub line_clamp: Option<u16>,
+    /// **The blockified display an author asked for with `display: -webkit-box`** — `Some(Block)`
+    /// for `-webkit-box`, `Some(InlineBlock)` for `-webkit-inline-box`, `None` for every other
+    /// (including a later `display` declaration that wins the cascade and clears it).
+    ///
+    /// This field exists ONLY so the shipping Stylo path can recover the value: both keywords are
+    /// `#[cfg(feature = "gecko")]` in stylo 0.19's display parser, so the servo build rejects the
+    /// whole declaration and the element keeps its default `inline` — which is what made the
+    /// `line_clamp` recovery above a dead letter, since the clamp only ever fires on a block.
+    /// Recording the *decision* separately (rather than reading `display` back out) is what keeps
+    /// the merge from overriding a display Stylo resolved correctly.
+    pub legacy_webkit_box: Option<Display>,
     /// `scroll-snap-type` on a scroll container; `scroll-snap-align` on its children.
     pub scroll_snap_type: ScrollSnapAxis,
     pub scroll_snap_align: ScrollSnapAlign,
@@ -1199,6 +1210,7 @@ impl ComputedStyle {
             white_space: WhiteSpace::Normal,
             text_overflow: TextOverflow::Clip,
             line_clamp: None,
+            legacy_webkit_box: None,
             scroll_snap_type: ScrollSnapAxis::None,
             scroll_snap_align: ScrollSnapAlign::None,
             text_transform: TextTransform::None,
@@ -3843,31 +3855,53 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
     let v = d.value.trim();
     match d.name.as_str() {
         "display" => {
-            s.display = match v {
-                "block" => Display::Block,
-                "inline" => Display::Inline,
-                "inline-block" => Display::InlineBlock,
-                "flex" => Display::Flex,
-                "grid" => Display::Grid,
-                "inline-flex" => Display::InlineFlex,
-                "inline-grid" => Display::InlineGrid,
-                "table" | "inline-table" => Display::Table,
+            // ⚠ **`-webkit-box` is not a vendor-prefixed curiosity, it is how the web clamps text.**
+            // `display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:N;
+            // overflow:hidden` is THE card/excerpt truncation idiom, and the display keyword is the
+            // half that makes the box a block — without it the clamp we already implement never runs
+            // (`line_clamp` is applied in the block-inline path). Chrome computes the clamped case to
+            // `flow-root` and the bare case to `-webkit-box`; both are BLOCK-LEVEL, which is the part
+            // that decides layout, so both map to `Block` here.
+            //
+            // The legacy flex-container half — `-webkit-box-orient: horizontal` laying element
+            // children out in a ROW — is deliberately NOT implemented (recorded in
+            // `CONSTELLATION.tsv`): the dominant idiom is text-only or `orient: vertical`, and the
+            // pre-fix behaviour for the row case was `inline`, which stacked them anyway.
+            // The second element is the `-webkit-box` MARKER: set by the two legacy keywords, and
+            // CLEARED by any other recognised value, so a later `display:flex` that wins the cascade
+            // also wins the recovery. An UNRECOGNISED value is an invalid declaration and leaves both
+            // the display and the marker exactly as they were.
+            let parsed = match v {
+                "-webkit-box" => Some((Display::Block, Some(Display::Block))),
+                "-webkit-inline-box" => Some((Display::InlineBlock, Some(Display::InlineBlock))),
+                "block" => Some((Display::Block, None)),
+                "inline" => Some((Display::Inline, None)),
+                "inline-block" => Some((Display::InlineBlock, None)),
+                "flex" => Some((Display::Flex, None)),
+                "grid" => Some((Display::Grid, None)),
+                "inline-flex" => Some((Display::InlineFlex, None)),
+                "inline-grid" => Some((Display::InlineGrid, None)),
+                "table" | "inline-table" => Some((Display::Table, None)),
                 "table-row-group" | "table-header-group" | "table-footer-group" => {
-                    Display::TableRowGroup
+                    Some((Display::TableRowGroup, None))
                 }
-                "table-row" => Display::TableRow,
-                "table-cell" => Display::TableCell,
-                "table-caption" => Display::TableCaption,
-                "table-column" => Display::TableColumn,
-                "table-column-group" => Display::TableColumnGroup,
-                "flow-root" => Display::FlowRoot,
+                "table-row" => Some((Display::TableRow, None)),
+                "table-cell" => Some((Display::TableCell, None)),
+                "table-caption" => Some((Display::TableCaption, None)),
+                "table-column" => Some((Display::TableColumn, None)),
+                "table-column-group" => Some((Display::TableColumnGroup, None)),
+                "flow-root" => Some((Display::FlowRoot, None)),
                 // `list-item` is block-level; the marker is generated elsewhere. Both cascades must
                 // agree here — a keyword one of them knows and the other does not is the
                 // two-cascades trap, and it produces a divergence nobody can reproduce.
-                "list-item" => Display::Block,
-                "contents" => Display::Contents,
-                "none" => Display::None,
-                _ => s.display,
+                "list-item" => Some((Display::Block, None)),
+                "contents" => Some((Display::Contents, None)),
+                "none" => Some((Display::None, None)),
+                _ => None,
+            };
+            if let Some((d, legacy)) = parsed {
+                s.display = d;
+                s.legacy_webkit_box = legacy;
             }
         }
         "color" => {

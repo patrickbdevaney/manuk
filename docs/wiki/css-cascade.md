@@ -1716,3 +1716,57 @@ Verified Chrome-exact on all six forms above plus the no-leak case.
 the caller must supply.** `ParentSelector`, `:scope`, `:host`, relative selectors — each has a *defined
 default* when the context is absent, so none of them errors, none logs, and each is a silent wrong answer
 waiting to be plausible. A placeholder that resolves to something plausible is worse than one that throws.
+
+---
+
+## The servo build REJECTS `-webkit-box`, and the clamp it gates was already built (tick 763)
+
+`engine/css/src/stylo_engine.rs` ends its cascade with a **recovery merge**: ~25 properties whose values
+stylo 0.19's *servo* build never computes are copied from the MinimalCascade (`visibility`,
+`background-image`, `text-transform`, `-webkit-line-clamp`, `scrollbar-width`, …). Each one is there
+because dropping it was visible on real pages.
+
+`-webkit-line-clamp` had been in that list for many ticks. It never fired on a real site, because the
+keyword that *switches it on* is behind the same conditional one file over:
+
+```rust
+// stylo-0.19.0/values/specified/box.rs
+#[cfg(feature = "gecko")]
+"-webkit-box" => Full(Display::WebkitBox),
+#[cfg(feature = "gecko")]
+"-webkit-inline-box" => Full(Display::WebkitInlineBox),
+```
+
+A rejected value is a **rejected declaration**, so the element keeps its default `inline` — and
+`apply_line_clamp` runs in the block-inline path, on blocks. The card excerpt showed every one of its
+lines. Measured vs live Chromium (200px card, `font:16px/20px sans-serif`, the SPAN's box):
+
+| markup | Chrome | was | now |
+|---|---|---|---|
+| `-webkit-box` + `-webkit-line-clamp:2` | `200×40` (computes `flow-root`) | `195×57` | `200×40` |
+| `-webkit-box` alone | `200×60` (computes `-webkit-box`) | `182×57` | `200×60` |
+| `-webkit-inline-box` | `108×20` (shrink-to-fit) | `108×17` | `108×20` |
+
+**The fix is a MARKER, not a display copy.** `ComputedStyle::legacy_webkit_box: Option<Display>` records
+*"the author asked for `-webkit-box` here"*; the merge applies only that:
+
+```rust
+if let Some(d) = m.legacy_webkit_box { cs.display = d; }
+```
+
+Copying `m.display` instead would give the shipping path the MinimalCascade's opinion on the display of
+**every element in the document** — the two-cascades trap (`docs/wiki/…`, memory
+`two-cascades-stale-source-of-truth`). The marker is set only by the two legacy keywords and **cleared by
+any other recognised `display` value**, so `display:-webkit-box;display:flex` computes `flex`; an
+unrecognised value is an invalid declaration and disturbs neither.
+
+**Gate.** `webkit_box_display_recovers_through_the_stylo_cascade`, RED-proven by neutering the recovery
+(reads `Inline` where the assertion wants `Block`). Real-site: `momon-ga.com` shape 0.509 → **0.565**,
+`marktplaats.nl` control byte-identical.
+
+**The generalisation, and it is a standing audit item.** A capability gated behind a keyword the parser
+rejects is not a capability. Our own clamp test set `-webkit-line-clamp` on a `<div>` — already a block —
+so it was green for exactly as long as the real idiom was broken. **When a feature is switched on by
+another property's value, its gate must assert the SWITCH, not the mechanism**, and every property in the
+recovery list deserves the question: *is the value that activates it on the other side of the same
+`cfg(feature = "gecko")`?*
