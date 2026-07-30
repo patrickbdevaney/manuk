@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **504** | ticks 1–751 |
 | median tick cycle | **22m** | 503 intervals |
-| median, last 10 | **31m** | 10 intervals |
+| median, last 10 | **53m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 455.2h elapsed |
+| **ticks per hour** | **1.10** | 457.1h elapsed |
 | median verify wall | **63s** | 443 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -600,6 +600,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **745** | 2026-07-29 23:32 | 7m | root-cause | 63s | +230/−45 | 352 | 81 | 56.0% · | `td { padding: 0 }` computed to 0 and was overwritten with 1px AFTER the cascade: every re |
 | **747** | 2026-07-30 00:10 | 38m | root-cause | 63s | +521/−47 | 353 | 81 | 56.0% · | `is_block_level` said "block" and the two margin-collapse predicates said "inline": every  |
 | **749** | 2026-07-30 03:52 | 3.7h | root-cause | 63s | +387/−32 | 353 | 81 | 56.0% · | `system-ui` was aliased to `sans-serif`, and four aliases at the FRONT of every modern fon |
-| **751** | 2026-07-30 04:14 | 22m | instrument-fidelity | 63s | +323/−33 | 353 | 81 | 56.0% · | the oracle refused to score a page whose CSS never arrived; the instrument that computes t |
+| **751** | 2026-07-30 06:07 | 2.2h | instrument-fidelity | 63s | +304/−32 | 353 | 81 | 56.0% · | the oracle refused to score a page whose CSS never arrived; the instrument that computes t |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -37777,3 +37777,72 @@ a guard with a hole shaped like every other caller.
 `docs/bench/corpus-crux-trend.txt`, which appeared in the tree mid-tick. `tick.sh` stages with `git add -A`,
 and reverting them to keep this commit clean is the documented way to **clobber observer work** — so they
 ride along, attributed here, rather than being destroyed for tidiness. I did not author or modify them.
+
+## Tick 752 — the first REPRESENTATIVE-corpus baseline: 3.8%, and the curated 265 was flattering us by ~3 points (2026-07-30)
+
+The owner's CORPUS SWITCH (board + `phase0-milestone-sequence`, revised 2026-07-30) retargets M1 from the
+curated 265 to the **representative CrUX corpus**, on the argument that driving the curated set to 95%
+over-fits the easy head and meets the tail — quirks-mode, legacy, malformed markup — blind at the end.
+This is that baseline: all 200 sites of `docs/bench/corpus-crux-trend.txt` (125 HEAD / 75 TAIL, stride-2
+subsample of `corpus-v2.tsv`), same one-process-per-site runner, **200/200 attempted, 201 rows — sampled
+== rows.**
+
+```
+IN-SCOPE PASS: 5/130 = 3.8%   (shape>=0.75)    TARGET 95% = 124  ->  NEED +119
+EXCLUDED (bot-wall/unreachable, watched·capped): 70/200 = 35%
+scored 80/130 · shape_mean 41.6% · cov_mean 82.6% · corpus=crux
+🆕 NEW BASELINE — no same-corpus prior, so NO slope (the metric-swap guard refused to diff a different site set)
+```
+
+**The switch cost ~3 points, and that is the finding.** Same engine, same day, same instrument: **6.7% on
+the curated 265, 3.8% on the representative sample.** The curated corpus was flattering us by nearly a
+factor of two on the headline, exactly as the owner's challenge predicted. `cov_mean` drops too
+(88.5 → 82.6) — the tail is not merely mis-placed, it is less completely rendered.
+
+⚠ **EXCLUDED is 35% here against 22% on the 265** (41 bot-wall + 14 unreachable + 7 probe-blocked + 5 http
++ 3 empty). The representative tail is far more hostile to a no-stealth client. That does not cap the
+ceiling — those sites leave the denominator by cert §3 — but it is the number to watch: it means a third
+of the representative web is unreachable to us *by our own policy*, and if it climbs, real failures start
+hiding inside it.
+
+**t751 validated on a corpus it was not written against: 3 `css-starved` rows** — pages that would
+otherwise have been scored as layout failures on their first-ever measurement, on a fresh site set.
+
+**The 5 passing sites are a warning about the tail's character**: `tukrd.com` (n=37), `777juegos.com`
+(n=40, cov **0.471**), `admin.munchbakery.com` (n=43), `ru4.bongacams-ru.com` (n=39) are tiny pages, and
+only `desiviral.net` (n=1085) is a substantial document. A pass on a 37-node page is a weaker claim than a
+pass on a 1085-node one, and the metric does not distinguish them. Worth remembering before reading an
+early climb as progress.
+
+### ⚠ BAR 0, CHECKED FIRST BECAUSE IT OUTRANKS EVERYTHING — AND IT IS CLEAN
+
+The tally shows **8 `crashed`**, which under Part 24.3 outranks every visual divergence on this board. It
+is not real. Cross-referencing each against the runner's recorded exit code:
+
+```
+bbs.ruliweb.com · www.amazon.com.be · www.friulioggi.it · swiftspinus.com
+secure.paymentech.com · www.taphouse23.com · beb88run.xyz · 7info.ru      ALL rc=124, all 180s
+```
+
+**All eight are watchdog TIMEOUTS. Zero panics, zero SIGSEGV, zero OOM** (no rc 101/139/137). No process
+died of a fault, so Bar 0 holds.
+
+But the rows say `crashed`, and that is an instrument lie of the expensive kind: a future session reading
+`8 crashed` would correctly treat it as the top priority and spend ticks hunting a crash that does not
+exist. The taxonomy already HAS `Timeout(secs)` for this; the information exists (the runner logs `rc`
+precisely because *"an external SIGKILL and a SIGSEGV leave the same marker"* — t706) and simply never
+reaches the row, because the row is written by the recovery pass and the `rc` is known only to the runner.
+**Same shape as t751: one question, two records, and they never meet.** Next tick.
+
+TICK SHAPE: measurement
+CLUSTER: none created. Establishes the M1 signal on the corpus the milestone now names, and re-prices the
+distance: **+119 sites**, from a baseline 3 points below the one the previous plan was written against.
+Gates: none — no engine behaviour. The sweep is the falsifiable artefact.
+PERF: none.
+WIKI: none — no engine source changed.
+PATTERN: ⚠⚠ **A CURATED CORPUS IS A HYPOTHESIS ABOUT THE WEB, AND ITS ERROR IS ALWAYS OPTIMISTIC.** The
+265 was assembled from sites that were easy to load, and it reported a headline ~1.8× better than a
+representative sample of the same web measured the same hour. Nothing was wrong with the instrument or
+the engine — the *sample* was the claim. The reusable half: **switch to the representative population
+EARLY, while the slope is still short**, because the cost of the switch is a re-baseline (one sweep) and
+the cost of deferring it is discovering a second hill after optimising for the first.
