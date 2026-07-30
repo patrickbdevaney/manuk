@@ -119,6 +119,13 @@ width.
 
 ## 5. Two structural forks — DECIDED by the owner (2026-07-29)
 
+> **Durable enforcement:** these decisions are an ORDERED 3-milestone state machine, tracked mechanically by
+> `scripts/phase0-milestones.sh` (surfaced every observer heartbeat via ops-check, and anchored in the board's
+> PHASE-0 SEQUENCE block). It computes the current milestone from observable signals and AUTO-ADVANCES when
+> each artefact hits its 95% gate — so the sequence survives board drift, agent relaunches, and context resets.
+> M1 = this doc (v1 render). M2 = the function leg → `docs/loop/FUNCTION-CERT.tsv`. M3 = the v2 re-cert →
+> `docs/loop/SWEEP-v2-t<N>-rows.tsv`. Then the v1.0.0 trigger.
+
 Both settled; the sequencing below is now authoritative, not advisory:
 
 - **Corpus — DECIDED: burn down on the 265 now, re-certify on `corpus-v2.tsv` at the end.** Fast iteration

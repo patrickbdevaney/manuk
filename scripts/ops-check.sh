@@ -118,6 +118,14 @@ if [ -x scripts/fidelity-progress.sh ]; then
   fi
 fi
 
+# 8b. PHASE-0 MILESTONE STATE (owner-locked 2026-07-29: v1 render → v1 function → v2 re-cert, in order).
+#     Durably surfaces WHICH milestone we are in + distance/slope, so the ordered path to Phase-0 cannot be
+#     forgotten across relaunches/context resets. Informational — computed from the ledger, never a gate.
+if [ -x scripts/phase0-milestones.sh ]; then
+  ms=$(bash scripts/phase0-milestones.sh --oneline 2>/dev/null || true)
+  [ -n "$ms" ] && note "$ms"
+fi
+
 # Summary line (the observer reads the tail of $LOG each heartbeat).
 note "ops-check: ${heal} healed, ${alert} alert(s) [disk ${DP:-?}% · grind ${NG} · systemd ${st:-n/a} · mapdrift ${MD:-?}]"
 [ "$alert" -gt 0 ] && exit 0   # alerts are informational; ops-check NEVER fails anything.
