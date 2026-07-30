@@ -2159,3 +2159,65 @@ Chrome-measured, `g_svg_use_reference`:
 non-rendered-container skip, which predates this and is its own mechanism); an external-file
 reference (`icons.svg#check`) is a fetch this pass does not do and reads as dangling; the SVG
 `<text>` baseline still sits at the svg's top.
+
+## A blockified inline is the spec's ANONYMOUS BLOCK — and the margin-collapse predicates could not see it (tick 746)
+
+`is_block_level` has blockified a **block-in-inline** since tick ~384: an inline that contains an in-flow
+block cannot stay in an inline formatting context, so CSS2 §9.2.1.1 splits it and wraps the runs in
+anonymous block boxes, and we approximate that by making the inline itself block-level. Every other layout
+decision in the crate reads that helper.
+
+The two margin-collapse predicates did not. They tested the **raw** `display`:
+
+```rust
+fn top_margin_collapses(s: &ComputedStyle, cw: f32) -> bool {
+    s.display == Display::Block && …
+```
+
+so a blockified `<a>` answered *"inline"* and became **opaque to the collapse**. The child's vertical
+margins had nowhere to go and stayed inside it.
+
+**Why that is the wrong answer and not merely a conservative one.** The blockified box stands in for the
+spec's anonymous block boxes, and *an anonymous block box has no margin, border or padding of its own* —
+there is nothing on it for the child's margin to be trapped by. Passing the margin through is not a
+liberty; it is the only behaviour the substitution can have.
+
+Chrome-measured on the exact shape (`manuk-wpt oracle --urls file://… --tol 0`, `margin:3px 2px 6px`,
+`width:10px; height:10px`):
+
+```text
+                                              CHROME            BEFORE            AFTER
+  <div><a><div m/></a></div>                  [0 3 1200x10]     [0 0 1200x19]     match
+  <center><a><div m/></a></center>            [0 42 1200x10]    [0 39 1200x19]    match
+  <div><a>text<div m/></a></div>              [0 78 1200x33]    [0 78 1200x39]    match
+  <div><span><div m 7/9/></span></div>        [0 144 1200x10]   [0 137 1200x26]   match
+```
+
+**17 divergences over 17 probed nodes → 3**, and none of the 3 is a height (one is `<center>`'s
+`-webkit-center` centring of a block descendant, two are 1px text-baseline residue). The third row is the
+eligibility half: real inline text *before* the block is the first in-flow content, so the **top** margin
+correctly stays in — while the **bottom** one still escapes, because the block is the last in-flow child.
+Chrome does exactly that (33 = 20 + 3 + 10), and it is why the fix has to route both edges through the
+shared predicate rather than only the one that produced the symptom.
+
+**The fix is one helper, and its point is that there is now one implementation:**
+
+```rust
+fn collapses_as_block(dom, styles, node, s) -> bool {
+    s.display == Display::Block
+        || (s.display == Display::Inline && is_block_level(dom, styles, node))
+}
+```
+
+Both predicates call it. Grepped first: those two were the **only** raw `display == Display::Block` tests
+in the crate, so the class is closed rather than merely one instance fixed.
+
+**Gate.** `a_block_inside_an_inline_collapses_its_margins_out` asserts both halves, RED-proven twice —
+**M1** revert `collapses_as_block` to the raw display test (height 19, not 10); **M2** revert only
+`bottom_margin_collapses` (height 16, not 10), which is what makes the bottom edge a real assertion
+instead of a passenger on the top one.
+
+**Corpus mass.** `C990e geometry: <a>` is the **#2** cluster in `docs/loop/CLUSTERS.md` — 97 sites, 15
+classes, 4,964 hits (only `C01ca geometry: <div>` outranks it). `<a>` wrapping a block is the card link,
+the nav item, the vote arrow; a wrong height there is a `dy` term that charges every sibling below it,
+which is exactly what SHAPE measures.

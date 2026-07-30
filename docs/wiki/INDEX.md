@@ -114,6 +114,7 @@
   - L2044 · The outermost <svg> is sized by a RATIO, never by its viewBox numbers (tick 742)
   - L2073 · A replaced element has no children, so measuring them reports ZERO
   - L2098 · The icon-sprite <use href="#icon"> resolved to NOTHING — the reference model (tick 743)
+  - L2163 · A blockified inline is the spec's ANONYMOUS BLOCK — and the margin-collapse predicates could not see it (tick 746)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1252,4 +1253,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1163 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1164 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

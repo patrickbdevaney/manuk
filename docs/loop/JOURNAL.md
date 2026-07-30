@@ -37272,3 +37272,67 @@ derives `a`/`b` from a pattern's length has the same shape — grep `tests/wpt/s
 DOM-derived strings. Corollary, and it is the reusable half: **an instrument's failure must never be
 expressible in the vocabulary it uses to describe the subject.** `reason=crashed` was available to the
 instrument to describe itself, so nobody could tell the two apart from the file.
+## Tick 747 — `is_block_level` said "block" and the two margin-collapse predicates said "inline": every block wrapped in an `<a>` was 9px too tall (2026-07-29)
+
+CSS2 §9.2.1.1: an inline box containing a block-level child is **split**, and the block sits between
+the two halves inside an **anonymous block box**. The load-bearing property of an anonymous box is
+what it *has not* got — no margin, no border, no padding — so it is transparent to margin collapsing:
+the block child's vertical margins pass straight up through it (§8.3.1) and out of the grandparent.
+
+`is_block_level(dom, styles, node)` already implements that blockification, and every other layout
+decision in `engine/layout` asks it. The two collapse predicates did not:
+
+```rust
+fn top_margin_collapses(s: &ComputedStyle, cw: f32) -> bool {
+    s.display == Display::Block      // <- the RAW cascaded display
+        && s.overflow == Overflow::Visible && !establishes_bfc(s) && …
+```
+
+so for a split inline the answer was `false` — the box became **opaque** to the collapse and kept the
+child's margins inside itself. `<a><div style="margin:3px 0 6px">…</div></a>` came out
+`3 + 10 + 6 = 19px` tall where it should be `10`. Chrome-measured on that exact shape: `#outer` is
+`[0 3 1200×10]`; ours was `[0 0 1200×19]`.
+
+**One rule, two implementations — the fourth sighting of that shape in thirty ticks** (MEMORY: t720–724).
+The rule is "is this box block-level?"; the implementations were `is_block_level` (right) and
+`s.display == Display::Block` inline in two predicates (wrong). FIX: extract the question as
+`collapses_as_block(dom, styles, node, s)` — `Display::Block`, **or** `Display::Inline` that
+`is_block_level` blockifies — and route both predicates and all five call sites through it.
+
+### WHY 9px IS A `dy` TERM AND NOT A ROUNDING NOTE
+
+A wrapper that keeps its child's margins is too tall by the sum of them, and a block's height is a
+`dy` term: **every sibling below it and every block after its container moves down by that much**, so
+one wrapper charges all N boxes below it. And the population is not an edge case — a block inside an
+anchor is the *dominant* modern markup idiom: the card link, the nav item, the vote arrow, every
+"make the whole tile clickable" wrapper. It is the shape `<a>` was given block children for.
+
+Both halves are asserted, because the fix is only correct if **eligibility survives**: an inline with
+real text before the block (`<a>t<div>…</div></a>`) must still decline the top collapse — the text is
+the first in-flow content, so the child's top margin is not adjacent to the container's top edge — and
+that is also what Chrome does. A fix that made every split inline transparent unconditionally would
+pass the first three assertions and be wrong.
+
+TICK SHAPE: root-cause
+CLUSTER: the `geometry/mis-sized: height ~9px` band on `<a>`-wrapped blocks, and the `displaced: y`
+cascade below every one of them — post-t744 mechanism keys, so a *primitive* claim, not a tag one.
+Next sweep must show it shrink.
+Gates: `a_block_inside_an_inline_collapses_its_margins_out` (`engine/layout/src/lib.rs`) — asserts the
+escape (`#outer` 10px, the blockified `<a>` 10px, `#inner` flush at the content top) **and** the
+eligibility half (text before the block keeps the 3px top margin in, while the trailing 6px still
+escapes). **RED-proven by running the mutation:** restore `s.display == Display::Block` in
+`collapses_as_block` and `#outer` reads 19. Regression check: the whole `manuk-layout` suite plus the
+neighbouring eligibility gates (`overflow:hidden` is still a margin-containing block — the clearfix
+idiom — and the BFC-root and border/padding conditions are untouched).
+PERF: two extra arguments and, only for `Display::Inline` boxes, one `is_block_level` call — which
+walks the box's own children, and is the same call the layout already makes for that box on the path
+that decides how to lay it out.
+WIKI: `docs/wiki/box-layout.md` — "an anonymous block box is defined by what it has not got".
+PATTERN: ⚠⚠ **A PREDICATE THAT RE-DERIVES A CLASSIFICATION THE ENGINE ALREADY OWNS WILL DRIFT FROM
+IT.** `s.display == Display::Block` is not a bug on its own line — it is a *second* answer to a
+question `is_block_level` already answers, and the two only had to disagree about one case for the
+whole idiom to break. Grep `engine/layout` for bare `display == Display::Block` and
+`matches!(…display, Display::Block)` outside `is_block_level` itself: each one is a place the
+blockified inline is invisible again. (t745's corollary, one tick apart: there the correct cascade was
+overwritten downstream; here the correct classification was never consulted. Both are *"the right
+answer existed and the caller computed its own"*.)

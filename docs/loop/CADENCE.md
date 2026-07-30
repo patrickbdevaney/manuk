@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **501** | ticks 1–745 |
-| median tick cycle | **22m** | 500 intervals |
+| ticks landed | **502** | ticks 1–747 |
+| median tick cycle | **22m** | 501 intervals |
 | median, last 10 | **22m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 450.5h elapsed |
-| median verify wall | **63s** | 440 ticks |
+| **ticks per hour** | **1.11** | 450.8h elapsed |
+| median verify wall | **63s** | 441 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **352**
-* **✅ rows in the capability ledger**: 144 → **381**
+* **✅ rows in the capability ledger**: 144 → **382**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**245 of 501 ticks** (49%) moved a
+**245 of 502 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -598,5 +598,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **743** | 2026-07-29 20:15 | 19.4h | root-cause | 63s | +640/−115 | 352 | 81 | 56.0% · | the icon-sprite `<use href="#icon">` resolved to nothing: the icon was never drawn (2026-0 |
 | **744** | 2026-07-29 23:26 | 3.2h | root-cause | 63s | +642/−39 | 352 | 81 | 56.0% · | the priority ledger ranked 351 ticks of work by HTML tag, because `delta` never crossed th |
 | **745** | 2026-07-29 23:32 | 7m | root-cause | 63s | +230/−45 | 352 | 81 | 56.0% · | `td { padding: 0 }` computed to 0 and was overwritten with 1px AFTER the cascade: every re |
+| **747** | 2026-07-29 23:53 | 21m | root-cause | 63s | +273/−50 | 352 | 81 | 56.0% · | `is_block_level` said "block" and the two margin-collapse predicates said "inline": every  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
