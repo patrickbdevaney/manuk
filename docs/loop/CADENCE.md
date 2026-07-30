@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **514** | ticks 1–765 |
-| median tick cycle | **22m** | 513 intervals |
-| median, last 10 | **35m** | 10 intervals |
+| ticks landed | **515** | ticks 1–767 |
+| median tick cycle | **22m** | 514 intervals |
+| median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 464.5h elapsed |
-| median verify wall | **63s** | 453 ticks |
+| **ticks per hour** | **1.10** | 468.0h elapsed |
+| median verify wall | **63s** | 454 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **353**
-* **✅ rows in the capability ledger**: 144 → **392**
+* **✅ rows in the capability ledger**: 144 → **393**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**245 of 514 ticks** (48%) moved a
+**245 of 515 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -611,5 +611,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **762** | 2026-07-30 11:31 | 31m | root-cause | 63s | +343/−54 | 353 | 81 | 56.0% · | `flex-wrap: wrap` on an auto-height COLUMN container put the whole page in four side-by-si |
 | **764** | 2026-07-30 12:52 | 81m | root-cause | 63s | +227/−35 | 353 | 81 | 56.0% · | the two worst `reading_order` sites in the corpus are both RTL, and a flex row ran backwar |
 | **765** | 2026-07-30 13:30 | 38m | root-cause | 63s | +284/−35 | 353 | 81 | 56.0% · | an RTL table reads backwards, and a Chrome-EXACT fix was reverted on the way (2026-07-30) |
+| **767** | 2026-07-30 17:01 | 3.5h | measurement | 63s | +529/−49 | 353 | 81 | 56.0% · | the sweep the board demanded: the headline is FLAT and the jarring mass HALVED (2026-07-30 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

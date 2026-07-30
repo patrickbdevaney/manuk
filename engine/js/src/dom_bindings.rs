@@ -2267,22 +2267,66 @@ unsafe fn record_mutation(
             .collect::<Vec<_>>()
             .join(",")
     };
-    let attr_lit = attr
-        .map(js_string_literal)
-        .unwrap_or_else(|| "null".to_string());
-    let old_lit = old_value
-        .map(js_string_literal)
-        .unwrap_or_else(|| "null".to_string());
-    let script = format!(
-        "if(globalThis.__recordMutation)__recordMutation({},{},{},{},{},{})",
-        js_string_literal(kind),
-        target.0,
-        attr_lit,
-        old_lit,
-        js_string_literal(&ids(added)),
-        js_string_literal(&ids(removed)),
+    // ── ⚠⚠⚠ **BAR 0: THIS USED TO COMPILE A FRESH SCRIPT PER DOM MUTATION.**
+    //
+    // The call was made by `format!`-ing a source string and handing it to `evaluate_script` — a
+    // full parse + bytecode-compile of `__recordMutation("childList",3382,null,null,"","")`, once
+    // per mutated node, on every page, whether or not anything was observing (the
+    // `if(globalThis.__recordMutation)` guard lived *inside* the text being compiled, so it could
+    // only run after the compile it exists to avoid).
+    //
+    // Measured on the live `en.wikipedia.org/wiki/Terrier` — the G6 gate's own page — MediaWiki's
+    // ResourceLoader boot drove **3.9 million** `Evaluating script from dom_event.js` lines and the
+    // process died with SIGSEGV inside SpiderMonkey in **6 of 8** `hittest` runs and **3 of 3**
+    // `render`/`boxes` runs. Controls: the same page crashes on the pre-t762 engine (not a
+    // regression from this session), an 8× larger stack does not help (not stack exhaustion), and
+    // stripping the page's `<script>` tags makes it clean 4 of 4 (it is the JS path).
+    //
+    // The fix is to CALL the function instead of compiling a program that calls it: one property
+    // lookup and an invoke, no parser, no bytecode, no `JSScript` per mutation.
+    let global = CurrentGlobalOrNull(&wrap_cx(cx));
+    if global.is_null() {
+        return;
+    }
+    rooted!(in(cx) let g = global);
+    rooted!(in(cx) let mut kind_v = UndefinedValue());
+    kind.to_jsval(cx, kind_v.handle_mut());
+    rooted!(in(cx) let mut target_v = Int32Value(target.0 as i32));
+    rooted!(in(cx) let mut attr_v = UndefinedValue());
+    match attr {
+        Some(a) => a.to_jsval(cx, attr_v.handle_mut()),
+        None => attr_v.set(NullValue()),
+    }
+    rooted!(in(cx) let mut old_v = UndefinedValue());
+    match old_value {
+        Some(o) => o.to_jsval(cx, old_v.handle_mut()),
+        None => old_v.set(NullValue()),
+    }
+    rooted!(in(cx) let mut added_v = UndefinedValue());
+    ids(added).to_jsval(cx, added_v.handle_mut());
+    rooted!(in(cx) let mut removed_v = UndefinedValue());
+    ids(removed).to_jsval(cx, removed_v.handle_mut());
+    // One contiguous, rooted argument vector — `HandleValueArray` borrows it for the call only.
+    let argv: [Value; 6] = [
+        kind_v.get(),
+        target_v.get(),
+        attr_v.get(),
+        old_v.get(),
+        added_v.get(),
+        removed_v.get(),
+    ];
+    rooted!(in(cx) let mut rval = UndefinedValue());
+    let args = mozjs::jsapi::HandleValueArray {
+        length_: argv.len(),
+        elements_: argv.as_ptr(),
+    };
+    let _ = mozjs::rust::wrappers2::JS_CallFunctionName(
+        &mut wrap_cx(cx),
+        g.handle(),
+        c"__recordMutation".as_ptr(),
+        &args,
+        rval.handle_mut(),
     );
-    let _ = eval_in_current_global(cx, &script);
 }
 
 /// Define the DOM methods on the rooted object `obj`. `is_document` selects the

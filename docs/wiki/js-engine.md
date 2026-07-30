@@ -2244,3 +2244,58 @@ function every construction path goes through. **Three callers is what produced 
 gate written against it would have passed throughout the entire bug. And it asserts three *negative*
 controls, because a hook answering `true` unconditionally satisfies every positive assertion and is a
 worse bug than the one being fixed.
+
+---
+
+## A mutation record must not COMPILE A SCRIPT (tick 768 — Bar 0)
+
+`record_mutation` in `engine/js/src/dom_bindings.rs` notified the JS-side `MutationObserver` machinery
+like this:
+
+```rust
+let script = format!(
+    "if(globalThis.__recordMutation)__recordMutation({},{},{},{},{},{})", …);
+let _ = eval_in_current_global(cx, &script);
+```
+
+That is a **parse + bytecode compile + `JSScript` allocation, once per mutated node**, on every page,
+observed or not. On `en.wikipedia.org/wiki/Terrier` — the G6 gate's own page — MediaWiki's ResourceLoader
+boot drove it ~4 million times (`RUST_LOG=debug` produced 3.9M lines, nearly all
+`Evaluating script from dom_event.js`) and the process died:
+
+| consumer | before | after |
+|---|---|---|
+| `hittest` | **6 of 8 SIGSEGV** | 8 of 8 clean |
+| `render` | 3 of 3 SIGSEGV | 3 of 3 clean |
+| `boxes` | 3 of 3 SIGSEGV | 3 of 3 clean |
+
+The crash is inside SpiderMonkey (the stack is NaN-boxed `JS::Value`s and JIT-range return addresses),
+which is the class `STATUS.md`'s Bar 0 row already names as uncontainable in-process — so the only fix is
+to stop provoking it.
+
+**The fix: call the function, do not compile a program that calls it.**
+
+```rust
+let args = mozjs::jsapi::HandleValueArray { length_: argv.len(), elements_: argv.as_ptr() };
+JS_CallFunctionName(&mut wrap_cx(cx), g.handle(), c"__recordMutation".as_ptr(), &args, rval.handle_mut());
+```
+
+One property lookup and an invoke. No parser, no bytecode, no `JSScript`.
+
+### Two things this cost, both worth keeping
+
+**The guard was inside the compiled text.** `if(globalThis.__recordMutation)` — the check for whether the
+call is needed at all — was part of the source being compiled, so it could only run *after* the compile it
+exists to avoid. A guard inside a compiled string is not a guard; it is a comment with a runtime cost.
+
+**A first fix, written from the doc comment, did nothing.** The function's own comment said *"a no-op if
+`MutationObserver` was never touched"*, so I added a Rust-side early-out on `__recordMutation` being
+absent — and measured **8 of 8 still crashing**. `WINDOW_PRELUDE` installs `__recordMutation`
+unconditionally, so the property is always present and the early-out could never fire. **Grep for the
+code that performs an early-out before trusting a comment that claims one.**
+
+### The standing audit item
+
+Grep the crates for `evaluate_script` / `eval_in_current_global` on any path that runs **per node, per
+event or per frame**. A compile is not a call, and the cost is invisible at the call site — it looks like
+a `format!`.

@@ -852,6 +852,9 @@
   - L2205 · The engine knew the answer and no page could reach it (tick 724)
   - L2220 · Why a false negative is worse than a missing feature
   - L2230 · The shape, and how it hid
+  - L2250 · A mutation record must not COMPILE A SCRIPT (tick 768 — Bar 0)
+  - L2285 · Two things this cost, both worth keeping
+  - L2297 · The standing audit item
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1285,4 +1288,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1196 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1199 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

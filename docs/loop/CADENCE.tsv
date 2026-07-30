@@ -513,3 +513,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 762	04b4f7cf	1785425487	2026-07-30T11:31:27-04:00	1873	root-cause	63	11	343	54	353	81	3896	6960	0	389	0	`flex-wrap: wrap` on an auto-height COLUMN container put the whole page in four side-by-side columns (2026-07-30)
 764	f0a1448a	1785430329	2026-07-30T12:52:09-04:00	4842	root-cause	63	9	227	35	353	81	3896	6960	0	391	0	the two worst `reading_order` sites in the corpus are both RTL, and a flex row ran backwards (2026-07-30)
 765	43bfc27f	1785432624	2026-07-30T13:30:24-04:00	2295	root-cause	63	9	284	35	353	81	3896	6960	0	392	0	an RTL table reads backwards, and a Chrome-EXACT fix was reverted on the way (2026-07-30)
+767	d556525f	1785445263	2026-07-30T17:01:03-04:00	12639	measurement	63	11	529	49	353	81	3896	6960	0	393	0	the sweep the board demanded: the headline is FLAT and the jarring mass HALVED (2026-07-30)

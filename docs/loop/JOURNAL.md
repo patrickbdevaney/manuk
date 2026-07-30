@@ -38770,3 +38770,169 @@ falsified it in one measurement, which is cheap; **believing the story and treat
 "unblocked" would have shipped the regression with a citation to the tick that had refused it.** The rule
 to keep: a revert note may name a suspected prerequisite, but the note must say *suspected*, and the
 re-attempt is an EXPERIMENT with a control, never a resumption.
+
+## Tick 767 — the sweep the board demanded: the headline is FLAT and the jarring mass HALVED (2026-07-30)
+
+The board's new SWEEP CADENCE block (observer, 2026-07-30) says: after ~5 render-primitive fixes, run a
+full `corpus-crux-trend` sweep and bank the rows **before landing more fixes**. Five had landed
+(762 · 763 · 764 · 765 · 766), so this is the sweep. 200/200 sites attempted, one process per site,
+200 rows banked at `docs/loop/SWEEP-t767-rows.tsv`; `fidelity-progress.sh` recorded the ledger row.
+
+```text
+IN-SCOPE PASS: 7/130 = 5.4%   (shape>=0.75)   TARGET 95% = 124  ->  NEED +117
+Δ vs t758:     5.4% -> 5.4%   (+0.0 pts)      scored 83 -> 82   excluded 70 -> 70
+```
+
+**The headline did not move.** That is the number the milestone is defined on, and it is reported first.
+
+### AND THE SAME FIVE FIXES HALVED THE JARRING MASS
+
+Over the **79 sites scored in BOTH sweeps** — the only honest comparison set, because the corpus-wide
+totals move when a site changes scorability:
+
+```text
+  h_overflow      2295 -> 1103   (-52%)
+  reading_order   2073 -> 1246   (-40%)
+  overlap          422 ->  415
+  dead_target      271 ->  266
+  shape_mean      41.0% -> 43.1%  (+2.0 pts)
+```
+
+and the movement is attributable, site by site, to the ticks that claimed it:
+
+```text
+  h_overflow   marktplaats.nl -742 (t762)   mobile.ir -267 (t764)   repubblica.it -139 (t762)
+               rockstaractu -41            lyreco -12
+  reading_order  mobile.ir -799 (t764/765/766)   possssno -12   repubblica -9
+```
+
+**So why is the headline flat?** Because `shape ≥ 0.75` is a THRESHOLD and the corpus sits far below it.
+`mobile.ir` went **0.174 → 0.523** — the largest single-site move this project has recorded — and
+contributed **zero** to the pass count. 16 sites improved, 4 moved down, and not one crossed.
+
+### ⚠ THE DENOMINATOR TRAP, CAUGHT IN MY OWN FIRST READING
+
+My first pass computed the invariants over *all rows with a number* and got `reading_order 2925 → 1255`.
+**817 of that 1670 is `ta3lemkonline.com` leaving the scored set**, not layout improving: it scored 458
+nodes at t758 and came back `thin-overlap-1` at t767 (it was already unscorable in the t765 spot-check).
+That is exactly the scorability regression `fidelity-progress.sh` flagged (scored 83 → 82) and the reason
+the same-population set above is the one quoted. The site is Arabic-education and has been flaky across
+three consecutive runs; it is not attributed to us and not claimed as a fix either.
+
+**The one lost pass is a hair, and it is not a layout regression.** `www.tz.de` 0.750263 → 0.741026 —
+it was sitting **0.0003 above the bar** — and its `shape_n` rose 1902 → **1950**, i.e. the page rendered
+48 MORE elements this run and scored a slightly harder population. Third time this corpus has crossed the
+bar by a hair (t758 recorded two).
+
+TICK SHAPE: measurement
+CLUSTER: none claimed — this tick banks the measurement the previous five owe.
+Gates: none added; `fidelity-progress.sh` + the banked rows are the artefacts.
+WIKI: none — this is a ledger tick; the mechanisms it measures are already written up
+(`docs/wiki/box-layout.md`, ticks 762–766).
+RE-RANK (the board's rule: a batch that does not raise in-scope-pass must be re-ranked from the honest
+ledger). The fresh ledger's top jarring sites, all scored, all fully-covered unless noted:
+
+```text
+  h_overflow      aftenbladet.no 530 (shape 0.271, cov 0.955)   alphanews.live 235   razaoautomovel 59
+  reading_order   possssno.sbs 589 (shape 0.123, cov 1.000!)    wdimax.com 85       repubblica.it 48
+  overlap         fragrantica.com 118 (shape 0.425, cov 1.000)  razaoautomovel 71   jatekshop.eu 31
+  NEAR-BAR        tz.de 0.741 · pivaldi 0.734 · marktplaats 0.709 · gismart 0.694 · ticket.jfa.jp 0.638
+```
+
+`possssno.sbs` is the sharpest single target on the board: **coverage 1.000, shape 0.123, reading_order
+589** — every box drawn, 589 pairs in the wrong order. `fragrantica.com` is the same shape for `overlap`
+(cov 1.000, 118 colliding pairs) and `overlap` is the invariant that moved LEAST this window (422 → 415),
+which makes it the untouched one.
+PATTERN: ⚠⚠⚠ **A THRESHOLD METRIC IS BLIND TO EVERYTHING THAT HAPPENS BELOW THE THRESHOLD, AND THAT IS
+NOT AN ARGUMENT FOR CHANGING THE THRESHOLD.** Five fixes halved the corpus's horizontal-overflow and
+reading-order mass and moved the headline by 0.0 points. Both readings are true, and the burndown needs
+both: the pass rate is the GATE (it defines done and must not be softened), the jarring totals and
+`shape_mean` are the SLOPE (they say whether the work is landing). A loop that reads only the gate
+concludes five good ticks did nothing and re-ranks away from a working seam; a loop that reads only the
+slope declares victory while 117 sites still fail. **Report the gate first, then the slope, then the
+attribution — and never let the second one be quoted without the first.**
+
+## Tick 768 — BAR 0: loading en.wikipedia.org segfaulted, because every DOM mutation COMPILED A SCRIPT (2026-07-30)
+
+t767's measurement tick could not land: the wall's **G6 went red** with *"only 0 links found on the
+page"*. Run by hand on the same tree the page scored 476 links / 99.2%, so the first reading was
+"transient". It was not. `rc=139`.
+
+**`en.wikipedia.org/wiki/Terrier` — the G6 gate's own page — segfaults the process.** Bar 0 outranks
+every visual divergence (Part 24.3), so the sweep tick waits and this is the tick.
+
+```text
+  hittest   6 of 8 runs   SIGSEGV
+  render    3 of 3 runs   SIGSEGV
+  boxes     3 of 3 runs   SIGSEGV        ← not one consumer's bug; the page-load path
+```
+
+### FOUR CONTROLS, RUN BEFORE ANY HYPOTHESIS WAS BELIEVED
+
+1. **Not a regression from this session.** Checked out `engine/` at t761 (pre-762) and rebuilt: the same
+   page crashes **6 of 6**. The engine did not change the outcome — the *page* did. (Which is also why
+   ticks 762–766 landed with G6 green: their walls fetched an earlier bundle.)
+2. **Not stack exhaustion.** `ulimit -s 65536` (8× the default): crashes **4 of 4**.
+3. **Not t766's new recursion.** Disabled the RTL-grid descendants walk and rebuilt: crashes **5 of 6**.
+4. **It is the JS path.** Strip every `<script>` from the page: **4 of 4 clean.**
+
+Bisecting the page's five scripts: no single script crashes, no pair, no triple — `{0,1,2,3}` crashes
+3 of 3 while `{1,2,3}`, `{0,1,2}`, `{0,2,3}` and `{0,1,3}` are all clean. It needs MediaWiki's whole
+ResourceLoader boot, which is the shape of *"fetch the REAL shipped bundle and run its boot path"*.
+
+### THE CAUSE, AND IT WAS IN OUR OWN LOG ALL ALONG
+
+`RUST_LOG=debug` produced **3.9 million lines**, and the tail is one thing repeated:
+
+```text
+DEBUG mozjs::rust: Evaluating script from dom_event.js with content
+                   if(globalThis.__recordMutation)__recordMutation("childList",3382,null,null,"","")
+DEBUG mozjs::rust: ...ok!
+```
+
+`record_mutation` (`engine/js/src/dom_bindings.rs`) **built a source string and COMPILED IT — once per
+mutated node.** A full parse + bytecode compile + `JSScript` allocation, per DOM mutation, on every page.
+MediaWiki's boot mutates enough to run that millions of times, and SpiderMonkey dies inside its own
+frames (the stack is NaN-boxed `JS::Value`s and JIT-range return addresses — the class STATUS.md already
+names as uncontainable in-process).
+
+⚠⚠ **And the guard was INSIDE the compiled text.** `if(globalThis.__recordMutation)` — the check that
+decides whether the call is needed — could only run *after* we had paid the entire cost it exists to
+avoid. The function's own doc comment said *"a no-op if `MutationObserver` was never touched"*; it never
+was one, in either direction.
+
+**The fix is to CALL the function instead of compiling a program that calls it**: `JS_CallFunctionName`
+with a rooted six-value argument vector. No parser, no bytecode, no `JSScript` per mutation.
+
+```text
+  hittest   8 of 8 runs   CLEAN   (was 6 of 8 SIGSEGV)
+  render    3 of 3 clean · boxes 3 of 3 clean
+```
+
+⚠ **A first attempt was WRONG and is recorded because the wrongness is the lesson.** I added a Rust-side
+early-out — *"if `globalThis.__recordMutation` is absent, return"* — took the doc comment at its word, and
+measured: **8 of 8 still crashed.** `__recordMutation` is installed unconditionally by `WINDOW_PRELUDE`,
+so the property is ALWAYS present and the early-out never fired. The comment described an intent that no
+code implemented, and a guard written from a comment rather than from the prelude is a guard on a
+condition that cannot occur.
+
+TICK SHAPE: root-cause (Bar 0)
+CLUSTER: none visual — this is the stability floor.
+Gates: the wall's own **G6** is the gate, and it was **proven RED by the defect itself** (`✗ G6 is
+VACUOUS: only 0 links found`) — the strongest form of red-proof there is, since the gate failed on
+reality before the fix existed. manuk-js 9/9; the full wall runs below.
+PERF: strictly cheaper — one property lookup + invoke replaces a parse/compile/`JSScript` per mutation.
+On this page that is ~4M compiles removed.
+WIKI: `docs/wiki/js-engine.md` — "a mutation record must not compile a script".
+⚠ THIS COMMIT ALSO CARRIES TICK 767 (the CrUX sweep + its ledger row): 767 was written, verified as
+docs-only, and **blocked from landing by the crash it uncovered**. Both journal entries are present; the
+cadence log will show one commit for the pair, and saying so here is cheaper than pretending the sweep
+landed separately.
+PATTERN: ⚠⚠⚠ **A STRING THAT IS COMPILED IS NOT A CALL, AND THE PLACE THAT PAYS IS NEVER THE PLACE THAT
+LOOKS EXPENSIVE.** `format!` + `evaluate_script` reads like a one-liner and *is* a compiler invocation;
+put it on a per-node path and the page's own DOM churn multiplies it without bound. Two corollaries, both
+earned here: **(a)** a guard that lives inside the text being compiled is not a guard, it is a comment
+with a runtime cost; **(b)** when a function's doc comment claims an early-out, grep for the code that
+performs it before trusting it — this one had said "no-op" for many ticks while doing the most expensive
+thing in the engine. **Grep the crates for `evaluate_script`/`eval_in_current_global` on any path that
+runs per node, per event or per frame.**
