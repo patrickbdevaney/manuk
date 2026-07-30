@@ -161,6 +161,32 @@ echo "── FIDELITY PROGRESS (rebuilt instrument · sweep $TICK · corpus=${CO
 [ "$SETTLED" != 1 ] && printf "  ⏳ SWEEP IN PROGRESS: %s/%s sites so far (live=%s) — numbers below are a PARTIAL, NOT banked until complete\n" "$SITES" "$EXPECT" "$SWEEP_LIVE"
 [ -z "$PREV" ] && [ "$SETTLED" = 1 ] && printf "  🆕 NEW %s-CORPUS BASELINE — no same-corpus prior sweep, so NO slope this time (a different site set is not diffable; the slope resumes at the next %s sweep)\n" "$CORPUS" "$CORPUS"
 M1_NEED=$(( TARGET - ${M1CNT:-0} )); [ "$M1_NEED" -lt 0 ] && M1_NEED=0
+# ── SCORABILITY CEILING (PHASE0-MEASUREMENT-SYSTEM.md §1,§3): the binding sub-constraint the shape burndown
+# was blind to. A site that does not render (render-failed/shell-only/timeout/css-starved — mostly boot-halting
+# JS throws) counts as an M1 FAIL and cannot pass until it first renders. So the HARD CAP on M1 is scored/inscope
+# — even if every scored site passed perfectly, M1 = scored/inscope. This is the FUNCTION leg (M2) surfacing as
+# M1's ceiling: killing boot throws raises this cap AND builds the function cert. Attack it FIRST. Break the
+# unscored reasons into a worklist so the loop ranks throw-killers, not just shape primitives.
+SC_CEIL=$(awk "BEGIN{printf \"%.1f\", ($INSCOPE>0?100*$SCORED/$INSCOPE:0)}")
+UNSCORED=$(( INSCOPE - SCORED ))
+read -r U_RENDER U_SHELL U_THIN U_TIMEOUT U_CSS U_OTHER < <(awk -F'\t' -v TOL=2 '
+  NR==1{next}
+  { r=$9; gsub(/[ \t]/,"",r)
+    if(r ~ /^bot-wall/ || r=="probe-blocked" || r=="unreachable" || r=="http-404" || r=="http-503" || r ~ /^empty-/) next
+    if(r=="") next                                     # scored — not in the ceiling
+    if(r ~ /render-fail|crash|panic/) rf++
+    else if(r ~ /shell/) sh++
+    else if(r ~ /thin|overlap-too|too-few/) th++
+    else if(r ~ /timeout|timed-out|slow/) to++
+    else if(r ~ /css-star|no-css|css-fail/) cs++
+    else ot++ }
+  END{ printf "%d %d %d %d %d %d", rf+0, sh+0, th+0, to+0, cs+0, ot+0 }' "$SRC")
+printf "  🧱 SCORABILITY CEILING: %s/%s in-scope sites RENDER = %s%% — M1 is CAPPED here (function leg; PHASE0-MEASUREMENT-SYSTEM.md)\n" \
+  "$SCORED" "$INSCOPE" "$SC_CEIL"
+if [ "$UNSCORED" -gt 0 ]; then
+  printf "     %s unscored = M1 fails until they render → throw-killer worklist: render-fail %s · shell-only %s · thin-overlap %s(measurement) · timeout %s · css-starved %s · other %s\n" \
+    "$UNSCORED" "$U_RENDER" "$U_SHELL" "$U_THIN" "$U_TIMEOUT" "$U_CSS" "$U_OTHER"
+fi
 printf "  ⭐ M1 GATE (shape>=0.75 AND jarring-clean · the TRUE visual bar): %s/%s = %s%%   TARGET 95%% = %s sites  →  NEED +%s\n" \
   "${M1CNT:-0}" "$INSCOPE" "${M1PCT:-0}" "$TARGET" "$M1_NEED"
 printf "     ├─ shape>=0.75: %s/%s = %s%%      └─ jarring-clean (no overlap/h-overflow/reorder/dead-target, TOL2): %s/%s = %s%%\n" \

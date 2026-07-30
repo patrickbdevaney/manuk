@@ -33,20 +33,24 @@ MODE="${1:-full}"
 # within a corpus — never diff CrUX against the 265).
 # M1_PASS is the FULL gate = m1_pass_pct (f15, shape AND jarring); old rows (pre-jarring) fall back to shape
 # (f12). Also lift shape (f12) and jarring-clean (f14) as the two components for display.
-read -r M1_TICK M1_PASS M1_INSCOPE M1_SHAPEPCT M1_JARPCT M1_PREVPASS M1_CORPUS < <(awk -F'\t' '
+read -r M1_TICK M1_PASS M1_INSCOPE M1_SHAPEPCT M1_JARPCT M1_PREVPASS M1_CORPUS M1_SCORED < <(awk -F'\t' '
   $1 ~ /^#/ || $1=="iso_sweep" || $1=="" {next}
   { rows[NR]=$0 }
   END{
     last=""; lastNR=0
     for(i=1;i<=NR;i++){ if(i in rows){ last=rows[i]; lastNR=i } }
-    if(last==""){ printf "none 0 0 0 0 NA 265"; exit }
+    if(last==""){ printf "none 0 0 0 0 NA 265 0"; exit }
     split(last,L,"\t"); lc=(L[13]==""?"265":L[13])
     m1=(L[15]!=""?L[15]:L[12]); shp=L[12]; jar=(L[14]!=""?L[14]:"NA")
     prev=""
     for(i=1;i<lastNR;i++){ if(!(i in rows)) continue; split(rows[i],f,"\t"); if((f[13]==""?"265":f[13])==lc) prev=rows[i] }
     pp="NA"; if(prev!=""){ split(prev,P,"\t"); pp=(P[15]!=""?P[15]:P[12]) }
-    printf "%s %s %s %s %s %s %s", L[2], m1, L[11], shp, jar, pp, lc
+    printf "%s %s %s %s %s %s %s %s", L[2], m1, L[11], shp, jar, pp, lc, L[4]
   }' "$LEDGER" 2>/dev/null)
+# SCORABILITY CEILING = scored/in-scope (PHASE0-MEASUREMENT-SYSTEM.md §1): the hard cap on M1 — a site that
+# does not render (mostly boot-halting JS throws = the function leg) can never pass M1. If this cap is < 95,
+# no shape/jarring fix can reach the target; the throw-killer leg must move first.
+SC_CEIL=$(awk "BEGIN{printf \"%.0f\", ((${M1_INSCOPE:-0}+0)>0 ? 100*(${M1_SCORED:-0}+0)/(${M1_INSCOPE:-0}+0) : 0)}")
 
 # ── M2 done-signal (auto-detect the agent's artefact) ────────────────────────────────────────────────────
 m2_pass=""; [ -f docs/loop/FUNCTION-CERT.tsv ] && m2_pass=$(awk -F'\t' '/overall|OVERALL|pass_pct/{for(i=1;i<=NF;i++) if($i+0>0 && $i+0<=100) v=$i} END{print v+0}' docs/loop/FUNCTION-CERT.tsv 2>/dev/null)
@@ -73,7 +77,8 @@ _st(){ [ "$1" = 1 ] && printf "%s✓done%s" "$G" "$O" || { [ "$2" = "$CUR" ] && 
 
 if [ "$MODE" = "--oneline" ]; then
   case "$CUR" in
-    M1) printf "PHASE-0 ▸ M1 RENDER(corpus=%s) shape+jarring %s%%→95%% (need +%s, %s) [shape %s%% · jarring-clean %s%%]%s  [M2 fn pending]\n" "${M1_CORPUS}" "${M1_PASS:-?}" "$NEED" "$SLOPE_TXT" "${M1_SHAPEPCT:-?}" "${M1_JARPCT:-?}" "$CORPUS_NOTE" ;;
+    M1) CEIL_FLAG=""; awk "BEGIN{exit !((${SC_CEIL:-100}+0) < 95)}" && CEIL_FLAG=" ⚠CAP ${SC_CEIL}%(scorability=function leg — attack throw-killers FIRST, PHASE0-MEASUREMENT-SYSTEM.md)"
+        printf "PHASE-0 ▸ M1 RENDER(corpus=%s) shape+jarring %s%%→95%% (need +%s, %s) [shape %s%% · jarring-clean %s%%]%s%s  [M2 fn pending]\n" "${M1_CORPUS}" "${M1_PASS:-?}" "$NEED" "$SLOPE_TXT" "${M1_SHAPEPCT:-?}" "${M1_JARPCT:-?}" "$CORPUS_NOTE" "$CEIL_FLAG" ;;
     M2) printf "PHASE-0 ▸ M1 RENDER done ✓ ▸ M2 FUNCTION leg %s  → then v1.0.0\n" "${m2_pass:-not-started}" ;;
     DONE) printf "PHASE-0 ▸ BOTH MILESTONES MET → fire v1.0.0 release trigger (memory v1-release-trigger)\n" ;;
   esac
