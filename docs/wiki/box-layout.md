@@ -2376,3 +2376,60 @@ It is re-scoped, not abandoned (`CONSTELLATION.tsv` carries the note): **land it
 errors beneath it, not before.** The general rule — *when a spec-correct change makes a real page worse,
 it is nearly always ORDER* — is the one worth keeping, together with the move that found it: ask the
 mechanism oracle *why*, rather than defending the fixture.
+
+---
+
+## An RTL grid's COLUMN AXIS runs right-to-left — and taffy cannot be told (tick 766)
+
+`direction` reverses a grid's inline-axis track order (CSS Grid §3: the column axis *is* the inline axis),
+so under `dir=rtl` the first item lands in the **rightmost** column. Two of the three RTL axis fixes had a
+natural home in the style mapping; this one does not:
+
+- **flex (t764)** — swap `row` ⇄ `row-reverse` in `map_direction`. Taffy expresses it natively.
+- **table (t765)** — mirror each cell's span inside the table's content box. Our own table code.
+- **grid (t766)** — taffy has no `direction`, and `grid-auto-flow` is *not* a direction. There is nothing
+  to swap.
+
+So the mirror is applied to the **placed slots on the way out** of `solve_subtree`, recursively:
+
+```rust
+fn mirror_rtl_grid(&self, p: &mut Placed, content_w: f32) {
+    p.slot.x = content_w - p.slot.x - p.slot.width;
+}
+```
+
+Mirroring the slot is enough because `extract_placed` positions each subtree *relative to* its slot — the
+whole child moves with it. The recursion re-mirrors any RTL grid nested inside the placed tree against
+**its own** content width (padding and border subtracted), so a grid inside a flex row inside a grid is
+each flipped in its own frame rather than all against the outermost one.
+
+Measured against live Chromium (`<html dir=rtl>`, a 600px `1fr 1fr` grid, x relative to the grid):
+
+| item | Chrome | was |
+|---|---|---|
+| 1 | **300** | 0 |
+| 2 | **0** | 300 |
+| 3 (wraps to row 2) | **300** | 0 |
+| a `direction:ltr` grid in the same page | 0 / 100 | 0 / 100 (unchanged) |
+
+**Real-site effect, and the arc across three ticks.** `mobile.ir` — the worst `reading_order` site in the
+200-site CrUX sample:
+
+| | t758 | after t764 (flex) | after t765 (table) | after t766 (grid) |
+|---|---|---|---|---|
+| shape | 0.174 | 0.320 | 0.493 | **0.523** |
+| `reading_order` | 874 | 820 | 87 | **75** |
+| `h_overflow` | 268 | 1 | 1 | **1** |
+
+`coverage` (0.997) and `shape_n` (1186) are unchanged throughout, and the LTR control `marktplaats.nl`
+is byte-identical at 0.708642 in every run — so the movement is the fixes, not the population.
+
+**Gate.** `an_rtl_grid_orders_its_columns_right_to_left`, RED-proven by forcing `grid_is_rtl → false`.
+
+### What is still wrong, pinned rather than guessed
+
+An `li` with `display:inline-block` on `mobile.ir` sits at **x=1208 while its parent `ul` spans 363…918**
+— 290px outside its own parent, and it is what makes 16 elements escape the viewport when the RTL
+block-margin rule is applied. Two candidates were eliminated by fixture rather than by argument:
+`float:right` is Chrome-exact, and table columns are correct as of t765. The cause is inline-level and
+unknown; it is a `missing` row in `CONSTELLATION.tsv` and it is where the next RTL tick starts.

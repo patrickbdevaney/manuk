@@ -4351,6 +4351,30 @@ impl Ctx<'_> {
                 }
             },
         );
+        // ── **AN RTL GRID'S COLUMN AXIS RUNS RIGHT-TO-LEFT, AND TAFFY CANNOT BE TOLD.** `direction`
+        // reverses a grid's inline-axis track order (CSS Grid §3: the column axis is the inline axis),
+        // so the first item goes in the RIGHTMOST column. Taffy has no `direction` property, and the
+        // `row` ⇄ `row-reverse` swap that fixes flex (t764) has no grid equivalent — `grid-auto-flow`
+        // is not a direction. So the mirror happens on the way OUT, on the placed slots.
+        //
+        // Measured vs live Chromium (`<html dir=rtl>`, a 600px two-column grid): Chrome puts the first
+        // item at **300** and the second at **0**; ours had them at 0 and 300. This is the third and
+        // last of the RTL axis-order primitives (flex row t764, table columns t765) and the same
+        // mechanism each time: an axis that the spec defines as LOGICAL reaching a physical engine.
+        //
+        // Mirroring the SLOT is enough because `extract_placed` positions each subtree relative to it,
+        // and it is applied recursively so a grid nested inside a grid gets its own mirror — against
+        // its own CONTENT width, which is why the padding/border frame is subtracted here.
+        let mut placed = placed;
+        if self.grid_is_rtl(node) {
+            let frame = 0.0; // the root's slots are already relative to its content origin
+            for p in placed.iter_mut() {
+                self.mirror_rtl_grid(p, cw - frame);
+            }
+        }
+        for p in placed.iter_mut() {
+            self.mirror_rtl_grid_descendants(p);
+        }
         let mut boxes = Vec::new();
         let mut max_h = 0.0f32;
         for p in &placed {
@@ -4359,6 +4383,40 @@ impl Ctx<'_> {
             boxes.push(boxx);
         }
         (BoxContent::Block(boxes), max_h)
+    }
+
+    /// Is this node a GRID container whose inline axis runs right-to-left?
+    fn grid_is_rtl(&self, node: NodeId) -> bool {
+        let s = self.style_of(node);
+        matches!(
+            s.display,
+            manuk_css::Display::Grid | manuk_css::Display::InlineGrid
+        ) && s.direction == manuk_css::Direction::Rtl
+    }
+
+    /// Mirror one placed slot within `content_w` — the RTL column-order flip (see the call site).
+    fn mirror_rtl_grid(&self, p: &mut taffy_tree::Placed, content_w: f32) {
+        p.slot.x = content_w - p.slot.x - p.slot.width;
+    }
+
+    /// Apply the mirror to every RTL grid container INSIDE an already-placed subtree, so a grid nested
+    /// in a flex row (or in another grid) is flipped against its own content box rather than the
+    /// outermost one.
+    fn mirror_rtl_grid_descendants(&self, p: &mut taffy_tree::Placed) {
+        if p.container && self.grid_is_rtl(p.dom) {
+            let s = self.style_of(p.dom);
+            let frame = s.padding.left.resolve(p.slot.width, 0.0)
+                + s.padding.right.resolve(p.slot.width, 0.0)
+                + s.border_width.left
+                + s.border_width.right;
+            let content_w = (p.slot.width - frame).max(0.0);
+            for c in p.children.iter_mut() {
+                self.mirror_rtl_grid(c, content_w);
+            }
+        }
+        for c in p.children.iter_mut() {
+            self.mirror_rtl_grid_descendants(c);
+        }
     }
 
     /// Turn a [`taffy_tree::Placed`] node into a `LayoutBox` at its taffy-assigned position
@@ -7397,6 +7455,62 @@ mod tests {
         let mut out = None;
         rec(root, dom, tag, &mut out);
         out
+    }
+
+    /// **An RTL grid's COLUMN AXIS runs right-to-left** — `direction` reverses a grid's inline-axis
+    /// track order (CSS Grid §3: the column axis IS the inline axis), so the first item lands in the
+    /// RIGHTMOST column.
+    ///
+    /// Taffy has no `direction` property and the `row` ⇄ `row-reverse` swap that fixes flex (t764) has
+    /// no grid equivalent — `grid-auto-flow` is not a direction — so the mirror is applied to the
+    /// placed SLOTS on the way out, recursively, each against its own content box.
+    ///
+    /// Measured against live Chromium (`<html dir=rtl>`, a 600px `1fr 1fr` grid, x relative to the
+    /// grid): Chrome **300 / 0 / 300** for items 1–3 (the third wraps to row 2); ours was 0 / 300 / 0.
+    ///
+    /// Real site: `mobile.ir` shape **0.493 → 0.523** and `reading_order` 87 → **75** on top of the
+    /// t764/t765 RTL fixes; across the three, that page went shape 0.174 → 0.523, `reading_order`
+    /// 874 → 75 and `h_overflow` 268 → 1. LTR control `marktplaats.nl` byte-identical throughout.
+    ///
+    /// ⚠ Second assertion, and it is the one that makes this a *direction* fix: a `direction:ltr` grid
+    /// inside the same RTL document keeps LTR column order (Chrome: 0 / 100).
+    ///
+    /// RED, run: make `grid_is_rtl` return `false` — item 1 reads 0 where Chrome says 300.
+    #[test]
+    fn an_rtl_grid_orders_its_columns_right_to_left() {
+        let (dom, root) = layout_html(
+            "<body dir=rtl style='margin:0;width:600px'>\
+               <div id=g style='display:grid;grid-template-columns:1fr 1fr;width:600px'>\
+                 <div id=x1>1</div><div id=x2>2</div><div id=x3>3</div></div>\
+               <div id=g2 style='display:grid;grid-template-columns:100px 200px;width:600px;direction:ltr'>\
+                 <div id=y1>a</div><div id=y2>b</div></div>\
+             </body>",
+            "",
+            600.0,
+        );
+        let rects = root.node_rects(&dom);
+        let x = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            rects[&n].x
+        };
+        assert!(
+            (x("x1") - 300.0).abs() < 1.0 && x("x2").abs() < 1.0,
+            "the FIRST grid item is in the RIGHT column: x1={} x2={}",
+            x("x1"),
+            x("x2")
+        );
+        assert!(
+            (x("x3") - 300.0).abs() < 1.0,
+            "the wrapped third item starts the next row on the RIGHT too: {}",
+            x("x3")
+        );
+        assert!(
+            x("y1") < x("y2"),
+            "a direction:ltr grid inside an RTL page keeps LTR column order"
+        );
     }
 
     /// **An RTL table's COLUMN AXIS runs right-to-left** — `direction` on the table box orders the

@@ -38700,3 +38700,73 @@ that the site is wrong (it was not). The mechanism oracle turned "my correct fix
 that reading produced a **+17.4pt** tick instead of a defended +0pt one. The general form:
 **when a spec-correct change makes a real page worse, it is nearly always ORDER — the same fix after the
 upstream one is fine — so measure the upstream first rather than defending the downstream.**
+
+## Tick 766 — the third RTL axis, and a hypothesis that did NOT survive its control (2026-07-30)
+
+Two results this tick, and the negative one came first.
+
+**THE FALSIFIED HYPOTHESIS.** t765 reverted the RTL block-margin rule (§10.3.3) with the reading *"land
+it after the containing-block errors under it"*, and named RTL table columns as the prerequisite. Tables
+landed in t765, so I re-applied the block rule on top and re-measured. **`mobile.ir` h_overflow 1 → 16
+again, shape 0.4933 → 0.4916 — identical to before.** The prerequisite was not the prerequisite. The rule
+stays reverted and its map row keeps the `missing` status, now with the correction that the t765 reading
+was a *guess about which upstream defect*, and the guess was wrong.
+
+Chasing the 16 escapees printed the instrument's own example:
+
+```text
+  H-OVERFLOW: 16 element(s) escape the 1200px viewport (Chrome keeps them in)
+    …/ul:nth-child(1)/li:nth-child(4) → right 1336 > vw 1200
+```
+
+and the box tree put that `li` (`display: InlineBlock`) at **x=1208 inside a `<ul>` spanning 363…918** —
+290px outside its own parent. So the residual cause is an INLINE-level placement, not the block rule.
+Two candidates were then eliminated by fixture rather than by argument: `float:right` is **Chrome-exact**
+(`/tmp/float.html`: a right float in a 600px box at `margin-left:100px` reads 620 in both engines, and a
+second box at a different offset also matches), and the table columns are now correct. Recorded, not
+guessed at.
+
+### THE TICK THAT DID LAND: AN RTL GRID'S COLUMN AXIS
+
+The same box tree showed `ul <Grid> [933 332 158×337]` with its items at **933, 1012** — left-to-right,
+inside an RTL page. `direction` reverses a grid's inline-axis track order (CSS Grid §3: the column axis
+IS the inline axis), so the first item belongs in the RIGHTMOST column.
+
+**Taffy has no `direction`, and the `row` ⇄ `row-reverse` swap that fixed flex (t764) has no grid
+equivalent** — `grid-auto-flow` is not a direction. So the mirror is applied to the placed SLOTS on the
+way out, recursively, each against its own content box (padding/border subtracted), which is enough
+because `extract_placed` positions every subtree relative to its slot.
+
+```text
+  (<html dir=rtl>, a 600px `1fr 1fr` grid, x relative to the grid)
+                      Chrome      was       now
+  item 1                 300        0  ✗     300  ✓
+  item 2                   0      300  ✗       0  ✓
+  item 3 (row 2)         300        0  ✗     300  ✓
+  a direction:ltr grid in the SAME page      0 / 100 in all three  ✓
+```
+
+MEASURED: `mobile.ir` shape **0.493 → 0.523**, `reading_order` 87 → **75**, coverage 0.997 and `shape_n`
+unchanged. Control `marktplaats.nl` **0.708642 → 0.708642**. Across t764–t766 that one page went shape
+**0.174 → 0.523**, `reading_order` **874 → 75**, `h_overflow` **268 → 1**.
+
+TICK SHAPE: root-cause
+CLUSTER: `reading_order` / `geometry: x` on RTL pages — the third and last of the RTL axis-order
+primitives (flex row t764, table columns t765, grid t766).
+Gates: `an_rtl_grid_orders_its_columns_right_to_left` (`engine/layout/src/lib.rs`) — the first item is in
+the right column, the wrapped third item starts the next row on the right, and a `direction:ltr` grid
+inside the RTL page keeps LTR order. **RED-proven by running the mutation** (`grid_is_rtl → false`):
+`x1=0 x2=300`. Regression: manuk-layout 101/101.
+PERF: one enum comparison per container plus one subtraction per placed slot, on the way out of a solve
+that already walks the same tree.
+WIKI: `docs/wiki/box-layout.md` — "an RTL grid's column axis runs right-to-left".
+RESIDUE: an inline-block `<li>` placed 290px outside its parent `<ul>` on `mobile.ir` (`x=1208` in a
+`ul` at 363…918) — pinned in `CONSTELLATION.tsv`, cause unknown, floats and tables eliminated.
+PATTERN: ⚠⚠⚠ **THE PREREQUISITE NAMED IN A REVERT IS A HYPOTHESIS, AND IT INHERITS NONE OF THE
+EVIDENCE THAT JUSTIFIED THE REVERT.** t765's revert was right (the number was deterministic, twice) and
+its *explanation* — "tables are underneath this" — was a story told at the moment of reverting, when the
+oracle's top row happened to be tables. Re-applying the rule after tables landed cost one build and
+falsified it in one measurement, which is cheap; **believing the story and treating the block rule as
+"unblocked" would have shipped the regression with a citation to the tick that had refused it.** The rule
+to keep: a revert note may name a suspected prerequisite, but the note must say *suspected*, and the
+re-attempt is an EXPERIMENT with a control, never a resumption.

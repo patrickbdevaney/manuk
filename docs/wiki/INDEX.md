@@ -119,6 +119,8 @@
   - L2286 · row is a LOGICAL direction, and taffy only speaks physical (tick 764)
   - L2334 · An RTL table's COLUMN AXIS runs right-to-left (tick 765)
   - L2367 · ⚠ The fix that was reverted to get here
+  - L2382 · An RTL grid's COLUMN AXIS runs right-to-left — and taffy cannot be told (tick 766)
+  - L2429 · What is still wrong, pinned rather than guessed
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1283,4 +1285,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1194 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1196 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
