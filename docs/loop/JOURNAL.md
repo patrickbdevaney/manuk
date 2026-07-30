@@ -38315,3 +38315,60 @@ test of ASCII input can catch it, and the failure appears only for the character
 deliberately. Grep the class: `is_whitespace`, `is_alphanumeric`, `to_lowercase`, `trim()` — each has a
 CSS/HTML definition that differs from Unicode's at the edges, and the edges are where authors live. (Same
 family as t749's `system-ui`: a name that resolves to something *plausible* instead of failing.)
+
+## Tick 760 — measure-and-pin: the empty-inline line box is THREE defects, and one existing decision is right (2026-07-30)
+
+t759's fixture left two residues. Pinning them properly before anything is built, because the obvious
+fix for the first would have **broken a deliberate decision that is correct**.
+
+Measured against live Chromium, `body{margin:0;font:16px/normal sans-serif}`:
+
+| case | Chrome | ours |
+|---|---|---|
+| `<div>text<span id=s1></span>text</div>` — div / **span** | 18 / **17** | 19 / 19 |
+| `<div><span id=s2></span></div>` — div / span | **0 / 0** | **19 / 19** ❌ |
+| `<div><span id=s3 style="padding:4px"></span></div>` — div / **span** | 18 / **25** | 18 / **0** ❌ |
+
+### THE THREE DEFECTS, SEPARATED
+
+1. **A line box containing ONLY empty inlines must not exist** (CSS2 §9.4.2: no text, no preserved white
+   space, no inline with non-zero margin/border/padding ⇒ the line box is treated as not existing).
+   Chrome 0, ours 19. This is the one that showed up in the corpus.
+2. **An empty inline's own rect must carry its padding** — Chrome reports `s3` as **25** tall; we report
+   **0**. Note the containing div is correct in both (18), so only the inline's *self-reported* geometry
+   is lost. That box is what scroll-spy, sticky-header offsets and `getBoundingClientRect` targets read.
+3. **A 1px line-box height difference** on lines that legitimately exist (`d1` 18 vs 19), which is the
+   `<br>` residue from t759 in another dress.
+
+### ⚠ WHY THIS IS A MEASUREMENT TICK AND NOT A FIX
+
+`InlineItem::Spacer` carries the empty inline **deliberately**, and its comment states the reason and
+cites Chrome:
+
+> Also carries an **empty inline element** (`<span id="Section_2"></span>`), which occupies no width but
+> is still a box: Chrome reports zero width and a line-height-tall rect for it, and real pages depend on
+> that (fragment anchors, scroll-spy targets, `getBoundingClientRect` on a marker span).
+
+**That decision is CORRECT — measured: `s1` is 17px tall in Chrome.** An empty inline sharing a line with
+text really does get a real rect. What is wrong is only the case where such an inline is *alone on its
+line*, where Chrome gives 0. So the blunt fix I was reaching for — "an empty inline generates no line
+box" — would have **regressed the exact case the Spacer was built for**, and the fixture that would have
+caught it is the one I only wrote because the comment made me check.
+
+Quoting the decision before superseding it is a standing rule here, and this is the tick where it earned
+its keep: the rule to be implemented is *"a LINE BOX with no content-bearing member does not exist"*, not
+*"an empty inline has no box"*. Those differ on precisely the fragment-anchor case.
+
+TICK SHAPE: measurement
+CLUSTER: contributes to the CrUX `height ~16px (<div>)` band; the alone-on-a-line case is a `dy` term in
+the over-production direction (we add a line Chrome does not).
+Gates: none — nothing was built. The three rows are recorded in `CONSTELLATION.tsv` with their measured
+numbers, per t754's lesson that a finding left in a comment is a tick nobody schedules.
+PERF: none.
+WIKI: none — no engine source changed.
+PATTERN: ⚠⚠ **A DELIBERATE DECISION IS A HYPOTHESIS WITH A CITATION, AND THE CITATION MAY BE TRUE IN A
+NARROWER CASE THAN THE CODE APPLIES IT TO.** The `Spacer` comment was not wrong — an empty inline beside
+text is 17px tall in Chrome, exactly as claimed. It was *generalised*: applied also to the case where the
+inline is alone, where Chrome says 0. The reusable half: **when a measurement justifies a behaviour, note
+which configuration it was measured in** — because the next reader will apply it to every configuration,
+and the one that differs is where the bug lives.
