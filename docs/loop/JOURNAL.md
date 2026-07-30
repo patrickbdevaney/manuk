@@ -38092,3 +38092,89 @@ question (the `(no box)` side) forced it. The general form: **an instrument that
 be asked which side is which, in code, before any inference is drawn from a single one** — and the cheap
 tell is that the answer is one `grep` of the formatter, against however long it takes to chase a
 direction that does not exist.
+
+## Tick 757 — every `&` in every stylesheet matched `<html>`: CSS nesting was indexed but never resolved (2026-07-30)
+
+Found by following the *re-keyed* CrUX ledger (t754) to its new #1 primitive —
+`geometry/mis-sized: height ~16px (<div>)`, **10 of 12 sites** — and reading one sample:
+
+```
+www.heart.org  …/main/div:nth-child(1):   Chrome [0 336 1200×536]   ours [8 2903 1184×556]
+```
+
+`x=8`, `width=1184` against Chrome's `0`/`1200`. That is the **UA `body { margin: 8px }` still
+applied** where Chrome has none — an author margin reset not reaching us, which is the t745 class
+exactly. But the fixture said otherwise: `body{margin:0}` → `x=0` ✅, `*{margin:0}` → `x=0` ✅, no reset
+→ `x=8` ✅. The primitive was fine, so something was **eating the rule**. Testing the wrappers a modern
+reset lives inside: `@layer` ✅, `@media` ✅, `:where()` ✅, `@supports` ✅ … **CSS nesting ✗**.
+
+### THE MECHANISM
+
+`RuleIndex` has recursed into a style rule's nested rules since t659 — the rules are indexed. But their
+selectors were indexed **verbatim**, and a verbatim `&` is `Component::ParentSelector`, which
+`selectors-0.39.0/matching.rs:1300` resolves as:
+
+```rust
+Component::ParentSelector => match context.shared.scope_element {
+    Some(ref scope_element) => element.opaque() == *scope_element,
+    None => element.is_root(),        // <-- ours: we never set a scope
+},
+```
+
+**So every `&` on the web was matching `<html>`.** Measured against live Chromium (`body{margin:0}`, so
+the numbers are comparable):
+
+| rule | Chrome | was |
+|---|---|---|
+| `#a { width:50px; & { width:300px } }` | 300 | **50** |
+| `#h { width:40px; &:not(.x){ width:260px } }` | 260 | **40** |
+| `.p { & > span { width:240px } }` | 240 | **73** |
+| `#other { & .leak { width:500px } }`, on a `.leak` **inside** `#other` | 500 | **100** |
+| `#wrap { & .child { … } }` | 250 | 250 ✅ |
+| `#wrap2 { .child2 { … } }` (implicit) | 220 | 220 ✅ |
+
+⚠⚠ **The last two rows are why this survived: it did not fail as "nested rules are dropped".** A
+DESCENDANT form matches *by accident*, because `<html>` really is an ancestor of everything — so
+`& .child` applied to `.child` **anywhere in the document**, and carried **no specificity from `&`**
+(an unresolved `&` contributes nothing where it should contribute the parent's). Hence `#other { & .leak }`
+reading **100**: it did match, then lost the tie to a later `.leak { width:100px }` it should have beaten.
+**Over-matching, under-specified, and right often enough to look fine** — which is exactly the shape that
+outlives a hundred ticks.
+
+FIX: the one Stylo's own `stylist` uses at rule-collection time —
+`sr.selectors.replace_parent_selector(parent)` **before** indexing. Substitution corrects matching,
+specificity **and the index key** in one move: a substituted `& .leak` keys on `.leak` with `#other` as a
+real ancestor constraint. The enclosing rule's *resolved* list is threaded into the recursion (nesting
+composes, so `&` two levels down must resolve against an already-substituted parent, not another `&`);
+`@media`/`@supports`/`@layer` pass their parent through unchanged, because an at-rule does not introduce
+a nesting level. Implicit nesting (`.child {}` with no `&`) already parses as `& .child`, so it is
+covered by the same call. **All seven measurements are now Chrome-exact.**
+
+⚠ **`PseudoIndex` was checked for the same defect and does NOT have it — it has a different one.** It
+recurses into `@media`/`@supports`/`@layer` but **never into a style rule's own nested rules**, so it
+never sees an unresolved `&`; the consequence is that a `::before`/`::after` rule *nested inside another
+rule* is *never collected at all*. That is a separate gap with a separate fix, and per t754's lesson it
+is being recorded in the ledger (`CONSTELLATION.tsv`, status `partial`) rather than left as a comment
+saying it is "owed".
+
+TICK SHAPE: root-cause
+CLUSTER: the CrUX ledger's #1 `geometry/mis-sized: height ~16px (<div>)` (10/12 sites) and the `x`/`width`
+band under it. ⚠ NOT claimed as closed: the fixture proves the mechanism, and the next CrUX sweep prices
+how much of that band it was.
+Gates: `a_nested_rules_ampersand_resolves_to_the_enclosing_selector_not_the_root`
+(`engine/css/src/stylo_engine.rs`) — asserts all four broken shapes, the two that already worked, and,
+load-bearing, that `& .leak` does **NOT** leak to a `.leak` outside `#other`. That last assertion is what
+a fix that merely "makes `&` match anything" would fail, so the gate distinguishes the correct fix from
+the plausible one. **RED-proven by running the mutation** (`replace_parent_selector` → `clone`): the bare
+`&` reads `Px(50)` where `Px(300)` is required. Regression: manuk-css 44, manuk-layout, manuk-text,
+manuk-page all green.
+PERF: one `replace_parent_selector` per nested selector at index build (once per stylesheet set, not per
+element). Top-level rules take the `None` arm and are untouched.
+WIKI: `docs/wiki/css-cascade.md` — "an unresolved `&` is not a no-op, it is a selector for the root".
+PATTERN: ⚠⚠⚠ **A PLACEHOLDER THAT RESOLVES TO SOMETHING PLAUSIBLE INSTEAD OF FAILING IS WORSE THAN ONE
+THAT THROWS.** `&` had a defined meaning with no scope set — *the root element* — so nothing errored,
+nothing logged, and a large fraction of nested rules kept working through an ancestor coincidence. The
+41%-of-corpus population (measured at t659) was indexed, matched, and quietly wrong. The reusable half:
+**when you adopt a matcher's data structure, enumerate the components whose meaning depends on context
+the caller must supply** — `ParentSelector`, `:scope`, `:host`, relative selectors — because each is a
+silent default waiting to be plausible.

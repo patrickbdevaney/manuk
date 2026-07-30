@@ -1252,7 +1252,16 @@ impl RuleIndex {
         for sheet in sheets {
             let rank = origin_rank(sheet.contents.read_with(guard).origin);
             let rules = sheet.contents.read_with(guard).rules(guard);
-            idx.add_rules(rules, guard, device, &mut order, qm, &mut cq_stack, rank);
+            idx.add_rules(
+                rules,
+                guard,
+                device,
+                &mut order,
+                qm,
+                &mut cq_stack,
+                rank,
+                None,
+            );
         }
         idx
     }
@@ -1267,13 +1276,57 @@ impl RuleIndex {
         qm: QuirksMode,
         cq_stack: &mut Vec<ServoArc<Vec<ContainerCondition>>>,
         origin_rank: u8,
+        // The ENCLOSING style rule's selector list, with `&` in it already substituted — `None` at
+        // the top level. Threaded so nested `&` can be resolved; see the substitution below.
+        parent: Option<&selectors::SelectorList<stylo::selector_parser::SelectorImpl>>,
     ) {
         use selectors::parser::Component;
         for rule in rules {
             match rule {
                 CssRule::Style(style_rule) => {
                     let sr = style_rule.read_with(guard);
-                    for sel in sr.selectors.slice() {
+                    // ── **CSS NESTING: `&` MUST BE SUBSTITUTED, OR IT SILENTLY MEANS `<html>`.**
+                    //
+                    // t659 taught this walk to RECURSE into `sr.rules`, so nested rules are indexed —
+                    // but it indexed their selectors VERBATIM, and a verbatim `&` is
+                    // `Component::ParentSelector`, which the matcher resolves as:
+                    //
+                    //     Component::ParentSelector => match context.shared.scope_element {
+                    //         Some(ref scope_element) => element.opaque() == *scope_element,
+                    //         None => element.is_root(),          // <-- ours: no scope is ever set
+                    //     }
+                    //
+                    // So every `&` in every stylesheet matched **the root element**. Measured against
+                    // live Chromium, with `body{margin:0}` so the numbers are comparable:
+                    //
+                    //   `#a { width:50px; & { width:300px } }`          Chrome 300   ours **50**
+                    //   `#h { width:40px; &:not(.x){ width:260px } }`   Chrome 260   ours **40**
+                    //   `.p { & > span { width:240px } }`               Chrome 240   ours **73**
+                    //   `#other { & .leak { width:500px } }`            Chrome 500   ours **100**
+                    //
+                    // ⚠ The failure is not a clean "dropped", which is why it survived: a DESCENDANT
+                    // form like `& .child` matches *by accident*, because `<html>` really is an
+                    // ancestor of everything — so it applies to `.child` **anywhere in the document**,
+                    // while carrying the wrong SPECIFICITY (`&` should contribute the parent
+                    // selector's, an unresolved one contributes nothing), so it then loses cascade
+                    // fights it should win: `#other { & .leak }` reads 100 instead of 500 for exactly
+                    // that reason. Over-matching, under-specified, and right often enough to look fine.
+                    //
+                    // The fix is the one Stylo's own `stylist` uses at rule-collection time
+                    // (`replace_parent_selector`): substitute the enclosing rule's selectors into `&`
+                    // BEFORE indexing, which corrects matching, specificity and the index KEY together
+                    // — a substituted `& .leak` keys on `.leak` with `#other` as a real ancestor
+                    // constraint. Implicit nesting (`.child {}` with no `&`) already parses as
+                    // `& .child`, so the same call covers it.
+                    //
+                    // Population is not a guess: the comment on the recursion below records that
+                    // **41% of the corpus uses CSS nesting** in its inline `<style>` blocks alone.
+                    let resolved: selectors::SelectorList<stylo::selector_parser::SelectorImpl> =
+                        match parent {
+                            Some(p) => sr.selectors.replace_parent_selector(p),
+                            None => sr.selectors.clone(),
+                        };
+                    for sel in resolved.slice() {
                         // The rightmost compound is the one that must match THIS element; anything
                         // to its left is an ancestor/sibling constraint checked afterwards.
                         let mut key: Option<(u8, String)> = None;
@@ -1330,7 +1383,19 @@ impl RuleIndex {
                     // whether the rules it indexed were all the rules there were.
                     if let Some(nested) = &sr.rules {
                         let nested = nested.read_with(guard);
-                        self.add_rules(&nested.0, guard, device, order, qm, cq_stack, origin_rank);
+                        // The RESOLVED list, not `sr.selectors`: nesting composes, so `&` inside a
+                        // doubly-nested rule must resolve against its parent's already-substituted
+                        // selector rather than against another unresolved `&`.
+                        self.add_rules(
+                            &nested.0,
+                            guard,
+                            device,
+                            order,
+                            qm,
+                            cq_stack,
+                            origin_rank,
+                            Some(&resolved),
+                        );
                     }
                 }
                 CssRule::Media(media_rule) => {
@@ -1338,7 +1403,16 @@ impl RuleIndex {
                     let mut custom = CustomMediaEvaluator::none();
                     if ml.evaluate(device, qm, &mut custom) {
                         let nested = media_rule.rules.read_with(guard);
-                        self.add_rules(&nested.0, guard, device, order, qm, cq_stack, origin_rank);
+                        self.add_rules(
+                            &nested.0,
+                            guard,
+                            device,
+                            order,
+                            qm,
+                            cq_stack,
+                            origin_rank,
+                            parent,
+                        );
                     }
                 }
                 CssRule::Supports(supports_rule) => {
@@ -1351,12 +1425,30 @@ impl RuleIndex {
                         && honest_supports(&supports_rule.condition).unwrap_or(true)
                     {
                         let nested = supports_rule.rules.read_with(guard);
-                        self.add_rules(&nested.0, guard, device, order, qm, cq_stack, origin_rank);
+                        self.add_rules(
+                            &nested.0,
+                            guard,
+                            device,
+                            order,
+                            qm,
+                            cq_stack,
+                            origin_rank,
+                            parent,
+                        );
                     }
                 }
                 CssRule::LayerBlock(layer) => {
                     let nested = layer.rules.read_with(guard);
-                    self.add_rules(&nested.0, guard, device, order, qm, cq_stack, origin_rank);
+                    self.add_rules(
+                        &nested.0,
+                        guard,
+                        device,
+                        order,
+                        qm,
+                        cq_stack,
+                        origin_rank,
+                        parent,
+                    );
                 }
                 // `CssRule::Container` never appears here: stylo's servo build parses the
                 // `@container` at-rule only under `cfg!(feature = "gecko")` (rule_parser.rs), so
@@ -1592,6 +1684,7 @@ impl RuleIndex {
                     qm,
                     &mut cq_stack,
                     ORIGIN_AUTHOR,
+                    None,
                 );
             }
         }
@@ -2452,6 +2545,88 @@ mod tests {
             map[&id("rl")].text_align,
             A::Left,
             "explicit physical left stays left in RTL"
+        );
+    }
+
+    /// **CSS NESTING: `&` MUST BE SUBSTITUTED WITH THE ENCLOSING SELECTOR, NOT LEFT TO MEAN `<html>`.**
+    ///
+    /// `RuleIndex` recurses into a style rule's nested rules (t659) but used to index their selectors
+    /// verbatim — and a verbatim `&` is `Component::ParentSelector`, which the matcher resolves as
+    /// `scope_element` if one is set and **`element.is_root()`** if not. We never set one, so every
+    /// `&` on the web matched `<html>`.
+    ///
+    /// ⚠ It did not fail as a clean "nested rules are dropped", which is why it survived: the
+    /// DESCENDANT form matched *by accident* (`<html>` is an ancestor of everything), so it applied
+    /// document-wide while carrying no specificity from `&`. Measured against live Chromium:
+    ///
+    /// | rule | Chrome | was |
+    /// |---|---|---|
+    /// | `#a { width:50px; & { width:300px } }` | 300 | **50** |
+    /// | `#h { width:40px; &:not(.x){ width:260px } }` | 260 | **40** |
+    /// | `.p { & > span { width:240px } }` | 240 | **73** |
+    /// | `#other { & .leak { width:500px } }` (a `.leak` INSIDE `#other`) | 500 | **100** |
+    ///
+    /// This asserts all four shapes plus the two that already worked, and — the load-bearing one —
+    /// that a nested descendant rule does **NOT** leak to a `.leak` outside `#other`, which is the
+    /// over-match the root accident produced and which a fix that merely "makes `&` match anything"
+    /// would leave in place.
+    ///
+    /// RED, run: replace `sr.selectors.replace_parent_selector(p)` with `sr.selectors.clone()` in
+    /// `RuleIndex::add_rules` — `bare`, `compound` and `child` read their un-nested widths (50/40/30)
+    /// and `inside` reads 100 instead of 500.
+    #[test]
+    fn a_nested_rules_ampersand_resolves_to_the_enclosing_selector_not_the_root() {
+        let dom = manuk_html::parse(
+            r#"<div id="a">x</div>
+               <div id="h">x</div>
+               <div class="p"><span id="c3">x</span></div>
+               <div id="other"><div class="leak" id="inside">x</div></div>
+               <div><div class="leak" id="outside">x</div></div>"#,
+        );
+        let sheet = Stylesheet::parse(
+            "#a { width: 50px; & { width: 300px } }
+             #h { width: 40px; &:not(.x) { width: 260px } }
+             .p { & > span { width: 240px; display: block } }
+             #other { & .leak { width: 500px } }
+             .leak { width: 100px }",
+        );
+        let map = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 1200.0, 800.0);
+        let id = |v: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(v))
+                .unwrap()
+        };
+        let w = |v: &str| map[&id(v)].width;
+        use crate::Dim;
+        assert_eq!(
+            w("a"),
+            Dim::Px(300.0),
+            "a bare `&` must select the parent rule's subject"
+        );
+        assert_eq!(
+            w("h"),
+            Dim::Px(260.0),
+            "`&:not(.x)` is a compound on the parent's subject, not a selector for the root"
+        );
+        assert_eq!(
+            w("c3"),
+            Dim::Px(240.0),
+            "`& > span` must resolve `&` to `.p`, so the child combinator has a real left-hand side"
+        );
+        // The two halves of the descendant case. `inside` proves the rule APPLIES (and, because
+        // `.leak{width:100px}` follows it in source order, that `&` contributed `#other`'s
+        // specificity — an unresolved `&` loses this tie and reads 100).
+        assert_eq!(
+            w("inside"),
+            Dim::Px(500.0),
+            "`& .leak` must match inside #other AND carry #other's specificity"
+        );
+        // …and `outside` proves it does NOT leak, which the `<html>`-matching accident did.
+        assert_eq!(
+            w("outside"),
+            Dim::Px(100.0),
+            "`& .leak` must NOT match a .leak outside #other — the root accident made every nested \
+             descendant rule document-wide"
         );
     }
 

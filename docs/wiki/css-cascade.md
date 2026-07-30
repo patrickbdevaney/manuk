@@ -1652,3 +1652,67 @@ override. Two implementations of one rule where only one is on the shipping path
 ([[two-cascades-stale-source-of-truth]] in memory) — the non-shipping one was the correct one.
 
 [[box-layout]] [[conformance-and-oracles]]
+
+## An unresolved `&` is not a no-op — it is a selector for the ROOT (tick 757)
+
+`RuleIndex` flattens a stylesheet's rules into one indexed list, and since t659 it recurses into a style
+rule's **nested** rules. It indexed their selectors verbatim. A verbatim `&` is
+`Component::ParentSelector`, and `selectors-0.39.0/matching.rs` resolves it as:
+
+```rust
+Component::ParentSelector => match context.shared.scope_element {
+    Some(ref scope_element) => element.opaque() == *scope_element,
+    None => element.is_root(),        // no scope set -> `&` means <html>
+},
+```
+
+We never set `scope_element`. **So every `&` in every stylesheet matched `<html>`.**
+
+### Why it looked like it worked
+
+This is the important part, and the reason it survived ~100 ticks after nesting was indexed. It did not
+fail as *"nested rules are dropped"*:
+
+| form | outcome |
+|---|---|
+| `& .child` (descendant) | **matches by accident** — `<html>` really is an ancestor of everything |
+| `.child` (implicit, parses as `& .child`) | same accident |
+| `&` bare, `&:not(.x)`, `&.active`, `&:hover` | never match (the element is not the root) |
+| `& > span` (child combinator) | never match (the parent is not the root) |
+
+And the accident is not benign. A descendant form applied to that selector **anywhere in the document**,
+and `&` contributed **no specificity** where it should contribute the parent selector's. So
+`#other { & .leak { width: 500px } }` alongside a later `.leak { width: 100px }` matched *and then lost
+the tie*: measured 100 where Chrome says 500. **Over-matching, under-specified, and right often enough to
+look fine.**
+
+### The fix, and why substitution rather than a scope
+
+Stylo's own `stylist` substitutes at rule-collection time, and so do we now:
+
+```rust
+let resolved = match parent {
+    Some(p) => sr.selectors.replace_parent_selector(p),
+    None    => sr.selectors.clone(),
+};
+```
+
+Substitution beats setting `scope_element` at match time for a flattened index, because one pass fixes
+three things at once: **matching**, **specificity**, and the **index key** — a substituted `& .leak` keys
+on `.leak` with `#other` as a genuine ancestor constraint, so the bucket it lands in is right too.
+
+Two details:
+
+- **Thread the RESOLVED list into the recursion, not `sr.selectors`.** Nesting composes; `&` two levels
+  down must resolve against its parent's already-substituted selector, never against another `&`.
+- **`@media` / `@supports` / `@layer` pass their parent through unchanged** — an at-rule does not
+  introduce a nesting level.
+
+Verified Chrome-exact on all six forms above plus the no-leak case.
+
+### The rule
+
+**When you adopt a matcher's data structure, enumerate the components whose meaning depends on context
+the caller must supply.** `ParentSelector`, `:scope`, `:host`, relative selectors — each has a *defined
+default* when the context is absent, so none of them errors, none logs, and each is a silent wrong answer
+waiting to be plausible. A placeholder that resolves to something plausible is worse than one that throws.
