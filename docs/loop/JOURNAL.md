@@ -38178,3 +38178,62 @@ nothing logged, and a large fraction of nested rules kept working through an anc
 **when you adopt a matcher's data structure, enumerate the components whose meaning depends on context
 the caller must supply** — `ParentSelector`, `:scope`, `:host`, relative selectors — because each is a
 silent default waiting to be plausible.
+
+## Tick 758 — the CrUX burndown moved +1.6 pts on ONE engine tick, and two of the three crossings were by a hair (2026-07-30)
+
+The validation sweep t757 (CSS nesting) owes. Full 200-site CrUX trend corpus, same runner, same
+instrument hash, **200/200 attempted, 201 rows — sampled == rows.**
+
+```
+IN-SCOPE PASS: 7/130 = 5.4%   (was 5/130 = 3.8%)    TARGET 95% = 124  ->  NEED +117
+scored 80 -> 83 · excluded 70 -> 70 (flat) · shape_mean 41.6 -> 41.3 · cov_mean 82.6 -> 82.0
+Δ vs t752: +1.6 pts    BURNDOWN: ~56 more sweeps to 95% at this rate
+✓ no trap/regression/staleness/exclusion flag
+```
+
+**Attribution is unusually clean this time.** Between the two sweeps the only change the *engine* saw was
+**t757**: t753 and t754 are instrument-side (and t754's oracle keying does not touch the fidelity path at
+all), t755/t756 are documentation. So this is close to a single-tick measurement, which is the calibration
+the constitution check asked for: **one shared-root-cause CSS fix ≈ +1.6 points on the representative
+corpus.**
+
+Per-site, and it is clean in the direction that matters:
+
+```
+newly passing:   dashboard.twitch.tv  0.727 -> 0.909
+                 payb.jp              0.734 -> 0.752
+                 www.tz.de            0.740 -> 0.750
+stopped passing: (none)
+scored in both: 79   improved: 6   regressed: 4
+```
+
+⚠ **THE HONEST QUALIFIER, AND IT IS THE POINT OF WRITING THIS DOWN: two of the three crossings are
+threshold artefacts.** `payb.jp` (0.752) and `www.tz.de` (0.750) cleared 0.75 by 2 and 0 thousandths.
+Only `dashboard.twitch.tv` (+0.182) is a movement anyone would call one. `shape≥0.75` is a **threshold**
+metric, so a site parked at 0.74 flips for almost nothing — which cuts both ways and means **a +2 in the
+pass count is not 2 sites' worth of progress.** The mean tells the sober story: `shape_mean` went
+41.6 → 41.3, i.e. **flat**. The pass count moved because a few sites were sitting on the line, not because
+the corpus got materially better.
+
+That is not an argument against the metric — it is the Phase-0 exit condition and it is the right one.
+It is an argument for reading `shape_mean` beside it every time, and for expecting the *next* points to
+cost more than these did, because the sites nearest the line have now been harvested.
+
+**Zero regressions** among 79 sites scored in both, which is the ratchet's actual question and the answer
+is clean. The 4 "regressed" are all under the per-site noise floor this session already measured (a
+same-binary spread of 0.003 on a stable site, against live-site swings of tenths).
+
+TICK SHAPE: measurement
+CLUSTER: prices t757. The CrUX ledger's #1 (`geometry/mis-sized: height ~16px (<div>)`, 10/12 sites) is
+where the nesting bug surfaced; whether that row actually shrank needs the re-crawl t754 made necessary,
+which is the next ranking action and is NOT claimed here.
+Gates: none — no engine behaviour. The sweep is the falsifiable artefact, and the protocol's requirement
+("a fix MUST raise in-scope-pass on the next sweep or it is reverted/re-scoped") is **met**.
+PERF: none.
+WIKI: none — no engine source changed.
+PATTERN: ⚠⚠ **A THRESHOLD METRIC PAYS OUT IN LUMPS THAT HAVE NOTHING TO DO WITH THE SIZE OF THE FIX.**
+Two of three sites crossed 0.75 by ≤0.002 while the corpus mean did not move. Read a threshold count
+*next to* the continuous statistic it thresholds, always — the count answers "did anything cross the
+line", the mean answers "did the population move", and only the second is evidence about the engine. The
+corollary for planning: **the cheapest points are the ones already at the line, so an early slope
+over-predicts the rest of the curve.**

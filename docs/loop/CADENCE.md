@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **509** | ticks 1–757 |
 | median tick cycle | **22m** | 508 intervals |
-| median, last 10 | **32m** | 10 intervals |
+| median, last 10 | **33m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 458.4h elapsed |
+| **ticks per hour** | **1.10** | 460.1h elapsed |
 | median verify wall | **63s** | 448 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -605,6 +605,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **753** | 2026-07-30 06:45 | 27m | instrument-fidelity | 63s | +419/−35 | 353 | 81 | 56.0% · | the sweep manufactured 8 Bar-0 "crashes" that were watchdog timeouts, because a killed pro |
 | **754** | 2026-07-30 06:48 | 3m | instrument-fidelity | 63s | +113/−33 | 353 | 81 | 56.0% · | the priority ledger this project ranks its work by was ~68% phantom: the oracle keyed by c |
 | **755** | 2026-07-30 06:50 | 2m | process | 63s | +76/−32 | 353 | 81 | 56.0% · | the wall audit was recorded where its counter does not look (2026-07-30) |
-| **757** | 2026-07-30 07:28 | 38m | root-cause | 63s | +375/−40 | 353 | 81 | 56.0% · | every `&` in every stylesheet matched `<html>`: CSS nesting was indexed but never resolved |
+| **757** | 2026-07-30 09:11 | 2.3h | root-cause | 63s | +294/−32 | 353 | 81 | 56.0% · | every `&` in every stylesheet matched `<html>`: CSS nesting was indexed but never resolved |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

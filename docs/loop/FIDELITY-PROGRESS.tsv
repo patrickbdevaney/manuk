@@ -5,3 +5,4 @@ iso_sweep	sweep_tick	sites	scored	shape_ge0.75	shape_ge0.75_pct	shape_mean	cov_m
 2026-07-29T23:07:51	t745	265	132	10	3.8	42.3	86.4	docs/loop/SWEEP-t745-rows.tsv	61	204	4.9
 2026-07-30T03:44:19	t750	265	134	14	5.3	41.8	88.5	docs/loop/SWEEP-t750-rows.tsv	57	208	6.7
 2026-07-30T06:03:52	t752	200	80	5	2.5	41.6	82.6	docs/loop/SWEEP-t752-rows.tsv	70	130	3.8	crux
+2026-07-30T09:08:56	t758	200	83	7	3.5	41.3	82.0	docs/loop/SWEEP-t758-rows.tsv	70	130	5.4	crux
