@@ -1446,3 +1446,48 @@ input can catch it, and the failure appears only for characters an author chose 
 
 Grep the class — `is_whitespace`, `is_alphanumeric`, `to_lowercase`, `trim()` — each has a CSS/HTML
 definition that differs from Unicode's at the edges, and the edges are where authors live.
+
+## A line box with no content-bearing member does not exist — and the spec's own sentence is too wide (tick 761)
+
+`<div><span></span></div>` was **19px tall here against Chrome's 0**. The strut (§10.8, tick 690) is
+folded into *every* line box unconditionally, so any wrapper whose inline content collapsed to nothing
+still got a full line height. CSS 2.1 §9.4.2 says it should not:
+
+> *"Line boxes that contain no text, no preserved white space, no inline elements with non-zero margins,
+> padding or borders, and no other in-flow content … must be treated as zero-height line boxes for the
+> purposes of determining the positions of any elements inside of them, and must be treated as not
+> existing for any other purpose."*
+
+**The rule is about the LINE, not about the empty inline** — and that distinction is the whole tick. An
+empty inline *sharing a line with text* keeps a real rect: Chrome reports the span in
+`<div>text<span id=s1></span>text</div>` as **17px tall**, and fragment anchors, scroll-spy targets and
+`getBoundingClientRect` on a marker span depend on it. That is exactly what `InlineItem::Spacer` was
+built for, and its comment said so with a Chrome citation. The blunt fix — *"an empty inline generates no
+line box"* — closes the corpus symptom and regresses the anchor case. The implemented predicate is
+`any(content_bearing)` over the line's fragments, and the reporter fragments are still **emitted at zero
+height** rather than dropped, so the element stays in `node_rects` (dropping them would trade a placement
+error for a coverage one — the regression `LineFrag::report_h` already documents).
+
+### Chrome is NARROWER than its own spec text, and only the measurement says so
+
+§9.4.2's escape hatch reads *"no inline elements with non-zero margins, padding or borders"*, which
+invites the general test. Measured against live Chromium, `body{margin:0;font:16px/normal sans-serif}`,
+reading the **div's** height:
+
+```text
+  <div><span style="padding:4px">      </span></div>   18   <- 4px of it is HORIZONTAL
+  <div><span style="padding:4px 0">    </span></div>    0   <- vertical only
+  <div><span style="border-top:3px">   </span></div>    0
+  <div><span style="margin-left:10px"> </span></div>    0
+```
+
+Three of those four rows have a non-zero margin/border/padding and are still **0**. What actually holds a
+line open is an edge that occupies **inline flow width** — which in this engine is precisely the
+`pad_l` / `pad_r` spacers, so `holds_line` is `true` on those two emission sites and `false` on the
+empty-inline reporter. Writing the predicate from the spec sentence would have made three of the four
+rows 18 against Chrome's 0: a fix that is *more spec-compliant* and *less correct*.
+
+Gate: `a_line_box_with_only_empty_inlines_does_not_exist` (`engine/layout/src/lib.rs`), which asserts both
+directions and all four rows above. RED-proven by mutation in both directions — `holds_line: true` on the
+empty-inline spacer reads 19.2 (the corpus symptom), `holds_line: false` on the padding edges reads 0
+where Chrome says 18.

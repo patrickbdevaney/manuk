@@ -4778,6 +4778,7 @@ impl Ctx<'_> {
                         node: Some(node),
                         space_before: *pending_space && !*first,
                         report_height: 0.0,
+                        holds_line: true,
                     });
                     *first = false;
                     *pending_space = false;
@@ -4793,6 +4794,7 @@ impl Ctx<'_> {
                         node: Some(node),
                         space_before: false,
                         report_height: 0.0,
+                        holds_line: true,
                     });
                     *pending_space = false;
                 }
@@ -4801,11 +4803,32 @@ impl Ctx<'_> {
                 // be scrolled to, and it cannot be painted. On one Wikipedia article that is 1,079
                 // spans and 298 anchors — the single largest source of missing elements.
                 if out.len() == mark {
+                    // …but it does NOT bring a line box into existence on its own (CSS2 §9.4.2), so
+                    // `holds_line` is FALSE here — see `close_line`.
+                    //
+                    // §9.4.2's escape hatch reads *"no inline elements with non-zero margins, padding
+                    // or borders"*, which invites the general test. **Chrome is narrower than its own
+                    // spec text, measured on this exact fixture** (`16px/normal sans-serif`, the div's
+                    // height):
+                    //
+                    // ```text
+                    //   <span style="padding:4px">       18   <- 4px of it is HORIZONTAL
+                    //   <span style="padding:4px 0">      0   <- vertical only
+                    //   <span style="border-top:3px">     0
+                    //   <span style="margin-left:10px">   0
+                    // ```
+                    //
+                    // So what actually holds a line open is an edge that occupies INLINE FLOW WIDTH —
+                    // which is precisely the `pad_l`/`pad_r` spacers above, and reaching this branch
+                    // means both were zero. Deriving `holds_line` from the spec sentence instead of
+                    // from the measurement would have made three of these four rows 18 against
+                    // Chrome's 0.
                     out.push(InlineItem::Spacer {
                         width: 0.0,
                         node: Some(node),
                         space_before: false,
                         report_height: s.line_height.max(0.0),
+                        holds_line: false,
                     });
                 }
             }
@@ -4986,6 +5009,7 @@ impl Ctx<'_> {
                         atomic: None,
                         atomic_h: 0.0,
                         valign: VerticalAlign::Baseline,
+                        content_bearing: true,
                     });
                 } else if node.map(|n| self.dom.tag_name(n)) == Some(Some("br")) {
                     // The `<br>` that ends a NON-empty line also earns a box: a zero-width
@@ -5023,6 +5047,7 @@ impl Ctx<'_> {
                         atomic: None,
                         atomic_h: 0.0,
                         valign: VerticalAlign::Baseline,
+                        content_bearing: true,
                     });
                 }
                 y = close_line(
@@ -5091,6 +5116,7 @@ impl Ctx<'_> {
                             atomic: None,
                             atomic_h: 0.0,
                             valign: VerticalAlign::Baseline,
+                            content_bearing: true,
                         }),
                     )
                 }
@@ -5142,6 +5168,7 @@ impl Ctx<'_> {
                             atomic: Some(box_),
                             atomic_h: height,
                             valign,
+                            content_bearing: true,
                         }),
                     )
                 }
@@ -5152,6 +5179,7 @@ impl Ctx<'_> {
                     node,
                     space_before,
                     report_height,
+                    holds_line,
                 } => {
                     // Inline padding/border: occupies `width`, paints nothing, but its
                     // (empty-text) fragment carries the owning element's geometry.
@@ -5195,6 +5223,7 @@ impl Ctx<'_> {
                             atomic: None,
                             atomic_h: 0.0,
                             valign: VerticalAlign::Baseline,
+                            content_bearing: holds_line,
                         }),
                     )
                 }
@@ -5287,6 +5316,11 @@ struct LineFrag {
     atomic: Option<Box<LayoutBox>>,
     atomic_h: f32,
     valign: VerticalAlign,
+    /// **Does this fragment bring its line box into existence?** (CSS 2.1 §9.4.2.) True for text, an
+    /// atomic inline, a `<br>`'s box and a real margin/border/padding edge; false for the zero-width
+    /// geometry box of an empty inline, which is a *reporter* and not content. A line every one of
+    /// whose fragments answers `false` is treated as not existing — see `close_line`.
+    content_bearing: bool,
 }
 
 /// Commit a line's fragments at vertical `y` within band `[line_left, +line_avail)`,
@@ -5303,6 +5337,41 @@ fn close_line(
     _fonts: &FontContext,
     strut: (f32, f32, f32),
 ) -> f32 {
+    // ── **A LINE BOX WITH NOTHING IN IT DOES NOT EXIST** (CSS 2.1 §9.4.2):
+    //
+    //    > *"Line boxes that contain no text, no preserved white space, no inline elements with
+    //    > non-zero margins, padding or borders, and no other in-flow content … must be treated as
+    //    > zero-height line boxes for the purposes of determining the positions of any elements
+    //    > inside of them, and must be treated as not existing for any other purpose."*
+    //
+    //    The strut (§10.8) is folded into every line box unconditionally, so a `<div><span></span></div>`
+    //    came out **19px tall against Chrome's 0** — a phantom line under every empty wrapper, and a
+    //    `dy` that charges everything below it. Measured t760: `d2/s2` Chrome 0/0, ours 19/19.
+    //
+    //    ⚠ **The rule is about the LINE, not about the empty inline.** An empty inline *sharing a line
+    //    with text* keeps its real rect — Chrome reports `<div>text<span id=s1></span>text</div>`'s
+    //    span as 17px tall, and fragment anchors, scroll-spy targets and `getBoundingClientRect` on a
+    //    marker span depend on it (which is exactly what `InlineItem::Spacer` was built for). So the
+    //    test is `any(content_bearing)` over the line, and the reporter fragments are still EMITTED
+    //    here — at zero height — rather than dropped, because dropping them would take the element out
+    //    of `node_rects` and trade a placement error for a coverage one.
+    if !line.iter().any(|f| f.content_bearing) {
+        for f in line.drain(..) {
+            frags.push(TextFragment {
+                x: line_left + f.x,
+                line_top: y,
+                baseline: y,
+                width: f.width,
+                text: f.text,
+                style: f.style,
+                node: f.node,
+                content_ascent: 0.0,
+                content_height: 0.0,
+            });
+        }
+        return y;
+    }
+
     // ROUNDED per-part, because that is the content area's rule and it is NOT the line box's rule
     // (`LineMetrics::content_height` documents the measurement that separates them). The max is
     // taken over the *rounded* values so a mixed-font line agrees with the per-fragment boxes below.
@@ -5525,11 +5594,16 @@ enum InlineItem {
     /// real pages depend on that (fragment anchors, scroll-spy targets, `getBoundingClientRect` on
     /// a marker span). `report_height` is the height its rect claims — `0` for a padding edge (which
     /// must not inflate anything), the element's line-height for an empty inline.
+    ///
+    /// `holds_line` is CSS 2.1 §9.4.2: a spacer that is a real *margin/border/padding* edge keeps its
+    /// line box in existence, while the zero-width box of a bare `<span></span>` does not — see
+    /// `close_line`.
     Spacer {
         width: f32,
         node: Option<NodeId>,
         space_before: bool,
         report_height: f32,
+        holds_line: bool,
     },
     /// A **forced line break** — `<br>`, or a newline inside `white-space: pre`.
     ///
@@ -6190,6 +6264,91 @@ mod tests {
             "three ASCII spaces must still collapse to one (Chrome 29 == 29), got {} vs {}",
             r("sp3").width,
             r("one").width
+        );
+    }
+
+    /// **A line box with no content-bearing member does not exist** (CSS 2.1 §9.4.2) — and the
+    /// interesting half of this gate is the case it must NOT break.
+    ///
+    /// Measured against live Chromium on `body{margin:0;font:16px/normal sans-serif}`:
+    ///
+    /// | markup | Chrome (div / span) | was |
+    /// |---|---|---|
+    /// | `<div>text<span></span>text</div>` | 18 / **17** | 19 / 19 — the ANCHOR case, must stay >0 |
+    /// | `<div><span></span></div>` | **0 / 0** | 19 / 19 ❌ |
+    /// | `<div><span style=padding:4px></span></div>` | **18** / 25 | 18 / 0 |
+    /// | `<div><span style=padding:4px 0></span></div>` | **0** | — |
+    /// | `<div><span style=border-top:3px></span></div>` | **0** | — |
+    /// | `<div><span style=margin-left:10px></span></div>` | **0** | — |
+    ///
+    /// The last three rows are why this is asserted and not derived: §9.4.2's own words are *"no
+    /// inline elements with non-zero margins, padding or borders"*, and three of those four rows have
+    /// exactly that and are still 0. Only an edge that occupies **inline flow width** holds the line.
+    ///
+    /// RED, run: give the empty-inline `Spacer` `holds_line: true` — `d2` reads 19 against Chrome's 0,
+    /// which is the corpus symptom. Give it to every spacer and `d4`/`d5` go 19 as well.
+    #[test]
+    fn a_line_box_with_only_empty_inlines_does_not_exist() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0;font:16px/normal sans-serif'>\
+             <div id=d1>text<span id=s1></span>text</div>\
+             <div id=d2><span id=s2></span></div>\
+             <div id=d3><span id=s3 style='padding:4px'></span></div>\
+             <div id=d4><span id=s4 style='padding:4px 0'></span></div>\
+             <div id=d6><span id=s6 style='margin-left:10px'></span></div>\
+             </body>",
+            "",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let r = |want: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(want))
+                .unwrap_or_else(|| panic!("no #{want}"));
+            rects[&n]
+        };
+        // THE FIX: an empty inline alone on its line generates no line box (Chrome 0/0).
+        assert!(
+            r("d2").height < 1.0,
+            "`<div><span></span></div>` must have NO line box (Chrome 0), got {}",
+            r("d2").height
+        );
+        assert!(
+            r("s2").height < 1.0,
+            "the empty inline alone on its line reports 0 in Chrome, got {}",
+            r("s2").height
+        );
+        // THE HALF THAT MUST NOT BREAK — an empty inline SHARING a line with text keeps a real rect
+        // (Chrome 17): fragment anchors, scroll-spy targets and `getBoundingClientRect` on a marker
+        // span all read this box, and it is the reason `InlineItem::Spacer` exists. A blunt "an empty
+        // inline makes no line box" fix passes the assertion above and fails this one.
+        assert!(
+            r("d1").height > 10.0,
+            "a line with text still exists (Chrome 18), got {}",
+            r("d1").height
+        );
+        assert!(
+            r("s1").height > 10.0,
+            "an empty inline BESIDE TEXT keeps its rect (Chrome 17), got {}",
+            r("s1").height
+        );
+        // An edge that occupies inline flow width DOES hold the line open (Chrome 18)…
+        assert!(
+            r("d3").height > 10.0,
+            "horizontal padding on an empty inline holds its line box (Chrome 18), got {}",
+            r("d3").height
+        );
+        // …and one that does not, does not — Chrome is narrower than §9.4.2's own sentence here.
+        assert!(
+            r("d4").height < 1.0,
+            "vertical-only padding does NOT hold a line box (Chrome 0), got {}",
+            r("d4").height
+        );
+        assert!(
+            r("d6").height < 1.0,
+            "a horizontal margin does NOT hold a line box (Chrome 0), got {}",
+            r("d6").height
         );
     }
 

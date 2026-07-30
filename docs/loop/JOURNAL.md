@@ -38372,3 +38372,63 @@ text is 17px tall in Chrome, exactly as claimed. It was *generalised*: applied a
 inline is alone, where Chrome says 0. The reusable half: **when a measurement justifies a behaviour, note
 which configuration it was measured in** — because the next reader will apply it to every configuration,
 and the one that differs is where the bug lives.
+
+## Tick 761 — the phantom line box under every empty wrapper, and a spec sentence that is wider than Chrome (2026-07-30)
+
+t760 measured three defects and built none. This lands the first: **a line box with no content-bearing
+member does not exist** (CSS 2.1 §9.4.2). `<div><span></span></div>` was **19px tall against Chrome's 0**
+— the strut (t690) is folded into every line box unconditionally, so any wrapper whose inline content
+collapses to nothing still gets a full line height. A phantom line is a `dy` term: it charges every
+sibling below it, and empty wrappers are ordinary output from every templating engine and component
+framework.
+
+### THE HALF THAT HAD TO NOT BREAK
+
+The obvious fix — *"an empty inline generates no line box"* — closes the symptom and **regresses the case
+`InlineItem::Spacer` was built for**. Chrome reports the span in `<div>text<span id=s1></span>text</div>`
+as **17px tall**; fragment anchors, scroll-spy targets and `getBoundingClientRect` on a marker span read
+that box. So the predicate is `any(content_bearing)` **over the line**, not a property of the inline, and
+the reporter fragments are still emitted — at zero height — rather than dropped, because dropping them
+takes the element out of `node_rects` and trades a placement error for a coverage one.
+
+### ⚠ THE SPEC SENTENCE IS TOO WIDE, AND ONLY THE MEASUREMENT SAYS SO
+
+§9.4.2's escape hatch reads *"no inline elements with non-zero margins, padding or borders"*. I wrote the
+general test from it first. Then I measured live Chromium (`body{margin:0;font:16px/normal sans-serif}`,
+the **div's** height):
+
+```text
+  <div><span style="padding:4px">      </span></div>   18   <- 4px of it is HORIZONTAL
+  <div><span style="padding:4px 0">    </span></div>    0   <- vertical only
+  <div><span style="border-top:3px">   </span></div>    0
+  <div><span style="margin-left:10px"> </span></div>    0
+```
+
+**Three of those four rows have exactly what the sentence exempts and are still 0.** What holds a line
+open is an edge that occupies **inline flow width** — precisely the `pad_l`/`pad_r` spacers. The
+spec-derived predicate would have made three of four rows 18 against Chrome's 0: a fix that is *more
+spec-compliant* and *less correct*, shipped under a citation that reads as authority.
+
+TICK SHAPE: root-cause
+CLUSTER: the CrUX ledger's #1 `geometry/mis-sized: height ~16px (<div>)` band — the over-production
+direction (t759 fixed an under-production case in the same band). ⚠ NOT claimed as closed; the next
+sweep prices it.
+Gates: `a_line_box_with_only_empty_inlines_does_not_exist` (`engine/layout/src/lib.rs`) — asserts the
+suppression (d2/s2 → 0), the anchor case that must survive (d1/s1 → >10), and all four rows of the
+narrowing table. **RED-proven by running the mutation in BOTH directions**: `holds_line: true` on the
+empty-inline spacer reads **19.2** (exactly the corpus symptom); `holds_line: false` on the padding edges
+reads **0** where Chrome says 18. Regression: manuk-layout 97/97, manuk-text, manuk-css all green.
+PERF: an `any()` over a line's fragments at line close, ahead of the metric fold it now sometimes skips —
+strictly cheaper on the lines it suppresses, unmeasurable on the rest.
+WIKI: `docs/wiki/text-layout.md` — "a line box with no content-bearing member does not exist".
+RESIDUE, unchanged and still `missing` in `CONSTELLATION.tsv`: the empty inline's own rect does not carry
+its padding (Chrome `s3`=25, ours 0), and the 1px `<br>` line-box difference from t759.
+PATTERN: ⚠⚠⚠ **A SPEC SENTENCE IS A HYPOTHESIS ABOUT THE ENGINE YOU ARE MATCHING, NOT A DESCRIPTION OF
+IT.** The rule here is not that the spec is wrong — it is that a *general* clause ("non-zero margins,
+padding or borders") is implemented by the reference engine through a *narrower* mechanism (does this edge
+occupy inline flow width?), and the two agree only on the example everyone quotes. Deriving from the
+sentence produces code that cites its own authority while being wrong on three of four inputs, and no
+review catches it because the citation is accurate. Same family as t760's lesson one tick earlier — a
+justification is true in the configuration it was measured in — but pointed at the *spec* rather than at
+our own comment: **when the citation is a general clause, enumerate the cases and measure each one; the
+clause tells you where to look, never what the answer is.**
