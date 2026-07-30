@@ -38635,3 +38635,68 @@ reordering, box placement, logical padding, flex/grid axis order. A row named fo
 gated by one test honestly; a row named for a population cannot, and its `gated` is an average pretending
 to be a verdict. What kept it alive is that the half the gate is named for is the half you notice in a
 screenshot: the Arabic text shapes and reads correctly, and the boxes around it are in the wrong places.
+
+## Tick 765 — an RTL table reads backwards, and a Chrome-EXACT fix was reverted on the way (2026-07-30)
+
+Continuing t764's RTL worklist. The next measured-missing primitive was *"a block box's inline-START edge
+is the right one"* (CSS 2.1 §10.3.3: the over-constrained margin that gives is `margin-left` in RTL). I
+built it, and it was **Chrome-exact on the fixture** — 7 of the 8 rows in `/tmp/rtl.html` matched live
+Chromium, including the two the rule is about (`body{width:600px}` x=600, an inner 300px block x=900).
+
+**Then the site got worse.** `mobile.ir`, deterministic across two control runs on the same binary:
+`h_overflow` **1 → 16**, shape 0.3196 → 0.3179. Sixteen elements Chrome keeps inside the viewport were
+now spilling past its right edge.
+
+**I ran the mechanism oracle instead of arguing with the number**, and it named the cause in one row:
+
+```text
+   145 hits  geometry/mis-sized: x (horizontal) ~256px  (<td>)
+             td:nth-child(4)   Chrome [367 …]   ours [502 …]
+    52 hits  geometry/mis-sized: x ~128px  (<td>)
+             td:nth-child(2)   Chrome [637 …]   ours [166 …]
+```
+
+The *columns are reversed*. `mobile.ir` is a table-dominated page, and flush-right on a block whose
+containing block is already the wrong width points its content OFF-SCREEN, where flush-left had hidden
+the same error. **The block-margin fix was REVERTED** (`git checkout -- engine/layout/src/lib.rs`) —
+correct rule, wrong order to land it in — and this tick is the mechanism that was actually on top.
+
+### AN RTL TABLE'S COLUMN AXIS RUNS RIGHT-TO-LEFT
+
+`direction` on the table box orders the COLUMNS, not just the text inside them (CSS 2.1 §17.5.3: the
+column axis follows the inline direction), so the first `<td>` in source order is the RIGHTMOST cell.
+Measured vs live Chromium (`<html dir=rtl>`, a 600px table of four 150px cells, x relative to the table):
+
+```text
+             Chrome        was          now
+  1st td       450           0  ✗        450  ✓
+  2nd td       300         150  ✗        300  ✓
+  3rd td       150         300  ✗        150  ✓
+  4th td         0         450  ✗          0  ✓
+  (a direction:ltr table inside the SAME RTL page)   0 / 300   unchanged ✓ in all three
+```
+
+MEASURED ON REAL SITES: `mobile.ir` shape **0.320 → 0.493** (+17.4 pts) and `reading_order`
+**820 → 87**, with `coverage` 0.997 and `shape_n` 1186 unchanged. Against the t758 baseline that is
+shape **0.174 → 0.493** and `reading_order` **874 → 87** across two ticks. Control `marktplaats.nl`
+**0.708642 → 0.708642**, byte-identical.
+
+TICK SHAPE: root-cause
+CLUSTER: `geometry/mis-sized: x (<td>)` — 250+ hits on `mobile.ir`, the site's #1 mechanism.
+Gates: `an_rtl_table_orders_its_columns_right_to_left` (`engine/layout/src/lib.rs`) — the source order
+runs right-to-left, the first cell is Chrome-exact at 450, and a `direction:ltr` table inside the RTL
+page keeps LTR order. **RED-proven by running the mutation** (`rtl_cols = false`): `0 150 300 450`.
+Regression: manuk-layout 100/100.
+PERF: one enum comparison per table, and an arithmetic mirror per cell.
+WIKI: `docs/wiki/box-layout.md` — "an RTL table's column axis runs right-to-left".
+RESIDUE: the reverted block-margin rule stays `missing` in `CONSTELLATION.tsv` with the new note that
+the naive form REGRESSES `h_overflow` until the containing blocks under it are right — it is re-scoped,
+not abandoned.
+PATTERN: ⚠⚠⚠ **A CHROME-EXACT FIX CAN STILL BE THE WRONG TICK, AND THE SITE METRIC IS HOW YOU FIND OUT
+— BUT ONLY IF YOU ASK THE ORACLE WHY.** The temptation on seeing `h_overflow 1 → 16` under a fix whose
+fixture is *exactly* Chrome is to argue the number is noise (it was not: deterministic on two runs) or
+that the site is wrong (it was not). The mechanism oracle turned "my correct fix regressed a site" into
+"a bigger defect upstream makes correctness point the error at the viewport edge" in one command, and
+that reading produced a **+17.4pt** tick instead of a defended +0pt one. The general form:
+**when a spec-correct change makes a real page worse, it is nearly always ORDER — the same fix after the
+upstream one is fine — so measure the upstream first rather than defending the downstream.**

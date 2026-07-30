@@ -117,6 +117,8 @@
   - L2163 · A blockified inline is the spec's ANONYMOUS BLOCK — and the margin-collapse predicates could not see it (tick 746)
   - L2227 · An indefinite MAIN size is INFINITE available main space, not zero (tick 762)
   - L2286 · row is a LOGICAL direction, and taffy only speaks physical (tick 764)
+  - L2334 · An RTL table's COLUMN AXIS runs right-to-left (tick 765)
+  - L2367 · ⚠ The fix that was reverted to get here
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1281,4 +1283,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1192 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1194 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

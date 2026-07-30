@@ -3387,8 +3387,28 @@ impl Ctx<'_> {
         // row's height; rowspan cells' overflow is added to their last spanned row.
         let mut laid: Vec<(usize, LayoutBox, f32)> = Vec::new();
         let mut row_h = vec![0.0f32; nrows.max(1)];
+        // ── **AN RTL TABLE'S COLUMN AXIS RUNS RIGHT-TO-LEFT.** `direction` on the table box orders the
+        // COLUMNS, not just the text inside them (CSS 2.1 §17.5.3: the column axis follows the inline
+        // direction), so column 0 — the first `<td>` in source order — is the RIGHTMOST one.
+        //
+        // Measured vs live Chromium, `<html dir=rtl>`, a 600px table of four 150px cells (x relative to
+        // the table): Chrome **450 / 300 / 150 / 0** for the 1st…4th cell; ours was 0 / 150 / 300 / 450 —
+        // the whole table read backwards, which is the single largest mechanism on `mobile.ir` (the worst
+        // `reading_order` site in the CrUX sample: 250+ `<td>` x-divergences).
+        //
+        // ⚠ The direction is read from the TABLE's own computed style, not the document's: a
+        // `<table style="direction:ltr">` inside an RTL page keeps LTR column order, and Chrome agrees
+        // (fixture row `#t2`: 0 / 300, unchanged). Mirroring the whole SPAN — not the first column —
+        // is what makes `colspan` land on the right cells.
+        let rtl_cols = s.direction == manuk_css::Direction::Rtl;
         for (pi, p) in placed.iter().enumerate() {
-            let cx = col_x.get(p.col).copied().unwrap_or(content_x);
+            let cx0 = col_x.get(p.col).copied().unwrap_or(content_x);
+            let cw_span = span_w(p.col, p.colspan);
+            let cx = if rtl_cols {
+                content_x + content_w - (cx0 - content_x) - cw_span
+            } else {
+                cx0
+            };
             let (cbox, bh) = self.layout_cell(p.cell, cx, 0.0, span_w(p.col, p.colspan));
             if p.rowspan == 1 {
                 row_h[p.row] = row_h[p.row].max(bh);
@@ -7377,6 +7397,57 @@ mod tests {
         let mut out = None;
         rec(root, dom, tag, &mut out);
         out
+    }
+
+    /// **An RTL table's COLUMN AXIS runs right-to-left** — `direction` on the table box orders the
+    /// columns, not just the text in them (CSS 2.1 §17.5.3), so the first `<td>` in source order is the
+    /// RIGHTMOST cell.
+    ///
+    /// Measured against live Chromium (`<html dir=rtl>`, a 600px table of four 150px cells, x relative
+    /// to the table): Chrome **450 / 300 / 150 / 0**; ours was 0 / 150 / 300 / 450 — every RTL table
+    /// read backwards. It is the largest single mechanism on `mobile.ir`, the worst `reading_order`
+    /// site in the CrUX sample: the fix took it from shape 0.320 → **0.493** and `reading_order`
+    /// 820 → **87**, with `coverage` and `shape_n` unchanged and the LTR control byte-identical.
+    ///
+    /// ⚠ The second half is the one that makes it a *direction* fix rather than a *reverse the cells*
+    /// fix: a `<table style="direction:ltr">` inside an RTL document keeps LTR column order, because the
+    /// axis is read from the TABLE's own computed style. Chrome agrees, and this asserts it.
+    ///
+    /// RED, run: force `rtl_cols` to `false` — the first cell reads 0 where Chrome says 450.
+    #[test]
+    fn an_rtl_table_orders_its_columns_right_to_left() {
+        let (dom, root) = layout_html(
+            "<body dir=rtl style='margin:0;width:600px'>\
+               <table id=t1 style='width:600px;border-collapse:collapse'><tr>\
+                 <td id=a>a</td><td id=b>b</td><td id=c>c</td><td id=d>d</td></tr></table>\
+               <table id=t2 style='width:600px;border-collapse:collapse;direction:ltr'><tr>\
+                 <td id=e>e</td><td id=f>f</td></tr></table>\
+             </body>",
+            "td{padding:0;width:150px}",
+            600.0,
+        );
+        let rects = root.node_rects(&dom);
+        let x = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            rects[&n].x
+        };
+        let (a, b, c, d) = (x("a"), x("b"), x("c"), x("d"));
+        assert!(
+            a > b && b > c && c > d,
+            "source order runs RIGHT to LEFT in an RTL table: {a} {b} {c} {d}"
+        );
+        assert!(
+            (a - 450.0).abs() < 1.0 && (d - 0.0).abs() < 1.0,
+            "Chrome-exact: the first cell is flush right (450) and the last is at 0, got {a} / {d}"
+        );
+        // The control: `direction:ltr` on the TABLE wins over the document's RTL.
+        assert!(
+            x("e") < x("f"),
+            "a direction:ltr table inside an RTL page keeps LTR column order"
+        );
     }
 
     /// Collect every cell box (DOM tag td/th) as rects, in tree order.

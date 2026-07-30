@@ -2328,3 +2328,51 @@ UA sheet (`padding-inline-start`), and it is the same two-cascades surface as ev
 **And the half that was already correct** — bidi shaping, intra-run reordering, mixed Arabic+Latin, two
 spans on one line, `text-align: start` resolving to `right` — is Chrome-exact. That asymmetry is what let
 `G_BIDI_BASE` stand in for the whole RTL web on the capability map for 549 ticks (surface audit #48).
+
+---
+
+## An RTL table's COLUMN AXIS runs right-to-left (tick 765)
+
+`direction` on a table box orders the **columns**, not just the text inside them — the column axis follows
+the inline direction (CSS 2.1 §17.5.3). So in `<html dir=rtl>` the first `<td>` in source order is the
+**rightmost** cell. Measured against live Chromium (600px table, four 150px cells, x relative to the
+table):
+
+| cell | Chrome | was |
+|---|---|---|
+| 1st | **450** | 0 |
+| 2nd | **300** | 150 |
+| 3rd | **150** | 300 |
+| 4th | **0** | 450 |
+
+The implementation mirrors each cell's *span* inside the table's content box rather than reversing the
+column list, which is what keeps `colspan` landing on the right cells:
+
+```rust
+let cx = if rtl_cols { content_x + content_w - (cx0 - content_x) - cw_span } else { cx0 };
+```
+
+**The direction is the TABLE's own**, not the document's: `<table style="direction:ltr">` inside an RTL
+page keeps LTR column order, and Chrome agrees (fixture `#t2`: 0 / 300 in both engines, before and after).
+That assertion is what makes this a *direction* fix rather than a *reverse the cells* fix.
+
+**Real-site effect.** `mobile.ir`, the worst `reading_order` site in the 200-site CrUX sample: shape
+**0.320 → 0.493**, `reading_order` **820 → 87**, `coverage` and `shape_n` unchanged; LTR control
+byte-identical. Across ticks 764–765 the same site went shape **0.174 → 0.493** and `reading_order`
+**874 → 87**.
+
+**Gate.** `an_rtl_table_orders_its_columns_right_to_left`, RED-proven by forcing `rtl_cols = false`
+(`0 150 300 450`).
+
+### ⚠ The fix that was reverted to get here
+
+The other RTL primitive on the same worklist — CSS 2.1 §10.3.3, *in RTL the over-constrained margin that
+gives is `margin-left`, so a narrow block sits flush right* — was built first, matched Chromium on 7 of 8
+fixture rows, and was **reverted**: `mobile.ir`'s `h_overflow` went 1 → 16, deterministic over two control
+runs. Flush-right on a block whose containing block is already the wrong width points its content off the
+right edge of the viewport, where flush-left had quietly hidden the same error.
+
+It is re-scoped, not abandoned (`CONSTELLATION.tsv` carries the note): **land it after the containing-block
+errors beneath it, not before.** The general rule — *when a spec-correct change makes a real page worse,
+it is nearly always ORDER* — is the one worth keeping, together with the move that found it: ask the
+mechanism oracle *why*, rather than defending the fixture.

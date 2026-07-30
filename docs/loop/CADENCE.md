@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **513** | ticks 1–764 |
 | median tick cycle | **22m** | 512 intervals |
-| median, last 10 | **32m** | 10 intervals |
+| median, last 10 | **35m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 463.0h elapsed |
+| **ticks per hour** | **1.10** | 463.8h elapsed |
 | median verify wall | **63s** | 452 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -28,7 +28,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **353**
-* **✅ rows in the capability ledger**: 144 → **390**
+* **✅ rows in the capability ledger**: 144 → **391**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **245 of 513 ticks** (48%) moved a
@@ -609,6 +609,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **759** | 2026-07-30 09:51 | 39m | root-cause | 63s | +92/−33 | 353 | 81 | 56.0% · | `&nbsp;` was collapsed like a space, so a spacer element had no line box: `char::is_whites |
 | **761** | 2026-07-30 11:00 | 69m | root-cause | 63s | +275/−33 | 353 | 81 | 56.0% · | the phantom line box under every empty wrapper, and a spec sentence that is wider than Chr |
 | **762** | 2026-07-30 11:31 | 31m | root-cause | 63s | +343/−54 | 353 | 81 | 56.0% · | `flex-wrap: wrap` on an auto-height COLUMN container put the whole page in four side-by-si |
-| **764** | 2026-07-30 12:03 | 32m | root-cause | 63s | +304/−44 | 353 | 81 | 56.0% · | the two worst `reading_order` sites in the corpus are both RTL, and a flex row ran backwar |
+| **764** | 2026-07-30 12:52 | 81m | root-cause | 63s | +227/−35 | 353 | 81 | 56.0% · | the two worst `reading_order` sites in the corpus are both RTL, and a flex row ran backwar |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
