@@ -86,8 +86,23 @@ launch_agent() {
   AGENT_MODEL="${MANUK_AGENT_MODEL:-claude-opus-5}"
   say "agent model for this launch: $AGENT_MODEL"
   systemctl --user reset-failed "${AGENT_SCOPE}.scope" 2>/dev/null || true   # clear any lingering scope name
+  # ── BUILD-SPEED ENV (observer 2026-07-30, USER: minimize rebuild cost). LOOP-ONLY — set here, NEVER in the
+  # committed .cargo/config.toml (a committed sccache wrapper broke every clone once; same rule for the linker).
+  # mold = fast linker (identical binary, faster link); sccache = compile cache for the dominant dep builds
+  # (stylo/mozjs/taffy). Both are runtime/correctness-NEUTRAL — no timing-gate risk. KILL-SWITCH: gated on the
+  # flag file `.git/manuk-fast-build`; `rm` it to disable instantly on the next relaunch, no code edit. Each var
+  # is added ONLY if its tool exists (graceful). ⚠ the FIRST build after this turns on does one full rebuild
+  # (fingerprints change) which also warms sccache; it self-recovers via the wall-freshness rule.
+  SPEED=()
+  if [ -f "$PWD/.git/manuk-fast-build" ]; then
+    _MOLD="$(command -v mold 2>/dev/null || echo "$HOME/.local/bin/mold")"
+    _SCC="$(command -v sccache 2>/dev/null || echo "$HOME/.local/bin/sccache")"
+    [ -x "$_MOLD" ] && SPEED+=("--setenv=PATH=$HOME/.local/bin:$PATH" "--setenv=RUSTFLAGS=-Clink-arg=-fuse-ld=mold")
+    [ -x "$_SCC" ]  && SPEED+=("--setenv=RUSTC_WRAPPER=$_SCC")
+    [ ${#SPEED[@]} -gt 0 ] && say "build-speed ON: ${SPEED[*]}"
+  fi
   if systemd-run --user --scope --quiet \
-        --setenv=CARGO_BUILD_JOBS=8 --setenv=WPT_DIR="$HOME/wpt" \
+        --setenv=CARGO_BUILD_JOBS=8 --setenv=WPT_DIR="$HOME/wpt" "${SPEED[@]}" \
         -p MemoryMax=24G -p MemorySwapMax=4G -p MemoryHigh=20G -p OOMPolicy=kill \
         "$CLAUDE" --model "$AGENT_MODEL" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1
   then return 0; fi
