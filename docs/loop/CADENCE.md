@@ -15,7 +15,7 @@
 | median tick cycle | **22m** | 502 intervals |
 | median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 451.9h elapsed |
+| **ticks per hour** | **1.10** | 454.8h elapsed |
 | median verify wall | **63s** | 442 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -599,6 +599,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **744** | 2026-07-29 23:26 | 3.2h | root-cause | 63s | +642/−39 | 352 | 81 | 56.0% · | the priority ledger ranked 351 ticks of work by HTML tag, because `delta` never crossed th |
 | **745** | 2026-07-29 23:32 | 7m | root-cause | 63s | +230/−45 | 352 | 81 | 56.0% · | `td { padding: 0 }` computed to 0 and was overwritten with 1px AFTER the cascade: every re |
 | **747** | 2026-07-30 00:10 | 38m | root-cause | 63s | +521/−47 | 353 | 81 | 56.0% · | `is_block_level` said "block" and the two margin-collapse predicates said "inline": every  |
-| **749** | 2026-07-30 00:57 | 46m | root-cause | 63s | +467/−36 | 353 | 81 | 56.0% · | `system-ui` was aliased to `sans-serif`, and four aliases at the FRONT of every modern fon |
+| **749** | 2026-07-30 03:52 | 3.7h | root-cause | 63s | +387/−32 | 353 | 81 | 56.0% · | `system-ui` was aliased to `sans-serif`, and four aliases at the FRONT of every modern fon |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

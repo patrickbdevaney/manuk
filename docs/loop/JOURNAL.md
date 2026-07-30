@@ -37599,3 +37599,90 @@ harmlessly approximate. The general form, and it is the reusable half: **when a 
 author-ordered list, an over-eager early match is not a small error — it is a decision made on the
 author's behalf about every entry that follows.** Grep for the class: match arms that return a default
 from inside a loop over author-supplied alternatives.
+
+## Tick 750 — the burndown moved for the first time (+1.8 pts), and the same sweep proved its own per-site noise floor is 100× the published one (2026-07-30)
+
+The validation sweep the burndown protocol owes for ticks 745–749: *"a fix MUST raise in-scope-pass on
+the next sweep or it is reverted/re-scoped."* Full 265-site corpus, one process per site, same runner and
+same instrument hash (`1feee14c`) as t745 — **the instrument was deliberately left unchanged for this
+sweep** (the `css-starved` fix was written during it and parked) so the delta measures the ENGINE and not
+a scoring change.
+
+```
+IN-SCOPE PASS: 14/208 = 6.7%   (was 10/204 = 4.9%)    TARGET 95% = 198  ->  NEED +184
+scored 132 -> 134 · excluded 61 -> 57 · cov_mean 86.4 -> 88.5 · shape_mean 42.3 -> 41.8
+Δ vs t745: +1.8 pts    BURNDOWN: ~50 more sweeps to 95% at this rate
+✓ no trap/regression/staleness/exclusion flag
+```
+
+**It moved, and it moved on the anchors the board names, for the reasons the ticks claimed.** The four
+scored sites that newly cross 0.75:
+
+| site | t745 | t750 | the tick that predicted it |
+|---|---|---|---|
+| **news.ycombinator.com** | 0.730 | **0.802** | t745 — table-based layout; its journal named this site at 54 hits in the `dh=+2` band |
+| **martinfowler.com** | 0.678 | **0.771** | t745 (77 hits in that band) |
+| docs.djangoproject.com | 0.716 | 0.780 | |
+| joelonsoftware.com | 0.745 | 0.772 | |
+
+`bsky.app` reads `1.000 -> 0.400` and is **not** a regression: it is `shell-only-2 -> shell-only-5`,
+unscored in both, i.e. the ORACLE rendered a 2-element shell and `shape 1.000` meant *one comparable
+element matched*. The `shell-only` guard did exactly its job — that row was never in the tally.
+
+### ⚠⚠⚠ THE FINDING THAT MATTERS MORE THAN THE HEADLINE
+
+Among the 130 sites scored in BOTH sweeps: **18 improved, 14 regressed.** Three of the regressions are
+enormous — `discourse.org` 0.499→**0.087**, `regex101.com` 0.707→0.402, `arstechnica.com` 0.336→**0.043**
+— which is 10× the documented run-to-run spread (a live site's shape varies ~3.7 pts on one unchanged
+tree). A +1.8 pt headline sitting on top of ±40 pt per-site swings is not a result anyone should bank
+without asking what the swings are.
+
+**CONTROL BEFORE BLAME.** Three consecutive runs of the CURRENT binary on the worst regressor:
+
+```
+discourse.org   shape 0.4964 · 0.4995 · 0.4995      (t750 sweep recorded 0.087)
+```
+
+Same-binary spread **0.003**; the sweep's own row is **0.41 off** its own binary. So the 0.087 is not a
+property of this engine at all — it is an artefact of *that run*. Not a ratchet violation, and not one of
+ticks 745–749.
+
+**And the artefact has a name, because I had just diagnosed it.** Look at what those rows have in common:
+
+```
+discourse.org    cov 0.971  shape 0.087
+arstechnica.com  cov 0.988  shape 0.043
+basecamp.com     cov 0.987  shape 0.115
+```
+
+**High coverage, collapsed shape** — every box present, almost none placed. That is the signature of a
+page rendered in UA fallback because its author stylesheets never arrived: there was no CSS to drop an
+element and no CSS to position one. `Page::failed_stylesheet_fetches` exists precisely so a measurement
+can refuse such a page — its doc comment says *"The differential oracle discards such runs"* — and the
+oracle does. **The fidelity path, which computes the Phase-0 headline, never asked.**
+
+So the intermittent starvation I found while investigating t749 (and correctly refused to call the
+dominant *layout* mechanism — 0 of 24 sites under control) turns out to be the dominant **instrument**
+mechanism: it hits a rotating subset of sites each sweep and books them as real shape numbers. **Both
+t745 and t750 contain mis-scored rows**, which is why `shape_mean` can fall (42.3→41.8) while the pass
+count rises — the two sweeps were starved on different sites.
+
+⚠ **My own prediction for the parked fix was too small and is corrected here rather than quietly
+updated.** I predicted *"2–6 rows reclassify"* from the `cov≥0.98 ∧ shape≤0.10` band of the t745 sweep.
+That band only finds sites starved in the sweep I happened to look at; `discourse.org` and
+`arstechnica.com` are starved in t750 and were NOT in it. The population is *per-run*, not a fixed set.
+
+TICK SHAPE: measurement
+CLUSTER: none created. Banks the burndown slope (+1.8 pts/sweep, ~50 sweeps at this rate) and names the
+instrument defect that makes the per-site series untrustworthy.
+Gates: none — this tick adds no engine behaviour. The sweep IS the falsifiable check the burndown
+protocol demands, and it was run on the unchanged instrument for exactly that reason.
+PERF: none.
+WIKI: none — no engine source changed; the mechanism this uncovered is captured with its fix in the
+following tick.
+PATTERN: ⚠⚠⚠ **AN AGGREGATE THAT MOVES BY LESS THAN ITS OWN PER-ITEM NOISE IS NOT YET A RESULT — AND THE
+NOISE IS A BUG, NOT A CONSTANT.** +1.8 pts is real and directionally confirmed by four named sites, but
+the same file carries ±40 pt swings on single sites, and it would have been easy to report the first and
+never compute the second. The reusable half: **when a metric's per-item variance is large, do not model
+it as noise to be averaged over — find its mechanism, because it usually has one.** Here three same-binary
+control runs cost four minutes and converted "14 regressions" into "one instrument defect".
