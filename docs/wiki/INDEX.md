@@ -268,6 +268,11 @@
   - L2312 · The instrument charged its own panic to the engine — and 12 of 13 "crashes" were timeouts (tick 748)
   - L2317 · A non-ASCII class name panicked the sweep, and the site was banked as crashed
   - L2348 · reason=crashed conflates a panic with a watchdog kill — 12 of 13, measured
+  - L2371 · Two instruments answered one question, and the permissive one published (tick 751)
+  - L2385 · The signature, and why it reads as noise
+  - L2402 · The refusal is about ASYMMETRY, not about starvation
+  - L2420 · Where the refusal goes, and which side of the denominator
+  - L2436 · The rule
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1260,4 +1265,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1171 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1176 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

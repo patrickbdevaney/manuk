@@ -2367,3 +2367,76 @@ The rows file cannot see the exit code, so the label is wrong in the file the bu
 from "was killed" from inside the dying process. The runner already has the answer (`/tmp/*-rc.tsv`);
 the fix is to feed it back in, as its own tick. Until then, **read `reason=crashed` as
 `crashed-or-timed-out` and check the rc file before quoting a Bar-0 number from a sweep.**
+
+## Two instruments answered one question, and the permissive one published (tick 751)
+
+`Page::failed_stylesheet_fetches()` counts render-blocking author stylesheets that were requested and
+never arrived. Its doc comment states its own purpose exactly:
+
+> Non-zero means the current layout is (partly) UA-default fallback, NOT this engine's rendering of the
+> author's page — a measurement that diffs it against a fully-styled reference is charging network
+> weather to the engine's account. **The differential oracle discards such runs.**
+
+The oracle does. `run_oracle_cmd` calls it and prints `DISCARDED — N author stylesheet(s) never arrived`.
+**The fidelity sweep — the path that computes the Phase-0 headline — never called it.** So the same site,
+in the same session, was `DISCARDED` by one instrument and scored `cov 1.000 / shape 0.018` over 337 nodes
+by the other.
+
+### The signature, and why it reads as noise
+
+A UA-fallback render is **high coverage with collapsed shape**: every element is present (there was no CSS
+to `display:none` anything) and almost none is where Chrome puts it (there was no CSS to position it).
+
+```
+discourse.org     cov 0.971   shape 0.087      arstechnica.com  cov 0.988  shape 0.043
+basecamp.com      cov 0.987   shape 0.115      postgresql.org   cov 1.000  shape 0.018
+```
+
+It is **intermittent**, which is what makes it dangerous rather than merely wrong. Three consecutive runs
+of one binary on `discourse.org` give `0.4964 / 0.4995 / 0.4995` — a spread of **0.003** — while a sweep
+row for the same binary recorded **0.087**. A site therefore alternates between its real shape and ~0
+across sweeps, and the series shows ±40-point per-site swings that look exactly like layout regressions
+and are not. The set of affected sites is **per-run, not fixed**, so it cannot be identified by filtering
+one sweep's rows for the signature — an error worth naming because it was made here first.
+
+### The refusal is about ASYMMETRY, not about starvation
+
+The first version of this check refused any page with `failed_css > 0` and turned the wall's `G1` gate
+into `MEAN VISUAL: NaN%`. G1 feeds both engines `file://` snapshots from `.verify-cache`, where a
+snapshot's `href="/static/…"` cannot resolve — `failed_css` is non-zero **by construction**, so every G1
+site went unscored and the gate had an empty set to average.
+
+That is the distinction, and it is the whole rule:
+
+| comparison | reference engine | verdict |
+|---|---|---|
+| `file://` snapshot, sheets unresolvable | sees the **same** missing sheets, renders unstyled too | **symmetric — still scorable** |
+| live `http(s)://`, our fetch cut by the deadline | fetches its own subresources and **succeeds** | **asymmetric — refuse** |
+
+A diff survives both engines missing the same thing. It does not survive the two sides looking at
+*different documents*. So the check keys on the URL scheme — not as a special case to appease a gate, but
+because the scheme is what determines whether the reference had the CSS we lacked.
+
+### Where the refusal goes, and which side of the denominator
+
+At the same point the oracle's is: after the page is built and painted, **before** the reference engine is
+invoked, so a starved site costs no screenshot.
+
+`css-starved-N` stays **IN-SCOPE**. `fidelity-progress.sh` partitions on the reason string, and EXCLUDED is
+reserved for sites permanently unreachable under our own no-stealth policy. Our own load deadline cut a
+sheet the origin served — that is our bug, and a daily driver may not render a reachable site in UA
+fallback. Filing it EXCLUDED would *raise* the headline by removing our failure from the denominator, the
+exact move `EXCLUDED-RISING` alarms on. The gate mirrors the shell script's exclusion list in code so the
+reason cannot drift across that line silently.
+
+Expect, on the first sweep after this lands: `scored` falls, `shape_mean` **rises**, and the
+**DENOMINATOR-TRAP** alert fires. It is correct to fire — the population changed. Quote
+`inscope_pass_pct`, which is unaffected by construction because these rows were failing either way.
+
+### The rule
+
+**When two instruments answer the same question, the permissive one is the one that publishes.** Nothing
+was missing here: the refusal existed, was correct, was documented, and was called — by the other
+consumer. Grep for the class: a predicate whose doc comment says *"so a measurement can refuse X"*, then
+enumerate its callers and check that **every** measurement is among them. A guard with one caller is a
+guard with a hole shaped like every other caller.

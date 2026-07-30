@@ -134,6 +134,32 @@ pub enum Unmeasurable {
     /// operator's `kill`. Recovered on the NEXT run from the in-flight marker, never by the run that
     /// died, which by definition writes nothing.
     ///
+    /// **The author's render-blocking stylesheets never arrived, so the page we measured is the UA
+    /// stylesheet's idea of the document.** Carries how many sheets were cut.
+    ///
+    /// ⚠⚠⚠ **THE ORACLE ALREADY REFUSED THESE RUNS AND THIS INSTRUMENT SCORED THEM.** `Page::
+    /// failed_stylesheet_fetches` exists precisely so a measurement can decline to score such a page —
+    /// its own doc comment says *"a measurement that diffs it against a fully-styled reference is
+    /// charging network weather to the engine's account"* — and `oracle` calls it and prints
+    /// `DISCARDED`. The **fidelity** path, which produces the Phase-0 headline, never asked. So one
+    /// question had two answers and the permissive one was the one that got published.
+    ///
+    /// The signature is unmistakable once named: coverage ≈ **1.000** with shape ≈ **0**. Every element
+    /// exists (nothing was dropped — there was no CSS to drop it) and almost nothing is where Chrome
+    /// puts it (there was no CSS to place it). `postgresql.org` scored `cov 1.000 / shape 0.018` over
+    /// 337 nodes in the t745 sweep while the oracle discarded the same site for *3 starved sheets*.
+    ///
+    /// ⚠ It is **INTERMITTENT**, which is what makes it dangerous rather than merely wrong: the same
+    /// URL discards on one run and diffs cleanly on the next, so a site's shape silently alternates
+    /// between its real value and ~0 — a per-run variance source in the headline that looks exactly
+    /// like a layout regression. A control found 0 of 24 worst-shape sites starved on a second run
+    /// (t749), which is how the *systematic* version of this hypothesis was refuted.
+    ///
+    /// **This is OUR bug, and it stays IN-SCOPE.** The sheets were cut by our own `load_deadline`, not
+    /// refused by the origin, so it must not join the EXCLUDED tier — a daily driver may not render a
+    /// reachable site in UA fallback. `fidelity-progress.sh` partitions on the reason string and lands
+    /// any unrecognised reason in-scope, which is the correct side for this one.
+    CssStarved(usize),
     /// [`Self::Timeout`] is the same hazard one level out, and its doc comment states the argument:
     /// *"the sweep runs sites in ONE process … the sites that already finished are lost with it."*
     /// t625 closed that for a **child** we invoke, by bounding it. It stayed open for the case where
@@ -162,6 +188,7 @@ impl Unmeasurable {
             Self::Timeout(secs) => format!("timeout-{secs}s"),
             Self::Crashed => "crashed".into(),
             Self::ThinOverlap(n) => format!("thin-overlap-{n}"),
+            Self::CssStarved(n) => format!("css-starved-{n}"),
         }
     }
 
@@ -181,6 +208,9 @@ impl Unmeasurable {
                 .parse()
                 .ok()
                 .map(Self::Timeout),
+            _ if s.starts_with("css-starved-") => {
+                s["css-starved-".len()..].parse().ok().map(Self::CssStarved)
+            }
             _ if s.starts_with("shell-only-") => {
                 s["shell-only-".len()..].parse().ok().map(Self::ShellOnly)
             }
@@ -250,6 +280,15 @@ impl Unmeasurable {
                  which is below the sample floor — so there is nothing to compute a placement ratio \
                  over. Unlike shell-only this is OURS: the oracle built the page and we did not, so \
                  the missing elements are a coverage failure wearing an 'unscored' label"
+            ),
+            Self::CssStarved(n) => format!(
+                "{n} render-blocking author stylesheet(s) NEVER ARRIVED before the load deadline, so \
+                 the page measured is the UA stylesheet's idea of the document, not the author's \
+                 design — the giveaway is coverage ~1.000 with shape ~0 (every element present, \
+                 because there was no CSS to drop it; almost none placed, because there was no CSS to \
+                 place it). The ORACLE has always discarded these runs; this instrument scored them, \
+                 which charged network weather to the layout engine's account. OURS and IN-SCOPE: the \
+                 sheets were cut by our own load deadline, not refused by the origin"
             ),
             Self::Crashed => "THE SWEEP PROCESS DIED while rendering this site (SIGSEGV/OOM/kill) — \
                  our own bug, like render-failed, and the most expensive kind: it takes the whole \
@@ -2389,11 +2428,47 @@ mod shape_tests {
             Unmeasurable::RenderFailed,
             Unmeasurable::ShellOnly(3),
             Unmeasurable::Timeout(90),
+            // ⚠ `ThinOverlap` and `Crashed` were missing from this loop — **checked, and they do
+            // round-trip correctly**, so this is a COVERAGE gap being closed, not a bug being found.
+            // Worth saying explicitly: the loop's comment claims a property ("a tag that writes but
+            // does not read back dies at the chunk boundary") that it was only enforcing for 8 of the
+            // 10 variants, so the claim was broader than the test. `CssStarved` is new (t751).
+            Unmeasurable::ThinOverlap(4),
+            Unmeasurable::Crashed,
+            Unmeasurable::CssStarved(3),
         ] {
             assert_eq!(
                 Unmeasurable::from_tag(&u.tag()),
                 Some(u.clone()),
                 "{u:?} must survive its own tag"
+            );
+        }
+
+        // ── **`css-starved-N` STAYS IN-SCOPE, AND THAT IS A DECISION, SO IT IS ASSERTED.**
+        //
+        // `fidelity-progress.sh` partitions on the reason STRING: a site is EXCLUDED from the Phase-0
+        // denominator only when it is permanently unreachable by our own no-stealth policy — the tags
+        // below. A starved stylesheet is not that: **our own load deadline cut the sheet**, the origin
+        // served it. Landing it in EXCLUDED would launder our bug out of the denominator and *raise*
+        // the headline, which is the exact failure `EXCLUDED-RISING` exists to alarm on.
+        //
+        // This mirrors the shell script's list in code so a future rename cannot quietly move the
+        // reason across the line — the partition is the metric's definition, not a formatting detail.
+        let excluded_prefixes = ["bot-wall", "empty-"];
+        let excluded_exact = ["probe-blocked", "unreachable", "http-404", "http-503"];
+        for ours in [
+            Unmeasurable::CssStarved(3),
+            Unmeasurable::RenderFailed,
+            Unmeasurable::Crashed,
+            Unmeasurable::ShellOnly(3),
+            Unmeasurable::ThinOverlap(4),
+        ] {
+            let tag = ours.tag();
+            assert!(
+                !excluded_prefixes.iter().any(|p| tag.starts_with(p))
+                    && !excluded_exact.contains(&tag.as_str()),
+                "{tag} is OUR bug on a reachable site and must count against the in-scope \
+                 denominator, never join the EXCLUDED tier"
             );
         }
         assert_eq!(

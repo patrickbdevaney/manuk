@@ -603,6 +603,51 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
         }
         let manuk_ms = t_manuk.elapsed().as_millis();
 
+        // …and the FOURTH, which is the one the ORACLE had already been refusing all along.
+        //
+        // ⚠⚠⚠ **A PAGE WHOSE AUTHOR STYLESHEETS NEVER ARRIVED MUST NOT BE GIVEN A SHAPE SCORE.** We
+        // painted faithfully; we painted the *wrong document* — the UA stylesheet's idea of it. Diffing
+        // that against a fully-styled Chromium charges **network weather to the layout engine's
+        // account**, which is precisely what `Page::failed_stylesheet_fetches`'s own doc comment says
+        // it exists to prevent: *"The differential oracle discards such runs."*
+        //
+        // It does. `run_oracle_cmd` calls this very method and prints `DISCARDED`. **This path — the
+        // one that produces the Phase-0 headline — never asked.** One question, two instruments, two
+        // answers, and the permissive one was the published one.
+        //
+        // The signature is unmistakable once named: **coverage ≈ 1.000 with shape ≈ 0.** Every element
+        // is present (there was no CSS to drop any) and almost none is placed (there was no CSS to
+        // place it). `postgresql.org` was scored `cov 1.000 / shape 0.018` over 337 nodes in the t745
+        // sweep while the oracle discarded that same site for three starved sheets — and it is
+        // INTERMITTENT, so a site alternates between its real shape and ~0 across runs, which reads
+        // exactly like a layout regression and is a standing variance source in the headline.
+        //
+        // Counted IN-SCOPE, not excluded: our own `load_deadline` cut those sheets, so this is our bug.
+        //
+        // ⚠⚠ **THE REFUSAL IS ABOUT ASYMMETRY, NOT ABOUT STARVATION — and the wall caught me getting
+        // that wrong.** The first version of this check fired on any `starved > 0` and turned `G1`'s
+        // `MEAN VISUAL` into **NaN**: G1 feeds the two engines `file://` snapshots from `.verify-cache`,
+        // and a snapshot's `href="/static/…"` cannot resolve under `file://`, so `failed_css` is
+        // non-zero there **by construction**. Every G1 site went unscored and the gate had an empty set
+        // to average.
+        //
+        // That failure is the useful half: under `file://` **both engines see the same missing sheets**
+        // — Chromium renders that snapshot unstyled too — so the diff is still apples-to-apples and the
+        // number means something. What makes a starved sheet fatal on the CORPUS is that the reference
+        // engine fetches its own subresources over the live network and **succeeds** where we did not:
+        // the two sides are then looking at different documents, and that is the thing no diff survives.
+        //
+        // So the condition is the scheme, and it is not a special case bolted on — it is the actual
+        // rule: refuse when the comparison is ASYMMETRIC.
+        let starved = page.failed_stylesheet_fetches();
+        let live = final_url.starts_with("http://") || final_url.starts_with("https://");
+        if starved > 0 && live {
+            let reason = manuk_wpt::fidelity::Unmeasurable::CssStarved(starved);
+            eprintln!("  UNMEASURABLE [{}]: {}", reason.tag(), reason.explain());
+            rows.push(manuk_wpt::fidelity::Fidelity::unmeasured(&name, reason));
+            continue;
+        }
+
         // Chromium — the same live URL, so it fetches its own subresources.
         let t_chrome = std::time::Instant::now();
         let cpath = out.join(format!("{name}.chrome.png"));

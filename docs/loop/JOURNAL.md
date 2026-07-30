@@ -37686,3 +37686,94 @@ the same file carries ±40 pt swings on single sites, and it would have been eas
 never compute the second. The reusable half: **when a metric's per-item variance is large, do not model
 it as noise to be averaged over — find its mechanism, because it usually has one.** Here three same-binary
 control runs cost four minutes and converted "14 regressions" into "one instrument defect".
+
+## Tick 751 — the oracle refused to score a page whose CSS never arrived; the instrument that computes the headline scored it anyway (2026-07-30)
+
+t750's control found the mechanism behind the ±40-point per-site swings in the fidelity series: pages
+rendered in **UA fallback** — author stylesheets cut by our own load deadline — being handed a real shape
+number. Three same-binary runs put `discourse.org` at 0.4964/0.4995/0.4995 (spread **0.003**) while the
+t750 sweep had recorded **0.087** for it, and the rows that collapse share one signature: **high coverage,
+collapsed shape** (`discourse` cov 0.971/shape 0.087, `arstechnica` 0.988/0.043, `basecamp` 0.987/0.115).
+Every element present — there was no CSS to drop one — and almost none placed, because there was no CSS
+to place it.
+
+**The engine already knew.** `Page::failed_stylesheet_fetches` was built for exactly this and says so in
+its own doc comment: *"a measurement that diffs it against a fully-styled reference is charging network
+weather to the engine's account. The differential oracle discards such runs."* It does — `run_oracle_cmd`
+calls it and prints `DISCARDED`, which is how `postgresql.org` came back discarded while the **same site
+in the same sweep** was scored `cov 1.000 / shape 0.018` over 337 nodes. **One question, two instruments,
+two answers — and the permissive one was the one that produced the Phase-0 headline.**
+
+FIX: a `CssStarved(n)` reason, and the fidelity path asks the same question the oracle asks, at the same
+point — after the page is built and painted, before Chromium is invoked (so a starved page costs no
+screenshot).
+
+⚠⚠⚠ **THE REFUSAL IS ABOUT ASYMMETRY, NOT ABOUT STARVATION — AND THE WALL CAUGHT ME GETTING THAT WRONG.**
+The first version fired on any `starved > 0` and turned `G1`'s `MEAN VISUAL` into **NaN**. G1 feeds both
+engines `file://` snapshots out of `.verify-cache`, and a snapshot's `href="/static/…"` cannot resolve
+under `file://` — so `failed_css` is non-zero there **by construction**, every G1 site went unscored, and
+the gate had an empty set to average. The wall went RED and was RIGHT to.
+
+The failure is the useful half. Under `file://` **both engines see the same missing sheets** — Chromium
+renders that snapshot unstyled too — so the diff is still apples-to-apples and the number means something.
+What makes a starved sheet fatal on the CORPUS is that the reference engine fetches its own subresources
+over the live network and **succeeds where we did not**: the two sides are then looking at *different
+documents*, which is the one thing no diff survives. So the condition is the URL scheme, and that is not a
+special case bolted on to appease a gate — it is the actual rule stated properly. Verified both ways:
+a live `http://` page with one 404'd sheet reads `css-starved-1`; the `file://` HN snapshot scores
+`cov 1.000 / shape 0.792` exactly as before.
+
+**A gate I did not write, guarding a number I was not thinking about, refused a change that would have
+blinded it.** That is the ratchet doing its job on the instrument rather than on the engine.
+
+**It stays IN-SCOPE, and that is the load-bearing decision.** `fidelity-progress.sh` partitions on the
+reason string: EXCLUDED is only for sites permanently unreachable under our own no-stealth policy
+(bot-wall/probe-blocked/unreachable/http-404/503/empty-2xx). A starved sheet is **our own load deadline
+cutting a sheet the origin served** — so it counts against us. Filing it as EXCLUDED would have *raised*
+the headline by laundering our bug out of the denominator, which is precisely what the `EXCLUDED-RISING`
+alarm exists to catch. That decision is now an **executable assertion**, not a comment: the gate mirrors
+the shell script's own exclusion list in code and fails if `css-starved` — or `render-failed`, `crashed`,
+`shell-only`, `thin-overlap` — ever drifts across that line.
+
+⚠ **What this does NOT do.** It does not fix the starvation, and it does not raise the pass rate: these
+rows were failing either way, and they move from *"scored, shape 0.09"* to *"in-scope fail, reason
+css-starved-N"*. What it buys is that the number stops **lying about which subsystem is broken** — a
+layout tick aimed at `discourse.org`'s 0.087 would have been aimed at nothing. Expect `scored` to fall and
+`shape_mean` to RISE on the next sweep, which will trip the **DENOMINATOR-TRAP** alert. **That alert will
+be correct and must not be tuned away**: the honest headline to quote is `inscope_pass_pct`, which is
+unaffected by construction.
+
+⚠ **My own earlier prediction is corrected, not quietly updated.** I predicted 2–6 rows would reclassify,
+from the `cov≥0.98 ∧ shape≤0.10` band of the t745 rows. Wrong frame: that band names the sites starved in
+*one* sweep, and `discourse.org`/`arstechnica.com` were starved in t750 and absent from it. **The
+population is per-run, not a fixed set** — which is exactly why it presents as noise.
+
+TICK SHAPE: instrument-fidelity
+CLUSTER: none created. Removes a per-run variance source from every future sweep and stops the burndown
+attributing fetch failures to layout math.
+Gates: `an_unscored_site_must_name_its_cause` (`tests/wpt/src/fidelity.rs`) extended — `CssStarved`
+round-trips through its own tag, and the in-scope/EXCLUDED partition is asserted for all five of OUR-bug
+reasons. ⚠ `ThinOverlap` and `Crashed` were missing from that round-trip loop; **checked, and they do
+round-trip correctly**, so adding them closes a COVERAGE gap and is not a bug found — the loop's comment
+claimed a property it was enforcing for 8 of 10 variants.
+**RED-proven by running two mutations, restored between.** **M1** delete the `from_tag` arm → *"CssStarved(3)
+must survive its own tag"* fails (`None` vs `Some(CssStarved(3))`) — the reason would have died silently at
+the chunk boundary. **M2, end-to-end and the one that matters:** a local server serving a page whose one
+`<link rel=stylesheet>` 404s. With the fix the row is `- / - / css-starved-1`, unscored and counted against
+the bar; with the branch disabled (`if false &&`) the *same page* is measured **`coverage 1.000000, shape
+0.666667`** — the instrument manufacturing a plausible shape number out of a page it never styled.
+PERF: one `usize` read per site, and a *saved* Chromium screenshot on every starved site.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "two instruments answering one question, and the permissive
+one publishes".
+PATTERN: ⚠⚠⚠ **WHEN TWO INSTRUMENTS ANSWER THE SAME QUESTION, THE PERMISSIVE ONE IS THE ONE THAT
+PUBLISHES.** The refusal existed, was correct, was documented, and was called — by the *other* consumer.
+Nothing was missing except the second caller, and the cost was a headline with a per-item noise floor 100×
+its own movement. Grep for the class: a predicate whose doc comment says *"so a measurement can refuse
+X"*, then grep its callers and check that **every** measurement is among them. A guard with one caller is
+a guard with a hole shaped like every other caller.
+
+⚠ HOUSEKEEPING, disclosed rather than hidden: this commit also carries an **observer-owned** change to
+`scripts/fidelity-progress.sh` (corpus detection for the CrUX switch) and the new
+`docs/bench/corpus-crux-trend.txt`, which appeared in the tree mid-tick. `tick.sh` stages with `git add -A`,
+and reverting them to keep this commit clean is the documented way to **clobber observer work** — so they
+ride along, attributed here, rather than being destroyed for tidiness. I did not author or modify them.
