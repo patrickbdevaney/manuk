@@ -117,27 +117,33 @@ width.
    is positive and steady, Phase-0-render has a finite ETA. Flat/negative slope = escalate (the primitive
    list is wrong, or a second mechanism is hiding — instrument deeper before grinding).
 
-## 5. Two structural forks — DECIDED by the owner (2026-07-29)
+## 5. The path — REVISED by the owner (2026-07-30): representative CrUX from the start
 
-> **Durable enforcement:** these decisions are an ORDERED 3-milestone state machine, tracked mechanically by
-> `scripts/phase0-milestones.sh` (surfaced every observer heartbeat via ops-check, and anchored in the board's
-> PHASE-0 SEQUENCE block). It computes the current milestone from observable signals and AUTO-ADVANCES when
-> each artefact hits its 95% gate — so the sequence survives board drift, agent relaunches, and context resets.
-> M1 = this doc (v1 render). M2 = the function leg → `docs/loop/FUNCTION-CERT.tsv`. M3 = the v2 re-cert →
-> `docs/loop/SWEEP-v2-t<N>-rows.tsv`. Then the v1.0.0 trigger.
+> **Durable enforcement:** an ORDERED **2**-milestone state machine, tracked mechanically by
+> `scripts/phase0-milestones.sh` (every observer heartbeat via ops-check + the board's CORPUS-SWITCH /
+> PHASE-0 SEQUENCE blocks). Computes the current milestone from observable signals and AUTO-ADVANCES at
+> each 95% gate — surviving board drift, relaunches, context resets. M1 = this doc (render on CrUX).
+> M2 = the function leg → `docs/loop/FUNCTION-CERT.tsv`. Then the v1.0.0 trigger.
 
-Both settled; the sequencing below is now authoritative, not advisory:
+**Superseded the 2026-07-29 "265 now → corpus-v2 at the end" plan.** Reason (the owner's correct challenge):
+driving the curated 265 to 95% would over-fit the easy head and hit the CrUX tail (quirks-mode, legacy
+table layout, malformed HTML) **blind, at the very end** — a second hill the t602 pilot already showed
+scores worse. Since the primitive fixes are corpus-agnostic (they help any site) and we were only 2 sweeps
+in, switching to the representative corpus **now** costs almost nothing and eliminates the late surprise.
+This collapses the old 3 milestones (v1-render → v1-function → v2-recert) into two — there is no separate
+"re-cert on v2" because CrUX is the corpus from day one.
 
-- **Corpus — DECIDED: burn down on the 265 now, re-certify on `corpus-v2.tsv` at the end.** Fast iteration
-  on stable anchors (hackernews/wikipedia/…) while the slope is being established; once in-scope-pass
-  crosses ~50%, re-run the certificate on the representative CrUX/Tranco corpus-v2 (built t581, currently
-  unused) for the headline "95% of the web" claim. Do NOT switch the working corpus mid-burndown.
-- **Function-on-real-sites — DECIDED: build the BiDi per-site function leg AFTER the render burndown, as
-  the final Phase-0 gate.** Render is the visible binding gap and goes first; function-on-real-sites
-  (cert §4 Layer C-function) is the last gate before certification. The capability breadth to pass it is
-  largely already there per `PHASE0-BOUNDED-REMAINDER.md` — this is a measurement build, not a big new
-  capability arc. Until then, function remains fixture-tested only (a known, named Phase-0 gap, not a
-  silent one).
+- **M1 RENDER — DECIDED: drive the representative CrUX corpus now.** Trend sweeps on the ~200-site
+  stratified subsample `docs/bench/corpus-crux-trend.txt` (fast); cert on the full 400 `corpus-v2.tsv`.
+  Keep reachable head anchors (hackernews/wikipedia, in the HEAD stratum) for per-tick debugging. The first
+  CrUX sweep is a NEW baseline (likely lower — the tail is harder); `fidelity-progress.sh` auto-detects the
+  corpus (ledger f13) and never diffs CrUX against the 265 (the metric-swap guard). The final 265 slope was
+  **+1.8 pts from 4 dy fixes** (real, modest — ~50 sweeps to 95% as a first noisy ETA); CrUX recalibrates it.
+- **M2 FUNCTION — DECIDED: build the BiDi per-site leg AFTER M1.** Render is the visible binding gap and
+  goes first. BUT a cheap early signal rides along now: the M1 sweeps flag **throw-class killers** (a
+  touched API that throws/no-ops — IndexedDB/observer-trio/etc — takes down the page), so function-fatal
+  sites surface continuously instead of as a late pile-up. The full A/B leg (cert §4 Layer C-function) is
+  the last gate; its capability breadth is largely already there per `PHASE0-BOUNDED-REMAINDER.md`.
 
 ## 6. Division of labour (unchanged doctrine)
 

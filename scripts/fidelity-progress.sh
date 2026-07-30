@@ -38,6 +38,18 @@ TICK=$(printf '%s' "$SRC" | grep -oE 't[0-9]+' | head -1)
 SWEEP_ISO=$(date -d "@$SRC_EPOCH" '+%Y-%m-%dT%H:%M:%S' 2>/dev/null || echo "?")
 NOW_EPOCH=$(date +%s 2>/dev/null || echo "$SRC_EPOCH")
 
+# ── CORPUS DETECTION (the metric-swap guard at the corpus switch) ─────────────────────────────────────────
+# When the driving corpus changes (265 curated → representative CrUX), the first sweep on the new corpus is a
+# NEW BASELINE, NOT a slope point — diffing it against a different site set is the metric-swap lie. Detect the
+# corpus of THIS sweep from its CONTENT (max site-name overlap with each corpus file, ground truth), tag the
+# ledger row with it, and only diff SAME-CORPUS rows. Old rows without a tag default to '265' (all were).
+_names=$(awk -F'\t' 'NR>1{print $1}' "$SRC" 2>/dev/null | sed 's#^https\?://##; s#/.*##; s/^www\.//' | grep -v '^$' | sort -u)
+if [ -n "$_names" ]; then
+  n265=$(grep -Ff <(printf '%s\n' "$_names") docs/bench/oracle-corpus.txt 2>/dev/null | wc -l)
+  ncrux=$(grep -Ff <(printf '%s\n' "$_names") docs/bench/corpus-crux-trend.txt docs/bench/corpus-v2.tsv 2>/dev/null | wc -l)
+  CORPUS=$([ "${ncrux:-0}" -gt "${n265:-0}" ] && echo crux || echo 265)
+else CORPUS=265; fi
+
 # Aggregate. The Phase-0 exit metric is shape>=0.75 on >=95% of the IN-SCOPE corpus — and the denominator
 # is the crux (DAILY-DRIVER-CERTIFICATION.md §3): a site is EXCLUDED (reported separately, its rate watched
 # and capped) ONLY when it is permanently unreachable by our own no-stealth policy or simply gone —
@@ -68,7 +80,9 @@ read -r SITES SCORED GE75 GE75PCT SHAPEM COVM EXCL INSCOPE INPASS < <(awk -F'\t'
 
 # PREV = last COMPLETE ledger row for a DIFFERENT tick (skip a same-tick partial we are about to supersede),
 # so Δ/alerts always compare against a real prior reading, never against a mid-write row for this same sweep.
-PREV=""; [ -f "$LEDGER" ] && PREV=$(grep -vE '^(iso|#)' "$LEDGER" 2>/dev/null | awk -F'\t' -v t="$TICK" '$2!=t' | tail -1)
+# PREV = last COMPLETE row for a DIFFERENT tick AND the SAME corpus (f13; missing⇒265). Same-corpus only, so
+# the slope never diffs a CrUX sweep against a 265 sweep (different site set = the metric-swap lie).
+PREV=""; [ -f "$LEDGER" ] && PREV=$(grep -vE '^(iso|#)' "$LEDGER" 2>/dev/null | awk -F'\t' -v t="$TICK" -v c="$CORPUS" '{ rc=($13==""?"265":$13) } $2!=t && rc==c' | tail -1)
 p_iso=$(echo "$PREV" | cut -f1); p_tick=$(echo "$PREV" | cut -f2); p_scored=$(echo "$PREV" | cut -f4); p_ge=$(echo "$PREV" | cut -f5); p_sh=$(echo "$PREV" | cut -f7); p_excl=$(echo "$PREV" | cut -f10); p_inscope=$(echo "$PREV" | cut -f11); p_inpass=$(echo "$PREV" | cut -f12)
 
 # ── SETTLED / COMPLETE guard (the mid-write-partial fix) ──────────────────────────────────────────────────
@@ -78,16 +92,27 @@ p_iso=$(echo "$PREV" | cut -f1); p_tick=$(echo "$PREV" | cut -f2); p_scored=$(ec
 #   LIVE     — a manuk-wpt fidelity/oracle process is running ⇒ still being written ⇒ NOT settled.
 #   COMPLETE — row count ≥80%% of the expected corpus (max historical sites, floor 200), so a between-chunk
 #              lull or a sweep that died early is never mistaken for a finished run.
-EXPECT=$(awk -F'\t' '$1!~/^#/ && $1!="iso_sweep"{ if($3+0>m) m=$3+0 } END{ print (m>200?m:265) }' "$LEDGER" 2>/dev/null); [ -z "$EXPECT" ] && EXPECT=265
+# EXPECT is CORPUS-RELATIVE (a fixed 265 breaks when the driving corpus becomes the ~200-site CrUX trend or
+# the 400-site full cert corpus): expected = the detected corpus's own size (for CrUX, whichever of the
+# 200-trend / 400-full file the sweep's site count is closest to), so "complete" means ~all of ITS corpus.
+if [ "$CORPUS" = "crux" ]; then
+  et=$(grep -vcE '^#|^$' docs/bench/corpus-crux-trend.txt 2>/dev/null); [ -z "$et" ] && et=200
+  ef=$(grep -vcE '^#' docs/bench/corpus-v2.tsv 2>/dev/null); [ -z "$ef" ] && ef=400
+  dt=$(( SITES>et ? SITES-et : et-SITES )); df=$(( SITES>ef ? SITES-ef : ef-SITES ))
+  EXPECT=$et; [ "$df" -lt "$dt" ] && EXPECT=$ef
+else
+  EXPECT=$(grep -vcE '^#|^$' docs/bench/oracle-corpus.txt 2>/dev/null); [ -z "$EXPECT" ] && EXPECT=265
+fi
+[ "${EXPECT:-0}" -lt 100 ] && EXPECT=200
 MINROWS=$(( EXPECT * 80 / 100 ))
 SWEEP_LIVE=0; { pgrep -f 'manuk-wpt fidelity' >/dev/null 2>&1 || pgrep -f 'manuk-wpt oracle' >/dev/null 2>&1; } && SWEEP_LIVE=1
 SETTLED=1; { [ "$SWEEP_LIVE" = 1 ] || [ "${SITES:-0}" -lt "$MINROWS" ]; } && SETTLED=0
 
 # ── record-if-new (by sweep tick) ──────────────────────────────────────────────────────────────────────
 if [ "$MODE" != "--check" ]; then
-  [ -f "$LEDGER" ] || printf '# rebuilt-instrument schema (t706+); shape=parent-relative, NOT the old absolute placement (6.4 pre-2026-07-28 row is a DIFFERENT metric, do not diff)\n# f6 shape_ge0.75_pct = LEGACY fixed-265 denom. f12 inscope_pass_pct = the winnable Phase-0 headline (denom excludes bot-wall/unreachable per DAILY-DRIVER-CERTIFICATION.md §3). Exit = f12 >= 95.\niso_sweep\tsweep_tick\tsites\tscored\tshape_ge0.75\tshape_ge0.75_pct\tshape_mean\tcov_mean\tsource\texcluded\tinscope\tinscope_pass_pct\n' > "$LEDGER"
+  [ -f "$LEDGER" ] || printf '# rebuilt-instrument schema (t706+); shape=parent-relative, NOT the old absolute placement (6.4 pre-2026-07-28 row is a DIFFERENT metric, do not diff)\n# f6 shape_ge0.75_pct = LEGACY fixed-265 denom. f12 inscope_pass_pct = the winnable Phase-0 headline (denom excludes bot-wall/unreachable per DAILY-DRIVER-CERTIFICATION.md §3). Exit = f12 >= 95. f13 corpus = driving corpus (265 curated | crux representative) — slope only diffs SAME corpus.\niso_sweep\tsweep_tick\tsites\tscored\tshape_ge0.75\tshape_ge0.75_pct\tshape_mean\tcov_mean\tsource\texcluded\tinscope\tinscope_pass_pct\tcorpus\n' > "$LEDGER"
   EXIST_SITES=$(awk -F'\t' -v t="$TICK" '$2==t{print $3+0; exit}' "$LEDGER")
-  ROW=$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$SWEEP_ISO" "$TICK" "$SITES" "$SCORED" "$GE75" "$GE75PCT" "$SHAPEM" "$COVM" "$SRC" "$EXCL" "$INSCOPE" "$INPASS")
+  ROW=$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$SWEEP_ISO" "$TICK" "$SITES" "$SCORED" "$GE75" "$GE75PCT" "$SHAPEM" "$COVM" "$SRC" "$EXCL" "$INSCOPE" "$INPASS" "$CORPUS")
   if [ "$SETTLED" != 1 ]; then
     echo "fidelity-progress: sweep $TICK NOT settled (live=$SWEEP_LIVE, $SITES/$EXPECT sites) — not banking a mid-write partial"
   elif [ -z "$EXIST_SITES" ]; then
@@ -120,8 +145,9 @@ if [ "$MODE" = "--check" ]; then [ -n "$alerts" ] && printf "%b" "$alerts"; exit
 
 TARGET=$(awk "BEGIN{printf \"%d\", int(0.95*$INSCOPE + 0.999)}")
 NEED=$(( TARGET - GE75 )); [ "$NEED" -lt 0 ] && NEED=0
-echo "── FIDELITY PROGRESS (rebuilt instrument · sweep $TICK · $SWEEP_ISO · ${AGE_DAYS}d old) ─────────"
+echo "── FIDELITY PROGRESS (rebuilt instrument · sweep $TICK · corpus=${CORPUS} · $SWEEP_ISO · ${AGE_DAYS}d old) ─────────"
 [ "$SETTLED" != 1 ] && printf "  ⏳ SWEEP IN PROGRESS: %s/%s sites so far (live=%s) — numbers below are a PARTIAL, NOT banked until complete\n" "$SITES" "$EXPECT" "$SWEEP_LIVE"
+[ -z "$PREV" ] && [ "$SETTLED" = 1 ] && printf "  🆕 NEW %s-CORPUS BASELINE — no same-corpus prior sweep, so NO slope this time (a different site set is not diffable; the slope resumes at the next %s sweep)\n" "$CORPUS" "$CORPUS"
 printf "  ⭐ IN-SCOPE PASS: %s/%s = %s%% (shape>=0.75)   TARGET 95%% = %s sites  →  NEED +%s more\n" \
   "$GE75" "$INSCOPE" "$INPASS" "$TARGET" "$NEED"
 printf "     EXCLUDED (bot-wall/unreachable, watched·capped): %s/%s = %s%%   ·   scored %s/%s   shape_mean=%s%%  cov_mean=%s%%\n" \
