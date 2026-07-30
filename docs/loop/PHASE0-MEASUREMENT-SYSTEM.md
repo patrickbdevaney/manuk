@@ -72,6 +72,13 @@ A single per-origin verdict with an **ordered gate**:
 M1 (visual) and M2 (function) stop being sequential milestones and become **two terms of one number**, with
 function gating visual.
 
+> **🔒 LOCKED by owner 2026-07-30:** function-first framing is confirmed and is now the authoritative
+> sequence. The function gate leads — a site must render (not throw during boot) before its shape is
+> scorable — so the throw-killer / scorability leg is the FIRST work, not deferred behind a finished visual
+> milestone. This supersedes the strictly-ordered "M1 render → then M2 function" framing in the
+> `phase0-milestone-sequence` memory. The two-artefact structure stays (visual burndown + BiDi function
+> cert); what is locked is that **function leads and the two are terms of one gated number.**
+
 ---
 
 ## 3. THE THREE TRACKED LEGS (the burndown, re-ranked)
@@ -118,10 +125,13 @@ Mozilla's data: the **#1 real-world breakage class is faulty UA-sniffing + `-web
 standard fallback** — almost none of the top breakage classes is a missing feature.
 - **`-webkit-` prefix aliasing is COMPAT, not stealth — in-scope, pursue it.** Every non-WebKit engine
   (Moz/Opera/MS, 2012) had to alias `-webkit-` prefixes to render the real web.
-- **UA-spoofing past bot-walls is the contested part.** Our no-stealth policy (memory: `scope-botdetection`)
-  accepts the ~35% excluded corpus as a **known, capped cost** — that scope decision is already made. Flagged
-  here only because it is the single place our policy and SOTA (Ladybird spoofs Chrome's UA) diverge; the
-  excluded rate is watched and capped by `fidelity-progress.sh`, not hidden.
+- **🔒 NO STEALTH — LOCKED by owner 2026-07-30:** "no stealth is better for an open source browser project."
+  We do NOT UA-spoof or fingerprint-dodge to defeat bot-walls, even though SOTA (Ladybird spoofs Chrome's UA)
+  weighs it heavily for minority engines — an open-source engine competes on being honestly itself. The ~35%
+  excluded corpus is a **known, accepted, capped cost**, watched by `fidelity-progress.sh` (EXCLUDED-RISING
+  alert), never hidden. The 95% target is explicitly "95% of the in-scope ~65% that admit an honest engine."
+  This does not restrict `-webkit-` aliasing (compat) or a truthful modern UA string; it forbids
+  impersonation/evasion. Aligns with memory `scope-botdetection`.
 
 ## 7. THROUGHPUT (feed the loop faster)
 
@@ -166,13 +176,16 @@ standard fallback** — almost none of the top breakage classes is a missing fea
   because the shared dy/flex mechanism clears it alongside shape.
 - **Instrument:** `fidelity-progress.sh` prints the **SCORABILITY CEILING** explicitly (scored/in-scope +
   unscored-reason breakdown) so the loop can no longer grind shape under an untracked cap.
-- **Two owner decisions surfaced** (do not need answering to proceed, but confirm the framing):
-  1. **Function-first**: reframe M1/M2 as two terms of one function-gated number (function first), vs the
-     current strictly-ordered "M1 render then M2 function." The evidence (all four probes) favors function
-     first. *This touches the owner-locked milestone sequence — surfaced, not unilaterally flipped.*
-  2. **No-stealth cost**: confirm we accept the ~35% excluded corpus as a capped cost while pursuing
-     `-webkit-` prefix aliasing (compat, in-scope). Scope decision already on record; re-confirming because
-     SOTA weighs it heavily for minority engines.
+- **🔒 Both owner decisions LOCKED (2026-07-30):**
+  1. **Function-first — LOCKED.** M1/M2 are two terms of one function-gated number; function leads (§2).
+  2. **No stealth — LOCKED.** "No stealth is better for an open source browser project." ~35% excluded is an
+     accepted, capped cost; `-webkit-` aliasing (compat) is pursued; impersonation/evasion is refused (§6).
+- **BiDi function A/B leg — the M2 build, sequenced "when appropriate" (owner 2026-07-30).** The full
+  per-site function certificate needs `script.evaluate` built (`bidi/src/protocol.rs:481` is stubbed). The
+  **mechanical trigger**: build it once the **scorability ceiling clears ~85%** (most in-scope sites render)
+  — you cannot A/B-probe function on a site that doesn't boot, and until then the cheap **throw-class proxy**
+  riding the M1 sweeps is the sufficient, cheaper signal. So: throw-killer proxy now → BiDi A/B when
+  scorability ≳85% → full render∧function cert on the 400-site corpus.
 
 **One-line answer to "fastest path to M1 and M2":** they are the same leg. **Kill boot-halting exceptions on
 the ~48 unscored sites first** (raises the render ceiling AND builds the function cert), **then shape-nudge

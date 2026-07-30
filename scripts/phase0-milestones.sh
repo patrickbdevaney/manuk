@@ -90,8 +90,8 @@ printf "  %sM1%s RENDER  shape>=0.75 AND jarring-clean on >=95%% of in-scope rep
 printf "       now %s%s%%%s on corpus=%s  (%s/%s in-scope · target %s · need +%s)   %s%s\n" "$B" "${M1_PASS:-?}" "$O" "${M1_CORPUS}" "${M1CNT:-?}" "${M1_INSCOPE:-?}" "$TARGET" "$NEED" "$SLOPE_TXT" "$CORPUS_NOTE"
 printf "       ├─ shape>=0.75: %s%%   └─ jarring-clean (no overlap/h-overflow/reorder/dead-target): %s%%  (both must clear 95%%)\n" "${M1_SHAPEPCT:-?}" "${M1_JARPCT:-?}"
 printf "       drive: docs/bench/corpus-crux-trend.txt (~200, fast) · cert: docs/bench/corpus-v2.tsv (400) · last sweep %s\n" "${M1_TICK:-none}"
-printf "  %sM2%s FUNCTION  per-site render∧function >=95%% on the representative corpus   %s\n" "$B" "$O" "$(_st $M2_DONE M2)"
-printf "       %s  (artefact docs/loop/FUNCTION-CERT.tsv — BiDi leg, build AFTER M1; throw-class killers flagged during M1 sweeps as an early signal)\n" "$([ -n "$m2_pass" ] && echo "now ${m2_pass}%" || echo "not started — leg unbuilt")"
+printf "  %sM2%s FUNCTION  per-site render∧function >=95%% on the representative corpus  %s(🔒 function-first LOCKED: function GATES visual — a site must boot before shape is scorable)%s   %s\n" "$B" "$O" "$C" "$O" "$(_st $M2_DONE M2)"
+printf "       %s  (artefact docs/loop/FUNCTION-CERT.tsv — throw-class proxy rides M1 sweeps NOW; build the BiDi script.evaluate A/B leg [bidi/src/protocol.rs:481] WHEN scorability ceiling >=~85%% — can't A/B a site that won't boot)\n" "$([ -n "$m2_pass" ] && echo "now ${m2_pass}%" || echo "throw-class proxy active — full BiDi A/B leg deferred to scorability>=85%")"
 printf "  %s→%s then v1.0.0 release trigger (memory: v1-release-trigger) + Phase 1\n" "$B" "$O"
 echo "  plan: docs/loop/PHASE0-RENDER-BURNDOWN.md (M1) · PHASE0-BOUNDED-REMAINDER.md (M2 worklist) · DAILY-DRIVER-CERTIFICATION.md (authority)"
 exit 0
