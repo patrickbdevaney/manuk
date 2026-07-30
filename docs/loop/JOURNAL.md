@@ -38994,3 +38994,63 @@ makes a cost assertion falsifiable is a CONTROL IN THE SAME RUN: measure the sus
 comparable operation the machine performs in the same loop, and assert the ratio. The absolute number is
 a property of the box; the ratio is a property of the code. **Any new perf gate must name the control
 it divides by, and be shown red with the defect restored — not merely shown green without it.**
+
+## Tick 770 — `box-sizing: border-box` was never applied to a FLOAT (2026-07-30)
+
+Back to the render burndown, ranked from t767's own re-rank: `possssno.sbs` — **coverage 1.000, shape
+0.123, reading_order 589** — every box drawn, nothing in the right place. The mechanism oracle over it
+plus `fragrantica.com` and `aftenbladet.no` put one signature on top: `geometry/mis-sized: width ~8px`,
+69 hits on `<a>` across all three sites and 206 on `<div>` across two.
+
+The example was legible: a card `<a>` at Chrome `[20 1072 342×210]` and ours `[5 1205 352×210]` — **10px
+too wide**. The site's CSS is the pre-flexbox column, verbatim:
+
+```css
+  *{box-sizing:border-box}                       /* every reset since 2011 */
+  .video{width:50%;float:left;padding:0 5px}     /* the WordPress card grid */
+```
+
+### THE CONTROL WAS IN THE SAME FIXTURE, AND IT IS WHAT NAMES THE BUG
+
+```text
+  (704px container, *{box-sizing:border-box}, width:50% + padding:0 5px)
+                                     Chrome        was          now
+  1st float, border box                 352        362  ✗       352  ✓
+  its content                           342        352  ✗       342  ✓
+  2nd float's x                         352        362  ✗       352  ✓
+  the SAME box without `float`      352 / 342    352 / 342 ✓   unchanged ✓
+```
+
+The last row is the whole diagnosis: `layout_block` has subtracted padding+border from a border-box
+width for many ticks (`bs_extra_w`). **`layout_float` is a separate width resolution and never learned
+it** — it took the specified `50%`, resolved it, and used it as the CONTENT width. So every floated
+column on every border-box page was `padding-left + padding-right` too wide, and the next float was
+pushed by the same amount.
+
+⚠ Two hypotheses died first, both by fixture rather than by argument: a blockified `<a>` ignoring its
+parent's padding (`a=5:200 d=5:200 b=5:200` — Chrome-exact, falsified), and an `<img width=352>`
+attribute driving the card's width (the image is `width:100%` in the sheet; not it either).
+
+MEASURED: `possssno.sbs` shape **0.123 → 0.430** (+30.7 pts) at coverage 1.000, `shape_n` 575 both runs.
+Control `marktplaats.nl` **0.708642 → 0.708642**, byte-identical. `fragrantica.com` 0.425 → 0.412 —
+inside the ±3.7pt per-site spread and NOT claimed either way. ⚠ `possssno`'s `reading_order` went
+589 → 599: with the cards finally the right size the pair ordering shifts, and I am reporting it rather
+than quietly keeping the shape number.
+
+TICK SHAPE: root-cause
+CLUSTER: `geometry/mis-sized: width ~8px` — the top signature over the three re-ranked sites.
+Gates: `box_sizing_border_box_applies_to_a_float` (`engine/layout/src/lib.rs`) — the float's border box
+is the specified 50%, its content is 342, the second float starts at 352, **and the non-float control is
+unchanged**. RED-proven by running the mutation: `float 0/362, inner 5/352`. manuk-layout 102/102.
+PERF: one comparison and a subtraction per float.
+WIKI: `docs/wiki/box-layout.md` — "box-sizing applies to a float too, and the float path is a SECOND
+width resolution".
+PATTERN: ⚠⚠⚠ **A SECOND IMPLEMENTATION OF A SIZING RULE IS A SECOND PLACE FOR EVERY PROPERTY TO BE
+FORGOTTEN — AND THE ONE THAT LOOKS SPECIAL IS THE ONE THAT ROTS.** This is the sixth "one rule, N
+implementations" defect this project has recorded, and the pattern within the pattern is sharper: the
+forgotten copy is never the main path, it is the *variant* — the float, the flex item, the table cell —
+because the variant is written once for its special case and then never revisited as ordinary properties
+land in the main path. The tell is structural, not behavioural: **`layout_float` resolves `s.width`
+itself**, and any function that resolves a width owes every width-modifying property (`box-sizing`,
+`min-width`, `max-width`). Grep for the other width resolutions and diff them against `layout_block`'s
+list — that is a bounded audit with a known yield.

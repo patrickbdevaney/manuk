@@ -121,6 +121,8 @@
   - L2367 · ⚠ The fix that was reverted to get here
   - L2382 · An RTL grid's COLUMN AXIS runs right-to-left — and taffy cannot be told (tick 766)
   - L2429 · What is still wrong, pinned rather than guessed
+  - L2439 · box-sizing applies to a FLOAT too — and the float path is a SECOND width resolution (tick 770)
+  - L2476 · The audit this opens
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1289,4 +1291,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1200 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1202 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

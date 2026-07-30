@@ -2824,7 +2824,27 @@ impl Ctx<'_> {
             // between a full-width banner and one hugging its text.
             Dim::Auto if s.width_stretch => avail,
             Dim::Auto => self.shrink_to_fit(node, avail),
-            other => other.resolve(cw, avail).max(0.0),
+            // ── **`box-sizing: border-box` — THE FLOAT PATH NEVER APPLIED IT.** A specified width on a
+            // border-box element is the BORDER box, so the content width is that minus padding and
+            // border; `layout_block` has done this since t~ (`bs_extra_w`), and this function, which is
+            // a separate width resolution, simply did not. `auto` is already a content width, so only
+            // the specified arm subtracts.
+            //
+            // Measured vs live Chromium on the exact corpus shape (`*{box-sizing:border-box}` +
+            // `.card{width:50%;float:left;padding:0 5px}` in a 704px container): Chrome **352** border
+            // box / **342** content, ours **362 / 352** — every float 10px too wide, and the control in
+            // the same fixture (the identical box WITHOUT `float`) was already Chrome-exact at 352/342.
+            //
+            // `*{box-sizing:border-box}` is in every CSS reset written since 2011, and a
+            // `width:%` + `padding` float is the pre-flexbox column — i.e. most of the WordPress web.
+            other => {
+                let w = other.resolve(cw, avail).max(0.0);
+                if s.box_sizing == BoxSizing::BorderBox {
+                    (w - (pl + pr + bl + br)).max(0.0)
+                } else {
+                    w
+                }
+            }
         };
 
         // **A floated table must still get TABLE layout.** `layout_table` is only reached from
@@ -7455,6 +7475,71 @@ mod tests {
         let mut out = None;
         rec(root, dom, tag, &mut out);
         out
+    }
+
+    /// **`box-sizing: border-box` applies to a FLOAT too** — the float path resolved its own width and
+    /// never subtracted padding + border, so every floated column was `padding-left + padding-right`
+    /// too wide.
+    ///
+    /// Measured against live Chromium on the exact corpus shape — `*{box-sizing:border-box}` with
+    /// `.card{width:50%;float:left;padding:0 5px}` in a 704px container:
+    ///
+    /// | box | Chrome | was |
+    /// |---|---|---|
+    /// | 1st float (border box) | **352** | 362 ❌ |
+    /// | its content | **342** | 352 ❌ |
+    /// | 2nd float's x | **352** | 362 ❌ |
+    /// | the same box WITHOUT `float` | 352 / 342 | 352 / 342 ✅ |
+    ///
+    /// The last row is the control and it is why this is a *float* bug and not a box-sizing bug:
+    /// `layout_block` has applied `bs_extra_w` for many ticks; `layout_float` is a separate width
+    /// resolution that never learned it. `*{box-sizing:border-box}` is in every CSS reset written since
+    /// 2011, and a `width:%` + `padding` float is the pre-flexbox column — most of the WordPress web.
+    ///
+    /// Real site: `possssno.sbs` (coverage 1.000, the sharpest target on the t767 ledger) went shape
+    /// **0.123 → 0.430**.
+    ///
+    /// RED, run: drop the `BoxSizing::BorderBox` arm in `layout_float` — the float reads 362 and its
+    /// content 352.
+    #[test]
+    fn box_sizing_border_box_applies_to_a_float() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0'><div id=wrap style='width:704px'>\
+               <div class=f id=f1><div class=inner id=i1>a</div></div>\
+               <div class=f id=f2><div class=inner id=i2>b</div></div>\
+               <div id=nofloat><div class=inner id=i3>c</div></div>\
+             </div></body>",
+            "*{box-sizing:border-box} .f{width:50%;float:left;padding:0 5px} \
+             .inner{height:20px} #nofloat{width:50%;padding:0 5px}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let g = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            (rects[&n].x, rects[&n].width)
+        };
+        let (f1x, f1w) = g("f1");
+        let (i1x, i1w) = g("i1");
+        let (f2x, _) = g("f2");
+        assert!(
+            (f1w - 352.0).abs() < 1.0 && (i1w - 342.0).abs() < 1.0,
+            "the float's BORDER box is the specified 50% (352) and its CONTENT is 342: \
+             float {f1x}/{f1w}, inner {i1x}/{i1w}"
+        );
+        assert!(
+            (f2x - 352.0).abs() < 1.0,
+            "two 50% floats fit side by side — the second starts at 352, got {f2x}"
+        );
+        // The control: the same box without `float` was ALREADY Chrome-exact, and must stay so.
+        let (_, nfw) = g("nofloat");
+        let (_, i3w) = g("i3");
+        assert!(
+            (nfw - 352.0).abs() < 1.0 && (i3w - 342.0).abs() < 1.0,
+            "the non-float control is unchanged: {nfw} / {i3w}"
+        );
     }
 
     /// **An RTL grid's COLUMN AXIS runs right-to-left** — `direction` reverses a grid's inline-axis

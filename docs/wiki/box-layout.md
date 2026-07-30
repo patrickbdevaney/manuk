@@ -2433,3 +2433,51 @@ An `li` with `display:inline-block` on `mobile.ir` sits at **x=1208 while its pa
 block-margin rule is applied. Two candidates were eliminated by fixture rather than by argument:
 `float:right` is Chrome-exact, and table columns are correct as of t765. The cause is inline-level and
 unknown; it is a `missing` row in `CONSTELLATION.tsv` and it is where the next RTL tick starts.
+
+---
+
+## `box-sizing` applies to a FLOAT too — and the float path is a SECOND width resolution (tick 770)
+
+`layout_float` resolves its own width:
+
+```rust
+let width = match s.width {
+    Dim::Auto if s.width_stretch => avail,
+    Dim::Auto => self.shrink_to_fit(node, avail),
+    other => other.resolve(cw, avail).max(0.0),   // ← the specified width, used as CONTENT width
+};
+```
+
+That last arm is the bug. Under `box-sizing: border-box` a specified width is the **border box**, so the
+content width is that minus padding and border — which `layout_block` has done for many ticks via
+`bs_extra_w`, and which this function never learned.
+
+Measured against live Chromium on the shape the corpus actually ships
+(`*{box-sizing:border-box}` + `.card{width:50%;float:left;padding:0 5px}`, 704px container):
+
+| box | Chrome | was | now |
+|---|---|---|---|
+| 1st float (border box) | **352** | 362 | 352 |
+| its content | **342** | 352 | 342 |
+| 2nd float's x | **352** | 362 | 352 |
+| **the same box without `float`** | 352 / 342 | 352 / 342 | unchanged |
+
+The last row is the control, in the same fixture: the non-float path was already exact. That is what
+makes this a *float* defect rather than a *box-sizing* defect, and it is the reason the bug survived —
+every direct test of `box-sizing` passed.
+
+**Real-site effect.** `possssno.sbs` — coverage 1.000, shape 0.123, the sharpest single target on the
+t767 ledger — went shape **0.123 → 0.430**. `marktplaats.nl` (no floats of this shape) was
+byte-identical.
+
+**Gate.** `box_sizing_border_box_applies_to_a_float`, RED-proven by dropping the arm (`float 0/362,
+inner 5/352`).
+
+### The audit this opens
+
+**Any function that resolves `s.width` itself owes every width-modifying property** — `box-sizing`,
+`min-width`, `max-width`, the intrinsic keywords. `layout_block` carries the full list; the variants
+(float, flex/grid item, table cell, abspos) each resolve width separately. Diff their lists against
+`layout_block`'s: it is a bounded audit with a known yield, because the forgotten copy is never the main
+path — it is the variant, written once for its special case and never revisited as ordinary properties
+land in the main path.
