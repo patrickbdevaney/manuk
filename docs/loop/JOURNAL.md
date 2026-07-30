@@ -38049,3 +38049,46 @@ their OWN file (`SURFACE-AUDIT.md`, `CONSTITUTION-CHECK.md`, `WALL-AUDIT.md`). W
 journal is writing it where nothing counts it. Same family as the two ledger gotchas already recorded for
 the surface audit; the general form is **when a process step has a counter, find what the counter reads
 BEFORE doing the work, not after.**
+
+## Tick 756 — CORRECTION: tick 749 read the oracle's samples backwards (the conclusion stands, and is strengthened) (2026-07-30)
+
+Tick 749's journal says, of the sample that motivated the investigation:
+
+> `matklad.github.io`'s footer links sample as ours `62×27` vs Chrome `50×27`: same height, **24% too
+> wide**, which is what a wrong text advance looks like.
+
+**The polarity is wrong.** `oracle.rs:558` prints `format!("{}#{}: {} vs {}", d.site, d.id, d.chrome,
+d.manuk)` — **Chrome first, ours second** — corroborated by the missing-box path, which sets
+`manuk: "(no box)"` and prints it on the right. So that sample (`[356 15231 62×27] vs [116 11705 50×27]`)
+says **Chrome 62 wide, ours 50**: ours is **19% too NARROW**, not 24% too wide.
+
+**Why this is worth a correction rather than a shrug.** A future session reading "ours is too wide" would
+hunt a too-wide mechanism — the opposite direction. That is exactly the kind of confident, actionable,
+wrong statement the journal exists to prevent, and it sat in a landed commit.
+
+**The tick's conclusion is unaffected and is in fact better supported.** t749's finding — `system-ui`
+aliased to the sans generic — was reached by *direct fixture measurement against live Chromium*
+(`48×18` here vs `50.23×22` in Chrome), never from the ledger sample; the sample only pointed at `<a>`
+widths. And the corrected reading **agrees** with the fix: `system-ui` resolving to Liberation Sans
+instead of Noto Sans makes our text *narrower* (48 vs 50.23) and its line box *shorter* (18 vs 22) —
+precisely "ours is narrower at a similar height", which is what the sample actually showed. Read
+correctly, the sample was evidence *for* the bug that was found, rather than for the one I wrote down.
+
+Nothing else in ticks 745–755 depends on the sample ordering: every other claim came from fixtures I ran
+against Chrome directly, or from the sweep TSVs (whose columns are labelled). The `/tmp` analysis notes
+that inherited the error are corrected in place.
+
+TICK SHAPE: correction
+CLUSTER: none.
+Gates: none — no behaviour changed. The claim is verified from the source (`oracle.rs:558`) plus the
+independent corroboration of the `(no box)` side.
+PERF: none.
+WIKI: none — the ordering is now stated in `docs/wiki/conformance-and-oracles.md`'s tick-754 section by
+way of its worked example.
+PATTERN: ⚠⚠ **BEFORE READING A DIFF'S SAMPLES, READ ITS FORMAT STRING.** `A vs B` is not
+self-documenting, and a differential instrument's whole output is pairs. I read a dozen samples, built a
+"ours is consistently wider" story on top of them, and only checked the print order when a *different*
+question (the `(no box)` side) forced it. The general form: **an instrument that emits ordered pairs must
+be asked which side is which, in code, before any inference is drawn from a single one** — and the cheap
+tell is that the answer is one `grep` of the formatter, against however long it takes to chase a
+direction that does not exist.
