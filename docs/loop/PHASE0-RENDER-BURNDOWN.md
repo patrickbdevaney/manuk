@@ -151,3 +151,21 @@ This collapses the old 3 milestones (v1-render → v1-function → v2-recert) in
   banking sweep actuals, flagging the §5 forks. Never edits `engine/`/`manuk-wpt`; never runs sweeps.
 - **Agent:** the fresh sweep, the mechanism-oracle dimension, the per-primitive engine fixes, the per-site
   `boxes --why` diagnosis. Instrument + engine are agent territory.
+
+## 7. Measured rate is noisy — band rises faster than crossings (t752→t767, 2026-07-30)
+
+Two CrUX slopes in: t752→t758 **+1.6 pts** (real: scored↑, pass 5→7), t758→t767 **+0.0 pts** (pass 7→7 FLAT).
+But the FLAT sweep hid real work: the denominator-trap guard flagged the raw shape_mean +2.2 as inflated
+(4 sites dropped from scored), and the **common-scored-set control** (79 sites in both) showed a **real
++2.0pt band move — 14 sites improved, 2 regressed, 63 flat**. So the 7-fix batch DID lift the band; it just
+crossed 0.75 on ZERO sites this round. Lessons:
+- **Pass-count (shape≥0.75) is a threshold that LAGS the band** — report shape_mean (governing term) AND
+  pass-count together; a flat pass-count with a rising common-set band is real progress, not a stall.
+- **ALWAYS run the common-scored-set control before claiming a band move** — the raw shape_mean is
+  denominator-trap-prone (a dropped low-shape site fakes a rise). Do not narrate a band-lift off the raw mean.
+- **Rank primitives by CORPUS-SAMPLE frequency, not by whatever bug you find.** 3 of 7 fixes were RTL
+  (flex/table/grid) — real, but the CrUX-200 sample is RTL-light, so they crossed ~0 MEASURED sites. The
+  honest ledger already ranks by sites-affected; follow it to maximise measured movement.
+- **Conservative rate ≈ +0.8 pts/sweep** (2-slope avg) → order ~100 sweeps; but the band-rise implies
+  crossings come in WAVES as clusters approach 0.75, so linear extrapolation is an upper bound. Finite, long,
+  noisy — recompute the rate every 2-3 crux sweeps, never off one.
