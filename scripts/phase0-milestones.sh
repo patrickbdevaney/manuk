@@ -27,17 +27,22 @@ MODE="${1:-full}"
 
 # ── M1 signal: last COMPLETE fidelity row (skip mid-write partials: sites >= 80% of the max sites seen) ───
 #    Also lift the row's CORPUS tag (f13; missing⇒265) so we can say WHICH corpus the render number is on.
+# Every BANKED ledger row is already a settled+complete sweep (fidelity-progress guards that at write time,
+# corpus-relative), so DO NOT re-apply a site-count threshold here — a fixed 265-based one wrongly excludes
+# the 200-site CrUX sweeps. M1 = the LAST row; PREV = the most recent SAME-CORPUS row before it (slope only
+# within a corpus — never diff CrUX against the 265).
 read -r M1_TICK M1_PASS M1_INSCOPE M1_GE75 M1_PREVPASS M1_CORPUS < <(awk -F'\t' '
   $1 ~ /^#/ || $1=="iso_sweep" || $1=="" {next}
-  { if($3+0>maxs) maxs=$3+0; rows[NR]=$0 }
+  { rows[NR]=$0 }
   END{
-    thr = (maxs>200?maxs:200)*0.8
-    last=""; prev=""
-    for(i=1;i<=NR;i++){ if(!(i in rows)) continue; split(rows[i],f,"\t"); if(f[3]+0>=thr){ prev=last; last=rows[i] } }
-    if(last!=""){ split(last,L,"\t"); lc=(L[13]==""?"265":L[13])
-      pp=""; if(prev!=""){ split(prev,P,"\t"); if((P[13]==""?"265":P[13])==lc) pp=P[12] }
-      printf "%s %s %s %s %s %s", L[2], L[12], L[11], L[5], (pp==""?"NA":pp), lc }
-    else printf "none 0 0 0 NA 265"
+    last=""; lastNR=0
+    for(i=1;i<=NR;i++){ if(i in rows){ last=rows[i]; lastNR=i } }
+    if(last==""){ printf "none 0 0 0 NA 265"; exit }
+    split(last,L,"\t"); lc=(L[13]==""?"265":L[13])
+    prev=""
+    for(i=1;i<lastNR;i++){ if(!(i in rows)) continue; split(rows[i],f,"\t"); if((f[13]==""?"265":f[13])==lc) prev=rows[i] }
+    pp="NA"; if(prev!=""){ split(prev,P,"\t"); pp=P[12] }
+    printf "%s %s %s %s %s %s", L[2], L[12], L[11], L[5], pp, lc
   }' "$LEDGER" 2>/dev/null)
 
 # ── M2 done-signal (auto-detect the agent's artefact) ────────────────────────────────────────────────────
