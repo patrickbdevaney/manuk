@@ -38237,3 +38237,81 @@ Two of three sites crossed 0.75 by ≤0.002 while the corpus mean did not move. 
 line", the mean answers "did the population move", and only the second is evidence about the engine. The
 corollary for planning: **the cheapest points are the ones already at the line, so an early slope
 over-predicts the rest of the curve.**
+
+## Tick 759 — `&nbsp;` was collapsed like a space, so a spacer element had no line box: `char::is_whitespace` is Unicode's set, not CSS's (2026-07-30)
+
+Found by following the re-keyed CrUX ledger's #1 primitive (`geometry/mis-sized: height ~16px (<div>)`,
+**12 of 17 sites**) to a sample, and reading which side was zero:
+
+```
+…/footer/div/div/div:   Chrome [15 4921 1170×16]   ours [8 9034 1184×0]
+```
+
+**Ours is 0 where Chrome is 16** — we produce *no line box* where Chrome makes one. So the question is
+narrow: what does Chrome give a line box to that we do not? A nine-case fixture answered it:
+
+| markup | Chrome | ours |
+|---|---|---|
+| `<div>&nbsp;</div>` | **18** | **0** ❌ |
+| `<div><span></span></div>` | 0 | 19 ❌ |
+| `<div><br></div>` | 18 | 19 ❌ |
+| `<div>   </div>` · `<div></div>` · only-float · only-abspos · comment | 0 | 0 ✅ |
+| `<div><span style=display:inline-block></span></div>` | 18 | 18 ✅ |
+
+### THE MECHANISM
+
+CSS Text collapses exactly **SPACE, TAB, LF, CR, FF**. Rust's `char::is_whitespace` implements the
+**Unicode `White_Space` property**, which is a strictly larger set — and its extra members are precisely
+the characters an author reaches for *because they must not collapse*: U+00A0 NO-BREAK SPACE, U+2007
+FIGURE SPACE, U+202F NARROW NO-BREAK SPACE, U+2000–U+200A.
+
+All three white-space collapse sites in `engine/layout` used it. So `&nbsp;` was collapsed and trimmed
+like an ordinary space, and an element whose only content was `&nbsp;` was left with **no text at all,
+hence no line box, hence height 0.**
+
+FIX: `fn is_css_white_space(ch) -> bool { matches!(ch, ' ' | '\t' | '\n' | '\r' | '\u{c}') }`, used at
+the three collapse/word-split sites. `text-transform: capitalize`'s word-start scan keeps
+`is_whitespace` — a word boundary is a different question from a collapsible character, and NBSP *is* a
+word separator for that purpose.
+
+**Both directions verified, because a fix that simply stopped collapsing would be a worse bug:**
+
+```
+a&nbsp;b  29        a&nbsp;&nbsp;&nbsp;b  48   <- three NBSP stay three
+a   b     29        (three ASCII spaces still collapse to one)
+```
+
+Chrome-exact on all six, in both fixtures.
+
+**Population.** `&nbsp;` is one of the most common constructs in hand-written HTML: the spacer cell, the
+`&nbsp;|&nbsp;` separator, `10&nbsp;km`, French punctuation, and the "keep this from collapsing" idiom
+that predates flexbox. A zero-height spacer is a `dy` term, so each one charges everything below it.
+
+RESIDUE, named and NOT fixed here — the same fixture caught two more, each a distinct rule:
+- `<div><span></span></div>` — Chrome **0**, ours **19**: an *empty inline* must not generate a line box;
+  we generate one. (We over-produce; the opposite direction to this tick.)
+- `<div><br></div>` — Chrome **18**, ours **19**: a 1px line-box height difference on `<br>`.
+
+Both are recorded in `CONSTELLATION.tsv` rather than left in a comment, per t754's lesson.
+
+TICK SHAPE: root-cause
+CLUSTER: the CrUX ledger's #1 `geometry/mis-sized: height ~16px (<div>)` (12/17 sites). ⚠ NOT claimed as
+closed — the fixture proves the mechanism; the next sweep prices how much of the band it was.
+Gates: `a_non_breaking_space_is_content_not_collapsible_white_space` (`engine/layout/src/lib.rs`) —
+asserts the NBSP div gets a line box, a genuinely empty div does not, a run of three NBSP does not
+collapse, **and** that three ASCII spaces still do. Thresholds are deliberately font-INDEPENDENT: the
+absolute 48/29 come from the browser fixture where `monospace` resolves, while the unit harness resolves
+a different face, and pinning 48-vs-29 there would pin the test environment's font rather than the rule.
+**RED-proven by running the mutation** (`is_css_white_space` → `ch.is_whitespace()`): the NBSP div reads
+**0**, which is exactly the corpus symptom. Regression: manuk-layout, manuk-text, manuk-css, manuk-page
+all green.
+PERF: a `matches!` over five chars in place of a Unicode property lookup — strictly cheaper, on the
+hottest text path there is.
+WIKI: `docs/wiki/text-layout.md` — "the collapsible set is CSS's, not Unicode's".
+PATTERN: ⚠⚠⚠ **A STANDARD-LIBRARY PREDICATE THAT ALMOST MEANS WHAT THE SPEC MEANS IS A BUG THAT READS
+AS CORRECT CODE.** `ch.is_whitespace()` is not sloppy — it is a precise implementation of a *different*
+specification, and the difference is exactly the interesting cases. Nothing in the code looks wrong, no
+test of ASCII input can catch it, and the failure appears only for the characters an author chose
+deliberately. Grep the class: `is_whitespace`, `is_alphanumeric`, `to_lowercase`, `trim()` — each has a
+CSS/HTML definition that differs from Unicode's at the edges, and the edges are where authors live. (Same
+family as t749's `system-ui`: a name that resolves to something *plausible* instead of failing.)

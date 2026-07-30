@@ -1603,6 +1603,28 @@ fn collapses_as_block(dom: &Dom, styles: &StyleMap, node: NodeId, s: &ComputedSt
         || (s.display == Display::Inline && is_block_level(dom, styles, node))
 }
 
+/// **The characters CSS Text calls *document white space* — and NOT `char::is_whitespace`.**
+///
+/// White-space processing (collapsing runs, trimming edges, choosing soft-wrap opportunities) applies
+/// to exactly SPACE, TAB, LINE FEED, CARRIAGE RETURN and FORM FEED (CSS Text 3 §3, §4.1). Rust's
+/// `char::is_whitespace` is the **Unicode** `White_Space` property, which is a strictly larger set —
+/// and the extra members are precisely the characters an author reaches for when they want a space
+/// that is *not* collapsible.
+///
+/// ⚠ **The one that matters is U+00A0 NO-BREAK SPACE (`&nbsp;`).** `'\u{a0}'.is_whitespace()` is
+/// `true`, so every collapse site treated it as ordinary white space: a run of it collapsed away, and
+/// an element whose only content was `&nbsp;` was left with **no text at all, hence no line box**.
+/// Measured against live Chromium: `<div>&nbsp;</div>` is **18px** tall in Chrome and was **0** here.
+/// That is a `dy` term on one of the most common constructs in hand-written HTML — the spacer cell,
+/// `10&nbsp;km`, `&nbsp;|&nbsp;` separators, and French punctuation.
+///
+/// Also in the larger Unicode set and equally non-collapsible: U+2007 FIGURE SPACE, U+202F NARROW
+/// NO-BREAK SPACE, and the U+2000–U+200A fixed-width spaces, which authors use for exactly the reason
+/// their names suggest.
+fn is_css_white_space(ch: char) -> bool {
+    matches!(ch, ' ' | '\t' | '\n' | '\r' | '\u{c}')
+}
+
 /// May this block collapse its **top** margin with its first in-flow block child (CSS2 §8.3.1)?
 /// A block-collapsing box ([`collapses_as_block`]), `overflow:visible`, not a BFC root, with no top
 /// border and no top padding — the conditions under which the child's top margin escapes upward
@@ -4566,7 +4588,7 @@ impl Ctx<'_> {
                             };
                         }
                         for ch in line.chars() {
-                            let ws = ch.is_whitespace();
+                            let ws = is_css_white_space(ch);
                             if !run.is_empty() && ws != run_ws {
                                 flush_run!();
                             }
@@ -4591,7 +4613,7 @@ impl Ctx<'_> {
                         }
                         let mut buf = String::new();
                         for ch in line.chars() {
-                            if ch.is_whitespace() {
+                            if is_css_white_space(ch) {
                                 if !buf.is_empty() {
                                     push_word(
                                         out,
@@ -4655,7 +4677,7 @@ impl Ctx<'_> {
                 }
                 let mut buf = String::new();
                 for ch in t.chars() {
-                    if ch.is_whitespace() {
+                    if is_css_white_space(ch) {
                         if !buf.is_empty() {
                             push_word(
                                 out,
@@ -6093,6 +6115,81 @@ mod tests {
             "#outer must not carry a 40px internal gap at the bottom (outer.h={}, inner.h={})",
             outer.height,
             inner.height
+        );
+    }
+
+    /// **`&nbsp;` IS NOT COLLAPSIBLE WHITE SPACE, AND `char::is_whitespace` SAYS IT IS.**
+    ///
+    /// CSS Text collapses exactly SPACE, TAB, LF, CR and FF. Rust's `char::is_whitespace` implements
+    /// the **Unicode `White_Space` property**, a strictly larger set whose extra members are precisely
+    /// the characters an author picks *because* they must not collapse. Every collapse site here used
+    /// it, so `&nbsp;` was collapsed and trimmed like a space — and an element whose only content was
+    /// `&nbsp;` ended up with no text, hence **no line box at all**.
+    ///
+    /// Measured against live Chromium:
+    ///
+    /// | markup | Chrome | was |
+    /// |---|---|---|
+    /// | `<div>&nbsp;</div>` height | 18 | **0** |
+    /// | `a&nbsp;&nbsp;&nbsp;b` width (monospace 16px) | 48 | **29** (collapsed to one) |
+    /// | `a   b` width — ASCII, MUST still collapse | 29 | 29 |
+    ///
+    /// Both directions are asserted, because a fix that simply stopped collapsing would be a worse
+    /// bug: ASCII runs must still collapse to a single space.
+    ///
+    /// RED, run: change `is_css_white_space` back to `ch.is_whitespace()` — the nbsp div reads 0 and
+    /// the three-nbsp run reads the same width as the one-nbsp run.
+    #[test]
+    fn a_non_breaking_space_is_content_not_collapsible_white_space() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0;font:16px/normal monospace'>\
+             <div id=nb>\u{a0}</div>\
+             <div id=empty></div>\
+             <span id=one style='display:inline-block'>a\u{a0}b</span>\
+             <span id=three style='display:inline-block'>a\u{a0}\u{a0}\u{a0}b</span>\
+             <span id=sp3 style='display:inline-block'>a   b</span>\
+             </body>",
+            "",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let r = |want: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(want))
+                .unwrap_or_else(|| panic!("no #{want}"));
+            rects[&n]
+        };
+        // A div whose only content is `&nbsp;` gets a real line box (Chrome: 18 at 16px).
+        assert!(
+            r("nb").height > 10.0,
+            "`<div>&nbsp;</div>` must generate a line box (Chrome 18), got {}",
+            r("nb").height
+        );
+        // …and a genuinely empty one still must not.
+        assert!(
+            r("empty").height < 1.0,
+            "an empty <div> has no line box, got {}",
+            r("empty").height
+        );
+        // Three NBSP are three characters, not one collapsed space.
+        // Two extra NBSP must add two spaces' width. The threshold is deliberately font-INDEPENDENT
+        // (any face's space is wider than 2.5px at 16px): the absolute numbers in the table above come
+        // from the browser fixture, where `monospace` resolves; this harness resolves a different face,
+        // and a test that pinned 48-vs-29 here would be pinning the test environment's font, not the
+        // rule. What is asserted is the RULE: three do not collapse to one, and ASCII still does.
+        assert!(
+            r("three").width > r("one").width + 5.0,
+            "a run of `&nbsp;` must NOT collapse (browser fixture: Chrome 48 vs 29), got {} vs {}",
+            r("three").width,
+            r("one").width
+        );
+        // The other half: ASCII white space must still collapse, or the fix is a worse bug.
+        assert!(
+            (r("sp3").width - r("one").width).abs() < 2.0,
+            "three ASCII spaces must still collapse to one (Chrome 29 == 29), got {} vs {}",
+            r("sp3").width,
+            r("one").width
         );
     }
 

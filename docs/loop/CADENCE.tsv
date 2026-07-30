@@ -508,3 +508,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 754	a3e296f6	1785408505	2026-07-30T06:48:25-04:00	155	instrument-fidelity	63	5	113	33	353	81	3896	6960	0	384	0	the priority ledger this project ranks its work by was ~68% phantom: the oracle keyed by class signature and one differing ancestor lost every descendant (2026-
 755	b1317f2b	1785408642	2026-07-30T06:50:42-04:00	137	process	63	4	76	32	353	81	3896	6960	0	384	0	the wall audit was recorded where its counter does not look (2026-07-30)
 757	2cb59d62	1785417099	2026-07-30T09:11:39-04:00	8457	root-cause	63	6	294	32	353	81	3896	6960	0	385	0	every `&` in every stylesheet matched `<html>`: CSS nesting was indexed but never resolved (2026-07-30)
+759	dc199cb1	1785419164	2026-07-30T09:46:04-04:00	2065	root-cause	63	9	261	36	353	81	3896	6960	0	386	0	`&nbsp;` was collapsed like a space, so a spacer element had no line box: `char::is_whitespace` is Unicode's set, not CSS's (2026-07-30)

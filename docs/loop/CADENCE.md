@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **509** | ticks 1–757 |
-| median tick cycle | **22m** | 508 intervals |
-| median, last 10 | **33m** | 10 intervals |
+| ticks landed | **510** | ticks 1–759 |
+| median tick cycle | **22m** | 509 intervals |
+| median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 460.1h elapsed |
-| median verify wall | **63s** | 448 ticks |
+| **ticks per hour** | **1.10** | 460.7h elapsed |
+| median verify wall | **63s** | 449 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **353**
-* **✅ rows in the capability ledger**: 144 → **385**
+* **✅ rows in the capability ledger**: 144 → **386**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**245 of 509 ticks** (48%) moved a
+**245 of 510 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -606,5 +606,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **754** | 2026-07-30 06:48 | 3m | instrument-fidelity | 63s | +113/−33 | 353 | 81 | 56.0% · | the priority ledger this project ranks its work by was ~68% phantom: the oracle keyed by c |
 | **755** | 2026-07-30 06:50 | 2m | process | 63s | +76/−32 | 353 | 81 | 56.0% · | the wall audit was recorded where its counter does not look (2026-07-30) |
 | **757** | 2026-07-30 09:11 | 2.3h | root-cause | 63s | +294/−32 | 353 | 81 | 56.0% · | every `&` in every stylesheet matched `<html>`: CSS nesting was indexed but never resolved |
+| **759** | 2026-07-30 09:46 | 34m | root-cause | 63s | +261/−36 | 353 | 81 | 56.0% · | `&nbsp;` was collapsed like a space, so a spacer element had no line box: `char::is_whites |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

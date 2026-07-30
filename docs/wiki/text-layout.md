@@ -1405,3 +1405,44 @@ returned from inside the loop.
 **Residue, named:** a stack where *nothing* matches still falls back to sans here, where Chrome uses its
 **standard font** (Times → Liberation Serif) — `"Segoe UI"` alone is `48x18` for us and `41.77x18` for
 Chrome. Pre-existing, a different primitive, and its own tick.
+
+## The collapsible set is CSS's, not Unicode's (tick 759)
+
+White-space processing — collapsing runs, trimming edges, choosing soft-wrap opportunities — applies to
+exactly five characters (CSS Text 3 §3, §4.1):
+
+```
+SPACE U+0020 · TAB U+0009 · LINE FEED U+000A · CARRIAGE RETURN U+000D · FORM FEED U+000C
+```
+
+`char::is_whitespace` implements the **Unicode `White_Space` property**, which is strictly larger. The
+extra members are not exotic — they are the characters an author picks *precisely because they must not
+collapse*: `U+00A0` NO-BREAK SPACE (`&nbsp;`), `U+2007` FIGURE SPACE, `U+202F` NARROW NO-BREAK SPACE, and
+`U+2000`–`U+200A`.
+
+All three collapse sites in `engine/layout` used it, so `&nbsp;` was collapsed and trimmed like a space.
+The visible consequence was not a slightly-wrong width — an element whose only content was `&nbsp;` was
+left with **no text, therefore no line box, therefore height 0**:
+
+```
+<div>&nbsp;</div>        Chrome 18      was 0
+a&nbsp;&nbsp;&nbsp;b     Chrome 48      was 29   (collapsed to a single space)
+a   b                    Chrome 29          29   (ASCII — must still collapse)
+```
+
+That last row is the other half of the rule and belongs in any gate for this: a fix that simply stopped
+collapsing would be a worse bug than the one it replaced.
+
+`text-transform: capitalize` deliberately keeps `is_whitespace` for its word-start scan — *a word
+boundary is a different question from a collapsible character*, and NBSP genuinely is a word separator
+for that purpose.
+
+### The rule
+
+**A standard-library predicate that almost means what the spec means is a bug that reads as correct
+code.** `is_whitespace` is not sloppy; it is a precise implementation of a *different* specification, and
+the difference is exactly the interesting cases. Nothing looks wrong at the call site, no test over ASCII
+input can catch it, and the failure appears only for characters an author chose deliberately.
+
+Grep the class — `is_whitespace`, `is_alphanumeric`, `to_lowercase`, `trim()` — each has a CSS/HTML
+definition that differs from Unicode's at the edges, and the edges are where authors live.
