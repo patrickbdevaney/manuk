@@ -2413,6 +2413,32 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
             })
             .collect();
 
+        // ── **THE SAME CORRECTION THE EXIT GATE GOT AT t549, OWED HERE EVER SINCE.**
+        //
+        // t549 measured what the class signature costs and turned it OFF for the G1 fidelity probe:
+        // `gov.uk` coverage **0.0% → 82.8%** (418 paths: 418 missing → 72), `stripe.com` **0.1% →
+        // 43.1%**. Its comment ends by naming this exact site as the remaining half — *"`run_oracle_cmd`'s
+        // crawl keys still carry sigs — the same correction is owed there, as its own tick."* This is
+        // that tick.
+        //
+        // ⚠ **The cost is not a slightly noisier ledger — it is the ledger's #1 ROW.** `nth-child`
+        // already distinguishes siblings uniquely, so the sig never carried identity, only fragility:
+        // ONE ancestor whose class list differs between the engines (a script that adds `js`/`loaded`,
+        // a framework hydration class, a viewport-dependent modifier) re-keys **every descendant**, and
+        // the diff books the entire subtree as `missing box`. Measured here on `www.heart.org`: the
+        // shallowest "missing" element was **`<body>` itself** — `block [0 0 1200×5993] vs (no box)` —
+        // for a page we plainly render. From there the whole document is missing by construction.
+        //
+        // That is why `missing box: <div>` / `<a>` / `<span>` sat at the top of the mechanism ledger
+        // that ranks this project's work, and it is a measurement artefact of the instrument's own key.
+        //
+        // `MANUK_ORACLE_CLASS_SIG=1` restores the old keys, matching `MANUK_G1_CLASS_SIG` on the gate
+        // side, so the decision stays auditable and reversible rather than becoming folklore.
+        let (chrome, manuk) = if std::env::var_os("MANUK_ORACLE_CLASS_SIG").is_some() {
+            (chrome, manuk)
+        } else {
+            (strip_sigs(chrome), strip_sigs(manuk))
+        };
         let divs = diff_page(&short, &chrome, &manuk, tol);
         // Layer-2 jarring invariant (FIDELITY-SCORING-REDESIGN.md): elements we alone push past the
         // viewport. SHAPE scoring forgives a constant offset; this catches the different, highly-
@@ -3844,6 +3870,75 @@ mod path_key_tests {
         assert_eq!(out.len(), 3, "no key collapsed into another");
         // The values travel with their keys.
         assert_eq!(out["body:nth-child(2)/div:nth-child(6)"].tag, "div");
+    }
+
+    /// **ONE ANCESTOR'S CLASS LIST RE-KEYS THE WHOLE SUBTREE, AND THE DIFF BOOKS IT ALL AS MISSING.**
+    ///
+    /// `nth-child` already identifies a sibling uniquely, so the 8-hex class signature in a path key
+    /// never carried identity — only fragility. When a single ancestor's class list differs between the
+    /// engines (a script adding `js`/`loaded`, a hydration class, a viewport modifier), **every
+    /// descendant key changes**, nothing matches, and the entire subtree is reported `missing box`.
+    ///
+    /// t549 measured this for the G1 exit gate and turned the signature off there — `gov.uk` coverage
+    /// **0.0% → 82.8%**, `stripe.com` **0.1% → 43.1%** — and its comment named the remaining half:
+    /// *"`run_oracle_cmd`'s crawl keys still carry sigs — the same correction is owed there."* That
+    /// matters more than it sounds, because the oracle writes `CLUSTERS.md`, **the ledger this project
+    /// ranks its work by**. Measured on `www.heart.org` before the fix, the shallowest "missing"
+    /// element was `<body>` itself (`block [0 0 1200×5993] vs (no box)`) for a page we plainly render;
+    /// over three CrUX sites the reported divergences fell **2750 → 892** once the keys were stripped.
+    ///
+    /// This asserts the mechanism directly: two trees that are structurally IDENTICAL and differ only
+    /// in one ancestor's class signature must produce **no** divergences once keyed for diffing, and
+    /// must produce a full subtree of phantom `missing` ones when they are not.
+    ///
+    /// RED, run: delete the `strip_sigs` call guarded by `MANUK_ORACLE_CLASS_SIG` in `run_oracle_cmd`
+    /// — this test still passes (it tests the composition, not the call site), but
+    /// `oracle --urls https://www.heart.org/` reports `missing box: <div>` at 211 hits again and the
+    /// shallowest missing element is `<body>`. The call site's guard is the env var, kept auditable.
+    #[test]
+    fn a_differing_ancestor_class_signature_must_not_book_the_whole_subtree_as_missing() {
+        use manuk_wpt::oracle::{diff_page, Seen};
+        let seen = |tag: &str| Seen {
+            tag: tag.into(),
+            display: "block".into(),
+            rect: [0, 0, 100, 20],
+            font: String::new(),
+        };
+        // Same document, same geometry. Chrome's <body> carries a class signature; ours does not —
+        // which is exactly what a script that sets a class on <body> produces.
+        let mk = |body: &str| {
+            let mut m = std::collections::HashMap::new();
+            m.insert(format!("{body}:nth-child(2)"), seen("body"));
+            m.insert(format!("{body}:nth-child(2)/div:nth-child(1)"), seen("div"));
+            m.insert(
+                format!("{body}:nth-child(2)/div:nth-child(1)/a:nth-child(1)"),
+                seen("a"),
+            );
+            m
+        };
+        let chrome = mk("body.d6441846");
+        let manuk = mk("body");
+
+        // Raw keys: nothing matches, and every element of the tree is a phantom divergence.
+        let raw = diff_page("t", &chrome, &manuk, 8);
+        assert_eq!(
+            raw.len(),
+            3,
+            "unstripped, one differing ancestor sig must lose the WHOLE subtree — got {raw:?}"
+        );
+        assert!(
+            raw.iter().all(|d| d.kind == "missing"),
+            "and it must lose them as `missing`, which is what put `missing box` at the top of the              priority ledger — got {:?}",
+            raw.iter().map(|d| d.kind.clone()).collect::<Vec<_>>()
+        );
+
+        // Keyed for diffing, the two trees are what they actually are: identical.
+        let stripped = diff_page("t", &strip_sigs(chrome), &strip_sigs(manuk), 8);
+        assert!(
+            stripped.is_empty(),
+            "structurally identical trees must produce NO divergences once the signature is \
+             stripped — got {stripped:?}"
+        );
     }
 
     /// **A NON-ASCII class name must not panic the sweep.** `strip_sigs` runs on every site by

@@ -2488,3 +2488,55 @@ sees a marker — not a signal, not an exit code, not a core file. Either put th
 marker, or better, have the failing process label itself while it is still alive, which needs no
 cooperating reader at all. An instrument that cannot distinguish two causes will pick one, and if the one
 it picks is the alarming one, the cost is the whole board's attention.
+
+## The key is part of the measurement: one ancestor's class list re-keyed whole documents (tick 754)
+
+Selector-path keys carry an 8-hex **class signature** per component — `body.d6441846:nth-child(2)`. The
+intent (tick 395) was sound: a positional counterpart with a *different class list* should fail the key
+lookup and book as missing+extra (tree drift, which it is) rather than mint a phantom style diff between
+two unrelated elements.
+
+The cost is that `nth-child` **already** identifies a sibling uniquely, so the signature adds no
+discriminating power where the DOMs agree — and destroys the measurement where they differ by one class.
+A script that sets `js`/`loaded` on `<body>`, a hydration class, a viewport modifier: **every descendant
+key changes at once**, nothing matches, and the diff reports the entire subtree as `missing box`.
+
+t549 measured this for the G1 exit gate and turned the signature off there:
+
+```
+gov.uk      coverage  0.0% -> 82.8%   (418 paths: 418 missing -> 72)
+stripe.com  coverage  0.1% -> 43.1%   (1441 paths: 1439 -> 820)
+nytimes.com          0.0% ->  0.0%    <- did NOT move: a real, separate failure
+```
+
+That last row is why the conclusion is trustworthy: the correction is not a blanket improvement, it moves
+exactly the sites whose keys were broken.
+
+**The oracle kept the signature for ~200 more ticks**, and the oracle writes `CLUSTERS.md` — the file
+STATUS.md calls *the priority ledger, not a suggestion judgment may override*. So the instrument choosing
+what to build next was ranking by its own keying artefact. Measured on the same pages, same binary:
+
+| | `missing box: <div>` (heart.org) | divergence hits, 3 CrUX sites |
+|---|---|---|
+| sigs ON | 211 | 2750 |
+| sigs OFF | absent | 892 |
+
+**~68% phantom.** The tell was available the whole time and takes one sort to see: the *shallowest*
+missing element on `heart.org` was **`<body>`** (`block [0 0 1200×5993] vs (no box)`) — for a page that
+plainly renders. A coverage failure that starts at `<body>` is not a coverage failure.
+
+⚠ The **scores** were never affected — the fidelity sweep has stripped signatures since t549. Only the
+**ranking** was, which is the more expensive half: a wrong number is corrected by the next sweep, a wrong
+ranking spends ticks.
+
+### The rules
+
+1. **Before believing a "missing box" cluster, sort its members by DEPTH and look at the shallowest.**
+   If the shallowest missing element is an ancestor that obviously renders, the key is broken, not the
+   engine.
+2. **A key is not metadata about a measurement; it IS the measurement.** Two engines agreeing on a naming
+   scheme is a precondition for the diff meaning anything, and any component of the key that is not
+   *identity* is a way for agreement to fail spuriously.
+3. **When a fix names its own unfinished half, that sentence belongs in the ledger, not only in a
+   comment.** t549 wrote *"the same correction is owed there, as its own tick"* — correct, precise, and
+   invisible for two hundred ticks. Grep the tree for `owed` / `as its own tick` / `the same correction`.

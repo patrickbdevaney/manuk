@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **505** | ticks 1–752 |
-| median tick cycle | **22m** | 504 intervals |
+| ticks landed | **506** | ticks 1–753 |
+| median tick cycle | **22m** | 505 intervals |
 | median, last 10 | **53m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 457.3h elapsed |
-| median verify wall | **63s** | 444 ticks |
+| **ticks per hour** | **1.10** | 457.7h elapsed |
+| median verify wall | **63s** | 445 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **384**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**245 of 505 ticks** (49%) moved a
+**245 of 506 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -602,5 +602,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **749** | 2026-07-30 03:52 | 3.7h | root-cause | 63s | +387/−32 | 353 | 81 | 56.0% · | `system-ui` was aliased to `sans-serif`, and four aliases at the FRONT of every modern fon |
 | **751** | 2026-07-30 06:07 | 2.2h | instrument-fidelity | 63s | +304/−32 | 353 | 81 | 56.0% · | the oracle refused to score a page whose CSS never arrived; the instrument that computes t |
 | **752** | 2026-07-30 06:18 | 11m | measurement | 63s | +223/−33 | 353 | 81 | 56.0% · | the first REPRESENTATIVE-corpus baseline: 3.8%, and the curated 265 was flattering us by ~ |
+| **753** | 2026-07-30 06:45 | 27m | instrument-fidelity | 63s | +419/−35 | 353 | 81 | 56.0% · | the sweep manufactured 8 Bar-0 "crashes" that were watchdog timeouts, because a killed pro |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

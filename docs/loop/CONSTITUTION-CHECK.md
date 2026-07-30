@@ -3116,3 +3116,81 @@ it was started before this tick's engine change and the change was deliberately 
    the engine. Ticks land *around* a running sweep, never through it.
 
 **Next check due: tick 753.**
+
+---
+
+## Check #60 — tick 754
+
+**Horizon:** H0 — Pareto Web Parity, PART VII component **1 (daily-driver rendering parity)**.
+**Gate:** `DAILY-DRIVER-CERTIFICATION.md`, milestone **M1 RENDER** — shape ≥ 0.75 on ≥ 95% of the
+in-scope **representative CrUX** corpus (owner-locked 2026-07-30; the curated 265 is retired as the
+driving set). Baseline established this window: **5/130 = 3.8%**, target 124, **need +119**.
+
+**Gate or scoreboard?** Gate — and this window is unusual in that **most of it moved the INSTRUMENT, not
+the engine**, so the question deserves a real answer rather than a reflex.
+
+Ticks 745–754 were: the `td{padding:0}` post-cascade overwrite (745), the sig-stripper panic banked as a
+Bar-0 crash (746), block-in-inline margin collapse (747), one-face-per-family webfonts (748), `system-ui`
+aliased to the sans generic (749), the burndown sweep (750), UA-fallback pages scored as layout failures
+(751), the CrUX baseline (752), watchdog timeouts banked as Bar-0 crashes (753), and the oracle's
+class-signature keying (754).
+
+**Four engine ticks, and they are the only reason there is a slope at all:** 745/747/748/749 moved
+in-scope pass **4.9% → 6.7%** on the 265 (+4 sites across 0.75), with `news.ycombinator` 0.730→0.802 and
+`martinfowler` 0.678→0.771 — the two sites t745's own journal had named. That is an exit-gate condition
+moving, measured on the gate's own metric, not a scoreboard.
+
+**The other six are not scoreboard work either, and here is the test I applied**: each removed a
+*falsehood the loop would have acted on*. 751 stopped fetch failures being scored as layout failures. 753
+removed 8 phantom **Bar 0** events — the category that outranks everything, so a phantom there costs the
+whole board. 754 found the cluster ledger — *"the priority ledger, not a suggestion judgment may
+override"* — was **~68% phantom** (2750 → 892 divergences over three sites), because one differing
+ancestor class re-keyed whole subtrees; the shallowest "missing box" on `heart.org` was **`<body>`**.
+A tick chosen from that ledger would have been a tick spent on nothing. **Instrument work that changes
+what the next tick WILL BE is gate work; instrument work that only makes the number prettier is
+scoreboard work.** These changed the ranking. None of them moved f12 by a point, and none claimed to.
+
+**⚠ THE CORRECTION THIS CHECK OWES — I nearly ranked from the artefact.** After t752 I built a mechanism
+ledger over the CrUX worst sites, read `missing box: <div>` at the top (9 of 12 sites, 1330 hits), and
+was one step from spending the next several ticks on a coverage bug **that did not exist**. What stopped
+it was sorting the cluster by DEPTH and looking at the shallowest member — one command. The general form,
+which belongs in VI.3 beside the denominator corollary: **before ranking from a cluster, look at its
+shallowest/simplest member and ask whether that member is credible.** A coverage failure that begins at
+`<body>` is not a coverage failure. This is the fourth instrument in the I5 list (checked #58/#59) and it
+is about KEYS again, one tick after t744's `delta`: *the record's identity is part of the measurement*.
+
+**On I4 (usage-weighted breadth, tail excluded):** honoured, and sharpened twice this window. `system-ui`
+is the body font of Bootstrap 4/5, Tailwind and GitHub — breadth, and the fix was Chrome-exact on all
+four real stacks. Against that, `font-size-adjust` explains a whole site (matklad: 807 nodes, shape
+0.004) and was **measured to 1 of 24 sites and deliberately NOT built** — recorded in the map as
+`missing`. That is I4 working as written: a hit-count story losing to a site-count rule.
+
+**On the corpus switch (PART VI correction).** The driving corpus is now the representative CrUX sample,
+and the first honest reading is **3.8% against the 265's 6.7% — the curated corpus was flattering us by
+~1.8×**, on the same engine, the same day, the same instrument. PART VI is corrected accordingly: the
+distance to H0's render gate is **+119 in-scope sites**, not the +184 the 265 implied, and the population
+is one whose tail (35% excluded, vs 22%) is materially more hostile.
+
+**On PART VII / V1-SCOPE:** honoured; no harness file authored by me. One disclosure: tick 751 carried an
+**observer-owned** `scripts/fidelity-progress.sh` change that appeared mid-tick, because `tick.sh` stages
+with `git add -A` and reverting it is the documented way to clobber observer work. Attributed in that
+commit rather than hidden or destroyed.
+
+**No invariant is being bent.**
+
+### THE STEER
+
+1. **RE-CRAWL BEFORE RANKING.** `CLUSTERS.md` is invalidated by t754 and every number quoted from it —
+   including the board's `MISSING_BOX 401 sites / 17154 hits` — was computed with the broken keys. The
+   next ranking decision must come from a fresh crawl on the CrUX corpus, not from that file.
+2. **THE ENGINE LEVER IS STILL SHARED-`dy` PRIMITIVES, AND IT IS CALIBRATED NOW.** Four such fixes bought
+   +1.8 pts. That is the unit: Phase-0 render is **finite but not fast** — dozens of batches, not two.
+   Resist the search for one lever that closes it; there is no evidence such a lever exists, and three
+   plausible candidates (starved CSS, systematic advance error, flex sizing) were each refuted by a
+   control this window.
+3. **CONTROL BEFORE BLAME, AND IT PAID FOUR TIMES.** Every large per-site swing this window was an
+   instrument artefact, confirmed by re-running the same binary (discourse.org: sweep 0.087, three
+   controls 0.4964/0.4995/0.4995). A per-site delta is not a result until a control says the binary
+   produces it twice.
+
+**Next check due: tick 762.**

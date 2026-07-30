@@ -2646,3 +2646,52 @@ confessing that in its own receipt text for 141 ticks.
 **Standing note, twelfth audit running:** `map-reconcile.sh` searches `engine agent tests` and not
 `shell/`, so the eight gates living as `#[test] fn` in `shell/src/media.rs` and `shell/src/audio.rs`
 remain invisible to it. Harness-owned; reported, not touched.
+
+## Audit #47 — tick 754 (2026-07-30)
+
+**Method, and it is a deliberate departure.** The previous audits reconciled the map against what the
+*world* names (MDN/caniuse/spec indexes). This one reconciles it against what a **freshly measured
+representative corpus** turned out to need: the first CrUX sweep (t752, 200 sites) plus the fixture work
+under ticks 749–754. The reason is that this session found three real capability facts by *measuring*,
+and none of the three was on the map — which is exactly the failure mode this instrument exists to catch,
+arriving through a door it had not been pointed at.
+
+### ADDED
+
+| class | capability | status | why it is here |
+|---|---|---|---|
+| doc | **`font-size-adjust`** | `missing` | Measured against live Chromium: `16px serif; font-size-adjust: ex-height 0.53` is **738.75×21** in Chrome and **640×18** here — Chrome scales the used size 16px → 18.46px; with `EB Garamond`, 853.61 vs 649. `grep` over `engine/{css,layout,text}/src` finds **no parse, no computed value, no application**. It scales the *used font-size*, so every `em`/`ch`/`rem` and every `line-height` beneath it is wrong on a page that declares it. |
+| doc | **`system-ui` / `ui-*` generic families** | `gated` | Was silently aliased to the sans generic (tick 749), which is both the wrong face *and* a short-circuit of the whole `font-family` stack. Now gated. |
+
+### WHAT WE HAD BEEN WRONG ABOUT
+
+1. **The map had no row for the font-family generics at all** — not `missing`, not `unknown`: absent. So
+   the fact that `system-ui` resolved to the wrong face was not a known gap being deferred, it was
+   invisible, on a property that sets the body text of most of the modern web.
+2. **`font-size-adjust` is unimplemented and nothing said so.** It is the sort of property that is easy to
+   read as cosmetic and is not: it changes the *used font-size*, so it is a `dy` multiplier on the whole
+   document.
+3. ⚠ **The audit's own ranking rule saved a tick from being spent.** `font-size-adjust` explains
+   `matklad.github.io` completely — cov 1.000, shape 0.004, 807 nodes — and that is a *hit-count*
+   argument. Measuring the population first (scan of the 24 worst-shape sites' HTML + stylesheets) gave
+   **1 of 24 sites**. Recorded as `missing`, **not built**. The ledger ranks by DISTINCT SITES precisely
+   to refuse the seductive single-site story, and it worked.
+
+### NOT ADDED, AND WHY
+
+No new rows from the CrUX tail's failure modes yet. The t752 baseline's in-scope failures are dominated by
+`thin-overlap` (16), `shell-only` (12) and `render-failed` (11), which are *instrument* classifications
+rather than named capabilities — turning those into map rows needs the per-site cause, and the mechanism
+ledger that would supply it was **invalidated the same tick** (see below). Deferred honestly rather than
+guessed at.
+
+### ⚠ STANDING CORRECTION THIS AUDIT MUST RECORD
+
+`docs/loop/CLUSTERS.md` — the cluster ranking STATUS.md calls *the priority ledger* — **is invalidated as
+of tick 754** and needs a re-crawl before any tick is chosen from it. The oracle keyed paths by class
+signature, so one differing ancestor booked entire subtrees as `missing box`; measured, ~68% of reported
+divergences were phantom (2750 → 892 over three sites). Any re-rank done from that file before the
+re-crawl is a re-rank of an artefact.
+
+**Sources:** live Chromium 16px fixtures (`/tmp/adv*.html`, `/tmp/fsa.html`, `/tmp/flex.html`),
+`fc-match`, `docs/loop/SWEEP-t752-rows.tsv`, and the site stylesheets of the 24 worst-shape corpus sites.

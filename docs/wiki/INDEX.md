@@ -276,6 +276,8 @@
   - L2444 · A killed process and a faulting one leave the identical trace (tick 753)
   - L2461 · Why the fix goes in the failing process, not in the reader
   - L2484 · The rule
+  - L2492 · The key is part of the measurement: one ancestor's class list re-keyed whole documents (tick 754)
+  - L2532 · The rules
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1268,4 +1270,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1179 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1181 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

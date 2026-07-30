@@ -37911,3 +37911,108 @@ process can still SEE.** It sees a marker, not a signal, not an exit code. Eithe
 the marker or — better, because it needs no cooperating reader — make the failing process label itself
 while it is still alive. Third sighting in three ticks of *"the producer knew and the record did not
 carry it"* (t744 `delta`, t751 the starved-CSS refusal, t753 the exit code).
+
+## Tick 754 — the priority ledger this project ranks its work by was ~68% phantom: the oracle keyed by class signature and one differing ancestor lost every descendant (2026-07-30)
+
+Found by following t752's CrUX ledger down. Its #1 row was `missing box: <div>` — 9 of 12 sites, 1330
+hits — i.e. *"Chrome renders it and we render nothing"*, a coverage failure that would have commanded the
+next several ticks. Walking it to the **shallowest** missing element on `www.heart.org` gave the answer
+in one line:
+
+```
+body.d6441846:nth-child(2):  block [0 0 1200×5993] vs (no box)
+```
+
+**`<body>` itself.** We plainly render a body. So this was never a coverage failure — it was a **key
+mismatch**, and from `<body>` down the entire document is missing *by construction*.
+
+### The mechanism, and it was a NAMED OWED TICK sitting in the code
+
+Path keys carry an 8-hex **class signature** per component (`body.d6441846`). `nth-child` already
+identifies a sibling uniquely, so the signature never carried identity — only fragility: when one
+ancestor's class list differs between the engines (a script setting `js`/`loaded`, a hydration class, a
+viewport modifier), **every descendant key changes at once**, nothing matches, and the diff books the
+whole subtree as `missing`.
+
+t549 measured exactly this for the **G1 exit gate** and turned the signature off there — `gov.uk`
+coverage **0.0% → 82.8%** (418 paths: 418 missing → 72), `stripe.com` **0.1% → 43.1%**. And its comment
+ends by naming the half it did not do:
+
+> ⚠ … and **`run_oracle_cmd`'s crawl keys still carry sigs — the same correction is owed there, as its
+> own tick.**
+
+This is that tick, ~200 ticks later. The gate was fixed; **the oracle was not** — and the oracle is what
+writes `CLUSTERS.md`, *the file the board says IS the priority ledger* (STATUS.md: *"The oracle's cluster
+ranking IS the priority ledger — not a suggestion judgment may override"*). So the instrument that
+decides what gets built next was ranking by its own keying artefact.
+
+### Measured, both ways, same binary and same pages
+
+| | `missing box: <div>` on heart.org | divergence hits over 3 CrUX sites |
+|---|---|---|
+| sigs ON (as it has been) | **211** | **2750** |
+| sigs OFF (this tick) | *absent from the ledger* | **892** |
+
+**~68% of reported divergences were phantom.** What survives on heart.org is 22 `<a>` + 21 `<li>` in one
+footer — small, plausible, and actionable, which is what a ledger row is supposed to look like.
+
+⚠ **CONSEQUENCE THAT MUST NOT BE QUIET: `docs/loop/CLUSTERS.md` IS INVALIDATED.** Every cluster ranking
+in it — including the `MISSING_BOX 401 sites / 17154 hits` headline quoted on the board and in STATUS.md
+— was computed with these keys. It needs a full re-crawl before any tick is chosen from it again. The
+t752 CrUX mechanism ledger in tick 752's entry is invalidated for the same reason; the *scores* in
+`SWEEP-t752-rows.tsv` are NOT (the fidelity sweep has stripped sigs since t549 — this defect never
+touched the headline metric, only the ranking of what to fix).
+
+`MANUK_ORACLE_CLASS_SIG=1` restores the old keys, mirroring `MANUK_G1_CLASS_SIG` on the gate side, so the
+decision stays auditable and reversible rather than becoming folklore.
+
+TICK SHAPE: instrument-fidelity
+CLUSTER: invalidates and re-bases the whole cluster ledger. No engine behaviour changes.
+Gates: `a_differing_ancestor_class_signature_must_not_book_the_whole_subtree_as_missing`
+(`tests/wpt/src/main.rs`). Two structurally IDENTICAL trees differing only in one ancestor's signature:
+unstripped, `diff_page` returns **3 divergences, every one `kind == "missing"`** — the phantom subtree,
+reproduced in a unit test; stripped, it returns **none**. The test carries its own RED and GREEN states,
+so it cannot pass vacuously. The call site's guard is the env var, and the live proof is the
+211→absent / 2750→892 measurement above.
+PERF: one `strip_sigs` pass per site per engine (string work over already-materialised keys), against a
+crawl that spends seconds per site in two browsers.
+WIKI: `docs/wiki/conformance-and-oracles.md` — extended with "the key is part of the measurement".
+PATTERN: ⚠⚠⚠ **A FIX THAT NAMES ITS OWN UNFINISHED HALF IS AN UNTRIAGED TICK WITH GOOD PROSE, AND IT
+WILL SIT THERE FOR TWO HUNDRED TICKS.** t549 did everything right — measured the effect, fixed the gate,
+left the override auditable, and *wrote down precisely what remained and where*. That note then lived
+inside a comment nobody greps, while the unfixed half went on ranking the project's work. This is the
+second sighting of the shape (t704–710: *"a build spec whose 2nd half is unbuilt is an untriaged tick
+with good prose"*). The mechanism that would catch it: **when a tick's comment says the correction is
+"owed" somewhere else, that sentence belongs in the LEDGER, not only in the source.** Grep the tree for
+`owed`, `as its own tick`, `the same correction` — each is a tick nobody scheduled.
+
+### WALL-TIME AUDIT (due this tick) — the wall is LEAN; nothing trimmed, and that is the finding
+
+Total **65s** warm, against a Tier-0 ceiling of 300s that says *"re-measure if it ever crosses"*. Where
+the seconds go:
+
+```
+23s  T  (35%)   14s  G6 (22%)   13s  B  (20%)   5s  G1 (8%)
+ 4s  P  ( 6%)    4s  D  ( 6%)    2s  F  ( 3%)   1s  F4 (2%)   0s  every remaining gate
+```
+
+Against the four admissible (rigor-preserving) questions:
+
+1. **Redundancy** — the JS gates already share one `manuk-shell` invocation (observer, t118: four
+   concurrent `cargo test -p manuk-shell` processes became one). No second runtime-startup cluster is
+   visible at this size; `T` is the workspace test suite, which is the assertion itself, not overhead.
+2. **Parallelism** — the gate sections launch concurrently and the perf floors (`F`) are *deliberately*
+   serial, because a benchmark sharing the machine is not a benchmark. Nothing has become accidentally
+   serial: `F` is 2s of a 65s wall.
+3. **Caching** — `G1`'s live fetches are snapshot-cached (`.verify-cache`), incrementals live in RAM, and
+   `B` at 13s is an incremental build, not a cold one. No recomputation found.
+4. **Scope** — nothing builds the whole workspace to assert on one crate beyond `B` itself, which every
+   later section consumes.
+
+**Nothing was trimmed.** At 65s the wall is 4.6× under its ceiling, and every candidate optimisation
+would buy a few seconds off an already-cheap wall in exchange for touching coverage — which the audit's
+own rules forbid, and which would also be harness territory (observer-owned; I do not edit `scripts/`).
+The honest result is: **lean, no action.** ⚠ Worth noting for the next audit that the *engine* ticks in
+this window (`engine/text`, `engine/layout`, `engine/css`) each force a full release LTO relink outside
+this measurement — that cost (~500s) dominates a real tick and is invisible to this histogram, which only
+sees the warm wall. That is not wall bloat, but it is the number a tick actually waits on.
