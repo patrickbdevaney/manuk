@@ -264,6 +264,9 @@
   - L2265 · One rule, ONE implementation
   - L2285 · A missing delta is REFUSED, not zeroed
   - L2300 · The RED proof for the band had itself never run
+  - L2312 · The instrument charged its own panic to the engine — and 12 of 13 "crashes" were timeouts (tick 748)
+  - L2317 · A non-ASCII class name panicked the sweep, and the site was banked as crashed
+  - L2348 · reason=crashed conflates a panic with a watchdog kill — 12 of 13, measured
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1249,4 +1252,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1160 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1163 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

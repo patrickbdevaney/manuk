@@ -2308,3 +2308,62 @@ was dead — and neither loss made a sound.** Reunited; it now runs, and it goes
 falls back to the tag.
 
 [[certification-redesign]] [[box-layout]]
+
+## The instrument charged its own panic to the engine — and 12 of 13 "crashes" were timeouts (tick 748)
+
+Two honesty defects in the fidelity sweep's own bookkeeping, both found by reading the t745 corpus
+run's output rather than by any gate.
+
+### A non-ASCII class name panicked the sweep, and the site was banked as `crashed`
+
+`strip_sigs` (`tests/wpt/src/main.rs`) removes the `.SIG` component from every selector-path key. It
+runs on **every site by default** — t549 turned the class signature off, and `MANUK_G1_CLASS_SIG=1`
+restores it — and it looked back exactly **nine bytes** from the end of each path component:
+
+```rust
+if head.len() >= 9 {
+    let cand = &head[head.len() - 9..];      // <- byte index, not a char boundary
+```
+
+A sig is nine ASCII bytes, so where one exists that index *is* a char boundary. But a class name is
+arbitrary author text, and a page served with a broken charset produces components full of multi-byte
+`U+FFFD`. `swift.org` did exactly that:
+
+```text
+thread 'main' panicked at tests/wpt/src/main.rs:2481:
+byte index 194 is not a char boundary; it is inside '\u{fffd}' (bytes 193..195)
+```
+
+The process died 7 seconds in, and the recovery path banked the site as **`reason=crashed`** — which
+reads as a browser Bar-0 event. *The instrument charged its own panic to the engine, in the one file
+whose entire job is to measure the engine honestly.*
+
+Fixed with `head.len().checked_sub(9)` + `is_char_boundary(cut)`. The guard is not a
+micro-optimisation and the gate says so: `a_multibyte_class_name_does_not_panic_the_sig_stripper`
+asserts **both** directions — a component whose last nine bytes are not a sig passes through
+unchanged, and a real sig sitting immediately after multi-byte text is **still stripped**, so the
+guard cannot trade a panic for a silently unstripped key. RED-proven by restoring the byte-length
+test, which reproduces the panic exactly.
+
+### `reason=crashed` conflates a panic with a watchdog kill — 12 of 13, measured
+
+The t745 sweep runs each site as its own process under `timeout -k 10 180`, and logs the process's
+exit code **outside** the instrument precisely because an external `SIGKILL` and a `SIGSEGV` leave the
+same in-flight marker (t706). Cross-referencing the two files over the first 141 sites:
+
+```text
+  reason=crashed in the rows file        13
+  rc=124 (the 180s watchdog fired)       12      <- theguardian, apnews, npr, cnn, engadget,
+  rc=101 (a real abnormal exit)           1         stackoverflow, askubuntu, go.dev, redis.io,
+                                                    sourceforge, slashdot, walmart
+```
+
+**Exactly one of the thirteen was a crash, and it was the instrument's own.** The other twelve are
+sites that exceeded 180 seconds of wall clock — and per the standing rule that *every number has a
+harness*, that budget wraps **our render, Chromium's render and the probe**, so a `124` names nobody.
+The rows file cannot see the exit code, so the label is wrong in the file the burndown reads.
+
+⚠ Not fixed here, and it is not a one-liner: the in-flight marker genuinely cannot distinguish "died"
+from "was killed" from inside the dying process. The runner already has the answer (`/tmp/*-rc.tsv`);
+the fix is to feed it back in, as its own tick. Until then, **read `reason=crashed` as
+`crashed-or-timed-out` and check the rc file before quoting a Bar-0 number from a sweep.**

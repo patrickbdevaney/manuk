@@ -37205,3 +37205,70 @@ not a distribution of small errors — and it is measurable on a plain server-re
 with no bot wall, no SPA and no confound, which is exactly what a fix needs in order to be
 *attributable*. That is the next tick, and the mechanism oracle can now name the primitive because
 t744 made `delta` cross the boundary.
+## Tick 746 — a non-ASCII class name panicked the sweep, and the site was banked as `reason=crashed`: the instrument charged its own bug to the engine (2026-07-29)
+
+Found by the t745 full-corpus sweep while it was running — `swift.org` killed the fidelity process
+with
+
+```
+byte index 194 is not a char boundary; it is inside '\u{fffd}' (bytes 192..195)
+```
+
+and the row that reached `SWEEP-t745-rows.tsv` recorded the site as **`reason=crashed`**. That is the
+one label a browser must never be given falsely: `crashed` is a **Bar 0** reading, it outranks every
+visual divergence in the priority ledger (STATUS.md, Part 24.3), and it would have sent the next tick
+hunting a page-kill bug in an engine that never faltered. **The panic was in the measuring code.**
+
+`strip_sigs` (`tests/wpt/src/main.rs`) normalises a selector path by removing the optional 8-hex-digit
+class signature ahead of each `:nth-child(N)`. It looked back exactly **nine bytes**:
+
+```rust
+let keep = if head.len() >= 9 {
+    let cand = &head[head.len() - 9..];      // <- slices at a BYTE index
+```
+
+A signature is nine ASCII bytes, so wherever one exists `len - 9` *is* a char boundary — which is why
+this held for 549 ticks. But the thing it slices is **arbitrary author text**: a class name. A page
+served with a broken or mislabelled charset decodes into components full of multi-byte
+`'\u{fffd}'` replacement characters, `len - 9` lands in the middle of one, and `&str` indexing panics.
+
+FIX: `head.len().checked_sub(9)` guarded by `head.is_char_boundary(cut)`, falling through to "no sig
+here" when the index is not a boundary. `checked_sub` also removes the separate `len() >= 9` test, so
+the two ways of getting this wrong collapse into one expression.
+
+### WHY THIS IS NOT A ONE-SITE FIX
+
+Three properties, and each is worse than the panic:
+
+1. **It is a whole-process kill inside a serial sweep.** One site's class names end the run; every
+   site after it in the corpus is simply unmeasured. The t745 sweep is 265 sequential processes
+   precisely so one bad site costs one row — but a panic in the *shared* path-keying code is a bad
+   site that costs the rest of the file.
+2. **It fails INTO the highest-priority label.** An external `SIGKILL` and a `SIGSEGV` leave the same
+   marker (t706), which is why the sweep runner logs `rc` outside the instrument; `crashed` from a
+   Rust panic inside the instrument is a third thing wearing the same badge.
+3. **It is charset-correlated, so it is biased.** The sites that decode to `'\u{fffd}'` are legacy,
+   non-English, non-UTF-8 pages — exactly the tier the corpus is already accused of under-sampling
+   (STATUS.md: *"the corpus is systematically biased toward sites that are easy to load"*). An
+   instrument that panics on mojibake **drops the hard sites and keeps the easy ones**, and then
+   reports the average as if nothing were missing.
+
+TICK SHAPE: instrument-fidelity
+CLUSTER: none — this creates no fix in the engine. It removes a FALSE `reason=crashed` from the
+sweep's Bar-0 column and unblocks the tail of any corpus containing a mis-encoded page.
+Gates: `a_multibyte_class_name_does_not_panic_the_sig_stripper` (`tests/wpt/src/main.rs`,
+`mod path_key_tests`) — feeds `strip_sigs` a component whose class name is multi-byte and asserts it
+returns rather than panics, and asserts a real sig is still stripped (both halves: a fix that stopped
+panicking by never stripping would be a silent instrument change).
+**RED-proven by running the mutation:** restore `if head.len() >= 9 { let cand = &head[head.len() -
+9..]` and the test panics with the same `not a char boundary` message the sweep died on.
+PERF: none (one `checked_sub` + one `is_char_boundary` per path component, replacing a length test).
+WIKI: `docs/wiki/conformance-and-oracles.md` — "the instrument must not be able to charge its own
+panic to the engine".
+PATTERN: ⚠ **A BYTE INDEX COMPUTED FROM A KNOWN-ASCII PATTERN IS STILL APPLIED TO UNKNOWN TEXT.** The
+reasoning that makes `len - 9` safe is a statement about the *needle* (nine ASCII bytes); the operation
+is performed on the *haystack* (author text, any encoding). Every `&s[a..b]` in the instrument that
+derives `a`/`b` from a pattern's length has the same shape — grep `tests/wpt/src` for byte-slicing of
+DOM-derived strings. Corollary, and it is the reusable half: **an instrument's failure must never be
+expressible in the vocabulary it uses to describe the subject.** `reason=crashed` was available to the
+instrument to describe itself, so nobody could tell the two apart from the file.

@@ -2477,19 +2477,28 @@ fn strip_sigs(
             while let Some(i) = rest.find(":nth-child(") {
                 let (head, tail) = rest.split_at(i);
                 // A sig, if present, is the final 9 bytes of `head`: `.` + 8 hex digits.
-                let keep = if head.len() >= 9 {
-                    let cand = &head[head.len() - 9..];
-                    if cand.starts_with('.')
-                        && cand[1..]
-                            .bytes()
-                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
-                    {
-                        &head[..head.len() - 9]
-                    } else {
-                        head
+                //
+                // ⚠⚠ **`is_char_boundary` is the guard, not a micro-optimisation.** A sig is nine
+                // ASCII bytes, so where one exists `len - 9` is always a char boundary — but a class
+                // name is arbitrary author text, and a page served with a broken charset produces
+                // keys full of multi-byte replacement characters. `swift.org` did exactly that, and
+                // `&head[head.len() - 9..]` landed inside a two-byte `'\u{fffd}'` and **panicked the
+                // whole sweep process**. The site was then recorded as `reason=crashed`, which reads
+                // as a browser Bar-0 event: *the instrument charged its own panic to the engine.*
+                let keep = match head.len().checked_sub(9) {
+                    Some(cut) if head.is_char_boundary(cut) => {
+                        let cand = &head[cut..];
+                        if cand.starts_with('.')
+                            && cand[1..]
+                                .bytes()
+                                .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                        {
+                            &head[..cut]
+                        } else {
+                            head
+                        }
                     }
-                } else {
-                    head
+                    _ => head,
                 };
                 out.push_str(keep);
                 // Copy `:nth-child(N)` verbatim, then continue after it.
@@ -3717,5 +3726,51 @@ mod path_key_tests {
         assert_eq!(out.len(), 3, "no key collapsed into another");
         // The values travel with their keys.
         assert_eq!(out["body:nth-child(2)/div:nth-child(6)"].tag, "div");
+    }
+
+    /// **A NON-ASCII class name must not panic the sweep.** `strip_sigs` runs on every site by
+    /// default (t549 turned the sig off; `MANUK_G1_CLASS_SIG=1` restores it), and it looked back
+    /// exactly 9 BYTES from the end of each path component. A sig is nine ASCII bytes, so that index
+    /// is a char boundary whenever a sig is present — but a class name is arbitrary author text, and
+    /// a page served with a broken charset produces components full of multi-byte replacement
+    /// characters.
+    ///
+    /// `swift.org` did exactly that in the t745 corpus sweep: `byte index 194 is not a char boundary;
+    /// it is inside '\u{fffd}'`. The process died, and the site was banked as `reason=crashed` —
+    /// which reads as a browser Bar-0 event. **The instrument charged its own panic to the engine**,
+    /// in the one file whose whole job is to measure the engine honestly.
+    ///
+    /// RED, run: replace the `is_char_boundary` guard with the old `head.len() >= 9` test — this
+    /// test panics instead of failing, which is the point.
+    #[test]
+    fn a_multibyte_class_name_does_not_panic_the_sig_stripper() {
+        use manuk_wpt::oracle::Seen;
+        let seen = || Seen {
+            tag: "div".into(),
+            display: "block".into(),
+            rect: [0, 0, 1, 1],
+            font: String::new(),
+        };
+        // Each component's last 9 bytes straddle a multi-byte char, which is what panicked.
+        let mojibake = "body:nth-child(2)/div.\u{fffd}\u{fffd}\u{fffd}\u{fffd}x:nth-child(3)";
+        // …and the mirror case: a REAL sig sitting immediately after multi-byte text must still be
+        // stripped, or the guard would have traded a panic for a silently unstripped key.
+        let after_utf8 = "body:nth-child(2)/div.caf\u{e9}.0a1b2c3d:nth-child(4)";
+        let mut m = std::collections::HashMap::new();
+        m.insert(mojibake.to_string(), seen());
+        m.insert(after_utf8.to_string(), seen());
+
+        let out = strip_sigs(m); // must not panic
+
+        assert!(
+            out.contains_key(mojibake),
+            "a component whose last 9 bytes are not a sig must pass through UNCHANGED: {:?}",
+            out.keys()
+        );
+        assert!(
+            out.contains_key("body:nth-child(2)/div.caf\u{e9}:nth-child(4)"),
+            "a real sig after multi-byte text must still be stripped: {:?}",
+            out.keys()
+        );
     }
 }
