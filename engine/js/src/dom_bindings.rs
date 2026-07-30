@@ -3413,21 +3413,62 @@ unsafe fn svg_child_client_rect(dom: *mut Dom, node: NodeId) -> Option<[f32; 4]>
     ])
 }
 
+/// **Build a DOMRect-shaped object NATIVELY — no source string, no compile.**
+///
+/// The three geometry getters below used to `format!` an object literal and hand it to
+/// `evaluate_script`, i.e. run the JS *compiler* to produce eight numbers. `getBoundingClientRect` is
+/// the single hottest measurement call on the web — scroll handlers, sticky headers,
+/// `IntersectionObserver` polyfills and every animation library call it per element per frame — so that
+/// is a parse + bytecode + `JSScript` allocation on the frame path. Same defect class as the per-mutation
+/// compile that segfaulted Wikipedia (tick 768, `docs/wiki/js-engine.md`); this is the grep that followed
+/// it.
+unsafe fn new_rect_object(
+    cx: *mut RawJSContext,
+    fields: &[(&std::ffi::CStr, f64)],
+) -> Option<*mut JSObject> {
+    let obj = JS_NewObject(&mut wrap_cx(cx), std::ptr::null());
+    if obj.is_null() {
+        return None;
+    }
+    rooted!(in(cx) let o = obj);
+    for (name, v) in fields {
+        rooted!(in(cx) let val = mozjs::jsval::DoubleValue(*v));
+        if !JS_DefineProperty(
+            &mut wrap_cx(cx),
+            o.handle(),
+            name.as_ptr(),
+            val.handle(),
+            (mozjs::jsapi::JSPROP_ENUMERATE) as u32,
+        ) {
+            return None;
+        }
+    }
+    Some(o.get())
+}
+
 unsafe fn el_get_bounding_rect(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let node = this_node(vp).map(|(_, n)| n);
     let [x, y, w, h] = this_node(vp)
         .and_then(|(dom, n)| svg_child_client_rect(dom, n))
         .or_else(|| node.and_then(layout_rect))
         .unwrap_or([0.0, 0.0, 0.0, 0.0]);
-    let js = format!(
-        "({{x:{x},y:{y},width:{w},height:{h},left:{x},top:{y},right:{r},bottom:{b}}})",
-        r = x + w,
-        b = y + h
-    );
-    match eval_in_current_global(cx, &js) {
-        Some(v) => *vp = v,
-        None => *vp = NullValue(),
-    }
+    let (r, b) = (x + w, y + h);
+    *vp = match new_rect_object(
+        cx,
+        &[
+            (c"x", x as f64),
+            (c"y", y as f64),
+            (c"width", w as f64),
+            (c"height", h as f64),
+            (c"left", x as f64),
+            (c"top", y as f64),
+            (c"right", r as f64),
+            (c"bottom", b as f64),
+        ],
+    ) {
+        Some(o) => ObjectValue(o),
+        None => NullValue(),
+    };
     true
 }
 
@@ -3455,11 +3496,18 @@ unsafe fn el_get_bbox(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool
     let [x, y, w, h] = this_node(vp)
         .and_then(|(dom, n)| svg_bbox(dom, n))
         .unwrap_or([0.0, 0.0, 0.0, 0.0]);
-    let js = format!("({{x:{x},y:{y},width:{w},height:{h}}})");
-    match eval_in_current_global(cx, &js) {
-        Some(v) => *vp = v,
-        None => *vp = NullValue(),
-    }
+    *vp = match new_rect_object(
+        cx,
+        &[
+            (c"x", x as f64),
+            (c"y", y as f64),
+            (c"width", w as f64),
+            (c"height", h as f64),
+        ],
+    ) {
+        Some(o) => ObjectValue(o),
+        None => NullValue(),
+    };
     true
 }
 
@@ -3850,19 +3898,48 @@ unsafe fn svg_bbox(dom: *mut Dom, node: NodeId) -> Option<[f32; 4]> {
 /// case, which is the overwhelming majority), matching the layout snapshot we actually hold.
 unsafe fn el_get_client_rects(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let node = this_node(vp).map(|(_, n)| n);
-    let js = match node.and_then(layout_rect) {
-        Some([x, y, w, h]) => format!(
-            "(function(){{var r={{x:{x},y:{y},width:{w},height:{h},left:{x},top:{y},right:{r},bottom:{b}}};\
-             var l=[r];l.item=function(i){{i=i|0;return (i>=0&&i<this.length)?this[i]:null;}};return l;}})()",
-            r = x + w,
-            b = y + h
-        ),
-        None => "(function(){var l=[];l.item=function(){return null;};return l;})()".to_string(),
-    };
-    match eval_in_current_global(cx, &js) {
-        Some(v) => *vp = v,
-        None => *vp = NullValue(),
+    // The rect is built natively and the list factory — compiled ONCE in the window prelude — is
+    // CALLED, not compiled. This getter was the slowest of the three geometry calls: 354ms for 20,000
+    // calls against 15ms for `getBoundingClientRect` once that one was native (tick 769).
+    let global = CurrentGlobalOrNull(&wrap_cx(cx));
+    if global.is_null() {
+        *vp = NullValue();
+        return true;
     }
+    rooted!(in(cx) let g = global);
+    rooted!(in(cx) let mut rect_v = NullValue());
+    if let Some([x, y, w, h]) = node.and_then(layout_rect) {
+        let (r, b) = (x + w, y + h);
+        if let Some(o) = new_rect_object(
+            cx,
+            &[
+                (c"x", x as f64),
+                (c"y", y as f64),
+                (c"width", w as f64),
+                (c"height", h as f64),
+                (c"left", x as f64),
+                (c"top", y as f64),
+                (c"right", r as f64),
+                (c"bottom", b as f64),
+            ],
+        ) {
+            rect_v.set(ObjectValue(o));
+        }
+    }
+    let argv: [Value; 1] = [rect_v.get()];
+    rooted!(in(cx) let mut rval = UndefinedValue());
+    let args = mozjs::jsapi::HandleValueArray {
+        length_: argv.len(),
+        elements_: argv.as_ptr(),
+    };
+    let ok = mozjs::rust::wrappers2::JS_CallFunctionName(
+        &mut wrap_cx(cx),
+        g.handle(),
+        c"__mkRectList".as_ptr(),
+        &args,
+        rval.handle_mut(),
+    );
+    *vp = if ok { rval.get() } else { NullValue() };
     true
 }
 
@@ -6355,8 +6432,36 @@ unsafe fn el_dispatch_event(cx: *mut RawJSContext, argc: u32, vp: *mut Value) ->
         c"__pendingEvent".as_ptr(),
         v.handle(),
     );
-    let script = format!("__dispatchEvent({}, __pendingEvent)", node.0);
-    match eval_in_current_global(cx, &script) {
+    // A CALL, not a compiled program that calls (tick 768). `dispatchEvent` is on the per-event path:
+    // every click, input, scroll and custom event a page fires came through the JS compiler here.
+    let script_result = {
+        rooted!(in(cx) let mut pending = UndefinedValue());
+        let _ = JS_GetProperty(
+            &mut wrap_cx(cx),
+            global.handle(),
+            c"__pendingEvent".as_ptr(),
+            pending.handle_mut(),
+        );
+        let argv: [Value; 2] = [Int32Value(node.0 as i32), pending.get()];
+        rooted!(in(cx) let mut rval = UndefinedValue());
+        let args = mozjs::jsapi::HandleValueArray {
+            length_: argv.len(),
+            elements_: argv.as_ptr(),
+        };
+        let ok = mozjs::rust::wrappers2::JS_CallFunctionName(
+            &mut wrap_cx(cx),
+            global.handle(),
+            c"__dispatchEvent".as_ptr(),
+            &args,
+            rval.handle_mut(),
+        );
+        if ok {
+            Some(rval.get())
+        } else {
+            None
+        }
+    };
+    match script_result {
         Some(v) => {
             *vp = BooleanValue(v.is_boolean() && v.to_boolean());
             true
@@ -17042,6 +17147,15 @@ const WINDOW_PRELUDE: &str = r#"
             g.__pendingMutations = [];
             g.__moScheduled = false;
             g.__nodeById = function (id) { return (g.__nodes && g.__nodes[id]) || null; };
+            // `getClientRects()` returns a live-ish list with an `item()` method. Building that in the
+            // native getter used to mean COMPILING a small program per call (tick 768's defect class,
+            // and measured the slowest of the three: 354ms for 20,000 calls). Compiled ONCE here, then
+            // CALLED from the native getter with an already-built rect object.
+            g.__mkRectList = function (r) {
+                var l = r ? [r] : [];
+                l.item = function (i) { i = i | 0; return (i >= 0 && i < this.length) ? this[i] : null; };
+                return l;
+            };
             g.__moListToNodes = function (csv) {
                 if (!csv) return [];
                 var out = [], parts = String(csv).split(',');

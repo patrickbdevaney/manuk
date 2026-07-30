@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **515** | ticks 1–767 |
-| median tick cycle | **22m** | 514 intervals |
-| median, last 10 | **39m** | 10 intervals |
+| ticks landed | **516** | ticks 1–769 |
+| median tick cycle | **22m** | 515 intervals |
+| median, last 10 | **54m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 468.0h elapsed |
-| median verify wall | **63s** | 454 ticks |
+| **ticks per hour** | **1.10** | 469.3h elapsed |
+| median verify wall | **63s** | 455 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **353**
-* **✅ rows in the capability ledger**: 144 → **393**
+* **live gates**: 27 → **354**
+* **✅ rows in the capability ledger**: 144 → **394**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**245 of 515 ticks** (48%) moved a
+**245 of 516 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **245** capability ticks, median cycle **22m**
-* median diff per tick: **+245 / −34** lines across 8 files
+* median diff per tick: **+246 / −34** lines across 8 files
 
 ## Every tick
 
@@ -612,5 +612,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **764** | 2026-07-30 12:52 | 81m | root-cause | 63s | +227/−35 | 353 | 81 | 56.0% · | the two worst `reading_order` sites in the corpus are both RTL, and a flex row ran backwar |
 | **765** | 2026-07-30 13:30 | 38m | root-cause | 63s | +284/−35 | 353 | 81 | 56.0% · | an RTL table reads backwards, and a Chrome-EXACT fix was reverted on the way (2026-07-30) |
 | **767** | 2026-07-30 17:01 | 3.5h | measurement | 63s | +529/−49 | 353 | 81 | 56.0% · | the sweep the board demanded: the headline is FLAT and the jarring mass HALVED (2026-07-30 |
+| **769** | 2026-07-30 18:20 | 80m | root-cause | 63s | +419/−66 | 354 | 81 | 56.0% · | the grep t768 owed: three more hot paths were running the JS compiler (2026-07-30) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -38936,3 +38936,61 @@ with a runtime cost; **(b)** when a function's doc comment claims an early-out, 
 performs it before trusting it — this one had said "no-op" for many ticks while doing the most expensive
 thing in the engine. **Grep the crates for `evaluate_script`/`eval_in_current_global` on any path that
 runs per node, per event or per frame.**
+
+## Tick 769 — the grep t768 owed: three more hot paths were running the JS compiler (2026-07-30)
+
+t768 fixed a per-mutation `format!` + `evaluate_script` that segfaulted Wikipedia, and its own PATTERN
+line said what to do next: *"grep the crates for `evaluate_script`/`eval_in_current_global` on any path
+that runs per node, per event or per frame."* This is that grep, and the class had three more members —
+all of them on paths a real page hits per element or per event:
+
+```text
+                        20,000 calls        before      after
+  getBoundingClientRect  object literal      131ms       13ms     <- the hottest call on the web
+  getClientRects         IIFE + item()       354ms       16ms     <- the slowest of the three
+  dispatchEvent          __dispatchEvent()   per event fired
+  getBBox                object literal      per SVG node
+```
+
+`getBoundingClientRect` is what every scroll handler, sticky header, `IntersectionObserver` polyfill and
+animation library calls per element per frame — and each call was a parse + bytecode compile +
+`JSScript` allocation. `getClientRects` compiled an entire IIFE, closure and all.
+
+Two mechanisms, both from t768: build the object **natively** (`JS_NewObject` +
+`JS_DefineProperty`), and for anything with behaviour, compile the helper **once** into the window
+prelude and **call** it (`__mkRectList`, `__dispatchEvent`, `__recordMutation`).
+
+### ⚠ THE FIRST VERSION OF THE GATE COULD NOT GO RED, AND THAT IS THE TICK'S REAL LESSON
+
+I wrote the gate as an absolute budget — *"6,000 hot calls under 1500ms"* — and it passed at 11ms.
+Then I ran the mutation, and it **passed at 35ms too**. The defect was still there and the gate was
+green: 4,000 compiles of a small literal cost ~24ms, and no honest absolute budget separates that from
+noise on an unknown machine. A budget loose enough not to flake is loose enough to prove nothing.
+
+The rebuilt gate measures each hot call **against `element.tagName`** — a native property read, same
+loop, same process, same machine — and asserts the RATIO:
+
+```text
+                      with the compile      without      limit
+  getBoundingClientRect        65.5×          7.0×         15×
+  getClientRects             ~170×            8.0×         25×
+```
+
+RED-proven by running the mutation: `getBoundingClientRect costs 65.5× a native property read`.
+
+TICK SHAPE: root-cause (the class behind a Bar 0)
+CLUSTER: none visual — this is the t768 defect class closed by grep.
+Gates: **`G_HOT_DOM_NO_COMPILE`** (`engine/page/tests/g_hot_dom_no_compile.rs`), new. Asserts the
+correctness half FIRST (the exact rect/bbox values and delivery counts the old compiled literals
+produced — the rewrite must change **cost only**), then the two ratios.
+PERF: `getBoundingClientRect` **10×** faster, `getClientRects` **22×** faster, `dispatchEvent` and
+`getBBox` off the compiler entirely.
+WIKI: `docs/wiki/js-engine.md` — the tick-768 section now carries the grep's results and the ratio-gate
+reasoning.
+PATTERN: ⚠⚠⚠ **A PERFORMANCE GATE WITH AN ABSOLUTE BUDGET IS A GATE THAT CANNOT GO RED, AND IT WILL
+PASS WITH THE DEFECT RESTORED.** This is `falsify.sh`'s founding lesson arriving in a new costume: the
+first version of this gate was written, run green, run RED-proven — and the mutation *passed*. What
+makes a cost assertion falsifiable is a CONTROL IN THE SAME RUN: measure the suspect against a
+comparable operation the machine performs in the same loop, and assert the ratio. The absolute number is
+a property of the box; the ratio is a property of the code. **Any new perf gate must name the control
+it divides by, and be shown red with the defect restored — not merely shown green without it.**

@@ -854,7 +854,8 @@
   - L2230 · The shape, and how it hid
   - L2250 · A mutation record must not COMPILE A SCRIPT (tick 768 — Bar 0)
   - L2285 · Two things this cost, both worth keeping
-  - L2297 · The standing audit item
+  - L2297 · The grep this called for, and what it found (tick 769)
+  - L2319 · ⚠ The gate that could not go red
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1288,4 +1289,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1199 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1200 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

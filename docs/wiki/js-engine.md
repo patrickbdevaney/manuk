@@ -2294,8 +2294,42 @@ absent — and measured **8 of 8 still crashing**. `WINDOW_PRELUDE` installs `__
 unconditionally, so the property is always present and the early-out could never fire. **Grep for the
 code that performs an early-out before trusting a comment that claims one.**
 
-### The standing audit item
+### The grep this called for, and what it found (tick 769)
 
-Grep the crates for `evaluate_script` / `eval_in_current_global` on any path that runs **per node, per
-event or per frame**. A compile is not a call, and the cost is invisible at the call site — it looks like
-a `format!`.
+*"Grep the crates for `evaluate_script` / `eval_in_current_global` on any path that runs per node, per
+event or per frame."* Three more members of the class, all shipped:
+
+| call | what it compiled | 20,000 calls, before → after |
+|---|---|---|
+| `getBoundingClientRect()` | an eight-field object literal | **131ms → 13ms** |
+| `getClientRects()` | an IIFE with an `item()` closure | **354ms → 16ms** |
+| `dispatchEvent()` | `__dispatchEvent(id, __pendingEvent)` | per event fired |
+| `getBBox()` | an object literal | per SVG node |
+
+`getBoundingClientRect` is the most-called method on the web — every scroll handler, sticky header,
+`IntersectionObserver` polyfill and animation library calls it per element per frame.
+
+**Two mechanisms cover the whole class:**
+
+1. **Pure data → build it natively.** `JS_NewObject` + `JS_DefineProperty` per field (`new_rect_object`).
+2. **Data + behaviour → compile the helper ONCE, then call it.** `__mkRectList`, `__dispatchEvent` and
+   `__recordMutation` all live in the window prelude, which is compiled once per page;
+   `JS_CallFunctionName` invokes them with a rooted argument vector.
+
+### ⚠ The gate that could not go red
+
+`G_HOT_DOM_NO_COMPILE` was first written as an absolute budget — 6,000 hot calls under 1500ms. It passed
+at 11ms. Then the defect was restored and it **passed at 35ms**: 4,000 compiles of a small literal cost
+~24ms, and no absolute budget separates that from machine noise without flaking on a slow box.
+
+The rebuilt gate divides by a **control in the same run** — `element.tagName`, a native property read in
+the same loop, same process, same machine:
+
+| | with the compile | without | limit |
+|---|---|---|---|
+| `getBoundingClientRect` | **65.5×** | 7.0× | 15× |
+| `getClientRects` | ~170× | 8.0× | 25× |
+
+**The absolute number is a property of the box; the ratio is a property of the code.** Any new
+performance gate must name the control it divides by, and be shown RED with the defect restored — not
+merely green without it.
