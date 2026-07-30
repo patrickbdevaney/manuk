@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **499** | ticks 1–743 |
-| median tick cycle | **22m** | 498 intervals |
+| ticks landed | **500** | ticks 1–744 |
+| median tick cycle | **22m** | 499 intervals |
 | median, last 10 | **23m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 447.2h elapsed |
-| median verify wall | **63s** | 438 ticks |
+| **ticks per hour** | **1.11** | 450.4h elapsed |
+| median verify wall | **63s** | 439 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **352**
-* **✅ rows in the capability ledger**: 144 → **380**
+* **✅ rows in the capability ledger**: 144 → **381**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**245 of 499 ticks** (49%) moved a
+**245 of 500 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -596,5 +596,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **740** | 2026-07-28 23:41 | 23m | pattern-class | 63s | +164/−32 | 350 | 81 | 56.0% · | the method was correct and homeless (2026-07-28) |
 | **741** | 2026-07-29 00:50 | 69m | pattern-class | 63s | +461/−39 | 351 | 81 | 56.0% · | "idempotent" was hiding a component's own bug (2026-07-28) |
 | **743** | 2026-07-29 20:15 | 19.4h | root-cause | 63s | +640/−115 | 352 | 81 | 56.0% · | the icon-sprite `<use href="#icon">` resolved to nothing: the icon was never drawn (2026-0 |
+| **744** | 2026-07-29 23:26 | 3.2h | root-cause | 63s | +642/−39 | 352 | 81 | 56.0% · | the priority ledger ranked 351 ticks of work by HTML tag, because `delta` never crossed th |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

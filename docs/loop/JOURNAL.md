@@ -37064,3 +37064,144 @@ action — it will produce the first mechanism-keyed corpus ledger and the fresh
 5.3%, need +188). **(2)** Rank the new ledger by `(in-scope sites × dy severity)` and take the top
 primitive, per PHASE0-RENDER-BURNDOWN.md. **(3)** t743's residue: cross-`<svg>` `url(#grad)` /
 `clip-path` / `mask` references, the four ikea reading-order pairs, the SVG `<text>` baseline 6px.
+
+## Tick 745 — `td { padding: 0 }` computed to 0 and was overwritten with 1px AFTER the cascade: every reset table cell was 2px too tall, and every row below it 2px lower (2026-07-29)
+
+HYPOTHESIS (board CO-#1, the ranked SHAPE burndown): primitive #1 of
+`PHASE0-RENDER-BURNDOWN.md` §3 — *container-width/size errors that launder into a `dy` cascade* —
+found by MEASUREMENT, not by reading the plan: t744's mechanism-keyed oracle was pointed at the six
+fully-covered anchor sites (§1 of the plan: no confound, nothing missing), and its new primitive rows
+put `geometry/mis-sized: width (<a>)` and a systematic **`dh = +2`** on `<tr>`/`<td>` at the top
+(165 hits on blog.rust-lang.org, 77 on martinfowler.com, 54 on news.ycombinator.com).
+
+### THE ANCHOR LEDGER SAID SIZE; THE FIXTURE SAID WHOSE
+
+Chrome-vs-us on four hand-written fixtures (live Chromium, `--tol 0`), each smaller than the last:
+
+```text
+    plain <div><span>            20 vs 20      line box is CORRECT — not a text-metrics bug
+    <td><span>  (default)        22 vs 22      the UA 1px default is CORRECT
+    <td><span>  padding:0        20 vs 22      <- 2px, and the cell is also 2px too WIDE
+    <td><div>   padding:0        20 vs 22      the CHILD is 20 in both; the CELL adds the 2px
+```
+
+`padding: 7px` on the same cell was honoured exactly. Only **`padding: 0`** was ignored — the shape
+this project has now caught eight times (a wrong answer of the *right type*), and here it is the
+guard, not the value:
+
+```rust
+// apply_presentational_hints(), runs AFTER the cascade
+if matches!(tag, "td" | "th") && s.padding == Sides::all(Dim::Px(0.0)) {
+    s.padding = Sides::all(Dim::Px(1.0));
+}
+```
+
+`0` **is** `padding`'s initial value, so `padding == 0` cannot distinguish *"the author reset it"*
+from *"nobody set it"*. It answered "nobody" for both. So `* { padding: 0 }` — Tailwind's preflight,
+Normalize, and every hand-rolled reset since 2004 — cascaded correctly to 0 and was then overwritten,
+on all four sides, for table cells only.
+
+⚠⚠⚠ **THE HINT HAD SILENTLY UN-DONE A FIX THAT ALREADY LANDED.** t556 restamped `UA_CSS` from
+`Origin::Author` to `Origin::UserAgent` *for exactly this class of rule*: a reset is deliberately
+written with the weakest selector, so as an author sheet our `td { padding: 1px }` (0,0,1) beat
+`* { padding: 0 }` (0,0,0) on specificity. That fix worked — the cascade produced 0 — and a hint two
+hundred lines downstream wrote 1px over the answer. **A correct cascade is not the last word if
+something runs after it.** The `MinimalCascade` twin (`apply_ua_defaults`) was never wrong, and not
+because it was written more carefully: it runs BEFORE author declarations, so the same code is a
+default there and an override here. Two implementations of one rule, and the non-shipping one was the
+correct one.
+
+FIX: delete the hint. The default already exists in the one place that can express it without
+guessing what the author did — `UA_CSS`'s `td, th { display: table-cell; padding: 1px }`, where the
+origin sort decides. Net −3 lines of behaviour.
+
+### WHY 2px IS NOT A ROUNDING NOTE
+
+A cell 2px too tall makes its ROW 2px too tall, and a row height is a `dy` term: every row below it
+moves down 2px, the table by 2×rows, and every block after the table with it. On the anchor sites this
+is the `dh=+2` band itself, and the cascade below it is the largest single block of `dy` divergence
+the anchors report. Re-measured on the same fixture after the fix: **22 divergences → 6, and all six
+are the pre-existing 1px text-advance width** (`81×17` vs `80×17`) — a different, named bug (plan §3
+item 3). Heights and y-offsets are now exact.
+
+Population: unmeasured corpus-wide by construction until the next sweep — that is the burndown
+protocol (a fix must prove the band moved). The *reachable* population is every page that resets
+padding and uses a table: Tailwind/Normalize/legacy-reset sites, and table-based layout is still how
+Hacker News, Wikipedia's infoboxes and every documentation reference page are built.
+
+TICK SHAPE: root-cause
+CLUSTER: the `dh=+2` band on `<tr>`/`<td>`/`<table>` in the anchor ledger (blog.rust-lang.org 165,
+martinfowler.com 77, news.ycombinator.com 54 hits) — post-t744 mechanism keys, so it is a *primitive*
+claim, not a tag one. Next sweep must show it shrink.
+Gates: `an_author_padding_reset_on_a_table_cell_is_not_undone_by_the_ua_default` (`stylo_engine.rs`) —
+asserts BOTH halves, because the fix is only correct if the default still arrives: three reset shapes
+(`* {}` reset, `#id` rule, inline style) compute 0, and an unstyled `<td>` still computes 1px.
+**RED-proven against two mutations**, each restored and re-run green: **M1** restore the hint → the
+three reset assertions read `Px(1.0)`; **M2** delete `padding: 1px` from `UA_CSS` → the default
+assertion reads `Px(0.0)`. Plus the live-Chromium fixture diff above. Regression check: manuk-layout
+94, manuk-css 43 (`--features stylo`; the two counts were transposed when this entry was first
+written, and re-run at landing), and `g_table_dom` / `g_table_write` / `g_cascade_origin` / `g_ua_block_margins` /
+`g_client_box_is_the_padding_box` all green.
+PERF: none (one branch removed from the per-element hint pass).
+WIKI: `docs/wiki/css-cascade.md` — "A presentational hint cannot be guarded on *the property is still
+at its initial value*".
+PATTERN: ⚠⚠⚠ **A POST-CASCADE HINT MAY ONLY TEST A FIELD WHOSE "UNSET" VALUE NO AUTHOR CAN WRITE.**
+`background_color: Option` can answer *"did the author touch me?"*; `padding: Dim::Px(0.0)` cannot,
+and every property whose initial value is a legal author value is in the second category (`padding`,
+`margin`, `border-width`, `opacity: 1`, `z-index: auto`…). Grep `apply_presentational_hints` for the
+rest of that class. Corollary, and it is the cheaper lesson: **when a value is right in the cascade
+and wrong on the page, grep for post-cascade WRITERS of the field before re-reading the cascade** —
+the second sighting in three ticks of "the consumer is merely where the loss became visible" (t744:
+grep the emitter, not the parser).
+
+SEQUENCING: the owed full-corpus sweep is RUNNING as its own process (t745's runner, 31/265 at the
+time of this entry) and this tick's engine change was deliberately kept OUT of `target/release/manuk-wpt`
+until it finishes — a rebuild mid-sweep would silently split the baseline into two engine populations,
+and the `instrument` column would NOT show it (it hashes the instrument, not the engine). Verified on
+`target/debug/manuk-wpt` instead. The wall runs after the sweep lands.
+
+NEXT: **(1)** the sweep completes → `fidelity-progress.sh` banks the fresh in-scope-pass number + the
+burndown slope. **(2)** `height` on a `<tr>` is IGNORED — measured this tick on the same fixture rig:
+Chrome `tr{height:40px}` 40px, ours 22; an empty `tr{height:5px}` spacer (Hacker News has 24 of them)
+Chrome 5, ours **0**. `layout_table` builds `row_h` purely from cell content heights and never reads
+the row's own style. Chrome-verified rules already in hand: `height` is a MINIMUM (content wins when
+larger), `min-height` on a row is IGNORED, a `%` row height is IGNORED. **(3)** Cell content is
+TOP-aligned; Chrome centres it (`table { vertical-align: middle }` + `td { vertical-align: inherit }`
+in its UA sheet) — measured: a 60px row's content sits at +21px in Chrome, +1px here.
+
+### THE SWEEP THIS TICK OWED — BANKED, AND THE HEADLINE IS FLAT
+
+The full 265-site sweep finished at 23:07 (265 sites attempted, **266 rows — sampled == rows**, so
+nothing was silently dropped) and `fidelity-progress.sh` superseded the mid-write 8-site partial it
+had banked earlier. The honest number:
+
+```
+IN-SCOPE PASS: 10/204 = 4.9%   (shape>=0.75)   TARGET 95% = 194  ->  NEED +184
+EXCLUDED (bot-wall/unreachable, watched): 61/265 = 23%    scored 132/204
+shape_mean 42.3%    cov_mean 86.4%
+Δ vs t706:  IN-SCOPE PASS 5.3% -> 4.9% (-0.4 pts)  ·  scored 131 -> 132  ·  excluded 56 -> 61
+```
+
+⚠⚠⚠ **39 ticks of render-fidelity work did not move the headline.** `11 -> 10` passing sites out of
+~205 is one site, which is *inside* this instrument's own noise (MEMORY: a live site's SHAPE varies
+~3.7 pts across runs on one unchanged tree), and `shape_mean` went 43.0 -> 42.3. So the honest reading
+is **FLAT, not regressed** — but flat is the finding, and it is not the one the burndown plan
+predicted. Every tick in that window was Chrome-verified and RED-proven, so the fixes are real; what
+is now measured is that **their populations are small relative to whatever dominates the corpus.**
+Each tick claimed *reachable* population and none claimed *measured mass* — that gap is the thing this
+sweep just priced.
+
+⚠ `EXCLUDED-RISING: 56 -> 61 (+5)` fired. The exclusion rate is the metric that can quietly launder
+our own failures into "unreachable", so the five new exclusions are owed an audit before the next
+sweep is compared to this one.
+
+**What the sweep says to do next, from its own rows** — not from the plan. 44% of scored sites carry
+`h_overflow > 0`, so the width→re-wrap→`dy` laundering the board ranked #1 is real and large. But four
+sites have `h_overflow = 0`, `overlap = 0` and shape ≈ 0 with coverage **1.000** — every box drawn,
+almost none in the right place: `postgresql.org` 1.000/**0.018** (337 nodes),
+`flask.palletsprojects.com` 1.000/0.063 (687), `packagist.org` 1.000/0.184, `docs.python.org`
+1.000/0.212. That combination is the signature of **one systematic offset displacing a whole subtree**,
+not a distribution of small errors — and it is measurable on a plain server-rendered documentation page
+with no bot wall, no SPA and no confound, which is exactly what a fix needs in order to be
+*attributable*. That is the next tick, and the mechanism oracle can now name the primitive because
+t744 made `delta` cross the boundary.

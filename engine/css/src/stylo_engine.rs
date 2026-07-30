@@ -901,17 +901,25 @@ fn fold_effective_opacity(dom: &Dom, map: &mut StyleMap) {
 }
 
 /// Apply HTML presentational hints that Stylo's cascade doesn't see (our `TElement` wall
-/// doesn't synthesize them): replaced-element `width`/`height` attributes and `<td>`/`<th>`
-/// default padding. Applied only where the property is still at its initial, so real author
+/// doesn't synthesize them): replaced-element `width`/`height` attributes and the legacy
+/// colour/size attributes. Applied only where the property is still at its initial, so real author
 /// CSS wins (presentational hints are lower priority than author rules).
+///
+/// ⚠⚠⚠ **A cell's 1px padding is NOT here, and must never come back.** It used to be, guarded on
+/// `padding == 0` — and *nothing* can be guarded that way, because 0 **IS** the initial value of
+/// `padding`. So `td { padding: 0 }` (which is Tailwind's preflight, Normalize, and every
+/// hand-rolled `* { padding: 0 }` reset since 2004) computed to 0 through the cascade exactly as the
+/// author wrote it, and this function then put the UA 1px straight back — silently reinstating, for
+/// table cells only, the very bug the t556 origin fix had removed for every other element. Each
+/// cell came out 2px too wide and 2px too tall, so every row was 2px tall and every row below it
+/// 2px lower: measured against live Chromium, a reset cell read `43×20` in Chrome and `45×22` here.
+/// The default now comes from the ONE place that can express it without guessing — the UA-origin
+/// sheet (`td, th { padding: 1px }` in `UA_CSS`), where an author reset legitimately outranks it.
 fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedStyle) {
     let Some(el) = dom.element(node) else {
         return;
     };
     let tag = dom.tag_name(node).unwrap_or("");
-    if matches!(tag, "td" | "th") && s.padding == crate::Sides::all(crate::Dim::Px(0.0)) {
-        s.padding = crate::Sides::all(crate::Dim::Px(1.0));
-    }
     // Legacy presentational colour attributes — still load-bearing (Hacker News's whole identity
     // is `bgcolor` on <table>/<td>). Applied only where author CSS left the property initial.
     if s.background_color.is_none() {
@@ -2444,6 +2452,60 @@ mod tests {
             map[&id("rl")].text_align,
             A::Left,
             "explicit physical left stays left in RTL"
+        );
+    }
+
+    /// **An author `padding: 0` on a table cell survives the presentational hints.** The UA default
+    /// (1px) belongs to the UA-origin sheet, where a reset outranks it; it must NOT be re-applied
+    /// afterwards on a `padding == 0` test, because 0 is `padding`'s *initial value* — so that test
+    /// cannot distinguish "the author reset it" from "nobody set it", and it answered the wrong one.
+    /// Every `* { padding: 0 }` reset (Tailwind preflight, Normalize, every hand-rolled reset) got
+    /// its table cells silently re-padded: 2px too wide, 2px too tall, and every row below shifted.
+    ///
+    /// Both halves are asserted, because the fix is only correct if the DEFAULT still arrives:
+    /// a bare `<td>` keeps 1px, and a reset `<td>` gets 0. Chromium, live, on the same markup:
+    /// reset cell `43×20`, default cell `45×22`.
+    ///
+    /// RED, run: restore `if matches!(tag, "td"|"th") && s.padding == Sides::all(Dim::Px(0.0)) {
+    /// s.padding = Sides::all(Dim::Px(1.0)) }` in `apply_presentational_hints` — the three reset
+    /// assertions read `Px(1.0)`. Delete `td, th { padding: 1px }` from `UA_CSS` and the default
+    /// assertion reads `Px(0.0)` instead.
+    #[test]
+    fn an_author_padding_reset_on_a_table_cell_is_not_undone_by_the_ua_default() {
+        let dom = manuk_html::parse(
+            r#"<table><tr>
+                 <td id="bare">d</td>
+                 <td id="reset">r</td>
+                 <td id="inline" style="padding:0">i</td>
+                 <th id="star">s</th>
+               </tr></table>"#,
+        );
+        // Three shapes of the same author intent: the weak-selector reset that a UA-origin sheet
+        // must lose to, an id rule, and an inline style.
+        let sheet = Stylesheet::parse("#reset { padding: 0 } * { padding: 0 } th { padding: 0 }");
+        let map = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 800.0, 600.0);
+        let id = |v: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(v))
+                .unwrap()
+        };
+        use crate::Dim;
+        for who in ["reset", "inline", "star"] {
+            assert_eq!(
+                map[&id(who)].padding,
+                crate::Sides::all(Dim::Px(0.0)),
+                "author `padding:0` must reach the cell ({who})"
+            );
+        }
+        // …and the UA default must still be delivered, by the sheet, to a cell nobody styled.
+        // (`* { padding: 0 }` above is specificity 0,0,0 in the AUTHOR origin, so it still wins
+        // over the UA sheet here — that is why `bare` is asserted from a second cascade.)
+        let plain = Stylesheet::parse("");
+        let map2 = cascade_via_stylo(&dom, std::slice::from_ref(&plain), 800.0, 600.0);
+        assert_eq!(
+            map2[&id("bare")].padding,
+            crate::Sides::all(Dim::Px(1.0)),
+            "an unstyled cell still gets the UA 1px from UA_CSS"
         );
     }
 

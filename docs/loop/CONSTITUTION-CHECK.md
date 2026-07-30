@@ -3044,3 +3044,75 @@ running the mutation, which is the only reason it was caught at all.
    loop. It is the longest-standing unmet instruction in the log.
 
 **Next check due: tick 745.**
+
+---
+
+## Check #59 — tick 745
+
+**Horizon:** H0 — Pareto Web Parity, under PART VII component **1 (daily-driver rendering parity)**.
+**Gate:** the `DAILY-DRIVER-CERTIFICATION.md` certificate — and, as of the owner's 2026-07-29 steer, its
+render leg has a *winnable* form for the first time: **shape ≥ 0.75 on ≥ 95% of the IN-SCOPE corpus**
+(bot-walls excluded per cert §3, because they are excluded by PART IV and by our own no-stealth policy).
+Baseline 11/209 = 5.3%; target 199; distance **+188**.
+
+**Gate or scoreboard?** Gate, and the honest answer this check owes is about the DENOMINATOR, not the
+work. Ticks 738–745 were: two protocol/agentic blockers found by trying (738), event retargeting (739),
+a homeless method given a home (740), an "idempotent" wrapper hiding a component bug (741), SVG
+`viewBox` laid out as pixels (742), the icon-sprite `<use>` that drew nothing (743), the priority
+ledger keyed by HTML tag instead of by mechanism (744), and a UA hint that overwrote a correctly
+cascaded `padding: 0` (745). Six of eight are render-fidelity root causes on the representative corpus,
+which is the PART VII component 1 line exactly. No harness file was touched in any of them.
+
+**⚠ THE CORRECTION: A METRIC WHOSE DENOMINATOR CONTRADICTS PART IV CANNOT BE REACHED, AND WE RAN ON ONE
+FOR ~60 TICKS.** The render headline divided by all 265 corpus sites, but **56 of them (21%) are
+bot-walled / probe-blocked / unreachable** — and I4 plus PART IV put that tier *out of the
+compatibility mission by prior decision*. So "95% of 265" capped at ~80% **by construction**: the loop
+was grinding toward a bar its own constitution forbids it to clear. Fixed in `fidelity-progress.sh`
+(EXCLUDED is watched separately and capped; the pass rate divides by the in-scope 209, and crashed /
+render-failed / shell-only stay IN because those are OUR bugs). This is the encoding-tail lesson of
+VI.3 in a new place: **the number was not wrong, its frame was — and a ranking inside the wrong frame
+is confident and wrong.** Added to VI.3 as a corollary: *when a metric refuses to reach its bar, check
+the denominator against PART IV before adding work.*
+
+**Second correction, to VI.2's I5 row (the instrument list).** Check #58 named four instruments (oracle
+diffs OUTPUT, log reports EVENTS, page-probe observes SCHEDULE, differential fixture checks a VALUE).
+Ticks 744–745 add the fifth, and it is about *keys*: **the oracle can only rank by what its record
+carries across the process boundary.** `oracle::cluster` had computed the full mechanism signature —
+`{displaced|mis-sized}: {width|height|x|y} ~Npx` — for hundreds of ticks, and the crawl's JSONL emitter
+dropped the `delta` field, so every geometry divergence in the corpus reached the merge unkeyable and
+351 ticks of work were ranked by HTML **tag**. t745 is the first tick ranked by *primitive* instead, and
+it found its bug in ninety minutes off the new key. **A ledger is only as fine-grained as its serialised
+record.** (And the missing field is REFUSED, never zero-filled: `~0px` would have read as measured.)
+
+**On I4:** honoured, and sharpened. `td { padding: 0 }` is not a quirk — it is Tailwind preflight,
+Normalize, and every reset since 2004, i.e. usage-weighted breadth. The 2px it cost was a `dy` term, so
+it charged every row below it on every table-based page.
+
+**On I5:** the oracle is doing exactly its constitutional job — the discovery engine. t745's chain was
+*mechanism ledger on 6 anchor sites → the `dh=+2` band → four shrinking hand-written fixtures against
+live Chromium → the guard, not the value*. Breadth instrument to depth instrument in one tick.
+
+**On PART VII / V1-SCOPE:** honoured; thirty-four ticks, no harness file touched. The full-corpus sweep
+now owed for **eight consecutive checks** is finally RUNNING as the agent's own process (t745's runner);
+it was started before this tick's engine change and the change was deliberately kept out of
+`target/release/manuk-wpt` so the baseline is one engine population, not two.
+
+**No invariant is being bent.**
+
+### THE STEER
+
+1. **RANK BY PRIMITIVE NOW THAT THE LEDGER CAN.** The first mechanism-keyed corpus ledger arrives with
+   the running sweep. One primitive per tick, ordered by (in-scope sites × dy severity), each verified on
+   the fully-covered anchor sites — and **each must show its band shrink on the next sweep or be reverted
+   or re-scoped**. That is the finiteness readout the burndown plan promises.
+2. **GREP FOR POST-CASCADE WRITERS, NOT FOR CASCADE BUGS.** t744 (the writer's field list defines what
+   the reader may know) and t745 (a hint ran after a correct cascade and overwrote it) are the same
+   lesson two ticks apart: **when a value is right where it is computed and wrong where it is used, the
+   bug is between them.** The next audit sweep is the rest of `apply_presentational_hints` — every field
+   it guards on a value an author can legally write (`padding`, `margin`, `border-width`, `opacity: 1`,
+   `z-index: auto`) is the same defect waiting.
+3. **THE SWEEP IS A MEASUREMENT, SO PROTECT IT LIKE ONE.** A rebuild mid-sweep splits the baseline into
+   two engine populations and the `instrument` column would not show it — it hashes the instrument, not
+   the engine. Ticks land *around* a running sweep, never through it.
+
+**Next check due: tick 753.**

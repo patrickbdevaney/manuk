@@ -1597,3 +1597,58 @@ alone leaves it a plain block, and a plain block does not contain its floats —
 reason the value exists.
 
 [[box-layout]] [[conformance-and-oracles]]
+
+---
+
+## A presentational hint cannot be guarded on "the property is still at its initial value"
+
+`apply_presentational_hints` (`engine/css/src/stylo_engine.rs`) exists because our Stylo `TElement`
+wall does not synthesize HTML's presentational attributes, so `bgcolor`, `width="85%"`, `cellpadding`
+and friends are re-applied by hand *after* the cascade has run. Everything in it is guarded on the
+same idea — **apply this only where the author left the property alone** — and that guard is sound for
+`background_color` (`Option`, so `None` really does mean "nobody set it") and unsound the moment the
+property's *initial value is a legal author value*.
+
+`<td>`'s 1px padding was in that function, guarded on `s.padding == 0`:
+
+```rust
+if matches!(tag, "td" | "th") && s.padding == Sides::all(Dim::Px(0.0)) {
+    s.padding = Sides::all(Dim::Px(1.0));   // ← unfalsifiable guard
+}
+```
+
+`0` **is** `padding`'s initial value, so that test cannot separate *"the author wrote `padding: 0`"*
+from *"nobody mentioned padding"* — and the two need opposite answers. It answered the second one for
+both. Every reset that zeroes padding — Tailwind's preflight, Normalize, every hand-rolled
+`* { padding: 0 }` since 2004 — reached the cell with a correctly-cascaded `0` and had the UA 1px put
+straight back, on all four sides:
+
+```text
+    td { padding: 0 }        chrome  43×20      ours (before)  45×22      ours (after)  43×20
+    <td> (unstyled)          chrome  68×22      ours            67×22     unchanged
+```
+
++2px on the cell is +2px on the row, and a row is a **`dy` term**: every row below it moved down by 2px,
+the table by 2×rows, and the rest of the page with it. This is the `dy`-cascade law with the smallest
+possible cause.
+
+⚠⚠⚠ **The hint had silently un-done a fix that had already landed.** t556 corrected `UA_CSS` from
+`Origin::Author` to `Origin::UserAgent` precisely so that a weak-selector reset (`* { padding: 0 }`,
+specificity 0,0,0) would stop losing a *specificity* tie-break to a UA rule (`td { padding: 1px }`,
+0,0,1) that it outranks by *origin*. That fix worked — the cascade produced 0 — and then a hint two
+hundred lines away wrote 1px over the answer. **A correct cascade is not the last word if something
+runs after it.** When a value is right in the cascade and wrong in the page, grep for post-cascade
+writers of that field before re-reading the cascade.
+
+The default now comes from `UA_CSS` alone (`td, th { display: table-cell; padding: 1px }`), which is
+where a UA default can be expressed *without* having to guess what the author did — the origin sort
+answers that. **The general rule: a post-cascade hint may only test a field that has a value no author
+can write** (`Option::None`, a sentinel, an explicit `was_set` bit). If the field cannot answer
+"did the author touch me?", the hint does not belong after the cascade; it belongs in the UA sheet.
+
+Its twin in `MinimalCascade` (`apply_ua_defaults`, `engine/css/src/lib.rs`) was never wrong, and the
+reason is ordering, not care: it runs **before** author declarations, so it is a default rather than an
+override. Two implementations of one rule where only one is on the shipping path
+([[two-cascades-stale-source-of-truth]] in memory) — the non-shipping one was the correct one.
+
+[[box-layout]] [[conformance-and-oracles]]

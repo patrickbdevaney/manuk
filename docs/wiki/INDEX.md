@@ -359,6 +359,7 @@
   - L1541 · What it did and did not buy
   - L1552 · The catch-all that answers inline (tick 699)
   - L1581 · flow-root is a gecko-gated CONSTANT, not a gecko-gated FEATURE
+  - L1603 · A presentational hint cannot be guarded on "the property is still at its initial value"
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1248,4 +1249,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1159 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1160 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
