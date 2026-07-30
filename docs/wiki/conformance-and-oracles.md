@@ -2440,3 +2440,51 @@ was missing here: the refusal existed, was correct, was documented, and was call
 consumer. Grep for the class: a predicate whose doc comment says *"so a measurement can refuse X"*, then
 enumerate its callers and check that **every** measurement is among them. A guard with one caller is a
 guard with a hole shaped like every other caller.
+
+## A killed process and a faulting one leave the identical trace (tick 753)
+
+The fidelity sweep claims each site with an **in-flight marker** before touching the engine, so a run that
+dies is counted rather than dropped — `recover_inflight` turns a leftover marker into a row on the next
+run. The marker carries **only a site name**. So the recovery pass cannot tell *"the external watchdog
+killed it"* from *"it faulted"*, and files `Unmeasurable::Crashed` unconditionally.
+
+That default is expensive because of **what `Crashed` outranks**. It is a Bar 0 event, and Bar 0 sits
+above every visual divergence in the priority ledger (Part 24.3) — so a phantom `crashed` does not just
+add a wrong row, it commands the whole board. The t752 CrUX baseline reported **8 crashed sites**; every
+one was `rc=124` at exactly 180s, the runner's `timeout`. No panic, no SIGSEGV, no OOM.
+
+**The information existed the whole time.** The sweep runner logs `rc` beside each row *precisely* because
+of this — t706's lesson, in the runner's own comment: *"an external SIGKILL and a SIGSEGV leave the same
+marker."* But the row is written by the recovery pass, which has never read the runner's file. One
+question, two records, and they never meet.
+
+### Why the fix goes in the failing process, not in the reader
+
+Teaching `recover_inflight` to consult the runner's `rc` file would work and would be wrong: it couples
+the instrument to one particular runner, and the corpus runner is an agent-owned script outside the repo,
+so the coupling would be both invisible and unversioned.
+
+Instead the ambiguity is removed at the source. The instrument takes a budget **strictly under** the
+external watchdog, and a detached per-site timer files an honest `Timeout(secs)` row, clears the marker,
+and exits 0 before the kill can land. The external `timeout` becomes a true backstop — and if it ever
+fires again, `crashed` means what it says.
+
+Two details that are load-bearing:
+
+- **The budget is measured, not picked.** Across the 438 runs that succeeded in two real corpus sweeps,
+  the slowest was **132s** (`<30s: 275 · 30–60: 137 · 60–90: 20 · 90–120: 4 · 120–150: 2 · ≥150: 0`), so
+  150s sits above every observed success and below the 180s watchdog: kills become timeouts at a cost of
+  zero measurable sites. A mis-ordering against the external watchdog fails *visibly* — rows go back to
+  reading `crashed`.
+- **A detached timer cannot be joined, so it is disarmed by a generation counter.** Each timer captures
+  `SITE_GEN` when armed and re-checks before acting; `flush` bumps it as each row reaches disk, making
+  "the row exists" and "the timer is disarmed" the same event. Without it, a `--urls a,b` run lets site
+  A's timer fire while B is rendering and files B's row under A's timeout.
+
+### The rule
+
+**When a failure label is chosen by a recovery path, ask what the recovering process can still SEE.** It
+sees a marker — not a signal, not an exit code, not a core file. Either put the discriminator *in* the
+marker, or better, have the failing process label itself while it is still alive, which needs no
+cooperating reader at all. An instrument that cannot distinguish two causes will pick one, and if the one
+it picks is the alarming one, the cost is the whole board's attention.

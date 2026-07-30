@@ -7,6 +7,14 @@
 
 use std::path::PathBuf;
 
+/// Which site the fidelity sweep is currently measuring, as a monotonic counter.
+///
+/// The per-site timeout watchdog is a detached thread, so it cannot be joined or cancelled — it is
+/// disarmed by this counter instead: a timer captures the generation it was armed for and does nothing
+/// unless that is still the current one. Without it, a `--urls a,b` run would let site A's timer fire
+/// while site B is rendering and file B's row as A's timeout.
+static SITE_GEN: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 use manuk_text::FontContext;
 
 /// A `file://` URL for a local path — **absolutized**.
@@ -495,6 +503,20 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
     // five `continue` paths, and a bottom-of-loop flush would silently skip every one of them.
     // Before site N begins, sites 1..N-1 are on disk. That is the invariant, and it is `continue`-proof.
     let rows_out = flag(args, "--rows-out").map(PathBuf::from);
+    // Our OWN per-site budget, strictly under the sweep runner's external `timeout` so that WE file the
+    // row rather than being killed holding a marker the next run can only read as `crashed`. See the
+    // arming site below for why this exists at all.
+    //
+    // **150s is measured, not picked.** Across the 438 runs that SUCCEEDED in the two real corpus sweeps
+    // (t750's 265 sites + t752's 200), the slowest took **132s** and the distribution is
+    // `<30s: 275 · 30-60: 137 · 60-90: 20 · 90-120: 4 · 120-150: 2 · >=150: 0`. So this budget sits above
+    // every success ever observed and below the 180s external watchdog: it converts kills into honest
+    // timeouts without costing a single measurable site. `--site-budget` overrides for a slower box or a
+    // different external watchdog — and if the two are ever mis-ordered, the failure is visible (rows go
+    // back to reading `crashed`) rather than silent.
+    let site_budget: u64 = flag(args, "--site-budget")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(150);
     let mut flushed = 0usize;
     if let Some(p) = &rows_out {
         // The previous run's marker, if it died holding one. Recovered FIRST, so the site that
@@ -506,6 +528,9 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
         }
     }
     let mut flush = |rows: &[manuk_wpt::fidelity::Fidelity], flushed: &mut usize| {
+        // Disarm this site's watchdog: any timer still sleeping now belongs to a generation that has
+        // already produced its row, and must stay silent.
+        SITE_GEN.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         if let Some(p) = &rows_out {
             if *flushed < rows.len() {
                 if let Err(e) = manuk_wpt::fidelity::append_rows_tsv(p, &rows[*flushed..]) {
@@ -561,6 +586,54 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
             }
         }
         eprintln!("fidelity: {name}");
+
+        // ── **BOUND OUR OWN WORK, SO A SLOW SITE IS A `timeout`, NOT A MANUFACTURED `crashed`.**
+        //
+        // The sweep runs each site under an EXTERNAL watchdog (`timeout -k 10 180 …`). When that fires,
+        // this process is killed holding its in-flight marker, and the next run recovers that marker as
+        // `Unmeasurable::Crashed` — because the marker carries only a site name, and a killed process
+        // and a faulting one leave the identical trace. So the t752 baseline reported **8 `crashed`
+        // sites**, every one of them `rc=124` at exactly 180s: no panic, no SIGSEGV, no OOM.
+        //
+        // ⚠ That is the most expensive kind of instrument lie. `Crashed` is a **Bar 0** event, and Bar 0
+        // outranks every visual divergence in the priority ledger (Part 24.3) — so a future session
+        // reading `8 crashed` would correctly drop everything to hunt a crash that does not exist.
+        // t706 already learned this once ("an external SIGKILL and a SIGSEGV leave the same marker") and
+        // fixed it OUTSIDE, by having the runner log `rc` beside the row. The runner does. The row is
+        // written by the recovery pass, which has never seen the runner's file, so the two records never
+        // meet — the same shape as t751's oracle-refuses/fidelity-scores split.
+        //
+        // Fixing it by teaching the recovery pass to read the runner's `rc` would wire the instrument to
+        // one particular runner. Instead, remove the ambiguity at the SOURCE: give ourselves a budget
+        // strictly under the external one and file our own honest `Timeout` row before we can be killed.
+        // The external watchdog stays as a true backstop for a genuine hang below this thread, and if it
+        // ever fires again, `crashed` will mean what it says.
+        //
+        // The watchdog is armed per site and disarmed by a GENERATION counter rather than by being
+        // joined: a `--urls a,b` run must not have site A's timer fire while site B is rendering.
+        if let Some(p) = &rows_out {
+            let gen = SITE_GEN.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+            let (p, name_c) = (p.clone(), name.clone());
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(site_budget));
+                if SITE_GEN.load(std::sync::atomic::Ordering::SeqCst) != gen {
+                    return; // this site finished; the timer belongs to a completed generation
+                }
+                let reason = manuk_wpt::fidelity::Unmeasurable::Timeout(site_budget);
+                eprintln!(
+                    "  UNMEASURABLE [{}]: {}",
+                    reason.tag(),
+                    "this engine did not finish the site inside its own budget — filed as a TIMEOUT by \
+                     us, so it is never recovered as a phantom Bar-0 `crashed` by the next run"
+                );
+                let row = manuk_wpt::fidelity::Fidelity::unmeasured(&name_c, reason);
+                let _ = manuk_wpt::fidelity::append_rows_tsv(&p, std::slice::from_ref(&row));
+                manuk_wpt::fidelity::clear_inflight(&p);
+                // Exit rather than unwind: the row and the cleared marker are already on disk, and the
+                // main thread is wedged in whatever took too long.
+                std::process::exit(0);
+            });
+        }
 
         // **Time each engine separately, and attribute the cost to whoever actually spent it.**
         //

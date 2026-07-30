@@ -273,6 +273,9 @@
   - L2402 · The refusal is about ASYMMETRY, not about starvation
   - L2420 · Where the refusal goes, and which side of the denominator
   - L2436 · The rule
+  - L2444 · A killed process and a faulting one leave the identical trace (tick 753)
+  - L2461 · Why the fix goes in the failing process, not in the reader
+  - L2484 · The rule
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1265,4 +1268,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1176 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1179 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

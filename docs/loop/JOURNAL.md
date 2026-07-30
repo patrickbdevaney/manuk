@@ -37846,3 +37846,68 @@ representative sample of the same web measured the same hour. Nothing was wrong 
 the engine — the *sample* was the claim. The reusable half: **switch to the representative population
 EARLY, while the slope is still short**, because the cost of the switch is a re-baseline (one sweep) and
 the cost of deferring it is discovering a second hill after optimising for the first.
+
+## Tick 753 — the sweep manufactured 8 Bar-0 "crashes" that were watchdog timeouts, because a killed process and a faulting one leave the identical trace (2026-07-30)
+
+t752's CrUX baseline reported **8 `crashed` sites**. `Crashed` is a **Bar 0** event and Bar 0 outranks
+every visual divergence in the priority ledger (Part 24.3), so that number correctly commands the whole
+board. Cross-referenced against the runner's recorded exit code, all eight are **`rc=124` at exactly
+180s** — the external watchdog. Zero panics, zero SIGSEGV, zero OOM. **No process died of a fault.**
+
+The mechanism is a two-record split, and it is the third sighting of that shape in three ticks. The sweep
+claims each site with an in-flight marker before touching the engine, so a run that dies is COUNTED rather
+than dropped — good, and the reason `recover_inflight` exists. But the marker carries **only a site name**,
+so the recovery pass has no way to tell "the watchdog killed it" from "it faulted", and files `Crashed`
+unconditionally. t706 already learned this exact lesson and fixed it OUTSIDE the instrument, by having the
+runner log `rc` beside each row — *"an external SIGKILL and a SIGSEGV leave the same marker"*, in the
+runner's own comment. **The runner does log it. The row is written by the recovery pass, which has never
+seen the runner's file.** One question, two records, and they never meet — t751 was the same shape (oracle
+refuses / fidelity scores), and so was t744 (`delta` computed / `delta` not serialised).
+
+FIX, and the choice of WHERE matters. Teaching the recovery pass to read the runner's `rc` file would
+solve it by wiring the instrument to one particular runner — and that runner is an agent-owned script in
+`/tmp`, so the coupling would be invisible and unversioned. Instead the ambiguity is removed **at the
+source**: the instrument gives itself a budget strictly under the external one and files its own honest
+`Unmeasurable::Timeout(secs)` row before it can be killed, then clears the marker and exits 0. The
+external `timeout` becomes a true backstop — and if it ever fires again, `crashed` will mean what it says.
+
+**150s is measured, not picked.** Across the **438 runs that succeeded** in the two real corpus sweeps
+(t750's 265 + t752's 200), the slowest took **132s**:
+
+```
+<30s: 275 · 30-60s: 137 · 60-90s: 20 · 90-120s: 4 · 120-150s: 2 · >=150s: 0
+```
+
+So the budget sits above every success ever observed and below the 180s watchdog: it converts kills into
+honest timeouts **without costing a single measurable site**. `--site-budget` overrides, and a
+mis-ordering against the external watchdog fails VISIBLY (rows go back to reading `crashed`) rather than
+silently.
+
+The watchdog is a detached thread, so it cannot be joined; it is disarmed by a **generation counter**
+(`SITE_GEN`) that each timer captures when armed and re-checks before acting. Without it a `--urls a,b`
+run would let site A's timer fire while site B is rendering and file B's row under A's timeout. `flush`
+bumps the generation as each site's row reaches disk, so "the row exists" and "the timer is disarmed" are
+the same event.
+
+TICK SHAPE: instrument-fidelity
+CLUSTER: none created. Removes 8 phantom Bar-0 events from the CrUX baseline and stops the loop's
+highest-priority category from being manufactured by its own harness.
+Gates: **RED-proven end-to-end, both labels produced by the same hanging site in one file.** A local
+server that accepts the connection and never responds, so the engine genuinely waits. With the watchdog
+armed (`--site-budget 8`): the row is `timeout-8s`, the process exits **0**, and **no marker is left**, so
+there is nothing for the next run to recover. With it effectively off (`--site-budget 9999`) under an
+external `timeout 10`: rc=**124**, a marker is left holding the site name, and the NEXT run prints
+`RECOVERED [crashed]` and writes a `crashed` row — reproducing the t752 phantom exactly. Both rows sit in
+the same TSV, one above the other. Regression: manuk-wpt 79 + 5 + 1 green.
+PERF: one sleeping thread per site (no work until it fires) and, on a timeout, ~30s *saved* per hung site
+against the external watchdog.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "a killed process and a faulting one leave the identical
+trace, so the label must be chosen by whoever still has the information".
+PATTERN: ⚠⚠⚠ **AN INSTRUMENT THAT CANNOT DISTINGUISH TWO CAUSES WILL PICK THE ALARMING ONE, AND THE
+ALARMING ONE OUTRANKS EVERYTHING.** `Crashed` was not a wrong guess so much as the only guess available at
+the point the guess was made — and because it is Bar 0, the cost of that default is the whole board's
+attention. The reusable half: **when a failure label is chosen by a recovery path, ask what the recovering
+process can still SEE.** It sees a marker, not a signal, not an exit code. Either put the discriminator in
+the marker or — better, because it needs no cooperating reader — make the failing process label itself
+while it is still alive. Third sighting in three ticks of *"the producer knew and the record did not
+carry it"* (t744 `delta`, t751 the starved-CSS refusal, t753 the exit code).
