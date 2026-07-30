@@ -66,23 +66,44 @@ read -r SITES SCORED GE75 GE75PCT SHAPEM COVM EXCL INSCOPE INPASS < <(awk -F'\t'
     else         printf "%d 0 0 0 0 0 %d %d 0", sites, excl, inscope
   }' "$SRC")
 
-PREV=""; [ -f "$LEDGER" ] && PREV=$(grep -vE '^(iso|#)' "$LEDGER" 2>/dev/null | tail -1)
+# PREV = last COMPLETE ledger row for a DIFFERENT tick (skip a same-tick partial we are about to supersede),
+# so Δ/alerts always compare against a real prior reading, never against a mid-write row for this same sweep.
+PREV=""; [ -f "$LEDGER" ] && PREV=$(grep -vE '^(iso|#)' "$LEDGER" 2>/dev/null | awk -F'\t' -v t="$TICK" '$2!=t' | tail -1)
 p_iso=$(echo "$PREV" | cut -f1); p_tick=$(echo "$PREV" | cut -f2); p_scored=$(echo "$PREV" | cut -f4); p_ge=$(echo "$PREV" | cut -f5); p_sh=$(echo "$PREV" | cut -f7); p_excl=$(echo "$PREV" | cut -f10); p_inscope=$(echo "$PREV" | cut -f11); p_inpass=$(echo "$PREV" | cut -f12)
+
+# ── SETTLED / COMPLETE guard (the mid-write-partial fix) ──────────────────────────────────────────────────
+# The instrument appends one row per site over a long, chunked run (each chunk under `timeout … manuk-wpt
+# fidelity`). Reading it early banks a MID-WRITE PARTIAL — that is how an 8-site 0.0%% row landed in the
+# ledger while a 265-site sweep was in flight. Bank ONLY when the sweep is finished:
+#   LIVE     — a manuk-wpt fidelity/oracle process is running ⇒ still being written ⇒ NOT settled.
+#   COMPLETE — row count ≥80%% of the expected corpus (max historical sites, floor 200), so a between-chunk
+#              lull or a sweep that died early is never mistaken for a finished run.
+EXPECT=$(awk -F'\t' '$1!~/^#/ && $1!="iso_sweep"{ if($3+0>m) m=$3+0 } END{ print (m>200?m:265) }' "$LEDGER" 2>/dev/null); [ -z "$EXPECT" ] && EXPECT=265
+MINROWS=$(( EXPECT * 80 / 100 ))
+SWEEP_LIVE=0; { pgrep -f 'manuk-wpt fidelity' >/dev/null 2>&1 || pgrep -f 'manuk-wpt oracle' >/dev/null 2>&1; } && SWEEP_LIVE=1
+SETTLED=1; { [ "$SWEEP_LIVE" = 1 ] || [ "${SITES:-0}" -lt "$MINROWS" ]; } && SETTLED=0
 
 # ── record-if-new (by sweep tick) ──────────────────────────────────────────────────────────────────────
 if [ "$MODE" != "--check" ]; then
   [ -f "$LEDGER" ] || printf '# rebuilt-instrument schema (t706+); shape=parent-relative, NOT the old absolute placement (6.4 pre-2026-07-28 row is a DIFFERENT metric, do not diff)\n# f6 shape_ge0.75_pct = LEGACY fixed-265 denom. f12 inscope_pass_pct = the winnable Phase-0 headline (denom excludes bot-wall/unreachable per DAILY-DRIVER-CERTIFICATION.md §3). Exit = f12 >= 95.\niso_sweep\tsweep_tick\tsites\tscored\tshape_ge0.75\tshape_ge0.75_pct\tshape_mean\tcov_mean\tsource\texcluded\tinscope\tinscope_pass_pct\n' > "$LEDGER"
-  if [ "$TICK" != "$p_tick" ]; then
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$SWEEP_ISO" "$TICK" "$SITES" "$SCORED" "$GE75" "$GE75PCT" "$SHAPEM" "$COVM" "$SRC" "$EXCL" "$INSCOPE" "$INPASS" >> "$LEDGER"
-    echo "recorded sweep $TICK ($SWEEP_ISO)"
+  EXIST_SITES=$(awk -F'\t' -v t="$TICK" '$2==t{print $3+0; exit}' "$LEDGER")
+  ROW=$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$SWEEP_ISO" "$TICK" "$SITES" "$SCORED" "$GE75" "$GE75PCT" "$SHAPEM" "$COVM" "$SRC" "$EXCL" "$INSCOPE" "$INPASS")
+  if [ "$SETTLED" != 1 ]; then
+    echo "fidelity-progress: sweep $TICK NOT settled (live=$SWEEP_LIVE, $SITES/$EXPECT sites) — not banking a mid-write partial"
+  elif [ -z "$EXIST_SITES" ]; then
+    printf '%s\n' "$ROW" >> "$LEDGER"; echo "recorded sweep $TICK ($SWEEP_ISO, $SITES sites)"
+  elif [ "${EXIST_SITES:-0}" -lt "$MINROWS" ]; then
+    # a PARTIAL row for this tick was banked earlier (the mid-write bug) → replace it with the complete run
+    awk -F'\t' -v t="$TICK" '($1 ~ /^#/ || $1=="iso_sweep" || $2!=t)' "$LEDGER" > "$LEDGER.tmp" && mv "$LEDGER.tmp" "$LEDGER"
+    printf '%s\n' "$ROW" >> "$LEDGER"; echo "superseded partial $TICK ($EXIST_SITES sites) with complete sweep ($SITES sites)"
   fi
 fi
 
 # ── verdict / alerts ───────────────────────────────────────────────────────────────────────────────────
 alerts=""
 AGE_DAYS=$(( ( NOW_EPOCH - SRC_EPOCH ) / 86400 ))
-[ "$AGE_DAYS" -ge 3 ] && alerts="${alerts}STALE-SWEEP: newest banked corpus sweep ($TICK) is ${AGE_DAYS}d old — agent should run a fresh full sweep so the trend stays live\n"
-if [ -n "$PREV" ] && [ "$TICK" != "$p_tick" ]; then
+[ "$AGE_DAYS" -ge 3 ] && [ "$SWEEP_LIVE" != 1 ] && alerts="${alerts}STALE-SWEEP: newest banked corpus sweep ($TICK) is ${AGE_DAYS}d old — agent should run a fresh full sweep so the trend stays live\n"
+if [ -n "$PREV" ] && [ "$SETTLED" = 1 ]; then
   awk "BEGIN{exit !($SCORED < ${p_scored:-0})}" && alerts="${alerts}SCORABILITY-REGRESSED: scored ${p_scored} -> ${SCORED} (fewer sites measurable — investigate, not progress)\n"
   # denominator trap: shape_mean up while scored down => a hard site dropped out, not real improvement
   if awk "BEGIN{exit !($SHAPEM > ${p_sh:-0} && $SCORED < ${p_scored:-0})}"; then
@@ -100,12 +121,13 @@ if [ "$MODE" = "--check" ]; then [ -n "$alerts" ] && printf "%b" "$alerts"; exit
 TARGET=$(awk "BEGIN{printf \"%d\", int(0.95*$INSCOPE + 0.999)}")
 NEED=$(( TARGET - GE75 )); [ "$NEED" -lt 0 ] && NEED=0
 echo "── FIDELITY PROGRESS (rebuilt instrument · sweep $TICK · $SWEEP_ISO · ${AGE_DAYS}d old) ─────────"
+[ "$SETTLED" != 1 ] && printf "  ⏳ SWEEP IN PROGRESS: %s/%s sites so far (live=%s) — numbers below are a PARTIAL, NOT banked until complete\n" "$SITES" "$EXPECT" "$SWEEP_LIVE"
 printf "  ⭐ IN-SCOPE PASS: %s/%s = %s%% (shape>=0.75)   TARGET 95%% = %s sites  →  NEED +%s more\n" \
   "$GE75" "$INSCOPE" "$INPASS" "$TARGET" "$NEED"
 printf "     EXCLUDED (bot-wall/unreachable, watched·capped): %s/%s = %s%%   ·   scored %s/%s   shape_mean=%s%%  cov_mean=%s%%\n" \
   "$EXCL" "$SITES" "$(awk "BEGIN{printf \"%.0f\",100*$EXCL/$SITES}")" "$SCORED" "$INSCOPE" "$SHAPEM" "$COVM"
 printf "     (legacy fixed-265 denom for history: shape>=0.75 on %s%%)\n" "$GE75PCT"
-if [ -n "$PREV" ] && [ "$TICK" != "$p_tick" ] && [ -n "${p_inpass:-}" ]; then
+if [ -n "$PREV" ] && [ "$SETTLED" = 1 ] && [ -n "${p_inpass:-}" ]; then
   DPP=$(awk "BEGIN{printf \"%+.1f\", $INPASS - ${p_inpass:-0}}")
   printf "  Δ vs %s: IN-SCOPE PASS %s%%→%s%% (%s pts) · scored %s→%s · excluded %s→%s\n" \
     "$p_tick" "$p_inpass" "$INPASS" "$DPP" "$p_scored" "$SCORED" "${p_excl:-?}" "$EXCL"
