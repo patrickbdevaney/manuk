@@ -2221,3 +2221,62 @@ instead of a passenger on the top one.
 classes, 4,964 hits (only `C01ca geometry: <div>` outranks it). `<a>` wrapping a block is the card link,
 the nav item, the vote arrow; a wrong height there is a `dy` term that charges every sibling below it,
 which is exactly what SHAPE measures.
+
+---
+
+## An indefinite MAIN size is INFINITE available main space, not zero (tick 762)
+
+`solve_subtree` hands taffy an `AvailableSpace` for each axis. The width is always `Definite` (Manuk has
+already resolved it in the block path); the height was:
+
+```rust
+height: match container_height {
+    Some(h) => AvailableSpace::Definite(h),
+    None    => AvailableSpace::MinContent,   // ← wrong when the block axis is the MAIN axis
+}
+```
+
+For a **row** container the block axis is the cross axis, it does not decide line breaking, and the
+container is content-sized either way — `MinContent` is harmless there. For a **column** container the
+block axis is the **main** axis, and available main space is precisely what `flex-wrap: wrap` breaks
+lines against (CSS Flexbox §9.3.5). `MinContent` means *"be as short as you can"*, so **every item taller
+than nothing started its own flex line**: a vertical stack rendered as N side-by-side columns, each
+`1/N` of the cross size.
+
+Chrome, measured on `#c{display:flex;flex-direction:column;flex-wrap:wrap;min-height:100vh;width:1200px}`
+with 200 / 900 / 150-tall children:
+
+| box | Chrome | was | now |
+|---|---|---|---|
+| `#c` | `1200×1250` | `1200×900` | `1200×1250` |
+| `#a` | `[0 0 1200×200]` | `[0 0 400×200]` | `[0 0 1200×200]` |
+| `#b` | `[0 200 1200×900]` | `[400 0 400×900]` | `[0 200 1200×900]` |
+| `#d` | `[0 1100 1200×150]` | `[800 0 400×150]` | `[0 1100 1200×150]` |
+
+An auto-height column container has an **indefinite** main size, so all items share one line;
+`min-height` only floors the resulting height. The fix passes `MaxContent` (taffy's "unbounded") for the
+height when — and only when — the root is a flex container with `column`/`column-reverse` direction.
+
+**What must NOT change, and was controlled for.** A column container with a *definite* height **does**
+wrap (Chrome: `height:300px` → two columns), and that path already passes `Definite(h)`. A control run
+with the change stashed moved exactly one of six cases:
+
+| case | Chrome | before | after |
+|---|---|---|---|
+| column, nowrap | stacked | stacked ✓ | stacked ✓ |
+| column, wrap, **auto** height | stacked | 3 columns ✗ | stacked ✓ |
+| column, wrap, definite `height:300px` | 2 columns | 2 columns ✓ | 2 columns ✓ |
+| row, wrap (the 12-column grid idiom) | 2 lines | 2 lines ✓ | 2 lines ✓ |
+| grid, 2 columns | 2 columns | 2 columns ✓ | 2 columns ✓ |
+
+**Why it survived this long: SHAPE cannot see it.** The fidelity score is *parent-relative* — each box is
+compared against its nearest common ancestor frame — so a document displaced 2,201px **with** its
+container scores about one point worse while being completely unusable. The `h_overflow` jarring
+invariant is the channel that sees it: marktplaats.nl **742 → 0**, repubblica.it **139 → 0**.
+
+**Gate.** `auto_height_column_flex_does_not_wrap` (`engine/layout/src/taffy_tree.rs`), RED-proven by
+restoring `AvailableSpace::MinContent` — the two items land at x=0 / x=600 in one row of two lines.
+
+**Residue, un-fixed and named:** a percentage height on a child of an indefinite-height column container
+(`height:50%`) measures 9px here against Chrome's 18px (content height). The control proves it predates
+this tick; it is a percentage-resolution question, not a wrapping one.

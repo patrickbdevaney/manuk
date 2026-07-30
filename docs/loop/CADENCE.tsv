@@ -509,4 +509,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 755	b1317f2b	1785408642	2026-07-30T06:50:42-04:00	137	process	63	4	76	32	353	81	3896	6960	0	384	0	the wall audit was recorded where its counter does not look (2026-07-30)
 757	2cb59d62	1785417099	2026-07-30T09:11:39-04:00	8457	root-cause	63	6	294	32	353	81	3896	6960	0	385	0	every `&` in every stylesheet matched `<html>`: CSS nesting was indexed but never resolved (2026-07-30)
 759	9fd2e58b	1785419461	2026-07-30T09:51:01-04:00	2362	root-cause	63	5	92	33	353	81	3896	6960	0	386	0	`&nbsp;` was collapsed like a space, so a spacer element had no line box: `char::is_whitespace` is Unicode's set, not CSS's (2026-07-30)
-761	2044c9da	1785420973	2026-07-30T10:16:13-04:00	1512	root-cause	63	9	305	34	353	81	3896	6960	0	387	0	the phantom line box under every empty wrapper, and a spec sentence that is wider than Chrome (2026-07-30)
+761	e7147eef	1785423614	2026-07-30T11:00:14-04:00	4153	root-cause	63	9	275	33	353	81	3896	6960	0	388	0	the phantom line box under every empty wrapper, and a spec sentence that is wider than Chrome (2026-07-30)

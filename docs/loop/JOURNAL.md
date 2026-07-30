@@ -38432,3 +38432,91 @@ review catches it because the citation is accurate. Same family as t760's lesson
 justification is true in the configuration it was measured in — but pointed at the *spec* rather than at
 our own comment: **when the citation is a general clause, enumerate the cases and measure each one; the
 clause tells you where to look, never what the answer is.**
+
+## Tick 762 — `flex-wrap: wrap` on an auto-height COLUMN container put the whole page in four side-by-side columns (2026-07-30)
+
+The board's #1 render primitive is *"container-WIDTH errors laundered into wrap/line-count → dy
+cascade"*, with `h_overflow` named as the ready proxy. I ran the mechanism oracle on four fully-covered
+near-bar CrUX sites (`kicktipp` 0.72, `255md` 0.70, `marktplaats` 0.70, `momon-ga` 0.51) and the top row
+was not a near-miss at all: marktplaats' footer links sat at **x=4200 against Chrome's x=801**.
+
+Walking the box tree up from there found the cause four levels above the page content:
+
+```text
+  div#         display=Flex  box=[0 0 1200x6305]   elem_kids=4
+    div#header-root          box=[   0 0 1200x185]
+    div#category-menu-bar    box=[1001 0 1200x48 ]
+    div#page-wrapper         box=[2201 0 1200x6305]   <- the ENTIRE page body
+    div#                     box=[3401 0 1200x396]    <- the footer
+```
+
+Four children of one flex container, each 1200px wide, laid **side by side**. The rule is
+`.hz-Page-body{display:flex;flex-direction:column;flex-wrap:wrap;min-height:100vh}` — a stock
+design-system idiom, not an exotic one.
+
+### THE MECHANISM: AN INDEFINITE MAIN SIZE IS INFINITE, NOT ZERO
+
+`solve_subtree` passed `AvailableSpace::MinContent` for the height whenever the container's own height
+was indefinite. For a **column** container the block axis is the **main** axis, and available main space
+is what `flex-wrap: wrap` breaks lines against (Flexbox §9.3.5). `MinContent` says *"be as short as you
+can"*, so **every item taller than nothing started a new flex line** — a vertical stack came out as N
+side-by-side columns, each `1/N` of the width.
+
+Reduced fixture, measured against live Chromium
+(`#c{display:flex;flex-direction:column;flex-wrap:wrap;min-height:100vh;width:1200px}`, children 200 /
+900 / 150 tall):
+
+```text
+              Chrome              was                 now
+  #c   1200×1250            1200×900  ✗          1200×1250  ✓
+  #a   [   0    0 1200×200] [  0 0 400×200] ✗    [   0    0 1200×200] ✓
+  #b   [   0  200 1200×900] [400 0 400×900] ✗    [   0  200 1200×900] ✓
+  #d   [   0 1100 1200×150] [800 0 400×150] ✗    [   0 1100 1200×150] ✓
+```
+
+Chrome does **not** wrap: an auto-height column container has an indefinite main size, so all items
+share one line and `min-height` only floors the result.
+
+### THE CONTROL — because "column" and "wrap" are not the only things that read that argument
+
+Six cases measured in Chrome, then in our engine **with the change stashed** and again with it applied.
+Only the wrap+auto-height column moved:
+
+```text
+                                            Chrome         before        after
+  column, NOWRAP                            stacked        stacked  ✓     stacked  ✓
+  column, wrap, AUTO height                 stacked        3 columns ✗    stacked  ✓
+  column, wrap, DEFINITE height:300px       2 columns      2 columns ✓    2 columns ✓
+  row, wrap (the 12-column grid idiom)      2 lines        2 lines  ✓     2 lines  ✓
+  grid, 2 columns                           2 columns      2 columns ✓    2 columns ✓
+  column, min-height:100vh, child height:50%  18px         9px      ✗     9px      ✗  (pre-existing)
+```
+
+The definite-height row is the one that makes the fix narrow rather than a blanket "never wrap": Chrome
+**does** wrap there, and that path already passes `Definite(h)`. The `height:50%` residue is charged to
+neither side — the control proves it predates this tick.
+
+TICK SHAPE: root-cause
+CLUSTER: `h_overflow` (the CO-#1 §3 family-1 proxy) — the first primitive attacked from the width side
+rather than the dy side.
+Gates: `auto_height_column_flex_does_not_wrap` (`engine/layout/src/taffy_tree.rs`) — asserts the second
+item stacks BELOW the first and that both get the full cross size. RED-proven by restoring
+`AvailableSpace::MinContent`: the items land at x=0/x=600 in two lines. Regression: manuk-layout 98/98.
+MEASURED ON REAL SITES (fidelity scorer, same binary, before = the t758 sweep row):
+`marktplaats.nl` h_overflow **742 → 0**, shape 0.699 → 0.709 · `repubblica.it` h_overflow **139 → 0**,
+shape 0.380 → 0.389 · `kicktipp.com` shape 0.716 → 0.725 · `ikea.com` 0.507 → 0.526. ⚠ Honest read: the
+h_overflow collapses are the result (structural, deterministic); the shape deltas are inside the known
+±3.7pt per-site spread and are NOT claimed. Four of the seven other top-`h_overflow` sites did not move
+(`aftenbladet` 521, `mobile.ir` 259, `alphanews` 235, `razaoautomovel` 62) — different causes, still open.
+PERF: one `matches!` on the root style before `compute_root_layout`, once per flex/grid container.
+WIKI: `docs/wiki/box-layout.md` — "an indefinite main size is infinite available main space".
+PATTERN: ⚠⚠⚠ **THE PROXY POINTED AT THE RIGHT FAMILY AND THE WRONG SIZE OF BUG.** The board's #1 was
+written as a *near-miss* story — "a container a few px too wide re-wraps its prose" — and `h_overflow`
+was proposed as its subtle proxy. The proxy was right and the size was wrong: the top `h_overflow` site's
+defect was not a few px of prose re-wrap, it was **the whole document in four columns**, sitting four
+levels above anything the shape number could point at. Because SHAPE is parent-relative, an error this
+gross is nearly INVISIBLE to it — every descendant is displaced *with* its parent, so the score moves one
+point while the page is unusable. Two lessons, and the second is the one to keep: a metric that
+normalises away the common-mode term cannot see a common-mode failure, so **the jarring invariants
+(`h_overflow`, `overlap`, `reading_order`) are not decoration next to shape — they are the only channel
+in the instrument that sees a whole-page error**, and the ranked burndown should read them FIRST.

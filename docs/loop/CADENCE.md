@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **511** | ticks 1–761 |
 | median tick cycle | **22m** | 510 intervals |
-| median, last 10 | **33m** | 10 intervals |
+| median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 461.2h elapsed |
+| **ticks per hour** | **1.10** | 462.0h elapsed |
 | median verify wall | **63s** | 450 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -28,7 +28,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **353**
-* **✅ rows in the capability ledger**: 144 → **387**
+* **✅ rows in the capability ledger**: 144 → **388**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **245 of 511 ticks** (48%) moved a
@@ -607,6 +607,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **755** | 2026-07-30 06:50 | 2m | process | 63s | +76/−32 | 353 | 81 | 56.0% · | the wall audit was recorded where its counter does not look (2026-07-30) |
 | **757** | 2026-07-30 09:11 | 2.3h | root-cause | 63s | +294/−32 | 353 | 81 | 56.0% · | every `&` in every stylesheet matched `<html>`: CSS nesting was indexed but never resolved |
 | **759** | 2026-07-30 09:51 | 39m | root-cause | 63s | +92/−33 | 353 | 81 | 56.0% · | `&nbsp;` was collapsed like a space, so a spacer element had no line box: `char::is_whites |
-| **761** | 2026-07-30 10:16 | 25m | root-cause | 63s | +305/−34 | 353 | 81 | 56.0% · | the phantom line box under every empty wrapper, and a spec sentence that is wider than Chr |
+| **761** | 2026-07-30 11:00 | 69m | root-cause | 63s | +275/−33 | 353 | 81 | 56.0% · | the phantom line box under every empty wrapper, and a spec sentence that is wider than Chr |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

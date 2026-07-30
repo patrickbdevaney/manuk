@@ -663,6 +663,26 @@ pub fn solve_subtree<'m>(
         width: length(container_width),
         height: container_height.map(length).unwrap_or(auto()),
     };
+    // **An INDEFINITE main size is INFINITE available main space, never zero.** For a `column`
+    // flex container the block axis is the MAIN axis, and the available main space is what
+    // `flex-wrap: wrap` breaks lines against (CSS Flexbox §9.3.5). Passing `MinContent` there says
+    // *"be as short as you can"*, so every item taller than nothing started a new flex line — a
+    // vertical stack came out as N side-by-side COLUMNS, each `1/N` of the width.
+    //
+    // That is not a corner case: `display:flex; flex-direction:column; flex-wrap:wrap` on the page
+    // root is a stock design-system idiom (`.hz-Page-body` on marktplaats.nl, where it put the
+    // header, the nav bar, the page body and the footer in four 1200px-wide columns and drove
+    // `page-wrapper` to `x=2201` — h_overflow 742). Chrome, measured on the reduced fixture, does
+    // NOT wrap: an auto-height column container has an indefinite main size, so all items share one
+    // line and `min-height` only floors the result.
+    //
+    // The CROSS axis keeps `MinContent` — for a `row` container the height is the cross axis, it
+    // does not decide line breaking, and it is content-sized either way.
+    let vertical_main = matches!(tree.nodes[r].style.display, taffy::Display::Flex)
+        && matches!(
+            tree.nodes[r].style.flex_direction,
+            FlexDirection::Column | FlexDirection::ColumnReverse
+        );
     compute_root_layout(
         &mut tree,
         root,
@@ -670,6 +690,7 @@ pub fn solve_subtree<'m>(
             width: AvailableSpace::Definite(container_width),
             height: match container_height {
                 Some(h) => AvailableSpace::Definite(h),
+                None if vertical_main => AvailableSpace::MaxContent,
                 None => AvailableSpace::MinContent,
             },
         },
@@ -818,5 +839,72 @@ mod tests {
         assert!((s1.width - 150.0).abs() < 1.0, "got {s1:?}");
         assert!(s1.x >= s0.width - 1.0, "second is to the right");
         assert!(!placed[0].container, "block child is a leaf");
+    }
+
+    /// **`flex-wrap: wrap` on an auto-height COLUMN container must not wrap** — an indefinite main
+    /// size is INFINITE available main space, not zero. Measured against live Chromium on
+    /// `#c{display:flex;flex-direction:column;flex-wrap:wrap;min-height:100vh;width:1200px}` with
+    /// 200 / 900 / 150-tall children:
+    ///
+    /// | box | Chrome | was |
+    /// |---|---|---|
+    /// | `#c` | `1200×1250` | `1200×900` ❌ |
+    /// | `#a` | `[0 0 1200×200]` | `[0 0 400×200]` ❌ |
+    /// | `#b` | `[0 200 1200×900]` | `[400 0 400×900]` ❌ |
+    /// | `#d` | `[0 1100 1200×150]` | `[800 0 400×150]` ❌ |
+    ///
+    /// Every item started its own flex LINE, so a vertical stack came out as three side-by-side
+    /// columns each a third of the width. On marktplaats.nl (`.hz-Page-body`, a stock design-system
+    /// rule) that put the header, nav bar, page body and footer in four 1200px columns and drove
+    /// `#page-wrapper` to `x=2201`.
+    ///
+    /// RED, run: restore `AvailableSpace::MinContent` for the indefinite-height case and both items
+    /// land on x=0/x=600 in one row of two lines instead of stacking.
+    ///
+    /// The nowrap column, the row container and the DEFINITE-height column (which *must* still wrap,
+    /// Chrome-verified) are unaffected — the control ran with the change stashed and only the
+    /// wrap+auto-height column moved.
+    #[test]
+    fn auto_height_column_flex_does_not_wrap() {
+        use manuk_dom::Dom;
+        use std::collections::HashMap;
+
+        let mut dom = Dom::new();
+        let container = dom.create_element("div");
+        dom.append_child(dom.root(), container);
+        let a = dom.create_element("div");
+        let b = dom.create_element("div");
+        dom.append_child(container, a);
+        dom.append_child(container, b);
+
+        let mut styles: HashMap<_, _> = HashMap::new();
+        let mut cc = ComputedStyle::initial();
+        cc.display = CssDisplay::Flex;
+        cc.flex_direction = CssDir::Column;
+        cc.flex_wrap = CssWrap::Wrap;
+        cc.width = Dim::Px(600.0);
+        styles.insert(container, cc);
+        for (child, h) in [(a, 100.0), (b, 400.0)] {
+            let mut cs = ComputedStyle::initial();
+            cs.display = CssDisplay::Block;
+            cs.height = Dim::Px(h);
+            styles.insert(child, cs);
+        }
+
+        // Height `None` = the container's own height is indefinite, which is the whole point.
+        let placed = solve_subtree(&dom, &styles, container, 600.0, None, |_n, _k, _a| Size {
+            width: 0.0,
+            height: 0.0,
+        });
+        assert_eq!(placed.len(), 2);
+        let (s0, s1) = (placed[0].slot, placed[1].slot);
+        assert!(
+            (s1.y - 100.0).abs() < 1.0 && s1.x.abs() < 1.0,
+            "second item stacks BELOW the first, not beside it: {s1:?}"
+        );
+        assert!(
+            (s0.width - 600.0).abs() < 1.0 && (s1.width - 600.0).abs() < 1.0,
+            "one line means both items get the full cross size: {s0:?} {s1:?}"
+        );
     }
 }
