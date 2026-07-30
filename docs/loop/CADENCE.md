@@ -15,7 +15,7 @@
 | median tick cycle | **22m** | 498 intervals |
 | median, last 10 | **23m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 446.8h elapsed |
+| **ticks per hour** | **1.11** | 447.2h elapsed |
 | median verify wall | **63s** | 438 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -595,6 +595,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **739** | 2026-07-28 23:18 | 23m | pattern-class | 63s | +303/−35 | 350 | 81 | 56.0% · | retargeting, landed as the ONE change t738 said it had to be (2026-07-28) |
 | **740** | 2026-07-28 23:41 | 23m | pattern-class | 63s | +164/−32 | 350 | 81 | 56.0% · | the method was correct and homeless (2026-07-28) |
 | **741** | 2026-07-29 00:50 | 69m | pattern-class | 63s | +461/−39 | 351 | 81 | 56.0% · | "idempotent" was hiding a component's own bug (2026-07-28) |
-| **743** | 2026-07-29 19:50 | 19.0h | root-cause | 63s | +894/−64 | 352 | 81 | 56.0% · | the icon-sprite `<use href="#icon">` resolved to nothing: the icon was never drawn (2026-0 |
+| **743** | 2026-07-29 20:15 | 19.4h | root-cause | 63s | +640/−115 | 352 | 81 | 56.0% · | the icon-sprite `<use href="#icon">` resolved to nothing: the icon was never drawn (2026-0 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

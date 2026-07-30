@@ -2230,3 +2230,81 @@ away — a lever that improves three sites and worsens a fourth has a second mec
 `0.100` draw. Its bimodality (t683) is unexplained and it remains the least trustworthy site in the corpus.
 
 [[certification-redesign]] [[box-layout]]
+
+## The priority ledger was keyed by TAG because `delta` never crossed the serialisation boundary (tick 744)
+
+`oracle::cluster()` — the in-process `manuk-wpt oracle --urls …` path — has built the full mechanism key
+since t554: `geometry/{displaced|mis-sized}: {axis} ~{band}px  (<tag>)`. It separates a box that is the
+wrong SIZE (a sizing fact about the element) from one that is the right size in the wrong PLACE (an
+ancestor-frame fact), names which of the four numbers is wrong, and bands the magnitude so a 23px
+near-miss does not merge with a 1400px page collapse.
+
+`docs/loop/CLUSTERS.md` — **the file the board ranks the entire loop's work by** — is not written by that
+path. It is written by `run_oracle_merge`, which reads the crawl's JSONL, and its geometry arm was one
+line:
+
+```rust
+_ => format!("geometry: <{tag}>"),
+```
+
+So the corpus ledger's #1 row read `geometry: <div>   1781 sites / 14002 hits` — a row that merges a 129px
+column swap with a 2px line-height residue and **cannot be attacked as one cause**. Every geometry
+divergence in the corpus, for 351 ticks, was ranked by an HTML element name.
+
+⚠⚠⚠ **And the merge was not merely choosing a coarser key — the information had already been destroyed.**
+The emitter wrote `site`, `class`, `tag`, `dkind`, `chrome`, `manuk`, `id` and **not `delta`**. The four
+deltas are the only field that distinguishes a wrong width from a wrong height from a pure displacement,
+and they were dropped on the floor at the `format!` that serialised each divergence. No fix to the merge
+alone could have restored them; the reader was poor because the writer had already answered the question.
+
+**This is [[tick 743]]'s lesson at the other end of the same pipe: a serialisation boundary is a semantic
+one.** There, handing an `<svg>` subtree to a parser as a standalone document silently answered a question
+about reference SCOPE. Here, serialising a `Divergence` silently answered *"what is a root cause?"* — and
+answered it with the tag, because the tag is what survived the write.
+
+### One rule, ONE implementation
+
+`oracle::signature_of(&Divergence)` is now the single definition, called by both `cluster()` and
+`run_oracle_merge`. `div_to_jsonl` / `div_from_jsonl` are the matching halves of the boundary, in the same
+file, with a round-trip test between them asserting the signature is **byte-identical** before and after.
+
+Measured on a 2-site crawl, the same divergences, before and after:
+
+```text
+  before                    after
+  geometry: <span>          geometry/displaced: x (horizontal) ~128px  (<span>)   med=200px   44 hits
+  geometry: <tr>            geometry/displaced: y (vertical drift) ~64px (<tr>)   med=85px    21 hits
+  geometry: <a>             geometry/mis-sized: height ~8px  (<a>)                med=9px     29 hits
+```
+
+`med=` is the REAL median of the dominant axis, printed beside the band because **`~Npx` is a power-of-two
+BAND and a reader cannot tell that by looking**. t551 read *"the deltas are QUANTISED — 8/16/32/64/128 —
+the signature of ONE systematic box-model delta"* off exactly that, and the quantisation was the printer.
+Both numbers travel now.
+
+### A missing delta is REFUSED, not zeroed
+
+A pre-t744 crawl directory has no `delta`. The available quiet failure is to default it to `[0,0,0,0]`,
+which keys as `geometry/displaced: x (horizontal) ~0px` — **a wrong answer of exactly the right type**, and
+every row in the resulting ledger would look measured. `div_from_jsonl` returns `None` for a *geometry*
+record with no delta; the merge counts them and prints `217 divergence records REFUSED … Re-crawl to rank
+by primitive.` `display` and `missing` records carry no meaningful delta and still parse — they are keyed
+by tag by definition.
+
+⚠ `oracle-merge <dir>` also **unconditionally overwrote `docs/loop/CLUSTERS.md`** from whatever directory
+it was pointed at, so verifying the merge on a two-site test crawl would have replaced the 265-site
+priority ledger with a two-site one. It fired during this tick's own development. `--no-registry` now
+exists for an ad-hoc run to say *"I am not the corpus"*; the default is unchanged so `oracle-crawl.sh`
+keeps working.
+
+### The RED proof for the band had itself never run
+
+`cluster_bands_geometry_by_offset_magnitude` — the test that proves a 23px near-miss and a 1400px collapse
+are different causes — had its `#[test]` attribute and doc comment stranded **190 lines above its own
+function**, because a later test was inserted between them. The compiler said so, quietly, as a
+`duplicate_macro_attributes` warning on the function that ended up with two. **So the datum was lost twice,
+independently, in the same subject — the ledger discarded the band, and the proof that the band matters
+was dead — and neither loss made a sound.** Reunited; it now runs, and it goes RED when `signature_of`
+falls back to the tag.
+
+[[certification-redesign]] [[box-layout]]

@@ -2365,16 +2365,15 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
                 rinv,
                 dead
             ));
+            // ⚠⚠⚠ **This line used to drop `delta`**, and `delta` is the only field that separates a
+            // wrong WIDTH from a wrong HEIGHT from a pure displacement. Every geometry divergence in
+            // the corpus therefore reached `oracle-merge` unkeyable, and the ledger the loop ranks by
+            // fell back to the tag. The emitter and its reader now live together in `oracle.rs` so the
+            // pair cannot drift again — see `oracle::div_to_jsonl`.
             for d in &divs {
-                out.push_str(&format!(
-                    "{{\"kind\":\"div\",\"site\":\"{}\",\"class\":\"{}\",\"tag\":\"{}\",\"dkind\":\"{}\",\"chrome\":{},\"manuk\":{},\"id\":{}}}\n",
-                    d.site,
+                out.push_str(&manuk_wpt::oracle::div_to_jsonl(
+                    d,
                     flag(args, "--class").unwrap_or("?"),
-                    d.tag,
-                    d.kind,
-                    json_str(&d.chrome),
-                    json_str(&d.manuk),
-                    json_str(&d.id),
                 ));
             }
             let _ = std::fs::write(
@@ -2390,22 +2389,10 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
     report(&clusters, diffed, skipped);
 }
 
-/// Minimal JSON string escaping — the crawl's own output must never be the thing that breaks it.
-fn json_str(s: &str) -> String {
-    let mut o = String::with_capacity(s.len() + 2);
-    o.push('"');
-    for c in s.chars() {
-        match c {
-            '"' => o.push_str("\\\""),
-            '\\' => o.push_str("\\\\"),
-            '\n' => o.push_str("\\n"),
-            c if (c as u32) < 0x20 => o.push(' '),
-            c => o.push(c),
-        }
-    }
-    o.push('"');
-    o
-}
+// The JSON escaper that used to live here is gone: it was the WRITER's half of a pair whose reader
+// lived in `oracle.rs`, and a pair split across two files is the drift this tick exists to close.
+// Both halves are now `oracle::div_to_jsonl` / `oracle::div_from_jsonl`, beside each other, with a
+// round-trip test between them.
 
 /// Our `Display` as CSS names it — the vocabulary the oracle diffs in.
 fn css_display_name(d: manuk_css::Display) -> &'static str {
@@ -2588,10 +2575,18 @@ fn run_oracle_merge(args: &[String]) {
             .unwrap_or(0)
     };
 
-    // signature -> (sites, classes, hits, example)
-    let mut acc: BTreeMap<String, (BTreeSet<String>, BTreeSet<String>, usize, String)> =
-        BTreeMap::new();
+    // signature -> (sites, classes, hits, example, dominant-axis magnitudes)
+    #[allow(clippy::type_complexity)]
+    let mut acc: BTreeMap<
+        String,
+        (BTreeSet<String>, BTreeSet<String>, usize, String, Vec<i64>),
+    > = BTreeMap::new();
     let (mut ok, mut hang, mut fail, mut discard) = (0usize, 0usize, 0usize, 0usize);
+    // **Divergence records this merge REFUSED because they carried no `delta`.** A pre-t744 crawl
+    // directory has none, and re-keying those to a fabricated `[0,0,0,0]` would fill the ledger with
+    // rows that read `geometry/displaced: x (horizontal) ~0px` and look measured. Counted and
+    // reported instead — an old crawl must announce itself, not quietly produce a plausible ledger.
+    let mut unkeyable = 0usize;
     let mut slow: Vec<(i64, i64, String)> = Vec::new();
     // Per-site jarring-invariant counts [overlap, h_overflow, reorder, dead_target], rolled up into
     // the Phase-0 exit-bar tally (FIDELITY-SCORING-REDESIGN.md §2 Layer 2) after the crawl.
@@ -2639,31 +2634,45 @@ fn run_oracle_merge(args: &[String]) {
             if !line.contains("\"kind\":\"div\"") {
                 continue;
             }
-            let (site, class, tag, kind) = (
-                field(line, "site"),
-                field(line, "class"),
-                field(line, "tag"),
-                field(line, "dkind"),
-            );
-            let (chrome, manuk) = (field(line, "chrome"), field(line, "manuk"));
-            let sig = match kind.as_str() {
-                "display" => format!("display: {chrome} → {manuk}   (<{tag}>)"),
-                "missing" => {
-                    format!("MISSING BOX: <{tag}>  (Chrome renders it, we render nothing)")
-                }
-                _ => format!("geometry: <{tag}>"),
+            // ⚠⚠⚠ **THE LEDGER'S KEY IS NO LONGER COMPUTED HERE.** It used to be, and its geometry arm
+            // was the single line `format!("geometry: <{tag}>")` — while `oracle::cluster()`, on the
+            // in-process path, already built the full `{displaced|mis-sized}: {axis} ~{band}px`
+            // mechanism key. Same rule, two implementations, and *this* one — the one that writes
+            // `docs/loop/CLUSTERS.md`, the file the board ranks the whole loop's work by — was the
+            // poorer of the two for 351 ticks. It now calls the shared definition.
+            let Some((d, class)) = manuk_wpt::oracle::div_from_jsonl(line) else {
+                unkeyable += 1;
+                continue;
+            };
+            // `missing` keeps the merge's own longer wording (the registry has always spelled out
+            // what it means, and the cluster IDs of 401 sites' worth of rows hang off that string).
+            let sig = if d.kind == "missing" {
+                format!(
+                    "MISSING BOX: <{}>  (Chrome renders it, we render nothing)",
+                    d.tag
+                )
+            } else {
+                manuk_wpt::oracle::signature_of(&d)
             };
             let en = acc.entry(sig).or_insert_with(|| {
                 (
                     BTreeSet::new(),
                     BTreeSet::new(),
                     0,
-                    format!("{site}: {chrome} vs {manuk}"),
+                    format!("{}#{}: {} vs {}", d.site, d.id, d.chrome, d.manuk),
+                    Vec::new(),
                 )
             });
-            en.0.insert(site);
+            en.0.insert(d.site);
             en.1.insert(class);
             en.2 += 1;
+            // The RAW dominant-axis magnitude, kept because `~Npx` in the signature is a power-of-two
+            // BAND and a reader cannot tell that by looking. t551 read "the deltas are QUANTISED —
+            // 8/16/32/64/128 — the signature of ONE systematic box-model delta" off exactly that, and
+            // the quantisation was the PRINTER. Both numbers travel now, on this path too.
+            if d.kind == "geometry" {
+                en.4.push(manuk_wpt::oracle::dominant_axis(d.delta).1.abs());
+            }
         }
     }
 
@@ -2682,6 +2691,18 @@ fn run_oracle_merge(args: &[String]) {
     }
     if fail > 0 {
         println!("  \x1b[33m{fail:>4} failed\x1b[0m");
+    }
+    // **An old-format crawl must say so out loud.** Pre-t744 JSONL carries no `delta`, so its geometry
+    // records are unkeyable — and the only wrong answer available here is a QUIET one: default the
+    // delta to zero, key everything as `~0px`, and print a ledger that looks measured. Refused and
+    // counted instead, with the remedy named, because a ledger is only worth its provenance.
+    if unkeyable > 0 {
+        println!(
+            "  \x1b[31m{unkeyable:>4} divergence records REFUSED\x1b[0m — no `delta` field, so no \
+             mechanism key.\n       This crawl directory predates the mechanism oracle (t744). Its \
+             geometry rows are NOT\n       in the ledger below and were not re-keyed to a fabricated \
+             zero. Re-crawl to rank by primitive."
+        );
     }
 
     if !slow.is_empty() {
@@ -2745,26 +2766,34 @@ fn run_oracle_merge(args: &[String]) {
     // nothing would catch — into a verified fact. A journal entry that cannot name a real, current
     // cluster ID is a single-site tick BY DEFINITION.
     let mut registry = String::from(
-        "# ORACLE CLUSTER REGISTRY — generated by `manuk-wpt oracle-merge`. Do not hand-edit.\n         #\n         # This IS the priority ledger (Part 4) and the website-class taxonomy (Part 24.1). Ranked by\n         # DISTINCT SITES then DISTINCT CLASSES, never by hit count. A pattern class that CRASHES or\n         # HANGS outranks every visual divergence here (Part 24.3) — those live in STATUS.md's Bar 0.\n         #\n         # id            sites  classes  hits  root cause\n",
+        "# ORACLE CLUSTER REGISTRY — generated by `manuk-wpt oracle-merge`. Do not hand-edit.\n         #\n         # This IS the priority ledger (Part 4) and the website-class taxonomy (Part 24.1). Ranked by\n         # DISTINCT SITES then DISTINCT CLASSES, never by hit count. A pattern class that CRASHES or\n         # HANGS outranks every visual divergence here (Part 24.3) — those live in STATUS.md's Bar 0.\n         #\n         # A geometry row names a MECHANISM, not a tag (t744): {displaced|mis-sized} says whether the\n         # box is the wrong SIZE or in the wrong PLACE, the axis says which of the four numbers is\n         # wrong, `~Npx` is the power-of-two BAND, and `med=` is the REAL median of that axis — the\n         # band is a printer artifact and must never be read as the measurement (t552).\n         #\n         # id            sites  classes  hits  root cause\n",
     );
     println!("\n──── ROOT CAUSES, ranked by SITES EXPLAINED — this IS the ledger ────\n");
     println!(
         "{:>6} {:>8} {:>7}  {:<10} {}",
         "sites", "classes", "hits", "cluster", "root cause"
     );
-    for (i, (sig, (sites, classes, hits, example))) in ranked.iter().enumerate() {
+    for (i, (sig, (sites, classes, hits, example, mags))) in ranked.iter().enumerate() {
         // Stable, human-quotable, and derived from the signature so the same root cause keeps the
         // same id across crawls even as its rank moves.
         let id = format!("C{:04x}", fnv(sig) & 0xffff);
+        // The REAL median dominant-axis delta, beside the band the signature quotes.
+        let med = if mags.is_empty() {
+            String::new()
+        } else {
+            let mut m = mags.clone();
+            m.sort_unstable();
+            format!("   med={}px", m[m.len() / 2])
+        };
         registry.push_str(&format!(
-            "{id:<14} {:>5} {:>8} {:>5}  {sig}\n",
+            "{id:<14} {:>5} {:>8} {:>5}  {sig}{med}\n",
             sites.len(),
             classes.len(),
             hits
         ));
         if i < 30 {
             println!(
-                "{:>6} {:>8} {:>7}  {id:<10} {sig}",
+                "{:>6} {:>8} {:>7}  {id:<10} {sig}{med}",
                 sites.len(),
                 classes.len(),
                 hits
@@ -2772,11 +2801,29 @@ fn run_oracle_merge(args: &[String]) {
             println!("{:>26}e.g. {example}", "");
         }
     }
-    let _ = std::fs::write("docs/loop/CLUSTERS.md", &registry);
-    println!(
-        "\n  cluster registry → docs/loop/CLUSTERS.md ({} clusters)",
-        ranked.len()
-    );
+    // **`--no-registry` exists because this write is a FOOTGUN, and it fired during this tick's own
+    // development.** `oracle-merge <dir>` unconditionally overwrote `docs/loop/CLUSTERS.md` — the
+    // 265-site priority ledger — from whatever directory it was pointed at, so verifying the merge on
+    // a two-site test crawl would have replaced the corpus ledger with a two-site one. The default is
+    // unchanged (the observer's `oracle-crawl.sh` calls it with no flags and must keep working); this
+    // only gives a small ad-hoc run a way to say *"I am not the corpus."*
+    //
+    // It is a BARE flag, so it is matched by `any`, never by `flag()` — `flag()` returns the arg
+    // AFTER the name, so asking it about a boolean either reads the next token as a value or, at the
+    // end of the line, answers "absent" for a flag that is plainly present.
+    if args.iter().any(|a| a == "--no-registry") {
+        println!(
+            "\n  \x1b[33m--no-registry\x1b[0m: docs/loop/CLUSTERS.md NOT written ({} clusters from \
+             {ok} site(s) — too few to be the ledger)",
+            ranked.len()
+        );
+    } else {
+        let _ = std::fs::write("docs/loop/CLUSTERS.md", &registry);
+        println!(
+            "\n  cluster registry → docs/loop/CLUSTERS.md ({} clusters from {ok} diffed site(s))",
+            ranked.len()
+        );
+    }
     println!(
         "\nRanked by DISTINCT SITES and DISTINCT CLASSES, never by hit count — otherwise whichever\n\
          site has the most <span>s tops the plan forever. A cause spanning several classes is a\n\

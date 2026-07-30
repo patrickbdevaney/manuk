@@ -260,6 +260,10 @@
   - L2173 · This breaks tick 673's monotonicity argument on purpose
   - L2181 · ⚠ And the gate's first draft was vacuous — the third time this session
   - L2196 · The claimed clusters moved — ikea coverage 97.1% → 100%, keirin dy 206 → 161 (tick 692)
+  - L2234 · The priority ledger was keyed by TAG because delta never crossed the serialisation boundary (tick 744)
+  - L2265 · One rule, ONE implementation
+  - L2285 · A missing delta is REFUSED, not zeroed
+  - L2300 · The RED proof for the band had itself never run
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1244,4 +1248,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1155 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1159 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
