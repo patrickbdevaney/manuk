@@ -40199,3 +40199,94 @@ intrinsically sized, and **this tick does not move the headline** — `scored/in
 untouched, which is exactly what a correct fix to a term that was only wrong on unscored rows should
 do. Stated because the tempting reading is the other one: an instrument fix that moved the number
 would have been the thing to be suspicious of.
+
+## Tick 782 — `thin-overlap` said "this is OURS" and the number that decides it was never read (2026-07-31)
+
+TICK SHAPE: instrument-fidelity (a blame verdict computed without the deciding term)
+
+HYPOTHESIS (written before the change): the board's binding cohort is `thin-overlap` (25 of 129
+in-scope rows at t777), whose reason text asserts *"the oracle built the page and we did not, so the
+missing elements are a coverage failure wearing an 'unscored' label"*. `unscoreable_reason` decides
+that from **two** numbers — `probed` (the oracle's element count) and `common` (the intersection) —
+and never from OUR count, which is sitting in `mseen` at the one call site. If we render at least as
+many box-bearing elements as the oracle and still share almost none of the same paths, the sentence
+is unsupported: that is two documents, not one engine rendering less.
+
+**MEASURED, and it is not close.** `www.naukri.com`: **oracle 57 paths, ours 434** — we produce 7.6×
+the reference's element count — with 9 shared and 48 "missing". The row that came out of that reads
+`coverage 15.8% · thin-overlap-9 · this is OURS`.
+
+How the tick reached the number, because it took most of the work: the site renders our header,
+login/register, "Find your dream job now" hero and full footer, then sits on a Materialize
+`div.preloader-wrapper` forever — the classic booted-but-thin picture. Controls, in order, all
+negative: a 45s load budget changes nothing (**not** timing/starvation); `page.console` is silent
+(no throw to kill); the shell's own `if (typeof HTMLElement !== 'function')` IE/Safari shim — a
+site branching on exactly the "wrong answer of the RIGHT TYPE" shape this project keeps finding —
+does **not** fire, since `HTMLElement`/`Element`/`Node`/`HTMLDivElement`/`EventTarget` all answer
+`function` here. What finally answered it was a self-probe: appending a probe to naukri's own bytes
+and rendering them through our engine with `--url` set to the live origin, so the results come back
+as element **ids** the `boxes` dump prints. It reports `elems_517`, `rs_complete`, `preloader
+present` — our DOM is *larger* than the reference's, not smaller.
+
+**MEASURED ON THE WHOLE COHORT.** All 25 `thin-overlap` rows of t777, re-run at `--jobs 2` with the
+new reason live:
+
+```
+www.crazyshop.pl      ours 1481  common 1      www.timeline.com   ours 1055  common 2
+sports.yahoo.com      ours 1838  common 1      mayatoys.in        ours 1044  common 3
+trivago de/fr/pl/be/jp 1355/1347/1345/1345/1335  common 0        www.ebay.com  ours 1226  common 4
+www.freesupertips.com ours  738  common 6      portagelearning    ours  492  common 8
+www.naukri.com        ours  434  common 9      www.kroftools.com  ours  444  common 2
+```
+
+**23 of 25 now read `tree-divergence`; the other two are `unreachable` and `timeout-150s`. Not one
+row survives as `thin-overlap`.** The cohort the board names as *"the NEXT ENGINE GAP after the boot
+throw"* is, on every member, two engines each drawing hundreds-to-thousands of boxes and agreeing on
+between **zero and nine** paths. A coverage gap cannot look like that.
+
+### The rule changed once, because the cohort refuted the first draft
+
+The first version tested `ours >= probed`. That kept the 1410-vs-1355-vs-**0** rows filed as *"we did
+not build the page"* — on pages where we drew over thirteen hundred boxes. The rule is now the
+**symmetric counterpart of `ShellOnly`** against the same `CERT_MIN_SHAPE_SAMPLE`: `ShellOnly` asks
+*did the ORACLE build a page*, this asks *did WE build a page*, and when both did, a thin
+intersection is divergence. No new threshold was invented, and the refuted case is kept as an
+assertion.
+
+⚠ **`tree-divergence-N` is IN-SCOPE and UNSCORED, asserted by the excluded-tier test.** The tempting
+next step — *"the comparison is unsound, so drop these rows"* — would move 23 of 129 in-scope rows
+into EXCLUDED and raise the Phase-0 headline for free. A comparison being unsound is a reason to stop
+MIS-ATTRIBUTING it, never a reason to stop COUNTING it. The certificate's arithmetic does not move.
+
+⚠ **A WRONG TABLE, CAUGHT BEFORE IT LANDED.** The first draft of the wiki table paired each
+`fidelity: <name>` log line with the next `structural:` line. Under `--jobs 2` the log **interleaves
+two chunks**, so those two lines routinely belong to different sites: it attributed
+`tracker.shadowfax.in` an oracle count of 1410 that belongs to a trivago row (its real row reads
+`ours 48`). The rows FILE carries the name in the row and is the only row-attributed source. *An
+interleaved log is not a table* — the same shape as t780's *"a hand-off list is a hypothesis"*, one
+layer down.
+
+### The next lead, named and NOT taken
+
+Zero shared paths between two ~1,400-element trees is not a rendering result, it is a KEYING result:
+`nth-child` indices are absolute sibling positions, so **one differing element near the root
+re-numbers every key beneath it**. `main.rs` already records the identical failure for the key's
+class-hash component (*"a single ancestor's class list differs DESTROYS the measurement"* — turning
+sigs off recovered gov.uk from 0.0% to 82.8%). The remaining half of that correction — a key that
+survives one inserted ad `<div>` — is the open lead, and it is worth more than any single layout
+primitive: it is the difference between `coverage 0.00%` and a real number on ~20 in-scope sites.
+
+HONEST SCOPE: no site is claimed to cross, no engine source changed, and the Phase-0 headline is
+untouched by construction.
+
+PERF: none claimed — one extra `usize` argument and one `HashMap::len()`.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "`thin-overlap` said 'this is OURS', and the number
+that decides it was never read"
+
+PATTERN: ⚠⚠⚠ **A VERDICT THAT ASSIGNS BLAME NEEDS EVERY PARTY'S NUMBER.** `unscoreable_reason`
+compared the REFERENCE against the INTERSECTION and then pronounced on the SUBJECT, which was never
+in the expression — and the subject's count was one `.len()` away at the only call site. The tell is
+grammatical and cheap to check: **the sentence names someone the inputs do not mention.** Same family
+as t781's instrument-writes-into-its-own-subject, and it produced the more expensive error of the
+two, because this one told the loop where to work. [no-pattern]

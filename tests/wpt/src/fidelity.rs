@@ -129,7 +129,34 @@ pub enum Unmeasurable {
     /// t614 named and t626 carried forward as its one remaining unexplained row.
     ///
     /// The reason points at US, not the corpus: the oracle rendered the page and we did not.
+    ///
+    /// ⚠ **THAT CLAIM IS ONLY SOUND WHEN WE ACTUALLY RENDERED LESS — see [`Self::TreeDivergence`],
+    /// which t782 split out of this variant** after measuring the one thing this reason never
+    /// looked at: our own element count.
     ThinOverlap(usize),
+    /// **Both engines built a page of comparable size and they still barely OVERLAP.** Carries how
+    /// many box-bearing elements *we* produced.
+    ///
+    /// ⚠⚠⚠ **THE VARIANT ABOVE ASSERTED BLAME FROM TWO NUMBERS AND THE DECIDING THIRD WAS NEVER
+    /// READ.** `unscoreable_reason` took `probed` (the oracle's count) and `common` (the
+    /// intersection) and, whenever the intersection was thin, printed *"the oracle built the page
+    /// and we did not"*. It never took OUR count — which is sitting in `mseen` at the call site —
+    /// so the sentence was structurally incapable of noticing the case where we built **more**.
+    ///
+    /// Measured on `www.naukri.com` (t782): the oracle's copy carries **57** box-bearing elements,
+    /// ours carries **far more**, and only **9** paths are shared. Two engines that each build a
+    /// page and agree on nine elements are not one engine failing to render — they are **two
+    /// different documents, or the same document caught in two different states**. The oracle is fed
+    /// a `curl` snapshot from `file://` while we render the LIVE url over our own net stack, and on
+    /// a JS app those two runs settle differently: Chrome's copy sat on skeleton placeholders while
+    /// ours had replaced them.
+    ///
+    /// So this is **NOT** an exoneration and **NOT** a pass — it is unscored and counts against the
+    /// bar exactly as `ThinOverlap` did, and the arithmetic of the certificate is unchanged. What
+    /// changes is that the loop stops being told a coverage bug is waiting where the evidence does
+    /// not support one. `thin-overlap` was **25 of the 129 in-scope rows** at t777 and the board
+    /// ranks work off that cohort.
+    TreeDivergence(usize),
     /// **The sweep process itself died while rendering this site** — SIGSEGV, OOM-kill, or an
     /// operator's `kill`. Recovered on the NEXT run from the in-flight marker, never by the run that
     /// died, which by definition writes nothing.
@@ -188,6 +215,7 @@ impl Unmeasurable {
             Self::Timeout(secs) => format!("timeout-{secs}s"),
             Self::Crashed => "crashed".into(),
             Self::ThinOverlap(n) => format!("thin-overlap-{n}"),
+            Self::TreeDivergence(n) => format!("tree-divergence-{n}"),
             Self::CssStarved(n) => format!("css-starved-{n}"),
         }
     }
@@ -204,6 +232,10 @@ impl Unmeasurable {
                 .parse()
                 .ok()
                 .map(Self::ThinOverlap),
+            _ if s.starts_with("tree-divergence-") => s["tree-divergence-".len()..]
+                .parse()
+                .ok()
+                .map(Self::TreeDivergence),
             _ if s.starts_with("timeout-") && s.ends_with('s') => s["timeout-".len()..s.len() - 1]
                 .parse()
                 .ok()
@@ -280,6 +312,15 @@ impl Unmeasurable {
                  which is below the sample floor — so there is nothing to compute a placement ratio \
                  over. Unlike shell-only this is OURS: the oracle built the page and we did not, so \
                  the missing elements are a coverage failure wearing an 'unscored' label"
+            ),
+            Self::TreeDivergence(n) => format!(
+                "both engines built a page — WE produced {n} box-bearing element(s), well above the \
+                 shell floor — and they still share almost none of the same paths. That is not 'we \
+                 rendered less'; it is two different documents, or the same document caught in two \
+                 different states (the oracle renders a curl SNAPSHOT from file://, we render the \
+                 LIVE url), and one differing element near the root re-numbers every nth-child key \
+                 beneath it. UNSCORED and counted against the bar exactly as thin-overlap is — but \
+                 do NOT take it as a coverage bug to grind: the evidence does not say that"
             ),
             Self::CssStarved(n) => format!(
                 "{n} render-blocking author stylesheet(s) NEVER ARRIVED before the load deadline, so \
@@ -1363,11 +1404,36 @@ fn ink(means: &[[f64; 3]]) -> f64 {
 /// reason** — the certificate's own *"the instrument could not say why"* line, open since t614.
 ///
 /// Returns `None` when there is enough to compare, so a caller can leave an existing reason alone.
-pub fn unscoreable_reason(probed: usize, common: usize) -> Option<Unmeasurable> {
+///
+/// ⚠⚠⚠ **`ours` IS THE THIRD NUMBER, AND ITS ABSENCE MADE THIS FUNCTION ASSERT BLAME IT COULD NOT
+/// SEE (t782).** With only `probed` and `common`, every thin intersection printed *"the oracle built
+/// the page and we did not"* — a sentence about OUR count, decided without OUR count. It is sitting
+/// in `mseen` at the one call site and was dropped on the floor. When we rendered **at least as
+/// many** box-bearing elements as the oracle and the two still barely overlap, the honest reading is
+/// [`Unmeasurable::TreeDivergence`]: two documents, or two states of one document, not one engine
+/// rendering less. Both outcomes are UNSCORED and both count against the bar — the certificate's
+/// arithmetic does not move — so this changes only what the loop is told to go and fix.
+pub fn unscoreable_reason(probed: usize, common: usize, ours: usize) -> Option<Unmeasurable> {
     if probed < CERT_MIN_SHAPE_SAMPLE {
         Some(Unmeasurable::ShellOnly(probed))
     } else if common < CERT_MIN_SHAPE_SAMPLE {
-        Some(Unmeasurable::ThinOverlap(common))
+        // ⚠ **THE TEST IS `ours` AGAINST THE SAME FLOOR, NOT `ours` AGAINST `probed`** — and the
+        // first draft of this tick got that wrong in a way the cohort measurement caught. `ours >=
+        // probed` kept `tracker.shadowfax.in` (oracle 1410 · ours 1355 · common **0**) and
+        // `mayatoys.in` (1417 · 1335 · **0**) filed as *"we did not build the page"*, on pages where
+        // we drew over thirteen hundred boxes. Two engines that each draw ~1,400 boxes and agree on
+        // NONE of the paths are not one engine rendering less; that is total path misalignment.
+        //
+        // So the rule is the SYMMETRIC counterpart of `ShellOnly` above, and it reuses the same
+        // constant rather than inventing a ratio: `ShellOnly` asks *"did the ORACLE build a page?"*,
+        // this asks *"did WE build a page?"*, and when both did, a thin intersection is DIVERGENCE.
+        // `ThinOverlap` keeps exactly the case its sentence can support — the oracle built a page
+        // and we are the one below the floor.
+        if ours >= CERT_MIN_SHAPE_SAMPLE {
+            Some(Unmeasurable::TreeDivergence(ours))
+        } else {
+            Some(Unmeasurable::ThinOverlap(common))
+        }
     } else {
         None
     }
@@ -2012,25 +2078,56 @@ mod shape_tests {
 
         // `comix.to` — the ORACLE built 3 elements from its `file://` copy. Not our bug, and not
         // evidence about the site.
-        assert_eq!(unscoreable_reason(3, 2), Some(Unmeasurable::ShellOnly(3)));
+        assert_eq!(
+            unscoreable_reason(3, 2, 900),
+            Some(Unmeasurable::ShellOnly(3))
+        );
 
         // `www.ebay.com` @t653 — **the gap**. The oracle built 25 (no shell), and only 4 were common
         // because WE rendered 16% of the page. Deciding on `probed` alone, this returns None and the
         // row goes out unscored with nothing to say.
         assert_eq!(
-            unscoreable_reason(25, 4),
-            Some(Unmeasurable::ThinOverlap(4))
+            unscoreable_reason(25, 4, 3),
+            Some(Unmeasurable::ThinOverlap(4)),
+            "we drew THREE boxes against the oracle's 25 — below the same floor `ShellOnly` uses, \
+             so 'the oracle built the page and we did not' is a claim the numbers support"
+        );
+
+        // ⚠ **THE THIRD NUMBER (t782).** Same `probed` and same `common` as the row above — and the
+        // opposite verdict, because WE built a page too. `thin-overlap`'s sentence ("the oracle
+        // built the page and we did not") is a claim about our count, and it was decided without
+        // our count for as long as the variant existed.
+        assert_eq!(
+            unscoreable_reason(25, 4, 25),
+            Some(Unmeasurable::TreeDivergence(25)),
+            "both engines above the floor with a thin intersection is DIVERGENCE, not us rendering \
+             less"
+        );
+        assert_eq!(
+            unscoreable_reason(57, 9, 434),
+            Some(Unmeasurable::TreeDivergence(434)),
+            "www.naukri.com, measured: the oracle's copy has 57 box-bearing elements and ours has \
+             434 — 7.6x — with 9 paths shared. Calling that a coverage failure of ours is backwards"
+        );
+        // ⚠ The case the FIRST draft of this rule got wrong, kept as a regression: `ours >= probed`
+        // would file `tracker.shadowfax.in` (oracle 1410 · ours 1355 · common 0) as thin-overlap,
+        // on a page where we drew 1,355 boxes. Two engines that each draw ~1,400 and share NONE are
+        // misaligned, not one engine rendering nothing.
+        assert_eq!(
+            unscoreable_reason(1410, 0, 1355),
+            Some(Unmeasurable::TreeDivergence(1355)),
+            "1,355 of our own boxes is not 'we did not build the page', whatever the intersection is"
         );
 
         // `www.ikea.com` — 698 probed, 698 common. Scoreable, so no reason at all: a rule that
         // manufactures a reason for a healthy site is worse than one that stays quiet.
-        assert_eq!(unscoreable_reason(698, 698), None);
+        assert_eq!(unscoreable_reason(698, 698, 698), None);
 
         // The boundary is the certificate's OWN floor, reused rather than invented — so this can
         // never disagree with the thing that refuses to score.
-        assert_eq!(unscoreable_reason(FLOOR, FLOOR), None);
+        assert_eq!(unscoreable_reason(FLOOR, FLOOR, FLOOR), None);
         assert_eq!(
-            unscoreable_reason(FLOOR, FLOOR - 1),
+            unscoreable_reason(FLOOR, FLOOR - 1, 0),
             Some(Unmeasurable::ThinOverlap(FLOOR - 1)),
             "one element below the floor must be REFUSED and NAMED, not scored"
         );
@@ -2436,6 +2533,10 @@ mod shape_tests {
             Unmeasurable::ThinOverlap(4),
             Unmeasurable::Crashed,
             Unmeasurable::CssStarved(3),
+            // `TreeDivergence` is new (t782) and its number is OUR element count, which on a real
+            // page is four digits — so the round-trip is asserted on a value the parser could
+            // plausibly choke on rather than on a friendly `4`.
+            Unmeasurable::TreeDivergence(1487),
         ] {
             assert_eq!(
                 Unmeasurable::from_tag(&u.tag()),
@@ -2462,6 +2563,13 @@ mod shape_tests {
             Unmeasurable::Crashed,
             Unmeasurable::ShellOnly(3),
             Unmeasurable::ThinOverlap(4),
+            // ⚠ **`tree-divergence-N` STAYS IN-SCOPE TOO, AND THAT IS THE LOAD-BEARING HALF OF
+            // t782.** The variant exists because `thin-overlap` was ASSERTING a coverage bug the
+            // evidence did not support — and the tempting next step, moving those rows out of the
+            // denominator because "the comparison is unsound", would launder 25 of 129 in-scope rows
+            // into EXCLUDED and RAISE the headline for free. The comparison being unsound is a
+            // reason to stop MIS-ATTRIBUTING it, never a reason to stop COUNTING it.
+            Unmeasurable::TreeDivergence(1487),
         ] {
             let tag = ours.tag();
             assert!(

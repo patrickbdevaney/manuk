@@ -1127,7 +1127,19 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                     f.missing = missing;
                     f.misplaced = misplaced;
                     f.probed = probed;
-                    eprintln!("  structural: {:.1}% ({probed} paths, {missing} missing, {misplaced} misplaced)", sc * 100.0);
+                    // ⚠ **BOTH SIDES' COUNTS, ALWAYS** (t782, meta-instrument #3 — accounting
+                    // reconciliation). This line used to print only the ORACLE's `probed` and how
+                    // many of those we lacked, which reads as "we rendered 15.8% of the page" and
+                    // can be true at the same time as *"we rendered three times as many boxes as the
+                    // reference"* — which is what naukri.com actually does. A coverage ratio whose
+                    // denominator is one engine and whose numerator is an intersection says nothing
+                    // about the size of the other side; printing `ours` is what makes the two
+                    // readings distinguishable at a glance instead of one tick's archaeology.
+                    eprintln!(
+                        "  structural: {:.1}% (oracle {probed} paths, ours {} paths, {missing} missing, {misplaced} misplaced)",
+                        sc * 100.0,
+                        mboxes.len()
+                    );
                     // **A HANDFUL OF PROBED ELEMENTS IS A SHELL, AND SCORING IT IS A FALSE NUMBER.**
                     //
                     // The oracle serves one fetched copy from `file://` so both Chrome probes see the
@@ -1167,7 +1179,7 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                     // the earlier cause is the true one, and this is the residue.
                     if f.unmeasurable.is_none() {
                         if let Some(reason) =
-                            manuk_wpt::fidelity::unscoreable_reason(probed, shape_n)
+                            manuk_wpt::fidelity::unscoreable_reason(probed, shape_n, mboxes.len())
                         {
                             eprintln!("  UNMEASURABLE [{}]: {}", reason.tag(), reason.explain());
                             f.unmeasurable = Some(reason);

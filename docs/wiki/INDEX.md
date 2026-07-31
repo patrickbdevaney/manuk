@@ -296,6 +296,10 @@
   - L2594 · The reference probe was WIDENING the page it measured (t781)
   - L2625 · Why the near-miss took a while to name
   - L2634 · The general form
+  - L2656 · thin-overlap said "this is OURS", and the number that decides it was never read (t782)
+  - L2668 · What the cohort actually looks like
+  - L2713 · The new reason, and what it deliberately does NOT do
+  - L2733 · The general form
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1329,4 +1333,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1240 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1244 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

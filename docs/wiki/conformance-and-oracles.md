@@ -2652,3 +2652,86 @@ Guarded by two tests in `tests/wpt/src/chrome.rs`:
 ⚠ **What this did NOT fix.** naukri's `coverage` is unchanged at 15.8% with 48 missing elements — that
 half is a real engine gap and is still the open lead. What moved is `misplaced 9 → 4` and the geometry
 the burndown ranks on.
+
+## `thin-overlap` said "this is OURS", and the number that decides it was never read (t782)
+
+`unscoreable_reason` classified an unscoreable row from two numbers: `probed` (how many box-bearing
+elements the ORACLE built) and `common` (how many paths both engines share). Whenever the
+intersection fell under the certificate's sample floor it returned `ThinOverlap`, whose text reads:
+
+> *"the oracle built the page and we did not, so the missing elements are a coverage failure wearing
+> an 'unscored' label"*
+
+That is a claim about **our** element count, and our element count was never an argument. It is
+sitting in `mseen` at the one call site and was dropped on the floor.
+
+### What the cohort actually looks like
+
+The 25 `thin-overlap` rows of the t777 sweep, re-measured with our own side printed. `ours` is the
+count the reason now carries; `common` is the intersection the score is computed over:
+
+| site | **ours** | common | the row's coverage |
+|---|---|---|---|
+| www.crazyshop.pl | 1481 | 1 | 0.07% |
+| www.trivago.de / .fr / .pl / .be / .jp | 1355 / 1347 / 1345 / 1345 / 1335 | **0** | 0.00% |
+| sports.yahoo.com | 1838 | 1 | 9.1% |
+| www.ebay.com | 1226 | 4 | 16.0% |
+| www.timeline.com | 1055 | 2 | 0.17% |
+| mayatoys.in | 1044 | 3 | 0.19% |
+| www.freesupertips.com | 738 | 6 | 0.77% |
+| a1.ro | 689 | 1 | 0.15% |
+| www.ta3lemkonline.com | 645 | 1 | 0.22% |
+| portagelearning.edu | 492 | 8 | 4.8% |
+| www.kroftools.com | 444 | 2 | 0.30% |
+| www.naukri.com | 434 | 9 | 15.8% |
+| app.ordertime.com · crm.majoo.id · mobcup.fm | 31 / 32 / 32 | 1 | 2-4% |
+
+**We draw hundreds to thousands of boxes and the two engines agree on between zero and nine paths.**
+`www.naukri.com`, measured on its own so both sides are exactly attributable: **oracle 57 paths,
+ours 434** — 7.6× — and the row said we had rendered *15.8% of the page*. A coverage gap cannot look
+like this.
+
+It is two path spaces that do not line up — the same failure mode `main.rs` already records for the
+class-hash component of the key (*"a single ancestor's class list differs DESTROYS the measurement"*,
+sigs ON→OFF recovered gov.uk from 0.0% to 82.8%), arriving this time through `nth-child` indices:
+**one differing element near the root re-numbers every sibling beneath it and every key below changes
+at once.**
+
+And the documents genuinely do differ. The oracle renders a `curl` SNAPSHOT from `file://`; we render
+the LIVE url through our own net stack. Two fetches of an ad-serving, personalised, hydrating page
+are two documents, and one extra `<div>` in either is enough.
+
+**After the change: 23 of the 25 rows read `tree-divergence`, and the other two are `unreachable`
+and `timeout-150s`. Not one row survives as `thin-overlap`.**
+
+⚠ **The per-site table above is taken from the ROWS FILE, not from the run log, and that distinction
+cost a wrong draft.** Under `--jobs 2` the log interleaves two chunks, so a `fidelity: <name>` line
+and the next `structural:` line belong to *different sites*; pairing them by adjacency attributed
+`tracker.shadowfax.in` a 1410-element oracle count that belongs to a trivago row. The TSV carries the
+name in the row, so it is the only row-attributed source. *An interleaved log is not a table.*
+
+### The new reason, and what it deliberately does NOT do
+
+`Unmeasurable::TreeDivergence(ours)` — *"both engines built a page and they still share almost none
+of the same paths"* — carrying OUR element count so the row can never again describe one side only.
+
+The rule is the **symmetric counterpart of `ShellOnly`**, reusing `CERT_MIN_SHAPE_SAMPLE` rather than
+inventing a ratio: `ShellOnly` asks *did the ORACLE build a page*, this asks *did WE build a page*,
+and when both did, a thin intersection is divergence. `ThinOverlap` keeps exactly the case its
+sentence can support — the oracle built a page and we are the one below the floor.
+
+⚠ **The first draft tested `ours >= probed` and the cohort measurement caught it**: that kept
+`shadowfax` (1410 · 1355 · 0) and `mayatoys` (1417 · 1335 · 0) filed as *"we did not build the
+page"*, on pages where we drew over thirteen hundred boxes. Kept as a regression assertion.
+
+⚠⚠ **`tree-divergence-N` stays IN-SCOPE and stays UNSCORED**, and that is the load-bearing half. The
+tempting next step — "the comparison is unsound, so exclude these rows" — would move 20-odd of 129
+in-scope rows into EXCLUDED and raise the Phase-0 headline for free. **A comparison being unsound is
+a reason to stop MIS-ATTRIBUTING it, never a reason to stop COUNTING it.** The certificate's
+arithmetic is byte-for-byte unchanged; only what the loop is told to go and fix changes.
+
+### The general form
+
+**A verdict that assigns blame needs every party's number.** This one compared the reference against
+the intersection and pronounced on the subject, which was never in the expression. The tell is
+grammatical and worth memorising: the sentence names *us*, the inputs do not.
