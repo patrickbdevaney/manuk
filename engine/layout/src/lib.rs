@@ -3087,9 +3087,39 @@ impl Ctx<'_> {
         }
         let mut fc = FloatContext::new(0.0, 1.0);
         let (content, _h) = self.layout_children(node, 0.0, 0.0, 1.0, None, &mut fc);
-        let w = content_right_extent(&content, self.fonts, 0.0, &|n| self.px_margin_right(n));
+        let w = content_right_extent(&content, self.fonts, 0.0, &|n| self.px_margin_right(n))
+            + self.native_widget_width(node);
         self.min_content_cache.borrow_mut().insert(node, w);
         w
+    }
+
+    /// **The part of a control's intrinsic width that is the WIDGET, not the text** — today, a
+    /// `<select>`'s dropdown arrow.
+    ///
+    /// A select sizes to its selected option, and every engine then adds room for the arrow it
+    /// draws beside it. Measured against headless Chrome, and the number is a constant rather than
+    /// a proportion, which is what identifies it: **159 vs our 142 with a long option, 30 vs our 13
+    /// with a one-character one — the same 17px either way.** A text-measurement difference would
+    /// have scaled with the text.
+    ///
+    /// ⚠ **`appearance: none` is the condition, and without it this would be a TRADE.** That
+    /// declaration takes the native widget off the control — Chrome drops to 139px on the same
+    /// option text — so reserving unconditionally would fix the classic select and newly break every
+    /// restyled one, which is most of the modern web's design systems. Reading the property is what
+    /// makes this a fix rather than a swap of one error for another.
+    ///
+    /// ⚠ We do not PAINT the arrow (this engine draws no native widget — `G_APPEARANCE_NONE`), so
+    /// the reserved strip is blank. That is a Bar-2 gap, deliberately: the BOX is what every sibling
+    /// and every ancestor is laid out against, and a right box with a missing glyph is a smaller
+    /// error than a wrong box.
+    fn native_widget_width(&self, node: NodeId) -> f32 {
+        if self.dom.tag_name(node) != Some("select") {
+            return 0.0;
+        }
+        if self.style_of(node).appearance_none {
+            return 0.0;
+        }
+        17.0
     }
 
     /// Shrink-to-fit width, CSS2 §10.3.5: `min(max-content, max(available, min-content))`.
@@ -3169,7 +3199,11 @@ impl Ctx<'_> {
         // Lay the subtree out unconstrained and measure how far its content actually reaches.
         let mut fc = FloatContext::new(0.0, 1.0e6);
         let (content, _h) = self.layout_children(node, 0.0, 0.0, 1.0e6, None, &mut fc);
-        let pref = content_right_extent(&content, self.fonts, 0.0, &|n| self.px_margin_right(n));
+        // The widget strip rides on BOTH intrinsic widths, or a select would hug its text at
+        // max-content and reserve at min-content — the box would change size with the space around
+        // it, which is not what a reserved widget is.
+        let pref = content_right_extent(&content, self.fonts, 0.0, &|n| self.px_margin_right(n))
+            + self.native_widget_width(node);
         // See `MANUK_TRACE_INTRINSIC` in `measure_intrinsic`: max-content is the OTHER place an
         // intrinsic width is decided (inline-block / inline-flex / float / abs), and a box that
         // fills when it should hug is nearly always this number.

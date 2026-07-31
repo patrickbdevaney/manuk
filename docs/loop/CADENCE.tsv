@@ -531,3 +531,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 785	4f74b0c3	1785499788	2026-07-31T08:09:48-04:00	4654	capability	63	6	314	32	361	81	3896	6960	0	404	0	a nested `@media` lost its declarations, and only its declarations (2026-07-31)
 786	6f5cc374	1785501934	2026-07-31T08:45:34-04:00	2146	measurement	63	11	507	50	362	81	3896	6960	0	405	0	bank a clean sweep: did the key change convert the corpus, or four sites? (2026-07-31)
 787	131fd54e	1785503148	2026-07-31T09:05:48-04:00	1214	capability	63	5	177	34	362	81	3896	6960	0	405	0	a form control does not inherit the page's font, and `rows` was never read (2026-07-31)
+788	06d421b8	1785504940	2026-07-31T09:35:40-04:00	1792	process	63	11	256	36	362	81	3896	6960	0	406	0	the two due audits, and the M1 population nobody had enumerated (2026-07-31)

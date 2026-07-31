@@ -1029,6 +1029,24 @@ pub struct ComputedStyle {
     /// so the UA's fixed-size presentational hints (`<textarea cols>` above all) must stand down
     /// and let intrinsic sizing run. `false` = `fixed`, the initial value.
     pub field_sizing_content: bool,
+    /// `appearance: none` (or `-webkit-appearance: none`) — the author has taken the NATIVE WIDGET
+    /// off this control.
+    ///
+    /// **This engine draws no native widget, so for a long time reading this property would have
+    /// been theatre** — `G_APPEARANCE_NONE` says exactly that, measured: our controls are drawn by
+    /// ordinary UA *CSS* at lowest specificity, which an author rule already beats, so
+    /// `appearance: none` was a visual no-op with nothing to switch off.
+    ///
+    /// It has one reader now, and it is geometric rather than visual: a `<select>` must RESERVE room
+    /// for the dropdown arrow in its intrinsic width, and `appearance: none` is precisely the
+    /// declaration that says there is no arrow to reserve for. Chrome, measured: 159px with the
+    /// widget, **139px with `appearance: none`** on the same option text.
+    ///
+    /// `clone_appearance()` is `engine="gecko"` in stylo 0.19 (compile-probed at t788: *no method
+    /// named `clone_appearance` found for `&style::properties::ComputedValues`*), so this is
+    /// recovered from `MinimalCascade` and merged in `stylo_engine` — the same fence as
+    /// `scrollbar-width` and `-webkit-line-clamp`.
+    pub appearance_none: bool,
     /// `line-height: normal` — the value was NOT authored, so it must come from the FONT's own
     /// ascent/descent/lineGap rather than a multiple of the font size. A 1.2× guess is not what any
     /// browser does, and it makes every line box the wrong height on every page.
@@ -1232,6 +1250,7 @@ impl ComputedStyle {
             scrollbar_width: ScrollbarWidth::Auto,
             scrollbar_color: ScrollbarColor::Auto,
             field_sizing_content: false,
+            appearance_none: false,
             line_height_normal: true,
             mask_image: None,
             background_images: Vec::new(),
@@ -4474,6 +4493,15 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         // property's only source — same recovered-property route as `visibility` above.
         "field-sizing" => {
             s.field_sizing_content = v.trim().eq_ignore_ascii_case("content");
+        }
+        // `appearance` / `-webkit-appearance` — `engine="gecko"` in stylo 0.19, so this cascade is
+        // the property's only source. Only `none` is consumed: it is the one value with a geometric
+        // consequence here (a `<select>` stops reserving the dropdown arrow's width), and inventing
+        // behaviour for the other keywords would be modelling widgets this engine does not draw.
+        // The `-webkit-` alias is not decoration — it is what the majority of shipped CSS writes,
+        // usually in the same declaration block as the unprefixed one.
+        "appearance" | "-webkit-appearance" => {
+            s.appearance_none = v.trim().eq_ignore_ascii_case("none");
         }
         "background-image" => s.background_images = parse_background_images(v),
         "background" => {

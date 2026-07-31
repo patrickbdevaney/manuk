@@ -49,10 +49,14 @@
 
 use manuk_text::FontContext;
 
-const HTML: &str = r##"<!doctype html><html><head><style>body{margin:0;font:16px sans-serif}</style></head><body>
+const HTML: &str = r##"<!doctype html><html><head><style>body{margin:0;font:16px sans-serif}
+#z{appearance:none;-webkit-appearance:none}</style></head><body>
 <input id="a1" size="1"><input id="a5" size="5"><input id="a20"><input id="a40" size="40">
 <textarea id="t0"></textarea><textarea id="t1" rows="1"></textarea>
 <textarea id="t3" rows="3"></textarea><textarea id="tc" rows="2" cols="10"></textarea>
+<select id="s1"><option>English (United States)</option></select>
+<select id="s2"><option>a</option></select>
+<select id="z"><option>English (United States)</option></select>
 </body></html>"##;
 
 /// The BORDER-BOX `[w, h]` the live pipeline laid out — the same quantity
@@ -141,5 +145,36 @@ fn g_form_control_metrics() {
         "#t3",
         51.0,
         "rows=3 — pins the per-row slope, not just the default",
+    );
+
+    // ── SELECT: the text plus the WIDGET. A select sizes to its selected option and then every
+    // engine adds room for the arrow it draws beside it. Two options of very different lengths,
+    // because a constant and a proportion are only distinguishable across a span: Chrome is 17px
+    // wider than our text measurement on BOTH, which is what says "reserved widget" rather than
+    // "our glyphs are narrow".
+    assert_w(&page, "#s1", 159.0, "a long option — text plus the arrow");
+    assert_w(
+        &page,
+        "#s2",
+        30.0,
+        "a ONE-CHARACTER option — here the arrow is most of the box, and a proportional error \
+         would show up as a different miss than on #s1",
+    );
+
+    // ── …and `appearance: none` must stand the reservation DOWN. This is the assertion that makes
+    // the fix a fix rather than a trade: reserving unconditionally would correct the classic select
+    // and newly break every restyled one, which is most of the modern web's design systems.
+    //
+    // Asserted as a RELATION, not against a number of our own: Chrome reads 139 here against our
+    // 142, a 3px residual that predates this work and belongs to select text measurement, not to
+    // the arrow. Pinning 142 would freeze our own answer as if it were Chrome's.
+    let (s1, z) = (box_of(&page, "#s1")[0], box_of(&page, "#z")[0]);
+    assert!(
+        z < s1 - 15.0,
+        "G_FORM_CONTROL_METRICS: `appearance: none` must remove the reserved arrow — #s1 is {s1}px \
+         with the widget and #z is {z}px without it, a difference of {:.1}px where the arrow is 17. \
+         If these are equal the property is not being read, and every restyled <select> on the web \
+         is now 17px too wide.",
+        s1 - z
     );
 }

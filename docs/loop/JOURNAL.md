@@ -40768,3 +40768,76 @@ The mirror population — shape already passing, exactly one jarring dimension d
 rows that were already on disk, and it is three sites against a gate standing at five. **When a gate is
 an AND, rank the distance to EACH conjunct separately; the shorter distance is not always in the term
 you have been working.** [no-pattern]
+
+## Tick 789 — the 17px a `<select>` reserves, and the property that says not to (2026-07-31)
+
+TICK SHAPE: capability (CSS/layout) — one measured constant, plus the one property it must be
+conditioned on
+
+HYPOTHESIS (written before the fix): check #64's steer #1. A `<select>` is short by **exactly 17px** —
+159 vs our 142 with a long option, 30 vs our 13 with a one-character one. The same 17 either way is
+what identifies it: a text-measurement difference would have scaled with the text, so this is a
+reserved WIDGET strip, the dropdown arrow every engine draws beside the option.
+
+⚠ **AND IT COULD NOT BE RESERVED UNCONDITIONALLY, WHICH IS THE WHOLE TICK.** `appearance: none` takes
+the native widget off the control — Chrome drops to **139** on the same option text — so an
+unconditional 17px would correct the classic select and newly break every restyled one, which is most
+of the modern web's design systems. That is a TRADE, and trades are refused. The property had to be
+read first.
+
+`clone_appearance()` is `engine="gecko"` in stylo 0.19 (compile-probed at t788: *no method named
+`clone_appearance` found for `&style::properties::ComputedValues`*), so `appearance` is recovered from
+`MinimalCascade` and merged in `stylo_engine` — the same fence as `scrollbar-width` and
+`-webkit-line-clamp`, and merged at the same point as `field-sizing`, before the presentational hints,
+because the reserved width is decided downstream of it. Only `none` is consumed: it is the one value
+with a geometric consequence here, and the `-webkit-` alias is not decoration — it is what the
+majority of shipped CSS writes.
+
+⚠ **`G_APPEARANCE_NONE` (surface audit #32) concluded that reading this property would be theatre, and
+it was RIGHT AT THE TIME.** Its measurement stands: this engine draws no native widget, our controls
+are ordinary UA CSS at lowest specificity, and an author rule already beats them — so `appearance:
+none` had nothing to switch off *visually*. It has a reader now, and the reader is geometric rather
+than visual. **A capability whose value was correctly measured as zero can acquire one when a
+different subsystem starts asking the question.** That gate still passes unchanged.
+
+MEASURED:
+
+```
+                                    Chrome    before    after
+<select> long option                 159       142       159   EXACT
+<select> one-char option              30        13        30   EXACT
+<select appearance:none>             139       142       142   reservation stood down (3px residual)
+
+blog.rust-lang.org  CONTROL   73.6% -> 73.6%  (1664 paths)   secure5 79.5% · 255md 69.8% — unchanged
+```
+
+⚠ **THE SITE THAT MOTIVATED THIS DOES NOT MOVE, AND THE REASON RETIRES THE LEAD.** `chat.google.com`
+was chosen because its footer `<select>` reads ours 236 against Chrome's 162. Re-measured on this
+binary it still reads 236 — because that select's width is not intrinsic at all: its `<form>` and the
+`<div>` above it are ALSO exactly 236 vs 162, so the control is filling an ancestor we size wrong. The
+oracle listed it under `<select>` because the tag on the row is the tag of the element, not of the
+cause. **A cluster keyed by the tag of the element it manifests on names the victim, not the culprit** —
+so the +0.05 crossing predicted for that site was never available from this fix, and I state that
+rather than let the fixture's exactness stand in for it.
+
+Gate: `G_FORM_CONTROL_METRICS` extended — 159 and 30 asserted against Chrome (two option lengths,
+because a constant and a proportion are only distinguishable across a span), plus `appearance: none`
+asserted as a RELATION (`#z < #s1 - 15`) rather than against a number of our own: Chrome reads 139
+where we read 142, and pinning 142 would freeze our answer as if it were Chrome's. **Proven red twice:**
+deleting the `appearance_none` guard fails the relation (159 vs 159, "the property is not being read");
+returning 0.0 from the reservation fails `#s1` at 142.
+
+HONEST SCOPE: no site is claimed to cross; the one that motivated the lead is explained instead. The
+arrow is RESERVED, not PAINTED — this engine draws no native widget, so the strip is blank. That is a
+deliberate Bar-2 gap: the box is what every sibling and ancestor is laid out against, and a right box
+with a missing glyph is a smaller error than a wrong box.
+
+PERF: none claimed — one tag comparison per intrinsic-width measurement, on a memoized path.
+
+WIKI: `docs/wiki/box-layout.md` — "The 17px a `<select>` reserves"
+
+PATTERN: ⚠⚠ **A CONSTANT ERROR ACROSS TWO VERY DIFFERENT INPUTS IS A RESERVED SLOT; A PROPORTIONAL ONE
+IS A MEASUREMENT.** 17px short on a 24-character option and 17px short on a one-character option
+cannot be a font metric, and that single observation is what turned "our select text is narrow"
+into "our select reserves no arrow" — before any code was read. The two-point probe cost one fixture.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

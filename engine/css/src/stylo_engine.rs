@@ -647,6 +647,9 @@ pub fn cascade_via_stylo_sized(
         // intrinsic-width hint below.
         if let Some(m) = minimal.get(&node) {
             cs.field_sizing_content = m.field_sizing_content;
+            // `appearance: none` — same gecko-only fence, and it must land before the hints for
+            // the same reason: a `<select>`'s reserved arrow width is decided downstream of it.
+            cs.appearance_none = m.appearance_none;
         }
         timed(&mut ph.hints_ns, || {
             apply_presentational_hints(dom, node, &mut cs)

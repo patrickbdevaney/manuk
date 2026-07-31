@@ -2578,3 +2578,44 @@ saying it was *"the same approximation Chrome's own default ends up at (`size=20
 ends up at 205. A calibration claim that reads as evidence, never throws, and is wrong by an amount
 invisible without running the reference is the easiest kind of unmeasured claim to keep. **Any number
 here that claims Chrome parity should carry the command that produced it.**
+
+## The 17px a `<select>` reserves — and the property that says not to (t789)
+
+A `<select>` sizes to its selected option, and then every engine adds room for the arrow it draws
+beside it. Measured against headless Chrome:
+
+```
+  <select><option>English (United States)</option></select>    Chrome 159   ours 142
+  <select><option>a</option></select>                          Chrome  30   ours  13
+  <select id=z style="appearance:none">…long option…</select>  Chrome 139   ours 142
+```
+
+**The same 17px on a 24-character option and on a one-character one is the whole diagnosis.** A font
+metric difference scales with the text; a constant across two very different inputs is a reserved slot.
+That single observation turned *"our select text measures narrow"* into *"our select reserves no
+arrow"* before any code was read.
+
+⚠ **It cannot be reserved unconditionally.** `appearance: none` takes the native widget off the control
+— Chrome's third row — so an unconditional 17px corrects the classic select and newly breaks every
+restyled one, which is most of the modern web's design systems. That is a trade, and this project
+refuses trades. So the property had to be read, and `clone_appearance()` is `engine="gecko"` in stylo
+0.19: `appearance` is recovered from `MinimalCascade` and merged in `stylo_engine`, the same fence as
+`scrollbar-width` and `-webkit-line-clamp`.
+
+⚠ **`G_APPEARANCE_NONE` had concluded that reading this property would be theatre, and it was right at
+the time.** Its measurement still stands: this engine draws no native widget, our controls are ordinary
+UA CSS at lowest specificity, and an author rule already beats them — so `appearance: none` had nothing
+to switch off *visually*. It has a reader now, and the reader is geometric rather than visual. **A
+capability correctly measured as worth zero can acquire a value when a different subsystem starts
+asking the question.**
+
+The arrow is **reserved, not painted**: the strip is blank, deliberately. The box is what every sibling
+and every ancestor is laid out against, and a right box with a missing glyph is a smaller error than a
+wrong box.
+
+⚠ **The site that motivated the lead did not move, and the reason is worth more than the fix.**
+`chat.google.com`'s footer `<select>` reads ours 236 against Chrome's 162 — but its `<form>` and the
+`<div>` above it are ALSO exactly 236 vs 162, so the control is filling an ancestor we size wrong and
+its own intrinsic width never runs. The oracle filed the row under `<select>` because **the tag on a
+cluster row is the tag of the element, not of the cause: a cluster keyed that way names the victim, not
+the culprit.**

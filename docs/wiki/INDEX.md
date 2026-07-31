@@ -128,6 +128,7 @@
   - L2517 · The two mutations the test demands
   - L2527 · And the burndown could not see any of it
   - L2534 · A form control does not inherit the page's font (t787)
+  - L2582 · The 17px a <select> reserves — and the property that says not to (t789)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1337,4 +1338,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1248 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1249 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
