@@ -42,7 +42,7 @@ document.querySelectorAll('[id^="p-"]').forEach(function(e){
   var r=e.getBoundingClientRect();
   out[e.id]=[Math.round(r.x),Math.round(r.y),Math.round(r.width),Math.round(r.height)];
 });
-var pre=document.createElement('pre');pre.id='__PARITY__';
+var pre=document.createElement('pre');pre.id='__PARITY__';pre.style.display='none';
 pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})();
 </script>"#;
 
@@ -75,6 +75,26 @@ pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})
 /// The `setTimeout` is belt-and-braces for a page that never fires `load` (a hanging subresource);
 /// under `--virtual-time-budget` its 3s costs no real time.
 ///
+/// ⚠⚠⚠ **AND IT IS WHY THE SENTINEL MUST BE `display:none` (tick 781).** Deferring turned a probe
+/// that measured ONCE and *then* wrote its answer into the page into one that writes its answer into
+/// the page and then **measures again, three more times** — and `emit()` appends a `<pre>` holding
+/// the entire result JSON as **one unwrapped line**. `<pre>` does not wrap, so that element's
+/// max-content width is tens of thousands of px, and it is appended to `document.documentElement`,
+/// i.e. as a SIBLING OF `<body>`. On any page whose root box is intrinsically sized rather than
+/// stretched to the ICB, `<html>` then sizes to the sentinel and `<body>` inherits that width.
+///
+/// Measured on `www.naukri.com`, deterministically, on the harness's own instrumented copy:
+/// **`<body>` 89,905px wide against a 1,200px viewport** — 75× — with the element population
+/// unchanged (57 either way) and every height correct. Adding `pre.style.display='none'` and
+/// changing nothing else returns it to **1,200**. Every `x` and every `width` the reference reported
+/// for that site was a number the reference had created, and `shape_stats` charged the whole thing
+/// to the engine: the row read `thin-overlap`, whose own text says *"this is OURS"*.
+///
+/// The general form, and the reason this is written at the deferral rather than at the sentinel:
+/// **an instrument that writes into the thing it measures has to be re-checked when it starts
+/// measuring more than once.** t674 changed WHEN `capture()` runs and was careful about the
+/// population; the sentinel's inertness was a property of the OLD ordering and nobody re-derived it.
+///
 /// A macro rather than a `const` only because `concat!` takes literals; the point is that there is
 /// exactly ONE copy of this text and both probes paste it.
 macro_rules! probe_defer_tail {
@@ -100,7 +120,10 @@ const PROBE_ALL_IDS_JS: &str = concat!(
 (function(){
 var pre=null;
 function emit(o){
-  if(!pre){pre=document.createElement('pre');pre.id='__PARITY__';document.documentElement.appendChild(pre);}
+  // `display:none` is LOAD-BEARING, not tidiness: this sentinel is appended INTO the document the
+  // probe is about to measure again, and it holds the whole result JSON on ONE unwrapped `<pre>`
+  // line. See the doc comment above — without it the reference widens its own subject.
+  if(!pre){pre=document.createElement('pre');pre.id='__PARITY__';pre.style.display='none';document.documentElement.appendChild(pre);}
   pre.textContent=JSON.stringify(o);
 }
 function capture(){var out={};
@@ -139,7 +162,10 @@ const PROBE_ALL_PATHS_JS: &str = concat!(
 (function(){
 var pre=null;
 function emit(o){
-  if(!pre){pre=document.createElement('pre');pre.id='__PARITY__';document.documentElement.appendChild(pre);}
+  // `display:none` is LOAD-BEARING, not tidiness: this sentinel is appended INTO the document the
+  // probe is about to measure again, and it holds the whole result JSON on ONE unwrapped `<pre>`
+  // line. See the doc comment above — without it the reference widens its own subject.
+  if(!pre){pre=document.createElement('pre');pre.id='__PARITY__';pre.style.display='none';document.documentElement.appendChild(pre);}
   pre.textContent=JSON.stringify(o);
 }
 function fnv(str){var h=0x811c9dc5;for(var i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return h>>>0;}
@@ -277,7 +303,7 @@ pub fn oracle_probe(
   // elements happened to carry an id.
   out['__META__'] = ['', '', document.querySelectorAll('*').length,
                      (document.body ? document.body.innerText.length : 0), 0, 0];
-  var pre = document.createElement('pre'); pre.id = '__ORACLE__';
+  var pre = document.createElement('pre'); pre.id = '__ORACLE__'; pre.style.display = 'none';
   pre.textContent = JSON.stringify(out);
   document.documentElement.appendChild(pre);
 })();
@@ -366,7 +392,7 @@ pub fn capture_boxes_interaction(
   var before = snap();
   try {{ {steps_js} }} catch (e) {{}}
   var after = snap();
-  var pre = document.createElement('pre'); pre.id = '__G5__';
+  var pre = document.createElement('pre'); pre.id = '__G5__'; pre.style.display = 'none';
   pre.textContent = JSON.stringify({{before: before, after: after}});
   document.documentElement.appendChild(pre);
 }})();
@@ -1086,6 +1112,92 @@ mod tests {
             !PROBE_JS.contains("setTimeout(capture"),
             "PROBE_JS was deferred. It probes committed static fixtures where end-of-parse IS the \
              final DOM; deferring it risks a 72/72 green gate to buy nothing."
+        );
+    }
+
+    /// **G_PROBE_INERT (source half) — every sentinel this file appends into a page it measures
+    /// must be `display:none`.**
+    ///
+    /// Asserted over this file's OWN SOURCE rather than over the two probe constants, because there
+    /// are FIVE sentinels and only two of them are constants: `PROBE_JS`, `PROBE_ALL_IDS_JS`,
+    /// `PROBE_ALL_PATHS_JS`, the `__ORACLE__` probe built inside `capture_seen_all_paths_from_html`,
+    /// and the `__G5__` probe built inside the interaction capture. A test that named the two
+    /// constants would pass while the other three rotted — the "one rule, N implementations" shape
+    /// this project loses fixes to, and the exact reason the widening survived in the differential
+    /// crawl's probe as well as in the certificate's.
+    ///
+    /// The rule is positional and mechanical: a `createElement('pre')` must be followed, before the
+    /// `appendChild` that puts it in the document, by a `style.display` set to none.
+    #[test]
+    fn every_probe_sentinel_is_display_none() {
+        let src = include_str!("chrome.rs");
+        // Split so this line is not itself an instance of what it looks for.
+        let needle = concat!("createElement", "('pre')");
+        let mut seen = 0usize;
+        for line in src.lines() {
+            // Prose ABOUT the rule is not an instance of it; only real code counts.
+            if line.trim_start().starts_with("///") || !line.contains(needle) {
+                continue;
+            }
+            seen += 1;
+            assert!(
+                line.contains("style.display") && line.contains("none"),
+                "a probe sentinel is appended into the measured document WITHOUT display:none.\n\
+                 It carries the whole result JSON on one unwrapped `<pre>` line, so its max-content \
+                 width is tens of thousands of px; appended as a sibling of <body> it re-sizes any \
+                 root that is intrinsically sized rather than stretched to the ICB.\n\
+                 Measured (t781): naukri.com's Chrome reference read <body> 89905px wide at a 1200px \
+                 viewport — 75× — and shape_stats charged every one of those x/width values to the \
+                 engine.\n\
+                 offending line: {}",
+                line.trim()
+            );
+        }
+        assert!(
+            seen >= 5,
+            "expected at least 5 probe sentinels in this file, found {seen} — either a probe was \
+             removed (then drop the count) or the detection above stopped matching, which would \
+             make this gate vacuous"
+        );
+    }
+
+    /// **G_PROBE_INERT (live half) — the reference must return the same geometry with and without
+    /// its own sentinel in the page.**
+    ///
+    /// The source assertion above cannot show that the rule MATTERS; this one does, hermetically and
+    /// with no network. The fixture is a root that is intrinsically sized (`html{width:max-content}`)
+    /// wrapping a single 300px block, served from `file://` — so `<body>` must be exactly 300px wide.
+    ///
+    /// **Proven red (t781):** delete `pre.style.display='none'` from `PROBE_ALL_PATHS_JS` and this
+    /// reports `<body>` at **1221px** — the width of the probe's own JSON line — against the 300 it
+    /// must be. The margin is not a tolerance question: the failure IS the sentinel's width, so it
+    /// scales with how much the probe found (naukri.com: 89,905px).
+    #[test]
+    fn the_reference_probe_does_not_widen_an_intrinsically_sized_root() {
+        if !available() {
+            eprintln!("skipped: no Chrome/Chromium on this box");
+            return;
+        }
+        let fixture = "<!doctype html><html style=\"width:max-content\"><head><style>\
+                       body{margin:0}</style></head><body>\
+                       <div id=\"a\" style=\"width:300px;height:20px\">hello</div></body></html>";
+        let path =
+            std::env::temp_dir().join(format!("manuk-probe-inert-{}.html", stable_tag(fixture)));
+        std::fs::write(&path, fixture).expect("write fixture");
+        let url = format!("file://{}", path.display());
+        let seen = capture_seen_all_paths(&url, 1200, 800).expect("probe the fixture");
+        let _ = std::fs::remove_file(&path);
+        let body = seen
+            .iter()
+            .find(|(k, v)| v.tag == "body" && !k.contains('/'))
+            .map(|(_, v)| v)
+            .unwrap_or_else(|| panic!("no <body> in the reference snapshot: {:?}", seen.keys()));
+        assert_eq!(
+            body.rect[2], 300,
+            "the reference widened its own subject: <body> should be 300px (the max-content width \
+             of its only child) and came back {}px. The extra width is the probe's `<pre>` sentinel \
+             being laid out as a sibling of <body> under an intrinsically-sized <html>.",
+            body.rect[2]
         );
     }
 

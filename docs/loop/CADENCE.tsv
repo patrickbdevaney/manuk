@@ -524,3 +524,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 777	25065c87	1785475224	2026-07-31T01:20:24-04:00	1930	capability	63	10	580	39	360	81	3896	6960	0	402	0	`screen.orientation` was a two-field object literal, and no probe of NAMES could see it (2026-07-31)
 778	bc69a82a	1785477130	2026-07-31T01:52:10-04:00	1906	capability	63	9	355	35	361	81	3896	6960	0	403	0	six readonly IDL attributes on `Node.prototype`, so `this.index = 0` killed the constructor (2026-07-31)
 779	23434c1d	1785477699	2026-07-31T02:01:39-04:00	569	capability	63	5	210	33	361	81	3896	6960	0	403	0	"booted-but-thin" is TWO populations, and the bigger one is perf, not a missing API (2026-07-31)
+780	a80df85c	1785481659	2026-07-31T03:07:39-04:00	3960	measurement	63	7	310	38	361	81	3896	6960	0	403	0	constitution check #63, and the "fast-but-empty" cohort I named last tick does not exist (2026-07-31)

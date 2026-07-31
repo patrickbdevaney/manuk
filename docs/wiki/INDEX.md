@@ -293,6 +293,9 @@
   - L2546 · The parallel sweep — and what parallelism COSTS (tick 771)
   - L2557 · Two accounting defects it surfaced while being built
   - L2568 · ⚠ The speed is not free, and the cost is SCORABILITY, not accuracy
+  - L2594 · The reference probe was WIDENING the page it measured (t781)
+  - L2625 · Why the near-miss took a while to name
+  - L2634 · The general form
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1326,4 +1329,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1237 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1240 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

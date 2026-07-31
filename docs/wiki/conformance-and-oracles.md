@@ -2590,3 +2590,65 @@ loses sites must never be banked as a burndown point — the t771 row is annotat
 a control says otherwise.* When you change HOW a measurement is taken, the first run of the new
 instrument is a comparison against the old one, not a result. The tell for this failure is a
 **scorability shift with stable scores** — which is what the denominator trap looks like from the inside.
+
+## The reference probe was WIDENING the page it measured (t781)
+
+The Chrome-side probe serialises its result into a `<pre id="__PARITY__">` and appends that element to
+`document.documentElement` — a **sibling of `<body>`** — so `--dump-dom` carries the JSON back. That was
+inert for as long as the probe ran **once, at end of parse, and appended afterwards**.
+
+t674 deferred the probe: `capture()` now runs at parse, DOMContentLoaded, `load` and T+3000, and `emit()`
+creates the sentinel on the **first** call. From that tick on, three of the four readings measured a
+document that already contained the probe's own output — and a `<pre>` does not wrap, so an element
+holding ~30KB of JSON on one line has a max-content width of tens of thousands of px.
+
+On a page whose root box is **stretched to the ICB** that costs nothing: `<html>` is the viewport width
+and the sentinel simply overflows. On a page whose root is **intrinsically sized**, `<html>` sizes to the
+widest thing in it — the sentinel — and `<body>` inherits that width.
+
+Measured on `www.naukri.com`, deterministically, replaying the harness's own instrumented temp file:
+
+| | `<body>` | elements captured | heights |
+|---|---|---|---|
+| as shipped | **89,905 × 352** | 57 | correct |
+| `+ pre.style.display='none'` | **1,200 × 352** | 57 | correct |
+
+A 1,200px viewport, a body reported 75× too wide, and the centred 1,120px content column placed at
+`x = 44,392` — which is exactly `(89905 − 1120) / 2`. **Every `x` and every `width` the reference
+reported for that site was a number the reference had created**, and `shape_stats` charged all of it to
+the engine: the row read `thin-overlap`, whose own explanation text says *"this is OURS"*.
+
+The heights were right throughout, which is why it survived: the failure is horizontal-only, and the
+element **population** — the thing t674 was careful about, and the thing `instrument_tag()` fingerprints —
+never moved.
+
+### Why the near-miss took a while to name
+
+Four hand-replications of the probe returned `1200` and disagreed with the harness. Each differed from
+the harness in something plausible (probe timing, curl UA, capture phase) and none was the cause. What
+settled it was **running Chrome on the harness's own instrumented file**, recovered by copying
+`/tmp/manuk-shape-*.html` out from under the run before it deletes it — after which the 89,905 reproduced
+2/2 and a one-line patch to that same file returned it to 1,200. *When a replication disagrees with the
+instrument, replicate the instrument's actual artefact, not your reading of its source.*
+
+### The general form
+
+**An instrument that writes into the thing it measures must be re-checked the moment it starts measuring
+more than once.** The sentinel's inertness was a property of the OLD ordering — measure, then write. t674
+changed the ordering to write, then measure again, and re-derived the population question but not this
+one. There is no way to notice from the diff: the deferral tick and the sentinel are twenty lines apart
+and neither mentions the other.
+
+Guarded by two tests in `tests/wpt/src/chrome.rs`:
+
+- `every_probe_sentinel_is_display_none` scans **this file's own source**, not the two probe constants —
+  there are five sentinels (`PROBE_JS`, `PROBE_ALL_IDS_JS`, `PROBE_ALL_PATHS_JS`, `__ORACLE__`, `__G5__`)
+  and only two are constants. A test naming the two would have passed while the differential crawl's
+  probe (which feeds `CLUSTERS.md`) rotted.
+- `the_reference_probe_does_not_widen_an_intrinsically_sized_root` runs the real probe over a `file://`
+  fixture whose `<html>` is `width:max-content` around a 300px block. **Proven red:** without the fix it
+  reports `<body>` at 1221px against the 300 it must be.
+
+⚠ **What this did NOT fix.** naukri's `coverage` is unchanged at 15.8% with 48 missing elements — that
+half is a real engine gap and is still the open lead. What moved is `misplaced 9 → 4` and the geometry
+the burndown ranks on.

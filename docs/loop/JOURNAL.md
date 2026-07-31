@@ -40105,3 +40105,97 @@ inherited a four-site list and published a population built on the one member wh
 `probe-blocked`. The check costs one grep of the artefact the list was derived from, and it is the
 same failure the project already records for stale cluster ledgers and stale launch prompts, arriving
 this time through a *fresh* and *correct* steer. [no-pattern]
+
+## Tick 781 — the Chrome reference probe was WIDENING the page it measured (2026-07-31)
+
+TICK SHAPE: instrument-fidelity (the reference oracle perturbs its own subject)
+
+HYPOTHESIS (written before the fix): `www.naukri.com` — t780's one clean `booted-but-thin` lead — is
+not a coverage failure of ours. The Chrome reference reports `<body>` at **89,905px wide against a
+1,200px viewport**, deterministically, and every x/width in the diff is computed against that. If the
+cause is the probe's own `<pre id="__PARITY__">` sentinel — a single unwrapped ~30KB JSON line
+appended INTO the document before the later `capture()` calls run — then making the sentinel
+`display:none` returns Chrome's body to 1,200 with the element population unchanged.
+
+**CONFIRMED, and the fix is one line per sentinel.** Replaying Chrome over the harness's *own*
+instrumented temp file (recovered by copying `/tmp/manuk-shape-*.html` out from under a live run
+before it deletes it) reproduces `<body> 89905×352` 2/2. Adding `pre.style.display='none'` and
+changing nothing else returns it to `1200×352` — **same 57 elements, same every height**. The
+centred content column sat at `x=44392`, which is exactly `(89905−1120)/2`: the reference was
+centring real content inside a width it had invented.
+
+The mechanism, and why it is twenty lines away from the tick that caused it: `emit()` appends a
+`<pre>` carrying the whole result JSON **on one unwrapped line** to `document.documentElement` — a
+sibling of `<body>`. That was inert while the probe measured ONCE and wrote afterwards. **t674
+deferred the probe** (parse → DCL → load → T+3000) and `emit()` creates the sentinel on the *first*
+call, so three of the four readings measure a document containing the probe's own output. Under a
+root that is stretched to the ICB this costs nothing; under a root that is **intrinsically sized**,
+`<html>` sizes to the sentinel and `<body>` inherits it.
+
+### The four replications that disagreed, and what actually settled it
+
+Hand-built probes returned `1200` four times, and each hand-build differed from the harness in
+something plausible — capture phase, curl UA, the class-hash in `pathOf`, the font read. None was the
+cause; the probe's OUTPUT SIZE was, and every hand-build emitted a smaller JSON. Two controls were
+run and both came back negative before the right one: the harness's curl UA fetches **byte-identical
+HTML** to mine, and Chrome navigating the LIVE url is bot-walled to a 7-element page (so the
+`curl → file://` route is not an avoidable shortcut, it is the only route that sees the site at all).
+What settled it was replaying the instrument's **actual artefact** instead of my reading of its
+source. *When a replication disagrees with the instrument, replicate the instrument's artefact.*
+
+### Scope of the blast radius
+
+Five sentinels, not two: `PROBE_JS`, `PROBE_ALL_IDS_JS`, `PROBE_ALL_PATHS_JS`, `__ORACLE__` (the
+differential crawl's probe — **this one feeds `CLUSTERS.md`, the priority ledger**) and `__G5__` (the
+interaction probe). Only the two live-site path probes are re-entrant today, so only they could
+widen; the other three are fixed anyway, because a rule that holds "for the ones that currently
+re-measure" is the shape this project loses fixes to.
+
+Gates (`tests/wpt/src/chrome.rs`), **both proven red by deleting the fix**:
+
+1. `every_probe_sentinel_is_display_none` — scans **this file's own source**, not the two probe
+   constants, because three of the five sentinels are built inside functions and a constant-named
+   test would pass while they rotted. Red: `offending line: …createElement('pre');pre.id='__PARITY__';document.documentElement.appendChild(pre)…`.
+2. `the_reference_probe_does_not_widen_an_intrinsically_sized_root` — runs the REAL probe over a
+   `file://` fixture whose `<html>` is `width:max-content` around a 300px block; asserts `<body>`
+   is exactly 300. Red: **1221px**, which is the width of the probe's own JSON line.
+
+⚠ **HONEST SCOPE — naukri is NOT fixed and no site is claimed to cross.** After the fix its row is
+`coverage 15.8% · 48 missing · misplaced 9 → 4`. The **geometry** half of the divergence was the
+instrument's; the **coverage** half is ours and is still the open lead the observer named. What this
+tick buys is that the burndown's x/width ranking is no longer partly reading numbers the reference
+manufactured — and `h_overflow`, which the CO-#1 block names as the proxy to rank on FIRST, is
+computed from exactly those widths.
+
+⚠ **Sighted, not chased:** one of five `fidelity --urls https://www.naukri.com` runs SIGSEGV'd inside
+the site's render (the other four, and three since, exit 0). Not reproducible in 7 attempts; logged
+here rather than claimed, so a later Bar-0 hunt has the sighting.
+
+PERF: none claimed — the change is one JS property assignment per probe run.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "The reference probe was WIDENING the page it measured"
+
+PATTERN: ⚠⚠⚠ **AN INSTRUMENT THAT WRITES INTO WHAT IT MEASURES MUST BE RE-CHECKED THE MOMENT IT
+STARTS MEASURING MORE THAN ONCE.** The sentinel's inertness was a property of the ORDER — measure,
+then write. t674 reversed it to write, then measure again, re-derived the *population* question
+carefully (its doc comment carries a five-column table), and never asked whether the thing it now
+wrote first was inert. Neither line mentions the other and no diff can show it. The general trigger:
+when a change makes a step REPEAT, enumerate every side effect that was safe only because it happened
+last. [no-pattern]
+
+### The blast radius, measured — and it is ZERO on the scored population
+
+A control on 8 already-SCORED t777 rows (post-fix, `--jobs 2`) against their t777 values:
+
+```
+hope.cap-systems.org     0.000000 → 0.000000      www.cbse.gov.in       0.000000 → 0.000000
+www.mobile.bg            0.000000 → 0.000000      hipmiluwuutara.org    0.124000 → 0.124000
+pordentrodetudo.com.br   0.105178 → 0.105178      ru.restaurantguru.com 0.222222 → 0.222222
+www.jatekshop.eu         0.179443 → 0.179443      www.heart.org         0.029478 → timeout-150s
+```
+
+**Byte-identical, every one.** So the corruption is confined to pages whose root box is
+intrinsically sized, and **this tick does not move the headline** — `scored/in-scope` and M1 are
+untouched, which is exactly what a correct fix to a term that was only wrong on unscored rows should
+do. Stated because the tempting reading is the other one: an instrument fix that moved the number
+would have been the thing to be suspicious of.

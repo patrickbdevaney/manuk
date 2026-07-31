@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **525** | ticks 1–779 |
-| median tick cycle | **23m** | 524 intervals |
+| ticks landed | **526** | ticks 1–780 |
+| median tick cycle | **23m** | 525 intervals |
 | median, last 10 | **40m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 477.0h elapsed |
-| median verify wall | **63s** | 464 ticks |
+| **ticks per hour** | **1.10** | 478.1h elapsed |
+| median verify wall | **63s** | 465 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **403**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**252 of 525 ticks** (48%) moved a
+**252 of 526 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **252** capability ticks, median cycle **23m**
-* median diff per tick: **+247 / −34** lines across 8 files
+* median diff per tick: **+248 / −34** lines across 8 files
 
 ## Every tick
 
@@ -622,5 +622,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **777** | 2026-07-31 01:20 | 32m | capability | 63s | +580/−39 | 360 | 81 | 56.0% · | `screen.orientation` was a two-field object literal, and no probe of NAMES could see it (2 |
 | **778** | 2026-07-31 01:52 | 32m | capability | 63s | +355/−35 | 361 | 81 | 56.0% · | six readonly IDL attributes on `Node.prototype`, so `this.index = 0` killed the constructo |
 | **779** | 2026-07-31 02:01 | 9m | capability | 63s | +210/−33 | 361 | 81 | 56.0% · | "booted-but-thin" is TWO populations, and the bigger one is perf, not a missing API (2026- |
+| **780** | 2026-07-31 03:07 | 66m | measurement | 63s | +310/−38 | 361 | 81 | 56.0% · | constitution check #63, and the "fast-but-empty" cohort I named last tick does not exist ( |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
