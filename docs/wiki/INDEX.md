@@ -132,6 +132,7 @@
   - L2623 · A float belongs to its own block, not to the viewport (t792)
   - L2652 · order lays items out in order-modified document order (t793)
   - L2679 · …and the containing block is the float's ORIGIN, not just its limit (t797)
+  - L2704 · A percentage height on a flex item was resolved twice (t798)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1344,4 +1345,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1255 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1256 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

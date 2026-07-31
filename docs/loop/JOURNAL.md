@@ -41458,3 +41458,70 @@ available five ticks earlier — `l.max(cb_left)` is a no-op whenever `cb_left <
 when that happens. **When a fix is `max`/`min` against a bound, ask what the expression does when the
 bound is on the other side.**
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 798 — a percentage height on a flex item was resolved twice (2026-07-31)
+
+TICK SHAPE: capability (flex/grid) — the block-axis twin of a bug this project fixed at tick 14
+
+HYPOTHESIS (written before the probe): keep probing high-reach primitives, aimed at what ordinary
+content pages are built from. Three fixtures this tick, and the first two are negative results worth
+their cost:
+
+* **CSS custom properties are Chrome-exact** — `var()`, a fallback, a var inside `calc()`, a var
+  redefined on a descendant scope, `calc()` mixing two vars, plus `gap` in flex AND grid,
+  `aspect-ratio`, and `calc(100% - 40px)`. Thirteen cases, all identical. **The highest-reach modern
+  CSS feature there is, and it is clean.**
+* **Image intrinsic sizing is Chrome-exact** — intrinsic size, `width` attr with ratio, `height` attr
+  with ratio, CSS width, `max-width:100%` overriding a width attribute, `width:100%;height:auto`.
+* **THE FINDING**, from a percentage/min/max/overflow fixture: `height: 50%` on a flex item.
+
+```
+                                                 Chrome   before   after
+  height:50%  in a height:200px flex ROW           100      50      100      ✗→✓
+  height:50%  in a height:300px flex ROW           150      75      150      ✗→✓
+  height:25%  in a height:200px flex ROW            50      13       50      ✗→✓   (0.25² × 200)
+  height:50%  in a height:200px flex COLUMN        100      50      100      ✗→✓
+  height:50%  child of a height:200px BLOCK        100     100      100      ✓ always right
+```
+
+**The percentage was applied TWICE.** `layout_flex` hands each item its taffy slot as the parent's
+definite height and `own_definite_h` re-resolved the item's own percentage against it — 0.5 × (0.5 ×
+200). Instrumenting the bridge showed taffy's own answers were already correct (100, 150, 50, 100), so
+the squaring is entirely on our side of the seam.
+
+⚠⚠ **THIS IS THE SAME DEFECT THE WIDTH AXIS HAD AND FIXED AT TICK 14** — *"a percentage width on a
+flex item resolved twice; used width came out squared"*. `taffy_item_width` exists for exactly that,
+with a comment explaining it, and it has been sitting next to the unfixed block axis ever since. The
+fix is its mirror, `taffy_item_height`. **The forgotten copy is never the main path — it is the other
+axis** (t770's float/box-sizing tick said the same thing about the same shape).
+
+CONTROLS: `blog.rust-lang.org` 99.3%, `en.wikipedia.org` 60.4%, `news.ycombinator` 79.9%,
+`chat.google.com` 84.7% — every one byte-identical. `manuk-layout` 103 tests green.
+
+Gate: `G_FLEX_PERCENT_HEIGHT` (new), nine Chrome-measured heights read off the GATE'S OWN fixture
+(t797's lesson, applied without being reminded). **Proven red:** removing the record squares `#x1`
+back to 50.
+
+⚠ **AND THE SECOND MUTATION WOULD NOT GO RED, WHICH IS RECORDED RATHER THAN PAPERED OVER.** The
+`pct_h` guard — record taffy's verdict only where the item asked for a percentage — survives its own
+mutation: recording for `auto` items too passes every case in the fixture, including two (`#s1`,
+`#ov`) added specifically to break it, because the post-layout adoption already takes
+`max(slot, content)`. So the guard is a **conservatism, not a proven necessity**, and the gate says so
+in its RED list instead of claiming a red it cannot produce. A gate that cannot distinguish two
+implementations must not imply it can.
+
+RESIDUE, measured in the same fixture and NOT fixed: a `height:auto` flex item in a ROW whose content
+is TALLER than the container should stretch to the line and overflow (Chrome 30 in a 30px row); we
+keep the content height (58). Pre-existing, independent of this fix, and now written down.
+
+HONEST SCOPE: no site is claimed to cross; no control moved. The corpus price comes at the next sweep,
+read paired.
+
+PERF: none claimed — one `HashMap` insert/remove per flex item that asked for a percentage height.
+
+WIKI: `docs/wiki/box-layout.md` — appended.
+
+PATTERN: ⚠⚠⚠ **WHEN A FIX EXISTS FOR ONE AXIS, GREP FOR ITS MIRROR BEFORE BELIEVING THE CLASS IS
+CLOSED.** `taffy_item_width` was written with a comment naming the exact failure mode, and the same
+failure on the other axis outlived it by 784 ticks. The grep is one word long.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

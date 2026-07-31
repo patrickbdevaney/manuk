@@ -2986,3 +2986,55 @@ running the reference.
 | doc | form-control INTRINSIC metrics (`size`/`cols`/`rows` + the control's own font) | **`gated`** (new row) | `G_FORM_CONTROL_METRICS`, t787 — three defects in one measured table |
 | doc | `<select>` reserves the dropdown arrow in its intrinsic width | **`missing`** (new row) | exactly 17px short, both a long and a one-character option — a constant, not a text-measurement difference |
 | doc | `@layer` PRECEDENCE (unlayered beats layered) | **`missing`** (new row) | Chrome 100, ours 333; independent of t785, true since layers were walked |
+
+## Audit #51 — tick 798 (2026-07-31)
+
+**Method.** A new door, and it is the one this whole session ran on: **the map is measured against
+Chrome with four-line fixtures**, not against a capability list. Nine probe areas since #50, each one
+`google-chrome --dump-dom` versus `manuk-wpt boxes` on the same file. The audit's job here is to record
+what the probes said about the MAP — including, and especially, the areas that came back clean.
+
+### THE CLEAN AREAS ARE MAP INFORMATION, NOT A NON-RESULT
+
+Five areas were probed and found Chrome-exact. Each is a row that could have been carrying an
+unmeasured `?`, and each retires a hypothesis the burndown's numbers actively invite:
+
+| area probed | cases | verdict |
+|---|---|---|
+| **CSS custom properties** — `var()`, fallback, var-in-`calc()`, scoped redefinition, two vars in one `calc()` | 6 | **exact** — the highest-usage modern CSS feature there is |
+| `gap` (flex + grid), `aspect-ratio`, `calc(100% - Npx)` | 7 | **exact** |
+| **Image intrinsic sizing** — intrinsic, `width`/`height` attrs with ratio, CSS width, `max-width:100%` over an attr, `width:100%;height:auto` | 6 | **exact** |
+| **Tables** — `border-collapse`, `table-layout:fixed`, `colspan`, `rowspan`, `border-spacing`, auto width distribution | 13 | **exact** (≤3px, all of it the collapsed-border edge convention) |
+| **Flex/overflow** — `min-width:auto` floor, `flex-wrap`, `overflow:hidden` not shrinking a child, `min-width:0`, blown `1fr` tracks, oversized `flex:0 0 auto` | 10 | **exact** |
+| **Text advance widths** — 9 strings × 5 font stacks | 45 | **exact within 0.5px** |
+
+That last row deserves its own line: *"our font metrics are systematically narrow"* is the hypothesis
+the h-overflow and wrap-divergence numbers most invite, it would have been a subsystem to chase, and
+one fixture killed it.
+
+### WHAT THE SAME METHOD FOUND — six defects the map called covered
+
+`CSS nesting` (the group-rule half), form-control intrinsic metrics, the `<select>` arrow, `@layer`
+precedence, the solidus line break, the float containing block (twice: limit, then origin), flex/grid
+`order`, the inline-block baseline, and the flex percentage height. **Every one of them sat under a row
+the map already had.** #48's shape — *a row coarser than the thing it stands in for* — is now the
+dominant finding of three consecutive audits, and the correction is mechanical rather than editorial:
+**a row's receipt should name the CASES measured, because that is exactly the set the next reader will
+assume is covered.**
+
+### ⚠ THE FINDING WITH THE LONGEST LIFE: A FIXED AXIS AND AN UNFIXED MIRROR
+
+t798's percentage-height bug is *the same defect the width axis fixed at tick 14*, and
+`taffy_item_width` — the fix — has sat beside the unfixed block axis for 784 ticks with a comment
+naming the failure mode. t770 recorded the identical shape for `box-sizing` (applied on the main path,
+never on the FLOAT path). **Two sightings make it a rule: when a fix is written for one axis or one
+variant, grep for the mirror before recording the class as closed.** The grep is one word long.
+
+### ADDED / CHANGED
+
+| class | capability | status | note |
+|---|---|---|---|
+| doc | percentage `height` on a flex/grid ITEM resolves once | **`gated`** (new row) | `G_FLEX_PERCENT_HEIGHT`, t798 — was squared; the width axis's tick-14 mirror |
+| doc | CSS custom properties (`var()`, fallbacks, scoped redefinition, in `calc()`) | **`gated`-by-measurement** | 6 cases Chrome-exact (t798 probe); previously unmeasured |
+| doc | `<img>` intrinsic sizing + `max-width:100%` over a dimension attribute | **verified exact** | 6 cases (t798 probe) |
+| doc | text advance widths vs Chrome | **verified exact within 0.5px** | 45 measurements (t795 probe) — retires the systematic-metrics hypothesis |

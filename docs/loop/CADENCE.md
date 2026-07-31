@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **540** | ticks 1–796 |
-| median tick cycle | **24m** | 539 intervals |
+| ticks landed | **541** | ticks 1–797 |
+| median tick cycle | **24m** | 540 intervals |
 | median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 490.2h elapsed |
-| median verify wall | **63s** | 479 ticks |
+| **ticks per hour** | **1.10** | 490.9h elapsed |
+| median verify wall | **63s** | 480 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **367**
-* **✅ rows in the capability ledger**: 144 → **412**
+* **live gates**: 27 → **368**
+* **✅ rows in the capability ledger**: 144 → **413**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**259 of 540 ticks** (48%) moved a
+**260 of 541 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **259** capability ticks, median cycle **24m**
-* median diff per tick: **+254 / −34** lines across 8 files
+* **260** capability ticks, median cycle **24m**
+* median diff per tick: **+255 / −34** lines across 8 files
 
 ## Every tick
 
@@ -637,5 +637,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **794** | 2026-07-31 13:34 | 29m | measurement | 63s | +363/−36 | 367 | 81 | 56.0% · | bank the sweep the cadence rule asks for, before an eighth fix (2026-07-31) |
 | **795** | 2026-07-31 14:42 | 68m | capability | 63s | +413/−33 | 367 | 81 | 56.0% · | a text-bearing `inline-block` sits on ITS OWN baseline (2026-07-31) |
 | **796** | 2026-07-31 15:13 | 32m | measurement | 63s | +239/−38 | 367 | 81 | 56.0% · | one variable, one sweep: what an inline-block baseline is worth on 200 sites (2026-07-31) |
+| **797** | 2026-07-31 15:59 | 45m | capability | 63s | +404/−47 | 368 | 81 | 56.0% · | the containing block is the float's ORIGIN, not just its limit (2026-07-31) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

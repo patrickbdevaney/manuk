@@ -712,6 +712,21 @@ struct Ctx<'a> {
     /// Flex/grid items whose **used border-box width taffy has already decided**. Their own `width`
     /// style must NOT be resolved a second time — see the width resolution in `layout_block`.
     taffy_item_width: RefCell<HashMap<NodeId, f32>>,
+    /// **Taffy's verdict on a flex/grid item's BORDER-BOX HEIGHT** — the block-axis twin of
+    /// [`taffy_item_width`], and it was missing for as long as that one has existed.
+    ///
+    /// `layout_flex` hands each item its slot height as the parent's definite height (`pch`), and
+    /// `own_definite_h` then resolves the item's OWN `height: 50%` against it — **so the percentage
+    /// is applied twice and the used height comes out squared.** Measured against Chrome: a
+    /// `height:50%` item in a `height:200px` flex row reads **100** there and read **50** here;
+    /// `height:25%` reads 50 there and 13 here (0.25² × 200). Blocks were always right; only flex
+    /// and grid items squared.
+    ///
+    /// ⚠ This is the SAME defect the width axis had and fixed at tick 14 (*"a percentage width on a
+    /// flex item resolved twice — used width came out squared"*). One axis was corrected and the
+    /// mirror was left, which is this project's most-repeated shape: **the forgotten copy is never
+    /// the main path, it is the other axis.**
+    taffy_item_height: RefCell<HashMap<NodeId, f32>>,
     /// **Static positions of out-of-flow boxes** — where an `absolute` box *would* have gone had it
     /// stayed in flow. Recorded as normal flow walks past it, because that is the only moment the
     /// information exists.
@@ -743,6 +758,7 @@ pub fn layout_document(
         min_content_cache: RefCell::new(HashMap::new()),
         max_content_cache: RefCell::new(HashMap::new()),
         taffy_item_width: RefCell::new(HashMap::new()),
+        taffy_item_height: RefCell::new(HashMap::new()),
         static_pos: RefCell::new(HashMap::new()),
     };
     let root_el = dom
@@ -2275,19 +2291,28 @@ impl Ctx<'_> {
         } else {
             0.0
         };
-        let own_definite_h: Option<f32> = match s.height {
-            Dim::Px(p) => Some((p - bs_extra_h).max(0.0)),
-            Dim::Percent(pct) => pch.map(|h| (h * pct / 100.0 - bs_extra_h).max(0.0)),
-            Dim::Calc { .. } => pch.map(|h| (s.height.resolve(h, 0.0) - bs_extra_h).max(0.0)),
-            // `height:stretch`/`-webkit-fill-available` fill the containing block's definite content
-            // height: the MARGIN box fills `pch`, so the content box is `pch` minus this box's own
-            // margins, border and padding (box-sizing-independent — stretch fills available space, not
-            // a specified length, so the full deduction applies in both modes). `None` pch (auto-height
-            // parent) leaves it content-sized, at parity with Chrome.
-            Dim::Auto if s.height_stretch => {
-                pch.map(|h| (h - mt - mb - pt - pb - bt - bb).max(0.0))
-            }
-            Dim::Auto => None,
+        // Taffy already resolved this item's height against its real containing block; re-resolving
+        // the percentage against the slot it produced applies it twice (see `taffy_item_height`).
+        // The slot is a BORDER box, so the content height is it less this box's own padding+border —
+        // the same subtraction the width axis makes above, and it makes the `box-sizing` adjustment
+        // (`bs_extra_h`) redundant for these, exactly as it is for `taffy_known` widths.
+        let own_definite_h: Option<f32> = match self.taffy_item_height.borrow().get(&node).copied()
+        {
+            Some(border_box) => Some((border_box - pt - pb - bt - bb).max(0.0)),
+            None => match s.height {
+                Dim::Px(p) => Some((p - bs_extra_h).max(0.0)),
+                Dim::Percent(pct) => pch.map(|h| (h * pct / 100.0 - bs_extra_h).max(0.0)),
+                Dim::Calc { .. } => pch.map(|h| (s.height.resolve(h, 0.0) - bs_extra_h).max(0.0)),
+                // `height:stretch`/`-webkit-fill-available` fill the containing block's definite content
+                // height: the MARGIN box fills `pch`, so the content box is `pch` minus this box's own
+                // margins, border and padding (box-sizing-independent — stretch fills available space, not
+                // a specified length, so the full deduction applies in both modes). `None` pch (auto-height
+                // parent) leaves it content-sized, at parity with Chrome.
+                Dim::Auto if s.height_stretch => {
+                    pch.map(|h| (h - mt - mb - pt - pb - bt - bb).max(0.0))
+                }
+                Dim::Auto => None,
+            },
         };
 
         // **Scrollbar-gutter reservation** (CSS Overflow 4 §3.2). A classic (non-overlay) vertical
@@ -4639,6 +4664,21 @@ impl Ctx<'_> {
             self.taffy_item_width
                 .borrow_mut()
                 .insert(p.dom, p.slot.width);
+            // The block-axis twin, and it is only recorded when the item asked for a PERCENTAGE
+            // height: taffy's slot is authoritative there because it already resolved that
+            // percentage against the real containing block. For an `auto`-height item the slot is a
+            // stretch verdict, not a resolution, and the item must still size to its content — that
+            // case is handled after the layout by the `height == Dim::Auto` adoption below, and
+            // overriding it here would freeze every stretched item at its line's height.
+            let pct_h = matches!(
+                self.style_of(p.dom).height,
+                Dim::Percent(_) | Dim::Calc { .. }
+            );
+            if pct_h {
+                self.taffy_item_height
+                    .borrow_mut()
+                    .insert(p.dom, p.slot.height);
+            }
             let r = self.layout_block(
                 p.dom,
                 p.slot.width,
@@ -4649,6 +4689,7 @@ impl Ctx<'_> {
                 &mut item_floats,
             );
             self.taffy_item_width.borrow_mut().remove(&p.dom);
+            self.taffy_item_height.borrow_mut().remove(&p.dom);
             let mut boxx = r.boxx;
             // Taffy sized the item (grow/stretch/track height); when its own height is `auto`,
             // adopt taffy's slot height so it fills its flex line / grid cell.

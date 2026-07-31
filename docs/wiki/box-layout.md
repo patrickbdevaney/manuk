@@ -2700,3 +2700,29 @@ this case reads **265** in isolation and **150** in the gate's own fixture, wher
 floats share the band — both are Chrome. Porting the isolated number into the gate is inventing it,
 and it is the second time in seven ticks the gate caught an asserted-not-measured value. Extract the
 gate's own `const HTML`, run THAT through Chrome.
+
+### A percentage height on a flex item was resolved twice (t798)
+
+`layout_flex` hands each item its taffy slot as the parent's definite height; `own_definite_h` then
+re-resolved the item's own `height: 50%` against that slot. The percentage was applied twice and the
+used height came out squared:
+
+```
+                                              Chrome   ours (before)
+  height:50%  in a height:200px flex row        100        50          0.5² × 200
+  height:25%  in a height:200px flex row         50        13          0.25² × 200
+  height:50%  child of a 200px BLOCK            100       100          always right
+```
+
+Instrumenting the bridge showed taffy's own answers were already correct, so the squaring was entirely
+on our side of the seam. The fix is `taffy_item_height` — record taffy's verdict before laying the
+item out, exactly as `taffy_item_width` has done since **tick 14**, when this project fixed *the same
+bug on the width axis* and left the mirror standing.
+
+⚠ **The `pct_h` guard is a conservatism, not a proven necessity**: recording the slot for `auto` items
+too passes every case in the gate, including two written to break it. The gate's RED list says so
+rather than claiming a red it cannot produce.
+
+⚠ Residue, measured alongside: a `height:auto` flex item in a ROW whose content is taller than the
+container should stretch to the line and overflow (Chrome 30 in a 30px row); we keep the content
+height (58).
