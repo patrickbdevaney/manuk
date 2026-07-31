@@ -739,3 +739,47 @@ I first recorded this audit in `JOURNAL.md` and set `LAST_WALL_AUDIT` by hand in
 `## Audit #N — tick M` headers **in this file**. The audit had been *done* and was about to come due
 again on the next tick. Same shape as the ledger gotchas already recorded for the surface audit: **the
 cadence reads a ledger, not the journal and not STATUS.** Record audits where their counter looks.
+
+## Audit #25 — tick 775 (655s, and the audit that ran never reached the ledger the cadence reads)
+
+**⚠ FILED LATE, AT TICK 776, AND THAT IS THE FIRST FINDING.** The audit was *performed* at tick 775 —
+`scripts/wall-audit.sh run`, total **655s**, and its four-question verdict was written out in full in
+`docs/loop/JOURNAL.md` under tick 775. It went into the **journal** and never into **this file**, which
+is the only thing `status-update.sh` greps (`^## Audit #N — tick N`). So `LAST_WALL_AUDIT` stayed at
+754, and the pre-flight blocked the next tick as *overdue* for work that had already been done.
+
+That is memory's own rule firing again — **the LEDGER is what the cadence reads** — and it is worth a
+line here rather than a quiet backfill: a report that is accurate, complete and filed in the wrong place
+is, to every mechanical consumer, indistinguishable from a report that was never written.
+
+### The measurement (tick 775, `wall-audit.sh run`, total 655s)
+
+```text
+   49s  T · crate tests        ██████    7%      3s  F · perf floors
+   36s  B · build              █████     5%      1s  F4
+   19s  G6 · clickability      ███       3%      0s  every remaining named gate
+    6s  G1 · fidelity          █         1%
+    5s  D · disk               █
+    4s  P · parity             █
+                                              ≈ 123s of NAMED sections — and ~530s that is not
+```
+
+**The named sections sum to ~123s; ~530s is the gate fan-out, spread thin across many small gates.**
+The audit's own text names the cause: **~1.5s of every JS gate is SpiderMonkey runtime startup**, and
+there are hundreds of them. That product — per-gate SpiderMonkey startup × gate count — is now the
+single largest wall lever in the project.
+
+### The four questions, and none of them yields anything admissible
+
+*Redundancy* — the real cost is structural (the startup product above). The lever is `cargo-nextest`
+(one shared test binary, harder parallelism), which is **`scripts/`, observer-owned**. *Parallelism* —
+gates already launch concurrently under `CARGO_BUILD_JOBS`; the perf floors are deliberately serial,
+which is correct. *Caching* — incrementals are on the ramdisk, live fetches are snapshot-cached.
+*Scope* — the gates added in the 768–776 window (`g_user_timing`, `g_iface_surface_2`, `g_css_utf8`,
+`g_doc_prototype`) are single-`#[test]` page gates on the **existing** `manuk-page` binary and the t775
+layout regression went into `manuk-layout`'s existing suite, so none of them adds a build target.
+
+**Nothing trimmed, and nothing should be**: every admissible saving is harness work this agent does not
+own, and the inadmissible ones (drop a gate, widen a floor, sample instead of cover, launder to CI) are
+refused by construction. Recorded for the observer, unchanged from #24's carry-forward and now
+quantified: **per-gate SpiderMonkey startup × gate count ≈ 530s of a 655s wall, and it is `scripts/`-side.**

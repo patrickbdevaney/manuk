@@ -2818,3 +2818,83 @@ None of the four is larger than the current line of work. The material re-rank i
 throw-killer leg is a **4-site** lever, not a 30-site one, so it should stop being priced as the way to
 break the M1 ceiling. Finding 2 says the near-bar shape leg needs its *own* correction — rank by what
 the metric can see, or accept that some of the work it surfaces will never show up in it.
+
+## Audit #49 — tick 776 (2026-07-31)
+
+**Method.** The same door as #47 and #48 — reconcile the map against what a *measurement* just turned
+up. The trigger this time is new: the running CrUX sweep's **own stderr**. Every uncaught page throw is
+already routed through `__reportError` and printed (`uncaught (reported): …`), so a sweep that nobody
+asked to harvest errors is producing a ranked throw-class worklist as a by-product. Aggregating it over
+the first ~75 sites gave, among others:
+
+```
+  1  TypeError: b.createRange is not a function                   (Google CSE dynamic.js)
+  1  TypeError: b.createRange … / t.getClientRects is not a function
+  2  Minified React error #446                                    ("currentResources" was expected to exist)
+```
+
+`b.createRange` is a **direct call on a document that is not the singleton**, which sent me to the map.
+
+### ⚠ THE FINDING: A GATE THAT WAS FAITHFUL TO ONE LIBRARY AND BLIND TO THE PLATFORM
+
+Three rows claim this territory, all `gated`:
+
+```text
+dom  NodeIterator / TreeWalker with the filter protocol              gated  G_TRAVERSAL
+dom  detached Document from DOMImplementation + pre-insertion valid  gated  G_DOM_IMPL, G_CREATED_DOCUMENT_IS_REAL
+app  third-party library boot (… DOMPurify …)                        gated  G_NODE_TYPE_ENUMERATION, G_SECOND_DOCUMENT_IS_REAL
+```
+
+All three are green, and **`Document.prototype` carried none of the seven `create*` methods**. A probe:
+`Document.prototype.createRange === undefined`, and 19 members sitting as own properties of the one
+`document` object every fixture in this tree builds.
+
+The reason the gates missed it is precise and generalisable. `G_SECOND_DOCUMENT_IS_REAL`'s central
+claim is
+
+```js
+document.createNodeIterator.call(b.ownerDocument || b, d.body, …)
+```
+
+and the gate's header explains — correctly — that this expression is *transcribed from the library
+rather than invented*. It is: DOMPurify destructures `createNodeIterator` off the **original** document
+and `.call`s it with the parsed root's document as `this` (verified against the shipped
+`dompurify@3.2.4`, lines 350–352 and 856–857, not from memory).
+
+So the transcription is faithful, and it takes the **function from the singleton**, supplying only the
+receiver. It exercises the ALGORITHM over a second document and never performs the LOOKUP on one. **It
+passes for exactly as long as `otherDoc.createNodeIterator` is `undefined`.**
+
+The corollary corrected this tick's own commit message before it landed: **DOMPurify was never broken
+by this defect.** The story "the sanitiser everyone runs was dead" was the one I had already written
+into the journal, the wiki, the pattern ledger and the gate header. The audit is what refuted it.
+
+### THE RULE THIS ADDS
+
+> **If a gate obtains the thing under test from somewhere other than the subject, it has not tested the
+> subject's surface.** `X.method.call(subject, …)` proves the algorithm; only `subject.method(…)`
+> proves the lookup. And the trap has a specific flavour: *transcribing the real library's idiom* is
+> normally the strongest form of evidence this project has (t633-649: fetch the REAL shipped bundle and
+> run its boot path), so the substitution felt **more** rigorous, not less. A library's defensive idiom
+> is a statement about that library, not about the platform.
+
+Same family as #48 (a row coarser than the thing it stands in for) and #45 (rank by what happens on
+absence), with a new edge: here the row was not coarse and the gate was not lazy — it was *aimed at one
+caller*.
+
+### ADDED / CHANGED
+
+| class | capability | status | note |
+|---|---|---|---|
+| dom | `Document.prototype` carries the `create*` family | **`gated`** (new row) | G_DOC_PROTOTYPE, tick 776. Seven methods promoted off the singleton; ownership asserted, not just presence |
+| dom | `Range.prototype.getClientRects` / `getBoundingClientRect` | **`missing`** | absent (`typeof … === 'undefined'`). Live throw: `t.getClientRects is not a function`, agoda.com. The primitive under every tooltip, highlighter, caret and text-measurement library. ⚠ We hold NO per-text-run geometry, so this is not a shim — name the bound before building |
+| app | React Float resource bookkeeping (`"currentResources" was expected to exist`) | **`unknown`** | React error #446, **2 sites** in the first 75 of the t776 sweep — the highest-frequency single throw in the harvest. React DOM keys hoisted resources (`<link rel=preload>`, stylesheets) off the DOCUMENT; an unstable `ownerDocument`/`getRootNode()` identity would produce exactly this. NOT diagnosed — the code is confirmed absent from the map, not confirmed broken here |
+| — | (instrument) the sweep's stderr **is** an unhandled-error harvester | **noted** | STATUS's meta-instrument #1 has effectively existed for ticks, unaggregated. Ranking leg-1 throw-killers by distinct sites needs only an aggregation over a file that is already being written |
+
+### NOT ADDED, AND WHY
+
+No external search this round, and that is a deliberate departure recorded rather than hidden: the
+board's current mandate is leg-1 **scorability** — get the ~48 non-rendering in-scope sites to boot —
+and the corpus is producing a *measured, ranked, first-party* worklist for that faster than any
+external list can. Interop/Baseline reconciliation is owed and is the next audit's job (#50), before
+the leg-2 shape work resumes.

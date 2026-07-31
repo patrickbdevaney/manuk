@@ -1795,3 +1795,79 @@ gated, and RED-proven, and the next question is now a *timing* question with an 
 TypeError with none.
 
 [[frameworks]] [[conformance-and-oracles]]
+
+## The second document — a `document` method that belongs to the singleton (tick 776)
+
+`Document.prototype` is not decorative in this engine. `dom_bindings::dom_protos` builds it in Rust as
+`__protoDocument`, and **every** document genuinely inherits from it — the singleton, an `<iframe>`'s,
+and one made by `DOMImplementation.createHTMLDocument()`. Measured, both directions:
+`Object.getPrototypeOf(document) === Document.prototype` and the same for a created document.
+
+Nineteen `document` methods were nevertheless **own properties of the singleton**, because every
+JS-side shim was written the obvious way:
+
+```js
+document.createRange = function () { … };        // an own property of ONE document
+```
+
+So the family — `createRange`, `createNodeIterator`, `createTreeWalker`, `createAttribute`,
+`createAttributeNS`, `createEvent`, `evaluate` — did not exist for any other document in the page, and
+touching one was a `TypeError`, not a `false`.
+
+**What it actually broke, measured rather than assumed.** The live evidence is one corpus throw:
+`TypeError: b.createRange is not a function` out of Google's CSE `dynamic.js`, in the tick-776 sweep —
+a direct call on a document that is not the singleton. Plus every `Document.prototype.X = wrapper`
+patch, which was a silent no-op.
+
+### ⚠ The gate that owns this ground passes, and the reason is worth more than the fix
+
+`G_SECOND_DOCUMENT_IS_REAL` was built for exactly this territory. Its central claim is
+
+```js
+document.createNodeIterator.call(b.ownerDocument || b, d.body, …)
+```
+
+and its header says, correctly, that the expression is *transcribed from the library rather than
+invented*: DOMPurify destructures `createNodeIterator` off the original document and `.call`s it with
+the parsed root's document as `this`. So the transcription is faithful — and it takes the **function
+from the singleton**, supplying only the receiver. It exercises the algorithm over a second document
+while never performing the property lookup on one. It passes for precisely as long as
+`otherDoc.createNodeIterator` is `undefined`.
+
+Two consequences, and the first is the one this tick nearly got wrong in its own commit message:
+
+* **DOMPurify was never broken by this.** Its `.call` idiom routes around the defect entirely. The
+  affected callers are the ones that write `doc.createX(…)` — which is what Google's `dynamic.js`
+  does, and what the spec expects of everyone.
+* **A gate that reaches a method off a known-good receiver and `.call`s it onto the subject has
+  tested the algorithm and skipped the lookup.** `G_DOC_PROTOTYPE` therefore calls through the
+  subject's own property, every time.
+
+### The trap: a `this`-blind promotion is WORSE than the throw
+
+Hanging the existing closures off the prototype "fixes" every presence check while making them operate
+on the **wrong** document. For a sanitiser-shaped caller that inverts a security property — a range built
+from an inert parsed copy would point into the live page. So each promoted method resolves its document from
+`this` (`__thisDoc`, which falls back to the singleton only for a detached call), and `G_DOC_PROTOTYPE`
+asserts **ownership** — a range made from a created document is rooted in *that* document and not in
+the live one. That claim is the one the over-broad fix fails; every "did it return a Range" claim
+passes it.
+
+Deliberately **not** promoted, and named rather than left to look like an oversight: `getSelection`,
+`execCommand`, `hasFocus`, the fullscreen exits, `getAnimations`, `startViewTransition`. Those are about
+the *displayed* document, and a created document has no selection to get.
+
+### One source, two eval sites
+
+`__defDoc`/`__thisDoc` live in `event_loop::DOC_PROTO_JS` and are evaluated from **both** install paths,
+because the install order is not one order: `dom_bindings::install` runs `WINDOW_PRELUDE` (which defines
+`createEvent`) before `event_loop::install` exists, while a bare JS context gets `event_loop::install`
+with no `dom_bindings` at all. Putting the helper inside either prelude leaves the other path calling an
+undefined function — and a `TypeError` at the top of a prelude takes the whole prelude with it.
+
+The second thing this buys is **patchability**, the [[js-engine]] `G_PROTOTYPE` lesson one interface
+over: `Document.prototype.createRange = wrapper` used to be a silent no-op, because the wrapper landed
+on an object no document consulted. That is how every error tracker, ad-blocker and polyfill hooks the
+DOM.
+
+[[js-engine]] [[frameworks]] [[conformance-and-oracles]]

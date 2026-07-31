@@ -520,3 +520,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 772	b8caf712	1785462227	2026-07-30T21:43:47-04:00	2655	capability	63	9	706	33	356	81	3896	6960	0	397	0	a HALF-INSTALLED `performance` API blanked a top-1000 site, and `coinmarketcap.com` crossed into scorable (2026-07-31)
 773	339c24fc	1785464319	2026-07-30T22:18:39-04:00	2092	capability	63	9	373	34	357	81	3896	6960	0	398	0	the interface surface re-measured: 59 of 262 absent, and the half where `false` is a LIE (2026-07-31)
 774	b59ef7bc	1785465942	2026-07-30T22:45:42-04:00	1623	capability	63	10	421	51	357	81	3896	6960	0	399	0	`out.push(b[i] as char)`: every stylesheet in the engine was mojibake'd, by one character of Rust (2026-07-31)
+776	98454c5a	1785468698	2026-07-30T23:31:38-04:00	2756	capability	63	17	669	51	358	81	3896	6960	0	400	0	every `document.X` shim was an own property of the SINGLETON, so a second document threw (2026-07-31)

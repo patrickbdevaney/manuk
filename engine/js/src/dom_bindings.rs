@@ -9741,6 +9741,9 @@ pub unsafe fn install(
         0,
     );
 
+    // `__defDoc`/`__thisDoc` FIRST — `WINDOW_PRELUDE` below installs `createEvent` through them, and
+    // this install path runs entirely before `event_loop::install` (see `event_loop::DOC_PROTO_JS`).
+    let _ = eval_in_current_global(cx, crate::event_loop::DOC_PROTO_JS);
     // The JS-side event-listener registry that addEventListener/dispatchEvent drive.
     let _ = eval_in_current_global(cx, LISTENER_PRELUDE);
     let _ = eval_in_current_global(cx, CSSOM_PRELUDE);
@@ -14529,7 +14532,9 @@ const WINDOW_PRELUDE: &str = r#"
         // (see above), and that is fixed. Legacy code, jQuery's `trigger`, and Google Analytics all use
         // this path, and `createEvent is not a function` takes the whole script with it.
         if (typeof g.document !== 'undefined' && typeof g.document.createEvent !== 'function') {
-            g.document.createEvent = function (iface) {
+            // On `Document.prototype` (tick 776) — the event constructors are globals, so this needs
+            // no document of its own; it was an own property of the singleton purely by habit.
+            g.__defDoc('createEvent', function (iface) {
                 var C = g[String(iface)] || g.Event;
                 var e = new C('');
                 // Per spec the event is created UNINITIALIZED — `initEvent` must be called before it is
@@ -14537,7 +14542,7 @@ const WINDOW_PRELUDE: &str = r#"
                 // early throw InvalidStateError (see `__dispatchEvent`); `initEvent` clears it.
                 e.__initialized = false;
                 return e;
-            };
+            });
         }
 
         // `document.startViewTransition(updateCallback)` — the View Transitions API. This is now the

@@ -39497,3 +39497,118 @@ Checked against the four admissible questions, none of which yields anything I c
 and the inadmissible ones (drop a gate, widen a floor, sample instead of cover, launder to CI) are
 refused by construction. Recorded for the observer: **the single largest wall lever in the project is
 per-gate SpiderMonkey startup × gate count, and it is `scripts/`-side.**
+
+## Tick 776 — every `document.X` shim was an own property of the SINGLETON, so a second document threw (2026-07-31)
+
+HYPOTHESIS (measured before writing a line of fix, and the corpus named it first): the running t776
+sweep's own log carries `TypeError: b.createRange is not a function` out of Google's CSE `dynamic.js`.
+A probe says why: **19 `document` methods are own properties of the main `document` object**, and
+`Document.prototype` — which is real here (`__protoDocument`, and both the singleton AND
+`document.implementation.createHTMLDocument()` genuinely inherit from it) — carries none of them. So
+every SECOND document in the page gets a `TypeError` for `createRange`, `createNodeIterator`,
+`createTreeWalker`, `createAttribute`, `createAttributeNS`, `createEvent` and `evaluate`.
+
+TICK SHAPE: capability (JS platform — one rule, N implementations: the install SITE was the instance)
+
+### WHAT WAS MEASURED, BEFORE ANY CODE
+
+A probe (written, run, deleted) answered three questions in one page:
+
+```
+Document.prototype === __protoDocument .......... true
+Object.getPrototypeOf(document) === Document.prototype ......... true
+Object.getPrototypeOf(createHTMLDocument('')) === Document.prototype ... true
+Document.prototype.createRange .................. undefined
+document own function properties ................ 19
+  hasFocus createEvent startViewTransition getAnimations exitFullscreen
+  webkitExitFullscreen webkitCancelFullScreen mozCancelFullScreen getSelection
+  execCommand queryCommandSupported queryCommandEnabled queryCommandState
+  createTreeWalker createRange createNodeIterator createAttribute
+  createAttributeNS evaluate
+createHTMLDocument('').createNodeIterator ....... THROW(TypeError: … is not a function)
+```
+
+So the prototype was real, in every document's chain, and **empty of the whole family**. This is
+`G_PROTOTYPE` (`Element.prototype.setAttribute` was `undefined`) one interface over, and it survived
+because the singleton is the only document most test fixtures ever build.
+
+### ⚠⚠⚠ THE CLAIM I WROTE FIRST WAS WRONG, AND THE DUE SURFACE AUDIT IS WHAT CAUGHT IT
+
+The commit message, the wiki entry, the pattern row and the gate's own header all said this broke
+**DOMPurify** — `createHTMLDocument('')` then `createNodeIterator` on that document is its documented
+boot shape, and it is the reason the second document exists at all. Audit #49 went to
+`G_SECOND_DOCUMENT_IS_REAL` to ask why an existing gate for this exact territory was green, and the
+answer refuted the story:
+
+```js
+document.createNodeIterator.call(b.ownerDocument || b, d.body, …)   // that gate's central claim
+```
+
+That line is transcribed **correctly** from DOMPurify, which destructures `createNodeIterator` off the
+*original* document and `.call`s it with the parsed root's document as `this`. Verified against the
+shipped bundle (`dompurify@3.2.4`, lines 350–352 and 856–857), not from memory. So DOMPurify takes the
+**function from the singleton** and supplies only the receiver — it **routes around this defect
+entirely and was never broken by it.**
+
+Two things follow, and the second is worth more than the fix:
+
+* **The honest impact is smaller than the story I reached for**: one observed live throw (Google CSE
+  `dynamic.js`) plus every `Document.prototype.X = wrapper` patch being a silent no-op. Every
+  spec-conformant `doc.createX(…)` caller is fixed; I cannot name a second popular library that was
+  actually down, and I looked (jQuery, htmx, marked: no direct-call sites).
+* **A gate that reaches a method off a known-good receiver and `.call`s it onto the subject has
+  tested the ALGORITHM and skipped the LOOKUP.** It passes for exactly as long as
+  `otherDoc.createNodeIterator` is `undefined`. The gate was *more* faithful to the library than to
+  the platform, and faithfulness to one caller is what let the hole sit under a green light.
+
+### THE FIX, AND THE ONE THING IT REFUSES TO DO
+
+`event_loop::DOC_PROTO_JS` defines `__defDoc(name, fn)` — which installs on
+`Object.getPrototypeOf(document)`, i.e. the prototype **by reference** rather than by the name
+`__protoDocument`, so it cannot drift — and `__thisDoc(self)`, which resolves the document a method was
+CALLED on. Seven methods move: `createRange` (range.js), `createNodeIterator` + `createTreeWalker`
+(traversal.js), `createAttribute` + `createAttributeNS` (attrs.js), `createEvent` (WINDOW_PRELUDE),
+`evaluate` (xpath.js).
+
+⚠ **`DOC_PROTO_JS` is its own const evaluated from TWO places, and that is not tidiness.**
+`dom_bindings::install` runs `WINDOW_PRELUDE` *before* `event_loop::install` exists, while a bare JS
+context gets `event_loop::install` with no `dom_bindings` at all. Putting the helper inside either
+prelude leaves the other path calling an undefined function — and a `TypeError` at the top of a prelude
+takes the whole prelude with it.
+
+⚠⚠ **Deliberately NOT promoted, named rather than left looking like an oversight**: `getSelection`,
+`execCommand`, `hasFocus`, the fullscreen exits, `getAnimations`, `startViewTransition`. Those are about
+the *displayed* document; a created document has no selection to get.
+
+Gates: **`G_DOC_PROTOTYPE`** (`engine/page/tests/g_doc_prototype.rs`), 9 claims — every one of them
+calling through the **subject's own property**, never `.call`ed off the singleton — **proven red THREE
+ways**, each on a different claim:
+
+1. **Restore the pre-776 install site** (`target = document`) — `offProto` and `absentOnFresh` list all
+   seven, and `ownLookup` reproduces the corpus symptom verbatim:
+   `THROW(TypeError: d.createNodeIterator is not a function)`.
+2. **The OVER-BROAD fix** — make `__thisDoc` always return the singleton, i.e. promote the closures
+   without honouring `this`. Every presence claim still passes; only `rangeOwner` fails, and it fails
+   as `false,true`: **the range made from the inert parsed copy is rooted in the LIVE page.** That is a
+   security property inverted rather than a bug degraded, and it is why this gate asserts document
+   IDENTITY rather than "did it return a Range".
+3. **Leave the prelude's plain-object `createTreeWalker` as an own property of the singleton** —
+   `walkerIsReal` drops to `false,undefined`: the fallback shadows the real `TreeWalker` for the main
+   document. A promotion that fixes the second document by regressing the first is not a fix.
+
+Regression sweep before the wall, all green: `g_range g_traversal g_attrs g_selection g_dom_exception
+g_capability g_prototype g_iface_surface g_iface_surface_2 g_xpath_subset g_event_constructors
+g_event_surface g_mutation g_silent_fail g_set_range_text g_text_selection`.
+
+PERF: none claimed. `__defDoc` runs seven times at install; the methods themselves are unchanged, and
+resolving one through a one-link prototype chain is what every other DOM method here already does.
+WIKI: `docs/wiki/dom-semantics.md` — "The second document".
+PATTERN: ⚠⚠⚠ **A GATE CAN BE FAITHFUL TO ONE CALLER AND BLIND TO THE PLATFORM.** The transferable rule
+is mechanical: **if a gate obtains the thing under test from somewhere other than the subject, it has
+not tested the subject's surface.** `X.method.call(subject, …)` proves the algorithm; only
+`subject.method(…)` proves the lookup — and "transcribed from the real library" is what made that
+substitution feel *more* rigorous rather than less. The secondary rule, which decided this tick's
+shape: **when the absent thing THROWS, the over-broad fix is more dangerous than the absence**, because
+absence routes a caller to its fallback while a wrong-document answer routes it, silently and
+confidently, at the live page.
+

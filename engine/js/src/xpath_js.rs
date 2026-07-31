@@ -432,9 +432,11 @@ pub const XPATH_JS: &str = r#"
   g.XPathExpression = XPathExpression;
   g.XPathResult = XPathResult;
   if (g.document && typeof g.document.evaluate !== 'function') {
-    g.document.evaluate = function (src, contextNode, resolver, type) {
+    // On `Document.prototype` (tick 776). The context node carries the document, so nothing here is
+    // singleton-specific — it was only ever installed that way.
+    g.__defDoc('evaluate', function (src, contextNode, resolver, type) {
       return runExpression(parse(src), contextNode, type);
-    };
+    });
   }
 })();
 "#;

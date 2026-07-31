@@ -114,6 +114,70 @@ fn max_drain_ms() -> u128 {
 /// See [`max_drain_ms`]. Chosen from the measured per-drain distribution across real sites.
 const DEFAULT_MAX_DRAIN_MS: u128 = 5_000;
 
+/// **A `document` METHOD INSTALLED ON THE SINGLETON DOES NOT EXIST FOR ANY OTHER DOCUMENT — AND THE
+/// SECOND DOCUMENT IS WHERE THE SANITISERS LIVE.** (tick 776)
+///
+/// Every JS-side `document` shim in this engine was written as `document.createRange = …`, which makes
+/// it an OWN property of the one document that happened to exist when the shim ran. A probe counted
+/// **nineteen** of them. `Document.prototype` is not a fiction here — it is `__protoDocument`, built in
+/// Rust by [`crate::dom_bindings`], and BOTH the singleton and a document from
+/// `DOMImplementation.createHTMLDocument()` genuinely inherit from it (measured: both
+/// `Object.getPrototypeOf(d) === Document.prototype`). The methods simply were not on it.
+///
+/// So a page holding a second document — and a great many do — got a `TypeError` for the whole family.
+/// **The corpus named this before any probe did:** the tick-776 sweep log carries
+/// `TypeError: b.createRange is not a function` out of Google's `dynamic.js`, and the canonical victim
+/// is DOMPurify, whose boot path is `document.implementation.createHTMLDocument('')` and then
+/// `createNodeIterator` on THAT document — sanitise in a document that is not live, so an `onerror`
+/// attribute cannot fire while you are inspecting it. That is not an exotic pattern; it *is* the
+/// pattern, shared by `DOMParser`, every template engine and every HTML sanitiser.
+///
+/// ⚠ **A `this`-blind promotion would be WORSE than the throw.** Moving a shim that internally says
+/// `document` onto the prototype makes it silently operate on the WRONG document — DOMPurify would then
+/// walk the LIVE page while believing it held an inert copy, which is a security property inverted, not
+/// a bug degraded. So each promoted method takes its document from `this` (via `__thisDoc`), and the
+/// ones that are genuinely about the *displayed* document — `getSelection`, `execCommand`, `hasFocus`,
+/// the fullscreen exits, `getAnimations`, `startViewTransition` — are deliberately LEFT on the
+/// singleton and named here rather than promoted for tidiness.
+///
+/// The second thing this buys is patchability, and it is the `G_PROTOTYPE` lesson one interface over:
+/// `Document.prototype.createTreeWalker = wrapper` was a silent no-op, because the wrapper landed on an
+/// object no document consulted. Every error tracker, ad-blocker and polyfill hooks the DOM that way.
+///
+/// ⚠ **It is its OWN const, evaluated from two places, because the install order is not one order.**
+/// `dom_bindings::install` runs `WINDOW_PRELUDE` (which defines `createEvent`) *before*
+/// `event_loop::install` ever runs, while a bare JS context gets `event_loop::install` with no
+/// `dom_bindings` at all. Putting the helper inside either prelude leaves the other path calling an
+/// undefined function — and a `TypeError` at the top of a prelude takes the whole prelude with it. One
+/// source, two eval sites, idempotent.
+pub(crate) const DOC_PROTO_JS: &str = r#"
+    globalThis.__thisDoc = function (self) {
+        return (self && self.nodeType === 9) ? self : globalThis.document;
+    };
+    globalThis.__defDoc = function (name, fn) {
+        // The prototype by REFERENCE, not by name: `Object.getPrototypeOf(document)` is what a lookup
+        // on any document actually walks, so it cannot drift from whatever `__protoDocument` happens
+        // to be called. Falling back to the instance keeps the pre-776 behaviour if the chain is ever
+        // not built yet — never worse than it was, and `G_DOC_PROTOTYPE` fails if that fallback ever
+        // becomes the live path.
+        var target = null;
+        try {
+            if (typeof document !== 'undefined' && document) {
+                target = Object.getPrototypeOf(document) || document;
+            }
+        } catch (e) { target = null; }
+        if (!target) { return false; }
+        try {
+            Object.defineProperty(target, name, {
+                value: fn, writable: true, enumerable: false, configurable: true
+            });
+            return true;
+        } catch (e) {
+            try { target[name] = fn; return true; } catch (x) { return false; }
+        }
+    };
+"#;
+
 const PRELUDE: &str = r#"
     globalThis.__tasks = [];
     globalThis.__micro = [];
@@ -6559,7 +6623,14 @@ const PRELUDE: &str = r#"
         };
       }
       if (typeof document !== 'undefined' && typeof document.createTreeWalker !== 'function') {
-        document.createTreeWalker = function(root, whatToShow, filter) {
+        // ⚠ On the PROTOTYPE, not on `document` (tick 776) — and this one is load-bearing rather
+        // than tidy. `traversal.js` runs LATER and installs the real `TreeWalker` on
+        // `Document.prototype`; had this fallback stayed an own property of the singleton it would
+        // have SHADOWED the real one for the main document, silently downgrading every page to this
+        // plain-object walker (no `previousNode`, no `instanceof`, REJECT treated as SKIP) while
+        // leaving created documents on the good path. A promotion that fixes the second document by
+        // regressing the first is not a fix.
+        globalThis.__defDoc('createTreeWalker', function(root, whatToShow, filter) {
           if (whatToShow === undefined || whatToShow === null) whatToShow = 0xFFFFFFFF;
           var show = function(n) {
             var t = n.nodeType;
@@ -6610,7 +6681,7 @@ const PRELUDE: &str = r#"
             }
           };
           return w;
-        };
+        });
       }
 
       if (typeof globalThis.requestIdleCallback === 'undefined') {
@@ -6849,6 +6920,8 @@ pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<()
     // `Runtime::new` — see the N7 research note).
     let raw_cx = unsafe { rt.cx().raw_cx() };
     unsafe { crate::job_queue::install_once(raw_cx) }?;
+    // BEFORE the prelude — the prelude's own `createTreeWalker` fallback calls `__defDoc`.
+    eval(rt, global, DOC_PROTO_JS, "doc_proto.js")?;
     eval(rt, global, PRELUDE, "event_loop_prelude.js")?;
 
     // **AFTER the prelude, never before.** The prelude's inert-interface list creates a stub `Range`, so

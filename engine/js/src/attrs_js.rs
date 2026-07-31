@@ -273,7 +273,9 @@ pub const ATTRS_JS: &str = r#"
     }
   };
 
-  document.createAttribute = function (name) {
+  // On `Document.prototype` (tick 776) — an `Attr` is detached, so it needs no owning document, but
+  // as an own property of the singleton the method did not exist for any other one.
+  globalThis.__defDoc('createAttribute', function (name) {
     name = String(name);
     if (name === '') {
       throw new DOMException('an empty attribute name is not allowed', 'InvalidCharacterError');
@@ -281,7 +283,9 @@ pub const ATTRS_JS: &str = r#"
     // Created DETACHED, with an empty value, exactly as the spec says — it holds its own value until
     // something attaches it to an element.
     return makeAttr(null, name, '');
-  };
-  document.createAttributeNS = function (_ns, name) { return document.createAttribute(name); };
+  });
+  globalThis.__defDoc('createAttributeNS', function (_ns, name) {
+    return globalThis.__thisDoc(this).createAttribute(name);
+  });
 })();
 "#;

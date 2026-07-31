@@ -514,6 +514,10 @@
   - L1731 · What it cost, measured on a HEAD-20 site
   - L1758 · The mechanism, and the three ways it could have been subtly wrong
   - L1783 · What it bought, stated honestly
+  - L1799 · The second document — a document method that belongs to the singleton (tick 776)
+  - L1822 · ⚠ The gate that owns this ground passes, and the reason is worth more than the fix
+  - L1846 · The trap: a this-blind promotion is WORSE than the throw
+  - L1860 · One source, two eval sites
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1311,4 +1315,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1222 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1226 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

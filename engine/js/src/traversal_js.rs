@@ -244,13 +244,16 @@ pub const TRAVERSAL_JS: &str = r#"
 
   globalThis.NodeIterator = NodeIterator;
   globalThis.TreeWalker = TreeWalker;
-  document.createNodeIterator = function (root, whatToShow, filter) {
+  // On `Document.prototype` (tick 776) — these two need no document of their own (the `root`
+  // argument carries it), and as own properties of the singleton they were the exact `TypeError`
+  // DOMPurify takes on `document.implementation.createHTMLDocument('').createNodeIterator(...)`.
+  globalThis.__defDoc('createNodeIterator', function (root, whatToShow, filter) {
     return new NodeIterator(root, whatToShow, filter);
-  };
+  });
   // Replaces the previous plain-object shim, which had `nextNode` and nothing else — no `previousNode`,
   // no `firstChild`/`nextSibling`/`parentNode`, and no prototype, so `instanceof TreeWalker` was false.
-  document.createTreeWalker = function (root, whatToShow, filter) {
+  globalThis.__defDoc('createTreeWalker', function (root, whatToShow, filter) {
     return new TreeWalker(root, whatToShow, filter);
-  };
+  });
 })();
 "#;

@@ -415,11 +415,16 @@ pub const RANGE_JS: &str = r#"
   // Replace the inert stub. It was in the interface list, so `typeof Range === 'function'` was already
   // true — which is precisely why nobody noticed it did nothing.
   globalThis.Range = Range;
-  document.createRange = function () {
+  // On `Document.prototype`, and rooted in the document it was CALLED on (tick 776). It used to be
+  // an own property of the singleton that selected the singleton's contents, so a range made from a
+  // `createHTMLDocument()` copy either threw or — worse, had it been promoted carelessly — would have
+  // pointed into the live page.
+  globalThis.__defDoc('createRange', function () {
+    var d = globalThis.__thisDoc(this);
     var r = new Range();
-    r.selectNodeContents(document);
+    r.selectNodeContents(d);
     r.collapse(true);
     return r;
-  };
+  });
 })();
 "#;
