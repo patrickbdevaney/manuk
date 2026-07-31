@@ -286,6 +286,9 @@
   - L2484 · The rule
   - L2492 · The key is part of the measurement: one ancestor's class list re-keyed whole documents (tick 754)
   - L2532 · The rules
+  - L2546 · The parallel sweep — and what parallelism COSTS (tick 771)
+  - L2557 · Two accounting defects it surfaced while being built
+  - L2568 · ⚠ The speed is not free, and the cost is SCORABILITY, not accuracy
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1291,4 +1294,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1202 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1205 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

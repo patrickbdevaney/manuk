@@ -574,6 +574,176 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
         }
     }
 
+    // ── **`--jobs N` — THE SWEEP IS 40–60% OF THE TICK CYCLE AND IT RAN ONE SITE AT A TIME.**
+    //
+    // A 200-site trend sweep took ~2h serial (measured, t767: ~1min/site on 32 cores, with 31 of them
+    // idle). Nothing lands while it runs, so it is pure cycle overhead — the board's throughput
+    // directive (owner, 2026-07-30) names parallelising it as the single biggest lever.
+    //
+    // The fan-out is **process-level, not thread-level**, and that is not a convenience:
+    //   * a site that SEGFAULTS (tick 768 found a live one) kills its own chunk and nothing else — the
+    //     other chunks keep their rows, and the in-flight marker recovery already handles the victim;
+    //   * each child gets its own SpiderMonkey runtime and its own Chromium, which is what the scorer
+    //     needs anyway (one runtime per process is the model everywhere else in this binary);
+    //   * `--rows-out` is append-with-flush per site, so N children writing N chunk files and one merge
+    //     at the end preserves the "sites 1..N-1 are on disk before N starts" invariant per chunk.
+    //
+    // The parent does no rendering: it splits, spawns, waits, merges, and re-reads the merged file
+    // through the SAME certificate path a serial run uses, so the number cannot depend on the job count.
+    let jobs: usize = flag(args, "--jobs")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1)
+        .max(1);
+    if jobs > 1 && sweep_urls.len() > 1 {
+        let Some(rows_path) = rows_out.clone() else {
+            eprintln!("✗ --jobs requires --rows-out (the chunks are merged into it)");
+            std::process::exit(2);
+        };
+        let exe = std::env::current_exe().expect("current exe");
+        let chunks = jobs.min(sweep_urls.len());
+        // Round-robin rather than contiguous blocks: the corpus is stratified (HEAD sites first), so
+        // contiguous chunks would give one child every slow site and leave the rest idle at the end.
+        let mut buckets: Vec<Vec<String>> = vec![Vec::new(); chunks];
+        for (i, u) in sweep_urls.iter().enumerate() {
+            buckets[i % chunks].push(u.clone());
+        }
+        let stamp = std::process::id();
+        // ⚠ **A CHUNK CAN EXIT EARLY, AND EVERY SITE AFTER IT WOULD VANISH.** The per-site watchdog
+        // files its `timeout-150s` row and then `std::process::exit(0)`s — correct for a wedged main
+        // thread, fatal for a chunk, because the sites QUEUED BEHIND it in that child never run.
+        // Measured on a 9-site trial: 8 rows merged, `www.ikea.com` silently absent, which is precisely
+        // the denominator trap ("a metric satisfied by measuring LESS") this instrument refuses.
+        //
+        // So a chunk is not one spawn, it is a spawn LOOP: re-spawn the remainder until every URL in the
+        // bucket has a row or the retry cap is reached, and file an explicit `crashed` row for anything
+        // still missing. The certificate's denominator stays whole either way.
+        const CHUNK_ROUNDS: usize = 4;
+        let run_chunk = |urls: &[String], part: &std::path::Path| -> std::io::Result<()> {
+            let mut cmd = std::process::Command::new(&exe);
+            cmd.arg("fidelity")
+                .arg("--urls")
+                .arg(urls.join(","))
+                .arg("--rows-out")
+                .arg(part)
+                .arg("--width")
+                .arg(vw.to_string())
+                .arg("--height")
+                .arg(vh.to_string())
+                .arg("--site-budget")
+                .arg(site_budget.to_string())
+                .stdout(std::process::Stdio::null());
+            cmd.spawn()?.wait().map(|_| ())
+        };
+        let have = |part: &std::path::Path| -> std::collections::HashSet<String> {
+            std::fs::read_to_string(part)
+                .unwrap_or_default()
+                .lines()
+                .filter(|l| !l.starts_with('#'))
+                .filter_map(|l| l.split('\t').next().map(str::to_string))
+                .collect()
+        };
+        eprintln!(
+            "▶ FIDELITY SWEEP: {} sites across {} processes (--jobs {jobs})",
+            sweep_urls.len(),
+            buckets.len()
+        );
+        let parts: Vec<std::path::PathBuf> = (0..buckets.len())
+            .map(|i| out.join(format!("sweep-part-{stamp}-{i}.tsv")))
+            .collect();
+        for p in &parts {
+            let _ = std::fs::remove_file(p);
+        }
+        // The buckets run CONCURRENTLY (that is the whole point), each in its own thread that owns its
+        // spawn-loop. The threads only spawn and wait; every render happens in a child process.
+        std::thread::scope(|sc| {
+            for (i, b) in buckets.iter().enumerate() {
+                let part = parts[i].clone();
+                let run_chunk = &run_chunk;
+                let have = &have;
+                sc.spawn(move || {
+                    let mut todo: Vec<String> = b.clone();
+                    for round in 0..CHUNK_ROUNDS {
+                        if todo.is_empty() {
+                            break;
+                        }
+                        if run_chunk(&todo, &part).is_err() {
+                            eprintln!("  ✗ chunk {i}: failed to spawn (round {round})");
+                            break;
+                        }
+                        if let Some(name) = manuk_wpt::fidelity::recover_inflight(&part) {
+                            eprintln!(
+                                "  RECOVERED [crashed]: {name} — its chunk died while rendering it; counted, not dropped"
+                            );
+                        }
+                        let done = have(&part);
+                        let left: Vec<String> = todo
+                            .iter()
+                            .filter(|u| !done.contains(manuk_wpt::fidelity::site_name(u).as_str()))
+                            .cloned()
+                            .collect();
+                        if left.len() == todo.len() && round > 0 {
+                            break; // no progress this round — stop rather than spin
+                        }
+                        if !left.is_empty() {
+                            eprintln!(
+                                "  ⟳ chunk {i} exited early with {} site(s) unrun — re-spawning (round {})",
+                                left.len(),
+                                round + 1
+                            );
+                        }
+                        todo = left;
+                    }
+                    // Anything still missing after the cap is UNSCORED-and-counted, never absent.
+                    if !todo.is_empty() {
+                        let rows: Vec<manuk_wpt::fidelity::Fidelity> = todo
+                            .iter()
+                            .map(|u| {
+                                manuk_wpt::fidelity::Fidelity::unmeasured(
+                                    &manuk_wpt::fidelity::site_name(u),
+                                    manuk_wpt::fidelity::Unmeasurable::Crashed,
+                                )
+                            })
+                            .collect();
+                        eprintln!(
+                            "  ⚠ chunk {i}: {} site(s) never produced a row after {CHUNK_ROUNDS} rounds — filed as crashed",
+                            rows.len()
+                        );
+                        let _ = manuk_wpt::fidelity::append_rows_tsv(&part, &rows);
+                    }
+                });
+            }
+        });
+        let mut merged: Vec<String> = Vec::new();
+        for part in &parts {
+            let text = std::fs::read_to_string(part).unwrap_or_default();
+            merged.extend(
+                text.lines()
+                    .filter(|l| !l.starts_with('#'))
+                    .map(str::to_string),
+            );
+            let _ = std::fs::remove_file(part);
+        }
+        let header = "#name\tcoverage\tshape\th_overflow\toverlap\treading_order\tdead_target\tshape_n\treason\tinstrument";
+        let body = merged.join("\n");
+        let _ = std::fs::write(&rows_path, format!("{header}\n{body}\n"));
+        // SAMPLED == ROWS is the reconciliation this instrument owes (METHODOLOGY: accounting
+        // reconciliation is a first-class mechanism). Print BOTH numbers, always.
+        eprintln!(
+            "▶ merged {} row(s) into {} (sampled {})",
+            merged.len(),
+            rows_path.display(),
+            sweep_urls.len()
+        );
+        if merged.len() != sweep_urls.len() {
+            eprintln!(
+                "  ⚠ RECONCILIATION: {} sampled vs {} rows — the difference is an INSTRUMENT bug, not a result",
+                sweep_urls.len(),
+                merged.len()
+            );
+        }
+        return;
+    }
+
     for url in &sweep_urls {
         let url = url.as_str();
         let name = manuk_wpt::fidelity::site_name(url);

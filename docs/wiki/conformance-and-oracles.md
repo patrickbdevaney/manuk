@@ -2540,3 +2540,53 @@ ranking spends ticks.
 3. **When a fix names its own unfinished half, that sentence belongs in the ledger, not only in a
    comment.** t549 wrote *"the same correction is owed there, as its own tick"* — correct, precise, and
    invisible for two hundred ticks. Grep the tree for `owed` / `as its own tick` / `the same correction`.
+
+---
+
+## The parallel sweep — and what parallelism COSTS (tick 771)
+
+`manuk-wpt fidelity --jobs N` fans the corpus out across N **child processes** (not threads):
+
+- a site that SEGFAULTs kills its own chunk and nothing else (tick 768 found a live one);
+- each child gets its own SpiderMonkey runtime and its own Chromium, which is the model everywhere else;
+- the parent renders nothing — it splits **round-robin** (the corpus is stratified, so contiguous blocks
+  would hand one child every slow HEAD site), spawns, waits, merges, and prints `sampled` vs `rows`.
+
+**200 sites: 3h20m serial → 29m55s at `--jobs 8`.**
+
+### Two accounting defects it surfaced while being built
+
+1. A killed child leaves its in-flight site as a marker in its **own** chunk file; without recovering it
+   there, the site that killed the chunk is the one site nobody counts.
+2. The per-site watchdog files its `timeout-150s` row and then `std::process::exit(0)`s — correct for a
+   wedged main thread, fatal for a chunk, because every site **queued behind it** never runs. A 9-site
+   trial merged 8 rows with `www.ikea.com` silently absent.
+
+A chunk is therefore a **spawn loop**: re-spawn the remainder (cap 4 rounds), file an explicit `crashed`
+row for anything still missing, and reconcile `sampled == rows` out loud.
+
+### ⚠ The speed is not free, and the cost is SCORABILITY, not accuracy
+
+The first full `--jobs 8` sweep read `scored 82 → 52`. The control — re-run the lost sites serially on the
+same binary:
+
+| | scored |
+|---|---|
+| 10 lost sites, **serial** | 9 (the 10th is genuinely unreachable) |
+| the same 10, `--jobs 4` | 8 |
+| the same 10, `--jobs 2` | 9 |
+| **\|Δ shape\| for any site that scores, at any job count** | **max 0.1 pt** |
+
+**A site that completes scores the same number at any job count.** What parallelism costs is whether it
+completes: the per-site budget and the network timeouts are **wall-clock**, so eight concurrent
+Chrome+manuk pairs push hard sites past a deadline that measures the box rather than the engine.
+
+**The rule that follows:** `--jobs 2` for cert-grade sweeps (2× faster, denominator intact); higher job
+counts are for *triage* sweeps where losing the slowest fifth of the corpus is a stated cost. A run that
+loses sites must never be banked as a burndown point — the t771 row is annotated as contaminated in
+`FIDELITY-PROGRESS.tsv` for exactly that reason.
+
+**And the general form, which outlives this tool:** *a faster instrument is a different instrument until
+a control says otherwise.* When you change HOW a measurement is taken, the first run of the new
+instrument is a comparison against the old one, not a result. The tell for this failure is a
+**scorability shift with stable scores** — which is what the denominator trap looks like from the inside.

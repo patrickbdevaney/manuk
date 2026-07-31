@@ -39054,3 +39054,75 @@ land in the main path. The tell is structural, not behavioural: **`layout_float`
 itself**, and any function that resolves a width owes every width-modifying property (`box-sizing`,
 `min-width`, `max-width`). Grep for the other width resolutions and diff them against `layout_block`'s
 list — that is a bounded audit with a known yield.
+
+## Tick 771 — the sweep is 4× faster, and the speed COSTS SITES: measured, calibrated, and the number refused (2026-07-30)
+
+The board's new THROUGHPUT directive (owner, USER DIRECTIVE, 2026-07-30) names the sweep as 40–60% of
+the tick cycle and pure overhead: *"PARALLELIZE THE SWEEP — do it as your next non-render tick."* The
+sweep runner lives in `manuk-wpt fidelity`, which is agent territory (`scripts/` stay observer-owned), so
+this adds `--jobs N` there.
+
+**Process-level fan-out, not threads, and that is not a convenience.** A site that SEGFAULTS (t768 found
+a live one) must kill its own chunk and nothing else; each child needs its own SpiderMonkey runtime and
+its own Chromium anyway. The parent renders nothing: it splits round-robin (the corpus is stratified, so
+contiguous blocks would hand one child every slow HEAD site), spawns, waits, merges.
+
+**Two accounting defects found and fixed while building it**, both of the shape this instrument exists to
+refuse — *a metric satisfied by measuring LESS*:
+
+1. A killed child leaves its in-flight site as a marker in its own chunk file. Without recovering it, the
+   site that killed the chunk is the one site nobody counts.
+2. **The per-site watchdog files its timeout row and then `std::process::exit(0)`s** — correct for a
+   wedged main thread, fatal for a chunk, because every site QUEUED BEHIND it never runs. Measured on a
+   9-site trial: 8 rows merged, `www.ikea.com` silently absent. A chunk is now a spawn LOOP (re-spawn the
+   remainder, cap 4 rounds, file `crashed` for anything still missing), and the merge prints
+   **sampled vs rows** every time.
+
+```text
+  200 sites, --jobs 8:   29m55s   ·   merged 200 row(s) (sampled 200)
+  200 sites, serial (t767):  ~3h20m
+```
+
+### ⚠⚠⚠ AND THEN THE MEASUREMENT MOVED, SO THE SPEED-UP IS NOT FREE
+
+The t771 sweep read **scored 82 → 52**. Before blaming the engine (t770 had just landed), I ran the
+control: take the 31 sites that lost scorability, re-run them SERIALLY on the same binary.
+
+```text
+  sample of 10 lost sites, SERIAL:   9 scored, 1 genuinely unreachable
+  the same 10 at --jobs 4:           8 scored
+  the same 10 at --jobs 2:           9 scored
+  |Δ shape| for any site that scores, at ANY job count:   max 0.1 pt
+```
+
+**The contamination is binary, and that is the useful part.** A site that completes scores the *same*
+number at any job count — the geometry is not perturbed. What parallelism costs is **scorability**: the
+per-site budget and the network timeouts are WALL-CLOCK, so eight concurrent Chrome+manuk pairs push hard
+sites past a deadline that measures the box, not the engine. At 8 jobs that is 31 of 82 sites; at 4,
+about one in five; at 2, none beyond what serial also loses.
+
+So the t771 row is **CONTAMINATED and is annotated as such in `FIDELITY-PROGRESS.tsv`** — the last honest
+burndown point remains t767's 5.4%, and cert-grade sweeps run at `--jobs 2` (2× faster, denominator
+intact). The 4× number is real and is the right tool for a *triage* sweep, where losing the slowest fifth
+of the corpus is a stated cost rather than a hidden one.
+
+⚠ One genuine result did survive the contaminated run and is worth recording: `www.tz.de` scores
+**0.8426** serially on this tree — it was 0.7503 at t758 and 0.7410 at t767, i.e. **it now clears the
+0.75 bar with room**, which is t770's float fix showing up on a real site.
+
+TICK SHAPE: instrument
+CLUSTER: none — this is the throughput lever the board asked for, plus the calibration it needed.
+Gates: none added; the mechanism's own reconciliation (`sampled == rows`, printed every run, with an
+explicit RECONCILIATION warning when they differ) is the check, and it caught both accounting defects
+above during construction.
+PERF: 200-site sweep **3h20m → 30m** at `--jobs 8`; ~2× at the cert-grade `--jobs 2`.
+WIKI: `docs/wiki/conformance-and-oracles.md` — "the parallel sweep, and what parallelism costs".
+PATTERN: ⚠⚠⚠ **A FASTER INSTRUMENT IS A DIFFERENT INSTRUMENT UNTIL A CONTROL SAYS OTHERWISE.** The
+speed-up was requested, delivered, and would have been reported as a win — the fan-out is lossless in
+*accounting* (sampled == rows, every site has a row) and the rows all looked ordinary. What moved was
+which sites got a row at all, and the headline fell 5.4% → 3.1% for a reason that had nothing to do with
+the engine. The generalisable form: **when you change HOW a measurement is taken, the first run of the
+new instrument is a comparison against the old one, not a result.** Any wall-clock budget inside a
+measurement is a budget on the MACHINE, so any change to what else the machine is doing changes the
+metric — and the tell is a scorability shift with stable scores, which is exactly what the denominator
+trap looks like from the inside.
