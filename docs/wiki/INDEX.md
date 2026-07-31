@@ -1315,6 +1315,7 @@
   - L1450 · A line box with no content-bearing member does not exist — and the spec's own sentence is too wide (tick 761)
   - L1471 · Chrome is NARROWER than its own spec text, and only the measurement says so
   - L1495 · Chrome does not break after a solidus (t791)
+  - L1527 · A text-bearing inline-block sits on its own baseline (t795)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1342,4 +1343,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1253 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1254 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

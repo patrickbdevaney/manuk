@@ -1523,3 +1523,38 @@ URL to be broken still gets it. That assertion is what separates this from a reg
 parity number — and it is the one number in the gate I first wrote from an assumption (77px, *"the URL
 with every slash broken"*) rather than from Chrome. Chrome reads 58. **Thirteen measured numbers and
 one invented one, and the invented one was in the guard.**
+
+## A text-bearing `inline-block` sits on its own baseline (t795)
+
+CSS 2.1 §10.8.1: the baseline of an `inline-block` is **the baseline of its last in-flow line box** —
+unless it has no in-flow line boxes, or `overflow` computes to something other than `visible`, in
+which case it is the bottom margin edge. We implemented only the fallback, so a text-bearing
+inline-block sat entirely above the line's baseline and its line box grew by the whole strut descent.
+
+```
+                                                    Chrome   before   after
+  <span style="display:inline-block">Ay</span>Ay     19.19     23      19
+  …with padding:5px                                  29.19     33      29
+  …with overflow:hidden                              23.38     23      23   ✓ (fallback)
+  an EMPTY inline-block + text                       19.19     19      19   ✓ (fallback)
+  a 20×20 empty inline-block + text                  24.19     24      24   ✓ (fallback)
+```
+
+⚠ **The three rows that already matched are the fallback cases — which is exactly why this survived
+690 ticks.** The rule we implemented is a real rule; it was applied to every box instead of to the two
+kinds it belongs to. A wrong rule that is right a third of the time, and silent the rest, is the
+hardest shape to see from the inside.
+
+About 4px per line, on every row of chips, nav items, badges, tags, buttons and inline lists on the
+modern web — compounding down the page as `dy`. Measured: `blog.rust-lang.org` **73.7% → 99.3%**
+shape on 1664 elements, `chat.google.com` **72.9% → 84.7%** (crossing the bar), `255md.com` 69.8 →
+72.1, `en.wikipedia.org` 58.8 → 60.4.
+
+⚠ **`blog.rust-lang.org` had been this loop's control site all day**, sitting at 73.6–73.7% through six
+consecutive fixes, and its byte-identical reading was quoted as evidence each time. It was
+byte-identical because none of those fixes touched what was actually wrong with it. **A control that
+never moves is telling you about your fixes, not about the site.**
+
+⚠ It was found by a probe built to ask a different question — sub-pixel accumulation, whose answer was
+"no bug". The container height in the same output read 22 against Chrome's 18, and nobody had asked.
+**A probe is worth more than its hypothesis.**

@@ -536,3 +536,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 791	cd77c82b	1785511224	2026-07-31T11:20:24-04:00	1818	capability	63	9	322	41	365	81	3896	6960	0	409	0	Chrome does not break a line after `/`, and every URL in body text says so (2026-07-31)
 792	56e28c89	1785512745	2026-07-31T11:45:45-04:00	1521	capability	63	11	328	33	366	81	3896	6960	0	410	0	a float belongs to its own block, not to the viewport (2026-07-31)
 793	105b3689	1785517527	2026-07-31T13:05:27-04:00	4782	capability	63	6	340	32	366	81	3896	6960	0	410	0	`order` lays items out in order-modified document order (2026-07-31)
+794	4c615ee0	1785519272	2026-07-31T13:34:32-04:00	1745	measurement	63	9	363	36	367	81	3896	6960	0	411	0	bank the sweep the cadence rule asks for, before an eighth fix (2026-07-31)

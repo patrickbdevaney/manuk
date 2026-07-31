@@ -41211,3 +41211,83 @@ DELTA.** Five sites changed reachability between two runs of one corpus; the in-
 127, so that is four points of headline before the engine is consulted at all. The fix is not a
 stricter threshold or a bigger corpus — it is PAIRING: compare the sites both runs scored, and report
 the unpaired number beside it rather than instead of it. [no-pattern]
+
+## Tick 795 — a text-bearing `inline-block` sits on ITS OWN baseline (2026-07-31)
+
+TICK SHAPE: capability (inline layout) — the largest single per-site move this session, from the
+§8-first order t794 argued for
+
+HYPOTHESIS (written before the fix): t794's own conclusion was *take a site off the crossing-ranked
+list and work whatever that site needs*. The top two are `chat.google.com` (+0.021 to the bar) and
+`255md.com` (+0.052). Both show the same shape: a container where **Chrome wraps and we do not** —
+chat.google's footer `<ul>` puts its third `<li>` on a second row at 192px and we fit three at 193px;
+255md's footer `<a>` is 84×44 in Chrome and 85×22 here.
+
+**TWO NEGATIVE RESULTS FIRST, AND THEY ARE WHY THE THIRD PROBE WAS AIMED WHERE IT WAS.**
+
+* **Text advance widths are Chrome-exact.** Nine strings × five font stacks: `Hello world` 79.14 vs
+  79, the pangram 316.61 vs 317, `iiiiiiiiii` 35.55 vs 36, `WWWWWWWWWW` 151.02 vs 151, serif,
+  monospace, 13.3px Arial, 24px — every one inside half a pixel. **The scariest hypothesis available
+  — "our font metrics are systematically narrow" — is dead**, and it cost one fixture.
+* **Sub-pixel advance does not accumulate.** Three `Privacy Policy` inline-blocks (99.58 each) in a
+  299px box: Chrome 0 / 99.58 / 199.16, ours 0 / 100 / 199 — we carry the fraction and round only at
+  report time, so there is no per-item ceil.
+
+But that fixture's CONTAINER read **22px against Chrome's 18**, which was not what it was built to
+measure. Pulling that thread:
+
+MECHANISM — CSS 2.1 §10.8.1: the baseline of an `inline-block` is **the baseline of its last in-flow
+line box**, unless it has no in-flow line boxes or `overflow` is not `visible`, in which case it is
+the bottom margin edge. **We implemented only the fallback.** So a text-bearing inline-block sat
+entirely above the line's baseline and its line box grew by the whole strut descent.
+
+```
+                                                    Chrome   before   after
+  <span style="display:inline-block">Ay</span>Ay     19.19     23      19    ✗→✓
+  …with padding:5px                                  29.19     33      29    ✗→✓
+  …with overflow:hidden                              23.38     23      23    ✓ (the fallback)
+  an EMPTY inline-block + text                       19.19     19      19    ✓ (the fallback)
+  a 20×20 empty inline-block + text                  24.19     24      24    ✓ (the fallback)
+```
+
+⚠ **The three rows that already matched are the fallback cases, and that is exactly why this survived
+690 ticks: the rule we implemented is a REAL rule, applied to every box instead of to the two kinds it
+belongs to.** A wrong rule that is right a third of the time and silent the rest is the hardest shape
+there is to see from the inside.
+
+**WHAT IT WAS WORTH — every one of these is the same binary, minutes apart:**
+
+```
+  blog.rust-lang.org   73.7% -> 99.3%   (+25.6 on 1664 scored)   ← the CONTROL site all session
+  chat.google.com      72.9% -> 84.7%   (+11.8)  CROSSES the 0.75 shape bar
+  255md.com            69.8% -> 72.1%   ·  en.wikipedia.org 58.8% -> 60.4%
+  news.ycombinator     80.0% -> 79.1%   ·  simplepdf.com 78.6% -> 77.4%   (both inside the ±3.7 spread)
+  secure5              79.5% -> 79.5%   ·  every coverage count unchanged
+```
+
+⚠ **`blog.rust-lang.org` HAD BEEN THIS LOOP'S CONTROL SITE ALL DAY.** It sat at 73.6–73.7% through six
+consecutive fixes and I used its byte-identical reading as evidence each time. It was byte-identical
+because none of those fixes touched what was wrong with it — **a control that never moves is telling
+you about the fixes, not about the site**, and 25.6 points were sitting in it the whole time.
+
+Gate: `G_INLINE_BLOCK_BASELINE` (new) — all five Chrome-measured heights, so a fix that "simplified"
+the rule cannot quietly break the three fallback rows, plus an assertion that the line-box
+contribution and the placement are inverses (the box must sit at its line's top). **Proven red two
+ways:** restoring the bottom-margin-edge rule fails `#c1` at 23.4; ignoring the `overflow` condition
+fails `#c4` at 19.2 — each mutation fails exactly the rows it should and no others.
+
+HONEST SCOPE: one site is claimed to cross the SHAPE bar (`chat.google.com`), and M1 also needs
+jarring-clean, which it is. The corpus price comes at the next sweep — and after t794 I will not quote
+an unpaired sweep delta as this fix's result.
+
+PERF: none claimed — one extra tree walk per inline-block, over a subtree already laid out.
+
+WIKI: `docs/wiki/text-layout.md` — "A text-bearing `inline-block` sits on its own baseline"
+
+PATTERN: ⚠⚠⚠ **THE FIXTURE THAT ANSWERS YOUR QUESTION ALSO MEASURES THINGS YOU DID NOT ASK ABOUT —
+READ THE WHOLE OUTPUT.** This came out of a sub-pixel probe built to test accumulation, whose
+accumulation answer was "no bug". The container height in the same output was 22 against 18, and it
+was not part of the question. Three of this session's findings arrived this way (nested `@layer` from
+a nesting control, this from a sub-pixel control, the float bug from a positioning sweep aimed at
+reading-order). **A probe is worth more than its hypothesis.**
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
