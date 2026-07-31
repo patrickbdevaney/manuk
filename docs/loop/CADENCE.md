@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **533** | ticks 1–788 |
-| median tick cycle | **23m** | 532 intervals |
-| median, last 10 | **39m** | 10 intervals |
+| ticks landed | **534** | ticks 1–790 |
+| median tick cycle | **23m** | 533 intervals |
+| median, last 10 | **44m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 484.5h elapsed |
-| median verify wall | **63s** | 472 ticks |
+| **ticks per hour** | **1.10** | 485.3h elapsed |
+| median verify wall | **63s** | 473 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **362**
-* **✅ rows in the capability ledger**: 144 → **406**
+* **live gates**: 27 → **363**
+* **✅ rows in the capability ledger**: 144 → **407**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**254 of 533 ticks** (48%) moved a
+**255 of 534 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **254** capability ticks, median cycle **23m**
-* median diff per tick: **+251 / −34** lines across 8 files
+* **255** capability ticks, median cycle **23m**
+* median diff per tick: **+252 / −34** lines across 8 files
 
 ## Every tick
 
@@ -630,5 +630,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **786** | 2026-07-31 08:45 | 36m | measurement | 63s | +507/−50 | 362 | 81 | 56.0% · | bank a clean sweep: did the key change convert the corpus, or four sites? (2026-07-31) |
 | **787** | 2026-07-31 09:05 | 20m | capability | 63s | +177/−34 | 362 | 81 | 56.0% · | a form control does not inherit the page's font, and `rows` was never read (2026-07-31) |
 | **788** | 2026-07-31 09:35 | 30m | process | 63s | +256/−36 | 362 | 81 | 56.0% · | the two due audits, and the M1 population nobody had enumerated (2026-07-31) |
+| **790** | 2026-07-31 10:22 | 47m | capability | 63s | +362/−44 | 363 | 81 | 56.0% · | a layer exists to LOSE, and ours won (2026-07-31) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

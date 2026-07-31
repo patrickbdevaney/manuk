@@ -1292,6 +1292,38 @@ struct RuleIndex {
     by_class: std::collections::HashMap<String, Vec<u32>>,
     by_tag: std::collections::HashMap<String, Vec<u32>>,
     universal: Vec<u32>,
+    /// **CASCADE LAYERS — the sort criterion between origin and specificity.** Named layers in the
+    /// order they were first declared, so `@layer reset, theme;` fixes the order before either
+    /// block appears (which is the whole point of the statement form). A layer's rank is its index
+    /// here; anonymous `@layer { … }` blocks take a fresh rank each and are never looked up.
+    layer_names: Vec<String>,
+    /// The layer the walk is currently inside — `UNLAYERED` at the top level. Carried as state
+    /// rather than as a ninth `add_rules` parameter: the walk is single-threaded and every
+    /// recursion site would otherwise have to remember to thread it, which is exactly how the
+    /// `origin_rank` argument got dropped on one path once already.
+    cur_layer: u16,
+    /// The next rank an anonymous layer takes. Anonymous layers are ordered among themselves and
+    /// against named ones by declaration order, so they share the same counter space.
+    next_layer: u16,
+}
+
+/// **Unlayered author declarations BEAT layered ones, regardless of document order** (CSS Cascade 5
+/// §6.4.4), which is the entire reason an author moves a component's styles into a layer: the layer
+/// exists to LOSE to the page's own rules. Measured at t787 (audit #50) with layers flattened into
+/// document order: `#h { width:100px }` then `@layer L { #h { width:333px } }` read Chrome **100**
+/// and ours **333**.
+///
+/// So unlayered takes the TOP rank and layers count up from zero in declaration order (a later
+/// layer beats an earlier one). Sorting ascending and merging in that order means the last block
+/// merged wins, which is the convention the rest of this sort already uses.
+const UNLAYERED: u16 = u16::MAX;
+
+/// A layer's name as written, for identity only — `@layer a` reopened later is the SAME layer, and
+/// two blocks must not take two ranks. Serialised through Stylo's own `ToCss` so a dotted sublayer
+/// name (`@layer framework.base`) keeps the form the author wrote rather than one we invent.
+fn layer_name_string(n: &stylo::stylesheets::layer_rule::LayerName) -> String {
+    use style_traits::ToCss;
+    n.to_css_string()
 }
 
 struct IndexedRule {
@@ -1302,6 +1334,9 @@ struct IndexedRule {
     /// `* { margin: 0 }`, which is the first rule of every CSS reset on the web. See the sort in
     /// `cascade_element`/`cascade_pseudo` and the note on the UA sheet's `Origin` at its parse site.
     origin_rank: u8,
+    /// The rule's cascade LAYER rank — `UNLAYERED` (the maximum) when it is not in a layer at all,
+    /// which is the case for the overwhelming majority of rules and is also the WINNING value.
+    layer_rank: u16,
     spec: u32,
     order: usize,
     block: ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>,
@@ -1326,6 +1361,9 @@ impl RuleIndex {
             by_class: Default::default(),
             by_tag: Default::default(),
             universal: Vec::new(),
+            layer_names: Vec::new(),
+            cur_layer: UNLAYERED,
+            next_layer: 0,
         };
         let mut order = 0usize;
         let mut cq_stack: Vec<ServoArc<Vec<ContainerCondition>>> = Vec::new();
@@ -1344,6 +1382,24 @@ impl RuleIndex {
             );
         }
         idx
+    }
+
+    /// The rank of a NAMED layer, allocating it on first sight. Order of first declaration is the
+    /// layer's order — whether that first sight is a `@layer a, b;` statement or the block itself.
+    fn layer_rank_for(&mut self, name: &str) -> u16 {
+        if let Some(i) = self.layer_names.iter().position(|n| n == name) {
+            return i as u16;
+        }
+        let r = self.next_layer;
+        self.next_layer = self.next_layer.saturating_add(1);
+        self.layer_names.push(name.to_string());
+        // `layer_names` is indexed BY RANK, so a name allocated after an anonymous block has to sit
+        // at its own rank's index — pad rather than push out of alignment.
+        while self.layer_names.len() <= r as usize {
+            self.layer_names.push(String::new());
+        }
+        self.layer_names[r as usize] = name.to_string();
+        r
     }
 
     /// Index one declaration block against one already-`&`-resolved selector list.
@@ -1386,6 +1442,7 @@ impl RuleIndex {
             self.rules.push(IndexedRule {
                 sel: sel.clone(),
                 origin_rank,
+                layer_rank: self.cur_layer,
                 spec: sel.specificity(),
                 order: *order,
                 block: block.clone(),
@@ -1571,6 +1628,19 @@ impl RuleIndex {
                     }
                 }
                 CssRule::LayerBlock(layer) => {
+                    // A named layer keeps ONE rank across every block that reopens it — `@layer a`
+                    // written twice is one layer, not two — so the name is looked up rather than
+                    // counted. An anonymous block is its own layer by definition and can never be
+                    // reopened, so it takes a fresh rank and is not recorded under any name.
+                    let outer = self.cur_layer;
+                    self.cur_layer = match &layer.name {
+                        Some(n) => self.layer_rank_for(&layer_name_string(n)),
+                        None => {
+                            let r = self.next_layer;
+                            self.next_layer = self.next_layer.saturating_add(1);
+                            r
+                        }
+                    };
                     let nested = layer.rules.read_with(guard);
                     self.add_rules(
                         &nested.0,
@@ -1582,6 +1652,17 @@ impl RuleIndex {
                         origin_rank,
                         parent,
                     );
+                    self.cur_layer = outer;
+                }
+                // `@layer reset, theme;` — the STATEMENT form, which declares the order before
+                // either block exists. Ignoring it is not a small loss: the statement is the
+                // idiomatic way to fix layer order at the top of a sheet precisely so the blocks
+                // can then appear in any order, so a walk that ranked layers by first BLOCK would
+                // get the common case backwards.
+                CssRule::LayerStatement(stmt) => {
+                    for name in stmt.names.iter() {
+                        self.layer_rank_for(&layer_name_string(name));
+                    }
                 }
                 // `CssRule::Container` never appears here: stylo's servo build parses the
                 // `@container` at-rule only under `cfg!(feature = "gecko")` (rule_parser.rs), so
@@ -2072,6 +2153,7 @@ fn cascade_pseudo(
     }
     let mut winners: Vec<(
         u8,
+        u16,
         u32,
         usize,
         ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>,
@@ -2086,17 +2168,22 @@ fn cascade_pseudo(
             MatchingForInvalidation::No,
         );
         if matches_selector(&r.sel, 0, None, el, &mut ctx) {
-            winners.push((r.origin_rank, r.spec, r.order, r.block.clone()));
+            // ⚠ The PSEUDO index does not carry a layer rank yet — `UNLAYERED` for every rule, so
+            // this sort behaves exactly as it did before layers were ranked. Stated rather than
+            // silently omitted: `@layer { .x::before { … } }` still loses to nothing, which is the
+            // pre-t790 behaviour and a named residue, not a claim.
+            winners.push((r.origin_rank, UNLAYERED, r.spec, r.order, r.block.clone()));
         }
     }
     if winners.is_empty() {
         return None;
     }
-    // ORIGIN FIRST, then specificity, then document order (CSS Cascade §6). Sorting on
-    // `(spec, order)` alone let the UA sheet's type selectors beat an author reset's `*`.
-    winners.sort_by_key(|(rank, spec, ord, _)| (*rank, *spec, *ord));
+    // ORIGIN FIRST, then LAYER, then specificity, then document order (CSS Cascade §6). Sorting on
+    // `(spec, order)` alone let the UA sheet's type selectors beat an author reset's `*`; sorting
+    // without the layer term let a layer beat the unlayered rules it exists to lose to.
+    winners.sort_by_key(|(rank, layer, spec, ord, _)| (*rank, *layer, *spec, *ord));
     let mut merged = PropertyDeclarationBlock::new();
-    for (_, _, _, block) in &winners {
+    for (_, _, _, _, block) in &winners {
         for (decl, importance) in block.read_with(guard).declaration_importance_iter() {
             merged.push(decl.clone(), importance);
         }
@@ -2155,6 +2242,7 @@ fn cascade_one_element(
     // ordered by (specificity, source order).
     let mut winners: Vec<(
         u8,
+        u16,
         u32,
         usize,
         ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>,
@@ -2195,16 +2283,23 @@ fn cascade_one_element(
                     continue;
                 }
             }
-            winners.push((r.origin_rank, r.spec, r.order, r.block.clone()));
+            winners.push((
+                r.origin_rank,
+                r.layer_rank,
+                r.spec,
+                r.order,
+                r.block.clone(),
+            ));
         }
     }
-    // ORIGIN FIRST, then specificity, then document order (CSS Cascade §6). Sorting on
-    // `(spec, order)` alone let the UA sheet's type selectors beat an author reset's `*`.
-    winners.sort_by_key(|(rank, spec, ord, _)| (*rank, *spec, *ord));
+    // ORIGIN FIRST, then LAYER, then specificity, then document order (CSS Cascade §6). Sorting on
+    // `(spec, order)` alone let the UA sheet's type selectors beat an author reset's `*`; sorting
+    // without the layer term let a layer beat the unlayered rules it exists to lose to.
+    winners.sort_by_key(|(rank, layer, spec, ord, _)| (*rank, *layer, *spec, *ord));
 
     // Merge winning declarations (ascending priority: later overrides earlier).
     let mut merged = PropertyDeclarationBlock::new();
-    for (_, _, _, block) in &winners {
+    for (_, _, _, _, block) in &winners {
         for (decl, importance) in block.read_with(guard).declaration_importance_iter() {
             merged.push(decl.clone(), importance);
         }

@@ -411,6 +411,7 @@
   - L1814 · ⚠ Why it survived the entire project, which is the part worth keeping
   - L1823 · And the headline metric could not see it either
   - L1832 · A nested @media lost its declarations, and only its declarations (t785)
+  - L1873 · A layer exists to LOSE, and ours won (t790)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1338,4 +1339,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1249 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1250 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -1869,3 +1869,36 @@ entertimeonline's rule is in one — so 8% is a floor.
 `dy`*, and every previous attempt at it went looking for a sizing primitive. This box was the wrong
 width because a declaration that would have sized it never entered the cascade. **The evidence was not
 in the boxes; it was in the four lines of CSS the site actually served, one `curl` away.**
+
+## A layer exists to LOSE, and ours won (t790)
+
+`@layer` is how a page keeps a framework overridable: the vendor's rules go in a layer, the page's own
+rules stay unlayered, and **unlayered beats layered regardless of document order.** That last clause is
+the whole feature. We flattened layers into document order, so it read exactly backwards:
+
+```css
+#h { width: 100px }
+@layer L { #h { width: 333px } }        Chrome 100   ·   ours 333   (before t790)
+```
+
+The fix is one term in the winner sort, between ORIGIN and SPECIFICITY: unlayered takes the top rank,
+layers count up from zero in declaration order.
+
+**Two clauses decide whether an implementation is right or merely plausible.**
+
+1. **The `@layer reset, theme;` STATEMENT form fixes the order before either block exists.** It is
+   written at the top of a sheet precisely so the blocks below can appear in any order — which is the
+   idiom nearly all real usage takes. An engine that ranks layers by first BLOCK reads it backwards.
+   In the gate: `theme` must win at 300 though its block is written *before* `reset`'s.
+2. **"Layers lose" must not become "layers are ignored".** A declaration that exists ONLY in a layer
+   still applies. A fix aimed at symptom 1 alone breaks this, and the two are indistinguishable on
+   every page where both a layered and an unlayered rule exist — which is where the bug was found.
+
+Named residues: the pseudo-element index carries no layer rank (every pseudo rule is unlayered, the
+pre-t790 behaviour), and `!important` does not yet **reverse** layer order the way the spec requires.
+
+⚠ **Where it came from is the transferable part.** Nobody went looking for cascade layers. The t785
+nesting fix's own probe fixture had a nested `@layer` line in it as a *control*, Chrome disagreed on
+that line, and pulling the thread found a top-level defect that had nothing to do with nesting. **A
+capability's neighbours are the cheapest place to find the next defect, because the fixture is already
+open and the reference is already running.**

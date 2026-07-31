@@ -40841,3 +40841,67 @@ IS A MEASUREMENT.** 17px short on a 24-character option and 17px short on a one-
 cannot be a font metric, and that single observation is what turned "our select text is narrow"
 into "our select reserves no arrow" — before any code was read. The two-point probe cost one fixture.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 790 — a layer exists to LOSE, and ours won (2026-07-31)
+
+TICK SHAPE: capability (CSS cascade) — one sort term, and the two clauses that decide whether it is
+right or merely plausible
+
+HYPOTHESIS (written before the fix): check #64's steer #2, from audit #50's measurement. `@layer` is
+how a page keeps a framework overridable — the vendor's rules go in a layer, the page's own stay
+unlayered, and **unlayered beats layered regardless of document order.** We flattened layers into
+document order, so it read exactly backwards: `#h{width:100px}` then `@layer L{#h{width:333px}}` gave
+Chrome 100 and ours 333. The framework's styles beating the page's own is the precise outcome the
+author moved them into a layer to prevent.
+
+MECHANISM: the winner sort was `(origin, specificity, document order)`. CSS Cascade 5 §6.4.4 puts
+LAYER between origin and specificity. `IndexedRule` gains a `layer_rank`; unlayered takes the top rank
+(`u16::MAX`, so it sorts last and therefore wins under the merge convention already used here) and
+layers count up from zero in declaration order. The walk carries the current layer as index state
+rather than as a ninth `add_rules` parameter — every recursion site would otherwise have to remember
+to thread it, which is how the `origin_rank` argument was dropped on one path once already.
+
+**TWO CLAUSES DECIDE WHETHER THIS IS RIGHT OR MERELY PLAUSIBLE, and both are in the gate:**
+
+1. **The `@layer reset, theme;` STATEMENT form fixes the order before either block exists.** It sits
+   at the top of a sheet precisely so the blocks below can arrive in any order — the idiom essentially
+   all real usage takes. An engine ranking layers by first BLOCK reads it backwards. Measured: `theme`
+   must win at 300 although its block is written *before* `reset`'s.
+2. **"Layers lose" must not become "layers are ignored".** A declaration existing ONLY in a layer still
+   applies. A fix aimed at the first symptom alone breaks this, and the two are indistinguishable on
+   every page where a layered and an unlayered rule both exist — which is where the bug was found.
+
+MEASURED, all five against headless Chrome on the same fixture the gate loads:
+
+```
+                                                        Chrome   before   after
+a  @layer reset, theme;  theme block first                300      111     300
+b  later layer beats earlier                              300      111     300
+c  UNLAYERED beats layered (audit #50's case)             100      333     100
+d  a declaration ONLY in a layer still applies            210      210     210
+e  an anonymous @layer { } is a layer too                 100      250     100
+
+CONTROLS  blog.rust-lang.org 73.6% (1664 paths) · news.ycombinator 80.0% · secure5 79.5%
+          en.wikipedia.org 53.3% — all unchanged
+```
+
+Gate: `G_CASCADE_LAYERS` (new). **Proven red two ways, and the second is the one worth having:**
+dropping the layer term from the sort fails `#a`; dropping the `CssRule::LayerStatement` arm *also*
+fails `#a` and nothing else — the statement form is a separate mechanism from the block form and a
+gate without a statement case would have called a half-implementation green.
+
+HONEST SCOPE: no site is claimed to cross; every control is byte-identical. RESIDUES, named: the
+PSEUDO-element index carries no layer rank (every pseudo rule is `UNLAYERED` — the pre-t790 behaviour,
+stated at the push site rather than silently omitted), and `!important` does not yet REVERSE layer
+order the way the spec requires.
+
+PERF: none claimed — one `u16` in the sort tuple and one comparison per winner.
+
+WIKI: `docs/wiki/css-cascade.md` — "A layer exists to LOSE, and ours won"
+
+PATTERN: ⚠⚠ **A CAPABILITY'S NEIGHBOURS ARE THE CHEAPEST PLACE TO FIND THE NEXT DEFECT — THE FIXTURE
+IS ALREADY OPEN AND THE REFERENCE IS ALREADY RUNNING.** Nobody went looking for cascade layers. t785's
+nesting probe carried a nested `@layer` line as a CONTROL, Chrome disagreed on that line, and pulling
+it found a top-level cascade defect with nothing to do with nesting. Three of this session's six
+capability findings came out of a fixture written to check something else.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
