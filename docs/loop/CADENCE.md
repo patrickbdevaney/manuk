@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **524** | ticks 1–778 |
-| median tick cycle | **23m** | 523 intervals |
-| median, last 10 | **46m** | 10 intervals |
+| ticks landed | **525** | ticks 1–779 |
+| median tick cycle | **23m** | 524 intervals |
+| median, last 10 | **40m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 476.8h elapsed |
-| median verify wall | **63s** | 463 ticks |
+| **ticks per hour** | **1.10** | 477.0h elapsed |
+| median verify wall | **63s** | 464 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **403**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**251 of 524 ticks** (48%) moved a
+**252 of 525 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **251** capability ticks, median cycle **23m**
-* median diff per tick: **+248 / −34** lines across 8 files
+* **252** capability ticks, median cycle **23m**
+* median diff per tick: **+247 / −34** lines across 8 files
 
 ## Every tick
 
@@ -621,5 +621,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **776** | 2026-07-31 00:48 | 2.0h | capability | 63s | +845/−41 | 359 | 81 | 56.0% · | every `document.X` shim was an own property of the SINGLETON, so a second document threw ( |
 | **777** | 2026-07-31 01:20 | 32m | capability | 63s | +580/−39 | 360 | 81 | 56.0% · | `screen.orientation` was a two-field object literal, and no probe of NAMES could see it (2 |
 | **778** | 2026-07-31 01:52 | 32m | capability | 63s | +355/−35 | 361 | 81 | 56.0% · | six readonly IDL attributes on `Node.prototype`, so `this.index = 0` killed the constructo |
+| **779** | 2026-07-31 02:01 | 9m | capability | 63s | +210/−33 | 361 | 81 | 56.0% · | "booted-but-thin" is TWO populations, and the bigger one is perf, not a missing API (2026- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

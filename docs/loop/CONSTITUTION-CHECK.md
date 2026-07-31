@@ -3342,3 +3342,112 @@ And the mechanism, which generalises past this API:
    hypothesis.
 
 **Next check due: tick 780.**
+
+---
+
+## Check #63 — tick 780
+
+**Horizon:** H0 / PART VII item 1 — *daily-driver rendering parity*, measured as `shape ≥ 0.75` on
+≥95% of the in-scope CrUX corpus. **Gate:** the M1 leg of the owner-locked Phase-0 sequence.
+
+**Gate or scoreboard?** ⚠ **This check exists to record that the gate has not moved in nineteen ticks,
+and that the instrument said otherwise.**
+
+The t777 sweep — the first cert-grade `--jobs 2` run since the function pivot — lands the leg's honest
+trend next to its two honest predecessors:
+
+```
+tick    scored   pass   in-scope-pass   jarring-clean   M1 gate   shape_mean
+t758      83      7        5.4%            23.8%         2.3%       41.3
+t767      82      7        5.4%            25.4%         2.3%       43.5
+t777      81      7        5.4%            24.0%         2.3%       46.3
+```
+
+Every crossing number is identical. The only thing that moved is `shape_mean`, +5.0 points. That is
+`PHASE0-RENDER-BURNDOWN.md` §7's own predicted failure mode — *"the band rises faster than
+crossings"* — now observed rather than forecast.
+
+**And `fidelity-progress.sh` printed `+2.3 pts/sweep → ~39 more sweeps to 95%`**, because it diffs
+against **t771**, the row whose own ledger header says it is contaminated. The honest slope is **0.0**.
+Per I5 and the standing rule that a number's *name* is not its definition, the `+2.3` was refused
+rather than banked, and the burndown carries no ETA right now. **A leg with a zero slope is not behind
+schedule; it is un-ranked.**
+
+### PART VI / VII CORRECTION — the ranking axis was wrong, and it was wrong in a knowable way
+
+The previous check's steer (*"keep working the unscored list, ranked by shared bundle"*) was followed:
+t772–t779 landed ~8 throw-killers, and they **worked** — `render-failed` 12→5, `timeout` 6→3, ~10 sites
+that crashed at boot now boot. The leg's own metric still did not move, because the rescued sites
+landed in `thin-overlap`: they boot and then render <20% of Chrome's DOM.
+
+> **Clearing a boot throw is necessary and not sufficient. The function leg is a CHAIN, and its metric
+> only moves when a site reaches the END of it.** Ranking by *the rung a site is stuck on* rewards
+> clearing rung 1 on many sites; the metric pays only for sites that clear the last rung.
+
+The complementary correction, on the render side, is that the loop had no crossing-ranked list at all:
+
+> **Rank by MARGINAL CROSSINGS, not by cluster mass, band width, or mean shape.** Four fully-covered,
+> jarring-clean sites sit within **0.06** of the bar with **fewer than 100 scored elements each**
+> (`chat.google.com` +0.021, `kicktipp` +0.025, `255md.com` +0.052, `secure5.entertimeonline.com`
+> +0.058) — roughly **eight mis-placed elements across three pages** would double the M1 gate. Banked
+> as `PHASE0-RENDER-BURNDOWN.md` §8.
+
+### ⚠ THE COHORT IS PARTLY AN ARTEFACT — measured this tick, and it invalidates part of t779
+
+t779 split "booted-but-thin" into *timeout-starved* and *fast-but-empty*. Re-measuring the second group
+against the sweep rows rather than the steer's site list breaks it:
+
+- **`www.amazon.com.mx` was never in the cohort.** Its row reads `probe-blocked`, and a direct run today
+  returns **HTTP 202 with a zero-byte body** — a bot wall, excluded by the NO-STEALTH policy. It was
+  quoted in t779 as the flagship "fast but empty" case **because the steer's list named it and I did not
+  check its row.** That claim is withdrawn.
+- **`sports.yahoo.com` flips between runs**: `coverage 0.09` in the sweep, **0.97 (verdict `ok`)** on a
+  direct run today, with the 12s budget exhausted six times in both. So **thin-overlap membership is a
+  timing lottery for slow sites**, and any work-list built from one sweep's membership inherits that
+  noise. *This is the same lesson as the ±40-pt per-site swings of t745-751, one label over.*
+- **`www.naukri.com` is the one clean case** — 11.7s (under budget), no exhaustion, coverage 15.8%, 48
+  missing elements, and the instrument names it itself: *"a coverage failure wearing an 'unscored'
+  label"*. Its four unhandled rejections are a **permission-fingerprinting probe** (`clipboard`,
+  `speaker`, `device-info`, `accessibility-events`), which Chrome largely rejects too — not a defect.
+
+### INVARIANTS
+
+- **I2 (never patch dependencies):** held — fork surface still empty; t777-t779 touched only our own
+  prelude and bindings.
+- **I3 (semantic model in lockstep):** held. t778's fix lets custom-element constructors complete, so
+  every component element it recovers enters `node_rects` and the a11y tree by construction.
+- **I4 (Pareto discipline):** held. Custom-element constructors and `permissions.query` are both
+  Baseline-Widely-Available and on the boot path; neither is a tail item.
+- **I5 (the oracle/log is the discovery engine):** held, and it paid twice. t778 came from a log line
+  (`setting getter-only property "index"`, 18× on one site) and t779's whole measurement came from
+  **mining the sweep log while the sweep was still running** — at zero CPU, on a box that could not be
+  used for anything else.
+- **PART VII / V1-SCOPE:** honoured. No `scripts/` file authored or edited in t777-t780.
+
+**One invariant is being bent, and it is named rather than absorbed:** the standing rule that *"a fix
+MUST raise in-scope-pass on the next sweep or it is reverted/re-scoped"* (`PHASE0-RENDER-BURNDOWN.md`
+§4.3) has now failed nineteen consecutive ticks, and nothing was reverted. Reverting real, gated,
+falsified fixes because a **badly-ranked** work-list did not move a metric would be the wrong reading —
+but leaving the rule silently unenforced is how a ratchet becomes decoration. **It is re-scoped, not
+dropped:** the rule binds from the next sweep onward, applied to ticks chosen off the §8
+crossing-ranked list, where "did the named site cross" is a question the tick can actually answer.
+
+### THE STEER
+
+1. **TAKE THE §8 CROSSING-RANKED LIST, NOT THE CLUSTER LEDGER.** The next render tick starts at
+   `secure5.entertimeonline.com`'s `<article>` — ours `[33 120 1134×452]`, Chrome `[0 120 487×354]`. We
+   give a `width:auto` box the full containing block and centre it; Chrome shrink-wraps to 487. That is
+   **min/max-content intrinsic sizing**, the step-function lever the board has carried for many ticks,
+   now attached to named sites with per-element evidence. ⚠ The mechanism oracle **already prints
+   per-element `[x y w×h] {font/size}` for both engines** — no instrument work is needed first.
+2. **PERF IS NOW A FIDELITY BLOCKER, NOT A COMFORT METRIC — AND IT IS THE MAJORITY OF THE THIN COHORT.**
+   trivago.de 25.7s vs Chrome 5.1s, trivago.be 25.5/5.7, monopolybingo 27.1/4.2, coinmarketcap
+   38.8/11.7, sports.yahoo 41.0/24.3 — budget exhausted ~5× each, painting an unpopulated DOM. No API
+   tick moves these. This is the one place where a load-path tick is squarely on-mandate.
+3. **THE WRITE PATH IS AN UNAUDITED SURFACE.** t778's defect survived every existing gate because
+   **every gate in this repo READS**. One bounded, high-expected-yield tick: enumerate the accessors
+   installed on `Node.prototype` / `Document.prototype` and assert an *assignment* against each, the way
+   `G_EXPANDO_READONLY` does for six. The same question generalises to the other access modes — lift-off
+   -the-prototype, enumerate, delete.
+
+**Next check due: tick 788.**

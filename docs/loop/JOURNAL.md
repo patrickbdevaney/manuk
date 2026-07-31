@@ -40038,3 +40038,70 @@ question nobody asks: for every API that partitions its input into *known* and *
 partition must match the reference's **on both sides**. Ours was too small, so valid probes rejected;
 the tempting repair makes it too large, so invalid probes resolve — and the second error is invisible
 without a control that asserts the rejection.
+
+## Tick 780 — constitution check #63, and the "fast-but-empty" cohort I named last tick does not exist (2026-07-31)
+
+TICK SHAPE: measurement + cadence (constitution check due at 780; no engine source changed)
+
+**THE CADENCE ITEM.** `docs/loop/CONSTITUTION-CHECK.md` **check #63** is written and
+`LAST_CONSTITUTION_CHECK` moved 772 → 780. Its finding, in one line: **the M1 gate has not moved in
+nineteen ticks** (t758/t767/t777 all read in-scope pass 5.4%, 7 passing sites, M1 2.3%) **while
+`shape_mean` rose 41.3 → 46.3**, and the progress script reported a positive slope only because it
+diffed the row its own ledger header marks contaminated. The `+2.3 pts/sweep → ~39 sweeps` figure is
+refused; the honest slope is **0.0**, and a leg with a zero slope is not behind schedule, it is
+un-ranked.
+
+The check also names the invariant that is being bent rather than absorbing it: §4.3's *"a fix MUST
+raise in-scope-pass on the next sweep or it is reverted"* has failed nineteen consecutive ticks and
+nothing was reverted. Reverting real, gated, falsified fixes because a **badly-ranked work-list** did
+not move a metric is the wrong reading — but leaving the rule silently unenforced is how a ratchet
+becomes decoration. It is **re-scoped**: it binds from the next sweep, applied to ticks taken off the
+§8 crossing-ranked list, where *"did the named site cross"* is a question the tick can answer.
+
+### ⚠⚠ RETRACTION — t779's second population was built on a site that was never in the cohort
+
+t779 split "booted-but-thin" into *timeout-starved* and *fast-but-empty*, and gave
+**`www.amazon.com.mx` (1.8s, zero rejections, still thin)** as the flagship case for the second. That
+is **withdrawn**. Its row in `SWEEP-t777-rows.tsv` reads **`probe-blocked`**, not `thin-overlap`, and a
+direct run today returns **HTTP 202 with a zero-byte body** — a bot wall, excluded by the NO-STEALTH
+policy. It is fast because the server sent nothing.
+
+**The error was mechanical and worth naming: I took the site list out of the observer's steer and did
+not check each name against its own row.** The steer named candidates; the rows were the evidence, and
+they were on disk the whole time. *A hand-off list is a hypothesis, not a measurement.*
+
+Re-measuring the rest breaks the split further:
+
+- **`sports.yahoo.com` flips between runs** — `coverage 0.09` in the sweep, **0.97, verdict `ok`** on a
+  direct run today, with the 12s budget exhausted six times in *both*. So **thin-overlap membership is
+  a timing lottery for slow sites**, and any work-list built from a single sweep's membership inherits
+  that noise. Same lesson as the ±40-pt per-site swings of t745-751, one label over.
+- **`www.naukri.com` is the one clean case that survives** — 11.7s (under the 12s budget), no
+  exhaustion, coverage 15.8%, 48 missing elements, and the instrument names it itself: *"a coverage
+  failure wearing an 'unscored' label"*. **Unexplained, and it is the best remaining lead.**
+- Its four unhandled rejections are **not** the cause: `clipboard`, `speaker`, `device-info`,
+  `accessibility-events` is a **permission-fingerprinting probe**, and Chrome rejects most of those
+  names too. The second CONTROL-BEFORE-BLAME of the window, and the reason t779's fix deliberately
+  stopped at the seven names Chrome genuinely supports.
+
+So the honest shape of the observer's lever is: **the thin cohort is mostly perf-starvation
+(trivago.de 25.7s vs 5.1s, trivago.be 25.5/5.7, monopolybingo 27.1/4.2, coinmarketcap 38.8/11.7,
+sports.yahoo 41.0/24.3 — budget exhausted ~5× each), plus one genuine unexplained coverage failure
+(naukri), plus membership noise.** No API tick moves the first group.
+
+**HONEST SCOPE.** No engine source changed and no capability is claimed. This is a cadence tick that
+also retracts a claim from the tick before it; both halves are the deliverable.
+
+PERF: none claimed — no engine code touched.
+
+WIKI: none — no engine source changed; the durable findings land in `docs/loop/CONSTITUTION-CHECK.md`
+check #63 and the retraction above, and the mechanism wiki this window owed was written at t778
+("A write-only defect: every gate in this repo reads") and t779 ("An error message that names our file
+is not evidence that the answer is ours").
+
+PATTERN: ⚠⚠ **A HAND-OFF LIST IS A HYPOTHESIS, NOT A MEASUREMENT.** A steer, a ledger row, a previous
+tick's cohort — each names candidates, and each was written against a state that may have moved. t779
+inherited a four-site list and published a population built on the one member whose own row said
+`probe-blocked`. The check costs one grep of the artefact the list was derived from, and it is the
+same failure the project already records for stale cluster ledgers and stale launch prompts, arriving
+this time through a *fresh* and *correct* steer. [no-pattern]
