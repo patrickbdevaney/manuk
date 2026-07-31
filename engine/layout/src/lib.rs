@@ -1441,17 +1441,43 @@ impl FloatContext {
     /// Place a float of margin-box size `(w, h)` on `side`, no higher than `top`.
     /// Scans downward to the first band where `w` fits between opposing floats
     /// (CSS2 §9.5.1), records the margin box, and returns it.
-    fn place(&mut self, side: Float, top: f32, w: f32, h: f32) -> Rect {
+    ///
+    /// **`cb_left`/`cb_right` are the CONTAINING BLOCK's content edges, and they are not the same
+    /// thing as this context's edges.** A float participates in its nearest BFC — which is why the
+    /// exclusion bands are shared across nested plain blocks and must be — but CSS 2.1 §9.5.1 rules
+    /// 1 and 2 pin it to *its own containing block*: "the left outer edge of a left-floating box may
+    /// not be to the left of the left edge of its containing block", and the mirror for right.
+    ///
+    /// Conflating the two put every `float: right` inside a narrow block against the VIEWPORT edge.
+    /// Measured (t792): a `float:right` 50px box inside a `width:300px` div reads Chrome **x=250**
+    /// and read **x=1150** here — 900px away, on the single most common legacy layout primitive
+    /// there is. A miss that size is not one wrong box: it spawns overlap and reading-order
+    /// violations across everything the float was supposed to sit beside.
+    fn place(
+        &mut self,
+        side: Float,
+        top: f32,
+        w: f32,
+        h: f32,
+        cb_left: f32,
+        cb_right: f32,
+    ) -> Rect {
         let full = self.right_edge - self.left_edge;
         let mut y = top;
         loop {
             let (l, avail) = self.available(y, h);
             if w <= avail || avail >= full {
                 let x = if side == Float::Right {
-                    self.right_offset(y, h) - w
+                    self.right_offset(y, h).min(cb_right) - w
                 } else {
-                    l
+                    l.max(cb_left)
                 };
+                // ⚠ **ONLY THE HUGGED EDGE IS CLAMPED, and that was measured rather than reasoned.**
+                // The first draft also clamped a right float to `cb_left`, on the theory that a box
+                // should never start outside its own block. Chrome disagrees: a `float:right` 400px
+                // wide inside a 300px block reads **x = -100** — its right edge stays on the
+                // containing block's right edge and it overflows to the LEFT. Clamping made that
+                // case read 0, so the fix would have traded a 900px error for a 100px one.
                 let rect = Rect {
                     x,
                     y,
@@ -1466,9 +1492,9 @@ impl FloatContext {
                 None => {
                     // Nothing opposing fits anywhere lower: hug the edge here.
                     let x = if side == Float::Right {
-                        self.right_edge - w
+                        self.right_edge.min(cb_right) - w
                     } else {
-                        self.left_edge
+                        self.left_edge.max(cb_left)
                     };
                     let rect = Rect {
                         x,
@@ -2659,7 +2685,7 @@ impl Ctx<'_> {
                     cw,
                     floats,
                 );
-                let fbox = self.layout_float(k, cw, cur_y + prev_margin.max(0.0), floats);
+                let fbox = self.layout_float(k, cw, cur_y + prev_margin.max(0.0), floats, cx);
                 boxes.push(fbox);
             } else if is_out_of_flow_positioned(ks) {
                 // Absolutely/fixed positioned: taken out of flow here and placed in the later pass.
@@ -2796,6 +2822,10 @@ impl Ctx<'_> {
         cw: f32,
         top: f32,
         floats: &mut FloatContext,
+        // The containing block's LEFT content edge, in the same absolute space the float context
+        // uses. Together with `cw` this is what pins the float to its own block rather than to
+        // whatever BFC happens to own the exclusion bands — see `FloatContext::place`.
+        cb_left: f32,
     ) -> LayoutBox {
         let s = self.style_of(node).clone();
         let ml = s.margin.left.resolve(cw, 0.0);
@@ -2856,7 +2886,7 @@ impl Ctx<'_> {
             let r = self.layout_table(node, cw, 0.0, 0.0, 0.0);
             let mut b = r.boxx;
             let (mbw, mbh) = (ml + b.rect.width + mr, mt + b.rect.height + mb);
-            let margin_rect = floats.place(s.float, top, mbw, mbh);
+            let margin_rect = floats.place(s.float, top, mbw, mbh, cb_left, cb_left + cw);
             b.shift_x(margin_rect.x + ml - b.rect.x);
             b.shift_y(margin_rect.y + mt - b.rect.y);
             return b;
@@ -2876,7 +2906,8 @@ impl Ctx<'_> {
         let margin_box_h = mt + border_box_h + mb;
 
         let side = s.float;
-        let margin_rect = floats.place(side, top, margin_box_w, margin_box_h);
+        let margin_rect =
+            floats.place(side, top, margin_box_w, margin_box_h, cb_left, cb_left + cw);
         let border_x = margin_rect.x + ml;
         let border_y = margin_rect.y + mt;
 

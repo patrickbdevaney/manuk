@@ -40977,3 +40977,71 @@ h-overflow metric points at; the very next fixture, over the most boring input i
 one-character defect affecting every URL on the web. That is the t725-732 lesson holding a fourth
 time: the discovery engine is a fixture and a reference, not a theory about which subsystem is weak.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 792 — a float belongs to its own block, not to the viewport (2026-07-31)
+
+TICK SHAPE: capability (layout/floats) — one containing-block clamp, found by the same probe method
+
+HYPOTHESIS (written before the fix): continue the t791 method — one fixture per suspected class,
+diffed against Chrome — into POSITIONING, because `reading-order` is the worst jarring dimension
+(14.5% clean) and out-of-flow boxes are what make two siblings swap visual order. Thirteen cases:
+absolute with each inset combination, `inset` shorthand, `vertical-align` middle/top on inline-blocks,
+floats both ways, flex `order`, `position: sticky`.
+
+**ELEVEN OF THIRTEEN WERE CHROME-EXACT.** Absolute positioning against a relative parent (every inset
+combination, including the four-sided `inset` shorthand), inline-block baseline alignment,
+`vertical-align: middle`/`top`, sticky — all matched. Two did not, and this tick takes the larger:
+
+```
+                                                  Chrome        ours
+  float:right, 50px box in a width:300px block     x = 250     x = 1150     ✗  900px
+  flex `order: 2` / `order: 1`                     swapped     DOM order    ✗  (next tick)
+```
+
+MECHANISM: a float participates in its nearest **block formatting context** — that is why exclusion
+bands are shared across nested plain blocks, and it must stay that way. But CSS 2.1 §9.5.1 rules 1
+and 2 pin the float to *its own containing block*. We conflated the two, so `place()` hugged the BFC's
+edge — the body's — and every `float: right` inside a narrow block flew to the viewport edge. A miss
+that size is never one wrong box: it spawns overlap and reading-order violations across everything the
+float was meant to sit beside.
+
+MEASURED, seven cases, all Chrome-exact after (x only — see the residue):
+
+```
+  a1 float:right in a 300px block                250   ·  a2 float:left, same block          0
+  b1 float:right in a 150px block, ml:20         120   ·  c1 the same block as a BFC       250
+  d1 float:right 400px wide in a 300px block    -100   ·  e1/e2 two right floats      250 / 200
+
+  en.wikipedia.org  shape 53.8% -> 58.8%   (+5.0 — floated infoboxes and thumbnails)
+  blog.rust-lang.org 73.6% -> 73.7%  ·  news.ycombinator 80.0%  ·  secure5 79.5%  ·  255md 69.8%
+```
+
+⚠ **THE FIRST DRAFT CLAMPED BOTH EDGES AND WOULD HAVE TRADED A 900px ERROR FOR A 100px ONE.** "A box
+should not start outside its own block" is a reasonable-sounding rule and it is wrong: Chrome puts a
+400px right float in a 300px block at **x = -100** — the right edge stays pinned and the box overflows
+to the LEFT. I only found out because the fixture had a too-wide case in it. **Only the hugged edge is
+clamped**, and the gate asserts `-100` so the plausible version cannot come back.
+
+⚠ RESIDUE, measured in the same fixture and deliberately not fixed: **a BFC root must not overlap
+preceding floats.** Chrome moves the `overflow:hidden` block down to `y=20`, clear of the floats above
+it; we leave it at `y=0`. That is why this gate asserts **x only** — the y column carries a second,
+independent defect, and a gate red for a reason it does not name is worse than one that names its
+scope.
+
+Gate: `G_FLOAT_CONTAINING_BLOCK` (new), seven assertions. **Proven red two ways:** dropping the
+`cb_right` clamp sends `#a1` back to 1150; re-adding the `cb_left` clamp fails `#d1` at 0 — the
+plausible-but-wrong version has its own red.
+
+HONEST SCOPE: no site is claimed to CROSS the bar — wikipedia moves 53.8 → 58.8 and the bar is 75.
+`layout` crate suite green (103 tests).
+
+PERF: none claimed — two extra `f32` arguments and one `min` per float placement.
+
+WIKI: `docs/wiki/box-layout.md` — "A float belongs to its own block, not to the viewport"
+
+PATTERN: ⚠⚠⚠ **THE FIXTURE THAT FINDS THE BUG MUST ALSO CONTAIN THE CASE THAT CONSTRAINS THE FIX.**
+Two of the last three ticks produced a first draft that was reasonable, wrong, and would have passed a
+gate built only from the failing case: the unconditional `<select>` arrow (t789) and the two-sided
+float clamp here. Both were caught by a case that was in the fixture for completeness rather than
+because it was suspected. **Probe the neighbourhood, not the symptom.**
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

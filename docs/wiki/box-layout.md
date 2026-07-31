@@ -2619,3 +2619,32 @@ wrong box.
 its own intrinsic width never runs. The oracle filed the row under `<select>` because **the tag on a
 cluster row is the tag of the element, not of the cause: a cluster keyed that way names the victim, not
 the culprit.**
+
+## A float belongs to its own block, not to the viewport (t792)
+
+A float participates in its nearest **block formatting context** — that is why exclusion bands are
+shared across nested plain blocks, and it must stay that way. But CSS 2.1 §9.5.1 rules 1 and 2 pin the
+float to *its own containing block*. We conflated the two:
+
+```html
+<div style="width:300px"><div style="float:right;width:50px"></div></div>
+      Chrome x = 250          ours x = 1150       (a 1200px viewport)
+```
+
+900px, on the most common legacy layout primitive there is — and a miss that size is never one wrong
+box: it spawns overlap and reading-order violations across everything the float was meant to sit
+beside. `en.wikipedia.org`, whose articles are built from floated infoboxes and thumbnails, went shape
+**53.8% → 58.8%** on this one change.
+
+The fix is to pass the containing block's content edges into float placement and clamp the hugged edge
+against them, leaving the shared exclusion bands alone.
+
+⚠ **The first draft clamped BOTH edges, and would have traded a 900px error for a 100px one.** *"A box
+should not start outside its own block"* sounds right and is wrong: Chrome puts a 400px right float in
+a 300px block at **x = -100** — the right edge stays pinned and the box overflows to the left. The gate
+asserts −100 so the plausible version cannot come back.
+
+⚠ **Residue, measured in the same fixture and not fixed here: a BFC root must not overlap preceding
+floats.** Chrome moves an `overflow:hidden` block down to clear the floats above it; we leave it in
+place. The gate therefore asserts **x only** — the y column carries a second, independent defect, and a
+gate that is red for a reason it does not name is worse than one that states its scope.
