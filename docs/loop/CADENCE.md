@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **534** | ticks 1–790 |
 | median tick cycle | **23m** | 533 intervals |
-| median, last 10 | **44m** | 10 intervals |
+| median, last 10 | **54m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 485.3h elapsed |
+| **ticks per hour** | **1.10** | 485.8h elapsed |
 | median verify wall | **63s** | 473 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,8 +27,8 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **363**
-* **✅ rows in the capability ledger**: 144 → **407**
+* **live gates**: 27 → **364**
+* **✅ rows in the capability ledger**: 144 → **408**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **255 of 534 ticks** (48%) moved a
@@ -630,6 +630,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **786** | 2026-07-31 08:45 | 36m | measurement | 63s | +507/−50 | 362 | 81 | 56.0% · | bank a clean sweep: did the key change convert the corpus, or four sites? (2026-07-31) |
 | **787** | 2026-07-31 09:05 | 20m | capability | 63s | +177/−34 | 362 | 81 | 56.0% · | a form control does not inherit the page's font, and `rows` was never read (2026-07-31) |
 | **788** | 2026-07-31 09:35 | 30m | process | 63s | +256/−36 | 362 | 81 | 56.0% · | the two due audits, and the M1 population nobody had enumerated (2026-07-31) |
-| **790** | 2026-07-31 10:22 | 47m | capability | 63s | +362/−44 | 363 | 81 | 56.0% · | a layer exists to LOSE, and ours won (2026-07-31) |
+| **790** | 2026-07-31 10:50 | 74m | capability | 63s | +295/−33 | 364 | 81 | 56.0% · | a layer exists to LOSE, and ours won (2026-07-31) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

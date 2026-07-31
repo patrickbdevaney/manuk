@@ -5851,6 +5851,31 @@ fn break_segments(word: &str) -> Vec<String> {
         if idx >= word.len() {
             break;
         }
+        // ── **NO BREAK AFTER A SOLIDUS — Chrome does not take this opportunity, and URLs are where
+        // it shows.** UAX #14 offers a break after `/` (class SY), and `unicode-linebreak` reports
+        // it faithfully; Blink tailors it away, so a long URL overflows its box in Chrome instead of
+        // wrapping. Measured on three fixtures at a 120px width, heights in px:
+        //
+        //   `aaaa/bbbb/cccc/dddd`                        Chrome 19   ours 38
+        //   `https://example.com/very/long/path/here`    Chrome 19   ours 77
+        //   `one/two three/four five/six seven/eight`    Chrome 77   ours 58
+        //
+        // The last one is the tell that this is not "Chrome wraps less": Chrome takes MORE lines
+        // there, because refusing the `/` opportunity means a whole token has to move down. So the
+        // error is not a bias in one direction — it is a different set of line boxes, and every
+        // element below one inherits the difference as `dy`.
+        //
+        // Every other separator probed in the same fixture agrees already (`- . _ ? = & , : +`,
+        // numeric dates, CJK, soft hyphens, U+200B), which is what makes this a one-character
+        // tailoring rather than a quarrel with the crate. U+002F is the only character in class SY,
+        // so "after a solidus" and "after SY" are the same rule.
+        //
+        // ⚠ `overflow-wrap: break-word` is a DIFFERENT path (`InlineItem::break_word`) and is
+        // unaffected: a page that asks for the URL to be broken still gets it broken, which is the
+        // half that would make this a regression rather than a fix.
+        if word[..idx].ends_with('/') {
+            continue;
+        }
         segs.push(word[start..idx].to_string());
         start = idx;
     }

@@ -1491,3 +1491,35 @@ Gate: `a_line_box_with_only_empty_inlines_does_not_exist` (`engine/layout/src/li
 directions and all four rows above. RED-proven by mutation in both directions — `holds_line: true` on the
 empty-inline spacer reads 19.2 (the corpus symptom), `holds_line: false` on the padding edges reads 0
 where Chrome says 18.
+
+## Chrome does not break after a solidus (t791)
+
+UAX #14 offers a line-break opportunity after `/` (class SY, whose only member is U+002F), and
+`unicode-linebreak` reports it faithfully. **Blink tailors it away** — a long URL overflows its box in
+Chrome rather than wrapping at its path separators. We took the opportunity, so every URL, file path
+and breadcrumb in body text produced a different set of line boxes.
+
+```
+  at width 120px, heights in px                       Chrome   ours (before)
+  aaaa/bbbb/cccc/dddd                                   19      38
+  https://example.com/very/long/path/here               19      77
+  one/two three/four five/six seven/eight               77      58
+  the URL again, with overflow-wrap: break-word         58      58   (unchanged, deliberately)
+```
+
+⚠ **The third row is why the first two would teach the wrong lesson.** Read alone they say *"Chrome
+overflows where we wrap"*, which sounds like we are the tidier engine. On the third Chrome takes
+**four** lines against our three — refusing the opportunity moves a whole token down. The error is not
+a bias in one direction; it is a different set of line boxes, and every element below one inherits the
+difference as `dy`.
+
+Every other separator already agreed (`- . _ ? = & , : +`, numeric dates, CJK, soft hyphens, U+200B),
+which is what makes this a one-character tailoring rather than a quarrel with the crate. The hyphen and
+the zero-width space are asserted in the gate precisely so the over-broad version of this fix — *stop
+breaking inside words* — cannot pass.
+
+⚠ **`overflow-wrap: break-word` is a different path and must keep breaking.** A page that asks for the
+URL to be broken still gets it. That assertion is what separates this from a regression wearing a
+parity number — and it is the one number in the gate I first wrote from an assumption (77px, *"the URL
+with every slash broken"*) rather than from Chrome. Chrome reads 58. **Thirteen measured numbers and
+one invented one, and the invented one was in the guard.**

@@ -40905,3 +40905,75 @@ nesting probe carried a nested `@layer` line as a CONTROL, Chrome disagreed on t
 it found a top-level cascade defect with nothing to do with nesting. Three of this session's six
 capability findings came out of a fixture written to check something else.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 791 — Chrome does not break a line after `/`, and every URL in body text says so (2026-07-31)
+
+TICK SHAPE: capability (text/line breaking) — one UAX #14 tailoring, found by a broad probe
+
+⚠ HARNESS NOTE (one line, per V1-SCOPE): t790's first wall run went RED on `manuk-shell tests FAILED`
+with no test named; run directly the crate is **74 + 2 green**. A false RED of the known shell-rebuild
+race shape — re-ran the wall unchanged and it landed. Observer-owned; nothing edited.
+
+HYPOTHESIS (written before the probe): check #64's steer #3 says jarring-clean is now the binding half
+of M1, and `h-overflow` is dirty on 67.5% of in-scope sites. `simplepdf.com` is jarring-clean but for
+h-overflow and would cross at 0.786. Rather than debug one Tailwind footer, ask whether there is a
+SHARED mechanism: write one fixture per suspected class and diff it against Chrome.
+
+**TWO PROBES, AND THE FIRST ONE'S NEGATIVE RESULT IS WORTH AS MUCH AS THE SECOND'S FINDING.**
+
+* **Flex/grid/overflow — ten cases, ALL Chrome-exact.** `flex:1` with an unbreakable word (the
+  `min-width:auto` floor), `flex-wrap`, `overflow:hidden` not shrinking its child, `min-width:0`
+  letting an item shrink, `1fr 1fr` grid tracks blown by one long word, two oversized `flex:0 0 auto`
+  items. Every x and width matched. **That rules out the whole class the h-overflow number invites you
+  to suspect** — and it cost one fixture.
+* **Text breaking — one divergence out of fourteen cases, and it is a single character.**
+
+```
+  at width 120px, heights in px                       Chrome   ours
+  aaaa/bbbb/cccc/dddd                                   19      38     ✗
+  https://example.com/very/long/path/here               19      77     ✗
+  one/two three/four five/six seven/eight               77      58     ✗
+  aaaa-bbbb-cccc-dddd  ·  aaaa.bbbb  ·  aaaa_bbbb              agree
+  aaaa?bbbb=cccc&dddd  ·  aaaa,bbbb  ·  aaaa:bbbb  ·  aaaa+bbbb agree
+  2026/07/31 dates · CJK · soft hyphens · U+200B               agree
+```
+
+MECHANISM: UAX #14 offers a break after a solidus (class SY, whose only member is U+002F) and
+`unicode-linebreak` reports it faithfully. **Blink tailors it away.** We took it, so every URL, file
+path and breadcrumb in body text produced a different set of line boxes — and a different line count
+is a different container height and a `dy` for everything below.
+
+⚠ **THE THIRD ROW IS WHY THE FIRST TWO WOULD HAVE TAUGHT THE WRONG LESSON.** Read alone, they say
+"Chrome overflows where we wrap", which sounds like we are the tidier engine. On `one/two three/four
+five/six seven/eight` Chrome takes **four** lines against our three: refusing the opportunity moves a
+whole token down. The error is not a bias in one direction — it is a different set of line boxes.
+
+MEASURED after the fix: all fourteen cases match Chrome, including the two that must NOT change —
+`overflow-wrap: break-word` still breaks the same URL (58px, three lines) and the hyphen is still an
+opportunity. Real sites: `en.wikipedia.org` shape **53.3% → 53.8%**; `blog.rust-lang.org` 73.6%,
+`news.ycombinator.com` 80.0%, `secure5` 79.5%, `simplepdf` 78.6% — all byte-identical.
+
+Gate: `G_LINE_BREAK_SOLIDUS` (new), six assertions. **Proven red two ways, and the second is the
+guard that matters:** removing the solidus check fails `#s1`; *widening* it to hyphens as well —
+the plausible "stop breaking inside words" version — fails `#s2` while every solidus case passes.
+
+⚠ **ONE ASSERTION IN THIS GATE WAS WRITTEN FROM AN ASSUMPTION AND THE TEST CAUGHT IT.** I asserted the
+`overflow-wrap: break-word` case at 77px by reasoning *"that is the URL with every slash broken"*.
+Chrome reads **58**. I had measured thirteen numbers and invented the fourteenth, and it is the one
+assertion whose job is to prove the fix did not damage the other path. Measured and corrected before
+landing — *the reference was still running; asking it again cost fifteen seconds.*
+
+HONEST SCOPE: no site is claimed to cross. `simplepdf.com`'s h-overflow is unmoved — its five escaping
+elements are a footer icon row, not text. This tick came out of that investigation and does not close
+it.
+
+PERF: none claimed — one `ends_with` per break opportunity, on words that have one at all.
+
+WIKI: `docs/wiki/text-layout.md` — "Chrome does not break after a solidus"
+
+PATTERN: ⚠⚠⚠ **A BROAD DIFFERENTIAL PROBE'S NEGATIVE RESULT IS A DELETED HYPOTHESIS, AND THEY ARE
+CHEAP.** Ten flex/overflow cases came back Chrome-exact, which retired the entire class the
+h-overflow metric points at; the very next fixture, over the most boring input imaginable, found a
+one-character defect affecting every URL on the web. That is the t725-732 lesson holding a fourth
+time: the discovery engine is a fixture and a reference, not a theory about which subsystem is weak.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
