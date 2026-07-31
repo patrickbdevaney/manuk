@@ -39612,3 +39612,239 @@ shape: **when the absent thing THROWS, the over-broad fix is more dangerous than
 absence routes a caller to its fallback while a wrong-document answer routes it, silently and
 confidently, at the live page.
 
+
+## Tick 777 — `screen.orientation` was a two-field object literal, and no probe of NAMES could see it (2026-07-31)
+
+HYPOTHESIS (from the due constitution check's steer #2, written before any code): *"AUDIT THE PRELUDE
+FOR HALF-INSTALLED FAMILIES — bounded, one-tick, high-expected-yield: grep the prelude for objects
+assembled method-by-method and check each against its spec IDL block. The failure is silent until a real
+bundle calls the sibling nobody wrote."* The board's M1 leg-1 is scorability, i.e. throw-class killers,
+and t772 established the shape: a half-present API passes the feature detect and then throws.
+
+TICK SHAPE: capability (throw-class killer — the board's leg-1 scorability work)
+
+### WHAT THE AUDIT FOUND
+
+Walking the prelude's host objects against their IDL, most were **complete** — `navigator.connection`
+carries the full EventTarget half, `matchMedia`'s MQL has `addListener`/`addEventListener`/`onchange`,
+`visualViewport` has listeners, `document.fonts` is real (t730), IndexedDB has indexes, cursors,
+compound keys, `getAll`, `deleteDatabase`, `databases` and `cmp`. This codebase is generally careful.
+
+**One object was not.** `engine/js/src/dom_bindings.rs`:
+
+```js
+if (typeof g.screen === 'undefined') g.screen = {
+    width: VW, height: VH, availWidth: VW, availHeight: VH,
+    colorDepth: 24, pixelDepth: 24, orientation: { type: 'landscape-primary', angle: 0 }
+};
+```
+
+`ScreenOrientation` is an **`EventTarget`** with `lock`/`unlock`/`onchange`. Five of its six members
+were absent. The call every mobile-responsive bundle makes —
+`screen.orientation.addEventListener('change', …)`, for a video player going fullscreen, a map
+re-projecting, a carousel re-measuring — is made **unguarded**, because the guard people write is
+`if (screen.orientation)` and a two-field literal answers that with an enthusiastic yes.
+
+### ⚠⚠⚠ WHY NEITHER INSTRUMENT BUILT AFTER t772 COULD HAVE FOUND THIS
+
+This matters more than the fix. Tick 772 ended with a rule and tick 773 built a probe, and **this defect
+is invisible to both**:
+
+* **t772's rule** — *"grep the prelude for objects whose methods were added one at a time; each is a
+  candidate"* — describes an object **assembled over several ticks**. This one was written
+  complete-looking, in a single line, in one sitting. It never accumulated.
+* **t773's probe** re-measured **262 platform globals** and ranks by **ABSENT top-level names**. `screen`
+  was present. `screen.orientation` was present. The census had nothing to report.
+
+> **A probe over NAMES cannot find a hole INSIDE an object it can reach.** The half-installed family is
+> defined by the gap between the *feature-detect surface* and the *call surface*, and a name census only
+> ever samples the first. The instrument this calls for iterates **spec IDL members per object**, not
+> globals — and it does not exist yet. Flagged for the observer as a bounded follow-up rather than
+> smuggled into this tick.
+
+### TWO MORE DEFECTS IN THE SAME FOUR LINES
+
+**`type` was a constant.** `'landscape-primary'` on every viewport, portrait ones included — a *wrong
+answer of the right type* (t733's dominant shape): present, correctly-formed, and false. A page laying
+out from `screen.orientation.type` took the landscape branch on a phone-sized viewport. Both `type` and
+`angle` are now getters over the live `innerWidth`/`innerHeight` — the same globals the cascade resolves
+`vw`/`vh` and `@media` against.
+
+⚠ **The assertion for that claim is made against a SECOND EVALUATOR, and it had to be.** Asserting the
+string against the implementation that produced it is a tautology; a plausible constant can only be
+caught by asking the question a different way. So the gate compares it to
+`matchMedia('(orientation: portrait)')`, which Stylo answers through the same `@media` machinery the
+cascade uses. Two instruments, one question — the discipline `matchMedia` itself had to adopt when the
+prelude was carrying its own feature table.
+
+**`lock()` REJECTS with `NotSupportedError`** rather than being absent, which is what desktop Chrome
+does — a desktop window has no orientation to lock, so rejecting *matches the reference*. It hands the
+caller the `.catch()` it already wrote, where an absent `lock` throws a synchronous `TypeError` out of a
+call the author expected to be thenable. Same reasoning as the navigation-timing fields that raise
+`InvalidAccessError` instead of fabricating a plausible `0`. Also added: `screen.availLeft`/`availTop`
+(Chrome's CSSOM-View extensions — a popup-placement helper computes `screen.availLeft + x`, and
+`undefined + x` is `NaN`).
+
+### AND THE INERT-STUB HALF, WHICH THE LIST'S OWN COMMENT FORBIDS
+
+`Screen`, `History`, `Location` and `VisualViewport` sat in `__inertNames`. The engine builds all four on
+**every page**, so the stub made `location instanceof Location` answer `false` about `window.location`
+itself. That is exactly the defect t773 fixed for `CSSStyleRule` — and it went past these four for a
+reason worth recording: **it ranked by names that were ABSENT, and these were present-but-lying.** They
+now carry real `Symbol.hasInstance` predicates, read **lazily**, because `g.location` is reassigned on
+navigation (`g.location = g.__parseUrl(abs)`) and a captured object would start answering `false` after
+the first same-document navigation.
+
+### HONEST SCOPE — what is NOT claimed
+
+**No site is claimed to cross.** Unlike t772 (`performance.clearMarks`, observed in the sweep log and
+attributed by restoring the mutation), this defect was found by **audit, not by a corpus line**. I have
+no live `screen.orientation` throw in hand from this corpus. What is banked is a removed throw-class of
+the exact shape the board ranks first, plus two corrected wrong answers — not a measured crossing. The
+t777 sweep now running (`--jobs 2`, clean, corpus-crux-trend) is the instrument that would show one, and
+it was started **before** this fix, so it cannot contain it either way.
+
+⚠ **The sweep and this tick's wall cannot share the box** — perf floors under contention false-RED
+(recorded four ways in this journal). The wall runs after the sweep finishes.
+
+Gates: **`G_SCREEN_ORIENTATION`** (`engine/page/tests/g_screen_orientation.rs`), 9 claims, **proven red
+three ways**, each on a different claim:
+
+1. **Restore the pre-777 literal** — `missing:addEventListener,removeEventListener,dispatchEvent,lock,unlock`,
+   and `listen` reproduces the live symptom verbatim
+   (`THROW(TypeError: screen.orientation.addEventListener is not a function)`), plus
+   `type:landscape-primary`, `agreesWithCSS:false`, `availLeft:undefined,undefined`.
+2. **Put the four names back in `__inertNames`** — every orientation claim still passes and only
+   `instances` moves, to `Screen,History,Location,VisualViewport,ScreenOrientation`.
+3. **Demote `dispatchEvent` to the `return true` stub `navigator.connection` still uses** — the API is
+   now *fully present*, `missing:none` passes, and only `listen:3 → 0` catches it. A complete surface
+   that observes nothing is `mark()`-records-nothing in EventTarget clothing.
+
+⚠ The fixture loads at **390×844 on purpose**. A landscape fixture agrees with the constant the bug
+returned, so the claim that matters most could not have gone red — an instrument calibrated by the bug it
+was built to find (t715's lesson, applied in advance for once).
+
+Regression sweep, all green: `g_screen_orientation g_iface_surface g_iface_surface_2 g_capability
+g_doc_prototype g_prototype g_globals g_visual_viewport g_viewport g_match_media_agrees g_fullscreen
+g_probe_capabilities g_zoom_and_probe_pins g_srcset_selection`.
+
+### ⚠⚠⚠ THE GREP FOR THE CLASS — RUN, and it found NINE MORE. Measured, published, NOT smuggled in.
+
+This tick's own story criticises t773 for fixing `CSSStyleRule` and walking past four sibling defects.
+Landing it without running the grep that criticism demands would repeat the failure exactly. So I ran it,
+as a probe (written, run, deleted) that asks the *honest* question — not "is there a constructor" but
+**"does `instanceof` answer TRUE for an object this engine actually hands the page"**:
+
+```text
+LIARS[9]: NodeList  MediaQueryList  StyleSheet  ShadowRoot
+          HTMLLabelElement  HTMLTableElement  HTMLPictureElement  HTMLSlotElement  SVGSVGElement
+```
+
+`document.querySelectorAll(…) instanceof NodeList` is **`false`**. So is
+`el.attachShadow({mode:'open'}) instanceof ShadowRoot`, which is the check every web-component base class
+makes on `getRootNode()`. So is `matchMedia(q) instanceof MediaQueryList` and
+`document.styleSheets[0] instanceof StyleSheet`. Five element interfaces have `tagIs` predicates and five
+siblings do not — one rule, N implementations, for the seventh recorded time.
+
+⚠ **A first version of this probe reported 53 liars and was wrong**, and the error is worth keeping: it
+defined "inert" as *a constructor carrying no `Symbol.hasInstance`*. But a **real** constructor with a
+**real** prototype needs no `hasInstance` — native `instanceof` already works — so that test flagged every
+genuine implementation in the list. The measurement only became true when it stopped asking about the
+constructor's *shape* and started asking the platform's actual question, against a real instance.
+`UIEvent` and `ProgressEvent` were then discounted from the result on the same principle: my probe fed
+them a plain `Event`, and a plain `Event` is genuinely **not** a `UIEvent` — a `LIES` that was the
+probe's fault, not the engine's.
+
+**These nine are NOT fixed here, and that is deliberate.** Each needs its own measured predicate (t773's
+rule: name an interface IFF the capability exists, and `NodeList` vs `HTMLCollection` must not be
+duck-typed into each other), which is a tick with its own gate, not four lines appended to this one.
+**t778 is that tick, and it starts from this list rather than from a hypothesis.** The difference between
+this and what t773 did is not that I fixed more — it is that the successor inherits a *measurement*
+instead of a blind spot.
+
+PERF: none claimed. Two getters replace two constant reads on an object touched at most a few times per
+page; the listener arrays are allocated once at install.
+WIKI: `docs/wiki/js-engine.md` — "A two-field object literal is a half-installed API that no probe of
+NAMES can see".
+PATTERN: ⚠⚠⚠ **A PROBE OVER NAMES CANNOT FIND A HOLE INSIDE AN OBJECT IT CAN REACH.** The two
+instruments this project built specifically to prevent half-installed APIs — a grep for
+assembled-over-time objects and a 262-name global census — were both structurally incapable of seeing
+this one, because it was written complete-looking in one line and its top-level name was present. The
+generalisable rule: **when a defect class is defined by a gap between two surfaces, an instrument that
+samples only one of them will report clean forever.** The census answers *"is the name there"*; the
+failure lives in *"is the family there"*, and the only instrument that closes it walks spec IDL members
+per object. Naming that gap is worth more than the four lines of JS this tick changed.
+
+### Self-audit (due at t777) — one item open, and it is not mine to close
+
+`./scripts/self-audit.sh`: **1 prescribed-but-not-executed item**, and it is the same one the t775
+wall audit already resolved and recorded —
+
+```
+✗ verify wall: 363s EXCEEDS the 300s target — Part 21.2 item 1 has regressed.
+  mold/lld, cargo-nextest, workspace-hack, risk-based gate scheduling.
+```
+
+Every remedy the audit names (linker, test runner, workspace-hack, gate scheduling) is a `scripts/` or
+build-config change, which is **observer-owned** per CONSTITUTION.MD PART VII / `V1-SCOPE.md`. The t775
+wall audit reached the same conclusion in its own words: *"every admissible saving here is harness work I
+do not own, and the inadmissible ones (drop a gate, widen a floor, sample instead of cover, launder to
+CI) are refused by construction… the single largest wall lever in the project is per-gate SpiderMonkey
+startup × gate count, and it is `scripts/`-side."* Recorded, not acted on; browser work continues.
+Everything else in the audit is green (49 process defects each naming a closing mechanism, every gate
+declaring how to break it, journal contiguous, pattern ledger moving with the engine).
+
+### ⚠⚠⚠ THE t777 SWEEP LANDED, AND IT SAYS THE HEADLINE HAS NOT MOVED IN 19 TICKS
+
+`docs/loop/SWEEP-t777-rows.tsv` (200 CrUX sites, `--jobs 2`, cert-grade). The sweep was started
+*before* this tick's fix, so it cannot contain it — it is the answer to the board's standing question:
+**did the ~7 throw-killers since t767 raise scorability above 63%?**
+
+**No.** Read against the last *honest* points (t771 is flagged contaminated in the ledger and must not
+be diffed):
+
+```
+tick    scored   pass   in-scope-pass   jarring-clean   M1 gate   shape_mean
+t758      83      7        5.4%            23.8%         2.3%       41.3
+t767      82      7        5.4%            25.4%         2.3%       43.5
+t777      81      7        5.4%            24.0%         2.3%       46.3
+```
+
+**Three honest sweeps, nineteen ticks, and every crossing number is identical.** Scorability is flat
+(83 → 82 → 81, drifting *down* inside noise), in-scope pass is flat at 7 sites, the true M1 gate is
+flat at 3. The one number that moved is **`shape_mean` 41.3 → 46.3 (+5.0 pts)** — which is exactly the
+failure mode `PHASE0-RENDER-BURNDOWN.md` §7 predicted in writing: *"band rises faster than
+crossings."* Nineteen ticks of real, verified fixes raised the mean and crossed **zero** additional
+sites.
+
+⚠ **The `+2.3 pts/sweep → ~39 more sweeps` line `fidelity-progress.sh` printed is an ARTEFACT and I
+am not banking it.** It diffs t777 against **t771**, the row the ledger's own header says is
+contaminated. Against the honest predecessor the slope is **0.0 pts across 19 ticks**, and a burndown
+with a zero slope has no ETA at all. Publishing the +2.3 would have been the fourth time an instrument
+here produced a flattering number on its first honest run.
+
+**This trips the board's own escalation rule** (*"flat/negative slope = escalate; the primitive list is
+wrong, or a second mechanism is hiding — instrument deeper before grinding"*). So the sweep was mined
+for the ranking the board actually asks for — **marginal M1 crossings**, not tag frequency — and the
+answer is concentrated to an almost implausible degree:
+
+```
+shape   distance  site                          jarring        n     cov
+0.729    +0.021   chat.google.com               ALL ZERO       59    1.00   → ~2 elements
+0.725    +0.025   www.kicktipp.com              r=1            80    0.99   → ~2 elements
+0.698    +0.052   255md.com                     ALL ZERO       43    1.00   → ~3 elements
+0.692    +0.058   secure5.entertimeonline.com   ALL ZERO       39    1.00   → ~3 elements
+0.709    +0.041   www.marktplaats.nl            r=1 d=2       810    1.00
+```
+
+Four fully-covered, jarring-clean sites sit within 0.06 of the bar with **fewer than 100 scored
+elements each** — so roughly **eight mis-placed elements across three pages stand between the M1 gate
+and a doubling of it** (3/129 → 6/129). That is the next tick, and it is chosen by *crossings*, which
+is the axis the last nineteen ticks were not ranked on.
+
+**The other half of the ceiling, stated honestly.** 48 of 129 in-scope sites do not render at all, but
+**25 of those 48 are `thin-overlap` — a MEASUREMENT gap the board says to flag, not grind.** Excluding
+them the real engine-side ceiling is 81/104 = **78%**, not 62.8%. The engine-side unscored residue is
+therefore 23 sites (shell-only 12 · render-fail 5 · timeout 3 · css-starved 3), which is a much smaller
+target than the ceiling line implies — and worth saying, because a ceiling quoted 15 points too low
+makes the function leg look like the binding constraint when the crossing arithmetic says it is not.

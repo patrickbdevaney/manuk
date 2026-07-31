@@ -882,6 +882,10 @@
   - L2416 · The half that is not "add more names"
   - L2434 · ⚠ The refusal is part of the surface, and a gate caught the attempt to skip it
   - L2456 · The gate, and one way it was briefly vacuous
+  - L2469 · A two-field object literal is a half-installed API that no probe of NAMES can see (tick 777)
+  - L2494 · The other two defects in the same four lines
+  - L2509 · Screen, History, Location and VisualViewport were inert stubs of objects we build
+  - L2523 · The gate
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1315,4 +1319,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1226 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1230 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

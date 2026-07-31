@@ -16609,10 +16609,82 @@ const WINDOW_PRELUDE: &str = r#"
         if (typeof g.devicePixelRatio === 'undefined') g.devicePixelRatio = 1;
         if (typeof g.screenX === 'undefined') g.screenX = 0;
         if (typeof g.screenY === 'undefined') g.screenY = 0;
-        if (typeof g.screen === 'undefined') g.screen = {
-            width: VW, height: VH, availWidth: VW, availHeight: VH,
-            colorDepth: 24, pixelDepth: 24, orientation: { type: 'landscape-primary', angle: 0 }
-        };
+        // ── **`screen.orientation` WAS A TWO-FIELD OBJECT LITERAL, AND THAT IS THE WORST SHAPE** (t777)
+        //
+        // `ScreenOrientation` is an **`EventTarget`** in the spec, and the call every mobile-responsive
+        // bundle makes is `screen.orientation.addEventListener('change', …)` — video players deciding
+        // when to go fullscreen, maps re-projecting, carousels re-measuring, PWAs re-laying-out. It is
+        // made **UNGUARDED**, because the guard people write is `if (screen.orientation)` and a
+        // `{ type, angle }` literal answers that with an enthusiastic yes. So the detect passed, the
+        // caller committed, and the next line was `TypeError: screen.orientation.addEventListener is
+        // not a function` — t772's half-installed `performance` exactly, one object over: *absence
+        // routes a caller to its fallback; half-presence routes it into a wall.*
+        //
+        // ⚠ **And `type` was a hardcoded `'landscape-primary'` on every viewport, including portrait
+        // ones.** That is the *other* recurring shape here — a wrong answer of the right type, which no
+        // feature detect can see because the field is present and is a string of the correct form. A
+        // page that lays out from `screen.orientation.type` got the landscape branch on a phone-sized
+        // viewport. Both `type` and `angle` are now GETTERS over the live `innerWidth`/`innerHeight`,
+        // the same globals the cascade resolves `vw`/`vh` and `@media` against — one source of truth,
+        // for the same reason `matchMedia` had to stop carrying its own feature table.
+        //
+        // ⚠⚠ **`lock()` REJECTS rather than being absent, and that is the honest answer, not a
+        // shortcut.** Desktop Chrome rejects `screen.orientation.lock()` with `NotSupportedError`
+        // because a desktop window has no orientation to lock — so rejecting is *matching* the
+        // reference, and it routes the caller into the `.catch()` it already wrote. An absent `lock`
+        // would instead throw a synchronous `TypeError` out of a call the author expected to be
+        // thenable, which is strictly worse than the platform's own "no".
+        //
+        // Honest limit, stated rather than implied: we never rotate, so nothing here fires `change` on
+        // its own — the listeners are RETAINED and `dispatchEvent` really invokes them (plus the
+        // `onchange` handler slot), so a future host that can rotate drives this with one call. That is
+        // the `visualViewport` posture with the no-op `dispatchEvent` upgraded to a real one.
+        if (typeof g.screen === 'undefined') {
+            var __soListeners = {};
+            // Primary orientation either way: a window that is merely wider than it is tall has not
+            // been ROTATED, so the angle is 0 in both cases — which is what Chrome reports on a
+            // desktop, portrait window or not.
+            var __soType = function () {
+                return (Number(g.innerHeight) > Number(g.innerWidth)) ? 'portrait-primary' : 'landscape-primary';
+            };
+            var __orientation = {
+                get type() { return __soType(); },
+                get angle() { return 0; },
+                onchange: null,
+                lock: function (o) {
+                    return Promise.reject(new DOMException(
+                        "screen.orientation.lock() is not available on this device.", 'NotSupportedError'));
+                },
+                unlock: function () {},
+                addEventListener: function (type, fn) {
+                    if (typeof fn === 'function') {
+                        (__soListeners[type] = __soListeners[type] || []).push(fn);
+                    }
+                },
+                removeEventListener: function (type, fn) {
+                    var l = __soListeners[type]; if (!l) { return; }
+                    var i = l.indexOf(fn); if (i >= 0) { l.splice(i, 1); }
+                },
+                dispatchEvent: function (ev) {
+                    var type = ev && ev.type ? String(ev.type) : '';
+                    if (ev && ev.target === undefined) { try { ev.target = __orientation; } catch (e) {} }
+                    var l = (__soListeners[type] || []).slice();
+                    for (var i = 0; i < l.length; i++) { try { l[i].call(__orientation, ev); } catch (e) {} }
+                    if (type === 'change' && typeof __orientation.onchange === 'function') {
+                        try { __orientation.onchange.call(__orientation, ev); } catch (e) {}
+                    }
+                    return !(ev && ev.defaultPrevented);
+                }
+            };
+            g.screen = {
+                width: VW, height: VH, availWidth: VW, availHeight: VH,
+                // `availLeft`/`availTop` are the CSSOM-View extensions Chrome ships; a popup-placement
+                // helper does `screen.availLeft + x` and `undefined + x` is `NaN`, which positions the
+                // window nowhere. Zero is the true value for a single un-offset display.
+                availLeft: 0, availTop: 0,
+                colorDepth: 24, pixelDepth: 24, orientation: __orientation
+            };
+        }
         // `window.visualViewport` — the VisualViewport API. Keyboard-aware layouts, pinch-zoom handlers,
         // sticky/`position:fixed` correction and mobile-responsive frameworks read
         // `visualViewport.width/height/scale/offsetTop` and listen for `resize`/`scroll` on it. It is

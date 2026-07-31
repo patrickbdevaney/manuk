@@ -2465,3 +2465,73 @@ the handler fires on a later microtask and the harness reads the output element 
 script — so the gate was green on assertions that did not execute. They were replaced with synchronous
 *negative* claims (`objNotDb`, `reqNotDb`, …), which are the side that actually catches the failure a
 duck-typed predicate invites.
+
+## A two-field object literal is a half-installed API that no probe of NAMES can see (tick 777)
+
+`screen.orientation` was `{ type: 'landscape-primary', angle: 0 }`.
+
+`ScreenOrientation` is an **`EventTarget`** in the spec, and the call every mobile-responsive bundle
+makes is `screen.orientation.addEventListener('change', …)` — a video player deciding when to go
+fullscreen, a map re-projecting, a carousel re-measuring. It is made **unguarded**, and the reason is
+structural rather than sloppy: the guard people write is `if (screen.orientation)`, and a two-field
+literal answers that with an enthusiastic yes. So the detect passed, the caller committed, and the next
+line was `TypeError: screen.orientation.addEventListener is not a function`.
+
+This is tick 772 one object over, and it is worth stating why 772's own follow-up did not catch it.
+That tick's rule was *"grep the prelude for objects whose methods were added one at a time — each is a
+candidate,"* and tick 773 then re-probed **262 platform globals** for absence. Neither instrument could
+see this:
+
+* the method-by-method grep looks for an object **assembled over several ticks**, and this one was
+  written in a single line, complete-looking, in one sitting;
+* the 262-global probe ranks by **absent top-level names**, and `screen` was present, as was
+  `screen.orientation`.
+
+> **The measurable form: a probe over NAMES cannot find a hole INSIDE an object it can reach.** The
+> half-installed family is defined by the gap between the *feature-detect surface* and the *call
+> surface*, and a name census only ever samples the first.
+
+### The other two defects in the same four lines
+
+**`type` was a constant.** `'landscape-primary'` on every viewport, including portrait ones — a *wrong
+answer of the right type*, present and correctly-shaped and false. Both `type` and `angle` are now
+getters over the live `innerWidth`/`innerHeight`, the same globals the cascade resolves `vw`/`vh` and
+`@media` against, and `G_SCREEN_ORIENTATION` checks the answer against **a second, independent
+evaluator** — `matchMedia('(orientation: portrait)')`, which Stylo answers. One question asked two ways
+is the only check that can catch a plausible constant; asserting the string against itself cannot.
+
+**`lock()` REJECTS rather than being absent**, with `NotSupportedError`, which is what desktop Chrome
+does: a desktop window has no orientation to lock. That is the *reference's own* answer, and it hands
+the caller the `.catch()` it already wrote. An absent `lock` throws a synchronous `TypeError` out of a
+call the author expected to be thenable — worse than the platform's own no. Same reasoning as the
+navigation-timing fields that raise `InvalidAccessError` instead of fabricating a plausible `0`.
+
+### `Screen`, `History`, `Location` and `VisualViewport` were inert stubs of objects we build
+
+All four sat in `__inertNames`, whose own comment forbids exactly this. The inert doctrine is sound only
+for a name whose object the engine **never builds** — `x instanceof FileList` answering `false` is
+correct here because there is no `FileList`. The engine builds `window.screen`, `window.history`,
+`window.location` and `window.visualViewport` on every page, so the stub made
+`location instanceof Location` answer `false` about the only `Location` there is.
+
+Tick 773 fixed precisely this for `CSSStyleRule` and went past these four, for a reason that generalises:
+**it ranked by names that were ABSENT, and these were present-but-lying.** They now carry real
+`Symbol.hasInstance` predicates, read **lazily** — `g.location` is reassigned on navigation
+(`g.location = g.__parseUrl(abs)`), so a predicate that captured the object once would start answering
+`false` after the first same-document navigation.
+
+### The gate
+
+`G_SCREEN_ORIENTATION`, 9 claims, red three ways, each on a different claim:
+
+1. **Restore the pre-777 literal** — `missing:` names all five absent members and `listen` reproduces the
+   live symptom verbatim, plus `type:landscape-primary` and `agreesWithCSS:false` on a portrait fixture.
+2. **Put the four names back in `__inertNames`** — every orientation claim still passes and only
+   `instances` moves, to `Screen,History,Location,VisualViewport,ScreenOrientation`.
+3. **Make `dispatchEvent` the `return true` stub** that `navigator.connection` still uses — the API is
+   now *fully present* and `missing:none` passes; only `listen:3 → 0` catches it. A complete surface that
+   observes nothing is the `mark()`-that-records-nothing failure in EventTarget clothing.
+
+⚠ The fixture is loaded at **390×844 on purpose**. A landscape fixture agrees with the constant the bug
+returned, so the claim that matters most could not have gone red — an instrument calibrated by the bug it
+was built to find.

@@ -3315,8 +3315,16 @@ const PRELUDE: &str = r#"
         'SVGSVGElement', 'SVGGraphicsElement',
         // Misc platform objects
         'MessagePort', 'Range', 'DOMTokenList', 'NamedNodeMap', 'Attr',
-        'CSSRule', 'CSSStyleRule', 'MediaQueryList', 'PerformanceEntry', 'IdleDeadline',
-        'Screen', 'History', 'Location', 'VisualViewport'
+        'CSSRule', 'CSSStyleRule', 'MediaQueryList', 'PerformanceEntry', 'IdleDeadline'
+        // ⚠ **`Screen`, `History`, `Location` and `VisualViewport` WERE ON THIS LIST, AND THIS LIST'S
+        // OWN COMMENT SAYS THEY MUST NOT BE** (removed t777). The inert-stub doctrine is only sound
+        // for a name whose object this engine never builds — `x instanceof FileList` answering `false`
+        // is CORRECT here because there is no `FileList`. All four of these name an object the engine
+        // builds on **every** page (`window.screen`, `window.history`, `window.location`,
+        // `window.visualViewport`), so an inert stub made `location instanceof Location` answer
+        // `false` about the one `Location` there is. That is precisely the defect t773 fixed for
+        // `CSSStyleRule` — it went past these four because the re-probe ranked by ABSENT names, and
+        // these were present-but-lying. They now carry real `Symbol.hasInstance` predicates below.
         // ── **THE t773 RE-MEASURE ADDED NOTHING TO THIS LIST, AND THAT IS THE POINT.** A probe of 262 platform globals
         // found 59 absent. Almost all of them named something this engine really builds, so they got
         // real `Symbol.hasInstance` predicates up with `iface()` rather than a stub — an inert
@@ -4604,6 +4612,24 @@ const PRELUDE: &str = r#"
       iface('FontFaceSet',  function (o) { return !!o && o === document.fonts; });
       iface('FontFace', function (o) {
         return !!o && typeof o === 'object' && typeof o.family === 'string' && 'status' in o;
+      });
+
+      // ── The WINDOW's own sub-objects (t777). These four were INERT STUBS, which made
+      // `location instanceof Location` answer `false` about `window.location` itself. Same rule as
+      // the `navigator` block above and the same reason t773 gave for `CSSStyleRule`: the stub
+      // doctrine holds only for a name whose object we never build, and we build all four on every
+      // page. Identity against the singleton, read LAZILY — `g.location` is REASSIGNED on navigation
+      // (`g.location = g.__parseUrl(abs)`), so a predicate that captured it once would start
+      // answering `false` after the first same-document navigation.
+      iface('Screen',         function (o) { return !!o && o === globalThis.screen; });
+      iface('History',        function (o) { return !!o && o === globalThis.history; });
+      iface('Location',       function (o) { return !!o && o === globalThis.location; });
+      iface('VisualViewport', function (o) { return !!o && o === globalThis.visualViewport; });
+      // `ScreenOrientation` is an EventTarget the engine really builds, so it is named for the same
+      // reason — and NOT before t777, when `screen.orientation` was a two-field object literal with
+      // no listener half at all.
+      iface('ScreenOrientation', function (o) {
+        return !!o && !!globalThis.screen && o === globalThis.screen.orientation;
       });
 
       // `performance.now()` — schedulers, profilers and animation libraries all feature-detect it and
