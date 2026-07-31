@@ -553,6 +553,28 @@ fn flex_items(
             Some(_) => out.push(c),
         }
     }
+    // ── **`order` — THE ITEMS ARE LAID OUT IN ORDER-MODIFIED DOCUMENT ORDER** (Flexbox §5.4, Grid
+    // §6.3). taffy has no `order` field, so the sort has to happen here, on the way in.
+    //
+    // Ignoring it is not a missing feature that degrades gracefully — it is a READING-ORDER defect,
+    // the jarring dimension this corpus is worst at (14.5% of in-scope sites clean at t786). A
+    // responsive layout that writes `order: -1` to pull the image above the copy on mobile, or
+    // `order: 2` to send the sidebar after the article on desktop, renders with its blocks in the
+    // wrong sequence and every pairwise comparison against Chrome disagrees.
+    //
+    // ⚠ **STABLE sort, and that is the whole specification of the tie.** Equal `order` — which is
+    // every item on most pages, since the initial value is 0 — must keep DOCUMENT order. An unstable
+    // sort would shuffle ordinary flex rows for no reason at all, on every page, which is a far worse
+    // bug than the one being fixed.
+    //
+    // The DOM, the accessibility tree and sequential focus are untouched: `order` is visual only, by
+    // design, and reordering them here would turn a layout fix into an a11y regression.
+    if out
+        .iter()
+        .any(|n| styles.get(n).is_some_and(|s| s.order != 0))
+    {
+        out.sort_by_key(|n| styles.get(n).map(|s| s.order).unwrap_or(0));
+    }
     out
 }
 

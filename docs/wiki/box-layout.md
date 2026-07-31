@@ -2648,3 +2648,30 @@ asserts −100 so the plausible version cannot come back.
 floats.** Chrome moves an `overflow:hidden` block down to clear the floats above it; we leave it in
 place. The gate therefore asserts **x only** — the y column carries a second, independent defect, and a
 gate that is red for a reason it does not name is worse than one that states its scope.
+
+## `order` lays items out in order-modified document order (t793)
+
+Flexbox §5.4 and Grid §6.3: items are laid out in **order-modified document order**. `order: -1` to
+pull the image above the copy, `order: 2` to send the sidebar after the article — it is how a
+responsive layout rearranges blocks without touching the markup, and it is in essentially every design
+system's breakpoint CSS. taffy has no `order` field, so the sort belongs where the items are collected.
+
+```
+  x positions, 400px rows of 100px items            Chrome        ours (before)
+  second item has order:-1                       100   0  200     0  100  200
+  order 3 / 1 / 2                                200   0  100     0  100  200
+  the same, in a GRID                            100   0  200     0  100  200
+```
+
+**This is a reading-order defect, not a quiet missing property.** `reading-order` is scored over
+sibling PAIRS, so one `order` flips every comparison across the reordered group at once — and it is the
+jarring dimension this corpus is worst at (14.5% of in-scope sites clean).
+
+⚠ **The tie is the whole specification of the sort.** Equal `order` — every item on most pages, since
+the initial value is 0 — must keep DOCUMENT order, so the sort must be STABLE. An unstable one would
+shuffle ordinary flex rows for no reason, on every page: a far worse bug than the one being fixed. The
+sort is skipped entirely unless some item carries a non-zero `order`.
+
+⚠ **And the DOM must not move.** `order` is visual only by design: the accessibility tree and
+sequential focus read source order. An engine that reordered the tree would pass every box assertion
+and silently rewrite what a screen reader announces.

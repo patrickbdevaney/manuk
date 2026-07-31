@@ -1047,6 +1047,12 @@ pub struct ComputedStyle {
     /// recovered from `MinimalCascade` and merged in `stylo_engine` — the same fence as
     /// `scrollbar-width` and `-webkit-line-clamp`.
     pub appearance_none: bool,
+    /// `order` — a flex/grid item's VISUAL order among its siblings (initial `0`, may be negative).
+    ///
+    /// Only the visual order: the DOM, the accessibility tree and sequential focus keep source order,
+    /// which is exactly why the spec cautions against carrying meaning in it — and exactly why an
+    /// engine that ignores it reads as a READING-ORDER divergence rather than as a missing property.
+    pub order: i32,
     /// `line-height: normal` — the value was NOT authored, so it must come from the FONT's own
     /// ascent/descent/lineGap rather than a multiple of the font size. A 1.2× guess is not what any
     /// browser does, and it makes every line box the wrong height on every page.
@@ -1251,6 +1257,7 @@ impl ComputedStyle {
             scrollbar_color: ScrollbarColor::Auto,
             field_sizing_content: false,
             appearance_none: false,
+            order: 0,
             line_height_normal: true,
             mask_image: None,
             background_images: Vec::new(),
@@ -4502,6 +4509,14 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         // usually in the same declaration block as the unprefixed one.
         "appearance" | "-webkit-appearance" => {
             s.appearance_none = v.trim().eq_ignore_ascii_case("none");
+        }
+        // `order` — kept in lockstep with the Stylo path (`clone_order`), because the two cascades
+        // disagreeing on a property is how a `<source>` got 19px of height in one configuration and
+        // none in the other.
+        "order" => {
+            if let Ok(n) = v.trim().parse::<i32>() {
+                s.order = n;
+            }
         }
         "background-image" => s.background_images = parse_background_images(v),
         "background" => {

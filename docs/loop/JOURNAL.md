@@ -41045,3 +41045,64 @@ gate built only from the failing case: the unconditional `<select>` arrow (t789)
 float clamp here. Both were caught by a case that was in the fixture for completeness rather than
 because it was suspected. **Probe the neighbourhood, not the symptom.**
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 793 — `order` lays items out in order-modified document order (2026-07-31)
+
+TICK SHAPE: capability (flex/grid) — the second of the two defects t792's probe found
+
+HYPOTHESIS (written before the fix): t792's thirteen-case positioning probe found exactly two
+divergences and took the larger. This is the other one: Chrome lays a flex row's `order: 2` item
+second and its `order: 1` item first; we used DOM order. Flexbox §5.4 and Grid §6.3 say items are laid
+out in **order-modified document order**, and taffy has no `order` field, so the sort has to happen
+where the items are collected.
+
+⚠ **THIS IS A READING-ORDER DEFECT, NOT A MISSING PROPERTY THAT DEGRADES QUIETLY.** `reading-order` is
+the jarring dimension this corpus is worst at — 14.5% of in-scope sites clean at t786 — and it is
+scored over sibling PAIRS. One `order` on one item flips every pairwise comparison across the
+reordered group at once. `order: -1` (pull the image above the copy) and `order: 2` (send the sidebar
+after the article) are in essentially every design system's breakpoint CSS.
+
+`clone_order()` IS available in stylo's servo build (compile-probed before writing anything — unlike
+`appearance` at t789, this one needed no `MinimalCascade` recovery), so the property is mapped
+directly; the minimal cascade learned it too, because the two cascades disagreeing is its own class of
+bug in this tree.
+
+MEASURED — twelve x positions in 400px rows of 100px items, all Chrome-exact after:
+
+```
+  n1 n2 n3   second item has order:-1        100    0  200
+  t1 t2 t3   middle has an EXPLICIT order:0    0  100  200   ← ties keep document order
+  m1 m2 m3   order 3 / 1 / 2                 200    0  100
+  ga gb gc   the same, in a GRID             100    0  200   ← one collection serves both
+
+  CONTROLS  blog.rust-lang.org 73.7% · news.ycombinator 80.0% · en.wikipedia.org 58.8%
+            secure5 79.5% · 255md 69.8% · chat.google.com 72.9% — every one unchanged
+```
+
+⚠ **THE TIE IS THE WHOLE SPECIFICATION OF THE SORT, and it is the case a fixture written from the
+symptom would not contain.** Equal `order` — every item on most pages, since the initial value is 0 —
+must keep DOCUMENT order. An unstable sort would shuffle ordinary flex rows for no reason on every
+page, which is a far worse bug than the one being fixed. The sort is also skipped entirely unless some
+item carries a non-zero `order`, so the common case does not even pay for the comparison.
+
+⚠ **AND THE DOM MUST NOT MOVE.** `order` is visual only by design: the accessibility tree and
+sequential focus read source order. An engine that reordered the tree would pass every box assertion
+and silently rewrite what a screen reader announces — so the gate asserts the container's element
+children are still `n1, n2, n3` after layout.
+
+Gate: `G_FLEX_ORDER` (new), twelve positions plus the DOM-order assertion. **Proven red two ways:**
+dropping the sort fails `#n2`; making ties come out reversed fails `#n1` while every explicit-order
+case still passes.
+
+HONEST SCOPE: no site is claimed to cross, and no control moved — this is a correctness fix whose
+corpus price comes at the next sweep. Six real sites re-measured, all byte-identical.
+
+PERF: none claimed, and guarded: the sort runs only when an item has a non-zero `order`.
+
+WIKI: `docs/wiki/box-layout.md` — "`order` lays items out in order-modified document order"
+
+PATTERN: ⚠⚠ **ONE PROBE, TWO DEFECTS, TWO TICKS — AND THE SECOND ONE IS FREE.** The thirteen-case
+positioning fixture cost one Chrome run and produced both t792 and t793; eleven of its cases came back
+Chrome-exact, which is what made the two that did not stand out at all. A probe wide enough to be
+mostly boring is what makes the interesting rows visible.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

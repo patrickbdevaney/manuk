@@ -482,6 +482,11 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
 
     // Display.
     s.display = map_display(cv.clone_display());
+    // `order` — the flex/grid item's VISUAL position, and only its visual position. Sorting items by
+    // it is what a `order: -1` "pull this to the front on desktop" rule means, and it is invisible to
+    // the DOM, to the a11y tree and to tab order by design (which is why the spec warns about using
+    // it for meaning).
+    s.order = cv.clone_order();
 
     // Box model — sizing.
     let cw = cv.clone_width();
