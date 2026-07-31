@@ -109,6 +109,24 @@ read -r SITES SCORED GE75 GE75PCT SHAPEM COVM EXCL INSCOPE INPASS JARCLEAN JCPCT
 PREV=""; [ -f "$LEDGER" ] && PREV=$(grep -vE '^(iso|#)' "$LEDGER" 2>/dev/null | awk -F'\t' -v t="$TICK" -v c="$CORPUS" '{ rc=($13==""?"265":$13) } $2!=t && rc==c' | tail -1)
 p_iso=$(echo "$PREV" | cut -f1); p_tick=$(echo "$PREV" | cut -f2); p_scored=$(echo "$PREV" | cut -f4); p_ge=$(echo "$PREV" | cut -f5); p_sh=$(echo "$PREV" | cut -f7); p_excl=$(echo "$PREV" | cut -f10); p_inscope=$(echo "$PREV" | cut -f11); p_inpass=$(echo "$PREV" | cut -f12)
 
+# ── COMMON-SCORED-SET BAND (the trap-free, de-noised slope) ───────────────────────────────────────────────
+# Raw pass-count (inpass/M1) is NOISY: ~2-4 sites flip per sweep on live-site variance + low-sample rows, and
+# WHICH sites score changes run-to-run, so a headline +/- can be pure COMPOSITION (the general form of the
+# DENOMINATOR TRAP). The trap-free measure is the COMMON-SCORED SET: join this sweep's file with the previous
+# same-corpus sweep's file on sites scored in BOTH, and report the MEAN shape delta over that fixed set. This
+# is what PHASE0-RENDER-BURNDOWN.md prescribes and what the agent computes by hand ("the headline moved by
+# less than its own churn"). Immune to sites dropping in/out; the DIRECTION here is the real signal, not the
+# pass-count sign. (p_src = the previous ledger row's source SWEEP file, ledger col f9.)
+CS_BAND=""; p_src=$(echo "$PREV" | cut -f9)
+if [ -n "$PREV" ] && [ -f "${p_src:-/nonexistent}" ] && [ "$p_src" != "$SRC" ]; then
+  read -r CS_N CS_UP CS_DOWN CS_BANDPT < <(awk -F'\t' '
+    FNR==NR { if(FNR>1 && $9=="") prev[$1]=$3+0; next }                       # prev sweep: site -> shape (scored only)
+    FNR>1 && $9=="" && ($1 in prev) { n++; d=($3+0)-prev[$1]; sum+=d; if(d>0.02)up++; else if(d<-0.02)down++ }
+    END{ printf "%d %d %d %.2f", n+0, up+0, down+0, (n>0?100*sum/n:0) }' "$p_src" "$SRC" 2>/dev/null)
+  # band = mean Δshape over both-scored sites (PHASE0-RENDER-BURNDOWN.md §7 method); up/down count moves >2pt.
+  [ "${CS_N:-0}" -gt 0 ] && CS_BAND=$(printf "%+.2f pts (§7 method: mean Δshape over %d sites scored in BOTH %s+%s · %d up · %d down >2pt)" "$CS_BANDPT" "$CS_N" "$p_tick" "$TICK" "$CS_UP" "$CS_DOWN")
+fi
+
 # ── SETTLED / COMPLETE guard (the mid-write-partial fix) ──────────────────────────────────────────────────
 # The instrument appends one row per site over a long, chunked run (each chunk under `timeout … manuk-wpt
 # fidelity`). Reading it early banks a MID-WRITE PARTIAL — that is how an 8-site 0.0%% row landed in the
@@ -217,10 +235,18 @@ printf "     EXCLUDED (bot-wall/unreachable, watched·capped): %s/%s = %s%%   ·
   "$EXCL" "$SITES" "$(awk "BEGIN{printf \"%.0f\",100*$EXCL/$SITES}")" "$SCORED" "$INSCOPE" "$SHAPEM" "$COVM"
 if [ -n "$PREV" ] && [ "$SETTLED" = 1 ] && [ -n "${p_inpass:-}" ] && [ "$CONTAM_SWEEP" != 1 ]; then
   DPP=$(awk "BEGIN{printf \"%+.1f\", $INPASS - ${p_inpass:-0}}")
-  printf "  Δ vs %s: IN-SCOPE PASS %s%%→%s%% (%s pts) · scored %s→%s · excluded %s→%s\n" \
+  printf "  Δ vs %s: IN-SCOPE PASS %s%%→%s%% (%s pts, PASS-COUNT = NOISY ±2-4 sites) · scored %s→%s · excluded %s→%s\n" \
     "$p_tick" "$p_inpass" "$INPASS" "$DPP" "$p_scored" "$SCORED" "${p_excl:-?}" "$EXCL"
-  # burndown slope → sweeps-to-95% (the FINITENESS readout the plan hinges on)
-  awk "BEGIN{ d=$INPASS-${p_inpass:-0}; if(d>0.05){ printf \"  BURNDOWN: +%.1f pts/sweep → ~%d more sweeps to 95%% at this rate\n\", d, int((95-$INPASS)/d + 0.999) } else if(d<=0){ print \"  BURNDOWN: flat/negative — the shape burndown is NOT moving; see PHASE0-RENDER-BURNDOWN.md\" } }"
+  # ⭐ COMMON-SET BAND = the TRAP-FREE de-noised signal (trust THIS direction, not the pass-count sign above).
+  if [ -n "$CS_BAND" ]; then
+    printf "  ⭐ COMMON-SET BAND (trap-free, sites scored in BOTH): %s  ← the REAL slope; ignore the pass-count sign when they disagree\n" "$CS_BAND"
+  fi
+  # burndown slope → sweeps-to-95% (the FINITENESS readout). Pass-count is noisy, so gate the readout on the
+  # common-set band direction: only call it 'moving' when the trap-free band agrees, else it is churn.
+  awk -v cs="${CS_BANDPT:-NA}" "BEGIN{ d=$INPASS-${p_inpass:-0};
+    if(d>0.05 && (cs==\"NA\" || cs+0>=0)) { printf \"  BURNDOWN: +%.1f pts/sweep pass-count (common-set band %s) → ~%d more sweeps to 95%% at this rate\n\", d, cs, int((95-$INPASS)/d + 0.999) }
+    else if(cs!=\"NA\") { printf \"  BURNDOWN: pass-count %+.1f but COMMON-SET BAND %s is the real read — %s (pass-count is churn; see PHASE0-RENDER-BURNDOWN.md)\n\", d, cs, (cs+0>0.02?\"engine IS moving up\":(cs+0<-0.02?\"a real small regression — investigate\":\"genuinely flat this sweep\")) }
+    else { print \"  BURNDOWN: flat/negative pass-count (no common-set band available) — see PHASE0-RENDER-BURNDOWN.md\" } }"
 fi
 if [ -n "$alerts" ]; then printf "  ⚠ %b" "$alerts"; else echo "  ✓ no trap/regression/staleness/exclusion flag"; fi
 echo "  last ${LEDGER} rows:"; tail -3 "$LEDGER" 2>/dev/null | sed 's/^/    /'

@@ -77,7 +77,7 @@ M1CNT=$(awk "BEGIN{printf \"%d\", (${M1_PASS:-0}+0)/100*(${M1_INSCOPE:-200}+0)+0
 NEED=$(( TARGET - M1CNT )); [ "$NEED" -lt 0 ] && NEED=0
 SLOPE_TXT="(need a 2nd same-corpus complete sweep for a slope)"
 if [ "${M1_PREVPASS:-NA}" != "NA" ]; then
-  SLOPE_TXT=$(awk "BEGIN{d=${M1_PASS:-0}-${M1_PREVPASS:-0}; if(d>0.05) printf \"+%.1f pts/sweep → ~%d sweeps to 95%%\", d, int((95-${M1_PASS:-0})/d+0.999); else printf \"%+.1f pts/sweep (FLAT/NEG — see PHASE0-RENDER-BURNDOWN.md)\", d}")
+  SLOPE_TXT=$(awk "BEGIN{d=${M1_PASS:-0}-${M1_PREVPASS:-0}; if(d>0.05) printf \"+%.1f pts/sweep pass-count → ~%d sweeps to 95%%\", d, int((95-${M1_PASS:-0})/d+0.999); else printf \"%+.1f pts/sweep PASS-COUNT=NOISY (±2-4 sites) — read the trap-free COMMON-SET BAND in fidelity-progress.sh, not this sign\", d}")
 fi
 # CrUX transition flag: the render target is the representative corpus; while the number is still on the 265,
 # it is a PROXY that recalibrates (likely lower) at the first CrUX sweep.
