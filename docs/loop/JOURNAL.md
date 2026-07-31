@@ -40608,3 +40608,107 @@ IT.** Four sample sites said the key change worked; they could not say it conver
 observer had to interrupt to get this run, after "the next clean sweep will price it" appeared in three
 consecutive ticks — and the sweep took 50 minutes, which is less than one of the ticks that deferred
 it. [no-pattern]
+
+## Tick 787 — a form control does not inherit the page's font, and `rows` was never read (2026-07-31)
+
+TICK SHAPE: capability (form-control intrinsic sizing, calibrated against Chrome)
+
+HYPOTHESIS (written before the fix): the fresh t786 rows rank two sites within 0.06 of the M1 bar —
+`chat.google.com` +0.021 (59 elements) and `255md.com` +0.052 (43). The mechanism oracle on both names
+FORM CONTROLS: `chat.google.com`'s footer `<select>` is ours `236` against Chrome's `162`, dragging its
+`<form>` and wrapper to the same wrong width; `255md.com`'s `<textarea>` is ours `97` tall against
+Chrome's `29`. A control's intrinsic size is the browser's arithmetic, not the page's — so if it is
+wrong it is wrong on every form that does not override it, and the error leaves the control: a
+container's width one level up, and a page's whole vertical flow below.
+
+MEASURED FIRST, on a local fixture against headless Chrome, because a control's size is a number the
+reference can simply be asked for (`font: 16px sans-serif` on the body, so the control font is the
+UA's and not the document's):
+
+```
+                      Chrome        ours (before)     ours (after)
+<input size=1>         53×21          27×22            53×19
+<input size=5>         85×21          59×22            85×19
+<input> (size=20)     205×21         179×22           205×19
+<input size=40>       365×21         339×22           365×19
+<textarea>            182×36         179×22           182×36
+<textarea rows=1>     182×21         179×22           182×21
+<textarea rows=3>     182×51         179×22           182×51
+<textarea rows=2 cols=10> 102×36      99×22           102×36
+```
+
+THREE DEFECTS, and the table names each one:
+
+1. **A form control does not inherit the page's font.** Chrome gives every control
+   `font: -webkit-small-control` — the ~13.3px system face, not the document's 16px. We inherited,
+   so every control was ~20% too big in both axes on every page that sets a body font, which is
+   every page.
+2. **The `<input>` intercept was 26px short.** The slope is exactly 8.0px/char in both engines; the
+   CONSTANT is 45px border box and ours was 19. ⚠ The comment that shipped with the old constant
+   asserted `size=20 → ~173px` was *"the same approximation Chrome's own default ends up at"*.
+   **Chrome ends up at 205.** The two had never been put side by side — a calibration claim that was
+   asserted rather than measured, sitting in the code as if it were evidence.
+3. **`rows` was not read at all**, so an empty `<textarea>` sized to its empty content: one line,
+   22px, against Chrome's 36. Every comment box, contact form and review field on the web.
+
+⚠ **ONE SHARED CONSTANT WOULD HAVE BEEN WRONG FOR ONE OF THEM.** `<input>`'s intercept is 45px border
+box and `<textarea>`'s is 22 — a text field reserves caret-scroll room a textarea does not. The old
+code used one number for both, which is how it could be 3px off for textareas and 26px off for inputs
+at the same time. Both terms are now `font-size`-relative, so an author who sets a control font gets a
+proportional box instead of one calibrated for a font it is not using (checked at 32px: input 484 vs
+Chrome 476, textarea 428 vs 407 — ~2–5%, against the ~135% error a fixed constant would give).
+
+CONTROLS AND TARGETS, same binary, live:
+
+```
+blog.rust-lang.org   73.6% -> 73.6%   (1664 paths — unchanged, the control)
+secure5.entertime…   79.5% -> 79.5%   ·  255md.com 69.8% -> 69.8%
+chat.google.com      72.9% -> 72.9%   ·  news.ycombinator 80.4% -> 80.0% (804 paths vs 811: the PAGE changed)
+```
+
+**NO SITE CROSSED, and that is stated rather than buried.** Neither near-bar site moved: `255md`'s
+textarea is CSS-sized (the UA default never applies), and `chat.google.com`'s remaining `<select>` gap
+is the residual below. This tick is justified by Chrome-exactness on a primitive every form uses, not
+by a crossing, and the corpus price comes at the next sweep.
+
+RESIDUALS, measured and named rather than left to be rediscovered:
+* `<input>` heights read 19px against Chrome's 21 — Chrome's inner editor adds 1px above and below,
+  which the textarea path now carries explicitly and the auto-height input path does not.
+* **A `<select>`'s intrinsic width is short by exactly 17px** — 142 vs 159 with a long option, 13 vs
+  30 with a one-character one. The SAME 17 either way, which is the dropdown arrow Chrome reserves.
+  That is the whole of `chat.google.com`'s form cluster and it is the next bounded fix; it belongs in
+  layout (the width is content-derived there), not in this UA-hint function.
+
+Gate: `G_FORM_CONTROL_METRICS` (new) — nine assertions over the measured table, four widths on the
+`<input>` line so a wrong slope with a compensating intercept cannot pass, and three `rows` heights so
+a hard-coded two-line box cannot pass either. **Proven red twice:** restoring `cols * 8.0 + 13.0`
+fails `#a1` (27 against 53); deleting the `rows` block fails `#t1` (19 against 21) while every width
+stays green — which is why the heights are asserted separately.
+
+HONEST SCOPE: no site is claimed to cross. The blast radius is real (every control on every page) and
+is Chrome-directional by construction: each number now equals a number read out of Chrome.
+
+PERF: none claimed — the same function, two more attribute reads.
+
+SURFACE AUDIT #50 (due, and it found three things rather than rubber-stamping the tick):
+* the `CSS nesting` row was COARSER than the feature — its receipt names the two forms t124 tested and
+  is silent on the group-rule half t785 fixed (the #48 shape, third sighting). ⚠ And the map ALREADY
+  held a sighting of it, filed as the `container queries` row's residue — *a residue noted on the row
+  of the capability you were building is invisible to the row it actually belongs to.*
+* **nested `@container` is STILL skipped** (Chrome 400, ours 100) because it comes through a different
+  door — a source-lifting supplement that scans stylesheet TEXT for top-level blocks. Two mechanisms
+  for one syntax: fixing one proves nothing about the other. New row, `missing`, probe recorded.
+* **`@layer` has no PRECEDENCE**: `#h{width:100px}` then `@layer L{#h{width:333px}}` reads Chrome 100,
+  ours 333 — unlayered must beat layered regardless of order, which is the entire point of a layer.
+  Independent of t785 (same reading for a top-level layer). Both directions measured, because the
+  complementary case — a declaration existing ONLY in a layer — is now RIGHT (222 vs 222, and 100
+  before t785), and a row recording only the failure would send the next tick to re-derive that half.
+
+WIKI: `docs/wiki/box-layout.md` — "A form control does not inherit the page's font"
+
+PATTERN: ⚠⚠⚠ **A CALIBRATION CONSTANT WITH A COMMENT CLAIMING IT MATCHES THE REFERENCE IS THE EASIEST
+KIND OF UNMEASURED CLAIM TO KEEP.** It reads as evidence, it never throws, and it is wrong by a
+quantity nobody can see without running the reference — 26px per text field, for as long as the
+comment stood. The check cost one fixture and one `--dump-dom`. **Any number in this engine that
+claims to match Chrome should carry the command that produced it.**
+Ledgered in `docs/loop/WEB-PATTERNS.md` as *a form the author did not size*.

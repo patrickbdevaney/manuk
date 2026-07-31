@@ -217,6 +217,16 @@ option, optgroup { display: none; }
    background and an intrinsic size, a checkbox is nothing at all — every form on the web rendered
    its labels next to empty space. (These are UA rules, lowest specificity: any author styling
    still wins.) */
+/* **A FORM CONTROL DOES NOT INHERIT THE PAGE'S FONT.** Chrome's `html.css` gives every control
+   `font: -webkit-small-control`, which resolves to the ~13.3px system UI face — NOT the 16px the
+   document is using. Inheriting it here made every control ~20% too big in both axes, and since a
+   text field's intrinsic width is measured in characters, the error came straight back out as a
+   wrong BOX width on every form on the web. Authors who want inheritance ask for it (`input {
+   font: inherit }` is in most CSS resets) and this is UA-origin, so they still win. */
+input, select, textarea, button {
+  font-family: Arial, sans-serif;
+  font-size: 13.333px;
+}
 input, textarea, select {
   border: 1px solid #767676;
   background-color: #ffffff;
@@ -1019,9 +1029,25 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
                 }
             }
             "hidden" | "submit" | "reset" | "button" | "image" | "file" | "range" | "color" => {}
-            // Text-like: `size` characters wide. The 8px-per-character figure is the average
-            // advance of the default UI font at 16px — the same approximation Chrome's own default
-            // ends up at (`size=20` → ~173px).
+            // Text-like: `size` characters wide, PLUS a constant — and the constant is not a fudge
+            // factor, it is most of the box on a short field. Measured against headless Chrome on
+            // `/tmp/ctl.html` (`font: 16px sans-serif` on the body, so the control font is the UA's):
+            //
+            //   size= 1   Chrome  53px border box        size=20   Chrome 205px
+            //   size= 5   Chrome  85px                   size=40   Chrome 365px
+            //
+            // The slope is exactly 8.0px/char and the intercept is 45px border box — 39px of content
+            // once this UA sheet's `padding:1px 2px` + `1px` border are removed. Blink derives that
+            // intercept from the face (`maxCharWidth - avgCharWidth`, plus room for the caret); we
+            // take the number it arrives at.
+            //
+            // ⚠ **The comment this replaces asserted `size=20 → ~173px` was "the same approximation
+            // Chrome's own default ends up at". Chrome ends up at 205.** Nobody had put the two side
+            // by side, so every default-width text field on the web was 26px too narrow here — and a
+            // text field's width is a container's width one level up.
+            //
+            // Both terms scale with the control's own `font-size`, so an author who sets one gets a
+            // proportional box rather than a box calibrated for a font it is not using.
             _ => {
                 // A UA intrinsic width is a DEFAULT, so an author declaration outranks it — and
                 // `width: stretch` is a declaration that merely *looks* absent (`Dim::Auto`). Same
@@ -1035,22 +1061,59 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
                         .and_then(|v| v.trim().parse::<f32>().ok())
                         .filter(|n| *n > 0.0)
                         .unwrap_or(20.0);
-                    s.width = crate::Dim::Px(cols * 8.0 + 13.0);
+                    s.width = crate::Dim::Px(s.font_size * (cols * 0.6 + 2.925));
                 }
             }
         }
     }
-    if tag == "textarea"
-        && s.width == crate::Dim::Auto
-        && !s.width_stretch
-        && !s.field_sizing_content
-    {
-        let cols = el
-            .attr("cols")
-            .and_then(|v| v.trim().parse::<f32>().ok())
-            .filter(|n| *n > 0.0)
-            .unwrap_or(20.0);
-        s.width = crate::Dim::Px(cols * 8.0 + 13.0);
+    if tag == "textarea" && !s.field_sizing_content {
+        // `cols` — same 0.6em/char slope as `<input>`, but a DIFFERENT intercept: Chrome gives a
+        // default `<textarea>` 182px border box and a `cols="10"` one 102px, i.e. 8.0px/char with a
+        // 22px border-box intercept (16px of content) against the text field's 45. A textarea has no
+        // caret-scroll allowance to reserve; a single shared constant would be wrong for one of them.
+        if s.width == crate::Dim::Auto && !s.width_stretch {
+            let cols = el
+                .attr("cols")
+                .and_then(|v| v.trim().parse::<f32>().ok())
+                .filter(|n| *n > 0.0)
+                .unwrap_or(20.0);
+            s.width = crate::Dim::Px(s.font_size * (cols * 0.6 + 1.2));
+        }
+        // ── **`rows` WAS NOT READ AT ALL, SO EVERY `<textarea>` ON THE WEB WAS ONE LINE TALL.**
+        //
+        // The width half of this control has been honoured since it was written; the height half was
+        // never implemented, so an empty textarea sized to its (empty) content and came out 22px
+        // against Chrome's 36. Measured: Chrome `rows=1` → 21px border box, no `rows` → 36, `rows=2`
+        // → 36, `rows=3` → 51. That is `rows × line-height` of content, with the default **2** the
+        // HTML spec names — a slope of 15px/row at the UA control font, and 15/13.333 is `1.125`.
+        //
+        // Every comment box, contact form and review field on the web is affected, and the error is
+        // not confined to the control: a box one line short pulls everything below it up the page,
+        // which is the `dy` term the render burndown ranks first.
+        //
+        // ⚠ `line-height: normal` cannot be resolved here — it is the FACE's ascent+descent+lineGap
+        // and the metrics live in the text layer, which this function has no handle on. The 1.125
+        // factor is Chrome's own ratio at the control font, and it sizes the BOX only: the lines
+        // drawn inside it still come from real font metrics. An authored `line-height` is used
+        // directly, because then there is nothing to approximate.
+        if s.height == crate::Dim::Auto && !s.height_stretch {
+            let rows = el
+                .attr("rows")
+                .and_then(|v| v.trim().parse::<f32>().ok())
+                .filter(|n| *n > 0.0)
+                .unwrap_or(2.0);
+            let lh = if s.line_height_normal {
+                s.font_size * 1.125
+            } else {
+                s.line_height
+            };
+            // The `+ 2` is measured, not derived: Chrome's inner editor sits 1px clear of the top
+            // and bottom of the content box (`rows=1` → 21px border box, of which this sheet's
+            // padding+border account for 4 and one 15px line for 15). Written here rather than as UA
+            // padding on purpose — `getComputedStyle(el).padding` must keep reporting `1px 2px`,
+            // which is what the page can observe and what Chrome answers.
+            s.height = crate::Dim::Px(rows * lh + 2.0);
+        }
     }
     if matches!(
         tag,

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **530** | ticks 1–785 |
-| median tick cycle | **23m** | 529 intervals |
+| ticks landed | **531** | ticks 1–786 |
+| median tick cycle | **23m** | 530 intervals |
 | median, last 10 | **54m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 483.1h elapsed |
-| median verify wall | **63s** | 469 ticks |
+| **ticks per hour** | **1.10** | 483.7h elapsed |
+| median verify wall | **63s** | 470 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **361**
-* **✅ rows in the capability ledger**: 144 → **404**
+* **live gates**: 27 → **362**
+* **✅ rows in the capability ledger**: 144 → **405**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**253 of 530 ticks** (48%) moved a
+**253 of 531 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **253** capability ticks, median cycle **23m**
-* median diff per tick: **+250 / −34** lines across 8 files
+* median diff per tick: **+251 / −34** lines across 8 files
 
 ## Every tick
 
@@ -627,5 +627,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **782** | 2026-07-31 05:07 | 41m | instrument-fidelity | 63s | +398/−33 | 361 | 81 | 56.0% · | `thin-overlap` said "this is OURS" and the number that decides it was never read (2026-07- |
 | **784** | 2026-07-31 06:52 | 1.7h | instrument-fidelity | 63s | +282/−72 | 361 | 81 | 56.0% · | the key that survives an inserted sibling: `:nth-child` → `:nth-of-type` (2026-07-31) |
 | **785** | 2026-07-31 08:09 | 78m | capability | 63s | +314/−32 | 361 | 81 | 56.0% · | a nested `@media` lost its declarations, and only its declarations (2026-07-31) |
+| **786** | 2026-07-31 08:45 | 36m | measurement | 63s | +507/−50 | 362 | 81 | 56.0% · | bank a clean sweep: did the key change convert the corpus, or four sites? (2026-07-31) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

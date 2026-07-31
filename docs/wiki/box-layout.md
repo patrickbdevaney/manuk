@@ -2530,3 +2530,51 @@ Fixing this moved **zero** shape points on all six near-bar sites — as did tic
 tick before. Shape scores **element** geometry; both defects live *inside* an element's box. When a
 metric is used to RANK work, its blind spot silently deprioritises an entire class of visible defect —
 and the near-bar pages it ranks are exactly where those defects sit.
+
+## A form control does not inherit the page's font (t787)
+
+A control's size is the browser's arithmetic, not the page's. Nothing in a document says how wide a
+search box should be — so when that arithmetic is wrong, it is wrong on every form that does not
+override it, and the error does not stay in the control: a text field's width is a container's width
+one level up, and a textarea one line short pulls the whole page below it upward.
+
+Read out of headless Chrome, body font `16px sans-serif` (so the control font is the UA's):
+
+```
+                      Chrome        ours (before)     ours (after)
+<input size=1>         53×21          27×22            53×19
+<input>  (size=20)    205×21         179×22           205×19
+<input size=40>       365×21         339×22           365×19
+<textarea>            182×36         179×22           182×36
+<textarea rows=3>     182×51         179×22           182×51
+```
+
+**Three separate facts, each of which was a defect.**
+
+1. **Chrome gives every control `font: -webkit-small-control`** — the ~13.3px system face, *not* the
+   document's 16px. We inherited. Every control was ~20% too big in both axes. Authors who want
+   inheritance ask for it (`input { font: inherit }` is in most resets) and the rule is UA-origin, so
+   they still win.
+2. **The `<input>` intercept is 45px border box; ours was 19.** The slope is exactly 8.0px/char in
+   both engines — it is the *constant* that was 26px short, and on a short field the constant is most
+   of the box.
+3. **`rows` was never read.** An empty `<textarea>` sized to its empty content.
+
+⚠ **One shared constant was wrong for one of them.** `<input>`'s intercept is 45px border box and
+`<textarea>`'s is 22 — a text field reserves caret-scroll room a textarea does not. The old code used
+one number for both, which is how it managed to be 3px off for textareas and 26px off for inputs at
+the same time. Both terms are `font-size`-relative now, so an authored control font gets a
+proportional box rather than one calibrated for a font it is not using.
+
+**Measured residuals, named so they are not rediscovered.** `<input>` heights read 19 against Chrome's
+21 (Chrome's inner editor clears 1px top and bottom; the textarea path carries that explicitly, the
+auto-height input path does not). A `<select>`'s intrinsic width is short by **exactly 17px** — 142 vs
+159 with a long option, 13 vs 30 with a one-character one, the same 17 either way. That is the
+dropdown arrow, it is the whole of `chat.google.com`'s form cluster, and it belongs in layout where
+the width is content-derived rather than in the UA-hint pass.
+
+⚠⚠ **The transferable part is about the comment, not the code.** The old constant shipped with a note
+saying it was *"the same approximation Chrome's own default ends up at (`size=20` → ~173px)"*. Chrome
+ends up at 205. A calibration claim that reads as evidence, never throws, and is wrong by an amount
+invisible without running the reference is the easiest kind of unmeasured claim to keep. **Any number
+here that claims Chrome parity should carry the command that produced it.**

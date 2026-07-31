@@ -127,6 +127,7 @@
   - L2509 · ⚠ Deliberately partial, and named so the next person knows which half exists
   - L2517 · The two mutations the test demands
   - L2527 · And the burndown could not see any of it
+  - L2534 · A form control does not inherit the page's font (t787)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1336,4 +1337,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1247 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1248 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

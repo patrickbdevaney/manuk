@@ -2898,3 +2898,91 @@ board's current mandate is leg-1 **scorability** — get the ~48 non-rendering i
 and the corpus is producing a *measured, ranked, first-party* worklist for that faster than any
 external list can. Interop/Baseline reconciliation is owed and is the next audit's job (#50), before
 the leg-2 shape work resumes.
+
+## Audit #50 — tick 787 (2026-07-31)
+
+**Method.** The same door as #47–#49 — reconcile the map against what a measurement just turned up —
+but this time the measurement is the cheapest one available and the loop had not been using it:
+**write a four-line fixture and ask Chrome for the number.** Two ticks in a row (t785 nested `@media`,
+t787 form controls) found a shipped, mapped, gated capability that was wrong by an amount no gate could
+see, and in both cases the reference could simply have been asked.
+
+### ⚠ FINDING 1 — THE ROW WAS COARSER THAN THE FEATURE, AGAIN (and the residue was already on the map)
+
+`doc · CSS nesting (native &) · gated · G_CSS_NESTING · "tick 124: MEASURED — Stylo backs native
+nesting (& descendant + bare &)"`.
+
+CSS Nesting has two halves. A nested **style rule** (`& .c {}`) has its own selectors and worked since
+t124. Declarations written **directly inside a nested group rule** have none — the spec wraps them in
+an implicit `& { … }`, Stylo materialises that as `CssRule::NestedDeclarations`, and the rule-index
+walker's `_ => {}` dropped them whole:
+
+```css
+article { max-width: 423px; @media (min-width: 1018px) { max-width: 974px } }
+```
+
+The row's own receipt names the two forms that were tested. **It is accurate about what it measured and
+silent about what it did not** — the #48 shape (a row coarser than the thing it stands in for), third
+sighting.
+
+⚠ **And the map had already written down a sighting of it, filed under a different row.** The
+`container queries` row's residue list ends with *"style-rule-NESTED @container (&-relative) skipped"*.
+That is the same symptom, recorded at t379 as one at-rule's residue rather than as a fact about nested
+group rules in general. **A residue noted on the row of the capability you were building is invisible to
+the row of the capability it actually belongs to.**
+
+### FINDING 2 — WHAT THE FIX DID AND DID NOT REACH, measured after landing
+
+Probe (`#c` inside a 600px `container-type: inline-size` wrapper), Chrome vs ours after t785:
+
+```
+  nested @media   (matching)      Chrome 300   ours 300   ✓
+  nested @media   (non-matching)  Chrome 100   ours 100   ✓  (the negative control)
+  nested @supports                Chrome  ok   ours  ok   ✓
+  nested @layer   (only decl)     Chrome 222   ours 222   ✓  (was 100 before t785)
+  nested @container               Chrome 400   ours 100   ✗  STILL SKIPPED
+```
+
+`@container` is the exception because it does not come through the same door: it is a **source-lifting
+supplement** (`extract_container_blocks` reads blocks out of the stylesheet TEXT, because Stylo's servo
+build cfg-drops the at-rule), and a supplement that scans for top-level blocks cannot see one nested
+inside a style rule. Two mechanisms for one syntax means a fix to one of them proves nothing about the
+other — new row added, `missing`, with the probe recorded.
+
+### FINDING 3 — A NEW DEFECT THE FIX MADE VISIBLE: `@layer` HAS NO PRECEDENCE
+
+While probing nested `@layer` I measured the ordinary one:
+
+```css
+#h { width: 100px }
+@layer L { #h { width: 333px } }        Chrome 100   ·   ours 333
+```
+
+**Unlayered author declarations beat layered ones regardless of document order** — that is the whole
+point of a layer, and we flatten layers into document order (`CssRule::LayerBlock` recurses and keeps
+nothing). This is *independent of t785*: it reads the same for a top-level layer, so it has been true
+since layers were walked at all. The cascade's sort key needs a layer term between origin and
+specificity. Added as `missing`, with both directions measured — because the complementary case (a
+declaration that exists ONLY in a layer) is now RIGHT, and a row that recorded only the failure would
+have sent the next tick to re-derive that half.
+
+### FINDING 4 — A CALIBRATION CONSTANT IS AN UNMEASURED CLAIM WEARING EVIDENCE'S CLOTHES
+
+`<input>`'s intrinsic width shipped as `size * 8.0 + 13.0` under a comment reading *"the same
+approximation Chrome's own default ends up at (`size=20` → ~173px)"*. Chrome ends up at **205**. The
+slope was right; the constant was 26px short on every text field on the web that the author did not
+size. Nothing could catch it: it never throws, it reads as evidence, and the error is invisible without
+running the reference.
+
+> **THE RULE THIS ADDS: any number in this engine that claims to match Chrome must carry the command
+> that produced it.** `G_UA_BLOCK_MARGINS` already does this (its header pastes the `--dump-dom`
+> output); the form-control constants did not, and were wrong for as long as they existed.
+
+### ADDED / CHANGED
+
+| class | capability | status | note |
+|---|---|---|---|
+| doc | CSS nesting (native `&`) | `gated` (receipt CORRECTED) | the nested-group-rule half was dropped whole until t785; nested `@container` still skipped |
+| doc | form-control INTRINSIC metrics (`size`/`cols`/`rows` + the control's own font) | **`gated`** (new row) | `G_FORM_CONTROL_METRICS`, t787 — three defects in one measured table |
+| doc | `<select>` reserves the dropdown arrow in its intrinsic width | **`missing`** (new row) | exactly 17px short, both a long and a one-character option — a constant, not a text-measurement difference |
+| doc | `@layer` PRECEDENCE (unlayered beats layered) | **`missing`** (new row) | Chrome 100, ours 333; independent of t785, true since layers were walked |
