@@ -5032,6 +5032,23 @@ still `Err`. Without that claim, an engine that never reported a network failure
 every "did it render?" assertion above. A dead origin, a DNS failure and a timeout are a different fact
 and they keep their own answer.
 
+## Pattern — a stylesheet that contains ANY non-ASCII character: `content:`, `font-family` in its own script (tick 774)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| A stylesheet carries a literal non-ASCII character — `content: "\u2013"` for a list bullet, `content: "\u2192"` for a chevron, a checkmark in a `::before`, or a **`font-family` written in its own script** (`"\u5fae\u8f6f\u96c5\u9ed1"`, `"\u30d2\u30e9\u30ae\u30ce\u89d2\u30b4"`, `"\ub9d1\uc740 \uace0\ub515"`). Every one of them reached the cascade as its raw UTF-8 bytes widened to Latin-1 code points | **Everywhere, silently.** `255md.com` drew `\u00e2` glued to each list bullet where Chrome draws an en dash. The expensive half is invisible: a mangled family name matches no font, so an entire CJK font stack falls through to a default with nothing logged — and the CrUX tail this corpus is stratified to reach is heavily CJK | ✅ **tick 774** — `strip_comments` walked the source as bytes and emitted `out.push(b[i] as char)`; it now copies the whole character. Gated by **`G_CSS_UTF8`** (11 claims in four scripts plus an astral emoji, RED-proven by restoring the original line) |
+
+**This was one character of Rust, and it corrupted every stylesheet in the engine** — `Stylesheet::parse`
+stores the stripped text as `source`, and `source` is what is handed to Stylo, so the cascade never saw a
+correctly-decoded sheet. The DOM was correct throughout, which is why nothing pointed at it.
+
+⚠ **It survived because the escape form was never affected.** `content: "\2013"` is pure ASCII and always
+worked, and every CSS test in this repo was written in ASCII. **A test suite written in one alphabet
+cannot see an encoding bug** — the fix is to leave the alphabet, not to add assertions.
+
+⚠ **And the headline metric could not see it either**: fixing it moved zero shape points, because a
+`::before` is not an element and the `<li>`'s rect is identical whichever glyph is drawn inside it.
+
 ## Pattern — a page that narrows `sheet.cssRules` by `instanceof`, and an inert stub that answers `false` about a rule that IS one (tick 773)
 
 | pattern | where it shows up | status |

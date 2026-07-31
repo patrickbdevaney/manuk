@@ -39319,3 +39319,97 @@ rather than measured is a number about the author. The corollary this tick nearl
 widen a surface, the honest NEGATIVES are part of the surface** — a name added for a capability we lack
 defeats the feature detection that is a page's only way to route around us, which is the same
 half-installed-API failure as t772 with the sign flipped.
+
+## Tick 774 — `out.push(b[i] as char)`: every stylesheet in the engine was mojibake'd, by one character of Rust (2026-07-31)
+
+The board's leg 2 is the jarring-clean near-bar cohort. I ran the four sites within +0.06 of the bar
+(`chat.google.com` 0.729, `255md.com` 0.698, `developers.google.com` 0.694,
+`secure5.entertimeonline.com` 0.692) and went to the **shallowest member** — `255md.com`, 43 paths, 100%
+coverage. The side-by-side showed something the numbers had not: its list bullets read **`åad delivery`**
+where Chrome reads **`–  ad delivery`**.
+
+A four-line fixture isolated it exactly:
+
+```text
+  text node  "– → ★ ©"            ours  – → ★ ©     Chrome  – → ★ ©     ✓ correct
+  content: "–"   (literal)        ours  â           Chrome  –           ✗
+  content: "\2013" (escape)       ours  –           Chrome  –           ✓ correct
+  content: "→ ★ ©"                ours  â â Â©      Chrome  → ★ ©       ✗
+```
+
+`Â©` is the tell: one source character became **two** glyphs, so this is byte expansion, not a font miss.
+`©` is U+00A9 = UTF-8 `C2 A9`, and `Â` is U+00C2.
+
+### ⚠⚠⚠ THE CULPRIT IS ONE CHARACTER, AND IT IS ON THE WAY IN
+
+`engine/css/src/lib.rs`, `strip_comments`, which walks the stylesheet as **bytes**:
+
+```rust
+out.push(b[i] as char);   // identity for ASCII; Latin-1 widening for everything else
+```
+
+`Stylesheet::parse` stores that result as `source`, and `source` is the string handed verbatim to
+`StyloStylesheet::from_str`. **Stylo has never seen a correctly-decoded stylesheet in this engine.**
+The instrumentation chain that pinned it: `style.textContent` read back U+2013 exactly (DOM fine) →
+`dom.text_content()` in Rust read back 8211 (DOM fine) → `sheet.source()` at the Stylo call site already
+held `[226, 128, 147]`. Corruption between a correct DOM and the cascade.
+
+Blast radius is every non-ASCII byte in every stylesheet:
+
+* every non-ASCII `content:` string — arrows, checkmarks, quotes, currency, the icon glyphs half the web
+  puts in `::before`;
+* **`font-family` names written in their own script** — `"微软雅黑"`, `"ヒラギノ角ゴ"`, `"맑은 고딕"`.
+  A mangled family name matches no font, so an entire CJK font stack falls through to a default with
+  nothing logged. That is a large share of the CrUX tail this corpus is stratified to reach;
+* custom properties, `quotes:`, non-ASCII identifiers, `url()` with non-ASCII paths, and **attribute
+  selectors matching non-ASCII values** — with the defect restored, `#a[data-x="café"]` stops matching
+  and the rule simply does not apply.
+
+The fix is to copy the whole character instead of one byte of it. Scanning for `/*` and `*/` as bytes
+stays — `/` and `*` are ASCII and a UTF-8 continuation byte is always ≥ 0x80, so no multi-byte character
+can contain either — so the diff is only about what gets COPIED, not what gets skipped.
+
+### ⚠ WHY IT SURVIVED, WHICH IS THE TRANSFERABLE PART
+
+**The escape form was never affected.** `content: "\2013"` is pure ASCII and always worked — and every
+CSS test in this repository was written in ASCII. *A bug invisible to the entire alphabet your tests are
+written in is not found by writing more tests of the same kind.* `G_CSS_UTF8` is therefore deliberately
+written in four scripts (Han, Katakana, Hangul, Latin-1 accented) plus an astral emoji, and reports
+**code points**, not rendered text — a mojibake'd string still renders *something*, and eyeballing it is
+precisely how this survived.
+
+### THE MEASURED OUTCOME — and the honest part is what did NOT move
+
+The fixture is now **pixel-identical to Chrome** on all four lines. On the corpus:
+
+| site | before | after |
+|---|---|---|
+| 255md.com | 0.698 | **0.698** |
+| news.ycombinator.com | 0.801 | 0.801 |
+| chat.google.com · secure5.entertimeonline.com | 0.729 / 0.692 | unchanged |
+
+**Zero shape movement, and that is a fact about the instrument, not the fix.** Shape scores ELEMENT
+geometry; a `::before` is not an element, its text is drawn inside the `<li>`'s box, and the `<li>`'s
+rect is identical whether the marker says `–` or `â`. So a visibly-wrong, Chrome-differential
+rendering defect on a real site is **completely invisible to the headline metric** — the same shape of
+blindness as t762's parent-relative cancellation, in a different dimension. The evidence for this fix is
+the pixel comparison and the RED mutation, not a corpus crossing, and claiming otherwise would be
+inventing a number.
+
+TICK SHAPE: capability (text/CSS correctness — surfaced by working the board's leg-2 near-bar cohort)
+CLUSTER: none shrank. The defect is sub-element and the cluster ledger keys on elements.
+Gates: **`G_CSS_UTF8`** (`engine/page/tests/g_css_utf8.rs`), 11 claims, **proven red by restoring the
+original line** — every non-ASCII code point comes back as its raw UTF-8 bytes
+(`ff:229,190,174,232,189,175,…`), `attrsel` drops to `rgb(0, 0, 0)` because the selector stops matching,
+and `esc:` is *unaffected*, which is the exhibit for why it hid. The comment-stripping behaviour itself
+is guarded four ways (flush-before, flush-after, abutting a multi-byte char, and a comment full of
+non-ASCII still being removed) because the fix changed what that function copies.
+PERF: none claimed. The new path copies a slice instead of a char and is not measurably different.
+WIKI: `docs/wiki/css-cascade.md` — "The cascade never saw a decoded stylesheet".
+PATTERN: ⚠⚠⚠ **A TEST SUITE WRITTEN IN ONE ALPHABET CANNOT SEE AN ENCODING BUG.** Every CSS test here
+was ASCII, so a function that mangled every non-ASCII byte in every stylesheet passed all of them for
+the life of the project. The generalisable move is not "add more tests" but **leave the alphabet**:
+choose inputs from outside the space the existing tests occupy — a different script, an astral plane, a
+right-to-left run — because the blind spot is the input space, not the assertion count. The corollary
+found the same tick: **the headline metric could not see this either**, so "no number moved" is
+sometimes a statement about the instrument's frame rather than about the fix.

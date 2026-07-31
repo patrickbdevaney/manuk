@@ -390,6 +390,11 @@
   - L1689 · The fix, and why substitution rather than a scope
   - L1713 · The rule
   - L1722 · The servo build REJECTS -webkit-box, and the clamp it gates was already built (tick 763)
+  - L1774 · The cascade never saw a decoded stylesheet — out.push(b[i] as char)
+  - L1795 · What it cost
+  - L1807 · The fix, and what deliberately did not change
+  - L1814 · ⚠ Why it survived the entire project, which is the part worth keeping
+  - L1823 · And the headline metric could not see it either
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1302,4 +1307,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1213 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1218 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

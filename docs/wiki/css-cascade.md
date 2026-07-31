@@ -1770,3 +1770,61 @@ so it was green for exactly as long as the real idiom was broken. **When a featu
 another property's value, its gate must assert the SWITCH, not the mechanism**, and every property in the
 recovery list deserves the question: *is the value that activates it on the other side of the same
 `cfg(feature = "gecko")`?*
+
+## The cascade never saw a decoded stylesheet — `out.push(b[i] as char)`
+
+`strip_comments` runs on the way IN to `Stylesheet::parse`, and it walked the source as **bytes**:
+
+```rust
+out.push(b[i] as char);   // identity for ASCII; Latin-1 widening for everything else
+```
+
+Each UTF-8 byte became its own code point, so `–` (U+2013, bytes `E2 80 93`) came out as `â€“`.
+`Stylesheet::parse` stores the result as `source`, and `source` is the string handed verbatim to
+`StyloStylesheet::from_str` — **so Stylo never received a correctly-decoded stylesheet.**
+
+The DOM was fine the whole time, which is why the bug had nowhere to show itself. The chain that pinned
+it, and the reason it took instrumentation rather than reasoning:
+
+| observation point | code points for `–` |
+|---|---|
+| `style.textContent` from JS | `8211` ✓ |
+| `dom.text_content()` in Rust | `8211` ✓ |
+| `sheet.source()` at the `StyloStylesheet::from_str` call site | **`226, 128, 147`** ✗ |
+
+### What it cost
+
+* Every non-ASCII `content:` string — arrows, checkmarks, quotes, currency, the icon glyphs half the web
+  puts in `::before`. Found on `255md.com`, whose bullets are `li::before { content: "–" }`: we drew
+  `â` glued to each item.
+* **`font-family` names written in their own script** — `"微软雅黑"`, `"ヒラギノ角ゴ"`, `"맑은 고딕"`.
+  A mangled family name matches no font, so an entire CJK font stack silently falls through to a
+  default. Nothing is logged, because from the font layer's side the name simply did not resolve.
+* Custom properties, `quotes:`, non-ASCII identifiers, `url()` with a non-ASCII path — and **attribute
+  selectors matching non-ASCII values**: with the defect restored, `#a[data-x="café"]` stops matching
+  and the rule does not apply at all.
+
+### The fix, and what deliberately did not change
+
+Copy the whole character rather than one byte of it. Scanning for the `/*` and `*/` delimiters as bytes
+is **still correct and is kept**: `/` and `*` are ASCII, and a UTF-8 continuation byte is always ≥ `0x80`,
+so no multi-byte character can contain either delimiter. Advancing over the lead byte plus its
+continuation bytes leaves the index on a char boundary, so the slice cannot panic.
+
+### ⚠ Why it survived the entire project, which is the part worth keeping
+
+**The escape form was never affected.** `content: "\2013"` is pure ASCII and always worked — and every
+CSS test in this repository was written in ASCII. *A bug invisible to the entire alphabet your tests are
+written in is not found by writing more tests of the same kind.* `G_CSS_UTF8` is written in four scripts
+plus an astral emoji, and asserts **code points** rather than rendered text, because a mojibake'd string
+still renders *something* and eyeballing it is exactly how this survived. It is red-proven by restoring
+the original line, and the exhibit is that `esc:` stays green while everything else turns into raw bytes.
+
+### And the headline metric could not see it either
+
+Fixing this moved **zero** shape points on `255md.com` (0.698 before and after). Shape scores ELEMENT
+geometry; a `::before` is not an element, its text draws inside the `<li>`'s box, and that box is
+identical whether the marker says `–` or `â`. A visibly wrong, Chrome-differential rendering defect on a
+real site is therefore invisible to the burndown — the same blindness as the parent-relative
+cancellation of tick 762, in a different dimension. "No number moved" is sometimes a statement about the
+instrument's frame, not about the fix.

@@ -2759,6 +2759,32 @@ fn media_feature_matches(feature: &str) -> bool {
     }
 }
 
+/// ⚠⚠⚠ **THIS FUNCTION MOJIBAKE'D EVERY STYLESHEET IN THE ENGINE, and it did it in one character.**
+///
+/// It used to walk the source as BYTES and emit `out.push(b[i] as char)`. For ASCII that is the
+/// identity. For anything else it widens **each UTF-8 byte into its own Latin-1 code point**, so
+/// `–` (U+2013, bytes `E2 80 93`) came out as the three characters `â€“`.
+///
+/// The blast radius is the whole cascade, because this runs on the way IN: `Stylesheet::parse`
+/// stores the result as `source`, and `source` is the string handed verbatim to
+/// `StyloStylesheet::from_str`. **Stylo never saw a correctly-decoded stylesheet.** Measured on
+/// `255md.com`, whose list markers are `li::before { content: "–" }` — we drew `â` glued to each
+/// item where Chrome draws an en dash. The same corruption reaches:
+///
+/// * every non-ASCII `content:` string — arrows, bullets, quotes, checkmarks, currency, the icon
+///   glyphs half the web puts in `::before`;
+/// * **`font-family` names written in their own script** — `font-family: "微软雅黑"`,
+///   `"ヒラギノ角ゴ"`, `"맑은 고딕"`. A mangled family name matches no font, so the whole CJK
+///   font stack silently falls through to a default. That is a large share of the CrUX tail.
+/// * `quotes:`, non-ASCII identifiers, and any `url()` with a non-ASCII path.
+///
+/// The escape form was never affected — `content: "\2013"` is pure ASCII and always worked — which
+/// is exactly why this survived: the bug is invisible to any test written in ASCII, and every test
+/// in this file was.
+///
+/// Scanning for the delimiters as bytes is still correct and is kept: `/` and `*` are ASCII, and a
+/// UTF-8 continuation byte is always ≥ `0x80`, so no multi-byte character can contain either one.
+/// The only thing that had to change is what gets COPIED — the whole character, not one byte of it.
 fn strip_comments(src: &str) -> String {
     let mut out = String::with_capacity(src.len());
     let b = src.as_bytes();
@@ -2771,8 +2797,14 @@ fn strip_comments(src: &str) -> String {
             }
             i += 2;
         } else {
-            out.push(b[i] as char);
+            // Advance over the lead byte and any continuation bytes, then copy the character
+            // whole. `i` therefore always lands on a char boundary, so the slice cannot panic.
+            let start = i;
             i += 1;
+            while i < b.len() && (b[i] & 0xC0) == 0x80 {
+                i += 1;
+            }
+            out.push_str(&src[start..i]);
         }
     }
     out
