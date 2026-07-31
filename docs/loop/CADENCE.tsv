@@ -516,3 +516,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 767	d556525f	1785445263	2026-07-30T17:01:03-04:00	12639	measurement	63	11	529	49	353	81	3896	6960	0	393	0	the sweep the board demanded: the headline is FLAT and the jarring mass HALVED (2026-07-30)
 769	b3327912	1785452179	2026-07-30T18:56:19-04:00	6916	root-cause	63	9	235	34	354	81	3896	6960	0	395	0	the grep t768 owed: three more hot paths were running the JS compiler (2026-07-30)
 770	5fe78e8f	1785456760	2026-07-30T20:12:40-04:00	4581	root-cause	63	10	533	33	354	81	3896	6960	0	395	0	`box-sizing: border-box` was never applied to a FLOAT (2026-07-30)
+771	bccb573f	1785459572	2026-07-30T20:59:32-04:00	2812	instrument	63	10	708	46	355	81	3896	6960	0	396	0	the sweep is 4× faster, and the speed COSTS SITES: measured, calibrated, and the number refused (2026-07-30)

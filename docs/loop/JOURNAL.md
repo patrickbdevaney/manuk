@@ -39126,3 +39126,89 @@ new instrument is a comparison against the old one, not a result.** Any wall-clo
 measurement is a budget on the MACHINE, so any change to what else the machine is doing changes the
 metric — and the tell is a scorability shift with stable scores, which is exactly what the denominator
 trap looks like from the inside.
+
+## Tick 772 — a HALF-INSTALLED `performance` API blanked a top-1000 site, and `coinmarketcap.com` crossed into scorable (2026-07-31)
+
+The board's M1 priority order is **scorability first**: M1 has a hard ~63% ceiling because 48 of 130
+in-scope sites do not render a real page at all, and most of those are boot-halting JS throws. So this
+tick took the largest single cluster in the t767 unscored list — **five `render-failed` rows that are one
+bundle**: `www.trivago.de` and its `.be`/`.fr`/`.jp`/`.pl` siblings.
+
+`www.trivago.de` died on one line, with **1410 of 1410 elements never rendered**:
+
+```text
+uncaught (reported): performance.clearMarks is not a function
+structural: 0.0% (1410 paths, 1410 missing, 0 misplaced)
+```
+
+### ⚠⚠⚠ THE SHAPE, AND IT INVERTS THE USUAL INTUITION ABOUT STUBS
+
+`performance.mark` and `performance.measure` had existed since the navigation-timing tick — **as
+no-ops**. `clearMarks` and `clearMeasures` had not. So the bundle's feature detect
+(`typeof performance.mark === 'function'`) answered **yes**, it committed to its instrumented path, and
+the next call into the *other half of the same API* threw.
+
+**An absent API is survivable; a HALF-PRESENT one is not.** Absence fails the detect and routes the
+caller into its fallback — a path the author wrote and tested. Half-presence passes the detect, the
+caller commits, and it walks into a wall it had no way to see. `innerText` (t612, getter without setter)
+was this same bug with the halves being accessor sides instead of sibling methods. The rule that falls
+out: **when you implement one method of an API family, implement the family** — the call a page detects
+on is almost never the call it dies on.
+
+Inert was also wrong on its own terms, and that is the second half of the fix. `mark('a')` then
+`measure('m','a')` is what every scheduler does; with `mark()` discarding and `getEntriesByName`
+hard-coded to `[]`, the measure resolved against a mark that "did not exist". **The buffer is the
+feature.** A `mark()` that records nothing passes every `typeof` check ever written — the
+`typeof null === 'object'` class again, a wrong answer of the right type.
+
+So this landed User Timing Level 3 for real: a live entry buffer, `mark`/`measure`/`clearMarks`/
+`clearMeasures`/`getEntries`/`getEntriesByType`/`getEntriesByName`/`clearResourceTimings`/
+`setResourceTimingBufferSize`/`toJSON`, real `PerformanceEntry`/`PerformanceMark`/`PerformanceMeasure`
+constructors, entries sorted by `startTime`, and the spec's errors — because a library's `try/catch`
+around `measure(n,'never-marked')` is a live code path and a plausible duration-0 measure would tell it
+everything is fine.
+
+### The next rung was visible only because the first one was fixed
+
+With the buffer working, trivago's very next line was `measure(n, 'navigationStart')` — and nobody ever
+calls `mark('navigationStart')`, so our honest-looking `SyntaxError` killed the page just as dead. The
+legacy `PerformanceTiming` attribute names are **not marks and resolve first**, ahead of the mark buffer.
+`navigationStart` is **0** by definition (it *is* `timeOrigin`). The phases the host actually observes
+answer with their real value; the network phases we never observe raise **`InvalidAccessError`** — which
+is both the spec's answer for an empty timing value and the honest one, since a fabricated `0` for
+`responseStart` is a confident wrong TTFB nobody would ever catch. Same rule the navigation entry's
+absent network fields already follow.
+
+### ⚠ CONTROL BEFORE BLAME — the crossing was attributed, not assumed
+
+| site | t767 row | after | control: same tree, `clearMarks` deleted |
+|---|---|---|---|
+| **coinmarketcap.com** | `render-failed` | **380 scored · shape 0.374** | back to `render-failed`, 2114/2116 missing |
+| www.trivago.de | `render-failed` | `thin-overlap-0`, **no uncaught throws** | `render-failed` |
+| pogoda.by | `render-failed` | `thin-overlap-1`, no `performance` throw | `render-failed` |
+| news.ycombinator.com (anchor control) | 0.72 | **0.801**, 804 scored, 0 missing | — |
+
+A live site's shape varies run-to-run, so a scorability crossing is only a result when the mutation is
+restored and the crossing **reverses**. It did.
+
+**Honest accounting of what did NOT happen:** trivago still does not score. Its next blocker is a failed
+dynamic `import()` (`Failed to fetch dynamically imported module: ./v/4.8.3/loader.polyfills…`) plus a
+12s load-budget exhaustion at 23s wall — a different mechanism, and the next tick's work. `pogoda.by`'s
+next rung is Zone.js detecting that `Promise` was overwritten. So this tick banks **one** confirmed
+scorability crossing and **three** origins moved off `render-failed`, not five sites rendered.
+
+TICK SHAPE: capability (throw-class killer — the board's leg-1 scorability work)
+CLUSTER: scorability ceiling / throw-class killers. `render-failed` −3 on the sites measured; +1 scored.
+Gates: **`G_USER_TIMING`** (`engine/page/tests/g_user_timing.rs`), 33 claims, **proven red two ways** —
+delete `clearMarks` → `missing:clearMarks`; make `mark()` stop recording → the probe's own `measure`
+throws, the page never writes its result (`got: -`), which is trivago's failure reproduced in miniature.
+PERF: none claimed. Noted for the ledger: trivago now loads in 23s vs Chromium 4.4s and trips
+OURS-IS-SLOW — it is doing far more work now that its boot no longer aborts, which is the honest cost of
+the page actually running.
+WIKI: `docs/wiki/js-engine.md` — "A HALF-INSTALLED API is worse than an absent one".
+PATTERN: ⚠⚠⚠ **A HALF-INSTALLED API IS WORSE THAN AN ABSENT ONE.** Absence routes a caller to its
+fallback; half-presence routes it into a wall. The corollary for this codebase, which ships a large
+hand-written platform prelude full of exactly such partial objects: **the feature-detect surface and the
+call surface are different sets**, so a stub that satisfies the first while failing the second is a page
+killer wearing a green `typeof` check. Grep the prelude for objects whose methods were added one at a
+time — each is a candidate.

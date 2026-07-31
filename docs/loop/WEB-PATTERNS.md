@@ -5032,6 +5032,25 @@ still `Err`. Without that claim, an engine that never reported a network failure
 every "did it render?" assertion above. A dead origin, a DNS failure and a timeout are a different fact
 and they keep their own answer.
 
+## Pattern — an API family that is only HALF implemented: the feature-detect passes, the next call throws (tick 772)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| A bundle feature-detects **one** method of an API family (`typeof performance.mark === 'function'`), commits to its instrumented path, and then calls a **sibling** the engine never implemented. The detect answered yes, so the author's fallback path is unreachable — and the throw happens where nobody wrapped it | **`www.trivago.de` (+ `.be`/`.fr`/`.jp`/`.pl` — one bundle, five corpus origins) and `coinmarketcap.com`.** `performance.mark`/`measure` existed as **no-ops**; `clearMarks` did not exist at all. `uncaught: performance.clearMarks is not a function` → trivago rendered **0 of 1410** elements, coinmarketcap **2 of 2116** | ✅ **tick 772** — full User Timing L3 (live entry buffer, `mark`/`measure`/`clearMarks`/`clearMeasures`/`getEntries*`/`toJSON`, real `PerformanceMark`/`PerformanceMeasure`, spec `SyntaxError`/`TypeError`/`InvalidAccessError`, legacy `PerformanceTiming` names resolving ahead of the buffer), gated by **`G_USER_TIMING`** (33 claims, RED-proven two ways). **`coinmarketcap.com` crossed `render-failed` → scored (shape 0.374), reversed by the control.** trivago's next rung is a failed dynamic `import()`; pogoda.by's is Zone.js `Promise` patching |
+
+**An absent API is survivable; a half-present one is not** — and that inverts the usual intuition about
+stubs. Absence *fails* the detect and routes the caller into the fallback its author wrote and tested.
+Half-presence *passes* the detect, the caller commits, and it walks into a wall it had no way to see.
+This is the same mechanism as the interface-object row below with the halves being sibling methods
+instead of a bare identifier, and the same mechanism as `innerText` (tick 612) with the halves being
+getter and setter. **The feature-detect surface and the call surface are different sets**, so the rule is:
+implement the family, not the method a page happens to sniff.
+
+The second half is subtler and applies to every inert stub in the prelude: `mark('a'); measure('m','a')`
+could not have worked even with `clearMarks` present, because `mark()` discarded and `getEntriesByName`
+returned `[]`. **The buffer is the feature; the function existing is not.** A no-op passes every `typeof`
+check ever written — a wrong answer of the right type.
+
 ## Pattern — a page that PROBES the platform's interface objects and aborts when one is absent (tick 608)
 
 | pattern | where it shows up | status |

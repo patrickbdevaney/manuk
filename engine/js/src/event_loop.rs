@@ -4383,21 +4383,200 @@ const PRELUDE: &str = r#"
           redirectCount: 0
         };
         globalThis.__navTiming = __navTiming;
-        globalThis.performance = {
-          now: function(){ return Date.now() - t0; },
-          mark: function(){}, measure: function(){},
-          getEntriesByName: function(){ return []; },
-          getEntriesByType: function(type){
-            if (type === 'navigation') {
-              // `duration` is `loadEventEnd - startTime` per spec, and is 0 until load has fired —
-              // which is exactly what a page reading it DURING load should see.
-              __navTiming.duration = __navTiming.loadEventEnd || 0;
-              return [__navTiming];
+
+        // ── **USER TIMING (Level 3) — `mark`/`measure` were no-ops, and `clearMarks` was ABSENT.**
+        //
+        // Found on `www.trivago.de` (and its .be/.fr/.jp/.pl siblings — one bundle, five corpus
+        // sites), which scored **0.0% coverage, 1410 of 1410 elements never rendered**. The whole
+        // page died on one line:
+        //
+        //     uncaught: performance.clearMarks is not a function
+        //
+        // The instructive part is the SHAPE. `mark()` and `measure()` were present-and-inert, so
+        // every feature-detect (`typeof performance.mark === 'function'`) answered yes and the
+        // bundle took its instrumented path — then reached for the *other half* of the API, which
+        // nobody had stubbed, and threw. A half-installed API is worse than an absent one: absence
+        // routes a caller to its fallback, a half-presence routes it into a wall. (Same class as
+        // the `innerText` getter-only TypeError, t612.)
+        //
+        // Inert was also wrong on its own terms: `mark('a'); measure('m','a')` is what a scheduler
+        // does, and with `getEntriesByName` hard-coded to `[]` the measure resolved against a mark
+        // that "did not exist". So this is a real buffer, not a wider set of no-ops — marks are
+        // recorded, measures resolve against them, and the entries come back sorted by `startTime`
+        // the way every consumer assumes.
+        //
+        // Errors are the spec's errors, because they are load-bearing: `measure(n, 'never-marked')`
+        // is a **SyntaxError** in Chrome, and a library's try/catch around it is a real code path.
+        // Silently returning a measure of duration 0 there would be a plausible wrong answer.
+        var __utEntries = [];
+        function __utErr(msg, name) {
+          try { return new DOMException(msg, name); }
+          catch (e) { var e2 = new Error(msg); e2.name = name; return e2; }
+        }
+        function PerformanceEntry() {}
+        PerformanceEntry.prototype.toJSON = function () {
+          return { name: this.name, entryType: this.entryType,
+                   startTime: this.startTime, duration: this.duration };
+        };
+        function PerformanceMark(name, startTime, detail) {
+          this.name = String(name); this.entryType = 'mark';
+          this.startTime = startTime; this.duration = 0;
+          this.detail = (detail === undefined) ? null : detail;
+        }
+        PerformanceMark.prototype = Object.create(PerformanceEntry.prototype);
+        PerformanceMark.prototype.constructor = PerformanceMark;
+        function PerformanceMeasure(name, startTime, duration, detail) {
+          this.name = String(name); this.entryType = 'measure';
+          this.startTime = startTime; this.duration = duration;
+          this.detail = (detail === undefined) ? null : detail;
+        }
+        PerformanceMeasure.prototype = Object.create(PerformanceEntry.prototype);
+        PerformanceMeasure.prototype.constructor = PerformanceMeasure;
+        globalThis.PerformanceEntry   = PerformanceEntry;
+        globalThis.PerformanceMark    = PerformanceMark;
+        globalThis.PerformanceMeasure = PerformanceMeasure;
+
+        var __utNow = function () { return Date.now() - t0; };
+        // `navigation` is not in `__utEntries` — it is owned by `__fireLoad` and its `duration` is
+        // derived on read, so it is spliced in wherever the type/name matches.
+        function __navMatches(type, name) {
+          return (type === undefined || type === 'navigation') &&
+                 (name === undefined || name === __navTiming.name);
+        }
+        function __navSnapshot() {
+          // `duration` is `loadEventEnd - startTime` per spec, and is 0 until load has fired —
+          // which is exactly what a page reading it DURING load should see.
+          __navTiming.duration = __navTiming.loadEventEnd || 0;
+          return __navTiming;
+        }
+        function __utSorted(list) {
+          return list.slice().sort(function (a, b) { return a.startTime - b.startTime; });
+        }
+        // ── **THE LEGACY `PerformanceTiming` NAMES ARE NOT MARKS, AND THEY RESOLVE FIRST.**
+        //
+        // This is the rung directly behind `clearMarks`. With the buffer working, trivago's next
+        // line was `measure(n, 'navigationStart')` — and `navigationStart` was never `mark()`ed by
+        // anybody, so the honest-looking SyntaxError killed the page just as dead. It is not a mark:
+        // the spec's `convert a mark to a timestamp` checks the read-only attributes of the legacy
+        // `PerformanceTiming` interface BEFORE it looks in the mark buffer, and "time since the
+        // navigation started" is the single most common thing a page measures.
+        //
+        // `navigationStart` is **0** by definition — it *is* `timeOrigin`, so this is not a guess.
+        // The rest are answered only where the host actually observed them (`__fireDOMContentLoaded`
+        // / `__fireLoad` below). For the others the spec's own answer for an unrecorded phase is an
+        // **InvalidAccessError**, and that is also the honest one: a fabricated `0` for
+        // `responseStart` is a confident, wrong TTFB that nobody would ever catch. It is the same
+        // rule the navigation entry's absent network fields already follow.
+        var __timingNames = {
+          navigationStart: 1, unloadEventStart: 1, unloadEventEnd: 1, redirectStart: 1,
+          redirectEnd: 1, fetchStart: 1, domainLookupStart: 1, domainLookupEnd: 1,
+          connectStart: 1, connectEnd: 1, secureConnectionStart: 1, requestStart: 1,
+          responseStart: 1, responseEnd: 1, domLoading: 1, domInteractive: 1,
+          domContentLoadedEventStart: 1, domContentLoadedEventEnd: 1, domComplete: 1,
+          loadEventStart: 1, loadEventEnd: 1
+        };
+        // Spec `convert a mark to a timestamp`: a legacy timing name, else the MOST RECENT mark with
+        // that name (an unknown one is a SyntaxError, never a 0), else a number used as-is, which
+        // may not be negative.
+        function __utResolve(v) {
+          if (typeof v === 'string') {
+            if (__timingNames[v] === 1) {
+              if (v === 'navigationStart') { return 0; }
+              var t = __navTiming[v];
+              if (typeof t === 'number') { return t; }
+              throw __utErr("Failed to execute 'measure' on 'Performance': '" + v +
+                            "' is empty — that phase was not observed.", 'InvalidAccessError');
             }
-            return [];
+            for (var i = __utEntries.length - 1; i >= 0; i--) {
+              if (__utEntries[i].entryType === 'mark' && __utEntries[i].name === v) {
+                return __utEntries[i].startTime;
+              }
+            }
+            throw __utErr("Failed to execute 'measure' on 'Performance': The mark '" + v +
+                          "' does not exist.", 'SyntaxError');
+          }
+          var n = Number(v);
+          if (!isFinite(n)) {
+            throw __utErr('Failed to execute measure: value is not a finite number', 'TypeError');
+          }
+          if (n < 0) {
+            throw __utErr('Failed to execute measure: negative values are not allowed',
+                          'TypeError');
+          }
+          return n;
+        }
+
+        globalThis.performance = {
+          now: __utNow,
+          timeOrigin: t0,
+          mark: function (name, options) {
+            if (arguments.length < 1) {
+              throw __utErr("Failed to execute 'mark' on 'Performance': 1 argument required.",
+                            'TypeError');
+            }
+            var o = options || {};
+            var st = (o.startTime === undefined) ? __utNow() : __utResolve(o.startTime);
+            var m = new PerformanceMark(name, st, o.detail);
+            __utEntries.push(m);
+            return m;
           },
-          getEntries: function(){ return []; },
-          timeOrigin: t0
+          measure: function (name, startOrOptions, endMark) {
+            var start, end, detail;
+            if (startOrOptions !== null && typeof startOrOptions === 'object') {
+              var o = startOrOptions;
+              detail = o.detail;
+              if (o.start !== undefined && o.end !== undefined) {
+                start = __utResolve(o.start); end = __utResolve(o.end);
+              } else if (o.start !== undefined && o.duration !== undefined) {
+                start = __utResolve(o.start); end = start + Number(o.duration);
+              } else if (o.duration !== undefined && o.end !== undefined) {
+                end = __utResolve(o.end); start = end - Number(o.duration);
+              } else if (o.start !== undefined) {
+                start = __utResolve(o.start); end = __utNow();
+              } else if (o.end !== undefined) {
+                start = 0; end = __utResolve(o.end);
+              } else {
+                start = 0; end = __utNow();
+              }
+            } else {
+              start = (startOrOptions === undefined) ? 0 : __utResolve(startOrOptions);
+              end   = (endMark === undefined) ? __utNow() : __utResolve(endMark);
+            }
+            var m = new PerformanceMeasure(name, start, end - start, detail);
+            __utEntries.push(m);
+            return m;
+          },
+          clearMarks: function (name) {
+            __utEntries = __utEntries.filter(function (e) {
+              return e.entryType !== 'mark' || (name !== undefined && e.name !== String(name));
+            });
+          },
+          clearMeasures: function (name) {
+            __utEntries = __utEntries.filter(function (e) {
+              return e.entryType !== 'measure' || (name !== undefined && e.name !== String(name));
+            });
+          },
+          getEntries: function () {
+            return __utSorted(__utEntries.concat([__navSnapshot()]));
+          },
+          getEntriesByType: function (type) {
+            type = String(type);
+            if (type === 'navigation') { return [__navSnapshot()]; }
+            return __utSorted(__utEntries.filter(function (e) { return e.entryType === type; }));
+          },
+          getEntriesByName: function (name, type) {
+            name = String(name);
+            var out = __utEntries.filter(function (e) {
+              return e.name === name && (type === undefined || e.entryType === String(type));
+            });
+            if (__navMatches(type, name)) { out = out.concat([__navSnapshot()]); }
+            return __utSorted(out);
+          },
+          // Resource Timing is not observed at this layer, so its buffer is honestly empty and
+          // these are the no-ops the spec allows for an empty buffer — NOT stand-ins for data.
+          clearResourceTimings: function () {},
+          setResourceTimingBufferSize: function () {},
+          toJSON: function () { return { timeOrigin: t0 }; }
         };
       }
 

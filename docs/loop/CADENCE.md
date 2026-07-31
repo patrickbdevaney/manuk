@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **517** | ticks 1–770 |
-| median tick cycle | **22m** | 516 intervals |
+| ticks landed | **518** | ticks 1–771 |
+| median tick cycle | **22m** | 517 intervals |
 | median, last 10 | **73m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 471.2h elapsed |
-| median verify wall | **63s** | 456 ticks |
+| **ticks per hour** | **1.10** | 471.9h elapsed |
+| median verify wall | **63s** | 457 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **354**
-* **✅ rows in the capability ledger**: 144 → **395**
+* **live gates**: 27 → **355**
+* **✅ rows in the capability ledger**: 144 → **396**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**245 of 517 ticks** (47%) moved a
+**245 of 518 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **245** capability ticks, median cycle **22m**
-* median diff per tick: **+245 / −34** lines across 8 files
+* median diff per tick: **+246 / −34** lines across 8 files
 
 ## Every tick
 
@@ -614,5 +614,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **767** | 2026-07-30 17:01 | 3.5h | measurement | 63s | +529/−49 | 353 | 81 | 56.0% · | the sweep the board demanded: the headline is FLAT and the jarring mass HALVED (2026-07-30 |
 | **769** | 2026-07-30 18:56 | 1.9h | root-cause | 63s | +235/−34 | 354 | 81 | 56.0% · | the grep t768 owed: three more hot paths were running the JS compiler (2026-07-30) |
 | **770** | 2026-07-30 20:12 | 76m | root-cause | 63s | +533/−33 | 354 | 81 | 56.0% · | `box-sizing: border-box` was never applied to a FLOAT (2026-07-30) |
+| **771** | 2026-07-30 20:59 | 47m | instrument | 63s | +708/−46 | 355 | 81 | 56.0% · | the sweep is 4× faster, and the speed COSTS SITES: measured, calibrated, and the number re |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

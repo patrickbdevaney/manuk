@@ -3259,3 +3259,86 @@ t761 explicitly *refused* to drop reporter fragments because that would take ele
    is a bounded, one-tick grep with a real chance of a second dead capability.
 
 **Next check due: tick 771.**
+
+## Check #62 — tick 772
+
+**Date:** 2026-07-31. **Horizon:** H0, and the operative gate is not H0's four conditions in the
+abstract — it is `DAILY-DRIVER-CERTIFICATION.md`'s per-origin certificate, which PART VII made the
+near-term north star: **≥95% of in-scope CrUX origins pass both a FUNCTION gate and a VISUAL gate.**
+
+### THE GATE, NAMED
+
+Owner-locked 2026-07-30 (`PHASE0-MEASUREMENT-SYSTEM.md` §2): M1 and M2 are **two terms of one
+function-gated number**, and **function leads** — a site must boot without an app-halting exception
+before its shape is scorable at all. The binding quantity today is the **scorability ceiling**: 48 of
+130 in-scope t767 origins do not render a real page, so even a perfect score on the 82 that do caps M1
+at **63%**.
+
+### GATE OR SCOREBOARD? — gate, and this window is the first that attacks the CEILING rather than the island
+
+The last ~8 ticks (764–771) were: three RTL logical-axis fixes, a Bar-0 segfault fix (per-mutation
+script compile), a hot-path grep, `box-sizing` on floats, a full sweep, and the parallel-sweep
+throughput lever. Honest reading: **most of them optimised shape on the 82-site scored island, under a
+cap none of them could move.** The sweep and the parallelisation are instrument work — necessary, and
+t771 correctly *refused* its own faster number when the control showed parallelism costs scorability.
+But the RTL arc crossed ~0 sites, exactly as `PHASE0-MEASUREMENT-SYSTEM.md` §7 predicted for
+breadth-ranked work.
+
+t772 is the first tick of the re-ranked leg, and it moved the thing the ranking says binds:
+`coinmarketcap.com` crossed `render-failed` → **scored**, with the mutation restored to reverse it.
+
+### PART VI CORRECTION
+
+VI.2's `I5` row already records that **the instrumented log is the depth discovery engine**. This check
+extends it with the sharper form the window produced:
+
+> **The unscored-reason column of the sweep IS a ranked work-list, and it was being read as an
+> exclusion list.** `render-failed` is the one reason the instrument itself flags as *ours*. Five of the
+> t767 `render-failed` rows were the same bundle on five TLDs (`trivago.{be,de,fr,jp,pl}`) — a cluster
+> visible by *reading the site names*, needing no oracle run at all. Rank the unscored rows by shared
+> origin/bundle before ranking anything inside the scored island.
+
+And the mechanism, which generalises past this API:
+
+> **A HALF-INSTALLED API IS WORSE THAN AN ABSENT ONE.** Absence fails the feature-detect and routes the
+> caller into the fallback its author wrote and tested. Half-presence *passes* the detect, the caller
+> commits, and throws where nobody guarded. This codebase ships a large hand-written platform prelude
+> built up one method at a time, so **the feature-detect surface and the call surface are different
+> sets** throughout it. That is a standing audit target, not a one-site fix.
+
+### INVARIANTS
+
+- **I2 (never patch dependencies):** held — this is our own prelude, no vendored source touched, fork
+  surface still empty.
+- **I3 (semantic model in lockstep):** held. The fix makes pages *boot*; every element it recovers
+  enters `node_rects` and the a11y tree by construction. `coinmarketcap.com` went from 2 to 380
+  observable elements — that is the agent surface widening, not just the pixel one.
+- **I4 (Pareto discipline):** held, and this is the strongest case in several windows. User Timing is
+  Baseline-Widely-Available and instrumented by essentially every framework and RUM bundle — it is the
+  opposite of the encoding tail. Two independent top-1k origins died on the same missing method.
+- **I5 (the oracle/log is the discovery engine):** held and exercised — the fix came from one log line
+  (`performance.clearMarks is not a function`), and the *second* rung (`navigationStart` resolving as a
+  mark) was only visible after the first was fixed.
+- **PART VII / V1-SCOPE:** honoured. No `scripts/` file authored.
+
+**No invariant is being bent.**
+
+### THE STEER
+
+1. **KEEP WORKING THE UNSCORED LIST, RANKED BY SHARED BUNDLE — it is the ceiling.** Named and open right
+   now, with the rung each one is stuck on: `trivago.{be,de,fr,jp,pl}` — failed dynamic `import()` of a
+   relative module path (`./v/4.8.3/loader.polyfills…`) plus a 12s load budget exhausted at 23s wall;
+   `pogoda.by` — Zone.js aborting because `Promise` was overwritten; `www.otomoto.pl` — still
+   `render-failed`, uninvestigated. Each `render-failed` cleared raises the M1 cap **and** builds the M2
+   function certificate for free.
+2. **AUDIT THE PRELUDE FOR HALF-INSTALLED FAMILIES.** Bounded, one-tick, high-expected-yield: grep the
+   prelude for objects assembled method-by-method (`performance` was one; candidates include
+   `PerformanceObserver` — currently `observe`/`disconnect`/`takeRecords` no-ops with
+   `supportedEntryTypes: []`, `navigator`, `screen`, `history`, `CSS`) and check each against its spec
+   IDL block. The failure is silent until a real bundle calls the sibling nobody wrote.
+3. **THE SWEEP CADENCE IS OWED.** The last honest burndown point is t767 (t771 is annotated
+   CONTAMINATED). After ~5 more throw-killer fixes, run a full `corpus-crux-trend` sweep at
+   `--jobs 2` and bank it — the scorability leg has no slope yet, and a leg with no slope is a
+   hypothesis.
+
+**Next check due: tick 780.**

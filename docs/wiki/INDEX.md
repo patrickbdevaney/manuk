@@ -861,6 +861,10 @@
   - L2285 · Two things this cost, both worth keeping
   - L2297 · The grep this called for, and what it found (tick 769)
   - L2319 · ⚠ The gate that could not go red
+  - L2337 · A HALF-INSTALLED API is worse than an absent one — performance.clearMarks blanked a top-1000 site
+  - L2365 · Inert was also wrong on its own terms
+  - L2373 · The errors are load-bearing, so they are the spec's errors
+  - L2389 · What it bought, with the control
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1294,4 +1298,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1205 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1209 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

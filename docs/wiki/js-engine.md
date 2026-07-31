@@ -2333,3 +2333,71 @@ the same loop, same process, same machine:
 **The absolute number is a property of the box; the ratio is a property of the code.** Any new
 performance gate must name the control it divides by, and be shown RED with the defect restored — not
 merely green without it.
+
+## A HALF-INSTALLED API is worse than an absent one — `performance.clearMarks` blanked a top-1000 site
+
+`www.trivago.de` came back from the CrUX sweep as `render-failed` with **1410 of 1410 elements never
+rendered** — a blank document where Chrome draws a travel front page. The whole cause was one line:
+
+```text
+uncaught (reported): performance.clearMarks is not a function
+```
+
+`performance.mark` and `performance.measure` had been present since the navigation-timing tick, as
+**no-ops**. `clearMarks` and `clearMeasures` had not. So the bundle's feature detect —
+
+```js
+if (typeof performance.mark === 'function') { /* instrumented path */ }
+```
+
+— answered **yes**, the bundle committed to its instrumented path, and the next call into the *other half*
+of the same API threw. The same bundle serves `.be`, `.fr`, `.jp` and `.pl`, so it is five corpus origins
+from one missing function.
+
+**This is the reusable shape, and it inverts the usual intuition about stubs.** An absent API is
+*survivable*: the feature detect fails and the caller takes its fallback, which authors wrote and tested.
+A **half-present** API is not: the detect passes, the caller commits, and it walks into a wall it had no
+way to see. `innerText` (getter without setter) and `outerText` were the same bug with the halves being
+accessor sides rather than sibling methods. **When you implement one method of an API family, grep the
+spec's IDL block and implement the family** — the detect a page performs is almost never the call it dies
+on.
+
+### Inert was also wrong on its own terms
+
+`mark('a'); measure('m','a')` is what every scheduler does. With `mark()` discarding and
+`getEntriesByName` hard-coded to `[]`, the measure resolved against a mark that "did not exist" — so the
+no-op version could not have worked even with `clearMarks` present. The buffer is the feature; the
+function merely existing is not. This is the `typeof null === 'object'` class: **a wrong answer of the
+right type passes every feature detect ever written.**
+
+### The errors are load-bearing, so they are the spec's errors
+
+- `measure(n, 'never-marked')` → **`SyntaxError`**. A library's `try/catch` around that call is a live
+  code path that decides whether instrumentation stays on. Returning a plausible duration-0 measure
+  instead would silently tell it everything is fine.
+- A negative numeric endpoint → **`TypeError`**.
+- The legacy `PerformanceTiming` attribute names (`navigationStart`, `responseStart`, `domInteractive`, …)
+  are **not marks and resolve first**, ahead of the mark buffer. This was trivago's *next* rung: with the
+  buffer working, `measure(n, 'navigationStart')` produced an honest-looking `SyntaxError` that killed the
+  page just as dead. `navigationStart` is **0** by definition — it *is* `timeOrigin`. The phases the host
+  actually observes (`domInteractive`, `domContentLoadedEvent*`, `loadEvent*`, recorded by
+  `__fireDOMContentLoaded` / `__fireLoad`) answer with their real value; the network phases we never
+  observe raise **`InvalidAccessError`**, which is both the spec's answer for an empty timing value and
+  the honest one — a fabricated `0` for `responseStart` is a confident, wrong TTFB that nobody would ever
+  catch.
+
+### What it bought, with the control
+
+| site | without `clearMarks` | with the full surface |
+|---|---|---|
+| `coinmarketcap.com` | 2114/2116 missing → **`render-failed`, unscored** | 380 scored, **shape 0.374** |
+| `www.trivago.de` | `render-failed`, uncaught throw | no uncaught throws; next rung is a failed dynamic `import()` |
+| `pogoda.by` | `render-failed`, uncaught throw | no `performance` throw; next rung is Zone.js `Promise` patching |
+
+The control matters and was run: the *same tree* with only `clearMarks` deleted puts `coinmarketcap.com`
+back to `render-failed`. A live site's shape varies run-to-run, so a scorability crossing is only
+attributable when the mutation is restored and the crossing reverses.
+
+Gate: `G_USER_TIMING` (`engine/page/tests/g_user_timing.rs`), proven red two ways — delete `clearMarks`
+(→ `missing:clearMarks`), and make `mark()` stop recording (→ the probe's own `measure` throws and the
+page never writes its result, `got: -`, which is exactly trivago's failure reproduced in miniature).
