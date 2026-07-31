@@ -300,6 +300,7 @@
   - L2668 · What the cohort actually looks like
   - L2713 · The new reason, and what it deliberately does NOT do
   - L2733 · The general form
+  - L2739 · Is a zero intersection a RENDERING result or a KEYING result? (t783)
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1333,4 +1334,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1244 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1245 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

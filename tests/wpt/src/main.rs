@@ -1182,6 +1182,40 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                             manuk_wpt::fidelity::unscoreable_reason(probed, shape_n, mboxes.len())
                         {
                             eprintln!("  UNMEASURABLE [{}]: {}", reason.tag(), reason.explain());
+                            // **THE ONE MEASUREMENT THAT DECIDES WHERE THE NEXT TICKS GO** (t783).
+                            // A `tree-divergence` row says the two path spaces do not line up and
+                            // deliberately does NOT say why; the two candidates — a brittle
+                            // `:nth-child` key vs two genuinely different documents — cost a
+                            // subsystem each and have nothing in common. Printed only for the rows
+                            // where the question is live, so a healthy sweep gains no noise.
+                            if matches!(
+                                reason,
+                                manuk_wpt::fidelity::Unmeasurable::TreeDivergence(_)
+                            ) {
+                                let a = manuk_wpt::fidelity::tree_alignment(&cmap, &mboxes);
+                                eprintln!(
+                                    "  TREE ALIGNMENT: exact {}/{} · tag-path multiset {} ({:.0}% of the oracle's) \
+                                     · ours {} · first differing depth {} — {}",
+                                    a.exact,
+                                    a.probed,
+                                    a.tag_overlap,
+                                    if a.probed == 0 { 0.0 } else { a.tag_overlap as f64 / a.probed as f64 * 100.0 },
+                                    a.ours,
+                                    a.first_bad_depth
+                                        .map(|d| d.to_string())
+                                        .unwrap_or_else(|| "none".into()),
+                                    // ⚠ The cut is a READING AID, not a fact, and it is named as
+                                    // one: the honest content of the line is the ratio itself.
+                                    // At 44% (naukri) a better key still recovers ~3x what the
+                                    // index-bearing one does — calling that "different documents"
+                                    // would be a stronger claim than the numbers support.
+                                    if a.probed > 0 && a.tag_overlap * 2 >= a.probed {
+                                        "INDEX SHIFT: most of the oracle's tree is reachable by an index-insensitive key, so the KEY is what does not agree"
+                                    } else {
+                                        "MIXED: an index-insensitive key recovers some of it; the rest is the two engines not being shown the same page"
+                                    }
+                                );
+                            }
                             f.unmeasurable = Some(reason);
                         }
                     }

@@ -40290,3 +40290,86 @@ in the expression — and the subject's count was one `.len()` away at the only 
 grammatical and cheap to check: **the sentence names someone the inputs do not mention.** Same family
 as t781's instrument-writes-into-its-own-subject, and it produced the more expensive error of the
 two, because this one told the loop where to work. [no-pattern]
+
+## Tick 783 — is a zero intersection a RENDERING result or a KEYING result? (2026-07-31)
+
+TICK SHAPE: instrument-fidelity (one measurement that decides between two subsystem-sized fixes)
+
+HYPOTHESIS (written before the measurement): t782 left 23 in-scope rows reading `tree-divergence` —
+two engines each drawing hundreds-to-thousands of boxes and sharing between **zero and nine**
+selector-paths. Exactly two explanations survive that shape, and they have nothing in common:
+
+1. **INDEX SHIFT** — the trees are substantially the same and the KEY is brittle. `:nth-child(N)` is
+   an absolute sibling index, so one element present in one document and not the other re-numbers
+   every sibling beneath it. Fix: a key that survives an insertion.
+2. **DIFFERENT DOCUMENTS** — the oracle renders a `curl` snapshot from `file://`, we render the LIVE
+   url, and the two runs really built different pages. Fix: hand both engines the same bytes.
+
+Guessing costs a subsystem either way. `tree_alignment` re-keys both sides on the **tag path alone**
+(every `:nth-child(N)` stripped) and reports the MULTISET overlap — the ceiling an index-insensitive
+key could reach — beside the exact intersection and the shallowest depth whose element count differs.
+`tag_overlap ≫ exact` is index shift; both ≈ 0 is two documents.
+
+**MEASURED, and it is not close on the population that matters.** Six `tree-divergence` sites, each
+row attributable because the reason tag carries `ours`:
+
+```
+site                    exact / oracle    tag-path multiset     ours   first differing depth
+a1.ro                       1 / 685        685  (100%)           689          3
+www.timeline.com            2 / 1212      1055  ( 87%)          1055          8
+www.freesupertips.com       6 /  756       507  ( 67%)           738          2
+www.kroftools.com           2 /  667       442  ( 66%)           444          1
+www.naukri.com              9 /   57        25  ( 44%)           434          2
+tracker.shadowfax.in        1 /   29         1  (  3%)            48          2
+```
+
+**`a1.ro` is the whole finding in one row: the two trees are IDENTICAL under a tag-only key — 685 of
+685 — and the shipped `:nth-child` key recovers ONE element.** The row it produced reads
+`coverage 0.15%`. On the four large sites an index-insensitive key reaches **66–100%** of the
+oracle's tree where the shipped key reaches **0.1–0.8%**.
+
+So the answer is **INDEX SHIFT, on the population that matters** — hypothesis 1, not 2. The expensive
+fix (hand both engines the same bytes) is NOT what these rows are asking for; a key that survives one
+inserted sibling is. The two small sites are the mixed tail: `shadowfax` at 3% is genuinely two
+different documents, and `naukri` at 44% is both — a better key would still recover ~3× what the
+current one does.
+
+`first differing depth` localises it and confirms the mechanism rather than restating it: **1, 2 and
+3** on three of the six. A single node inserted that close to the root re-numbers essentially the
+whole document, which is precisely why `exact` collapses to 1 or 2 while the tag-path multiset stays
+at 66–100%.
+
+⚠ **A VERDICT STRING WAS WALKED BACK MID-TICK.** The first draft printed *"DIFFERENT DOCUMENTS: no
+key recovers this"* below a 50% cut, and naukri came in at 44% — where a better key still recovers
+25 against 9, nearly 3×. That sentence was a stronger claim than the ratio supports, and the cut is
+a reading aid I invented, not a fact. It now says `MIXED` and the doc comment says the cut is a
+reporting convention. *A threshold that decides a WORD is still a threshold.*
+
+Gate: `tree_alignment_separates_an_inserted_node_from_two_different_pages` — synthetic maps, no
+network. One fixture inserts a node near the root (`exact` collapses to the containers, `tag_overlap`
+holds, verdict INDEX SHIFT, `first_bad_depth` = 1); one gives two unrelated trees of the same size
+and depth (**both** measures 0, so the weak key cannot manufacture agreement — the way this
+measurement would go vacuous); one gives a healthy site (no divergence at either strength).
+
+⚠ The insertion fixture asserts `exact == 3`, **not 0**, and the comment keeps the reason: a shift
+does not destroy every key, because the bare CONTAINER paths still collide across it. What a shift
+reliably destroys is the LEAVES, which is where a page's elements are — hence `1 of 685` in the wild.
+
+**NEXT, and it is now a bounded fix rather than a subsystem:** the key needs one more component that
+survives a sibling insertion. `main.rs` already has half this correction on record — the class-hash
+component was turned OFF at t549 for the mirror-image reason (*"a single ancestor's class list
+differs DESTROYS the measurement"*, gov.uk 0.0% → 82.8%). The remaining half is the sibling index.
+
+HONEST SCOPE: no site is claimed to cross, no engine source changed, no headline moves. This tick
+buys a decision, and the decision is that ~20 in-scope rows are recoverable by a key change.
+
+PERF: none claimed — the alignment is computed only on rows already classified `tree-divergence`.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "Is a zero intersection a rendering result or a keying
+result?"
+
+PATTERN: ⚠⚠ **WHEN TWO EXPLANATIONS OF ONE SYMPTOM COST A SUBSYSTEM EACH, BUILD THE MEASUREMENT THAT
+DISCRIMINATES BEFORE BUILDING EITHER.** The symptom (`exact` ≈ 0 over two large trees) was identical
+under both, and the fixes point in opposite directions — a better key, or the same bytes to both
+engines. The discriminator was forty lines of pure function over two maps already in hand, and it
+returned an answer strong enough that one of the two candidates is now off the board. [no-pattern]

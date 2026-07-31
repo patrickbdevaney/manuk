@@ -2735,3 +2735,54 @@ arithmetic is byte-for-byte unchanged; only what the loop is told to go and fix 
 **A verdict that assigns blame needs every party's number.** This one compared the reference against
 the intersection and pronounced on the subject, which was never in the expression. The tell is
 grammatical and worth memorising: the sentence names *us*, the inputs do not.
+
+## Is a zero intersection a RENDERING result or a KEYING result? (t783)
+
+t782 left 23 in-scope rows reading `tree-divergence`: two engines each drawing hundreds-to-thousands
+of boxes and sharing between zero and nine selector-paths. Exactly two explanations survive that
+shape, and their fixes point in opposite directions:
+
+1. **Index shift** — the trees are substantially the same and the KEY is brittle. `:nth-child(N)` is
+   an absolute sibling index, so one element present in one document and not the other re-numbers
+   every sibling beneath it. Fix: a key that survives an insertion.
+2. **Different documents** — the oracle renders a `curl` snapshot from `file://` and we render the
+   LIVE url. Fix: hand both engines the same bytes.
+
+`fidelity::tree_alignment` discriminates them without building either. It re-keys both sides on the
+**tag path alone** (every `:nth-child(N)` stripped, so `body:nth-child(2)/div:nth-child(4)` becomes
+`body/div`) and reports the MULTISET overlap — the ceiling an index-insensitive key could reach —
+beside the exact intersection and the shallowest depth whose element count differs.
+
+| site | exact / oracle | tag-path multiset | ours | first differing depth |
+|---|---|---|---|---|
+| a1.ro | **1 / 685** | **685 (100%)** | 689 | 3 |
+| www.timeline.com | 2 / 1212 | 1055 (87%) | 1055 | 8 |
+| www.freesupertips.com | 6 / 756 | 507 (67%) | 738 | 2 |
+| www.kroftools.com | 2 / 667 | 442 (66%) | 444 | 1 |
+| www.naukri.com | 9 / 57 | 25 (44%) | 434 | 2 |
+| tracker.shadowfax.in | 1 / 29 | 1 (3%) | 48 | 2 |
+
+**`a1.ro` is the finding in one row: the two trees are identical under a tag-only key — 685 of 685 —
+and the shipped key recovers ONE element.** That row goes out as `coverage 0.15%`. On the four large
+sites an index-insensitive key reaches 66–100% where the shipped key reaches 0.1–0.8%.
+
+So it is **index shift on the population that matters**, and the small sites are the mixed tail:
+`shadowfax` at 3% really is two different documents, `naukri` at 44% is both. `first differing depth`
+confirms rather than restates the mechanism — **1, 2 and 3** on half the rows. A node inserted that
+close to the root re-numbers essentially the whole document, which is exactly why `exact` collapses
+to 1 or 2 while the tag-path multiset holds.
+
+⚠ **The 50% cut that picks the printed WORD is a reading aid, not a fact.** The first draft printed
+*"DIFFERENT DOCUMENTS: no key recovers this"* below it, and naukri came in at 44% — where a better
+key still recovers nearly 3× what the current one does. A threshold that decides a word is still a
+threshold; the honest content of the line is the ratio.
+
+⚠ **The insertion fixture asserts `exact == 3`, not 0.** A shift does not destroy every key: the bare
+CONTAINER paths still collide across it, because the sibling that moves into slot N usually has the
+same tag as the one that left. What a shift reliably destroys is the LEAVES — which is where a page's
+elements are, and why the wild reading is `1 of 685`.
+
+**The open half.** `main.rs` already carries the mirror image of this correction: the key's class-hash
+component was turned OFF at t549 because *"a single ancestor's class list differs DESTROYS the
+measurement"* (gov.uk 0.0% → 82.8%). The sibling index is the same failure through the other
+component, and it is now a bounded fix rather than a subsystem.

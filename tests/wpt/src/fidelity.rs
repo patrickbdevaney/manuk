@@ -1732,6 +1732,102 @@ pub fn shape_stats(
     (frac, n)
 }
 
+/// **IS A ZERO INTERSECTION A RENDERING RESULT OR A KEYING RESULT?** — the one measurement that
+/// decides where the next several ticks go (t783).
+///
+/// t782 measured the `thin-overlap` cohort with both sides printed and found the same shape on every
+/// member: two engines each drawing hundreds-to-thousands of boxes and sharing **between zero and
+/// nine** selector-paths. Two explanations survive that, and they have completely different fixes:
+///
+/// 1. **INDEX SHIFT.** The trees are substantially the same and the KEY is brittle. `:nth-child(N)`
+///    is an absolute sibling index, so a single element present in one document and not the other —
+///    one ad `<div>`, one hydration wrapper — re-numbers every sibling beneath it and every key
+///    below changes at once. Fix: a key that survives an insertion.
+/// 2. **DIFFERENT DOCUMENTS.** The oracle renders a `curl` snapshot from `file://` and we render the
+///    LIVE url, so the two runs really did build different pages. Fix: give both engines the same
+///    bytes.
+///
+/// Guessing between them costs a subsystem either way, so this measures instead. It re-keys both
+/// sides on the **tag path alone** — every `:nth-child(N)` stripped, so `body:nth-child(2)/div:nth-
+/// child(4)` becomes `body/div` — and reports the MULTISET overlap, which is exactly the intersection
+/// an index-insensitive key could reach. Multiset, not set, because the weak key is deliberately
+/// non-unique: `min(chrome_count, our_count)` summed over keys is the honest upper bound.
+///
+/// Reading it:
+///
+/// * `exact` ≈ 0 and `tag_overlap` ≈ `probed` → **index shift**, and a better key recovers the page.
+/// * `exact` ≈ 0 and `tag_overlap` ≈ 0 → **different documents**, and no key will help.
+///
+/// `first_bad_depth` localises it further: the shallowest depth at which the two sides disagree on
+/// how many elements exist. A depth of 1 or 2 with a high `tag_overlap` is the signature of exactly
+/// one inserted node near the root.
+pub fn tree_alignment(
+    chrome: &std::collections::HashMap<String, [i64; 4]>,
+    ours: &std::collections::HashMap<String, [i64; 4]>,
+) -> TreeAlignment {
+    fn weak(path: &str) -> String {
+        path.split('/')
+            .map(|c| match c.find(":nth-child(") {
+                Some(i) => &c[..i],
+                None => c,
+            })
+            .collect::<Vec<_>>()
+            .join("/")
+    }
+    fn depth_counts(m: &std::collections::HashMap<String, [i64; 4]>) -> Vec<usize> {
+        let mut v = Vec::new();
+        for k in m.keys() {
+            let d = k.matches('/').count();
+            if v.len() <= d {
+                v.resize(d + 1, 0);
+            }
+            v[d] += 1;
+        }
+        v
+    }
+    let exact = chrome.keys().filter(|k| ours.contains_key(*k)).count();
+    let mut cbag: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for k in chrome.keys() {
+        *cbag.entry(weak(k)).or_default() += 1;
+    }
+    let mut obag: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for k in ours.keys() {
+        *obag.entry(weak(k)).or_default() += 1;
+    }
+    let tag_overlap: usize = cbag
+        .iter()
+        .map(|(k, c)| *c.min(obag.get(k).unwrap_or(&0)))
+        .sum();
+    let (cd, od) = (depth_counts(chrome), depth_counts(ours));
+    let first_bad_depth =
+        (0..cd.len().max(od.len())).find(|d| cd.get(*d).unwrap_or(&0) != od.get(*d).unwrap_or(&0));
+    TreeAlignment {
+        probed: chrome.len(),
+        ours: ours.len(),
+        exact,
+        tag_overlap,
+        first_bad_depth,
+    }
+}
+
+/// What [`tree_alignment`] answers. See its doc comment for how to read the two numbers together —
+/// neither is meaningful alone, which is why they are returned as one value rather than two calls.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TreeAlignment {
+    /// How many box-bearing elements the ORACLE built.
+    pub probed: usize,
+    /// How many WE built. The number `thin-overlap` decided blame without (t782).
+    pub ours: usize,
+    /// Paths present in both under the real, index-bearing key — what the score is computed over.
+    pub exact: usize,
+    /// The multiset overlap under a key with every `:nth-child(N)` stripped: the ceiling an
+    /// index-insensitive key could reach. **`tag_overlap` ≫ `exact` is the index-shift signature.**
+    pub tag_overlap: usize,
+    /// Shallowest depth whose element COUNT differs between the two sides, or `None` when every
+    /// depth agrees (which, with `exact` ≈ 0, would itself be the index-shift signature).
+    pub first_bad_depth: Option<usize>,
+}
+
 /// **Where does the layout first diverge?** Sort every element both engines render by Chrome's `y`
 /// and walk down the page; report the first id whose vertical offset exceeds `jump`, plus the last
 /// id that was still in agreement. Downstream drift is almost always ONE upstream box with the
@@ -2478,6 +2574,105 @@ mod shape_tests {
     ///    passing by comparing a refusal against itself.
     /// 3. **The reason survives the chunk boundary**, or it vanishes exactly when the headline is
     ///    computed from the accumulated rows.
+    /// **G_TREE_ALIGNMENT — the index-shift signature must be distinguishable from two different
+    /// documents, on maps alone, with no network (t783).**
+    ///
+    /// Both failures produce the SAME visible symptom — `exact` ≈ 0 over two large trees — and they
+    /// cost a subsystem each, in opposite directions. If this cannot tell them apart on synthetic
+    /// input, the line it prints on a real sweep is decoration.
+    #[test]
+    fn tree_alignment_separates_an_inserted_node_from_two_different_pages() {
+        use super::tree_alignment;
+        use std::collections::HashMap;
+
+        let mk = |paths: &[&str]| -> HashMap<String, [i64; 4]> {
+            paths
+                .iter()
+                .map(|p| (p.to_string(), [0, 0, 1, 1]))
+                .collect()
+        };
+
+        // ── ONE INSERTED NODE near the root. The oracle's document has an extra `<div>` as body's
+        // first child, so every sibling below it is re-numbered — while the trees are otherwise the
+        // same page.
+        let chrome = mk(&[
+            "body:nth-child(2)/div:nth-child(1)",
+            "body:nth-child(2)/div:nth-child(2)",
+            "body:nth-child(2)/div:nth-child(2)/p:nth-child(1)",
+            "body:nth-child(2)/div:nth-child(3)",
+            "body:nth-child(2)/div:nth-child(3)/p:nth-child(1)",
+        ]);
+        let ours = mk(&[
+            "body:nth-child(2)/div:nth-child(1)",
+            "body:nth-child(2)/div:nth-child(1)/p:nth-child(1)",
+            "body:nth-child(2)/div:nth-child(2)",
+            "body:nth-child(2)/div:nth-child(2)/p:nth-child(1)",
+        ]);
+        let a = tree_alignment(&chrome, &ours);
+        // ⚠ **3, not 0 — and the reason is worth keeping.** A shift does not destroy every key: the
+        // bare CONTAINER paths (`div:nth-child(1)`, `div:nth-child(2)`) still collide across the
+        // shift because the sibling that moved into slot N has the same tag as the one that left it.
+        // What a shift reliably destroys is the LEAVES, which is where a page's elements actually
+        // are — real sweeps read `exact 0 of 1410`. So the test asserts the RELATION, not a zero.
+        assert_eq!(a.exact, 3, "containers survive a shift; leaves do not");
+        assert_eq!(
+            a.tag_overlap, 4,
+            "under a tag-only key the two trees agree on everything we built — the gap between \
+             `exact` and `tag_overlap` IS the index-shift signature, and it is the whole point"
+        );
+        assert!(
+            a.tag_overlap > a.exact,
+            "an index-insensitive key must recover MORE than the index-bearing one, or this \
+             measurement cannot discriminate at all"
+        );
+        assert_eq!(
+            a.first_bad_depth,
+            Some(1),
+            "the extra node is body's own child, so depth 1 is where the counts first disagree — \
+             that is what localises the insertion instead of merely reporting that one happened"
+        );
+        assert!(
+            a.tag_overlap * 2 >= a.probed,
+            "an insertion must read as INDEX SHIFT, i.e. a key problem a better key can fix"
+        );
+
+        // ── TWO DIFFERENT DOCUMENTS. Same sizes, same depths, nothing in common at any key
+        // strength — the case where a better key buys exactly nothing and the fix is upstream, in
+        // what the two engines were handed.
+        let chrome = mk(&[
+            "body:nth-child(2)/header:nth-child(1)",
+            "body:nth-child(2)/header:nth-child(1)/nav:nth-child(1)",
+            "body:nth-child(2)/main:nth-child(2)",
+            "body:nth-child(2)/main:nth-child(2)/article:nth-child(1)",
+        ]);
+        let ours = mk(&[
+            "body:nth-child(2)/form:nth-child(1)",
+            "body:nth-child(2)/form:nth-child(1)/input:nth-child(1)",
+            "body:nth-child(2)/aside:nth-child(2)",
+            "body:nth-child(2)/aside:nth-child(2)/ul:nth-child(1)",
+        ]);
+        let a = tree_alignment(&chrome, &ours);
+        assert_eq!(a.exact, 0);
+        assert_eq!(
+            a.tag_overlap, 0,
+            "stripping the index must NOT manufacture agreement between two unrelated trees — a \
+             weak key that matches everything would make this measurement vacuous"
+        );
+        assert!(
+            !(a.probed > 0 && a.tag_overlap * 2 >= a.probed),
+            "two different pages must NOT read as an index shift"
+        );
+
+        // ── And a healthy site is unremarkable at both strengths, so the verdict can never fire on
+        // one.
+        let same = mk(&[
+            "body:nth-child(2)/div:nth-child(1)",
+            "body:nth-child(2)/div:nth-child(2)",
+        ]);
+        let a = tree_alignment(&same, &same);
+        assert_eq!((a.exact, a.tag_overlap, a.first_bad_depth), (2, 2, None));
+    }
+
     #[test]
     fn an_unscored_site_must_name_its_cause() {
         use super::{classify_fetch, Unmeasurable};
