@@ -41749,3 +41749,104 @@ the web's, and the web moved 11 points on one site in three hours. **When a pair
 rebuild the old binary before you believe it**; three minutes of compile answers what no amount of
 staring at the diff can.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 801 — a `max-width` clamp does not re-run the auto-margin split (2026-07-31)
+
+TICK SHAPE: capability (block layout) — one primitive, aimed from the FRESH t800 near-bar list
+
+HYPOTHESIS (written before the probe): t800's sweep gives a same-day near-bar table, so take its
+closest jarring-clean fully-covered row — `255md.com` 0.721, **+0.029 from the M1 bar**, n=43, cov
+1.00, every jarring dimension zero — run the mechanism oracle on it and fix whichever primitive its
+twelve divergences name. A crossing there is a direct M1 gate point.
+
+WHAT THE ORACLE SAID: twelve divergences, and they split cleanly in two.
+
+* the `<form>` is **400 wide in both engines** and sits at Chrome's x=400 against our x=309, inside a
+  680-wide card at x=260. 400 = 260 + 48 + (680−96−400)/2 — dead centre of the card's padded content
+  box. 309 = 260 + 48 — flush against its left padding edge.
+* everything else is **height**: `<textarea>` Chrome 97 ours 138, and the `<form>`/`<p>`/`<div>`/
+  `<body>` chain above it inflated by the same 41px.
+
+The page's own CSS names the first outright: `.contact-form { display:block; margin:auto;
+max-width:400px }` — **no `width`**.
+
+MECHANISM: CSS 2.1 §10.4 is one sentence — when the used width violates `max-width`, the §10.3.3
+rules are *applied again* with the constraint as the computed width — and §10.3.3 is precisely where
+a pair of `auto` margins splits the remainder. We did the clamp and skipped the re-run. The
+auto-margin block was guarded on
+
+```rust
+if s.width != Dim::Auto || s.width_keyword.is_some() {
+```
+
+which asks *did the AUTHOR write a `width`*. For `max-width: 1200px; margin: 0 auto` they did not, so
+the box became definite at 400 and the margins were never told.
+
+```
+                                                   Chrome   before   after
+  max-width:400px; margin:auto        in 800px       200        0      200   ✗→✓
+  max-width:400px; margin:0 auto      in 800px       200        0      200   ✗→✓
+  max-width:400px; margin-left:auto   in 800px       400        0      400   ✗→✓
+  …inside a 48px-padded parent                       200       48      200   ✗→✓
+  width:400px;     margin:0 auto      in 800px       200      200      200   ✓ always right
+  max-width:400px; NO auto margin                      0        0        0   ✓ must not move
+  max-width:1000px (NOT binding); margin:0 auto        0        0        0   ✓ must not move
+  min-width:600px; width:100px; margin:0 auto        100      100      100   ✓ always right
+```
+
+⚠⚠ **THE REACH IS `.container { max-width: 1200px; margin: 0 auto }`** — every Bootstrap container,
+every Tailwind `mx-auto max-w-*`, every blog and docs theme's article column, every marketing page's
+section wrapper. It is the reason a wide window shows margins instead of edge-to-edge text, and it is
+plausibly the most-written layout rule on the modern web. It was rendering flush left.
+
+⚠⚠ **AND THE `min-width` HALF OF THE SAME SENTENCE LOOKED FINE, WHICH IS WHY THIS SURVIVED.** A clamp
+UPWARD only binds when there is an explicit `width` — a `width:auto` block already fills its
+containing block, so `min-width` has nothing to raise — and an explicit width always satisfied the
+guard's first term. So **every `min-width` case in existence took the working path**, and no test and
+no site could distinguish *"we implement §10.4's re-run"* from *"we don't"*. One rule, two
+constraints, and the one that needed no help was the one that worked. The fix is the third term,
+`inline_constraint_violated` — a value the same function already computed for the replaced-element
+ratio case **one line above** and never used here.
+
+MEASURED: eight Chrome-measured x/width pairs, **all eight now byte-identical**; `255md.com`'s
+`<form>` moves 309 → 400, Chrome-exact. Controls byte-identical: `blog.rust-lang.org` 0.993389,
+`en.wikipedia.org` 0.604356, `news.ycombinator.com` 0.797264, `linkmake.in` 0.702703,
+`www.kicktipp.com` 0.725000. `manuk-layout` 103 tests green.
+
+⚠ **THE SUBJECT SITE'S SCORE DID NOT MOVE (0.720930, unchanged), AND THE REASON IS WORTH THE LINE.**
+Every element carrying the x error also carries a co-located HEIGHT error — the `<textarea>` is 138
+tall against Chrome's 97, and that inflation propagates up the `<form>`/`<p>`/`<div>` chain — and an
+element is scored wrong if ANY axis is wrong. So a correct x fix on a box that is also the wrong
+height buys nothing on the metric. **A MASKED FIX IS NOT A NULL RESULT**, and the distinction is only
+visible because the oracle prints both engines' boxes: 12 divergences before, 12 after, with the x
+term gone from all of them.
+
+Gate: `G_MAX_WIDTH_AUTO_MARGIN` (new), eight Chrome-measured pairs read off the gate's own fixture.
+**Proven RED:** drop `inline_constraint_violated` and `#m1`/`#m2`/`#m6`/`#m7` snap back to 0/0/0/48
+while `#m3` and `#m8` — the explicit-width cases — still pass. That split is the point: a gate built
+only from `width:Npx; margin:0 auto` is green against this defect. The second mutation (run the split
+unconditionally) does NOT go red and the gate's RED list says so — for an unclamped `width:auto` box
+`leftover` is already 0, so the narrow guard is a statement of intent, not a proven necessity.
+
+HONEST SCOPE: no site is claimed to cross. One site's element is Chrome-exact where it was 91px out;
+the justification is the idiom's reach, and the corpus price comes at the next sweep, read PAIRED —
+and per t800, with the old binary rebuilt if the band goes negative.
+
+RESIDUE, measured on the same page and NOT fixed — **this is the next tick**: `<textarea>` height 138
+vs Chrome 97. The page sets `body { line-height: 1.7 }` and our UA sheet gives form controls a
+`font-family` and `font-size` but **no `line-height`**, so 1.7 inherits straight through: 5 rows ×
+27.2 + 2 border = 138, against Chrome's 5 × 19 + 2 = 97. Chrome's `font: -webkit-small-control`
+shorthand resets `line-height` to `normal`, and a UA *declared* value beats inheritance. **This is the
+exact sibling of t787** (*a form control does not inherit the page's font*) — the third property of
+the same rule, left out.
+
+PERF: none claimed — one bool already computed, ORed into an existing condition.
+
+WIKI: `docs/wiki/box-layout.md` — new section.
+
+PATTERN: ⚠⚠⚠ **WHEN ONE SPEC SENTENCE NAMES TWO CONSTRAINTS, CHECK WHETHER EITHER IS OBSERVABLE ON
+ITS OWN.** `min-width` and `max-width` share §10.4 and share the code; only `max-width` could ever
+show the bug, because `min-width` cannot bind without the explicit `width` that already took the
+correct branch. A constraint that is unobservable in isolation is not evidence the rule is
+implemented — it is evidence nothing has asked.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

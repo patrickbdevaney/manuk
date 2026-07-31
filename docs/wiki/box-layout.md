@@ -2801,3 +2801,56 @@ so the float drops to the next line instead of sharing it, and the run centres i
 (350) rather than the float-narrowed band (Chrome 380). Pre-existing and untouched by this fix; the
 gate asserts the property this tick delivers (the run is centred, not at x=0) rather than a number it
 knows is wrong.
+
+## A `max-width` clamp RE-RUNS the auto-margin split (t801)
+
+```css
+.container { max-width: 1200px; margin: 0 auto; }
+```
+
+That rule centres the content column of most of the modern web — every Bootstrap `.container`, every
+Tailwind `mx-auto max-w-*`, every blog theme's article body. **It rendered flush left.**
+
+CSS 2.1 §10.4 is one sentence: when the used width violates `max-width`, the §10.3.3 rules are
+**applied again** with the constraint as the computed width. §10.3.3 is where a pair of `auto`
+margins splits the leftover space. We did the first half and skipped the second — the auto-margin
+block was guarded on
+
+```rust
+if s.width != Dim::Auto || s.width_keyword.is_some() {
+```
+
+which asks *did the author write a `width`*. For `max-width: 1200px; margin: 0 auto` the answer is no,
+so the box was clamped to 1200 (correctly) and then placed at x=0 (not correctly), because the margins
+were never told the width had become definite.
+
+```
+                                                   Chrome   ours (before)
+  max-width:400px; margin:auto        in 800px       200          0
+  max-width:400px; margin:0 auto      in 800px       200          0
+  max-width:400px; margin-left:auto   in 800px       400          0
+  …inside a 48px-padded parent                       200         48
+  width:400px;     margin:0 auto      in 800px       200        200   ✓ always right
+  max-width:400px; NO auto margin                      0          0   ✓ must not move
+  max-width:1000px (NOT binding)                       0          0   ✓ must not move
+  min-width:600px; width:100px; margin:0 auto        100        100   ✓ always right
+```
+
+The fix is the third term, `inline_constraint_violated` — a value the function already computed for
+the replaced-element ratio case, one line above, and never used here.
+
+### ⚠ Why the `min-width` half looked fine
+
+Both constraints live in the same §10.4 sentence and only one of them was broken *observably*. A
+clamp **upward** needs an explicit `width` to bind at all — a `width:auto` block already fills its
+containing block, so `min-width` has nothing to raise — and an explicit width always satisfied the
+guard's first term. So every `min-width` case in existence took the working path, and nothing could
+distinguish *"we implement the §10.4 re-run"* from *"we don't"*. **One rule, two constraints, and the
+one that needed no help was the one that worked.**
+
+### `margin-left:auto` alone is what proves it is the SPLIT and not a special case
+
+A plausible wrong fix is *"if a max-width clamped the box, centre it"*. `#m6` refutes it: with only
+`margin-left:auto`, Chrome pushes the box fully right (x=400 in an 800px parent), because §10.3.3
+gives the whole remainder to the single auto margin. The gate asserts that, so the plausible version
+cannot come back.

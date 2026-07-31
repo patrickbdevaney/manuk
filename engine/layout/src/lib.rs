@@ -2252,7 +2252,20 @@ impl Ctx<'_> {
         // Horizontal auto-margin centering when width is definite. A keyword width (`fit-content`
         // etc.) collapses to `Dim::Auto` but IS definite for margins — `width:fit-content;margin:auto`
         // centers the hugged box. Only the left margin shifts the box; the right absorbs the remainder.
-        if s.width != Dim::Auto || s.width_keyword.is_some() {
+        //
+        // ⚠⚠ **`inline_constraint_violated` IS THE THIRD TERM, AND WITHOUT IT `max-width` + `margin:
+        // 0 auto` — the standard centred-container idiom of the entire modern web — RENDERED FLUSH
+        // LEFT.** CSS 2.1 §10.4: when the used width violates `max-width` (or `min-width`), the
+        // §10.3.3 rules are *applied again* with the constraint as the computed width — and §10.3.3
+        // is precisely where a pair of `auto` margins splits the remainder. The clamp above already
+        // does the first half (the box IS 400 wide); this guard was still asking whether the AUTHOR
+        // wrote a `width`, which for `.container { max-width: 1200px; margin: 0 auto }` they did not.
+        // So the box became definite and the margins never learned about it.
+        //
+        // The `min-width` half of the same sentence looked fine only because a clamp UP needs an
+        // explicit `width` to be observable (`width:auto` already fills the container), so it always
+        // took the first term. One rule, two constraints, and only the one that needs no help worked.
+        if s.width != Dim::Auto || s.width_keyword.is_some() || inline_constraint_violated {
             let leftover = cw - (width + pl + pr + bl + br);
             match (s.margin.left.is_auto(), s.margin.right.is_auto()) {
                 (true, true) => ml = (leftover / 2.0).max(0.0),

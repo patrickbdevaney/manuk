@@ -138,6 +138,9 @@
   - L2777 · The strut is the second symptom of the same omission
   - L2790 · text-indent is the third literal and is deliberately NOT fixed here
   - L2797 · Residue, measured in the same fixture
+  - L2805 · A max-width clamp RE-RUNS the auto-margin split (t801)
+  - L2842 · ⚠ Why the min-width half looked fine
+  - L2851 · margin-left:auto alone is what proves it is the SPLIT and not a special case
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1350,4 +1353,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1261 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1264 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
