@@ -2854,3 +2854,39 @@ A plausible wrong fix is *"if a max-width clamped the box, centre it"*. `#m6` re
 `margin-left:auto`, Chrome pushes the box fully right (x=400 in an 800px parent), because §10.3.3
 gives the whole remainder to the single auto margin. The gate asserts that, so the plausible version
 cannot come back.
+
+## A form control does not inherit the page's `line-height` either (t802)
+
+t787 gave form controls the UA's `font-family` and `font-size`, because Chrome's `html.css` says
+`font: -webkit-small-control` and a control is a widget the browser sizes. **`line-height` is the
+third property of that shorthand**, and a shorthand resets what it does not mention — so Chrome's
+controls carry `line-height: normal` as a UA *declared* value, which beats inheritance.
+
+We set two of the three. The page's own value walked back in through the door the shorthand closes:
+
+```
+   body { line-height: 1.7 }                     Chrome   ours (before)
+   <textarea rows=5>   (UA font)                 182x81    182x119
+   <textarea>          (rows=2 default)          182x36    182x51
+   <select>                                       30x19     30x27
+   <textarea line-height:2>  (AUTHOR)            182x86    182x86    ✓ author still wins
+   <div> plain block                            1200x27   1200x27    ✓ still inherits 1.7
+```
+
+A `<textarea>`'s height is **rows × line-height**, so the error is proportional to the control: a
+one-line field was 6px too tall and a five-row box was 38px too tall. And because
+`body { line-height: 1.5 }`-ish is one of the most common typographic rules on the web, this landed
+on essentially every styled form.
+
+### The two constraints are what make it a fix rather than a trade
+
+* An author's own `line-height` on the control **must still win** — the rule is UA-origin, and
+  `line-height:2` on a textarea reads 86 in both engines before and after.
+* A plain block **must still inherit** the body's value. A fix that reset `line-height` globally
+  would correct every control and silently re-typeset every page.
+
+### Residual, named
+
+At an *author* font-size of 16px the textarea is 96 here against Chrome's 101 — `line-height: normal`
+resolving to 18/row where Chrome uses 19. That is a font-metric question, independent of this rule
+and unchanged by it, and the gate deliberately does not assert Chrome's number there.

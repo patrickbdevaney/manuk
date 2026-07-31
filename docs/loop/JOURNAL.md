@@ -41850,3 +41850,84 @@ show the bug, because `min-width` cannot bind without the explicit `width` that 
 correct branch. A constraint that is unobservable in isolation is not evidence the rule is
 implemented — it is evidence nothing has asked.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 802 — a form control does not inherit the page's `line-height` either (2026-07-31)
+
+TICK SHAPE: capability (CSS UA sheet) — the residue t801 measured and named, taken in the next tick
+
+HYPOTHESIS (written before the fixture): t801 left one thing written down — `255md.com`'s `<textarea>`
+is 138 tall against Chrome's 97, the page sets `body { line-height: 1.7 }`, and our UA sheet gives
+form controls a `font-family` and a `font-size` and **no `line-height`**. If that is the whole story
+then 5 rows × 27.2 + 2 = 138 and 5 × 19 + 2 = 97, the arithmetic closes, and the site — which is
+jarring-clean and sits +0.029 from the M1 bar with a chain of height errors all descending from that
+one control — should CROSS.
+
+MECHANISM: Chrome's `html.css` says `font: -webkit-small-control`. That is a **shorthand**, and a
+shorthand resets every property it does not mention — so `line-height` becomes `normal` as a UA
+*declared* value, and a declared value beats inheritance no matter what the author put on `<body>`.
+t787 read the family and the size out of that shorthand and stopped. The third property was the door
+the shorthand closes, and the page's own value walked back through it.
+
+```
+   body { line-height: 1.7 }                     Chrome   before   after
+   <textarea rows=5>   (UA font)                 182x81   182x119  182x81   ✗→✓
+   <textarea>          (rows=2 default)          182x36   182x 51  182x36   ✗→✓
+   <input>             (UA font)                 205x21   205x 27  205x19   ✗→~
+   <button>                                       47x21    45x 27   45x19   ✗→~
+   <select>                                       30x19    30x 27   30x19   ✗→✓
+   <textarea line-height:2>  (AUTHOR)            182x86   182x 86  182x86   ✓ must not move
+   <div> plain block                            1200x27  1200x 27 1200x27   ✓ must not move
+```
+
+A `<textarea>`'s height is **rows × line-height**, so the error is proportional to the control — 6px
+on a one-line field, 38px on a five-row box — and `body { line-height: ~1.5 }` is one of the most
+common typographic rules on the web, so it landed on essentially every styled form.
+
+⚠⚠ **THE EXISTING GATE COULD NOT SEE THIS, BY CONSTRUCTION.** `G_FORM_CONTROL_METRICS` sets
+`font: 16px sans-serif` on its body — no `line-height` — so the document's value and the control's
+were **both `normal` and agreed by accident**. Eleven Chrome-measured control boxes, all passing,
+and not one of them varied the property that was wrong. *A fixture that does not vary a property
+cannot fail on it*, and the fix for that is a second fixture that varies exactly one thing, which is
+what landed.
+
+MEASURED: **`255md.com` shape 0.720930 → 0.767442 — it CROSSES the 0.75 bar, and it is
+jarring-clean on all four dimensions, so this is an M1 GATE CROSSING.** Six controls byte-identical:
+`linkmake.in` 0.702703, `blog.rust-lang.org` 0.993389, `news.ycombinator.com` 0.797264,
+`www.kicktipp.com` 0.725000, `chat.google.com` 0.847458; `en.wikipedia.org` 0.603996 against
+0.604356 with `shape_n` 1102→1101 — one element left the corpus, so it is not a like-for-like
+comparison and is not a move. `manuk-layout` 103 tests green.
+
+Gate: `G_FORM_CONTROL_METRICS` extended with `g_control_line_height_is_normal` — a second fixture
+whose one variable is `line-height` on the body. **Proven RED:** delete the declaration and `#lt5`
+reads **119.33** against Chrome's 81, while `#lo` and `#ld` still pass. That split is the point: a
+gate that only checked the textarea could not distinguish *"we reset it on controls"* from *"we
+disabled `line-height`"*.
+
+⚠ **EVERY `before` NUMBER IN THAT TABLE IS READ OFF THE GATE'S OWN FIXTURE**, obtained by running the
+mutation under a throwaway probe test and deleting it. I had written `116`, `51` and `27` into the
+gate's doc comment from arithmetic before measuring; the real first value is **119.33**. t797's rule
+— *a measured number is only measured for the fixture it was measured in* — applies to the BEFORE
+column exactly as it applies to the after, and an estimated number in a table of measured ones is
+indistinguishable from a measured one to every later reader.
+
+HONEST SCOPE: one crossing, on one site, verified twice. The idiom's reach is the general claim and
+the corpus price comes at the next sweep, read PAIRED and — per t800 — with the old binary rebuilt if
+the band goes negative.
+
+RESIDUE, measured in the same fixture and NOT fixed: at an AUTHOR font-size of 16px the textarea is
+96 here against Chrome's 101 and the input 245 against 238 — `line-height: normal` resolving to
+18/row where Chrome uses 19, plus a character-width difference. A font-metric question, independent
+of this rule and unchanged by it; the gate deliberately does not assert Chrome's number there,
+because a gate that fails for a reason it does not test is worse than one that says less.
+
+PERF: none claimed — one declaration in a UA stylesheet parsed once.
+
+WIKI: `docs/wiki/box-layout.md` — new section.
+
+PATTERN: ⚠⚠⚠ **A SHORTHAND IS A LIST OF RESETS, AND COPYING TWO OF ITS THREE PROPERTIES LEAVES THE
+THIRD INHERITING.** `font: -webkit-small-control` was read as *"the control's font is 13.3px Arial"*
+when what it says is *"the control's font, line-height and everything else in the `font` shorthand are
+the system control's"*. When a fix is derived from a shorthand in another engine's UA sheet, ENUMERATE
+the shorthand's properties and account for each one — the ones left out do not become absent, they
+become INHERITED, which is a different and quieter wrong answer.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

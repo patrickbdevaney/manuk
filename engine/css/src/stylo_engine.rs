@@ -223,9 +223,20 @@ option, optgroup { display: none; }
    text field's intrinsic width is measured in characters, the error came straight back out as a
    wrong BOX width on every form on the web. Authors who want inheritance ask for it (`input {
    font: inherit }` is in most CSS resets) and this is UA-origin, so they still win. */
+/* ⚠⚠ **`line-height` IS THE THIRD PROPERTY OF THAT SHORTHAND, AND LEAVING IT OUT LET THE PAGE'S OWN
+   LINE-HEIGHT BACK IN.** `font: -webkit-small-control` is a SHORTHAND, so it resets `line-height` to
+   `normal` — and a UA *declared* value beats inheritance, whatever the author put on `<body>`. We set
+   only the family and the size, so `body { line-height: 1.7 }` — the single most common typographic
+   rule on the modern web — inherited straight into every control and multiplied its height. A
+   `<textarea rows=5>` at 16px measured 5 × 27.2 + 2 = **138** against Chrome's 5 × 19 + 2 = **97**,
+   and a text field 29 against 20. Because a textarea's height is rows × line-height, the error is
+   proportional to the control and lands on every form on the web that styles its body text.
+   ⚠ Still UA-origin, so an author's OWN `line-height` on the control wins — asserted in the gate
+   (`line-height:2` on a textarea is 98 in both engines, before and after). */
 input, select, textarea, button {
   font-family: Arial, sans-serif;
   font-size: 13.333px;
+  line-height: normal;
 }
 input, textarea, select {
   border: 1px solid #767676;

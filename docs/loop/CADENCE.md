@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **544** | ticks 1–800 |
-| median tick cycle | **24m** | 543 intervals |
+| ticks landed | **545** | ticks 1–801 |
+| median tick cycle | **24m** | 544 intervals |
 | median, last 10 | **41m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 493.9h elapsed |
-| median verify wall | **63s** | 483 ticks |
+| **ticks per hour** | **1.10** | 494.4h elapsed |
+| median verify wall | **63s** | 484 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **370**
-* **✅ rows in the capability ledger**: 144 → **415**
+* **✅ rows in the capability ledger**: 144 → **416**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**262 of 544 ticks** (48%) moved a
+**263 of 545 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **262** capability ticks, median cycle **24m**
+* **263** capability ticks, median cycle **24m**
 * median diff per tick: **+256 / −34** lines across 8 files
 
 ## Every tick
@@ -641,5 +641,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **798** | 2026-07-31 16:43 | 44m | capability | 63s | +529/−41 | 369 | 81 | 56.0% · | a percentage height on a flex item was resolved twice (2026-07-31) |
 | **799** | 2026-07-31 18:21 | 1.6h | capability | 63s | +342/−32 | 369 | 81 | 56.0% · | an anonymous block box inherited NOTHING from the container that made it (2026-07-31) |
 | **800** | 2026-07-31 18:59 | 38m | measurement | 63s | +372/−34 | 370 | 81 | 56.0% · | the COMMON-SET BAND went NEGATIVE, and the old binary says it was the SITES (2026-07-31) |
+| **801** | 2026-07-31 19:26 | 27m | capability | 63s | +285/−33 | 370 | 81 | 56.0% · | a `max-width` clamp does not re-run the auto-margin split (2026-07-31) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -141,6 +141,9 @@
   - L2805 · A max-width clamp RE-RUNS the auto-margin split (t801)
   - L2842 · ⚠ Why the min-width half looked fine
   - L2851 · margin-left:auto alone is what proves it is the SPLIT and not a special case
+  - L2858 · A form control does not inherit the page's line-height either (t802)
+  - L2881 · The two constraints are what make it a fix rather than a trade
+  - L2888 · Residual, named
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1353,4 +1356,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1264 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1267 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

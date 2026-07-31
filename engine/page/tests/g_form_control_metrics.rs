@@ -59,6 +59,53 @@ const HTML: &str = r##"<!doctype html><html><head><style>body{margin:0;font:16px
 <select id="z"><option>English (United States)</option></select>
 </body></html>"##;
 
+/// ⚠⚠ **THE SECOND FIXTURE, AND ITS ONE VARIABLE IS `line-height` ON THE BODY** (t802). The fixture
+/// above deliberately sets `font: 16px sans-serif` with no `line-height`, so the document's value is
+/// `normal` and identical to the control's — which made it structurally incapable of seeing that we
+/// were inheriting the document's. `body { line-height: 1.7 }` is one of the most common typographic
+/// rules on the web, and with it every control multiplied out:
+///
+/// ```text
+///                                                  Chrome   before   after
+///   <textarea rows=5>  (UA font)                   182x81   182x119  182x81   ✗→✓
+///   <textarea>         (UA font, rows=2 default)   182x36   182x 51  182x36   ✗→✓
+///   <input>            (UA font)                   205x21   205x 27  205x19   ✗→~
+///   <button>                                        47x21    45x 27   45x19   ✗→~
+///   <select>                                        30x19    30x 27   30x19   ✗→✓
+///   <textarea rows=3 line-height:2>  (AUTHOR)      182x86   182x 86  182x86   ✓ must not move
+///   <div> plain block                             1200x27  1200x 27 1200x27   ✓ must not move
+///
+/// Every `before`/`after` column here is READ OFF THIS FIXTURE (t797's rule: a measured number is
+/// only measured for the fixture it was measured in), the `before` column by running the mutation
+/// below. `~` marks the two rows that improve but do not land on Chrome's number — a single-line
+/// control is 19 here against Chrome's 21, which is the `line-height: normal` metric residual named
+/// at the bottom of this comment and is NOT asserted.
+/// ```
+///
+/// `line-height` is the third property of Chrome's `font: -webkit-small-control` shorthand, which
+/// resets it to `normal`; a UA *declared* value beats inheritance. We set the family and the size and
+/// stopped, so the page's value walked back in through the door the shorthand closes.
+///
+/// ⚠ `#lo` and `#ld` are the two constraints, and they are not decoration. `#lo` proves the rule is
+/// still UA-origin (an author's own `line-height` on the control wins, 86 before and after), and
+/// `#ld` proves the fix did not disable `line-height` inheritance generally — a plain block still
+/// gets the body's 1.7. A fix that reset line-height everywhere passes every row above and fails
+/// `#ld`.
+///
+/// ⚠ NOT asserted, and named rather than left looking covered: at an AUTHOR font-size of 16px the
+/// textarea is 96 here against Chrome's 101 and the input 245 against 238. That residual is
+/// `line-height: normal` resolving to 18/row where Chrome uses 19, plus a character-width difference
+/// — a font-metric question, independent of this rule and unchanged by it. Asserting Chrome's number
+/// there would make this gate fail for a reason it does not test.
+const LH_HTML: &str = r##"<!doctype html><html><head><style>body{margin:0;font-family:sans-serif;font-size:16px;line-height:1.7}
+.big{font-size:16px}
+#lo{line-height:2}</style></head><body>
+<input id="li"><textarea id="lt"></textarea><textarea id="lt5" rows="5"></textarea><button id="lb">Send</button><select id="ls"><option>a</option></select>
+<div id="ld">plain block</div>
+<input id="bi" class="big"><textarea id="bt5" class="big" rows="5"></textarea>
+<textarea id="lo" rows="3"></textarea>
+</body></html>"##;
+
 /// The BORDER-BOX `[w, h]` the live pipeline laid out — the same quantity
 /// `getBoundingClientRect()` reports in Chrome, so the two tables are comparable.
 fn box_of(page: &manuk_page::Page, sel: &str) -> [f32; 2] {
@@ -176,5 +223,74 @@ fn g_form_control_metrics() {
          If these are equal the property is not being read, and every restyled <select> on the web \
          is now 17px too wide.",
         s1 - z
+    );
+}
+
+/// ⚠⚠ **A CONTROL DOES NOT INHERIT THE PAGE'S `line-height` EITHER** (t802) — the third property of
+/// the shorthand `font: -webkit-small-control`, left out when the family and the size were added at
+/// t787. The fixture above cannot see this: it sets no `line-height`, so the document's value and the
+/// control's are both `normal` and agree by accident. Given `body { line-height: 1.7 }` — one of the
+/// most common typographic rules on the web — every control multiplied out, and a `<textarea>`'s
+/// height is *rows × line-height*, so the error grew with the control.
+///
+/// Found on `255md.com` (in-scope CrUX, jarring-clean, n=43): a `<textarea>` 138 tall against
+/// Chrome's 97 dragged the `<form>`/`<p>`/`<div>`/`<body>` chain above it with it. The site crossed
+/// the M1 bar on this fix, 0.721 → 0.767.
+///
+/// ## How this goes RED
+///
+/// Delete `line-height: normal` from the control rule in `stylo_engine.rs` and `#lt5` reads 119.33
+/// against Chrome's 81 — the body's 1.7 walking back in — while `#lo` and `#ld` still pass. That
+/// split is what makes the pair of constraints worth asserting: a gate that only checked the
+/// textarea could not tell "we reset it on controls" from "we disabled line-height".
+#[test]
+fn g_control_line_height_is_normal() {
+    let fonts = FontContext::new();
+    let page = manuk_page::Page::load(LH_HTML, "https://forms.test/", &fonts, 1200.0);
+
+    // ── THE BUG: rows × line-height, so the error is proportional to the control.
+    assert_h(
+        &page,
+        "#lt5",
+        81.0,
+        "a 5-row <textarea> under `body{line-height:1.7}`: the control's line-height is `normal`, \
+         not the document's. At 1.7 this reads 119",
+    );
+    assert_h(
+        &page,
+        "#lt",
+        36.0,
+        "the default 2-row textarea — the same rule at a different row count, so a fix that got the \
+         intercept right and the slope wrong fails here",
+    );
+    assert_h(
+        &page,
+        "#ls",
+        19.0,
+        "a <select> is one line tall and is measured by the same rule",
+    );
+    assert_w(
+        &page,
+        "#lt5",
+        182.0,
+        "and the WIDTH must not move — `line-height` is a block-axis property, so a fix that \
+         disturbed the cols arithmetic would show up here",
+    );
+
+    // ── THE TWO CONSTRAINTS. Neither is decoration; each kills a different plausible wrong fix.
+    assert_h(
+        &page,
+        "#lo",
+        86.0,
+        "an AUTHOR `line-height:2` on the textarea itself still WINS — this rule is UA-origin. \
+         Chrome reads 86 with or without the fix; if this changed, the new declaration is being \
+         applied at the wrong origin and every styled control on the web just lost its typography",
+    );
+    assert_h(
+        &page,
+        "#ld",
+        27.0,
+        "a PLAIN BLOCK still inherits the body's 1.7 (16 × 1.7 ≈ 27). A fix that reset line-height \
+         globally, rather than on controls, passes every assertion above and fails this one",
     );
 }
