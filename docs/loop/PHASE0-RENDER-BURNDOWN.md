@@ -169,3 +169,56 @@ crossed 0.75 on ZERO sites this round. Lessons:
 - **Conservative rate ≈ +0.8 pts/sweep** (2-slope avg) → order ~100 sweeps; but the band-rise implies
   crossings come in WAVES as clusters approach 0.75, so linear extrapolation is an upper bound. Finite, long,
   noisy — recompute the rate every 2-3 crux sweeps, never off one.
+
+## 8. The crossing-ranked worklist (measured from SWEEP-t777, 2026-07-31)
+
+§7 warned that the band rises faster than crossings. **t758 → t767 → t777 confirms it outright**: three
+honest sweeps, nineteen ticks, `in-scope pass 5.4% / 5.4% / 5.4%`, `7 / 7 / 7` passing sites, M1 gate
+`2.3% / 2.3% / 2.3%` — while `shape_mean` climbed 41.3 → 46.3. **Zero crossings for +5.0 points of
+mean.** (The `+2.3 pts/sweep` `fidelity-progress.sh` printed diffs t777 against the *contaminated*
+t771 row and is an artefact; the honest slope is 0.0 and no ETA follows from it.)
+
+That trips the escalation rule at the top of §4.3, so the sweep was re-ranked on the axis the board
+actually asks for — **marginal M1 crossings** — instead of tag frequency or mean shape:
+
+```
+shape   distance  site                          jarring       n     cov     elements to cross
+0.729    +0.021   chat.google.com               ALL ZERO      59    1.00    ~2
+0.725    +0.025   www.kicktipp.com              r=1           80    0.99    ~2
+0.698    +0.052   255md.com                     ALL ZERO      43    1.00    ~3
+0.692    +0.058   secure5.entertimeonline.com   ALL ZERO      39    1.00    ~3
+0.709    +0.041   www.marktplaats.nl            r=1 d=2      810    1.00
+```
+
+**Four fully-covered, jarring-clean sites sit within 0.06 of the bar with fewer than 100 scored
+elements each** — roughly **eight mis-placed elements across three pages stand between the M1 gate and
+a doubling of it** (3/129 → 6/129). Rank render ticks from this table, not from cluster mass.
+
+⚠ **Caveat that must travel with the table** (memory `session-654-657`): a live site's shape varies a
+few points run-to-run, so a +0.021 distance is **at or below the noise floor**. The table ranks *where
+to look*, and a fix is only real if it names a mechanism — never if it only moves one site's number.
+
+### First probe result — the mechanism is family #1, and it is gross, not near-miss
+
+Running the instrument on the two cleanest targets (the mechanism oracle already prints per-element
+`[x y w×h] {font/size}` for both engines — §2's "nearly free" signature, and it is live):
+
+* **`secure5.entertimeonline.com`** — `<article>` is ours `[33 120 1134×452]` vs Chrome
+  `[0 120 487×354]`. **Our article is 1134px wide; Chrome's is 487.** We give a `width:auto` box the
+  full containing block and then centre it (33 = (1200−1134)/2); Chrome shrink-wraps it to 487 at
+  x=0. Every descendant inherits the x-shift (`div` at 389 vs 56, and so on down).
+* **`255md.com`** — the `<form>` is 400 wide in *both*, but ours sits at x=400 (dead-centre of its
+  680-wide parent) and Chrome's at x=309. Same y, same width, different x: we are centring something
+  Chrome does not centre. Its `<textarea>` is also `97px` tall in `{monospace/16}` where Chrome has
+  `29px` in `{-apple-system/16}` — **the author's `font-family` is not reaching the form control**,
+  and the height error follows the font error.
+
+Both are **family #1 (container-width → cascade)**, but the sharp correction to §3 is that on these
+sites it is **not** the subtle "a few px re-wraps the prose" form — it is a **shrink-to-fit /
+intrinsic-width box being given the full containing block**, a 647px error on one element. That is the
+`min-content`/`max-content` sizing lever the lever-board has carried as a step-function item all
+along, and it is now attached to named sites with per-element evidence instead of a WPT count.
+
+**Next render tick starts here**: determine why the `secure5` `<article>` resolves `width:auto` to the
+containing block instead of shrink-to-fit (float / inline-block / abspos / flex-item / `fit-content`),
+fix that one primitive, and prove it on all four near-bar sites before claiming a crossing.

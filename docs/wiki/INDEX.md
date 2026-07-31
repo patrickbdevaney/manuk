@@ -886,6 +886,10 @@
   - L2494 · The other two defects in the same four lines
   - L2509 · Screen, History, Location and VisualViewport were inert stubs of objects we build
   - L2523 · The gate
+  - L2539 · A write-only defect: every gate in this repo reads (tick 778)
+  - L2560 · The mechanism
+  - L2583 · ⚠ The transferable finding — a surface has more than one mode of use
+  - L2601 · Measured next to it, and NOT fixed here
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1319,4 +1323,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1230 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1234 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

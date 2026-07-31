@@ -2535,3 +2535,74 @@ Tick 773 fixed precisely this for `CSSStyleRule` and went past these four, for a
 ⚠ The fixture is loaded at **390×844 on purpose**. A landscape fixture agrees with the constant the bug
 returned, so the claim that matters most could not have gone red — an instrument calibrated by the bug it
 was built to find.
+
+## A write-only defect: every gate in this repo reads (tick 778)
+
+Six readonly IDL attributes — `index`, `options`, `selectedOptions`, `mode`, `origin`, `wholeText` —
+were installed **getter-only on `Node.prototype`** (`dom_bindings.rs`, `define_members`, the
+`Tier::Node` branch). Each is readonly on exactly ONE interface (`HTMLOptionElement`,
+`HTMLSelectElement`, `ShadowRoot`, `HTMLAnchorElement`, `Text`), and every element in the document
+inherited all six.
+
+On a `<my-widget>` none of those names is in the prototype chain at all in a real browser, so
+`this.index = 0` is an ordinary expando that simply creates an own property. Here it found an
+inherited accessor with **no setter** — and a `class` body is **always strict** — so it threw
+
+```
+TypeError: setting getter-only property "index"
+```
+
+out of the constructor, **before the custom element existed**. Measured live: 18 of that message on
+`meet.google.com` in the t777 CrUX sweep, 17 tagged `custom element ctor` /
+`attributeChangedCallback`. The site scored shape 0.126. From the outside this is "my component
+renders nothing"; the cause is several frames up, in a setter that does not exist.
+
+### The mechanism
+
+`expando_unless_owner(cx, argc, vp, name, owns)` is a shared setter:
+
+* the receiver **is** the interface that owns the attribute → the write is ignored, which is the
+  platform's own readonly behaviour;
+* otherwise → `JS_DefineProperty` installs an ordinary own data property on the receiver, which
+  shadows the prototype accessor exactly the way a browser that never put the name there behaves.
+
+The owner predicates are deliberately not all tag comparisons: `mode` belongs to `ShadowRoot`, so its
+predicate is `shadow_root_mode(n).is_some()`, and `wholeText` belongs to `Text`, so its predicate is
+`is_text(n)`.
+
+**The accepted divergence.** A native accessor cannot see whether its caller is strict, so "readonly"
+here means *the write is ignored*, not *the write throws in strict mode*. Chrome ignores it in sloppy
+mode and throws in strict. We ignore it in both. That costs code which writes to a genuinely readonly
+attribute — already a bug in that code — and buys back every element that is not an `<option>`.
+
+**The careless version trades a throw for a lie.** Making all six plainly writable would let
+`option.index = 99` stick. `G_EXPANDO_READONLY` therefore asserts *both* halves: the expando lands on
+a `<div>`, **and** `option.index` still reports its position, `a.origin` still reports the URL's
+origin, `shadowRoot.mode` is still `open`.
+
+### ⚠ The transferable finding — a surface has more than one mode of use
+
+`G_PROTOTYPE` asserts DOM members live on prototypes. `G_IFACE_SURFACE` and the 262-name census
+assert `index` exists. All of them were green throughout, and all of them were right: presence, type,
+value and prototype-location were correct. **The hole is in the property's ACCESS SHAPE, and it is
+observable only on a WRITE — which no gate in this repo performs against a platform accessor.**
+
+This is a sibling of tick 777's lesson, one layer down. There the rule was *"a probe over NAMES
+cannot find a hole inside an object it can reach."* Here the name is present, the object is
+reachable, the getter is correct, and the defect survived anyway:
+
+> **When a surface has more than one mode of use, a gate suite that covers one mode reports full
+> coverage of the surface.**
+
+Read and write are two modes. So are call-as-method and lift-off-the-prototype (which is what the
+Svelte accessor bridge exists for), and enumerate-vs-access. Each is a place a defect can live where
+the other mode's instrument reports clean forever.
+
+### Measured next to it, and NOT fixed here
+
+`document.createElement('my-widget')` does **not** run a defined custom element's constructor — the
+upgrade that does run comes from the parser's pass over the markup. Found because the gate's first
+draft asserted the read-back against a `createElement`ed element and failed `false,false,false` *with
+the fix in place*. It is banked as `viaCreateElement:false,false,false`, asserted at its measured
+value so it cannot change silently, and left for its own tick rather than folded into a gate that
+would then fail for two unrelated causes.

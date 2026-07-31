@@ -2498,7 +2498,12 @@ unsafe fn define_members(
         // are inherited by Comment/PI too, but both guard on the node being Text (splitText via
         // `char_units`, wholeText via `is_text`).
         def_guarded!(def, c"splitText", el_split_text, 1);
-        prop_guarded!(prop, c"wholeText", el_get_whole_text, None);
+        prop_guarded!(
+            prop,
+            c"wholeText",
+            el_get_whole_text,
+            Some(el_set_whole_text)
+        );
         prop_guarded!(prop, c"nodeValue", el_get_char_data, Some(el_set_char_data));
         // Forms — 50% of the corpus, and the difference between a reader and a browser.
         def_guarded!(def, c"submit", el_form_submit, 0);
@@ -2662,9 +2667,19 @@ unsafe fn define_members(
             el_get_option_selected,
             Some(el_set_option_selected)
         );
-        prop_guarded!(prop, c"options", el_get_options, None);
-        prop_guarded!(prop, c"selectedOptions", el_get_selected_options, None);
-        prop_guarded!(prop, c"index", el_get_option_index, None);
+        prop_guarded!(prop, c"options", el_get_options, Some(el_set_options));
+        prop_guarded!(
+            prop,
+            c"selectedOptions",
+            el_get_selected_options,
+            Some(el_set_selected_options)
+        );
+        prop_guarded!(
+            prop,
+            c"index",
+            el_get_option_index,
+            Some(el_set_option_index)
+        );
         // Accessor properties (jQuery-core read/write surface).
         prop_guarded!(
             prop,
@@ -2724,11 +2739,11 @@ unsafe fn define_members(
         prop_guarded!(prop, c"hostname", el_get_hostname, Some(el_set_hostname));
         prop_guarded!(prop, c"port", el_get_port, Some(el_set_port));
         prop_guarded!(prop, c"host", el_get_host, Some(el_set_host));
-        prop_guarded!(prop, c"mode", el_get_shadow_mode, None);
+        prop_guarded!(prop, c"mode", el_get_shadow_mode, Some(el_set_shadow_mode));
         prop_guarded!(prop, c"pathname", el_get_pathname, Some(el_set_pathname));
         prop_guarded!(prop, c"search", el_get_search, Some(el_set_search));
         prop_guarded!(prop, c"hash", el_get_hash, Some(el_set_hash));
-        prop_guarded!(prop, c"origin", el_get_origin, None);
+        prop_guarded!(prop, c"origin", el_get_origin, Some(el_set_url_origin));
         // Element metrics.
         prop_guarded!(prop, c"offsetLeft", el_get_offset_left, None);
         prop_guarded!(prop, c"offsetTop", el_get_offset_top, None);
@@ -4970,6 +4985,108 @@ unsafe fn is_select(dom: *mut Dom, n: NodeId) -> bool {
         .map(|e| e.name == "select")
         .unwrap_or(false)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// **A READONLY IDL ATTRIBUTE THAT DOES NOT BELONG ON EVERY NODE.**
+//
+// `index`, `options`, `selectedOptions`, `mode`, `origin` and `wholeText` are each readonly on
+// exactly ONE interface — `HTMLOptionElement`, `HTMLSelectElement`, `ShadowRoot`,
+// `HTMLAnchorElement`, `Text` — and every one of them was installed **getter-only on
+// `Node.prototype`** (`define_members`, the `Tier::Node` branch), which every element inherits.
+//
+// On a `<my-widget>` none of those names is in the prototype chain at all in a real browser, so
+// `this.index = 0` is an ordinary expando and simply creates an own property. Here it found an
+// INHERITED ACCESSOR WITH NO SETTER — and a `class` body is always strict — so it threw
+//
+//     TypeError: setting getter-only property "index"
+//
+// out of the constructor, **before the custom element existed**. The t777 sweep logged that exact
+// message 18 times on `meet.google.com` (which scored shape 0.126), 17 of them tagged
+// `custom element ctor` / `attributeChangedCallback`; every component on the page failed to
+// construct, which is what a page that renders nothing and points at nothing looks like inside.
+//
+// Two of this project's recurring shapes at once: a **wrong answer of the right type** (the name is
+// present, correctly-shaped, and wrong about *who owns it*), and **one rule, N implementations** —
+// six accessors, one mis-tiering, found together only because the fix was written as a class.
+//
+// ⚠ **AND IT IS A WRITE-ONLY DEFECT, WHICH IS WHY NOTHING SAW IT.** `G_PROTOTYPE`,
+// `G_IFACE_SURFACE` and the 262-name census all confirm `index` exists and reads correctly. Every
+// gate in this repo READS. The hole is in the property's ACCESS SHAPE and is observable only on a
+// WRITE — one layer below t777's *"a probe over NAMES cannot find a hole inside an object it can
+// reach"*.
+//
+// ⚠ **THE ACCEPTED DIVERGENCE, STATED HERE RATHER THAN DISCOVERED LATER.** A native accessor cannot
+// see whether its caller is strict, so "readonly" below means *the write is ignored*, not *the write
+// throws in strict mode*. Chrome ignores it sloppy and throws strict; we ignore it in both. That
+// costs code which writes to a genuinely readonly attribute — already a bug in that code — and buys
+// back every element that is not an `<option>`. Readonly-ness stays observable the way it actually
+// matters: **the value does not change.** `G_EXPANDO_READONLY` asserts both halves, because the
+// careless version of this fix — making all six plainly writable — trades a throw for a lie.
+
+/// `dom[n]` is an element whose tag is `tag`.
+unsafe fn tag_is(dom: *mut Dom, n: NodeId, tag: &str) -> bool {
+    (*dom).element(n).map(|e| e.name == tag).unwrap_or(false)
+}
+
+/// The shared setter for a readonly IDL attribute that lives on one interface but is installed on
+/// `Node.prototype`. On the interface that owns it the write is the platform's readonly no-op; on
+/// anything else it becomes an ordinary own data property — which is what the name would have been
+/// all along in a browser that never put it on the prototype.
+unsafe fn expando_unless_owner(
+    cx: *mut RawJSContext,
+    argc: u32,
+    vp: *mut Value,
+    name: &std::ffi::CStr,
+    owns: unsafe fn(*mut Dom, NodeId) -> bool,
+) -> bool {
+    let is_owner = this_node(vp).map(|(dom, n)| owns(dom, n)).unwrap_or(false);
+    if !is_owner && argc >= 1 {
+        if let Some(obj) = this_object(vp) {
+            rooted!(in(cx) let this = obj);
+            rooted!(in(cx) let val = *vp.add(2));
+            JS_DefineProperty(
+                &mut wrap_cx(cx),
+                this.handle(),
+                name.as_ptr(),
+                val.handle(),
+                JSPROP_ENUMERATE as u32,
+            );
+        }
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+macro_rules! expando_setter {
+    ($fname:ident, $name:expr, |$dom:ident, $n:ident| $owns:expr) => {
+        unsafe fn $fname(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+            unsafe fn owner($dom: *mut Dom, $n: NodeId) -> bool {
+                $owns
+            }
+            expando_unless_owner(cx, argc, vp, $name, owner)
+        }
+    };
+}
+
+expando_setter!(el_set_option_index, c"index", |dom, n| tag_is(
+    dom, n, "option"
+));
+expando_setter!(el_set_options, c"options", |dom, n| tag_is(
+    dom, n, "select"
+) || tag_is(
+    dom, n, "datalist"
+));
+expando_setter!(
+    el_set_selected_options,
+    c"selectedOptions",
+    |dom, n| tag_is(dom, n, "select")
+);
+expando_setter!(el_set_shadow_mode, c"mode", |dom, n| (*dom)
+    .shadow_root_mode(n)
+    .is_some());
+expando_setter!(el_set_url_origin, c"origin", |dom, n| tag_is(dom, n, "a")
+    || tag_is(dom, n, "area"));
+expando_setter!(el_set_whole_text, c"wholeText", |dom, n| (*dom).is_text(n));
 
 /// The `<option>` descendants of a `<select>`, in tree order.
 ///

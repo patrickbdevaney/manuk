@@ -39848,3 +39848,92 @@ them the real engine-side ceiling is 81/104 = **78%**, not 62.8%. The engine-sid
 therefore 23 sites (shell-only 12 · render-fail 5 · timeout 3 · css-starved 3), which is a much smaller
 target than the ceiling line implies — and worth saying, because a ceiling quoted 15 points too low
 makes the function leg look like the binding constraint when the crossing arithmetic says it is not.
+
+## Tick 778 — six readonly IDL attributes on `Node.prototype`, so `this.index = 0` killed the constructor (2026-07-31)
+
+TICK SHAPE: capability (throw-class killer — the board's M1 leg-1 scorability work, chosen from a
+MEASURED live symptom rather than an audit)
+
+**HYPOTHESIS (written before the fix).** `meet.google.com` scored **shape 0.126** in the t777 sweep —
+one of the worst scored sites in the corpus — and its console carries **18
+`TypeError: setting getter-only property "index"`**, **17 of them tagged `custom element ctor` /
+`attributeChangedCallback`**. If that throw is what stops the page's components from constructing,
+then giving the mis-tiered accessors a setter should let the constructors complete.
+
+**THE DEFECT.** `index`, `options`, `selectedOptions`, `mode`, `origin` and `wholeText` are each
+readonly on exactly ONE interface — `HTMLOptionElement`, `HTMLSelectElement`, `ShadowRoot`,
+`HTMLAnchorElement`, `Text` — and every one of them was installed **getter-only on `Node.prototype`**
+(`dom_bindings.rs` `define_members`, the `Tier::Node` branch), which every element inherits.
+
+On a `<my-widget>` none of those names is in the prototype chain at all in a real browser, so
+`this.index = 0` is an ordinary expando and simply creates an own property. Here it found an
+**inherited accessor with no setter** — and a `class` body is **always strict** — so it threw out of
+the constructor, *before the element existed*. The failure presents as *"my component renders
+nothing"*, with the cause several frames up in a setter that does not exist.
+
+**⚠ WHY NOTHING SAW IT: THIS IS A WRITE-ONLY DEFECT.** `G_PROTOTYPE`, `G_IFACE_SURFACE` and the
+262-name census all confirm `index` exists and reads correctly — and **every gate in this repo
+READS.** The hole is in the property's *access shape* and is observable only on a **write**. That is
+one layer below t777's closing pattern (*"a probe over NAMES cannot find a hole inside an object it
+can reach"*): here the name is present, the object is reachable, the getter is right, and the defect
+still sits there because no instrument ever assigned to it.
+
+Two recurring shapes at once: a **wrong answer of the right type** (present, correctly-shaped, wrong
+about *who owns it*), and **one rule, N implementations** — six accessors, one mis-tiering, found
+together only because the fix was written as a class rather than as a fix for `index`.
+
+**THE FIX.** A shared setter, `expando_unless_owner`: if the receiver really is the interface that
+owns the attribute, the write is the platform's readonly no-op; otherwise it becomes an ordinary own
+data property — which is what the name would have been all along in a browser that never put it on
+the prototype.
+
+⚠ **THE ACCEPTED DIVERGENCE, STATED RATHER THAN DISCOVERED LATER.** A native accessor cannot see
+whether its caller is strict, so "readonly" here means *the write is ignored*, not *the write throws
+in strict mode*. Chrome ignores it sloppy and throws strict; we ignore it in both. That divergence
+costs code which writes to a genuinely readonly attribute — already a bug in that code — and buys
+back every element that is not an `<option>`. Readonly-ness stays observable the way it actually
+matters: **the value does not change**, and the gate asserts that half explicitly. Making all six
+plainly writable would have traded a throw for a lie.
+
+Gate: **`G_EXPANDO_READONLY`** (`engine/page/tests/g_expando_readonly.rs`), 9 claims, **proven red by
+restoring the six `None` setters** — and it reproduces the production symptom *verbatim*:
+
+```
+plain:THREW(index,options,selectedOptions,mode,origin,wholeText)
+ctor:never-ran
+optionIndex:THROW(TypeError: setting getter-only property "index")     ← the meet.google.com string
+```
+
+Regression sweep, all green: `g_expando_readonly g_anchor_url_setters g_options_length g_option_text
+g_select_options g_select_length g_select_write g_select_actuation g_shadow_root_identity
+g_split_text g_characterdata_iface g_prototype g_doc_prototype g_iface_surface g_iface_surface_2
+g_form_elements g_screen_orientation g_capability`.
+
+**⚠ MEASURED AND DELIBERATELY NOT FIXED HERE: `document.createElement('my-widget')` does not run a
+defined custom element's constructor.** The gate's first run asserted the read-back against a
+`createElement`ed element and failed `false,false,false` — with the fix in place and `ctor:ok`. The
+constructor had run via the *parser's* upgrade pass on the markup element, not via `createElement`.
+That is a second, unrelated capability gap; folding it into this gate would make it fail for two
+causes at once, so it is **reported as `viaCreateElement:false,false,false` and asserted at that
+value**, which is the honest posture: the number is banked as a fact the successor inherits instead
+of a blind spot, and the gate goes red if it silently changes either way.
+
+**HONEST SCOPE — what is NOT claimed.** No site is claimed to cross. `meet.google.com` sits at shape
+0.126, nowhere near the 0.75 bar, so clearing its constructor throws cannot produce an M1 crossing on
+its own; what is banked is a removed throw-class of the exact shape the board ranks first, attributed
+to a named site by a message found in the sweep log. The next sweep is the instrument that would show
+movement, and it has not run.
+
+PERF: none claimed. Six accessors gain a setter; the setter runs only on assignment, which on the
+owning interface is a tag comparison and nothing else. No new work on any read path, and no change to
+the one-own-property-per-element invariant `G_PROTOTYPE` banks.
+
+WIKI: `docs/wiki/js-engine.md` — "A write-only defect: every gate in this repo reads"
+
+PATTERN: ⚠⚠⚠ **AN INSTRUMENT THAT ONLY READS CANNOT SEE A DEFECT IN THE WRITE PATH.** The generalisable
+form, and it is a sibling of t777's rather than a repeat: a property has *two* access shapes, and this
+project's entire gate corpus exercises one of them. Presence, type, value and prototype-location were
+all asserted and all correct; `obj.x = v` was never executed against a platform accessor anywhere, so
+six mis-tiered attributes sat in the hottest path on the web — a custom-element constructor — for as
+long as custom elements have worked. **When a surface has more than one mode of use, a gate suite that
+covers one mode reports full coverage of the surface.**
