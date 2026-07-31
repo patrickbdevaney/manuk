@@ -41106,3 +41106,108 @@ positioning fixture cost one Chrome run and produced both t792 and t793; eleven 
 Chrome-exact, which is what made the two that did not stand out at all. A probe wide enough to be
 mostly boring is what makes the interesting rows visible.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 794 — bank the sweep the cadence rule asks for, before an eighth fix (2026-07-31)
+
+TICK SHAPE: measurement (a banked burndown point — the cadence rule, obeyed without being told twice)
+
+HYPOTHESIS (written before the sweep finished): the cadence rule is *after ~5-6 fixes of either class,
+run a CLEAN `--jobs 2` sweep and bank it before landing many more*. Since t786 this loop has landed
+**seven** capability fixes — nested `@media` declarations (t785), form-control metrics (t787), the
+`<select>` arrow (t789), `@layer` precedence (t790), the solidus line break (t791), the float
+containing block (t792), flex/grid `order` (t793). At t785 the observer had to interrupt to get this
+run; this time it is the tick without being asked.
+
+PREDICTION, recorded before the number exists:
+
+1. **`shape_mean` RISES**, where t786's fell. t786's movement was a conversion (twenty unscoreable
+   sites entering the population at the bottom); this batch changes GEOMETRY on already-scored sites,
+   and four of the seven fixes moved a named site's shape on the same binary — `en.wikipedia.org`
+   53.3% → 58.8% across t791+t792 alone.
+2. **In-scope pass (shape ≥0.75) rises by less than the mean does.** Wikipedia gained 5.5 points and
+   is still 16 short of the bar; a mean that moves without crossings is exactly what the burndown's
+   §8 note predicts, and it is not a failure — it is the band rising before the crossings.
+3. **`reading-order` clean improves** — it was 14.5%, the worst dimension, and `order` (t793) is
+   scored over exactly the sibling pairs it reorders.
+4. **Scorability stays ~78%.** Nothing in this batch clears a boot throw, so a large move there would
+   mean something else changed and I should go looking rather than celebrate.
+
+⚠ Prediction 2 is the one worth being wrong about publicly: if the mean rises and the pass rate does
+not move at all, the §8 crossing-ranked list is the only thing that will ever move M1, and this
+session's method — probe a primitive against Chrome, fix what diverges — has to be re-aimed at the
+sites nearest the bar rather than at the primitives that happen to be wrong.
+
+**MEASURED, and the headline WENT DOWN. All four predictions were wrong.**
+
+```
+                       t777    t786    t794
+scored / in-scope       81     101      97   of 127        78.3% -> 76.4%
+shape>=0.75 in-scope   5.4%    7.8%    6.3%  (10 -> 8 sites)
+M1 (shape AND jarring) 2.3%    3.9%    2.4%  (5 -> 3 sites)
+shape_mean             46.3    45.1    45.0
+cov_mean               81.6    82.6    83.2
+excluded                71      71      73
+```
+
+⚠ **THEN IT WAS DECOMPOSED, AND THE DROP IS ALMOST ENTIRELY THE SWEEP'S OWN CHURN.** Three sites left
+the passing list:
+
+```
+  mobcup.fm             0.870 (n=31)   -> bot-wall-403 this run   NETWORK
+  ru4.bongacams-ru.com  0.923 (n=39)   -> unreachable this run    NETWORK
+  simplepdf.com         0.786 -> 0.748 (n=159 both)               the only rendering-shaped loss
+  payb.jp               GAINED, 0.750 on n=717                    a real crossing
+```
+
+and `simplepdf.com` re-measured **twice on this binary today reads 0.786 both times**, 159 elements
+scored, identical coverage. **The sweep row is the artifact, not the site.** Likewise the scorability
+drop: 5 sites went unreachable/bot-walled/css-starved between runs and 1 came back — exactly the
+101 → 97. Not one of those is a rendering change.
+
+**PAIRED over the 200 sites present in both sweeps — the comparison that survives the churn:**
+
+```
+  16 sites moved by >=0.03      11 UP   ·   5 DOWN   ·   net +0.28 shape points
+  biggest movers up:  bhfudbal.ba +0.259 · dapam-sirius +0.200 · ikea.com +0.171
+                      experiencia.pichincha +0.167 · linkmake.in +0.162
+  biggest down:       pogoda.by -0.500 and vk.com -0.250 — BOTH on UNSCORED rows with n=1..4,
+                      and both re-measure to their old values live. Noise on rows that
+                      cannot enter the numerator at all.
+```
+
+⚠⚠ **THE INSTRUMENT LESSON, AND IT IS THE THIRD SIGHTING OF THIS SHAPE: THE HEADLINE MOVED BY LESS
+THAN ITS OWN CHURN.** Two sweeps of the same corpus, four hours apart, disagree about which sites are
+*reachable* by five — and each of those is worth a full point of the in-scope pass rate, because the
+denominator is 127. So a sweep-to-sweep delta on this corpus is **not a result unless it is PAIRED
+over the sites scored in BOTH runs**. `fidelity-progress.sh` prints the unpaired delta and called this
+batch `flat/negative`; the paired read of the same two files is +0.28 with 11 sites up and 5 down.
+Both numbers are honest; only one of them is about the engine. (Same family as t695's *"an outlier
+inside a batch run is a harness reading"* and t779's *"thin-overlap membership is a timing lottery"* —
+`scripts/` is observer-owned, so this is recorded as a finding for the observer, not patched.)
+
+**AND THE PREDICTION I ASKED TO BE WRONG ABOUT PUBLICLY IS THE ONE THAT MATTERS.** I wrote: *if the
+mean rises and the pass rate does not move, the §8 crossing-ranked list is the only thing that will
+move M1, and this session's method has to be re-aimed.* The mean did not even rise — 45.1 → 45.0 —
+and the paired gain of +0.28 across 200 sites is ~0.14 points of mean. **Seven Chrome-verified
+primitive fixes, every one of them real, gated and red-proven, bought one crossing.**
+
+That is not an argument for reverting them (each is a genuine divergence from the reference, several
+moved a named site by whole points — `en.wikipedia.org` 53.3 → 58.8 — and every control was
+byte-identical). It is an argument about AIM: **M1 is a per-site threshold, and fixing a primitive
+moves whichever sites happen to use it, which is uncorrelated with which sites are near the bar.**
+The §8 crossing-ranked list exists precisely to correlate them, and the next render tick takes a site
+off it and works whatever that site needs — the reverse of this session's order.
+
+HONEST SCOPE: no engine source changed this tick. The rows file is the deliverable and the numbers are
+reported as they came out, including the ones that make the last seven ticks look worse than they are.
+
+PERF: not measured this tick.
+
+WIKI: none — the finding belongs to `PHASE0-RENDER-BURNDOWN.md`'s method, and the observer owns the
+script that prints it.
+
+PATTERN: ⚠⚠⚠ **A METRIC WHOSE DENOMINATOR IS DECIDED BY THE NETWORK CANNOT MEASURE A FOUR-HOUR
+DELTA.** Five sites changed reachability between two runs of one corpus; the in-scope denominator is
+127, so that is four points of headline before the engine is consulted at all. The fix is not a
+stricter threshold or a bigger corpus — it is PAIRING: compare the sites both runs scored, and report
+the unpaired number beside it rather than instead of it. [no-pattern]
