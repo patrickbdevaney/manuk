@@ -202,10 +202,12 @@ printf "  🧱 SCORABILITY CEILING: %s/%s in-scope sites RENDER = %s%% — M1 is
 if [ "$UNSCORED" -gt 0 ]; then
   printf "     %s unscored = M1 fails until they render → throw-killer worklist: render-fail %s · shell-only %s · thin-overlap %s(booted-but-thin) · timeout %s · css-starved %s · other %s\n" \
     "$UNSCORED" "$U_RENDER" "$U_SHELL" "$U_THIN" "$U_TIMEOUT" "$U_CSS" "$U_OTHER"
-  # ⚠ thin-overlap is NOT (measurement) when coverage is low — t777 showed all 25 at cov<0.2 (booted but
-  # rendered <20% of Chrome's DOM). It is the NEXT engine gap AFTER the boot throw: throw-killers stop the
-  # crash, the page boots, then a deeper gap leaves it blank/thin. That is where scored-count actually moves.
-  [ "${U_THIN:-0}" -gt 0 ] && printf "       ↳ thin-overlap = booted-but-thin (ENGINE, not measurement, when cov<0.5): the crash is fixed but the app didn't populate the DOM — the chain's NEXT throw/gap. THIS is the current binding constraint on scored-count.\n"
+  # thin-overlap (cov<0.2) = booted-but-thin: the boot crash is fixed but the page didn't populate the DOM.
+  # CONSTITUTION-CHECK #63 (agent, t779) refined it into TWO sub-populations: (a) timeout-starved — the 12s
+  # render budget was exhausted, a BUDGET/instrument artifact; (b) fast-but-empty — a real deeper engine gap.
+  # So it is NOT purely "engine" (my t777 relabel over-corrected) — it is a real gap to close either way, the
+  # chain's NEXT rung, and the current binding constraint on scored-count (the metric pays only the LAST rung).
+  [ "${U_THIN:-0}" -gt 0 ] && printf "       ↳ thin-overlap = booted-but-thin (crash fixed, DOM not populated): check #63 splits it timeout-starved[12s budget] + fast-but-empty[engine] — the chain's NEXT rung, binding on scored-count.\n"
 fi
 printf "  ⭐ M1 GATE (shape>=0.75 AND jarring-clean · the TRUE visual bar): %s/%s = %s%%   TARGET 95%% = %s sites  →  NEED +%s\n" \
   "${M1CNT:-0}" "$INSCOPE" "${M1PCT:-0}" "$TARGET" "$M1_NEED"
