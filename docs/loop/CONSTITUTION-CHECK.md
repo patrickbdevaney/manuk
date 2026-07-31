@@ -3451,3 +3451,89 @@ crossing-ranked list, where "did the named site cross" is a question the tick ca
    -the-prototype, enumerate, delete.
 
 **Next check due: tick 788.**
+
+---
+
+## Check #64 — tick 788 (2026-07-31)
+
+**Horizon:** Phase-0 · M1 RENDER (`shape ≥ 0.75` **and** jarring-clean on ≥95% of the in-scope
+representative CrUX corpus), owner-locked function-first, then M2 FUNCTION, then v1.0.0.
+
+**Gate or scoreboard?** Gate, and for the first time in twenty ticks the gate MOVED for a reason the
+loop can name. t786 banked the first clean `--jobs 2` sweep since t777:
+
+```
+                       t771    t777    t786
+scored / in-scope       52      81     101   of 129     62.8% -> 78.3%
+shape>=0.75 in-scope   2.0%    5.4%    7.8%
+M1 (shape AND jarring)    ?    2.3%    3.9%
+jarring-clean         17.6%   24.0%   26.4%
+shape_mean             44.5    46.3    45.1
+```
+
+### THE STANDING RULE THAT HAD FAILED 19 TICKS IS SATISFIED THIS WINDOW
+
+Check #63 recorded that `PHASE0-RENDER-BURNDOWN.md` §4.3 — *a fix MUST raise in-scope-pass on the next
+sweep or it is reverted/re-scoped* — had gone unenforced for nineteen consecutive ticks, and re-scoped
+it to bind from the next sweep. **It binds now, and it passes:** in-scope pass 5.4% → 7.8%, scorability
++15.5 points. The mechanism is nameable rather than atmospheric — `tree-divergence` rows 23 → 4,
+`thin-overlap` 25 → 1, from the t784 key change.
+
+⚠ **And the honest half: `shape_mean` FELL, 46.3 → 45.1.** That is the signature of a real conversion —
+~20 sites entered the scored population near the bottom. A sweep where the mean had RISEN while twenty
+new sites arrived would have been the suspicious one. The loop's own prediction, written before the
+run, said so.
+
+### WHAT THE LAST EIGHT TICKS ACTUALLY WERE
+
+t781–t784 were four consecutive INSTRUMENT ticks, and the observer interrupted at t785 to demand a
+measurement checkpoint before a fifth. **The interrupt was right and the ticks were right, which is the
+uncomfortable combination.** Each keying fix was real and gated; what none of them could say was
+whether it converted 20 rows or 2 — and answering that took 50 minutes, less than one of the ticks that
+deferred it. Recorded as the rule: *a fix measured on the sites that motivated it is an anecdote until
+the corpus prices it.*
+
+The pivot the observer asked for then happened without further prompting: t785 (nested `@media`
+declarations dropped whole), t787 (form-control intrinsic metrics) are ENGINE capability ticks, both
+found by the same cheap move — **write a four-line fixture and ask Chrome for the number.**
+
+### INVARIANTS
+
+- **I2 (never patch dependencies):** held — the fork surface is still empty. t785 changed our own
+  rule-index walker; t787 changed our own UA sheet and presentational-hint pass.
+- **I3 (semantic model in lockstep):** held. Both fixes move BOX GEOMETRY only; no node appears or
+  disappears, so `node_rects` and the a11y tree are unaffected by construction.
+- **I4 (Pareto discipline):** held, and sharply. Nested group rules are in every stylesheet authored
+  since ~2023; form controls are on every page with a form. Neither is a tail item.
+- **I5 (the oracle/log is the discovery engine):** held — t787's whole work-list came from the fresh
+  t786 rows plus the mechanism oracle's per-element `[x y w×h]` on the two named near-bar sites.
+- **PART VII / V1-SCOPE:** honoured. No `scripts/` file authored or edited in t784–t788.
+
+### ⚠ ONE TIER-0 ITEM HAS REGRESSED, AND IT IS NOT OURS TO FIX
+
+`self-audit.sh` at t787: **the verify wall reads 881s against the 300s Tier-0 target.** It read 63s at
+the start of this session; the difference is that these ticks touch `engine/css`, the shared-type edit
+that cascades furthest, on a box whose disk is 93% full. Per PART VII the wall is observer-owned —
+recorded here and in the journal, not touched. It costs ~15 minutes per tick, which is now the largest
+single term in the cycle.
+
+### THE STEER
+
+1. **THE NEXT RENDER TICK IS THE `<select>` ARROW, AND ITS BLOCKER IS MEASURED.** A `<select>` is short
+   by **exactly 17px** (142 vs 159 with a long option, 13 vs 30 with a one-character one) — the whole of
+   `chat.google.com`'s form cluster, which is 3 of its 59 elements and would carry it across the M1 bar
+   from 0.729. ⚠ It cannot be reserved unconditionally: with `appearance: none` Chrome drops to 139, so
+   the reservation must be conditioned on the appearance value — and `clone_appearance()` is
+   **gecko-only in stylo 0.19** (compile-probed this tick, `no method named clone_appearance`). It has
+   to come through the `MinimalCascade` merge path, the same fence as `scrollbar-width` and
+   `-webkit-line-clamp`. That is the shape of the tick: plumb one property, then reserve.
+2. **`@layer` HAS NO PRECEDENCE** (audit #50, measured: Chrome 100, ours 333). Unlayered author
+   declarations must beat layered ones regardless of document order. It needs a layer term in the
+   cascade sort between origin and specificity — a real but bounded change to one comparator.
+3. **JARRING-CLEAN IS NOW THE BINDING HALF OF M1, NOT SHAPE.** 26.4% clean against 7.8% shape-pass
+   looks like shape is behind, but M1 needs BOTH at 95% and the jarring dimensions are
+   reading-order 14.5%, overlap 20.0%, h-overflow 32.5%. Ranked by marginal crossings the next sweep
+   should be read for *jarring-clean sites that are shape-short* (the §8 list) AND *shape-passing sites
+   with exactly one dirty jarring dimension* — the second population has never been enumerated.
+
+**Next check due: tick 796.**

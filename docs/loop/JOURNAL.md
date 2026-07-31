@@ -40712,3 +40712,59 @@ quantity nobody can see without running the reference — 26px per text field, f
 comment stood. The check cost one fixture and one `--dump-dom`. **Any number in this engine that
 claims to match Chrome should carry the command that produced it.**
 Ledgered in `docs/loop/WEB-PATTERNS.md` as *a form the author did not size*.
+
+## Tick 788 — the two due audits, and the M1 population nobody had enumerated (2026-07-31)
+
+TICK SHAPE: process (constitution check #64 + self-audit, both mechanically due) — with one measured
+work-list, so the tick leaves a lever rather than only prose
+
+CONSTITUTION CHECK #64 (due at 788, written to `docs/loop/CONSTITUTION-CHECK.md`): the standing rule
+that had gone unenforced for nineteen ticks — *§4.3, a fix must raise in-scope-pass on the next sweep* —
+**binds this window and passes**: 5.4% → 7.8% in-scope, scorability 62.8% → 78.3%, with the mechanism
+nameable (`tree-divergence` 23 → 4). Invariants I2–I5 and PART VII all hold; the fork surface is still
+empty and no `scripts/` file was touched in t784–t788.
+
+SELF-AUDIT (due at 787): **one prescribed-but-not-executed item, and it is not ours.** The verify wall
+reads **881s against the 300s Tier-0 target** — 63s at the start of this session, because these ticks
+touch `engine/css`, the shared-type edit that cascades furthest, on a box at 93% disk. Per PART VII /
+V1-SCOPE the wall is observer-owned: recorded, not touched. It is now the largest single term in the
+cycle at ~15 minutes a tick. Everything else in the audit is green (42 gates declare how to break them,
+49 process defects each name a closing mechanism, the journal has no gaps).
+
+⚠ **THE M1 POPULATION NOBODY HAD ENUMERATED.** M1 requires `shape ≥ 0.75` **AND** jarring-clean, and
+the loop has only ever ranked the first half. From the fresh t786 rows, the second half:
+
+```
+shape-passing sites: 10   of which dirty: h_overflow 4 · overlap 3 · reading_order 3 · dead_target 1
+
+ONE dirty dimension away from an M1 crossing:
+  admin.munchbakery.com   shape 0.932   reading_order   n=44
+  simplepdf.com           shape 0.786   h_overflow      n=159
+  desiviral.net           shape 0.771   overlap         n=1085
+```
+
+**Three sites are one jarring dimension from crossing, and M1 currently stands at five.** That is the
+same order of leverage as the §8 shape near-bar list and it has never been on the board — jarring has
+been treated as a fix target ranked by breadth, never as *the last thing standing between a
+shape-passing site and the gate*. Banked as steer #3 of check #64.
+
+NEXT LEVER, and its blocker is measured rather than assumed: the `<select>` arrow (exactly 17px, the
+whole of `chat.google.com`'s form cluster, which would carry it over from 0.729). It cannot be reserved
+unconditionally — with `appearance: none` Chrome drops from 159 to 139 — and `clone_appearance()` is
+**gecko-only in stylo 0.19**, compile-probed this tick (`no method named clone_appearance found for
+&style::properties::ComputedValues`). It has to come through the `MinimalCascade` merge path, the same
+fence as `scrollbar-width` and `-webkit-line-clamp`.
+
+HONEST SCOPE: no engine source changed. Two audits, one enumeration, one compile-probed blocker.
+
+PERF: the wall regression above is measured and attributed; nothing else claimed.
+
+WIKI: none — this tick's findings live in `CONSTITUTION-CHECK.md` and `SURFACE-AUDIT.md`, which are the
+instruments that own them.
+
+PATTERN: ⚠⚠ **A CONJUNCTIVE GATE HAS TWO NEAR-BAR POPULATIONS AND THIS LOOP HAD RANKED ONE.** M1 is
+`shape ≥ 0.75 AND jarring-clean`; every crossing-ranked list ever built here sorted by shape distance.
+The mirror population — shape already passing, exactly one jarring dimension dirty — took one `awk` over
+rows that were already on disk, and it is three sites against a gate standing at five. **When a gate is
+an AND, rank the distance to EACH conjunct separately; the shorter distance is not always in the term
+you have been working.** [no-pattern]
