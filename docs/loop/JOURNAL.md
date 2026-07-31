@@ -40529,3 +40529,82 @@ looking for a sizing primitive. Here the box was the wrong width because a decla
 have sized it was never in the cascade — and the evidence that says so is not in the boxes at all,
 it is in the four lines of CSS the site actually served. Fetching the rule cost one `curl`.
 Ledgered in `docs/loop/WEB-PATTERNS.md` as *a responsive rule written with CSS Nesting*.
+
+## Tick 786 — bank a clean sweep: did the key change convert the corpus, or four sites? (2026-07-31)
+
+TICK SHAPE: measurement (a banked burndown point — the observer's t785 cadence steer, taken)
+
+HYPOTHESIS (written before the sweep finished): the observer's steer is correct and the reason is
+mechanical — **`fidelity-progress.sh` and `phase0-milestones.sh` only move on a fresh clean sweep**,
+and the last one is t777. Since then this loop has landed the chrome-reference widening fix, three
+keying fixes and one cascade fix, and has said "the next clean sweep will price it" three times. Four
+sample sites are not a corpus: `timeline.com` recovering to 87% says the KEY can convert a row, not
+how many rows it converts.
+
+PREDICTION, recorded before the number exists so it can be wrong:
+
+1. **scored/in-scope RISES** — `tree-divergence`/`thin-overlap` rows convert to scored. t777 read
+   81/129 = 62.8%.
+2. **M1 (shape ≥0.75) stays ~flat** — the converted sites score LOW (timeline.com came in at 33.9%),
+   so they enter the denominator's scored population near the bottom. A headline that ROSE sharply
+   here would be the suspicious outcome, not the good one.
+3. The `t784` key change moves NO healthy site (blog.rust-lang.org was byte-identical), so any
+   movement on the already-scored population is attributable to the engine ticks, not the key.
+
+⚠ If (1) is flat, the four-site sample was not representative and the keying arc is over regardless of
+how good its individual rows looked — that is the outcome this sweep exists to be able to state.
+
+Run as TWO concurrent `manuk-wpt fidelity` processes over a round-robin split of
+`docs/bench/corpus-crux-trend.txt` (200 stratified CrUX sites), which is the cadence rule's `--jobs 2`:
+2× faster than serial with the denominator intact, where `--jobs 8` costs hard sites their scorability
+to wall-clock timeout and auto-annotates itself contaminated.
+
+**MEASURED — 200 sites, `--jobs 2`, one binary, banked as `docs/loop/SWEEP-t786-rows.tsv`:**
+
+```
+                        t771     t777     t786
+scored / in-scope       52       81       101   of 129      62.8% -> 78.3%
+shape>=0.75 in-scope    2.0%     5.4%     7.8%   (7 -> 10 sites)
+M1 (shape AND jarring)  ?        2.3%     3.9%   (3 -> 5 sites)
+jarring-clean           17.6%    24.0%    26.4%
+shape_mean              44.5     46.3     45.1
+cov_mean                85.0     81.6     82.6
+excluded (bot-wall/…)   131      71       71
+```
+
+**The keying fix converted the CORPUS, not four sites.** `tree-divergence` rows **23 → 4**;
+`thin-overlap` **25 → 1**. Scorability +15.5 points in one sweep, and it is the metric the board names
+as M1's hard ceiling — the ceiling moved from 62.8% to 78.3%, which is most of the distance to the 85%
+at which the BiDi function leg is unlocked.
+
+**All three predictions held, and the third is the one worth keeping.** (1) scored rose, hard. (2) M1
+did not stay flat but rose only 2.3% → 3.9%, and `shape_mean` FELL 46.3 → 45.1 — which is the shape of
+an honest conversion: ~20 sites entered the scored population near the bottom and dragged the mean
+down while adding real rows. A sweep where the mean had RISEN with 20 new sites would have been the
+suspicious one. (3) `fidelity-progress.sh` reads **+2.4 pts/sweep** against t777 — and unlike the
+t771-contaminated slope that number now diffs two clean same-corpus sweeps.
+
+⚠ **THE SWEEP DIED TWICE BEFORE IT RAN, AND BOTH CAUSES ARE WORTH THE LINE.** First: I hand-split the
+corpus into two files and ran two `fidelity` processes myself. Both exited after their first
+`timeout-150s` site with ~10 rows written — because the per-site watchdog files its row and then
+`process::exit(0)`s, which is correct for a wedged main thread and fatal for a chunk, since every site
+queued behind it silently vanishes. **`fidelity --jobs N` already solves exactly this** (spawn LOOP with
+`CHUNK_ROUNDS` re-spawns and an explicit `crashed` row for anything still missing) and its comment says
+so, measured on a 9-site trial. *A hand-rolled parallel is a re-implementation of a solved problem, and
+it re-introduced the denominator trap the solution was built to close.* Second: **128 orphaned headless
+Chrome processes**, the oldest running 23.6 hours, were eating the box; killed by PID (never `pkill -f`
+a pattern this loop's own command line contains) and throughput went from ~1.3 to ~4 rows/min.
+
+HONEST SCOPE: no engine source changed this tick. The rows file is the deliverable, and the burndown
+baseline is no longer blind.
+
+PERF: not measured this tick; the sweep is not a perf instrument.
+
+WIKI: none — the mechanism is already written up (`conformance-and-oracles.md` t784, `css-cascade.md`
+t785); this tick prices them.
+
+PATTERN: ⚠⚠ **A FIX MEASURED ON THE SITES THAT MOTIVATED IT IS AN ANECDOTE UNTIL THE CORPUS PRICES
+IT.** Four sample sites said the key change worked; they could not say it converted 20 rows or 2. The
+observer had to interrupt to get this run, after "the next clean sweep will price it" appeared in three
+consecutive ticks — and the sweep took 50 minutes, which is less than one of the ticks that deferred
+it. [no-pattern]

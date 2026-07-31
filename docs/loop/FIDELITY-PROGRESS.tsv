@@ -10,3 +10,4 @@ iso_sweep	sweep_tick	sites	scored	shape_ge0.75	shape_ge0.75_pct	shape_mean	cov_m
 # ⚠ THE t771 ROW BELOW IS CONTAMINATED — DO NOT READ IT AS A BURNDOWN POINT. It was swept at --jobs 8 (tick 771's new fan-out) and 8 concurrent Chrome+manuk pairs cost 31 sites their SCORABILITY (timeout-150s / css-starved: wall-clock budgets under CPU+network contention). CONTROL, same binary: 9 of a 10-site sample of the lost sites score fine SERIALLY, and every site that DOES score scores the same to within 0.1 pt at any job count. So the score is stable and the DENOMINATOR is not: read t767 (5.4%) as the last honest point, and sweep at --jobs 2 for cert-grade numbers.
 2026-07-30T19:49:04	t771	200	52	4	2.0	44.5	85.0	docs/loop/SWEEP-t771-rows.tsv	69	131	3.1	crux	17.6	1.5
 2026-07-31T00:31:22	t777	200	81	7	3.5	46.3	81.6	docs/loop/SWEEP-t777-rows.tsv	71	129	5.4	crux	24.0	2.3
+2026-07-31T08:07:38	t786	200	101	10	5.0	45.1	82.6	docs/loop/SWEEP-t786-rows.tsv	71	129	7.8	crux	26.4	3.9
