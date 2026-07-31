@@ -15,7 +15,7 @@
 | median tick cycle | **23m** | 528 intervals |
 | median, last 10 | **38m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 481.2h elapsed |
+| **ticks per hour** | **1.10** | 481.8h elapsed |
 | median verify wall | **63s** | 468 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -28,7 +28,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **361**
-* **✅ rows in the capability ledger**: 144 → **403**
+* **✅ rows in the capability ledger**: 144 → **404**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **252 of 529 ticks** (48%) moved a
@@ -625,6 +625,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **780** | 2026-07-31 03:07 | 66m | measurement | 63s | +310/−38 | 361 | 81 | 56.0% · | constitution check #63, and the "fast-but-empty" cohort I named last tick does not exist ( |
 | **781** | 2026-07-31 04:25 | 78m | instrument-fidelity | 63s | +342/−43 | 361 | 81 | 56.0% · | the Chrome reference probe was WIDENING the page it measured (2026-07-31) |
 | **782** | 2026-07-31 05:07 | 41m | instrument-fidelity | 63s | +398/−33 | 361 | 81 | 56.0% · | `thin-overlap` said "this is OURS" and the number that decides it was never read (2026-07- |
-| **784** | 2026-07-31 06:17 | 70m | instrument-fidelity | 63s | +386/−150 | 361 | 81 | 56.0% · | the key that survives an inserted sibling: `:nth-child` → `:nth-of-type` (2026-07-31) |
+| **784** | 2026-07-31 06:52 | 1.7h | instrument-fidelity | 63s | +282/−72 | 361 | 81 | 56.0% · | the key that survives an inserted sibling: `:nth-child` → `:nth-of-type` (2026-07-31) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

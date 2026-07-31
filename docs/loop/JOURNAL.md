@@ -40450,3 +40450,82 @@ a reason that had nothing to do with rendering: `:nth-child` is an ABSOLUTE posi
 whole document into every key. Two ticks of evidence (t782's both-sides counts, t783's tag-path
 ceiling) were needed before the fix was one counting rule — and the CONTROL, not the subjects, is what
 proves it was a key change and not a score change. [no-pattern]
+
+## Tick 785 — a nested `@media` lost its declarations, and only its declarations (2026-07-31)
+
+TICK SHAPE: capability (CSS) — one `CssRule` variant the rule-index walker never handled
+
+HYPOTHESIS (written before the fix): the board's §8 crossing-ranked list starts at
+`secure5.entertimeonline.com`, four fully-covered jarring-clean sites within 0.06 of the M1 bar. Its
+`<article>` reads ours `[33 120 1134×452]` against Chrome's `[0 120 487×354]`, and the mechanism
+oracle's #1 cause on that site is `displaced: x ~256px` on its descendants — one container's width,
+laundered into every child's position. **Take the width error to its source rather than to a layout
+primitive**: fetch the sheet the box comes from and read the rule.
+
+THE RULE, and it is not a layout bug at all:
+
+```css
+article {
+  display: flex; justify-content: center; margin: 0 auto;
+  padding: 0 32px;
+  max-width: 423px;
+  @media screen and (min-width: 1018px) { max-width: 974px; padding: 0 80px; }
+}
+```
+
+423 + 2×32 = **487** — Chrome's box. 974 + 2×80 = **1134** — ours. The two engines each picked one of
+the two branches. We take the wide one at every viewport because **the nested `@media`'s declarations
+never arrived at all**, so `max-width` came only from the branch that is not conditional… and the
+condition we were "matching" was never evaluated: we were laying out with the OUTER `max-width`
+absent and the box filling its container.
+
+MECHANISM: t659 taught the rule-index walk to recurse into a style rule's `sr.rules`, so a nested
+STYLE rule is indexed. But declarations written *directly* inside a nested group rule are not a style
+rule — CSS Nesting wraps them in an implicit `& { … }`, and Stylo materialises that as its own
+variant, **`CssRule::NestedDeclarations`** (block, no selectors). Our match had no arm for it and a
+trailing `_ => {}`, so it was dropped in silence. **The rule that owns a selector survived; the one
+that borrows its parent's did not.** The enclosing selectors were already threaded into this walk as
+`parent` (t659 added them for `&` substitution), so the fix is that same list plus the block that
+arrived — the `Style` arm's indexing body is now shared with it rather than copied, because a nested
+declaration that cascaded differently from the declaration one line above it would be a subtler bug
+than the drop.
+
+MEASURED — a minimal reproducer first, then the site, then the controls:
+
+```
+                                             before   after   Chrome
+#a { w:100; @media (min-width:500px){w:300} }   100     300     300
+#b { @media (min-width:500px){w:333} }          100     333     333
+#c { & > span { w:44 } }   (nesting control)     44      44      44
+
+secure5.entertimeonline.com   shape 69.2%  ->  79.5%   ← CROSSES the 0.75 M1 bar
+blog.rust-lang.org   CONTROL  shape 73.6%  ->  73.6%   (1664 paths, unchanged)
+news.ycombinator.com          shape 80.4%   ·  en.wikipedia.org 53.3%  ·  no regression
+www.kicktipp.de 71.6%  ·  255md.com 69.8%   ← the other near-bar sites do NOT use it; still short
+```
+
+POPULATION, with its limit stated: **4 of 48 cached snapshots (8%) put an at-rule inside a style
+block in their INLINE `<style>` alone.** External sheets are not scanned by that count and are where
+compiled framework CSS lives — entertimeonline's is external — so 8% is a FLOOR, not an estimate.
+
+Gate: `G_CSS_NESTING` extended (`engine/page/tests/g_css_nesting.rs`) — one process, three new
+assertions on the same page: a nested `@media` that MATCHES applies; a nested `@media (min-width:
+5000px)` on an 800px page must NOT; a nested `@supports` applies. ⚠ The negative one is the load-
+bearing one: without it, this fix is indistinguishable from applying every nested block
+unconditionally, which is a worse bug than the drop it replaces. **Proven red:** restoring
+`CssRule::NestedDeclarations(_) => {}` fails the gate.
+
+HONEST SCOPE: one site is claimed to cross, and it is named. The other two near-bar sites do not use
+nested at-rules and did not move — this is not the shared mechanism that clears the §8 list, it is one
+named cause on it. The corpus-wide number is not claimed until the next clean sweep.
+
+PERF: none claimed. The walk visits one more enum arm; nothing is re-parsed.
+
+WIKI: `docs/wiki/css-cascade.md` — "A nested `@media` lost its declarations, and only its declarations"
+
+PATTERN: ⚠⚠⚠ **A CONTAINER'S WRONG WIDTH IS A CASCADE QUESTION BEFORE IT IS A LAYOUT ONE.** The
+burndown ranks width-error-launders-into-dy as mechanism #1 and every previous attempt at it went
+looking for a sizing primitive. Here the box was the wrong width because a declaration that would
+have sized it was never in the cascade — and the evidence that says so is not in the boxes at all,
+it is in the four lines of CSS the site actually served. Fetching the rule cost one `curl`.
+Ledgered in `docs/loop/WEB-PATTERNS.md` as *a responsive rule written with CSS Nesting*.

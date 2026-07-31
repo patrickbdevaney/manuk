@@ -1828,3 +1828,44 @@ identical whether the marker says `–` or `â`. A visibly wrong, Chrome-differe
 real site is therefore invisible to the burndown — the same blindness as the parent-relative
 cancellation of tick 762, in a different dimension. "No number moved" is sometimes a statement about the
 instrument's frame, not about the fix.
+
+## A nested `@media` lost its declarations, and only its declarations (t785)
+
+CSS Nesting has two halves and this engine shipped one of them for 126 ticks.
+
+```css
+article {
+  padding: 0 32px;
+  max-width: 423px;
+  @media screen and (min-width: 1018px) { max-width: 974px; padding: 0 80px; }
+}
+```
+
+A nested **style** rule (`& .c { … }`) is a `CssRule::Style` with its own selectors, and t659 taught
+the rule-index walk to recurse into `sr.rules` and substitute `&`. Declarations written *directly*
+inside a nested group rule have no selectors of their own: the spec wraps them in an implicit
+`& { … }`, and Stylo materialises that as a separate variant — **`CssRule::NestedDeclarations`**,
+a block and nothing else. The walker had no arm for it and a trailing `_ => {}`.
+
+**The rule that owns a selector survived; the one that borrows its parent's did not.** Nothing warned,
+nothing threw, and the page still rendered — with one branch of a media query silently missing.
+
+**What it cost, on a site the board had already ranked.** `secure5.entertimeonline.com`: Chrome lays
+the `<article>` out at 487px (423 + 2×32), we gave it 1134px (974 + 2×80) — the page's whole content
+column, and every descendant displaced with it (that site's #1 oracle cause was `displaced: x ~256px`
+on the children, not a width error on the parent). Shape **69.2% → 79.5%**, which crosses the 0.75 M1
+bar. `blog.rust-lang.org` did not move by a decimal (1664 paths, 73.6% both sides).
+
+⚠ **The fix's own failure mode is worse than the bug, so the gate pins it.** "Apply the declarations
+we were dropping" and "apply them *unconditionally*" produce identical results on every matching
+media query and differ only on a non-matching one. `G_CSS_NESTING` therefore asserts a nested
+`@media (min-width: 5000px)` does NOT apply on an 800px page, beside the one that does.
+
+**Population:** 4 of 48 cached snapshots (8%) put an at-rule inside a style block in their inline
+`<style>` alone. External sheets are not counted there and are where compiled framework CSS lives —
+entertimeonline's rule is in one — so 8% is a floor.
+
+**The transferable part.** The burndown's ranked #1 mechanism is *container-width errors launder into
+`dy`*, and every previous attempt at it went looking for a sizing primitive. This box was the wrong
+width because a declaration that would have sized it never entered the cascade. **The evidence was not
+in the boxes; it was in the four lines of CSS the site actually served, one `curl` away.**

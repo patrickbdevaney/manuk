@@ -1280,6 +1280,63 @@ impl RuleIndex {
         idx
     }
 
+    /// Index one declaration block against one already-`&`-resolved selector list.
+    ///
+    /// Split out of `add_rules` because **two different `CssRule` variants carry the same payload**:
+    /// a `Style` rule (selectors + block) and a `NestedDeclarations` rule (block only, borrowing its
+    /// enclosing rule's selectors). Sharing the body is what keeps the two from drifting — the index
+    /// KEY derivation, the specificity, the `@container` stack and the document-order counter all
+    /// have to be identical or a nested declaration would cascade differently from the sibling
+    /// declaration written one line above it.
+    fn index_block(
+        &mut self,
+        selectors: &selectors::SelectorList<stylo::selector_parser::SelectorImpl>,
+        block: &ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>,
+        order: &mut usize,
+        qm: QuirksMode,
+        cq_stack: &[ServoArc<Vec<ContainerCondition>>],
+        origin_rank: u8,
+    ) {
+        use selectors::parser::Component;
+        for sel in selectors.slice() {
+            // The rightmost compound is the one that must match THIS element; anything to its left
+            // is an ancestor/sibling constraint checked afterwards.
+            let mut key: Option<(u8, String)> = None;
+            for comp in sel.iter() {
+                let cand = match comp {
+                    Component::ID(v) => Some((0u8, index_key(&v.to_string(), qm))),
+                    Component::Class(v) => Some((1u8, index_key(&v.to_string(), qm))),
+                    Component::LocalName(n) => Some((2u8, n.lower_name.to_string())),
+                    _ => None,
+                };
+                // Prefer the most selective key available: id > class > tag.
+                if let Some(c) = cand {
+                    if key.as_ref().map(|k| c.0 < k.0).unwrap_or(true) {
+                        key = Some(c);
+                    }
+                }
+            }
+            let i = self.rules.len() as u32;
+            self.rules.push(IndexedRule {
+                sel: sel.clone(),
+                origin_rank,
+                spec: sel.specificity(),
+                order: *order,
+                block: block.clone(),
+                cq: cq_stack.to_vec(),
+            });
+            match key {
+                Some((0, v)) => self.by_id.entry(v).or_default().push(i),
+                Some((1, v)) => self.by_class.entry(v).or_default().push(i),
+                Some((2, v)) => self.by_tag.entry(v).or_default().push(i),
+                // `*`, `:hover`, `[attr]` and friends have no cheap key: they must be tried against
+                // everything, which is correct and is what `SelectorMap` does too.
+                _ => self.universal.push(i),
+            }
+            *order += 1;
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn add_rules(
         &mut self,
@@ -1294,7 +1351,6 @@ impl RuleIndex {
         // the top level. Threaded so nested `&` can be resolved; see the substitution below.
         parent: Option<&selectors::SelectorList<stylo::selector_parser::SelectorImpl>>,
     ) {
-        use selectors::parser::Component;
         for rule in rules {
             match rule {
                 CssRule::Style(style_rule) => {
@@ -1340,44 +1396,7 @@ impl RuleIndex {
                             Some(p) => sr.selectors.replace_parent_selector(p),
                             None => sr.selectors.clone(),
                         };
-                    for sel in resolved.slice() {
-                        // The rightmost compound is the one that must match THIS element; anything
-                        // to its left is an ancestor/sibling constraint checked afterwards.
-                        let mut key: Option<(u8, String)> = None;
-                        for comp in sel.iter() {
-                            let cand = match comp {
-                                Component::ID(v) => Some((0u8, index_key(&v.to_string(), qm))),
-                                Component::Class(v) => Some((1u8, index_key(&v.to_string(), qm))),
-                                Component::LocalName(n) => Some((2u8, n.lower_name.to_string())),
-                                _ => None,
-                            };
-                            // Prefer the most selective key available: id > class > tag.
-                            if let Some(c) = cand {
-                                if key.as_ref().map(|k| c.0 < k.0).unwrap_or(true) {
-                                    key = Some(c);
-                                }
-                            }
-                        }
-                        let i = self.rules.len() as u32;
-                        self.rules.push(IndexedRule {
-                            sel: sel.clone(),
-                            origin_rank,
-                            spec: sel.specificity(),
-                            order: *order,
-                            block: sr.block.clone(),
-                            cq: cq_stack.clone(),
-                        });
-                        match key {
-                            Some((0, v)) => self.by_id.entry(v).or_default().push(i),
-                            Some((1, v)) => self.by_class.entry(v).or_default().push(i),
-                            Some((2, v)) => self.by_tag.entry(v).or_default().push(i),
-                            // `*`, `:hover`, `[attr]` and friends have no cheap key: they must be
-                            // tried against everything, which is correct and is what `SelectorMap`
-                            // does too.
-                            _ => self.universal.push(i),
-                        }
-                        *order += 1;
-                    }
+                    self.index_block(&resolved, &sr.block, order, qm, cq_stack, origin_rank);
 
                     // **CSS NESTING — and this walk was silently dropping all of it.**
                     //
@@ -1410,6 +1429,40 @@ impl RuleIndex {
                             origin_rank,
                             Some(&resolved),
                         );
+                    }
+                }
+                // ── **A NESTED `@media` LOST ITS DECLARATIONS, AND ONLY ITS DECLARATIONS** (t785).
+                //
+                // t659 taught this walk to recurse into `sr.rules`, so a nested STYLE rule is
+                // indexed. But declarations written *directly* inside a nested group rule are not a
+                // style rule at all — CSS Nesting wraps them in an implicit `& { … }`, and Stylo
+                // materialises that as its own variant, `CssRule::NestedDeclarations`, carrying a
+                // block and NO selectors. It fell into the `_ => {}` arm below and was dropped in
+                // silence, which is the shape this project keeps getting caught by: the rule that
+                // *has* a selector survives, the one that borrows its parent's does not.
+                //
+                //     article {
+                //       max-width: 423px;                                  <- indexed
+                //       @media (min-width: 1018px) { max-width: 974px; }   <- DROPPED, every time
+                //     }
+                //
+                // Measured on `secure5.entertimeonline.com` (a board §8 near-bar site), viewport
+                // 1200: Chrome lays the `<article>` out at **487px**, we gave it **1134px** — the
+                // page's whole content column, and every descendant with it (the oracle's #1 cause
+                // there is `displaced: x ~256px`). A width error is the burndown's ranked #1
+                // mechanism precisely because it does not stay a width error: a container a few
+                // hundred px too wide re-wraps its prose, and the wrong line count cascades down the
+                // rest of the page as `dy`.
+                //
+                // The enclosing selectors arrive as `parent` — already `&`-substituted by the Style
+                // arm above — so this is the same index call with the block that came in here.
+                // A `NestedDeclarations` with no parent cannot be produced by the grammar (there is
+                // nothing for the implicit `&` to mean at the top level); it is skipped rather than
+                // guessed at, because inventing a selector is how a dropped rule becomes a WRONG one.
+                CssRule::NestedDeclarations(ndr) => {
+                    if let Some(parent) = parent {
+                        let ndr = ndr.read_with(guard);
+                        self.index_block(parent, &ndr.block, order, qm, cq_stack, origin_rank);
                     }
                 }
                 CssRule::Media(media_rule) => {
