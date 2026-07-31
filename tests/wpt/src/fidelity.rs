@@ -318,8 +318,8 @@ impl Unmeasurable {
                  shell floor — and they still share almost none of the same paths. That is not 'we \
                  rendered less'; it is two different documents, or the same document caught in two \
                  different states (the oracle renders a curl SNAPSHOT from file://, we render the \
-                 LIVE url), and one differing element near the root re-numbers every nth-child key \
-                 beneath it. UNSCORED and counted against the bar exactly as thin-overlap is — but \
+                 LIVE url), or one inserted SAME-TAG sibling near the root re-numbering the \
+                 nth-of-type keys beneath it. UNSCORED and counted against the bar exactly as thin-overlap is — but \
                  do NOT take it as a coverage bug to grind: the evidence does not say that"
             ),
             Self::CssStarved(n) => format!(
@@ -1672,7 +1672,7 @@ pub fn placement_stats(
 /// otherwise correct and a user notices nothing. Under SHAPE that constant offset **cancels**: only
 /// the one element where the offset *originates* fails, so one root cause counts once.
 ///
-/// **Keys are selector-paths** (`tag.SIG:nth-child(n)/…` from the root, the SAME convention the
+/// **Keys are selector-paths** (`tag.SIG:nth-of-type(n)/…` from the root, the SAME convention the
 /// differential oracle uses in `oracle::diff_page`), so an ancestor's key is a prefix of its
 /// descendants'. Each element is scored against the **nearest ancestor present in BOTH maps** — the
 /// shared reference frame (`oracle::common_frame`): both engines measure the child against the *same*
@@ -1748,10 +1748,17 @@ pub fn shape_stats(
 ///    bytes.
 ///
 /// Guessing between them costs a subsystem either way, so this measures instead. It re-keys both
-/// sides on the **tag path alone** — every `:nth-child(N)` stripped, so `body:nth-child(2)/div:nth-
-/// child(4)` becomes `body/div` — and reports the MULTISET overlap, which is exactly the intersection
-/// an index-insensitive key could reach. Multiset, not set, because the weak key is deliberately
-/// non-unique: `min(chrome_count, our_count)` summed over keys is the honest upper bound.
+/// sides on the **tag path alone** — every `:nth-of-type(N)` stripped, so `body:nth-of-type(1)/div:
+/// nth-of-type(4)` becomes `body/div` — and reports the MULTISET overlap, which is exactly the
+/// intersection an index-insensitive key could reach. Multiset, not set, because the weak key is
+/// deliberately non-unique: `min(chrome_count, our_count)` summed over keys is the honest upper bound.
+///
+/// ⚠ **THE ANSWER CAME BACK "INDEX SHIFT" AND THE KEY WAS CHANGED (t784), SO THIS FUNCTION NOW READS
+/// AGAINST A DIFFERENT `exact`.** The shipped key counts per-TAG ordinals, which absorbs an inserted
+/// sibling of a *different* tag. What it still cannot absorb is an inserted sibling of the *same*
+/// tag — so a surviving `exact` ≈ 0 / `tag_overlap` ≫ 0 row now means one of the narrower two:
+/// same-tag insertion, or genuinely different documents. The measurement keeps its value precisely
+/// because the ceiling it reports (`tag_overlap`) did not move when the key did.
 ///
 /// Reading it:
 ///
@@ -1767,7 +1774,7 @@ pub fn tree_alignment(
 ) -> TreeAlignment {
     fn weak(path: &str) -> String {
         path.split('/')
-            .map(|c| match c.find(":nth-child(") {
+            .map(|c| match c.find(":nth-of-type(") {
                 Some(i) => &c[..i],
                 None => c,
             })
@@ -1820,7 +1827,7 @@ pub struct TreeAlignment {
     pub ours: usize,
     /// Paths present in both under the real, index-bearing key — what the score is computed over.
     pub exact: usize,
-    /// The multiset overlap under a key with every `:nth-child(N)` stripped: the ceiling an
+    /// The multiset overlap under a key with every `:nth-of-type(N)` stripped: the ceiling an
     /// index-insensitive key could reach. **`tag_overlap` ≫ `exact` is the index-shift signature.**
     pub tag_overlap: usize,
     /// Shallowest depth whose element COUNT differs between the two sides, or `None` when every
@@ -2005,13 +2012,13 @@ mod shape_tests {
         // Root + header positions match Chrome exactly (the page top is not shifted).
         m.insert("html/body".to_string(), [0, 0, 1000, 3000]);
         m.insert(
-            "html/body/header:nth-child(1)".to_string(),
+            "html/body/header:nth-of-type(1)".to_string(),
             [0, 0, 1000, 80 + header_extra], // Manuk's header is `header_extra` px too tall
         );
         // Content container: pushed down by the taller header → its box vs body is off by header_extra.
         let content_y = 80 + header_extra;
         m.insert(
-            "html/body/main:nth-child(2)".to_string(),
+            "html/body/main:nth-of-type(2)".to_string(),
             [0, content_y, 1000, 2000],
         );
         // Content's children: absolutely shifted by header_extra too, but their position RELATIVE to
@@ -2020,7 +2027,7 @@ mod shape_tests {
             let ky = content_y + 100 + (k as i64) * 200;
             let h = if bad_child && k == 0 { 999 } else { 150 };
             m.insert(
-                format!("html/body/main:nth-child(2)/div:nth-child({})", k + 1),
+                format!("html/body/main:nth-of-type(2)/div:nth-of-type({})", k + 1),
                 [20, ky, 960, h],
             );
         }
@@ -2071,7 +2078,7 @@ mod shape_tests {
     fn only_common_elements_scored() {
         let chrome = tree(0, false);
         let mut manuk = tree(0, false);
-        manuk.remove("html/body/main:nth-child(2)/div:nth-child(1)"); // Manuk dropped one leaf
+        manuk.remove("html/body/main:nth-of-type(2)/div:nth-of-type(1)"); // Manuk dropped one leaf
         let (shape, n) = shape_stats(&chrome, &manuk, 8);
         assert_eq!(
             n,
@@ -2595,22 +2602,28 @@ mod shape_tests {
         // ── ONE INSERTED NODE near the root. The oracle's document has an extra `<div>` as body's
         // first child, so every sibling below it is re-numbered — while the trees are otherwise the
         // same page.
+        //
+        // ⚠ **The inserted node shares its siblings' TAG on purpose (t784).** Since the key counts
+        // per-tag ordinals, a *different*-tag insertion no longer shifts anything — which is the
+        // whole point of the t784 change and would make this fixture measure nothing. A same-tag
+        // insertion is the residual case the key still cannot absorb, so it is the one worth
+        // holding a gate on.
         let chrome = mk(&[
-            "body:nth-child(2)/div:nth-child(1)",
-            "body:nth-child(2)/div:nth-child(2)",
-            "body:nth-child(2)/div:nth-child(2)/p:nth-child(1)",
-            "body:nth-child(2)/div:nth-child(3)",
-            "body:nth-child(2)/div:nth-child(3)/p:nth-child(1)",
+            "body:nth-of-type(1)/div:nth-of-type(1)",
+            "body:nth-of-type(1)/div:nth-of-type(2)",
+            "body:nth-of-type(1)/div:nth-of-type(2)/p:nth-of-type(1)",
+            "body:nth-of-type(1)/div:nth-of-type(3)",
+            "body:nth-of-type(1)/div:nth-of-type(3)/p:nth-of-type(1)",
         ]);
         let ours = mk(&[
-            "body:nth-child(2)/div:nth-child(1)",
-            "body:nth-child(2)/div:nth-child(1)/p:nth-child(1)",
-            "body:nth-child(2)/div:nth-child(2)",
-            "body:nth-child(2)/div:nth-child(2)/p:nth-child(1)",
+            "body:nth-of-type(1)/div:nth-of-type(1)",
+            "body:nth-of-type(1)/div:nth-of-type(1)/p:nth-of-type(1)",
+            "body:nth-of-type(1)/div:nth-of-type(2)",
+            "body:nth-of-type(1)/div:nth-of-type(2)/p:nth-of-type(1)",
         ]);
         let a = tree_alignment(&chrome, &ours);
         // ⚠ **3, not 0 — and the reason is worth keeping.** A shift does not destroy every key: the
-        // bare CONTAINER paths (`div:nth-child(1)`, `div:nth-child(2)`) still collide across the
+        // bare CONTAINER paths (`div:nth-of-type(1)`, `div:nth-of-type(2)`) still collide across the
         // shift because the sibling that moved into slot N has the same tag as the one that left it.
         // What a shift reliably destroys is the LEAVES, which is where a page's elements actually
         // are — real sweeps read `exact 0 of 1410`. So the test asserts the RELATION, not a zero.
@@ -2640,16 +2653,16 @@ mod shape_tests {
         // strength — the case where a better key buys exactly nothing and the fix is upstream, in
         // what the two engines were handed.
         let chrome = mk(&[
-            "body:nth-child(2)/header:nth-child(1)",
-            "body:nth-child(2)/header:nth-child(1)/nav:nth-child(1)",
-            "body:nth-child(2)/main:nth-child(2)",
-            "body:nth-child(2)/main:nth-child(2)/article:nth-child(1)",
+            "body:nth-of-type(1)/header:nth-of-type(1)",
+            "body:nth-of-type(1)/header:nth-of-type(1)/nav:nth-of-type(1)",
+            "body:nth-of-type(1)/main:nth-of-type(2)",
+            "body:nth-of-type(1)/main:nth-of-type(2)/article:nth-of-type(1)",
         ]);
         let ours = mk(&[
-            "body:nth-child(2)/form:nth-child(1)",
-            "body:nth-child(2)/form:nth-child(1)/input:nth-child(1)",
-            "body:nth-child(2)/aside:nth-child(2)",
-            "body:nth-child(2)/aside:nth-child(2)/ul:nth-child(1)",
+            "body:nth-of-type(1)/form:nth-of-type(1)",
+            "body:nth-of-type(1)/form:nth-of-type(1)/input:nth-of-type(1)",
+            "body:nth-of-type(1)/aside:nth-of-type(2)",
+            "body:nth-of-type(1)/aside:nth-of-type(2)/ul:nth-of-type(1)",
         ]);
         let a = tree_alignment(&chrome, &ours);
         assert_eq!(a.exact, 0);
@@ -2666,8 +2679,8 @@ mod shape_tests {
         // ── And a healthy site is unremarkable at both strengths, so the verdict can never fire on
         // one.
         let same = mk(&[
-            "body:nth-child(2)/div:nth-child(1)",
-            "body:nth-child(2)/div:nth-child(2)",
+            "body:nth-of-type(1)/div:nth-of-type(1)",
+            "body:nth-of-type(1)/div:nth-of-type(2)",
         ]);
         let a = tree_alignment(&same, &same);
         assert_eq!((a.exact, a.tag_overlap, a.first_bad_depth), (2, 2, None));
@@ -2972,7 +2985,7 @@ fn falsify_baseline() -> (
             let tag = if i == 0 { "a" } else { "div" };
             m.insert(
                 format!(
-                    "body/div:nth-child({}){}/{}:nth-child({})",
+                    "body/div:nth-of-type({}){}/{}:nth-of-type({})",
                     g + 1,
                     "",
                     tag,

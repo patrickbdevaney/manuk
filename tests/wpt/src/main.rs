@@ -1085,7 +1085,7 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                     // Which elements are missing? A coverage number is only actionable if it names
                     // the culprits — and 1,402 missing elements are a handful of CLASS bugs, not
                     // 1,402 bugs. The key IS a selector-path, so the missing element's tag is the
-                    // tag of its LAST component (after the final '/', before its `.SIG`/`:nth-child`)
+                    // tag of its LAST component (after the final '/', before its `.SIG`/`:nth-of-type`)
                     // — no DOM lookup needed, and it works even though the key is no longer an `id`.
                     if !missing_ids.is_empty() {
                         let mut by_tag: std::collections::BTreeMap<String, usize> =
@@ -2637,7 +2637,7 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
         // crawl keys still carry sigs — the same correction is owed there, as its own tick."* This is
         // that tick.
         //
-        // ⚠ **The cost is not a slightly noisier ledger — it is the ledger's #1 ROW.** `nth-child`
+        // ⚠ **The cost is not a slightly noisier ledger — it is the ledger's #1 ROW.** `nth-of-type`
         // already distinguishes siblings uniquely, so the sig never carried identity, only fragility:
         // ONE ancestor whose class list differs between the engines (a script that adds `js`/`loaded`,
         // a framework hydration class, a viewport-dependent modifier) re-keys **every descendant**, and
@@ -2818,13 +2818,13 @@ fn sig_of(dom: &manuk_dom::Dom, n: manuk_dom::NodeId) -> String {
 
 /// Strip every `.SIG` component from a keyed map — the class-signature ABLATION (`MANUK_G1_NO_SIG=1`).
 ///
-/// A sig is exactly `.` + 8 lowercase hex digits, and it always sits immediately before `:nth-child(`,
-/// so the removal is unambiguous and needs no regex crate. Applied to BOTH sides identically, so the
-/// comparison stays a comparison; applied to `Seen` maps rather than at the producers, so Chromium's
-/// injected JS (a byte-identical contract with `sig_of`) is left untouched.
+/// A sig is exactly `.` + 8 lowercase hex digits, and it always sits immediately before
+/// `:nth-of-type(`, so the removal is unambiguous and needs no regex crate. Applied to BOTH sides
+/// identically, so the comparison stays a comparison; applied to `Seen` maps rather than at the
+/// producers, so Chromium's injected JS (a byte-identical contract with `sig_of`) is left untouched.
 ///
 /// Collisions are possible in principle — two same-tag siblings differing only by class cannot happen,
-/// because `nth-child` already distinguishes siblings. Where a collision WOULD occur the later entry
+/// because `nth-of-type` already distinguishes same-tag siblings. Where a collision WOULD occur the later entry
 /// wins, which can only LOSE elements from each side, never invent matches; so a coverage number that
 /// rises under ablation is a real signal, not an artifact of the ablation.
 fn strip_sigs(
@@ -2834,7 +2834,7 @@ fn strip_sigs(
         .map(|(k, v)| {
             let mut out = String::with_capacity(k.len());
             let mut rest = k.as_str();
-            while let Some(i) = rest.find(":nth-child(") {
+            while let Some(i) = rest.find(":nth-of-type(") {
                 let (head, tail) = rest.split_at(i);
                 // A sig, if present, is the final 9 bytes of `head`: `.` + 8 hex digits.
                 //
@@ -2861,7 +2861,7 @@ fn strip_sigs(
                     _ => head,
                 };
                 out.push_str(keep);
-                // Copy `:nth-child(N)` verbatim, then continue after it.
+                // Copy `:nth-of-type(N)` verbatim, then continue after it.
                 let close = tail.find(')').map(|c| c + 1).unwrap_or(tail.len());
                 out.push_str(&tail[..close]);
                 rest = &tail[close..];
@@ -2872,12 +2872,26 @@ fn strip_sigs(
         .collect()
 }
 
-/// `tag.SIG:nth-child(N)/…` from the root — N 1-based over ALL element siblings — mirroring the JS
-/// `pathOf` in chrome.rs. An element whose parent is NOT an element (i.e. `<html>`, whose parent is
-/// the document) contributes NO component, because the JS `e.parentElement` is null there and its
-/// loop never runs for it. Emitting a root component on our side once shifted every key by one level
-/// and reported `<html>` MISSING on every site, with total confidence — so this asymmetry is load-
-/// bearing, not an oversight.
+/// `tag.SIG:nth-of-type(N)/…` from the root — N 1-based over the element siblings that share this
+/// element's TAG — mirroring the JS `pathOf` in chrome.rs. An element whose parent is NOT an element
+/// (i.e. `<html>`, whose parent is the document) contributes NO component, because the JS
+/// `e.parentElement` is null there and its loop never runs for it. Emitting a root component on our
+/// side once shifted every key by one level and reported `<html>` MISSING on every site, with total
+/// confidence — so this asymmetry is load-bearing, not an oversight.
+///
+/// **N COUNTS SAME-TAG SIBLINGS, AND THAT IS THE WHOLE POINT (t784).** It used to count ALL element
+/// siblings — `:nth-child` — which makes the key an ABSOLUTE position: one element present in one
+/// document and not the other re-numbers every sibling after it *and every descendant key beneath
+/// them*. t783 measured the damage rather than assuming it: `a1.ro` has 685 of 685 elements identical
+/// under a tag-only key and matched **1 of 685** under the absolute index, and five more sites read
+/// 44–100% tag-overlap against 0.1–0.8% exact. Counting per-tag confines an inserted `<div>`'s blast
+/// radius to the `<div>` keys under its own parent.
+///
+/// ⚠ Identity is UNCHANGED: `(tag, N)` is still unique among a parent's children, so a path is still
+/// unique to an element. This weakens what a MISMATCH means, never what a MATCH means — a weaker key
+/// that could mint agreement between two unrelated trees would be the way this goes wrong, and
+/// `tree_alignment_separates_an_inserted_node_from_two_different_pages` is the gate that says it does
+/// not.
 fn path_of(dom: &manuk_dom::Dom, n: manuk_dom::NodeId) -> Option<String> {
     let mut parts: Vec<String> = Vec::new();
     let mut cur = n;
@@ -2892,11 +2906,11 @@ fn path_of(dom: &manuk_dom::Dom, n: manuk_dom::NodeId) -> Option<String> {
             if sib == cur {
                 break;
             }
-            if dom.is_element(sib) {
+            if dom.is_element(sib) && dom.tag_name(sib) == Some(tag) {
                 i += 1;
             }
         }
-        parts.push(format!("{tag}{}:nth-child({i})", sig_of(dom, cur)));
+        parts.push(format!("{tag}{}:nth-of-type({i})", sig_of(dom, cur)));
         cur = parent;
     }
     parts.reverse();
@@ -3976,16 +3990,92 @@ mod path_key_tests {
             !pdiv.split('/').any(|c| c.starts_with("html")),
             "html must not appear as a component: {pdiv}"
         );
-        // `body` is nth-child(2): the parser inserts an implicit `<head>` as html's first element
-        // child, and nth-child counts ALL element siblings — exactly as Chrome's `pathOf` does via
-        // `previousElementSibling` (head is counted positionally though it is never emitted as a key).
+        // `body` is `nth-of-type(1)`: the parser inserts an implicit `<head>` as html's first element
+        // child, but `nth-of-type` counts only SAME-TAG siblings, so the head no longer leaks into
+        // body's ordinal at all — exactly as Chrome's `pathOf` now computes it via
+        // `previousElementSibling` filtered on `tagName`.
         assert_eq!(
             pdiv,
-            format!("body:nth-child(2)/div{}:nth-child(1)", ref_sig(&["a", "b"]))
+            format!(
+                "body:nth-of-type(1)/div{}:nth-of-type(1)",
+                ref_sig(&["a", "b"])
+            )
         );
-        // nth-child counts element siblings 1-based; a classless element emits NO `.SIG` component.
+        // nth-of-type counts same-tag element siblings 1-based; a classless element emits NO `.SIG`
+        // component. The second `<span>` is the second SPAN, and here that is also its absolute
+        // position — the two keys only diverge once a sibling of another tag sits between them,
+        // which is what `a_key_survives_an_inserted_sibling_of_another_tag` pins.
         let p2 = path_of(&d, spans[1]).unwrap();
-        assert!(p2.ends_with("/span:nth-child(2)"), "got {p2}");
+        assert!(p2.ends_with("/span:nth-of-type(2)"), "got {p2}");
+    }
+
+    /// **G_KEY_INSERTION — the key must survive one inserted sibling of another tag (t784).**
+    ///
+    /// This is the gate for the t783 finding, and it is written as a FALSIFICATION of the key it
+    /// replaced: the same test computes the old `:nth-child` absolute index for the same element in
+    /// both documents and asserts those two numbers DIFFER. So the test states, in one place, both
+    /// that the new key holds and that the old key would have gone red here — which is what makes
+    /// this a ratchet tooth rather than a hope.
+    ///
+    /// The wild measurement it stands for: `a1.ro`, 685 elements, **1** matched under the absolute
+    /// index and **685** under a tag-only key; five more in-scope sites at 44–100% tag-overlap
+    /// against 0.1–0.8% exact (t783). Every one of those is one inserted node near the root.
+    #[test]
+    fn a_key_survives_an_inserted_sibling_of_another_tag() {
+        // The SAME page, except the second document has one extra `<div>` — an ad container, a
+        // hydration wrapper, a consent banner — before the elements we are keying.
+        let a =
+            manuk_html::parse(r#"<html><body><main><p>x</p><span>y</span></main></body></html>"#);
+        let b = manuk_html::parse(
+            r#"<html><body><main><div>ad</div><p>x</p><span>y</span></main></body></html>"#,
+        );
+        let ka = path_of(&a, find_tag(&a, "span")[0]).unwrap();
+        let kb = path_of(&b, find_tag(&b, "span")[0]).unwrap();
+        assert_eq!(
+            ka, kb,
+            "one inserted sibling of ANOTHER tag must not re-key the elements around it — that \
+             single property is the difference between `coverage 0.15%` and a real number on ~20 \
+             in-scope sites"
+        );
+        assert!(ka.ends_with("/span:nth-of-type(1)"), "got {ka}");
+
+        // ── AND THE OLD KEY WOULD HAVE DIFFERED. The absolute element index, computed here so the
+        // contrast is asserted rather than asserted-about.
+        let abs = |d: &manuk_dom::Dom, n: manuk_dom::NodeId| -> usize {
+            let parent = d.parent(n).unwrap();
+            let mut i = 1usize;
+            for sib in d.children(parent) {
+                if sib == n {
+                    break;
+                }
+                if d.is_element(sib) {
+                    i += 1;
+                }
+            }
+            i
+        };
+        let (ia, ib) = (
+            abs(&a, find_tag(&a, "span")[0]),
+            abs(&b, find_tag(&b, "span")[0]),
+        );
+        assert_eq!((ia, ib), (2, 3), "the retired :nth-child key: 2 vs 3");
+        assert_ne!(
+            ia, ib,
+            "if these were equal this fixture would not reproduce the bug it is named for"
+        );
+
+        // ── THE HONEST LIMIT, PINNED SO IT IS NEVER MISREAD AS SOLVED. A SAME-tag insertion still
+        // shifts, because a per-tag ordinal is still an ordinal. That residue is what a surviving
+        // `tree-divergence` row means from here on, and `fidelity::tree_alignment` still measures it.
+        let c = manuk_html::parse(
+            r#"<html><body><main><span>ad</span><p>x</p><span>y</span></main></body></html>"#,
+        );
+        let kc = path_of(&c, find_tag(&c, "span")[1]).unwrap();
+        assert!(
+            kc.ends_with("/span:nth-of-type(2)"),
+            "a same-tag insertion DOES still shift the ordinal — got {kc}"
+        );
+        assert_ne!(ka, kc, "…and that is a real, named, remaining limitation");
     }
 
     #[test]
@@ -3998,22 +4088,27 @@ mod path_key_tests {
         assert_eq!(sig_of(&d, is[0]), sig_of(&d, is[1]));
         // And it must equal the independent reference hash — the JS/Rust byte-identical contract.
         assert_eq!(sig_of(&d, is[0]), ref_sig(&["a", "z"]));
-        // A classless element has the empty signature (so its key is `p:nth-child(N)`, no dot).
+        // A classless element has the empty signature (so its key is `p:nth-of-type(N)`, no dot).
         let p = find_tag(&d, "p")[0];
         assert_eq!(sig_of(&d, p), "");
     }
 
-    /// **Chrome's key for every real page's body is `body:nth-child(2)` — because `<head>` is the
-    /// first element child of `<html>`. If OUR producer disagrees, EVERY key on the page mismatches at
-    /// its root component and the site reports ~100% MISSING.**
+    /// **THE ROOT COMPONENT MUST MATCH CHROME'S EXACTLY, OR EVERY KEY ON THE PAGE MISMATCHES AT ITS
+    /// FIRST COMPONENT AND THE SITE REPORTS ~100% MISSING.** Under the retired `:nth-child` key that
+    /// meant `body:nth-child(2)` — `<head>` is html's first element child and was counted
+    /// positionally. Under `:nth-of-type` (t784) it means `body:nth-of-type(1)`, because head is not
+    /// a body and no longer contributes to the count at all.
     ///
-    /// This is not hypothetical: the t549 sweep found 13 of 54 sites under 5% coverage, several of them
-    /// with the exact signature of a root-component mismatch — `gov.uk` 418 of 418 missing in 6.8s (no
-    /// timeout excuse), `nytimes.com` 2,406 of 2,407 missing with the leading component of every missing
-    /// path printed as `body:nth-child(2)`. A keying artifact and a rendering failure look identical in
-    /// the coverage number, so the key has to be pinned against the shape a real document has.
+    /// **The old wording is quoted rather than deleted, because the failure it was written for is
+    /// real and is now structurally impossible:** the t549 sweep found 13 of 54 sites under 5%
+    /// coverage, several with the exact signature of a root-component mismatch — `gov.uk` 418 of 418
+    /// missing in 6.8s (no timeout excuse), `nytimes.com` 2,406 of 2,407 missing with the leading
+    /// component of every missing path printed as `body:nth-child(2)`. A keying artifact and a
+    /// rendering failure look identical in the coverage number. The head/body off-by-one that test
+    /// guarded cannot recur once the count is per-tag — one whole class of root-component mismatch is
+    /// gone rather than merely watched.
     #[test]
-    fn the_body_key_matches_chromes_because_head_is_the_first_element_child() {
+    fn the_body_key_matches_chromes_and_is_now_head_insensitive() {
         let d = manuk_html::parse(
             r#"<!doctype html><html><head><title>t</title></head><body class="js-enabled"><div id="a"></div></body></html>"#,
         );
@@ -4025,10 +4120,11 @@ mod path_key_tests {
             "the path is rooted at body (html's parent is the document, not an element): got {p}"
         );
         assert!(
-            p.ends_with(":nth-child(2)"),
-            "body must be the SECOND element child of <html> — <head> is the first, and Chrome keys it \
-             that way. If this is nth-child(1) then every descendant key on every real page mismatches \
-             at its root and the site reports ~100% MISSING: got {p}"
+            p.ends_with(":nth-of-type(1)"),
+            "body is the FIRST (and only) <body> among html's children — Chrome's pathOf now filters \
+             previousElementSibling on tagName and keys it the same way. If this is nth-of-type(2) \
+             then our producer is still counting <head> and every descendant key on every real page \
+             mismatches at its root: got {p}"
         );
         // And a descendant's full path must carry that same root component, or the mismatch is one
         // level down instead of at the root.
@@ -4039,8 +4135,8 @@ mod path_key_tests {
             "descendant paths are rooted at the body component: got {dp}"
         );
         assert!(
-            dp.contains(":nth-child(2)/"),
-            "…and it is body's nth-child(2) that leads: got {dp}"
+            dp.contains(":nth-of-type(1)/"),
+            "…and it is body's nth-of-type(1) that leads: got {dp}"
         );
     }
 
@@ -4062,35 +4158,38 @@ mod path_key_tests {
         };
         let mut m = std::collections::HashMap::new();
         m.insert(
-            "body.ba1d8e99:nth-child(2)/div.74146c68:nth-child(6)".to_string(),
+            "body.ba1d8e99:nth-of-type(2)/div.74146c68:nth-of-type(6)".to_string(),
             seen("div"),
         );
-        m.insert("body:nth-child(2)/a:nth-child(3)".to_string(), seen("a"));
+        m.insert(
+            "body:nth-of-type(2)/a:nth-of-type(3)".to_string(),
+            seen("a"),
+        );
         // A tag that ends in 9 hex-ish chars must NOT be truncated: only a leading `.` marks a sig.
-        m.insert("abcdef012:nth-child(1)".to_string(), seen("abcdef012"));
+        m.insert("abcdef012:nth-of-type(1)".to_string(), seen("abcdef012"));
         let out = strip_sigs(m);
         assert!(
-            out.contains_key("body:nth-child(2)/div:nth-child(6)"),
+            out.contains_key("body:nth-of-type(2)/div:nth-of-type(6)"),
             "sigs gone: {:?}",
             out.keys()
         );
         assert!(
-            out.contains_key("body:nth-child(2)/a:nth-child(3)"),
+            out.contains_key("body:nth-of-type(2)/a:nth-of-type(3)"),
             "a sig-less key is unchanged"
         );
         assert!(
-            out.contains_key("abcdef012:nth-child(1)"),
+            out.contains_key("abcdef012:nth-of-type(1)"),
             "9 hex chars with NO leading dot is a tag name, not a signature: {:?}",
             out.keys()
         );
         assert_eq!(out.len(), 3, "no key collapsed into another");
         // The values travel with their keys.
-        assert_eq!(out["body:nth-child(2)/div:nth-child(6)"].tag, "div");
+        assert_eq!(out["body:nth-of-type(2)/div:nth-of-type(6)"].tag, "div");
     }
 
     /// **ONE ANCESTOR'S CLASS LIST RE-KEYS THE WHOLE SUBTREE, AND THE DIFF BOOKS IT ALL AS MISSING.**
     ///
-    /// `nth-child` already identifies a sibling uniquely, so the 8-hex class signature in a path key
+    /// `nth-of-type` already identifies a sibling uniquely, so the 8-hex class signature in a path key
     /// never carried identity — only fragility. When a single ancestor's class list differs between the
     /// engines (a script adding `js`/`loaded`, a hydration class, a viewport modifier), **every
     /// descendant key changes**, nothing matches, and the entire subtree is reported `missing box`.
@@ -4124,10 +4223,13 @@ mod path_key_tests {
         // which is exactly what a script that sets a class on <body> produces.
         let mk = |body: &str| {
             let mut m = std::collections::HashMap::new();
-            m.insert(format!("{body}:nth-child(2)"), seen("body"));
-            m.insert(format!("{body}:nth-child(2)/div:nth-child(1)"), seen("div"));
+            m.insert(format!("{body}:nth-of-type(2)"), seen("body"));
             m.insert(
-                format!("{body}:nth-child(2)/div:nth-child(1)/a:nth-child(1)"),
+                format!("{body}:nth-of-type(2)/div:nth-of-type(1)"),
+                seen("div"),
+            );
+            m.insert(
+                format!("{body}:nth-of-type(2)/div:nth-of-type(1)/a:nth-of-type(1)"),
                 seen("a"),
             );
             m
@@ -4181,10 +4283,10 @@ mod path_key_tests {
             font: String::new(),
         };
         // Each component's last 9 bytes straddle a multi-byte char, which is what panicked.
-        let mojibake = "body:nth-child(2)/div.\u{fffd}\u{fffd}\u{fffd}\u{fffd}x:nth-child(3)";
+        let mojibake = "body:nth-of-type(2)/div.\u{fffd}\u{fffd}\u{fffd}\u{fffd}x:nth-of-type(3)";
         // …and the mirror case: a REAL sig sitting immediately after multi-byte text must still be
         // stripped, or the guard would have traded a panic for a silently unstripped key.
-        let after_utf8 = "body:nth-child(2)/div.caf\u{e9}.0a1b2c3d:nth-child(4)";
+        let after_utf8 = "body:nth-of-type(2)/div.caf\u{e9}.0a1b2c3d:nth-of-type(4)";
         let mut m = std::collections::HashMap::new();
         m.insert(mojibake.to_string(), seen());
         m.insert(after_utf8.to_string(), seen());
@@ -4197,7 +4299,7 @@ mod path_key_tests {
             out.keys()
         );
         assert!(
-            out.contains_key("body:nth-child(2)/div.caf\u{e9}:nth-child(4)"),
+            out.contains_key("body:nth-of-type(2)/div.caf\u{e9}:nth-of-type(4)"),
             "a real sig after multi-byte text must still be stripped: {:?}",
             out.keys()
         );

@@ -138,7 +138,7 @@ emit(out);}"#,
 );
 
 /// **Structural probe, selector-path keyed** (the fidelity redesign §3a producer). Keys every element
-/// by its selector-PATH (`tag.SIG:nth-child(n)/…` from the root) instead of its `id`, so
+/// by its selector-PATH (`tag.SIG:nth-of-type(n)/…` from the root) instead of its `id`, so
 /// `fidelity::shape_stats` has real `/`-ancestry to subtract a constant page offset against. Modern
 /// React/Tailwind pages barely use ids (39% of the corpus was unmeasurable on `[id]` keys); a path is
 /// present on every element.
@@ -170,7 +170,7 @@ function emit(o){
 }
 function fnv(str){var h=0x811c9dc5;for(var i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return h>>>0;}
 function sigOf(e){var cls=e.getAttribute('class');if(!cls)return '';var toks=cls.split(/[ \t\n\f\r]+/),a=[];for(var i=0;i<toks.length;i++){if(toks[i])a.push(toks[i].replace(/[A-Z]/g,function(c){return c.toLowerCase();}));}if(!a.length)return '';a.sort();var u=[];for(var j=0;j<a.length;j++){if(j===0||a[j]!==a[j-1])u.push(a[j]);}return '.'+('0000000'+fnv(u.join('.')).toString(16)).slice(-8);}
-function pathOf(e){var p=[];while(e&&e.nodeType===1&&e.parentElement){var i=1,s=e;while((s=s.previousElementSibling))i++;p.unshift(e.tagName.toLowerCase()+sigOf(e)+':nth-child('+i+')');e=e.parentElement;}return p.join('/');}
+function pathOf(e){var p=[];while(e&&e.nodeType===1&&e.parentElement){var t=e.tagName.toLowerCase(),i=1,s=e;while((s=s.previousElementSibling)){if(s.tagName.toLowerCase()===t)i++;}p.unshift(t+sigOf(e)+':nth-of-type('+i+')');e=e.parentElement;}return p.join('/');}
 function capture(){var out={};
 var all=document.querySelectorAll('*');
 var lim=Math.min(all.length,6000);
@@ -237,7 +237,7 @@ pub fn oracle_probe(
     // does not put ids on things. Across 265 sites the oracle was about to be very nearly blind —
     // and, worse, it would have reported "no divergences" with complete confidence.
     //
-    // A path (`div.a1b2c3d4:nth-child(1)/main:nth-child(2)/p:nth-child(4)`) is computable
+    // A path (`div.a1b2c3d4:nth-of-type(1)/main:nth-of-type(1)/p:nth-of-type(4)`) is computable
     // identically by both engines from the same
     // snapshot, and it names EVERY element rather than the handful an author chose to label. The
     // 6,000-element cap is a bound on probe cost, not on ambition, and it is reported so a truncated
@@ -245,8 +245,11 @@ pub fn oracle_probe(
     let probe = r#"<script>
 (function(){
   var out = {};
-  // Selector-path keying (tick 399 spec): `tag.SIG:nth-child(N)`. N counts ALL element
-  // siblings (1-based); SIG is fnv1a-32 over the ASCII-lowercased, SORTED, deduped class
+  // Selector-path keying (tick 399 spec, RE-COUNTED t784): `tag.SIG:nth-of-type(N)`. N counts
+  // the element siblings that share this element's TAG (1-based) — NOT all element siblings,
+  // which is what `:nth-child` counted and what made one inserted `<div>` re-number the whole
+  // page (t783: a1.ro matched 1 of 685 under nth-child, 685 of 685 under a tag-only key).
+  // SIG is fnv1a-32 over the ASCII-lowercased, SORTED, deduped class
   // list joined with '.'. Sorted so framework class-shuffling keeps identity; hashed so a
   // 40-class Tailwind string cannot bloat the key (or smuggle a '/' into the path). An
   // element whose class list differs from its positional counterpart FAILS the lookup and
@@ -277,9 +280,9 @@ pub fn oracle_probe(
   function pathOf(e){
     var p = [];
     while (e && e.nodeType === 1 && e.parentElement) {
-      var i = 1, s = e;
-      while ((s = s.previousElementSibling)) i++;
-      p.unshift(e.tagName.toLowerCase() + sigOf(e) + ':nth-child(' + i + ')');
+      var t = e.tagName.toLowerCase(), i = 1, s = e;
+      while ((s = s.previousElementSibling)) { if (s.tagName.toLowerCase() === t) i++; }
+      p.unshift(t + sigOf(e) + ':nth-of-type(' + i + ')');
       e = e.parentElement;
     }
     return p.join('/');
@@ -1247,19 +1250,18 @@ mod tests {
         // as the differential `oracle_probe`. Prove the tag and display survive the round-trip, not
         // just the box (a Box4-only parse would silently drop them and the jarring invariants that
         // read `Seen.tag` — collapsed-target — would misfire).
-        let dom = r#"<html><body><pre id="__PARITY__">{"button.abc:nth-child(2)":["button","flex",30,0,100,40],"div:nth-child(1)/p:nth-child(3)":["p","block",0,40,60,20]}</pre></body></html>"#;
+        let dom = r#"<html><body><pre id="__PARITY__">{"button.abc:nth-of-type(2)":["button","flex",30,0,100,40],"div:nth-of-type(1)/p:nth-of-type(3)":["p","block",0,40,60,20]}</pre></body></html>"#;
         let seen = parse_seen_probe_json(dom).unwrap();
-        let b = &seen["button.abc:nth-child(2)"];
+        let b = &seen["button.abc:nth-of-type(2)"];
         assert_eq!(b.tag, "button");
         assert_eq!(b.display, "flex");
         assert_eq!(b.rect, [30, 0, 100, 40]);
-        let p = &seen["div:nth-child(1)/p:nth-child(3)"];
+        let p = &seen["div:nth-of-type(1)/p:nth-of-type(3)"];
         assert_eq!(p.tag, "p");
         assert_eq!(p.display, "block");
         assert_eq!(p.rect, [0, 40, 60, 20]);
         // A malformed entry (a bare 4-tuple from a stale probe) is skipped, never mis-parsed as a Seen.
-        let bad =
-            r#"<html><body><pre id="__PARITY__">{"x:nth-child(1)":[1,2,3,4]}</pre></body></html>"#;
+        let bad = r#"<html><body><pre id="__PARITY__">{"x:nth-of-type(1)":[1,2,3,4]}</pre></body></html>"#;
         assert!(parse_seen_probe_json(bad).unwrap().is_empty());
     }
 }

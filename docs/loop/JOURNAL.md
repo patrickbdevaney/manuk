@@ -40373,3 +40373,80 @@ DISCRIMINATES BEFORE BUILDING EITHER.** The symptom (`exact` ≈ 0 over two larg
 under both, and the fixes point in opposite directions — a better key, or the same bytes to both
 engines. The discriminator was forty lines of pure function over two maps already in hand, and it
 returned an answer strong enough that one of the two candidates is now off the board. [no-pattern]
+
+## Tick 784 — the key that survives an inserted sibling: `:nth-child` → `:nth-of-type` (2026-07-31)
+
+TICK SHAPE: instrument-fidelity (the KEY the whole render metric is computed over)
+
+HYPOTHESIS (written before the change): t783 measured that `thin-overlap` is **index shift**, not two
+different documents — `a1.ro` is 685 of 685 elements identical under a tag-only key and **1 of 685**
+under the shipped `:nth-child(N)` key. `N` is an ABSOLUTE sibling index, so one element present in one
+document and not the other re-numbers every sibling after it and every descendant key below it.
+
+The fix is one counting rule in three producers that must move together: count the ordinal among
+siblings **of the same tag** (`:nth-of-type(K)`) instead of among ALL element siblings. An inserted ad
+`<div>` then perturbs only the keys of its own tag under its own parent, instead of every key on the
+page. Identity is preserved exactly as before — `(tag, K)` is unique within a parent, so the path is
+still unique — so this is strictly a change to what a MISMATCH means, not to what a MATCH means.
+
+FALSIFIABLE BAR, both directions (the t550 sig-ablation precedent):
+- SUBJECT: `a1.ro` coverage must rise off 0.15%; the `tree-divergence` rows must fall.
+- CONTROL: healthy sites (blog.rust-lang.org, news.ycombinator.com) must NOT move — if the trees
+  already agree, both keys are the same key, and a control that moves means I changed the score
+  rather than the key.
+
+**MEASURED, and the control is what makes it admissible.** Same binary vintage, one variable — the
+counting rule in the three producers — with the old rule rebuilt and re-run on the same four sites:
+
+```
+site                     old :nth-child            new :nth-of-type
+www.timeline.com         0.2% cov,    2 scored     87.0% cov, 1055 scored   ← the tag-path CEILING
+www.kroftools.com        0.3% cov,    2 scored      5.7% cov,   38 scored
+a1.ro                    0.1% cov,    1 scored      2.3% cov,   16 scored
+blog.rust-lang.org  CTL  100.0% / 73.6%, 1664 paths  100.0% / 73.6%, 1664 paths   ← BYTE-IDENTICAL
+```
+
+**The control did not move by a decimal, and that is the result that licenses the other three.** Where
+the two DOMs agree, the two keys ARE the same key; a healthy site that moved would have meant I changed
+the SCORE and called it a key. This is the t550 class-signature ablation's evidence shape, demanded in
+the hypothesis above rather than noticed afterwards.
+
+`www.timeline.com` is the point in one row: **UNSCORED (`tree-divergence`) → SCORED**, at shape 33.9%
+with h-overflow, overlap and reading-order all dirty. That is a FAIL, and a fail is a result — 1055
+elements of per-element evidence where the instrument had two. The headline does not rise from this;
+the population it is computed over becomes real.
+
+⚠ **THE RECOVERY IS NOT UNIFORM, AND THE TWO WEAK ROWS SAY WHY — recorded because the tempting reading
+is that a1.ro "did not work".** It went 1 → 16 against a ceiling of 685. A per-tag ordinal absorbs a
+`<div>` inserted among `<header>/<main>/<footer>`; it does NOT absorb a `<div>` inserted among other
+`<div>`s, and near the root that is the common case. So the fix is real, bounded, and partial, and the
+partial half is now a NAMED residue instead of an unexplained zero.
+
+Gate: `a_key_survives_an_inserted_sibling_of_another_tag` — the same test asserts the property AND
+computes the retired absolute index for the same element (2 vs 3), so it states in one place that the
+new key holds and the old key would have gone red here. **Proven red:** reverting only the counting
+rule fails it plus two more (`path_is_slash_keyed_and_excludes_html`,
+`the_body_key_matches_chromes_and_is_now_head_insensitive`). Its third block pins the LIMIT — a
+same-tag insertion still shifts — so the residue can never be silently read as solved.
+
+⚠ **ONE TEST INVERTED ITS PREMISE AND WAS REWRITTEN, NOT DELETED.** `the_body_key_matches_chromes_
+because_head_is_the_first_element_child` existed to pin `body:nth-child(2)` — `<head>` counted
+positionally — after t549 found sites reading ~100% MISSING from exactly that off-by-one. Under a
+per-tag ordinal `<head>` is not a `<body>` and contributes nothing, so the key is `body:nth-of-type(1)`
+and **that whole class of root-component mismatch is structurally impossible rather than watched.** The
+old wording is quoted in the doc comment above the new assertion.
+
+HONEST SCOPE: no engine source changed; no site is claimed to CROSS the 0.75 bar (timeline.com scores
+33.9% and fails). What moves is SCORABILITY — the metric the board names as M1's ceiling — and only on
+the next clean sweep, which will price it across the corpus rather than on four sites.
+
+PERF: none claimed. The producers' inner loop gains one tag comparison per preceding sibling.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "The key that survives an inserted sibling"
+
+PATTERN: ⚠⚠⚠ **AN INSTRUMENT'S IDENTITY FUNCTION IS AS MUCH A SUBJECT OF MEASUREMENT AS THE ENGINE.**
+The score was computed over an intersection, and for ~20 in-scope sites that intersection was empty for
+a reason that had nothing to do with rendering: `:nth-child` is an ABSOLUTE position, so it encodes the
+whole document into every key. Two ticks of evidence (t782's both-sides counts, t783's tag-path
+ceiling) were needed before the fix was one counting rule — and the CONTROL, not the subjects, is what
+proves it was a key change and not a score change. [no-pattern]

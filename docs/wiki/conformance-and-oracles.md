@@ -2786,3 +2786,43 @@ elements are, and why the wild reading is `1 of 685`.
 component was turned OFF at t549 because *"a single ancestor's class list differs DESTROYS the
 measurement"* (gov.uk 0.0% → 82.8%). The sibling index is the same failure through the other
 component, and it is now a bounded fix rather than a subsystem.
+
+## The key that survives an inserted sibling — `:nth-child` → `:nth-of-type` (t784)
+
+The open half above was closed the next tick, and it is one counting rule in three producers that had
+to move together: the live-site probe's JS `pathOf`, the snapshot oracle probe's JS `pathOf`, and
+Rust's `path_of` over our own DOM. The rule: **the ordinal counts the element siblings that share this
+element's TAG, not all of them.**
+
+Nothing else about the key changed. `(tag, N)` is still unique among a parent's children, so a path is
+still unique to an element — this weakens what a MISMATCH means and leaves what a MATCH means exactly
+where it was. That asymmetry is the reason it is safe: a weaker key that *mints* agreement is how this
+would go wrong, and the alignment gate holds two unrelated trees at zero under both strengths.
+
+**Measured on live sites, same binary vintage, one variable — including the control that decides
+whether this is a key change or a score change:**
+
+| site | old key `:nth-child` | new key `:nth-of-type` |
+|---|---|---|
+| `www.timeline.com` | 0.2% coverage, **2** elements scored | **87.0%**, **1055** scored — the tag-path ceiling, exactly |
+| `www.kroftools.com` | 0.3%, 2 scored | 5.7%, 38 scored |
+| `a1.ro` | 0.1%, 1 scored | 2.3%, 16 scored |
+| `blog.rust-lang.org` **(CONTROL)** | 100.0% cov / 73.6% shape, 1664 paths | **byte-identical: 100.0% / 73.6%, 1664 paths** |
+
+**The control is the load-bearing row.** Where the two DOMs agree, the two keys are *the same key* —
+so a healthy site cannot move, and if one had, the change would have been a change to the SCORE
+wearing a key's clothes. This is the same shape of evidence the t550 class-signature ablation
+produced (healthy sites byte-identical, broken sites recovered), and it was demanded up front in the
+tick's hypothesis rather than noticed afterwards.
+
+`timeline.com` is the whole point in one row: it was UNSCORED (`tree-divergence`) and is now SCORED,
+at shape 33.9% with all three jarring invariants dirty. **That is a fail, and a fail is a result** —
+1055 elements of real per-element evidence where the instrument previously had two.
+
+⚠ **The recovery is NOT uniform, and the two weak rows say why.** `a1.ro` reaches 16 of a possible
+685 and `kroftools` 38 of a possible ~440: a per-tag ordinal absorbs an inserted `<div>` among
+`<header>/<main>/<footer>`, but **not an inserted `<div>` among other `<div>`s** — and near the root
+that is the common case. The residue is named, gated (`a_key_survives_an_inserted_sibling_of_another_tag`
+pins both the property and its limit), and is the next lead: group the ordinal by **tag AND class
+signature**, which puts the sig's discrimination back into the key's *counting* without putting the
+sig back into the key's *text* — the t550 finding and this one satisfied at the same time.

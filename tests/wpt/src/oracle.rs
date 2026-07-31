@@ -275,7 +275,7 @@ fn display_agrees(chrome: &str, manuk: &str) -> bool {
 }
 
 /// The nearest ancestor of `path` present in **both** engine maps — the reference frame for
-/// parent-relative (SHAPE) scoring. Keys are `tag.SIG:nth-child(n)/…` from the root, so an ancestor's key
+/// parent-relative (SHAPE) scoring. Keys are `tag.SIG:nth-of-type(n)/…` from the root, so an ancestor's key
 /// is a prefix of its descendants'; dropping the last `/component` walks up one level. Returns the
 /// (chrome, manuk) boxes of the closest such ancestor, or `None` for a root-level element (no `/`),
 /// where there is nothing to subtract and the absolute position is itself the shape.
@@ -664,7 +664,7 @@ where
 /// is the hittability invariant's job (occlusion-aware hit-test), not this one.
 ///
 /// Groups larger than `MAX_GROUP` siblings skip the O(n²) pairwise scan; the count of skipped groups
-/// is returned so a bounded scan is never mistaken for a clean page. Keys are `tag.SIG:nth-child(n)/…` paths, so the
+/// is returned so a bounded scan is never mistaken for a clean page. Keys are `tag.SIG:nth-of-type(n)/…` paths, so the
 /// parent is the prefix before the last `/`.
 pub fn jarring_overlap(
     chrome: &HashMap<String, Seen>,
@@ -1092,7 +1092,7 @@ mod tests {
     /// Written at tick 553 after two consecutive wrong inferences drawn from cluster HEADLINES: t551 read
     /// a power-of-two pattern that was the printer's banding, and t552 re-aimed the lead at
     /// text-measurement because `<a>` width was the biggest cluster. The first instance printed
-    /// falsified that too — `lobste.rs …/a:nth-child(3): [434 183 92×17] vs [305 183 92×17]` is
+    /// falsified that too — `lobste.rs …/a:nth-of-type(3): [434 183 92×17] vs [305 183 92×17]` is
     /// **identical in size** and 129px displaced, which is an ancestor-layout fact, not a text one, while
     /// the width cases in the same band are 12–30px icon-ish anchors. **One signature, at least two
     /// causes.** The examples field existed the whole time and nothing printed it, so the ledger could
@@ -1101,7 +1101,7 @@ mod tests {
     fn a_cluster_carries_an_openable_instance_with_both_engines_rects() {
         let d = Divergence {
             site: "lobste.rs".into(),
-            id: "body:nth-child(2)/a:nth-child(3)".into(),
+            id: "body:nth-of-type(2)/a:nth-of-type(3)".into(),
             kind: "geometry".into(),
             tag: "a".into(),
             chrome: "[434 183 92×17]".into(),
@@ -1119,7 +1119,7 @@ mod tests {
             "the instance names its SITE: {ex}"
         );
         assert!(
-            ex.contains("body:nth-child(2)/a:nth-child(3)"),
+            ex.contains("body:nth-of-type(2)/a:nth-of-type(3)"),
             "…and the selector-path, so it can be opened in a browser: {ex}"
         );
         assert!(
@@ -1250,9 +1250,9 @@ mod tests {
     #[test]
     fn exit_gate_clusters_shape_cancelled_descendants_once_per_site() {
         fn shifted_site(off: i64) -> (HashMap<String, Seen>, HashMap<String, Seen>) {
-            let hk = "header.h:nth-child(1)".to_string();
-            let c1 = format!("{hk}/p.p:nth-child(1)");
-            let c2 = format!("{hk}/p.p:nth-child(2)");
+            let hk = "header.h:nth-of-type(1)".to_string();
+            let c1 = format!("{hk}/p.p:nth-of-type(1)");
+            let c2 = format!("{hk}/p.p:nth-of-type(2)");
             let mut chrome = HashMap::new();
             chrome.insert(hk.clone(), seen("header", [0, 0, 1000, 80]));
             chrome.insert(c1.clone(), seen("p", [10, 10, 200, 20]));
@@ -1425,35 +1425,35 @@ mod tests {
         let mut manuk: HashMap<String, [i64; 4]> = HashMap::new();
         // (a) OUR fault: Chrome fits, Manuk spills.
         chrome.insert(
-            "body:nth-child(2)/div:nth-child(1)".into(),
+            "body:nth-of-type(2)/div:nth-of-type(1)".into(),
             [0, 0, 1200, 50],
         );
         manuk.insert(
-            "body:nth-child(2)/div:nth-child(1)".into(),
+            "body:nth-of-type(2)/div:nth-of-type(1)".into(),
             [0, 0, 1400, 50],
         );
         // (b) The SITE is wide: both spill — not our bug.
         chrome.insert(
-            "body:nth-child(2)/div:nth-child(2)".into(),
+            "body:nth-of-type(2)/div:nth-of-type(2)".into(),
             [0, 60, 2000, 50],
         );
         manuk.insert(
-            "body:nth-child(2)/div:nth-child(2)".into(),
+            "body:nth-of-type(2)/div:nth-of-type(2)".into(),
             [0, 60, 2000, 50],
         );
         // (c) Within tolerance.
         chrome.insert(
-            "body:nth-child(2)/div:nth-child(3)".into(),
+            "body:nth-of-type(2)/div:nth-of-type(3)".into(),
             [0, 120, 1200, 50],
         );
         manuk.insert(
-            "body:nth-child(2)/div:nth-child(3)".into(),
+            "body:nth-of-type(2)/div:nth-of-type(3)".into(),
             [0, 120, 1205, 50],
         );
 
         let (count, examples) = h_overflow_boxes(&chrome, &manuk, vw, tol);
         assert_eq!(count, 1, "only our-alone spill counts");
-        assert!(examples[0].starts_with("body:nth-child(2)/div:nth-child(1)"));
+        assert!(examples[0].starts_with("body:nth-of-type(2)/div:nth-of-type(1)"));
     }
 
     /// **The sibling-overlap jarring invariant, and its RED proof.** Two siblings Chrome keeps
@@ -1615,7 +1615,7 @@ mod tests {
     fn div(tag: &str, kind: &str, delta: [i64; 4]) -> Divergence {
         Divergence {
             site: "s.example".into(),
-            id: "body[0]/div.a1b2:nth-child(3)".into(),
+            id: "body[0]/div.a1b2:nth-of-type(3)".into(),
             tag: tag.into(),
             kind: kind.into(),
             chrome: "[10 20 300×40]{Open Sans/13}".into(),
@@ -1744,7 +1744,7 @@ mod tests {
     #[test]
     fn a_quote_or_backslash_in_a_field_does_not_break_the_line() {
         let mut d = div("div", "geometry", [0, 0, 0, 24]);
-        d.id = "body[0]/div[a=\"x\"]\\/y:nth-child(2)".into();
+        d.id = "body[0]/div[a=\"x\"]\\/y:nth-of-type(2)".into();
         d.chrome = "[0 0 1×1]{\"Weird\\Face\"/13}".into();
         let line = div_to_jsonl(&d, "news");
         assert_eq!(line.matches('\n').count(), 1, "exactly one record per line");

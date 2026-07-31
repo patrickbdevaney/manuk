@@ -527,3 +527,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 780	a80df85c	1785481659	2026-07-31T03:07:39-04:00	3960	measurement	63	7	310	38	361	81	3896	6960	0	403	0	constitution check #63, and the "fast-but-empty" cohort I named last tick does not exist (2026-07-31)
 781	bef18e4f	1785486356	2026-07-31T04:25:56-04:00	4697	instrument-fidelity	63	8	342	43	361	81	3896	6960	0	403	0	the Chrome reference probe was WIDENING the page it measured (2026-07-31)
 782	cd1abb0a	1785488844	2026-07-31T05:07:24-04:00	2488	instrument-fidelity	63	8	398	33	361	81	3896	6960	0	403	0	`thin-overlap` said "this is OURS" and the number that decides it was never read (2026-07-31)
+784	7d35cd9c	1785493055	2026-07-31T06:17:35-04:00	4211	instrument-fidelity	63	10	386	150	361	81	3896	6960	0	403	0	the key that survives an inserted sibling: `:nth-child` → `:nth-of-type` (2026-07-31)
