@@ -39937,3 +39937,104 @@ all asserted and all correct; `obj.x = v` was never executed against a platform 
 six mis-tiered attributes sat in the hottest path on the web — a custom-element constructor — for as
 long as custom elements have worked. **When a surface has more than one mode of use, a gate suite that
 covers one mode reports full coverage of the surface.**
+
+## Tick 779 — "booted-but-thin" is TWO populations, and the bigger one is perf, not a missing API (2026-07-31)
+
+TICK SHAPE: capability + measurement (the observer's t777 steer — *"pick 3-5 booted-but-thin sites and
+find WHY a booted page renders <20%"* — answered with per-site evidence, plus the one real engine
+divergence it turned up)
+
+**THE STEER.** The observer's t777 read corrected mine, and the correction is the important part: the
+throw-killers **did** work (render-fail 12→5, timeout 6→3, ~10 sites that crashed at boot now boot),
+but scored/in-scope stayed flat because the rescued sites moved into **thin-overlap** — they boot and
+then render <20% of Chrome's DOM. ⚠ **My t777 entry called thin-overlap a measurement gap and computed
+a "real ceiling" of 78% from that. That was wrong** — it inherited the board's older label. At
+`cov<0.5` thin-overlap is the *next engine gap after the boot throw*, not an instrument artefact, and
+the 78% figure should not be quoted.
+
+**THE MEASUREMENT.** Mining the t777 sweep log per site (zero extra CPU — the answer was already on
+disk) splits the cohort cleanly in two:
+
+```
+site                        manuk/chrome load   budget-exhausted   rejections
+www.trivago.de                25663 / 5123ms          5                6      ← 5.0× slower
+www.trivago.be                25466 / 5729ms          5                6      ← 4.4×
+www.monopolybingogame.com     27073 / 4179ms          5                1      ← 6.5×
+coinmarketcap.com             38791 / 11696ms         2                2      ← 3.3×
+www.ebay.com                  18872 / 12717ms         1                2      ← 1.5×
+── the other population ──────────────────────────────────────────────────────
+www.amazon.com.mx              1780 / 1092ms          0                0      ← FAST
+sports.yahoo.com                    —                 0                0
+www.naukri.com                      —                 0                5
+```
+
+**Population 1 — TIMEOUT-STARVED (the majority).** We are 3–6.5× slower than Chrome, the load budget
+expires *five times*, and the page paints with an unpopulated DOM. This is **perf surfacing as
+fidelity**, exactly as the t602 note warned (*"the 12s load budget is exhausted so pages paint
+incomplete and shape is PARTLY a TIMING result"*) — and it means the next lever for these sites is a
+load-path lever, not an API lever. **Grinding absent APIs at trivago would have moved nothing.**
+
+**Population 2 — FAST-BUT-EMPTY.** `amazon.com.mx` loads in **1.8s** against Chrome's 1.1s, exhausts
+no budget, and logs **zero** rejections — and still renders <20%. Whatever empties that page is
+neither slowness nor a throw, so it is a genuinely separate investigation and must not be pooled with
+population 1. Naming the split is the point: a single "booted-but-thin" bucket would have sent every
+tick at the wrong organ for one of the two halves.
+
+### ⚠ CONTROL BEFORE BLAME — the finding that was NOT a bug
+
+`www.trivago.de` logs **26 unhandled rejections**, all reading *"Failed to execute 'query' on
+'Permissions': 'speaker' is not a valid enum value of type PermissionName"*, with the top stack frame
+in **our own prelude**. That looks exactly like an engine defect, and it is not: **`speaker` is not a
+valid `PermissionName` in Chrome either** — it was dropped from the spec in favour of
+`speaker-selection` — so Chrome rejects that same call, and trivago's own code is the thing at fault.
+"Fixing" it would have been a divergence engineered to move a number. It is recorded here because the
+near-miss is the lesson: an error message that names our file is not evidence that the answer is ours.
+
+### The real divergence the control turned up
+
+Checking our `PERM_STATE` against Chrome's actual enum found **seven names Chrome supports that we
+rejected**: `display-capture`, `background-fetch`, `periodic-background-sync`, `bluetooth`, `nfc`,
+`speaker-selection`, `top-level-storage-access`. Each is an ordinary probe that resolves in Chrome and
+produced an unhandled rejection here. They now resolve `denied` — a state Chrome itself returns, and
+**not** a capability claim, because a page detects Web Bluetooth with `navigator.bluetooth`, never
+with `permissions.query`. The reject path is reserved for a name that is not in the enum at all.
+
+And one entry was actively false: **`clipboard-read` answered `denied`** while `readText`/`read`
+genuinely pull the real OS clipboard through `__clipboardRead` — the *"a 'no' stub becomes a lie when
+the capability lands"* shape. It is now `granted`. ⚠ It is **`granted` and not `prompt`**, and that
+supersedes a deliberate decision, so the decision is **quoted at the call site** rather than dropped:
+*"everything we have no implementation for is 'denied' as well — 'prompt' would be the lie that costs
+the user, because a page told 'prompt' puts up a permission UI and waits for a decision that nothing
+here can ever deliver."* That reasoning is still right, and it is precisely why `prompt` was refused.
+
+⚠ **A false claim caught before it landed:** the first draft of this tick said `clipboard-write` was
+absent. It was already `granted`, on a line four above the range I had read, and my edit introduced a
+duplicate key. The gate now asserts `clipboardWrite:granted` as a *don't-regress* claim rather than a
+fix, and the entry says so.
+
+Gate: **`G_PERMISSION_ENUM`** (`engine/page/tests/g_permission_enum.rs`), 5 claims, **proven red two
+ways, and the second is the load-bearing one**:
+
+1. Restore the pre-779 table → `knownRejected:display-capture,background-fetch,…` (7 names).
+2. ⚠ Make `query` resolve for *any* name — the tempting "fix" that would have made trivago's message
+   disappear → `unknownResolved:speaker,not-a-real-permission`. **The control catches the divergence,
+   which is the only reason the resolutions above can be trusted.**
+
+Regression sweep green: `g_permission_enum g_expando_readonly g_capability g_probe_capabilities
+g_iface_surface g_iface_surface_2 g_globals`.
+
+**HONEST SCOPE.** No site is claimed to cross, and trivago is explicitly **not** fixed by this tick —
+its blankness is load-budget starvation, diagnosed above and left for a perf tick.
+
+PERF: none claimed. Seven map entries and one changed string; `permissions.query` is a single object
+lookup either way.
+
+WIKI: `docs/wiki/js-engine.md` — "An error message that names our file is not evidence that the
+answer is ours"
+
+PATTERN: ⚠⚠⚠ **A REJECT PATH IS A SCARCE RESOURCE, AND SPENDING IT ON A NAME THE REFERENCE KNOWS
+CONVERTS A ROUTINE PROBE INTO A BOOT-CHAIN FAILURE.** The general form is the enum-completeness
+question nobody asks: for every API that partitions its input into *known* and *invalid*, our
+partition must match the reference's **on both sides**. Ours was too small, so valid probes rejected;
+the tempting repair makes it too large, so invalid probes resolve — and the second error is invisible
+without a control that asserts the rejection.

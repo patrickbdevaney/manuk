@@ -2606,3 +2606,51 @@ draft asserted the read-back against a `createElement`ed element and failed `fal
 the fix in place*. It is banked as `viaCreateElement:false,false,false`, asserted at its measured
 value so it cannot change silently, and left for its own tick rather than folded into a gate that
 would then fail for two unrelated causes.
+
+## An error message that names our file is not evidence that the answer is ours (tick 779)
+
+`www.trivago.de` renders 0% of Chrome's DOM and logs **26 unhandled promise rejections**, every one of
+them with the top stack frame in **our own prelude**:
+
+```
+Failed to execute 'query' on 'Permissions': 'speaker' is not a valid enum value of type PermissionName.
+query@dom_event.js:3432:51
+```
+
+That is as close to a signed confession as a log gets, and it is wrong. **`speaker` is not a valid
+`PermissionName` in Chrome either** — it was dropped from the spec in favour of `speaker-selection` —
+so Chrome rejects the identical call, and the bug is in trivago's bundle. Making it resolve would have
+been a divergence engineered to make a message disappear.
+
+trivago's actual problem is on a different axis entirely: **25.7s to load against Chrome's 5.1s, with
+the load budget exhausted five times.** The page paints before its DOM is populated. Perf is a
+fidelity input, and no amount of API work would have moved it.
+
+**The transferable rule:** our frame appears in the stack of every call a page makes *into* the
+platform, because that is where the platform is. Before treating a message that names our file as our
+defect, ask what the reference does with the same input.
+
+### The enum-completeness question, which is two-sided
+
+Checking the table against Chrome's real enum did find a genuine divergence — seven names Chrome
+supports (`display-capture`, `background-fetch`, `periodic-background-sync`, `bluetooth`, `nfc`,
+`speaker-selection`, `top-level-storage-access`) that we rejected, turning ordinary probes into
+unhandled rejections. They resolve `denied` now, which is a state Chrome itself returns and **not** a
+capability claim: a page detects Web Bluetooth with `navigator.bluetooth`, never with
+`permissions.query`.
+
+> For any API that partitions its input into **known** and **invalid**, our partition has to match the
+> reference's **on both sides**. Too small and valid probes reject; the obvious repair makes it too
+> large and invalid probes resolve — and the second error is invisible unless a gate asserts the
+> rejection as hard as it asserts the resolutions.
+
+`G_PERMISSION_ENUM` is therefore red two ways: restore the old table (valid names reject) *and* accept
+everything (`speaker` resolves). The second is the one that keeps the fix honest.
+
+### And one entry that had quietly become false
+
+`clipboard-read` answered `denied` while `readText`/`read` genuinely pull the real OS clipboard through
+`__clipboardRead`. That is the *"a 'no' stub becomes a lie when the capability lands"* shape: a paste
+button that checks the permission first disables itself against a clipboard that works. It is now
+`granted` — **not `prompt`**, because the table's own documented rule (quoted at the call site rather
+than dropped) is that `prompt` promises a permission dialog nothing here can ever show.

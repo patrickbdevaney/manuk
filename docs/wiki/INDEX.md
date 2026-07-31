@@ -890,6 +890,9 @@
   - L2560 · The mechanism
   - L2583 · ⚠ The transferable finding — a surface has more than one mode of use
   - L2601 · Measured next to it, and NOT fixed here
+  - L2610 · An error message that names our file is not evidence that the answer is ours (tick 779)
+  - L2633 · The enum-completeness question, which is two-sided
+  - L2650 · And one entry that had quietly become false
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1323,4 +1326,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1234 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1237 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

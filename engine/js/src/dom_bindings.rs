@@ -16526,12 +16526,36 @@ const WINDOW_PRELUDE: &str = r#"
                 // to reject (below), and rejecting for something the platform obviously has would
                 // be its own tell.
                 'notifications': 'denied', 'push': 'denied', 'geolocation': 'denied',
-                'camera': 'denied', 'microphone': 'denied', 'clipboard-read': 'denied',
+                'camera': 'denied', 'microphone': 'denied',
                 'midi': 'denied', 'background-sync': 'denied', 'persistent-storage': 'denied',
                 'accelerometer': 'denied', 'gyroscope': 'denied', 'magnetometer': 'denied',
                 'ambient-light-sensor': 'denied', 'screen-wake-lock': 'denied',
                 'payment-handler': 'denied', 'idle-detection': 'denied', 'local-fonts': 'denied',
-                'window-management': 'denied', 'storage-access': 'denied'
+                'window-management': 'denied', 'storage-access': 'denied',
+                // ── **`clipboard-read` IS NOT `denied` — WE IMPLEMENT IT**, and this supersedes the
+                // rule stated four lines above, so that rule is quoted rather than quietly dropped:
+                //
+                //     "everything we have no implementation for is 'denied' as well — 'prompt' would
+                //      be the lie that costs the user, because a page told 'prompt' puts up a
+                //      permission UI and waits for a decision that nothing here can ever deliver."
+                //
+                // That reasoning is still exactly right, and it is the reason this is `granted` and
+                // NOT `prompt`: `readText`/`read` pull the real OS clipboard through
+                // `__clipboardRead` with no UI in front of them, so there is a decision we CAN
+                // deliver — but there is still no permission dialog we could ever show. `denied` was
+                // the other failure, a "no" stub that became a lie when the capability landed: a
+                // paste button that checks the permission first disables itself against a clipboard
+                // that works. `clipboard-write` was already `granted` above for this same reason.
+                'clipboard-read': 'granted',
+                // ── The rest of Chrome's `PermissionName` enum. We implement none of them, so they
+                // answer `denied` — which is a state Chrome itself returns (policy-blocked) and NOT
+                // a capability claim: a page detects Web Bluetooth with `navigator.bluetooth`, never
+                // with `permissions.query`. What matters is that they RESOLVE, because the reject
+                // path is reserved for a name that is not in the enum AT ALL, and spending it on a
+                // name Chrome knows turns a routine probe into an unhandled rejection.
+                'display-capture': 'denied', 'background-fetch': 'denied',
+                'periodic-background-sync': 'denied', 'bluetooth': 'denied', 'nfc': 'denied',
+                'speaker-selection': 'denied', 'top-level-storage-access': 'denied'
             };
             var PermissionStatus = function PermissionStatus(name, state) {
                 this.name = name; this.state = state; this.onchange = null;
