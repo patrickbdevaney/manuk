@@ -2726,3 +2726,78 @@ rather than claiming a red it cannot produce.
 ⚠ Residue, measured alongside: a `height:auto` flex item in a ROW whose content is taller than the
 container should stretch to the line and overflow (Chrome 30 in a 30px row); we keep the content
 height (58).
+
+## An anonymous block box INHERITS from the container that made it (t799)
+
+When a block container holds *both* inline and block-level children, CSS 2.1 §9.2.1.1 wraps each run
+of inline content in an **anonymous block box**. That box has no element, so it has no cascade of its
+own — and the spec is explicit that it therefore **inherits every inheritable property from the block
+container that generated it**.
+
+`flush_inline_run` built those boxes with none of it. It called `layout_inline` with the literals
+
+```rust
+self.layout_inline(items, cx, start, cw, TextAlign::Left, 0.0, floats, None)
+//                                       ^^^^^^^^^^^^^^^  ^^^         ^^^^
+//                                       align            indent      strut
+```
+
+where the pure-IFC branch of the same file — the path taken when a container's children are *all*
+inline — passes `bcs.text_align`, the resolved `text_indent`, and `Some(&bcs)`. **Two paths, one
+formatting context, and only one of them knew what it inherited.**
+
+### The trigger is "…and one block child", which is why it hid
+
+The same markup renders correctly right up until a block-level element joins it:
+
+```html
+<div style="text-align:center"><span class="chip"></span></div>              <!-- centred ✓ -->
+<div style="text-align:center"><span class="chip"></span><textarea></textarea></div>  <!-- x=0 ✗ -->
+```
+
+Nothing about the alignment changed; the *presence of a sibling* moved the inline run onto a code
+path that dropped it. Measured against headless Chrome on a fixed-width `inline-block` (font-
+independent, so the numbers are exact):
+
+```
+                                                     Chrome   ours (before)
+  inline-block in text-align:center, INLINE-ONLY        350       350   ✓ always right
+  …the same, with one block-level sibling               350         0
+  …the run AFTER the block child                        350         0
+  …between two block children                           350         0
+  text-align:right, mixed                               700         0
+  <center> with a block child                           350         0
+  align inherited from a GRANDPARENT                    350         0
+  a plain TEXT run, centred, mixed                      344         0
+  default (left) with a block child                       0         0   ✓ must not move
+
+  the anonymous line box's HEIGHT (20px inline-block)    24        20    ← the STRUT
+```
+
+### The strut is the second symptom of the same omission
+
+`strut_style: None` gives the line box a zero strut. A **text** run survives that, because each
+fragment carries its own inherited `line-height`; an **atomic** inline-block does not — it sits on the
+baseline and Chrome adds the containing block's font *descent* below it. So a line whose only content
+is a 20px inline-block was 20px here and is 24px in Chrome, and every mixed container was 4px short.
+
+⚠ **A test had frozen that missing descent as ground truth.** `inline_block_boxes_flow_horizontally_
+then_a_block_drops_below` asserted the following block lands at `y=30`, and its comment claimed the
+number was *"verified numerically against Chrome by the parity harness"*. Chrome, run on that exact
+markup, says **34**. A number asserted from an unverified claim of verification is the most expensive
+kind: it defends the defect.
+
+### `text-indent` is the third literal and is deliberately NOT fixed here
+
+Chrome indents only the **first** anonymous run of a container: with `text-indent:40px` on a mixed
+container, run 1 starts at x=40 and the run after the block child starts at x=0. Passing the indent
+through unconditionally would over-indent every run but the first, so the literal `0.0` stays, with
+the measurement written down, until a tick can pin the edge rule properly.
+
+### Residue, measured in the same fixture
+
+A `float:left` sibling *after* an inline run: we flush the pending run before registering the float,
+so the float drops to the next line instead of sharing it, and the run centres in the full width
+(350) rather than the float-narrowed band (Chrome 380). Pre-existing and untouched by this fix; the
+gate asserts the property this tick delivers (the run is centred, not at x=0) rather than a number it
+knows is wrong.

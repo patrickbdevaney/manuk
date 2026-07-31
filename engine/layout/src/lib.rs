@@ -2719,6 +2719,10 @@ impl Ctx<'_> {
         let mut cur_y = cy;
         let mut prev_margin = 0.0f32;
         let mut inline_run: Vec<NodeId> = Vec::new();
+        // The anonymous blocks this container generates inherit from IT (CSS 2.1 §9.2.1.1) — its
+        // `text-align` and its font/`line-height` strut. Read once here, exactly as the pure-IFC
+        // branch above reads `bcs`.
+        let run_bcs = self.style_of(node);
 
         // Parent↔child TOP margin collapse (CSS2 §8.3.1): if THIS container collapses its top margin
         // with its first in-flow block child, that child is placed flush to the content top — its
@@ -2746,6 +2750,7 @@ impl Ctx<'_> {
                     prev_margin,
                     cw,
                     floats,
+                    &run_bcs,
                 );
                 let fbox = self.layout_float(k, cw, cur_y + prev_margin.max(0.0), floats, cx);
                 boxes.push(fbox);
@@ -2772,6 +2777,7 @@ impl Ctx<'_> {
                     prev_margin,
                     cw,
                     floats,
+                    &run_bcs,
                 );
                 // Clearance pushes the block below the relevant floats.
                 if ks.clear != Clear::None {
@@ -2807,6 +2813,7 @@ impl Ctx<'_> {
             prev_margin,
             cw,
             floats,
+            &run_bcs,
         );
 
         // ⚠⚠ **THE CLEARFIX — a BLOCK-LEVEL `::after`, which generated content had no way to be.**
@@ -4364,6 +4371,24 @@ impl Ctx<'_> {
     /// box and preserves the pending block margin (so `<p>a</p>\n<p>b</p>` still
     /// collapses); real inline content is not collapsible, so the pending margin is
     /// committed before it.
+    ///
+    /// ⚠⚠ **`bcs` is the CONTAINING BLOCK's style, and this call used to pass NONE of it.** The
+    /// `layout_inline` arguments were the literals `TextAlign::Left, 0.0, …, None` where the
+    /// pure-IFC branch two thousand lines up passes `bcs.text_align, text_indent, …, Some(&bcs)`.
+    /// CSS 2.1 §9.2.1.1: an anonymous block box *inherits* every inheritable property from the
+    /// block container that generated it — so the anonymous twin was built with no inherited
+    /// context at all, and two separate symptoms fell out of the one omission:
+    ///
+    /// * **`text-align` was lost.** The moment a container mixed inline content with even one
+    ///   block-level child — which is the only condition under which this function runs — every
+    ///   inline run in it snapped back to the left edge, while the SAME markup with no block child
+    ///   centred correctly. `<center><b>…</b><textarea></textarea></center>` is the archetype.
+    /// * **The STRUT was lost.** With `strut_style: None` the line box carries a zero strut, so a
+    ///   line whose only content is an atomic inline-block is exactly the inline-block's height —
+    ///   Chrome adds the containing block's font descent below the baseline the inline-block sits
+    ///   on. Measured: a 20px inline-block in a `font:16px/1.2` container is a 24px line in Chrome
+    ///   and was a 20px line here. A text run was already right, because a fragment's own inherited
+    ///   `line-height` covers it; only the atomic case exposed the missing strut.
     #[allow(clippy::too_many_arguments)]
     fn flush_inline_run(
         &self,
@@ -4374,6 +4399,7 @@ impl Ctx<'_> {
         prev_margin: f32,
         cw: f32,
         floats: &FloatContext,
+        bcs: &manuk_css::ComputedStyle,
     ) -> (f32, f32) {
         if run.is_empty() {
             return (cur_y, prev_margin);
@@ -4384,8 +4410,12 @@ impl Ctx<'_> {
             return (cur_y, prev_margin); // whitespace-only: keep the pending margin
         }
         let start = cur_y + prev_margin;
+        // `text_indent` stays 0 and is NOT passed through: Chrome indents only the FIRST anonymous
+        // run of a container (`text-indent:40px` on a mixed container → run 1 at x=40, run 2 after
+        // the block child at x=0), so handing it to every flush would over-indent every run but the
+        // first. Measured, named in the journal, and left for its own tick rather than guessed at.
         let (frags, atomics, h) =
-            self.layout_inline(items, cx, start, cw, TextAlign::Left, 0.0, floats, None);
+            self.layout_inline(items, cx, start, cw, bcs.text_align, 0.0, floats, Some(bcs));
         boxes.push(LayoutBox {
             rect: Rect {
                 x: cx,
@@ -7446,8 +7476,17 @@ mod tests {
     }
 
     /// `display:inline-block` flows atomically: sized boxes sit side by side on a line, and
-    /// a following block drops below the line's height. Verified numerically against Chrome
-    /// by the parity harness; this pins the geometry as a unit.
+    /// a following block drops below the line's height.
+    ///
+    /// ⚠⚠ **THIS TEST ASSERTED `below.y == 30` AND CHROME SAYS 34 — the assertion was the bug,
+    /// and its own comment claimed it was "verified numerically against Chrome by the parity
+    /// harness".** It was not: a 30px inline-block sits ON the baseline, and the line box is 30
+    /// plus the containing block's font DESCENT below it. The anonymous block wrapping this run
+    /// was built with `strut_style: None` (see `flush_inline_run`), so the descent was zero and a
+    /// wrong number got frozen into a test as ground truth. Re-measured in headless Chrome on
+    /// this exact markup: `a [0 0 80×30]`, `b [84 0 80×30]`, `below [0 34 120×25]` — all three
+    /// now byte-identical here. **A number asserted from an unverified claim of verification is
+    /// the most expensive kind: it defends the defect.**
     #[test]
     fn inline_block_boxes_flow_horizontally_then_a_block_drops_below() {
         let (dom, root) = layout_html(
@@ -7470,14 +7509,15 @@ mod tests {
         let a = by_id("a");
         let b = by_id("b");
         assert_eq!((a.x, a.y, a.width, a.height), (0.0, 0.0, 80.0, 30.0));
-        // The second inline-block sits to the right of the first, on the same line.
+        // The second inline-block sits to the right of the first, one word space along (Chrome: 84).
         assert!(b.x >= 80.0, "second inline-block is to the right: {b:?}");
         assert!((b.y - 0.0).abs() < 0.5, "same line as the first");
-        // The block after the inline run drops below the 30px line.
+        // The block after the inline run drops below the line — 30px of inline-block ABOVE the
+        // baseline plus the strut's descent BELOW it. Chrome-measured on this markup: 34.
         let below = by_id("below");
         assert!(
-            (below.y - 30.0).abs() < 1.0,
-            "block drops below the inline line: {below:?}"
+            (below.y - 34.0).abs() < 1.0,
+            "block drops below the inline line at Chrome's 34 (30px box + strut descent): {below:?}"
         );
     }
 

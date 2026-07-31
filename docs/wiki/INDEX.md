@@ -133,6 +133,11 @@
   - L2652 · order lays items out in order-modified document order (t793)
   - L2679 · …and the containing block is the float's ORIGIN, not just its limit (t797)
   - L2704 · A percentage height on a flex item was resolved twice (t798)
+  - L2730 · An anonymous block box INHERITS from the container that made it (t799)
+  - L2749 · The trigger is "…and one block child", which is why it hid
+  - L2777 · The strut is the second symptom of the same omission
+  - L2790 · text-indent is the third literal and is deliberately NOT fixed here
+  - L2797 · Residue, measured in the same fixture
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1345,4 +1350,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1256 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1261 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

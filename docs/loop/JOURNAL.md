@@ -41525,3 +41525,124 @@ PATTERN: ⚠⚠⚠ **WHEN A FIX EXISTS FOR ONE AXIS, GREP FOR ITS MIRROR BEFORE 
 CLOSED.** `taffy_item_width` was written with a comment naming the exact failure mode, and the same
 failure on the other axis outlived it by 784 ticks. The grep is one word long.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 799 — an anonymous block box inherited NOTHING from the container that made it (2026-07-31)
+
+TICK SHAPE: capability (block/inline layout) — one primitive, aimed from the §8 near-bar list
+
+HYPOTHESIS (written before the probe): the t796 check-in's steer says aim from the crossing-ranked
+near-bar table, then probe the primitive that site's divergence names. So: take the *smallest
+fully-covered jarring-clean* rows of `SWEEP-t796-rows.tsv` — `www.dapam-sirius.fr` (n=30, cov 1.00,
+shape 0.633) and `linkmake.in` (n=74, cov 1.00, shape 0.622) — run the mechanism oracle on both, and
+follow whatever it names.
+
+WHAT THE ORACLE SAID: `linkmake.in` had a run of `x` displacements in **power-of-two bands nobody
+should ever see** — `~256px` on a `<b>` and two `<br>`s, `~128px` on another, `~64px` on a `<font>`.
+Chrome puts the `<b>` at 537 and we put it at 170; `<font>` 273 vs 170; `<small>` 491 vs 170. Every
+one of ours sits at the container's left content edge, every one of Chrome's is `(861 − w)/2` from
+it. **We were left-aligning a centred column.**
+
+### The fixture said `<center>` works — so the fixture was wrong about the question
+
+`center { text-align: center }` is in the UA sheet and a four-line `<center><b>…</b></center>` is
+Chrome-exact. The site's markup is not that: it is
+
+```html
+<center><b>Paste Link URLs</b><br> … <textarea class="form-control"></textarea></center>
+```
+
+— inline copy **and a block-level control** in one container. That is the trigger, and a second
+fixture isolated it in one row: identical markup centres at 350 with no block child and at **0** with
+one.
+
+MECHANISM: when a block container mixes inline and block-level children, CSS 2.1 §9.2.1.1 wraps each
+run of inline content in an **anonymous block box**, which has no element and therefore no cascade —
+so it inherits every inheritable property from the container that generated it. `flush_inline_run`,
+the function that builds them, called `layout_inline` with the literals
+
+```rust
+self.layout_inline(items, cx, start, cw, TextAlign::Left, 0.0, floats, None)
+```
+
+where the pure-IFC branch of the same file passes `bcs.text_align`, the resolved `text_indent` and
+`Some(&bcs)`. **Two paths into one formatting context, and only one of them knew what it inherited.**
+
+```
+                                                     Chrome   before   after
+  inline-block in text-align:center, INLINE-ONLY        350      350     350   ✓ always right
+  …the same, with ONE block-level sibling               350        0     350   ✗→✓
+  …the run AFTER the block child                        350        0     350   ✗→✓
+  …between two block children                           350        0     350   ✗→✓
+  text-align:right, mixed                               700        0     700   ✗→✓
+  <center> with a block child (linkmake.in's shape)     350        0     350   ✗→✓
+  align inherited from a GRANDPARENT                    350        0     350   ✗→✓
+  a plain TEXT run, centred, mixed                      344        0     344   ✗→✓
+  default (left) with a block child                       0        0       0   ✓ must not move
+
+  the anonymous line box's HEIGHT (20px inline-block)    24       20      24   ✗→✓  ← the STRUT
+```
+
+### The strut is the SAME omission's second symptom, and it was hiding behind text
+
+`strut_style: None` yields a zero strut. A **text** run survives that — each fragment carries its own
+inherited `line-height` — but an **atomic** inline-block does not: it sits on the baseline and Chrome
+adds the containing block's font descent below it. So every mixed container was 4px short per line,
+and only the atomic case could show it. Both halves are the one literal-argument list, so both are
+fixed here; they are asserted and RED-proven **separately**.
+
+⚠⚠ **A TEST HAD FROZEN THE MISSING DESCENT AS GROUND TRUTH, AND SAID SO IN A COMMENT.**
+`inline_block_boxes_flow_horizontally_then_a_block_drops_below` asserted the following block lands at
+`y=30` and its doc comment claimed the number was *"verified numerically against Chrome by the parity
+harness"*. Headless Chrome on that exact markup: `a [0 0 80×30]`, `b [84 0 80×30]`, **`below
+[0 34 120×25]`** — all three now byte-identical here. The test went red on the fix, I read Chrome
+before touching it, and the assertion was the defect's last line of defence. **A number asserted from
+an unverified CLAIM of verification is the most expensive kind.**
+
+MEASURED: `linkmake.in` shape **0.622 → 0.689** (align) **→ 0.703** (align+strut); its `~256/128/64px`
+displacement bands are gone from the oracle entirely, leaving only ~16–32px text-metric and drift
+rows. **31 of 33 fixture boxes Chrome-exact** (was 24). Controls **byte-identical at every step** —
+`blog.rust-lang.org` 0.993389, `en.wikipedia.org` 0.604356, `news.ycombinator.com` 0.797264,
+`255md.com` 0.720930, `www.dapam-sirius.fr` 0.633333. `manuk-layout` 103 tests green.
+
+Gate: `G_ANON_BLOCK_INHERITS` (new) — fourteen assertions on Chrome numbers read off the GATE'S OWN
+fixture. **Proven RED twice, independently:** restoring `TextAlign::Left` fails `#a2` at 0 while every
+height passes; restoring `strut_style: None` fails `#q2` at 40 while every x passes. The fixture
+carries its own control (`#a1`, the same markup minus the block child, which was never broken) and its
+own constraint (`#a7`, default-left, which a fix that centred everything would fail).
+
+HONEST SCOPE: one in-scope site measured to move, and it does **not** cross the 0.75 bar (0.703). No
+crossing is claimed. The justification is reach — "a centred section that also contains a block
+element" is the ordinary shape of a real card/hero/footer, not an edge case — and the corpus price
+comes at the next sweep, read PAIRED.
+
+RESIDUE, measured here and NOT fixed:
+* **`text-indent` is the third literal.** Chrome indents only the FIRST anonymous run of a container
+  (`text-indent:40px` mixed → run 1 at x=40, the run after the block child at x=0). Passing it through
+  unconditionally would over-indent every run but the first, so `0.0` stays with the measurement
+  written down rather than a guessed edge rule shipped.
+* **A `float:left` after an inline run drops a line instead of sharing it.** We flush the pending run
+  before registering the float, so Chrome puts `#a8` at 380 in the float-narrowed band and we put it
+  at 350 in the full width. Pre-existing, independent, and now named — the gate asserts the weaker
+  property it can prove (the run is CENTRED, not at x=0) rather than a number it knows is wrong.
+* **`<center>` does not centre BLOCK children.** Chrome's `-webkit-center` puts a `width:200px` div
+  inside `<center>` at x=300; we leave it at 0. Measured in the first fixture, out of scope here.
+
+PERF: none claimed — one extra `ComputedStyle` read per block container, hoisted out of the child loop.
+
+WIKI: `docs/wiki/box-layout.md` — new section.
+
+PATTERN: ⚠⚠⚠ **WHEN ONE FORMATTING CONTEXT HAS TWO CODE PATHS, DIFF THEIR ARGUMENT LISTS.** The pure-IFC
+call and the anonymous-block call sit two thousand lines apart in one file, do the same job, and
+differed in three of eight arguments — all three being the literal "I inherited nothing". No behaviour
+test could see it, because the bug only fires when a *sibling* changes which path runs. **The tell is a
+literal where the twin reads a field**, and that is greppable.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+SELF-AUDIT (tick 798 window, run at the start of this tick's landing): **one prescribed-but-not-
+executed item, and it is HARNESS-OWNED.** `verify wall: 1523s EXCEEDS the 300s target`. The number is
+read from `.git/manuk-verify-receipt`, whose row for the t798 run reads `seconds: 1523`,
+`unattributed_seconds: 1523`, `load1: 7.59` — a contended box with the whole wall unattributed, against
+`LAST_WALL_TIME: 63s` in STATUS.md. Per V1-SCOPE / CONSTITUTION.MD Part VII the wall and everything
+under `scripts/` is the observer's; this is reported and NOT patched. Every other audit item is green
+(gates declare how to break them, the process ledger names mechanisms, enforcement is mechanical, the
+journal has no gaps, the pattern ledger moves with the engine). `LAST_AUDIT_TICK` set to 798.
