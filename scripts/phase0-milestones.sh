@@ -33,20 +33,30 @@ MODE="${1:-full}"
 # within a corpus — never diff CrUX against the 265).
 # M1_PASS is the FULL gate = m1_pass_pct (f15, shape AND jarring); old rows (pre-jarring) fall back to shape
 # (f12). Also lift shape (f12) and jarring-clean (f14) as the two components for display.
-read -r M1_TICK M1_PASS M1_INSCOPE M1_SHAPEPCT M1_JARPCT M1_PREVPASS M1_CORPUS M1_SCORED < <(awk -F'\t' '
-  $1 ~ /^#/ || $1=="iso_sweep" || $1=="" {next}
-  { rows[NR]=$0 }
+# A sweep row can be CONTAMINATED (e.g. a --jobs>2 triage sweep whose wall-clock contention costs hard
+# sites their scorability — the agent annotates it with a preceding '# ... CONTAMINATED ...' comment and
+# says "read the last honest point"). HONOR that: the burndown/ceiling/slope must come from the last CLEAN
+# row, never a row the ledger itself flags as not-a-burndown-point. We still report WHICH newest sweep was
+# contaminated so it is visible, not silently dropped. (M1_CONTAM = contaminated newest tick, or '-'.)
+read -r M1_TICK M1_PASS M1_INSCOPE M1_SHAPEPCT M1_JARPCT M1_PREVPASS M1_CORPUS M1_SCORED M1_CONTAM < <(awk -F'\t' '
+  /^#/ { if(tolower($0) ~ /contaminat/) cflag=1; next }
+  $1=="iso_sweep" || $1=="" { next }
+  { rows[NR]=$0; if(cflag){ contam[NR]=1; cflag=0 } }
   END{
-    last=""; lastNR=0
-    for(i=1;i<=NR;i++){ if(i in rows){ last=rows[i]; lastNR=i } }
-    if(last==""){ printf "none 0 0 0 0 NA 265 0"; exit }
-    split(last,L,"\t"); lc=(L[13]==""?"265":L[13])
+    lastAnyNR=0; lastClean=""; lastCleanNR=0; contamTick=""
+    for(i=1;i<=NR;i++){ if(!(i in rows)) continue
+      lastAnyNR=i
+      if(!(i in contam)){ lastClean=rows[i]; lastCleanNR=i } }
+    if(lastClean==""){ printf "none 0 0 0 0 NA 265 0 -"; exit }   # no clean row yet
+    if(lastAnyNR in contam){ split(rows[lastAnyNR],c,"\t"); contamTick=c[2] }  # newest row is contaminated
+    split(lastClean,L,"\t"); lc=(L[13]==""?"265":L[13])
     m1=(L[15]!=""?L[15]:L[12]); shp=L[12]; jar=(L[14]!=""?L[14]:"NA")
     prev=""
-    for(i=1;i<lastNR;i++){ if(!(i in rows)) continue; split(rows[i],f,"\t"); if((f[13]==""?"265":f[13])==lc) prev=rows[i] }
+    for(i=1;i<lastCleanNR;i++){ if(!(i in rows) || (i in contam)) continue; split(rows[i],f,"\t"); if((f[13]==""?"265":f[13])==lc) prev=rows[i] }
     pp="NA"; if(prev!=""){ split(prev,P,"\t"); pp=(P[15]!=""?P[15]:P[12]) }
-    printf "%s %s %s %s %s %s %s %s", L[2], m1, L[11], shp, jar, pp, lc, L[4]
+    printf "%s %s %s %s %s %s %s %s %s", L[2], m1, L[11], shp, jar, pp, lc, L[4], (contamTick==""?"-":contamTick)
   }' "$LEDGER" 2>/dev/null)
+[ "${M1_CONTAM:-1}" = "-" ] && M1_CONTAM=""
 # SCORABILITY CEILING = scored/in-scope (PHASE0-MEASUREMENT-SYSTEM.md §1): the hard cap on M1 — a site that
 # does not render (mostly boot-halting JS throws = the function leg) can never pass M1. If this cap is < 95,
 # no shape/jarring fix can reach the target; the throw-killer leg must move first.
@@ -72,13 +82,14 @@ fi
 # CrUX transition flag: the render target is the representative corpus; while the number is still on the 265,
 # it is a PROXY that recalibrates (likely lower) at the first CrUX sweep.
 CORPUS_NOTE=""; [ "${M1_CORPUS:-265}" = "265" ] && CORPUS_NOTE=" [still on 265 proxy — recalibrates at first CrUX sweep]"
+CONTAM_NOTE=""; [ -n "${M1_CONTAM:-}" ] && CONTAM_NOTE=" [⚠newest sweep ${M1_CONTAM} CONTAMINATED (--jobs>2 triage) → showing last CLEAN ${M1_TICK}]"
 
 _st(){ [ "$1" = 1 ] && printf "%s✓done%s" "$G" "$O" || { [ "$2" = "$CUR" ] && printf "%s◀ CURRENT%s" "$Y$B" "$O" || printf "%s· pending%s" "$C" "$O"; }; }
 
 if [ "$MODE" = "--oneline" ]; then
   case "$CUR" in
     M1) CEIL_FLAG=""; awk "BEGIN{exit !((${SC_CEIL:-100}+0) < 95)}" && CEIL_FLAG=" ⚠CAP ${SC_CEIL}%(scorability=function leg — attack throw-killers FIRST, PHASE0-MEASUREMENT-SYSTEM.md)"
-        printf "PHASE-0 ▸ M1 RENDER(corpus=%s) shape+jarring %s%%→95%% (need +%s, %s) [shape %s%% · jarring-clean %s%%]%s%s  [M2 fn pending]\n" "${M1_CORPUS}" "${M1_PASS:-?}" "$NEED" "$SLOPE_TXT" "${M1_SHAPEPCT:-?}" "${M1_JARPCT:-?}" "$CORPUS_NOTE" "$CEIL_FLAG" ;;
+        printf "PHASE-0 ▸ M1 RENDER(corpus=%s) shape+jarring %s%%→95%% (need +%s, %s) [shape %s%% · jarring-clean %s%%]%s%s%s  [M2 fn pending]\n" "${M1_CORPUS}" "${M1_PASS:-?}" "$NEED" "$SLOPE_TXT" "${M1_SHAPEPCT:-?}" "${M1_JARPCT:-?}" "$CORPUS_NOTE" "$CEIL_FLAG" "$CONTAM_NOTE" ;;
     M2) printf "PHASE-0 ▸ M1 RENDER done ✓ ▸ M2 FUNCTION leg %s  → then v1.0.0\n" "${m2_pass:-not-started}" ;;
     DONE) printf "PHASE-0 ▸ BOTH MILESTONES MET → fire v1.0.0 release trigger (memory v1-release-trigger)\n" ;;
   esac
@@ -87,7 +98,7 @@ fi
 
 echo "${B}══ PHASE-0 COMPLETION — 2 ordered milestones · representative CrUX from the start (owner 2026-07-30) ══${O}"
 printf "  %sM1%s RENDER  shape>=0.75 AND jarring-clean on >=95%% of in-scope representative CrUX (the TRUE visual bar)   %s\n" "$B" "$O" "$(_st $M1_DONE M1)"
-printf "       now %s%s%%%s on corpus=%s  (%s/%s in-scope · target %s · need +%s)   %s%s\n" "$B" "${M1_PASS:-?}" "$O" "${M1_CORPUS}" "${M1CNT:-?}" "${M1_INSCOPE:-?}" "$TARGET" "$NEED" "$SLOPE_TXT" "$CORPUS_NOTE"
+printf "       now %s%s%%%s on corpus=%s  (%s/%s in-scope · target %s · need +%s)   %s%s%s\n" "$B" "${M1_PASS:-?}" "$O" "${M1_CORPUS}" "${M1CNT:-?}" "${M1_INSCOPE:-?}" "$TARGET" "$NEED" "$SLOPE_TXT" "$CORPUS_NOTE" "$CONTAM_NOTE"
 printf "       ├─ shape>=0.75: %s%%   └─ jarring-clean (no overlap/h-overflow/reorder/dead-target): %s%%  (both must clear 95%%)\n" "${M1_SHAPEPCT:-?}" "${M1_JARPCT:-?}"
 printf "       drive: docs/bench/corpus-crux-trend.txt (~200, fast) · cert: docs/bench/corpus-v2.tsv (400) · last sweep %s\n" "${M1_TICK:-none}"
 printf "  %sM2%s FUNCTION  per-site render∧function >=95%% on the representative corpus  %s(🔒 function-first LOCKED: function GATES visual — a site must boot before shape is scorable)%s   %s\n" "$B" "$O" "$C" "$O" "$(_st $M2_DONE M2)"

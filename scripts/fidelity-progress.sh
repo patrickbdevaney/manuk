@@ -38,6 +38,18 @@ TICK=$(printf '%s' "$SRC" | grep -oE 't[0-9]+' | head -1)
 SWEEP_ISO=$(date -d "@$SRC_EPOCH" '+%Y-%m-%dT%H:%M:%S' 2>/dev/null || echo "?")
 NOW_EPOCH=$(date +%s 2>/dev/null || echo "$SRC_EPOCH")
 
+# ── CONTAMINATION HONOR ──────────────────────────────────────────────────────────────────────────────────
+# A sweep can be CONTAMINATED (a --jobs>2 triage run whose wall-clock contention costs hard sites their
+# SCORABILITY — timeout-150s/css-starved — while every site that DOES score is unchanged to <0.1pt). The
+# agent annotates such a row with a preceding '# ... CONTAMINATED ...' ledger comment and says "read the last
+# honest point." HONOR it: display the run, but SUPPRESS the burndown Δ/slope (it would read a false
+# regression) and say so. Detect: does a '#...contaminat...' comment immediately precede THIS sweep's row?
+CONTAM_SWEEP=0
+[ -f "$LEDGER" ] && awk -F'\t' -v t="$TICK" '
+  /^#/ { if(tolower($0) ~ /contaminat/) c=1; next }
+  { if(c && $2==t){ found=1; exit } c=0 }
+  END{ exit !found }' "$LEDGER" && CONTAM_SWEEP=1
+
 # ── CORPUS DETECTION (the metric-swap guard at the corpus switch) ─────────────────────────────────────────
 # When the driving corpus changes (265 curated → representative CrUX), the first sweep on the new corpus is a
 # NEW BASELINE, NOT a slope point — diffing it against a different site set is the metric-swap lie. Detect the
@@ -140,7 +152,10 @@ fi
 alerts=""
 AGE_DAYS=$(( ( NOW_EPOCH - SRC_EPOCH ) / 86400 ))
 [ "$AGE_DAYS" -ge 3 ] && [ "$SWEEP_LIVE" != 1 ] && alerts="${alerts}STALE-SWEEP: newest banked corpus sweep ($TICK) is ${AGE_DAYS}d old — agent should run a fresh full sweep so the trend stays live\n"
-if [ -n "$PREV" ] && [ "$SETTLED" = 1 ]; then
+# Contaminated triage sweeps (--jobs>2) legitimately show fewer scored sites; the banner already explains it,
+# so DO NOT fire the regression/trap alerts on them (they would false-alarm ops-check --check every heartbeat
+# until the next clean sweep). The contamination is honored, not hidden — it is printed as its own banner.
+if [ -n "$PREV" ] && [ "$SETTLED" = 1 ] && [ "$CONTAM_SWEEP" != 1 ]; then
   awk "BEGIN{exit !($SCORED < ${p_scored:-0})}" && alerts="${alerts}SCORABILITY-REGRESSED: scored ${p_scored} -> ${SCORED} (fewer sites measurable — investigate, not progress)\n"
   # denominator trap: shape_mean up while scored down => a hard site dropped out, not real improvement
   if awk "BEGIN{exit !($SHAPEM > ${p_sh:-0} && $SCORED < ${p_scored:-0})}"; then
@@ -159,6 +174,7 @@ TARGET=$(awk "BEGIN{printf \"%d\", int(0.95*$INSCOPE + 0.999)}")
 NEED=$(( TARGET - GE75 )); [ "$NEED" -lt 0 ] && NEED=0
 echo "── FIDELITY PROGRESS (rebuilt instrument · sweep $TICK · corpus=${CORPUS} · $SWEEP_ISO · ${AGE_DAYS}d old) ─────────"
 [ "$SETTLED" != 1 ] && printf "  ⏳ SWEEP IN PROGRESS: %s/%s sites so far (live=%s) — numbers below are a PARTIAL, NOT banked until complete\n" "$SITES" "$EXPECT" "$SWEEP_LIVE"
+[ "$CONTAM_SWEEP" = 1 ] && printf "  🚫 THIS SWEEP (%s) IS FLAGGED CONTAMINATED in the ledger (a --jobs>2 triage run — scorability lost to wall-clock contention, geometry intact). DO NOT read it as a burndown point; the slope below is SUPPRESSED. The last HONEST point is the last non-contaminated ledger row.\n" "$TICK"
 [ -z "$PREV" ] && [ "$SETTLED" = 1 ] && printf "  🆕 NEW %s-CORPUS BASELINE — no same-corpus prior sweep, so NO slope this time (a different site set is not diffable; the slope resumes at the next %s sweep)\n" "$CORPUS" "$CORPUS"
 M1_NEED=$(( TARGET - ${M1CNT:-0} )); [ "$M1_NEED" -lt 0 ] && M1_NEED=0
 # ── SCORABILITY CEILING (PHASE0-MEASUREMENT-SYSTEM.md §1,§3): the binding sub-constraint the shape burndown
@@ -193,7 +209,7 @@ printf "     ├─ shape>=0.75: %s/%s = %s%%      └─ jarring-clean (no over
   "$GE75" "$INSCOPE" "$INPASS" "${JARCLEAN:-0}" "$INSCOPE" "${JCPCT:-0}"
 printf "     EXCLUDED (bot-wall/unreachable, watched·capped): %s/%s = %s%%   ·   scored %s/%s   shape_mean=%s%%  cov_mean=%s%%\n" \
   "$EXCL" "$SITES" "$(awk "BEGIN{printf \"%.0f\",100*$EXCL/$SITES}")" "$SCORED" "$INSCOPE" "$SHAPEM" "$COVM"
-if [ -n "$PREV" ] && [ "$SETTLED" = 1 ] && [ -n "${p_inpass:-}" ]; then
+if [ -n "$PREV" ] && [ "$SETTLED" = 1 ] && [ -n "${p_inpass:-}" ] && [ "$CONTAM_SWEEP" != 1 ]; then
   DPP=$(awk "BEGIN{printf \"%+.1f\", $INPASS - ${p_inpass:-0}}")
   printf "  Δ vs %s: IN-SCOPE PASS %s%%→%s%% (%s pts) · scored %s→%s · excluded %s→%s\n" \
     "$p_tick" "$p_inpass" "$INPASS" "$DPP" "$p_scored" "$SCORED" "${p_excl:-?}" "$EXCL"
