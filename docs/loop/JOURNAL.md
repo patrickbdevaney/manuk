@@ -39413,3 +39413,87 @@ choose inputs from outside the space the existing tests occupy — a different s
 right-to-left run — because the blind spot is the input space, not the assertion count. The corollary
 found the same tick: **the headline metric could not see this either**, so "no number moved" is
 sometimes a statement about the instrument's frame rather than about the fix.
+
+## Tick 775 — an out-of-flow `::before` was pushing the text it was supposed to sit beside (2026-07-31)
+
+The second defect in the same `255md.com` fixture as t774, and this one is layout, not text.
+
+`.item::before { content: "–"; position: absolute; left: 0 }` over `padding-left: 20px` is **the**
+custom-bullet idiom, and the same shape carries every pseudo icon, chevron and decorative bar on the
+web. `collect_inline_group` materialises `::before`/`::after` as ordinary inline WORDS and never
+consulted `position` — so the marker **took advance width**, pushed the item's own text right by it, and
+drew itself where the text should have started. Against Chrome, the dash was glued to `ad delivery`
+instead of sitting 20px to its left.
+
+The fix is a new `InlineItem::AbsPseudo` with **zero advance, zero space and zero line metrics**, drawn
+at `dx` from the pen. Insets resolve against the containing block's padding box while the inline pen
+starts at the content box, so `dx = left − padding-left` (or `−(right + padding-right)`), which is exact
+whenever the owner is itself the containing block — `position: relative` on the owner, which is what
+this idiom always writes.
+
+⚠ **Deliberately partial, and named.** The VERTICAL inset is not honoured (the fragment keeps the line's
+baseline — right for the one-line markers and inline icons this idiom is made of, wrong for a tall block
+with `::before { top: 0 }`), and it does not walk to a positioned ancestor when the owner is static.
+Both need the pseudo to become a real out-of-flow box with its own containing block. Same posture as the
+clearfix `::after` in the block path, and named for the same reason.
+
+The fixture is now **pixel-identical to Chrome** on all four lines.
+
+### ⚠⚠⚠ AND FOR THE SECOND TICK RUNNING, THE HEADLINE METRIC DID NOT MOVE
+
+| site | before | after |
+|---|---|---|
+| 255md.com · news.ycombinator.com · chat.google.com · secure5.entertimeonline.com · kicktipp · developers.google.com | 0.698 / 0.801 / 0.729 / 0.692 / 0.725 / 0.694 | **all identical** |
+
+This is now a pattern, not an accident, and it is worth naming precisely. **Shape scores ELEMENT
+geometry.** t774's mojibake lived inside an `<li>`'s box; t775's displacement moves the `<li>`'s *text*,
+and text is not an element. Both are visible, Chrome-differential rendering defects on a site the board
+named as near-bar, both are now fixed and pixel-verified — and the burndown that ranked the work
+registers **nothing**.
+
+So: **the ranking instrument and the defect population are not in the same frame.** The near-bar cohort
+was selected *by* shape, so working it surfaces whatever is wrong on those pages — but only the subset
+that happens to move an element's rect can ever pay back in the metric. That is a real limit on
+"rank by marginal M1 crossings", and it is reported here rather than acted on: changing what the metric
+counts is the one edit most likely to flatter the loop, and neither of these ticks would justify it.
+
+TICK SHAPE: capability (layout — out-of-flow generated content)
+CLUSTER: none shrank; see above — the mechanism is sub-element.
+Gates: `an_absolutely_positioned_pseudo_leaves_the_flow_but_still_paints` (`engine/layout`, 103 tests
+green), **proven red two ways** — restore the in-flow behaviour (marker lands on the text, text at
++42px); and apply the *over-broad* fix of dropping the pseudo instead of repositioning it, which the
+"both markers must still render" claim catches. **Out of FLOW is not out of the PAGE**, and a fix that
+traded a placement bug for a missing-content bug would otherwise have passed every positional claim.
+The in-flow control (a pseudo with no `position` must still push the text) is what stops this passing by
+having quietly removed all generated content from the flow.
+PERF: none claimed.
+WIKI: `docs/wiki/box-layout.md` — "An out-of-flow pseudo takes no advance".
+PATTERN: ⚠⚠⚠ **TWO CONSECUTIVE REAL FIXES, ZERO METRIC MOVEMENT — SUSPECT THE FRAME, NOT THE FIX.** The
+burndown is an element-geometry instrument, so an entire class of visible defect (anything drawn inside
+an element's box: generated content, markers, text position within a line, glyph identity) is invisible
+to it by construction. When a metric is used to RANK work, its blind spot silently deprioritises
+everything in that class — and the pages it ranks near-bar are exactly where those defects sit. The
+honest response is to report the frame mismatch, not to widen the metric until the work you did counts.
+
+### Wall-time audit (tick 775, due since 754) — the wall is lean where it is measured, and the residue is not mine to cut
+
+`scripts/wall-audit.sh run` at total **655s**. Named sections: `T` crate tests **49s**, `B` build **36s**,
+`G6` **19s**, `G1` 6s, `D` 5s, `P` 4s, `F` 3s, `F4` 1s, and a tail of gates at 0s. **The named sections
+sum to ~123s; ~530s is the gate fan-out, spread thin across many small gates.**
+
+Checked against the four admissible questions, none of which yields anything I can act on:
+
+- **Redundancy** — the real cost is structural, and the audit's own text names it: *~1.5s of every JS
+  gate is SpiderMonkey runtime startup*, and there are hundreds. That is the ~530s. The lever is
+  `cargo-nextest` (shared test binary, harder parallelism), which is **`scripts/`, observer-owned**.
+- **Parallelism** — gates already launch concurrently under `CARGO_BUILD_JOBS`; the perf floors are
+  deliberately serial, which is correct (a benchmark sharing the machine is not a benchmark).
+- **Caching** — incrementals are already on the ramdisk and live fetches are snapshot-cached.
+- **Scope** — the gates I added this session (`g_user_timing`, `g_iface_surface_2`, `g_css_utf8`) are
+  single-`#[test]` page gates on the existing `manuk-page` binary, adding no new build target. The t775
+  layout regression went into `manuk-layout`'s existing suite for the same reason.
+
+**Nothing trimmed, and nothing should be**: every admissible saving here is harness work I do not own,
+and the inadmissible ones (drop a gate, widen a floor, sample instead of cover, launder to CI) are
+refused by construction. Recorded for the observer: **the single largest wall lever in the project is
+per-gate SpiderMonkey startup × gate count, and it is `scripts/`-side.**

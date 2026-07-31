@@ -123,6 +123,10 @@
   - L2429 · What is still wrong, pinned rather than guessed
   - L2439 · box-sizing applies to a FLOAT too — and the float path is a SECOND width resolution (tick 770)
   - L2476 · The audit this opens
+  - L2485 · An out-of-flow pseudo takes no advance — the custom-bullet idiom
+  - L2509 · ⚠ Deliberately partial, and named so the next person knows which half exists
+  - L2517 · The two mutations the test demands
+  - L2527 · And the burndown could not see any of it
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1307,4 +1311,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1218 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1222 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -2481,3 +2481,52 @@ inner 5/352`).
 `layout_block`'s: it is a bounded audit with a known yield, because the forgotten copy is never the main
 path — it is the variant, written once for its special case and never revisited as ordinary properties
 land in the main path.
+
+## An out-of-flow pseudo takes no advance — the custom-bullet idiom
+
+`collect_inline_group` materialises `::before`/`::after` as ordinary inline **words** — the only place
+generated content can enter the flow, since it is not in the DOM. It never consulted `position`.
+
+So `.item::before { content: "–"; position: absolute; left: 0 }` over `padding-left: 20px` — **the**
+custom-bullet idiom, and the shape that carries every pseudo icon, chevron and decorative bar on the web
+— produced a marker that **took advance width**: it pushed the item's own text right by its own width
+and drew itself where the text should have started. Against Chrome on `255md.com`, the dash was glued to
+`ad delivery` instead of sitting 20px to its left.
+
+`InlineItem::AbsPseudo` contributes **zero advance, zero inter-word space and zero line metrics**, and
+paints at `dx` from the pen:
+
+| inset | `dx` |
+|---|---|
+| `left: L` | `L − padding-left` |
+| `right: R` | `−(R + padding-right)` |
+| both `auto` | `0` — the static position; the box still takes no space, which is the part that matters |
+
+Insets resolve against the containing block's **padding** box while the inline pen starts at the
+**content** box, which is where the padding term comes from. It is exact whenever the owner is itself
+the containing block — `position: relative` on the owner, which is what this idiom always writes.
+
+### ⚠ Deliberately partial, and named so the next person knows which half exists
+
+The **vertical** inset is not honoured: the fragment keeps the line's baseline, which is right for the
+one-line markers and inline icons this idiom is made of and wrong for a tall block with
+`::before { top: 0 }`. Nor does it walk to a positioned ancestor when the owner is `static`. Both need
+the pseudo to become a real out-of-flow box with its own containing block. Same posture, and the same
+reasoning, as the block path's clearfix `::after`.
+
+### The two mutations the test demands
+
+1. **Restore the in-flow behaviour** — the marker lands on the text and the text moves right.
+2. **Apply the over-broad fix**: drop the pseudo instead of repositioning it. Every *positional* claim
+   still passes. **Out of FLOW is not out of the PAGE** — the "both markers must still render" claim is
+   the only thing standing between a placement fix and a missing-content bug.
+
+A third guard, the in-flow control, stops the whole test passing by having removed all generated content
+from the flow: a pseudo with no `position` must still push the text.
+
+### And the burndown could not see any of it
+
+Fixing this moved **zero** shape points on all six near-bar sites — as did tick 774's mojibake fix the
+tick before. Shape scores **element** geometry; both defects live *inside* an element's box. When a
+metric is used to RANK work, its blind spot silently deprioritises an entire class of visible defect —
+and the near-bar pages it ranks are exactly where those defects sit.

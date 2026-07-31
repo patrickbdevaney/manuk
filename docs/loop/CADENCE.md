@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **520** | ticks 1–773 |
-| median tick cycle | **23m** | 519 intervals |
-| median, last 10 | **58m** | 10 intervals |
+| ticks landed | **521** | ticks 1–774 |
+| median tick cycle | **23m** | 520 intervals |
+| median, last 10 | **46m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 473.3h elapsed |
-| median verify wall | **63s** | 459 ticks |
+| **ticks per hour** | **1.10** | 473.7h elapsed |
+| median verify wall | **63s** | 460 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **357**
-* **✅ rows in the capability ledger**: 144 → **398**
+* **✅ rows in the capability ledger**: 144 → **399**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**247 of 520 ticks** (48%) moved a
+**248 of 521 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **247** capability ticks, median cycle **23m**
+* **248** capability ticks, median cycle **23m**
 * median diff per tick: **+246 / −34** lines across 8 files
 
 ## Every tick
@@ -617,5 +617,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **771** | 2026-07-30 20:59 | 47m | instrument | 63s | +708/−46 | 355 | 81 | 56.0% · | the sweep is 4× faster, and the speed COSTS SITES: measured, calibrated, and the number re |
 | **772** | 2026-07-30 21:43 | 44m | capability | 63s | +706/−33 | 356 | 81 | 56.0% · | a HALF-INSTALLED `performance` API blanked a top-1000 site, and `coinmarketcap.com` crosse |
 | **773** | 2026-07-30 22:18 | 35m | capability | 63s | +373/−34 | 357 | 81 | 56.0% · | the interface surface re-measured: 59 of 262 absent, and the half where `false` is a LIE ( |
+| **774** | 2026-07-30 22:45 | 27m | capability | 63s | +421/−51 | 357 | 81 | 56.0% · | `out.push(b[i] as char)`: every stylesheet in the engine was mojibake'd, by one character  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

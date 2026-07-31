@@ -2761,3 +2761,60 @@ exactly the "rank from the artefact" mistake check #60 caught. It is the next fi
 
 **Sources:** `/tmp/rtl.html` measured against live Chromium 1200×800, `docs/loop/SWEEP-t758-rows.tsv`,
 `engine/layout/src/taffy_tree.rs`, `engine/text/tests/g_bidi_base_direction.rs`.
+
+## Audit — tick 775, 2026-07-31
+
+**Sources checked (external, this session):** Interop 2026 focus areas —
+[web.dev](https://web.dev/blog/interop-2026), [WebKit](https://webkit.org/blog/17818/announcing-interop-2026/),
+[Mozilla Hacks](https://hacks.mozilla.org/2026/02/launching-interop-2026/),
+[Igalia](https://www.igalia.com/news/interop-2026.html),
+[web-platform-tests/interop 2026 README](https://github.com/web-platform-tests/interop/blob/main/2026/README.md).
+
+### What the world named, and what our map already said
+
+Interop 2026's 20 areas: **Anchor Positioning, advanced `attr()`, View Transitions (now including
+cross-document), Container Queries, Subgrid, the `zoom` property, WebRTC**, plus investigations into
+accessibility testing, **JPEG XL**, mobile testing infrastructure and **WebVTT**.
+
+**Every one of them is already on `CONSTELLATION.tsv` with a verdict** — `zoom` gated
+(`G_ZOOM_AND_PROBE_PINS`), container queries gated, View Transitions gated with cross-document `partial`,
+`attr()` `partial`, anchor positioning and subgrid `missing`. JPEG XL, WebVTT and WebRTC are on the
+explicit death-tail cut line, which is a *decision*, not a gap. **No phantom, no rot, nothing added from
+the external list.** That is a real result and the first clean one — but "an audit that finds nothing is
+a suspicious audit", so the rest of this entry is what the audit found by looking somewhere else.
+
+### ⚠⚠⚠ WHAT WE WERE WRONG ABOUT — and it is not on the capability map at all
+
+**1. The board's own ranking of the scorability lever is off by ~7×.** The M1 priority order prices the
+unscored cohort as "~30 of 48 are function/boot problems". Measuring all 22 boot-broken t767 origins
+(t773) found **4**. Eleven are `shell-only` — *the ORACLE rendered only N elements* — and on seven of
+those our coverage of what Chrome drew is **100%** (`forums.moneysavingexpert` 9 paths / 0 missing;
+`booking.directferries` 3/0). I read the Chrome-side PNGs rather than the labels: moneysavingexpert is a
+header over an **empty body in Chrome**; directferries is a **blank grey page in Chrome**. So the "63%
+scorability ceiling" is substantially a corpus/oracle-validity fact, not an engine ceiling. Recorded, not
+acted on — moving the denominator is the most self-serving edit available and t771 already refused its
+own version of it.
+
+**2. The burndown and the defect population are not in the same frame.** t774 (every stylesheet
+mojibake'd) and t775 (out-of-flow `::before` pushing its own text) are both real, Chrome-differential,
+pixel-verified fixes on the cohort the ranking itself named — and **both moved the metric by exactly
+zero**. Shape scores ELEMENT geometry; both defects live *inside* an element's box. A metric used to RANK
+work silently deprioritises everything in its blind spot, and the near-bar pages it ranks are exactly
+where those defects sit. **This is the map-of-the-map correction this audit exists to make**, and it is
+not something the capability list could ever have shown.
+
+**3. Four capability gaps found by MEASUREMENT while probing, now added to `CONSTELLATION.tsv`:**
+
+| added | status | how it was found |
+|---|---|---|
+| `getComputedStyle(el, '::before')` pseudo styles | missing | returned `undefined` while building a t775 probe |
+| `ResizeObserver.takeRecords()` | missing | one rule, two implementations — `IntersectionObserver` has it, `ResizeObserver` never did |
+| out-of-flow pseudo VERTICAL insets | partial | named residue of t775's horizontal half |
+| `DOMStringMap` | missing | t773 residue: `dataset` works, but no distinguishing shape exists to write a truthful `instanceof` predicate over, so it is deliberately left absent rather than guessed |
+
+### Re-rank
+
+None of the four is larger than the current line of work. The material re-rank is **finding 1**: the
+throw-killer leg is a **4-site** lever, not a 30-site one, so it should stop being priced as the way to
+break the M1 ceiling. Finding 2 says the near-bar shape leg needs its *own* correction — rank by what
+the metric can see, or accept that some of the work it surfaces will never show up in it.

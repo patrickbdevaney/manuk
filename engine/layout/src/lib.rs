@@ -4575,34 +4575,78 @@ impl Ctx<'_> {
         let mut out = Vec::new();
         let mut pending_space = false;
         let mut first = true;
-        let pseudo = |which: fn(&ComputedStyle) -> &Option<Box<ComputedStyle>>| -> Option<(String, TextStyle)> {
+        // ⚠⚠ **`position: absolute` on a pseudo was IGNORED, and the marker sat in the flow.**
+        //
+        // `.item::before { content: "–"; position: absolute; left: 0 }` with `padding-left: 20px` on
+        // the item is *the* custom-bullet idiom, and the same shape carries every icon, chevron and
+        // decorative bar the web puts in a pseudo. An out-of-flow box takes no space and is placed
+        // against its containing block; ours was emitted as an ordinary inline word, so it **pushed
+        // the item's text right by the marker's width** and drew the marker where the text should
+        // start. Measured on `255md.com` against Chrome: the dash glued to `ad delivery` instead of
+        // sitting 20px to its left.
+        //
+        // `dx` is the horizontal correction. Insets resolve against the containing block's PADDING
+        // box, and the inline pen starts at the content box, so the shift is
+        // `left - padding-left` (or `-(right + padding-right)` for a right inset). That is exact
+        // whenever the owner is itself the containing block — `position: relative` on the owner,
+        // which is what this idiom always writes, and what makes the marker land at the padding edge.
+        //
+        // ⚠ **Deliberately partial, and named so the next person knows which half exists.** The
+        // VERTICAL inset is not honoured: the fragment keeps the line's baseline, which is right for
+        // the one-line markers and inline icons this idiom is made of and wrong for a tall block
+        // with `::before { top: 0 }`. Nor does this walk up to a positioned ancestor when the owner
+        // is static. Both need the pseudo to become a real out-of-flow box with its own containing
+        // block, which is a different tick — this one removes it from the flow and puts it at the
+        // right x, which is the whole of the observable effect for the idiom that is everywhere.
+        let pseudo = |which: fn(&ComputedStyle) -> &Option<Box<ComputedStyle>>|
+         -> Option<(String, TextStyle, Option<f32>)> {
             let s = owner.and_then(|n| self.styles.get(&n))?;
             let p = which(s).as_ref()?;
             let text = p.content.clone()?;
-            (!text.is_empty()).then(|| (text, text_style(p, self.fonts)))
+            if text.is_empty() {
+                return None;
+            }
+            let dx = is_out_of_flow_positioned(p).then(|| {
+                if !p.inset.left.is_auto() {
+                    p.inset.left.resolve(cw, 0.0) - s.padding.left.resolve(cw, 0.0)
+                } else if !p.inset.right.is_auto() {
+                    -(p.inset.right.resolve(cw, 0.0) + s.padding.right.resolve(cw, 0.0))
+                } else {
+                    // `auto` on both: the static position, i.e. exactly where the flow would have
+                    // put it. The box still takes no space — that is the part that matters.
+                    0.0
+                }
+            });
+            Some((text, text_style(p, self.fonts), dx))
         };
-        if let Some((text, style)) = pseudo(|s| &s.before) {
-            out.push(InlineItem::Word {
-                text,
-                style,
-                space_before: false,
-                node: owner,
-                no_wrap: true,
-                break_word: false,
+        if let Some((text, style, dx)) = pseudo(|s| &s.before) {
+            out.push(match dx {
+                Some(dx) => InlineItem::AbsPseudo { text, style, dx },
+                None => InlineItem::Word {
+                    text,
+                    style,
+                    space_before: false,
+                    node: owner,
+                    no_wrap: true,
+                    break_word: false,
+                },
             });
             first = false;
         }
         for &n in nodes {
             self.collect_inline_node(n, &mut out, &mut pending_space, &mut first, None, cw);
         }
-        if let Some((text, style)) = pseudo(|s| &s.after) {
-            out.push(InlineItem::Word {
-                text,
-                style,
-                space_before: pending_space && !first,
-                node: owner,
-                no_wrap: true,
-                break_word: false,
+        if let Some((text, style, dx)) = pseudo(|s| &s.after) {
+            out.push(match dx {
+                Some(dx) => InlineItem::AbsPseudo { text, style, dx },
+                None => InlineItem::Word {
+                    text,
+                    style,
+                    space_before: pending_space && !first,
+                    node: owner,
+                    no_wrap: true,
+                    break_word: false,
+                },
             });
         }
         out
@@ -5218,6 +5262,36 @@ impl Ctx<'_> {
                         }),
                     )
                 }
+                InlineItem::AbsPseudo { text, style, dx } => {
+                    // Zero advance, zero space, zero height: an out-of-flow box occupies nothing in
+                    // its parent's flow. `width` is still the measured width so the fragment reports
+                    // a real box and paint draws the glyph; `ascent`/`descent` stay 0 so the marker
+                    // cannot grow the line it is no longer part of.
+                    let key = style.font_key;
+                    let size = style.font_size;
+                    let w = self.fonts.measure(&text, key, size)
+                        + style.letter_spacing * text.chars().count() as f32;
+                    (
+                        0.0,
+                        0.0,
+                        0.0,
+                        true,
+                        Box::new(move |x: f32| LineFrag {
+                            x: x + dx,
+                            width: w,
+                            text,
+                            style,
+                            ascent: 0.0,
+                            descent: 0.0,
+                            node: None,
+                            report_h: None,
+                            atomic: None,
+                            atomic_h: 0.0,
+                            valign: VerticalAlign::Baseline,
+                            content_bearing: true,
+                        }),
+                    )
+                }
                 InlineItem::Atomic {
                     box_,
                     advance,
@@ -5669,6 +5743,16 @@ enum InlineItem {
         /// `overflow-wrap:break-word` / `word-break:break-all` — this word may be split at an
         /// arbitrary character when it would otherwise overflow the line (a long URL / hash).
         break_word: bool,
+    },
+    /// An **out-of-flow positioned `::before`/`::after`** — the custom-bullet / icon idiom
+    /// (`content: "–"; position: absolute; left: 0`). It contributes **zero advance and zero line
+    /// metrics**, so it neither pushes the following text nor grows the line, and paints at `dx`
+    /// from the pen. See the long comment in `collect_inline_group` for what this deliberately does
+    /// NOT do (vertical insets; a static owner's positioned ancestor).
+    AbsPseudo {
+        text: String,
+        style: TextStyle,
+        dx: f32,
     },
     /// An `inline-block`: `advance` is its margin-box main-axis size; `box_` is its already
     /// laid-out block box (positioned at the origin, translated into place at line close).
@@ -8350,6 +8434,78 @@ mod tests {
             "the underline must reach the text fragment, which is what paints it"
         );
     }
+    /// ⚠⚠ **An out-of-flow `::before` must leave the flow — it was pushing the item's text.**
+    ///
+    /// `.item::before { content: "–"; position: absolute; left: 0 }` over `padding-left: 20px` is
+    /// *the* custom-bullet idiom, and the same shape carries every pseudo icon and chevron on the
+    /// web. The generated content was emitted as an ordinary inline word, so the marker **took
+    /// advance width** and shifted the item's own text right by it, while drawing itself where the
+    /// text should have started. Measured against Chrome on `255md.com`: the dash glued to
+    /// `ad delivery` instead of sitting 20px to its left.
+    ///
+    /// Three claims, and the second two are the ones that catch an over-broad fix: the marker still
+    /// PAINTS (an out-of-flow box is removed from the flow, not from the page — deleting it would
+    /// trade a placement bug for a missing-content bug), and a pseudo that is NOT positioned must
+    /// still occupy its width.
+    #[test]
+    fn an_absolutely_positioned_pseudo_leaves_the_flow_but_still_paints() {
+        let html = r#"<ul><li id="a">text</li></ul><ul><li id="b">text</li></ul>"#;
+        let css = r#"ul{margin:0;padding:0;list-style:none}
+                     li{padding-left:20px;position:relative}
+                     #a::before{content:"XXXX";position:absolute;left:0}
+                     #b::before{content:"XXXX"}"#;
+        let (dom, root) = layout_html(html, css, 400.0);
+        let _ = &dom;
+        // Collect every fragment in document order with its x.
+        let mut frags: Vec<(String, f32)> = Vec::new();
+        root.walk(&mut |b| {
+            if let BoxContent::Inline(f) = &b.content {
+                for fr in f {
+                    if !fr.text.trim().is_empty() {
+                        frags.push((fr.text.clone(), fr.x));
+                    }
+                }
+            }
+        });
+        let x_of = |t: &str, nth: usize| -> f32 {
+            frags
+                .iter()
+                .filter(|(s, _)| s.trim() == t)
+                .nth(nth)
+                .unwrap_or_else(|| panic!("no `{t}` #{nth} among {frags:?}"))
+                .1
+        };
+        // 1. THE MARKER STILL PAINTS. Two of them: one out-of-flow, one in-flow.
+        assert_eq!(
+            frags.iter().filter(|(s, _)| s.trim() == "XXXX").count(),
+            2,
+            "both markers must still render — out of FLOW is not out of the PAGE: {frags:?}"
+        );
+        // 2. The out-of-flow marker sits at the inset (`left:0` of a `position:relative` li), i.e.
+        //    20px left of the content edge, and does NOT displace the text.
+        // Stated RELATIVE to each other, never as absolute px: the body's UA margin is not what
+        // this test is about, and encoding it would make the assertion fail for the wrong reason
+        // the next time a default changes.
+        assert_eq!(
+            x_of("XXXX", 0),
+            x_of("text", 0) - 20.0,
+            "abs ::before must sit at `left:0` — the padding edge, 20px left of the text — not at \
+             the text: {frags:?}"
+        );
+        // 3. THE CONTROL. A pseudo with no `position` is still in the flow and still pushes the
+        //    text, so this cannot pass by having removed all generated content from the flow. Its
+        //    marker starts exactly where the out-of-flow item's TEXT starts: the content edge.
+        assert_eq!(
+            x_of("XXXX", 1),
+            x_of("text", 0),
+            "an in-flow marker starts at the content edge: {frags:?}"
+        );
+        assert!(
+            x_of("text", 1) > 20.0,
+            "an IN-FLOW marker must still push the text right (control): {frags:?}"
+        );
+    }
+
     /// Regression: `::before` / `::after` generated content enters the flow. It is how the web draws
     /// icons, quotation marks, counters and dividers — and it is NOT in the DOM, so this is the only
     /// place it can appear.

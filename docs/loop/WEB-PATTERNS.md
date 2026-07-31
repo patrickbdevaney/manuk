@@ -5032,6 +5032,21 @@ still `Err`. Without that claim, an engine that never reported a network failure
 every "did it render?" assertion above. A dead origin, a DNS failure and a timeout are a different fact
 and they keep their own answer.
 
+## Pattern — the custom bullet: `::before { content: "–"; position: absolute; left: 0 }` (tick 775)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| A list item, card or nav link sets `padding-left` and hangs a marker in an absolutely-positioned `::before` — a dash, a chevron, an icon glyph, a decorative bar. The generated content was materialised as an ordinary inline WORD with `position` never consulted, so the marker **took advance width**: it pushed the item's own text right by its own width and drew itself where the text should have started | **`255md.com`**, whose bullets are exactly this, and every site using the idiom — it is how the web has drawn custom list markers since `list-style: none` became normal, and the same shape carries pseudo icons, chevrons and decorative rules | ✅ **tick 775** — `InlineItem::AbsPseudo`: zero advance, zero inter-word space, zero line metrics, painted at `left − padding-left` from the pen. Gated by `an_absolutely_positioned_pseudo_leaves_the_flow_but_still_paints`, RED-proven two ways (restore the in-flow behaviour; and the OVER-BROAD fix of dropping the pseudo, which every positional claim still passes). ⚠ Partial and named: vertical insets are not honoured, and a `static` owner's positioned ancestor is not walked |
+
+**Out of FLOW is not out of the PAGE** — the failure mode of the obvious fix is to delete the marker,
+which trades a placement bug for a missing-content bug and passes every position assertion.
+
+⚠ **The burndown could not see this, or tick 774.** Shape scores ELEMENT geometry, and both defects live
+*inside* an element's box — the `<li>`'s rect is identical whether the marker is glued to the text or
+20px to its left. Two consecutive real, Chrome-verified fixes on the cohort the ranking named, zero
+metric movement: **when a metric RANKS work, its blind spot silently deprioritises a whole class of
+visible defect.**
+
 ## Pattern — a stylesheet that contains ANY non-ASCII character: `content:`, `font-family` in its own script (tick 774)
 
 | pattern | where it shows up | status |
