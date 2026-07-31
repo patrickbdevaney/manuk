@@ -783,3 +783,41 @@ layout regression went into `manuk-layout`'s existing suite, so none of them add
 own, and the inadmissible ones (drop a gate, widen a floor, sample instead of cover, launder to CI) are
 refused by construction. Recorded for the observer, unchanged from #24's carry-forward and now
 quantified: **per-gate SpiderMonkey startup × gate count ≈ 530s of a 655s wall, and it is `scripts/`-side.**
+
+## Audit #26 — tick 796 (881s, and the audit's own table does not add up)
+
+```
+   184s  P (parity, 72/72 vs live Chrome)        █████ 21%
+   120s  T (crate tests)                         ███ 14%
+    40s  B (workspace build)                     █ 5%
+    17s  G6 · 5s G1 · 4s D · 2s F · 1s G_IFRAME · then a column of gates reading 0s
+   ────
+   373s  attributed          881s  total          508s (58%) UNATTRIBUTED
+```
+
+**The accounting gap outranks anything in the ranking.** 58% of the wall is not in the table the
+instrument prints, and the column of `0s` gates is the tell: each of those stands up its own test
+binary and its own SpiderMonkey runtime, so a gate cannot cost nothing. This is #25's finding one turn
+further — #25 named *"~530s is the gate fan-out, spread thin"* by SUBTRACTION; #26 is the same
+subtraction on a bigger wall, and the subtraction is still the only way to see it. **Optimising the
+21% while 58% is unnamed is optimising the wrong thing**, and this is meta-instrument #3's exact shape:
+*8 of 30 process defects were caught by a number that did not add up, not by any gate.*
+
+### The four questions
+
+*Redundancy* — unchanged and still the lever: per-gate SpiderMonkey startup × gate count, whose fix is
+`cargo-nextest` (one shared binary), which is `scripts/`-side. *Parallelism* — gates launch
+concurrently; the perf floors are deliberately serial and must stay so. *Caching* — incrementals on
+the ramdisk, fetches snapshot-cached. *Scope* — the four gates added this window
+(`G_FORM_CONTROL_METRICS`, `G_CASCADE_LAYERS`, `G_LINE_BREAK_SOLIDUS`, `G_FLOAT_CONTAINING_BLOCK`,
+`G_FLEX_ORDER`, `G_INLINE_BLOCK_BASELINE`) are single-`#[test]` page gates on the **existing**
+`manuk-page` binary — no new build target, and each is the cheapest possible shape for what it asserts.
+
+**Nothing trimmed, and nothing should be.** Every admissible saving is harness work this agent does not
+own; the inadmissible ones are refused by construction.
+
+⚠ **For the record: this wall read 63s at the start of the session and 881s at its end, on the same
+machine.** The difference is not bloat — these ticks edit `engine/css` and `engine/layout`, the
+shared-type crates that cascade furthest, so 881s is the *worst realistic tick* the Tier-0 item is
+measured against (the 300s target is stated for that case). The audit that would settle it is the
+attribution gap above, not a stopwatch.

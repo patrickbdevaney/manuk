@@ -538,3 +538,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 793	105b3689	1785517527	2026-07-31T13:05:27-04:00	4782	capability	63	6	340	32	366	81	3896	6960	0	410	0	`order` lays items out in order-modified document order (2026-07-31)
 794	4c615ee0	1785519272	2026-07-31T13:34:32-04:00	1745	measurement	63	9	363	36	367	81	3896	6960	0	411	0	bank the sweep the cadence rule asks for, before an eighth fix (2026-07-31)
 795	afd1d340	1785523322	2026-07-31T14:42:02-04:00	4050	capability	63	7	413	33	367	81	3896	6960	0	411	0	a text-bearing `inline-block` sits on ITS OWN baseline (2026-07-31)
+796	488efc94	1785525232	2026-07-31T15:13:52-04:00	1910	measurement	63	10	239	38	367	81	3896	6960	0	412	0	one variable, one sweep: what an inline-block baseline is worth on 200 sites (2026-07-31)

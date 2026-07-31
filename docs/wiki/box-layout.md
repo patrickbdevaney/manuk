@@ -2675,3 +2675,28 @@ sort is skipped entirely unless some item carries a non-zero `order`.
 ⚠ **And the DOM must not move.** `order` is visual only by design: the accessibility tree and
 sequential focus read source order. An engine that reordered the tree would pass every box assertion
 and silently rewrite what a screen reader announces.
+
+### …and the containing block is the float's ORIGIN, not just its limit (t797)
+
+t792 taught float placement that the containing block is a LIMIT — clamp into it. That is only half
+the rule, and the missing half has a famous idiom:
+
+```css
+.row { margin: 0 -15px }        /* Bootstrap's gutter row */
+.col { float: left }
+```
+
+A negative horizontal margin puts the row's content edges OUTSIDE the formatting context that owns the
+exclusion bands. `place()` took its origin from `available()`, which folds the context's own
+`left_edge` in as a floor — right for line content, wrong for a float whose containing block starts
+further out. Chrome puts the column at **-15**; we put it at **0**, and a clamp cannot fix that
+because `l.max(cb_left)` is a no-op whenever `cb_left` is the smaller number.
+
+**The containing block is the origin; the floats are the obstacle.** Overlapping floats now push
+inward from `cb_left`/`cb_right` rather than from the context's edges.
+
+⚠ **A measured number is only measured for the fixture it was measured in.** The right-float half of
+this case reads **265** in isolation and **150** in the gate's own fixture, where five earlier right
+floats share the band — both are Chrome. Porting the isolated number into the gate is inventing it,
+and it is the second time in seven ticks the gate caught an asserted-not-measured value. Extract the
+gate's own `const HTML`, run THAT through Chrome.

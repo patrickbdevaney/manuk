@@ -60,12 +60,16 @@ body{margin:0;font:16px/1.2 sans-serif}
 .fr{float:right;width:50px;height:20px}
 .fl{float:left;width:50px;height:20px}
 .wide{float:right;width:400px;height:10px}
+.row{margin:0 -15px}
+.colL{float:left;width:50px;height:10px}
+.colR{float:right;width:50px;height:10px}
 </style></head><body>
 <div class="w"><div class="fr" id="a1"></div><div class="fl" id="a2"></div></div>
 <div class="n"><div class="fr" id="b1"></div></div>
 <div class="bfc"><div class="fr" id="c1"></div></div>
 <div class="w"><div class="wide" id="d1"></div></div>
 <div class="w"><div class="fr" id="e1"></div><div class="fr" id="e2"></div></div>
+<div class="w"><div class="row"><div class="colL" id="g1"></div><div class="colR" id="g2"></div></div></div>
 </body></html>"##;
 
 fn x_of(page: &manuk_page::Page, sel: &str) -> f32 {
@@ -143,5 +147,27 @@ fn g_float_containing_block() {
         200.0,
         "…and the second stacks inward against it, so the clamp did not break the exclusion bands \
          it shares with its neighbours",
+    );
+
+    // ── THE CONTAINING BLOCK IS THE ORIGIN, NOT JUST THE LIMIT (t797). A negative horizontal margin
+    // puts a block's content edges OUTSIDE the formatting context that owns the exclusion bands, and
+    // `.row { margin: 0 -15px }` with floated columns inside is the Bootstrap grid and every
+    // framework that copied it. Taking the float context's own edge as a floor overrules the block
+    // the float is actually in — measured, Chrome puts the left column at -15 and we put it at 0.
+    assert_x(
+        &page,
+        "#g1",
+        -15.0,
+        "a `float:left` in a `margin:0 -15px` row starts at its CONTAINING BLOCK's content edge, \
+         which the negative margin has pushed to -15 — not at the enclosing block's 0",
+    );
+    assert_x(
+        &page,
+        "#g2",
+        150.0,
+        "…and its right-floated sibling stacks inward from the right floats ALREADY in this band \
+         (every `.w` here is zero-height, so all of them share it): 150, measured in Chrome on \
+         THIS fixture. ⚠ In isolation the same markup reads 265 — the number is a property of the \
+         whole fixture, not of the rule, which is why it was measured here rather than ported",
     );
 }

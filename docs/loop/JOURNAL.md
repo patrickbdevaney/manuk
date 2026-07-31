@@ -41389,3 +41389,72 @@ ratchet's own rule says a Bar-0 crash is reverted rather than traded. Reproducin
 ninety seconds and cost nothing; reverting on the label would have thrown away +1.25 points of corpus
 shape and three crossings. **The instrument's word for a failure is a hypothesis about it.**
 [no-pattern]
+
+## Tick 797 — the containing block is the float's ORIGIN, not just its limit (2026-07-31)
+
+TICK SHAPE: capability (layout/floats) — the Bootstrap grid idiom, found by probing negative margins
+
+HYPOTHESIS (written before the fix): check #65's steer is *aim from the near-bar list, then probe the
+primitive that site's divergence names*. `255md.com` needs +0.029 and `rpsc.rajasthan.gov.in` — 0.942
+shape, blocked only by reading-order — are the two targets. Both are ordinary content sites, so probe
+the layout idioms ordinary content sites are built from: negative margins, percentage padding,
+box-sizing.
+
+**THREE PROBES, TWO NEGATIVE, ONE FINDING — and the negative ones are recorded because they retire
+whole classes:**
+
+* **Tables are Chrome-correct.** `border-collapse`, `table-layout:fixed`, `colspan`, `rowspan`,
+  `border-spacing`, auto width distribution: thirteen cells, every difference ≤3px and all of it the
+  collapsed-border edge convention. A `.gov.in` site is the archetypal table page and this is not
+  where its divergence lives.
+* **Negative margins on a plain block are exact.** `margin:0 -15px` on an auto-width block inside an
+  offset 400px container: x = 85, width = 430, and the one-sided variants too — all four Chrome-exact.
+
+* **THE FINDING, and it is one line of the same fixture:** a `float:left` INSIDE that
+  negative-margin row lands at **0** where Chrome puts it at **-15**.
+
+MECHANISM: `place()` took its left origin from `available()`, which folds this float CONTEXT's own
+`left_edge` in as a floor. That is correct for LINE content — it lives in this block — and wrong for a
+float whose CONTAINING BLOCK starts outside those edges, which is precisely what a negative horizontal
+margin does. **The containing block is the float's ORIGIN; the floats are the obstacle.** t792 taught
+this walk that the containing block is a LIMIT (`.min(cb_right)`, `.max(cb_left)`); a limit cannot
+help when the block starts further out than the context. Now the origin is `cb_left`/`cb_right` and
+overlapping floats push inward from there, via two new helpers that report the float-derived edge
+ALONE (`None` when nothing overlaps).
+
+⚠ **THIS IS THE BOOTSTRAP GRID.** `.row { margin: 0 -15px }` with floated columns inside is Bootstrap
+3/4's gutter idiom and every framework that copied it — one of the most-repeated CSS patterns on the
+pre-flexbox web, which is most of what is still online.
+
+MEASURED: `float:left` in a `margin:0 -15px` row → **-15, Chrome-exact** (was 0); the right-floated
+sibling likewise. t792's seven float positions unchanged, `manuk-layout` 103 tests green, and the four
+control sites byte-identical (`blog.rust-lang.org` 99.3%, `en.wikipedia.org` 60.4%,
+`news.ycombinator` 79.9%, `255md.com` 72.1%).
+
+Gate: `G_FLOAT_CONTAINING_BLOCK` extended with the negative-margin row. **Proven red:** restoring the
+context-edge floor fails `#g1` at 0 while every t792 case passes — the two rules are genuinely
+different and the old gate could not tell them apart.
+
+⚠⚠ **I ASSERTED 265 FOR THE RIGHT-FLOAT CASE AND THE GATE CAUGHT ME — FOR THE SECOND TIME IN SEVEN
+TICKS.** I measured the idiom in ISOLATION (265, correct there) and asserted that number in a fixture
+where five earlier right floats share the band; Chrome reads **150** on the real fixture, which is
+what we produce. **A measured number is only measured for the fixture it was measured in** — porting
+one between fixtures is inventing it. Extracting the gate's own `const HTML` and running THAT through
+Chrome took forty seconds, and the corrected assertion now carries the isolated number and the reason
+they differ.
+
+HONEST SCOPE: no site is claimed to cross; the two near-bar sites this probe was aimed at do not use
+the idiom, so they did not move. The fix is justified by Chrome-exactness on an idiom with enormous
+reach, and the corpus price comes at the next sweep — read paired.
+
+PERF: none claimed — two folds over the float list, replacing two that already ran.
+
+WIKI: `docs/wiki/box-layout.md` — appended to the float section.
+
+PATTERN: ⚠⚠ **A LIMIT AND AN ORIGIN ARE DIFFERENT FIXES, AND THE FIRST ONE LOOKS COMPLETE.** t792
+clamped floats INTO their containing block and every case it could think of passed; the case it could
+not think of is a block that starts OUTSIDE the context, where a clamp is a no-op. The tell was
+available five ticks earlier — `l.max(cb_left)` is a no-op whenever `cb_left < l`, and nobody asked
+when that happens. **When a fix is `max`/`min` against a bound, ask what the expression does when the
+bound is on the other side.**
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

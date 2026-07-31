@@ -1422,6 +1422,36 @@ impl FloatContext {
         x
     }
 
+    /// The inner edge imposed by OVERLAPPING FLOATS ALONE, ignoring this context's own edges —
+    /// `None` when no float on that side overlaps the band.
+    ///
+    /// `left_offset`/`right_offset` fold the context's `left_edge`/`right_edge` in as a floor, which
+    /// is right for LINE content (it lives in this block) and wrong for placing a float whose
+    /// CONTAINING BLOCK starts outside those edges. A negative horizontal margin does exactly that,
+    /// and it is not an exotic case: `.row { margin: 0 -15px }` with floated columns inside is the
+    /// Bootstrap grid, and every framework that copied it. Measured — a `float:left` column in a
+    /// `margin:0 -15px` row inside a 400px block: Chrome **x = -15**, ours **x = 0**.
+    fn left_float_edge(&self, y: f32, h: f32) -> Option<f32> {
+        self.floats
+            .iter()
+            .filter(|f| f.side == Float::Left && band_overlaps(f.rect, y, h))
+            .map(|f| f.rect.x + f.rect.width)
+            .fold(None, |a: Option<f32>, x| {
+                Some(a.map_or(x, |m: f32| m.max(x)))
+            })
+    }
+
+    /// Mirror of [`left_float_edge`] for right floats.
+    fn right_float_edge(&self, y: f32, h: f32) -> Option<f32> {
+        self.floats
+            .iter()
+            .filter(|f| f.side == Float::Right && band_overlaps(f.rect, y, h))
+            .map(|f| f.rect.x)
+            .fold(None, |a: Option<f32>, x| {
+                Some(a.map_or(x, |m: f32| m.min(x)))
+            })
+    }
+
     /// Available `(left_x, width)` for in-flow / line content in band `[y, y+h)`.
     fn available(&self, y: f32, h: f32) -> (f32, f32) {
         let l = self.left_offset(y, h);
@@ -1466,11 +1496,18 @@ impl FloatContext {
         let mut y = top;
         loop {
             let (l, avail) = self.available(y, h);
+            let _ = l;
+            let (left_float_edge, right_float_edge) =
+                (self.left_float_edge(y, h), self.right_float_edge(y, h));
             if w <= avail || avail >= full {
+                // ⚠ **THE CONTAINING BLOCK IS THE ORIGIN; THE FLOATS ARE THE OBSTACLE.** Taking
+                // `left_offset` here — which folds in this CONTEXT's left edge — makes the BFC's
+                // edge a floor, and a containing block with a negative margin starts OUTSIDE it. So
+                // the float's own block gets overruled by a block it is not in.
                 let x = if side == Float::Right {
-                    self.right_offset(y, h).min(cb_right) - w
+                    right_float_edge.map_or(cb_right, |e| e.min(cb_right)) - w
                 } else {
-                    l.max(cb_left)
+                    left_float_edge.map_or(cb_left, |e| e.max(cb_left))
                 };
                 // ⚠ **ONLY THE HUGGED EDGE IS CLAMPED, and that was measured rather than reasoned.**
                 // The first draft also clamped a right float to `cb_left`, on the theory that a box
@@ -1492,9 +1529,9 @@ impl FloatContext {
                 None => {
                     // Nothing opposing fits anywhere lower: hug the edge here.
                     let x = if side == Float::Right {
-                        self.right_edge.min(cb_right) - w
+                        cb_right - w
                     } else {
-                        self.left_edge.max(cb_left)
+                        cb_left
                     };
                     let rect = Rect {
                         x,
