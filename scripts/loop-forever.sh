@@ -128,9 +128,14 @@ while true; do
   # number from git — otherwise the progress check below false-fails and the supervisor backs off forever.
   TICK=$(git log --oneline -40 2>/dev/null | grep -oiE 'tick [0-9]+' | head -1 | grep -oE '[0-9]+' || echo 0)
   TARGET=$(grep -oP '^LOOP_UNTIL_TICK=\K[0-9]+' "$STORE" 2>/dev/null || echo 0)
+  # SAFETY CEILING (not a goal): the real terminal condition is the PHASE CERTIFICATES, not a tick
+  # count — so hitting this must NOT read as "complete" and must NOT hard-exit (which would need a
+  # manual restart). PAUSE with a recurring alarm and re-check: raising LOOP_UNTIL_TICK auto-resumes,
+  # the kill file stops for real. See docs/loop/AUTOLOOP (reframed 2026-07-30, owner).
   if [ "$TICK" -ge "$TARGET" ] 2>/dev/null; then
-    say "budget spent (tick $TICK ≥ target $TARGET) — loop complete. Supervisor exiting."
-    break
+    say "⚠ SAFETY CEILING reached (tick $TICK ≥ ceiling $TARGET) — this is a BACKSTOP, NOT completion. The real 'done' is the Phase-6 certificate. Pausing 300s; RAISE the ceiling (edit docs/loop/AUTOLOOP or ./scripts/autoloop.sh set <K>) to auto-resume, or touch $KILL to stop."
+    sleep 300
+    continue
   fi
 
   # Keep the watchdogs (cron daemon) dormant across the brief relaunch gap.

@@ -1,8 +1,16 @@
-# ── THE LOOP BUDGET ────────────────────────────────────────────────────────────────────────
-# The autonomous tick/eval loop runs until TICK reaches LOOP_UNTIL_TICK, then STOPS and reports
-# back (the ONE legitimate handback: "budget reached, set a new K"). This is how the operator sets
-# "run K more ticks" WITHOUT it living in a context window — the loop reads it mechanically each tick.
+# ── THE LOOP SAFETY CEILING (NOT a goal) ─────────────────────────────────────────────────────
+# ⚠ REFRAMED 2026-07-30 (owner): this number is a BACKSTOP, not a target. The real terminal
+# condition of the autonomous loop is the PHASE CERTIFICATES (Phase-0 cert → v1.0.0 → … → Phase-6),
+# handled by the standing triggers — NOT an arbitrary tick count. Reaching a tick number says
+# nothing about whether any phase is done, so the loop must NOT treat hitting this as "complete."
 #
-# To extend: edit the number below, or run  ./scripts/autoloop.sh set <K>   (target = current tick + K).
-# To run effectively forever: set a very large number.
-LOOP_UNTIL_TICK=1088
+# Behaviour when TICK reaches this ceiling (loop-forever.sh): the supervisor PAUSES with a loud,
+# recurring alarm and RE-CHECKS — it does NOT exit and does NOT claim completion. Raising the number
+# (edit here or ./scripts/autoloop.sh set <K>) auto-resumes it; no restart needed. To actually STOP
+# the loop, use the kill file:  touch .git/manuk-loop-DISABLED  (or pkill -f loop-forever.sh).
+#
+# Set FAR above any realistic phase-completion tick so it never interrupts mid-phase; it exists only
+# so an unattended, cost-bearing, auto-respawning loop is never truly unbounded (this loop has OOMed
+# the box and double-spawned when uncapped). 5000 = ~4200 ticks of headroom from t749, well past the
+# whole Phase 0→6 journey; raise it if a phase ever legitimately approaches it.
+LOOP_UNTIL_TICK=5000
