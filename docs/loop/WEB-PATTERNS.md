@@ -5032,6 +5032,30 @@ still `Err`. Without that claim, an engine that never reported a network failure
 every "did it render?" assertion above. A dead origin, a DNS failure and a timeout are a different fact
 and they keep their own answer.
 
+## Pattern — a page that narrows `sheet.cssRules` by `instanceof`, and an inert stub that answers `false` about a rule that IS one (tick 773)
+
+| pattern | where it shows up | status |
+| --- | --- | --- |
+| A CSS-in-JS runtime walks `document.styleSheets[i].cssRules` and narrows each entry by `instanceof CSSStyleRule` / `CSSMediaRule` / `CSSKeyframesRule` (or by `rule.type === CSSRule.MEDIA_RULE`). An **inert named stub** satisfies the `typeof` check and then answers **`false` about an object that IS a media rule** — so the runtime takes its "this browser has no media rules" branch with the rules sitting right there | **styled-components, Emotion, Lit, JSS** — the injection/rehydration path of all four. `CSSStyleRule` was an inert stub here, so `rule instanceof CSSStyleRule` was `false` for every real style rule; `CSSMediaRule` and the rest of the family did not exist at all (a `ReferenceError`) | ✅ **tick 773** — real `Symbol.hasInstance` predicates over what `__ruleOf`/`__makeSheet` actually build, plus the `CSSRule.*_RULE` numeric constants libraries read instead of hard-coding `4`. Gated by **`G_IFACE_SURFACE_2`** (47 claims, RED-proven three ways; the mutation that demotes `CSSMediaRule` back to an inert stub leaves `absent:none` passing and is caught only by `media:0`) |
+
+**The inert-stub doctrine has a boundary, and this is it.** `x instanceof FileList` answering `false` is
+*correct* — this engine never builds a `FileList`. The justification is the non-existence, not the
+naming, so it **does not transfer to interfaces we do build**. A stub for something real is not a
+placeholder; it is a wrong answer that no feature-detect can see.
+
+The same re-measure found **59 of 262** platform globals absent (`MessageEvent`, the SVG shape elements,
+the IndexedDB interface names every wrapper references at module scope, `TextMetrics`,
+`HTMLOptionsCollection`, `FontFace`/`FontFaceSet`, the `navigator` sub-object interfaces) — five ticks
+after the surface was last extended to "174 of 183". **A surface goes stale from the WEB's side, so its
+denominator is a measurement, not a constant.**
+
+⚠ **And 17 of the 59 were REFUSED.** `OffscreenCanvas`, `TrustedTypePolicyFactory`,
+`XMLHttpRequestUpload`, `DeviceMotionEvent`, `ToggleEvent`, `FormDataEvent` and the rest each name a
+capability this engine does not have, and `'DeviceMotionEvent' in window` is exactly how a page decides
+whether to run a motion-permission flow. Naming them would defeat the feature detection that is a page's
+only route around us — tick 772's half-installed-API trap with the sign flipped. The gate asserts those
+absences (`overclaimed:none`).
+
 ## Pattern — an API family that is only HALF implemented: the feature-detect passes, the next call throws (tick 772)
 
 | pattern | where it shows up | status |

@@ -3253,6 +3253,27 @@ const PRELUDE: &str = r#"
         'MessagePort', 'Range', 'DOMTokenList', 'NamedNodeMap', 'Attr',
         'CSSRule', 'CSSStyleRule', 'MediaQueryList', 'PerformanceEntry', 'IdleDeadline',
         'Screen', 'History', 'Location', 'VisualViewport'
+        // ── **THE t773 RE-MEASURE ADDED NOTHING TO THIS LIST, AND THAT IS THE POINT.** A probe of 262 platform globals
+        // found 59 absent. Almost all of them named something this engine really builds, so they got
+        // real `Symbol.hasInstance` predicates up with `iface()` rather than a stub — an inert
+        // `CSSMediaRule` would answer `false` about an object that IS one, which is the failure this
+        // list's own comment says it is not allowed to cause.
+        //
+        // ⚠ **The rest were deliberately LEFT ABSENT, and that is the load-bearing half of the
+        // decision.** Tick 608's rule stands: *"An interface object is defined IFF the thing it names
+        // exists in this engine"* — `OffscreenCanvas`, `TrustedTypePolicyFactory`,
+        // `XMLHttpRequestUpload`, `ReportingObserver`, `PerformanceResourceTiming`,
+        // `PerformanceObserverEntryList`, `StaticRange`, `CSSKeyframeRule`, `DeviceMotionEvent`,
+        // `DeviceOrientationEvent`, `GamepadEvent`, `TrackEvent`, `ToggleEvent`, `FormDataEvent`,
+        // `ContentVisibilityAutoStateChangeEvent` and `CDATASection` each name a capability we do
+        // not have, and `'DeviceMotionEvent' in window` is precisely how a page decides whether to
+        // run a motion-permission flow. Naming them would defeat the feature detection that is a
+        // page's only way to route around us — the same trap in the other direction as t772's
+        // half-installed `performance`. `G_IFACE_SURFACE_2` asserts those absences.
+        //
+        // `DOMStringMap` is the one genuine residue: `dataset` exists, but nothing distinguishes the
+        // object it returns from a plain object, so a predicate would be a guess. Tick 608 left it
+        // for the same reason and it stays left, named here so it is not mistaken for an oversight.
       ].forEach(function (n) { __inertNames.push(n); });
 
       // ── **`WebSocket` — it did not exist, and on a live-news site that is the whole page.**
@@ -4351,6 +4372,175 @@ const PRELUDE: &str = r#"
       // SVG's `path` — the one SVG element interface the earlier list reached for and missed. SVG
       // tag names are case-sensitive and stay lowercase, unlike HTML's.
       iface('SVGPathElement', function (o) { return isEl(o) && o.tagName === 'path'; });
+
+      // ── **THE REST OF THE SVG ELEMENT FAMILY.** `SVGPathElement` was added alone at t608 because
+      // one page reached for it; a re-measure of 262 platform globals found the other seven still
+      // absent. Charting libraries (D3, Chart.js, Highcharts) build these tags and then narrow on
+      // them by name — and an absent name is a `ReferenceError`, which removes the chart rather than
+      // degrading it. SVG tag names are case-sensitive and stay lowercase, unlike HTML's.
+      var __svgTag = { g: 'SVGGElement', rect: 'SVGRectElement', circle: 'SVGCircleElement',
+                       use: 'SVGUseElement', text: 'SVGTextElement', image: 'SVGImageElement' };
+      Object.keys(__svgTag).forEach(function (t) {
+        iface(__svgTag[t], function (o) { return isEl(o) && o.tagName === t; });
+      });
+      // `SVGGeometryElement` is the WebIDL base of the shape elements — every one of them is one.
+      var __svgGeom = { path: 1, rect: 1, circle: 1, ellipse: 1, line: 1, polyline: 1, polygon: 1 };
+      iface('SVGGeometryElement', function (o) { return isEl(o) && __svgGeom[o.tagName] === 1; });
+
+      // ── **THE CSSOM RULE FAMILY, AND HERE `false` IS NOT THE TRUTH.**
+      //
+      // The inert-stub doctrine rests on `x instanceof FileList` answering `false` *correctly* —
+      // nothing here is a `FileList`. That reasoning does NOT transfer to the rule interfaces: we
+      // genuinely produce `@media` and `@keyframes` rules, so an inert `CSSMediaRule` would answer
+      // `false` about an object that IS one. Every CSS-in-JS runtime (styled-components, Emotion,
+      // Lit, JSS) walks `sheet.cssRules` and narrows by `instanceof` or by `rule.type` — a wrong
+      // `false` sends it down the "this browser has no media rules" branch with the rules right
+      // there. So these get real predicates over what `__ruleOf` actually builds.
+      var __isRule = function (o) {
+        return !!o && typeof o === 'object' && typeof o.type === 'number'
+               && typeof o.cssText === 'string';
+      };
+      var __atRule = function (kw) {
+        return function (o) { return __isRule(o) && new RegExp('^@' + kw + '\\b', 'i').test(o.cssText); };
+      };
+      var CSSRuleC = iface('CSSRule', __isRule);
+      // The numeric constants live on the interface object AND on every instance's prototype chain in
+      // a real browser; libraries read `CSSRule.MEDIA_RULE` rather than hard-coding 4.
+      [['STYLE_RULE', 1], ['CHARSET_RULE', 2], ['IMPORT_RULE', 3], ['MEDIA_RULE', 4],
+       ['FONT_FACE_RULE', 5], ['PAGE_RULE', 6], ['KEYFRAMES_RULE', 7], ['KEYFRAME_RULE', 8],
+       ['NAMESPACE_RULE', 10], ['SUPPORTS_RULE', 12]].forEach(function (p) {
+        try { Object.defineProperty(CSSRuleC, p[0], { value: p[1], enumerable: true }); } catch (e) {}
+      });
+      iface('CSSStyleRule', function (o) {
+        return __isRule(o) && o.type === 1 && typeof o.selectorText === 'string';
+      });
+      iface('CSSMediaRule',     __atRule('media'));
+      iface('CSSKeyframesRule', __atRule('(-webkit-)?keyframes'));
+      iface('CSSSupportsRule',  __atRule('supports'));
+      iface('CSSFontFaceRule',  __atRule('font-face'));
+      iface('CSSImportRule',    __atRule('import'));
+      iface('CSSPageRule',      __atRule('page'));
+      iface('CSSNamespaceRule', __atRule('namespace'));
+      // `CSSGroupingRule` / `CSSConditionRule` are WebIDL bases: a grouping rule is one that contains
+      // other rules, and a condition rule is the `@media`/`@supports` subset of those.
+      iface('CSSConditionRule', function (o) {
+        return __atRule('media')(o) || __atRule('supports')(o);
+      });
+      iface('CSSGroupingRule', function (o) {
+        return __atRule('media')(o) || __atRule('supports')(o) || __atRule('(-webkit-)?keyframes')(o);
+      });
+      // ⚠ `CSSKeyframeRule` (a single `0% { … }` step) is deliberately NOT here: our rule splitter
+      // does not descend into a `@keyframes` block, so no object in this engine is one, and naming
+      // it would be a claim rather than a fact. Named as residue, not silently skipped.
+      iface('MediaList', function (o) {
+        return !!o && typeof o === 'object' && typeof o.mediaText === 'string'
+               && typeof o.item === 'function';
+      });
+
+      // ── **`MessageEvent` — the single most-referenced absent name in the re-measure.**
+      // `postMessage`, `WebSocket`, `EventSource`, `Worker`, `BroadcastChannel` and every OAuth popup
+      // handshake deliver one, and the idiom that guards a cross-origin listener is
+      // `if (!(e instanceof MessageEvent)) return;`. The engine already builds message events as
+      // plain objects on several paths, so the honest predicate is over their shape rather than a
+      // constructor identity that only one of those paths would satisfy.
+      iface('MessageEvent', function (o) {
+        return !!o && typeof o === 'object' && 'data' in o
+               && (o.type === 'message' || o.type === 'messageerror');
+      });
+      iface('MediaQueryListEvent', function (o) {
+        return !!o && typeof o === 'object' && o.type === 'change'
+               && typeof o.matches === 'boolean' && typeof o.media === 'string';
+      });
+      // `TextMetrics` is what `measureText` returns and what a text-fitting loop narrows on.
+      iface('TextMetrics', function (o) {
+        return !!o && typeof o === 'object' && typeof o.width === 'number'
+               && 'actualBoundingBoxAscent' in o;
+      });
+      // `PerformanceNavigationTiming` — we DO build a navigation entry, so the name is a real gap
+      // rather than a claim. Every RUM library narrows `getEntriesByType('navigation')[0]` by it.
+      iface('PerformanceNavigationTiming', function (o) {
+        return !!o && typeof o === 'object' && o.entryType === 'navigation';
+      });
+      iface('PerformanceMark',    function (o) { return !!o && o.entryType === 'mark'; });
+      iface('PerformanceMeasure', function (o) { return !!o && o.entryType === 'measure'; });
+      // `HTMLOptionsCollection` is what `select.options` is, and it is NOT a plain HTMLCollection —
+      // the distinguishing member is `add`, which is exactly what a page uses it for.
+      iface('HTMLOptionsCollection', function (o) {
+        return !!o && typeof o === 'object' && typeof o.add === 'function'
+               && typeof o.length === 'number' && typeof o.item === 'function';
+      });
+      // The two live-list interfaces behind `document.styleSheets` and `sheet.cssRules`.
+      iface('StyleSheetList', function (o) {
+        return !!o && typeof o === 'object' && typeof o.length === 'number'
+               && typeof o.item === 'function' && (o.length === 0 || !!(o[0] && o[0].cssRules));
+      });
+      iface('CSSRuleList', function (o) {
+        return !!o && typeof o === 'object' && typeof o.length === 'number'
+               && typeof o.item === 'function' && (o.length === 0 || __isRule(o[0]));
+      });
+      // The observer entry types. We build both — an IntersectionObserver entry and a ResizeObserver
+      // size box — so an inert `false` here would be wrong about an object the engine just handed the
+      // page inside its own callback.
+      iface('IntersectionObserverEntry', function (o) {
+        return !!o && typeof o === 'object' && typeof o.intersectionRatio === 'number'
+               && 'isIntersecting' in o;
+      });
+      iface('ResizeObserverSize', function (o) {
+        return !!o && typeof o === 'object' && typeof o.inlineSize === 'number'
+               && typeof o.blockSize === 'number';
+      });
+
+      // ── **THE INDEXEDDB INTERFACE NAMES.** `indexedDB.open` is a real implementation here, which is
+      // exactly why these are a gap and not a claim: a wrapper (Dexie, `idb`, Firebase's persistence
+      // layer) names `IDBDatabase`/`IDBRequest` at MODULE scope, before any database is opened — so
+      // the `ReferenceError` lands before the feature it guards is ever reached, and the app's
+      // "IndexedDB unavailable" fallback never runs because the check for it threw. Tick 608 recorded
+      // these as residue with the reason "their predicates need a distinguishing shape this tick did
+      // not establish"; the shapes are established below, from what the implementation actually
+      // returns.
+      iface('IDBFactory', function (o) { return !!o && o === globalThis.indexedDB; });
+      iface('IDBRequest', function (o) {
+        return !!o && typeof o === 'object' && 'result' in o && 'error' in o
+               && (o.readyState === 'pending' || o.readyState === 'done');
+      });
+      // An open request is the one that carries a version-change transaction slot from birth.
+      iface('IDBOpenDBRequest', function (o) {
+        return !!o && typeof o === 'object' && 'result' in o && 'error' in o
+               && (o.readyState === 'pending' || o.readyState === 'done')
+               && 'transaction' in o && o.source === null;
+      });
+      iface('IDBDatabase', function (o) {
+        return !!o && typeof o === 'object' && typeof o.transaction === 'function'
+               && typeof o.close === 'function' && 'objectStoreNames' in o;
+      });
+      iface('IDBTransaction', function (o) {
+        return !!o && typeof o === 'object' && typeof o.objectStore === 'function' && !!o.db;
+      });
+      iface('IDBObjectStore', function (o) {
+        return !!o && typeof o === 'object' && typeof o.put === 'function'
+               && typeof o.index === 'function' && 'keyPath' in o;
+      });
+      iface('IDBIndex', function (o) {
+        return !!o && typeof o === 'object' && typeof o.getAll === 'function' && 'multiEntry' in o;
+      });
+      iface('IDBCursor', function (o) {
+        return !!o && typeof o === 'object' && typeof o.continue === 'function' && 'primaryKey' in o;
+      });
+      iface('IDBVersionChangeEvent', function (o) {
+        return !!o && typeof o === 'object' && 'oldVersion' in o && 'newVersion' in o;
+      });
+
+      // ── The `navigator` sub-object interfaces. Each is named ONLY because the object it names is
+      // really there — `navigator.clipboard`, `.permissions`, `.userAgentData`, `.serviceWorker` and
+      // `document.fonts` all exist, so identity against the singleton is exact.
+      iface('Clipboard',    function (o) { return !!o && o === navigator.clipboard; });
+      iface('Permissions',  function (o) { return !!o && o === navigator.permissions; });
+      iface('NavigatorUAData', function (o) { return !!o && o === navigator.userAgentData; });
+      iface('ServiceWorkerContainer', function (o) { return !!o && o === navigator.serviceWorker; });
+      iface('FontFaceSet',  function (o) { return !!o && o === document.fonts; });
+      iface('FontFace', function (o) {
+        return !!o && typeof o === 'object' && typeof o.family === 'string' && 'status' in o;
+      });
 
       // `performance.now()` — schedulers, profilers and animation libraries all feature-detect it and
       // most fall back to `Date.now()`. The ones that don't simply break.

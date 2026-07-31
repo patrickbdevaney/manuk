@@ -39212,3 +39212,110 @@ hand-written platform prelude full of exactly such partial objects: **the featur
 call surface are different sets**, so a stub that satisfies the first while failing the second is a page
 killer wearing a green `typeof` check. Grep the prelude for objects whose methods were added one at a
 time — each is a candidate.
+
+## Tick 773 — the interface surface re-measured: 59 of 262 absent, and the half where `false` is a LIE (2026-07-31)
+
+Two things happened this tick, and the measurement one is the more important.
+
+### ⚠⚠⚠ FIRST: THE UNSCORED LIST IS NOT WHAT THE RANKING SAYS IT IS
+
+Before picking work I ran the whole t767 boot-broken cohort — every `render-failed`, `shell-only` and
+`css-starved` row, 22 origins — to get a ranked throw-killer worklist instead of guessing. The board's
+premise is that "~30 of the 48 (render-failed + shell-only + timeout) are function/boot problems". **The
+data does not support that.** Of the 22:
+
+| bucket | n | whose bug |
+|---|---|---|
+| `shell-only-N` | 11 | **the ORACLE's** — *Chrome itself* rendered only N elements. On 7 of the 11 our coverage of what Chrome drew is **100%** (`forums.moneysavingexpert` 9 paths / 0 missing; `booking.directferries` 3/0; `allticketscol` 1/0; `pt88.app` 3/0). |
+| `empty-202` / `unreachable` | 2 | the origin's — zero-byte body, or the request never completed |
+| `css-starved-N` | 2 | ours, but a load-budget/network problem, not a throw |
+| `thin-overlap` | 1 | measurement |
+| **genuinely ours, a real render failure** | **4** | `otomoto.pl`, `redemoura.gupy.io`, `pogoda.by`, and `coinmarketcap.com` (which t772 already fixed) |
+
+I looked at the Chrome-side PNGs rather than trusting the label: `forums.moneysavingexpert.com` is a
+header and nav above an **empty body** *in Chrome*, and `booking.directferries.com` is a **blank grey
+page** *in Chrome*. So the 63% scorability ceiling is **substantially a corpus/oracle-validity fact, not
+an engine ceiling** — and a site where the reference engine renders nothing cannot be a render failure of
+ours, yet it counts against a 95% bar.
+
+**I am deliberately NOT changing the denominator.** That is the single most self-serving edit available
+here and it is exactly what t771 refused when its own faster sweep produced a better-looking number. The
+finding is recorded, with the evidence, for the cert owner. What it *does* change is the ranking: the
+throw-killer worklist is **4 sites, not 30**, so "clear the unscored list" is a much smaller lever than
+the board prices it at, and each remaining one has its own named next rung (`otomoto.pl` uninvestigated;
+`redemoura.gupy.io` uninvestigated; `pogoda.by` = Zone.js aborting because `Promise` was overwritten —
+and `globalThis.Promise` is writable here and a real zone.js bundle boots clean in a fixture, so that one
+is not the obvious bug it looks like).
+
+### SECOND: THE SURFACE GOES STALE FROM THE WEB'S SIDE
+
+`G_IFACE_SURFACE` (t608) took the interface surface 120 → 174 of **183** names. That denominator was
+itself a guess, and it had never been re-measured. A probe of **262** platform globals found **59
+absent** — `MessageEvent`, the entire CSSOM rule family, the SVG shape elements, the IndexedDB interface
+names, `TextMetrics`, `HTMLOptionsCollection`, `FontFace`/`FontFaceSet`, the `navigator` sub-object
+interfaces.
+
+**The part that is not "add more names".** The inert-stub doctrine rests on a specific claim —
+`x instanceof FileList` answering `false` is *correct*, because this engine never builds one. **That
+justification does not transfer to interfaces we DO build.** `CSSStyleRule` was an inert stub, so
+`rule instanceof CSSStyleRule` answered **`false` about a real style rule** — a wrong answer, not an
+absence, and every CSS-in-JS runtime (styled-components, Emotion, Lit, JSS) narrows exactly that way.
+So the additions are real `Symbol.hasInstance` predicates over what the engine actually produces: the SVG
+tags, `__ruleOf`'s rules, message events, `measureText`'s metrics, the IndexedDB shapes, and identity
+against the `navigator`/`document.fonts` singletons.
+
+### ⚠ AND THE HALF THAT IS A REFUSAL, WHICH IS WHERE THIS TICK NEARLY WENT WRONG
+
+The first draft added all 59. It made **`G_IFACE_SURFACE` go red** on `offscreen_absent=true` — a claim
+t608 wrote on purpose, and quoting it, since superseding a deliberate decision requires quoting it:
+
+> *"An interface object is defined IFF the thing it names exists in this engine. `OffscreenCanvas` is
+> therefore **deliberately absent** … A stub that names a capability we lack defeats feature-detection
+> and is worse than the gap."*
+
+That rule is right, it is the **t772 trap pointing the other way**, and a gate caught me breaking it. So
+I measured each candidate's capability instead of assuming: `transferControlToOffscreen` undefined,
+`trustedTypes` undefined, `xhr.upload` undefined, no `formdata` event, `toggle` fires but with no
+`newState`. **17 names were withdrawn and are now asserted ABSENT** by the new gate —
+`OffscreenCanvas`, `TrustedTypePolicyFactory`, `XMLHttpRequestUpload`, `ReportingObserver`,
+`PerformanceResourceTiming`, `PerformanceObserverEntryList`, `StaticRange`, `CSSKeyframeRule`,
+`DeviceMotionEvent`, `DeviceOrientationEvent`, `GamepadEvent`, `TrackEvent`, `ToggleEvent`,
+`FormDataEvent`, `ContentVisibilityAutoStateChangeEvent`, `CDATASection`, `DOMStringMap`.
+`'DeviceMotionEvent' in window` is precisely how a page decides whether to run a motion-permission flow;
+naming it would defeat the only mechanism a page has for routing around us. **The `__inertNames` list
+gained ZERO entries this tick, and that is the result, not an omission.**
+
+### THE MEASURED OUTCOME — and it is a null on the corpus
+
+| site | before | after |
+|---|---|---|
+| news.ycombinator.com (anchor control) | 0.801 / 804 scored | **0.780 / 804 scored** — inside the documented 3.7pt run-to-run spread, not a signal either way |
+| coinmarketcap.com | 0.374 | 0.371 (same, noise) |
+| otomoto.pl · redemoura.gupy.io · pogoda.by | `render-failed` | **still `render-failed`** |
+
+**No site crossed, and none was expected to** — the 4 real render failures each have a different named
+blocker. The value banked here is a *class* of `ReferenceError` removed plus one corrected wrong answer
+(`CSSStyleRule` said `false` about real style rules), not a corpus movement. Saying otherwise would be
+the "band lifted +2.0pt, 0 sites crossed" reporting the measurement doc warns about.
+
+TICK SHAPE: capability (throw-class surface — the board's killer #1, re-measured rather than remembered)
+CLUSTER: interface-objects. 59 absent → 0 unaccounted (42 named truthfully, 17 refused as honest
+negatives). No corpus cluster shrank; this removes a failure class, it does not move a site.
+Gates: **`G_IFACE_SURFACE_2`** (`engine/page/tests/g_iface_surface_2.rs`), 47 claims, **proven red three
+ways** — drop one name (`absent:IDBVersionChangeEvent`); demote `CSSMediaRule` to an inert stub
+(`absent:none` still passes, `media:0` catches it — the t608 lesson that existence is not the property
+worth asserting, reproduced as a mutation); widen the `IDBDatabase` duck predicate (`objNotDb:true`).
+`G_IFACE_SURFACE`'s nine negatives all still hold.
+⚠ A first draft of the gate asserted the IndexedDB family from inside `onupgradeneeded`. Those pushes
+**never executed** — the handler fires on a later microtask, the harness reads `#out` after the
+synchronous script — so the gate passed on assertions that did not run. Replaced with synchronous
+negative claims, which are the side that actually catches an over-broad duck predicate.
+PERF: none claimed, none measured.
+WIKI: `docs/wiki/js-engine.md` — "The interface surface is defined IFF the capability exists".
+PATTERN: ⚠⚠⚠ **A SURFACE GOES STALE FROM THE WEB'S SIDE, SO ITS DENOMINATOR IS A MEASUREMENT, NOT A
+CONSTANT.** "174 of 183" read like 95% done; the 183 was a list someone wrote down once, and re-probing
+against 262 names found a third of the gap had never been counted. Any "N of M" where M was authored
+rather than measured is a number about the author. The corollary this tick nearly failed: **when you
+widen a surface, the honest NEGATIVES are part of the surface** — a name added for a capability we lack
+defeats the feature detection that is a page's only way to route around us, which is the same
+half-installed-API failure as t772 with the sign flipped.

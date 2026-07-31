@@ -2401,3 +2401,67 @@ attributable when the mutation is restored and the crossing reverses.
 Gate: `G_USER_TIMING` (`engine/page/tests/g_user_timing.rs`), proven red two ways — delete `clearMarks`
 (→ `missing:clearMarks`), and make `mark()` stop recording (→ the probe's own `measure` throws and the
 page never writes its result, `got: -`, which is exactly trivago's failure reproduced in miniature).
+
+## The interface surface is defined IFF the capability exists — and its denominator is a measurement
+
+`G_IFACE_SURFACE` (tick 608) took the platform interface surface from **120 to 174 of 183** names, after
+`www.welt.de` read a bare `HTMLMetaElement`, took the `ReferenceError`, decided it was being ad-blocked
+and blanked its own document. "174 of 183" reads like 95% done.
+
+**The 183 was a list someone wrote down once.** Re-probing against **262** platform globals found **59
+absent** — a third of the gap had never been counted, because the surface goes stale *from the web's
+side*, not ours. Generalisable: **any "N of M" where M was authored rather than measured is a number
+about the author.**
+
+### The half that is not "add more names"
+
+The inert-stub doctrine is justified by a specific claim: `x instanceof FileList` answering `false` is
+**correct**, because this engine never builds a `FileList`. **That justification does not transfer to
+interfaces we DO build.** `CSSStyleRule` was an inert stub, so `rule instanceof CSSStyleRule` answered
+`false` **about a real style rule** — a wrong answer, not an absence, and narrowing `sheet.cssRules` by
+`instanceof` is exactly what styled-components, Emotion, Lit and JSS do.
+
+So the additions are real `Symbol.hasInstance` predicates over what the engine actually produces:
+
+| family | predicate keys on |
+|---|---|
+| SVG shape elements | the lowercase, case-sensitive `tagName` (`SVGGeometryElement` = the shape subset) |
+| CSSOM rules | `__ruleOf`'s `{type, cssText}` — `@media`/`@supports`/`@keyframes`/`@font-face`/`@import` by at-keyword |
+| `MessageEvent` | `type` ∈ {`message`,`messageerror`} ∧ `'data' in o` — several delivery paths build these, so constructor identity would satisfy only one |
+| IndexedDB | the shapes `indexedDB.open` really returns (`readyState`+`result`+`error` for a request; `transaction()`+`close()`+`objectStoreNames` for a database) |
+| `navigator` sub-objects | identity against the singleton (`navigator.clipboard`, `.permissions`, `document.fonts`) — exact |
+
+### ⚠ The refusal is part of the surface, and a gate caught the attempt to skip it
+
+The first draft added all 59 and made `G_IFACE_SURFACE` go **red** on `offscreen_absent=true`, a claim
+tick 608 wrote on purpose:
+
+> *"An interface object is defined IFF the thing it names exists in this engine. `OffscreenCanvas` is
+> therefore **deliberately absent** … A stub that names a capability we lack defeats feature-detection
+> and is worse than the gap."*
+
+**This is tick 772's half-installed-API trap with the sign flipped.** There, a name present without its
+family let the detect pass and the caller walk into a wall. Here, a name present without its *capability*
+does the same thing one level up: `'DeviceMotionEvent' in window` is precisely how a page decides whether
+to run a motion-permission flow, and answering yes removes the page's only way to route around us.
+
+So each candidate's capability was **measured**, not assumed — `transferControlToOffscreen` undefined,
+`trustedTypes` undefined, `xhr.upload` undefined, no `formdata` event, `toggle` fires but carries no
+`newState`. **17 names were withdrawn and are now asserted ABSENT** by `G_IFACE_SURFACE_2`'s
+`overclaimed:none`. The `__inertNames` list gained **zero** entries; that is the result, not an omission.
+
+`DOMStringMap` is the one genuine residue: `dataset` exists, but nothing distinguishes the object it
+returns from a plain object, so a predicate would be a guess — the same reason tick 608 left it.
+
+### The gate, and one way it was briefly vacuous
+
+`G_IFACE_SURFACE_2`, 47 claims, red three ways: drop a name; **demote `CSSMediaRule` back to an inert
+stub** — under which `absent:none` still passes and only `media:0` catches it, reproducing tick 608's
+lesson that *existence was never the property worth asserting* as an executable mutation; and widen the
+`IDBDatabase` duck predicate until a bare `{close:1}` passes.
+
+⚠ A first draft asserted the IndexedDB family from inside `onupgradeneeded`. **Those pushes never ran** —
+the handler fires on a later microtask and the harness reads the output element after the synchronous
+script — so the gate was green on assertions that did not execute. They were replaced with synchronous
+*negative* claims (`objNotDb`, `reqNotDb`, …), which are the side that actually catches the failure a
+duck-typed predicate invites.
