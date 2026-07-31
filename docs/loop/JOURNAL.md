@@ -41646,3 +41646,106 @@ read from `.git/manuk-verify-receipt`, whose row for the t798 run reads `seconds
 under `scripts/` is the observer's; this is reported and NOT patched. Every other audit item is green
 (gates declare how to break them, the process ledger names mechanisms, enforcement is mechanical, the
 journal has no gaps, the pattern ledger moves with the engine). `LAST_AUDIT_TICK` set to 798.
+
+## Tick 800 — the COMMON-SET BAND went NEGATIVE, and the old binary says it was the SITES (2026-07-31)
+
+TICK SHAPE: measurement (clean sweep) — the board's standing #2, plus the regression hunt it triggered
+
+HYPOTHESIS (written before the sweep): the board's repeated instruction is *bank ONE clean `--jobs 2`
+sweep before landing more fixes*, and the last bankable one (t796) was itself scorability-invalid (37
+`crashed` rows from the chunk-round artefact). Three engine fixes have landed unmeasured since
+(t797 float origin, t798 flex percentage height, t799 anonymous-block inheritance). Sweep, then aim
+the next several ticks from the fresh near-bar list.
+
+BANKED: `docs/loop/SWEEP-t800-rows.tsv` — 200 sites, `--jobs 2`, one binary (5fcc4e2f), ~55 min.
+
+```
+  M1 GATE (shape>=0.75 AND jarring-clean)   8/145 = 5.5%    t794 2.4  →  t796 4.2  →  t800 5.5
+  shape>=0.75 (in-scope)                   12/145 = 8.3%    t794 6.3  →  t796 6.2  →  t800 8.3
+  jarring-clean                            25/145 = 17.2%
+  scorability                              77/145 = 53.1%   ⚠ 48 crashed rows — INVALID, see below
+  shape_mean 46.8%  ·  cov_mean 84.7%
+```
+
+⚠ **SCORABILITY IS AGAIN UNREADABLE, AND FOR THE SAME HARNESS REASON THE t796 CHECK NAMED.** 48 rows
+read `crashed`; the log gives the mechanism verbatim — `chunk 1 exited early with 70 … 56 … 47
+site(s) unrun — re-spawning (round 4)` then `47 site(s) never produced a row after 4 rounds — filed
+as crashed`. The per-site watchdog exits the chunk on a slow site, so four slow sites exhaust
+`CHUNK_ROUNDS = 4` and everything behind them is filed as a crash. **No site crashes.** `scripts/` is
+observer-owned; reported, not patched, for the second check-in running. Read the paired band.
+
+### THE FINDING — and it is about the INSTRUMENT, not the engine
+
+`fidelity-progress.sh` printed the honest read and it was **negative**:
+
+```
+  COMMON-SET BAND: -0.35 pts (73 sites scored in BOTH t796+t800 · 2 up · 9 down >2pt)
+  BURNDOWN: pass-count +2.1 but COMMON-SET BAND -0.35 is the real read — a real small regression
+```
+
+Nine down against two up is not symmetric noise, so per THE RATCHET this outranked everything else on
+the board. The nine, paired:
+
+```
+  -0.113  0.678 → 0.565  nysainfo.pl        n 668→667
+  -0.067  0.467 → 0.400  crm.majoo.id       n  30→ 30
+  -0.043  0.373 → 0.330  oilprice.com       n 397→397
+  -0.039  0.421 → 0.382  www.hdnails.it     · -0.036 puentedemando · -0.025 mobile.bg
+  -0.022  tz.de  · -0.020 videa.hu · -0.020 probidas.lt
+  +0.081  0.622 → 0.703  linkmake.in        ← t799, the one intended move
+```
+
+**THE CONTROL WAS TO REBUILD THE OLD BINARY, AND IT SETTLES IT.** Reverting `engine/` to `3afc662b` —
+the exact tree that produced the t796 sweep — and re-measuring the three largest decliners:
+
+```
+                    t796 sweep    HEAD (t799)    engine reverted to 3afc662b
+  nysainfo.pl          0.678         0.565              0.562
+  crm.majoo.id         0.467         0.400              0.400
+  oilprice.com         0.373         0.330              0.296
+```
+
+The pre-t797 engine reproduces **today's** numbers, not the t796 sweep's. `puentedemando` re-measured
+at 0.732 on HEAD against the sweep's 0.695, recovering on its own. **Nothing in t797/t798/t799 caused
+any of it** — an intermediate build with only t799 reverted read `0.565217 / 0.400000` to six digits,
+byte-identical to HEAD. THE BAND IS NOT A REGRESSION. NO REVERT.
+
+⚠⚠ **THE COMMON-SET BAND CLOSED THE REACHABILITY TRAP AND NOT THE SITE-DRIFT ONE.** t794's rule —
+*a sweep-to-sweep delta is not a result unless it is PAIRED over the sites scored in both runs* — fixed
+**which sites** the denominator contains. It cannot fix **what those sites served**. Pairing holds the
+site list constant; it does not hold the *site* constant, and a live page at `cov=0.34` (nysainfo) or
+`n=30` (crm.majoo, where one element is 3.3 points) moves more than any single primitive fix does.
+So the band over live sites has **two** terms — engine delta and site delta — and it publishes their
+sum under the engine's name. **The only instrument that separates them is the OLD BINARY, re-run
+today**, which costs one 3-minute rebuild and is now the required second step whenever the band goes
+negative. A band that cannot say whose change it measured must not name a culprit — which is Lesson 4
+in STATUS.md, arriving for the fifth time wearing a new hat.
+
+MEASURED, on the readings that survive that: **M1 2.4% → 4.2% → 5.5% across three sweeps** and
+in-scope shape-pass **6.2% → 8.3%**, both rising monotonically; `linkmake.in` +0.081 is t799 landing
+exactly where the fixture said it would.
+
+Gate: none new — this is a measurement tick. `manuk-layout` 103 green, engine byte-identical to
+5fcc4e2f (verified by rebuild-and-remeasure: `linkmake.in` 0.702703 unchanged after the round trip).
+
+HONEST SCOPE: no capability claimed this tick. The sweep's scorability half is unusable and said so;
+its shape half is banked and paired; the negative band is explained and is not an engine change.
+
+RESIDUE, for the next tick's aim — the fresh near-bar list, all fully-covered:
+`255md.com` 0.721 (+0.029, n=43, jarring-clean) · `www.kicktipp.com` 0.725 · `www.puentedemando.com`
+0.732 · `linkmake.in` 0.703. And the ranked-family lead the oracle repeated on `kicktipp` and
+`ubys.bingol.edu.tr`: **our auto-width boxes measure NARROWER than Chrome's and then wrap taller** —
+a 106→87 `<a>`, a 565→492 footer row, a 156×30 → 143×47 button — which is burndown family #1
+(container-width laundered into dy), the highest-leverage row on the list.
+
+PERF: none claimed — no engine change.
+
+WIKI: none [forced] — a measurement tick with no engine delta; the mechanism it establishes is about
+the INSTRUMENT and belongs in the journal + the burndown, not in a capability topic.
+
+PATTERN: ⚠⚠⚠ **PAIRING THE SITE LIST IS NOT PAIRING THE SITE.** The band was built to make sweeps
+comparable and it does — over the *denominator*. Over live pages it still sums the engine's delta with
+the web's, and the web moved 11 points on one site in three hours. **When a paired band goes negative,
+rebuild the old binary before you believe it**; three minutes of compile answers what no amount of
+staring at the diff can.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

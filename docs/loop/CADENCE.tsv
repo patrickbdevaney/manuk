@@ -541,3 +541,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 796	488efc94	1785525232	2026-07-31T15:13:52-04:00	1910	measurement	63	10	239	38	367	81	3896	6960	0	412	0	one variable, one sweep: what an inline-block baseline is worth on 200 sites (2026-07-31)
 797	19e87984	1785527952	2026-07-31T15:59:12-04:00	2720	capability	63	11	404	47	368	81	3896	6960	0	413	0	the containing block is the float's ORIGIN, not just its limit (2026-07-31)
 798	2752727d	1785530606	2026-07-31T16:43:26-04:00	2654	capability	63	9	529	41	369	81	3896	6960	0	414	0	a percentage height on a flex item was resolved twice (2026-07-31)
+799	2bac658e	1785536475	2026-07-31T18:21:15-04:00	5869	capability	63	7	342	32	369	81	3896	6960	0	414	0	an anonymous block box inherited NOTHING from the container that made it (2026-07-31)
