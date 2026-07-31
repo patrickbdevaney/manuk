@@ -41291,3 +41291,101 @@ was not part of the question. Three of this session's findings arrived this way 
 a nesting control, this from a sub-pixel control, the float bug from a positioning sweep aimed at
 reading-order). **A probe is worth more than its hypothesis.**
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 796 — one variable, one sweep: what an inline-block baseline is worth on 200 sites (2026-07-31)
+
+TICK SHAPE: measurement + constitution check #65 (due at 796)
+
+HYPOTHESIS (written before the sweep finished): t795 moved `blog.rust-lang.org` 73.7 → 99.3 and
+`chat.google.com` across the bar, on the same binary minutes apart. It is ONE change since the t794
+sweep, which makes this the cleanest attribution this instrument can produce — every other sweep in
+this loop's history has priced a BATCH.
+
+⚠ **AND THE READING RULE IS THE ONE t794 BANKED: the headline delta is not the result.** Two sweeps of
+this corpus four hours apart disagreed about which sites were REACHABLE by five, worth four points of
+in-scope pass before the engine is consulted. So the number quoted for this fix is the PAIRED one —
+sites scored in both runs, up/down/net — with the unpaired headline beside it, not instead of it.
+
+PREDICTION: paired net strongly positive, concentrated in sites with text-bearing inline-block rows
+(nav bars, chip rows, footers); `shape_mean` up by more than the +0.14 points t794's seven-fix batch
+managed; and between 1 and 4 new crossings, because +25 points on one site is worth a crossing only
+where the site was already close.
+
+**MEASURED — one change, one sweep, and the paired band is the headline.**
+
+```
+  paired over the 78 sites scored in BOTH t794 and t796:  mean Δshape  +1.25 pts   ·  11 up, 4 down
+  crossed the 0.75 shape bar:   www.marktplaats.nl      0.709 -> 0.906
+                                chat.google.com         0.729 -> 0.847
+                                rpsc.rajasthan.gov.in   0.542 -> 0.942
+                                crossed DOWN: none
+  biggest losses:               www.agoda.com -0.065 · meuconsultordigital -0.047   (inside the spread)
+  M1 gate (shape AND jarring-clean):  3 sites -> 6
+```
+
+**ONE PRIMITIVE WAS WORTH ~9× THE SEVEN-FIX BATCH BEFORE IT** — +1.25 points of mean shape against
++0.14 — and the difference is not effort. It is that an `inline-block` baseline is on nearly every
+line of nearly every page. All three predictions held (paired net strongly positive, mean up by far
+more than the batch, 1–4 crossings → 3).
+
+⚠ **THE OBSERVER WIRED t794'S LESSON INTO THE INSTRUMENT, AND THE FIRST RUN AFTER IT IS THE ONE THAT
+NEEDED IT.** `fidelity-progress.sh` now prints a **COMMON-SET BAND** — *"+1.25 pts (78 sites scored in
+BOTH) ← the REAL slope; ignore the pass-count sign when they disagree"* — beside an unpaired pass
+count that reads −0.1 on this same run. The loop found the trap at t794, the observer closed it in the
+instrument, and it paid immediately. That is the division of labour working, and it is worth recording
+as such rather than as a script detail.
+
+⚠⚠ **AND THIS SWEEP IS PARTLY INVALID — 37 rows read `crashed` against ZERO in both previous sweeps.**
+Before touching anything: **no site crashes.** `payb.jp` scores 1.000 standalone, `sip777man.site`
+exits 0. The log names the mechanism itself:
+
+```
+  ⟳ chunk 1 exited early with 95 site(s) unrun — re-spawning (round 1)
+  ⟳ chunk 1 exited early with 56 … 47 … 37 site(s) unrun — re-spawning (round 4)
+  ⚠ chunk 1: 37 site(s) never produced a row after 4 rounds — filed as crashed
+```
+
+The per-site watchdog files its `timeout-150s` row and then `process::exit(0)`s — correct for a wedged
+main thread — so **every slow site costs its chunk one of its four rounds**, and a chunk that meets
+four of them files everything queued behind as `crashed`. That inflates the in-scope denominator
+(127 → 144, because `crashed` is ours by construction) and collapses scorability to 55.6%. `scripts/`
+and the harness are observer-owned: reported, not patched. **Read this sweep's paired band; do not
+read its scorability.** ⚠ Note the shape of the near-miss: a row that says `crashed` is exactly what a
+Bar-0 event looks like, and the first thing I did was try to reproduce one. *Control before blame*
+took ninety seconds and stopped a revert of the best fix of the session.
+
+CONSTITUTION CHECK #65 (due at 796, written to `docs/loop/CONSTITUTION-CHECK.md`): invariants I2–I5
+and PART VII all hold; the steer is (1) keep the primitive-probe method but AIM it from the §8
+near-bar list — t794's seven unaimed fixes bought one crossing, t795's one aimed fix bought three;
+(2) jarring-clean is now the binding half of M1 at 18.1% against shape's 9 sites; (3) treat any sweep
+with a non-zero `crashed` count as scorability-invalid until the watchdog/round budget is
+re-parameterised.
+
+WALL-TIME AUDIT (due at 795, `scripts/wall-audit.sh run` — the third instrument due this window):
+**the audit's own table does not add up, and that outranks anything it ranks.** Total 881s; the
+sections it prints are P (parity) 184s, T (crate tests) 120s, B (build) 40s, G6 17s, G1 5s, D 4s,
+F 2s and a column of gates reading 0s — **373s of 881s. 58% of the wall is unattributed by the
+instrument that exists to attribute it**, and the 0s gates are the tell: each of those stands up its
+own test binary, so a gate cannot cost nothing. Optimising the 21% while 58% is unnamed is optimising
+the wrong thing, and this is meta-instrument #3's shape exactly — *8 of 30 process defects were caught
+by a number that did not add up, not by any gate.* Nothing trimmed: the two largest ATTRIBUTED costs
+(parity 72/72 against live Chrome, and the crate suites) are both irreducible coverage, and the
+admissible-optimisation list explicitly forbids the alternatives. `scripts/` is observer-owned, so the
+accounting gap is reported here rather than patched. ⚠ For the record, the wall read **63s at the
+start of this session and 881s now**: these ticks touch `engine/css` and `engine/layout`, the
+shared-type edits that cascade furthest, so this is the worst-case shape rather than a regression in
+the wall itself.
+
+HONEST SCOPE: no engine source changed this tick. Three deliverables — the rows file, the constitution
+check and the wall audit — plus two harness findings handed to the observer.
+
+PERF: not measured this tick.
+
+WIKI: none — the findings belong to `CONSTITUTION-CHECK.md` and the burndown's method.
+
+PATTERN: ⚠⚠⚠ **A ROW THAT SAYS `crashed` IS NOT A CRASH UNTIL YOU HAVE RUN THE SITE.** Thirty-seven
+of them appeared in one sweep, immediately after the largest layout change of the session, and the
+ratchet's own rule says a Bar-0 crash is reverted rather than traded. Reproducing two of them took
+ninety seconds and cost nothing; reverting on the label would have thrown away +1.25 points of corpus
+shape and three crossings. **The instrument's word for a failure is a hypothesis about it.**
+[no-pattern]

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **538** | ticks 1–794 |
-| median tick cycle | **23m** | 537 intervals |
+| ticks landed | **539** | ticks 1–795 |
+| median tick cycle | **23m** | 538 intervals |
 | median, last 10 | **33m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 488.5h elapsed |
-| median verify wall | **63s** | 477 ticks |
+| **ticks per hour** | **1.10** | 489.6h elapsed |
+| median verify wall | **63s** | 478 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **411**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**258 of 538 ticks** (48%) moved a
+**259 of 539 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **258** capability ticks, median cycle **23m**
-* median diff per tick: **+254 / −34** lines across 8 files
+* **259** capability ticks, median cycle **23m**
+* median diff per tick: **+255 / −34** lines across 8 files
 
 ## Every tick
 
@@ -635,5 +635,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **792** | 2026-07-31 11:45 | 25m | capability | 63s | +328/−33 | 366 | 81 | 56.0% · | a float belongs to its own block, not to the viewport (2026-07-31) |
 | **793** | 2026-07-31 13:05 | 80m | capability | 63s | +340/−32 | 366 | 81 | 56.0% · | `order` lays items out in order-modified document order (2026-07-31) |
 | **794** | 2026-07-31 13:34 | 29m | measurement | 63s | +363/−36 | 367 | 81 | 56.0% · | bank the sweep the cadence rule asks for, before an eighth fix (2026-07-31) |
+| **795** | 2026-07-31 14:42 | 68m | capability | 63s | +413/−33 | 367 | 81 | 56.0% · | a text-bearing `inline-block` sits on ITS OWN baseline (2026-07-31) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

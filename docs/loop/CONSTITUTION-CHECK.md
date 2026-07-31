@@ -3537,3 +3537,82 @@ single term in the cycle.
    with exactly one dirty jarring dimension* — the second population has never been enumerated.
 
 **Next check due: tick 796.**
+
+---
+
+## Check #65 — tick 796 (2026-07-31)
+
+**Horizon:** Phase-0 · M1 RENDER, unchanged. Function-first stays owner-locked.
+
+**Gate or scoreboard?** Gate — and this window is the first time the loop has priced a SINGLE change
+against the corpus rather than a batch. t795 (the `inline-block` baseline) is the only engine change
+between the t794 and t796 sweeps:
+
+```
+  paired over the 78 sites scored in BOTH sweeps:   mean Δshape +1.25 pts   ·  11 up, 4 down
+  crossed the 0.75 shape bar:  marktplaats.nl 0.709→0.906 · chat.google.com 0.729→0.847
+                               rpsc.rajasthan.gov.in 0.542→0.942            ·  crossed DOWN: none
+  M1 gate (shape AND jarring-clean):  3 sites → 6
+```
+
+**One primitive was worth ~9× the seven-fix batch before it** (+1.25 pts against +0.14), and the
+difference is not effort — it is that this one is on nearly every line of nearly every page.
+
+### THE METHOD CORRECTION THAT CAME OUT OF t794 IS NOW IN THE INSTRUMENT
+
+t794 measured that two sweeps four hours apart disagree about which sites are REACHABLE by five, worth
+four points of headline before the engine is consulted, and banked the rule: *a sweep-to-sweep delta is
+not a result unless it is PAIRED over the sites scored in both runs.* **The observer has since wired
+exactly that into `fidelity-progress.sh` as the COMMON-SET BAND**, and it printed `+1.25 pts (78 sites
+scored in BOTH) ← the REAL slope; ignore the pass-count sign when they disagree` on this very run —
+where the unpaired pass count reads −0.1. The loop found the trap, the observer closed it in the
+instrument, and the first run after that is the one that needed it. That is the intended division of
+labour working.
+
+### ⚠ THIS SWEEP IS PARTLY INVALID, AND THE REASON IS A HARNESS PARAMETER
+
+37 rows read `crashed`, against **zero** in each of the two previous sweeps, and the readout duly
+collapsed (scorability 76.4% → 55.6%, in-scope denominator 127 → 144). **No site crashes.** Every one
+tested runs clean standalone — `payb.jp` scores 1.000, `sip777man.site` exits 0. The log gives the
+mechanism outright:
+
+```
+  ⟳ chunk 1 exited early with 95 site(s) unrun — re-spawning (round 1)
+  ⟳ chunk 1 exited early with 56 ...  47 ...  37 site(s) unrun — re-spawning (round 4)
+  ⚠ chunk 1: 37 site(s) never produced a row after 4 rounds — filed as crashed
+```
+
+The per-site watchdog files its `timeout-150s` row and then `process::exit(0)`s — correct for a wedged
+main thread — so **each slow site costs the chunk one of its four rounds**, and a chunk that meets four
+slow sites files everything behind them as `crashed`. `CHUNK_ROUNDS = 4` is the parameter; `scripts/`
+and the harness are observer-owned, so this is reported, not patched. **Read this sweep's paired band;
+do not read its scorability.**
+
+### INVARIANTS
+
+- **I2 (never patch dependencies):** held — fork surface still empty across t789–t795.
+- **I3 (semantic model in lockstep):** held, and asserted rather than assumed this window: t793's
+  `order` gate checks the DOM's child sequence is untouched, because `order` is visual-only and
+  reordering the tree would have rewritten what a screen reader announces.
+- **I4 (Pareto discipline):** held. Every fix this window is on a primitive with corpus-wide reach —
+  inline-block rows, floats, `order`, cascade layers, form controls, URL line breaking.
+- **I5 (the oracle/log is the discovery engine):** held, with a sharpened form. Three of this window's
+  findings came from a fixture built to ask a DIFFERENT question: nested `@layer` from a nesting
+  control, the float clamp from a probe aimed at reading-order, and t795 — the largest single move in
+  the session — from a sub-pixel probe whose own answer was "no bug".
+- **PART VII / V1-SCOPE:** honoured. No `scripts/` file authored or edited in t789–t796.
+
+### THE STEER
+
+1. **THE PRIMITIVE-PROBE METHOD IS VINDICATED, BUT ONLY WHEN AIMED FROM THE NEAR-BAR LIST.** t794's
+   verdict — seven primitive fixes, one crossing — and t795's — one primitive fix chosen by asking
+   *what does `chat.google.com` need*, three crossings — are the same method with different aim. Keep
+   starting from the §8 crossing-ranked list, then probe the primitive that site's divergence names.
+2. **JARRING-CLEAN IS NOW THE BINDING HALF, HARDER THAN LAST CHECK.** shape ≥0.75 is 9 sites,
+   jarring-clean is 26 of 144 (18.1%). The M1 gate needs BOTH at 95%. The three dimensions to work
+   are reading-order, overlap and h-overflow, and t793 (`order`) is the first fix this loop has landed
+   that targets one of them directly.
+3. **THE 150s WATCHDOG COSTS A CHUNK A ROUND** (above). Until the observer re-parameterises it, prefer
+   reading the paired band and treat any sweep with a non-zero `crashed` count as scorability-invalid.
+
+**Next check due: tick 804.**
