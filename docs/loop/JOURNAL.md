@@ -42794,3 +42794,70 @@ spec clause in `docs/wiki/box-layout.md` (now headed with a REVERTED banner and 
 re-landing), the pattern-ledger row marked ⛔ with the bisection, and the fixture in this journal.
 The gate comes back with the code, and the code comes back when someone can say why a float-band
 narrowing costs `www.ta3lemkonline.com` 26 elements.
+
+## Tick 813 — bisecting across trees on a LIVE site inherits the site's drift (2026-08-01)
+
+TICK SHAPE: measurement — the t812 residue, chased to an attribution that overturns t812's own guess
+
+HYPOTHESIS (written before the builds): t812 left one thing open — `tukrd.com` was **1.000000** at the
+t806 tree and **0.973684** at HEAD, one element of 38 on a site that had been perfect, *"unbisected
+between t808 and t809"*. A site that was perfect and is not is worth the next cheap probe.
+
+WHAT THE BISECTION SAID, and then what it actually meant:
+
+```
+   engine tree                                   tukrd.com
+   c7175c48  (t806)                               1.000000
+   8b551216  (t808, inline vertical padding)      0.605263   ← 15 elements, apparently t808
+   31f087e7  (t809, + the display list)           0.973684
+   e0175dff  (t811 / HEAD)                        0.973684
+```
+
+That reads as *t808 cost 15 elements and t809 gave 14 back*, which is a striking story and is wrong.
+
+⚠⚠⚠ **THE ISOLATION TEST OVERTURNS IT.** Disabling t808's inline-padding hunk **on the HEAD tree**,
+one build, one window:
+
+```
+   HEAD                                           0.973684
+   HEAD with t808's inline padding DISABLED       0.973684   ← identical
+```
+
+**t808 is exonerated.** If it had cost this site 15 elements, removing it at HEAD would have given
+them back; it changes nothing. So the `0.605263` reading was not a measurement of t808 — it was
+`tukrd.com` moving between two builds four minutes apart, which is the same live-site drift this
+session has already caught three times.
+
+**A BISECTION ACROSS TREES IS A SEQUENCE OF SPOT READINGS, AND IT INHERITS EVERY ONE OF THEIR
+DRIFTS.** t800 established *rebuild the old binary and measure NOW*; the natural extension — walk the
+trees and watch the number move — quietly reintroduces the confound it was built to remove, because
+each rung is measured at a different time. The form that survives is **isolating the hunk on ONE tree
+and measuring both states in one window**, which costs the same single build and holds the site
+constant by construction.
+
+I had already written `t808 or t809` into t812's residue line on the strength of the walk. It is
+recorded here rather than quietly corrected, because the walk *looked* like the rigorous version of
+exactly the discipline this session has been enforcing.
+
+WHAT REMAINS: `tukrd.com` is 0.973684 against t806's 1.000000 — **one element of 38**, not attributed
+to t808, and either t809 (which is Chrome-verified on eight computed `display` values and bought
+`en.wikipedia.org` two elements of coverage and `mobcup.fm` six points of it) or the site. One element
+below the run-to-run spread of a live page is **not a result**, and this loop's own rule
+(`session-654-657`) says so. No revert is taken and none is warranted; the residue is closed as
+unattributable rather than left implying a suspect.
+
+MEASURED at HEAD after the round trip: `tukrd.com` 0.973684, `linkmake.in` 0.756757,
+`www.ta3lemkonline.com` 0.540481, `manuk-layout` 103 tests green. The tree is byte-identical to
+d2d5e34c.
+
+PERF: none — no engine change.
+
+WIKI: none — no engine delta. The mechanism is about how an attribution is taken, which belongs here.
+
+PATTERN: ⚠⚠⚠ **ISOLATE THE HUNK, DO NOT WALK THE TREES.** Both procedures cost one build. Walking
+gives you N readings taken at N different times on a page that is changing under you, and the
+differences between them read exactly like the effect you are hunting — a clean 15-element step that
+was not there. Isolating gives you two readings in one window with the site held constant, and it is
+the only one of the two that answers the question asked. **The seductive part is that the walk
+produces a NUMBER PER TICK and therefore looks like the more thorough method.**
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
