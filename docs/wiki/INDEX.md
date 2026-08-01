@@ -150,6 +150,7 @@
   - L2964 · text-align: justify — the slack goes into the WORD GAPS, not into one offset (t805)
   - L2986 · The three call sites ARE the specification
   - L2994 · ⚠ Snapshot the gaps BEFORE shifting
+  - L3003 · The space is a character — letter-spacing and the inter-word gap (t806)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1362,4 +1363,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1273 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1274 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

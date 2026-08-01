@@ -2999,3 +2999,33 @@ the first measures as closed and the expansion stops accumulating. Written that 
 word landed exactly right and the 6th was 10px short — **from the outside, a shift that stops
 accumulating is indistinguishable from a slightly-wrong per-gap constant.** Two words on the same
 line is what separates them, and both are in the gate.
+
+## The space is a character — `letter-spacing` and the inter-word gap (t806)
+
+`letter-spacing` adds a fixed advance after every character. We added it once per character of each
+**word** and stopped there, so an inter-word space was the one character on the line that did not get
+it.
+
+That is the hardest shape a layout defect takes: **every word's own box stays exactly right while its
+POSITION falls one `letter-spacing` behind per preceding space**, cumulatively along the line. The
+quantity you would think to measure — the word's width — is correct.
+
+```
+   letter-spacing:2px, 16px sans-serif        Chrome   ours (before)
+     2nd word   (one preceding space)           39       37
+     4th word   (three preceding spaces)       115      109
+   word-spacing:5px  (the sibling property)
+     2nd word / 4th word                    36 / 106  36 / 106   ✓ always right
+   no spacing, three faces                                       ✓ unchanged
+```
+
+The arithmetic is what identifies it rather than a fudge: at the 4th word Chrome has advanced
+**12 characters × 2px** and we had advanced **9 × 2px** — exactly the three spaces missing, and
+nothing else.
+
+`word-spacing` — the sibling property, one line away in the same expression — was **always** applied
+to the space. So a probe of "spacing" that happened to use `word-spacing` reports everything working.
+
+`letter-spacing: .05em` on nav bars, buttons, headings and uppercase labels is design-system standard,
+so this rides on a large share of the chrome of the modern web, and on every one of those runs
+everything after the first word was in the wrong place.

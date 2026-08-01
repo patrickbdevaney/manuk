@@ -42204,3 +42204,72 @@ property then *parses*, *computes*, *inherits* and *reports* correctly while doi
 to every check except a positional one. **When enumerating a property's values, ask which one has a
 different KIND of answer; that is where the wildcard is hiding.**
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 806 — the space is a character (2026-07-31)
+
+TICK SHAPE: capability (inline layout) — the residue t805 named, taken in the next tick
+
+HYPOTHESIS (written before the fixture): t805 excluded justification as the cause of `www.wdimax.com`'s
+127 spans — exact widths, x lagging further and further along each line — and named the remaining
+candidates: the space advance itself (`word-spacing`, or a different measured width for U+0020) and
+`letter-spacing`. Both would produce that exact signature. Probe all of them on three faces.
+
+WHAT THE FIXTURE SAID: the space advance is Chrome-exact on sans-serif, Arial and Georgia, and
+`word-spacing` is Chrome-exact. **`letter-spacing` is not applied to the inter-word space.**
+
+```
+   letter-spacing:2px, 16px sans-serif        Chrome   before   after
+     2nd word   (one preceding space)           39       37       39    ✗→✓
+     4th word   (three preceding spaces)       115      109      115    ✗→✓
+   word-spacing:5px  (the sibling property)
+     2nd word / 4th word                    36 / 106  36 / 106  36 / 106  ✓ always right
+   no spacing — sans-serif / Arial / Georgia                             ✓ unchanged
+```
+
+MECHANISM: `letter-spacing` adds a fixed advance after every character. The word's width already got
+it (`measure(&text) + letter_spacing × char_count`, with a comment saying "trailing included,
+matching Chrome"), and the line immediately below computed `space_w = measure(" ") + word_spacing` —
+so **the space was the one character on the line that did not get it.**
+
+The arithmetic is what identifies it rather than a fudge: at the 4th word Chrome has advanced
+**12 characters × 2px** and we had advanced **9 × 2px** — exactly the three spaces, and nothing else.
+
+⚠⚠ **THIS IS THE HARDEST SHAPE A LAYOUT DEFECT TAKES.** Every word's own box stays *exactly right*
+while its POSITION falls one `letter-spacing` behind per preceding space, cumulatively. The quantity
+anyone would think to measure — the word's width — is the correct one, so the error only exists as a
+slope, and only along a sentence long enough to show it.
+
+⚠ **`word-spacing` IS THE SIBLING PROPERTY, ONE LINE AWAY IN THE SAME EXPRESSION, AND IT WAS ALWAYS
+RIGHT.** So any probe of "spacing" that happened to reach for `word-spacing` reports the whole area
+working. It is in the gate as the control that says the defect was specific.
+
+MEASURED: four Chrome positions exact where two were wrong. `news.ycombinator.com` **0.797264 →
+0.798507**; seven controls byte-identical — `en.wikipedia.org` 0.593110, `www.dapam-sirius.fr`
+0.800000, `255md.com` 0.767442, `linkmake.in` 0.702703, `blog.rust-lang.org` 0.993389,
+`chat.google.com` 0.847458, `www.wdimax.com` 0.607427. `manuk-layout` 103 tests green.
+
+Gate: `G_LETTER_SPACING_SPACE` (new), ten Chrome-measured x positions across three faces plus a width
+assertion. **Proven RED:** drop `letter_spacing` from the space advance and `#e1` reads 37.14 against
+Chrome's 39, while every `word-spacing` and no-spacing row passes. The width assertion exists because
+a fix that *moved* the advance from the word to the space would satisfy both position assertions.
+
+HONEST SCOPE: one control improves by one element; nothing crosses. The reach argument is the idiom —
+`letter-spacing: .05em` is design-system standard on nav bars, buttons and headings — and the corpus
+price comes at the next sweep.
+
+RESIDUE, unchanged and now narrower: `www.wdimax.com` still lags. Its CSS has no `letter-spacing` and
+no `justify`; it does carry `text-indent: 2em` on chapter paragraphs. Two leads spent, two real
+defects found, and the site that suggested both is explained by neither.
+
+PERF: none claimed — one addition in an expression that already read the style.
+
+WIKI: `docs/wiki/box-layout.md` — new section.
+
+PATTERN: ⚠⚠⚠ **WHEN A PROPERTY APPLIES "PER CHARACTER", ENUMERATE WHICH THINGS ARE CHARACTERS.** The
+word text was treated as characters and the space was treated as *spacing* — a different category in
+the code, in the same expression, one line apart. The tell is a quantity computed twice under two
+names (`word_w` from `text.chars()`, `space_w` from `measure(" ")`) where the spec has one rule; the
+second computation is where the rule gets dropped. **A defect that leaves every box the right size and
+only the positions wrong will never be caught by a size check** — it needs two measurements far apart
+on the same line.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

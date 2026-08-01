@@ -5467,9 +5467,24 @@ impl Ctx<'_> {
                     // (the default) leaves the width byte-identical.
                     let word_w = self.fonts.measure(&text, key, size)
                         + style.letter_spacing * text.chars().count() as f32;
-                    // `word-spacing` widens each inter-word space.
+                    // `word-spacing` widens each inter-word space — and so does `letter-spacing`.
+                    //
+                    // ⚠⚠ **THE SPACE IS A CHARACTER.** The line above adds `letter_spacing` once per
+                    // character of the WORD and stopped there, so an inter-word space was the one
+                    // character on the line that did not get it. Every word's own width stayed
+                    // correct while its POSITION fell one `letter-spacing` behind per preceding
+                    // space, cumulatively along the line — the hardest shape to spot, because the
+                    // thing you would measure (the word box) is right.
+                    //
+                    // Chrome-measured at `letter-spacing: 2px`, `16px sans-serif`: the 2nd word sits
+                    // at 39 (we had 37, one space short) and the 4th at 115 (we had 109, three
+                    // spaces short — 12 characters × 2 against our 9). `letter-spacing` on nav bars,
+                    // buttons, headings and uppercase labels is design-system standard, so this rides
+                    // on a large share of the chrome of the modern web.
                     let space_w = if space_before {
-                        self.fonts.measure(" ", key, size) + style.word_spacing
+                        self.fonts.measure(" ", key, size)
+                            + style.word_spacing
+                            + style.letter_spacing
                     } else {
                         0.0
                     };
