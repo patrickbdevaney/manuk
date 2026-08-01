@@ -42603,3 +42603,83 @@ bare text at 0×0 in the ninth context it tested, and this one found the BFC/flo
 context it tested. **The ninth row is where the fixtures keep paying**, because the first eight are
 the ones you thought to check. Write the wide fixture even when you expect it to be boring.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 811 — a BFC root sits BESIDE a float, or below it (2026-08-01)
+
+TICK SHAPE: capability (block layout) — the item t810 specified, built in the next tick as promised
+
+HYPOTHESIS (written at t810, before any code): CSS 2.1 §9.5 says a BFC root's border box must not
+overlap a float's margin box — placed BESIDE the intruding floats and narrowed to the band, or moved
+DOWN when an explicit width will not fit. t810 measured that we do neither and banked the Chrome
+table, the insertion point and the reason it was not built in the same tick. This tick builds it.
+
+```
+   float:left 80x40, then a BFC root in a 300px column
+                                       Chrome         before        after
+     overflow:hidden               [80   0 220x20]  [0 … 300x20]  [80   0 220x20]  ✗→✓
+     display:flow-root             [80  50 220x20]  [0 … 300x20]  [80  50 220x20]  ✗→✓
+     display:flex                  [80 100 220x20]  [0 … 300x20]  [80 100 220x20]  ✗→✓
+     display:grid                  [80 150 220x20]  [0 … 300x20]  [80 150 220x20]  ✗→✓
+     float:RIGHT + overflow:hidden [0  320 220x20]  [0 … 300x20]  [0  320 220x20]  ✗→✓
+     overflow:hidden, width:280px  [0  290 280x20]  [0 … 280x20]  [0  290 280x20]  ✗→✓ (DROPS)
+     a PLAIN block (not a BFC)     [0  200 300x20]  [0 … 300x20]  [0  200 300x20]  ✓ must not move
+```
+
+**Every box in the gate's fixture is byte-identical to Chrome. None was before.**
+
+MECHANISM: in the block-children loop, immediately before `layout_block`, a child that
+`establishes_bfc` probes the float band at its y. `left_float_edge`/`right_float_edge` — the `Option`
+form, `None` when nothing overlaps — give the float-derived edges alone; the box is placed at that
+edge with the band's width. An `auto` width shrinks to the band and always fits; an explicit width
+that will not fit walks down `next_bottom_below` until it does.
+
+⚠ **`left_float_edge`, NOT `left_offset`.** The latter falls back to the CONTEXT's edges, which are
+not this block's containing block when the two are nested, and would shift blocks with no float near
+them at all. That is t797's distinction, reused rather than rediscovered — the tick that learned it
+wrote the helpers this one needed.
+
+⚠ **THE PLAIN BLOCK IS THE RULE'S BOUNDARY.** A non-BFC block's border box legitimately DOES overlap
+floats; only its line boxes avoid them, and `open_band` already does that. Keying this on anything
+broader passes all five shifted rows and is badly wrong on the commonest layout on the web — which is
+why it is one of the gate's proven reds.
+
+MEASURED: **NINE controls byte-identical** — `en.wikipedia.org` 0.592937 (cov 1.000000, n 1076),
+`mobcup.fm` 0.909091, `linkmake.in` 0.756757, `www.dapam-sirius.fr` 0.800000, `255md.com` 0.767442,
+`blog.rust-lang.org` 0.993389, `news.ycombinator.com` 0.798507, `chat.google.com` 0.847458,
+`www.kicktipp.com` 0.725000. `manuk-layout` 103 tests green. **No site is claimed to cross**; the
+justification is the idiom's reach and the corpus price comes at the next sweep.
+
+⚠⚠ **THIS IS THE CHANGE t804 REFUSED THE SHAPE OF, AND THE DIFFERENCE IS THE CONTROLS.** Both are
+spec-correct and fixture-exact; t804's cost nine wikipedia elements with no mechanism connecting the
+fixture to the loss, and was reverted. This one moves nothing on any control, including the two sites
+t804's attempt had damaged. **"Spec-correct and fixture-exact" is the same evidence in both cases —
+the controls are what separated them**, which is exactly why the refusal was worth its tick.
+
+Gate: `G_BFC_AVOIDS_FLOATS` (new), seven Chrome-measured x/width pairs plus the drop case. **Proven
+RED two ways:** disable the branch → the five shifted rows read x=0 w=300 while the plain block and
+the dropped box still pass; key it on EVERY block → the plain block moves to 80 and narrows.
+
+⚠⚠⚠ **AND THE GATE CAUGHT ME PORTING A NUMBER BETWEEN FIXTURES — THE SECOND TIME THIS SESSION AND
+THE THIRD IN FIFTEEN TICKS.** I asserted `#p7.y > 300` from the t810 characterisation fixture, which
+carries an extra `display:table` row; the gate's own fixture drops it and everything below moves up
+by 50. Chrome reads **290** on the gate's markup and we read 290 exactly. Extracting the gate's own
+`const HTML` and running THAT through Chrome took under a minute. **t797 wrote this rule, t797's own
+tick was caught by it, and it caught me again here: a measured number is only measured for the
+fixture it was measured in.**
+
+RESIDUE, named and not asserted: `display:table` beside a float is `[80 200 35x20]` in Chrome and a
+**0-wide** box here — an independent table intrinsic-width defect (`layout_table` documents its own
+bounded scope) that predates this change and is unmoved by it. Shifting a box that is already the
+wrong width would be cosmetic, and asserting Chrome's 35 would make the gate fail for something it
+does not test.
+
+PERF: none claimed — one float-band probe per BFC-root child, and only when a float overlaps.
+
+WIKI: `docs/wiki/box-layout.md` — new section.
+
+PATTERN: ⚠⚠⚠ **SPECIFY IN ONE TICK, BUILD IN THE NEXT — WHEN THE BLAST RADIUS IS WIDE.** t810 refused
+to build this at the end of a long session and banked the Chrome table instead; t811 spent its whole
+budget on controls rather than on discovery, and landed a change that moves nine controls by zero.
+The split cost one extra tick and bought the thing t804 did not have: **a measurement taken before the
+code existed, so the code could not have been fitted to it.**
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

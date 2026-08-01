@@ -3113,3 +3113,46 @@ The `display: none` list exists twice — the Stylo UA sheet and `apply_ua_defau
 `MinimalCascade` — and the second one's own comment warns: *"Keep in lockstep … The two cascades
 disagreeing about which elements render at all is how a `<source>` ends up with 19px of height in one
 configuration and none in the other."* Both moved together.
+
+## A BFC root sits BESIDE a float, or below it (t811)
+
+CSS 2.1 §9.5: *"the border box of a table, a block-level replaced element, or an element in the normal
+flow that establishes a new block formatting context must not overlap the margin box of any floats in
+the same block formatting context."*
+
+We did neither half. A BFC root sat straight on top of the float.
+
+```
+   float:left 80x40, then a BFC root in a 300px column
+                                       Chrome         ours (before)
+     overflow:hidden               [80   0 220x20]   [0 … 300x20]
+     display:flow-root             [80  50 220x20]   [0 … 300x20]
+     display:flex                  [80 100 220x20]   [0 … 300x20]
+     display:grid                  [80 150 220x20]   [0 … 300x20]
+     float:RIGHT + overflow:hidden [0  320 220x20]   [0 … 300x20]
+     overflow:hidden, width:280px  [0  290 280x20]   [0 … 280x20]  ← Chrome DROPS it to clear
+     a PLAIN block (not a BFC)     [0  200 300x20]   [0 … 300x20]  ✓ correct in both
+```
+
+**The reach is the media object** — a floated avatar or thumbnail with an `overflow:hidden` /
+`flow-root` / flex content block beside it: every comment thread, every card list, every article with
+a pull-quote, and the standard pre-flexbox two-column idiom.
+
+### Two halves
+
+An `auto` width shrinks to the band and always fits. An **explicit** width that will not fit is moved
+DOWN past the floats rather than squeezed — squeezing would also satisfy *"must not overlap"* and is
+the wrong answer.
+
+### The plain block is the rule's boundary, not an oversight
+
+A non-BFC block's border box legitimately **does** overlap floats; only its *line boxes* avoid them,
+which `open_band` already handles. Keying this on anything broader than `establishes_bfc` passes every
+shifted row and is badly wrong on the commonest layout on the web.
+
+### `left_float_edge`, not `left_offset`
+
+The `Option` form reports the float-derived edge **alone** and is `None` when nothing overlaps;
+`left_offset` falls back to the CONTEXT's edges, which are not this block's containing block when the
+two are nested, and would shift blocks with no float near them. That is t797's distinction, reused
+rather than rediscovered.

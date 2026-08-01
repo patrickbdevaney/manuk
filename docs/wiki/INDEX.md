@@ -157,6 +157,10 @@
   - L3077 · Not rendered is not display: none (t809)
   - L3099 · The structural guard turned out not to be needed
   - L3110 · Both cascades, same tick
+  - L3117 · A BFC root sits BESIDE a float, or below it (t811)
+  - L3141 · Two halves
+  - L3147 · The plain block is the rule's boundary, not an oversight
+  - L3153 · left_float_edge, not left_offset
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1369,4 +1373,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1280 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1284 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
