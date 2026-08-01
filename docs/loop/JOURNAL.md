@@ -42273,3 +42273,88 @@ second computation is where the rule gets dropped. **A defect that leaves every 
 only the positions wrong will never be caught by a size check** — it needs two measurements far apart
 on the same line.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 807 — the sweep after five aimed fixes, and it is the best window this burndown has had (2026-07-31)
+
+TICK SHAPE: measurement (clean sweep) — the cadence rule's checkpoint after five engine fixes
+
+HYPOTHESIS (written before the sweep): five aimed render primitives have landed since the t800 sweep
+(t801 `max-width`+auto-margin, t802 control `line-height`, t803 abspos bare text, t805
+`text-align:justify`, t806 `letter-spacing` on the space). Each was Chrome-exact on its own fixture
+with its controls byte-identical, and two named a site that crossed the bar under a spot check. The
+cadence rule says bank a clean `--jobs 2` sweep before landing more, so: measure.
+
+BANKED: `docs/loop/SWEEP-t807-rows.tsv` — 200 CrUX sites, `--jobs 2`, one binary (c7175c48), ~55 min,
+and **ZERO `crashed` rows** for the first time in three sweeps.
+
+```
+                          t796      t800      t807
+  M1 GATE                 4.2%      5.5%      8.4%   (11/131)
+  shape >= 0.75           6.2%      8.3%     13.0%   (17/131)
+  jarring-clean          18.1%     17.2%     27.5%   (36/131)
+  shape_mean             45.4%     46.8%     50.0%
+  COMMON-SET BAND            —     −0.35     +2.71   (75 sites in both · 20 up · 5 down)
+```
+
+**Twenty sites up against five down**, and the risers are not marginal: `oilprice.com` 0.330 → 0.778,
+`app.ordertime.com` 0.310 → 0.655, `www.5movierulz.discount` 0.410 → 0.681, `www.dapam-sirius.fr`
+0.633 → 0.800, `nysainfo.pl` 0.565 → 0.714, `ubys.bingol.edu.tr` 0.671 → **0.814**. Five of the
+risers cross 0.75 outright (`oilprice`, `dapam-sirius`, `ubys.bingol`, `255md`, `desiviral.net`).
+
+⚠ **THE OLD-BINARY CONTROL WAS RUN ON THE DECLINE, EVEN THOUGH THE BAND IS POSITIVE.** `gismart.com`
+is the only faller with a stable element count (−0.071, n=281 both). Rebuilding `engine/` at
+`6736b86a` — the t800 sweep's tree — and measuring in this window:
+
+```
+  t800 sweep 0.708   ·   t807 sweep 0.637   ·   TODAY, old binary 0.693950   ·   TODAY, HEAD 0.693950
+```
+
+**Byte-identical on both binaries**, and today's value sits between the two sweep readings — the site
+is moving, we are not. No engine regression in this window. (The other four fallers all changed
+`shape_n`, so they are not like-for-like at all.)
+
+⚠⚠ **SCORABILITY 53.1% → 78.6% IS NOT ENGINE PROGRESS, AND SAYING SO IS THE POINT OF THIS ENTRY.**
+The t800 sweep filed **48** rows as `crashed` from the `CHUNK_ROUNDS = 4` harness artefact; this one
+filed **zero**. Those 48 were counted as unscored in-scope, so `scored 77 → 103` is mostly a harness
+artefact disappearing. Reason counts, side by side:
+
+```
+  t800   48 crashed · 29 bot-wall · 12 unreachable · 8 shell-only · 6 probe-blocked · 5 timeout
+  t807    0 crashed · 39 bot-wall · 13 unreachable · 13 shell-only · 9 probe-blocked · 3 timeout
+```
+
+The in-scope denominator moved 145 → 131 and `excluded` rose 55 → 69 (+14) — the instrument flagged
+that itself (`EXCLUDED-RISING`). Almost all of it is `bot-wall` 29 → 39, which is an identity
+question and explicitly out of engine scope, but it means **the two sweeps' scorability figures are
+not comparable and no scorability claim is made here.** The shape and jarring numbers ARE paired and
+are the readable half.
+
+⚠ **THE OBSERVER WIRED t800'S FINDING INTO THE INSTRUMENT, AND THIS RUN IS THE FIRST TO READ IT.**
+The band now prints *"trap-free of composition, but engine+site-drift confounded … isolate engine via
+the OLD-BINARY control"* (`ca6f8d90`). The loop found the confound, the observer put it in the tool,
+and the very next sweep used the procedure it prescribes — on `gismart`, which it then cleared. That
+is the intended division of labour working twice in one day.
+
+MEASURED, and this is the honest headline: **M1 2.4% → 4.2% → 5.5% → 8.4% across four sweeps**, and
+the jump from 5.5 to 8.4 is the largest this burndown has recorded. `jarring-clean` — the half the
+t796 check called binding and which had been FLAT at 17–18% — moved to **27.5%**.
+
+HONEST SCOPE: no capability claimed this tick. The engine is byte-identical to c7175c48 (verified by
+the revert-and-restore round trip: `gismart.com` 0.693950 on both). `manuk-layout` 103 green.
+
+RESIDUE / next aim, from the fresh near-bar list: the M1 gate is 11/131 and the jarring-clean cohort
+is now 36 sites, so the two populations have moved apart — **6 of the 17 shape-passers are not
+jarring-clean**, which is a new and more tractable shape than "shape is scarce". The next tick should
+read the fresh §8 table rather than the t800 one.
+
+PERF: none — no engine change.
+
+WIKI: none — a measurement tick with no engine delta; the mechanism it establishes (which halves of a
+sweep are comparable across a harness change) belongs in the journal and the burndown.
+
+PATTERN: ⚠⚠⚠ **WHEN A HARNESS DEFECT DISAPPEARS, THE METRIC IT WAS SUPPRESSING JUMPS — AND THAT JUMP
+IS NOT YOURS.** 48 false `crashed` rows became 0 and scorability leapt 25 points in one sweep, which
+would have been the most quotable number of the session and would have been a lie. **Diff the UNSCORED
+REASON COUNTS between two sweeps before comparing their denominators**; a category that goes from 48
+to 0 is a harness change, not an engine one, and it is visible in one `uniq -c`.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

@@ -547,3 +547,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 802	7db7f216	1785542735	2026-07-31T20:05:35-04:00	2373	capability	63	9	424	41	371	81	3896	6960	0	417	0	a form control does not inherit the page's `line-height` either (2026-07-31)
 804	afc54009	1785547224	2026-07-31T21:20:24-04:00	4489	measurement	63	9	383	33	372	81	3896	6960	0	418	0	the flex/abspos fix is spec-correct, fixture-exact, and REFUSED (2026-07-31)
 805	d4ff8e60	1785548753	2026-07-31T21:45:53-04:00	1529	capability	63	9	291	35	373	81	3896	6960	0	419	0	`text-align: justify` was parsed and then ignored (2026-07-31)
+806	278af145	1785552648	2026-07-31T22:50:48-04:00	3895	capability	63	7	324	32	373	81	3896	6960	0	419	0	the space is a character (2026-07-31)
