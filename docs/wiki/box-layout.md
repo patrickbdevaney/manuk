@@ -2890,3 +2890,73 @@ on essentially every styled form.
 At an *author* font-size of 16px the textarea is 96 here against Chrome's 101 — `line-height: normal`
 resolving to 18/row where Chrome uses 19. That is a font-metric question, independent of this rule
 and unchanged by it, and the gate deliberately does not assert Chrome's number there.
+
+## A TEXT NODE IS NEVER OUT OF FLOW (t803)
+
+```html
+<div style="position:absolute">Menu</div>
+```
+
+That box measured **0×0** — not misplaced, *sized to nothing*. Every dropdown item, tooltip, badge,
+absolutely-positioned caption and `.sr-only` label whose content is bare text collapsed to a point.
+
+`layout_children` filters a container's out-of-flow children out of the in-flow list:
+
+```rust
+.filter(|&k| { let s = self.style_of(k); !is_float(s) && !is_out_of_flow_positioned(s) })
+```
+
+**Under the Stylo cascade a bare text node carries a CLONE of its parent's style.** So inside a
+`position:absolute` box, the box's own text answers *yes, I am out of flow* — and filters itself out
+of the content it IS. No children left to measure, `shrink_to_fit` returns 0, content height 0.
+
+An **element** child hides it completely, because a `<span>` carries its own `position: static`:
+
+```
+                                                       Chrome   ours (before)
+  <div abspos>bare text</div>                           62x20     0x0
+  …with padding:10px                                    82x40    20x20    ← the padding alone
+  …with height:40px (width still auto)                  62x40     0x40
+  <span abspos>bare text</span>                        130x20     0x0
+  <div abspos>text<div/>text</div>  (MIXED)             70x52    70x12    ← both runs dropped
+  <div position:fixed>bare text</div>                  101x20     0x0
+  <div abspos left:0 right:0>bare text</div>           600x20   600x0
+  <div abspos><span>elem child</span></div>             72x20    72x20    ✓ always right
+  <div float:left>floated bare text</div>              115x20   115x20    ✓ always right
+```
+
+So the bug fires on exactly the shape people write and not on the shape a test-writer reaches for.
+
+### The guard already existed, one function away
+
+`max_content_width_uncached` documents this precise trap for `display:flex` — *"a bare run inside
+`display:flex` reads back as `flex` here … routing it into the taffy path would build a tree whose
+root measures via `measure_intrinsic`, which lands back in this function: unbounded recursion"* — and
+guards it with `self.dom.is_element(node)`. Same cascade quirk, same guard, **four more call sites**
+that never got it: the in-flow filter, the has-a-float check, the static-position loop, and the
+block-children dispatch.
+
+The fix is two node-aware predicates that every child filter must now use:
+
+```rust
+fn kid_is_float(&self, k: NodeId) -> bool {
+    self.dom.is_element(k) && is_float(self.style_of(k))
+}
+```
+
+The element check is not an optimisation — a text node has no box of its own, cannot be positioned and
+cannot float, so it is the **predicate's precondition**.
+
+### ⚠ What this fix EXPOSED, and it is a real defect that was being hidden
+
+`en.wikipedia.org`'s `header > div:nth-of-type(1)` is Chrome 180px wide and is now **248px** here; it
+matched before. That header is a flex container with an absolutely-positioned dropdown inside it, and
+`taffy_tree::flex_items` pushes **every** element child, including out-of-flow ones. Flexbox §4.1 is
+explicit that an absolutely-positioned child of a flex container **is not a flex item** and does not
+contribute to the container's size — so this was always wrong, and it was invisible only because
+those boxes measured zero.
+
+Excluding them is not a one-liner: an all-auto-inset abspos box is placed from `static_pos`, which the
+flex path never records, so removing it from `flex_items` without also recording that position makes
+the box vanish (`position_absolutes` has a `continue` for exactly that case). Both halves together are
+the next tick, and they are named here rather than folded in.

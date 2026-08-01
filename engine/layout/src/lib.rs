@@ -2618,16 +2618,13 @@ impl Ctx<'_> {
         let flow_kids: Vec<NodeId> = kids
             .iter()
             .copied()
-            .filter(|&k| {
-                let s = self.style_of(k);
-                !is_float(s) && !is_out_of_flow_positioned(s)
-            })
+            .filter(|&k| !self.kid_is_float(k) && !self.kid_is_out_of_flow(k))
             .collect();
         let has_block = flow_kids
             .iter()
             .any(|&k| is_block_level(self.dom, self.styles, k));
 
-        if !has_block && !kids.iter().any(|&k| is_float(self.style_of(k))) {
+        if !has_block && !kids.iter().any(|&k| self.kid_is_float(k)) {
             // Pure inline formatting context (no floats to flow around).
             //
             // **Record the static position of the out-of-flow children before returning.** This
@@ -2648,7 +2645,7 @@ impl Ctx<'_> {
             // the static position along that line; that refinement is not modelled here, and the
             // box lands at the line start instead.
             for &k in &kids {
-                if is_out_of_flow_positioned(self.style_of(k)) {
+                if self.kid_is_out_of_flow(k) {
                     self.static_pos.borrow_mut().insert(k, (cx, cy));
                 }
             }
@@ -2752,7 +2749,10 @@ impl Ctx<'_> {
 
         for &k in &kids {
             let ks = self.style_of(k);
-            if is_float(ks) {
+            // `kid_is_*`, not the raw style predicates: a bare text node clones its parent's style,
+            // so inside a floated or absolutely-positioned box its own text would take these arms
+            // and be dropped from the flow it constitutes. See `kid_is_float`.
+            if self.kid_is_float(k) {
                 // Floats attach at the current flow position without advancing it.
                 // Flush pending inline content first so it wraps around this float.
                 (cur_y, prev_margin) = self.flush_inline_run(
@@ -2767,7 +2767,7 @@ impl Ctx<'_> {
                 );
                 let fbox = self.layout_float(k, cw, cur_y + prev_margin.max(0.0), floats, cx);
                 boxes.push(fbox);
-            } else if is_out_of_flow_positioned(ks) {
+            } else if self.kid_is_out_of_flow(k) {
                 // Absolutely/fixed positioned: taken out of flow here and placed in the later pass.
                 //
                 // **But record where it WOULD have been first.** An abs box with `auto` on every
@@ -3194,6 +3194,28 @@ impl Ctx<'_> {
     /// Definition, and it is why this is cheap to get right: lay the subtree out at a ~zero
     /// available width. Every soft break is taken, so the widest fragment that survives is the
     /// longest run that *cannot* be broken. That is min-content, by construction.
+    /// Is this CHILD a float / out-of-flow box? — the node-aware form, and the only one a child
+    /// filter may use.
+    ///
+    /// ⚠⚠ **A BARE TEXT NODE CARRIES A CLONE OF ITS PARENT'S STYLE under the Stylo cascade**, so
+    /// `is_out_of_flow_positioned(self.style_of(text))` inside a `position:absolute` box answers
+    /// **yes** — and every filter that asked it dropped the box's own text. `<div
+    /// style="position:absolute">Menu</div>` measured **0×0**: the text filtered itself out of the
+    /// content it WAS. A text node has no box of its own, cannot be positioned and cannot float, so
+    /// the element check is not an optimisation — it is the predicate's precondition.
+    ///
+    /// `max_content_width_uncached` already documents this exact trap for `display:flex` ("a bare
+    /// run inside `display:flex` reads back as `flex` here") and guards it with `is_element`. Same
+    /// cascade quirk, same guard, four more call sites.
+    fn kid_is_float(&self, k: NodeId) -> bool {
+        self.dom.is_element(k) && is_float(self.style_of(k))
+    }
+
+    /// See [`Self::kid_is_float`] — a text node is never absolutely or fixed positioned.
+    fn kid_is_out_of_flow(&self, k: NodeId) -> bool {
+        self.dom.is_element(k) && is_out_of_flow_positioned(self.style_of(k))
+    }
+
     fn min_content_width(&self, node: NodeId) -> f32 {
         if let Some(&c) = self.min_content_cache.borrow().get(&node) {
             return c;

@@ -144,6 +144,9 @@
   - L2858 · A form control does not inherit the page's line-height either (t802)
   - L2881 · The two constraints are what make it a fix rather than a trade
   - L2888 · Residual, named
+  - L2894 · A TEXT NODE IS NEVER OUT OF FLOW (t803)
+  - L2930 · The guard already existed, one function away
+  - L2950 · ⚠ What this fix EXPOSED, and it is a real defect that was being hidden
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1356,4 +1359,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1267 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1270 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

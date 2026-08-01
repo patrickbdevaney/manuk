@@ -41931,3 +41931,105 @@ the system control's"*. When a fix is derived from a shorthand in another engine
 the shorthand's properties and account for each one — the ones left out do not become absent, they
 become INHERITED, which is a different and quieter wrong answer.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 803 — a text node is never out of flow (2026-07-31)
+
+TICK SHAPE: capability (block layout) — one primitive, found by a broad probe aimed from the near-bar list
+
+HYPOTHESIS (written before the probe): `www.kicktipp.com` is the closest near-bar row (0.725, +0.025)
+and its oracle signature is a row of items **narrower AND taller** than Chrome's — 108×30 → 88×47,
+103×30 → 96×47 — which reads as shrink-to-fit sized to *min*-content, forcing a wrap Chrome does not
+have. So probe shrink-to-fit across every context that uses it: inline-block, float, abspos,
+`fit-content`, flex item, inline-flex, table-cell, grid item, button.
+
+**THE PROBE'S FIRST ANSWER WAS "NO BUG", AND ITS SECOND WAS THIS.** Nine contexts, and shrink-to-fit
+is Chrome-exact at 141px in eight of them — the min-content hypothesis is retired. The ninth was
+`position:absolute`, at **0×0**.
+
+MECHANISM: `layout_children` filters a container's out-of-flow children out of the in-flow list with
+a predicate that takes only a style:
+
+```rust
+.filter(|&k| { let s = self.style_of(k); !is_float(s) && !is_out_of_flow_positioned(s) })
+```
+
+**Under the Stylo cascade a bare text node carries a CLONE of its parent's style.** So inside a
+`position:absolute` box, the box's own text answers *yes, I am out of flow* and filters itself out of
+the content it IS. Nothing left to measure, `shrink_to_fit` returns 0, content height 0.
+
+```
+                                                       Chrome   before   after
+  <div abspos>bare text</div>                           62x20     0x0    62x20   ✗→✓
+  …with padding:10px                                    82x40    20x20   82x40   ✗→✓
+  …with height:40px (width still auto)                  62x40     0x40   62x40   ✗→✓
+  <span abspos>bare text</span>                        130x20     0x0   130x20   ✗→✓
+  <div abspos>text<div/>text</div>  (MIXED)             70x52    70x12   70x52   ✗→✓
+  <div position:fixed>bare text</div>                  101x20     0x0   101x20   ✗→✓
+  <div abspos left:0 right:0>bare text</div>           600x20   600x0   600x20   ✗→✓
+  <div abspos><span>elem child</span></div>             72x20    72x20   72x20   ✓ always right
+  <div float:left>floated bare text</div>              115x20   115x20  115x20   ✓ always right
+```
+
+⚠⚠ **AN ELEMENT CHILD HID IT COMPLETELY.** `<div abspos><span>Menu</span></div>` was always correct,
+because the `<span>` carries its own `position:static`. So the bug fires on **exactly the shape people
+write** — `<div style="position:absolute">Menu</div>` — and not on the shape a test-writer reaches
+for. With `padding:10px` it read 20×20, which is the padding alone and *looks like a box rather than
+like an absence*: the most expensive way for a defect to present.
+
+⚠⚠ **AND THE GUARD ALREADY EXISTED, ONE FUNCTION AWAY.** `max_content_width_uncached` documents this
+precise trap for `display:flex` — *"a bare run inside `display:flex` reads back as `flex` here"* — and
+guards it with `self.dom.is_element(node)`. Same cascade quirk, same guard, **four more call sites**
+that never got it. The fix is two node-aware predicates (`kid_is_float` / `kid_is_out_of_flow`) that
+every child filter must now use; the element check is not an optimisation but the predicate's
+**precondition**, since a text node has no box, cannot be positioned and cannot float.
+
+MEASURED: **`www.dapam-sirius.fr` shape 0.633333 → 0.800000 — CROSSES the 0.75 bar, jarring-clean on
+all four dimensions. An M1 GATE CROSSING, the second in three ticks.** All nine fixture boxes
+Chrome-exact (four were 0-size). `255md.com` holds at 0.767442; `linkmake.in` 0.702703,
+`blog.rust-lang.org` 0.993389, `news.ycombinator.com` 0.797264, `chat.google.com` 0.847458,
+`www.kicktipp.com` 0.725000 all byte-identical. `manuk-layout` 103 tests green.
+
+⚠⚠⚠ **`en.wikipedia.org` WENT DOWN, 0.603996 → 0.602180 — TWO ELEMENTS OF 1101 — AND I RAN t800'S
+CONTROL RATHER THAN CALLING IT NOISE.** Rebuilding `engine/` at HEAD and re-measuring in the same
+window reproduced **0.603996** exactly, so this is my change, not the site. Diffing the oracle's
+divergence list before and after names it precisely:
+
+```
+  header > div:nth-of-type(1)     Chrome [44 8 180×50]   ours now [44 8 248×50]   (matched before)
+```
+
+That header is a **flex container with an absolutely-positioned dropdown inside it**, and
+`taffy_tree::flex_items` pushes *every* element child, out-of-flow ones included. **Flexbox §4.1 says
+an absolutely-positioned child of a flex container is NOT a flex item and does not contribute to the
+container's size.** So this was always wrong; it was invisible only because those boxes measured zero.
+**The fix did not create an error — it stopped an error from being hidden by a second error**, which
+is t751's shape exactly (a UA-fallback render scoring as real shape until the permissive instrument
+was fixed).
+
+I did NOT fold the flex fix in, and the reason is bounded scope rather than convenience: an
+all-auto-inset abspos box is placed from `static_pos`, which the flex path never records, so removing
+it from `flex_items` *without* also recording that position makes the box vanish outright
+(`position_absolutes` has a `continue` for precisely that case). Two changes, one behaviour — the
+shape this loop has been caught by before. **It is the next tick, named with its file and its
+spec clause.**
+
+Gate: `G_ABSPOS_BARE_TEXT` (new), nine Chrome-measured sizes read off the gate's own fixture. **Proven
+RED twice, independently:** restore the raw predicates in the pure-IFC filter → six cases go 0-size
+while `#cc` (element child) and `#cf` (float) still pass; restore them in the block dispatch alone →
+only `#c9` fails, at **70×12**, which is the 12px block with both text runs dropped. The two paths
+were separately wrong and are separately covered.
+
+HONEST SCOPE: one M1 crossing, verified. One control down two elements of 1101, controlled against the
+old binary, explained, and left standing with its cause named — because reverting would restore a
+0×0-content bug in order to keep a 68px width bug invisible.
+
+PERF: none claimed — one `is_element` check per child in filters that already read a style.
+
+WIKI: `docs/wiki/box-layout.md` — new section.
+
+PATTERN: ⚠⚠⚠ **A PREDICATE THAT TAKES ONLY A STYLE CANNOT KNOW WHAT IT IS LOOKING AT.**
+`is_out_of_flow_positioned(&ComputedStyle)` is unanswerable for a text node, and the cascade hands it
+a confident wrong answer instead of nothing. The tell is a helper whose argument is a *property bag*
+rather than a *node* — grep for every call site that passes it `style_of(child)`, because each one is
+asking a question the type cannot represent. This engine had five; one had the guard.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
