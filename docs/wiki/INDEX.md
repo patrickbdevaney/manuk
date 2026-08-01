@@ -174,6 +174,11 @@
   - L3398 · The margin half needs no percentage and no framework
   - L3405 · The fix
   - L3421 · t827 addendum — the same rule on the BLOCK axis, and a defect hidden by a later write
+  - L3449 · A shrink-to-fit box hugged its text ONE PADDING too tightly — then still re-wrapped it (tick 830)
+  - L3456 · ⓵ The FILL_SENTINEL discard is asymmetric
+  - L3486 · ⓶ A box sized to its own max-content re-wrapped the run it was measured from
+  - L3509 · What it bought, against an OLD-BINARY CONTROL
+  - L3529 · Two lessons, and the second is about the gate
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1391,4 +1396,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1302 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1307 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

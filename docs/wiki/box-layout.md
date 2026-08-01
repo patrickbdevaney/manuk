@@ -3445,3 +3445,100 @@ skipped for taffy items on both axes, and `#v1` stays in the gate as the row tha
 
 ⚠ HONEST SCOPE: all seven anchors byte-identical across this change. The idiom needs `height: <pct>`
 AND `max-height: <pct>` on a flex/grid item; this completes a mechanism rather than moving a corpus.
+
+## A shrink-to-fit box hugged its text ONE PADDING too tightly — then still re-wrapped it (tick 830)
+
+**Symptom.** `www.kicktipp.com`'s footer link: Chrome `[742 790 103x30]`, ours `[749 804 96x48]`. One
+line in Chrome, two here, and the height error cascades down the subtree. This is the burndown's #1
+named mechanism (*"container-WIDTH errors LAUNDER into dy"*) caught in the act — but it took **two
+independent defects** to produce, and fixing either alone leaves the site failing.
+
+### ⓵ The FILL_SENTINEL discard is asymmetric
+
+`content_right_extent` reads max-content by laying the subtree out at a 1e6 available width and
+measuring how far its content reached. A block-level child *fills* that width, so its own
+`rect.width` (≈1e6) is meaningless as a contribution — the walk discards the box and recurses to the
+inline text that carries the real extent. Correct, and **asymmetric**:
+
+- the discarded box's **left** padding / border / margin survive the discard *for free* — they are
+  baked into where its descendants were laid out, so they arrive in the fragment's `x`;
+- its **right** ones have no content after them to carry them, so discarding the box discards them.
+
+Measured against headless Chrome, a `13.2px/17.16px Arial` run inside a `box-sizing: border-box;
+padding: 6.6px` block, itself inside a shrink-to-fit box:
+
+```text
+  outer box                       Chrome    before    after
+  flex item                        86.5      80.0      86.5   ✗→✓
+  inline-block                     86.5      80.0      86.5   ✗→✓
+  float: left                      86.5      80.0      86.5   ✗→✓
+  position: absolute               86.5      80.0      86.5   ✗→✓
+  display: table                   86.5      80.0      86.5   ✗→✓
+  grid item                        86.5      80.0      86.5   ✗→✓
+  padding on the BOX ITSELF        86.5      86.5      86.5   ← guard: says which half was broken
+  margin: 0 10px on the child      93.3      83.3      93.3   ✗→✓  same loss, other property
+  border: 3px on the box itself    83.3      83.3      83.3   ← guard
+```
+
+**Fix.** Carry the skipped box's right insets (`margin-right + padding-right + border-right`) down
+the walk as a `pending` term, and add it to whatever extent its descendants report.
+
+### ⓶ A box sized to its own max-content re-wrapped the run it was measured from
+
+With ⓵ landed the `<a>` matched Chrome's `103` **exactly** — and was still 48px tall.
+
+max-content is read by laying the run out unbounded and measuring the reach; the box is then given
+exactly that number and the run is laid out **again** against it. The second pass accumulates the
+same fragment advances in a different order and can land a few thousandths of a pixel *over* — and
+the line breaker has no tolerance, so it takes the break. Bisected by giving the box explicit widths:
+
+```text
+  width           lines
+  89.520px          2      ← what max-content reported
+  89.525px          1      ← what the box's own re-layout needs
+```
+
+⚠⚠⚠ **A BOX SIZED TO ITS OWN MAX-CONTENT MUST FIT ITS OWN CONTENT, AND ON A BARE `f32` IT DOES NOT.**
+
+Blink cannot reach this state: a preferred width is a `LayoutUnit` built with `FromFloatCeil`, so the
+quantisation is **outward** — the box is never smaller than the content it was measured from. This is
+the tick 813-818 quantum (`snap_to_layout_unit`, 1/64 px) with the rounding direction reversed, and
+the direction is the whole point. `taffy_tree::ceil_to_layout_unit` now snaps every intrinsic width
+out: `max_content_width`, `min_content_width`, and the table-cell `(min, max)` pair.
+
+### What it bought, against an OLD-BINARY CONTROL
+
+Same 14 sites, same hour, one binary apart (a live site moves on its own — a per-site delta measured
+against a banked row from six hours ago is not a result):
+
+```text
+  site                            shape old   shape new    delta
+  www.kicktipp.com                 0.7349      0.8313     +0.0964   ★ crossed 0.75
+  celeb.gate.cc                    0.7284      0.7832     +0.0547   ★ crossed 0.75
+  www.library.chiyoda.tokyo.jp     0.7472      0.7528     +0.0056   ★ crossed 0.75
+  en.wikipedia.org                 0.6066      0.6242     +0.0177
+  momon-ga.com                     0.5682      0.5699     +0.0017
+  blog.rust-lang.org               0.9934      0.9946     +0.0012
+  (8 others)                          —           —       +0.0000
+  mean                                                    +0.0127
+```
+
+**Zero regressions; `coverage` byte-identical on all 14** — so this is layout math, not a denominator
+effect (t825's rule: a shape move at unchanged coverage cannot be composition).
+
+### Two lessons, and the second is about the gate
+
+⚠⚠⚠ **THE SECOND DEFECT WAS ONLY VISIBLE BECAUSE THE FIRST ONE LANDED.** A residue narrowed to *"the
+width is wrong"* would have been closed by ⓵, and kicktipp would still have failed. The aim survived
+because the check was **the height against Chrome**, not the width against my own hypothesis.
+
+⚠⚠ **AND THE SECOND GATE WAS VACUOUS ON ITS FIRST WRITING.** The exact fixture that reproduces on the
+shipping path (`Page::load`/Stylo) **passed under `MinimalCascade` with the fix mutated out** — t826's
+two-cascade trap arriving from the other direction: not a false positive, a false GREEN. Finding a
+case the unit harness can actually see took a brute-force scan of 8 strings × 8 sizes *under the
+mutated build*. **A gate written from a live-site reduction must be re-falsified under the harness it
+will live in**, not merely under the engine it was found in.
+
+Gates: `shrink_to_fit_counts_the_right_padding_of_a_filled_block_child` and
+`a_flex_item_at_its_own_max_content_does_not_rewrap_its_own_text` (`manuk-layout`), each RED-proven by
+mutating out its own half.

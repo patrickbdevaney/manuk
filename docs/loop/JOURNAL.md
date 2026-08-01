@@ -44105,3 +44105,99 @@ the ORGAN correctly and every guess about the MECHANISM was wrong.** Naming the 
 reliable; naming the mechanism from the organ is a guess, and t814's rule — *a stated cause is a guess
 until it is measured on its own* — applies to a hypothesis exactly as it applies to a residue.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 830 — a shrink-to-fit box hugged one padding too tightly, then re-wrapped what it measured (2026-08-01)
+
+TICK SHAPE: capability (intrinsic sizing / shrink-to-fit) — t826's residue, measured one suspect at a
+time and closed, priced against an old-binary control
+
+HYPOTHESIS (written before the fixture): t826 aimed at `www.kicktipp.com` (near-bar, gap +0.015),
+found its `<a>` **6.6px — exactly one padding — narrower than Chrome's**, and banked a residue stated
+precisely: *"our `<a>` is 96 wide because something upstream of it is, and it is not `box-sizing`, not
+`padding`, and not text measurement (our string widths are within 0.09% of Chrome's). The residue is
+in the ANCESTOR CHAIN, and it is measured with one suspect at a time or it is not measured."* So:
+walk that chain on the live render, find the first box whose width disagrees, and reduce it.
+
+**THE CHAIN, in one probe, and the answer was not an ancestor.** `boxes --fetch --why 'a'` put the
+whole chain on screen: `body → #wbwrapper → #pagewrapper(845) → #wrapper(flex) → #kicktipp-content →
+div(flex) → div(flex) → div → a[749 804 96x48]`. Every ancestor agreed with Chrome; the divergence
+was the LEAF, and the leaf is a **flex item sized to its own content**. That reframed the question
+from *"which container is wrong"* to *"what does a shrink-to-fit box think its content is worth"* —
+and the answer is two independent defects, both on the SHIPPING cascade (t826's rule), each of which
+alone leaves the site failing.
+
+**⓵ THE `FILL_SENTINEL` DISCARD IS ASYMMETRIC.** `content_right_extent` reads max-content by laying
+the subtree out at 1e6 and discarding any box that FILLED that width — its `rect.width ≈ 1e6` is
+meaningless, so the walk recurses to the inline text that carries the real extent. Correct, and
+asymmetric: **the discarded box's LEFT padding/border/margin survive the discard for free** (they are
+baked into where its descendants were laid out, so they arrive in the fragment's `x`); its RIGHT ones
+have nothing after them to carry them and are simply lost. Chrome vs ours, a `13.2px/17.16px Arial`
+run in a `box-sizing:border-box; padding:6.6px` block inside a shrink-to-fit box:
+
+```
+  outer box                       Chrome    before    after
+  flex item                        86.5      80.0      86.5   ✗→✓
+  inline-block                     86.5      80.0      86.5   ✗→✓
+  float: left                      86.5      80.0      86.5   ✗→✓
+  position: absolute               86.5      80.0      86.5   ✗→✓
+  display: table                   86.5      80.0      86.5   ✗→✓
+  grid item                        86.5      80.0      86.5   ✗→✓
+  padding on the BOX ITSELF        86.5      86.5      86.5   ← guard: names which half was broken
+  margin: 0 10px on the child      93.3      83.3      93.3   ✗→✓  same loss, other property
+  border: 3px on the box itself    83.3      83.3      83.3   ← guard
+```
+
+⚠⚠⚠ **AND THE WIDTH BEING RIGHT WAS NOT ENOUGH.** With ⓵ landed, kicktipp's `<a>` came out
+`[742 804 103x30]` in x AND width — Chrome's `[742 790 103x30]` exactly — and in the reduced fixture
+it was **still two lines tall**. ⓶ max-content is read by laying the run out unbounded; the box is
+then given exactly that number and the run is laid out AGAIN, accumulating the same advances in a
+different order and landing a few thousandths of a pixel OVER. Bisected with explicit widths:
+
+```
+  width           lines
+  89.520px          2     ← what max-content reported
+  89.525px          1     ← what the box's own re-layout needs
+```
+
+**A BOX SIZED TO ITS OWN MAX-CONTENT MUST FIT ITS OWN CONTENT, AND ON A BARE `f32` IT DOES NOT.**
+Blink cannot reach this state: a preferred width is a `LayoutUnit` built with `FromFloatCeil`, so the
+quantisation is **outward**. This is the t813-818 quantum (1/64px) with the rounding direction
+reversed, and the direction is the whole point — `ceil_to_layout_unit` now snaps `max_content_width`,
+`min_content_width` and the table-cell `(min,max)` pair.
+
+MEASURED — **OLD BINARY vs NEW, 14 sites, same hour** (a live site moves on its own; a delta against a
+row banked six hours ago is not a result):
+
+```
+  www.kicktipp.com               0.7349 → 0.8313   +0.0964   ★ CROSSED 0.75
+  celeb.gate.cc                  0.7284 → 0.7832   +0.0547   ★ CROSSED 0.75
+  www.library.chiyoda.tokyo.jp   0.7472 → 0.7528   +0.0056   ★ CROSSED 0.75
+  en.wikipedia.org               0.6066 → 0.6242   +0.0177
+  momon-ga.com                   0.5682 → 0.5699   +0.0017
+  blog.rust-lang.org             0.9934 → 0.9946   +0.0012
+  8 others                                          0.0000
+  mean +0.0127 · M1 crossings 3 · ZERO regressions · coverage byte-identical on all 14
+```
+
+Coverage unchanged everywhere, so this is layout math and not a denominator effect (t825's rule).
+`manuk-layout` **105 green** (103 + 2). Both new gates RED-proven by mutating out their own half.
+
+PERF: none — the ceil is one multiply/ceil/divide on an already-memoized value.
+
+WIKI: `docs/wiki/box-layout.md` — "A shrink-to-fit box hugged its text ONE PADDING too tightly — then
+still re-wrapped it", with the full Chrome table, the bisection, and the priced control.
+
+PATTERN: ⚠⚠⚠ **THE SECOND DEFECT WAS ONLY VISIBLE BECAUSE THE FIRST ONE LANDED.** A residue narrowed
+to *"the width is wrong"* would have been closed by ⓵ and the site would still have failed; the aim
+held because the check was **the height against Chrome**, not the width against my own hypothesis. A
+reduction is finished when the SYMPTOM is gone, not when the named cause is. ⚠⚠ **AND THE SECOND GATE
+WAS VACUOUS ON ITS FIRST WRITING** — the exact fixture that fails on `Page::load` **passed under
+`MinimalCascade` with the fix mutated out**. That is t826's two-cascade trap arriving from the other
+direction: not a false positive but a false GREEN, and it is the more dangerous one, because a
+passing test is not re-examined. Finding a case the unit harness can see took a brute-force scan of 8
+strings × 8 sizes *under the mutated build*. **A gate written from a live-site reduction must be
+re-falsified under the harness it will live in.** ⚠ Aiming note, banked for the next tick: t826 spent
+its whole tick reaching a residue and this tick spent one probe consuming it — **a residue written
+with its refutations attached is worth more than a fix**, and the two cohorts t826 banked still have
+seven unattacked sites in them.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

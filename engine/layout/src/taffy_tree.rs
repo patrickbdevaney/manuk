@@ -688,6 +688,30 @@ fn snap_to_layout_unit(v: f32) -> f32 {
     (v * LAYOUT_UNIT).round() / LAYOUT_UNIT
 }
 
+/// The same grid, rounded **UP** — which is the only direction an *intrinsic* width may be snapped.
+///
+/// ⚠⚠⚠ **A BOX SIZED TO ITS OWN MAX-CONTENT MUST FIT ITS OWN CONTENT, AND ON A BARE `f32` IT DOES
+/// NOT.** max-content is measured by laying the run out at an unbounded width and reading how far it
+/// reached; the box is then given exactly that width and the run is laid out *again* against it. The
+/// second pass accumulates the same fragment advances in a different order, so the total can land a
+/// few thousandths of a pixel **over** the width it produced — and the line breaker, which has no
+/// tolerance, takes a break. The box hugs its text one word too tightly, the line count goes up, and
+/// the height error cascades down the whole subtree. Measured on `kicktipp.com`: a footer link whose
+/// max-content came to `89.520px` and whose own re-layout needed `89.525px`, so a box Chrome renders
+/// one line tall came out two.
+///
+/// Blink does not have this failure mode because a preferred width is a `LayoutUnit` built with
+/// `FromFloatCeil` — the quantisation is *outward*, so the box is never smaller than the content it
+/// was measured from. One 1/64px of slack, deliberately spent. Same reasoning as
+/// [`snap_to_layout_unit`], opposite rounding, and the direction is the whole point.
+pub(crate) fn ceil_to_layout_unit(v: f32) -> f32 {
+    if v.is_finite() {
+        (v * LAYOUT_UNIT).ceil() / LAYOUT_UNIT
+    } else {
+        v
+    }
+}
+
 /// ⚠⚠⚠ **A SUB-PIXEL FLOAT EXCESS BREAKS A FLEX LINE, AND BOOTSTRAP'S COLUMNS ARE WRITTEN IN
 /// EXACTLY THE PERCENTAGES THAT TRIGGER IT.**
 ///

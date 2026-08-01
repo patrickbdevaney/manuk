@@ -1747,12 +1747,14 @@ fn content_right_extent(
     content: &BoxContent,
     fonts: &FontContext,
     origin: f32,
-    // The right margin (px, non-negative) of a box's node. Needed because a `LayoutBox` carries only its
-    // BORDER box, while `rect.x` already includes the box's LEFT margin — so without adding the right
-    // margin the measured extent is asymmetric and short by one margin. A flex item wrapping `<p margin:10>`
-    // reported 110 instead of 120 (its content's margin box). Percentage/auto margins resolve to 0 for an
-    // intrinsic measure; negative margins do not pull the border-box edge in, so this is clamped ≥ 0.
-    margin_right: &dyn Fn(Option<NodeId>) -> f32,
+    // A box's RIGHT-EDGE insets, as `(margin-right, padding-right + border-right)`, both px and ≥0.
+    // Needed because a `LayoutBox` carries only its BORDER box, while `rect.x` already includes the
+    // box's LEFT margin — so without adding the right margin the measured extent is asymmetric and
+    // short by one margin. A flex item wrapping `<p margin:10>` reported 110 instead of 120 (its
+    // content's margin box). The second term exists for the FILL_SENTINEL case below, which is the
+    // same asymmetry one level deeper. Percentage/auto insets resolve to 0 for an intrinsic measure;
+    // negative margins do not pull the border-box edge in, so this is clamped ≥ 0.
+    right_insets: &dyn Fn(Option<NodeId>) -> (f32, f32),
 ) -> f32 {
     // `shrink_to_fit` lays the subtree out at a very large available width (1e6) to read its
     // *max-content* width. Two artifacts of that absurd width must be discarded, or the measurement
@@ -1821,27 +1823,46 @@ fn content_right_extent(
         fonts: &FontContext,
         max_r: &mut f32,
         rel: &dyn Fn(f32) -> f32,
-        mr: &dyn Fn(Option<NodeId>) -> f32,
+        ins: &dyn Fn(Option<NodeId>) -> (f32, f32),
+        // The right-edge insets of every FILLED ancestor between this box and the box being
+        // measured. See the `else` branch: a skipped box's right insets are real content extent
+        // that nothing else in this walk can account for.
+        pending: f32,
     ) {
+        let (mr, pbr) = ins(b.node);
+        let mut pending_kids = pending;
         if b.rect.width < FILL_SENTINEL {
             // `rect.x` includes the LEFT margin; add the RIGHT margin for a full margin-box extent.
-            *max_r = max_r.max(rel(b.rect.x) + b.rect.width + mr(b.node));
+            *max_r = max_r.max(rel(b.rect.x) + b.rect.width + mr + pending);
+        } else {
+            // **A box discarded by FILL_SENTINEL still has right-hand insets, and they are the
+            // half of it that nothing downstream can see.** Its LEFT padding/border/margin survive
+            // the skip for free — they are baked into where its descendants were laid out, so they
+            // show up in the descendants' `x`. Its RIGHT ones have no content after them to carry
+            // them, so dropping the box drops them, and the measured max-content comes out short by
+            // exactly one padding (or one margin, or one border) per skipped ancestor.
+            //
+            // That is a shrink-to-fit box hugging its text one padding too tightly, which then
+            // re-wraps a line that fitted in Chrome and cascades a whole-line height error down the
+            // subtree — the "container-WIDTH errors LAUNDER into dy" mechanism, measured on
+            // kicktipp.com as a `<a>` 96px wide against Chrome's 103. Carry them down instead.
+            pending_kids += mr + pbr;
         }
         match &b.content {
             BoxContent::Block(kids) => {
                 for k in kids {
-                    visit(k, fonts, max_r, rel, mr);
+                    visit(k, fonts, max_r, rel, ins, pending_kids);
                 }
             }
             BoxContent::Inline(frags) => {
-                *max_r = max_r.max(inline_extent(frags, fonts, rel));
+                *max_r = max_r.max(inline_extent(frags, fonts, rel) + pending_kids);
             }
         }
     }
     match content {
         BoxContent::Block(kids) => {
             for k in kids {
-                visit(k, fonts, &mut max_r, &rel, margin_right);
+                visit(k, fonts, &mut max_r, &rel, right_insets, 0.0);
             }
         }
         BoxContent::Inline(frags) => {
@@ -3350,8 +3371,12 @@ impl Ctx<'_> {
         }
         let mut fc = FloatContext::new(0.0, 1.0);
         let (content, _h) = self.layout_children(node, 0.0, 0.0, 1.0, None, &mut fc);
-        let w = content_right_extent(&content, self.fonts, 0.0, &|n| self.px_margin_right(n))
-            + self.native_widget_width(node);
+        // Ceil to the LayoutUnit grid for the same reason max-content does: a box given exactly its
+        // min-content width must still fit its longest unbreakable run.
+        let w = taffy_tree::ceil_to_layout_unit(
+            content_right_extent(&content, self.fonts, 0.0, &|n| self.px_right_insets(n))
+                + self.native_widget_width(node),
+        );
         self.min_content_cache.borrow_mut().insert(node, w);
         w
     }
@@ -3412,16 +3437,24 @@ impl Ctx<'_> {
         if let Some(&cached) = self.max_content_cache.borrow().get(&node) {
             return cached;
         }
-        let pref = self.max_content_width_uncached(node);
+        // Ceil to the LayoutUnit grid, never round — see `taffy_tree::ceil_to_layout_unit`. An
+        // intrinsic width that is a few thousandths of a pixel SHORT of what its own content needs
+        // makes the box re-wrap the run it was measured from.
+        let pref = taffy_tree::ceil_to_layout_unit(self.max_content_width_uncached(node));
         self.max_content_cache.borrow_mut().insert(node, pref);
         pref
     }
 
-    /// The right margin (px, ≥0) of a box's node, for the margin-box extent in `content_right_extent`.
-    /// Percentage/auto margins resolve to 0 for an intrinsic measure; negatives don't extend the box.
-    fn px_margin_right(&self, n: Option<NodeId>) -> f32 {
-        n.map_or(0.0, |node| {
-            self.style_of(node).margin.right.resolve(0.0, 0.0).max(0.0)
+    /// The right-edge insets `(margin-right, padding-right + border-right)` of a box's node, in px
+    /// and ≥0, for the margin-box extent in `content_right_extent`. Percentage/auto insets resolve
+    /// to 0 for an intrinsic measure; negatives don't extend the box.
+    fn px_right_insets(&self, n: Option<NodeId>) -> (f32, f32) {
+        n.map_or((0.0, 0.0), |node| {
+            let s = self.style_of(node);
+            (
+                s.margin.right.resolve(0.0, 0.0).max(0.0),
+                s.padding.right.resolve(0.0, 0.0).max(0.0) + s.border_width.right.max(0.0),
+            )
         })
     }
 
@@ -3465,7 +3498,7 @@ impl Ctx<'_> {
         // The widget strip rides on BOTH intrinsic widths, or a select would hug its text at
         // max-content and reserve at min-content — the box would change size with the space around
         // it, which is not what a reserved widget is.
-        let pref = content_right_extent(&content, self.fonts, 0.0, &|n| self.px_margin_right(n))
+        let pref = content_right_extent(&content, self.fonts, 0.0, &|n| self.px_right_insets(n))
             + self.native_widget_width(node);
         // See `MANUK_TRACE_INTRINSIC` in `measure_intrinsic`: max-content is the OTHER place an
         // intrinsic width is decided (inline-block / inline-flex / float / abs), and a box that
@@ -3923,11 +3956,14 @@ impl Ctx<'_> {
         }
         let mut fc_max = FloatContext::new(0.0, 1.0e6);
         let (cmax, _) = self.layout_children(cell, 0.0, 0.0, 1.0e6, None, &mut fc_max);
-        let max = content_right_extent(&cmax, self.fonts, 0.0, &|n| self.px_margin_right(n));
+        let max = content_right_extent(&cmax, self.fonts, 0.0, &|n| self.px_right_insets(n));
         let mut fc_min = FloatContext::new(0.0, 0.0);
         let (cmin, _) = self.layout_children(cell, 0.0, 0.0, 0.0, None, &mut fc_min);
-        let min = content_right_extent(&cmin, self.fonts, 0.0, &|n| self.px_margin_right(n));
-        (min + frame, max + frame)
+        let min = content_right_extent(&cmin, self.fonts, 0.0, &|n| self.px_right_insets(n));
+        (
+            taffy_tree::ceil_to_layout_unit(min + frame),
+            taffy_tree::ceil_to_layout_unit(max + frame),
+        )
     }
 
     /// Auto table layout (CSS2 §17.5.2.2): distribute `avail` across columns using
@@ -9499,6 +9535,105 @@ mod tests {
         assert!(
             w > 40.0 && w < 900.0,
             "width:max-content must hug the unwrapped line (not fill 1000px), got {w}"
+        );
+    }
+
+    /// ⚠⚠⚠ **A SHRINK-TO-FIT BOX WHOSE PADDING SITS ON A BLOCK CHILD CAME OUT ONE PADDING TOO
+    /// NARROW — IN EVERY SHRINK-TO-FIT CONTEXT THERE IS.**
+    ///
+    /// `content_right_extent` measures max-content by laying the subtree out at 1e6 and reading how
+    /// far it reached. A block child *fills* that width, so its own `rect.width` (≈1e6) is
+    /// meaningless and the walk discards the box and recurses to the text. That discard is correct
+    /// and it is also asymmetric: the child's LEFT padding survives it for free (it is baked into
+    /// where the text was laid out, so it shows up in the fragment's `x`), while its RIGHT padding
+    /// has no content after it to carry it and is simply lost.
+    ///
+    /// Measured against headless Chrome — a `13.2px/17.16px Arial` run inside a `box-sizing:
+    /// border-box; padding: 6.6px` block, itself inside a shrink-to-fit box:
+    ///
+    /// ```text
+    ///   outer box                       Chrome    before    after
+    ///   flex item                        86.5      80.0      86.5   ✗→✓
+    ///   inline-block                     86.5      80.0      86.5   ✗→✓
+    ///   float: left                      86.5      80.0      86.5   ✗→✓
+    ///   position: absolute               86.5      80.0      86.5   ✗→✓
+    ///   display: table                   86.5      80.0      86.5   ✗→✓
+    ///   padding on the box ITSELF        86.5      86.5      86.5   ← guard (never broken)
+    ///   margin: 0 10px on the child      93.3      83.3      93.3   ✗→✓  (same loss, other property)
+    /// ```
+    ///
+    /// The reach is a footer link, a nav item, a button — anything that hugs its text through a
+    /// padded wrapper. On `kicktipp.com` it was a `<a>` 96px wide against Chrome's 103, and six px
+    /// of width is a re-wrapped line, which is a doubled height, which cascades down the subtree.
+    #[test]
+    fn shrink_to_fit_counts_the_right_padding_of_a_filled_block_child() {
+        // Padding on the CHILD, not on the box being measured — that is the whole point.
+        let html = r#"<div id="host"><span id="ib"><div id="kid">hello</div></span></div>"#;
+        let css = "#host{width:400px;font-size:16px}\
+                   #ib{display:inline-block}\
+                   #kid{box-sizing:border-box;padding-left:20px;padding-right:20px}";
+        let (dom, root) = layout_html(html, css, 800.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        // The bare word, measured with no padding at all, is the baseline the assertion is relative
+        // to — so this does not hard-code a font metric that a font change would falsify.
+        let bare = r#"<div id="host"><span id="ib">hello</span></div>"#;
+        let (d2, r2) = layout_html(
+            bare,
+            "#host{width:400px;font-size:16px}#ib{display:inline-block}",
+            800.0,
+        );
+        let rects2 = r2.node_rects(&d2);
+        let text_w = rects2[&d2
+            .descendants(d2.root())
+            .find(|&n| d2.element(n).and_then(|e| e.attr("id")) == Some("ib"))
+            .expect("id")]
+            .width;
+        let w = rects[&by_id("ib")].width;
+        assert!(
+            (w - (text_w + 40.0)).abs() < 1.0,
+            "an inline-block wrapping a block with 20px padding EACH SIDE must be text+40 \
+             ({:.2}), not text+20 ({:.2}) — got {w:.2}",
+            text_w + 40.0,
+            text_w + 20.0
+        );
+    }
+
+    /// ⚠⚠⚠ **A BOX SIZED TO ITS OWN MAX-CONTENT MUST FIT ITS OWN CONTENT, AND ON A BARE `f32` IT
+    /// DOES NOT.**
+    ///
+    /// max-content is read by laying the run out unbounded and measuring how far it reached; the box
+    /// is then given exactly that number and the run is laid out *again* against it. The second pass
+    /// accumulates the same advances in a different order and can land a few thousandths of a pixel
+    /// over — and the line breaker has no tolerance, so it takes a break. The box hugs its text one
+    /// word too tightly and comes out **two lines tall where Chrome renders one**.
+    ///
+    /// Measured on `kicktipp.com`: a footer link whose max-content came to `89.520px` and whose own
+    /// re-layout needed `89.525px`. Blink cannot reach this state because a preferred width is a
+    /// `LayoutUnit` built with `FromFloatCeil` — quantised *outward*, never inward. See
+    /// [`taffy_tree::ceil_to_layout_unit`]; this test is the falsifier for that direction.
+    #[test]
+    fn a_flex_item_at_its_own_max_content_does_not_rewrap_its_own_text() {
+        // Two words, so a break is available for the bug to take; a flex item, because that is the
+        // path that hands the measured width straight back as the used width.
+        let html = r#"<div id="row"><div id="item">Terms and conditions</div></div>"#;
+        let css = "#row{display:flex;width:650px;font-size:13.2px}#item{font-size:13.2px}";
+        let (dom, root) = layout_html(html, css, 1280.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let h = rects[&by_id("item")].height;
+        assert!(
+            h < 22.0,
+            "a flex item sized to its own max-content must keep its text on ONE line \
+             (~17px); {h:.2}px is two lines — the box re-wrapped the run it was measured from"
         );
     }
 

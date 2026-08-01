@@ -566,3 +566,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 826	f673d705	1785613194	2026-08-01T15:39:54-04:00	4337	measurement	63	9	265	36	379	81	3896	6960	0	429	0	the near-bar cohort, and a SECOND CASCADE that nearly produced a false diagnosis (2026-08-01)
 827	1932c41c	1785614170	2026-08-01T15:56:10-04:00	976	capability	63	6	224	35	379	81	3896	6960	0	429	0	the block-axis twin, banked at t823 and now closed (2026-08-01)
 828	e0ef724d	1785615373	2026-08-01T16:16:13-04:00	1203	process	63	5	104	32	379	81	3896	6960	0	429	0	the triple cadence: self-audit, surface audit #54, constitution check #69 (2026-08-01)
+830	314bd26e	1785618546	2026-08-01T17:09:06-04:00	3173	capability	63	9	418	56	379	81	3896	6960	0	430	0	a shrink-to-fit box hugged one padding too tightly, then re-wrapped what it measured (2026-08-01)
