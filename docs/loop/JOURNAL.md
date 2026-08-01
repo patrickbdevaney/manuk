@@ -44201,3 +44201,127 @@ its whole tick reaching a residue and this tick spent one probe consuming it —
 with its refutations attached is worth more than a fix**, and the two cohorts t826 banked still have
 seven unattacked sites in them.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 831 — the float path is a SECOND width resolution, and it never learned three of the block path's rules (2026-08-01)
+
+TICK SHAPE: capability (float sizing / replaced elements) — aimed by a new per-element dump on the
+LIVE frame, reduced against Chrome, priced on an old-binary control
+
+HYPOTHESIS (written before the fixture): t826 banked a near-bar cohort and t830 crossed three of it.
+Of what remains, five sites share a signature that is almost too clean to ignore — `coverage
+1.000000`, `h_overflow 0`, `overlap 0`, and shape stuck between 0.55 and 0.66:
+
+```
+  app.ordertime.com                 1.000000  0.655172   n   29
+  littlecaesarsbcs.libellum.com.mx  1.000000  0.615385   n   78
+  promo.golesliga1max.pe            1.000000  0.587302   n   63
+  cyoinatu-onna.com                 0.967123  0.578612   n 1412
+  momon-ga.com                      1.000000  0.568182   n  572
+  admin.zoomph.com                  1.000000  0.558824   n   34
+```
+
+Every box drawn, nothing overflowing, nothing overlapping — and a third of the boxes in the wrong
+place. That is a layout-math signature, not a coverage or a keying one, and `app.ordertime.com` at
+29 elements is small enough to hold entirely in view.
+
+**THE INSTRUMENT ALREADY KNEW THE ANSWER AND WAS THROWING IT AWAY.** `shape_stats` walks every
+shared selector-path, subtracts the shared frame, takes the worst of four deltas — and reduces the
+whole thing to one ratio. Every reduction tick since t813 has then spent its first half rebuilding
+that walk BY HAND (`boxes --fetch` on our side, a headless Chrome dump on the other, an eyeball
+diff), against a *different frame*. So this tick's first move was `fidelity --shape-dump N`: the
+per-element misses, worst-first, in the frame the score is computed in. On the cohort's smallest
+member it named the mechanism in **one command**:
+
+```text
+  height +32  c[0 0 113x40]   m[0 0 113x8]    div
+  height +32  c[12 2 101x36]  m[12 2 101x4]   a
+  height +32  c[0 2 101x32]   m[0 2 101x0]    img   ← ZERO HEIGHT
+  width  +14  c[16 13 14x14]  m[16 13 0x16]   img   ← ZERO WIDTH
+```
+
+`boxes --images` then showed both images **decoded, with `natural 101x32` and `14x14` — exactly
+Chrome's boxes.** The intrinsic sizes were in hand and layout produced zero anyway. The site's CSS
+said why in one line: `.logo a img{float:left}` and `.help a img{float:left}`. THE IMAGES ARE
+FLOATED — and `layout_float` is a **second width/height resolution** living beside `layout_block`'s.
+
+Three defects, all in that one function, all one grep apart:
+
+**⓵ A floated replaced element has no content, so without its ratio it has no size.** An `<img>` has
+no children, so the float path's content-height was 0 and its `auto` width was `shrink_to_fit` = 0.
+Neither axis consulted `aspect_ratio`, which the block path has used for as long as it has had the
+field.
+
+```text
+                                       Chrome   before   after
+  float:left, no width/height          101x32   101x0    101x32   ✗→✓
+  float:left, height=16 attr only       16x16     0x16     16x16   ✗→✓
+  the SAME image, NOT floated          101x32   101x32   101x32    ✓  ← control
+```
+
+⚠ The control is the diagnosis, not decoration: the two resolutions disagreed **inside one
+document**, which says the bug is the second resolution and not the ratio machinery.
+
+**⓶ `min-width`/`max-width`/`min-height`/`max-height` did not exist on this path** — not
+mis-applied; the words were not in the function. Measured on plain floated `<div>`s so no
+replaced-element machinery could explain the numbers away:
+
+```text
+                                             Chrome   before   after
+  float, width:200px; max-width:50px         50x10    200x10   50x10   ✗→✓
+  float, width:20px;  min-width:80px         80x10     20x10   80x10   ✗→✓
+  float, width:10px; height:200px; max-h:50  10x50    10x200   10x50   ✗→✓
+  float, width:10px; height:20px;  min-h:80  10x80     10x20   10x80   ✗→✓
+```
+
+With the clamp comes CSS 2.1 §10.4 in **both** directions — a clamp that moves a replaced element's
+used size in one axis recomputes the other through the ratio, or the picture renders stretched:
+
+```text
+                                                 Chrome   before   after
+  float, 101x32 image, max-width:50px            50x16    101x0    50x16   ✗→✓
+  float, 14x14 image, height=16, max-height:14   14x14      0x16    14x14   ✗→✓
+```
+
+That second row **is** `app.ordertime.com`: `.help img{max-height:14px;max-width:14px}` over an
+`<img height="16">` is exactly where its `0x16` against Chrome's `14x14` came from.
+
+**⓷ And `box-sizing: border-box` on the block axis** — the width arm got it in an earlier tick, the
+height arm four lines below it did not, so a border-box float came out padding+border too tall
+(Chrome 100×100, ours 100×120).
+
+MEASURED — **OLD BINARY vs NEW, 16 sites, same hour** (a live site moves on its own):
+
+```
+  app.ordertime.com                  0.6552 → 0.8621   +0.2069   ★ CROSSED 0.75
+  littlecaesarsbcs.libellum.com.mx   0.6154 → 0.9487   +0.3333   ★ CROSSED 0.75
+  14 others                                            +0.0000
+  mean +0.0338 · M1 crossings 2 · ZERO regressions · coverage byte-identical on all 16
+```
+
+`manuk-layout` **108 green** (105 + 3), plus a block-axis assertion added to the existing float
+box-sizing test. All four halves RED-proven by mutating out their own half — and each mutation left
+the *other* three green, so the four gates are separable rather than one gate wearing four names.
+
+PERF: none — four comparisons and at most one divide on a path that already resolves two lengths.
+
+WIKI: `docs/wiki/box-layout.md` — "A float is a SECOND width resolution, and it never learned three
+of the block path's rules", with the full Chrome tables and the priced control.
+
+PATTERN: ⚠⚠⚠ **A SECOND IMPLEMENTATION OF A RULE DOES NOT INHERIT THE FIRST ONE'S FIXES — IT
+ACCUMULATES THE FIRST ONE'S BACKLOG.** `layout_float` has been acquiring `layout_block`'s rules one
+measured defect at a time for the life of this project, and every arrival has looked like a small
+local fix rather than what it actually is: evidence that the SET is incomplete. The correct move
+when a fix lands in one of two parallel resolutions is to **enumerate the other one's rules against
+it**, not to wait for the next site to name the next missing rule. ⚠⚠ **A TEST NAMED FOR A RULE
+GUARDS ONLY THE AXIS IT ASKED ABOUT** — `box_sizing_border_box_applies_to_a_float` is the *correct*
+name for a test that checked half of that rule, so the name itself gave no signal that the other
+half was unguarded. A gate's name is a claim about scope and nothing checks it. ⚠ **A COHORT IS A
+LEAD, NOT A CAUSE, AND BOTH HALVES ARE THE RESULT**: `littlecaesarsbcs` was never looked at, shared
+the mechanism, and moved +0.33 on its own — while the four *other* cov=1.000 members did not move at
+all. ⚠ RESIDUE, banked with numbers so the next tick aims without re-deriving: `admin.zoomph.com`
+(unmoved, cov 1.000, 15 of 34 misses) is one `<img>` inside a `<center>` at `320x30` where Chrome
+gives `113x30` — a replaced element stretched to its container instead of its intrinsic width, on
+the NON-float path this time, with everything below inheriting it. But the page also carries an
+independent `-50` height and a `-30` body `y` that the img cannot explain, so that is **two
+suspects, measured one at a time** (t826's rule), not one cause.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

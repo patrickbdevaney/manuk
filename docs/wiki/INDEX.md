@@ -179,6 +179,12 @@
   - L3486 · ⓶ A box sized to its own max-content re-wrapped the run it was measured from
   - L3509 · What it bought, against an OLD-BINARY CONTROL
   - L3529 · Two lessons, and the second is about the gate
+  - L3546 · A float is a SECOND width resolution, and it never learned three of the block path's rules (t831)
+  - L3553 · The aim, and it came from the scorer rather than from a hand-rolled probe
+  - L3575 · ⓵ A floated replaced element has no content, so without its ratio it has no size
+  - L3593 · ⓶ min-width / max-width / min-height / max-height did not exist on this path
+  - L3622 · ⓷ And box-sizing: border-box on the block axis
+  - L3629 · Priced against an OLD-BINARY control, 16 sites, same hour
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1396,4 +1402,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1307 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1313 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

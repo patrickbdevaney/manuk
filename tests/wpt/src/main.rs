@@ -517,6 +517,10 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
     let site_budget: u64 = flag(args, "--site-budget")
         .and_then(|v| v.parse().ok())
         .unwrap_or(150);
+    // Diagnostic only — see the print site for why it is off by default and stderr-only.
+    let shape_dump: usize = flag(args, "--shape-dump")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
     let mut flushed = 0usize;
     if let Some(p) = &rows_out {
         // The previous run's marker, if it died holding one. Recovered FIRST, so the site that
@@ -1213,6 +1217,37 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                     // the old absolute PLACEMENT line, which charged one constant offset N times.
                     // `placement_stats` (absolute) is kept as a Layer-3 diagnostic only.
                     let (shape, shape_n) = manuk_wpt::fidelity::shape_stats(&cmap, &mboxes, 8);
+                    // `--shape-dump N` — the per-element aim behind the ratio, worst-first.
+                    //
+                    // Off by default and printed to stderr, so no sweep row and no certificate can
+                    // depend on it. It exists because the reduction ticks were reconstructing this
+                    // walk by hand against a DIFFERENT frame (`boxes --fetch` renders the live URL,
+                    // the oracle's snapshot path renders a `curl` capture) and a diff of two frames
+                    // is not a diff — t830 spent its first probe re-deriving a chain the scorer had
+                    // already scored.
+                    if shape_dump > 0 {
+                        let misses = manuk_wpt::fidelity::shape_misses(&cmap, &mboxes, 8);
+                        eprintln!(
+                            "  SHAPE MISSES: {} of {shape_n} scored (worst first, parent-relative, \
+                             d = chrome - manuk)",
+                            misses.len()
+                        );
+                        for miss in misses.iter().take(shape_dump) {
+                            eprintln!(
+                                "    {:<10} c[{} {} {}x{}]  m[{} {} {}x{}]  {}",
+                                miss.axis(),
+                                miss.chrome[0],
+                                miss.chrome[1],
+                                miss.chrome[2],
+                                miss.chrome[3],
+                                miss.manuk[0],
+                                miss.manuk[1],
+                                miss.manuk[2],
+                                miss.manuk[3],
+                                miss.path,
+                            );
+                        }
+                    }
                     f.shape = Some(shape);
                     // The SAMPLE travels with the ratio. `shape_stats` returns 1.0 over an empty
                     // sample, and the first real sweep produced seven `SHAPE: 100.0% … (0 scored)`

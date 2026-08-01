@@ -1898,6 +1898,105 @@ pub struct TreeAlignment {
     pub first_bad_depth: Option<usize>,
 }
 
+/// One element that SHAPE scored as wrong, with the four parent-relative deltas that made it wrong.
+///
+/// The fields are already in the units the reduction needs: `d` is the per-axis
+/// `(chrome - manuk)` after each side's box has had its shared frame subtracted, exactly as
+/// [`shape_stats`] computes it. Nothing is rounded or bucketed on the way out — a bucket is a
+/// decision about which mechanism this is, and that decision belongs to the reader.
+#[derive(Debug, Clone)]
+pub struct ShapeMiss {
+    /// Selector path, the same key both sides are scored under.
+    pub path: String,
+    /// `chrome - manuk` for `[x, y, width, height]`, parent-relative in x/y.
+    pub d: [i64; 4],
+    /// Chrome's frame-relative box, for reading the delta against a size.
+    pub chrome: [i64; 4],
+    /// Ours.
+    pub manuk: [i64; 4],
+}
+
+impl ShapeMiss {
+    /// Which axis carries this miss, and how far — `"width +6"`, `"y -14"`. The single largest
+    /// component, because a box that is wrong in one axis and right in three is a different
+    /// mechanism from one that is wrong in all four, and the label must not hide that.
+    pub fn axis(&self) -> String {
+        let names = ["x", "y", "width", "height"];
+        let (i, v) = (0..4)
+            .map(|i| (i, self.d[i]))
+            .max_by_key(|(_, v)| v.abs())
+            .unwrap_or((0, 0));
+        format!("{} {}{}", names[i], if v >= 0 { "+" } else { "" }, v)
+    }
+}
+
+/// **THE AIM THAT `shape_stats` ALREADY COMPUTES AND THROWS AWAY.**
+///
+/// `shape_stats` walks every shared path, subtracts the shared frame, takes the worst of four
+/// deltas, and reduces the whole thing to one ratio. Every reduction tick since t813 has then spent
+/// its first half rebuilding that walk by hand — `boxes --fetch` on our side, a headless Chrome dump
+/// on the other, and an eyeball diff — to answer the question the scorer had already answered
+/// per-element and discarded. This returns it: the misses, worst-first, in the SAME frame the score
+/// is computed in, so the number a probe reads and the number the sweep publishes cannot disagree.
+///
+/// It is deliberately NOT clustered. The board's mechanism-oracle note wants work ranked by
+/// primitive rather than by tag, and that is right — but a signature computed here would be this
+/// function guessing which of `x/y/width/height` is the *cause*, when on a page laid out top-down
+/// the cause is upstream of almost every symptom it would name. [`ShapeMiss::axis`] labels the
+/// symptom honestly and stops there; the causal call stays with the reader, who can see the tree.
+pub fn shape_misses(
+    chrome: &std::collections::HashMap<String, [i64; 4]>,
+    manuk: &std::collections::HashMap<String, [i64; 4]>,
+    tol: i64,
+) -> Vec<ShapeMiss> {
+    let mut out = Vec::new();
+    for (path, c) in chrome {
+        let Some(m) = manuk.get(path) else { continue };
+        // The frame subtraction is `shape_stats`'s, re-derived here rather than shared, because
+        // sharing it would mean exposing `common_frame` and the two callers want different things
+        // from a missing frame: the scorer wants a number, this wants the raw boxes. The invariant
+        // that matters — same frame, same tolerance — is asserted by a test, not by a call.
+        let (cr, mr) = {
+            let mut p: &str = path;
+            let mut frame = None;
+            while let Some(cut) = p.rfind('/') {
+                p = &p[..cut];
+                if let (Some(cf), Some(mf)) = (chrome.get(p), manuk.get(p)) {
+                    frame = Some((*cf, *mf));
+                    break;
+                }
+            }
+            match frame {
+                Some((cf, mf)) => (
+                    [c[0] - cf[0], c[1] - cf[1], c[2], c[3]],
+                    [m[0] - mf[0], m[1] - mf[1], m[2], m[3]],
+                ),
+                None => (*c, *m),
+            }
+        };
+        let d = [cr[0] - mr[0], cr[1] - mr[1], cr[2] - mr[2], cr[3] - mr[3]];
+        let worst = (0..4).map(|i| d[i].abs()).max().unwrap_or(0);
+        if worst > tol {
+            out.push(ShapeMiss {
+                path: path.clone(),
+                d,
+                chrome: cr,
+                manuk: mr,
+            });
+        }
+    }
+    // Worst first, then by path so a re-run of the same tree prints the same order — a probe whose
+    // output reorders between runs cannot be diffed across a fix, which is the only way it gets used.
+    out.sort_by(|a, b| {
+        let (x, y) = (
+            (0..4).map(|i| a.d[i].abs()).max().unwrap_or(0),
+            (0..4).map(|i| b.d[i].abs()).max().unwrap_or(0),
+        );
+        y.cmp(&x).then_with(|| a.path.cmp(&b.path))
+    });
+    out
+}
+
 /// **Where does the layout first diverge?** Sort every element both engines render by Chrome's `y`
 /// and walk down the page; report the first id whose vertical offset exceeds `jump`, plus the last
 /// id that was still in agreement. Downstream drift is almost always ONE upstream box with the
@@ -2060,7 +2159,7 @@ pub fn report(rows: &[Fidelity], floor: f64) -> bool {
 
 #[cfg(test)]
 mod shape_tests {
-    use super::{certificate, shape_stats, Fidelity};
+    use super::{certificate, shape_misses, shape_stats, Fidelity};
     use std::collections::HashMap;
 
     // A realistic selector-path box tree modelling the microsoft.com artifact from the redesign:
@@ -2121,6 +2220,60 @@ mod shape_tests {
         assert!(
             place_frac <= 2.0 / TOTAL as f64 + 1e-9,
             "absolute placement must be dragged down by the offset it cannot cancel, got {place_frac}"
+        );
+    }
+
+    // ── THE DUMP AND THE SCORE MUST BE THE SAME WALK.
+    //
+    // `shape_misses` re-derives the frame subtraction rather than sharing `shape_stats`'s (the two
+    // callers want different things from a missing frame). That is a duplicated invariant, and a
+    // duplicated invariant that nothing checks is how a probe starts naming elements the score
+    // considers fine — which would send a reduction tick at a box that is not costing us anything.
+    // So: the dump's LENGTH must equal the score's failure count, on both fixtures, exactly.
+    #[test]
+    fn the_miss_dump_names_exactly_the_elements_the_score_failed() {
+        for (label, chrome, manuk) in [
+            ("constant offset", tree(0, false), tree(23, false)),
+            ("one bad leaf", tree(0, false), tree(0, true)),
+        ] {
+            let (shape, n) = shape_stats(&chrome, &manuk, 8);
+            let failed = n - (shape * n as f64).round() as usize;
+            let misses = shape_misses(&chrome, &manuk, 8);
+            assert_eq!(
+                misses.len(),
+                failed,
+                "{label}: the dump must name exactly the elements SHAPE scored as wrong — \
+                 shape {shape} over {n} means {failed} failures, dump named {}",
+                misses.len()
+            );
+            // Worst-first, or the `--shape-dump N` truncation silently hides the biggest error.
+            let worst: Vec<i64> = misses
+                .iter()
+                .map(|m| (0..4).map(|i| m.d[i].abs()).max().unwrap_or(0))
+                .collect();
+            assert!(
+                worst.windows(2).all(|w| w[0] >= w[1]),
+                "{label}: misses must be worst-first, got {worst:?}"
+            );
+            assert!(
+                worst.iter().all(|&w| w > 8),
+                "{label}: nothing within tolerance may appear in the dump, got {worst:?}"
+            );
+        }
+    }
+
+    // The axis label must name the axis that actually carries the error. `tree(_, true)` corrupts a
+    // leaf's HEIGHT by 849px and nothing else, so a dump that calls that a `y` miss is mislabelling
+    // the mechanism — the exact failure mode t817 recorded (a wrong LABEL is caught by nothing).
+    #[test]
+    fn the_axis_label_names_the_axis_that_is_wrong() {
+        let misses = shape_misses(&tree(0, false), &tree(0, true), 8);
+        assert_eq!(misses.len(), 1);
+        assert_eq!(
+            misses[0].axis(),
+            "height -849",
+            "a corrupted HEIGHT must be labelled height, got {}",
+            misses[0].axis()
         );
     }
 

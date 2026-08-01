@@ -3077,7 +3077,7 @@ impl Ctx<'_> {
 
         let non_content = ml + mr + pl + pr + bl + br;
         let avail = (cw - non_content).max(0.0);
-        let width = match s.width {
+        let mut width = match s.width {
             // A float shrink-to-fits on `auto` — that is the whole point of a float — so `stretch`
             // is the only way to say "this floated card fills its column", and it is the difference
             // between a full-width banner and one hugging its text.
@@ -3106,6 +3106,63 @@ impl Ctx<'_> {
             }
         };
 
+        // ── ⓵ **A FLOATED REPLACED ELEMENT DERIVES ITS AUTO WIDTH FROM ITS HEIGHT AND ITS RATIO**
+        // (CSS2 §10.4) — the mirror of the height derivation below, and `layout_block` has had it
+        // for as long as it has had `aspect_ratio`. This path never did, so a floated `<img>` with
+        // a height and no width shrink-to-fit to the width of its (empty) content: **zero**.
+        //
+        // `width: stretch` is a definite width wearing `Dim::Auto`'s representation, so it is
+        // excluded here exactly as it is in `layout_block` — the ratio must not overwrite it.
+        if s.width == Dim::Auto && !s.width_stretch {
+            if let (Some(r), Dim::Px(h)) = (s.aspect_ratio, s.height) {
+                if r > 0.0 {
+                    width = h * r;
+                }
+            }
+        }
+
+        // ── ⓶ **`min-width` / `max-width` — THE FLOAT PATH APPLIED NEITHER, EVER.**
+        //
+        // Not "applied them wrongly": the words do not appear in this function. A float is a second,
+        // hand-rolled width resolution living beside `layout_block`'s, and it has been acquiring that
+        // function's rules one measured defect at a time (`box-sizing` was the last one, in the arm
+        // directly above). Chrome-measured on plain floated `<div>`s, so no replaced-element
+        // machinery is in the way of reading it:
+        //
+        // ```text
+        //                                              Chrome   before   after
+        //   float, width:200px; max-width:50px         50x10    200x10   50x10   ✗→✓
+        //   float, width:20px;  min-width:80px         80x10     20x10   80x10   ✗→✓
+        //   float, width:10px;  max-height:50px        10x50    10x200   10x50   ✗→✓
+        //   float, width:10px;  min-height:80px        10x80     10x20   10x80   ✗→✓
+        // ```
+        //
+        // `.col { float:left; width:50%; max-width:600px }` is the entire pre-flexbox responsive
+        // column, and `img { max-width:100% }` is in every CSS reset written since 2011 — so this is
+        // not an edge of the float path, it is most of what floats are used for.
+        //
+        // Same construction as `layout_block`: max first, then min wins, both converted to the
+        // content box so a `border-box` clamp measures the same edge the specified width did.
+        let bs_extra_w = if s.box_sizing == BoxSizing::BorderBox {
+            pl + pr + bl + br
+        } else {
+            0.0
+        };
+        let min_w = (s.min_width.resolve(cw, 0.0) - bs_extra_w).max(0.0);
+        let max_w = match s.max_width {
+            Dim::Auto => f32::INFINITY,
+            other => (other.resolve(cw, f32::INFINITY) - bs_extra_w).max(0.0),
+        };
+        let unclamped_width = width;
+        if max_w.is_finite() {
+            width = width.min(max_w);
+        }
+        width = width.max(min_w);
+        // CSS2.1 §10.4: a clamp that MOVED the used width of a replaced element is a constraint
+        // violation, and the used height is recomputed from it so the ratio survives. This is what
+        // turns `float:left; max-width:50px` on a 101×32 logo into 50×16 rather than 50×32.
+        let inline_constraint_violated = width != unclamped_width;
+
         // **A floated table must still get TABLE layout.** `layout_table` is only reached from
         // `layout_block`, so a table arriving here (float) — or as a flex/grid item — fell through
         // to the generic path, where `<tr>`/`<th>` are not "block-level" and every cell's text
@@ -3126,10 +3183,70 @@ impl Ctx<'_> {
         // Lay out content at a provisional origin (0,0) in the float's own BFC.
         let mut inner = FloatContext::new(0.0, width);
         let (content, ch) = self.layout_children(node, 0.0, 0.0, width, None, &mut inner);
-        let content_height = match s.height {
-            Dim::Auto => ch.max((inner.lowest_bottom()).max(0.0)),
-            other => other.resolve(0.0, ch),
+        // ── ⓷ **AND `box-sizing: border-box` ON THE BLOCK AXIS, which the width arm above already
+        // got and this one did not** — a specified height on a border-box float came out padding +
+        // border too tall (Chrome-measured: `box-sizing:border-box; padding:10px; height:100px`
+        // floated is **100** tall, ours was 120). One rule, two axes, and only the inline one landed.
+        let bs_extra_h = if s.box_sizing == BoxSizing::BorderBox {
+            pt + pb + bt + bb
+        } else {
+            0.0
         };
+        let mut content_height = match (s.height, s.aspect_ratio) {
+            // A replaced element's auto height comes from its USED width and its intrinsic ratio
+            // (CSS2 §10.6.2). Without this a floated `<img>` is its content's height — and an
+            // `<img>` has no children, so **zero**. This is the defect that aimed the tick:
+            // `.logo a img { float:left }` measured `101x0` against Chrome's `101x32`, with the
+            // otherwise-identical unfloated image in the same document already Chrome-exact.
+            (Dim::Auto, Some(r)) if r > 0.0 => width / r,
+            // The §10.4 transfer, inline → block: the width was clamped, so the height follows it.
+            (_, Some(r))
+                if r > 0.0
+                    && inline_constraint_violated
+                    && is_replaced_element(self.dom.tag_name(node)) =>
+            {
+                width / r
+            }
+            (Dim::Auto, _) => ch.max((inner.lowest_bottom()).max(0.0)),
+            (other, _) => (other.resolve(0.0, ch) - bs_extra_h).max(0.0),
+        };
+        // The block-axis half of ⓶. A percentage min/max-height on a float resolves against its
+        // containing block's height, which this path does not carry — and CSS2 §10.7 says a
+        // percentage `max-height` against an INDEFINITE containing block is treated as `none`. So an
+        // unresolvable percentage is dropped rather than resolved against 0, because resolving
+        // against 0 clamps the box to nothing: that is the exact shape of the bug the
+        // `layout_block` twin of this comment records, where `img { max-height:100% }` erased every
+        // responsive image on the page. A px/em clamp — which is what the corpus actually uses —
+        // resolves normally.
+        let indefinite_pct = |d: Dim| {
+            matches!(d, Dim::Percent(_)) || matches!(d, Dim::Calc { pct, .. } if pct != 0.0)
+        };
+        let min_h = if indefinite_pct(s.min_height) {
+            0.0
+        } else {
+            (s.min_height.resolve(0.0, 0.0) - bs_extra_h).max(0.0)
+        };
+        let max_h = match s.max_height {
+            Dim::Auto => f32::INFINITY,
+            other if indefinite_pct(other) => f32::INFINITY,
+            other => (other.resolve(0.0, f32::INFINITY) - bs_extra_h).max(0.0),
+        };
+        let unclamped_height = content_height;
+        if max_h.is_finite() {
+            content_height = content_height.min(max_h);
+        }
+        content_height = content_height.max(min_h);
+        // §10.4 again, block → inline. A `max-height` that moved a replaced element's height must
+        // pull the width back through the ratio, or the picture renders stretched at its old width.
+        // This is `.help img { max-height:14px; max-width:14px }` over an `<img height="16">` — the
+        // shape that made `app.ordertime.com` measure `0x16` where Chrome measures **14x14**.
+        if content_height != unclamped_height {
+            if let Some(r) = s.aspect_ratio {
+                if r > 0.0 && is_replaced_element(self.dom.tag_name(node)) {
+                    width = (content_height * r).min(max_w).max(min_w);
+                }
+            }
+        }
 
         let border_box_w = bl + pl + width + pr + br;
         let border_box_h = bt + pt + content_height + pb + bb;
@@ -8280,6 +8397,188 @@ mod tests {
         assert!(
             (nfw - 352.0).abs() < 1.0 && (i3w - 342.0).abs() < 1.0,
             "the non-float control is unchanged: {nfw} / {i3w}"
+        );
+
+        // ── **AND THE BLOCK AXIS OF THE SAME RULE, which this test did not ask for and the code
+        // therefore did not have.** The width arm above subtracted padding+border from a border-box
+        // float; the height arm did not, so the same box came out padding+border too TALL. One rule,
+        // two axes, one of them landed — the shape this project keeps paying for. Chrome-measured:
+        // `box-sizing:border-box; padding:10px; width:100px; height:100px` floated is 100x100, ours
+        // was 100x120.
+        let (dom2, root2) = layout_html(
+            "<body style='margin:0'><div id=bh></div></body>",
+            "#bh{float:left;box-sizing:border-box;padding:10px;width:100px;height:100px}",
+            1200.0,
+        );
+        let rects2 = root2.node_rects(&dom2);
+        let n = dom2
+            .descendants(dom2.root())
+            .find(|&n| dom2.element(n).and_then(|e| e.attr("id")) == Some("bh"))
+            .expect("id");
+        let (bw, bhh) = (rects2[&n].width, rects2[&n].height);
+        assert!(
+            (bw - 100.0).abs() < 1.0 && (bhh - 100.0).abs() < 1.0,
+            "a border-box float's specified HEIGHT is its border box too (100x100), got {bw}x{bhh}"
+        );
+    }
+
+    /// **A FLOATED REPLACED ELEMENT HAS NO CONTENT, SO WITHOUT ITS RATIO IT HAS NO SIZE.**
+    ///
+    /// `layout_float` derived neither axis from `aspect_ratio`, and an `<img>` has no children — so a
+    /// floated image whose other axis was `auto` measured **zero** in it. Chrome-measured on a
+    /// 101×32 PNG and a 14×14 PNG served over HTTP, with the identical unfloated image in the same
+    /// document as the control:
+    ///
+    /// ```text
+    ///                                       Chrome   before   after
+    ///   float:left, no width/height        101x32    101x0    101x32   ✗→✓
+    ///   float:left, height=16 attr only      16x16      0x16     16x16   ✗→✓
+    ///   the SAME image, not floated        101x32   101x32   101x32    ✓  ← control
+    /// ```
+    ///
+    /// The control is the diagnosis: the block path had this rule the whole time, so the two
+    /// resolutions disagreed inside one document. `.logo a img { float:left }` is how the legacy web
+    /// puts a logo in a header, and it is why `app.ordertime.com` aimed this tick.
+    #[test]
+    fn a_floated_replaced_element_derives_its_missing_axis_from_its_ratio() {
+        // `aspect-ratio` in CSS is the same `s.aspect_ratio` a decoded image's intrinsic size
+        // produces (`apply_natural_size`), so this reaches the identical code path without needing
+        // a network fetch inside a unit test.
+        let (dom, root) = layout_html(
+            "<body style='margin:0'>\
+               <div><img id=f style='float:left' ></div>\
+               <div><img id=h style='float:left;height:16px'></div>\
+               <div><img id=c ></div>\
+             </body>",
+            "#f{aspect-ratio:101/32;width:101px} #h{aspect-ratio:1/1} #c{aspect-ratio:101/32;width:101px}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let g = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            (rects[&n].width, rects[&n].height)
+        };
+        let (fw, fh) = g("f");
+        assert!(
+            (fw - 101.0).abs() < 1.0 && (fh - 32.0).abs() < 1.0,
+            "a floated image with an auto HEIGHT takes it from its width and ratio (101x32), \
+             got {fw}x{fh}"
+        );
+        let (hw, hh) = g("h");
+        assert!(
+            (hw - 16.0).abs() < 1.0 && (hh - 16.0).abs() < 1.0,
+            "a floated image with an auto WIDTH takes it from its height and ratio (16x16), \
+             got {hw}x{hh}"
+        );
+        // The control that made this a diagnosis rather than a symptom: unfloated, already correct,
+        // and it must stay correct — a fix that moves it is a fix in the wrong function.
+        let (cw, chh) = g("c");
+        assert!(
+            (cw - 101.0).abs() < 1.0 && (chh - 32.0).abs() < 1.0,
+            "the unfloated control was already Chrome-exact and must not move: {cw}x{chh}"
+        );
+    }
+
+    /// **`min-width` / `max-width` / `min-height` / `max-height` DID NOT EXIST ON THE FLOAT PATH.**
+    ///
+    /// Not mis-applied — absent. A float is a second width/height resolution beside `layout_block`'s
+    /// and it has been acquiring that function's rules one measured defect at a time. Deliberately
+    /// tested on plain `<div>`s so no replaced-element machinery can explain the result away.
+    /// Chrome-measured:
+    ///
+    /// ```text
+    ///                                            Chrome   before   after
+    ///   float, width:200px; max-width:50px       50x10    200x10   50x10   ✗→✓
+    ///   float, width:20px;  min-width:80px       80x10     20x10   80x10   ✗→✓
+    ///   float, width:10px; height:200px; max-h:50  10x50   10x200   10x50   ✗→✓
+    ///   float, width:10px; height:20px;  min-h:80  10x80    10x20   10x80   ✗→✓
+    /// ```
+    ///
+    /// `.col { float:left; width:50%; max-width:600px }` is the pre-flexbox responsive column, so
+    /// this is not an edge of the float path — it is most of what floats are used for.
+    #[test]
+    fn a_float_clamps_both_axes_by_min_and_max() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0'>\
+               <div class=c id=mw></div><div class=c id=miw></div>\
+               <div class=c id=mh></div><div class=c id=mih></div>\
+             </body>",
+            ".c{float:left;clear:both} \
+             #mw{width:200px;max-width:50px;height:10px} \
+             #miw{width:20px;min-width:80px;height:10px} \
+             #mh{width:10px;height:200px;max-height:50px} \
+             #mih{width:10px;height:20px;min-height:80px}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let g = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            (rects[&n].width, rects[&n].height)
+        };
+        for (id, want) in [
+            ("mw", (50.0, 10.0)),
+            ("miw", (80.0, 10.0)),
+            ("mh", (10.0, 50.0)),
+            ("mih", (10.0, 80.0)),
+        ] {
+            let (w, h) = g(id);
+            assert!(
+                (w - want.0).abs() < 1.0 && (h - want.1).abs() < 1.0,
+                "float #{id}: Chrome measures {}x{}, got {w}x{h}",
+                want.0,
+                want.1
+            );
+        }
+    }
+
+    /// **CSS 2.1 §10.4 — A CLAMP ON A REPLACED ELEMENT TRANSFERS THROUGH THE RATIO, BOTH WAYS.**
+    ///
+    /// Clamping one axis of an image and leaving the other is how a picture renders stretched, and
+    /// the float path could not do it in either direction because it had neither the ratio nor the
+    /// clamp. Chrome-measured on the same two PNGs:
+    ///
+    /// ```text
+    ///                                                Chrome   before   after
+    ///   float, 101x32 image, max-width:50px          50x16    101x0    50x16   ✗→✓
+    ///   float, 14x14 image, height=16, max-height:14 14x14      0x16    14x14   ✗→✓
+    /// ```
+    ///
+    /// The second row is `app.ordertime.com` exactly: `.help img { max-height:14px; max-width:14px }`
+    /// over an `<img height="16">`, which is where its `0x16` against Chrome's `14x14` came from.
+    #[test]
+    fn a_max_constraint_on_a_floated_image_transfers_through_its_ratio() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0'>\
+               <div><img id=w style='float:left'></div>\
+               <div><img id=h style='float:left'></div>\
+             </body>",
+            "#w{aspect-ratio:101/32;width:101px;max-width:50px} \
+             #h{aspect-ratio:1/1;height:16px;max-height:14px}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let g = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            (rects[&n].width, rects[&n].height)
+        };
+        let (ww, wh) = g("w");
+        assert!(
+            (ww - 50.0).abs() < 1.0 && (wh - 16.0).abs() < 1.0,
+            "a max-width clamp must pull the HEIGHT down through the ratio (50x16), got {ww}x{wh}"
+        );
+        let (hw, hh) = g("h");
+        assert!(
+            (hw - 14.0).abs() < 1.0 && (hh - 14.0).abs() < 1.0,
+            "a max-height clamp must pull the WIDTH in through the ratio (14x14), got {hw}x{hh}"
         );
     }
 

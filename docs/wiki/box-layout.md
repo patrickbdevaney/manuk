@@ -3542,3 +3542,107 @@ will live in**, not merely under the engine it was found in.
 Gates: `shrink_to_fit_counts_the_right_padding_of_a_filled_block_child` and
 `a_flex_item_at_its_own_max_content_does_not_rewrap_its_own_text` (`manuk-layout`), each RED-proven by
 mutating out its own half.
+
+## A float is a SECOND width resolution, and it never learned three of the block path's rules (t831)
+
+`layout_float` resolves width and height itself rather than routing through `layout_block`. That is
+defensible — a float shrink-to-fits where a block fills — but it means every rule the block path
+holds has to be **re-landed here by hand**, and three of them never were. They were found together
+because they are all one grep away from each other in one function.
+
+### The aim, and it came from the scorer rather than from a hand-rolled probe
+
+Six sites in the sweep share a signature that is close to a diagnosis on its own — `coverage
+1.000000`, `h_overflow 0`, `overlap 0`, and shape stuck between 0.55 and 0.66. Every box drawn,
+nothing overflowing, nothing overlapping, and a third of the boxes in the wrong place: that is
+layout math, not coverage and not keying.
+
+`fidelity --shape-dump N` (new this tick) prints the per-element misses **the scorer already
+computes and threw away**, worst-first, in the frame the score is computed in. On the smallest
+member — `app.ordertime.com`, 29 elements — it named the mechanism in one command:
+
+```text
+  height +32  c[0 0 113x40]   m[0 0 113x8]    div
+  height +32  c[12 2 101x36]  m[12 2 101x4]   a
+  height +32  c[0 2 101x32]   m[0 2 101x0]    img   ← ZERO HEIGHT
+  width  +14  c[16 13 14x14]  m[16 13 0x16]   img   ← ZERO WIDTH
+```
+
+`boxes --images` then showed both images decoded with `natural 101x32` and `14x14` — **exactly
+Chrome's boxes**. So the intrinsic sizes were in hand and layout produced zero anyway. The site's
+CSS said why: `.logo a img { float:left }` and `.help a img { float:left }`.
+
+### ⓵ A floated replaced element has no content, so without its ratio it has no size
+
+An `<img>` has no children. `layout_float`'s height was its content's height and its `auto` width
+was `shrink_to_fit`, and neither consulted `aspect_ratio` — which `layout_block` has done for as
+long as it has had the field. Measured against Chrome on the two PNGs above, **with the identical
+unfloated image in the same document as the control**:
+
+```text
+                                       Chrome   before   after
+  float:left, no width/height          101x32   101x0    101x32   ✗→✓
+  float:left, height=16 attr only       16x16     0x16     16x16   ✗→✓
+  the SAME image, NOT floated          101x32   101x32   101x32    ✓  ← control
+```
+
+⚠ **The control is what turned a symptom into a diagnosis** (t813-818's rule, again): the two
+resolutions disagreed *inside one document*, which says the bug is the second resolution and not
+the ratio machinery.
+
+### ⓶ `min-width` / `max-width` / `min-height` / `max-height` did not exist on this path
+
+Not mis-applied — **the words did not appear in the function**. Measured on plain floated `<div>`s
+so that no replaced-element machinery could explain the numbers away:
+
+```text
+                                             Chrome   before   after
+  float, width:200px; max-width:50px         50x10    200x10   50x10   ✗→✓
+  float, width:20px;  min-width:80px         80x10     20x10   80x10   ✗→✓
+  float, width:10px; height:200px; max-h:50  10x50    10x200   10x50   ✗→✓
+  float, width:10px; height:20px;  min-h:80  10x80     10x20   10x80   ✗→✓
+```
+
+`.col { float:left; width:50%; max-width:600px }` is the entire pre-flexbox responsive column and
+`img { max-width:100% }` is in every CSS reset written since 2011, so this is not an edge of the
+float path — it is most of what floats are used for.
+
+With the clamp comes **CSS 2.1 §10.4 in both directions**: a clamp that moves a replaced element's
+used size in one axis recomputes the other through the ratio, or the picture renders stretched.
+
+```text
+                                                 Chrome   before   after
+  float, 101x32 image, max-width:50px            50x16    101x0    50x16   ✗→✓
+  float, 14x14 image, height=16, max-height:14   14x14      0x16    14x14   ✗→✓
+```
+
+The second row **is** `app.ordertime.com`: `.help img { max-height:14px; max-width:14px }` over an
+`<img height="16">` is where its `0x16` against Chrome's `14x14` came from.
+
+### ⓷ And `box-sizing: border-box` on the block axis
+
+The width arm got `box-sizing` in an earlier tick; the height arm, four lines below it, did not — so
+a border-box float came out padding+border too tall (Chrome 100×100, ours 100×120). **One rule, two
+axes, one of them landed.** The existing `box_sizing_border_box_applies_to_a_float` test passed the
+whole time because it only ever asked about width.
+
+### Priced against an OLD-BINARY control, 16 sites, same hour
+
+```text
+  app.ordertime.com                  0.6552 → 0.8621   +0.2069   ★ CROSSED 0.75
+  littlecaesarsbcs.libellum.com.mx   0.6154 → 0.9487   +0.3333   ★ CROSSED 0.75
+  14 others                                            +0.0000
+  mean +0.0338 · M1 crossings 2 · ZERO regressions · coverage byte-identical on all 16
+```
+
+⚠ **`littlecaesarsbcs` was never looked at.** It was in the cohort, it shared the mechanism, and it
+moved +0.33 on its own — which is what a cohort is *for*. Equally: the four other cov=1.000 members
+did **not** move, so the signature was a lead, not a single cause. Both halves of that are the
+result.
+
+Gates (`manuk-layout`): `a_floated_replaced_element_derives_its_missing_axis_from_its_ratio`,
+`a_float_clamps_both_axes_by_min_and_max`,
+`a_max_constraint_on_a_floated_image_transfers_through_its_ratio`, and a block-axis assertion added
+to `box_sizing_border_box_applies_to_a_float` — each RED-proven by mutating out its own half, and
+each proven to leave the *other* halves green, so the four are separable rather than one gate wearing
+four names.
