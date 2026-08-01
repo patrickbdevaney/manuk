@@ -237,16 +237,21 @@ if [ -n "$PREV" ] && [ "$SETTLED" = 1 ] && [ -n "${p_inpass:-}" ] && [ "$CONTAM_
   DPP=$(awk "BEGIN{printf \"%+.1f\", $INPASS - ${p_inpass:-0}}")
   printf "  Δ vs %s: IN-SCOPE PASS %s%%→%s%% (%s pts, PASS-COUNT = NOISY ±2-4 sites) · scored %s→%s · excluded %s→%s\n" \
     "$p_tick" "$p_inpass" "$INPASS" "$DPP" "$p_scored" "$SCORED" "${p_excl:-?}" "$EXCL"
-  # ⭐ COMMON-SET BAND = the TRAP-FREE de-noised signal (trust THIS direction, not the pass-count sign above).
+  # ⭐ COMMON-SET BAND = removes COMPOSITION noise (sites dropping in/out), but STILL confounds engine-change
+  # with LIVE-SITE DRIFT (the two sweeps are at different times, so the sites' content changed too). It is a
+  # BETTER signal than raw pass-count, NOT a clean engine slope. To isolate the engine, run the OLD-BINARY
+  # CONTROL (old binary, same sites, NOW) — the agent found a prior negative band was site-drift, not the
+  # engine ("the old binary says it was the sites"). So the band FLAGS movement + points to that control.
   if [ -n "$CS_BAND" ]; then
-    printf "  ⭐ COMMON-SET BAND (trap-free, sites scored in BOTH): %s  ← the REAL slope; ignore the pass-count sign when they disagree\n" "$CS_BAND"
+    printf "  ⭐ COMMON-SET BAND (trap-free of composition, but engine+site-drift confounded): %s  ← better than pass-count; isolate engine via the OLD-BINARY control\n" "$CS_BAND"
   fi
-  # burndown slope → sweeps-to-95% (the FINITENESS readout). Pass-count is noisy, so gate the readout on the
-  # common-set band direction: only call it 'moving' when the trap-free band agrees, else it is churn.
+  # burndown readout: pass-count is noisy AND the band is drift-confounded, so DON'T verdict engine-direction —
+  # report both and name the control that settles it.
   awk -v cs="${CS_BANDPT:-NA}" "BEGIN{ d=$INPASS-${p_inpass:-0};
-    if(d>0.05 && (cs==\"NA\" || cs+0>=0)) { printf \"  BURNDOWN: +%.1f pts/sweep pass-count (common-set band %s) → ~%d more sweeps to 95%% at this rate\n\", d, cs, int((95-$INPASS)/d + 0.999) }
-    else if(cs!=\"NA\") { printf \"  BURNDOWN: pass-count %+.1f but COMMON-SET BAND %s is the real read — %s (pass-count is churn; see PHASE0-RENDER-BURNDOWN.md)\n\", d, cs, (cs+0>0.02?\"engine IS moving up\":(cs+0<-0.02?\"a real small regression — investigate\":\"genuinely flat this sweep\")) }
-    else { print \"  BURNDOWN: flat/negative pass-count (no common-set band available) — see PHASE0-RENDER-BURNDOWN.md\" } }"
+    if(cs==\"NA\") { printf \"  BURNDOWN: pass-count %+.1f (no common-set band available) — noisy; see PHASE0-RENDER-BURNDOWN.md\n\", d }
+    else if(cs+0>0.3) { printf \"  BURNDOWN: pass-count %+.1f · band %s UP — likely progress, but confirm with the old-binary control (band confounds engine+site-drift)\n\", d, cs }
+    else if(cs+0<-0.3) { printf \"  BURNDOWN: pass-count %+.1f · band %s DOWN — could be engine OR site-drift; run the OLD-BINARY control before concluding regression (a prior negative band was site-drift)\n\", d, cs }
+    else { printf \"  BURNDOWN: pass-count %+.1f · band %s ≈ flat — within churn this sweep; see PHASE0-RENDER-BURNDOWN.md\n\", d, cs } }"
 fi
 if [ -n "$alerts" ]; then printf "  ⚠ %b" "$alerts"; else echo "  ✓ no trap/regression/staleness/exclusion flag"; fi
 echo "  last ${LEDGER} rows:"; tail -3 "$LEDGER" 2>/dev/null | sed 's/^/    /'
