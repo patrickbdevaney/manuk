@@ -3199,3 +3199,68 @@ block inherited nothing), t803 (a text node cloned its parent's `position:absolu
 itself out of the box it *was*), and this. **The recurring shape is a filter written for elements,
 applied to a child list that contains text** — and the guard is always the same one word, `is_element`
 or its equivalent, which `max_content_width_uncached` has had all along.
+
+## An orphaned `table-cell` is ATOMIC, not a run of inline text (t816)
+
+`display: table-cell` written **without** a `table`/`table-row` wrapper is the legacy
+vertical-centring and equal-height-column idiom, and it is still everywhere in the CrUX tail. CSS 2.1
+§17.2.1 wraps such a box in **anonymous table objects** — an anonymous row inside an anonymous table —
+and the box that results is *atomic*: laid out as a block, then flowed like a word.
+
+We had it in **neither of the two places that make a box atomic**, and the two omissions were the
+same omission:
+
+- the inline collector's atomic list read `InlineBlock | Flex | Grid | InlineFlex | InlineGrid`, so
+  an orphan cell **fell through to the text recursion and was laid out as a plain non-replaced
+  inline**;
+- the `width: auto` shrink-to-fit arm in `own_definite_w` had the identical list, so once the box
+  *was* atomic it filled its container instead of hugging its content.
+
+Chrome-measured, `16px/1.25 sans-serif`, both halves landed together:
+
+```text
+                                          Chrome         before        after
+  #ib  display:inline-block             [0   0  85x20]  [0  0 85x20]  unchanged ✓
+  #c1  table-cell, no table             [0  30  85x20]  [0 31 85x17]  [0  30  85x20] ✗→✓
+  #c2a two sibling cells share one row  [0  60  21x20]  [0 61 21x17]  [0  60  21x20] ✗→✓
+  #c2b   …so they sit SIDE BY SIDE      [21 60  31x20]  [21 61 31x17] [21 60  31x20] ✗→✓
+  #c4c cell inside an orphan table-row  [0 180  87x20]  [0 181 87x17] [0 180  87x20] ✗→✓
+  #c5a a cell, then a real block, then  [0 210  45x20]  [0 211 45x17] [0 210  45x20] ✗→✓
+  #c5b   …a cell — the block SPLITS     [0 230 600x20]  [0 230 600x20] unchanged ✓
+  #c5c   the anonymous table run        [0 250  32x20]  [0 251 32x17] [0 250  32x20] ✗→✓
+  #c6  a proper table/row/cell          [0 280  46x20]  [0 280 46x20] unchanged ✓
+```
+
+**An inline box is sized to its GLYPH BOX (17); an atomic one to its LINE BOX (20)** — and the
+leftover half-leading is also what pushed `y` down by 1. So every orphan cell on the page was ~3px
+short at the default metrics *and* one pixel low, with the error accumulating downward.
+
+### The control is what makes this a diagnosis rather than a symptom
+
+⚠ `#ib` is an `inline-block` with **byte-identical content** and it was already Chrome-exact at
+`85x20`. Without that row the whole table is equally consistent with a general line-height or
+half-leading error — the kind this project has chased before — and the fix would have been aimed at
+the strut. **One control turned "our boxes are 3px short" into a statement about one code path.**
+`#c6` (a properly structured table) and `#c5b` (a real in-flow block) are the same argument from the
+other side: both were always right, and both had to stay right.
+
+### Two edits, one behaviour — and the mutation proves which
+
+Reverting the shrink-to-fit arm alone goes red (`600x20`: the right height at the full container
+width). But **adding that arm alone, to the original code, would have been a no-op** — and the
+mutation demonstrates it instead of claiming it: reverting the *atomic* half while leaving the
+shrink-to-fit arm in place reproduces the untouched baseline to the pixel, `85x17` at `y=31`, because
+`layout_block` — the only caller of that arm — is never reached for a box that is still a
+text-recursion inline. The second edit is measurable only once the first has landed.
+
+### The residue, named rather than blamed
+
+⚠ A `table-cell` inside a table with an **explicit height** must stretch to fill it: Chrome gives
+`[0 90 300x80]` for the classic `display:table{height:80px}` + `vertical-align:middle` pair, and we
+give `[0 92 67x20]`. This fix takes that box from `67x17` to `67x20` — it is a cell, so it now gets a
+line box — but it does **not** stretch it. That needs anonymous-row generation *inside* a real table
+plus cell stretching: a different mechanism in a different function. `G_ORPHAN_TABLE_CELL` asserts it
+at **our** number on purpose, so a future fix has to come and change that line deliberately. Per t814,
+a residue's stated cause is a guess until it has been measured on its own.
+
+**Gate:** `G_ORPHAN_TABLE_CELL` (`engine/page/tests/g_orphan_table_cell.rs`).

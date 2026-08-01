@@ -42990,3 +42990,83 @@ box rather than a wrong one, and every one was invisible to a fixture whose cont
 element. **Grep every child filter for whether it can be handed a text node, and check what it
 answers.**
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 816 — an orphaned `table-cell` is ATOMIC, not a run of inline text (2026-08-01)
+
+TICK SHAPE: capability (inline/block layout) — the adjacent idiom t814 named and t815 did not reach
+
+HYPOTHESIS (written before the fixture): t814 named `display:table-cell; vertical-align:middle` as
+*the* legacy vertical-centring trick and left it unmeasured. t815 fixed the rowless TABLE; nothing
+was measured about the orphaned CELL. Measure it directly, against Chrome, with an `inline-block`
+carrying byte-identical content in the same fixture as the control.
+
+MEASURED — 4 of 12 boxes Chrome-exact before, **11 of 12 after**:
+
+```
+                                          Chrome         before        after
+  #ib  display:inline-block             [0   0  85x20]  [0  0 85x20]  unchanged ✓
+  #c1  table-cell, no table             [0  30  85x20]  [0 31 85x17]  [0  30  85x20]  ✗→✓
+  #c2a two sibling cells share one row  [0  60  21x20]  [0 61 21x17]  [0  60  21x20]  ✗→✓
+  #c2b   …so they sit SIDE BY SIDE      [21 60  31x20]  [21 61 31x17] [21 60  31x20]  ✗→✓
+  #c4c cell inside an orphan table-row  [0 180  87x20]  [0 181 87x17] [0 180  87x20]  ✗→✓
+  #c5a a cell, then a real block, then  [0 210  45x20]  [0 211 45x17] [0 210  45x20]  ✗→✓
+  #c5b   …a cell — the block SPLITS     [0 230 600x20]  [0 230 600x20] unchanged ✓
+  #c5c   the anonymous table run        [0 250  32x20]  [0 251 32x17] [0 250  32x20]  ✗→✓
+  #c6  a proper table/row/cell          [0 280  46x20]  [0 280 46x20] unchanged ✓
+  #c3  cell in a table with height:80   [0  90 300x80]  [0 92 67x17]  [0  92  67x20]  ~ residue
+```
+
+MECHANISM: CSS 2.1 §17.2.1 wraps an orphaned table-internal box in anonymous table objects, and the
+result is ATOMIC — laid out as a block, flowed like a word. We had it in **neither of the two places
+that make a box atomic, and the two omissions were the same omission**: the inline collector's atomic
+list read `InlineBlock | Flex | Grid | InlineFlex | InlineGrid`, so an orphan cell fell through to the
+TEXT RECURSION and was laid out as a plain non-replaced inline; and the `width:auto` shrink-to-fit arm
+carried the identical list, so once the box *was* atomic it filled its container. An inline box is
+sized to its GLYPH BOX (17), an atomic one to its LINE BOX (20), and the leftover half-leading is what
+also pushed `y` down by 1.
+
+⚠ **THE CONTROL IS WHAT MAKES THIS A DIAGNOSIS RATHER THAN A SYMPTOM.** `#ib` — an `inline-block`
+with BYTE-IDENTICAL content — was already Chrome-exact at 85x20. Without that row the table is
+equally consistent with a general line-height / half-leading error, which this project has chased
+before, and the fix would have been aimed at the strut. **One control turned "our boxes are 3px
+short" into a statement about one code path.**
+
+MEASURED (controls, PAIRED and BACK-TO-BACK on the same session — a live site moves on its own):
+`www.ta3lemkonline.com`, the ADVERSARIAL control t811's revert was bought with, misplaced **422 →
+420**. Eight controls byte-identical on every column: `en.wikipedia.org` 1017, `news.ycombinator.com`
+796, `linkmake.in` 43, `255md.com` 13, `www.dapam-sirius.fr` 9, `blog.rust-lang.org` 1643,
+`chat.google.com` 55, `tukrd.com` 36. MEAN SHAPE 77.4% both runs. `manuk-layout` 103 tests green.
+
+Gate: `G_ORPHAN_TABLE_CELL` (new), ten Chrome-measured boxes. **Proven RED, twice:** drop `TableCell`
+from the atomic list and `#c1` reads `85x17` at `y=31`; drop it from the shrink-to-fit arm and `#c1`
+reads `600x20` — the right height at the full container width, with `#c2a`/`#c2b` stacking.
+
+⚠ **TWO EDITS, ONE BEHAVIOUR — AND THE MUTATION PROVES WHICH ONE IS THE NO-OP.** Adding the
+shrink-to-fit arm *alone* to the original code would have changed nothing, and that is demonstrated
+rather than asserted: reverting the atomic half while LEAVING the shrink-to-fit arm in place
+reproduces the untouched baseline to the pixel (`85x17` at `y=31`), because `layout_block` — the only
+caller of that arm — is never reached for a box that is still a text-recursion inline.
+
+⚠ **THE GATE CAUGHT ME CARRYING A NUMBER ACROSS FIXTURES.** The first draft asserted `#ib` at 79x20,
+measured on the earlier probe fixture where that element's text was `"inline block"`; the gate file's
+text is `"cell no table"`. It failed immediately with `got 85.390625x20`. Every number in the final
+gate was re-measured in Chrome **from the gate file's own `const HTML`**, extracted by regex, not
+retyped. A Chrome table is only evidence about the fixture it was measured on.
+
+HONEST SCOPE: no site is claimed to cross. One control improves by two elements, eight hold exactly,
+the 9-site mean is flat — the standing control set barely uses this idiom, so the corpus price comes
+at the next sweep. The residue `#c3` (a cell must STRETCH to fill a table with an explicit height) is
+asserted at OUR number so a future fix has to change that line deliberately.
+
+PERF: none claimed — three added variants in two existing `matches!` lists.
+
+WIKI: `docs/wiki/box-layout.md` — new section.
+
+PATTERN: ⚠⚠⚠ **ONE RULE, N IMPLEMENTATIONS — AND THE SECOND COPY IS INERT UNTIL THE FIRST IS FIXED.**
+"Is this box atomic?" is answered in two places with two copies of the same `matches!` list, and both
+were missing the same three variants. Fixing only the collector gave the right height at the wrong
+width; fixing only the sizer changed nothing at all. **The dangerous shape is the second copy being a
+NO-OP while the first is broken** — it looks unused, it tests clean, and it is silently waiting to be
+wrong. When a fix in one place produces a half-right answer, GREP FOR THE OTHER COPY OF THE LIST
+rather than patching the half-right result.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

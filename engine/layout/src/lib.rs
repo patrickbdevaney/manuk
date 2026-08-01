@@ -2168,10 +2168,21 @@ impl Ctx<'_> {
                 // `own_definite_h`; the margin box fills, so the margins come out of the content
                 // width (which `extra` already does).
                 Dim::Auto if s.width_stretch => (cw - extra).max(0.0),
+                // ⚠ **The orphaned table-internal boxes belong in this arm too, and it is the OTHER
+                // HALF of the same fix** — making them atomic in the inline collector without this
+                // gives them a line box (right) at the FULL container width (wrong): 600 where
+                // Chrome shrink-wraps to 79. A table box sizes to its columns, and CSS 2.1 §17.2.1's
+                // anonymous table around an orphan cell is shrink-to-fit exactly as an inline-block
+                // is. Each edit alone is a worse answer than neither; they land together.
                 Dim::Auto
                     if matches!(
                         s.display,
-                        Display::InlineBlock | Display::InlineFlex | Display::InlineGrid
+                        Display::InlineBlock
+                            | Display::InlineFlex
+                            | Display::InlineGrid
+                            | Display::TableCell
+                            | Display::TableRow
+                            | Display::TableRowGroup
                     ) =>
                 {
                     self.shrink_to_fit(node, (cw - extra).max(0.0))
@@ -5117,6 +5128,29 @@ impl Ctx<'_> {
                 // into its children as inline text. A REPLACED element at `display: inline`
                 // (`<img>` — the computed value Chrome and the spec give it) is exactly as
                 // atomic; it must never fall through to the text recursion below.
+                //
+                // ⚠⚠ **AND SO IS AN ORPHANED TABLE-INTERNAL BOX**, which used to fall through to
+                // the text recursion and be laid out as a plain non-replaced INLINE. CSS 2.1
+                // §17.2.1 wraps a `table-cell` / `table-row` / `table-row-group` whose parent is
+                // not the table box it needs in ANONYMOUS table objects — and the resulting box is
+                // atomic, never a run of inline text. The difference is not academic; it is the
+                // difference between a line box and a glyph box. Chrome-measured, same content,
+                // `16px/1.25 sans-serif`:
+                //
+                // ```text
+                //                                      Chrome         before
+                //   display:inline-block             [0  0 79x20]   [0  0 79x20]  ✓ always right
+                //   display:table-cell (no table)    [0 30 79x20]   [0 31 79x17]  ✗
+                // ```
+                //
+                // **An `inline-block` with byte-identical content was already exact**, which is
+                // what proves this is not a general inline-box metric error but this one path: an
+                // inline box is sized to its GLYPHS (17), an atomic one to its LINE BOX (20), and
+                // the leftover half-leading is also what pushed `y` down by 1.
+                //
+                // THE REACH is every `display:table-cell` used without a table wrapper — the
+                // legacy vertical-centring and equal-height-column idioms — and every cell is
+                // 3px short at the default metrics, with the error accumulating DOWN the page.
                 if matches!(
                     disp,
                     Some(
@@ -5125,6 +5159,9 @@ impl Ctx<'_> {
                             | Display::Grid
                             | Display::InlineFlex
                             | Display::InlineGrid
+                            | Display::TableCell
+                            | Display::TableRow
+                            | Display::TableRowGroup
                     )
                 ) || is_atomic_inline_replaced(self.dom, self.styles, node)
                 {

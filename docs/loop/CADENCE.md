@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **557** | ticks 1–815 |
 | median tick cycle | **25m** | 556 intervals |
-| median, last 10 | **50m** | 10 intervals |
+| median, last 10 | **56m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 504.0h elapsed |
+| **ticks per hour** | **1.10** | 504.9h elapsed |
 | median verify wall | **63s** | 496 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,8 +27,8 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **376**
-* **✅ rows in the capability ledger**: 144 → **423**
+* **live gates**: 27 → **377**
+* **✅ rows in the capability ledger**: 144 → **424**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **269 of 557 ticks** (48%) moved a
@@ -653,6 +653,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **812** | 2026-08-01 02:15 | 68m | measurement | 63s | +441/−274 | 375 | 81 | 56.0% · | the sweep found the regression nine controls missed, and t811 is REVERTED (2026-08-01) |
 | **813** | 2026-08-01 03:15 | 60m | measurement | 63s | +104/−32 | 375 | 81 | 56.0% · | bisecting across trees on a LIVE site inherits the site's drift (2026-08-01) |
 | **814** | 2026-08-01 04:14 | 59m | measurement | 63s | +100/−32 | 375 | 81 | 56.0% · | a `display:table` with no table-structured children renders NOTHING (2026-08-01) |
-| **815** | 2026-08-01 05:01 | 47m | capability | 63s | +331/−36 | 376 | 81 | 56.0% · | a `display:table` with no rows is a shrink-to-fit BLOCK (2026-08-01) |
+| **815** | 2026-08-01 05:58 | 1.7h | capability | 63s | +412/−34 | 377 | 81 | 56.0% · | a `display:table` with no rows is a shrink-to-fit BLOCK (2026-08-01) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

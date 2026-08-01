@@ -162,6 +162,10 @@
   - L3155 · The plain block is the rule's boundary, not an oversight
   - L3161 · left_float_edge, not left_offset
   - L3168 · A display:table with no rows is a shrink-to-fit BLOCK (t815)
+  - L3203 · An orphaned table-cell is ATOMIC, not a run of inline text (t816)
+  - L3238 · The control is what makes this a diagnosis rather than a symptom
+  - L3247 · Two edits, one behaviour — and the mutation proves which
+  - L3256 · The residue, named rather than blamed
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1374,4 +1378,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1285 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1289 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
