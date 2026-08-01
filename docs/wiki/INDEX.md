@@ -147,6 +147,9 @@
   - L2894 · A TEXT NODE IS NEVER OUT OF FLOW (t803)
   - L2930 · The guard already existed, one function away
   - L2950 · ⚠ What this fix EXPOSED, and it is a real defect that was being hidden
+  - L2964 · text-align: justify — the slack goes into the WORD GAPS, not into one offset (t805)
+  - L2986 · The three call sites ARE the specification
+  - L2994 · ⚠ Snapshot the gaps BEFORE shifting
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1359,4 +1362,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1270 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1273 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

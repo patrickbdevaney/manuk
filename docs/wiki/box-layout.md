@@ -2960,3 +2960,42 @@ Excluding them is not a one-liner: an all-auto-inset abspos box is placed from `
 flex path never records, so removing it from `flex_items` without also recording that position makes
 the box vanish (`position_absolutes` has a `continue` for exactly that case). Both halves together are
 the next tick, and they are named here rather than folded in.
+
+## `text-align: justify` — the slack goes into the WORD GAPS, not into one offset (t805)
+
+`justify` was **parsed and then ignored**. `TextAlign::Justify` reached `close_line`, fell through the
+`_ => 0.0` arm of the offset match, and rendered identically to `left` — for the engine's whole life.
+
+Every other alignment is a single translation of the line, which is exactly why this one fell through:
+it is the only value that is not an offset.
+
+```
+                                                     Chrome   ours (before)
+  2nd word of a justified line                         49        45
+  6th word of the same line                           237       220
+  …the same words with NO justify (control)         45/220    45/220   ✓
+  last line of a justified block                       43        43     ✓
+  line ended by <br>, and the line after it          45/59     45/59    ✓
+  one unbreakable word (no gaps)                        0         0     ✓
+  an inline-block inside justified text                49        45
+```
+
+It does not degrade gently: on a justified paragraph **every word after the first is misplaced** and
+the error grows along the line, so one paragraph yields dozens of divergences.
+
+### The three call sites ARE the specification
+
+CSS Text §7.3: `justify` justifies every line except the last, and except any line ended by a
+**forced break** (those take `text-align-last`, `start` by default). `close_line` already had exactly
+three callers — the `<br>` site, the wrap site, and the final flush — so eligibility is one boolean
+per caller rather than a heuristic. Justifying a three-word last line across the whole column is the
+most recognisable rendering bug the property has, and it is one wrong argument away.
+
+### ⚠ Snapshot the gaps BEFORE shifting
+
+A gap is where the next fragment starts after this one ends. Reading `line[i-1].x` inside the loop
+that has *already moved* it compares a shifted fragment against an unshifted one, so every gap after
+the first measures as closed and the expansion stops accumulating. Written that way first, the 2nd
+word landed exactly right and the 6th was 10px short — **from the outside, a shift that stops
+accumulating is indistinguishable from a slightly-wrong per-gap constant.** Two words on the same
+line is what separates them, and both are in the gate.

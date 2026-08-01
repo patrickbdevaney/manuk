@@ -5434,6 +5434,7 @@ impl Ctx<'_> {
                     align,
                     self.fonts,
                     strut,
+                    false, // ended by a FORCED break (`<br>`) — takes `text-align-last`
                 );
                 first_line = false;
                 pen = 0.0;
@@ -5661,6 +5662,7 @@ impl Ctx<'_> {
                     align,
                     self.fonts,
                     strut,
+                    true, // a WRAPPED line — the only kind `justify` stretches
                 );
                 first_line = false;
                 let (l, w) = open_band(&mut y, est_h);
@@ -5695,6 +5697,7 @@ impl Ctx<'_> {
                 align,
                 self.fonts,
                 strut,
+                false, // the LAST line of the block — never justified
             );
         }
 
@@ -5753,6 +5756,13 @@ fn close_line(
     align: TextAlign,
     _fonts: &FontContext,
     strut: (f32, f32, f32),
+    // ⚠ **Is this line ELIGIBLE to be justified?** CSS Text §7.3: `text-align: justify` justifies
+    // every line of the block EXCEPT the last one and any line ended by a FORCED break (`<br>`),
+    // which take the `text-align-last` value — `start` by default. So this is `true` only at the
+    // wrap-induced call site. Getting it wrong is not a subtle error: justifying a three-word last
+    // line stretches it across the whole column, which is the most recognisable rendering bug the
+    // property has.
+    justified: bool,
 ) -> f32 {
     // ── **A LINE BOX WITH NOTHING IN IT DOES NOT EXIST** (CSS 2.1 §9.4.2):
     //
@@ -5925,9 +5935,53 @@ fn close_line(
     // so use it directly for both atomics and text rather than re-measuring — the re-measure would
     // drop letter-spacing and mis-place a centered/right-aligned tracked run.
     let line_width = line.last().map(|f| f.x + f.width).unwrap_or(0.0);
+    // ── **`text-align: justify` — the slack goes into the WORD GAPS, not into one offset.**
+    //
+    // Every other alignment is a single translation of the whole line, which is why `justify` fell
+    // through `_ => 0.0` and rendered identically to `left` for the engine's whole life. Justified
+    // text is not rare: it is the default look of prose-heavy pages, newspapers, institutional and
+    // government sites, and much of the non-English long tail this corpus is drawn from. And it does
+    // not degrade gently — on a justified paragraph EVERY word after the first is misplaced, and the
+    // error grows along the line, so one paragraph produces dozens of divergences. `www.wdimax.com`
+    // is 127 `<span>`s whose WIDTHS all match Chrome exactly and whose x positions lag further and
+    // further behind: the signature of the missing expansion, not of a measurement error.
+    //
+    // A gap is a place where the next fragment starts after this one ends — the advance the space
+    // already contributed. Distributing `slack / gaps` cumulatively moves each fragment (and each
+    // atomic box, which is positioned from the same `f.x`) to where the expanded spaces put it.
+    // With no gaps (one long word) or no slack (an overflowing line) nothing moves.
+    if matches!(align, TextAlign::Justify) && justified {
+        const GAP_EPS: f32 = 0.01;
+        let gaps = line
+            .windows(2)
+            .filter(|w| w[1].x - (w[0].x + w[0].width) > GAP_EPS)
+            .count();
+        let slack = line_avail - line_width;
+        if gaps > 0 && slack > GAP_EPS {
+            // ⚠ **The gap test has to be taken BEFORE anything moves.** Reading `line[i-1].x` inside
+            // the same loop that has already shifted it compares a moved fragment against an unmoved
+            // one, so every gap after the first measures as closed and the expansion stops
+            // accumulating. Measured while writing this: the 2nd word landed exactly right and the
+            // 6th was 10px short, which is what a shift that stops accumulating looks like from the
+            // outside. Snapshot the gap positions first, then apply.
+            let is_gap: Vec<bool> = (0..line.len())
+                .map(|i| i > 0 && line[i].x - (line[i - 1].x + line[i - 1].width) > GAP_EPS)
+                .collect();
+            let per_gap = slack / gaps as f32;
+            let mut shift = 0.0f32;
+            for i in 0..line.len() {
+                if is_gap[i] {
+                    shift += per_gap;
+                }
+                line[i].x += shift;
+            }
+        }
+    }
     let offset = match align {
         TextAlign::Center => (line_avail - line_width).max(0.0) / 2.0,
         TextAlign::Right => (line_avail - line_width).max(0.0),
+        // `justify` leaves the line at the start edge: the expansion above has already placed every
+        // fragment, and the last line (which reaches here with `justified == false`) is `start`.
         _ => 0.0,
     };
 

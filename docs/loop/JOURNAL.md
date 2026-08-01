@@ -42115,3 +42115,92 @@ height-only edit moving a width — and that is the cheapest possible signal tha
 further than its argument does. When a fix's effect appears in an axis the edit never touched, stop
 and trace the coupling before landing it.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 805 — `text-align: justify` was parsed and then ignored (2026-07-31)
+
+TICK SHAPE: capability (inline layout) — one primitive, from a lead that was wrong about its own site
+
+HYPOTHESIS (written before the fixture): the t804 constitution check named jarring-clean as the other
+half of the M1 gate, and `www.wdimax.com` carries **84 reading-order violations at coverage 1.00** —
+the most concentrated jarring signal on the near-bar list, so probably one mechanism. Its oracle
+signature is ~127 `<span>`s whose **widths all match Chrome exactly** and whose x positions lag
+further and further behind along each line, with some landing exactly at the paragraph's left edge.
+Words at the right width in the wrong place, drifting cumulatively, is what justified text looks like
+to a left-aligning engine.
+
+WHAT THE FIXTURE SAID: `text-align: justify` is **parsed and then ignored**. `TextAlign::Justify`
+reaches `close_line`, falls through the `_ => 0.0` arm of the offset match, and renders identically
+to `left`. Every other alignment IS a single translation of the whole line — which is exactly why
+this one fell through, because it is the only value that is not an offset.
+
+```
+                                                     Chrome   before   after
+  2nd word of a justified line                         49       45       49    ✗→✓
+  6th word of the same line                           237      220      237    ✗→✓
+  …the same words with NO justify (control)         45/220   45/220   45/220   ✓ must not move
+  last line of a justified block                       43       43       43    ✓ must not move
+  line ended by <br>, and the line after it          45/59    45/59    45/59   ✓ must not move
+  one unbreakable word (no gaps to expand)              0        0        0    ✓ must not move
+  text-align:center / :right, same fixture         160/341  160/341  160/341   ✓ must not move
+  an inline-block inside justified text                49       45       49    ✗→✓
+```
+
+**All nineteen boxes in the fixture are now byte-identical to Chrome.**
+
+MECHANISM: the slack is distributed across the line's word gaps, not applied as one offset. A gap is
+where the next fragment starts after this one ends (`InlineItem::Word` carries `space_before`, so
+every word is its own `LineFrag` and every space is a real gap). `slack / gaps` accumulates along the
+line; an inline-block moves with it because it is positioned from the same `LineFrag.x`.
+
+⚠ **THE THREE CALL SITES ARE THE SPECIFICATION.** CSS Text §7.3 exempts the last line and any line
+ended by a **forced break** (both take `text-align-last`, `start` by default). `close_line` already
+had exactly three callers — the `<br>` site, the wrap site, the final flush — so eligibility is one
+boolean per caller rather than a heuristic. Proven RED by passing `true` at the last-line site: a
+three-word line's word flies from **43 to 190**, which is the most recognisable rendering bug this
+property has and is one wrong argument away.
+
+⚠⚠ **AND I WROTE THE ACCUMULATION WRONG FIRST, IN A WAY THE OBVIOUS GATE WOULD NOT HAVE CAUGHT.**
+Reading `line[i-1].x` inside the loop that has *already shifted* it compares a moved fragment against
+an unmoved one, so every gap after the first measures as closed and the expansion stops accumulating.
+The 2nd word landed **exactly right** and the 6th was 10px short. **From the outside, a shift that
+stops accumulating is indistinguishable from a slightly-wrong per-gap constant** — one word cannot
+tell them apart, and a gate with one word would have been green on a broken implementation. Both words
+are in the fixture, with that reason written next to them.
+
+MEASURED: nineteen fixture boxes Chrome-exact. Seven controls **byte-identical** — `en.wikipedia.org`
+0.593110, `www.dapam-sirius.fr` 0.800000, `255md.com` 0.767442, `linkmake.in` 0.702703,
+`blog.rust-lang.org` 0.993389, `news.ycombinator.com` 0.797264, `chat.google.com` 0.847458.
+`manuk-layout` 103 tests green.
+
+⚠⚠ **THE LEAD WAS WRONG ABOUT ITS OWN SITE, AND THAT IS THE HONEST HEADLINE.** `www.wdimax.com` did
+**not** move — 0.607427 before and after. Its inline CSS contains no `justify` (I grepped it only
+after the fixture had already found the defect), so the 127 lagging spans are something else. The
+property was genuinely unimplemented and is now Chrome-exact on eleven measured positions; **the site
+that suggested it is not evidence for it.** Recorded this way round because the reverse — quoting
+wdimax as the beneficiary — would have been the easy sentence and a false one.
+
+Gate: `G_TEXT_ALIGN_JUSTIFY` (new), eleven Chrome-measured x positions read off the gate's own
+fixture. **Proven RED two ways:** disable the distribution → `#j1` reads 45 and `#j2` 220, the
+unjustified control's own numbers, while every must-not-move row passes; justify the last line →
+`#s1` reads 190 against 43.
+
+HONEST SCOPE: no site is claimed to cross and none moved. A whole CSS property goes from *silently
+unimplemented* to Chrome-exact, and the corpus price comes at the next sweep, read PAIRED and — per
+t800 — with the old binary rebuilt if the band goes negative.
+
+RESIDUE, and it is the next lead: `www.wdimax.com`'s 127 spans still lag with exact widths. Justify is
+excluded now. The remaining candidates are the space advance itself (`word-spacing`, or a different
+measured width for U+0020 in that face) and `letter-spacing` — both of which would produce the same
+cumulative-lag-with-exact-word-widths signature.
+
+PERF: none claimed — one pass over a line's fragments, only when the block is justified.
+
+WIKI: `docs/wiki/box-layout.md` — new section.
+
+PATTERN: ⚠⚠⚠ **THE VALUE THAT IS NOT THE SAME SHAPE AS ITS SIBLINGS IS THE ONE THAT IS MISSING.**
+`left`/`right`/`center` are all "translate the line by N"; `justify` is "redistribute inside the
+line". A `match` written around the first shape swallows the second into its wildcard arm, and the
+property then *parses*, *computes*, *inherits* and *reports* correctly while doing nothing — invisible
+to every check except a positional one. **When enumerating a property's values, ask which one has a
+different KIND of answer; that is where the wildcard is hiding.**
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

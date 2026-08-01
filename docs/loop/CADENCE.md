@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **547** | ticks 1–804 |
 | median tick cycle | **24m** | 546 intervals |
-| median, last 10 | **41m** | 10 intervals |
+| median, last 10 | **42m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 495.7h elapsed |
+| **ticks per hour** | **1.10** | 496.3h elapsed |
 | median verify wall | **63s** | 486 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,8 +27,8 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **371**
-* **✅ rows in the capability ledger**: 144 → **417**
+* **live gates**: 27 → **372**
+* **✅ rows in the capability ledger**: 144 → **418**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **264 of 547 ticks** (48%) moved a
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **264** capability ticks, median cycle **24m**
-* median diff per tick: **+256 / −34** lines across 8 files
+* median diff per tick: **+257 / −34** lines across 8 files
 
 ## Every tick
 
@@ -643,6 +643,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **800** | 2026-07-31 18:59 | 38m | measurement | 63s | +372/−34 | 370 | 81 | 56.0% · | the COMMON-SET BAND went NEGATIVE, and the old binary says it was the SITES (2026-07-31) |
 | **801** | 2026-07-31 19:26 | 27m | capability | 63s | +285/−33 | 370 | 81 | 56.0% · | a `max-width` clamp does not re-run the auto-margin split (2026-07-31) |
 | **802** | 2026-07-31 20:05 | 40m | capability | 63s | +424/−41 | 371 | 81 | 56.0% · | a form control does not inherit the page's `line-height` either (2026-07-31) |
-| **804** | 2026-07-31 20:47 | 42m | measurement | 63s | +225/−33 | 371 | 81 | 56.0% · | the flex/abspos fix is spec-correct, fixture-exact, and REFUSED (2026-07-31) |
+| **804** | 2026-07-31 21:20 | 75m | measurement | 63s | +383/−33 | 372 | 81 | 56.0% · | the flex/abspos fix is spec-correct, fixture-exact, and REFUSED (2026-07-31) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

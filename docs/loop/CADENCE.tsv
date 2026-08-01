@@ -545,4 +545,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 800	1d6de6ac	1785538747	2026-07-31T18:59:07-04:00	2272	measurement	63	9	372	34	370	81	3896	6960	0	415	0	the COMMON-SET BAND went NEGATIVE, and the old binary says it was the SITES (2026-07-31)
 801	e7834ae7	1785540362	2026-07-31T19:26:02-04:00	1615	capability	63	9	285	33	370	81	3896	6960	0	416	0	a `max-width` clamp does not re-run the auto-margin split (2026-07-31)
 802	7db7f216	1785542735	2026-07-31T20:05:35-04:00	2373	capability	63	9	424	41	371	81	3896	6960	0	417	0	a form control does not inherit the page's `line-height` either (2026-07-31)
-804	ab6db0df	1785545252	2026-07-31T20:47:32-04:00	2517	measurement	63	6	225	33	371	81	3896	6960	0	417	0	the flex/abspos fix is spec-correct, fixture-exact, and REFUSED (2026-07-31)
+804	afc54009	1785547224	2026-07-31T21:20:24-04:00	4489	measurement	63	9	383	33	372	81	3896	6960	0	418	0	the flex/abspos fix is spec-correct, fixture-exact, and REFUSED (2026-07-31)
