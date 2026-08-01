@@ -550,3 +550,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 806	278af145	1785552648	2026-07-31T22:50:48-04:00	3895	capability	63	7	324	32	373	81	3896	6960	0	419	0	the space is a character (2026-07-31)
 807	548fbc24	1785554951	2026-07-31T23:29:11-04:00	2303	measurement	63	9	429	41	374	81	3896	6960	0	420	0	the sweep after five aimed fixes, and it is the best window this burndown has had (2026-07-31)
 808	b2f89975	1785558135	2026-08-01T00:22:15-04:00	3184	capability	63	11	393	40	375	81	3896	6960	0	421	0	the padded inline BOX grows; the LINE does not (2026-07-31)
+809	ad9667e1	1785559153	2026-08-01T00:39:13-04:00	1018	capability	63	5	112	33	375	81	3896	6960	0	421	0	not rendered is not `display: none` (2026-07-31)

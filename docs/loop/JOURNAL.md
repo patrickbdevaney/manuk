@@ -42529,3 +42529,77 @@ this window, and its `display:none` list was HALF WRONG and had never been measu
 absolute` "works" only for an element child; and a guard I wrote myself was inert in the tree while
 being load-bearing in my head. No re-rank — this is the current frontier seen more clearly, and four
 M1 crossings came out of it. `LAST_SURFACE_AUDIT` set to 808.
+
+## Tick 810 — two probes at kicktipp, one negative and one that specifies the next fix (2026-08-01)
+
+TICK SHAPE: measurement — a retired hypothesis and a residue converted into a specification
+
+HYPOTHESIS (written before the fixtures): `www.kicktipp.com` is the closest near-bar row (0.725,
++0.025) and its dominant oracle signal is nine boxes that are **narrower AND taller** than Chrome's —
+`[195 790 32×30]` against our `[194 803 24×47]`. Narrow-and-tall is what wrapping looks like where
+Chrome does not wrap, and kicktipp's stylesheet carries **`white-space: nowrap` 34 times**. So: does
+`nowrap` survive every sizing context?
+
+### PROBE 1 — NEGATIVE, and it retires the hypothesis
+
+`nowrap` is **Chrome-exact in eight of nine contexts**: inline, block, flex item, `flex:0 0 auto`,
+inline-block, float, `width:fit-content`, and the wrapping control. Nine cases, one binary, all 72×20
+or 72×17 to the pixel. **kicktipp's narrow-and-tall boxes are not a `nowrap` failure**, and that is
+the second hypothesis this site has retired (t803 retired min-content shrink-to-fit on the same
+signature). Two probes, two clean answers, and the site is still open — recorded so the next attempt
+does not spend a third tick on the same two ideas.
+
+### PROBE 2 — THE NINTH CONTEXT, and it is t792's residue with numbers on it
+
+The one divergence was a GRID container sitting after a float: Chrome at **x=72**, ours at **x=0**.
+That is CSS 2.1 §9.5 — *"the border box of … an element in the normal flow that establishes a new
+block formatting context must not overlap the margin box of any floats in the same BFC"* — which t792
+named as residue (*"a BFC root must not overlap preceding floats … the gate asserts x only"*) and
+nobody has measured since. A dedicated fixture, `float:left 80×40` then a BFC root in a 300px column:
+
+```
+                                            Chrome          ours
+  overflow:hidden                       [80  0 220x20]   [0 …  300x20]
+  display:flow-root                     [160 20 140x20]  [0 …  300x20]
+  display:flex                          [240 40  60x20]  [0 …  300x20]
+  display:grid                          [240 60  60x20]  [0 …  300x20]
+  display:table                         [160 80  35x20]  [0 …    0x20]
+  a PLAIN block (not a BFC root)        [0  100 300x20]  [0 …  300x20]  ✓ correct in both
+  overflow:hidden, width:280px          [0  180 280x20]  [0 120 280x20] ✗ Chrome DROPS it to clear
+```
+
+**The rule has two halves and we implement neither.** A BFC root is placed BESIDE the intruding
+floats — shifted right by the band's left offset and narrowed to the band — and if an explicit width
+will not fit the band, it is moved DOWN until it clears (Chrome's `p7` at y=180 against our y=120).
+The plain-block row is the control that says this is specific to BFC roots: a non-BFC block's border
+box legitimately *does* overlap floats; only its line boxes avoid them, and that half is already right.
+
+⚠ **THE REACH IS THE MEDIA OBJECT** — a floated avatar or thumbnail with an `overflow:hidden` /
+`flow-root` / flex content block beside it. It is every comment thread, every card list, every article
+with a pull-quote, and the standard pre-flexbox two-column idiom.
+
+### WHY THIS IS BANKED RATHER THAN BUILT IN THIS TICK
+
+The insertion point is identified — the block-children loop, immediately before
+`layout_block(k, cw, pch, cx, child_y, prev_margin, floats)`, where `clear` is already handled two
+lines above and `floats.available(y, h)` / `next_bottom_below(y)` already exist. But it changes the
+ORIGIN and the AVAILABLE WIDTH of a whole class of blocks, which is the widest blast radius of
+anything attempted this session, and **t804 is six ticks old**: a spec-correct, fixture-exact change
+that cost nine wikipedia elements was refused there precisely because its reach on a real page was not
+traced. Landing this one at the end of a long session, with the controls measured only after the fact,
+would repeat that with a bigger surface. The measurement is the deliverable that makes the next
+attempt cheap; the code is the next tick's, with its Chrome table already written.
+
+MEASURED: no engine change. `manuk-layout` 103 tests green; the tree is byte-identical to 31f087e7.
+
+PERF: none.
+
+WIKI: none — no engine delta. The Chrome table above is the artefact, and it belongs where the next
+tick will look for it: this entry and the pattern ledger's open row.
+
+PATTERN: ⚠⚠⚠ **A SITE THAT RETIRES TWO HYPOTHESES IS STILL PAYING ITS WAY.** kicktipp has now cost
+two probes and produced no fix for itself — and both probes produced findings: t803's found abspos
+bare text at 0×0 in the ninth context it tested, and this one found the BFC/float rule in the ninth
+context it tested. **The ninth row is where the fixtures keep paying**, because the first eight are
+the ones you thought to check. Write the wide fixture even when you expect it to be boring.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
