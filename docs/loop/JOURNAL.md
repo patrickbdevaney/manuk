@@ -44038,3 +44038,70 @@ PERF: none.
 WIKI: none — a process tick; the artefacts are `SURFACE-AUDIT.md` #54 and `CONSTITUTION-CHECK.md` #69.
 
 PATTERN: [no-pattern] — a process tick unlocks no class of the web.
+
+## Tick 829 — the off-canvas drawer: four named mechanisms, all REFUTED (2026-08-01)
+
+TICK SHAPE: measurement — check #69's steer (1), the jarring-only cohort, probed to a narrowed residue
+
+HYPOTHESIS (written before the fixtures): check #69's steer names the cheapest M1 cohort — four sites
+**already over the shape bar**, held out of M1 by ONE jarring dimension each. Two are overlap-only:
+`desiviral.net` (shape 0.8020, overlap 5) and `www.puentedemando.com` (0.7742, overlap 18). If one
+mechanism clears both, that is 2 M1 crossings for one fix.
+
+**THE ORGAN, named in one probe.** Both sites' overlaps are top-level `<body>` children colliding with
+`<footer>`/`<header>`: `body/aside × body/footer`, `body/aside × body/header`,
+`body/div:nth(2) × body/footer`. Chrome's computed style for desiviral's `<aside>`:
+
+```
+  <aside>  [-256 0 256x813]   position=fixed  z-index=60  display=flex
+           transform = matrix(1, 0, 0, 1, -256, 0)
+           class="fixed top-0 left-0 w-64 h-full … transform -translate-x-full …"
+```
+
+**An off-canvas drawer, slid entirely off-screen by a transform** — the mobile-menu idiom of the whole
+web, and Tailwind's literal `-translate-x-full`. Our overlap says we place it ON the page, so the
+transform is not reaching our rect. Four mechanisms could do that, and each was measured on the
+**SHIPPING cascade** (`Page::load`, not `MinimalCascade` — the rule t826 paid for):
+
+```
+  1. transform on a fixed/absolute/sticky box reaching getBoundingClientRect
+       translateX(-256px) / -100% / fixed / absolute / sticky / in-flow   6 rows   ALL EXACT
+  2. var() INSIDE transform (Tailwind's whole transform system)
+       translate(var,var) · translateX(var) · var with fallback ·
+       fallback on a MISSING var · scale(var)                             5 rows   ALL EXACT
+  3. a class selector STARTING WITH A HYPHEN (every negative Tailwind utility)
+       .-translate-x-full · .-mt-4 · .plain · ._us                        4 rows   ALL EXACT
+  4. the REAL Tailwind v3 chain — 6 var()s across 7 functions, defaulted
+       by `*,::before,::after{--tw-translate-x:0;…}`                      3 rows   ALL EXACT
+```
+
+⚠⚠⚠ **ALL FOUR REFUTED, ALL CHROME-EXACT, EIGHTEEN ROWS.** The transform machinery is correct end to
+end — including the case that looked most likely to fail (a 7-function chain whose every argument is a
+custom property inherited from a universal-selector rule; one unresolvable `var()` would invalidate
+the whole declaration at computed-value time, and none is).
+
+**SO THE RESIDUE IS NARROWED, AND THAT IS THIS TICK'S PRODUCT.** Whatever puts desiviral's drawer on
+the page, it is **not** the transform, **not** `var()` inside it, **not** the hyphen-leading selector,
+and **not** the Tailwind chain. The next probe must start from *whether the rule reaches the element
+at all on the live render* (the site's Tailwind is external; a sheet that does not arrive is
+`css-starved`, which this instrument has a reason code for) rather than from the transform pipeline —
+which is where all four of my guesses pointed and where none of them belonged.
+
+MEASURED: no engine change — the scratch probe was removed and `git status` is docs only.
+`manuk-layout` 103 green.
+
+PERF: none.
+
+WIKI: none — a measurement tick; the artefact is the four-refutation table above.
+
+PATTERN: ⚠⚠⚠ **FOUR PLAUSIBLE MECHANISMS, ONE ORGAN, ZERO DEFECTS — AND THE PROBE STILL PAID.** Each
+hypothesis was specific, high-reach and testable, and each would have been a real bug had it been
+real: `var()` in `transform` is Tailwind's entire transform system, and a hyphen-leading class is
+every negative utility on the web. Refuting them cost four fixtures and saves the next session from
+spending four ticks on them. ⚠⚠ **A NEGATIVE RESULT IS ONLY WORTH BANKING IF IT IS WRITTEN DOWN AS
+SPECIFICALLY AS A POSITIVE ONE** — "transforms work" is worthless; the eighteen-row table above is
+what stops the re-derivation. ⚠ And the aiming note, which is the one to carry: **the composite named
+the ORGAN correctly and every guess about the MECHANISM was wrong.** Naming the organ is cheap and
+reliable; naming the mechanism from the organ is a guess, and t814's rule — *a stated cause is a guess
+until it is measured on its own* — applies to a hypothesis exactly as it applies to a residue.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

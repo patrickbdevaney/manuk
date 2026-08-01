@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **566** | ticks 1–827 |
-| median tick cycle | **25m** | 565 intervals |
-| median, last 10 | **74m** | 10 intervals |
+| ticks landed | **567** | ticks 1–828 |
+| median tick cycle | **25m** | 566 intervals |
+| median, last 10 | **66m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 514.9h elapsed |
-| median verify wall | **63s** | 505 ticks |
+| **ticks per hour** | **1.10** | 515.2h elapsed |
+| median verify wall | **63s** | 506 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **429**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**274 of 566 ticks** (48%) moved a
+**274 of 567 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -663,5 +663,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **824** | 2026-08-01 14:27 | 60m | capability | 63s | +353/−32 | 379 | 81 | 56.0% · | the sweep's `crashed` rows were the instrument's OWN re-spawn cap (2026-08-01) |
 | **826** | 2026-08-01 15:39 | 72m | measurement | 63s | +265/−36 | 379 | 81 | 56.0% · | the near-bar cohort, and a SECOND CASCADE that nearly produced a false diagnosis (2026-08- |
 | **827** | 2026-08-01 15:56 | 16m | capability | 63s | +224/−35 | 379 | 81 | 56.0% · | the block-axis twin, banked at t823 and now closed (2026-08-01) |
+| **828** | 2026-08-01 16:16 | 20m | process | 63s | +104/−32 | 379 | 81 | 56.0% · | the triple cadence: self-audit, surface audit #54, constitution check #69 (2026-08-01) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
