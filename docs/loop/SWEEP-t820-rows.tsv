@@ -1,0 +1,201 @@
+#name	coverage	shape	h_overflow	overlap	reading_order	dead_target	shape_n	reason	instrument
+comix.to	1.000000	1.000000	0	0	0	0	3	shell-only-3	46cdbdef
+www.naukri.com	0.280702	0.312500	0	1	1	0	16		46cdbdef
+www.ebay.com	-	-	0	0	0	0	0	timeout-150s	46cdbdef
+fdown.net	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+www.ikea.com	0.935806	0.689024	0	6	22	0	656		46cdbdef
+www.otomoto.pl	0.003697	0.000000	0	0	0	0	4	render-failed	46cdbdef
+aternos.org	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+www.bilibili.com	0.470356	0.560224	0	4	43	9	357		46cdbdef
+meet.google.com	-	-	0	0	0	0	0	timeout-150s	46cdbdef
+www.amazon.com.be	-	-	0	0	0	0	0	probe-blocked	46cdbdef
+client.dkitrxmdwoqruvsi.net	-	-	0	0	0	0	0	http-404	46cdbdef
+people.com	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+cibnext.icici.bank.in	-	-	0	0	0	0	0	http-404	46cdbdef
+255md.com	1.000000	0.767442	0	0	0	0	43		46cdbdef
+www.marktplaats.nl	1.000000	0.908642	0	0	1	2	810		46cdbdef
+awlyaa.education.dz	1.000000	0.833333	0	0	0	0	6	shell-only-6	46cdbdef
+www.repubblica.it	-	-	0	0	0	0	0	timeout-150s	46cdbdef
+mobcup.fm	-	-	0	0	0	0	0	unreachable	46cdbdef
+momon-ga.com	1.000000	0.568182	0	0	0	0	572		46cdbdef
+esaj.tjsp.jus.br	1.000000	0.500000	0	0	0	0	4	shell-only-4	46cdbdef
+www.mobile.bg	0.839080	0.427397	0	0	28	1	365		46cdbdef
+tracker.shadowfax.in	0.034483	0.000000	0	0	0	0	1	tree-divergence-48	46cdbdef
+www.kicktipp.com	0.988095	0.734940	0	0	1	0	83		46cdbdef
+alastonsuomi.com	-	-	0	0	0	0	0	unreachable	46cdbdef
+altogel.fit	-	-	0	0	0	0	0	unreachable	46cdbdef
+www.tz.de	0.879920	0.813137	3	0	0	0	1766		46cdbdef
+sports.yahoo.com	-	-	0	0	0	0	0	timeout-150s	46cdbdef
+gw.geneanet.org	-	-	0	0	0	0	0	crashed	46cdbdef
+www.bolde.com	-	-	0	0	0	0	0	crashed	46cdbdef
+dashboard.twitch.tv	-	-	0	0	0	0	0	crashed	46cdbdef
+mkp.gem.gov.in	-	-	0	0	0	0	0	crashed	46cdbdef
+celeb.gate.cc	-	-	0	0	0	0	0	crashed	46cdbdef
+www.fragrantica.com	-	-	0	0	0	0	0	crashed	46cdbdef
+www.blick.ch	-	-	0	0	0	0	0	crashed	46cdbdef
+www.hemnet.se	-	-	0	0	0	0	0	crashed	46cdbdef
+fr.bongacams.com	-	-	0	0	0	0	0	crashed	46cdbdef
+www.mobile.ir	-	-	0	0	0	0	0	crashed	46cdbdef
+www.alphanews.live	-	-	0	0	0	0	0	crashed	46cdbdef
+patrickmorin.com	-	-	0	0	0	0	0	crashed	46cdbdef
+www.nautica.com	-	-	0	0	0	0	0	crashed	46cdbdef
+app.ordertime.com	-	-	0	0	0	0	0	crashed	46cdbdef
+mexcbt.ed-cl.com	-	-	0	0	0	0	0	crashed	46cdbdef
+ticket.jfa.jp	-	-	0	0	0	0	0	crashed	46cdbdef
+house.udn.com	-	-	0	0	0	0	0	crashed	46cdbdef
+pogoda.by	-	-	0	0	0	0	0	crashed	46cdbdef
+d2rwkn96gppqo1.cloudfront.net	-	-	0	0	0	0	0	crashed	46cdbdef
+www.trivago.de	-	-	0	0	0	0	0	crashed	46cdbdef
+www.trivago.jp	-	-	0	0	0	0	0	crashed	46cdbdef
+www.monopolybingogame.com	-	-	0	0	0	0	0	crashed	46cdbdef
+www.mundotoro.com	-	-	0	0	0	0	0	crashed	46cdbdef
+www.puentedemando.com	-	-	0	0	0	0	0	crashed	46cdbdef
+donate.onenation.org.au	-	-	0	0	0	0	0	crashed	46cdbdef
+forums.moneysavingexpert.com	-	-	0	0	0	0	0	crashed	46cdbdef
+v8m5e6.com	-	-	0	0	0	0	0	crashed	46cdbdef
+aims.ucc-caloocan.edu.ph	-	-	0	0	0	0	0	crashed	46cdbdef
+sparkivo.pro	-	-	0	0	0	0	0	crashed	46cdbdef
+crm.majoo.id	-	-	0	0	0	0	0	crashed	46cdbdef
+www.smecel.com.br	-	-	0	0	0	0	0	crashed	46cdbdef
+lms12.tvu.ac.ir	-	-	0	0	0	0	0	crashed	46cdbdef
+serennu.com	-	-	0	0	0	0	0	crashed	46cdbdef
+basescan.org	-	-	0	0	0	0	0	crashed	46cdbdef
+app.levelupxx69.online	-	-	0	0	0	0	0	crashed	46cdbdef
+www.unoeste.br	-	-	0	0	0	0	0	crashed	46cdbdef
+lp.rsaiben.com	-	-	0	0	0	0	0	crashed	46cdbdef
+dla7h4u1.com	-	-	0	0	0	0	0	crashed	46cdbdef
+www.villaggioposeidone.it	-	-	0	0	0	0	0	crashed	46cdbdef
+admin.munchbakery.com	-	-	0	0	0	0	0	crashed	46cdbdef
+creaturecock.com	-	-	0	0	0	0	0	crashed	46cdbdef
+www.dapam-sirius.fr	-	-	0	0	0	0	0	crashed	46cdbdef
+pivaldi.restoplace.ws	-	-	0	0	0	0	0	crashed	46cdbdef
+ebanking.bdm-sa.com	-	-	0	0	0	0	0	crashed	46cdbdef
+beb88run.xyz	-	-	0	0	0	0	0	crashed	46cdbdef
+zainascarfs.com	-	-	0	0	0	0	0	crashed	46cdbdef
+www.cuneocronaca.it	-	-	0	0	0	0	0	crashed	46cdbdef
+ofero.id	-	-	0	0	0	0	0	crashed	46cdbdef
+probidas.lt	-	-	0	0	0	0	0	crashed	46cdbdef
+redinfor.com.pe	-	-	0	0	0	0	0	crashed	46cdbdef
+mydogcot.com	-	-	0	0	0	0	0	crashed	46cdbdef
+profissionaliza.cademi.com.br	-	-	0	0	0	0	0	crashed	46cdbdef
+www.timeline.com	-	-	0	0	0	0	0	crashed	46cdbdef
+admin.zoomph.com	-	-	0	0	0	0	0	crashed	46cdbdef
+e8c76.com	-	-	0	0	0	0	0	crashed	46cdbdef
+pordentrodetudo.com.br	-	-	0	0	0	0	0	crashed	46cdbdef
+bhramarah.in	-	-	0	0	0	0	0	crashed	46cdbdef
+dedebet252.com	-	-	0	0	0	0	0	crashed	46cdbdef
+aksesjambi.com	-	-	0	0	0	0	0	crashed	46cdbdef
+hipmiluwuutara.org	-	-	0	0	0	0	0	crashed	46cdbdef
+seduniaselat.com	-	-	0	0	0	0	0	crashed	46cdbdef
+www.wdimax.com	-	-	0	0	0	0	0	crashed	46cdbdef
+gismart.com	-	-	0	0	0	0	0	crashed	46cdbdef
+virtual.lapampa.edu.ar	-	-	0	0	0	0	0	crashed	46cdbdef
+experiencia.pichincha.com	-	-	0	0	0	0	0	crashed	46cdbdef
+bhfudbal.ba	-	-	0	0	0	0	0	crashed	46cdbdef
+www.hdnails.it	-	-	0	0	0	0	0	crashed	46cdbdef
+mayatoys.in	-	-	0	0	0	0	0	crashed	46cdbdef
+redemoura.gupy.io	-	-	0	0	0	0	0	crashed	46cdbdef
+neutypechic.com	-	-	0	0	0	0	0	crashed	46cdbdef
+nysainfo.pl	-	-	0	0	0	0	0	crashed	46cdbdef
+meuconsultordigital.com.br	-	-	0	0	0	0	0	crashed	46cdbdef
+venus.zeronline.cloud	-	-	0	0	0	0	0	crashed	46cdbdef
+service.smt.docomo.ne.jp	-	-	0	0	0	0	0	unreachable	46cdbdef
+www.mangago.me	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+www.agoda.com	0.077694	0.548387	0	0	0	0	62		46cdbdef
+bill.pitc.com.pk	-	-	0	0	0	0	0	unreachable	46cdbdef
+bbs.ruliweb.com	-	-	0	0	0	0	0	timeout-150s	46cdbdef
+mangaraw.ac	0.754538	0.563574	0	0	7	10	873		46cdbdef
+missav.live	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+vk.com	0.800000	0.250000	0	0	0	0	4	shell-only-5	46cdbdef
+tukrd.com	1.000000	0.973684	0	0	0	0	38		46cdbdef
+www.amazon.com.mx	-	-	0	0	0	0	0	empty-202	46cdbdef
+www.paypal.com	0.881271	0.430740	0	16	19	0	527		46cdbdef
+toyhou.se	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+linkmake.in	1.000000	0.756757	0	0	0	0	74		46cdbdef
+janitorai.com	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+stdn.iau.ir	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+desiviral.net	1.000000	0.802765	0	5	0	0	1085		46cdbdef
+www.livescore.cz	0.999736	0.423697	0	0	0	0	3781		46cdbdef
+m.youm7.com	-	-	0	0	0	0	0	css-starved-1	46cdbdef
+www.5movierulz.discount	1.000000	0.630979	0	0	38	0	439		46cdbdef
+ww1.goojara.to	-	-	0	0	0	0	0	probe-blocked	46cdbdef
+merchant.upi9.pro	1.000000	0.500000	0	0	0	0	2	shell-only-2	46cdbdef
+chat.google.com	1.000000	0.847458	0	0	0	0	59		46cdbdef
+haraj.com.sa	-	-	0	0	0	0	0	probe-blocked	46cdbdef
+id.vk.ru	0.995098	0.098522	10	4	8	180	1218		46cdbdef
+videa.hu	0.646607	0.560396	0	1	35	22	505		46cdbdef
+coinmarketcap.com	0.181002	0.355091	8	0	16	0	383		46cdbdef
+nitter.net	-	-	0	0	0	0	0	empty-200	46cdbdef
+rpsc.rajasthan.gov.in	0.995637	0.940403	0	0	0	0	1141		46cdbdef
+funinjeet.com	-	-	0	0	0	0	0	empty-202	46cdbdef
+pasarbokep.com	0.984190	0.425703	0	0	3	0	249		46cdbdef
+developers.google.com	0.844492	0.411765	0	19	6	0	391		46cdbdef
+oilprice.com	0.981651	0.585670	1	6	4	0	642		46cdbdef
+www.woolworths.com.au	-	-	0	0	0	0	0	bot-wall-403	46cdbdef
+www.netvasco.com.br	0.978896	0.615257	0	0	4	0	603		46cdbdef
+www.cbse.gov.in	1.000000	0.000000	0	0	0	0	57		46cdbdef
+ubys.bingol.edu.tr	0.994012	0.801205	0	0	19	0	166		46cdbdef
+hope.cap-systems.org	1.000000	0.000000	0	0	0	0	17		46cdbdef
+www.freesupertips.com	0.482510	0.720682	1	1	6	0	469		46cdbdef
+www.broshurko.bg	-	-	0	0	0	0	0	bot-wall-200	46cdbdef
+linxonline.co.pierce.wa.us	-	-	0	0	0	0	0	probe-blocked	46cdbdef
+lms.sltc.ac.lk	1.000000	0.395161	0	2	0	0	124		46cdbdef
+xhdesign.today	-	-	0	0	0	0	0	css-starved-1	46cdbdef
+www.crazyshop.pl	0.912167	0.588445	1	6	505	1	1402		46cdbdef
+www.friulioggi.it	-	-	0	0	0	0	0	timeout-150s	46cdbdef
+mirai-compass.net	-	-	0	0	0	0	0	http-404	46cdbdef
+www.trivago.be	0.956429	0.117999	27	10	18	0	1339		46cdbdef
+www.trivago.fr	0.956491	0.113348	27	10	18	0	1341		46cdbdef
+www.trivago.pl	0.956335	0.111527	27	10	19	0	1336		46cdbdef
+secure5.entertimeonline.com	1.000000	0.820513	0	0	0	0	39		46cdbdef
+www.aftenbladet.no	0.957071	0.315743	586	1	7	4	1137		46cdbdef
+www.jatekshop.eu	0.965633	0.188368	0	31	37	0	1152		46cdbdef
+cyoinatu-onna.com	0.967123	0.578612	0	0	0	0	1412		46cdbdef
+swiftspinus.com	-	-	0	0	0	0	0	timeout-150s	46cdbdef
+a1.ro	0.022663	0.500000	0	0	2	0	16		46cdbdef
+www.razaoautomovel.com	-	-	0	0	0	0	0	timeout-150s	46cdbdef
+acesso.pagbank.com.br	-	-	0	0	0	0	0	crashed	46cdbdef
+promo.golesliga1max.pe	-	-	0	0	0	0	0	crashed	46cdbdef
+www.radec.com.mx	-	-	0	0	0	0	0	crashed	46cdbdef
+possssno.sbs	-	-	0	0	0	0	0	crashed	46cdbdef
+www.heart.org	-	-	0	0	0	0	0	crashed	46cdbdef
+booking.directferries.com	-	-	0	0	0	0	0	crashed	46cdbdef
+www.lyreco.com	-	-	0	0	0	0	0	crashed	46cdbdef
+secure.paymentech.com	-	-	0	0	0	0	0	crashed	46cdbdef
+sip777man.site	-	-	0	0	0	0	0	crashed	46cdbdef
+www.kantorsupersam.pl	-	-	0	0	0	0	0	crashed	46cdbdef
+cloud.ssktco-op.com	-	-	0	0	0	0	0	crashed	46cdbdef
+allticketscol.com	-	-	0	0	0	0	0	crashed	46cdbdef
+payb.jp	-	-	0	0	0	0	0	crashed	46cdbdef
+packages.booking.com	-	-	0	0	0	0	0	crashed	46cdbdef
+www.taphouse23.com	-	-	0	0	0	0	0	crashed	46cdbdef
+www.ta3lemkonline.com	-	-	0	0	0	0	0	crashed	46cdbdef
+www.datacareservices.com	-	-	0	0	0	0	0	crashed	46cdbdef
+phone.uslowcosthousing.com	-	-	0	0	0	0	0	crashed	46cdbdef
+atendimentomondial.zendesk.com	-	-	0	0	0	0	0	crashed	46cdbdef
+morikoshi.net	-	-	0	0	0	0	0	crashed	46cdbdef
+777juegos.com	-	-	0	0	0	0	0	crashed	46cdbdef
+ru.restaurantguru.com	-	-	0	0	0	0	0	crashed	46cdbdef
+simplepdf.com	-	-	0	0	0	0	0	crashed	46cdbdef
+www.library.chiyoda.tokyo.jp	-	-	0	0	0	0	0	crashed	46cdbdef
+7info.ru	-	-	0	0	0	0	0	crashed	46cdbdef
+littlecaesarsbcs.libellum.com.mx	-	-	0	0	0	0	0	crashed	46cdbdef
+fr.download.it	-	-	0	0	0	0	0	crashed	46cdbdef
+cloud.email.cruzeirodosul.edu.br	-	-	0	0	0	0	0	crashed	46cdbdef
+portagelearning.edu	-	-	0	0	0	0	0	crashed	46cdbdef
+www.kuechenmomente.de	-	-	0	0	0	0	0	crashed	46cdbdef
+ab.asimakog.eu.org	-	-	0	0	0	0	0	crashed	46cdbdef
+www.kroftools.com	-	-	0	0	0	0	0	crashed	46cdbdef
+www.waitaly.net	-	-	0	0	0	0	0	crashed	46cdbdef
+123moviesfree.day	-	-	0	0	0	0	0	crashed	46cdbdef
+hnhbkis.edu.in	-	-	0	0	0	0	0	crashed	46cdbdef
+rockstaractu.com	-	-	0	0	0	0	0	crashed	46cdbdef
+pt88.app	-	-	0	0	0	0	0	crashed	46cdbdef
+sestra.cc	-	-	0	0	0	0	0	crashed	46cdbdef
+webfenix.movilidadbogota.gov.co	-	-	0	0	0	0	0	crashed	46cdbdef
+ru4.bongacams-ru.com	-	-	0	0	0	0	0	crashed	46cdbdef
+www.arw.ro	-	-	0	0	0	0	0	crashed	46cdbdef
+ioi-russia.vdi.mipt.ru	-	-	0	0	0	0	0	crashed	46cdbdef
+nortenoticia.com.br	-	-	0	0	0	0	0	crashed	46cdbdef
+portal.ensuretyfinance.com	-	-	0	0	0	0	0	crashed	46cdbdef
+www.jazzguitar.be	-	-	0	0	0	0	0	crashed	46cdbdef

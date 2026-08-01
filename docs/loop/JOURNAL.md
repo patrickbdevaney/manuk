@@ -43357,3 +43357,76 @@ PERF: none.
 WIKI: none — process tick; the artefact is `docs/loop/CONSTITUTION-CHECK.md` #68.
 
 PATTERN: [no-pattern] — a process tick unlocks no class of the web.
+
+## Tick 821 — the sweep is CONTAMINATED, and its worst "regression" is a COVERAGE WIN (2026-08-01)
+
+TICK SHAPE: measurement — the sweep check #68 steered to, run and correctly REFUSED
+
+HYPOTHESIS (written before the run): four engine fixes sit unpriced since `SWEEP-t812-rows`
+(t815, t816, t817, t819). Check #68's own steer was "SWEEP NEXT". Run the CrUX trend corpus
+(`docs/bench/corpus-crux-trend.txt`, 200 stratified) at cert-grade `--jobs 2` and bank the band.
+
+⚠⚠⚠ **THE SWEEP IS NOT BANKABLE, AND THE INSTRUMENT SAID SO IN ITS OWN LOG.** `chunk 1: 45 site(s)
+never produced a row after 4 rounds — filed as crashed`, preceded by a mozjs teardown fault
+(`pthread_mutex_destroy failed: Device or resource busy`). The reason histogram is the proof, not the
+prose:
+
+```
+                     t812        t820
+  crashed              25         118     ← the artefact
+  bot-wall             33          10     ← sites that were bot-walled are now filed "crashed"
+  scored               87          40
+```
+
+**118 of 200 filed `crashed` is a CHUNK_ROUNDS artefact, not 118 crashes** — and it is the third
+consecutive sweep this has invalidated (checks #67 and #68 both reported it as a harness item). A
+`bot-wall` count that FALLS from 33 to 10 while `crashed` quadruples is the tell: those chunks never
+ran, so their sites could not reach the classifier that would have called them bot-walled.
+**Neither half is comparable to t812**: scorability is the artefact directly, and the shape half was
+measured inside the same damaged process.
+
+MEASURED ANYWAY, and then refused: the paired common-set band over the 40 sites scored in BOTH reads
+`mean −0.0049, up 9 / down 15, 0 crossed up, 2 crossed DOWN`. **That number is not claimed.** It is
+smaller than the known single-binary per-site spread, and it comes from a run whose own chunks died
+four times. What it IS good for is a QUESTION: two sites crossed down, and a possible regression from
+my own four fixes gets resolved, not filed.
+
+⚠⚠⚠ **RESOLVED WITH THE OLD-BINARY CONTROL — AND THE WORST "REGRESSION" IS A COVERAGE WIN.**
+Rebuilt `d82da7f2` (pre-t815, before all four fixes) and re-measured the three biggest drops NOW:
+
+```
+                          OLD (pre-t815)                 NEW (t820)
+  oilprice.com        cov 61.3%  missing 253  mis 399  → cov 98.0%  missing  13  mis 639
+  www.freesupertips   cov 50.9%  missing 433  mis 448  → cov 50.1%  missing 440  mis 438
+  www.5movierulz      cov 100%   missing   0  mis 366  → cov 100%   missing   0  mis 366
+```
+
+`oilprice.com` 0.8005 → 0.5857 is **not a regression: it is 240 elements that we previously did not
+draw at all.** Coverage 61.3% → 98.0%, missing 253 → 13. The newly-drawn boxes are then scored for
+placement, so `misplaced` rises 399 → 639 and the shape RATIO falls — **while the page is strictly
+more correct.** The old 0.8005 was computed over 61% of the page; the new 0.5857 is computed over 98%
+of it. The other two are byte-identical or inside drift (`5movierulz` 366/366 and coverage 1.000 in
+both, so its −0.05 sweep row was pure run noise).
+
+**No regression from t815/t816/t817/t819.** `manuk-layout` 103 green; `G_ROWLESS_TABLE`,
+`G_ORPHAN_TABLE_CELL`, `G_FLEX_PERCENT_LINEBREAK` all green on the restored tree.
+
+⚠ ATOMICITY NOTE: the old-binary control was taken with `git checkout <sha> -- engine/`, and popping
+the stash afterwards left `UU engine/layout/src/lib.rs`. The tree was reset to HEAD and re-verified
+(103 layout tests + all three new gates) rather than built on. A conflicted file is exactly the
+"inconsistent partial state" the atomicity rule forbids carrying forward.
+
+PERF: none.
+
+WIKI: none — no engine delta; the artefact is `SWEEP-t820-rows.tsv` plus this refusal.
+
+PATTERN: ⚠⚠⚠ **A SHAPE DROP CAN BE A COVERAGE WIN, AND THE HEADLINE CANNOT TELL THE DIFFERENCE.**
+`shape` is a ratio over the elements BOTH engines render. Draw 240 boxes you used to omit and they
+all enter the denominator — a fix that strictly improves the page moves the metric DOWN. So **a
+crossed-down row is not a regression until its COVERAGE column has been read next to it**, and the
+old-binary control is what separates the two in one rebuild. The mirror of the t743 denominator
+lesson, arriving from the other side: there the metric was flattered by dividing by too much, here it
+is punished for rendering more. ⚠ Corollary for the burndown: the ranked plan should expect
+coverage-raising fixes to LOWER shape before they raise it, and must not read that as a reason to
+revert one.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

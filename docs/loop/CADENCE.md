@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **560** | ticks 1–819 |
-| median tick cycle | **25m** | 559 intervals |
-| median, last 10 | **59m** | 10 intervals |
+| ticks landed | **561** | ticks 1–821 |
+| median tick cycle | **25m** | 560 intervals |
+| median, last 10 | **64m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 508.1h elapsed |
-| median verify wall | **63s** | 499 ticks |
+| **ticks per hour** | **1.10** | 509.9h elapsed |
+| median verify wall | **63s** | 500 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **426**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**271 of 560 ticks** (48%) moved a
+**271 of 561 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -657,5 +657,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **817** | 2026-08-01 07:33 | 1.6h | capability | 63s | +532/−34 | 378 | 81 | 56.0% · | a sub-pixel float excess breaks a flex line, and Bootstrap is written in exactly those per |
 | **818** | 2026-08-01 08:48 | 75m | process | 63s | +162/−42 | 378 | 81 | 56.0% · | the audit tick: the missing column under `applied` is `COMPARED` (2026-08-01) |
 | **819** | 2026-08-01 09:06 | 18m | capability | 63s | +176/−33 | 378 | 81 | 56.0% · | `flex-basis` is a main size too, and t817's own residue label was wrong (2026-08-01) |
+| **821** | 2026-08-01 10:57 | 1.9h | measurement | 63s | +312/−32 | 378 | 81 | 56.0% · | the sweep is CONTAMINATED, and its worst "regression" is a COVERAGE WIN (2026-08-01) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
