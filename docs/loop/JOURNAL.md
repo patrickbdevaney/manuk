@@ -43826,3 +43826,103 @@ is a per-site tool that does not scale to a batch. ⚠ And the honest note on th
 percentages moved partly because the denominator shrank, and the only reason that is visible here is
 that the counts were printed next to them.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 826 — the near-bar cohort, and a SECOND CASCADE that nearly produced a false diagnosis (2026-08-01)
+
+TICK SHAPE: measurement — the board's item (2) aimed off a fresh sweep, and a reduction REFUSED by
+its own control
+
+HYPOTHESIS (written before the probe): the board's M1 priority (2) says to rank by MARGINAL M1
+CROSSINGS from the per-site distances already in `SWEEP-t<N>-rows.tsv`, and t825 finally provides a
+fresh one. A jarring-clean site within a few points of 0.75 is one nudge from an M1 crossing; find the
+cohort, find what they SHARE, fix that.
+
+**THE COHORT, from `SWEEP-t825-rows.tsv` — 10 jarring-clean sites inside 0.20 of the bar, and the top
+three are inside 0.022:**
+
+```
+  www.library.chiyoda.tokyo.jp   shape 0.7472   gap +0.003   cov 0.922   n  356   ← 1 element of 356
+  www.kicktipp.com               shape 0.7349   gap +0.015   cov 0.988   n   83   ← ~1.2 of 83
+  celeb.gate.cc                  shape 0.7284   gap +0.022   cov 0.983   n  475
+  app.ordertime.com              shape 0.6552   gap +0.095   cov 1.000   n   29
+  littlecaesarsbcs.libellum…     shape 0.6154   gap +0.135   cov 1.000   n   78
+  promo.golesliga1max.pe         shape 0.5873   gap +0.163   cov 1.000   n   63
+  cyoinatu-onna.com              shape 0.5786   gap +0.171   cov 0.967   n 1412
+  momon-ga.com                   shape 0.5682   gap +0.182   cov 1.000   n  572
+  admin.zoomph.com               shape 0.5588   gap +0.191   cov 1.000   n   34
+  www.agoda.com                  shape 0.5556   gap +0.194   cov 0.079   n   63
+```
+
+And the second cohort, which is cheaper still — **already over the shape bar, held out of M1 by
+jarring alone**: `desiviral.net` 0.8020 (overlap 5), `ubys.bingol.edu.tr` 0.8012 (reading-order 19),
+`payb.jp` 0.7894 (reorder 14), `www.puentedemando.com` 0.7742 (overlap 18). **Four sites, one jarring
+dimension each.** Both cohorts are banked here so the next tick aims without re-deriving them.
+
+THE SHARED MECHANISM across the top three, from the instrument's own ranked causes: **`geometry/
+mis-sized: HEIGHT`** — 23 hits over all 3 sites on `<div>`, 15 over 2 sites on `<a>`, medians 14-27px.
+
+AIMED, with the t817 chain, at `www.kicktipp.com` (83 elements, 31 misplaced, needs ~1.2 fewer).
+Chrome's own computed style for the first divergent element:
+
+```
+  <a>  Chrome [742 790 103x30]   ours [749 804 96x48]
+       display=block  box-sizing=border-box  padding=6.6px  line-height=17.16px  font=13.2px Arial
+       height 30.34 = ONE line (17.16) + padding (13.2)
+       ours   48    = TWO lines (2x17.16) + padding
+```
+
+⚠ **AND OUR BOX IS 6.6px NARROWER — EXACTLY ONE PADDING — WHICH IS WHAT WRAPS THE TEXT.** The string
+needs 89.44px; the content box at Chrome's width is 89.8. Six px of width buys the second line, and
+the second line is the height error. **This is the burndown's #1 named mechanism** (*"container-WIDTH
+errors LAUNDER into dy"*) caught in the act, with 0.36px of margin between fitting and not.
+
+⚠⚠⚠ **AND THEN THE REDUCTION FAILED ITS OWN CONTROL, WHICH IS THE RESULT.** The 5-row fixture
+(`box-sizing:border-box` + `padding:6.6px` + `font:13.2px/17.16px Arial`) reproduced the doubling
+exactly — `103.00 x 49.20` against Chrome's `103.00 x 30.34` — under `manuk-layout`'s test harness.
+Then the same fixture on the **shipping** path (`Page::load`, Stylo):
+
+```
+                                          Chrome   MinimalCascade   STYLO (shipping)
+  font:13.2px/17.16px Arial,sans-serif     17.16       18.00            17.16   ✓
+  font-size + line-height + family         17.16       17.16            17.16   ✓
+  font:13.2px Arial,sans-serif             15.00       18.00            15.00   ✓
+  font:italic bold 13.2px/17.16px Arial    17.16       18.00            17.16   ✓
+  font:13.2px/1.3 Arial                    17.16       18.00            17.16   ✓
+```
+
+**The shipping cascade is Chrome-exact on all five. The `font:` SHORTHAND is unparsed in
+`MinimalCascade` only** — and `MinimalCascade` is what all 103 `manuk-layout` unit tests are written
+against. So the reduction measured the test harness, not the browser, and one control killed a
+diagnosis that had a plausible mechanism, a Chrome table, and a reproducing fixture behind it.
+
+**DECLINED FOR THIS PHASE, with the reason.** Teaching `MinimalCascade` the `font:` shorthand moves
+`shape` by **exactly zero** — Stylo already ships the right answer, so no corpus box changes. It is
+the t822 rule applied to my own work (*"ask which term of the metric the fix lands in"*), and it is
+banked rather than built: any `manuk-layout` probe that uses `font:` shorthand is silently measuring
+16px/normal, so the NEXT such reduction will mislead the same way unless it is fixed or avoided.
+
+⚠ WHAT THIS LEAVES OPEN, stated precisely so the next tick does not re-run this one: our `<a>` is
+96 wide because **something upstream of it is**, and the reduced fixture proves it is not
+`box-sizing`, not `padding`, and not text measurement (our string widths are within **0.09%** of
+Chrome's — 89.52 vs 89.44, and 261.20 vs 260.95 on a long run; the Arial→metric-compatible mapping is
+correct). The residue is in kicktipp's ANCESTOR CHAIN, and it is measured with one suspect at a time
+or it is not measured (t819).
+
+MEASURED: no engine change — `git status` is the two harness-written TSVs plus docs. `manuk-layout`
+103 green.
+
+PERF: none.
+
+WIKI: none — a measurement tick; the artefacts are the two ranked cohorts above and the cascade table.
+
+PATTERN: ⚠⚠⚠ **TWO CASCADES MEANS EVERY CHEAP PROBE HAS A SECOND, SILENT SUBJECT.** The layout crate's
+unit harness runs `MinimalCascade`; the browser runs Stylo. They agree on almost everything, which is
+exactly what makes the disagreement dangerous — a fixture that reproduces under the cheap harness
+reads as a confirmed engine defect, and here it was a defect *in the harness*, on a property
+(`font:` shorthand) common enough to appear in any hand-written fixture. ⚠⚠ The guard is one line of
+work and it is now the rule for this seam: **a reduction is not confirmed until it has been run on the
+SHIPPING cascade.** The cheap harness proposes; `Page::load` disposes. ⚠ Note the shape of the near
+miss — the fixture did not merely fail to reproduce, it reproduced *the right number for the wrong
+reason* (49.20 is exactly 2×18 + 13.2, i.e. two lines at the DEFAULT 16px metrics), which is the most
+convincing kind of wrong answer there is.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
