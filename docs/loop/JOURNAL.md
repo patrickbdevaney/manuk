@@ -42924,3 +42924,69 @@ it is absent, and an explicit width does not rescue it. **The residue line in a 
 written at the moment of least curiosity about it**, right after the real fix has landed, and it
 inherits whatever hypothesis was nearest to hand. Re-measure a residue before acting on its label.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 815 — a `display:table` with no rows is a shrink-to-fit BLOCK (2026-08-01)
+
+TICK SHAPE: capability (block layout) — the item t814 specified, built in the next tick
+
+HYPOTHESIS (written at t814, before any code): `collect_table_rows` keeps only `table-row` /
+`table-row-group` ELEMENTS, so a `display:table` box whose content is bare text yields zero rows and
+`layout_table` builds an empty box. t814 measured it, banked the Chrome table, and named the one rule
+the retry had to carry: **`www.ta3lemkonline.com` in the control set from the start** — the site
+t811's revert was bought with.
+
+```
+                                            Chrome        before      after
+  display:table, bare text "short"       [0   0  36x20]    0x0     [0   0  36x20]  ✗→✓
+  display:table, a longer run of text    [0  20 213x20]    0x0     [0  20 213x20]  ✗→✓
+  display:table, width:200px, bare text  [0  86 200x20]    0x0     [0  86 200x20]  ✗→✓
+  display:inline-table, bare text        [0 106  72x20]    0x0     [0 106  72x20]  ✗→✓
+  display:table + table-row + table-cell [0  40 109x20]  109x20    [0  40 109x20]  ✓ always right
+  a real <table><tr><td>                 [0  60  97x26]   91x22       91x22        ~ unmoved
+```
+
+MECHANISM, and it is deliberately **not** a patch on the table formatter: CSS 2.1 §17.2.1 wraps
+non-table content in an anonymous table-cell inside an anonymous table-row, and a table with ONE
+anonymous cell is — in both axes — exactly a **shrink-to-fit block** over the same content.
+`collect_table_rows` returns real DOM ids, so there is no anonymous node it could return; instead the
+style CLONE in `layout_block` gets `width: fit-content` and the generic block path runs. Anything
+that really has rows still goes to the formatter, which was never the defect. The float dispatch got
+the same exception, or a floated rowless table would still be a 0×0 float.
+
+MEASURED: five of six fixture boxes Chrome-exact (four were **0×0**). **`www.ta3lemkonline.com`
+0.540481 → 0.551422** — the adversarial control IMPROVED by five elements, on the site t811 damaged.
+Eight controls byte-identical: `en.wikipedia.org` 0.592937, `news.ycombinator.com` 0.797264,
+`linkmake.in` 0.756757, `255md.com` 0.767442, `www.dapam-sirius.fr` 0.800000, `blog.rust-lang.org`
+0.993389, `chat.google.com` 0.847458, `tukrd.com` 0.973684. `manuk-layout` 103 tests green.
+
+Gate: `G_ROWLESS_TABLE` (new), six Chrome-measured sizes. **Proven RED:** route a rowless table back
+into `layout_table` and `#t1`/`#t2`/`#t5`/`#t6` read 0×0 while `#t3` (a real row/cell structure)
+passes — the split that says the formatter is correct and must keep running.
+
+⚠ **THE SECOND MUTATION DOES NOT GO RED AND THE GATE SAYS SO.** Dropping the `width == Dim::Auto`
+guard leaves `#t5` at 200, because `layout_block` only consults `width_keyword` when `s.width` is
+`Auto` — the guard is already inert on a definite width. It is kept as a statement of the spec rule
+rather than deleted (unlike t809's `never_rendered`, which was a whole inert function), and the RED
+list carries the distinction instead of implying a red it cannot produce.
+
+⚠ `#t4` — a real `<table><tr><td>` — is asserted at OUR 91×22 rather than Chrome's 97×26, with the
+reason next to it: it takes the table formatter in both states, is unmoved by this change, and the
+6×4 gap is a pre-existing cell-metric difference. Asserting Chrome's number would make the gate fail
+for something it does not test; asserting ours pins that the fix did not disturb the real-table path.
+
+HONEST SCOPE: no site is claimed to cross. One control improves, eight hold, and the corpus price
+comes at the next sweep.
+
+PERF: none claimed — one `collect_table_rows` call on the block path for `display:table` nodes, which
+`layout_table` was about to make anyway.
+
+WIKI: `docs/wiki/box-layout.md` — new section.
+
+PATTERN: ⚠⚠⚠ **A FILTER WRITTEN FOR ELEMENTS, APPLIED TO A CHILD LIST CONTAINING TEXT — three times
+in one session.** t799 (the anonymous block had no node to ask), t803 (a text node cloned its
+parent's `position:absolute` and filtered itself out of the box it WAS), t815 (a text node is not a
+`table-row`, so the table it entirely constitutes has no rows). Every one produced an ABSENT or EMPTY
+box rather than a wrong one, and every one was invisible to a fixture whose content was wrapped in an
+element. **Grep every child filter for whether it can be handed a text node, and check what it
+answers.**
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

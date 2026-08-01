@@ -161,6 +161,7 @@
   - L3149 · Two halves
   - L3155 · The plain block is the rule's boundary, not an oversight
   - L3161 · left_float_edge, not left_offset
+  - L3168 · A display:table with no rows is a shrink-to-fit BLOCK (t815)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1373,4 +1374,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1284 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1285 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -2071,12 +2071,44 @@ impl Ctx<'_> {
         prev_margin: f32,
         floats: &mut FloatContext,
     ) -> BlockResult {
-        let s = self.style_of(node).clone();
+        let mut s = self.style_of(node).clone();
 
         // Tables size their own width (shrink-to-columns when auto), so they run a
         // dedicated formatter rather than the generic block width algorithm.
+        //
+        // ⚠⚠ **…unless it has no rows at all, in which case it is not a table, it is a
+        // SHRINK-TO-FIT BLOCK.** `collect_table_rows` keeps only `table-row`/`table-row-group`
+        // ELEMENTS, so a `display:table` box whose content is bare text — or any non-table
+        // content — yields zero rows and `layout_table` produced an **empty box**. Not narrow:
+        // absent. Chrome-measured (t814):
+        //
+        // ```text
+        //                                            Chrome         before
+        //   display:table, bare text "short"       [0   0  36x20]   0x0
+        //   display:table, a longer run of text    [0  20 213x20]   0x0
+        //   display:table, width:200px, bare text  [0  86 200x20]   0x0   ← even EXPLICIT
+        //   display:inline-table, bare text        [0 106  72x20]   0x0
+        // ```
+        //
+        // An explicit width did not save it, which is what rules out sizing and names the cause.
+        //
+        // CSS 2.1 §17.2.1 wraps such content in an anonymous table-cell inside an anonymous
+        // table-row — and a table with ONE anonymous cell is, for both axes, exactly a
+        // shrink-to-fit block over the same content. So rather than synthesise boxes the row
+        // collector has no node to return, the style CLONE is given `width: fit-content` and the
+        // generic block path runs. An author's explicit width is left alone (the guard), so
+        // `width:200px` stays 200.
+        //
+        // ⚠ THE REACH is the pre-flexbox layout vocabulary: `display:table; margin:0 auto` to
+        // shrink-wrap and centre, and `display:inline-table` — still everywhere in the CrUX tail.
         if s.display == Display::Table {
-            return self.layout_table(node, cw, x, y, prev_margin);
+            if self.collect_table_rows(node).is_empty() {
+                if s.width == Dim::Auto && s.width_keyword.is_none() && !s.width_stretch {
+                    s.width_keyword = Some(IntrinsicSize::FitContent);
+                }
+            } else {
+                return self.layout_table(node, cw, x, y, prev_margin);
+            }
         }
 
         let mut ml = s.margin.left.resolve(cw, 0.0);
@@ -2964,7 +2996,9 @@ impl Ctx<'_> {
         // to the generic path, where `<tr>`/`<th>` are not "block-level" and every cell's text
         // simply flowed inline. That is why Wikipedia's infobox rendered as one run of text.
         // Run the real table formatter at a provisional origin, then place its margin box.
-        if s.display == Display::Table {
+        // Same rowless exception as `layout_block`: a floated `display:table` with no rows is a
+        // shrink-to-fit block, and routing it into the table formatter yields a 0x0 float.
+        if s.display == Display::Table && !self.collect_table_rows(node).is_empty() {
             let r = self.layout_table(node, cw, 0.0, 0.0, 0.0);
             let mut b = r.boxx;
             let (mbw, mbh) = (ml + b.rect.width + mr, mt + b.rect.height + mb);

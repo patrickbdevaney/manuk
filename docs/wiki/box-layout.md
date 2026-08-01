@@ -3164,3 +3164,38 @@ The `Option` form reports the float-derived edge **alone** and is `None` when no
 `left_offset` falls back to the CONTEXT's edges, which are not this block's containing block when the
 two are nested, and would shift blocks with no float near them. That is t797's distinction, reused
 rather than rediscovered.
+
+## A `display:table` with no rows is a shrink-to-fit BLOCK (t815)
+
+`collect_table_rows` keeps only `table-row` / `table-row-group` **elements**. A `display:table` box
+whose content is bare text — or any non-table content — therefore yields zero rows, and `layout_table`
+produced an **empty box**. Not narrow: absent.
+
+```
+                                            Chrome        ours (before)
+  display:table, bare text "short"       [0   0  36x20]     0x0
+  display:table, a longer run of text    [0  20 213x20]     0x0
+  display:table, width:200px, bare text  [0  86 200x20]     0x0     ← even EXPLICIT
+  display:inline-table, bare text        [0 106  72x20]     0x0
+  display:table + table-row + table-cell [0  40 109x20]   109x20    ✓ always right
+```
+
+An explicit width did not save it either, which is what rules out sizing and names the cause: the box
+was never built.
+
+**The fix is not a patch on the table formatter.** CSS 2.1 §17.2.1 wraps non-table content in an
+anonymous table-cell inside an anonymous table-row, and a table with ONE anonymous cell is — in both
+axes — exactly a shrink-to-fit block over the same content. `collect_table_rows` returns real DOM
+ids, so there is no anonymous node it *could* return; instead the style clone in `layout_block` gets
+`width: fit-content` and the generic block path runs. Anything that really has rows still goes to the
+table formatter, which was never the defect.
+
+**The reach is the pre-flexbox layout vocabulary** — `display:table; margin:0 auto` to shrink-wrap and
+centre, `display:inline-table`, and the `display:table-cell; vertical-align:middle` centring trick.
+Still everywhere in the CrUX tail.
+
+⚠ **Third time in one session a bare text node fell through a structural filter**: t799 (an anonymous
+block inherited nothing), t803 (a text node cloned its parent's `position:absolute` and filtered
+itself out of the box it *was*), and this. **The recurring shape is a filter written for elements,
+applied to a child list that contains text** — and the guard is always the same one word, `is_element`
+or its equivalent, which `max_content_width_uncached` has had all along.
