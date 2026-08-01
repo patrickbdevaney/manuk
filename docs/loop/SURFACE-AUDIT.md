@@ -3098,3 +3098,76 @@ clearly — it is precisely what the shape metric measures and what the §8 near
 M1 crossings this window came out of it. The steer stands.
 
 **Next audit due: tick 818.**
+
+## Audit #53 — tick 818 (2026-08-01)
+
+**Method.** Same door as #51/#52 — Chrome measured with small fixtures — but this window one probe
+was aimed by the board's own *marginal-crossing* rank rather than by curiosity, and that changed what
+it found. Three engine fixes landed (t815, t816, t817) plus two measurement ticks (t813, t814).
+
+### ⚠⚠⚠ #52 SAID THE MISSING COLUMN IS `applied`. THIS WINDOW SAYS THE ONE UNDER IT IS `COMPARED`.
+
+#52's defects were all *present but never applied*. Two of this window's three are a rung below that:
+the property was applied, the arithmetic was right, and the **comparison** that consumed it was wrong.
+
+| defect | what was correct | what actually failed |
+|---|---|---|
+| orphan `table-cell` (t816) | the cell's width was Chrome-exact; the cascade, the display value, the shrink-to-fit were all right | *"is this box atomic?"* — asked in **two** places, with two copies of the same `matches!` list, both missing the same three variants |
+| flex percentage line-break (t817) | every width computed correctly **to within 0.00004px** | `line_length > available` — an exact `>` on `f32`, and Bootstrap's `66.66666667%` is exactly the value that overflows it |
+| rowless `display:table` (t815) | the table formatter, which was never the defect | a filter written for *elements*, handed a child list containing **text** |
+
+**t817 is the sharpest thing this window produced and it is not a formula error at all.** No number
+was computed wrong. A page stacked because a comparison had no quantum. **Chrome does not compare
+with a tolerance — it snaps every length to 1/64 px so the comparisons come out exact**, and that is
+a structural choice we had not made anywhere. The map has no column for *"what grid do these operands
+live on"*, and nothing in the ledger would ever have asked.
+
+### ⚠⚠ WHAT I WAS WRONG ABOUT, AND THE CONTROLS THAT CAUGHT IT
+
+1. **"The 3px-short boxes are a line-height / half-leading problem."** Adjacent, plausible, and wrong.
+   An `inline-block` with **byte-identical content** was already Chrome-exact at `85x20` — so the
+   error was one code path, not the strut. **One control turned a symptom into a diagnosis**, and
+   without it the fix would have gone into the font metrics, which are already correct.
+2. **"The flex wrap bug is the sum exceeding 100%."** Killed by the row that sums to *under* 100%:
+   `33.33333333% × 3` still wrapped, because each third rounds **up** in `f32`. I had also blamed
+   `flex-wrap`, then the `flex: 0 0 auto` shorthand, then the decimal count. Three wrong causes, each
+   retired by one more fixture row. **The wide fixture pays in its ninth row** (I5, again).
+3. **"A residue's stated cause is a guess"** (t814's own lesson) held twice more: t815 shipped a
+   named residue, and t816's `#c3` is asserted at *our* number precisely so a future fix must change
+   that line deliberately rather than inherit a label.
+
+### ⚠⚠ THE INSTRUMENT CORRECTED ITSELF TWICE, BOTH TIMES BY REFUSING A NUMBER
+
+- **A gate caught me carrying a Chrome number ACROSS FIXTURES** (t816). The first draft asserted
+  `#ib` at `79x20`, measured on an earlier probe whose text was `"inline block"`; the gate file's
+  text is `"cell no table"`. It failed instantly with `got 85.390625x20`. Every number in both new
+  gates was then re-measured **from the gate file's own `const HTML`, extracted by regex, not
+  retyped** — and t817 promptly made the same class of slip in its *y* values and was caught the same
+  way. **A Chrome table is evidence about the fixture it was measured on and no other.**
+- **A ratio gate went RED from its DENOMINATOR** (t817). `F2 pipeline large/mid` read `8.11x` against
+  a `7.5x` bar on a run where `large` was unchanged (233.92 → 232.72 ms) and `mid` was **17% faster**
+  (34.75 → 28.68 ms). A re-run on a quieter box read `6.60x`. A ratio gate exists to divide out
+  machine speed, but it only does that when both legs move together. **Nothing was retuned** — the
+  gate was re-run, which is the only admissible response to a suspected-noise red.
+
+### ⚠ PART VII, and the harness item that is now three audits old
+
+`scripts/` untouched in t813–t818. Wall-audit #27 was run and recorded: **1661s total, 445s
+attributed, 1216s (73%) UNATTRIBUTED** — up from 58% at #26 and named by subtraction at #25. **Three
+consecutive audits have produced the same subtraction and no new information**, which is itself the
+finding: the four rigor-preserving questions are each questions *about a named section*, and the
+largest cost has no name. The self-audit's one open item (verify wall 744s vs the 300s target) is
+**explicitly ACCEPTED, not fixed**: every remedy it names — mold/lld, cargo-nextest, workspace-hack,
+risk-based gate scheduling — is harness work this agent does not own, and no *aimed* remedy exists for
+anyone while three quarters of the time is unlabelled.
+
+### RE-RANK
+
+No re-rank of the steer — but a sharpening. #52 said to reach for a **positional** fixture over a
+presence check. That still holds and produced all three fixes. What this window adds is that the
+positional fixture must carry **a control that is already correct** (t816's `inline-block`, t817's
+four exactly-representable percentage pairs) and **a case that must still FAIL** (t817's `70% + 40%`,
+asserted to keep wrapping). Without the first, a symptom names the wrong organ; without the second, a
+fix can degenerate into "never break a line" and every assertion still passes.
+
+**Next audit due: tick 828.**

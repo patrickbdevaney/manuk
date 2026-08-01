@@ -557,3 +557,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 814	05f15be0	1785572048	2026-08-01T04:14:08-04:00	3530	measurement	63	5	100	32	375	81	3896	6960	0	422	0	a `display:table` with no table-structured children renders NOTHING (2026-08-01)
 815	99b35e25	1785578293	2026-08-01T05:58:13-04:00	6245	capability	63	9	412	34	377	81	3896	6960	0	424	0	a `display:table` with no rows is a shrink-to-fit BLOCK (2026-08-01)
 817	1a2a2c77	1785583990	2026-08-01T07:33:10-04:00	5697	capability	63	10	532	34	378	81	3896	6960	0	425	0	a sub-pixel float excess breaks a flex line, and Bootstrap is written in exactly those percentages (2026-08-01)
+818	67b9602e	1785586155	2026-08-01T08:09:15-04:00	2165	process	63	5	169	34	378	81	3896	6960	0	425	0	the audit tick: the missing column under `applied` is `COMPARED` (2026-08-01)

@@ -43178,3 +43178,64 @@ the operands live on. ⚠ And the aim was not luck: the near-bar ranking pointed
 COMPOSITE named the organ, and Chrome's own computed style named the framework. Three cheap steps,
 none of them a guess.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 818 — the audit tick: the missing column under `applied` is `COMPARED` (2026-08-01)
+
+TICK SHAPE: process — the two audits due at 818, run and banked
+
+SELF-AUDIT (`scripts/self-audit.sh`): **one** prescribed-but-not-executed item, and it is
+**explicitly ACCEPTED rather than fixed**: `verify wall 744s EXCEEDS the 300s target` (Part 21.2
+item 1). Every remedy the audit itself names — mold/lld, cargo-nextest, workspace-hack, risk-based
+gate scheduling — is `scripts/`-side, which PART VII puts outside this agent's scope. Everything else
+green: 49 process defects recorded and each naming its closing MECHANISM, 392 clusters, 761 pattern
+rows, every gate declaring how to break it, journal entries for the last 5 ticks.
+
+SURFACE AUDIT #53 (`docs/loop/SURFACE-AUDIT.md`), covering t813–t817:
+
+⚠⚠⚠ **#52 SAID THE MISSING COLUMN IS `applied`. THIS WINDOW SAYS THE ONE UNDER IT IS `COMPARED`.**
+#52's nine defects were all *present but never applied*. Two of this window's three sit a rung below
+that — the property WAS applied, the arithmetic WAS right, and the **comparison that consumed it** was
+wrong. t816: *"is this box atomic?"* is asked in two places from two copies of one `matches!` list,
+both missing the same three variants. t817: every width was computed correctly **to within
+0.00004px**, and a bare `>` on `f32` stacked the page.
+
+**t817 is the sharpest result and it is not a formula error at all.** **Chrome does not compare with
+a tolerance — it snaps every length to 1/64 px so the comparisons come out exact.** A browser needs a
+QUANTUM, not an epsilon. The map has no column for *"what grid do these operands live on"*.
+
+⚠⚠ THREE WRONG CAUSES, EACH RETIRED BY ONE MORE FIXTURE ROW. For t817 I blamed `flex-wrap`, then the
+`flex: 0 0 auto` shorthand, then the decimal count — and the row that killed all of it was
+`33.33333333% × 3`, which sums to **under** 100% and still wrapped, because each third rounds UP.
+For t816 I was about to aim at the strut until an `inline-block` with byte-identical content measured
+Chrome-exact. **I5 again: the wide fixture pays in its ninth row, and the control that is ALREADY
+CORRECT is what turns a symptom into a diagnosis.**
+
+⚠⚠ THE INSTRUMENT REFUSED A NUMBER TWICE. (1) A gate caught me carrying a Chrome number ACROSS
+FIXTURES (t816 `#ib` at 79 vs 85); after that both new gates had every number re-measured **from the
+gate file's own `const HTML`, extracted by regex, not retyped** — and t817 made the same class of slip
+in its `y` values and was caught the same way. (2) `F2 pipeline large/mid` went RED **from its
+denominator** — `large` unchanged, `mid` 17% FASTER — and a re-run read 6.60x. **Nothing was retuned;
+the gate was re-run**, which is the only admissible response to a suspected-noise red.
+
+WALL AUDIT #27 (banked in `docs/loop/WALL-AUDIT.md`, `LAST_WALL_AUDIT: 817`): **1661s total, 445s
+attributed, 1216s (73%) UNATTRIBUTED** — 58% at #26, named by subtraction at #25. **Three consecutive
+audits, same subtraction, no new information.** The four rigor-preserving questions are each questions
+about a NAMED section, and the largest cost has no name, so no aimed remedy exists. Nothing trimmed —
+dropping a gate, widening a floor, sampling instead of covering and exiling to CI are inadmissible by
+construction. REPORTED, NOT PATCHED.
+
+⚠ HARNESS FRICTION, reported not patched (PART VII): `LAST_WALL_AUDIT` is derived by
+`status-update.sh` from the `## Audit #N — tick <N>` headers in `WALL-AUDIT.md`, but `tick.sh`'s
+preflight reads the *already-generated* STATUS.md — so running the audit and writing its ledger entry
+is not enough to clear the gate on the same invocation; `status-update.sh` has to run in between. It
+cost three blocked launches to see. A hand edit to STATUS.md does NOT survive, because the next regen
+recomputes the field from the ledger.
+
+MEASURED: no engine change; the tree is byte-identical to 29efa738 apart from docs. `manuk-layout`
+103 tests green.
+
+PERF: none.
+
+WIKI: none — this is a process tick; the artefacts are `SURFACE-AUDIT.md` #53 and `WALL-AUDIT.md` #27.
+
+PATTERN: [no-pattern] — a process tick unlocks no class of the web.
