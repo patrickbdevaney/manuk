@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **563** | ticks 1–823 |
-| median tick cycle | **25m** | 562 intervals |
-| median, last 10 | **72m** | 10 intervals |
+| ticks landed | **564** | ticks 1–824 |
+| median tick cycle | **25m** | 563 intervals |
+| median, last 10 | **68m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 512.4h elapsed |
-| median verify wall | **63s** | 502 ticks |
+| **ticks per hour** | **1.10** | 513.4h elapsed |
+| median verify wall | **63s** | 503 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **428**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**272 of 563 ticks** (48%) moved a
+**273 of 564 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **272** capability ticks, median cycle **25m**
+* **273** capability ticks, median cycle **25m**
 * median diff per tick: **+258 / −34** lines across 8 files
 
 ## Every tick
@@ -660,5 +660,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **821** | 2026-08-01 10:57 | 1.9h | measurement | 63s | +312/−32 | 378 | 81 | 56.0% · | the sweep is CONTAMINATED, and its worst "regression" is a COVERAGE WIN (2026-08-01) |
 | **822** | 2026-08-01 11:42 | 45m | measurement | 63s | +118/−32 | 378 | 81 | 56.0% · | `clip: rect()` is unimplemented, and the shape metric CANNOT SEE IT (2026-08-01) |
 | **823** | 2026-08-01 13:27 | 1.8h | capability | 63s | +471/−47 | 379 | 81 | 56.0% · | taffy's slot is a FINISHED ANSWER, and two things were still recomputed on top of it (2026 |
+| **824** | 2026-08-01 14:27 | 60m | capability | 63s | +353/−32 | 379 | 81 | 56.0% · | the sweep's `crashed` rows were the instrument's OWN re-spawn cap (2026-08-01) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

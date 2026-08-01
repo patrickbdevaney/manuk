@@ -43712,3 +43712,117 @@ the meta-note: **the sweep had to be RUN to find this.** t821 refused the run an
 mechanism from the histogram, correctly but incompletely; the mechanism is only visible in the
 *ordering* of the live log, which the rows cannot carry.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 825 — the sweep, on an instrument that can now finish it (2026-08-01)
+
+TICK SHAPE: measurement — the clean `--jobs 2` CrUX burndown point the last five ticks have owed
+
+HYPOTHESIS (written before the run): t824 fixed the arithmetic that invalidated the last three
+sweeps — the re-spawn budget now scales with the bucket, and a site that never ran is filed
+`never-ran` rather than as a Bar-0 `crashed`. Verified live on the two sites that killed chunks
+(10 sampled → 10 rows, zero crashed). So the 200-site CrUX trend corpus should now complete with a
+reason histogram comparable to t812's, and five unpriced engine fixes (t815 rowless `display:table`,
+t816 orphan `table-cell`, t817 flex percent line-break, t819 `flex-basis`, t823 taffy's slot is a
+finished answer) finally get a corpus price.
+
+⚠ THE CHECKS THIS RUN OWES ITSELF, IN ORDER, BEFORE ANY BAND IS READ:
+1. `uniq -c` the REASON histogram against t812. `crashed` + `never-ran` must be near t812's 25, not
+   near t820's 118. If they are not, the run is refused again and the instrument is still lying.
+2. Reconciliation: `sampled == rows`.
+3. Only then the band — and per t821, **no crossed-down row is a regression until its COVERAGE column
+   has been read beside it**, because a fix that draws boxes we used to omit lowers the shape RATIO
+   while making the page strictly more correct.
+
+⚠⚠⚠ **THE INSTRUMENT FINISHED, AND ITS OWN THREE CHECKS PASSED BEFORE ANY BAND WAS READ.**
+
+```
+  CHECK 1 — the reason histogram          t812      t820        t825
+    crashed                                 25       118           1
+    never-ran                                –         –           0
+    bot-wall                                33        10          39   ← back where it belongs
+    scored                                  87        40         101
+  CHECK 2 — reconciliation:  200 sampled → 200 rows merged.  Zero re-spawn exhaustion.
+```
+
+**`crashed` 118 → 1 and `bot-wall` 10 → 39 is the t824 fix, priced.** The sweep absorbed **5 deliberate
+watchdog exits** (`round 1 of 204`) without losing a site; under the old constant-4 cap those five
+would have cost most of two buckets. Wall-clock ~40 min for 200 sites at `--jobs 2` — not the 2.5h the
+old cap's failure mode made it look like.
+
+**THE BAND, against t812 — the last honest point, per the observer's own annotation:**
+
+```
+                                       t812        t825
+  in-scope                              138         130      ⚠ denominator SHRANK (excluded 62→70)
+  scored                                 87         101      +14
+  shape >= 0.75                          16          17      +1
+  jarring-clean                          29          36      +7
+  ⭐ M1 (shape AND jarring)               11          13      +2   →  8.0% → 10.0%
+  shape_mean                           48.6%       50.6%
+  cov_mean                             83.8%       85.2%
+
+  COMMON-SET BAND (85 sites scored in BOTH): mean Δshape +0.0177 (+1.8 pts)
+     16 up >2pt · 8 down >2pt · 3 CROSSED UP · 2 crossed down
+```
+
+⚠ **THE PERCENTAGES ARE PART COMPOSITION AND THE COUNTS ARE NOT — WHICH IS WHY BOTH ARE PRINTED.**
+In-scope fell 138 → 130 because `bot-wall` rose 33 → 39, and a shrinking denominator flatters every
+ratio (the denominator trap this loop has been caught by before). So the load-bearing number is the
+**M1 COUNT: 11 → 13 sites**, and jarring-clean **29 → 36**. Those are sites, not percentages, and they
+moved in the right direction on a denominator that moved the other way.
+
+⚠ **THE TWO CROSSED-DOWN ROWS, READ WITH THEIR COVERAGE COLUMN BESIDE THEM (t821's rule):**
+
+```
+  oilprice.com           shape 0.8005 → 0.6231   cov 0.613 → 0.982   n 401 → 642
+  www.freesupertips.com  shape 0.7637 → 0.6674   cov 0.486 → 0.514   n 457 → 463
+```
+
+`oilprice.com` is the case t821 already resolved with the old-binary control: **241 elements we did
+not previously draw at all** now enter the placement denominator. Not a regression — the old 0.80 was
+computed over 61% of the page and the new 0.62 is computed over 98% of it. `www.freesupertips.com` is
+the one row this tick does **not** claim to have explained: coverage rose only 2.8 pts while shape fell
+9.6, and at ~50% coverage it is a thin, noisy row. **It is named as owing an old-binary control rather
+than absorbed into the good news.**
+
+⚠⚠⚠ **THE GAINS HAVE THE SIGNATURE OF LAYOUT MATH, NOT OF COVERAGE — which is the evidence that the
+five fixes are what moved this.** The four largest are at *unchanged* coverage:
+
+```
+  celeb.gate.cc            0.2295 → 0.7284   cov 0.983 → 0.983   (+50 pts, coverage FLAT)
+  www.razaoautomovel.com   0.1781 → 0.6359   cov 0.900 → 0.934
+  lms.sltc.ac.lk           0.3952 → 0.7661   cov 1.000 → 1.000   ← CROSSED, coverage FLAT at 1.0
+  chat.google.com          0.8475 → 0.9322   cov 1.000 → 1.000
+```
+
+A 40-50 point shape gain on a page where the box COUNT did not change cannot be a denominator effect.
+That is composed block/flex geometry landing — which is exactly what t815/t816/t817/t819/t823 were.
+The three crossings up are `mobcup.fm`, `www.puentedemando.com` (t817's own anchor) and `lms.sltc.ac.lk`.
+
+MEASURED: no engine change this tick — `git diff --stat` is the sweep rows, the progress ledger and
+docs. `manuk-layout` 103 green.
+
+PERF: none. ⚠ Recorded because it is the actionable half of the throughput steer: the sweep is **~40
+min at `--jobs 2`**, not the ~2h the board's estimate assumes. The old estimate was measured through
+the broken spawn loop, which spent its time dying and re-spawning.
+
+WIKI: none — a measurement tick; the artefacts are `SWEEP-t825-rows.tsv` and the banked
+`FIDELITY-PROGRESS.tsv` row.
+
+⚠ HARNESS, reported not patched (PART VII): `fidelity-progress.sh` printed
+`⚠ EXCLUDED-RISING: excluded 25->70` — it diffed against the **t820 row it is itself annotated as
+CONTAMINATED**, so the alert's magnitude is an artefact of comparing to a run where 118 sites were
+mis-filed. Against t812 the real move is 62 → 70. The script has no notion of a poisoned predecessor;
+the annotation lives in a comment line it does not read.
+
+PATTERN: ⚠⚠⚠ **A MEASUREMENT THAT HAS FAILED THREE TIMES IS A CAPABILITY GAP, NOT A CHORE TO RETRY.**
+The board said "MEASURE NOW" for ~12 ticks and three sessions obeyed it literally — ran the sweep,
+found it contaminated, refused it, and moved on to engine work. The fourth run was the first to treat
+the *contamination itself* as the tick, and it cost one fix to convert a 12-tick blind spot into a
+40-minute, 200-of-200, bankable number. ⚠⚠ The corollary for a burndown: **an unpriced batch is not a
+neutral state.** Five fixes sat unpriced for eight ticks; had any of them been a regression, nothing
+in the loop would have said so, and the old-binary control that eventually caught t821's false alarm
+is a per-site tool that does not scale to a batch. ⚠ And the honest note on this very entry: the
+percentages moved partly because the denominator shrank, and the only reason that is visible here is
+that the counts were printed next to them.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

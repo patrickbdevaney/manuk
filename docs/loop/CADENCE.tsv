@@ -562,3 +562,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 821	3aff0865	1785596234	2026-08-01T10:57:14-04:00	6662	measurement	63	7	312	32	378	81	3896	6960	0	426	0	the sweep is CONTAMINATED, and its worst "regression" is a COVERAGE WIN (2026-08-01)
 822	bbacc908	1785598945	2026-08-01T11:42:25-04:00	2711	measurement	63	5	118	32	378	81	3896	6960	0	426	0	`clip: rect()` is unimplemented, and the shape metric CANNOT SEE IT (2026-08-01)
 823	e80d5c34	1785605273	2026-08-01T13:27:53-04:00	6328	capability	63	9	471	47	379	81	3896	6960	0	428	0	taffy's slot is a FINISHED ANSWER, and two things were still recomputed on top of it (2026-08-01)
+824	3016c874	1785608857	2026-08-01T14:27:37-04:00	3584	capability	63	7	353	32	379	81	3896	6960	0	428	0	the sweep's `crashed` rows were the instrument's OWN re-spawn cap (2026-08-01)
