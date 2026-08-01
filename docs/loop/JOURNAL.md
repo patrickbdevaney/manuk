@@ -44325,3 +44325,98 @@ the NON-float path this time, with everything below inheriting it. But the page 
 independent `-50` height and a `-30` body `y` that the img cannot explain, so that is **two
 suspects, measured one at a time** (t826's rule), not one cause.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 832 — the clean --jobs 2 CrUX burndown point the last six fixes have owed (2026-08-01)
+
+TICK SHAPE: measurement — a bankable sweep, not a fix
+
+HYPOTHESIS: six fixes have landed since t825's sweep (t827 max-height on a flex item · t830's two
+intrinsic-width defects · t831's three float-path defects) and NONE of them has been priced
+corpus-wide. `fidelity-progress.sh` and `phase0-milestones.sh` only move on a fresh clean sweep, so
+the loop's own headline has been blind for six ticks and the board's standing cadence rule (bank a
+clean sweep after ~5-6 fixes, and do not let it grow far past 6) is now due exactly.
+
+The per-site old-binary controls at t830 and t831 each priced their own fix honestly — 3 crossings
+and 2 crossings — but a control over 14-16 hand-picked sites cannot answer the two questions only a
+sweep can: whether those fixes cost anything on the ~185 sites nobody looked at, and what the
+SLOPE is. Expectation, stated before the run so it can be wrong: t825 measured M1 at 10.0%; five
+banked crossings over a 200-site corpus is +2.5 points if none of them regressed anything, so M1
+~12.5% and a per-sweep slope worth reading. A materially lower number means one of the six fixes
+has a cost that the near-bar cohorts could not see.
+
+RESULT — **the sweep completed 200 of 200 and the slope is real** (`--jobs 2`, one binary, the
+committed t831 tree, verified by BEHAVIOUR rather than by cargo's fingerprint: the five float
+fixture rows were re-measured Chrome-exact on the exact binary that ran the sweep, because
+`cargo build` reported `Finished in 0.43s` and a byte-identical artefact, which is a provenance
+claim I am not willing to take on trust for a bankable number).
+
+```
+                              t820     t825     t832
+  in-scope shape>=0.75        5.7%    13.1%    19.1%     (25 of 131 sites)
+  M1 GATE (shape AND jarring)  4.0%    10.0%    13.0%     (17 of 131)
+  shape_mean                  52.5%    50.6%    52.1%
+  cov_mean                    84.7%    85.2%    84.5%
+  scored / in-scope          25/175  101/130  101/131
+  COMMON-SET BAND (98 sites scored in BOTH t825 and t832)        +1.91 pts · 26 up · 7 down
+```
+
+The hypothesis written above was "M1 ~12.5%"; it came in at **13.0%**, so the six unpriced fixes
+were worth about what their per-tick controls said they were. Scorability is FLAT at 101 — exactly
+right for six render-only fixes, and the reason the ceiling (77.1%) is untouched: **M1 cannot pass
+95% until the function leg moves**, and nothing this tick or the last six touched it.
+
+⚠⚠⚠ **AND THE SWEEP FOUND A REGRESSION THAT SIX PER-TICK CONTROLS COULD NOT.** Seven sites fell
+>2pt against t825. The per-fix old-binary controls at t830 and t831 each reported *zero*
+regressions honestly — over 14 and 16 hand-picked sites, none of which was any of these seven. So
+the controls were not wrong; **they were answering a question about the sites they contained.**
+
+The attribution, and it took three binaries because a cross-sweep delta cannot make it:
+
+```
+                        t825 sweep   pre-t827 bin   post-t830 bin   HEAD    verdict
+  777juegos.com            0.7317         0.7439          0.7439   0.7439   SITE DRIFT
+  beb88run.xyz             0.5774         0.5724          —        0.5847   SITE DRIFT (up)
+  crm.majoo.id             0.3750         0.3750          —        0.3750   SITE DRIFT
+  dashboard.twitch.tv      0.9091         0.8889          —        0.8889   SITE DRIFT (cov -0.18)
+  www.crazyshop.pl         0.6234         0.6213          0.5649   0.5649   ENGINE, t830
+  www.kroftools.com        0.4474         0.4474          0.4250   0.4250   ENGINE, t830
+  portagelearning.edu      0.1000         0.1000          0.0000   0.0000   ENGINE, t830
+```
+
+**Four of the seven were never a regression at all** — same-hour, both binaries, identical to four
+decimal places. `777juegos` read 0.7317 in one sweep and 0.7439 in another **on the same code**.
+`dashboard.twitch.tv`'s drop came with `coverage 1.000 → 0.818`, i.e. a different page.
+
+Three are real, deterministic (identical across three separate runs) and **bisected to t830** —
+t827 measured clean, t831 measured clean. Neutering t830's half ⓶ (`ceil_to_layout_unit`) changed
+the three numbers by **exactly zero**, so it is half ⓵: the `FILL_SENTINEL` right-inset carry,
+which by construction makes max-content WIDER. On `www.crazyshop.pl` that is a mega-menu `<ul>` we
+already lay out at `185x1612` against Chrome's `740x468` — 610 of 1402 elements mis-placed before
+t830 touched anything — so a wider intrinsic width moves an already-wrong box further.
+
+**THE RATCHET CALL, STATED RATHER THAN QUIETLY TAKEN:** I am NOT reverting t830. The ratchet
+refuses trading a *capability* for a *capability*, and this is not that trade: half ⓵ is
+Chrome-verified correct on nine fixture rows across six shrink-to-fit contexts, it bought three M1
+crossings, and nothing that worked before works less well — three pages that were already 40-94%
+mis-placed are now differently mis-placed, none of them near the bar, none of them losing a
+crossing. Reverting a Chrome-correct primitive to flatter three broken pages would make the engine
+LESS like Chrome, which is the north star inverted. Recorded as a **named residue**, not waved off.
+
+PERF: none (measurement tick).
+
+WIKI: none — the artefacts are the burndown row, the seven-site attribution table above, and the
+`--shape-dump` aim that made it cheap.
+
+PATTERN: ⚠⚠⚠ **A PER-FIX CONTROL IS EVIDENCE ABOUT THE SITES IT CONTAINS, AND NOTHING ELSE.** t830
+and t831 both ran honest old-binary controls and both truthfully reported zero regressions; the
+regression was on a site neither list held. A hand-picked control answers *"did my fix do what I
+aimed it at"* — it CANNOT answer *"did my fix cost anything"*, because the sites a fix costs are by
+definition the ones you were not thinking about. **Only the sweep can answer the second question,
+which is the actual argument for the sweep cadence** — an argument this loop has been making on
+throughput grounds, which is the weaker half of it. ⚠⚠ **AND A CROSS-SWEEP DELTA CANNOT ATTRIBUTE
+ONE**: four of these seven were pure site drift, and one of them (`777juegos`, 0.7317 vs 0.7439 on
+identical code) is larger than two of the three REAL regressions. A sweep-to-sweep drop is a
+QUESTION; only a same-hour old-binary run is an ANSWER. ⚠ Bisecting to a HALF of a tick (three
+binaries + one neutering) is what turned "t830 did something" into a named mechanism, and it cost
+four builds — cheap against reverting a primitive that bought three crossings.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
