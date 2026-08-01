@@ -3890,3 +3890,68 @@ touches placement or sizing, and it costs one rebuild.
    flex/grid item with min/max-width) and wants a sweep on both sides of it, not a tail-of-session fix.
 
 **Next check due: tick 828.**
+
+## Check #69 — tick 828 (2026-08-01)
+
+TICK SHAPE: process — the constitution re-read due at 828, against CONSTITUTION.MD
+
+VERDICT: **GATE, AND PRICED — the first window in twelve ticks that can say that.** Five ticks landed
+(t823-t827), every one green on the full wall. The window's headline is not a rendering fix: it is
+that **the burndown has a slope again**. `M1 8.0% → 10.0%`, count **11 → 13 sites**, jarring-clean
+29 → 36, on the first clean 200-of-200 sweep since t812.
+
+⚠⚠⚠ **THE HIGHEST-LEVERAGE TICK OF THE WINDOW CHANGED NO RENDERING CODE, AND THAT IS THE FINDING.**
+The board said "MEASURE NOW" for ~12 ticks. Three sessions obeyed it *literally* — ran the sweep,
+found it contaminated, refused it honestly, and moved on to engine work. Each refusal was correct in
+isolation and the loop still went blind for twelve ticks. **A measurement that has failed three times
+is a capability gap, not a chore to retry.** t824 treated the contamination as the tick; one
+arithmetic fix (a constant re-spawn cap where the work is a variable) turned a 12-tick blind spot into
+a 40-minute, 200-of-200 number that priced five fixes at once.
+
+⚠⚠ **AND THE THING THAT BLINDED IT WAS A LABEL, WHICH IS #68'S OWN LESSON ARRIVING FROM OUTSIDE THE
+ENGINE.** #68 recorded *"a wrong FIX is caught by the next gate; a wrong LABEL is caught by NOTHING."*
+It said that about prose in a wiki. Here the wrong label was a **string in a data column**: sites the
+instrument never opened were filed `crashed`, which is a Bar-0 word, and two sessions read the
+teardown message printed beside it as a mozjs crash. The label survived three sweeps, passed every
+test, and aimed two ticks at an engine that was not faulting. `Unmeasurable::NeverRan` exists so those
+two events can never share a string again.
+
+INVARIANTS: **I2 held.** t823/t827 are taffy's boundary, and the fix went on OUR side of it both
+times — we stopped re-computing what taffy had already computed rather than patching taffy's
+resolver. **Fork surface still empty.** **I3 held** — t823 gives every margined flex item and every
+percentage-clamped column its true geometry; strictly more for `getBoundingClientRect` and the AX tree
+to see. **I4 held emphatically**: Bootstrap 4's grid column is `flex: 0 0 X%; max-width: X%`, and it
+rendered at two thirds of its width on every Bootstrap-4 page on the web. **I5 held, and was refined
+by a failure** — t826's reduction came from the aiming chain, reproduced perfectly, and was *wrong*,
+because the cheap harness runs `MinimalCascade` and the browser runs Stylo. **A reduction is not
+confirmed until it has run on the SHIPPING cascade.** **PART VII honoured**: no `scripts/` file edited
+in t823-t827; three harness items reported below. The one instrument change (t824) is in `tests/wpt`,
+which the board names as agent territory.
+
+### HARNESS, reported not patched (PART VII)
+
+1. **`manuk-wpt` is in NEITHER the wall's crate-test list nor CI's.** Both run the same seven
+   (`css layout paint dom net agent shell`). So the crate that produces the Phase-0 headline is the
+   one crate no lane tests, and t824's `chunk_spawn_budget` gate — real, RED-proven — runs only by
+   hand. A one-word change in two observer-owned files.
+2. **`fidelity-progress.sh`'s `EXCLUDED-RISING` alert diffed against the t820 row that the file
+   itself annotates as CONTAMINATED.** The annotation is a comment line the script does not read, so
+   the alert's magnitude (25 → 70) is an artefact; against t812 the real move is 62 → 70.
+3. **The verify wall is 776s against the 300s target** — the self-audit's single ✗. Also: `F2` went
+   red at 7.84x on a loaded box and read **5.82x** on a settled one, on a docs-only tree. Re-run,
+   never retune — the second window running.
+
+### THE STEER
+
+1. **AIM FROM THE BANKED COHORTS, DO NOT RE-DERIVE THEM.** t826's entry holds both M1-crossing lists
+   off the fresh sweep: ten jarring-clean sites inside 0.20 of the bar (three inside **0.022**), and
+   four already over the shape bar held out by **one jarring dimension each**. That second cohort is
+   the cheaper of the two and has never been worked.
+2. **THE NEXT REDUCTION RUNS ON `Page::load`.** Not negotiable after t826 — the cheap harness
+   proposes, the shipping cascade disposes, and the failure mode is a fixture that reproduces the
+   right number for the wrong reason.
+3. **ONE OPEN ROW IS NAMED AND OWES A CONTROL:** `www.freesupertips.com` 0.7637 → 0.6674 at near-flat
+   coverage, the only t825 crossing-down not explained by a coverage rise. Measure it with the
+   old-binary control before it becomes a story.
+
+**Next check due: tick 836.**

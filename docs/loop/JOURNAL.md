@@ -43994,3 +43994,47 @@ grep, not as a hunch.** t823's pattern entry said "when a value is guarded, grep
 of it"; that grep produced this row four ticks later, already named, already scoped, and it took one
 fixture to convict.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 828 — the triple cadence: self-audit, surface audit #54, constitution check #69 (2026-08-01)
+
+TICK SHAPE: process — all three cadences fell due on the same tick (self-audit and surface audit at
+818+10, the constitution re-read at 820+8)
+
+SELF-AUDIT: **one prescribed-but-not-executed item, and it is harness-owned.** `scripts/self-audit.sh`
+is green on every methodology item — gates declare how to break them, the process-defect ledger names
+a MECHANISM per defect (49 recorded), enforcement is mechanical, the journal has no gaps, the pattern
+ledger moves with the engine (785 rows). The single ✗ is **the verify wall at 776s against the 300s
+target**, which is `scripts/verify.sh` and therefore reported, not patched (PART VII).
+
+SURFACE AUDIT #54 — the window's shape, stated as the progression it is:
+
+```
+  #52:  the missing column is `applied`   — present, never applied
+  #53:  the missing column is `COMPARED`  — applied, wrongly compared
+  #54:  the missing column is `RE-COMPUTED` — computed CORRECTLY by the right component,
+                                              then computed AGAIN by another, against the
+                                              wrong reference
+```
+
+Three of the window's four defects are that shape, and the shared cause is **a guard with one
+consumer**: `taffy_item_width` arrived ~120 ticks ago carrying exactly the right sentence and applied
+to `width` alone. ⚠⚠ **TWO MASKS, AND THEY ARE DIFFERENT KINDS** — one is an input that cannot express
+the bug (yields to a wider fixture), the other is a **later write** that overwrites the wrong
+arithmetic with the right box (yields to nothing but asking why a row that SHOULD be wrong is right).
+The second is a class this project had not named.
+
+CONSTITUTION CHECK #69: **GATE, AND PRICED — the first window in twelve ticks that can say that.**
+I2 held (taffy's boundary respected twice; fork surface still empty), I3, I4 (Bootstrap 4's grid), I5
+held *and was refined by a failure* (t826's reduction was right-looking and wrong). PART VII honoured.
+⚠⚠ **#68's own lesson arrived from outside the engine**: it said a wrong LABEL is caught by nothing,
+about prose; here the wrong label was a **string in a data column** (`crashed` for sites never opened)
+and it blinded the loop for three sweeps.
+
+MEASURED: no engine change — `git status` is STATUS.md, the three ledgers and the journal.
+`manuk-layout` 103 green.
+
+PERF: none.
+
+WIKI: none — a process tick; the artefacts are `SURFACE-AUDIT.md` #54 and `CONSTITUTION-CHECK.md` #69.
+
+PATTERN: [no-pattern] — a process tick unlocks no class of the web.

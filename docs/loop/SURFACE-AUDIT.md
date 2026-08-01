@@ -3171,3 +3171,82 @@ asserted to keep wrapping). Without the first, a symptom names the wrong organ; 
 fix can degenerate into "never break a line" and every assertion still passes.
 
 **Next audit due: tick 828.**
+
+## Audit #54 — tick 828 (2026-08-01)
+
+**Method.** Same door as #51-#53 (Chrome, small fixtures), but this window's centre of gravity moved:
+of five landed ticks, **two were about the INSTRUMENT** and one of those was the highest-leverage
+thing in the window. Covers t823-t827.
+
+### ⚠⚠⚠ #53 SAID THE MISSING COLUMN IS `COMPARED`. THIS WINDOW SAYS IT IS `RE-COMPUTED`.
+
+#52's defects were *present but never applied*; #53's were *applied but wrongly compared*. Three of
+this window's four are a rung further out again: the value was computed **correctly, by the right
+component, against the right reference** — and then a second component computed it **again**, against
+the wrong one.
+
+| defect | who got it RIGHT | who did it AGAIN |
+|---|---|---|
+| `max-width: <pct>` on a flex item (t823) | taffy — clamped against the real containing block | `layout_block`, against the SLOT ⇒ the percentage squared |
+| a flex item's MARGINS (t823) | taffy — slot positioned with margins out of the line | `border_x = x + ml` ⇒ every margin doubled |
+| `max-height: <pct>` (t827) | taffy, again | the block-axis clamp, against `pch` = the slot |
+| the sweep's `crashed` rows (t824) | the watchdog — wrote an honest `timeout` row | the parent's re-spawn cap, re-filing the same event as Bar-0 `crashed` |
+
+**The shared shape is a GUARD WITH ONE CONSUMER.** `taffy_item_width` was introduced ~120 ticks ago
+with exactly the right sentence — *"a flex/grid item's width was already decided by taffy, do not
+resolve it a second time"* — and applied to `width` alone, while the clamp ten lines below and the
+margins twenty lines above went on doing it. **The rule was right; its coverage was one property
+wide.** The map has no column for *"who else reads this value"*, and nothing in the ledger would ask.
+
+### ⚠⚠ TWO MASKS, AND THEY ARE DIFFERENT KINDS OF MASK — THIS IS THE WINDOW'S REAL FINDING
+
+Why did a defect this wide survive 120 ticks? Because of the two things that hid it, which yield to
+different techniques:
+
+1. **An input that cannot express the bug.** A `px` clamp re-applied to the slot is a no-op;
+   `min-width: <pct>` of a slot can never exceed the slot. Of four min/max × px/pct combinations,
+   exactly **one** is observable. *Yields to input variation* — a wider fixture finds it.
+2. **A later write.** (t827.) A percentage `max-height` *still* hides unless the item also carries a
+   percentage `height`, because with `height: auto` the box is overwritten by `extract_placed`'s slot
+   adoption **after** the clamp runs. **The wrong arithmetic produced the right box.** *Does not
+   yield to input variation at all* — only to asking why a row that SHOULD be wrong is right.
+
+⚠ **#2 is a class this project has not named before**, and it is invisible to every test that checks
+the final box. It is now in the gate as `#v1`, a row that passes both before and after, kept
+specifically to document the mask.
+
+### ⚠⚠ WHAT I WAS WRONG ABOUT, AND THE CONTROLS THAT CAUGHT IT
+
+1. **"The sweep is dying to a mozjs teardown crash."** Carried by t820 AND t821, read off
+   `pthread_mutex_destroy failed: Device or resource busy` — the last line before each death.
+   **It is not a crash.** It is `process::exit` skipping `JS_ShutDown()`, and
+   `engine/js/src/spidermonkey.rs` predicts that exact string in its own doc comment. The line that
+   named the cause (`UNMEASURABLE [timeout-150s]`) was **one line higher, three times.**
+   ⚠ *The last line before a death is not the cause of it.*
+2. **"kicktipp's near-bar divergence is a `box-sizing`/`font` defect."** A reduction reproduced it
+   exactly — `103.00x49.20` against Chrome's `103.00x30.34` — under `manuk-layout`'s harness, and
+   **evaporated on `Page::load`.** The `font:` shorthand is unparsed in `MinimalCascade` only. It
+   reproduced *the right number for the wrong reason* (49.20 = 2×18 + 13.2, two lines at the default
+   16px metrics). ⚠ *A reduction is not confirmed until it has run on the SHIPPING cascade.*
+3. **"F2 is a regression."** 7.84x on a loaded box, **5.82x** on a settled one, on a docs-only tree.
+   The ratio's DENOMINATOR moved (`mid` 15% faster). Re-run, never retune — for the second time in
+   two audit windows.
+
+### ⚠ THE INSTRUMENT, WHICH IS WHERE THIS WINDOW'S LEVERAGE WAS
+
+t824 is the highest-value tick here and it changed no rendering code. Three sweeps had been refused;
+the board had said "MEASURE NOW" for ~12 ticks; three sessions obeyed literally and moved on. **The
+fourth run treated the contamination as the tick**, and one arithmetic fix converted a 12-tick blind
+spot into a 40-minute, 200-of-200 number that priced five unpriced fixes at once (M1 8.0% → 10.0%,
+count **11 → 13 sites**). ⚠ *A measurement that has failed three times is a capability gap, not a
+chore to retry.*
+
+### THE GAP THIS AUDIT LEAVES OPEN
+
+- **`manuk-wpt` is in NEITHER the wall's crate-test list nor CI's** — the crate that produces the
+  Phase-0 headline is the one crate no lane tests. `chunk_spawn_budget` is real and RED-proven and
+  runs only by hand. Both files are observer-owned; reported, not patched.
+- **The verify wall is 776s against a 300s target** — the self-audit's single ✗ this window, and
+  harness-owned. Reported, not patched.
+- **`www.freesupertips.com`** fell 0.7637 → 0.6674 at near-flat coverage and is the one t825 row not
+  explained. It owes an old-binary control.
