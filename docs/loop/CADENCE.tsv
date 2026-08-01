@@ -558,3 +558,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 815	99b35e25	1785578293	2026-08-01T05:58:13-04:00	6245	capability	63	9	412	34	377	81	3896	6960	0	424	0	a `display:table` with no rows is a shrink-to-fit BLOCK (2026-08-01)
 817	1a2a2c77	1785583990	2026-08-01T07:33:10-04:00	5697	capability	63	10	532	34	378	81	3896	6960	0	425	0	a sub-pixel float excess breaks a flex line, and Bootstrap is written in exactly those percentages (2026-08-01)
 818	8f06289a	1785588507	2026-08-01T08:48:27-04:00	4517	process	63	8	162	42	378	81	3896	6960	0	426	0	the audit tick: the missing column under `applied` is `COMPARED` (2026-08-01)
+819	6271b7fb	1785589572	2026-08-01T09:06:12-04:00	1065	capability	63	5	176	33	378	81	3896	6960	0	426	0	`flex-basis` is a main size too, and t817's own residue label was wrong (2026-08-01)

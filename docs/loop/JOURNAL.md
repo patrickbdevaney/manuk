@@ -43306,3 +43306,54 @@ property removed in turn, which took two extra fixture rows. ⚠ The corollary i
 a wrong FIX is caught by the gate that follows it, but a wrong LABEL is caught by nothing — it is
 prose, it passes every test, and it aims the next tick at the wrong organ.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 820 — constitution check #68: a wrong LABEL is caught by nothing (2026-08-01)
+
+TICK SHAPE: process — the constitution re-read due at 820, against CONSTITUTION.MD
+
+VERDICT: **GATE, but UNPRICED, and that is the honest headline.** Eight ticks since #67 — four engine
+fixes (t815 rowless `display:table`, t816 orphan `table-cell`, t817 flex-% line-break, t819
+flex-basis), two measurement ticks, one audit tick, and **no sweep**. M1 is unchanged at 8.0% because
+nothing has re-measured it. Every entry in this window says "no site is claimed to cross" in its own
+text, and the corpus price is genuinely owed. **A sweep is the next non-fix unit.**
+
+⚠⚠⚠ **THE SELF-CORRECTION THIS WINDOW WAS OF PROSE, NOT OF CODE — A NEW SHAPE.** #67's two
+corrections were both measurements withdrawn. t819's is different: **t817's FIX was correct and its
+LABEL was wrong.** The blast-radius asymmetry is the finding — **a wrong fix is caught by the gate
+that follows it; a wrong label is caught by NOTHING.** It is prose, it passes every test, it survives
+every sweep, and it aims the next tick at the wrong organ.
+
+⚠⚠ **THE OLD-BINARY CONTROL SERVED IN THE OPPOSITE DIRECTION.** #67 used it to WITHDRAW a claim
+(`mobcup.fm`) and to REVERT t811. t819 used it to *prevent a regression hunt against my own change*:
+wikipedia read 1017 at t816 and 1020 at t819, and the old binary also reads 1020. Same procedure,
+opposite service, one rebuild.
+
+INVARIANTS: **I2 held and was TESTED** — t817's defect is inside taffy (`flexbox.rs:930`), the obvious
+move was a `[patch.crates-io]` fork, and it was REFUSED; the quantisation went on our side of the
+boundary instead. **Fork surface still empty.** I3 held (t815/t816 give absent or mis-sized boxes
+their true geometry). **I4 held emphatically** — Bootstrap's grid, the `display:table-cell`
+vocabulary, `display:table` as a layout tool: representative real-web breadth, not one Chromium quirk.
+**I5 held and was refined** into an aiming chain: near-bar sweep row → composite screenshot names the
+organ → Chrome's own computed style names the framework → 4-line fixture. PART VII honoured: no
+`scripts/` file edited in t813–t820.
+
+HARNESS, reported not patched: (1) wall audit #27 — **1216s of 1661s (73%) unattributed**, third
+audit running the same subtraction; instrument the remainder before hunting the labelled 27%.
+(2) `LAST_WALL_AUDIT` cannot be cleared in one pass — the ledger feeds `status-update.sh` but
+`tick.sh`'s preflight reads the already-generated STATUS.md, so the regen must run in between; cost
+three blocked launches. (3) `F2` went red from its DENOMINATOR; re-run, never retune.
+
+THE STEER: (1) **SWEEP NEXT** — four unpriced fixes, one on Bootstrap's grid. (2) the aiming chain is
+the method. (3) **a residue is measured with ONE suspect at a time, or it is not measured** — and the
+open one is named precisely: `max-width: <pct>` on a flex item resolves against the item's OWN
+taffy-assigned width instead of its containing block, the documented `taffy_item_height` shape on the
+width axis. Subsystem-scale; it wants a sweep on both sides, not a tail-of-session fix.
+
+MEASURED: no engine change; the tree is byte-identical to 35d24b11 apart from docs. `manuk-layout`
+103 tests green.
+
+PERF: none.
+
+WIKI: none — process tick; the artefact is `docs/loop/CONSTITUTION-CHECK.md` #68.
+
+PATTERN: [no-pattern] — a process tick unlocks no class of the web.

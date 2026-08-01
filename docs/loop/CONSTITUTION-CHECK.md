@@ -3799,3 +3799,94 @@ and readable; it is the only half this loop can currently act on.
    narrowing costs a float-heavy page 26 elements, and that is the next attempt's first question.
 
 **Next check due: tick 820.**
+
+## Check #68 — tick 820 (2026-08-01)
+
+**Horizon:** H0 — Pareto Web Parity. **Gate:** M1 RENDER — `shape >= 0.75` AND jarring-clean on
+>= 95% of the in-scope CrUX corpus.
+
+### GATE OR SCOREBOARD? — GATE, but this window it is UNPRICED and that has to be said first
+
+Eight ticks since #67. Four engine fixes, two measurement ticks, one audit tick, and **no sweep**:
+
+```
+  t813  MEASURE — bisecting across TREES     t814  MEASURE — rowless table specified
+  t815  rowless display:table                t816  orphan table-cell is ATOMIC
+  t817  flex % line-break (Bootstrap)        t818  AUDIT — surface #53 + wall #27
+  t819  flex-basis is a main size too, and t817's own residue label was WRONG
+```
+
+**M1 is unchanged at 8.0% because nothing has re-measured it.** The last sweep is `SWEEP-t812-rows`;
+four engine fixes now sit unpriced. That is *inside* the board's own cadence (sweep after ~5–6) but it
+is the honest headline: **this window produced no M1 movement claim, and none should be read into
+it.** Every tick here says "no site is claimed to cross" in its own journal entry, and the
+corpus price is genuinely owed. A sweep is the next non-fix unit.
+
+### ⚠⚠⚠ THE SELF-CORRECTION THIS WINDOW WAS OF PROSE, NOT OF CODE — A NEW SHAPE
+
+#67's two self-corrections were both *measurements* withdrawn (`mobcup.fm`'s crossing, t811's fix).
+t819's is different in kind: **t817's FIX was correct and its LABEL was wrong.** t817 shipped, in
+three files, "Bootstrap 4's `533`/`133` is the percentage applied twice — a flex-BASIS defect". Drop
+the `max-width` and the same row is exactly `800`/`400`: the basis was never the culprit.
+
+**The blast-radius asymmetry is the finding.** A wrong *fix* is caught by the gate that follows it. A
+wrong *label* is caught by nothing — it is prose, it passes every test, it survives every sweep, and
+it aims the next tick at the wrong organ. t814 established "a residue's stated cause is a guess until
+measured on its own"; t815 and t816 honoured it by asserting residues at OUR numbers; and t817 still
+wrote a causal claim from **one fixture that had both suspect properties set together**. *A residue
+measured with two properties present names neither.* The guard cost two fixture rows.
+
+### ⚠⚠ THE OLD-BINARY CONTROL EARNED ITS KEEP AGAIN, IN THE OPPOSITE DIRECTION
+
+t819: `en.wikipedia.org` read **1017** misplaced at t816 and **1020** at t819 — and the **old binary
+also reads 1020**. #67 used the control to *withdraw* a claim; here it *prevented a regression hunt
+against my own change*. Same procedure, opposite service. It is now unconditional for any tick that
+touches placement or sizing, and it costs one rebuild.
+
+### INVARIANTS
+
+- **I2 (never patched internally):** held, and tested this window. t817's defect is *inside* taffy
+  (`flexbox.rs:930` breaks flex lines on a bare `>`). The obvious move was a `[patch.crates-io]`
+  fork; it was refused. The quantisation went on **our** side of the boundary instead
+  (`snap_row_item_percent_widths`), where `solve_subtree` already knows the container width. Fork
+  surface still **empty**.
+- **I3:** held. t815/t816 give boxes that did not exist, or existed at the wrong size, their true
+  geometry — strictly more for `getBoundingClientRect` and the AX tree to see.
+- **I4 (Pareto discipline):** held emphatically. t817 is Bootstrap's grid; t816 is the pre-flexbox
+  `display:table-cell` vocabulary; t815 is `display:table` as a layout tool. All three are
+  *representative real-web breadth*, none is a Chromium quirk or a tail completeness chase.
+- **I5 (the oracle is the discovery engine):** held, and refined. Every fix this window came from a
+  small fixture diffed against headless Chrome. t817 adds the aiming chain: **near-bar sweep row →
+  composite screenshot names the organ → Chrome's own computed style names the framework.** Three
+  cheap steps, no guessing, and it found a defect on the single most common layout idiom there is.
+- **PART VII:** honoured. No `scripts/` file edited in t813–t820. Three harness items reported below.
+
+### HARNESS, reported not patched (PART VII)
+
+1. **Wall audit #27: 1216s of 1661s (73%) UNATTRIBUTED** — 58% at #26, named by subtraction at #25.
+   **Three consecutive audits, same subtraction, no new information.** The audit's four questions are
+   each *about a named section*, so no aimed remedy exists for anyone while the largest cost is
+   unlabelled. Instrument the remainder before hunting bloat in the labelled 27%.
+2. **`LAST_WALL_AUDIT` cannot be cleared in one pass.** It is derived by `status-update.sh` from
+   `WALL-AUDIT.md`'s `## Audit #N — tick <N>` headers, but `tick.sh`'s preflight reads the
+   *already-generated* STATUS.md. Running the audit and writing its ledger entry is not enough;
+   `status-update.sh` must run in between. A hand edit does not survive. Cost three blocked launches.
+3. **`F2 pipeline large/mid` went RED from its DENOMINATOR** — 8.11x against a 7.5x bar with `large`
+   *unchanged* (233.92 → 232.72 ms) and `mid` **17% faster** (34.75 → 28.68 ms); re-runs read 6.60x,
+   6.00x, 6.80x. A ratio gate divides out machine speed only when both legs move together. **Re-run,
+   never retune** — nothing was touched.
+
+### THE STEER
+
+1. **SWEEP NEXT.** Four unpriced fixes, one of them (t817) on Bootstrap's grid — the widest-reach
+   change this loop has landed in some time. The burndown has no slope until it is measured, and
+   every entry this window explicitly deferred its corpus price to it.
+2. **THE AIMING CHAIN IS THE METHOD NOW.** near-bar sweep row → composite → Chrome computed style →
+   4-line fixture. It is cheaper than reading CLUSTERS.md and it found the Bootstrap defect.
+3. **A RESIDUE IS MEASURED WITH ONE SUSPECT AT A TIME, OR IT IS NOT MEASURED.** And the open one is
+   named precisely: `max-width: <pct>` on a flex item resolves against the item's **own**
+   taffy-assigned width instead of its containing block (`800 × 0.666667 = 533`) — the documented
+   `taffy_item_height` shape appearing on the width axis. It is a subsystem-scale change (every
+   flex/grid item with min/max-width) and wants a sweep on both sides of it, not a tail-of-session fix.
+
+**Next check due: tick 828.**
