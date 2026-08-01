@@ -3656,9 +3656,13 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         // Keep in lockstep with the UA sheet in `stylo_engine.rs`. The two cascades disagreeing
         // about which elements render at all is how a `<source>` ends up with 19px of height in one
         // configuration and none in the other.
-        "head" | "title" | "meta" | "link" | "script" | "style" | "base" | "noscript"
-        | "template" | "source" | "track" | "param" | "area" | "datalist" | "basefont"
-        | "noembed" | "noframes" | "rp" => (None, 0.0, 400, 1.0),
+        // ⚠⚠ `source`, `track`, `area` and `noscript` were REMOVED from this list (t809): Chrome
+        // computes `inline` for all four, and they generate no box for a STRUCTURAL reason (their
+        // parent consumes them), which now lives in `layout::never_rendered`. `param`, `datalist`,
+        // `template` and `rp` really are `display: none` in Chrome and stay. Both cascades were
+        // changed in the same tick, which is what the lockstep note above is for.
+        "head" | "title" | "meta" | "link" | "script" | "style" | "base" | "template" | "param"
+        | "datalist" | "basefont" | "noembed" | "noframes" | "rp" => (None, 0.0, 400, 1.0),
         // Form controls render as replaced-ish inline-block boxes (styled below).
         "input" | "button" | "textarea" | "select" => (InlineBlock, 0.0, 400, 1.0),
         // `<summary>` is a block: it is the disclosure's always-visible label. Whether the

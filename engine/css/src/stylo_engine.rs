@@ -204,8 +204,16 @@ center { text-align: center; }
    invented 152px out of eight of them, in the middle of the article. Same shape as the `<script>`
    that painted its own source code down rust-lang.org — a metadata element with no `display:none`
    becomes content. Mirrors Chrome's html.css. */
-head, title, meta, link, script, style, base, noscript, template,
-source, track, param, area, datalist, basefont, noembed, noframes, rp { display: none; }
+head, title, meta, link, script, style, base, template,
+param, datalist, basefont, noembed, noframes, rp { display: none; }
+/* ⚠⚠ **`source`, `track`, `area` and `noscript` ARE NOT `display: none` — Chrome computes `inline`
+   for all four** (measured with `getComputedStyle`, not recalled; `param`/`datalist`/`template`/`rp`
+   really are `none` and stay above). They generate no box because their PARENT consumes them —
+   `<picture>`/`<video>` render their `<img>`/media, `<map>` is not a container, `<noscript>` with
+   scripting enabled holds raw text — which is a STRUCTURAL fact, not a stylesheet one. Hiding them
+   here produced the right box and the wrong answer, and `getComputedStyle(source).display` is exactly
+   what a responsive-image shim reads. The structural rule now lives in `layout::never_rendered`,
+   where an author's `source { display: block }` cannot override it either. */
 /* Form controls are **atomic inline boxes**, not inline elements with children. Left as plain
    `inline`, the inline collector recurses into a `<select>`'s `<option>`s and paints every one of
    them into the surrounding line — rust-lang.org's language picker rendered as a row of twelve

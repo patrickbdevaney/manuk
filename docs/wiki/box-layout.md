@@ -3073,3 +3073,43 @@ they now carry `report_ascent` — how far above the baseline the rect starts, s
 horizontal edge at all, so it needs a zero-width one — which does **not** hold a line box open,
 because the measurement already recorded in `collect_inline_node` says only an edge occupying inline
 flow width does.
+
+## Not rendered is not `display: none` (t809)
+
+Eight elements were hidden with `display: none` in the UA sheet. That produced the right BOX and the
+wrong ANSWER for half of them. Measured out of headless Chrome with `getComputedStyle(el).display`:
+
+```
+   <source>    inline   ← we said none        <param>     none  ✓
+   <track>     inline   ← we said none        <datalist>  none  ✓
+   <area>      inline   ← we said none        <template>  none  ✓
+   <noscript>  inline   ← we said none        <rp>        none  ✓
+```
+
+Those four generate no box because their **parent consumes them** — `<picture>`/`<video>` render
+their `<img>`/media, `<map>` is not a container, `<noscript>` with scripting enabled holds raw text —
+and *not* because a stylesheet hides them. The difference is invisible until a page asks, and
+`getComputedStyle(source).display` is exactly what a responsive-image shim reads. `<picture><source>`
+is how the entire modern web serves responsive images.
+
+Half the list was already right, which is what makes the measurement worth taking rather than
+reasoning by analogy: `<param>` and `<datalist>` really are `display: none` in Chrome, and a fix
+applied to "the metadata elements" as a class would have broken them.
+
+### The structural guard turned out not to be needed
+
+The first version added a `never_rendered(tag)` check to `is_rendered`, to keep the four from drawing
+once their `display` stopped being `none`. Disabling that check entirely changed **nothing** — on the
+fixture or on the corpus (`mobcup.fm` reads 0.909091 either way) — because these elements' parents
+never lay them out as content in the first place. It also *improved* `en.wikipedia.org`'s coverage
+from 0.998141 to **1.000000**.
+
+**A guard that cannot be shown to do anything is not a safety margin, it is unexplained machinery.**
+The shipped change is the UA sheet edit alone, in both cascades.
+
+### Both cascades, same tick
+
+The `display: none` list exists twice — the Stylo UA sheet and `apply_ua_defaults`'s
+`MinimalCascade` — and the second one's own comment warns: *"Keep in lockstep … The two cascades
+disagreeing about which elements render at all is how a `<source>` ends up with 19px of height in one
+configuration and none in the other."* Both moved together.

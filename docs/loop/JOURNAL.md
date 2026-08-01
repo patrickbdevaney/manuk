@@ -42439,3 +42439,93 @@ containing block had grown with them. The div was in the fixture only because I 
 that separates this fix from a page-relaying regression. **When a change makes a box bigger, assert
 its PARENT.**
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 809 — not rendered is not `display: none` (2026-07-31)
+
+TICK SHAPE: capability (CSS UA sheet) — one primitive, aimed from the fresh t807 near-bar list
+
+HYPOTHESIS (written before the probe): `mobcup.fm` is the smallest jarring-clean near-bar row (n=31,
++0.040), and its only oracle divergence is `display: inline → none (<source>)`, twice — 2 of 31
+elements, which at that size is 6.5 points and more than enough to cross. Before touching anything,
+**measure what Chrome actually computes** for the whole UA `display:none` list rather than reasoning
+from the one symptom.
+
+WHAT CHROME SAID (`getComputedStyle(el).display`, on real markup, all eight at once):
+
+```
+   <source>    inline   ← we said none        <param>     none  ✓
+   <track>     inline   ← we said none        <datalist>  none  ✓
+   <area>      inline   ← we said none        <template>  none  ✓
+   <noscript>  inline   ← we said none        <rp>        none  ✓
+```
+
+⚠ **HALF THE LIST WAS ALREADY RIGHT, AND THAT IS WHY THE MEASUREMENT WAS WORTH TAKING.** A fix
+applied to "the metadata elements" as a class — the obvious generalisation from the `<source>`
+symptom — would have flipped `<param>` and `<datalist>` from correct to wrong.
+
+MECHANISM: those four generate no box because their **parent consumes them** — `<picture>`/`<video>`
+render their `<img>`/media, `<map>` is not a container, `<noscript>` with scripting enabled holds raw
+text — and *not* because a stylesheet hides them. `display: none` gave the right box and the wrong
+answer, and `getComputedStyle(source).display` is exactly what a responsive-image shim reads.
+
+⚠⚠⚠ **THE STRUCTURAL GUARD I WROTE FIRST TURNED OUT TO DO NOTHING, AND WAS REMOVED BEFORE SHIPPING.**
+The first version added `never_rendered(tag)` to `is_rendered`, on the reasoning that something must
+stop these drawing once their `display` stopped being `none`. Disabling it entirely changed **nothing
+measurable** — `mobcup.fm` reads 0.909091 with and without — because these elements' parents never
+lay them out as content in the first place. And removing it *improved* `en.wikipedia.org`'s coverage
+from 0.998141 to **1.000000**. **A guard that cannot be shown to do anything is not a safety margin,
+it is unexplained machinery**, and the shipped change is the UA sheet edit alone. I only found out by
+running the mutation on my own new code as if it were someone else's.
+
+⚠ **BOTH CASCADES MOVED IN THE SAME TICK.** The list exists twice — the Stylo UA sheet and
+`apply_ua_defaults`'s `MinimalCascade` — and the second one's own comment warns: *"Keep in lockstep …
+The two cascades disagreeing about which elements render at all is how a `<source>` ends up with 19px
+of height in one configuration and none in the other."*
+
+MEASURED: **`mobcup.fm` shape 0.710 → 0.909091 — CROSSES the 0.75 bar with room, jarring-clean on all
+four dimensions. The fourth M1 crossing of this session.** `en.wikipedia.org` coverage **0.998141 →
+1.000000** with shape 0.593110 → 0.592937 (n 1074 → 1076: two more elements measured, one more of
+them correct — strictly more page seen). Six controls byte-identical: `linkmake.in` 0.756757,
+`www.dapam-sirius.fr` 0.800000, `255md.com` 0.767442, `blog.rust-lang.org` 0.993389,
+`news.ycombinator.com` 0.798507, `chat.google.com` 0.847458. `manuk-layout` 103 tests green.
+
+Gate: `G_UNRENDERED_IS_NOT_DISPLAY_NONE` (new), eight Chrome-measured computed values plus two
+no-box assertions. **Proven RED** on the computed-value half: put the four back in the `display:none`
+list and the four `inline` assertions fail while the four `none` ones still pass — the split that
+says half the list was correct. ⚠ **The no-box half has NO mutation to flip, and the gate says so
+outright** rather than implying a red it cannot produce: nothing renders these elements, which is the
+same finding that removed the guard.
+
+HONEST SCOPE: one crossing, verified. This is a computed-value fix, not a rendering one — the boxes
+did not change, and the pattern-ledger row says so.
+
+PERF: none — a shorter selector list in a stylesheet parsed once.
+
+WIKI: `docs/wiki/box-layout.md` — new section.
+
+PATTERN: ⚠⚠⚠ **RUN THE MUTATION ON YOUR OWN NEW CODE, NOT ONLY ON THE CODE YOU ARE REPLACING.** The
+guard I added was load-bearing in my head and inert in the tree, and the only thing that revealed it
+was deleting it and re-measuring — the same procedure the gate discipline demands of the *old*
+behaviour. **A fix ships with two claims: "this makes X right" and "this part is necessary". The
+second one needs a red too**, and when it cannot produce one the honest move is to delete the part,
+not to document it as conservatism.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+SELF-AUDIT (tick 808 window): **the same single item, and it is still HARNESS-OWNED.** `verify wall:
+1192s EXCEEDS the 300s target`, read from `.git/manuk-verify-receipt`. Every other audit row is green.
+Per V1-SCOPE / CONSTITUTION.MD PART VII the wall and everything under `scripts/` belong to the
+observer; reported, not patched, for the second audit running. `LAST_AUDIT_TICK` set to 808.
+
+SURFACE AUDIT #52 (tick 808 window), recorded in `docs/loop/SURFACE-AUDIT.md`. ⚠⚠⚠ **The map tracks
+"is it there?" and every one of this window's nine defects was "is it APPLIED?"** — `text-align:
+justify` parsed, computed, inherited and reported correctly while rendering as `left`;
+`letter-spacing` was right inside every word and absent from every space; vertical padding on an
+inline was present, correct horizontally, correct on `inline-block`, and never grew the box. A
+capability map would mark all of them ✅, and `G_CAPABILITY`'s 42 assertions could not have caught one,
+because all 42 ask whether the SURFACE exists. **The missing column is `applied`, and the cheapest
+instrument for it is a positional fixture** — which the loop already runs and does not credit as a map
+instrument. Three things we had been wrong about: the UA sheet is not a solved area (three defects
+this window, and its `display:none` list was HALF WRONG and had never been measured); `position:
+absolute` "works" only for an element child; and a guard I wrote myself was inert in the tree while
+being load-bearing in my head. No re-rank — this is the current frontier seen more clearly, and four
+M1 crossings came out of it. `LAST_SURFACE_AUDIT` set to 808.

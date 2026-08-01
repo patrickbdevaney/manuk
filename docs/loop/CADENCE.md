@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **550** | ticks 1–807 |
-| median tick cycle | **24m** | 549 intervals |
+| ticks landed | **551** | ticks 1–808 |
+| median tick cycle | **24m** | 550 intervals |
 | median, last 10 | **42m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 498.4h elapsed |
-| median verify wall | **63s** | 489 ticks |
+| **ticks per hour** | **1.10** | 499.3h elapsed |
+| median verify wall | **63s** | 490 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **374**
-* **✅ rows in the capability ledger**: 144 → **420**
+* **live gates**: 27 → **375**
+* **✅ rows in the capability ledger**: 144 → **421**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**266 of 550 ticks** (48%) moved a
+**267 of 551 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **266** capability ticks, median cycle **24m**
+* **267** capability ticks, median cycle **24m**
 * median diff per tick: **+258 / −34** lines across 8 files
 
 ## Every tick
@@ -647,5 +647,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **805** | 2026-07-31 21:45 | 25m | capability | 63s | +291/−35 | 373 | 81 | 56.0% · | `text-align: justify` was parsed and then ignored (2026-07-31) |
 | **806** | 2026-07-31 22:50 | 65m | capability | 63s | +324/−32 | 373 | 81 | 56.0% · | the space is a character (2026-07-31) |
 | **807** | 2026-07-31 23:29 | 38m | measurement | 63s | +429/−41 | 374 | 81 | 56.0% · | the sweep after five aimed fixes, and it is the best window this burndown has had (2026-07 |
+| **808** | 2026-08-01 00:22 | 53m | capability | 63s | +393/−40 | 375 | 81 | 56.0% · | the padded inline BOX grows; the LINE does not (2026-07-31) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

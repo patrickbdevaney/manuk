@@ -3038,3 +3038,63 @@ variant, grep for the mirror before recording the class as closed.** The grep is
 | doc | CSS custom properties (`var()`, fallbacks, scoped redefinition, in `calc()`) | **`gated`-by-measurement** | 6 cases Chrome-exact (t798 probe); previously unmeasured |
 | doc | `<img>` intrinsic sizing + `max-width:100%` over a dimension attribute | **verified exact** | 6 cases (t798 probe) |
 | doc | text advance widths vs Chrome | **verified exact within 0.5px** | 45 measurements (t795 probe) — retires the systematic-metrics hypothesis |
+
+## Audit #52 — tick 808 (2026-07-31)
+
+**Method.** Same door as #51 — Chrome measured with small fixtures — but this window the probes went
+at *properties and computed values* rather than at box arithmetic, and the map turned out to be
+wrong in a **shape it does not have a column for**.
+
+### ⚠⚠⚠ THE MAP TRACKS "IS IT THERE?" AND EVERY DEFECT THIS WINDOW WAS "IS IT APPLIED?"
+
+Nine engine defects landed across t799–t809. Grouping them by what an honest capability map would have
+said *before* each was found:
+
+| defect | what the map said | what was true |
+|---|---|---|
+| `text-align: justify` (t805) | present — it **parses**, computes, inherits, and `getComputedStyle` reports it | reached layout and fell through a `_ => 0.0` wildcard. **Rendered as `left` for the engine's whole life** |
+| `letter-spacing` on the inter-word space (t806) | present — and the word's own width was correct | the space was the one character on the line that never got it |
+| vertical padding on an inline (t808) | present — horizontal padding worked, `inline-block` worked | the box never grew, so every padded pill painted at half height |
+| anonymous-block inheritance (t799) | not a capability at all | `text-align` + strut silently dropped for any container mixing inline and block children |
+| `max-width` + auto margins (t801) | both present and both correct in isolation | §10.4's *re-run* was missing, so `.container{max-width;margin:0 auto}` rendered flush left |
+| control `line-height` (t802) | `font: -webkit-small-control` was "done" at t787 | the shorthand's third property was never copied |
+| `getComputedStyle(source).display` (t809) | `<source>` "handled" — it correctly draws nothing | Chrome computes `inline`; we said `none`. Right box, wrong answer |
+
+**Every one of these is a capability the map would mark ✅.** They parse, they compute, they inherit,
+they report, and they do not do the thing. `G_CAPABILITY` asserts 42 ledger claims and could not have
+caught a single one, because all 42 ask *does the surface exist*.
+
+**The missing column is `applied`,** and it is not the same as `present`. The cheapest available
+instrument for it already exists and is not being used for this: a **positional** fixture. Every
+defect above is invisible to a presence check and visible in one Chrome box diff.
+
+### WHAT WE HAD BEEN WRONG ABOUT
+
+1. **"The UA sheet is a solved area."** It produced three of this window's defects (t802 control
+   `line-height`, t809 the `display:none` list, and t799's anonymous-block strut is adjacent). The
+   `display:none` list was **half wrong** — `source`/`track`/`area`/`noscript` are `inline` in Chrome
+   — and nobody had ever measured it; it was written from memory of what "should not render".
+2. **"`position:absolute` works."** `<div style="position:absolute">Menu</div>` measured **0×0**
+   (t803). Every probe that had ever exercised abspos used an *element* child, which is the shape a
+   test-writer reaches for and the shape the bug does not fire on.
+3. **A guard I wrote myself was inert** (t809). `never_rendered()` was load-bearing in my head and did
+   nothing in the tree; deleting it changed no number and *improved* wikipedia's coverage to 1.000.
+   The map has no column for *"machinery whose necessity was never tested"* either.
+
+### ⚠ THE INSTRUMENT'S OWN FRAME, CORRECTED TWICE THIS WINDOW
+
+- **A paired band still confounds engine with site drift** (t800). The fix is the **old-binary
+  control** — rebuild the previous tree and re-measure *now*. It changed the verdict three times in
+  nine ticks: land (t803), **refuse** (t804), clear as drift (t807). The observer has since wired the
+  caveat into `fidelity-progress.sh`.
+- **A harness defect disappearing looks exactly like progress** (t807). 48 false `crashed` rows became
+  0 and scorability leapt 53% → 79%. `uniq -c` over the unscored-reason column separates the two, and
+  nothing in the map required anyone to look.
+
+### RE-RANK
+
+No re-rank: the `applied`-not-`present` class is not a new frontier, it is the *current* one seen more
+clearly — it is precisely what the shape metric measures and what the §8 near-bar method finds. Four
+M1 crossings this window came out of it. The steer stands.
+
+**Next audit due: tick 818.**

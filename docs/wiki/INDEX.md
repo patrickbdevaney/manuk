@@ -154,6 +154,9 @@
   - L3033 · The padded inline BOX grows; the LINE does not (t808)
   - L3059 · The containing div is what makes it a fix and not a trade
   - L3068 · Two arms, because the edges are not symmetric
+  - L3077 · Not rendered is not display: none (t809)
+  - L3099 · The structural guard turned out not to be needed
+  - L3110 · Both cascades, same tick
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1366,4 +1369,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1277 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1280 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
