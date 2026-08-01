@@ -43430,3 +43430,84 @@ is punished for rendering more. ⚠ Corollary for the burndown: the ranked plan 
 coverage-raising fixes to LOWER shape before they raise it, and must not read that as a reason to
 revert one.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 822 — `clip: rect()` is unimplemented, and the shape metric CANNOT SEE IT (2026-08-01)
+
+TICK SHAPE: measurement — a near-bar lever measured, specified, and DECLINED for this phase
+
+HYPOTHESIS (written before the fixture): `www.5movierulz.discount` is the cleanest near-bar target in
+the t820 rows — `shape 0.6310`, **coverage 1.000** (no missing boxes to confound), `n=439`,
+`reading_order 38`, and byte-identical across the old-binary control (366 misplaced in both), so it is
+stable rather than drifting. Aim with the t817 chain: composite → name the organ → Chrome's computed
+style → 4-line fixture.
+
+THE COMPOSITE named an organ immediately: we paint **"Search for:" at the top-left corner** and Chrome
+paints nothing there. Chrome's computed style for it:
+
+```
+  .screen-reader-text   position=absolute   clip=rect(1px, 1px, 1px, 1px)   clip-path=none
+                        width=68.48px  height=21px  overflow=visible
+                        getBoundingClientRect → [743 46 68x21]
+```
+
+**Chrome gives it a full-size box and hides it purely with `clip`.** That is the visually-hidden
+idiom, and `.screen-reader-text` with `clip: rect(1px,1px,1px,1px)` is WordPress core boilerplate —
+it is in essentially every WordPress theme on the web.
+
+MEASURED, on the reduced fixture:
+
+```
+                                                  Chrome          ours
+  position:absolute; clip:rect(1px,1px,1px,1px)  [0  40 78x20]  [0  40 78x20]   ✓ EXACT
+  the WordPress-core block (width:1px too)       [-1 100  1x1]  [-1 103  1x1]   ✓ size exact
+  no clip at all (control)                       [0 163 78x17]  [0 173 78x17]   ✓ size exact
+```
+
+⚠⚠⚠ **THE GEOMETRY IS ALREADY RIGHT, AND THAT IS THE WHOLE RESULT.** `clip` never changes the box
+rect — Chrome reports `78x20` for a clipped element exactly as we do. The defect is entirely in
+PAINT: Chrome clips the painted output to a 1×1 region, we paint all 78×20 of the text. Confirmed in
+the engine: `grep` finds only `"clip" => Overflow::Clip` (that is `overflow: clip`, a different
+property) and **no `clip` field in `ComputedStyle` at all**. The property is unimplemented end to end.
+
+**SO IT IS DECLINED FOR THIS PHASE, AND THE REASON IS THE POINT.** The board's CO-#1 is M1 RENDER —
+`shape >= 0.75`, which scores ELEMENT GEOMETRY. A fix that makes `clip` paint correctly would move
+shape by **exactly zero**, because our boxes are already Chrome-exact. This is the trap the t772-775
+window already paid for once ("two pixel-verified fixes moved shape by ZERO — the burndown scores
+element geometry and both defects live INSIDE a box"), and it is *more* seductive here because the
+composite makes it the most visible thing on the page.
+
+BANKED, not built: `clip: rect(t,r,b,l)` on `position: absolute|fixed`, a paint-side clip. Real reach
+(every WordPress theme), real user-visible wrongness (text that must not be seen is seen), and a
+first-class JARRING/visual item — but **not an M1 lever**, and it must not be taken as one while the
+gate is the render bar. It needs a paint/display-item gate, not a box gate.
+
+⚠ THE NEAR-BAR AIM IS NOT SPENT: `5movierulz` still has `shape 0.6310` and `reading_order 38` at
+coverage 1.000, and **whatever drives that is NOT this** — the most visible divergence on the page
+turned out to be invisible to the metric. The next probe at this site must start from the
+reading-order rows, not from the screenshot.
+
+MEASURED: no engine change; the tree is byte-identical to 6b5fdcd9 apart from docs. `manuk-layout`
+103 green; `G_ROWLESS_TABLE`, `G_ORPHAN_TABLE_CELL`, `G_FLEX_PERCENT_LINEBREAK` green.
+
+PERF: none.
+
+WIKI: none — no engine delta; the Chrome table and the declined-with-reason are the artefact.
+
+⚠ HARNESS, reported not patched (PART VII): this DOCS-ONLY tick (zero `engine/` and `tests/` delta,
+verified with `git diff HEAD --stat`) was failed twice by the wall on the same cluster —
+`G_SILENT_FAIL`, `G_DEDUP`, `G_RUNAWAY`, `G_CONTAIN` — every one of them a timing/resource gate. The
+box is carrying **113 Chrome processes / 5.8 GB RSS**, and their root parents are `supervisord` and
+`systemd`, i.e. **not this agent's** (no `manuk-wpt` or `cargo` of mine is alive, and no Chrome is
+orphaned to PPID 1). Nothing was killed — the observer owns those. t821 hit three of the same four
+and went green on a plain re-run, which is the only admissible response to a suspected-noise red.
+Recorded so the observer sees the pattern: **the resource gates are the ones that false-RED under
+box contention, and a docs-only tree is the cleanest possible proof that the failure is not the tick.**
+
+PATTERN: ⚠⚠⚠ **THE MOST VISIBLE DIVERGENCE ON A COMPOSITE CAN BE THE ONE THE METRIC CANNOT SEE.**
+The screenshot chain that found t817 (composite → organ → computed style) is genuinely good at finding
+DEFECTS and says nothing about whether a defect can move the GATE. Here it found a real, unimplemented
+CSS property with enormous reach — and the same fixture that found it proved our geometry was already
+Chrome-exact, so the fix is worth zero against M1. **Before building what a composite shows you, ask
+which term of the metric the fix lands in**, and check whether the boxes were already right. The cost
+of asking is one fixture; the cost of not asking is a whole tick aimed off-mandate.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
