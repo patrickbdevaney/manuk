@@ -3721,3 +3721,81 @@ has not changed since the t777 board block: **the function leg raises the cap an
    change from a HEIGHT-only edit and therefore a coupling nobody has traced.
 
 **Next check due: tick 812.**
+
+---
+
+## Check #67 — tick 812 (2026-08-01)
+
+**Horizon:** H0 — Pareto Web Parity. **Gate:** M1 RENDER — `shape >= 0.75` AND jarring-clean on
+>= 95% of the in-scope CrUX corpus.
+
+### GATE OR SCOREBOARD? — GATE, and this window it also caught the loop cheating itself twice
+
+Eight ticks since #66. Four engine fixes, one measurement tick, one sweep, one refusal, one revert:
+
+```
+  t805  text-align:justify            t806  letter-spacing on the space
+  t807  MEASURE — M1 5.5% → 8.4%      t808  inline vertical padding   ★ linkmake.in CROSSES
+  t809  unrendered ≠ display:none     t810  MEASURE — BFC/float specified
+  t811  BFC avoids floats             t812  MEASURE — and t811 REVERTED (this check)
+```
+
+M1 across five sweeps: **2.4 → 4.2 → 5.5 → 8.4 → 8.0%**. The last step is a denominator move, not a
+loss: the M1 COUNT is **11 in both** t807 and t812; in-scope went 131 → 138.
+
+### ⚠⚠⚠ TWO SELF-CORRECTIONS THIS WINDOW, AND BOTH CAME FROM THE SAME PROCEDURE
+
+1. **`mobcup.fm` did not cross.** t809 measured it at **0.909** and banked a crossing. The t812
+   sweep reads **0.727**, and the old-binary control shows the ENGINE contribution is real but small
+   (0.903 → 0.909, plus coverage 0.912 → 0.971). The 0.909 spot reading and the 0.727 sweep reading
+   are the same binary on a dynamic media page. **A single spot measurement of a live site is not a
+   crossing** — `linkmake.in` (t808) IS confirmed in the sweep at 0.703 → 0.757 with `n=74` both, and
+   that is what a claimed crossing has to look like.
+2. **t811 is REVERTED.** It was spec-correct, 7-of-8 Chrome-exact, and landed with **nine controls
+   byte-identical** — and it costs `www.ta3lemkonline.com` **26 elements of 457** (0.540 → 0.484,
+   same `n`, old binary rebuilt). Bisected to t811 exactly: the t809 tree reads 0.540481, the t811
+   tree reads 0.483589.
+
+**The rule the second one proves is not "test more controls".** It is that *nine byte-identical
+controls is not evidence of no regression* — it is evidence about those nine sites. t804 refused a
+change on this basis; t811 passed the same bar and failed anyway, on a site nobody had chosen.
+
+### PART VI CORRECTION — the scorability ceiling is now the honest blocker, and the harness owns it
+
+`scored 87/138 = 63.0%` — but the sweep filed **25** rows as `crashed`, and t800 filed 48 and t807
+filed 0. **The scorability series (53% → 79% → 63%) is a measurement of `CHUNK_ROUNDS`, not of the
+engine**, and no scorability claim should be read across these three sweeps. The shape half is paired
+and readable; it is the only half this loop can currently act on.
+
+### INVARIANTS
+
+- **I2:** held — fork surface still empty.
+- **I3:** held. t808 gives boxes their true height and t809 gives four elements their true computed
+  `display`; both strictly improve what JS and the a11y tree can see.
+- **I4:** held. Every fix this window is a rule that runs on a large fraction of all pages —
+  justified text, tracked runs, padded inline links, `<picture><source>`.
+- **I5:** held, and the negative results are the evidence. Two probes at `kicktipp` retired two
+  hypotheses (min-content, then `nowrap` in 8 of 9 contexts) and found two unrelated defects in their
+  ninth rows. **The ninth row is where a wide fixture pays.**
+- **PART VII:** honoured. No `scripts/` file touched in t805–t812. Three harness items reported.
+
+### HARNESS, reported not patched (PART VII)
+
+1. **`CHUNK_ROUNDS = 4` has now invalidated three of five sweeps' scorability** (t796, t800 48 rows,
+   t812 25 rows; t807 was clean). This is the third consecutive check-in reporting it.
+2. **The self-audit's wall figure reads a stale contended receipt** (1192s against `LAST_WALL_TIME:
+   63s`). Second audit running.
+3. **`/home` reached 96% during a tick**; `tick.sh`'s own reclaim step handled it.
+
+### THE STEER
+
+1. **A CROSSING IS CLAIMED FROM A SWEEP, NOT FROM A SPOT CHECK.** `mobcup.fm` cost this loop a false
+   claim in a journal entry. A spot measurement aims the next tick; only a paired sweep row banks one.
+2. **THE CONTROL SET IS A SAMPLE, AND t811 IS THE PROOF.** For any change touching block placement or
+   sizing, measure a *hostile* site as well as the friendly nine — `www.ta3lemkonline.com`
+   (`reading_order` 816) is now named for exactly that.
+3. **THE BFC/FLOAT WORK IS STILL RIGHT AND IS STILL OPEN** — its fixture, its Chrome table and its
+   spec clause are banked twice over (t810, t811). What it lacks is an account of why a float-band
+   narrowing costs a float-heavy page 26 elements, and that is the next attempt's first question.
+
+**Next check due: tick 820.**

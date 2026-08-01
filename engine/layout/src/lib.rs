@@ -2803,80 +2803,12 @@ impl Ctx<'_> {
                 }
                 // The first in-flow block is placed `hoist_top` higher so it lands flush at the
                 // container's content top (its top margin escaped into the container's own margin).
-                let mut child_y = if first_block {
+                let child_y = if first_block {
                     cur_y - hoist_top
                 } else {
                     cur_y
                 };
-                // ── **A BFC ROOT MUST NOT OVERLAP A FLOAT** (CSS 2.1 §9.5): *"the border box of …
-                //    an element in the normal flow that establishes a new block formatting context
-                //    must not overlap the margin box of any floats in the same block formatting
-                //    context"*. It is placed BESIDE the intruding floats — shifted to the band's left
-                //    edge and narrowed to the band — and moved DOWN past them when an explicit width
-                //    will not fit.
-                //
-                //    We did neither, so a BFC root sat straight on top of the float. Chrome-measured
-                //    (`float:left 80×40`, then a BFC root in a 300px column):
-                //
-                //    ```text
-                //                                      Chrome           ours (before)
-                //      overflow:hidden             [80  0 220x20]      [0 … 300x20]
-                //      display:flow-root           [160 20 140x20]     [0 … 300x20]
-                //      display:flex                [240 40  60x20]     [0 … 300x20]
-                //      overflow:hidden, width:280  [0  180 280x20]     [0 120 280x20]  ← Chrome DROPS
-                //      a PLAIN block (not a BFC)   [0  100 300x20]     [0 … 300x20]    ✓ both
-                //    ```
-                //
-                //    ⚠ **The plain-block row is the rule's boundary, not an oversight**: a non-BFC
-                //    block's border box legitimately DOES overlap floats — only its line boxes avoid
-                //    them, which `open_band` already does. So this must key on `establishes_bfc` and
-                //    nothing else.
-                //
-                //    ⚠ **`left_float_edge`/`right_float_edge`, not `left_offset`/`right_offset`**:
-                //    the latter fall back to the CONTEXT's edges, which are not this block's
-                //    containing block when the two are nested, and would shift blocks with no float
-                //    near them at all. The `Option` form reports the float-derived edge ALONE and is
-                //    `None` when nothing overlaps — the t797 distinction, reused.
-                //
-                //    THE REACH IS THE MEDIA OBJECT: a floated avatar or thumbnail with an
-                //    `overflow:hidden` / `flow-root` / flex content block beside it — every comment
-                //    thread, card list and pull-quote on the web, and the standard pre-flexbox
-                //    two-column idiom.
-                let (blk_x, blk_cw) = if establishes_bfc(ks) {
-                    let mut placed = (cx, cw);
-                    loop {
-                        let lf = floats.left_float_edge(child_y, 1.0);
-                        let rf = floats.right_float_edge(child_y, 1.0);
-                        if lf.is_none() && rf.is_none() {
-                            break; // no float overlaps this band — nothing to avoid
-                        }
-                        let l = lf.unwrap_or(cx).max(cx);
-                        let r = rf.unwrap_or(cx + cw).min(cx + cw);
-                        let band = (r - l).max(0.0);
-                        // An AUTO width shrinks to the band and always fits. An explicit one that
-                        // does not fit sends the box below the floats instead of overlapping them.
-                        let wants = match ks.width {
-                            Dim::Auto => None,
-                            other => Some(other.resolve(cw, 0.0)),
-                        };
-                        if band > 0.0 && !wants.is_some_and(|w| w > band + 0.01) {
-                            placed = (l, band);
-                            break;
-                        }
-                        match floats.next_bottom_below(child_y) {
-                            Some(ny) if ny > child_y => {
-                                child_y = ny;
-                                cur_y = ny;
-                                prev_margin = 0.0;
-                            }
-                            _ => break,
-                        }
-                    }
-                    placed
-                } else {
-                    (cx, cw)
-                };
-                let r = self.layout_block(k, blk_cw, pch, blk_x, child_y, prev_margin, floats);
+                let r = self.layout_block(k, cw, pch, cx, child_y, prev_margin, floats);
                 // Stack against the normal-flow bottom (relative shifts are visual).
                 cur_y = r.flow_bottom;
                 prev_margin = r.margin_bottom;

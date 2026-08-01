@@ -157,10 +157,10 @@
   - L3077 · Not rendered is not display: none (t809)
   - L3099 · The structural guard turned out not to be needed
   - L3110 · Both cascades, same tick
-  - L3117 · A BFC root sits BESIDE a float, or below it (t811)
-  - L3141 · Two halves
-  - L3147 · The plain block is the rule's boundary, not an oversight
-  - L3153 · left_float_edge, not left_offset
+  - L3117 · A BFC root sits BESIDE a float, or below it (t811 — ⛔ REVERTED at t812, kept for the retry)
+  - L3149 · Two halves
+  - L3155 · The plain block is the rule's boundary, not an oversight
+  - L3161 · left_float_edge, not left_offset
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`

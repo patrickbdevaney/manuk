@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **553** | ticks 1–810 |
-| median tick cycle | **24m** | 552 intervals |
-| median, last 10 | **38m** | 10 intervals |
+| ticks landed | **554** | ticks 1–812 |
+| median tick cycle | **24m** | 553 intervals |
+| median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 500.1h elapsed |
-| median verify wall | **63s** | 492 ticks |
+| **ticks per hour** | **1.10** | 501.2h elapsed |
+| median verify wall | **63s** | 493 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **376**
+* **live gates**: 27 → **375**
 * **✅ rows in the capability ledger**: 144 → **422**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**268 of 553 ticks** (48%) moved a
+**268 of 554 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -650,5 +650,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **808** | 2026-08-01 00:22 | 53m | capability | 63s | +393/−40 | 375 | 81 | 56.0% · | the padded inline BOX grows; the LINE does not (2026-07-31) |
 | **809** | 2026-08-01 00:39 | 17m | capability | 63s | +112/−33 | 375 | 81 | 56.0% · | not rendered is not `display: none` (2026-07-31) |
 | **810** | 2026-08-01 01:07 | 28m | measurement | 63s | +400/−35 | 376 | 81 | 56.0% · | two probes at kicktipp, one negative and one that specifies the next fix (2026-08-01) |
+| **812** | 2026-08-01 02:15 | 68m | measurement | 63s | +441/−274 | 375 | 81 | 56.0% · | the sweep found the regression nine controls missed, and t811 is REVERTED (2026-08-01) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

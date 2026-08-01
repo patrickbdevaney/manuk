@@ -3114,7 +3114,15 @@ The `display: none` list exists twice — the Stylo UA sheet and `apply_ua_defau
 disagreeing about which elements render at all is how a `<source>` ends up with 19px of height in one
 configuration and none in the other."* Both moved together.
 
-## A BFC root sits BESIDE a float, or below it (t811)
+## A BFC root sits BESIDE a float, or below it (t811 — ⛔ REVERTED at t812, kept for the retry)
+
+> ⛔ **This section describes a change that was landed at t811 and REVERTED at t812.** It costs
+> `www.ta3lemkonline.com` — a float-heavy page with `reading_order` 816, which was not in the control
+> set — **26 elements of 457** (0.540481 → 0.483589, bisected exactly against the t809 tree). Nine
+> controls were byte-identical and that was true and not enough. The Chrome table below is measured
+> and correct; it is kept here because the next attempt needs it, and because the missing piece is not
+> the specification but an account of *why* a float-band narrowing costs a float-heavy page 26
+> elements. Do not re-land it without answering that and without `ta3lemkonline` in the controls.
 
 CSS 2.1 §9.5: *"the border box of a table, a block-level replaced element, or an element in the normal
 flow that establishes a new block formatting context must not overlap the margin box of any floats in

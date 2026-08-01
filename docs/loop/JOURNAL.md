@@ -42683,3 +42683,114 @@ budget on controls rather than on discovery, and landed a change that moves nine
 The split cost one extra tick and bought the thing t804 did not have: **a measurement taken before the
 code existed, so the code could not have been fitted to it.**
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 812 — the sweep found the regression nine controls missed, and t811 is REVERTED (2026-08-01)
+
+TICK SHAPE: measurement (clean sweep) + a revert + constitution check #67
+
+HYPOTHESIS (written before the sweep): four engine fixes have landed since t807 (t808 inline vertical
+padding, t809 unrendered-≠-`display:none`, t811 BFC-avoids-floats) with two claimed crossings. The
+cadence rule says bank a clean `--jobs 2` sweep. Measure.
+
+BANKED: `docs/loop/SWEEP-t812-rows.tsv` — 200 CrUX sites, `--jobs 2`, one binary (e0175dff).
+
+```
+                          t800      t807      t812
+  M1 GATE                 5.5%      8.4%      8.0%   ← 11 sites in BOTH; in-scope 131 → 138
+  shape >= 0.75           8.3%     13.0%     11.6%
+  jarring-clean          17.2%     27.5%     21.0%
+  COMMON-SET BAND        −0.35     +2.71     −0.06   (87 in both · 9 up · 13 down)
+```
+
+The band is flat and the instrument says so. **The M1 count did not move: 11 sites, both sweeps.**
+
+### ⚠⚠⚠ CORRECTION: `mobcup.fm` DID NOT CROSS, AND t809 CLAIMED IT DID
+
+t809 spot-measured `mobcup.fm` at **0.909091** and banked *"CROSSES the M1 bar … the fourth crossing
+of the session"*. This sweep reads **0.727273**. Both are the same binary; `mobcup.fm` is a dynamic
+media page and its two readings are three hours apart. The old-binary control separates the engine
+from the page: at `c7175c48` it reads 0.903226 / coverage 0.911765, at HEAD 0.909091 / 0.970588 — so
+**t809's fix is real and worth ~0.6 points plus 6 points of coverage, and the crossing was the
+page.** `linkmake.in` is what a claimed crossing must look like instead: **0.703 → 0.757 in the
+sweep, `n=74` in both**, confirmed corpus-wide.
+
+**A single spot measurement of a live site aims the next tick; only a paired sweep row banks a
+crossing.** The session's crossing count is **two** (255md.com t802, linkmake.in t808), not four —
+`www.dapam-sirius.fr` 0.633 → 0.800 is also sweep-confirmed at t807, so three. `mobcup.fm` is
+withdrawn.
+
+### ⚠⚠⚠ AND t811 IS REVERTED — IT COSTS A SITE 26 ELEMENTS
+
+`www.ta3lemkonline.com`, `n=457` in both sweeps, `reading_order` 816 — a float-heavy page nobody had
+chosen as a control. Old binary rebuilt, all three measured in the same window:
+
+```
+   engine tree                          ta3lemkonline      tukrd.com
+   c7175c48  (t806, the t807 sweep)       0.540481          1.000000
+   31f087e7  (t809, before the BFC fix)   0.540481          0.973684
+   e0175dff  (t811, HEAD)                 0.483589          0.973684
+```
+
+**Bisected exactly.** t811 costs `ta3lemkonline` 26 elements of 457 (−5.7 points); reverting restores
+**0.540481** to the digit, with `linkmake.in` 0.756757 and `en.wikipedia.org` 0.592937 untouched.
+`tukrd.com` lost one element at t808/t809 and was **1.000000** before — a separate, smaller item,
+named below.
+
+⚠⚠ **t811 LANDED WITH "NINE CONTROLS BYTE-IDENTICAL" AND THAT WAS TRUE.** It was spec-correct,
+7-of-8 Chrome-exact on CSS 2.1 §9.5, and its own journal entry contrasted it favourably with t804's
+refusal *because the controls were clean*. They were — for those nine sites. **Nine byte-identical
+controls is not evidence of no regression; it is evidence about nine sites**, and t811 is the proof.
+The rule this replaces the old one with: for any change touching block PLACEMENT or SIZING, measure a
+**hostile** page as well as the friendly set. `www.ta3lemkonline.com` is now named for that.
+
+The BFC/float work is **still right and still open**. Its fixture, its Chrome table and its spec
+clause are banked twice (t810, t811); the gate file is removed with the code. What it lacks is an
+account of *why* a float-band narrowing costs a float-heavy page 26 elements — which is the next
+attempt's first question, not its last.
+
+### THE SWEEP'S OWN SCORABILITY IS AGAIN UNREADABLE
+
+**25 rows filed `crashed`** — t796, t800 (48) and now t812 (25) against t807's zero. `scored 103 → 87`
+is mostly that. **The scorability series 53% → 79% → 63% measures `CHUNK_ROUNDS`, not the engine**, and
+no scorability claim is made from it. `scripts/` is observer-owned; reported for the third
+consecutive check-in.
+
+Also this tick: **CONSTITUTION CHECK #67** (due at 812), recorded in `docs/loop/CONSTITUTION-CHECK.md`.
+
+MEASURED after the revert: `manuk-layout` 103 green; `ta3lemkonline` 0.540481, `tukrd.com` 0.973684,
+`linkmake.in` 0.756757, `en.wikipedia.org` 0.592937 / cov 1.000000.
+
+RESIDUE, named: `tukrd.com` was **1.000000** at t806 and is 0.973684 from t808 or t809 — one element
+of 38, unbisected between those two. A site that was perfect and is not is worth the next cheap probe.
+
+PERF: none.
+
+WIKI: none — the engine ends this tick at the t809 tree; the two mechanisms established are about
+CLAIMS (a crossing needs a sweep) and CONTROLS (nine is a sample), which belong here and in the
+constitution ledger.
+
+PATTERN: ⚠⚠⚠ **A CLEAN CONTROL SET IS A NEGATIVE RESULT ABOUT THE SITES IN IT.** t804 was refused for
+costing a control; t811 passed the identical bar with nine of them and regressed a tenth that was
+never asked. The controls this loop uses are the sites it has already fixed things on — which is
+precisely the population least likely to be disturbed by the next fix. **Add an adversarial control,
+chosen for being pathological rather than for being familiar**, and re-run it on every placement or
+sizing change.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+⚠⚠ **THE RATCHET REFUSED THIS TICK ON `GATES 375 < 376`, AND THE MARK IS LOWERED DELIBERATELY —
+which is the one escape it offers, and it has to be argued rather than taken.** The missing gate is
+`G_BFC_AVOIDS_FLOATS`, deleted with the code it asserted. **A gate whose subject has been reverted
+cannot stay**: it would assert behaviour the engine no longer has and go red on every wall from here,
+which is worse than one fewer gate — a permanently-red gate is how a wall stops meaning anything.
+
+The alternative I considered and rejected was to keep the file and re-point it at the *current*
+behaviour, preserving the count. That would mean asserting `[0 … 300x20]` where Chrome reads
+`[80 0 220x20]` — **freezing a known-wrong number into a test**, which is precisely the defect t808
+found sitting in `layout/src/lib.rs` (`y=30` asserted with a comment claiming Chrome had verified it,
+where Chrome says 34). Buying a ratchet count with a false assertion is the worst trade on the board.
+
+So: **376 → 375, on purpose, with the mechanism preserved in three places** — the Chrome table and
+spec clause in `docs/wiki/box-layout.md` (now headed with a REVERTED banner and the conditions for
+re-landing), the pattern-ledger row marked ⛔ with the bisection, and the fixture in this journal.
+The gate comes back with the code, and the code comes back when someone can say why a float-band
+narrowing costs `www.ta3lemkonline.com` 26 elements.
