@@ -43239,3 +43239,70 @@ PERF: none.
 WIKI: none — this is a process tick; the artefacts are `SURFACE-AUDIT.md` #53 and `WALL-AUDIT.md` #27.
 
 PATTERN: [no-pattern] — a process tick unlocks no class of the web.
+
+## Tick 819 — `flex-basis` is a main size too, and t817's own residue label was wrong (2026-08-01)
+
+TICK SHAPE: capability (flex layout) — the half t817 did not cover, plus a correction to t817
+
+HYPOTHESIS (written before the fixture): t817 recorded, in three places, that Bootstrap 4's column
+(`flex: 0 0 66.666667%; max-width: 66.666667%`) comes out `533`/`133` because *"the percentage is
+applied twice — a flex-BASIS defect"*. That sentence was written next to a real fix, at the moment of
+least curiosity about it, which is exactly the shape t814 warned about. Measure it on its own.
+
+MEASURED, and **the label was wrong**:
+
+```
+  style on a 1200px flex-wrap:wrap row       Chrome        before        after
+  flex:0 0 66.666667% + max-width:66.666667% [0   0 800x20] 533, stacked  533 ✗ STILL OPEN
+  flex:0 0 66.666667%   (no max-width)       [0  20 800x20] 800, STACKED  [0 20 800x20] ✗→✓
+  flex-basis longhand   (no max-width)       [0  40 800x20] 800, STACKED  [0 40 800x20] ✗→✓
+  flex:0 0 50%                               [0  60 600x20] 600 ✓         unchanged ✓
+  flex:0 0 400px / 300px                     [0  80 400x20] 400 ✓         unchanged ✓
+  max-width:66.666667% + width:66.666667%    [0 100 800x20] 533           533 ✗ STILL OPEN
+```
+
+⚠⚠⚠ **DROP THE `max-width` AND THE SAME ROW IS EXACTLY 800/400.** The flex-basis percentage was
+CORRECT all along. Two rows of one fixture retired the label t817 shipped, and the real defect is
+`max-width: <pct>` on a flex item resolving against the item's **own taffy-assigned width** instead of
+its containing block — `800 × 0.666667 = 533`. That is the *height* axis's already-documented
+`taffy_item_height` shape ("resolving the percentage against the slot it produced applies it twice")
+appearing on the width axis, and it is still open.
+
+WHAT LANDED: **`flex-basis` is a main size too**, and leaving it out of t817 left that fix half-done.
+`flex: 0 0 <pct>` never touches `width` at all — the hypothetical main size comes from the BASIS — so
+those rows came out the RIGHT WIDTHS (800/400) on the WRONG LINES. `snap_row_item_percent_widths` now
+snaps `flex_basis` to the same 1/64 px grid as `size.width`.
+
+MEASURED (controls, PAIRED and BACK-TO-BACK, old binary rebuilt and re-measured):
+⚠ **`en.wikipedia.org` read 1017 misplaced two ticks ago and 1020 now — and the OLD BINARY ALSO READS
+1020.** The site moved, not the engine. Without the old-binary control this tick would have opened a
+regression hunt against its own change; with it, the question was closed in one run. Everything else
+paired-identical: `www.puentedemando.com` 1018/1018, `news.ycombinator.com` 796/796, `linkmake.in` 43,
+`255md.com` 13, `www.dapam-sirius.fr` 9, `blog.rust-lang.org` 1643, `chat.google.com` 55, `tukrd.com`
+36, `www.ta3lemkonline.com` 419/420 (one element, inside the same drift). `manuk-layout` 103 green.
+
+Gate: `G_FLEX_PERCENT_LINEBREAK` **extended** rather than duplicated — same mechanism, one more
+property. Two new Chrome-measured rows: the `flex:0 0 <pct>` shorthand and the `flex-basis` longhand,
+asserted SEPARATELY so a shorthand-parsing change cannot silently take both. **Proven RED:** remove
+the `flex_basis` arm and `#fb2` reads `[0 160]` — right width, wrong line.
+
+CORRECTED IN PLACE (t817's claim, in all three places it was written): the gate doc, the wiki section,
+and the pattern-ledger row now say that flex-basis was never the culprit and name `max-width` instead.
+A wrong diagnosis banked in the wiki is worse than no diagnosis, because the next tick inherits it.
+
+HONEST SCOPE: no site is claimed to cross — the controls are Bootstrap-4-light, so this is a fixture
+result plus a corrected record. Bounds unchanged from t817: direct children of a `row` container only.
+
+PERF: none claimed — one extra field read per flex-row child.
+
+WIKI: `docs/wiki/box-layout.md` — t819 addendum + correction in the t817 section.
+
+PATTERN: ⚠⚠⚠ **A RESIDUE LABEL IS A GUESS, AND MINE WAS WRONG ONE TICK AFTER I QUOTED THE RULE THAT
+SAYS SO.** t814 established it, t815 and t816 honoured it by asserting residues at OUR numbers — and
+t817 still shipped "a flex-BASIS defect" as prose, in three files, on the strength of one fixture that
+had `max-width` and flex-basis set TOGETHER. **A residue measured with two properties present names
+neither of them.** The cheap guard is the one this tick used: re-run the residue with each suspect
+property removed in turn, which took two extra fixture rows. ⚠ The corollary is about blast radius:
+a wrong FIX is caught by the gate that follows it, but a wrong LABEL is caught by nothing — it is
+prose, it passes every test, and it aims the next tick at the wrong organ.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

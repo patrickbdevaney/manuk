@@ -748,6 +748,16 @@ fn snap_row_item_percent_widths(tree: &mut TaffyDom, root: TId, container_width:
             let px = snap_to_layout_unit(raw.value() * container_width);
             tree.nodes[i].style.size.width = length(px);
         }
+        // ⚠ **`flex-basis` IS THE MAIN SIZE TOO, and leaving it out left the bug half-fixed.**
+        // `flex: 0 0 66.666667%` (Bootstrap 4's column, and the `flex-basis` longhand behind it) never
+        // touches `width` at all — the hypothetical main size comes from the BASIS. Measured against
+        // Chrome on a 1200px row, the pair was the right WIDTHS (800/400) on the WRONG LINES, which is
+        // the same defect wearing the one property t817 did not cover.
+        let rb = tree.nodes[i].style.flex_basis.into_raw();
+        if rb.tag() == taffy::style::CompactLength::PERCENT_TAG {
+            let px = snap_to_layout_unit(rb.value() * container_width);
+            tree.nodes[i].style.flex_basis = length(px);
+        }
     }
 }
 

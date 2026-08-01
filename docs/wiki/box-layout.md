@@ -3327,9 +3327,20 @@ the fixture identically, because its percentages of 1200px all land on integers.
 because it is *Chrome's actual quantum*, and `G_FLEX_PERCENT_LINEBREAK` says so rather than implying
 a red it cannot produce.
 
-⚠ **Measured and deliberately NOT fixed here:** Bootstrap **4**'s column shape
-(`flex: 0 0 66.666667%; max-width: 66.666667%`) comes out `533` / `133` against Chrome's `800` /
-`400` — the percentage is applied twice. That is a flex-**basis** defect, a different mechanism in a
-different place, and it is the next thing this seam owes.
+⚠ **CORRECTED AT t819 — this paragraph originally called Bootstrap 4's defect "a flex-basis
+defect". It is not.** `flex: 0 0 66.666667%; max-width: 66.666667%` comes out `533` / `133` against
+Chrome's `800` / `400`, but measured on its own **the flex-basis percentage is CORRECT**: drop the
+`max-width` and the same row is exactly `800` / `400`. t819 extended the snap to `flex_basis` (the
+line-break half) and that row is now Chrome-exact. What remains is `max-width: <pct>` on a flex item
+resolving against the item's **own** taffy-assigned width instead of its containing block —
+`800 × 0.666667 = 533` — which is the height axis's documented `taffy_item_height` shape appearing on
+the width axis. Still open; it is what this seam owes next.
+
+**t819 addendum — `flex-basis` is a main size too, and leaving it out left the fix half-done.**
+`flex: 0 0 <pct>` never touches `width`; the hypothetical main size comes from the BASIS. Those rows
+came out the right *widths* (800/400) on the *wrong lines* until `flex_basis` was snapped as well.
+Both properties are handled in `snap_row_item_percent_widths`, and `G_FLEX_PERCENT_LINEBREAK` asserts
+the shorthand and the `flex-basis` longhand separately so a shorthand-parsing change cannot silently
+take both.
 
 **Gate:** `G_FLEX_PERCENT_LINEBREAK` (`engine/page/tests/g_flex_percent_linebreak.rs`).

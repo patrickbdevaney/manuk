@@ -63,10 +63,14 @@
 //! `f32` resolution and can still lose a line-break by a sub-pixel. Fixing that needs the
 //! quantisation inside taffy's resolver, which is not ours to patch.
 //!
-//! ⚠ Separately measured and NOT fixed here: Bootstrap **4**'s column shape
-//! (`flex: 0 0 66.666667%; max-width: 66.666667%`) comes out `533x20` / `133x20` against Chrome's
-//! `800` / `400` — the percentage is applied twice. That is a flex-BASIS defect, a different
-//! mechanism in a different place, and it is deliberately left alone by this tick.
+//! ⚠ **CORRECTED AT t819 — the t817 text here called this 'a flex-BASIS defect'. It is not.**
+//! Bootstrap 4's column is `flex: 0 0 66.666667%; max-width: 66.666667%` and comes out `533` /
+//! `133` against Chrome's `800` / `400`. Measured on its own, **the flex-basis percentage is
+//! CORRECT** — drop the `max-width` and the same row is exactly `800`/`400` (that is `#fb1`/`#fb2`
+//! above). The wrong number comes from `max-width: <pct>` on a flex item resolving against the
+//! item's OWN taffy-assigned width rather than its containing block: `800 × 0.666667 = 533`. Still
+//! open, still a different mechanism, and t814's rule applies to my own residue label as much as to
+//! anyone's — a residue's stated cause is a guess until it is measured on its own.
 
 use manuk_text::FontContext;
 
@@ -82,6 +86,8 @@ body{margin:0;font:16px/1.25 sans-serif}
 <div class="r"><div class="h" id="h8dp" style="width:66.66666667%">x</div><div class="i" id="b8dp" style="width:33.33333333%">x</div></div>
 <div class="r"><div class="h" id="h6dp" style="width:66.666667%">x</div><div class="i" id="b6dp" style="width:33.333333%">x</div></div>
 <div class="r"><div class="h" id="t1" style="width:33.33333333%">x</div><div class="i" id="t2" style="width:33.33333333%">x</div><div class="h" id="t3" style="width:33.33333333%">x</div></div>
+<div class="r"><div class="h" id="fb1" style="flex:0 0 66.666667%">x</div><div class="i" id="fb2" style="flex:0 0 33.333333%">x</div></div>
+<div class="r"><div class="h" id="fl1" style="flex-basis:66.666667%;flex-grow:0;flex-shrink:0">x</div><div class="i" id="fl2" style="flex-basis:33.333333%;flex-grow:0;flex-shrink:0">x</div></div>
 <div class="r"><div class="h" id="wrapa" style="width:70%">x</div><div class="i" id="wrapb" style="width:40%">x</div></div>
 </body></html>"##;
 
@@ -176,6 +182,27 @@ fn g_flex_percent_linebreak() {
          green, which is why #wrapb below is the one that bounds it from the other side",
     );
 
+    // ── THE SAME DEFECT ON THE ONE PROPERTY THE FIRST FIX DID NOT COVER (t819). `flex: 0 0 <pct>`
+    //    never touches `width` at all — the hypothetical main size comes from the BASIS — so these
+    //    came out the right WIDTHS on the WRONG LINES until `flex_basis` was snapped too.
+    assert_pos(
+        &page,
+        "#fb2",
+        800.0,
+        140.0,
+        "`flex: 0 0 66.666667%` / `33.333333%` is Bootstrap 4's column shape. The widths were already \
+         800/400 — correct — and the pair still STACKED, because the sub-pixel excess is in the \
+         flex-BASIS here, not in `width`",
+    );
+    assert_pos(
+        &page,
+        "#fl2",
+        800.0,
+        160.0,
+        "the `flex-basis` longhand behind that shorthand — same mechanism, and it is asserted \
+         separately so a shorthand-parsing change cannot silently take both rows with it",
+    );
+
     // ── THE OTHER BOUND: a genuinely over-wide pair MUST still wrap. 70% + 40% = 110% of the row,
     //    an overflow of 120px — nowhere near a rounding artefact. If this stops wrapping, the fix
     //    has become a blanket tolerance and flex-wrap is broken.
@@ -183,7 +210,7 @@ fn g_flex_percent_linebreak() {
         &page,
         "#wrapb",
         0.0,
-        160.0,
+        200.0,
         "70%+40% = 110% genuinely does not fit and MUST still break to the next line. This is the \
          assertion that stops the fix from degenerating into 'never wrap'",
     );

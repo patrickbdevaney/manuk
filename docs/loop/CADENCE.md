@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **559** | ticks 1–818 |
 | median tick cycle | **25m** | 558 intervals |
-| median, last 10 | **56m** | 10 intervals |
+| median, last 10 | **59m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 507.1h elapsed |
+| **ticks per hour** | **1.10** | 507.8h elapsed |
 | median verify wall | **63s** | 498 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -28,7 +28,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **378**
-* **✅ rows in the capability ledger**: 144 → **425**
+* **✅ rows in the capability ledger**: 144 → **426**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **270 of 559 ticks** (48%) moved a
@@ -655,6 +655,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **814** | 2026-08-01 04:14 | 59m | measurement | 63s | +100/−32 | 375 | 81 | 56.0% · | a `display:table` with no table-structured children renders NOTHING (2026-08-01) |
 | **815** | 2026-08-01 05:58 | 1.7h | capability | 63s | +412/−34 | 377 | 81 | 56.0% · | a `display:table` with no rows is a shrink-to-fit BLOCK (2026-08-01) |
 | **817** | 2026-08-01 07:33 | 1.6h | capability | 63s | +532/−34 | 378 | 81 | 56.0% · | a sub-pixel float excess breaks a flex line, and Bootstrap is written in exactly those per |
-| **818** | 2026-08-01 08:09 | 36m | process | 63s | +169/−34 | 378 | 81 | 56.0% · | the audit tick: the missing column under `applied` is `COMPARED` (2026-08-01) |
+| **818** | 2026-08-01 08:48 | 75m | process | 63s | +162/−42 | 378 | 81 | 56.0% · | the audit tick: the missing column under `applied` is `COMPARED` (2026-08-01) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
