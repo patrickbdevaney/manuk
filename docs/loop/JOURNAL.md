@@ -43511,3 +43511,99 @@ Chrome-exact, so the fix is worth zero against M1. **Before building what a comp
 which term of the metric the fix lands in**, and check whether the boxes were already right. The cost
 of asking is one fixture; the cost of not asking is a whole tick aimed off-mandate.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 823 — taffy's slot is a FINISHED ANSWER, and two things were still recomputed on top of it (2026-08-01)
+
+TICK SHAPE: capability (flex/grid layout) — the residue t819 named, measured on its own and closed
+
+HYPOTHESIS (written before the fixture): check #68's steer names one open residue precisely —
+`max-width: <pct>` on a flex item resolving against the item's **own taffy-assigned width** instead of
+its containing block (`800 × 0.666667 = 533`). That is Bootstrap 4's `.col-8`
+(`flex: 0 0 66.666667%; max-width: 66.666667%`), so its reach is every Bootstrap-4 page on the web.
+Aim with the chain: 4-line fixture → headless Chrome → one suspect per row.
+
+⚠⚠⚠ **THE FIXTURE CONVICTED THE NAMED SUSPECT AND CAUGHT A BIGGER ONE STANDING NEXT TO IT.**
+Chrome-measured on a 1200px `display:flex; flex-wrap:wrap` row and an `800px 400px` grid:
+
+```
+                                                Chrome           before      after
+  flex:0 0 90%; max-width:50%                 [  0 600]        300 wide     600  ✗→✓
+  width:90%;    max-width:50%                 [  0 600]        300 wide     600  ✗→✓
+  flex:0 0 66.666667%; max-width:66.666667%   [  0 800]        533 wide     800  ✗→✓  ← Bootstrap 4
+  flex:0 0 33.333333%; max-width:33.333333%   [800 400]        133 wide     400  ✗→✓  ← Bootstrap 4
+  flex:0 0 50%; margin-left:100px             [100 600]        x = 200      100  ✗→✓  ← NOT a percentage
+  flex:0 0 50%; margin-left:10%               [120 600]        x = 180      120  ✗→✓
+  grid item, 800px track, max-width:50%       [  0 400]        200 wide     400  ✗→✓
+  grid item, 400px track, margin-left:10%     [840 360]        x = 876      840  ✗→✓
+  flex:0 0 10%; min-width:300px               [  0 300]        300          300   ✓   guard
+  flex:0 0 90%; max-width:300px               [  0 300]        300          300   ✓   guard
+  flex:0 0 50%; padding-left:100px / 10%      [  0 700]/[0 720]  same        same  ✓   guard
+  plain block, max-width:50% / margin-left:10% [ 0 600]/[120 600] same       same  ✓   control
+```
+
+**ONE MECHANISM, TWO PROPERTIES, AND THE MARGIN HALF NEEDS NO PERCENTAGE AT ALL.** A flex/grid item's
+box is taffy's answer: taffy resolves the width, applies the item's `min-width`/`max-width` clamp
+against the **real** containing block, and positions the slot with the item's margins already taken
+out of the line. `layout_block` then did two of those three AGAIN, using the SLOT as the containing
+block. Tick ~700 had already fixed the third (`width: <pct>` re-resolving against the slot) and left
+its guard — `taffy_item_width` — covering that one property only.
+
+WHAT LANDED (`engine/layout/src/lib.rs`, one boolean): for a taffy item the min/max-width clamp is
+**skipped wholesale** (taffy resolved it against the correct reference; a second pass can only be a
+no-op or wrong), the auto-margin re-centring is skipped (taffy is what distributes `ml-auto` free
+space, against the LINE not this item's slot), `border_x`/`border_y` no longer re-add `ml`/`mt`, and
+`extract_placed`'s content-height accumulator stops adding a `margin_top` that is already in `slot.y`.
+
+⚠⚠⚠ **A PERCENTAGE CLAMP RE-APPLIED TO THE SLOT ALWAYS BINDS AGAIN; A PIXEL ONE NEVER DOES.** That is
+why this survived ~120 ticks under a guard written for the same bug. Of the four min/max × px/pct
+combinations, exactly **one** is observable: `max-width: <pct>`, wrong by the percentage SQUARED (50%
+of the 50% answer is 25% of the container). `max-width: 300px` against an already-300px slot is a
+no-op; `min-width: <pct>` of a slot can never exceed that slot. **The rows a reader reaches for first
+to check a clamp are precisely the rows that cannot fail**, and both are now asserted as guards so the
+gate says which is which.
+
+MEASURED (controls, PAIRED and BACK-TO-BACK, old binary run immediately before the rebuild):
+
+```
+                          coverage    shape old → new     jarring
+  news.ycombinator.com     1.0000     0.799751 → 0.799751   identical
+  blog.rust-lang.org       1.0000     0.993389 → 0.993389   identical
+  html.spec.whatwg.org     1.0000     0.971229 → 0.971229   identical
+  getbootstrap.com         0.9084     0.279138 → 0.279138   overlap 5 → 4
+  martinfowler.com         0.9830     0.697406 → 0.703170   reading_order 68 → 67
+  en.wikipedia.org         1.0000     0.523297 → 0.537572   overlap 1→0, reading_order 2→0
+  www.a11yproject.com      0.9646     0.334862 → 0.357798
+                                      MEAN SHAPE 65.7% → 66.3%
+```
+
+**No regression on any anchor, and coverage is unchanged on all seven.** Three sites up, four
+byte-identical; every jarring dimension that moved, moved DOWN. ⚠ `en.wikipedia.org`'s `shape_n` also
+moved (279 → 346) and that site is the one t819 caught drifting on its own, so part of its +1.4 is
+site drift rather than this change — the four identical rows are the load-bearing control.
+
+HONEST SCOPE: **no site is claimed to CROSS 0.75.** `getbootstrap.com` is Bootstrap **5**, whose
+column ships `flex: 0 0 auto; width: X%` with no `max-width` — so it is a control here, not the
+target, and it reads identical exactly as it should. The Bootstrap-**4** result is a fixture result;
+the corpus price is owed to the next clean sweep along with t815/t816/t817/t819.
+
+Gate: **`G_FLEX_ITEM_SLOT_IS_FINAL`** (new). 14 Chrome-measured rows: 8 defect rows, 4 guards (the two
+`px` clamps and both paddings), 2 plain-block controls. **Proven RED twice, one mutation per half** —
+drop the `!taffy_item` guard on the clamp and `#x2` reads 300 / `#a1` reads 533; restore
+`border_x = x + ml` and `#m1` reads x=200 / `#q2` reads x=876. Both run, neither assumed.
+
+PERF: none — one hashmap lookup moved earlier in the same function; no new work.
+
+WIKI: `docs/wiki/box-layout.md` — a t823 section on the slot-is-final rule and the px/pct asymmetry.
+
+PATTERN: ⚠⚠⚠ **A GUARD IS WRITTEN FOR THE PROPERTY THAT WAS FAILING, NOT FOR THE RULE IT ENFORCES.**
+`taffy_item_width` was introduced with the correct sentence — *"a flex/grid item's width was already
+decided by taffy, do not resolve it a second time"* — and then applied to `width` alone, while the
+clamp and the margins went on being resolved a second time in the same function, ten lines apart.
+The rule was right, its coverage was one property wide, and nothing could tell the difference because
+the *other* consumers of the slot are wrong only for percentages. ⚠ The corollary is the cheap check:
+**when a guard exists, grep every other reader of the value it guards** — the same "one rule, N
+implementations" shape that has now fired ten times here, arriving this time as one rule with N
+CONSUMERS. ⚠⚠ And the aiming note: t819's residue label was correct *and understated*. It named
+`max-width` and it was right; measuring it on its own turned up `margin`, which is not a percentage
+bug, not a Bootstrap bug, and was doubling every `margin-left` on every flex item in the corpus.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

@@ -2111,6 +2111,46 @@ impl Ctx<'_> {
             }
         }
 
+        // ── **THE SLOT IS A FINISHED ANSWER, NOT AN INPUT — AND THREE THINGS WERE STILL BEING
+        //    RECOMPUTED ON TOP OF IT** (t823).
+        //
+        // `taffy_item_width` records that this box is a flex/grid ITEM whose border box taffy already
+        // resolved. Tick ~700 used it to stop re-resolving the item's own `width` against its own
+        // slot (the comment further down tells that story). But taffy's answer includes **more than
+        // the width**: it also applied the item's `min-width`/`max-width` clamp, and it positioned the
+        // slot with the item's MARGINS already taken out of the line. Both were then applied a second
+        // time here. Measured against headless Chrome on a 1200px `display:flex` row:
+        //
+        // ```text
+        //                                              Chrome            before
+        //   flex:0 0 90%; max-width:50%              [0 140 600x20]    600 → 300   ✗ clamped twice
+        //   width:90%;    max-width:50%              [0 160 600x20]    600 → 300   ✗
+        //   flex:0 0 50%; margin-left:100px          [100 0 600x20]    x = 200     ✗ margin twice
+        //   flex:0 0 50%; margin-left:10%            [120 20 600x20]   x = 180     ✗
+        //   grid item, 800px track, max-width:50%    [0 180 400x20]    400 → 200   ✗
+        //   grid item, 400px track, margin-left:10%  [840 180 360x20]  x = 876     ✗
+        //   flex:0 0 10%; min-width:300px            [0  80 300x20]    300         ✓ (see below)
+        //   flex:0 0 90%; max-width:300px            [0 120 300x20]    300         ✓
+        //   plain block,  max-width:50% / margin:10% [0 200 600] [120 220 600]     ✓ controls
+        // ```
+        //
+        // ⚠ **A PERCENTAGE CLAMP RE-APPLIED TO THE SLOT ALWAYS BINDS AGAIN; A PIXEL ONE NEVER DOES.**
+        // That is why the two `px` rows above are green and were green before: `max-width:300px`
+        // against an already-300px slot is a no-op, so the defect was invisible on exactly the rows a
+        // reader would reach for first. `max-width: <pct>` is not — 50% of a slot that is *itself* the
+        // 50% answer is 25% of the container, and the error is the percentage SQUARED. `min-width:<pct>`
+        // is latently wrong the same way but unobservable below 100%, because a percentage of the slot
+        // can never exceed the slot.
+        //
+        // ⚠ **REACH: this is Bootstrap 4's grid.** `.col-8` ships as
+        // `flex: 0 0 66.666667%; max-width: 66.666667%` — the `max-width` is the column's whole point
+        // (it stops a grown item from exceeding its share) — and it came out **533px against Chrome's
+        // 800**. t817/t819 chased that number through `flex-basis` and through line-breaking; t819
+        // named `max-width` as the remaining suspect and this is the measurement that convicts it.
+        // The margin half is wider still: every `margin-left` on a flex item, `px` or `%`, was doubled.
+        let taffy_known = self.taffy_item_width.borrow().get(&node).copied();
+        let taffy_item = taffy_known.is_some();
+
         let mut ml = s.margin.left.resolve(cw, 0.0);
         let mr = s.margin.right.resolve(cw, 0.0);
         let mt = s.margin.top.resolve(cw, 0.0);
@@ -2146,7 +2186,6 @@ impl Ctx<'_> {
         // Taffy's slot is a border box and excludes margins, so the content width is the slot less
         // this box's own padding and border. `box-sizing` is already accounted for by that
         // subtraction, so the border-box adjustment below must not run for these.
-        let taffy_known = self.taffy_item_width.borrow().get(&node).copied();
         let mut width = match taffy_known {
             Some(border_box) => (border_box - pl - pr - bl - br).max(0.0),
             None => match s.width {
@@ -2283,10 +2322,16 @@ impl Ctx<'_> {
             other => (other.resolve(cw, f32::INFINITY) - bs_extra_w).max(0.0),
         };
         let unclamped_width = width;
-        if max_w.is_finite() {
-            width = width.min(max_w);
+        // A taffy item's slot is ALREADY clamped — re-clamping squares any percentage (see the top of
+        // this function). Skipped wholesale rather than re-resolved against the containing block,
+        // because taffy resolved it against the correct reference and a second pass can only be a
+        // no-op (px) or wrong (%).
+        if !taffy_item {
+            if max_w.is_finite() {
+                width = width.min(max_w);
+            }
+            width = width.max(min_w);
         }
-        width = width.max(min_w);
         // Did a min/max-width constraint actually move the width? For a **replaced** element that
         // is a constraint violation in CSS2.1 §10.4's sense, and the height has to follow the ratio
         // — see the height derivation below.
@@ -2308,7 +2353,12 @@ impl Ctx<'_> {
         // The `min-width` half of the same sentence looked fine only because a clamp UP needs an
         // explicit `width` to be observable (`width:auto` already fills the container), so it always
         // took the first term. One rule, two constraints, and only the one that needs no help worked.
-        if s.width != Dim::Auto || s.width_keyword.is_some() || inline_constraint_violated {
+        // ⚠ `!taffy_item`: an `auto` margin on a flex item is how `ml-auto` pushes it to the end of
+        // the line, and TAFFY is what distributes that free space — against the line, not against this
+        // one item's slot. Re-centring here against `cw` (the slot) would shove it back.
+        if !taffy_item
+            && (s.width != Dim::Auto || s.width_keyword.is_some() || inline_constraint_violated)
+        {
             let leftover = cw - (width + pl + pr + bl + br);
             match (s.margin.left.is_auto(), s.margin.right.is_auto()) {
                 (true, true) => ml = (leftover / 2.0).max(0.0),
@@ -2318,7 +2368,11 @@ impl Ctx<'_> {
         }
         let _ = mr; // right margin does not affect downstream positioning here
 
-        let border_x = x + ml;
+        // Taffy's slot POSITION already has the item's margins taken out of the line (`extract_placed`
+        // passes `base + slot.x/y` straight in), so adding them again moved every margined flex item
+        // by exactly twice its margin. The margins are still computed above — they are reported in
+        // `BlockResult` and read by the caller — they just must not be spent a second time here.
+        let border_x = x + if taffy_item { 0.0 } else { ml };
         // Parent↔child TOP margin collapse (CSS2 §8.3.1): when this block has no top border/padding,
         // is `overflow:visible`, and does not establish a BFC, its top margin collapses with its
         // first in-flow block child's collapse-through top margin. That child's margin escapes
@@ -2334,7 +2388,11 @@ impl Ctx<'_> {
         let effective_mt = collapse_margins(mt, hoist_top);
         // Collapse this block's (possibly child-hoisted) top margin with the preceding sibling's
         // trailing margin to place the border-box top.
-        let border_y = y + collapse_margins(prev_margin, effective_mt);
+        let border_y = y + if taffy_item {
+            0.0
+        } else {
+            collapse_margins(prev_margin, effective_mt)
+        };
         let content_x = border_x + bl + pl;
         let content_y = border_y + bt + pt;
 
@@ -4806,7 +4864,10 @@ impl Ctx<'_> {
             if self.style_of(p.dom).height == Dim::Auto && p.slot.height > boxx.rect.height {
                 boxx.rect.height = p.slot.height;
             }
-            let bottom = p.slot.y + r.margin_top + boxx.rect.height + r.margin_bottom;
+            // `p.slot.y` is taffy's placement, which ALREADY has the item's top margin in it — so this
+            // must not add `r.margin_top` on top (t823: `layout_block` no longer does either). The
+            // bottom margin is not in the slot, so it stays.
+            let bottom = p.slot.y + boxx.rect.height + r.margin_bottom;
             (boxx, bottom)
         }
     }

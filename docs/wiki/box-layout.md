@@ -3334,7 +3334,9 @@ Chrome's `800` / `400`, but measured on its own **the flex-basis percentage is C
 line-break half) and that row is now Chrome-exact. What remains is `max-width: <pct>` on a flex item
 resolving against the item's **own** taffy-assigned width instead of its containing block —
 `800 × 0.666667 = 533` — which is the height axis's documented `taffy_item_height` shape appearing on
-the width axis. Still open; it is what this seam owes next.
+the width axis. ✅ **CLOSED AT t823** — see *"A flex/grid item's SLOT is a finished answer"* below. The
+label was right and understated: measured on its own it also caught the item's MARGINS being applied
+twice, which is not a percentage bug and needs no framework.
 
 **t819 addendum — `flex-basis` is a main size too, and leaving it out left the fix half-done.**
 `flex: 0 0 <pct>` never touches `width`; the hypothetical main size comes from the BASIS. Those rows
@@ -3344,3 +3346,74 @@ the shorthand and the `flex-basis` longhand separately so a shorthand-parsing ch
 take both.
 
 **Gate:** `G_FLEX_PERCENT_LINEBREAK` (`engine/page/tests/g_flex_percent_linebreak.rs`).
+
+## A flex/grid item's SLOT is a finished answer, not an input (t823) — and two things kept recomputing on top of it
+
+**This closes the `max-width` residue the section above ends on, and it turned out not to be alone.**
+
+Taffy does three things to a flex/grid item: it resolves the item's `width`, it applies the item's
+`min-width`/`max-width` clamp **against the real containing block**, and it positions the slot with
+the item's **margins already taken out of the line**. `layout_block` then ran over that answer and did
+two of those three a second time, using the SLOT as the containing block.
+
+Tick ~700 had already found the third case and fixed it — that is the `taffy_item_width` map and the
+comment beginning *"A flex/grid item's width was already decided by taffy — do not resolve it a second
+time"*. **The sentence was right and its coverage was one property wide.** Ten lines further down, the
+min/max clamp was still resolving percentages against `cw`; twenty lines up, `border_x = x + ml` was
+still spending a margin taffy had already spent.
+
+Chrome-measured, 1200px `display:flex; flex-wrap:wrap` row and an `800px 400px` grid:
+
+```text
+                                                 Chrome           before      after
+  flex:0 0 90%; max-width:50%                  [  0 600]        300 wide     600  ✗→✓
+  width:90%;    max-width:50%                  [  0 600]        300 wide     600  ✗→✓
+  flex:0 0 66.666667%; max-width:66.666667%    [  0 800]        533 wide     800  ✗→✓  ← Bootstrap 4
+  flex:0 0 33.333333%; max-width:33.333333%    [800 400]        133 wide     400  ✗→✓  ← Bootstrap 4
+  flex:0 0 50%; margin-left:100px              [100 600]        x = 200      100  ✗→✓
+  flex:0 0 50%; margin-left:10%                [120 600]        x = 180      120  ✗→✓
+  grid item, 800px track, max-width:50%        [  0 400]        200 wide     400  ✗→✓
+  grid item, 400px track, margin-left:10%      [840 360]        x = 876      840  ✗→✓
+  flex:0 0 10%; min-width:300px                [  0 300]        300          300   ✓  guard
+  flex:0 0 90%; max-width:300px                [  0 300]        300          300   ✓  guard
+  flex:0 0 50%; padding-left:100px / 10%       [0 700]/[0 720]    same        same  ✓  guard
+  plain block, max-width:50% / margin-left:10% [0 600]/[120 600]  same        same  ✓  control
+```
+
+### ⚠ The asymmetry that hid it: a percentage clamp always binds again, a pixel one never does
+
+Of the four min/max × px/pct combinations, **exactly one is observable**:
+
+| | `px` | `<pct>` |
+|---|---|---|
+| **`max-width`** | no-op — 300px against an already-300px slot | ✗ **the percentage SQUARED** — 50% of the 50% answer is 25% of the container |
+| **`min-width`** | no-op | latently wrong, unobservable — a percentage of the slot can never exceed the slot |
+
+So the two rows anyone would reach for first to sanity-check a clamp (`max-width: 300px`,
+`min-width: 300px`) **cannot fail**, and were green through the whole defect. They are asserted in the
+gate as guards for exactly that reason: they are also what now holds the fix honest, because the clamp
+is skipped *wholesale* for a taffy item rather than re-resolved. If taffy ever stopped applying
+`max-width`, those rows go red here instead of being silently covered by our own second clamp.
+
+### The margin half needs no percentage and no framework
+
+`margin-left: 100px` on a flex item put the box at **x = 200**. `extract_placed` passes
+`base + slot.x` straight into `layout_block`, and `slot.x` is taffy's placement — which already has
+the margin in it. Every margined flex item in the corpus moved by twice its margin, and the same
+double-count was in `extract_placed`'s content-height accumulator (`slot.y + margin_top + …`).
+
+### The fix
+
+One boolean, `taffy_item = taffy_known.is_some()`, gating four sites in `layout_block`: the min/max
+clamp, the auto-margin re-centring (taffy is what distributes `ml-auto` free space — against the LINE,
+not against this item's slot), and the `ml`/`mt` terms of `border_x`/`border_y`; plus the accumulator
+in `extract_placed`. Padding is deliberately **not** included: taffy's slot is a BORDER box, so
+subtracting the item's own padding from it here is correct and stays (the two padding rows above are
+the guard that says so).
+
+**Gate:** `G_FLEX_ITEM_SLOT_IS_FINAL` (`engine/page/tests/g_flex_item_slot_is_final.rs`) — proven RED
+twice, one mutation per half.
+
+⚠ **The lesson for the next seam like this: a guard is written for the property that was failing, not
+for the rule it enforces.** When a value is guarded, grep every other *consumer* of that value. This
+is the "one rule, N implementations" shape arriving as one rule with N **readers**.

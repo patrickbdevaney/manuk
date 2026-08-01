@@ -68,9 +68,14 @@
 //! `133` against Chrome's `800` / `400`. Measured on its own, **the flex-basis percentage is
 //! CORRECT** — drop the `max-width` and the same row is exactly `800`/`400` (that is `#fb1`/`#fb2`
 //! above). The wrong number comes from `max-width: <pct>` on a flex item resolving against the
-//! item's OWN taffy-assigned width rather than its containing block: `800 × 0.666667 = 533`. Still
-//! open, still a different mechanism, and t814's rule applies to my own residue label as much as to
-//! anyone's — a residue's stated cause is a guess until it is measured on its own.
+//! item's OWN taffy-assigned width rather than its containing block: `800 × 0.666667 = 533`. A
+//! different mechanism, and t814's rule applies to my own residue label as much as to anyone's — a
+//! residue's stated cause is a guess until it is measured on its own.
+//!
+//! ✅ **CLOSED AT t823 by `G_FLEX_ITEM_SLOT_IS_FINAL`**, which asserts the Bootstrap-4 pair's WIDTHS
+//! (800/400). The label above was right and understated: measured on its own it also caught a flex
+//! item's MARGINS being applied twice. This gate keeps the line-BREAK half; that one keeps the
+//! width half, and the two are deliberately not merged — they fail for different reasons.
 
 use manuk_text::FontContext;
 

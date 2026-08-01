@@ -169,6 +169,10 @@
   - L3268 · A sub-pixel float excess breaks a flex line — and Bootstrap is written in exactly those percentages (t817)
   - L3308 · The fix, and why it is where it is
   - L3316 · Bounds, stated rather than glossed
+  - L3350 · A flex/grid item's SLOT is a finished answer, not an input (t823) — and two things kept recomputing on top of it
+  - L3383 · ⚠ The asymmetry that hid it: a percentage clamp always binds again, a pixel one never does
+  - L3398 · The margin half needs no percentage and no framework
+  - L3405 · The fix
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1381,4 +1385,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1292 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1296 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
