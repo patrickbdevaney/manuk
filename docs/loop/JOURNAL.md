@@ -42358,3 +42358,84 @@ would have been the most quotable number of the session and would have been a li
 REASON COUNTS between two sweeps before comparing their denominators**; a category that goes from 48
 to 0 is a harness change, not an engine one, and it is visible in one `uniq -c`.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 808 — the padded inline BOX grows; the LINE does not (2026-07-31)
+
+TICK SHAPE: capability (inline layout) — one primitive, aimed from the FRESH t807 near-bar list
+
+HYPOTHESIS (written before the probe): the t807 sweep gives a same-hour §8 table. Take its smallest
+jarring-clean fully-covered rows — `mobcup.fm` (n=31), `app.ordertime.com` (n=29), `linkmake.in`
+(n=74, +0.047) — and run the mechanism oracle on all three, hoping for one shared primitive.
+
+WHAT THE ORACLE SAID: no shared primitive, but `linkmake.in` names the same defect twice — an `<a>`
+that is **94×37 in Chrome and 94×19 here**, in both header buttons. Its CSS is
+`.btnplus { padding: 10px 20px }` on a plain inline `<a>`. Widths match; only the height is halved.
+
+MECHANISM: CSS 2.1 §10.6.1 — on a non-replaced inline, vertical padding and border **do not affect
+line height**, but the box still has them. So the pill *overflows* its line, and that overflow is the
+entire visual point of the idiom. We grew neither: the box was just its text's content area.
+
+```
+                                             Chrome        before       after
+  <a padding:10px 20px>Login</a>          [0 -9 79x37]  [0 0 79x18]  [0 -9 79x37]  ✗→✓
+  <span padding:10px 20px>                [0 11 77x37]     …77x18    [0 11 77x37]  ✗→✓
+  <span padding:10px 0>   (VERTICAL only) [0 31 61x37]     …61x17    [0 31 61x37]  ✗→✓
+  <span border:5px solid>                 [0 76 76x27]     …76x18    [0 76 76x27]  ✗→✓
+  <span inline-block padding:10px 20px>  [0 100 117x40]    …117x40      …117x40    ✓ always right
+  THE CONTAINING DIV                     [0 140 600x20]    …600x20  [0 140 600x20] ✓ MUST NOT MOVE
+```
+
+**Note the y.** Chrome's anchor starts at −9: the box begins ABOVE its own text. A rect anchored at
+the line top cannot express that, so the padding edge carries a new `report_ascent` — how far above
+the baseline its reported rect starts.
+
+⚠⚠ **AN ATOMIC BOX WITH THE SAME PADDING WAS ALWAYS CORRECT.** `display:inline-block` owns its own
+border box, so `#s5` is 40 in both engines, before and after. That is precisely the shape a
+test-writer reaches for when checking "does padding work", and it is why this survived.
+
+⚠⚠⚠ **AND THE FIRST WORKING VERSION WAS A TRADE, CAUGHT BY THE FIXTURE'S OWN CONTAINING DIV.** Every
+anchor read 37 correctly — and the containing `<div>` read **37 too**, against Chrome's 20, pushing
+every following line down the page. `close_line` folds a synthetic reporter's `line_height` in as a
+FLOOR on the line box, which is right for an empty inline (Chrome gives `<span id="anchor"></span>` a
+line-height-tall rect and a real line) and catastrophic here. A padded edge now reports a tall RECT
+and a **zero** line-height. The div is asserted at 20 alongside every 37, because without it the gate
+is green on a change that relaid the page.
+
+A second arm was needed for `padding: 10px 0`: vertical padding emits no horizontal edge, so nothing
+carried the report and it stayed at 17. It gets a zero-width edge that does **not** hold a line box
+open — reusing the measurement already recorded in `collect_inline_node` (only an edge occupying
+inline flow width brings a line into existence; a vertical-only one does not).
+
+MEASURED: **`linkmake.in` shape 0.702703 → 0.756757 — CROSSES the 0.75 bar, jarring-clean on all four
+dimensions. The third M1 crossing of this session.** Six controls byte-identical:
+`www.dapam-sirius.fr` 0.800000, `255md.com` 0.767442, `blog.rust-lang.org` 0.993389,
+`news.ycombinator.com` 0.798507, `chat.google.com` 0.847458, `www.kicktipp.com` 0.725000.
+`manuk-layout` 103 tests green.
+
+⚠ **DISCLOSED: `en.wikipedia.org`'s `reading_order` went 5 → 7** while its shape stayed **byte-identical
+at 0.593110 with n=1074** — the same DOM, so this is attributable to the change rather than to drift.
+Two more sibling pairs read out of order once padded inlines have their real height. It does not move
+wikipedia's M1 status (it already fails jarring at `h_overflow = 52`), and it is not traced to a
+mechanism; recorded rather than left for a later sweep to surface as an unexplained band.
+
+Gate: `G_INLINE_VERTICAL_PADDING` (new), nine Chrome-measured heights plus a y assertion. **Proven RED
+three ways:** drop `report_ascent` → `#a1` is 18 at y=0 while the inline-block and the div still pass;
+feed the padded height back into `line_height` → **only `#wrap` fails, at 37**, every height assertion
+still passing; drop the vertical-only arm → only `#s2` fails, at 17.
+
+HONEST SCOPE: one crossing, verified. The `#s3` row (horizontal-only padding) is asserted at OUR 18
+rather than Chrome's 17, with the reason written next to it — that 1px is the `line-height: normal`
+rounding residual named at t802, it predates this change and is unmoved by it, and asserting Chrome's
+number there would make the gate fail for something it does not test.
+
+PERF: none claimed — one extra font-metrics lookup per inline element that has vertical padding.
+
+WIKI: `docs/wiki/box-layout.md` — new section.
+
+PATTERN: ⚠⚠⚠ **THE FIXTURE MUST CONTAIN THE THING THE FIX COULD BREAK, NOT ONLY THE THING IT FIXES.**
+Every anchor in this fixture read 37 in the first working version, and the change was wrong: the
+containing block had grown with them. The div was in the fixture only because I had written it to ask
+*"does the line box stay 20?"* — a question about what must NOT move — and it is the single assertion
+that separates this fix from a page-relaying regression. **When a change makes a box bigger, assert
+its PARENT.**
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

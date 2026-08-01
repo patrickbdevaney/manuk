@@ -5144,13 +5144,50 @@ impl Ctx<'_> {
                 let mark = out.len();
                 let pad_l = s.padding.left.resolve(cw, 0.0) + s.border_width.left;
                 let pad_r = s.padding.right.resolve(cw, 0.0) + s.border_width.right;
-                if pad_l > 0.0 {
+                // ── **VERTICAL padding/border extend the inline BOX without touching the LINE**
+                //    (CSS 2.1 §10.6.1: on a non-replaced inline, `height` and vertical padding do not
+                //    affect line height, but the box still has them). Chrome-measured, `16px/1.25
+                //    sans-serif`:
+                //
+                //    ```text
+                //      <a style="padding:10px 20px">Login</a>   box 37 tall, starting 10px ABOVE its
+                //                                               text; the LINE stays 20
+                //      <span style="border:5px">Bordered</span> box 27 tall
+                //      <span style="padding:0 20px">…</span>    box 17 — horizontal only, unchanged
+                //    ```
+                //
+                //    We reported 18 for the first two, so a padded inline link — the way every tag,
+                //    badge, nav pill and button-styled link on the web is written — had a box half
+                //    the height the author drew, and PAINTED its background at that size.
+                //
+                //    The height is the element's own content area (its font's ascent+descent) plus
+                //    its vertical padding and border; the rect starts `pad_t + border_t` above the
+                //    content top, which is what `report_ascent` carries.
+                let pad_t = s.padding.top.resolve(cw, 0.0) + s.border_width.top;
+                let pad_b = s.padding.bottom.resolve(cw, 0.0) + s.border_width.bottom;
+                let (v_ascent, v_height) = if pad_t > 0.0 || pad_b > 0.0 {
+                    let ts = text_style(&s, self.fonts);
+                    let lm = self.fonts.line_metrics(ts.font_key, ts.font_size);
+                    (
+                        Some(lm.ascent.round() + pad_t),
+                        lm.ascent.round() + lm.descent.round() + pad_t + pad_b,
+                    )
+                } else {
+                    (None, 0.0)
+                };
+                // `|| v_ascent.is_some()`: `padding: 10px 0` has NO horizontal edge, so without this
+                // there is no spacer at all and nothing carries the vertical report — the box stays
+                // 17 where Chrome says 37. `holds_line` still keys on the HORIZONTAL edge only,
+                // because that is what the measurement says brings a line box into existence (see
+                // the `out.len() == mark` branch below): a vertical-only edge does not.
+                if pad_l > 0.0 || v_ascent.is_some() {
                     out.push(InlineItem::Spacer {
                         width: pad_l,
                         node: Some(node),
                         space_before: *pending_space && !*first,
-                        report_height: 0.0,
-                        holds_line: true,
+                        report_height: v_height,
+                        report_ascent: v_ascent,
+                        holds_line: pad_l > 0.0,
                     });
                     *first = false;
                     *pending_space = false;
@@ -5165,7 +5202,8 @@ impl Ctx<'_> {
                         width: pad_r,
                         node: Some(node),
                         space_before: false,
-                        report_height: 0.0,
+                        report_height: v_height,
+                        report_ascent: v_ascent,
                         holds_line: true,
                     });
                     *pending_space = false;
@@ -5200,6 +5238,10 @@ impl Ctx<'_> {
                         node: Some(node),
                         space_before: false,
                         report_height: s.line_height.max(0.0),
+                        // An EMPTY inline keeps the old line-top anchoring: Chrome reports a
+                        // line-height-tall rect for `<span id="anchor"></span>`, and that is
+                        // measured behaviour this must not disturb.
+                        report_ascent: None,
                         holds_line: false,
                     });
                 }
@@ -5378,6 +5420,7 @@ impl Ctx<'_> {
                         descent: 0.0,
                         node,
                         report_h: Some(height),
+                        report_ascent: None,
                         atomic: None,
                         atomic_h: 0.0,
                         atomic_baseline: 0.0,
@@ -5417,6 +5460,7 @@ impl Ctx<'_> {
                         descent: 0.0,
                         node,
                         report_h: Some(height),
+                        report_ascent: None,
                         atomic: None,
                         atomic_h: 0.0,
                         atomic_baseline: 0.0,
@@ -5503,6 +5547,7 @@ impl Ctx<'_> {
                             descent: lm.descent,
                             node,
                             report_h: None,
+                            report_ascent: None,
                             atomic: None,
                             atomic_h: 0.0,
                             atomic_baseline: 0.0,
@@ -5534,6 +5579,7 @@ impl Ctx<'_> {
                             descent: 0.0,
                             node: None,
                             report_h: None,
+                            report_ascent: None,
                             atomic: None,
                             atomic_h: 0.0,
                             atomic_baseline: 0.0,
@@ -5588,6 +5634,7 @@ impl Ctx<'_> {
                             descent: 0.0,
                             node: None,
                             report_h: None,
+                            report_ascent: None,
                             atomic: Some(box_),
                             atomic_h: height,
                             atomic_baseline: own_baseline.unwrap_or(height),
@@ -5603,6 +5650,7 @@ impl Ctx<'_> {
                     node,
                     space_before,
                     report_height,
+                    report_ascent,
                     holds_line,
                 } => {
                     // Inline padding/border: occupies `width`, paints nothing, but its
@@ -5634,7 +5682,21 @@ impl Ctx<'_> {
                                 font_key: key,
                                 font_size: 16.0,
                                 color: Rgba::BLACK,
-                                line_height: report_height,
+                                // ⚠ **A PADDED edge reports a tall RECT and a ZERO line-height.**
+                                // `close_line` folds a synthetic reporter's `line_height` in as a
+                                // floor on the line box — right for an empty inline (Chrome gives
+                                // `<span id=anchor></span>` a line-height-tall rect and a real line),
+                                // and WRONG here: CSS 2.1 §10.6.1 says vertical padding on a
+                                // non-replaced inline does not affect line height. Measured: the div
+                                // around `<a style="padding:10px 20px">` is **20** in Chrome while
+                                // the anchor itself is 37 — the pill overflows its line, which is the
+                                // whole visual point of the idiom. Feeding the padded height in as a
+                                // floor made that div 37 and pushed every following line down.
+                                line_height: if report_ascent.is_some() {
+                                    0.0
+                                } else {
+                                    report_height
+                                },
                                 decoration: Default::default(),
                                 letter_spacing: 0.0,
                                 word_spacing: 0.0,
@@ -5644,6 +5706,7 @@ impl Ctx<'_> {
                             descent: 0.0,
                             node,
                             report_h: Some(report_height),
+                            report_ascent,
                             atomic: None,
                             atomic_h: 0.0,
                             atomic_baseline: 0.0,
@@ -5739,6 +5802,8 @@ struct LineFrag {
     /// as a coverage regression rather than a placement one. Made explicit so the next change to
     /// `rect()` cannot repeat it.
     report_h: Option<f32>,
+    /// See `InlineItem::Spacer::report_ascent` — how far above the baseline the reported rect starts.
+    report_ascent: Option<f32>,
     /// `Some` for an `inline-block`: the box to place, and its margin-box height.
     atomic: Option<Box<LayoutBox>>,
     atomic_h: f32,
@@ -6030,9 +6095,13 @@ fn close_line(
             // A synthetic reporter keeps the box it was built to report — anchored at the LINE TOP,
             // which is where it sat before the content area existed and where its owning element's
             // padding/border actually paints.
-            let (fa, fd) = match f.report_h {
-                Some(h) => (baseline - y, h - (baseline - y)),
-                None => (f.ascent.round(), f.descent.round()),
+            let (fa, fd) = match (f.report_h, f.report_ascent) {
+                // A PADDED inline edge: its rect starts above the content top by the vertical
+                // padding+border, so it carries its own ascent rather than anchoring at the line
+                // top. See `InlineItem::Spacer::report_ascent`.
+                (Some(h), Some(a)) => (a, h - a),
+                (Some(h), None) => (baseline - y, h - (baseline - y)),
+                (None, _) => (f.ascent.round(), f.descent.round()),
             };
             frags.push(TextFragment {
                 x: fx,
@@ -6111,6 +6180,19 @@ enum InlineItem {
         node: Option<NodeId>,
         space_before: bool,
         report_height: f32,
+        /// ⚠⚠ **How far ABOVE the baseline this spacer's reported rect starts** — `None` means
+        /// "from the line top", which is what every spacer used to do.
+        ///
+        /// It exists because **vertical padding and border on an INLINE box extend the box without
+        /// touching the line**. `<a style="padding:10px 20px">Login</a>` is 37px tall in Chrome and
+        /// starts 10px ABOVE its own text, while the line box around it stays 20px — the padded pill
+        /// simply overflows its line, which is exactly why `padding` on an inline link is the way
+        /// every tag, badge, nav pill and button-styled link on the web is written. We reported 18
+        /// and painted 18: the blue pill was half the height the author drew.
+        ///
+        /// A rect anchored at the line top cannot express that, because the box starts above it. So
+        /// the padded edge spacer carries its own ascent.
+        report_ascent: Option<f32>,
         holds_line: bool,
     },
     /// A **forced line break** — `<br>`, or a newline inside `white-space: pre`.

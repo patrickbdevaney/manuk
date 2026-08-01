@@ -3029,3 +3029,47 @@ to the space. So a probe of "spacing" that happened to use `word-spacing` report
 `letter-spacing: .05em` on nav bars, buttons, headings and uppercase labels is design-system standard,
 so this rides on a large share of the chrome of the modern web, and on every one of those runs
 everything after the first word was in the wrong place.
+
+## The padded inline BOX grows; the LINE does not (t808)
+
+```html
+<a class="btn" href="/login">Login</a>          .btn { padding: 10px 20px }
+```
+
+An inline `<a>` with padding is how every tag, badge, nav pill, chip and button-styled link on the web
+is written. CSS 2.1 §10.6.1: on a non-replaced inline, vertical padding and border **do not affect
+line height** — but the box still has them, so the pill *overflows* its line. That overflow is the
+entire visual point of the idiom.
+
+We grew neither. The box was its text's content area, so a 37px pill reported **18** — and painted
+its background at 18, half the height the author drew.
+
+```
+                                             Chrome     ours (before)
+  <a padding:10px 20px>Login</a>          [0 -9 79x37]  [0 0 79x18]
+  <span padding:10px 0>  (VERTICAL only)  [0 31 61x37]  [… 61x17]
+  <span border:5px solid>                 [0 76 76x27]  [… 76x18]
+  <span display:inline-block padding:…>  [0 100 117x40] [… 117x40]  ✓ always right
+  THE CONTAINING DIV                     [0 140 600x20] [… 600x20]  ✓ must not move
+```
+
+An **atomic** box (`inline-block`) was always correct, because it owns its own border box — which is
+exactly the shape a test-writer reaches for, and why this survived.
+
+### The containing div is what makes it a fix and not a trade
+
+`close_line` folds a synthetic reporter's `line_height` in as a **floor on the line box**. That is
+right for an empty inline (Chrome gives `<span id="anchor"></span>` a line-height-tall rect and a real
+line) and wrong here. The first working version of this change reported 37 correctly on every anchor
+**and made the containing div 37 too**, pushing every following line down the page. So a padded edge
+now reports a tall RECT and a **zero** line-height, and the gate asserts the div at Chrome's 20
+alongside every 37.
+
+### Two arms, because the edges are not symmetric
+
+The horizontal padding edges already existed as `InlineItem::Spacer`s (they occupy inline flow width);
+they now carry `report_ascent` — how far above the baseline the rect starts, since the box begins
+*above* its own text and a line-top-anchored rect cannot express that. And `padding: 10px 0` emits no
+horizontal edge at all, so it needs a zero-width one — which does **not** hold a line box open,
+because the measurement already recorded in `collect_inline_node` says only an edge occupying inline
+flow width does.
