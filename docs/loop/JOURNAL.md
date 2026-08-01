@@ -42033,3 +42033,85 @@ a confident wrong answer instead of nothing. The tell is a helper whose argument
 rather than a *node* — grep for every call site that passes it `style_of(child)`, because each one is
 asking a question the type cannot represent. This engine had five; one had the guard.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 804 — the flex/abspos fix is spec-correct, fixture-exact, and REFUSED (2026-07-31)
+
+TICK SHAPE: measurement + constitution check #66 — a refused trade, recorded rather than retried quietly
+
+HYPOTHESIS (written before the fixture): t803 named its own next tick. It exposed a defect it had been
+hiding — `taffy_tree::flex_items` pushes **every** element child into the item list, where Flexbox
+§4.1 says an absolutely-positioned child of a flex container **is not a flex item and does not
+contribute to the container's size**. It was invisible while abspos boxes measured 0×0, and became
+visible as two elements of `en.wikipedia.org` the moment they measured something. Fix it and wikipedia
+should recover.
+
+WHAT THE FIXTURE SAID — the spec is right and the isolated fix is exact:
+
+```
+                                                       Chrome   before   after
+  flex fit-content row + 100px abspos label             18x20    18x100   18x20   ✗→✓
+  …the same row WITHOUT the abspos child                18x20    18x20    18x20   ← identifies the cause
+  …with padding:10px                                    38x40    38x80    38x40   ✗→✓
+  GRID, fit-content, + abspos label                     18x20    18x100   18x20   ✗→✓
+  flex row + position:FIXED child                       18x20    18x40    18x20   ✗→✓
+  the abspos child itself   k1                          73x100   73x100   73x100  ✓ already exact
+  …at its static position   k4                        [10 70]   [10 70]  [10 70]  ✓ already exact
+```
+
+Six containers and four children Chrome-exact, from one edit: skip an out-of-flow item's bottom when
+folding the container's content height. Taffy already places the child correctly; only the container
+was growing to contain content that is by definition outside its flow.
+
+⚠⚠⚠ **AND ON `en.wikipedia.org` IT COST NINE ELEMENTS OF 1074, SO IT IS REFUSED.**
+
+The control matters more than the number, so here it is in full. Wikipedia read 0.602180/n=1101 at
+t803 and 0.584730/n=1074 with this fix — but **the site changed between those runs**, so that pair is
+not a comparison. Rebuilding `engine/` at HEAD and measuring in the same window (t800's rule):
+
+```
+                            shape       n
+  HEAD (t803)             0.593110    1074
+  HEAD + this fix         0.584730    1074      −0.0084 = 9 elements
+```
+
+Same `n`, same window, same corpus — **like-for-like, and it is ours.** Five other controls
+byte-identical (`dapam-sirius` 0.800, `255md` 0.767, `linkmake` 0.703, `blog.rust-lang` 0.993,
+`ycombinator` 0.797, `chat.google` 0.847). **No site crossed.**
+
+The oracle diff names one readable new divergence: `header/div[1]/nav[1]/div[1]`, Chrome
+`[38 17 32×32]`, ours now `[38 15 100×36]` — a 32×32 hamburger button becoming 100×36. **That is a
+WIDTH change out of a HEIGHT-only edit**, so there is a coupling between the container's resolved
+height and a sibling's width resolution that nobody has traced. Some divergences also went away
+(`main/div[2]/div[1]`, Chrome `[960 136 196×78]` vs ours `[960 180 196×476]`, is gone), so the change
+both fixes and breaks — and the net is negative.
+
+**A change whose blast radius on a real page is not understood is not a fix yet, however right the
+specification is.** Same verdict as t695's spec-correct 8/8 fix that regressed its control. Reverted;
+`git status` clean of engine changes, wikipedia confirmed back at 0.593110 and `dapam-sirius` still
+0.800 after the revert.
+
+⚠ **WHAT IS BANKED SO THE NEXT ATTEMPT STARTS FROM THE ANSWER**: the fixture above with its Chrome
+numbers, the spec clause (Flexbox §4.1 / Grid §9), the file and expression (`layout_flex_or_grid`'s
+`max_h = max_h.max(bottom)` fold over `placed`), and the ONE question that has to be answered first —
+why does removing an out-of-flow item from a container's HEIGHT change a sibling button's WIDTH from
+32 to 100?
+
+Also this tick: **CONSTITUTION CHECK #66** (due at 804), recorded in `docs/loop/CONSTITUTION-CHECK.md`.
+Verdict: GATE, not scoreboard — the window produced **two M1 crossings from two aimed fixes** and M1
+moved 2.4% → 4.2% → 5.5% across three banked sweeps. The steer is unchanged and now measured: keep
+aiming from the §8 crossing-ranked list; re-run the old binary whenever a control moves. Two harness
+items reported and not patched (`CHUNK_ROUNDS=4` invalidated the t800 sweep's scorability with 48
+false `crashed` rows; the self-audit's wall figure reads a stale contended receipt).
+
+PERF: none — no engine change survives this tick.
+
+WIKI: none — the engine is byte-identical to t803; the mechanism this tick establishes is about the
+DECISION (a refused trade and its evidence), which belongs in the journal and the constitution ledger.
+
+PATTERN: ⚠⚠⚠ **"THE FIXTURE IS EXACT" AND "THE FIX IS RIGHT" ARE DIFFERENT CLAIMS.** Six isolated
+cases went from wrong to Chrome-exact and the real page got worse, because a fixture holds everything
+else still and a page does not. The tell that the two had come apart was a **cross-axis surprise** — a
+height-only edit moving a width — and that is the cheapest possible signal that the change is reaching
+further than its argument does. When a fix's effect appears in an axis the edit never touched, stop
+and trace the coupling before landing it.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

@@ -3616,3 +3616,108 @@ do not read its scorability.**
    reading the paired band and treat any sweep with a non-zero `crashed` count as scorability-invalid.
 
 **Next check due: tick 804.**
+
+---
+
+## Check #66 — tick 804 (2026-07-31)
+
+**Horizon:** H0 — Pareto Web Parity. **Gate:** M1 RENDER — `shape >= 0.75` AND jarring-clean on
+>= 95% of the in-scope CrUX corpus (`scripts/phase0-milestones.sh`).
+
+### GATE OR SCOREBOARD? — GATE, and for the first time this window it MOVED BY CROSSINGS
+
+The t796 check closed with the steer *"aim from the §8 crossing-ranked list, then probe the primitive
+that site's divergence names"*. Eight ticks later that is exactly what the window did, and it is the
+first window in this burndown's history to produce **two M1 crossings from two aimed fixes**:
+
+```
+  t799  anonymous block inherits (align + strut)   linkmake.in       0.622 → 0.703
+  t800  MEASURE — clean --jobs2 sweep banked        (the checkpoint the board had asked for 3×)
+  t801  max-width re-runs the auto-margin split     255md.com form   x 309 → 400 (masked)
+  t802  a control does not inherit line-height      255md.com        0.721 → 0.767   ★ CROSSES
+  t803  a text node is never out of flow            dapam-sirius.fr  0.633 → 0.800   ★ CROSSES
+  t804  flex abspos item — REFUSED (this check)
+```
+
+M1 across the three banked sweeps: **2.4% → 4.2% → 5.5%**, in-scope shape-pass **6.3% → 6.2% → 8.3%**.
+The band the t796 check called "the binding half" (jarring-clean, 18.1%) is unchanged at 17.2% — the
+crossings came from sites that were *already* jarring-clean and short on shape, which is precisely the
+§8 ranking's prediction. **The method is no longer a hypothesis.**
+
+### THE INSTRUMENT CORRECTION OF THIS WINDOW — pairing the site list is not pairing the SITE
+
+t794 banked *"a sweep-to-sweep delta is not a result unless it is PAIRED"* and the observer wired the
+COMMON-SET BAND into `fidelity-progress.sh`. At t800 that band read **−0.35 pts (9 sites down, 2 up)**
+and the loop treated it as a regression, as the ratchet requires. **Rebuilding `engine/` at the exact
+tree behind the previous sweep reproduced TODAY's numbers, not the previous sweep's** — `nysainfo.pl`
+0.678 in the band, 0.562 on the old binary run today. The band over live pages sums the engine's delta
+with the WEB's and publishes both under the engine's name.
+
+**Banked as a mechanism, and used twice since:** when a control moves, rebuild the old binary in the
+same window before believing it. t803 did exactly that (wikipedia −2/1101 → confirmed as ours, landed
+with the cause named) and t804 did it again (wikipedia −9/1074 → confirmed as ours, **refused**). It
+cost three minutes each time and it changed the decision both times.
+
+### ⚠ THE REFUSED TRADE, recorded because refusing is the harder half of the ratchet
+
+t803 exposed a genuine defect it had been hiding: `taffy_tree::flex_items` pushes every element child
+into the item list, where **Flexbox §4.1 says an absolutely-positioned child is not a flex item and
+does not contribute to the container's size**. A six-case fixture confirmed it — a `width:fit-content`
+flex row holding `ab` and a 100px abspos label is **18×20** in Chrome and **18×100** here — and
+excluding out-of-flow items from the container's height made all six containers and all four children
+Chrome-exact.
+
+**On `en.wikipedia.org` it cost nine elements of 1074 (0.593 → 0.585), with no site crossing and no
+mechanism connecting the fixture to the loss.** Five other controls were byte-identical. Spec-correct,
+fixture-exact, and refused — the same verdict as the t695 fix that was 8/8 on its own fixture and
+regressed its control. **A change whose blast radius on a real page is not understood is not a fix
+yet, however right the specification is.** The fixture and the spec clause are banked in the journal
+so the next attempt starts from the answer rather than the question.
+
+### INVARIANTS
+
+- **I2 (never patch dependencies):** held — fork surface still empty across t797–t804.
+- **I3 (semantic model in lockstep):** held. t803's fix gives boxes to content that previously had
+  none, which strictly improves what the a11y tree and hit-test can see; nothing was removed.
+- **I4 (Pareto discipline):** held, and unusually literally. Every fix this window is a rule that runs
+  on a large fraction of all pages: `.container { max-width; margin:0 auto }`, `body { line-height }`
+  reaching a form control, a centred section with a block child, and `<div style="position:absolute">`
+  around bare text. None was chosen for its WPT mass.
+- **I5 (the log/oracle is the discovery engine):** held, and sharpened again. **t803's probe returned
+  "no bug" on the question it was asked** — shrink-to-fit is Chrome-exact in eight of nine contexts,
+  retiring the min-content hypothesis kicktipp suggested — and the ninth context was the finding. That
+  is the third window running in which the largest result came from a fixture built to ask something
+  else.
+- **PART VII / V1-SCOPE:** honoured. No `scripts/` file authored or edited in t797–t804. Two harness
+  problems were reported and not patched (below).
+
+### PART VI CORRECTION — what is now the real blocker
+
+The **scorability ceiling is unchanged and is still the cap**: 77/145 in-scope sites render, so M1
+cannot exceed ~53% however good the layout gets. Shape work is buying real crossings inside that
+ceiling and should continue while the near-bar list has jarring-clean sites within 0.06 — there are
+still four (`kicktipp` +0.025, `gismart` +0.042, `linkmake` +0.047, `ikea` +0.052). But the arithmetic
+has not changed since the t777 board block: **the function leg raises the cap and nothing else does.**
+
+### HARNESS, reported not patched (PART VII)
+
+1. **`CHUNK_ROUNDS = 4` again invalidated a sweep's scorability.** t800 filed **48** rows as `crashed`;
+   the log states the mechanism outright (`chunk 1 exited early with 70 … 56 … 47 site(s) unrun`, then
+   `47 site(s) never produced a row after 4 rounds — filed as crashed`). No site crashes. Second
+   consecutive check-in reporting this; the paired band remains the only readable half.
+2. **The self-audit's wall figure reads a stale receipt.** `verify wall: 1523s` comes from
+   `.git/manuk-verify-receipt`, whose row carried `unattributed_seconds: 1523` and `load1: 7.59` — a
+   contended box — against `LAST_WALL_TIME: 63s` in STATUS.md. Recorded at t799 and unchanged.
+
+### THE STEER
+
+1. **KEEP AIMING FROM THE §8 LIST — it is now measured, not argued.** Two aimed fixes, two crossings,
+   in five ticks. The four remaining jarring-clean near-bar sites are the next four targets.
+2. **RE-RUN THE OLD BINARY WHENEVER A CONTROL MOVES.** Three minutes, and it changed the verdict twice
+   in this window — once to land (t803) and once to refuse (t804). It is now part of the tick, not a
+   special measure.
+3. **THE FLEX/ABSPOS FIX IS OPEN, WITH ITS FIXTURE BANKED.** Before retrying it, explain the nine
+   wikipedia elements — the readable one is a 32×32 hamburger button becoming 100×36, which is a WIDTH
+   change from a HEIGHT-only edit and therefore a coupling nobody has traced.
+
+**Next check due: tick 812.**
