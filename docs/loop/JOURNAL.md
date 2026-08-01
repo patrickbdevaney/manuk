@@ -42861,3 +42861,66 @@ was not there. Isolating gives you two readings in one window with the site held
 the only one of the two that answers the question asked. **The seductive part is that the walk
 produces a NUMBER PER TICK and therefore looks like the more thorough method.**
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 814 — a `display:table` with no table-structured children renders NOTHING (2026-08-01)
+
+TICK SHAPE: measurement — a residue named at t811, characterised and specified
+
+HYPOTHESIS (written before the fixture): t811's fixture left one row unasserted with a reason —
+`display:table` beside a float is `[80 200 35x20]` in Chrome and a **0-wide box** here, blamed on "a
+table intrinsic-width defect that predates this change". That blame was a guess. Measure it directly,
+away from any float.
+
+MEASURED — and the defect is larger and simpler than "intrinsic width":
+
+```
+                                                    Chrome        ours
+   display:table, bare text "short"               [0   0  36x20]  [0 0 0x0]   ✗
+   display:table, a longer run of text            [0  20 213x20]  [0 0 0x0]   ✗
+   display:table, width:200px, bare text          [0  86 200x20]  [0 0 0x0]   ✗ ← even EXPLICIT
+   display:inline-table, bare text                [0 106  72x20]  [0 0 0x0]   ✗
+   display:table + table-row + table-cell         [0  40 109x20]  [0 0 109x20] ✓ exact
+   a real <table><tr><td>                         [0  60  97x26]  [0 20  91x22] ~ pre-existing metric
+```
+
+**It is not a width defect. The box does not exist at all** — and an explicit `width:200px` does not
+save it, which is what rules out sizing and names the cause.
+
+MECHANISM: `collect_table_rows` walks the table's children and keeps only elements whose display is
+`TableRow` or `TableRowGroup`; everything else hits `_ => {}` with the comment *"caption / column /
+colgroup / stray content: skipped"*. A `display:table` box whose only child is a **text node** has
+zero rows, and `layout_table` then produces an empty box. CSS 2.1 §17.2.1 says such content is wrapped
+in an **anonymous table-cell inside an anonymous table-row**; `layout_table`'s own doc-comment already
+declares its anonymous-box fixup *"minimal"*, so this is a known-bounded edge that nobody had priced.
+
+⚠ **THIS IS THE THIRD TIME THIS SESSION THAT A BARE TEXT NODE HAS FALLEN THROUGH A STRUCTURAL
+FILTER.** t799: an anonymous block inherited nothing because the filter had no node to ask. t803: a
+text node cloned its parent's `position:absolute` and filtered itself out of the box it *was*. Now:
+a text node is not a `TableRow`, so the table it is the entire content of renders as nothing. **The
+recurring shape is a filter written for elements, applied to a child list that contains text.**
+
+THE REACH: `display:table` on a non-table element is the pre-flexbox shrink-wrap-and-centre idiom
+(`display:table; margin:0 auto`), and `display:table-cell; vertical-align:middle` is *the* legacy
+vertical-centring trick. Both are still widespread in the CrUX tail this corpus is drawn from.
+
+WHY IT IS BANKED RATHER THAN BUILT: the fix is anonymous table-object generation, and `collect_table_rows`
+returns `Vec<(NodeId, Vec<NodeId>)>` — real DOM ids — so there is no anonymous node to return. It needs
+either a synthetic-box path through `layout_table` or a "no rows ⇒ lay this box out as a shrink-to-fit
+block" fallback, and both change the contract of a subsystem whose doc-comment deliberately bounds its
+scope. **t811 is two ticks old**: a placement/sizing change that was spec-correct, fixture-exact and
+clean on nine controls still cost an unchosen site 26 elements. The next tick builds this *with
+`www.ta3lemkonline.com` in the control set from the start*, which is the rule that revert bought.
+
+MEASURED: no engine change. `manuk-layout` 103 tests green; the tree is byte-identical to b5de02d8.
+
+PERF: none.
+
+WIKI: none — no engine delta; the Chrome table and the named mechanism are the artefact and live here
+and in the pattern ledger's open row.
+
+PATTERN: ⚠⚠⚠ **A RESIDUE'S STATED CAUSE IS A GUESS UNTIL IT IS MEASURED ON ITS OWN.** t811 wrote off
+this box as "a table intrinsic-width defect" — plausible, adjacent, and wrong: the box is not narrow,
+it is absent, and an explicit width does not rescue it. **The residue line in a journal entry is
+written at the moment of least curiosity about it**, right after the real fix has landed, and it
+inherits whatever hypothesis was nearest to hand. Re-measure a residue before acting on its label.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

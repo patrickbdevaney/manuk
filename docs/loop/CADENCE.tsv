@@ -554,3 +554,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 810	fb877d5e	1785560844	2026-08-01T01:07:24-04:00	1691	measurement	63	9	400	35	376	81	3896	6960	0	422	0	two probes at kicktipp, one negative and one that specifies the next fix (2026-08-01)
 812	ad958ea5	1785564914	2026-08-01T02:15:14-04:00	4070	measurement	63	12	441	274	375	81	3896	6960	0	422	0	the sweep found the regression nine controls missed, and t811 is REVERTED (2026-08-01)
 813	71aeb4cf	1785568518	2026-08-01T03:15:18-04:00	3604	measurement	63	5	104	32	375	81	3896	6960	0	422	0	bisecting across trees on a LIVE site inherits the site's drift (2026-08-01)
+814	05f15be0	1785572048	2026-08-01T04:14:08-04:00	3530	measurement	63	5	100	32	375	81	3896	6960	0	422	0	a `display:table` with no table-structured children renders NOTHING (2026-08-01)

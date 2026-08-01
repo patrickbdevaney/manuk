@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **555** | ticks 1–813 |
-| median tick cycle | **24m** | 554 intervals |
-| median, last 10 | **46m** | 10 intervals |
+| ticks landed | **556** | ticks 1–814 |
+| median tick cycle | **25m** | 555 intervals |
+| median, last 10 | **56m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 502.2h elapsed |
-| median verify wall | **63s** | 494 ticks |
+| **ticks per hour** | **1.10** | 503.2h elapsed |
+| median verify wall | **63s** | 495 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **422**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**268 of 555 ticks** (48%) moved a
+**268 of 556 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **268** capability ticks, median cycle **24m**
+* **268** capability ticks, median cycle **25m**
 * median diff per tick: **+258 / −34** lines across 8 files
 
 ## Every tick
@@ -652,5 +652,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **810** | 2026-08-01 01:07 | 28m | measurement | 63s | +400/−35 | 376 | 81 | 56.0% · | two probes at kicktipp, one negative and one that specifies the next fix (2026-08-01) |
 | **812** | 2026-08-01 02:15 | 68m | measurement | 63s | +441/−274 | 375 | 81 | 56.0% · | the sweep found the regression nine controls missed, and t811 is REVERTED (2026-08-01) |
 | **813** | 2026-08-01 03:15 | 60m | measurement | 63s | +104/−32 | 375 | 81 | 56.0% · | bisecting across trees on a LIVE site inherits the site's drift (2026-08-01) |
+| **814** | 2026-08-01 04:14 | 59m | measurement | 63s | +100/−32 | 375 | 81 | 56.0% · | a `display:table` with no table-structured children renders NOTHING (2026-08-01) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
