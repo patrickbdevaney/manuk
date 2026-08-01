@@ -821,3 +821,53 @@ machine.** The difference is not bloat — these ticks edit `engine/css` and `en
 shared-type crates that cascade furthest, so 881s is the *worst realistic tick* the Tier-0 item is
 measured against (the 300s target is stated for that case). The audit that would settle it is the
 attribution gap above, not a stopwatch.
+
+## Audit #27 — tick 817 (1661s, and the accounting gap is now 73% — the THIRD audit running)
+
+```
+   236s  P (parity, 72/72 vs live Chrome)        ███ 14%
+   117s  T (crate tests)                         █ 7%
+    64s  B (workspace build)                     █ 4%
+    10s  G6 · 8s D · 5s G1 · 3s F · 1s G_SELECTOR · 1s F4
+          · then G_VIEWPORT, G_TEARDOWN, G_STALE_NODE reading 0s
+   ────
+   445s  attributed         1661s  total         1216s (73%) UNATTRIBUTED
+```
+
+**#25 named this by subtraction, #26 named it again, and it has widened every time: 508s (58%) at tick
+796, now 1216s (73%).** The instrument's own table is the finding, for the third consecutive audit.
+
+⚠ **The four rigor-preserving questions cannot be AIMED while this holds, and that is the point worth
+recording rather than re-answering them.** Every one of *redundancy / parallelism / caching / scope* is
+a question **about a named section** — and the largest cost on the wall has no name. Answering them
+against the 27% that is labelled is optimising the wrong thing, which is exactly what #26 said in its
+own words. The column of gates reading `0s` remains the tell: each stands up its own test binary and
+its own SpiderMonkey runtime, so a gate cannot cost nothing, and whatever those startups really cost is
+inside the unattributed 1216s.
+
+### The four questions, answered only where they can be
+
+*Redundancy* — unchanged and still the standing lever: per-gate SpiderMonkey startup × gate count,
+whose fix is `cargo-nextest` (one shared test binary). `scripts/`-side, not this agent's to make.
+*Parallelism* — gates launch concurrently; the perf floors are deliberately serial and must stay so.
+*Caching* — incrementals on the ramdisk, fetches snapshot-cached. *Scope* — the three gates added this
+window (`G_ROWLESS_TABLE` t815, `G_ORPHAN_TABLE_CELL` t816, `G_FLEX_PERCENT_LINEBREAK` t817) are each a
+single `#[test]` on the **existing** `manuk-page` binary: no new build target, and the cheapest
+possible shape for what each asserts.
+
+**Nothing trimmed, and nothing should be.** Dropping a gate, widening a floor, sampling instead of
+covering, or exiling a check to CI are all inadmissible by construction; every admissible saving is
+harness work this agent does not own (PART VII).
+
+⚠ **REPORTED, NOT PATCHED.** The actionable item for the observer is **instrument the unattributed
+remainder before hunting bloat in the labelled 27%** — three audits have now produced the same
+subtraction and no new information, which is itself the signal that the next audit under the current
+timer will also produce nothing. A fourth reading of "58% → 73% is unnamed" is not worth its wall time.
+
+⚠ **Also observed this window, and it is a measurement note rather than a regression:** `F2 pipeline
+large/mid` read **8.11x (bar 7.5x) and FAILED the tick**, on a run where `large` was *unchanged*
+(233.92 → 232.72 ms) and `mid` was **17% FASTER** (34.75 → 28.68 ms). The ratio degraded because the
+DENOMINATOR shrank. A ratio gate exists to divide out machine speed, but it only does that when both
+legs move together; when the small page benefits more from a quiet box than the large one, the control
+moves the gate on its own. Recorded here for the observer as a gate-shape observation — **not** acted
+on, since retuning a ratchet gate to land one's own tick is precisely what is forbidden.

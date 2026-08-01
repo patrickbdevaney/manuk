@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **557** | ticks 1–815 |
-| median tick cycle | **25m** | 556 intervals |
-| median, last 10 | **56m** | 10 intervals |
+| ticks landed | **558** | ticks 1–817 |
+| median tick cycle | **25m** | 557 intervals |
+| median, last 10 | **59m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 504.9h elapsed |
-| median verify wall | **63s** | 496 ticks |
+| **ticks per hour** | **1.10** | 506.5h elapsed |
+| median verify wall | **63s** | 497 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **377**
-* **✅ rows in the capability ledger**: 144 → **424**
+* **live gates**: 27 → **378**
+* **✅ rows in the capability ledger**: 144 → **425**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**269 of 557 ticks** (48%) moved a
+**270 of 558 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **269** capability ticks, median cycle **25m**
+* **270** capability ticks, median cycle **25m**
 * median diff per tick: **+258 / −34** lines across 8 files
 
 ## Every tick
@@ -654,5 +654,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **813** | 2026-08-01 03:15 | 60m | measurement | 63s | +104/−32 | 375 | 81 | 56.0% · | bisecting across trees on a LIVE site inherits the site's drift (2026-08-01) |
 | **814** | 2026-08-01 04:14 | 59m | measurement | 63s | +100/−32 | 375 | 81 | 56.0% · | a `display:table` with no table-structured children renders NOTHING (2026-08-01) |
 | **815** | 2026-08-01 05:58 | 1.7h | capability | 63s | +412/−34 | 377 | 81 | 56.0% · | a `display:table` with no rows is a shrink-to-fit BLOCK (2026-08-01) |
+| **817** | 2026-08-01 07:33 | 1.6h | capability | 63s | +532/−34 | 378 | 81 | 56.0% · | a sub-pixel float excess breaks a flex line, and Bootstrap is written in exactly those per |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

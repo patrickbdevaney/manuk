@@ -679,6 +679,78 @@ impl LayoutGridContainer for TaffyDom<'_> {
     }
 }
 
+/// Chrome's `LayoutUnit` — 1/64 CSS px. **Every length Blink computes is quantised to this
+/// grid**, and that quantisation is not a detail: it is what makes `66.66666667% + 33.33333333%`
+/// of a 1200px row come to exactly 1200 instead of a hair over.
+const LAYOUT_UNIT: f32 = 64.0;
+
+fn snap_to_layout_unit(v: f32) -> f32 {
+    (v * LAYOUT_UNIT).round() / LAYOUT_UNIT
+}
+
+/// ⚠⚠⚠ **A SUB-PIXEL FLOAT EXCESS BREAKS A FLEX LINE, AND BOOTSTRAP'S COLUMNS ARE WRITTEN IN
+/// EXACTLY THE PERCENTAGES THAT TRIGGER IT.**
+///
+/// taffy collects flex items into lines with a bare `>` and no tolerance
+/// (`taffy-0.12.1/src/compute/flexbox.rs:930`):
+///
+/// ```text
+/// line_length += child.hypothetical_outer_size.main(constants.dir) + gap_contribution;
+/// line_length > main_axis_available_space && idx != 0
+/// ```
+///
+/// `width: 66.66666667%` is not representable in binary. As `f32` it resolves against a 1200px
+/// row to `800.00004`, its `33.33333333%` sibling to `400.00002`, and the pair sums to
+/// `1200.00006` — **six hundred-thousandths of a pixel over**, which is enough. The second column
+/// starts a new line and the two cards stack. Chrome never sees it: Blink quantises each resolved
+/// length to `LayoutUnit` (1/64 px) first, so the same pair is exactly `800 + 400 = 1200` and fits.
+///
+/// Measured against headless Chrome on a 1200px `flex-wrap: wrap` row, `[x y]` of the second item:
+///
+/// ```text
+///   width pair                        Chrome      before      after
+///   50% + 50%                        [600  0]    [600  0]   unchanged ✓ (exact in binary)
+///   75% + 25%                        [900  0]    [900  0]   unchanged ✓ (exact in binary)
+///   66.6667% + 33.3333%              [800  0]    [800  0]   unchanged ✓ (sums UNDER 100)
+///   66.66666667% + 33.33333333%      [800  0]    [0   20]   [800  0]  ✗→✓  ← Bootstrap 5
+///   66.666667% + 33.333333%          [800  0]    [0   20]   [800  0]  ✗→✓
+///   33.33333333% × 3 (3rd item)      [800  0]    [0   20]   [800  0]  ✗→✓
+/// ```
+///
+/// **THE REACH is every Bootstrap grid on the web.** `.col-8`/`.col-4` ship literally as
+/// `width: 66.66666667%` / `33.33333333%`, so a two-column Bootstrap 5 row STACKED instead of
+/// sitting side by side — and because the cards' own overlays are absolutely positioned, they then
+/// landed on top of each other rather than merely flowing wrong.
+///
+/// ⚠ **BOUND, stated rather than glossed:** this snaps the percentage main-axis widths of the
+/// container's DIRECT children, because that is the only place the containing-block width is known
+/// before taffy runs. A flex container nested *inside* a flex item has a content width that taffy
+/// itself decides, so its own children keep raw `f32` resolution and can still lose the line-break
+/// by a sub-pixel. Fixing that needs the quantisation inside taffy's resolver, which is not ours to
+/// patch. The gate asserts the direct-child case and records the nested one as unfixed.
+fn snap_row_item_percent_widths(tree: &mut TaffyDom, root: TId, container_width: f32) {
+    let r: usize = root.into();
+    // Line breaking is a MAIN-axis question, so this is only the width axis and only for a `row`
+    // container. A `column` container breaks on height, where the container's own main size is
+    // usually indefinite and there is no definite base to snap against in the first place.
+    if !matches!(tree.nodes[r].style.display, taffy::Display::Flex)
+        || !matches!(
+            tree.nodes[r].style.flex_direction,
+            FlexDirection::Row | FlexDirection::RowReverse
+        )
+    {
+        return;
+    }
+    for c in tree.nodes[r].children.clone() {
+        let i: usize = c.into();
+        let raw = tree.nodes[i].style.size.width.into_raw();
+        if raw.tag() == taffy::style::CompactLength::PERCENT_TAG {
+            let px = snap_to_layout_unit(raw.value() * container_width);
+            tree.nodes[i].style.size.width = length(px);
+        }
+    }
+}
+
 /// Lay out a flex/grid `container` and its directly-nested flex/grid descendants in one
 /// unified taffy tree, measuring block/inline/float/table leaves via `measure`. Returns the
 /// container's direct children as [`Placed`] subtrees (positions relative to the content
@@ -699,6 +771,7 @@ pub fn solve_subtree<'m>(
         width: length(container_width),
         height: container_height.map(length).unwrap_or(auto()),
     };
+    snap_row_item_percent_widths(&mut tree, root, container_width);
     // **An INDEFINITE main size is INFINITE available main space, never zero.** For a `column`
     // flex container the block axis is the MAIN axis, and the available main space is what
     // `flex-wrap: wrap` breaks lines against (CSS Flexbox §9.3.5). Passing `MinContent` there says

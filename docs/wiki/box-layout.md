@@ -3264,3 +3264,72 @@ at **our** number on purpose, so a future fix has to come and change that line d
 a residue's stated cause is a guess until it has been measured on its own.
 
 **Gate:** `G_ORPHAN_TABLE_CELL` (`engine/page/tests/g_orphan_table_cell.rs`).
+
+## A sub-pixel float excess breaks a flex line — and Bootstrap is written in exactly those percentages (t817)
+
+taffy collects flex items into lines with a bare `>` and no tolerance
+(`taffy-0.12.1/src/compute/flexbox.rs:930`):
+
+```rust
+line_length += child.hypothetical_outer_size.main(constants.dir) + gap_contribution;
+line_length > main_axis_available_space && idx != 0
+```
+
+`width: 66.66666667%` is not representable in binary. As `f32` it resolves against a 1200px row to
+`800.00004`, its `33.33333333%` sibling to `400.00002`, and the pair sums to a **hair over 1200** —
+which is enough. The second column starts a new flex line and the two columns stack.
+
+**Chrome never sees it.** Blink quantises every resolved length to `LayoutUnit` — **1/64 CSS px** —
+before anything compares them, so the same pair is exactly `800 + 400 = 1200` and fits.
+
+Those are Bootstrap's literal column widths. `.col-8` ships as `width: 66.66666667%` and `.col-4` as
+`33.33333333%`, so **a two-column Bootstrap 5 row stacked instead of sitting side by side, on every
+page that uses one** — and because such cards' overlays are usually absolutely positioned, they then
+landed on top of each other rather than merely flowing wrong.
+
+Chrome-measured on a 1200px `flex-wrap: wrap` row, x of the SECOND item:
+
+```text
+  width pair                      Chrome x    before        after
+  50% + 50%                          600     600           unchanged ✓  (exact in binary)
+  75% + 25%                          900     900           unchanged ✓  (exact in binary)
+  66.6667% + 33.3333%                800     800           unchanged ✓  (sums UNDER 100)
+  66.66% + 33.33%                    800     800           unchanged ✓  (sums under 100)
+  66.66666667% + 33.33333333%        800     0, WRAPPED    800  ✗→✓   ← Bootstrap 5
+  66.666667% + 33.333333%            800     0, WRAPPED    800  ✗→✓
+  33.33333333% × 3  (3rd item)       800     0, WRAPPED    800  ✗→✓
+  70% + 40%  (genuinely too wide)      0, WRAPPED in BOTH states — asserted
+```
+
+⚠ The three thirds are the sharpest row: `33.33333333% × 3` sums to **under** 100% in decimal and
+still overflowed, because each one rounds *up* in `f32`. The defect is binary representability, not
+the digit count and not the decimal sum.
+
+### The fix, and why it is where it is
+
+taffy is a crates.io dependency and its resolver is not ours to patch, so the quantisation happens on
+our side of the boundary: `solve_subtree` already knows the container's resolved content width, and
+`snap_row_item_percent_widths` converts each direct child's percentage main-axis width into a length
+snapped to the 1/64 px grid before taffy runs. Anything that is not a percentage, not a width, or not
+a direct child of a `row` flex container is untouched.
+
+### Bounds, stated rather than glossed
+
+⚠ **Direct children only.** A flex container nested *inside* a flex item has a content width that
+taffy itself decides, so its children keep raw `f32` resolution and can still lose a line-break by a
+sub-pixel. That needs the quantisation inside taffy's resolver.
+
+⚠ **`row` containers only.** Line breaking is a main-axis question; a `column` container breaks on
+height, where the main size is usually indefinite and there is no definite base to snap against.
+
+⚠ **The gate cannot prove the 1/64 constant.** Snapping to whole pixels (`LAYOUT_UNIT = 1.0`) passes
+the fixture identically, because its percentages of 1200px all land on integers. 1/64 is chosen
+because it is *Chrome's actual quantum*, and `G_FLEX_PERCENT_LINEBREAK` says so rather than implying
+a red it cannot produce.
+
+⚠ **Measured and deliberately NOT fixed here:** Bootstrap **4**'s column shape
+(`flex: 0 0 66.666667%; max-width: 66.666667%`) comes out `533` / `133` against Chrome's `800` /
+`400` — the percentage is applied twice. That is a flex-**basis** defect, a different mechanism in a
+different place, and it is the next thing this seam owes.
+
+**Gate:** `G_FLEX_PERCENT_LINEBREAK` (`engine/page/tests/g_flex_percent_linebreak.rs`).

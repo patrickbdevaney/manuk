@@ -43070,3 +43070,111 @@ NO-OP while the first is broken** — it looks unused, it tests clean, and it is
 wrong. When a fix in one place produces a half-right answer, GREP FOR THE OTHER COPY OF THE LIST
 rather than patching the half-right result.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 817 — a sub-pixel float excess breaks a flex line, and Bootstrap is written in exactly those percentages (2026-08-01)
+
+TICK SHAPE: capability (flex layout) — aimed from the near-bar list, per the board's crossing rank
+
+HYPOTHESIS (written before the fixture): the board says rank by MARGINAL CROSSINGS from the sweep
+rows, not by tag frequency. `www.puentedemando.com` is the tightest near-bar site in SWEEP-t812
+(shape 0.7290, gap 0.0210, n=1129, cov 0.983) and carries `overlap 21`. Look at its composite, name
+the gross divergence, reduce it to a fixture.
+
+MEASURED — the composite showed the hero cards OVERLAPPING where Chrome lays them side by side.
+Chrome's own DOM says the container is Bootstrap: `.row` is `display:flex; flex-wrap:wrap` and the
+card column is `.col-xl-8` at 793 of a 1189px row. Reduced to a fixture, x of the SECOND item on a
+1200px row:
+
+```
+  width pair                      Chrome x    before        after
+  50% + 50%                          600     600           unchanged ✓  (exact in binary)
+  75% + 25%                          900     900           unchanged ✓  (exact in binary)
+  66.6667% + 33.3333%                800     800           unchanged ✓  (sums UNDER 100)
+  66.66% + 33.33%                    800     800           unchanged ✓  (sums under 100)
+  66.66666667% + 33.33333333%        800     0, WRAPPED    800  ✗→✓   ← Bootstrap 5 .col-8/.col-4
+  66.666667% + 33.333333%            800     0, WRAPPED    800  ✗→✓
+  33.33333333% × 3  (3rd item)       800     0, WRAPPED    800  ✗→✓
+  70% + 40%  (genuinely too wide)      0, WRAPPED in BOTH states — asserted
+```
+
+MECHANISM: taffy collects flex items into lines with a bare `>` and NO tolerance
+(`taffy-0.12.1/src/compute/flexbox.rs:930`). `66.66666667%` is not representable in binary; in `f32`
+it resolves against a 1200px row to `800.00004`, its `33.33333333%` sibling to `400.00002`, and the
+pair sums to a hair OVER 1200 — enough. **Chrome never sees it: Blink quantises every resolved length
+to `LayoutUnit` (1/64 px) before anything compares them**, so the same pair is exactly 800+400.
+
+⚠ **THE THREE-THIRDS ROW IS THE SHARPEST**: `33.33333333% × 3` sums to UNDER 100% in decimal and
+still overflowed, because each one rounds UP in `f32`. The defect is binary representability — not
+the digit count, and not the decimal sum. Two of my four "obvious" candidate explanations died on
+that row.
+
+THE FIX is on our side of the boundary because taffy is a crates.io dependency and its resolver is
+not ours to patch: `solve_subtree` already knows the container's resolved content width, so
+`snap_row_item_percent_widths` converts each DIRECT child's percentage main-axis width into a length
+snapped to the 1/64 px grid before taffy runs. Nothing that is not a percentage, not a width, or not
+a direct child of a `row` flex container is touched.
+
+MEASURED (controls, PAIRED and BACK-TO-BACK, old binary rebuilt and re-measured):
+`www.puentedemando.com` visual **50.7% → 54.8%**, misplaced 1020 → 1018, and the composite shows the
+cards side by side with the 2/3+1/3 split instead of stacked and overlapping. Seven controls
+byte-identical (`www.ta3lemkonline.com` 420 — the adversarial one, `en.wikipedia.org` 1017,
+`linkmake.in` 43, `www.dapam-sirius.fr` 9, `blog.rust-lang.org` 1643, `chat.google.com` 55,
+`tukrd.com` 36); `news.ycombinator.com` misplaced 796 both, visual 89.7→90.4. `manuk-layout` 103
+tests green.
+
+⚠ **`255md.com` came back UNMEAS in the BASELINE run and `ok` in the other, so the two MEAN SHAPE
+figures (76.8 / 76.9) have different denominators and ARE NOT COMPARABLE.** They are not claimed as
+a result; the per-site paired rows are. A mean over a moving denominator is the exact shape of error
+the corpus-aware guard exists to catch, and it turned up inside a 10-site control run.
+
+Gate: `G_FLEX_PERCENT_LINEBREAK` (new), eight Chrome-measured rows. **Proven RED:** delete the
+`snap_row_item_percent_widths` call and `#b8dp` reads `[0 100]` — the Bootstrap pair stacks again.
+
+⚠ **THE SECOND MUTATION DOES NOT GO RED, AND IT WAS RUN RATHER THAN ASSUMED.** `LAYOUT_UNIT = 1.0`
+(whole-pixel snapping) passes every row, because this fixture's percentages of 1200px all land on
+integers. 1/64 is chosen because it is **Chrome's actual quantum**, not because the gate proves it,
+and the gate says exactly that plus what a fixture separating them would need.
+
+⚠ **THE FOUR PASSING ROWS ARE LOAD-BEARING AND SO IS `#wrapb`.** `50/50` and `75/25` are exact in
+binary; `66.6667/33.3333` and `66.66/33.33` sum to under 100%. All four were always right, so a fix
+that simply stopped breaking lines would keep them green — which is why `70% + 40%` (110%, a genuine
+120px overflow) is asserted to STILL wrap. The two bound the fix from opposite sides.
+
+HONEST SCOPE + BOUNDS: direct children of a `row` container only — a flex container nested inside a
+flex item has a width taffy decides, so its children keep raw `f32`. No site is claimed to cross;
+one anchor visibly improves, seven hold. Bootstrap **4**'s shape (`flex: 0 0 66.666667%`) is
+separately measured at `533`/`133` against Chrome's `800`/`400` — the percentage applied twice, a
+flex-BASIS defect, a different mechanism, deliberately untouched and now the next thing owed.
+
+PERF: none claimed — one pass over a flex row's direct children before the solve.
+
+WIKI: `docs/wiki/box-layout.md` — new section.
+
+WALL-TIME AUDIT (due at 816, run here; `scripts/wall-audit.sh run`, tick-816 receipt) — **the wall is
+NOT lean, and the audit's own arithmetic is the finding.** Total **1661s**, but the attributed
+sections sum to roughly **445s**: `P` parity 236s, `T` 117s, `B` build 64s, `G6` 10s, `D` 8s, `G1` 5s,
+`F` 3s, and eight more at ≤1s. **~1200s — about 72% of the wall — is UNATTRIBUTED**, so the four
+rigor-preserving questions the audit poses (redundancy / parallelism / caching / scope) cannot be
+aimed: every one of them is a question about a named section, and the biggest cost has no name. The
+honest reading is that the section timer does not cover whatever dominates, not that those 1200s are
+lean. For scale, t815's wall was `gate 388s · build 63s · total 451s` and t816's was `gate 1661s ·
+build 64s · total 1725s` on the same machine and a comparable tree — a 4× move in the gate leg
+between two consecutive ticks, which no gate I added accounts for.
+
+⚠ **REPORTED, NOT PATCHED (PART VII).** `scripts/` is observer-owned; I ran the audit, banked
+`LAST_WALL_AUDIT: 817`, and am not touching the timer, the sections, or the wall. Nothing was
+trimmed — dropping a gate, widening a floor or sampling instead of covering are all inadmissible, and
+no admissible trim is even identifiable while three quarters of the time is unlabelled. The
+actionable item for the observer is **instrumenting the unattributed remainder first**; until then a
+wall-bloat hunt is searching under the streetlight.
+
+PATTERN: ⚠⚠⚠ **AN EXACT COMPARISON ON FLOATS IS A LAYOUT BUG WITH A LONG FUSE, AND THE REAL WEB IS
+WRITTEN IN THE VALUES THAT LIGHT IT.** Nothing here is a wrong formula — every width was computed
+correctly to within 0.00004px, and one `>` turned that into a stacked page. The generalisation is
+that **a browser needs a QUANTUM, not an epsilon**: Chrome does not compare with a tolerance, it
+snaps every length to 1/64px so the comparisons come out exact. Wherever we compare accumulated
+lengths against a container — flex lines, line breaking, column fitting, overflow — ask what grid
+the operands live on. ⚠ And the aim was not luck: the near-bar ranking pointed at the site, the
+COMPOSITE named the organ, and Chrome's own computed style named the framework. Three cheap steps,
+none of them a guess.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

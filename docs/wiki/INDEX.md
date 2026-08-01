@@ -166,6 +166,9 @@
   - L3238 · The control is what makes this a diagnosis rather than a symptom
   - L3247 · Two edits, one behaviour — and the mutation proves which
   - L3256 · The residue, named rather than blamed
+  - L3268 · A sub-pixel float excess breaks a flex line — and Bootstrap is written in exactly those percentages (t817)
+  - L3308 · The fix, and why it is where it is
+  - L3316 · Bounds, stated rather than glossed
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1378,4 +1381,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1289 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1292 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
