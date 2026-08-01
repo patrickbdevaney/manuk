@@ -198,7 +198,60 @@ pub enum Unmeasurable {
     /// that kills the sweep is the hardest site in the corpus, and an instrument that drops it is
     /// flattering itself in precisely the direction §0 names as cause #1.
     Crashed,
+    /// **This site was never attempted. Its chunk ran out of re-spawn budget first.**
+    ///
+    /// ⚠⚠⚠ **THIS EXISTS BECAUSE THE INSTRUMENT SPENT THREE SWEEPS CALLING IT `crashed`** (t820,
+    /// t821 and the aborted t824 run), and `crashed` is a **Bar 0** event that outranks every visual
+    /// divergence in the priority ledger. The t820 sweep filed **118 of 200** sites `crashed` against
+    /// t812's 25 and was correctly refused — but for three sessions the *cause* was read off the one
+    /// message that happened to be printed next to it
+    /// (`pthread_mutex_destroy failed: Device or resource busy`) and reported as a **mozjs teardown
+    /// crash**. It is not. That message is what `std::process::exit` looks like when it skips
+    /// `JS_ShutDown()`, and the exit is the sweep's **own per-site watchdog**, firing deliberately
+    /// after a site spends its budget — with the timeout row already written to disk.
+    ///
+    /// The arithmetic, which is the whole defect: a chunk child exits **once per timed-out site**,
+    /// and the parent's re-spawn loop was capped at a constant **4 rounds**. A 100-site bucket
+    /// carrying a dozen slow sites therefore burned its budget after ~4 of them and filed *every
+    /// remaining site* — 90-odd of them, most never opened — as a Bar-0 crash. The cap was a constant
+    /// where the work is a variable.
+    ///
+    /// So this is the same lesson the `Timeout` variant above already records, one level further in:
+    /// **an instrument must never charge its own bookkeeping to the engine's account.** `Timeout`
+    /// was introduced so an external `SIGKILL` would stop being recovered as a phantom crash; the
+    /// parent's own re-spawn cap was manufacturing the identical phantom by a different route, and
+    /// nothing separated them because both ended as the string `crashed`.
+    ///
+    /// It counts against the bar exactly as every other unscored reason does — the denominator is
+    /// unchanged and this is not an excuse tier. What changes is that a sweep can no longer report an
+    /// **instrument budget** as an **engine crash**, and a reader can tell the two apart in the
+    /// histogram without rebuilding an old binary to find out.
+    NeverRan,
 }
+
+/// How many times a chunk's spawn-loop may re-spawn, for a bucket of `n` sites.
+///
+/// ⚠ **THE BUDGET MUST SCALE WITH THE WORK, AND A CONSTANT IS THE BUG** (see
+/// [`Unmeasurable::NeverRan`]). A chunk child exits **deliberately, once per site that spends its
+/// own budget** — the per-site watchdog writes the `timeout` row and then `process::exit(0)`s,
+/// because the main thread is wedged in whatever took too long. So the number of re-spawns a bucket
+/// needs is bounded by *the number of slow sites in it*, which is a fraction of `n` and is not
+/// knowable in advance. `n + 4` can absorb the pathological case where **every** site times out; the
+/// real stop condition is [`CHUNK_STALL_LIMIT`], not this ceiling.
+///
+/// ⚠ This does NOT multiply the run's cost. Every round makes at least one site's worth of progress
+/// (a site either produces a row or is recovered from its in-flight marker), so total wall-clock
+/// stays bounded by the sum of the per-site budgets — the re-spawn itself costs process startup.
+pub fn chunk_round_budget(n: usize) -> usize {
+    n.saturating_add(4)
+}
+
+/// Consecutive rounds that produce **no new row** after which a chunk is declared genuinely dead.
+///
+/// This is the real terminator, and it is the one that cannot be fooled by a slow corpus: a child
+/// that exits because a site timed out has *written that site's row*, so it made progress. A child
+/// that dies twice in a row without producing anything is failing to start.
+pub const CHUNK_STALL_LIMIT: usize = 2;
 
 impl Unmeasurable {
     /// A short stable tag for the TSV column and for grouping in the shortfall list. Stable because
@@ -214,6 +267,7 @@ impl Unmeasurable {
             Self::ShellOnly(n) => format!("shell-only-{n}"),
             Self::Timeout(secs) => format!("timeout-{secs}s"),
             Self::Crashed => "crashed".into(),
+            Self::NeverRan => "never-ran".into(),
             Self::ThinOverlap(n) => format!("thin-overlap-{n}"),
             Self::TreeDivergence(n) => format!("tree-divergence-{n}"),
             Self::CssStarved(n) => format!("css-starved-{n}"),
@@ -228,6 +282,7 @@ impl Unmeasurable {
             "probe-blocked" => Some(Self::ProbeBlocked),
             "render-failed" => Some(Self::RenderFailed),
             "crashed" => Some(Self::Crashed),
+            "never-ran" => Some(Self::NeverRan),
             _ if s.starts_with("thin-overlap-") => s["thin-overlap-".len()..]
                 .parse()
                 .ok()
@@ -335,6 +390,14 @@ impl Unmeasurable {
                  our own bug, like render-failed, and the most expensive kind: it takes the whole \
                  corpus down with it. Recovered from the in-flight marker on the following run, so \
                  the site is COUNTED rather than lost along with the run it killed"
+                .into(),
+            Self::NeverRan => "THIS SITE WAS NEVER ATTEMPTED — its chunk ran out of re-spawn budget \
+                 first, which is an INSTRUMENT fault and not a Bar-0 crash. A chunk child exits \
+                 deliberately once per site that spends its own budget (the watchdog writes the \
+                 timeout row, then `process::exit(0)` because the main thread is wedged), so a bucket \
+                 with many slow sites needs many re-spawns. It counts against the bar like every \
+                 other unscored reason — but if a run has MANY of these, the run is not measuring the \
+                 engine, and no band from it is bankable"
                 .into(),
         }
     }
@@ -3938,5 +4001,129 @@ stable.invalid\t1.0\t0.637124\t0\t0\t0\t0\t598\t
         ] {
             assert_eq!(super::site_name(url), want, "site_name({url})");
         }
+    }
+}
+
+/// # The chunked sweep's spawn-loop arithmetic — the defect that invalidated three sweeps
+///
+/// These tests do not spawn processes. They simulate the **one number** that broke t820, t821 and the
+/// aborted t824 run: how many times a chunk may be re-spawned, against how many times it deliberately
+/// exits. A chunk child exits once per site that spends its own budget, so the loop's budget must
+/// scale with the bucket — and the old `CHUNK_ROUNDS = 4` did not.
+#[cfg(test)]
+mod chunk_spawn_budget {
+    use super::{chunk_round_budget, CHUNK_STALL_LIMIT};
+
+    /// Replay the parent's spawn-loop against a child that runs `n` sites and then exits, where
+    /// `slow(i)` says whether site `i` will spend its budget (and therefore kill the child after
+    /// writing its own row). Returns `(rows_written, sites_never_run)`.
+    ///
+    /// This is the loop in `main.rs` reduced to its bookkeeping: a round runs the remaining sites in
+    /// order, stops at the first slow one (having recorded it), and the parent re-spawns.
+    fn simulate(bucket: usize, budget: usize, slow: impl Fn(usize) -> bool) -> (usize, usize) {
+        let mut todo: Vec<usize> = (0..bucket).collect();
+        let mut done = 0usize;
+        let (mut round, mut stalled) = (0usize, 0usize);
+        while !todo.is_empty() && round < budget && stalled < CHUNK_STALL_LIMIT {
+            round += 1;
+            let before = todo.len();
+            // The child works through the list and dies at the first slow site — AFTER writing it.
+            let mut ran = 0usize;
+            for &s in &todo {
+                ran += 1;
+                if slow(s) {
+                    break;
+                }
+            }
+            done += ran;
+            todo.drain(..ran);
+            if todo.len() == before {
+                stalled += 1;
+            } else {
+                stalled = 0;
+            }
+        }
+        (done, todo.len())
+    }
+
+    /// ⚠⚠⚠ **THE REGRESSION TEST FOR THE ACTUAL DEFECT.** 100 sites, every eighth one slow — which is
+    /// roughly the real corpus (the t812 sweep booked 4 `timeout-150s` rows plus the sites that spend
+    /// their budget without being classified). With a scaling budget every site runs. With the old
+    /// constant 4 it does not, and the assertion below states exactly how badly.
+    #[test]
+    fn a_bucket_with_many_slow_sites_still_runs_every_site() {
+        let bucket = 100;
+        let slow = |i: usize| i % 8 == 7;
+
+        let (done, never) = simulate(bucket, chunk_round_budget(bucket), slow);
+        assert_eq!(
+            (done, never),
+            (bucket, 0),
+            "every site in the bucket must get a row: a chunk child exits DELIBERATELY once per slow \
+             site, and absorbing those exits is the entire job of the spawn loop"
+        );
+
+        // The old cap, stated as an assertion rather than as prose, so the size of the defect is on
+        // the record and cannot be re-introduced as "probably fine".
+        let (old_done, old_never) = simulate(bucket, 4, slow);
+        assert!(
+            old_never > 60,
+            "the constant cap of 4 rounds left {old_never} of {bucket} sites unrun (ran {old_done}) — \
+             and every one of them was filed `crashed`, a Bar-0 event. This assertion exists so the \
+             constant cannot come back looking harmless"
+        );
+    }
+
+    /// The budget must be a function of the bucket, not a constant. Stated directly, because the
+    /// simulation above could be satisfied by any large enough number and the RULE is what matters.
+    #[test]
+    fn the_round_budget_scales_with_the_bucket() {
+        for n in [1usize, 10, 100, 1000] {
+            assert!(
+                chunk_round_budget(n) >= n,
+                "a bucket of {n} sites must be able to absorb one deliberate exit PER SITE — the \
+                 pathological case is every site timing out, and it is not knowable in advance which \
+                 will. Got {}",
+                chunk_round_budget(n)
+            );
+        }
+    }
+
+    /// The other bound: the loop must still stop. A child that dies producing NOTHING is failing to
+    /// start, and no amount of budget fixes that — so the stall counter, not the ceiling, is what
+    /// terminates a genuinely dead chunk. Without this the scaled budget would be a 1000-round spin.
+    #[test]
+    fn a_chunk_that_produces_nothing_stops_after_the_stall_limit() {
+        // `slow(_) = true` on the FIRST site with zero rows written is modelled by a child that runs
+        // no sites at all: it can never drain `todo`.
+        let bucket = 100;
+        let mut todo = bucket;
+        let (mut round, mut stalled) = (0usize, 0usize);
+        while todo > 0 && round < chunk_round_budget(bucket) && stalled < CHUNK_STALL_LIMIT {
+            round += 1;
+            stalled += 1; // no progress, ever
+        }
+        assert_eq!(
+            round, CHUNK_STALL_LIMIT,
+            "a chunk producing no rows must stop after {CHUNK_STALL_LIMIT} consecutive dead rounds, \
+             not run out the scaled ceiling"
+        );
+    }
+
+    /// A `never-ran` row must not be readable as a `crashed` one. They are different events — an
+    /// instrument budget versus a Bar-0 engine fault — and for three sweeps they shared a string.
+    #[test]
+    fn never_ran_is_not_crashed() {
+        use super::Unmeasurable;
+        assert_ne!(Unmeasurable::NeverRan.tag(), Unmeasurable::Crashed.tag());
+        assert_eq!(Unmeasurable::NeverRan.tag(), "never-ran");
+        assert!(
+            matches!(
+                Unmeasurable::from_tag("never-ran"),
+                Some(Unmeasurable::NeverRan)
+            ),
+            "the tag must round-trip: a chunked sweep reads its own reasons back across the process \
+             boundary, and a reason that does not parse silently becomes a different row"
+        );
     }
 }

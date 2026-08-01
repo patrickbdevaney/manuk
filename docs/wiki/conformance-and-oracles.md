@@ -2826,3 +2826,75 @@ that is the common case. The residue is named, gated (`a_key_survives_an_inserte
 pins both the property and its limit), and is the next lead: group the ordinal by **tag AND class
 signature**, which puts the sig's discrimination back into the key's *counting* without putting the
 sig back into the key's *text* — the t550 finding and this one satisfied at the same time.
+
+## The chunked sweep's spawn-loop arithmetic — a constant budget against a variable workload (t824)
+
+**This is why three consecutive corpus sweeps (t820, t821, the aborted t824 run) were unbankable, and
+why the loop's headline had no honest slope for ~12 ticks.**
+
+### The mechanism, in the order the log prints it
+
+```text
+  UNMEASURABLE [timeout-150s]: this engine did not finish the site inside its own budget …
+  mozilla::detail::MutexImpl::~MutexImpl: pthread_mutex_destroy failed: Device or resource busy
+    ⟳ chunk 0 exited early with 97 site(s) unrun — re-spawning (round 1)
+```
+
+Three lines, and they were read bottom-up. Read top-down they say:
+
+1. A site spent its per-site budget. The sweep's **own watchdog** wrote the site's `timeout` row,
+   cleared the in-flight marker, and called `std::process::exit(0)` — deliberately, because the main
+   thread is wedged in whatever took too long. This is documented at the call site and is correct.
+2. `std::process::exit` skips every thread-local destructor, so SpiderMonkey's `JS_ShutDown()` never
+   runs and its C++ statics fault on the way out. **`engine/js/src/spidermonkey.rs` predicts this
+   message, in these words, in its own doc comment.** It is the signature of an un-torn-down engine at
+   exit — *not* a crash, and not a Bar-0 event.
+3. The parent notices the child died with sites unrun and re-spawns the remainder.
+
+### The defect: `CHUNK_ROUNDS = 4`
+
+A chunk child exits **once per slow site**. The re-spawn cap was a constant `4`, so a bucket could
+absorb exactly four of them. A 100-site bucket carrying a dozen slow sites burned its budget on the
+first four and filed the ~90 sites *behind* them — most never opened — as **`crashed`**, which is a
+Bar-0 event that outranks every visual divergence in the priority ledger.
+
+| sweep | `crashed` | `bot-wall` | scored |
+|---|---|---|---|
+| t812 (honest) | 25 | 33 | 87 |
+| t820 | **118** | **10** | 40 |
+
+⚠ **The falling `bot-wall` count is the tell.** Sites cannot be *classified* as bot-walled if their
+chunk never opened them, so a `crashed` count that quadruples while every other reason *shrinks* is
+arithmetic about the instrument, not about the corpus.
+
+### The fix
+
+* **`chunk_round_budget(n) = n + 4`** — the budget scales with the bucket, so the pathological case
+  (every site times out) is absorbable. It does **not** multiply the run's cost: every round makes at
+  least one site's progress, so wall-clock stays bounded by the sum of the per-site budgets.
+* **`CHUNK_STALL_LIMIT = 2`** is the real terminator. A child that exits over a timeout *wrote that
+  site's row* — that is progress. A child that produces nothing twice running is failing to start,
+  which is the only condition worth giving up on.
+* **`Unmeasurable::NeverRan` (`never-ran`)**, split out of `Crashed`. An instrument budget and an
+  engine fault are different events and must not share a string. It still counts against the bar —
+  `fidelity-progress.sh` lands any unrecognised reason in-scope, which is the conservative side.
+* **The deliberate exit announces itself** on the line above the fault, so the teardown message can
+  never again be read as the cause of the death.
+
+### Verified live, on the sites that did it
+
+`--jobs 2` over 10 sites including `bbs.ruliweb.com` and `www.bilibili.com` (the two that killed
+chunks): **10 sampled, 10 rows, zero `crashed`, zero `never-ran`.** `bbs.ruliweb.com` timed out, was
+labelled, and the chunk re-spawned; `www.bilibili.com` produced a score of 0.549; and
+`janitorai.com` — previously *recovered as `crashed`* — classified itself as `bot-wall-403`, which is
+the direct receipt for the inference t821 drew from the histogram alone.
+
+**Gate:** `chunk_spawn_budget` (`tests/wpt/src/fidelity.rs`) — four tests simulating the loop's
+arithmetic with no processes spawned. RED-proven by restoring the constant.
+
+⚠ **`manuk-wpt` is in neither the wall's crate-test list nor CI's**, so nothing runs that gate
+automatically. Reported to the observer; both files are observer-owned.
+
+⚠ **The lesson worth carrying: the last line before a death is not the cause of it.** The line that
+named the cause was one line higher in the same log, three separate times. Make every deliberate exit
+announce itself, so an unlabelled fault is the only kind left.

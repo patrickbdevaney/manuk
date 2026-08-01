@@ -615,9 +615,29 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
         // the denominator trap ("a metric satisfied by measuring LESS") this instrument refuses.
         //
         // So a chunk is not one spawn, it is a spawn LOOP: re-spawn the remainder until every URL in the
-        // bucket has a row or the retry cap is reached, and file an explicit `crashed` row for anything
-        // still missing. The certificate's denominator stays whole either way.
-        const CHUNK_ROUNDS: usize = 4;
+        // bucket has a row, and file an explicit row for anything still missing. The certificate's
+        // denominator stays whole either way.
+        //
+        // ⚠⚠⚠ **AND THE CAP ON THAT LOOP WAS A CONSTANT WHERE THE WORK IS A VARIABLE — WHICH IS WHAT
+        // INVALIDATED THREE CONSECUTIVE SWEEPS** (t820, t821, the aborted t824 run). The comment above
+        // is right that the exit is deliberate and happens once per timed-out site. `CHUNK_ROUNDS = 4`
+        // then allowed **four such sites per bucket**. A 100-site bucket carrying a dozen slow sites
+        // burned its budget on the first four and filed the ~90 sites BEHIND THEM — most never opened —
+        // as `crashed`, a Bar-0 event. t820 read `118 of 200 crashed` against t812's `25`.
+        //
+        // ⚠⚠ **AND THE CAUSE WAS MISREAD FOR THREE SESSIONS, off the one message printed next to it:**
+        // `mozilla::detail::MutexImpl::~MutexImpl: pthread_mutex_destroy failed: Device or resource
+        // busy`, reported as a *mozjs teardown crash*. It is not a crash at all — it is what
+        // `std::process::exit` looks like when it skips `JS_ShutDown()`, i.e. it is the watchdog's own
+        // deliberate exit, with the timeout row already safely on disk. Reading the log for the line
+        // BEFORE it (`UNMEASURABLE [timeout-150s]`) names the mechanism in one glance, and the watchdog
+        // now says so itself.
+        //
+        // The budget therefore scales with the bucket (`chunk_round_budget`), and the real stop
+        // condition is **consecutive no-progress rounds** (`CHUNK_STALL_LIMIT`) — a child that exits
+        // over a timeout has written that site's row, so it made progress; a child that produces
+        // nothing twice running is failing to start, which is the only thing worth giving up on.
+        let chunk_rounds = manuk_wpt::fidelity::chunk_round_budget(sweep_urls.len());
         let run_chunk = |urls: &[String], part: &std::path::Path| -> std::io::Result<()> {
             let mut cmd = std::process::Command::new(&exe);
             cmd.arg("fidelity")
@@ -662,10 +682,13 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                 let have = &have;
                 sc.spawn(move || {
                     let mut todo: Vec<String> = b.clone();
-                    for round in 0..CHUNK_ROUNDS {
-                        if todo.is_empty() {
-                            break;
-                        }
+                    let mut stalled = 0usize;
+                    let mut round = 0usize;
+                    while !todo.is_empty()
+                        && round < chunk_rounds
+                        && stalled < manuk_wpt::fidelity::CHUNK_STALL_LIMIT
+                    {
+                        round += 1;
                         if run_chunk(&todo, &part).is_err() {
                             eprintln!("  ✗ chunk {i}: failed to spawn (round {round})");
                             break;
@@ -681,31 +704,44 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                             .filter(|u| !done.contains(manuk_wpt::fidelity::site_name(u).as_str()))
                             .cloned()
                             .collect();
-                        if left.len() == todo.len() && round > 0 {
-                            break; // no progress this round — stop rather than spin
+                        // A round that produced NOTHING is the only thing worth giving up on — and it
+                        // takes two in a row, because one can be a spawn that lost a race with the
+                        // filesystem. A round that produced even one row (including a recovered
+                        // in-flight marker) resets the counter: the loop is making progress and the
+                        // deliberate exits are exactly what it is built to absorb.
+                        if left.len() == todo.len() {
+                            stalled += 1;
+                        } else {
+                            stalled = 0;
                         }
                         if !left.is_empty() {
                             eprintln!(
-                                "  ⟳ chunk {i} exited early with {} site(s) unrun — re-spawning (round {})",
+                                "  ⟳ chunk {i} exited early with {} site(s) unrun — re-spawning (round {round} of {chunk_rounds}; {} done)",
                                 left.len(),
-                                round + 1
+                                todo.len() - left.len(),
                             );
                         }
                         todo = left;
                     }
-                    // Anything still missing after the cap is UNSCORED-and-counted, never absent.
+                    // Anything still missing is UNSCORED-and-counted, never absent — and it is filed as
+                    // `never-ran`, NOT as `crashed`. Those are different events: one is a Bar-0 engine
+                    // fault, the other is this loop running out of budget, and calling them by the same
+                    // name is what sent three sessions hunting a mozjs crash that did not exist.
                     if !todo.is_empty() {
                         let rows: Vec<manuk_wpt::fidelity::Fidelity> = todo
                             .iter()
                             .map(|u| {
                                 manuk_wpt::fidelity::Fidelity::unmeasured(
                                     &manuk_wpt::fidelity::site_name(u),
-                                    manuk_wpt::fidelity::Unmeasurable::Crashed,
+                                    manuk_wpt::fidelity::Unmeasurable::NeverRan,
                                 )
                             })
                             .collect();
                         eprintln!(
-                            "  ⚠ chunk {i}: {} site(s) never produced a row after {CHUNK_ROUNDS} rounds — filed as crashed",
+                            "  ⚠⚠⚠ chunk {i}: {} site(s) NEVER RAN — the spawn-loop stopped after {round} \
+                             round(s) (budget {chunk_rounds}, {stalled} consecutive no-progress). These are \
+                             filed `never-ran`, which is an INSTRUMENT fault, not a Bar-0 crash. A run with \
+                             many of these is NOT MEASURING THE ENGINE and no band from it is bankable.",
                             rows.len()
                         );
                         let _ = manuk_wpt::fidelity::append_rows_tsv(&part, &rows);
@@ -801,6 +837,20 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                 manuk_wpt::fidelity::clear_inflight(&p);
                 // Exit rather than unwind: the row and the cleared marker are already on disk, and the
                 // main thread is wedged in whatever took too long.
+                //
+                // ⚠⚠⚠ **SAY SO, BECAUSE THE SILENCE HERE COST THREE SWEEPS.** `std::process::exit`
+                // skips every thread-local destructor, so SpiderMonkey's `JS_ShutDown()` never runs and
+                // its C++ statics fault on the way out with
+                // `pthread_mutex_destroy failed: Device or resource busy`. That message is the LAST
+                // line in the log, it looks exactly like a crash, and t820/t821 both reported it as a
+                // mozjs teardown fault taking the sweep down — when it is this line's own deliberate
+                // exit, with the row already safely written. An unlabelled exit is indistinguishable
+                // from a fault, and the reader will pick the alarming reading every time.
+                eprintln!(
+                    "  ⏹ EXITING THIS PROCESS DELIBERATELY — the row above is on disk and the parent \
+                     re-spawns the remainder. Any SpiderMonkey teardown message BELOW this line is \
+                     this exit skipping `JS_ShutDown()`; it is NOT a crash and NOT a Bar-0 event."
+                );
                 std::process::exit(0);
             });
         }

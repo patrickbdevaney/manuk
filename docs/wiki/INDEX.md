@@ -348,6 +348,11 @@
   - L2733 · The general form
   - L2739 · Is a zero intersection a RENDERING result or a KEYING result? (t783)
   - L2790 · The key that survives an inserted sibling — :nth-child → :nth-of-type (t784)
+  - L2830 · The chunked sweep's spawn-loop arithmetic — a constant budget against a variable workload (t824)
+  - L2835 · The mechanism, in the order the log prints it
+  - L2854 · The defect: CHUNK_ROUNDS = 4
+  - L2870 · The fix
+  - L2884 · Verified live, on the sites that did it
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1385,4 +1390,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1296 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1301 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -43607,3 +43607,108 @@ CONSUMERS. ⚠⚠ And the aiming note: t819's residue label was correct *and und
 `max-width` and it was right; measuring it on its own turned up `margin`, which is not a percentage
 bug, not a Bootstrap bug, and was doubling every `margin-left` on every flex item in the corpus.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 824 — the sweep's `crashed` rows were the instrument's OWN re-spawn cap (2026-08-01)
+
+TICK SHAPE: capability (instrument fidelity — the third face of the ratchet) — a sweep run, its
+contamination REPRODUCED LIVE, and the mechanism named and fixed
+
+HYPOTHESIS (written before the run): five engine fixes are unpriced since `SWEEP-t812-rows` (t815,
+t816, t817, t819, t823). The board's top steer and check #68's steer both say the same thing. Run a
+clean `--jobs 2` CrUX sweep and bank the band. ⚠ The stub also wrote the guard it needed: *"this tick
+is not allowed to bank a contaminated read — check the reason histogram FIRST."*
+
+⚠⚠⚠ **THE RUN FALSIFIED ITS OWN PREMISE IN 12 MINUTES, AND THAT IS THE TICK.** At 60 of 200 sites the
+log had already booked **four chunk deaths**. The run was killed (by PID) rather than left to burn two
+more hours producing a fourth unbankable sweep. What the live log then showed, which no post-hoc row
+histogram could:
+
+```
+  UNMEASURABLE [timeout-150s]: this engine did not finish the site inside its own budget …
+  mozilla::detail::MutexImpl::~MutexImpl: pthread_mutex_destroy failed: Device or resource busy
+    ⟳ chunk 0 exited early with 97 site(s) unrun — re-spawning (round 1)
+```
+
+**EVERY chunk death is preceded by a `timeout-150s` row.** The chunk is not crashing. It is the
+sweep's **own per-site watchdog** calling `std::process::exit(0)` — by design, documented in the
+function that does it, with the timeout row already safely on disk.
+
+⚠⚠⚠ **AND THE `pthread_mutex_destroy` MESSAGE IS NOT A CRASH — IT IS WHAT THAT EXIT LOOKS LIKE.**
+`std::process::exit` skips every thread-local destructor, so `JS_ShutDown()` never runs and
+SpiderMonkey's C++ statics fault on the way out. `engine/js/src/spidermonkey.rs` says this in its own
+doc comment, in those words, and has for hundreds of ticks. **t820 and t821 both read that message as
+a mozjs teardown fault taking the sweep down, because it was the last line before the death and
+nothing labelled the line above it.** Three sessions, one misread, ~6h of measurement.
+
+**THE DEFECT, in one sentence: the re-spawn cap was a CONSTANT where the work is a VARIABLE.** A chunk
+child exits **once per slow site**. `CHUNK_ROUNDS = 4` therefore allowed four slow sites per bucket —
+and a 100-site bucket carrying a dozen of them burned its budget on the first four and filed the ~90
+sites BEHIND THEM, most never opened, as `crashed`. t820 read **118 of 200 `crashed`** against t812's
+25. The number was never about the engine at all.
+
+WHAT LANDED, three parts, in `tests/wpt` (the fidelity instrument is agent territory; no `scripts/`
+file was touched):
+
+1. **The budget scales with the bucket** — `chunk_round_budget(n) = n + 4`, so the pathological case
+   (every site times out) is absorbable. The real terminator is now `CHUNK_STALL_LIMIT = 2`
+   **consecutive no-progress rounds**: a child that exits over a timeout has *written that site's
+   row*, so it made progress; a child that produces nothing twice running is failing to start, and
+   that is the only condition worth giving up on.
+2. **`Unmeasurable::NeverRan` (`never-ran`)**, split out of `Crashed`. They are different events — an
+   instrument budget versus a Bar-0 engine fault — and for three sweeps they shared a string. It
+   counts against the bar exactly as before (`fidelity-progress.sh` lands any unrecognised reason
+   in-scope, verified by reading it — the conservative side, so **no `scripts/` change is needed**).
+3. **The deliberate exit says so, on the line above the fault.** `⏹ EXITING THIS PROCESS DELIBERATELY
+   — … any SpiderMonkey teardown message BELOW this line is this exit skipping JS_ShutDown(); it is
+   NOT a crash.` An unlabelled exit is indistinguishable from a fault, and the reader picks the
+   alarming reading every time.
+
+MEASURED, LIVE, on the exact sites that killed the chunks (`--jobs 2`, 10 sites incl.
+`bbs.ruliweb.com` and `www.bilibili.com`, the two that did it):
+
+```
+  before:  chunk 0 died at bbs.ruliweb → 97 of 100 unrun; chunk 1 died at bilibili → 95 unrun
+  after:   10 sampled, 10 rows merged, ZERO `crashed`, ZERO `never-ran`
+           bbs.ruliweb.com  timeout-150s   ← the deliberate exit, labelled, then re-spawned
+           www.bilibili.com SCORED 0.549   ← the site that killed a chunk now produces a number
+           janitorai.com    bot-wall-403   ← was RECOVERED as `crashed`; it was a BOT WALL
+```
+
+⚠ `janitorai.com` is the direct receipt for t821's inference. It reasoned that `bot-wall` falling
+33 → 10 while `crashed` quadrupled meant *"those chunks never ran, so their sites could not reach the
+classifier"*. Here is the same site, run to completion, classifying itself as the bot wall it always
+was.
+
+Gate: **`chunk_spawn_budget`** — four tests simulating the loop's arithmetic (no processes spawned).
+**Proven RED**: restore `chunk_round_budget` to the constant `4` and two of the four fail, one of them
+asserting the size of the defect on the record (`61+ of 100 sites unrun`). Also asserted: the budget
+scales for n ∈ {1,10,100,1000}; a chunk producing nothing stops at the stall limit rather than
+spinning the scaled ceiling; and `never-ran` round-trips through `tag`/`from_tag` distinctly from
+`crashed`.
+
+⚠ HARNESS, reported not patched (PART VII): **`manuk-wpt` is in neither the wall's crate-test list nor
+CI's** (`verify.sh` and `.github/workflows/ci.yml` both run the same seven: css, layout, paint, dom,
+net, agent, shell). So this gate is real and runnable but **nothing runs it automatically** — the
+instrument that produces the Phase-0 headline is the one crate whose tests no lane executes. Adding it
+is a one-word change in two observer-owned files. Reported, not made.
+
+MEASURED (engine): no `engine/` change — `git diff --stat` touches `tests/wpt` and docs only.
+`manuk-layout` 103 green; `manuk-wpt` 86 + 7 + 1 green.
+
+PERF: none. The scaled budget does not multiply the run's cost — every round makes at least one
+site's progress, so total wall-clock stays bounded by the sum of the per-site budgets.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — the chunked sweep's spawn-loop arithmetic.
+
+PATTERN: ⚠⚠⚠ **A CONSTANT BUDGET AGAINST A VARIABLE WORKLOAD IS A METRIC THAT DEGRADES WITH CORPUS
+SIZE — AND IT DEGRADES SILENTLY, INTO THE MOST ALARMING WORD THE LEDGER HAS.** The cap was fine at the
+scale it was written for and became a 118-row Bar-0 phantom at 200 sites, because the thing it bounds
+scales with the corpus. ⚠⚠ The second half is sharper and is about reading: **the last line before a
+death is not the cause of it.** `pthread_mutex_destroy` was printed by the exit, not by the thing that
+caused the exit, and the line that *did* name the cause (`UNMEASURABLE [timeout-150s]`) was one line
+higher in the same log, on three separate occasions. The cheap guard is the one this tick installed —
+**make every deliberate exit announce itself**, so an unlabelled fault is the only kind left. ⚠ And
+the meta-note: **the sweep had to be RUN to find this.** t821 refused the run and inferred the
+mechanism from the histogram, correctly but incompletely; the mechanism is only visible in the
+*ordering* of the live log, which the rows cannot carry.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
