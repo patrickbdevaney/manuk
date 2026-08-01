@@ -58,6 +58,28 @@
 //!   `#a1` reads 533. (Verified, not assumed.)
 //! - **Restore `border_x = x + ml`** → `#m1` reads `x = 200`, `#q2` reads `x = 876`. (Verified.)
 //!
+//! ## t827 — the BLOCK axis, banked at t823 before it was measured
+//!
+//! The same rule on `min-height`/`max-height`, and it was named as open in t823's own notes. `pch`
+//! for a taffy item is the slot taffy produced, so a percentage clamp re-resolved here is again the
+//! percentage squared:
+//!
+//! ```text
+//!                                                   Chrome    before   after
+//!   flex row item, height:100%, max-height:50%      600x200    100      200   ✗→✓
+//!   …the same with max-height:200px                 600x200    200      200    ✓  guard
+//!   …with min-height:50%                            600x200    200      200    ✓  guard
+//!   column-flex item, max-height:50% / 200px        600x200    200      200    ✓  guard
+//!   grid item in a 300px track, max-height:50%      600x150    150      150    ✓  guard
+//!   plain block, height:100%, max-height:50%        600x200    200      200    ✓  control
+//! ```
+//!
+//! ⚠⚠ **ONE ROW OF SIX WAS OBSERVABLE, AND IT TOOK TWO MASKS TO GET THERE.** The px/pct asymmetry
+//! above is the first. The second is new to this axis: even a percentage `max-height` hides unless
+//! the item ALSO carries a percentage `height`, because otherwise the item's height is `auto` and
+//! `extract_placed` **adopts the slot height after this clamp runs**, quietly overwriting the squared
+//! value. A defect masked by a later assignment is invisible to every test that checks the final box.
+//!
 //! ## The bound, stated rather than glossed
 //!
 //! ⚠ The clamp is skipped **wholesale** for a taffy item rather than re-resolved against the true
@@ -72,6 +94,8 @@ use manuk_text::FontContext;
 const HTML: &str = r##"<!doctype html><html><head><style>
 body{margin:0;font:16px/1.25 sans-serif}
 .r{display:flex;flex-wrap:wrap;width:1200px}
+.hr{display:flex;width:1200px;height:400px}
+.hc{display:flex;flex-direction:column;width:600px;height:400px}
 </style></head><body>
 <div class="r"><div id="a1" style="flex:0 0 66.666667%;max-width:66.666667%">x</div><div id="a2" style="flex:0 0 33.333333%;max-width:33.333333%">x</div></div>
 <div class="r"><div id="x2" style="flex:0 0 90%;max-width:50%">x</div></div>
@@ -84,6 +108,12 @@ body{margin:0;font:16px/1.25 sans-serif}
 <div class="r"><div id="p2" style="flex:0 0 50%;padding-left:10%">x</div></div>
 <div style="display:grid;grid-template-columns:800px 400px;width:1200px"><div id="q1" style="max-width:50%">x</div><div id="q2" style="margin-left:10%">x</div></div>
 <div style="width:1200px"><div id="z1" style="max-width:50%">x</div><div id="z2" style="margin-left:10%;width:50%">x</div></div>
+<div class="hr"><div id="h1" style="flex:0 0 50%;height:100%;max-height:50%">x</div></div>
+<div class="hr"><div id="h2" style="flex:0 0 50%;height:100%;max-height:200px">x</div></div>
+<div class="hr"><div id="h3" style="flex:0 0 50%;height:10%;min-height:50%">x</div></div>
+<div class="hc"><div id="v1" style="flex:0 0 50%;max-height:50%">x</div></div>
+<div style="display:grid;grid-template-rows:300px 100px;width:600px;height:400px"><div id="hg" style="max-height:50%">x</div><div>x</div></div>
+<div style="width:600px;height:400px"><div id="hz" style="height:100%;max-height:50%">x</div></div>
 </body></html>"##;
 
 fn rect_of(page: &manuk_page::Page, sel: &str) -> [f32; 3] {
@@ -114,6 +144,28 @@ fn assert_inline(page: &manuk_page::Page, sel: &str, x: f32, w: f32, why: &str) 
          THIS fixture), got x={} width={}.\n  {why}",
         g[0],
         g[1]
+    );
+}
+
+/// Assert the item's block-axis size. Split from [`assert_inline`] because the two axes fail for
+/// different reasons and a combined helper would report the wrong one.
+fn assert_height(page: &manuk_page::Page, sel: &str, h: f32, why: &str) {
+    let dom = page.dom();
+    let n = manuk_css::query_selector_all(dom, dom.root(), sel)
+        .first()
+        .copied()
+        .unwrap_or_else(|| panic!("selector {sel} matched nothing"));
+    let r = page
+        .root_box
+        .node_rects(dom)
+        .get(&n)
+        .copied()
+        .unwrap_or_else(|| panic!("no box for {sel}"));
+    assert!(
+        (r.height - h).abs() < 1.01,
+        "G_FLEX_ITEM_SLOT_IS_FINAL: `{sel}` expected height={h} (MEASURED in headless Chrome on THIS \
+         fixture), got {}.\n  {why}",
+        r.height
     );
 }
 
@@ -248,5 +300,55 @@ fn g_flex_item_slot_is_final() {
         600.0,
         "a plain block's `margin-left:10%` is applied HERE and nowhere else, so it must still move the \
          box. If this reads 0 the guard has been widened past flex/grid items",
+    );
+
+    // ── THE BLOCK AXIS (t827). Same rule, same squaring, and it was banked in t823's notes as open.
+    assert_height(
+        &page,
+        "#h1",
+        200.0,
+        "`max-height:50%` on a flex item resolves against the 400px flex CONTAINER, not against the \
+         200px slot taffy already clamped it into. Re-clamping gave 50% of 50% = 100px. This is the \
+         ONE row of six that was observable, and only because the item also carries `height:100%` — \
+         see the `#v1` guard below for why the others hid",
+    );
+    assert_height(
+        &page,
+        "#h2",
+        200.0,
+        "`max-height:200px` against an already-200px slot is a no-op, so this row passed through the \
+         whole defect. It is now the assertion that taffy is really doing the clamping we stopped \
+         duplicating on this axis",
+    );
+    assert_height(
+        &page,
+        "#h3",
+        200.0,
+        "`min-height:50%` pushes a 10% (40px) height up to 200. A percentage min of the slot can never \
+         EXCEED the slot, so like its width twin this one could never be observed as wrong",
+    );
+    assert_height(
+        &page,
+        "#v1",
+        200.0,
+        "⚠ THE SECOND MASK: a column-flex item with `max-height:50%` and NO `height`. Its height is \
+         `auto`, so `extract_placed` adopts the slot height AFTER the clamp runs and quietly \
+         overwrites the squared value. It was already 200 before the fix — a defect hidden by a later \
+         assignment, invisible to any test that only checks the final box",
+    );
+    assert_height(
+        &page,
+        "#hg",
+        150.0,
+        "a GRID item's containing block is its grid AREA: `max-height:50%` of a 300px track is 150, \
+         Chrome-measured. Grid is asserted on this axis for the same reason it is on the inline one — \
+         the mechanism is the slot, not the formatting context",
+    );
+    assert_height(
+        &page,
+        "#hz",
+        200.0,
+        "a plain block's `height:100%; max-height:50%` IS clamped here and must stay so — the control \
+         that says the `taffy_item` guard has not been widened past flex/grid items",
     );
 }

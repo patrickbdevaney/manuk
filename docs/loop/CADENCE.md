@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **565** | ticks 1–826 |
 | median tick cycle | **25m** | 564 intervals |
-| median, last 10 | **68m** | 10 intervals |
+| median, last 10 | **74m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 514.2h elapsed |
+| **ticks per hour** | **1.10** | 514.6h elapsed |
 | median verify wall | **63s** | 504 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -28,7 +28,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **379**
-* **✅ rows in the capability ledger**: 144 → **428**
+* **✅ rows in the capability ledger**: 144 → **429**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **273 of 565 ticks** (48%) moved a
@@ -661,6 +661,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **822** | 2026-08-01 11:42 | 45m | measurement | 63s | +118/−32 | 378 | 81 | 56.0% · | `clip: rect()` is unimplemented, and the shape metric CANNOT SEE IT (2026-08-01) |
 | **823** | 2026-08-01 13:27 | 1.8h | capability | 63s | +471/−47 | 379 | 81 | 56.0% · | taffy's slot is a FINISHED ANSWER, and two things were still recomputed on top of it (2026 |
 | **824** | 2026-08-01 14:27 | 60m | capability | 63s | +353/−32 | 379 | 81 | 56.0% · | the sweep's `crashed` rows were the instrument's OWN re-spawn cap (2026-08-01) |
-| **826** | 2026-08-01 15:12 | 45m | measurement | 63s | +137/−32 | 379 | 81 | 56.0% · | the near-bar cohort, and a SECOND CASCADE that nearly produced a false diagnosis (2026-08- |
+| **826** | 2026-08-01 15:39 | 72m | measurement | 63s | +265/−36 | 379 | 81 | 56.0% · | the near-bar cohort, and a SECOND CASCADE that nearly produced a false diagnosis (2026-08- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

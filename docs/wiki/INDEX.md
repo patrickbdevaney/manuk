@@ -173,6 +173,7 @@
   - L3383 · ⚠ The asymmetry that hid it: a percentage clamp always binds again, a pixel one never does
   - L3398 · The margin half needs no percentage and no framework
   - L3405 · The fix
+  - L3421 · t827 addendum — the same rule on the BLOCK axis, and a defect hidden by a later write
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1390,4 +1391,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1301 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1302 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

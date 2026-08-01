@@ -2553,10 +2553,35 @@ impl Ctx<'_> {
             Dim::Calc { pct, .. } if pct != 0.0 && pch.is_none() => f32::INFINITY,
             other => (other.resolve(pch.unwrap_or(0.0), f32::INFINITY) - bs_extra_h).max(0.0),
         };
-        if max_h.is_finite() {
-            content_height = content_height.min(max_h);
+        // ── **THE BLOCK-AXIS TWIN OF t823, AND IT WAS BANKED THERE BEFORE IT WAS MEASURED HERE.**
+        //
+        // Same rule, same reason: taffy already applied this item's `min-height`/`max-height` against
+        // its REAL containing block, and `pch` for a taffy item is the SLOT it produced — so a
+        // percentage clamp re-resolved here is the percentage SQUARED. Chrome-measured on a 400px
+        // `display:flex` row, `flex:0 0 50%; height:100%; max-height:50%`:
+        //
+        // ```text
+        //                                                   Chrome    before   after
+        //   flex row item, height:100%, max-height:50%      600x200    100      200   ✗→✓
+        //   …the same with max-height:200px                 600x200    200      200    ✓  guard
+        //   …with min-height:50%                            600x200    200      200    ✓  guard
+        //   column-flex item, max-height:50% / 200px        600x200    200      200    ✓  guard
+        //   grid item in a 300px track, max-height:50%      600x150    150      150    ✓  guard
+        //   plain block, height:100%, max-height:50%        600x200    200      200    ✓  control
+        // ```
+        //
+        // ⚠ **ONE ROW OF SIX WAS OBSERVABLE, AND IT IS THE SAME ASYMMETRY t823 NAMED.** A `px` clamp
+        // re-applied to the slot is a no-op; `min-height: <pct>` of the slot can never exceed the
+        // slot. Even the percentage `max-height` cases hid unless the item ALSO had a percentage
+        // `height` — without one the item's height is `auto`, and `extract_placed` adopts the slot
+        // height *after* this clamp runs, quietly overwriting the squared value. So the defect was
+        // masked by a later assignment on every row but one.
+        if !taffy_item {
+            if max_h.is_finite() {
+                content_height = content_height.min(max_h);
+            }
+            content_height = content_height.max(min_h);
         }
-        content_height = content_height.max(min_h);
 
         let border_box_w = bl + pl + width + pr + br;
         let border_box_h = bt + pt + content_height + pb + bb;

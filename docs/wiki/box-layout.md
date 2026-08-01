@@ -3417,3 +3417,31 @@ twice, one mutation per half.
 ⚠ **The lesson for the next seam like this: a guard is written for the property that was failing, not
 for the rule it enforces.** When a value is guarded, grep every other *consumer* of that value. This
 is the "one rule, N implementations" shape arriving as one rule with N **readers**.
+
+### t827 addendum — the same rule on the BLOCK axis, and a defect hidden by a later write
+
+`pch` for a taffy item is `Some(p.slot.height)`, so the `min-height`/`max-height` clamp squared its
+percentage exactly as the inline one did. Chrome-measured on a 400px `display:flex` row:
+
+```text
+                                                   Chrome    before   after
+  flex:0 0 50%; height:100%; max-height:50%       600x200     100      200   ✗→✓
+  …the same with max-height:200px                 600x200     200      200    ✓  guard
+  …with height:10%; min-height:50%                600x200     200      200    ✓  guard
+  column-flex item, max-height:50% (no height)    600x200     200      200    ✓  guard
+  grid item in a 300px track, max-height:50%      600x150     150      150    ✓  guard
+  plain block, height:100%; max-height:50%        600x200     200      200    ✓  control
+```
+
+⚠⚠⚠ **ONE ROW OF SIX WAS OBSERVABLE, AND THE SECOND MASK IS THE INTERESTING ONE.** Beyond the px/pct
+asymmetry, a percentage `max-height` *still* hides unless the item also carries a percentage `height`
+— because with `height: auto` the item's box is overwritten by `extract_placed`'s slot adoption
+(`if height == Auto && slot.height > rect.height { rect.height = slot.height }`) **after** the clamp
+runs. The wrong arithmetic produced the right box.
+
+**A defect masked by a later assignment is invisible to every test that checks the final box.** Input
+variation cannot reach it — only asking why a row that *should* be wrong is right. The clamp is now
+skipped for taffy items on both axes, and `#v1` stays in the gate as the row that documents the mask.
+
+⚠ HONEST SCOPE: all seven anchors byte-identical across this change. The idiom needs `height: <pct>`
+AND `max-height: <pct>` on a flex/grid item; this completes a mechanism rather than moving a corpus.

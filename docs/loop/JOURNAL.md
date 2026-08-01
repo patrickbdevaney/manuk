@@ -43926,3 +43926,71 @@ miss — the fixture did not merely fail to reproduce, it reproduced *the right 
 reason* (49.20 is exactly 2×18 + 13.2, i.e. two lines at the DEFAULT 16px metrics), which is the most
 convincing kind of wrong answer there is.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 827 — the block-axis twin, banked at t823 and now closed (2026-08-01)
+
+TICK SHAPE: capability (flex/grid layout) — the residue t823 banked, measured on its own and fixed
+
+HYPOTHESIS (written before the fixture): t823 fixed `min-width`/`max-width` and the margins for a
+taffy item and, while grepping the other consumers of the slot, banked one it did not measure — the
+block axis. `pch` for a taffy item is `Some(p.slot.height)`, and the `min-height`/`max-height` clamp
+resolves percentages against it, so `max-height: <pct>` should come out the percentage squared exactly
+as `max-width: <pct>` did. Measure it, one suspect per row.
+
+⚠ **AND MEASURE IT ON THE SHIPPING CASCADE, WHICH IS THE RULE t826 PAID FOR ONE TICK AGO.** The
+fixture below was run through `Page::load` (Stylo), not `manuk-layout`'s `MinimalCascade` harness.
+
+MEASURED, Chrome vs ours, on a 400px `display:flex` row and a `300px 100px` grid:
+
+```
+                                                   Chrome    before   after
+  flex:0 0 50%; height:100%; max-height:50%       600x200     100      200   ✗→✓
+  …the same with max-height:200px                 600x200     200      200    ✓  guard
+  …with height:10%; min-height:50%                600x200     200      200    ✓  guard
+  column-flex item, max-height:50% (no height)    600x200     200      200    ✓  guard
+  grid item in a 300px track, max-height:50%      600x150     150      150    ✓  guard
+  plain block, height:100%; max-height:50%        600x200     200      200    ✓  control
+```
+
+**ONE ROW OF SIX WAS OBSERVABLE, AND IT TOOK TWO SEPARATE MASKS TO GET THERE.** The first is the
+asymmetry t823 already named: a `px` clamp re-applied to the slot is a no-op, and `min-height: <pct>`
+of a slot can never exceed that slot. ⚠⚠⚠ **The second is new, and it is the more interesting one:
+even a percentage `max-height` hides unless the item ALSO carries a percentage `height`.** Without
+one the item's height is `auto`, and `extract_placed` **adopts the slot height AFTER this clamp runs**
+(`if height == Auto && slot.height > rect.height { rect.height = slot.height }`) — quietly
+overwriting the squared value with the right answer. `#v1` is that row, and it read 200 both before
+and after.
+
+WHAT LANDED: the same one-line guard as t823, on the block axis — `if !taffy_item { …clamp… }`.
+
+MEASURED (controls, PAIRED and BACK-TO-BACK, old binary run immediately before the rebuild):
+**all seven anchors BYTE-IDENTICAL** — `news.ycombinator.com` 0.800250, `www.a11yproject.com`
+0.357798, `en.wikipedia.org` 0.537572, `blog.rust-lang.org` 0.993389, `martinfowler.com` 0.703170,
+`html.spec.whatwg.org` 0.971229, `getbootstrap.com` 0.279138; coverage and every jarring column
+unchanged. `manuk-layout` 103 green.
+
+HONEST SCOPE, and it is narrower than t823's: **no site is claimed to move, and none did.** The idiom
+needs `height: <pct>` *and* `max-height: <pct>` on a flex/grid item, which no anchor uses. This is a
+fixture result that completes a mechanism on both axes and closes a banked residue — it is not a
+corpus lever, and the identical-anchor table is the evidence for that rather than against it.
+
+Gate: **`G_FLEX_ITEM_SLOT_IS_FINAL` EXTENDED**, not duplicated — same mechanism, one more axis, which
+is the t819 precedent. Six new Chrome-measured rows with a separate `assert_height` helper (the two
+axes fail for different reasons and a combined helper would report the wrong one). **Proven RED**:
+remove the block-axis `!taffy_item` guard and `#h1` reads 100 against Chrome's 200.
+
+PERF: none.
+
+WIKI: `docs/wiki/box-layout.md` — a t827 addendum to the t823 section.
+
+PATTERN: ⚠⚠⚠ **A DEFECT MASKED BY A LATER ASSIGNMENT IS INVISIBLE TO EVERY TEST THAT CHECKS THE FINAL
+BOX.** `#v1` computed the wrong height and then had it overwritten by the slot-adoption line, so the
+box was right, every assertion on it passed, and the wrong arithmetic sat there — reachable the moment
+an author adds a percentage `height`. This is not the same as the px/pct asymmetry (which hides a
+defect behind an input that cannot express it); it hides a defect behind a *later write*, which no
+amount of input variation reaches. The only thing that finds it is asking why a row that SHOULD be
+wrong is right. ⚠⚠ And the process note: **the residue was closed because t823 wrote it down as a
+grep, not as a hunch.** t823's pattern entry said "when a value is guarded, grep every other CONSUMER
+of it"; that grep produced this row four ticks later, already named, already scoped, and it took one
+fixture to convict.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
