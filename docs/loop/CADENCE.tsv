@@ -572,3 +572,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 833	6a12a06d	1785630410	2026-08-01T20:26:50-04:00	1932	capability	63	8	290	34	379	81	3896	6960	0	432	0	§10.4 runs BLOCK → INLINE too, and the block path only ever ran it one way (2026-08-01)
 834	2a450652	1785632656	2026-08-01T21:04:16-04:00	2246	capability	63	8	282	36	379	81	3896	6960	0	433	0	an absolutely positioned image was ZERO PIXELS TALL, always (2026-08-01)
 835	400d1bc1	1785636659	2026-08-01T22:10:59-04:00	4003	capability	63	8	293	37	379	81	3896	6960	0	434	0	a flex item `<img>` told taffy its content wanted ZERO, so a carousel shrank to slivers (2026-08-01)
+836	147aca73	1785639040	2026-08-01T22:50:40-04:00	2381	measurement	63	6	228	32	379	81	3896	6960	0	434	0	the obvious fix for t835's residue is WRONG, and one fixture proved it (2026-08-01)

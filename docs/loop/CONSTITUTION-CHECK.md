@@ -3955,3 +3955,107 @@ which the board names as agent territory.
    old-binary control before it becomes a story.
 
 **Next check due: tick 836.**
+
+---
+
+## Constitution check #70 — tick 836 (2026-08-01)
+
+HORIZON: **H0 — Pareto Web Parity.** Exit gate, all binary: ~83% WPT across categories · differential-
+oracle viability across all four usage-weighted corpora · a daily-drivable headful shell · every
+rendered construct queryable through the in-process semantic API.
+
+GATE OR SCOREBOARD? **GATE, and the strongest window in the burndown's history — with one caveat
+that belongs in the same sentence.** Seven ticks landed (t830-t836). The gate condition they serve is
+the second one (oracle-verified viability), whose operational form is the in-scope shape bar:
+
+```
+                              t820     t825     t832
+  in-scope shape>=0.75        5.7%    13.1%    19.1%
+  M1 GATE (shape AND jarring)  4.0%    10.0%    13.0%
+```
+
+**+6.0 points of gate condition in one sweep window**, the largest yet, and every point of it is
+layout math — H0 scope item 1, the item the constitution calls *"the single highest-leverage
+architectural decision in the renderer."*
+
+⚠ **THE CAVEAT, STATED HERE RATHER THAN IN A FOOTNOTE: SCORABILITY IS FLAT AT 101/131 = 77.1%, AND
+THAT IS THE REAL CEILING.** Six render fixes moved shape and did not move the count of sites that
+render at all. M1 cannot reach 95% while 30 in-scope sites never boot. The render leg is being worked
+because it is the binding constraint *on the sites that score*; the FUNCTION leg is the binding
+constraint on the bar itself, and no tick in this window touched it. That is not drift — the board's
+CO-#1 says render — but the next check must ask whether the render leg has taken enough ground that
+the ceiling deserves a window of its own.
+
+WHAT THIS WINDOW ACTUALLY FOUND — **one mechanism class, four implementations of it.** Every one of
+t831/t833/t834/t835 is the same sentence: *this engine resolves a replaced element's size in more
+than one place, and the places disagree.*
+
+```
+  layout_float   no intrinsic ratio · no min/max at all · box-sizing on one axis     t831  ✗→✓
+  layout_block   §10.4 ran inline→block only, never block→inline                     t833  ✗→✓
+  layout_abs     no ratio at all: an abspos <img> was ZERO PIXELS TALL, always       t834  ✗→✓
+  taffy leaf     <img> off the replaced-size list: content measured as ZERO          t835  ✗→✓
+  taffy line     cross size from UNFLEXED main size                                  t836  REFUSED
+```
+
+The window's method is worth recording separately from its result: **t833 concluded "the grep is
+symmetric or it is not a grep", and t834 executed it rather than filing it.** That single act of
+taking a recorded lesson literally found the worst defect of the five — an absolutely positioned
+image rendering at zero height on every page that uses `top/left` instead of `inset:0`.
+
+INVARIANTS.
+* **I2 held, and was tested hardest this window.** Four of the five defects are at taffy's boundary
+  and every fix landed on OUR side of it — we stopped discarding, mis-guarding or overwriting what
+  taffy had computed. t836 is the case that proves the invariant is real rather than convenient: the
+  remaining defect is *inside* taffy's line-cross-size computation, the local patch was measured to
+  encode a false rule, and the tick **refused it** rather than reaching across the boundary or
+  shipping an approximation with a confident comment.
+* **I4 held emphatically.** `float:left` on a header logo, `max-width:100%` + `max-height` on a
+  Cognito login page, `display:flex; overflow-x:scroll` carousels — this is representative-web
+  breadth, not tail. Nothing in the window chased a Chromium quirk.
+* **I3 held.** Every fix produces a truer box, which is what `getBoundingClientRect` and the AX tree
+  read; no new construct was added that lacks semantic exposure.
+* **I5 held and did more than usual.** The oracle stopped being only a ranker this window: the new
+  `--shape-dump` publishes the per-element misses `shape_stats` was already computing and throwing
+  away, and it aimed t831 (in one command), t833, and t835.
+* **PART VII honoured** — no `scripts/` file touched in t830-t836.
+
+PART VI CORRECTION. §VI.2 still reads *"CSS layout breadth is the weak spot: css-flexbox 5.5%,
+css-grid 4.7%."* That framing is now **stale in its instrument, not in its conclusion**: the
+conclusion (layout is the weak spot) is exactly what this window confirmed, but the WPT percentages
+are no longer how the loop measures it. The live gauge is the in-scope shape bar on the CrUX corpus
+(19.1%, +6.0/window) plus the scorability ceiling (77.1%), both of which move on a sweep and neither
+of which appears in Part VI. Part VI should carry those two numbers.
+
+### HARNESS, reported not patched (PART VII)
+
+1. **`F2` went RED at 7.70x on a loaded box and passed on a quiet re-run of the identical tree.**
+   Third window running. The denominator is what moves: `mid` read 34.35ms on the red run, the
+   fastest all session, which inflates a ratio whose numerator did not change. Re-run, never retune —
+   but a gate that reddens from its own denominator on a busy box is costing a full wall each time.
+2. **Swap sat at 94-99% for the whole window** while RAM was ~17GB free; `tick.sh` prints the warning
+   itself. It is stale pages from an earlier spike, and it is the likeliest cause of item 1.
+3. **`manuk-wpt` is still in neither the wall's crate-test list nor CI's** (reported at #69,
+   unchanged). The `fidelity::shape_tests` added at t831 — including the invariant that the miss dump
+   and the score are the same walk — run only by hand.
+
+### THE STEER
+
+1. **THE SWEEP IS THE ONLY THING THAT FINDS A REGRESSION, AND THIS WINDOW PROVED IT TWICE.** t832's
+   sweep found three real regressions that t830's and t831's honest 14- and 16-site controls could
+   not see, because the sites a fix costs are the ones you were not thinking about. Then t835's
+   control found a regression *the fixture could not*, because the corrective guard had been written
+   from the same hypothesis as the fix. **Keep both instruments; they fail in different directions.**
+2. **NEXT REDUCTION AIMS WITH `--shape-dump`, NOT BY HAND.** It has now aimed three ticks in one
+   command each, against the same frame the score is computed in. The hand-rolled `boxes` + headless-
+   Chrome diff that every reduction used before t831 is retired for this purpose.
+3. **THE OPEN RESIDUE IS NAMED AND ONE LAYER UP:** taffy's flex-line cross size is computed from
+   unflexed main sizes, so a shrunk image gets its unflexed height. Refuted this window: the measure
+   seam (t835), `align-items` (t835), the slot adoption (t836, counterexample = an image beside a
+   taller sibling, which Chrome stretches to 120). **Anything that touches one item cannot fix a
+   number that belongs to the line.**
+4. **AND THE CEILING IS THE NEXT QUESTION, NOT THE NEXT TICK.** 30 in-scope sites do not render at
+   all. Render work still pays — +6.0 points in one window — but the arithmetic of 101/131 does not
+   move until something boots them.
+
+**Next check due: tick 844.**

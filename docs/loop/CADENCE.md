@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **573** | ticks 1–835 |
-| median tick cycle | **25m** | 572 intervals |
-| median, last 10 | **54m** | 10 intervals |
+| ticks landed | **574** | ticks 1–836 |
+| median tick cycle | **25m** | 573 intervals |
+| median, last 10 | **46m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 521.1h elapsed |
-| median verify wall | **63s** | 512 ticks |
+| **ticks per hour** | **1.10** | 521.8h elapsed |
+| median verify wall | **63s** | 513 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **434**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**279 of 573 ticks** (49%) moved a
+**279 of 574 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -670,5 +670,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **833** | 2026-08-01 20:26 | 32m | capability | 63s | +290/−34 | 379 | 81 | 56.0% · | §10.4 runs BLOCK → INLINE too, and the block path only ever ran it one way (2026-08-01) |
 | **834** | 2026-08-01 21:04 | 37m | capability | 63s | +282/−36 | 379 | 81 | 56.0% · | an absolutely positioned image was ZERO PIXELS TALL, always (2026-08-01) |
 | **835** | 2026-08-01 22:10 | 67m | capability | 63s | +293/−37 | 379 | 81 | 56.0% · | a flex item `<img>` told taffy its content wanted ZERO, so a carousel shrank to slivers (2 |
+| **836** | 2026-08-01 22:50 | 40m | measurement | 63s | +228/−32 | 379 | 81 | 56.0% · | the obvious fix for t835's residue is WRONG, and one fixture proved it (2026-08-01) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

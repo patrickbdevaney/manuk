@@ -44662,3 +44662,90 @@ that a control is evidence about the sites it contains. ⚠ **A KNOWN-DRIFTY SIT
 REPEAT, NOT THE BENEFIT OF THE DOUBT**: `777juegos` had a recorded ±1.2pt spread, which is exactly
 the reason to run it twice per binary rather than to dismiss an 8.75pt drop as more of the same.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 836 — the obvious fix for t835's residue is WRONG, and one fixture proved it (2026-08-01)
+
+TICK SHAPE: measurement — a reduction that ends in a REFUSED fix and a sharpened residue
+
+HYPOTHESIS (t835's banked residue): a `min-width:0` flex item image in a 320px row is `160x43` in
+Chrome and `160x266` for us. t835 had already refuted two suspects by measurement — not the measure
+seam (the known-width→ratio derivation moved no number and was deleted), not cross-axis `stretch`
+(`align-items:flex-start` measures identically) — and named the remaining one: **taffy applies
+`aspect_ratio` to the item's SPECIFIED width rather than its FLEXED width**, so the cross size comes
+from 1000 (→266) instead of 160 (→43). The residue said the fix was in the slot adoption on the way
+out. It was found there, and it is not the fix.
+
+**THE MECHANISM IS EXACTLY AS BANKED.** `extract_placed`'s leaf branch calls `layout_block` with
+taffy's flexed width recorded, and `layout_block` correctly derives `160/3.759 = 42.6`. Three lines
+later the slot-height adoption — *"when its own height is `auto`, adopt taffy's slot height so it
+fills its flex line"* — sees `266 > 42.6` and **overwrites the correct number**. Guarding that
+adoption for a ratio-sized replaced element produced Chrome-exact results immediately:
+
+```text
+                                        Chrome   before   guarded
+  two min-width:0 images, 320px row      160x43   160x266   160x43   ✓
+  …with align-items:flex-start           160x43   160x266   160x43   ✓
+  four unshrunk images (t835's row)     1000x266 1000x266  1000x266  ✓ control
+  a <div> flex item, height:auto          60x120    60x120    60x120  ✓ control (stretch still works)
+```
+
+⚠⚠⚠ **AND THEN THE FOURTH FIXTURE KILLED IT.** An image in a row whose OTHER item is 120px tall:
+
+```text
+                                        Chrome   before   guarded
+  image beside a 120px-tall sibling      308x120  308x266   308x82   ✗ both wrong
+```
+
+**Chrome STRETCHES it to 120.** So `align-self: stretch` *does* apply to a ratio-sized replaced
+item, and the rule my guard was about to encode — *"a replaced item with a ratio never adopts the
+line's cross size"* — is **false**. The two fixtures that looked like a clean fix were both cases
+where the line's cross size happens to BE the ratio-derived height, so skipping the adoption and
+using the ratio-derived height are indistinguishable on them. One fixture with a taller sibling
+separates them, and it says the guard is wrong.
+
+**THE REAL DEFECT, now stated in the right layer:** the line's cross size is the max of the items'
+**hypothetical cross sizes**, and a flex item's hypothetical cross size is computed from its
+**flexed** main size. Taffy computes it from the SPECIFIED width, so the line comes out 266 instead
+of 43 — and every downstream number, including a correct stretch, is then measured against the wrong
+line. `160x266` is not one bug in the adoption; it is the line being 266 tall.
+
+**THE FIX IS REFUSED, NOT DEFERRED FOR CONVENIENCE.** The guard makes two families exact and moves
+the third from 146px wrong to 38px wrong — a net improvement in Chrome-likeness, and I could have
+landed it. I did not, because it encodes a rule this tick has just MEASURED to be false, behind a
+comment that would read as authoritative. t817's rule is the deciding one: **a wrong fix is caught
+by the next gate; a wrong label is caught by nothing.** A future tick correcting the line cross size
+would have to first discover that the confident guard above it is a lie.
+
+RESIDUE, re-banked one layer up and with this tick's refutation attached:
+* **Not** the measure seam (t835), **not** `align-items` (t835), **not** the slot adoption (t836 —
+  the counterexample is an image beside a taller sibling, where Chrome stretches to 120).
+* It is **taffy's flex-line cross size**, computed from unflexed main sizes.
+* Which means the fix is either upstream of taffy (give it a main size it will not re-flex) or a
+  correction pass over the placed line — **not** a per-item patch on the way out. Anything that
+  touches only one item cannot fix a number that is a property of the LINE.
+
+`manuk-layout` **111 green**, unchanged — the tree is byte-identical to t835's.
+
+Also in this tick: **constitution check #70** (due at 836, hook-enforced). Horizon H0; the gate
+condition this window served is oracle-verified viability, whose operational form is the in-scope
+shape bar — **5.7% → 13.1% → 19.1%**, the largest window yet, all of it layout math (H0 scope item
+1). The honest caveat recorded beside it: **scorability is FLAT at 101/131 = 77.1%**, so M1 cannot
+reach 95% until something boots the 30 in-scope sites that never render. I2 was tested hardest and
+held — four of five defects sat at taffy's boundary and every fix landed on our side of it, this
+tick included, which is the case that proves the invariant is real rather than convenient.
+
+PERF: none. WIKI: none — the artefact is the four-row table and the refutation.
+
+PATTERN: ⚠⚠⚠ **TWO FIXTURES AGREED WITH THE WRONG RULE BECAUSE BOTH WERE DEGENERATE.** In every case
+where all the flex items are the images themselves, the line's cross size IS the ratio-derived
+height — so "don't stretch" and "stretch to a line that happens to equal the ratio height" produce
+identical output. **A fixture family that cannot distinguish two hypotheses is one fixture, however
+many rows it has**, and the way to find that out is to ask what varies BETWEEN the rows: mine varied
+`align-items` and item count, neither of which changes the line's cross size. The fourth fixture
+varied the thing that does. ⚠⚠ **A RESIDUE CAN NAME THE RIGHT MECHANISM AND STILL POINT AT THE WRONG
+LAYER** — t835's residue was correct that taffy uses the specified width, and wrong that the fix
+lives in the slot adoption, because the symptom surfaces one item at a time while the cause is a
+property of the line. ⚠ Refusing a fix that measurably improves two of three cases is only defensible
+BECAUSE the measurement exists — without the fourth fixture this would have landed and been right by
+accident, which is the same thing as being wrong later.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
