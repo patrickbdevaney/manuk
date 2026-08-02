@@ -44507,3 +44507,77 @@ MEASURED (natural size vs used size) and not what was merely nearby. ⚠ The res
 "the page also carries an independent −50 and −30 that the img cannot explain" — was **right**, and
 writing it down is why this tick did not mistake +2.9pt for a solved page.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 834 — an absolutely positioned image was ZERO PIXELS TALL, always (2026-08-01)
+
+TICK SHAPE: capability (replaced-element sizing, third implementation) — t833's own conclusion taken
+literally instead of merely recorded
+
+HYPOTHESIS: t833 concluded *"two implementations of one rule drift in whichever direction the last
+fix landed, so the grep is symmetric or it is not a grep."* A lesson recorded and not executed is
+decoration, so this tick executed it: enumerate every OTHER place this engine resolves a replaced
+element's size and check each against the rules the other two now hold. There are three —
+`layout_block`, `layout_float`, and `layout_abs` — and only two had been looked at.
+
+`layout_abs` took its height from `definite_ch` or from the CONTENT height. **A replaced element has
+no children.** So unless the author gave an explicit `height` or set BOTH `top` and `bottom`, an
+absolutely positioned `<img>` measured `<w>x0` and painted nothing at all. Chrome-measured, a
+1000×266 image absolutely positioned in a 320×200 block:
+
+```text
+                                 Chrome    before     after
+  max-width:100%                 320x85    320x0     320x85    ✗→✓
+  max-height:30px                113x30   1000x0     113x30    ✗→✓
+  max-width:100% + max-height    113x30    320x0     113x30    ✗→✓
+  min-width:1500px              1500x399  1500x0    1500x399   ✗→✓
+```
+
+Every `before` height is 0 and every `before` WIDTH but one is already right — the min/max clamps
+reached this path in an earlier tick and the ratio never did. This was the worst of the three
+implementations: the other two produced a wrong size, **this produced no box.**
+
+⚠⚠⚠ **AND THE `inset:0` VARIANT HAPPENED TO WORK, WHICH IS WHY IT SURVIVED.** Both insets make
+`definite_ch`, so the most-cited form of the idiom — `position:absolute; inset:0` — was fine, while
+`position:absolute; top:0; left:0` (the same pattern, written the other common way) was invisible.
+**A defect whose canonical form works is not discoverable from the canonical form**, and the corpus
+will keep voting for the form that works.
+
+⚠⚠⚠ **THE FALSIFICATION PASS DELETED A THIRD OF MY OWN FIX.** I wrote all three rules onto this path
+for symmetry: the auto-height derivation, §10.4 inline→block, and §10.4 block→inline. Mutating each
+out separately, the inline→block half left the gate **GREEN** — because the auto-height arm already
+derives from `content_w` *after* the width clamp, so the transfer could only ever recompute the
+number it had just computed. `layout_block` and `layout_float` genuinely need their copies (both
+resolve the height from a source that is not the clamped width); this path does not. It is removed,
+with the reason written where the code would have gone, because the next person to run the symmetric
+grep will notice the asymmetry and re-add it otherwise. **Shipping a fourth copy of a rule for
+symmetry is unreachable code guarded by a test that cannot fail — this project's own definition of a
+vacuous gate, and I nearly committed one while quoting the lesson about them.**
+
+MEASURED — **OLD BINARY (t833) vs NEW, 15 sites, same hour**:
+
+```
+  all 15 sites                +0.0000   ·   crossings 0 · regressions 0 · coverage byte-identical
+```
+
+⚠⚠ **HONEST SCOPE: THIS MOVED NOTHING ON THE CONTROL LIST, AND THAT IS THE EXPECTED RESULT, NOT A
+DISAPPOINTMENT.** None of those 16 sites absolutely-positions an image without both insets. That is
+precisely the limitation t832 named — *a per-fix control is evidence about the sites it contains and
+nothing else* — arriving one tick after it was written, and the correct response is to say so rather
+than to pad the list until something moves. The witness for this fix is the Chrome table above (four
+rows, 0 → correct) and the next full sweep, not a hand-picked control that cannot see it.
+
+`manuk-layout` **110 green** (109 + 1), RED-proven by mutating out the derivation.
+
+PERF: none — one divide on a path that previously returned a content height of zero.
+
+WIKI: `docs/wiki/box-layout.md` — "An absolutely positioned image was ZERO PIXELS TALL, always".
+
+PATTERN: ⚠⚠⚠ **A DEFECT WHOSE CANONICAL FORM WORKS IS NOT DISCOVERABLE FROM THE CANONICAL FORM.**
+`inset:0` made `definite_ch` and hid a zero-height bug in every other way of writing the same
+idiom. Enumerating the WAYS a pattern is written is a different search from enumerating the
+patterns, and only the first one finds this class. ⚠⚠ **A LESSON RECORDED IS NOT A LESSON EXECUTED**
+— t833 wrote "the grep is symmetric or it is not a grep" and it cost one tick to actually run the
+grep, which found a worse defect than the one that produced the lesson. ⚠ **FALSIFY EVERY HALF
+SEPARATELY, INCLUDING THE HALVES YOU ADDED FOR TIDINESS**: one third of this fix was unreachable and
+only the per-half mutation could tell, because the whole-fix test passed either way.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

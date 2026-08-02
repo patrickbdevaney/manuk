@@ -186,6 +186,8 @@
   - L3622 · ⓷ And box-sizing: border-box on the block axis
   - L3629 · Priced against an OLD-BINARY control, 16 sites, same hour
   - L3650 · §10.4 runs BLOCK → INLINE too, and the block path only ever ran it one way (t833)
+  - L3694 · An absolutely positioned image was ZERO PIXELS TALL, always (t834)
+  - L3722 · The falsification pass deleted a third of the fix
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1403,4 +1405,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1314 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1316 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

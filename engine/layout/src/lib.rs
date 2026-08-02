@@ -4591,13 +4591,47 @@ impl Ctx<'_> {
             Dim::Auto => f32::INFINITY,
             other => (other.resolve(cw, f32::INFINITY) - bs_extra_w).max(0.0),
         };
-        let content_w = content_w.min(max_w).max(min_w);
+        let mut content_w = content_w.min(max_w).max(min_w);
         // Lay out content at a provisional origin, then re-origin once placed.
         let mut inner = FloatContext::new(0.0, content_w);
         let (content, ch) =
             self.layout_children(node, 0.0, 0.0, content_w, definite_ch, &mut inner);
-        // Height: the definite value if we have one; else content height (CSS2 §10.6.4).
-        let content_height = definite_ch.unwrap_or_else(|| ch.max(inner.lowest_bottom().max(0.0)));
+        // ── **AN ABSOLUTELY POSITIONED REPLACED ELEMENT WAS ZERO PIXELS TALL. ALWAYS.**
+        //
+        // Height was `definite_ch` or the CONTENT height, and a replaced element has no children —
+        // so unless the author gave it an explicit `height` or set BOTH `top` and `bottom`, an
+        // `<img>` measured `<w>x0` and painted nothing. This is the third implementation of the
+        // rule t831 landed in `layout_float` and t833 completed in `layout_block`, and it was the
+        // worst of the three: those produced a wrong size, this produced **no box at all**.
+        //
+        // `position:absolute; top:0; left:0` on an image is the hero/overlay/thumbnail idiom of the
+        // whole web. The `inset:0` variant HAPPENED to work — both insets make `definite_ch` — which
+        // is precisely why this survived: the most-cited form of the pattern is the one that hid it.
+        //
+        // Chrome-measured, a 1000×266 image absolutely positioned in a 320×200 block:
+        //
+        // ```text
+        //                                  Chrome    before     after
+        //   max-width:100%                 320x85    320x0     320x85    ✗→✓
+        //   max-height:30px                113x30   1000x0     113x30    ✗→✓
+        //   max-width:100% + max-height    113x30    320x0     113x30    ✗→✓
+        //   min-width:1500px              1500x399  1500x0    1500x399   ✗→✓
+        // ```
+        //
+        // Note every `before` height is 0 and every `before` WIDTH but one is already right: the
+        // clamps landed here in an earlier tick, the ratio never did.
+        let content_height = match (definite_ch, s.aspect_ratio) {
+            (None, Some(r)) if r > 0.0 => ((content_w + bs_extra_w) / r - bs_extra_h).max(0.0),
+            _ => definite_ch.unwrap_or_else(|| ch.max(inner.lowest_bottom().max(0.0))),
+        };
+        // ⚠ **§10.4's inline→block half is NOT written here, and that is deliberate rather than
+        // forgotten.** I wrote it, and the falsification pass found the gate stayed GREEN with it
+        // mutated out — because the arm above already derives the height from `content_w` *after*
+        // the width clamp, so the transfer could only ever recompute the number it had just
+        // computed. `layout_block` and `layout_float` genuinely need their copies (both resolve the
+        // height from a source that is not the clamped width); this path does not, and shipping a
+        // fourth copy of the rule for symmetry would have been unreachable code guarded by a test
+        // that cannot fail — which is the exact shape this project calls a vacuous gate.
         // `min-height` / `max-height` clamp (CSS2 §10.7) — the CB height is always definite here, so
         // a `%` bound resolves against it (unlike the in-flow case's indefinite-parent → `none`).
         let min_h = (s.min_height.resolve(cb.height, 0.0) - bs_extra_h).max(0.0);
@@ -4605,7 +4639,20 @@ impl Ctx<'_> {
             Dim::Auto => f32::INFINITY,
             other => (other.resolve(cb.height, f32::INFINITY) - bs_extra_h).max(0.0),
         };
+        let unclamped_h = content_height;
         let content_height = content_height.min(max_h).max(min_h);
+        // And §10.4 the other way, block → inline — the half t833 added to `layout_block`. Safe to
+        // move the width after `layout_children` ONLY under the replaced guard, since a replaced box
+        // has no children that were laid out against the old width.
+        if content_height != unclamped_h && is_replaced_element(self.dom.tag_name(node)) {
+            if let Some(r) = s.aspect_ratio {
+                if r > 0.0 {
+                    let w = ((content_height + bs_extra_h) * r - bs_extra_w).max(0.0);
+                    content_w = w.min(max_w).max(min_w);
+                }
+            }
+        }
+        let content_w = content_w;
 
         let border_box_w = bl + pl + content_w + pr + br;
         let border_box_h = bt + pt + content_height + pb + bb;
@@ -8470,6 +8517,73 @@ mod tests {
             (bw - 100.0).abs() < 1.0 && (bhh - 100.0).abs() < 1.0,
             "a border-box float's specified HEIGHT is its border box too (100x100), got {bw}x{bhh}"
         );
+    }
+
+    /// **AN ABSOLUTELY POSITIONED REPLACED ELEMENT WAS ZERO PIXELS TALL. ALWAYS.**
+    ///
+    /// `layout_abs` took its height from `definite_ch` or from the CONTENT height, and a replaced
+    /// element has no children — so unless the author gave an explicit `height` or set BOTH `top`
+    /// and `bottom`, an absolutely positioned `<img>` measured `<w>x0` and painted nothing.
+    ///
+    /// This is the THIRD implementation of the rule t831 landed in `layout_float` and t833
+    /// completed in `layout_block`, found by taking t833's own conclusion literally and grepping
+    /// the remaining size resolutions instead of waiting for a site to name the next one. It was
+    /// the worst of the three: the other two produced a wrong size, this produced **no box**.
+    ///
+    /// ⚠ **The `inset:0` variant HAPPENED to work** — both insets make `definite_ch` — which is
+    /// exactly why this survived: the most-cited form of the idiom is the one that hid it, and
+    /// `position:absolute; top:0; left:0` on an image is the hero/overlay/thumbnail pattern of the
+    /// whole web.
+    ///
+    /// Chrome-measured, a 1000×266 image absolutely positioned in a 320×200 block:
+    ///
+    /// ```text
+    ///                                  Chrome    before     after
+    ///   max-width:100%                 320x85    320x0     320x85    ✗→✓
+    ///   max-height:30px                113x30   1000x0     113x30    ✗→✓
+    ///   max-width:100% + max-height    113x30    320x0     113x30    ✗→✓
+    ///   min-width:1500px              1500x399  1500x0    1500x399   ✗→✓
+    /// ```
+    ///
+    /// Every `before` height is 0 and every `before` width but one is already right — the clamps
+    /// reached this path in an earlier tick and the ratio never did.
+    #[test]
+    fn an_abspos_replaced_element_takes_its_height_from_its_ratio() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0'>\
+               <div class=rel><img id=w></div>\
+               <div class=rel><img id=h></div>\
+               <div class=rel><img id=both></div>\
+               <div class=rel><img id=mw></div>\
+             </body>",
+            ".rel{position:relative;width:320px;height:200px} \
+             .rel img{position:absolute;top:0;left:0;aspect-ratio:1000/266;width:1000px} \
+             #w{max-width:100%} #h{max-height:30px} \
+             #both{max-width:100%;max-height:30px} #mw{min-width:1500px}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let g = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            (rects[&n].width, rects[&n].height)
+        };
+        for (id, want) in [
+            ("w", (320.0, 85.0)),
+            ("h", (113.0, 30.0)),
+            ("both", (113.0, 30.0)),
+            ("mw", (1500.0, 399.0)),
+        ] {
+            let (gw, gh) = g(id);
+            assert!(
+                (gw - want.0).abs() < 1.5 && (gh - want.1).abs() < 1.5,
+                "abspos #{id}: Chrome measures {}x{}, got {gw}x{gh}",
+                want.0,
+                want.1
+            );
+        }
     }
 
     /// **CSS 2.1 §10.4 RUNS BLOCK → INLINE TOO, AND THE BLOCK PATH ONLY EVER RAN IT ONE WAY.**

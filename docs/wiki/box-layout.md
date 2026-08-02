@@ -3690,3 +3690,54 @@ corpus lever — the same shape as t827, and labelled as such.
 Gate: `a_max_height_on_a_replaced_element_pulls_its_width_back_through_the_ratio` (`manuk-layout`),
 RED-proven twice — once by removing the transfer, once by removing ONLY the auto-margin re-run while
 keeping the width fix, so the two halves are separately falsifiable.
+
+## An absolutely positioned image was ZERO PIXELS TALL, always (t834)
+
+`layout_abs` took its height from `definite_ch` (an explicit `height`, or both `top` and `bottom`)
+or else from the CONTENT height. **A replaced element has no children.** So an absolutely
+positioned `<img>` with neither measured `<w>x0` and painted nothing.
+
+This is the third implementation of the rule t831 landed in `layout_float` and t833 completed in
+`layout_block`. It was found by taking t833's own conclusion literally — *the grep is symmetric or
+it is not a grep* — and enumerating every remaining size resolution rather than waiting for a site
+to name the next one. It was the worst of the three: the other two produced a wrong size, this
+produced no box.
+
+```text
+                                 Chrome    before     after
+  max-width:100%                 320x85    320x0     320x85    ✗→✓
+  max-height:30px                113x30   1000x0     113x30    ✗→✓
+  max-width:100% + max-height    113x30    320x0     113x30    ✗→✓
+  min-width:1500px              1500x399  1500x0    1500x399   ✗→✓
+```
+
+Every `before` height is 0 and every `before` width but one is already right: the min/max clamps
+reached this path in an earlier tick and the ratio never did.
+
+⚠⚠⚠ **THE `inset:0` VARIANT HAPPENED TO WORK, WHICH IS WHY THIS SURVIVED.** Both insets make
+`definite_ch`, so the most-cited spelling of the idiom was fine while `position:absolute; top:0;
+left:0` — the same pattern, written the other common way — was invisible. **A defect whose canonical
+form works is not discoverable from the canonical form.**
+
+### The falsification pass deleted a third of the fix
+
+All three rules were written onto this path for symmetry: the auto-height derivation, §10.4
+inline→block, and §10.4 block→inline. Mutated out one at a time, the **inline→block half left the
+gate GREEN** — the auto-height arm already derives from `content_w` *after* the width clamp, so that
+transfer could only recompute the number it had just computed. `layout_block` and `layout_float`
+genuinely need their copies (both resolve the height from a source that is not the clamped width);
+this path does not.
+
+It was removed, with the reason left where the code would have gone, because the next person to run
+the symmetric grep will otherwise notice the asymmetry and re-add it. **A fourth copy of a rule
+added for symmetry is unreachable code guarded by a test that cannot fail** — this project's own
+definition of a vacuous gate, nearly committed while quoting the lesson about them.
+
+⚠⚠ **HONEST SCOPE: zero movement on the 16-site control**, priced against the t833 binary in the
+same hour, all sites byte-identical. None of them absolutely-positions an image without both insets
+— which is exactly the limitation t832 named one tick earlier (*a per-fix control is evidence about
+the sites it contains and nothing else*). The witness is the Chrome table above and the next full
+sweep, not a control padded until something moves.
+
+Gate: `an_abspos_replaced_element_takes_its_height_from_its_ratio` (`manuk-layout`), RED-proven by
+mutating out the derivation.
