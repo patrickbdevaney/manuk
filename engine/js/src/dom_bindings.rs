@@ -15767,7 +15767,44 @@ const WINDOW_PRELUDE: &str = r#"
             };
             var th = opts.threshold;
             this._thresholds = (th === undefined) ? [0] : (Array.isArray(th) ? th.slice() : [th]);
-            this.observe = function (el) { if (el && this._targets.indexOf(el) < 0) this._targets.push(el); };
+            // ── ⚠⚠⚠ **`observe()` MUST DELIVER AN INITIAL OBSERVATION, AND THIS ONE ONLY RECORDED
+            // THE TARGET.**
+            //
+            // Intersection Observer §3.2: observing an element queues the *update intersection
+            // observations* steps, so **every browser calls the callback once per observed element
+            // without any scroll or layout change** — reporting `isIntersecting` either way. This
+            // shim pushed the target and waited, and `__runObservers` is only called by the engine
+            // *after a layout or a scroll*. Page scripts run after the initial layout and nothing
+            // scrolls a headless render, so for a static page the callback **never fired at all**.
+            //
+            // That is the whole lazy-load web on first paint. Measured on a fixture whose three
+            // images all carry `data-src` + a 1×1 GIF placeholder, in an 800px viewport:
+            //
+            // ```text
+            //                                            Chrome        before        after
+            //   swapped on DOMContentLoaded (no IO)      400x100      400x100 ✓     400x100
+            //   swapped by IO, ABOVE the fold            400x100      400x400 ✗     400x100
+            //   swapped by IO, below the fold            400x100      400x400 ✗     400x100
+            // ```
+            //
+            // ⚠ The first row is the control that made this a diagnosis instead of a guess: our JS
+            // runs, reaches the DOM, and swaps the `src` — so the page's script is not the problem
+            // and `IntersectionObserver` is. It also refutes the reading that this is a *scroll*
+            // gap: the failing element was never off-screen.
+            //
+            // ⚠⚠ And it is why `IntersectionObserver: confirmed` on the surface map was true and
+            // useless (t838). Tick 59's probe verified the chain *after moving the viewport* —
+            // scroll → `scrollY` → IO fires → `src` swaps → fetch queued — and every link of that
+            // was real. The link nobody probed is the one that needs no scroll, which is the one
+            // almost every page actually uses.
+            //
+            // Coalesced through one pending flag so observing N elements costs one pass, and run on
+            // a microtask so a script that observes and then mutates in the same turn sees a
+            // consistent tree.
+            this.observe = function (el) {
+                if (el && this._targets.indexOf(el) < 0) this._targets.push(el);
+                if (typeof g.__ioScheduleInitial === 'function') g.__ioScheduleInitial();
+            };
             this.unobserve = function (el) {
                 var i = this._targets.indexOf(el);
                 if (i >= 0) this._targets.splice(i, 1);
@@ -15787,6 +15824,27 @@ const WINDOW_PRELUDE: &str = r#"
             };
             this.disconnect = function () { this._targets.length = 0; };
             g.__roList.push(this);
+        };
+        // The initial-observation pump — see the comment on `observe()`. Coalesced: N `observe()`
+        // calls in one turn schedule one pass. The viewport is read from the same globals the page
+        // reads (`innerHeight`/`innerWidth`/`scrollY`), which by page-script time are the real ones
+        // the document was laid out at, so the initial pass and an engine-driven one can never
+        // disagree about where the viewport is.
+        g.__ioInitialPending = false;
+        g.__ioScheduleInitial = function () {
+            if (g.__ioInitialPending) return;
+            g.__ioInitialPending = true;
+            var run = function () {
+                g.__ioInitialPending = false;
+                if (typeof g.__runObservers !== 'function') return;
+                var vh = Number(g.innerHeight) || 0, vw = Number(g.innerWidth) || 0;
+                // No viewport yet means no honest answer — say nothing rather than reporting every
+                // element as not-intersecting against a 0×0 root, which would latch `_prev` to
+                // `false` and suppress the real observation when it arrives.
+                if (vh <= 0 || vw <= 0) return;
+                try { g.__runObservers(Number(g.scrollY) || 0, vh, vw); } catch (e) {}
+            };
+            if (typeof g.queueMicrotask === 'function') { g.queueMicrotask(run); } else { run(); }
         };
         // Called by the engine after every layout or scroll. `scrollY`/`vh`/`vw` describe the
         // viewport in document coordinates.

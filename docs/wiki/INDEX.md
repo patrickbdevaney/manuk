@@ -834,6 +834,10 @@
   - L2803 · document.hasFocus() — tied to the tab-in-front signal, never a second focus state (tick 496)
   - L2815 · <search> is a LANDMARK, and an unmapped landmark is an AGENTIC gap (tick 568)
   - L2841 · The close request is ONE stack, and the missing API was hiding a live bug (tick 574)
+  - L2888 · IntersectionObserver.observe() never delivered its INITIAL observation — and G_VIEWPORT's own shape hid it for 780 ticks (t839)
+  - L2907 · The fixture, and the control that was the whole diagnosis
+  - L2927 · A gate's shape can assert a case away
+  - L2939 · Honest scope, and the residue that is a policy question
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -1410,4 +1414,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1321 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1325 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

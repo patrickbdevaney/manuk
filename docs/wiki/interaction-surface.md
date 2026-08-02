@@ -2884,3 +2884,76 @@ cancelable path Escape runs.
 RED-proven twice, and the second proof is the one that mattered: restoring the private `__dialogEscape`
 listener yields `dlgkept:false` — one Escape, two dismissals, reproduced exactly. `G_CLOSE_WATCHER`.
 [[dialog-and-top-layer]]
+
+## `IntersectionObserver.observe()` never delivered its INITIAL observation — and G_VIEWPORT's own shape hid it for 780 ticks (t839)
+
+The live-viewport section above records the fourth step everybody forgets (*the image must actually
+ARRIVE*). This is the **zeroth** step, and it is the one this gate was structurally unable to see.
+
+`observe()` was:
+
+```js
+this.observe = function (el) { if (el && this._targets.indexOf(el) < 0) this._targets.push(el); };
+```
+
+It recorded the target and waited. `__runObservers` is called **by the engine after a layout or a
+scroll**. Page scripts run *after* the initial layout, and a headless render never scrolls — so on a
+static page the callback **never ran once**. Intersection Observer §3.2 queues the update-observations
+steps on `observe()` itself, which is why every browser delivers one callback per observed element
+with no scroll, resize or layout change, reporting `isIntersecting` either way.
+
+That is the above-the-fold half of the entire lazy-load web on first paint.
+
+### The fixture, and the control that was the whole diagnosis
+
+Three images, each `data-src` + a 1×1 GIF placeholder, in an 800px viewport, with `real.png` at
+400×100 so the **box geometry reads the answer out loud** (swapped → 400x100, placeholder → 400x400,
+because the 1×1 placeholder gives the element a 1:1 intrinsic ratio — see t838):
+
+```text
+                                        Chrome     before      after
+  swapped on DOMContentLoaded (no IO)   400x100   400x100 ✓   400x100   ← CONTROL
+  swapped by IO, ABOVE the fold         400x100   400x400 ✗   400x100   ✗→✓
+  swapped by IO, below the fold         400x100   400x400     400x400   ← residue, below
+```
+
+⚠⚠⚠ **The control row decided it.** The `DOMContentLoaded` image swapped *before* the fix — so our
+JS runs, reaches the DOM, sets `src`, and the engine fetches it. That refutes the whole "the site's
+lazy-load script never completes for us" branch in one line. And the failing element was never
+off-screen, which refutes reading it as a *scroll* gap. **Put the already-working spelling of the
+thing in the same fixture, always** — the same move that made t831's unfloated image and t833's
+`max-width`-alone row diagnoses instead of symptoms.
+
+### A gate's shape can assert a case away
+
+`G_VIEWPORT` has asserted "the whole lazy-load loop" since t59, and **its probe scrolls.** It proved
+*viewport moves → `scrollY` → IO fires → `src` swaps → engine fetches*, and every link of that was
+real. The link nobody probed is the one that needs no movement — which is the one almost every page
+uses. Its `seen:` string read `io-fired,scroll@2000`: **one firing, after the scroll.** It now reads
+`io-fired,io-fired,scroll@2000` and the first one is the point.
+
+The gate went red on demand, passed its falsification, and covered a chain it named correctly. It
+was still blind, because **its SETUP made the question unaskable**. The falsifier for this class is
+not *"does this gate go red?"* but ***"what does this gate's setup make unaskable?"***
+
+### Honest scope, and the residue that is a policy question
+
+Priced against the t837 binary over 21 sites in the same hour: `en.wikipedia.org` +0.0085,
+`crazyshop` +0.0007, 18 unchanged — **mean +0.0002, zero crossings, zero regressions.** A real,
+Chrome-verified capability fix with essentially no corpus movement, **and the reason is the
+measurement frame rather than the fix**: all 41 of `gismart.com`'s lazy images sit below the fold
+(`y` = 1261 … 14216), so the initial observation against the real 720px viewport correctly reports
+them as *not* intersecting, while the oracle's headless Chrome effectively observes the whole
+document.
+
+⚠ **The residue is a decision, not a bug: we lay out the entire document while telling
+`IntersectionObserver` the viewport is 720px tall.** Both halves are defensible alone and
+inconsistent together. Three options, none free — observe against the laid-out document during a
+full-page render (matches the oracle, wrong for a browser a human scrolls); drive a synthetic scroll
+through the document before scoring (matches a real browser, costs render time); or accept the
+divergence and stop scoring below-fold lazy images. It decides how much of the corpus's image
+geometry is reachable at all, so it wants a **measurement**, not a preference.
+
+Gate: `G_VIEWPORT` (`engine/page/tests/g_viewport.rs`) — **extended, not duplicated** (one `#[test]`
+per JS gate; a second SIGSEGVs), RED-proven by mutating out the schedule call, which yields
+`eager:NONE`.

@@ -44944,3 +44944,93 @@ one link of it. ⚠ **THE CORPUS SHIPS THE ATTRIBUTE THE ECOSYSTEM INVENTED, NOT
 ADDED** — `data-lazy` 41 vs `loading="lazy"` 0 on one page. Ranking by spec surface ranks the wrong
 thing.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 839 — `IntersectionObserver.observe()` never delivered its INITIAL observation (2026-08-02)
+
+TICK SHAPE: capability (function leg — the lazy-load chain) — t838's named discriminator, run
+
+HYPOTHESIS: t838 measured `gismart.com`'s 41 placeholder-ratio images and **refused to diagnose**,
+banking two candidates and the cheap discriminator that separates them: *find one `data-lazy` image
+ABOVE the fold and see whether its `src` swapped.* No such image exists on that page, so this tick
+built the fixture instead — three images, each `data-src` + a 1×1 GIF placeholder, in an 800px
+viewport, with `real.png` 400×100 so the box geometry reads the answer out loud (swapped → 400x100,
+placeholder → 400x400):
+
+```text
+                                        Chrome     before      after
+  swapped on DOMContentLoaded (no IO)   400x100   400x100 ✓   400x100   ← CONTROL
+  swapped by IO, ABOVE the fold         400x100   400x400 ✗   400x100   ✗→✓
+  swapped by IO, below the fold         400x100   400x400     400x400   ← see residue
+```
+
+**THE CONTROL DECIDED IT IN ONE ROW.** The `DOMContentLoaded` image swapped *before* this tick — so
+our JS runs, reaches the DOM, and sets `src`, and the engine fetches it. Candidate (a), *"the site's
+lazy-load script never completes for us"*, is **REFUTED**. And the failing element was never
+off-screen, which also refutes reading this as a *scroll* gap.
+
+**THE MECHANISM.** `IntersectionObserver.prototype.observe` was
+`function (el) { this._targets.push(el); }` — it recorded the target and waited. `__runObservers` is
+called *by the engine after a layout or a scroll*. Page scripts run after the initial layout, and a
+headless render never scrolls. **So for a static page the callback never fired at all.** Intersection
+Observer §3.2 queues the update-observations steps on `observe()`, which is why every browser
+delivers one callback per observed element with no scroll, resize or layout change. `observe()` now
+schedules that initial pass, coalesced through one pending flag and run on a microtask.
+
+⚠⚠⚠ **AND IT HID BEHIND ITS OWN GATE FOR 780 TICKS.** `G_VIEWPORT` has asserted this chain since
+t59 and its probe **scrolls**: it proved *viewport moves → `scrollY` → IO fires → `src` swaps →
+engine fetches*, and every link of that was real. The link nobody probed is the one that needs no
+movement — which is the one almost every page actually uses. The gate's own `seen:` string said
+`io-fired,scroll@2000`: **one firing, after the scroll.** It now says `io-fired,io-fired,scroll@2000`
+and the first one is the point. This is t838's *"a confirmed API is not a confirmed capability when
+the capability is a CHAIN"* with the missing link finally named — and the sharper version is that
+**the gate did not merely fail to cover the case, its shape asserted the case away**: a probe that
+scrolls can never ask what happens without scrolling.
+
+MEASURED — **OLD BINARY (t837) vs NEW, 21 sites, same hour**:
+
+```
+  en.wikipedia.org   0.6149 → 0.6234   +0.0085
+  www.crazyshop.pl   0.5642 → 0.5649   +0.0007
+  gismart.com        0.7295 → 0.7295   +0.0000   ← the site that AIMED the tick
+  18 others                             +0.0000
+  mean +0.0002 · M1 crossings 0 · ZERO regressions
+  (777juegos -0.0058 at coverage 0.941→0.965 — a different page state, its recorded drift)
+```
+
+⚠⚠ **HONEST SCOPE: A REAL, CHROME-VERIFIED CAPABILITY FIX WITH ESSENTIALLY ZERO CORPUS MOVEMENT, AND
+THE REASON IS THE MEASUREMENT FRAME, NOT THE FIX.** Every one of `gismart.com`'s 41 lazy images sits
+below the fold (`y` = 1261, 2301, 9425, 13415, 14216) and the initial observation, run against the
+**real 720px viewport**, correctly reports them as *not* intersecting. The oracle's Chrome swaps them
+because a headless full-page capture effectively observes the whole document. So the two engines
+disagree not about the API but about **what the viewport is during a full-page render** — and our
+answer is the spec-correct one for a browser a human scrolls.
+
+RESIDUE, named precisely and NOT fixed here because it is a policy question, not a bug: **our engine
+lays out the entire document while telling `IntersectionObserver` the viewport is 720px tall.** Both
+halves are defensible alone and together they are inconsistent. Three options, none of them free:
+observe against the laid-out document during a full-page render (matches the oracle, wrong for a
+real browser); drive a synthetic scroll through the document before scoring (matches a real browser,
+costs render time); or accept the divergence and stop scoring below-fold lazy images. **This decides
+how much of the corpus's image geometry is reachable at all, so it wants a measurement, not a
+preference.**
+
+`manuk-page` G_VIEWPORT green, gate EXTENDED not duplicated (one `#[test]` per JS gate — a second
+one SIGSEGVs), RED-proven by mutating out the schedule call: `eager:NONE` and the gate fails.
+
+PERF: one coalesced microtask per turn in which anything is observed.
+
+WIKI: `docs/wiki/interaction-surface.md` — "`IntersectionObserver.observe()` never delivered its
+INITIAL observation, and G_VIEWPORT's own shape hid it for 780 ticks", filed beside the live-viewport
+section whose FOURTH step it is the zeroth of.
+
+PATTERN: ⚠⚠⚠ **A GATE'S SHAPE CAN ASSERT A CASE AWAY.** `G_VIEWPORT` did not merely omit the
+no-scroll path; **its probe scrolls, so the question could not be asked inside it**, and the gate
+read as full coverage of "the whole lazy-load loop" for 780 ticks. The falsifier for this class is
+not *"does the gate go red?"* — it did — but *"what does this gate's SETUP make unaskable?"*
+⚠⚠ **THE CONTROL ROW WAS THE ENTIRE DIAGNOSIS AGAIN.** One image swapped by `DOMContentLoaded` in
+the same document refuted a whole candidate branch (JS not running) in one line, exactly as the
+unfloated image did at t831 and the `max-width`-alone row did at t833. **Put the already-working
+spelling of the thing in the same fixture, always.** ⚠ **A CAPABILITY FIX WITH NO METRIC MOVEMENT IS
+STILL A CAPABILITY FIX** — but only if the reason is measured. Here it is: the corpus's lazy images
+are below a fold the oracle does not have.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
