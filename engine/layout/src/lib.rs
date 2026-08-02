@@ -2071,6 +2071,24 @@ impl Ctx<'_> {
         0.0
     }
 
+    /// Does `node`'s containing block resolve `direction` to `rtl`? Used only by CSS 2.1 §10.3.3's
+    /// over-constrained rule, which is defined against the CONTAINING BLOCK's `direction` rather
+    /// than the box's own — and `direction` is inherited, so the two agree everywhere except the
+    /// case that distinguishes them (`<div style="direction:ltr">` inside an RTL page).
+    ///
+    /// The nearest element ancestor is the containing block for an in-flow block, which is the only
+    /// caller. A text node or a missing style answers `false`, i.e. the LTR behaviour that shipped.
+    fn parent_is_rtl(&self, node: NodeId) -> bool {
+        let mut cur = self.dom.parent(node);
+        while let Some(a) = cur {
+            if self.dom.is_element(a) {
+                return self.style_of(a).direction == manuk_css::Direction::Rtl;
+            }
+            cur = self.dom.parent(a);
+        }
+        false
+    }
+
     /// Lay out a block box in a containing block of `cw` px. `y` is the border-bottom
     /// edge of the preceding in-flow sibling (or the container's content-top for the
     /// first child); `prev_margin` is that sibling's trailing collapsible margin (0
@@ -2384,6 +2402,39 @@ impl Ctx<'_> {
             match (s.margin.left.is_auto(), s.margin.right.is_auto()) {
                 (true, true) => ml = (leftover / 2.0).max(0.0),
                 (true, false) => ml = (leftover - mr).max(0.0),
+                // ── **CSS 2.1 §10.3.3 — THE OVER-CONSTRAINED EQUATION IGNORES `margin-left` UNDER
+                //    `rtl`.** With a definite `width` and neither margin `auto`, the equation cannot
+                //    hold, and the spec says which term gives: *"if the `direction` property of the
+                //    containing block has the value `ltr`, the specified value of `margin-right` is
+                //    ignored … if the value of `direction` is `rtl`, `margin-left` is ignored."*
+                //    So a narrower-than-container block is flush LEFT in an LTR page and flush RIGHT
+                //    in an RTL one — every sidebar, card, centred-by-width wrapper and fixed-width
+                //    panel on the Arabic/Hebrew/Persian/Urdu web sat on the wrong side.
+                //
+                //    Chrome-measured, `dir=rtl` body, a 400px block in a 1200px viewport: **x=800**,
+                //    and we said **x=0**. Named as residue at t841, where the line-level fix (rule
+                //    L2) made the CONTENT of such a block read correctly while the block itself
+                //    stayed on the wrong side.
+                //
+                //    ⚠ **The direction is the CONTAINING BLOCK's, not this element's** — a
+                //    `<div style="direction:ltr">` inside an RTL page is still placed by its RTL
+                //    parent and stays flush right, which is what makes this a *containing-block*
+                //    rule rather than "RTL elements go right". `direction` is inherited, so reading
+                //    the element's own style would agree everywhere EXCEPT the one case that
+                //    distinguishes the two readings.
+                //    ⚠⚠ **NON-REPLACED ONLY, AND THE CORPUS TAUGHT ME THAT.** §10.3.3 is written
+                //    for a block-level *non-replaced* box. Applying it to a replaced one moved every
+                //    `<svg>` on `www.ta3lemkonline.com` — an atomic inline whose position belongs to
+                //    its LINE BOX, not to this equation — and the first draft cost exactly 3 of 457
+                //    elements there (deterministic, −0.00656 twice) while fixing NOTHING on the same
+                //    page. **Zero fixed and three broken is not a small win with a cost, it is the
+                //    wrong rule applied to the wrong box class.**
+                (false, false)
+                    if !is_replaced_element(self.dom.tag_name(node))
+                        && self.parent_is_rtl(node) =>
+                {
+                    ml = (leftover - mr).max(0.0)
+                }
                 _ => {}
             }
         }
@@ -9335,6 +9386,97 @@ mod tests {
             r("sib").x,
             r("sib").y
         );
+    }
+
+    /// **CSS 2.1 §10.3.3 — THE OVER-CONSTRAINED EQUATION IGNORES `margin-left` UNDER `rtl`**, so a
+    /// narrower-than-container block is flush LEFT in an LTR page and flush RIGHT in an RTL one.
+    ///
+    /// Named as residue at t841, where rule L2 made the *content* of such a block read correctly
+    /// while the block itself stayed on the wrong side. Every sidebar, card, fixed-width panel and
+    /// `width`-without-`margin:auto` wrapper on the Arabic/Hebrew/Persian/Urdu web.
+    ///
+    /// Chrome-measured, `<html dir=rtl>`, 400px blocks in a 1200px viewport:
+    ///
+    /// ```text
+    ///                                          Chrome   before   after
+    ///   plain 400px block                        800       0      800    ✗→✓
+    ///   dir=ltr ON THE BLOCK ITSELF               800       0      800    ✗→✓
+    ///   margin-right:auto                          0       0        0     ✓ control
+    ///   margin-left:auto                         800     800      800     ✓ control
+    ///   margin-left:auto; margin-right:auto      400     400      400     ✓ control
+    ///   inside a dir=ltr WRAPPER                     0       0        0     ✓ control
+    /// ```
+    ///
+    /// ⚠ **Row 2 is the row that makes this a CONTAINING-BLOCK rule rather than "RTL elements go
+    /// right".** `direction` is inherited, so reading the element's own style agrees with the spec
+    /// everywhere except here — a `direction:ltr` block inside an RTL page is still *placed* by its
+    /// RTL parent and stays flush right, while its own contents lay out LTR. Row 6 is the same point
+    /// inverted: an LTR wrapper puts its child back on the left even in an RTL document.
+    ///
+    /// To watch it go RED, drop the `(false, false) if self.parent_is_rtl(node)` arm: rows 1 and 2
+    /// read 0 and all four controls stay green.
+    #[test]
+    fn an_over_constrained_block_in_an_rtl_containing_block_is_flush_right() {
+        let (dom, root) = layout_html(
+            "<body dir=rtl>\
+               <div id=b1></div>\
+               <div id=b2 dir=ltr></div>\
+               <div id=b3></div>\
+               <div id=b4></div>\
+               <div id=b5></div>\
+               <div id=wrap dir=ltr><div id=b6></div></div>\
+             </body>",
+            "body{margin:0} div{width:400px;height:20px} \
+             #b3{margin-right:auto} #b4{margin-left:auto} \
+             #b5{margin-left:auto;margin-right:auto} #wrap{width:auto}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let x = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            rects[&n].x
+        };
+        for (id, want, why) in [
+            (
+                "b1",
+                800.0,
+                "an over-constrained block in an RTL containing block is flush RIGHT",
+            ),
+            (
+                "b2",
+                800.0,
+                "dir on the BLOCK ITSELF does not place it — its containing block does",
+            ),
+            (
+                "b3",
+                0.0,
+                "control: margin-right:auto is solved for, so the box stays at the start edge",
+            ),
+            (
+                "b4",
+                800.0,
+                "control: margin-left:auto is solved for in either direction",
+            ),
+            (
+                "b5",
+                400.0,
+                "control: two auto margins centre in either direction",
+            ),
+            (
+                "b6",
+                0.0,
+                "control: an LTR wrapper puts its child back on the left in an RTL document",
+            ),
+        ] {
+            assert!(
+                (x(id) - want).abs() < 1.0,
+                "#{id} is at x={} and Chrome puts it at {want} — {why}",
+                x(id)
+            );
+        }
     }
 
     /// **G_BIDI_LINE — UAX #9 RULE L2: A LINE'S INLINE BOXES ARE REORDERED, NOT JUST ITS GLYPHS.**

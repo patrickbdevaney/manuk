@@ -581,3 +581,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 842	0f4267d0	1785659390	2026-08-02T04:29:50-04:00	4243	measurement	63	8	358	33	379	81	3896	6960	0	438	0	the clean --jobs 2 sweep the last five fixes owe, and the first RTL fix it can price (2026-08-02)
 843	c4b9cad0	1785660253	2026-08-02T04:44:13-04:00	863	capability	63	6	222	33	379	81	3896	6960	0	438	0	a `position:relative` row inside a drawer was INVISIBLE as a containing block (2026-08-02)
 844	015f7bdc	1785671863	2026-08-02T07:57:43-04:00	11610	measurement	63	8	238	33	379	81	3896	6960	0	439	0	the constitution check, and the I3 gap it found in the last two winning ticks (2026-08-02)
+846	a6b83fd9	1785691258	2026-08-02T13:20:58-04:00	19395	capability	63	8	395	33	379	81	3896	6960	0	440	0	t841's residue closed, and a delta × n that came out an INTEGER (2026-08-02)

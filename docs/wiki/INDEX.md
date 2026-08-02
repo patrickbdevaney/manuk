@@ -196,6 +196,8 @@
   - L3824 · What it was priced at, honestly
   - L3846 · A position:relative ancestor inside an out-of-flow subtree is still a containing block
   - L3883 · The one-line version is wrong, and two existing gates say so
+  - L3900 · CSS 2.1 §10.3.3: the over-constrained equation ignores margin-left under rtl
+  - L3934 · The diagnostic that settled it: delta × n
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1418,4 +1420,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1329 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1331 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

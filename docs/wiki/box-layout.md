@@ -3896,3 +3896,55 @@ pushed *above* the box is filtered out.
 
 **A helper that walks UP the DOM has an implicit precondition about which tree it is walking, and
 that precondition is not in its signature.**
+
+## CSS 2.1 §10.3.3: the over-constrained equation ignores `margin-left` under `rtl`
+
+With a definite `width` and neither margin `auto`, the block-width equation cannot hold, and the
+spec says which term gives:
+
+> *"If the `direction` property of the containing block has the value `ltr`, the specified value of
+> `margin-right` is ignored and the value is calculated so as to make the equation true. If the value
+> of `direction` is `rtl`, `margin-left` is ignored."*
+
+So a narrower-than-container block is flush LEFT in an LTR page and flush RIGHT in an RTL one — every
+sidebar, card, fixed-width panel and `width`-without-`margin:auto` wrapper on the Arabic / Hebrew /
+Persian / Urdu web. Chrome-measured, `<html dir=rtl>`, 400px blocks in a 1200px viewport:
+
+```text
+                                         Chrome   before   after
+  plain 400px block                        800       0      800    ✗→✓
+  dir=ltr ON THE BLOCK ITSELF              800       0      800    ✗→✓
+  margin-right:auto                          0       0        0     ✓ control
+  margin-left:auto                         800     800      800     ✓ control
+  margin-left:auto + margin-right:auto     400     400      400     ✓ control
+  inside a dir=ltr WRAPPER                   0       0        0     ✓ control
+```
+
+⚠ **Row 2 is what makes this a containing-block rule rather than "RTL elements go right".**
+`direction` is inherited, so reading the element's own style agrees with the spec everywhere *except*
+there: a `dir=ltr` block inside an RTL page is still **placed** by its RTL parent and stays flush
+right, while its own contents lay out LTR. Row 6 is the same point inverted — an LTR wrapper puts its
+child back on the left even in an RTL document.
+
+⚠ **Non-replaced only, and the corpus taught that the hard way.** §10.3.3 is written for a
+block-level *non-replaced* box. The first draft omitted the guard and moved every `<svg>` on
+`www.ta3lemkonline.com` — an atomic inline whose position belongs to its line box, not to this
+equation.
+
+### The diagnostic that settled it: `delta × n`
+
+`www.ta3lemkonline.com` is **bimodal** — identical coverage, element count and `reading_order` on
+every run, with shape landing on one of two values. The first draft shifted **both** modes by the
+same amount:
+
+```text
+  0.601751 − 0.595186 = 0.006565      0.573304 − 0.566740 = 0.006564
+  0.006565 × 457 elements = 3.0
+```
+
+Exactly three elements, deterministically — on a site whose own spread (0.028) is four times the
+delta. **A per-site delta smaller than the site's spread can still be exactly attributable**: the
+spread bounds what a single reading proves, not what the arithmetic does. Then `comm` over two
+`--shape-dump` runs said **zero fixed, sixteen broken, every one an `svg` or `svg/path`** — and *zero
+fixed / N broken is a class error, not a tuning error*. No threshold would have found it, because the
+number was never about magnitude.
