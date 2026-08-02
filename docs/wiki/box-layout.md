@@ -3842,3 +3842,57 @@ Gate: `an_out_of_flow_percentage_height_resolves_against_the_viewport_not_the_do
 (`manuk-layout`), RED-proven by restoring `root.content_bottom()`. It asserts against the viewport
 the engine was actually given rather than a literal, because the defect is *which reference* is used
 and a hard-coded number would make the test a statement about the harness's window size.
+
+## A `position:relative` ancestor inside an out-of-flow subtree is still a containing block
+
+`position_absolutes` builds its rect map from the **in-flow** fragment tree. `abs_containing_block`
+tests `position != Static` and *then* requires a rect for that ancestor — and when it cannot find
+one it **walks straight past**. So nothing inside an out-of-flow subtree could ever be a containing
+block: a `position:relative` row inside a `position:absolute` drawer was invisible, and every abspos
+box under it escaped to the outer positioned ancestor.
+
+AdminLTE 2.4.5's sidebar is the canonical instance —
+`.main-sidebar{position:absolute}` > `section` > `ul` > `li` > `a{position:relative}` >
+`span.pull-right-container{position:absolute;right:10px;top:50%;margin-top:-7px}` — and it is the
+shape of every off-canvas menu, drawer, dropdown panel and fixed toolbar whose rows carry their own
+badges, carets or absolutely-placed icons.
+
+Chrome-measured on `ubys.bingol.edu.tr` (14 sidebar rows), and reduced to 12 lines of CSS:
+
+```text
+                                                    Chrome        before      after
+  abspos ancestor > section>ul>li > relative <a>     17 / 77       353 / 353   17 / 77   ✗→✓
+  …the same, min-height:100% on the drawer           17            353         17        ✗→✓
+  real AdminLTE stylesheet, 3 sidebar rows           65/109/153    353 ×3      65/109/153 ✗→✓
+  a relative <a> with NO positioned ancestor above   15            15          15        ✓ control
+```
+
+`353` is `viewport/2 − 7`: `top:50%` resolving against the sidebar, whose `min-height:100%` makes it
+viewport-tall.
+
+⚠ **Only one axis was visibly wrong.** `right:10px` is a length, and the drawer and the row share a
+right edge, so `x` came out **correct from the wrong containing block** — 210 in both engines, on
+every row. The defect therefore presented as a bug in `top:50%`, a percentage bug, in the exact
+family t837 had just worked. **A wrong containing block is only as visible as the insets that
+distinguish it.**
+
+⚠ **And the diagnosis was in the VARIANCE, not the magnitude.** Fourteen elements at fourteen
+different `y` in Chrome and *one* `y` in ours: no per-element arithmetic produces that. A constant is
+not a layout error, it is a containing-block error.
+
+### The one-line version is wrong, and two existing gates say so
+
+`rects.extend(b.node_rects(dom))` is the obvious fix and it breaks two tests. `node_rects` **lifts** a
+boxless element's geometry up the DOM until it reaches an ancestor that has a box *in the tree it was
+called on* — right for the whole-document call, inverted from inside an out-of-flow subtree, where
+**every ancestor is boxless**. `#modal`'s rect propagated onto its own `position:relative` containing
+block, so the next abspos sibling resolved against `[100 100 200x200]` instead of `[0 0 400x400]`
+(`abspos_auto_margins_center_a_constrained_box`), and a `position:static` inline acquired geometry it
+must never have (`an_out_of_flow_child_neither_splits_its_inline_nor_escapes_it`).
+
+The lift cannot simply be dropped — a `position:relative` **inline** inside a drawer has no box of
+its own and is a legal containing block (CSS 2.1 §10.1). So the union is kept and everything it
+pushed *above* the box is filtered out.
+
+**A helper that walks UP the DOM has an implicit precondition about which tree it is walking, and
+that precondition is not in its signature.**

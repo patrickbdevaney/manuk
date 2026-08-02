@@ -45378,3 +45378,120 @@ run, re-measure it alone — the second-cheapest instrument in this loop after t
 actual) and being wrong is what made the jarring-term finding visible: the number arrived without an
 explanation, so it needed one.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 843 — a `position:relative` row inside a drawer was INVISIBLE as a containing block (2026-08-02)
+
+TICK SHAPE: capability — one primitive, aimed straight from t842's finding, with the two controls
+that the first draft of the fix broke
+
+HYPOTHESIS: t842 measured that M1's *jarring* conjunct is where the near-bar cohort is blocked, not
+its shape conjunct, and the sweep hands over the cheapest cohort on the board: **11 sites are already
+`shape≥0.75` and fail M1 only on jarring**, and `reading_order` is the blocker on 5 of the 6 that
+fail hard. `ubys.bingol.edu.tr` is the cleanest subject — shape **0.8434**, coverage **0.994**, only
+**166 scored elements**, and `reading_order` **19**.
+
+The instrument named the offender in one line: the out-of-sequence pairs are all inside one anchor,
+`li(N)/a(1)`: `i(1) ⇄ span(2)` and `span(1) ⇄ span(2)`. And the root-cause table gave the shape of
+the error rather than its location:
+
+```text
+  li(11)/a(1)/span(2)   Chrome [-30 562 19x14]   ours [-26 353 15x14]
+  li(1) /a(1)/span(2)   Chrome [-30 122 19x14]   ours [-26 353 15x14]
+  li(9) /a(1)/span(2)   Chrome [-30 474 19x14]   ours [-26 353 15x14]
+```
+
+**Chrome's `y` moves with the row; every one of ours is 353.** A constant is not a layout error, it
+is a *containing block* error.
+
+**THE MECHANISM.** The site is AdminLTE 2.4.5:
+`.main-sidebar{position:absolute}` > `section` > `ul` > `li` > `a{position:relative}` >
+`span.pull-right-container{position:absolute;right:10px;top:50%;margin-top:-7px}`.
+`position_absolutes` builds its rect map from the **in-flow** fragment tree, so nothing inside an
+out-of-flow subtree has an entry in it — and `abs_containing_block` tests `position != Static` and
+*then* requires a rect, **walking straight past any ancestor it cannot find**. So the
+`position:relative` row was invisible as a containing block and every caret escaped to the drawer.
+353 is `720/2 − 7`: `top:50%` against the sidebar, whose `min-height:100%` makes it viewport-tall.
+
+⚠⚠ **ONLY ONE AXIS WAS VISIBLY WRONG, WHICH IS WHY THIS READ AS A `top` DEFECT.** `right:10px` is a
+LENGTH, and the drawer and the row share a right edge, so `x` came out **correct from the wrong
+containing block** — 210 in both engines, on every row. **A wrong containing block is only as
+visible as the insets that distinguish it**, and a fixed-length inset on a shared edge distinguishes
+nothing.
+
+MEASURED — the reduction, from the real AdminLTE stylesheets down to 12 lines of CSS:
+
+```text
+                                                    Chrome     before   after
+  abspos ancestor > section>ul>li > relative <a>     17 / 77    353/353  17/77   ✗→✓
+  …the same with min-height:100% on the drawer       17         353      17      ✗→✓
+  real AdminLTE sidebar, 3 rows                      65/109/153 353×3    65/109/153 ✗→✓
+  a relative <a> with NO positioned ancestor above   15         15       15      ✓ control
+```
+
+⚠⚠⚠ **THE FIRST DRAFT WAS ONE LINE AND IT BROKE TWO GATES — CORRECTLY.** `rects.extend(b.node_rects(…))`
+looks obviously right and is obviously wrong: `node_rects` **LIFTS** a boxless element's geometry up
+the DOM until it reaches an ancestor that has a box *in the tree it was called on*, which is exactly
+right for the whole-document call and catastrophic from inside an out-of-flow subtree, where **every
+ancestor is boxless**. `#modal`'s rect propagated onto its own `position:relative` containing block,
+so the next abspos sibling resolved against `[100 100 200x200]` instead of `[0 0 400x400]`
+(`abspos_auto_margins_center_a_constrained_box`), and a `position:static` inline acquired geometry it
+must never have (`an_out_of_flow_child_neither_splits_its_inline_nor_escapes_it` — whose control row
+was written for precisely this mistake, by a previous tick, and caught it). The lift still has to
+stay: a `position:relative` **inline** inside a drawer has no box of its own and is a legal
+containing block. So the union is kept and everything it pushed ABOVE the box is dropped.
+
+MEASURED — **OLD BINARY (t842 tree, rebuilt) vs NEW, 22 sites, same hour, `--jobs 2`**:
+
+```
+  ubys.bingol.edu.tr   0.8434 → 0.9277  +0.0843   reading_order 19 → 1   ← M1 CROSSING
+  www.unoeste.br       0.7766 → 0.7855  +0.0089   reorder 3→1, overlap 3→2 ← M1 CROSSING
+  payb.jp              0.6997 → 0.7221  +0.0223   reading_order  7 → 6
+  www.tz.de            0.8314 → 0.8439  +0.0124
+  777juegos.com        0.7375 → 0.7439  +0.0064   ← its RECORDED drift pair, not claimed
+  14 others                             +0.0000
+  M1 crossings +2 (19 → 21 of 130 = 14.6% → 16.2%) · ZERO attributable regressions
+```
+
+⚠ **THREE SITES WENT DOWN AND ALL THREE ARE REFUTED BY THEIR OWN SPREAD** — and one of them looked
+like a genuine consequence of this change, which is why it was measured rather than argued:
+
+```text
+                          old r1     old r2     new r1     new r2     (and 3 more each for sestra)
+  www.puentedemando.com   0.770463   0.738707   0.774911   0.742250   ← own spread 0.032; NEW's top
+                                                                        is ABOVE old's top
+  possssno.sbs            0.897391   0.897391   0.897391   0.897391   ← IDENTICAL ×4 (the batch row
+                                                                        that read reord 1→10 was a
+                                                                        one-off page state)
+  sestra.cc  old [0.7547 … 0.7635] over 5 runs  ·  new [0.7529 … 0.7611] over 5 runs — overlapping,
+             new's median 0.7582 sits inside old's range
+```
+
+`possssno.sbs` is the one that mattered: its `#aside{position:fixed;height:100%}` is exactly the
+shape this tick changes, and the batch row said `reading_order 1 → 10`. Four runs, two per binary,
+all four **0.897391 / reord 1**. ⚠ `www.tz.de`'s coverage moved 0.952 → 0.931 and its element count
+1922 → 1819 — a different page state, so its +0.0124 is reported and not banked.
+
+`manuk-layout` 114 green (was 113). RED-proven by emptying the extended map: rows 1 and 2 both
+collapse back onto `viewport/2 − 7` and the two control rows stay green.
+
+PERF: one `node_rects` per out-of-flow box over its own subtree, plus an O(depth) ancestor test per
+entry — bounded by the total out-of-flow node count, which is a small fraction of the document. F1
+cascade and F2 pipeline unchanged in the wall.
+
+WIKI: `docs/wiki/box-layout.md` — "a `position:relative` ancestor inside an out-of-flow subtree is
+still a containing block, and only one axis showed it".
+
+PATTERN: ⚠⚠⚠ **A WRONG CONTAINING BLOCK IS ONLY AS VISIBLE AS THE INSETS THAT DISTINGUISH IT.**
+`right:10px` gave the *correct* x from the *wrong* containing block because the drawer and the row
+share a right edge, so the defect presented as a bug in `top:50%` — a percentage bug, in the exact
+family t837 had just worked. **When one axis of a two-axis primitive is wrong, check whether the
+other axis is right by accident before naming the axis as the subject.** ⚠⚠⚠ **A CONSTANT IS NOT A
+LAYOUT ERROR, IT IS A CONTAINING-BLOCK ERROR.** Fourteen elements at fourteen different `y` in Chrome
+and *one* `y` in ours: no per-element arithmetic produces that. **Read the VARIANCE of a cluster
+before its magnitude** — the magnitude names a number, the variance names a scope. ⚠⚠ **THE
+OBVIOUS ONE-LINE FIX WAS WRONG AND A CONTROL WRITTEN BY AN EARLIER TICK CAUGHT IT.** The lift inside
+`node_rects` is correct for the caller it was written for and inverted for this one; the same
+function, unchanged, means two different things depending on which tree it is handed. **A helper
+that walks UP the DOM has an implicit precondition about which tree it is walking, and that
+precondition is not in its signature.**
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

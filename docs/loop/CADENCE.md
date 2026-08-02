@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **579** | ticks 1–841 |
-| median tick cycle | **25m** | 578 intervals |
+| ticks landed | **580** | ticks 1–842 |
+| median tick cycle | **25m** | 579 intervals |
 | median, last 10 | **52m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 526.3h elapsed |
-| median verify wall | **63s** | 518 ticks |
+| **ticks per hour** | **1.10** | 527.4h elapsed |
+| median verify wall | **63s** | 519 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **379**
-* **✅ rows in the capability ledger**: 144 → **437**
+* **✅ rows in the capability ledger**: 144 → **438**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**282 of 579 ticks** (49%) moved a
+**282 of 580 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **282** capability ticks, median cycle **25m**
-* median diff per tick: **+259 / −34** lines across 8 files
+* median diff per tick: **+260 / −34** lines across 8 files
 
 ## Every tick
 
@@ -676,5 +676,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **839** | 2026-08-02 00:52 | 46m | capability | 63s | +293/−35 | 379 | 81 | 56.0% · | `IntersectionObserver.observe()` never delivered its INITIAL observation (2026-08-02) |
 | **840** | 2026-08-02 02:16 | 84m | measurement | 63s | +508/−40 | 379 | 81 | 56.0% · | 777juegos is 0.006 from the bar and TWO obvious mechanisms are REFUTED (2026-08-02) |
 | **841** | 2026-08-02 03:19 | 63m | capability | 63s | +372/−32 | 379 | 81 | 56.0% · | the engine ran HALF of UAX #9 for 800 ticks: glyphs reordered, INLINE BOXES did not (2026- |
+| **842** | 2026-08-02 04:29 | 71m | measurement | 63s | +358/−33 | 379 | 81 | 56.0% · | the clean --jobs 2 sweep the last five fixes owe, and the first RTL fix it can price (2026 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

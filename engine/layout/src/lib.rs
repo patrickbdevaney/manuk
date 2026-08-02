@@ -4455,6 +4455,57 @@ impl Ctx<'_> {
                 }
             }
             let b = self.layout_abs(node, cb);
+            // ⚠⚠⚠ **THE WHOLE SUBTREE, NOT JUST THIS BOX.** `rects` was built from the IN-FLOW
+            // fragment tree, so nothing inside an out-of-flow subtree has an entry in it — and
+            // `abs_containing_block` reads `position != Static` and then requires a rect, walking
+            // straight PAST any ancestor it cannot find. So a `position:relative` element that
+            // happens to live inside an `position:absolute` ancestor was invisible as a containing
+            // block, and every abspos box under it escaped to the OUTER positioned ancestor.
+            //
+            // That is the AdminLTE sidebar exactly — `.main-sidebar{position:absolute}` >
+            // `section` > `ul` > `li` > `a{position:relative}` > `span{position:absolute;top:50%}`
+            // — and it is the shape of every off-canvas menu, drawer, dropdown panel and fixed
+            // toolbar whose rows carry their own badges, carets or absolutely-placed icons.
+            // Chrome-measured on `ubys.bingol.edu.tr`, 14 sidebar carets: each belongs at its own
+            // row (`y` 65, 109, 153, …) and every one of ours landed on the SAME `y`, because
+            // `top:50%` was resolving against the sidebar instead of the row.
+            //
+            // ⚠ Only ONE of the two axes was visibly wrong, which is why this read as a `top`
+            // defect rather than a containing-block defect: `right:10px` is a LENGTH, and the
+            // sidebar and the row happen to share a right edge, so x came out correct from the
+            // wrong containing block. **A wrong containing block is only as visible as the insets
+            // that distinguish it.**
+            //
+            // Inserted AFTER `layout_abs` so it is this box's placed geometry, and safe against the
+            // inflation concern that governs the map above: `positioned` is DOM pre-order, so an
+            // out-of-flow ancestor is laid out and recorded before any out-of-flow descendant reads
+            // it, and a nested abspos box is not in `b`'s in-flow content to begin with.
+            //
+            // ⚠⚠⚠ **FILTERED TO `node`'s OWN DESCENDANTS, AND THE UNFILTERED VERSION BROKE TWO
+            // GATES.** `node_rects` LIFTS a boxless element's geometry up the DOM until it reaches
+            // an ancestor that has a box *in the tree it was called on* — which is right for the
+            // whole-document call above and catastrophic here, because from inside an out-of-flow
+            // subtree EVERY ancestor is boxless: `#modal`'s rect propagated onto its own
+            // `position:relative` containing block, so the next abspos sibling resolved against
+            // `[100 100 200x200]` instead of `[0 0 400x400]`
+            // (`abspos_auto_margins_center_a_constrained_box`), and a `position:static` inline
+            // acquired geometry it must never have
+            // (`an_out_of_flow_child_neither_splits_its_inline_nor_escapes_it`, whose control row
+            // is written for exactly this mistake). Keeping the lift is still necessary — a
+            // `position:relative` INLINE inside a drawer has no box of its own and is a perfectly
+            // legal containing block — so the answer is to keep the union and drop everything it
+            // pushed ABOVE this box.
+            let sub = b.node_rects(self.dom);
+            rects.extend(sub.into_iter().filter(|&(n, _)| {
+                let mut cur = self.dom.parent(n);
+                while let Some(a) = cur {
+                    if a == node {
+                        return true;
+                    }
+                    cur = self.dom.parent(a);
+                }
+                false
+            }));
             rects.insert(node, b.rect); // enable nested abs to use it as CB
             new_boxes.push(b);
         }
@@ -9187,6 +9238,102 @@ mod tests {
         assert!(
             (hw - 14.0).abs() < 1.0 && (hh - 14.0).abs() < 1.0,
             "a max-height clamp must pull the WIDTH in through the ratio (14x14), got {hw}x{hh}"
+        );
+    }
+
+    /// **A `position:relative` ANCESTOR INSIDE AN OUT-OF-FLOW SUBTREE IS STILL A CONTAINING BLOCK.**
+    ///
+    /// `position_absolutes` builds its rect map from the IN-FLOW fragment tree, so nothing inside an
+    /// out-of-flow subtree has an entry — and `abs_containing_block` tests `position != Static` and
+    /// then requires a rect, walking straight PAST any ancestor it cannot find. So a
+    /// `position:relative` row inside a `position:absolute` drawer was invisible as a containing
+    /// block, and every abspos box under it escaped to the OUTER positioned ancestor.
+    ///
+    /// That is the AdminLTE sidebar exactly — `.main-sidebar{position:absolute}` > `section` > `ul`
+    /// > `li` > `a{position:relative}` > `span.pull-right-container{position:absolute;top:50%}` —
+    /// and the shape of every off-canvas menu, drawer and fixed toolbar whose rows carry their own
+    /// badges, carets or absolutely-placed icons. Chrome-measured on the real AdminLTE stylesheet,
+    /// 3 sidebar rows: the carets belong at `y` **65 / 109 / 153** and every one of ours landed on
+    /// the same `y=353` — which is `viewport/2 - 7`, i.e. `top:50%` resolved against the sidebar.
+    ///
+    /// ⚠ **Only ONE axis was visibly wrong, which is why this read as a `top` defect rather than a
+    /// containing-block defect:** `right:10px` is a LENGTH, and the drawer and the row share a right
+    /// edge, so `x` came out correct *from the wrong containing block*. **A wrong containing block
+    /// is only as visible as the insets that distinguish it.**
+    ///
+    /// ⚠ Rows 3 and 4 are controls, and the first draft of this fix broke BOTH of them — the
+    /// unfiltered `node_rects` LIFTS a boxless element's geometry onto its ancestors, which from
+    /// inside an out-of-flow subtree means onto the box's own containing block. They are asserted
+    /// here as well as in their own tests because they are what makes this a *containing-block*
+    /// widening rather than "every ancestor is a containing block now".
+    ///
+    /// To watch it go RED, drop the `rects.extend(...)` in `position_absolutes`: rows 1 and 2 both
+    /// collapse onto `viewport/2 - 7`.
+    #[test]
+    fn a_relative_ancestor_inside_an_out_of_flow_subtree_is_a_containing_block() {
+        let (dom, root) = layout_html(
+            "<body>\
+               <div class=drawer>\
+                 <section><ul><li><a id=r1>ONE<span id=c1 class=caret></span></a></li>\
+                              <li><a id=r2>TWO<span id=c2 class=caret></span></a></li></ul></section>\
+               </div>\
+               <div class=cb><div id=modal></div><div id=sib></div></div>\
+             </body>",
+            "body{margin:0} \
+             .drawer{position:absolute;top:0;left:0;width:230px} \
+             ul{list-style:none;margin:0;padding:0} \
+             .drawer a{position:relative;display:block;height:44px} \
+             .caret{position:absolute;right:10px;top:50%;margin-top:-7px;width:10px;height:14px} \
+             .cb{position:relative;width:400px;height:400px} \
+             #modal{position:absolute;top:0;right:0;bottom:0;left:0;width:200px;height:200px;\
+                    margin-left:auto;margin-right:auto;margin-top:auto;margin-bottom:auto} \
+             #sib{position:absolute;top:0;left:0;width:50px;height:50px}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let r = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            rects[&n]
+        };
+        // Rows 1 and 2 — each caret sits at the vertical middle of ITS OWN row, not at a single
+        // shared y derived from the drawer.
+        for (row, caret) in [("r1", "c1"), ("r2", "c2")] {
+            let want = r(row).y + r(row).height / 2.0 - 7.0;
+            assert!(
+                (r(caret).y - want).abs() < 1.5,
+                "#{caret} is at y={} and `top:50%` on a child of `#{row}` (y={}, h={}) puts it at \
+                 {want} — a `position:relative` ancestor inside an out-of-flow subtree is still \
+                 the containing block",
+                r(caret).y,
+                r(row).y,
+                r(row).height
+            );
+        }
+        assert!(
+            (r("c1").y - r("c2").y).abs() > 1.0,
+            "two carets in two different rows must not share a y ({} and {}) — that is the \
+             signature of both resolving against the drawer",
+            r("c1").y,
+            r("c2").y
+        );
+        // Row 3 — CONTROL. An out-of-flow box must not lend its geometry to its OWN containing
+        // block: `#modal` centres at (100,100) in a 400×400 `.cb`, and `#sib` must still see the
+        // full 400×400, not `#modal`'s 200×200 at (100,100).
+        assert!(
+            (r("modal").x - 100.0).abs() < 1.0 && (r("modal").y - 100.0).abs() < 1.0,
+            "control: inset:0;margin:auto centres at (100,100), got ({},{})",
+            r("modal").x,
+            r("modal").y
+        );
+        assert!(
+            r("sib").x.abs() < 1.0 && r("sib").y.abs() < 1.0,
+            "control: a sibling abspos box must still resolve against `.cb` at (0,0) — got \
+             ({},{}), which is `#modal`'s origin leaking onto its own containing block",
+            r("sib").x,
+            r("sib").y
         );
     }
 
