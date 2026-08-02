@@ -191,6 +191,8 @@
   - L3745 · A flex item <img> told taffy its content wanted ZERO (t835)
   - L3765 · The first version of the fix shipped a regression, and only the control caught it
   - L3780 · Residue, bounded and with its refutations attached
+  - L3794 · The out-of-flow pass's viewport held the DOCUMENT height (t837)
+  - L3824 · What it was priced at, honestly
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1408,4 +1410,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1319 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1321 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -871,3 +871,48 @@ DENOMINATOR shrank. A ratio gate exists to divide out machine speed, but it only
 legs move together; when the small page benefits more from a quiet box than the large one, the control
 moves the gate on its own. Recorded here for the observer as a gate-shape observation — **not** acted
 on, since retuning a ratchet gate to land one's own tick is precisely what is forbidden.
+
+## Audit #28 — tick 837 (925s, and the receipt now says the gap out loud: `unattributed_seconds: 925`)
+
+```
+  total (receipt `seconds:`)        925s      target 300s      3.1× over
+  build_seconds                      26s      (incremental, RAM-backed — not the problem)
+  load1 at the time                 7.66
+  the audit's own histogram:
+     P   parity 72/72 vs headless Chrome     230s   25%   ← largest NAMED cost
+     T   crate tests                          42s    5%
+     B   workspace build                      26s    3%
+     G6 · G1 · D · F · F4 · the G_* wall      23s    2%
+     ────────────────────────────────────────────────
+     accounted                               321s   35%
+     UNACCOUNTED                             604s   65%
+```
+
+**THE ACCOUNTING GAP IS THE FOURTH AUDIT RUNNING** (#26 73%, #27 73%, now 65%), and this time the
+receipt states it in its own field rather than leaving it to be derived: **`unattributed_seconds:
+925`** — the attribution mechanism attributed *none* of the wall, while the audit's histogram
+attributes 321s of it. **Two instruments disagree about 604 seconds and one of them says, correctly,
+that it does not know.** That is the reconciliation signal this project ranks above every gate
+(META-INSTRUMENT #3: *8 of 30 process defects were caught by a number that did not add up*), and it
+has now fired four times without being closed.
+
+What the gap is *not*: it is not the build (26s, measured), and it is not a section the histogram
+lists (they sum to 321s). It is time inside the wall that no section claims — which means either a
+section runs outside the timing harness, or the sections are timed as CPU while the wall is
+measured as clock, and at `load1 7.66` those diverge by exactly the factor observed.
+
+**NOTHING WAS TRIMMED, AND NOTHING SHOULD BE UNTIL THE 604s IS NAMED.** Every admissible
+optimisation the audit prompts for — share a SpiderMonkey runtime across JS gates, reuse one
+headless Chrome across the 72 parity fixtures, narrow a whole-workspace build to one crate — targets
+the 321s that *is* attributed. Optimising the attributed third while two thirds is unexplained is
+tuning the part you can see because it is the part you can see. **The next wall tick is the
+attribution, not the trim.**
+
+⚠ PART VII: `verify.sh`, the receipt writer, and the timing harness are all observer-owned. This is
+reported, not patched. The one thing an agent tick can say is which number to chase first, and it is
+`unattributed_seconds`.
+
+⚠ Also standing, from #27 and re-observed this window: **`F2` is a ratio gate that reddens from its
+DENOMINATOR.** It failed at 7.70x on a loaded box and passed on a quiet re-run of the identical
+tree; `mid` read 34.35ms on the red run, the fastest all session. Re-run, never retune — but it cost
+a full 925s wall to learn that, twice in three windows.

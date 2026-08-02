@@ -3790,3 +3790,55 @@ the slot adoption, and it is a tick of its own.
 Gate: `a_replaced_flex_item_is_floored_at_its_intrinsic_width` (`manuk-layout`), both halves
 RED-proven separately — mutating `is_img` off in the seam fails the intrinsic-floor assertion;
 restoring the `150.0` leak fails the default-object assertion.
+
+## The out-of-flow pass's `viewport` held the DOCUMENT height (t837)
+
+CSS 2.1 §10.1: the initial containing block has the dimensions of the **viewport**, and a
+`position:fixed` box's containing block IS the viewport. The out-of-flow pass built its containing
+block as `Rect { width: viewport_w, height: root.content_bottom() }` — **the variable was named
+`viewport` and held the whole scrolled document** — so every percentage height on an out-of-flow box
+resolved against the page instead of the window.
+
+That is every full-height drawer, modal backdrop, off-canvas menu and overlay on any page long
+enough to scroll, i.e. exactly the pages where it shows. Chrome-measured on a 3000px page in an
+800px window (`innerHeight` 713):
+
+```text
+                                       Chrome   before    after
+  position:fixed;    height:100%       300x713  300x3000  300x713   ✗→✓
+  position:fixed;    height:50%        100x357  100x1500  100x357   ✗→✓
+  position:absolute; height:100%       100x713  100x3000  100x713   ✗→✓
+  position:fixed;    height:auto        100x50   100x50    100x50    ✓  ← control
+```
+
+⚠⚠ **The IN-FLOW initial containing block already had this right** — `layout_document` reads
+`icb_height` from `manuk_css::values::viewport_size()` sixty lines above, with a comment explaining
+why a root `height:100%` must fill the window. Only the out-of-flow pass still used the document
+height. One rule, two implementations, and only one had ever been corrected.
+
+⚠⚠⚠ **THE NAME IS WHY IT SURVIVED.** Every reader downstream took `viewport` as the specification.
+The project's rule — *a wrong fix is caught by the next gate; a wrong label is caught by nothing* —
+was recorded about wiki prose (t817) and about a string in a data column (t824). This is the same
+failure in an **identifier**, which is the one place a wrong label also compiles.
+
+### What it was priced at, honestly
+
+Priced against the t835 binary over 19 sites in the same hour: `app.ordertime.com`
+**0.8621 → 1.0000** (a perfect score), `golesliga` +0.0159, `ta3lemkonline` +0.0044, `neutypechic`
++0.0017, mean +0.0065, **zero crossings, zero regressions**, coverage byte-identical.
+
+⚠ **The site that AIMED the tick moved 0.0035.** `possssno.sbs` has 172 misses; `#aside` at
+`300x4462` against Chrome's `300x713` was the single **largest** one, and fixing it moved almost
+nothing, because a score counts elements within tolerance and one subtree is a handful of them.
+**Rank by frequency, aim by magnitude, and do not confuse them** — `--shape-dump` is worst-first
+because that is how a mechanism is found, but the metric pays per element.
+
+Two rows in the single-draw control read as regressions (`ta3lemkonline` -0.0241, `777juegos`
+-0.0122) and **neither was one**: repeated twice per binary, `ta3lemkonline` is deterministic
+0.5448 → 0.5492 (an improvement, the old 0.5733 being the outlier) and `777juegos` is 0.7439 on
+both. **A single row is a draw; the repeat is the measurement.**
+
+Gate: `an_out_of_flow_percentage_height_resolves_against_the_viewport_not_the_document`
+(`manuk-layout`), RED-proven by restoring `root.content_bottom()`. It asserts against the viewport
+the engine was actually given rather than a literal, because the defect is *which reference* is used
+and a hard-coded number would make the test a statement about the harness's window size.

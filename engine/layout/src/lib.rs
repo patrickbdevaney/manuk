@@ -4370,12 +4370,34 @@ impl Ctx<'_> {
         //    by construction — `abs_containing_block` still requires `position != Static`, so a plain
         //    inline `<a>` is skipped exactly as before.
         let mut rects: HashMap<NodeId, Rect> = root.node_rects(self.dom);
-        let doc_h = root.content_bottom();
+        // ── ⚠⚠⚠ **THIS WAS NAMED `viewport` AND HELD THE DOCUMENT HEIGHT.**
+        //
+        // CSS 2.1 §10.1: the initial containing block has the dimensions of the **viewport**, and a
+        // `position:fixed` box's containing block IS the viewport. This used `root.content_bottom()`
+        // — the whole scrolled document — so every percentage height on an out-of-flow box resolved
+        // against the page instead of the window. On a 3000px-tall page under an 800px window:
+        //
+        // ```text
+        //                                        Chrome   before   after
+        //   position:fixed;  height:100%         300x713  300x3000  300x713   ✗→✓
+        //   position:fixed;  height:50%          100x357  100x1500  100x357   ✗→✓
+        //   position:absolute; height:100%       100x713  100x3000  100x713   ✗→✓
+        //   position:fixed;  height:auto          100x50   100x50    100x50    ✓  control
+        // ```
+        //
+        // That is every full-height drawer, modal backdrop, off-canvas menu and overlay on any page
+        // long enough to scroll — i.e. the ones it matters on. Measured on `possssno.sbs`, whose
+        // `#aside { position:fixed; height:100% }` drawer came out **4462px** tall against Chrome's
+        // **713**, and it is that site's single largest shape miss.
+        //
+        // The height is read from the same viewport the parser resolves `vh` against, which is what
+        // the IN-FLOW initial containing block already does 60 lines up (`icb_height`). One rule, two
+        // implementations, and only the in-flow one had been corrected — the same shape as t831/t833.
         let viewport = Rect {
             x: 0.0,
             y: 0.0,
             width: viewport_w,
-            height: doc_h,
+            height: manuk_css::values::viewport_size().1,
         };
 
         // Gather positioned elements in DOM pre-order so an abs ancestor is placed
@@ -8553,6 +8575,80 @@ mod tests {
         assert!(
             (bw - 100.0).abs() < 1.0 && (bhh - 100.0).abs() < 1.0,
             "a border-box float's specified HEIGHT is its border box too (100x100), got {bw}x{bhh}"
+        );
+    }
+
+    /// **THE OUT-OF-FLOW PASS'S `viewport` HELD THE DOCUMENT HEIGHT.**
+    ///
+    /// CSS 2.1 §10.1: the initial containing block has the dimensions of the **viewport**, and a
+    /// `position:fixed` box's containing block IS the viewport. The out-of-flow pass built its
+    /// containing block from `root.content_bottom()` — the whole scrolled document — so every
+    /// percentage height on an out-of-flow box resolved against the page instead of the window.
+    ///
+    /// That is every full-height drawer, modal backdrop, off-canvas menu and overlay on any page
+    /// long enough to scroll, i.e. exactly the pages where it is visible. Chrome-measured on a
+    /// 3000px-tall page in an 800px window (Chrome's `innerHeight` 713):
+    ///
+    /// ```text
+    ///                                        Chrome   before    after
+    ///   position:fixed;    height:100%       300x713  300x3000  300x713   ✗→✓
+    ///   position:fixed;    height:50%        100x357  100x1500  100x357   ✗→✓
+    ///   position:absolute; height:100%       100x713  100x3000  100x713   ✗→✓
+    ///   position:fixed;    height:auto        100x50   100x50    100x50    ✓  ← control
+    /// ```
+    ///
+    /// ⚠ **The IN-FLOW initial containing block already read the real viewport height** (`icb_height`
+    /// in `layout_document`); only the out-of-flow pass still used the document height. One rule,
+    /// two implementations, and only one of them had been corrected — the same shape as t831/t833.
+    /// The name is the reason it survived: the variable was called `viewport` and was not one.
+    #[test]
+    fn an_out_of_flow_percentage_height_resolves_against_the_viewport_not_the_document() {
+        let vp_h = manuk_css::values::viewport_size().1;
+        let (dom, root) = layout_html(
+            "<body style='margin:0'><div id=tall></div>\
+               <div id=fx></div><div id=half></div><div id=ab></div><div id=auto>x</div></body>",
+            "#tall{height:3000px} \
+             #fx{position:fixed;left:0;top:0;width:300px;height:100%} \
+             #half{position:fixed;left:320px;top:0;width:100px;height:50%} \
+             #ab{position:absolute;left:440px;top:0;width:100px;height:100%} \
+             #auto{position:fixed;left:560px;top:0;width:100px}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let g = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            rects[&n].height
+        };
+        // Asserted against the viewport the engine was actually given, not a hard-coded number:
+        // the defect is *which reference* is used, and pinning a literal would make this test a
+        // statement about the harness's window size instead of about the rule.
+        assert!(
+            (g("fx") - vp_h).abs() < 1.0,
+            "position:fixed; height:100% is the VIEWPORT height ({vp_h}), not the 3000px document \
+             — got {}",
+            g("fx")
+        );
+        assert!(
+            (g("half") - vp_h / 2.0).abs() < 1.0,
+            "height:50% is half the viewport ({}), got {}",
+            vp_h / 2.0,
+            g("half")
+        );
+        assert!(
+            (g("ab") - vp_h).abs() < 1.0,
+            "an absolute box with no positioned ancestor resolves against the ICB, which is also \
+             viewport-sized — got {}",
+            g("ab")
+        );
+        // The control: an out-of-flow box with `height:auto` still sizes to its content, so the fix
+        // changed the REFERENCE and not the rule.
+        assert!(
+            g("auto") < 100.0,
+            "height:auto must still be content-sized, got {}",
+            g("auto")
         );
     }
 

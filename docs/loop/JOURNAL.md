@@ -44749,3 +44749,107 @@ property of the line. ⚠ Refusing a fix that measurably improves two of three c
 BECAUSE the measurement exists — without the fourth fixture this would have landed and been right by
 accident, which is the same thing as being wrong later.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 837 — the out-of-flow pass's `viewport` held the DOCUMENT height (2026-08-01)
+
+TICK SHAPE: capability (initial containing block) — aimed from the FRESH t832 sweep, and the aim
+found something other than what it was aiming at
+
+HYPOTHESIS: aim from the fresh sweep rather than the t825 cohort. Ranking t832's rows by distance to
+the bar put `possssno.sbs` forward on a signature too clean to ignore — `coverage 1.000`, gap
+**0.053**, and `reading_order 515` out of 575 elements. Nearly every sibling pair out of sequence on
+a fully-covered page.
+
+⚠ **THE FIRST TWO HYPOTHESES WERE BOTH WRONG, AND BOTH DIED CHEAPLY.** `--shape-dump` showed the
+footer horizontally MIRRORED — Chrome's x=1118 at our x=0, Chrome's x=8 at our x=1058 — and
+`<html lang="fa" dir="rtl">` made RTL the obvious cause. **It is not:** a fixture with `dir="rtl"`
+inline links measured `a1` at **492 against Chrome's 493**, `a2` 529/529, `a3` 565/565, with the LTR
+row and a `text-align:left` override also exact. Our inline base direction is already right. The
+reading-order count is a *consequence* of the mirroring, not evidence about its cause, and the
+footer's real cause is still open.
+
+So the tick took the **largest** miss instead, which was a different subtree: `#aside` at
+`300x4462` against Chrome's `300x713`. Its CSS is `#aside { position:fixed; height:100%; width:300px }`.
+
+**THE MECHANISM, and it is one word.** The out-of-flow pass builds its containing block as
+
+```rust
+let doc_h = root.content_bottom();
+let viewport = Rect { x: 0.0, y: 0.0, width: viewport_w, height: doc_h };
+```
+
+**The variable is named `viewport` and holds the whole scrolled document.** CSS 2.1 §10.1: the
+initial containing block has the dimensions of the *viewport*, and a `position:fixed` box's
+containing block IS the viewport. Chrome-measured on a 3000px page in an 800px window
+(`innerHeight` 713):
+
+```text
+                                       Chrome   before    after
+  position:fixed;    height:100%       300x713  300x3000  300x713   ✗→✓
+  position:fixed;    height:50%        100x357  100x1500  100x357   ✗→✓
+  position:absolute; height:100%       100x713  100x3000  100x713   ✗→✓
+  position:fixed;    height:auto        100x50   100x50    100x50    ✓  ← control
+```
+
+⚠⚠ **AND THE IN-FLOW INITIAL CONTAINING BLOCK ALREADY HAD THIS RIGHT.** `layout_document` reads
+`icb_height` from `manuk_css::values::viewport_size()` sixty lines up, with a comment explaining why
+a root `height:100%` must fill the window. Only the out-of-flow pass still used the document height.
+**One rule, two implementations, and only one of them had ever been corrected** — the same shape as
+t831 and t833, for the third time in a week.
+
+MEASURED — **OLD BINARY (t835) vs NEW, 19 sites, same hour**:
+
+```
+  app.ordertime.com        0.8621 → 1.0000   +0.1379   ← a PERFECT score
+  promo.golesliga1max.pe   0.8254 → 0.8413   +0.0159
+  possssno.sbs             0.6974 → 0.7009   +0.0035   ← the site that AIMED the tick, barely moved
+  www.ta3lemkonline.com    0.5448 → 0.5492   +0.0044   (repeat-confirmed, both deterministic)
+  neutypechic.com          0.6535 → 0.6552   +0.0017
+  14 others                                  +0.0000
+  mean +0.0065 · M1 crossings 0 · ZERO regressions · coverage byte-identical on all 19
+```
+
+⚠⚠⚠ **TWO ROWS READ AS REGRESSIONS IN THE SINGLE-DRAW CONTROL AND NEITHER WAS ONE.**
+`ta3lemkonline` read -0.0241 and `777juegos` -0.0122. Repeated twice per binary, both resolve the
+other way: `ta3lemkonline` is **deterministic 0.5448 old / 0.5492 new — an improvement**, and the
+old run's 0.5733 was the outlier; `777juegos` is 0.7439 on both, its 0.7250 draw being the known
+±1.2pt spread t832 recorded. **This is the third time this session a single row was not a result**
+(t832's four ghost regressions, t835's real one found only by repeat, now two false ones). The rule
+has earned its place: **a single row is a draw; the repeat is the measurement.**
+
+⚠⚠ **HONEST SCOPE: ZERO CROSSINGS, AND THE SITE THAT AIMED THE TICK MOVED 0.0035.** `possssno.sbs`
+has 172 misses; the `#aside` was the single **largest** one and fixing it moved almost nothing,
+because a score is a COUNT of elements within tolerance and one subtree is a handful of them.
+**The biggest miss is not the biggest score term** — worst-first ranking aims at magnitude, and the
+metric pays for frequency. The win came from `app.ordertime.com` reaching **1.0000**, a site nobody
+was aiming at.
+
+`manuk-layout` **112 green** (111 + 1), RED-proven by restoring `root.content_bottom()`.
+
+Also in this tick: **wall audit #28** (due at 837, hook-enforced), banked in `docs/loop/WALL-AUDIT.md`
+and `LAST_WALL_AUDIT: 837`. **925s against a 300s target, and the accounting gap is the FOURTH audit
+running** — the histogram attributes 321s (parity 230s = 25%, the largest named cost) and the
+receipt's own field says **`unattributed_seconds: 925`**. Two instruments disagree about 604 seconds
+and one of them correctly says it does not know. **Nothing was trimmed, and nothing should be until
+that 604s is named**: every admissible optimisation the audit prompts for targets the attributed
+third, and tuning the part you can see because it is the part you can see is how a wall stays slow.
+`verify.sh` and the timing harness are observer-owned (PART VII) — reported, not patched; the one
+thing this tick can say is *which number to chase first*, and it is `unattributed_seconds`.
+
+PERF: none — one global read replacing one tree walk (`content_bottom` is strictly more work).
+
+WIKI: `docs/wiki/box-layout.md` — "The out-of-flow pass's `viewport` held the document height".
+
+PATTERN: ⚠⚠⚠ **A VARIABLE NAMED `viewport` THAT HELD THE DOCUMENT HEIGHT SURVIVED BECAUSE OF ITS
+NAME.** Every reader downstream, including three ticks of my own reading this function, took the
+name as the specification. This project's rule was *"a wrong FIX is caught by the next gate; a wrong
+LABEL is caught by NOTHING"* — recorded about prose in a wiki (t817) and about a string in a data
+column (t824); this is the same failure in an **identifier**, which is the one place a wrong label
+also compiles. ⚠⚠ **RANK BY FREQUENCY, AIM BY MAGNITUDE, AND DO NOT CONFUSE THEM**: `--shape-dump`
+is worst-first because that is how you find a mechanism, but the score pays per element, so the
+mechanism you find at the top may be worth 0.0035. Both are right; they answer different questions.
+⚠ **A CONSEQUENCE IS NOT EVIDENCE ABOUT ITS CAUSE** — `reading_order 515/575` looked like the
+strongest signal on the board and is downstream of the mirroring, which is still unexplained. RTL is
+now REFUTED for it by measurement (inline base direction is Chrome-exact to 1px), which is worth
+more than the tick's fix: the next probe starts somewhere else.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

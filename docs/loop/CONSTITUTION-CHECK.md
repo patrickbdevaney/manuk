@@ -3958,7 +3958,7 @@ which the board names as agent territory.
 
 ---
 
-## Constitution check #70 — tick 836 (2026-08-01)
+## Check #70 — tick 836 (2026-08-01)
 
 HORIZON: **H0 — Pareto Web Parity.** Exit gate, all binary: ~83% WPT across categories · differential-
 oracle viability across all four usage-weighted corpora · a daily-drivable headful shell · every
