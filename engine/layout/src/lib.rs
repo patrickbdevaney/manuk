@@ -2393,7 +2393,7 @@ impl Ctx<'_> {
         // passes `base + slot.x/y` straight in), so adding them again moved every margined flex item
         // by exactly twice its margin. The margins are still computed above — they are reported in
         // `BlockResult` and read by the caller — they just must not be spent a second time here.
-        let border_x = x + if taffy_item { 0.0 } else { ml };
+        let mut border_x = x + if taffy_item { 0.0 } else { ml };
         // Parent↔child TOP margin collapse (CSS2 §8.3.1): when this block has no top border/padding,
         // is `overflow:visible`, and does not establish a BFC, its top margin collapses with its
         // first in-flow block child's collapse-through top margin. That child's margin escapes
@@ -2598,10 +2598,60 @@ impl Ctx<'_> {
         // height *after* this clamp runs, quietly overwriting the squared value. So the defect was
         // masked by a later assignment on every row but one.
         if !taffy_item {
+            let unclamped_height = content_height;
             if max_h.is_finite() {
                 content_height = content_height.min(max_h);
             }
             content_height = content_height.max(min_h);
+            // ── **CSS 2.1 §10.4 RUNS BLOCK → INLINE TOO, AND THIS PATH ONLY EVER RAN IT ONE WAY.**
+            //
+            // The inline→block half is 60 lines up (`inline_constraint_violated`): a `max-width`
+            // that moves a replaced element's used width recomputes its height so the ratio
+            // survives. The block→inline half — a `max-height`/`min-height` that moves the HEIGHT
+            // must pull the width back the same way — was never written, so the box kept the width
+            // it had before the clamp and the picture rendered **stretched**.
+            //
+            // t831 added exactly this to `layout_float` and its pattern note said the quiet part:
+            // *a second implementation of a rule does not inherit the first one's fixes.* This is
+            // that sentence collected in the other direction — the float path now has both halves
+            // and the block path had one.
+            //
+            // Chrome-measured on a 1000×266 PNG in a 320px block, which is the AWS Cognito hosted
+            // login page's `.logo-customizable { max-width:100%; max-height:30px }` exactly:
+            //
+            // ```text
+            //                                            Chrome   before   after
+            //   max-width:100% + max-height:30px         113x30   320x30   113x30   ✗→✓
+            //   max-width:100% alone                     320x85   320x85   320x85    ✓  ← control
+            //   max-height:30px alone                    113x30   1000x30  113x30   ✗→✓
+            // ```
+            //
+            // The `max-width` control is the one that says which half was missing: it was already
+            // right, because the inline→block transfer has been here the whole time.
+            //
+            // Safe to move the width this late **only** because the guard is `is_replaced_element`:
+            // a replaced box has no children, so nothing has been laid out against the old width.
+            // The auto-margin centring is re-run below for the same reason it exists at all —
+            // §10.4 says the §10.3.3 rules are applied *again* with the constraint as the computed
+            // width, and §10.3.3 is where a pair of `auto` margins splits the remainder.
+            if content_height != unclamped_height && is_replaced_element(self.dom.tag_name(node)) {
+                if let Some(r) = s.aspect_ratio {
+                    if r > 0.0 {
+                        let mut w = content_height * r;
+                        if max_w.is_finite() {
+                            w = w.min(max_w);
+                        }
+                        width = w.max(min_w);
+                        let leftover = cw - (width + pl + pr + bl + br);
+                        match (s.margin.left.is_auto(), s.margin.right.is_auto()) {
+                            (true, true) => ml = (leftover / 2.0).max(0.0),
+                            (true, false) => ml = (leftover - mr).max(0.0),
+                            _ => {}
+                        }
+                        border_x = x + ml;
+                    }
+                }
+            }
         }
 
         let border_box_w = bl + pl + width + pr + br;
@@ -8420,6 +8470,75 @@ mod tests {
             (bw - 100.0).abs() < 1.0 && (bhh - 100.0).abs() < 1.0,
             "a border-box float's specified HEIGHT is its border box too (100x100), got {bw}x{bhh}"
         );
+    }
+
+    /// **CSS 2.1 §10.4 RUNS BLOCK → INLINE TOO, AND THE BLOCK PATH ONLY EVER RAN IT ONE WAY.**
+    ///
+    /// A `max-width` that moves a replaced element's used width has recomputed its height here for
+    /// a long time. The mirror — a `max-height` that moves the HEIGHT must pull the width back
+    /// through the ratio — was never written, so the box kept its pre-clamp width and the picture
+    /// rendered stretched. t831 added exactly this to `layout_float`; **the block path had one half
+    /// and the float path now has both**, which is t831's own pattern note arriving from the other
+    /// direction.
+    ///
+    /// Chrome-measured on a 1000×266 image in a 320px block — the AWS Cognito hosted login page's
+    /// `.logo-customizable { max-width:100%; max-height:30px }` exactly, which is what
+    /// `admin.zoomph.com` renders:
+    ///
+    /// ```text
+    ///                                              Chrome    before    after
+    ///   max-width:100% + max-height:30px           113x30    320x30    113x30   ✗→✓
+    ///   max-width:100% alone                       320x85    320x85    320x85    ✓  ← control
+    ///   max-height:30px alone                      113x30   1000x30    113x30   ✗→✓
+    ///   …+ display:block; margin:0 auto           113x30 @104  @0    113x30 @104  ✗→✓
+    /// ```
+    ///
+    /// ⚠ The `max-width`-alone row is the control that names which half was missing: it was already
+    /// right, because the inline→block transfer has been here the whole time. ⚠ And the centred row
+    /// is why the fix re-runs the auto-margin split rather than only assigning a width — §10.4 says
+    /// the §10.3.3 rules are applied *again*, and §10.3.3 is where two `auto` margins share the
+    /// remainder. Assigning the width alone leaves a correctly-sized image flush left.
+    #[test]
+    fn a_max_height_on_a_replaced_element_pulls_its_width_back_through_the_ratio() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0'>\
+               <div class=box><img id=both></div>\
+               <div class=box><img id=w></div>\
+               <div class=box><img id=h></div>\
+               <div class=box><img id=c></div>\
+             </body>",
+            ".box{width:320px} img{aspect-ratio:1000/266;width:1000px} \
+             #both{max-width:100%;max-height:30px} \
+             #w{max-width:100%} \
+             #h{max-height:30px} \
+             #c{display:block;margin:0 auto;max-width:100%;max-height:30px}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let g = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            (rects[&n].x, rects[&n].width, rects[&n].height)
+        };
+        for (id, want) in [
+            ("both", (0.0, 113.0, 30.0)),
+            // The control: `max-width` alone was ALREADY Chrome-exact (the inline→block transfer),
+            // and a fix to the other half must not touch it.
+            ("w", (0.0, 320.0, 85.0)),
+            ("h", (0.0, 113.0, 30.0)),
+            ("c", (104.0, 113.0, 30.0)),
+        ] {
+            let (gx, gw, gh) = g(id);
+            assert!(
+                (gx - want.0).abs() < 1.5 && (gw - want.1).abs() < 1.5 && (gh - want.2).abs() < 1.5,
+                "#{id}: Chrome measures {}x{} at x={}, got {gw}x{gh} at x={gx}",
+                want.1,
+                want.2,
+                want.0
+            );
+        }
     }
 
     /// **A FLOATED REPLACED ELEMENT HAS NO CONTENT, SO WITHOUT ITS RATIO IT HAS NO SIZE.**

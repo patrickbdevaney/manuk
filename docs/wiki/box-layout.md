@@ -3646,3 +3646,47 @@ Gates (`manuk-layout`): `a_floated_replaced_element_derives_its_missing_axis_fro
 to `box_sizing_border_box_applies_to_a_float` — each RED-proven by mutating out its own half, and
 each proven to leave the *other* halves green, so the four are separable rather than one gate wearing
 four names.
+
+## §10.4 runs BLOCK → INLINE too, and the block path only ever ran it one way (t833)
+
+CSS 2.1 §10.4 is symmetric: when a used size violates a `min-`/`max-` constraint, the rules are
+applied **again** with the constraint as the computed value — and for a replaced element with an
+intrinsic ratio that means the *other* axis is recomputed so the ratio survives. `layout_block` has
+had the inline→block half for a long time (`inline_constraint_violated`: a `max-width` that moves
+the width recomputes the height). The block→inline half was never written, so a `max-height` clamp
+left the box with the width it had **before** the clamp, and the picture rendered stretched.
+
+Aimed by t832's banked residue: `admin.zoomph.com`, one `<img>` at `320x30` against Chrome's
+`113x30`. `boxes --images` gave the input — `natural 1000x266` — and 113/30 = 3.767 against
+1000/266 = 3.759, so Chrome was sizing from the height and deriving the width. The site is the AWS
+Cognito hosted login page: `.logo-customizable { max-width:100%; max-height:30px }`.
+
+```text
+                                             Chrome     before      after
+  max-width:100% + max-height:30px           113x30     320x30     113x30    ✗→✓
+  max-width:100% alone                       320x85     320x85     320x85     ✓  ← control
+  max-height:30px alone                      113x30    1000x30     113x30    ✗→✓
+  …+ display:block; margin:0 auto        113x30 @104  113x30 @0  113x30 @104 ✗→✓
+```
+
+The `max-width`-alone control is what names **which half** was missing — it was already correct.
+The centred row is why the fix re-runs the auto-margin split rather than only assigning a width:
+§10.3.3 is where two `auto` margins share the remainder, so a width assigned without re-splitting
+leaves a correctly-sized image flush left — a new bug wearing the old one's fix.
+
+Moving the width this late is safe **only** under the `is_replaced_element` guard: a replaced box
+has no children, so nothing was laid out against the old width.
+
+⚠⚠⚠ **THIS IS t831'S PATTERN NOTE ARRIVING FROM THE OTHER DIRECTION.** t831 concluded that
+`layout_float` accumulates `layout_block`'s backlog. One tick later the debt ran the other way — the
+float path had both §10.4 directions and the block path had one. **Two implementations of one rule
+drift in whichever direction the last fix landed, so the grep is symmetric or it is not a grep.**
+
+⚠⚠ **HONEST SCOPE: this bought ZERO M1 crossings.** Priced against the t831 binary over 16 sites in
+the same hour: `admin.zoomph.com` +0.0294 (to 0.5882, still far under the bar), `crazyshop.pl`
++0.0007, fourteen unchanged, zero regressions, coverage byte-identical. A completed spec rule, not a
+corpus lever — the same shape as t827, and labelled as such.
+
+Gate: `a_max_height_on_a_replaced_element_pulls_its_width_back_through_the_ratio` (`manuk-layout`),
+RED-proven twice — once by removing the transfer, once by removing ONLY the auto-margin re-run while
+keeping the width fix, so the two halves are separately falsifiable.

@@ -44420,3 +44420,90 @@ QUESTION; only a same-hour old-binary run is an ANSWER. ⚠ Bisecting to a HALF 
 binaries + one neutering) is what turned "t830 did something" into a named mechanism, and it cost
 four builds — cheap against reverting a primitive that bought three crossings.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 833 — §10.4 runs BLOCK → INLINE too, and the block path only ever ran it one way (2026-08-01)
+
+TICK SHAPE: capability (replaced-element constraint transfer) — t832's banked residue, consumed by
+one probe, and HALF OF THE RESIDUE WAS WRONG
+
+HYPOTHESIS (from t832's banked residue): `admin.zoomph.com` is unmoved at shape 0.5588 with
+`coverage 1.000`, and its worst miss is one `<img>` inside a `<center>` measuring `320x30` where
+Chrome measures `113x30` — a replaced element stretched to its container instead of its intrinsic
+width. The residue also flagged an independent `-50` height and `-30` body `y` that the image cannot
+explain, and said to measure **one suspect at a time**.
+
+⚠ **THE `<center>` WAS A RED HERRING AND THE FIRST FIXTURE KILLED IT.** The same image with no
+`<center>` anywhere measured `320x30` identically. Naming it in the residue was reading the DOM path
+as a cause — the path is *where the symptom was found*, and it is not evidence about mechanism.
+
+`boxes --images` gave the real input: `natural 1000x266`, Chrome `113x30`. 113/30 = 3.767 and
+1000/266 = 3.759, so **Chrome is sizing from the HEIGHT and deriving the width from the ratio**, and
+we are not. The site is the AWS Cognito hosted login page (`class="logo-customizable"`), whose
+stylesheet is `.logo-customizable { max-width:100%; max-height:30px }`.
+
+**THE MECHANISM: CSS 2.1 §10.4 runs in BOTH directions and this path only ever ran one.** The
+inline→block half has been in `layout_block` for a long time — a `max-width` that moves a replaced
+element's used width recomputes its height so the ratio survives (`inline_constraint_violated`).
+The block→inline half — a `max-height`/`min-height` that moves the HEIGHT must pull the width back
+the same way — was never written. So the height clamped to 30 and `border_box_w` was computed from
+the width the box had *before* the clamp.
+
+⚠⚠⚠ **AND THIS IS t831'S OWN PATTERN NOTE ARRIVING FROM THE OTHER DIRECTION.** t831 wrote *"a second
+implementation of a rule does not inherit the first one's fixes — it accumulates the first one's
+backlog"* about `layout_float` missing what `layout_block` had. One tick later the debt runs the
+other way: I added **both** §10.4 directions to the float path, and the block path had **one**. The
+lesson as written was too narrow — it is not that the newer implementation lags the older one, it is
+that **two implementations of one rule drift in whichever direction the last fix happened to land**,
+so the grep is symmetric or it is not a grep.
+
+Chrome-measured, a 1000×266 image in a 320px block:
+
+```text
+                                             Chrome     before      after
+  max-width:100% + max-height:30px           113x30     320x30     113x30    ✗→✓
+  max-width:100% alone                       320x85     320x85     320x85     ✓  ← control
+  max-height:30px alone                      113x30    1000x30     113x30    ✗→✓
+  …+ display:block; margin:0 auto        113x30 @104  113x30 @0  113x30 @104 ✗→✓
+```
+
+⚠ The `max-width`-alone row is the control that says **which half** was missing: already correct,
+because the inline→block transfer was always here. ⚠ And the centred row is why the fix re-runs the
+auto-margin split instead of only assigning a width — §10.4 says the §10.3.3 rules are applied
+*again*, and §10.3.3 is where two `auto` margins share the remainder. Assigning the width alone
+leaves a correctly-sized image flush left, which is a new bug wearing the old one's fix.
+
+MEASURED — **OLD BINARY (t831) vs NEW, 16 sites, same hour**:
+
+```
+  admin.zoomph.com        0.5588 → 0.5882   +0.0294   (the aimed site; its <img> is now Chrome-exact)
+  www.crazyshop.pl        0.5642 → 0.5649   +0.0007
+  14 others                                 +0.0000
+  mean +0.0019 · M1 crossings 0 · ZERO regressions · coverage byte-identical on all 16
+```
+
+⚠⚠ **HONEST SCOPE, STATED AS THE RESULT RATHER THAN BURIED: THIS BOUGHT ZERO M1 CROSSINGS.** The
+aimed site moved +2.9pt and stayed at 0.5882, well under the bar — because the residue's *other*
+half (an independent −50 height and −30 body `y`) is still there, exactly as t832 predicted when it
+refused to assume one cause. What this tick banks is a **completed spec rule**, not a corpus lever:
+the same class as t827, and it is labelled that way rather than dressed up. A tick that reports a
+mechanism closed and no crossing bought is worth more than one that finds a number to lead with.
+
+`manuk-layout` **109 green** (108 + 1). The gate is RED-proven twice over — once by removing the
+transfer, once by removing ONLY the auto-margin re-run while keeping the width fix, so the two
+halves are separately falsifiable.
+
+PERF: none — one comparison, and a multiply that only runs when a clamp actually moved a replaced
+element.
+
+WIKI: `docs/wiki/box-layout.md` — "§10.4 runs BLOCK → INLINE too", with the four Chrome rows.
+
+PATTERN: ⚠⚠⚠ **TWO IMPLEMENTATIONS OF ONE RULE DRIFT IN WHICHEVER DIRECTION THE LAST FIX LANDED —
+SO THE GREP IS SYMMETRIC OR IT IS NOT A GREP.** t831 landed both §10.4 directions in the float path
+and concluded the float path was the one accumulating backlog; one tick later the block path was
+missing a direction the float path now had. ⚠⚠ **A DOM PATH IS WHERE A SYMPTOM WAS FOUND, NOT
+EVIDENCE ABOUT ITS MECHANISM** — t832 banked `<center>` into the residue because that is where the
+bad box lived, and the first fixture refuted it in one line. A residue should name what was
+MEASURED (natural size vs used size) and not what was merely nearby. ⚠ The residue's other half —
+"the page also carries an independent −50 and −30 that the img cannot explain" — was **right**, and
+writing it down is why this tick did not mistake +2.9pt for a solved page.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
