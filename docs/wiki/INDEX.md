@@ -378,6 +378,9 @@
   - L2854 · The defect: CHUNK_ROUNDS = 4
   - L2870 · The fix
   - L2884 · Verified live, on the sites that did it
+  - L2902 · Attributing a per-site sweep delta (t847) — the integer test is NOT the control
+  - L2931 · A sweep row is a LOWER BOUND on the same binary's solo reading
+  - L2939 · A corollary about corpus reach
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1420,4 +1423,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1331 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1334 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -2898,3 +2898,47 @@ automatically. Reported to the observer; both files are observer-owned.
 ⚠ **The lesson worth carrying: the last line before a death is not the cause of it.** The line that
 named the cause was one line higher in the same log, three separate times. Make every deliberate exit
 announce itself, so an unlabelled fault is the only kind left.
+
+## Attributing a per-site sweep delta (t847) — the integer test is NOT the control
+
+A fidelity sweep row is `shape = passed / shape_n`, so a change of `Δ` on a site with `n` scored
+elements corresponds to `Δ × n` elements changing verdict. When that product lands on a whole
+number, the delta is **real** — a definite set of elements flipped, and it is not a rounding
+artefact or a re-binned average. That is the whole of what the integer test proves, and t846
+overstated it.
+
+**It does not say WHO flipped them.** A site that serves a slightly different page between two
+visits — one more ad slot, a lazy image that arrived, a cookie banner that did not — also flips an
+integer number of elements. So does the sweep's own load: the run is two rendering processes against
+the live internet under a per-site time budget.
+
+t847 cut `t842 → t847` down to the 21 rows with **identical coverage AND identical `shape_n`**, the
+strictest same-page filter the TSV supports, then ran both binaries against seven of them in the
+same hour:
+
+* **Not one of the five tested losses reproduced.** `gismart.com` read `0.679715`, `0.654804` and
+  `0.729537` (twice) *on the same page, at byte-identical coverage and byte-identical element
+  count*. `developers.google.com`'s two sweep rows turned out to be its two binaries' values with
+  the labels **inverted**.
+* **The two real wins reproduced exactly**, and a three-point ladder (old tree / one-commit-later /
+  HEAD) placed the whole of each one on a single commit.
+
+**Identical coverage plus identical `shape_n` is not "the same page."** The rule:
+
+> The integer `delta × n` test separates a real verdict change from a rounding artefact.
+> **Only a same-hour run of the OLD BINARY separates the ENGINE from the DAY.**
+
+### A sweep row is a LOWER BOUND on the same binary's solo reading
+
+Re-running HEAD alone against its own t847 sweep rows: `gismart` +0.075, `possssno` +0.108,
+`developers.google` +0.018, `pivaldi` +0.005, and `celeb.gate` / `ubys` / `mobcup` byte-identical —
+**four up, three equal, zero down.** Sweep contention depresses some sites and inflates none, so the
+headline (M1) is a floor rather than a point estimate, and a per-site sweep delta is not evidence
+about the engine until the same binary reproduces it *alone*.
+
+### A corollary about corpus reach
+
+The same window's other fix (CSS 2.1 §10.3.3 under `rtl`) moved nothing, and the population says why
+rather than the fix being wrong: **5 of the 101 scored sites carry any RTL markup at all.** A corpus
+that cannot exercise a mechanism cannot price it, in either direction — which is an argument about
+the corpus, not a verdict on the fix.

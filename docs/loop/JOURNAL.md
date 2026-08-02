@@ -45817,3 +45817,120 @@ applied to the wrong set of boxes; looking for a threshold would have been looki
 does not exist. The `comm` of two `--shape-dump` runs answers "what changed verdict" directly and
 should be the first move after any attributed regression.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 847 — the sweep three layout fixes owe, and the wall unlock that was a BUILD KNOB (2026-08-02)
+
+TICK SHAPE: measurement — a clean `--jobs 2` CrUX-trend sweep on the committed t846 tree, which is
+the first reading that can price t843 (`position:relative` containing block) and t846 (CSS 2.1
+§10.3.3 under `rtl`), plus the harness finding that landed t846 after three RED walls.
+
+HYPOTHESIS: the board's standing cadence rule is that a fix MUST prove the band moved on the next
+sweep or it is reverted/re-scoped, and **two layout fixes are unpriced** — t843 and t846 both landed
+after `SWEEP-t842-rows.tsv` was banked. The constitution check at #71 also left a ranked cohort
+that only a fresh sweep can re-cut: **sites already at `shape>=0.75` that fail M1 on the JARRING
+conjunct alone**, which t842 put at 11 of the 25 shape-passing sites and which are each one
+mechanism from a crossing.
+
+⚠⚠⚠ **THE WALL WENT RED THREE TIMES AND NOT ONE OF THEM WAS THE ENGINE — THE VARIABLE WAS
+`CARGO_BUILD_JOBS`.** Run 1 red on `G_INTERACT` alone; run 2 red on `G2` with
+`error: linking with cc failed` under `manuk-page (test "g_line_break_solidus")`; run 3 red on `G2`
+AND `G_ALLOC` with the same linker error under *different* test binaries
+(`g_collection_named_props`, `g_computed_visual_effects`, `g_alloc`). **A failure that names a
+different subject every run is a RESOURCE failure wearing the subject's name** — and each of those
+binaries built clean in isolation in 16s immediately afterwards. `scripts/mem-guard.sh` sizes
+`CARGO_BUILD_JOBS` from *available memory* (8 of 32 cores at 25GB free), but the thing that
+exhausts this box is not compilation — it is the **tail of the build, where ~25 gate test binaries
+each statically link mozjs and are linked CONCURRENTLY**. `CARGO_BUILD_JOBS=3 ./scripts/tick.sh`
+landed the identical tree on the first attempt, all gates green. mem-guard already honours a
+pre-set value (`export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$_JOBS}"`), so this is the documented
+knob and not a harness edit. **Reported, not patched — PART VII.**
+
+⚠⚠ **AND I MADE IT WORSE BEFORE I MADE IT BETTER.** Between runs 3 and 4 I ran
+`cargo build --workspace --tests` to pre-link everything serially, reasoning that the wall would
+then find it cached. It took `/home` from **88G free to 46M free** and had to be reclaimed by
+`scripts/disk-hygiene.sh` (97G recovered), which *purges `target/debug` entirely* and so guaranteed
+the very cold rebuild I was trying to avoid. **`--workspace --tests` is a strictly larger set than
+the wall's, and on a tree where every gate binary statically links a JS engine that difference is
+tens of gigabytes.** The wall builds a targeted subset for a reason. Never pre-build the workspace
+here to "help" the wall.
+
+RESULT — **200 of 200 completed, `--jobs 2`, one binary, provenance verified by BEHAVIOUR** (the t846
+RTL fixture re-read `x=800` on the exact binary that ran the sweep; the control binary re-read `x=0`).
+
+```
+                              t832     t842     t847
+  M1 GATE (shape AND jarring) 13.0%    14.6%    15.4%     (20 of 130 sites)
+  in-scope shape>=0.75        19.1%    19.2%    18.5%     (24 of 130)
+  jarring-clean               26.7%    29.2%    29.2%     (38 of 130)
+  scorability (scored/in-scope) 101/131 103/130  101/130  = 77.7%
+  shape_mean                  52.1%    52.5%    52.9%
+  cov_mean                    84.5%    84.3%    84.3%
+  COMMON-SET BAND (100 sites scored in BOTH t842 and t847)     +1.00 pts · 12 up · 7 down
+```
+
+**M1 rose 14.6% → 15.4% while BOTH of its conjuncts stayed flat or fell** (`shape>=0.75` 25 → 24,
+`jarring-clean` 38 → 38). One site crossed (`secure5.entertimeonline.com`, 0.0000 → 0.8205) and one
+left the denominator entirely (`app.ordertime.com`, shape 1.000 → unscored `tree-divergence-31`).
+That is composition, not a band move; the band is the +1.00.
+
+⚠⚠⚠ **THE `delta × n` INTEGER TEST — WHICH I BANKED AS A METHOD ONE TICK AGO — DOES NOT ATTRIBUTE,
+AND THE OLD-BINARY CONTROL SAYS SO ON 5 SITES OUT OF 5.** t846's pattern entry said an integer
+`delta × n` "settles in one multiplication a question three more sweep runs would have left
+ambiguous." The multiplication does prove *a definite number of elements changed verdict* — that
+part stands, and it does rule out a rounding artefact. **It says NOTHING about WHAT changed them.**
+Cutting t842→t847 to the 21 rows with *identical coverage AND identical `shape_n`* — the strictest
+same-page filter the TSV supports — produced 10 clean losses and 11 clean wins. Same-hour A/B of
+both binaries on seven of them:
+
+```
+                         t842 tree   t843-only   HEAD(t846)   sweep t842   sweep t847
+  gismart.com             0.729537        —       0.729537     0.679715     0.654804   ← 3 values, 0 ours
+  celeb.gate.cc           0.774737        —       0.774737     0.783158     0.774737   ← -4 was the sweep
+  mobcup.fm               0.939394        —       0.939394     0.757576     0.939394   ← +6 was the sweep
+  possssno.sbs                —           —       0.897391 ×2  0.789565     0.789565   ← +62 elements SOLO
+  developers.google.com   0.340153    0.358056    0.358056     0.358056     0.340153   ← sweep rows SWAPPED
+  ubys.bingol.edu.tr      0.843373    0.927711    0.927711     0.843373     0.927711   ← REAL, ro 19 → 1
+  pivaldi.restoplace.ws   0.656676    0.700272    0.705722     0.662125     0.700272   ← REAL, ro  6 → 4
+```
+
+**Not one of the clean losses reproduced.** `gismart.com` read three distinct shapes today at
+byte-identical coverage and byte-identical element count; `developers.google.com`'s two sweep rows
+are its two binaries' values with the labels *inverted*. **Identical coverage plus identical
+`shape_n` is not "the same page".** The integer test separates signal from rounding; only a
+same-hour run of the OLD BINARY separates the engine from the day.
+
+⚠⚠ **EVERY POINT THIS WINDOW IS t843, AND NONE OF IT IS t846 — measured, not inferred.** The
+three-point ladder (t842 tree / t843-only / HEAD) puts the entire win at the middle rung:
+`ubys.bingol.edu.tr` **reading_order 19 → 1** (+14 elements) and `pivaldi.restoplace.ws` **6 → 4**
+(+16) are already fully present in the t843-only binary, and `developers.google.com` **6 → 3** (+7)
+likewise. t846's arm is guarded by `parent_is_rtl` and *cannot fire* on these pages — and the corpus
+agrees at the population level: **5 of the 101 scored sites carry any RTL markup at all**
+(`dashboard.twitch.tv`, `www.alphanews.live`, `coinmarketcap.com`, `possssno.sbs`,
+`www.ta3lemkonline.com`), and none of the five moved attributably. **t846 is correct and INERT on
+this corpus.** The board's rule — *a fix must raise in-scope-pass on the next sweep or it is
+reverted/re-scoped* — is aimed at fixes that do not work; t846 is Chrome-measured on six fixture
+rows including four controls and RED-proven by dropping its match arm. What the sweep establishes is
+not that it is wrong but that **the CrUX trend corpus cannot price RTL work**, and pretending
+otherwise in either direction would be the dishonest reading.
+
+⚠⚠ **AND THE SWEEP'S OWN READING IS A LOWER BOUND.** Solo re-runs of the HEAD binary against its own
+t847 sweep rows: `gismart` +0.075, `possssno` +0.108, `developers.google` +0.018, `pivaldi` +0.005,
+and `celeb.gate` / `ubys` / `mobcup` byte-identical. **Four up, three equal, zero down.** The sweep
+runs two rendering processes against a live internet under a per-site budget, and that depresses
+some sites' scores without ever inflating one. M1 15.4% is therefore a FLOOR, and a per-site sweep
+delta is not evidence about the engine until the same binary reproduces it alone.
+
+THE AIM THIS BUYS FOR t848: **the jarring conjunct, for the third window running.** Every
+attributable win this window is a `reading_order` drop (19→1, 6→4, 6→3) and `shape>=0.75` moved
+*down* by one. The cohort the constitution check named is re-cut on t847 and is where the cheap
+crossings are.
+
+TICK SHAPE: measurement — no engine change; the sweep, the attribution ladder, and the refutation of
+a method I banked one tick ago.
+
+PERF: none — measurement only. Sweep wall ~57 min for 200 sites at `--jobs 2`; the two control
+builds ~6 min and ~3 min in a detached worktree (removed).
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — the integer `delta × n` test proves a verdict
+change, never its cause; only the same-hour old-binary control attributes, and a sweep row is a
+LOWER BOUND on the same binary's solo reading.

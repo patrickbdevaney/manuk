@@ -582,3 +582,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 843	c4b9cad0	1785660253	2026-08-02T04:44:13-04:00	863	capability	63	6	222	33	379	81	3896	6960	0	438	0	a `position:relative` row inside a drawer was INVISIBLE as a containing block (2026-08-02)
 844	015f7bdc	1785671863	2026-08-02T07:57:43-04:00	11610	measurement	63	8	238	33	379	81	3896	6960	0	439	0	the constitution check, and the I3 gap it found in the last two winning ticks (2026-08-02)
 846	a6b83fd9	1785691258	2026-08-02T13:20:58-04:00	19395	capability	63	8	395	33	379	81	3896	6960	0	440	0	t841's residue closed, and a delta × n that came out an INTEGER (2026-08-02)
+847	0ca7303e	1785710875	2026-08-02T18:47:55-04:00	19617	measurement	63	9	404	33	379	81	3896	6960	0	440	0	the sweep three layout fixes owe, and the wall unlock that was a BUILD KNOB (2026-08-02)
