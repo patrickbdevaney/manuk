@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **575** | ticks 1–837 |
-| median tick cycle | **25m** | 574 intervals |
+| ticks landed | **576** | ticks 1–838 |
+| median tick cycle | **25m** | 575 intervals |
 | median, last 10 | **46m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 522.8h elapsed |
-| median verify wall | **63s** | 514 ticks |
+| **ticks per hour** | **1.10** | 523.1h elapsed |
+| median verify wall | **63s** | 515 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **435**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**280 of 575 ticks** (49%) moved a
+**280 of 576 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -672,5 +672,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **835** | 2026-08-01 22:10 | 67m | capability | 63s | +293/−37 | 379 | 81 | 56.0% · | a flex item `<img>` told taffy its content wanted ZERO, so a carousel shrank to slivers (2 |
 | **836** | 2026-08-01 22:50 | 40m | measurement | 63s | +228/−32 | 379 | 81 | 56.0% · | the obvious fix for t835's residue is WRONG, and one fixture proved it (2026-08-01) |
 | **837** | 2026-08-01 23:49 | 59m | capability | 63s | +342/−38 | 379 | 81 | 56.0% · | the out-of-flow pass's `viewport` held the DOCUMENT height (2026-08-01) |
+| **838** | 2026-08-02 00:06 | 17m | measurement | 63s | +205/−35 | 379 | 81 | 56.0% · | a 1×1 placeholder is not a missing image, it is a WRONG RATIO (2026-08-01) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

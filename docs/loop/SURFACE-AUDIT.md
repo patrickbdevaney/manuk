@@ -3250,3 +3250,77 @@ chore to retry.*
   harness-owned. Reported, not patched.
 - **`www.freesupertips.com`** fell 0.7637 → 0.6674 at near-flat coverage and is the one t825 row not
   explained. It owes an old-binary control.
+
+## Audit #55 — tick 838 (2026-08-01)
+
+SOURCES: the fresh t832 CrUX sweep rows; `gismart.com` (WordPress + a `data-lazy` image loader);
+`possssno.sbs` (Persian RTL, `#aside` off-canvas drawer); the engine's own `--images` probe.
+
+### WHAT WAS ADDED TO THE MAP — **the JS-driven lazy-load image swap, and it was not on it**
+
+The map has `IntersectionObserver` (confirmed, gated, with `trackVisibility` accepted) and it has
+`loading="lazy"`. It does **not** have the thing the corpus actually ships, which is neither:
+
+```html
+<img class="fit" data-lazy
+     src="data:image/gif;base64,…1×1 transparent GIF…"
+     data-src="https://…/footer-1.png"
+     data-srcset="…640w, …768w, …">
+```
+
+**41 of `gismart.com`'s images are that shape.** The real URL is in `data-src`; the site's own
+JavaScript moves it to `src`. This is the dominant lazy-load idiom of the WordPress/theme web —
+older and far more common than `loading="lazy"`, because it predates it and works everywhere — and
+the map had no row for it at all. Added with status **`unknown`**, because this audit measured the
+SYMPTOM and deliberately did not guess the cause (below).
+
+### WHAT WE HAD BEEN WRONG ABOUT — **a 1×1 placeholder is not a missing image, it is a WRONG RATIO**
+
+The instinct (and the map's framing) is that a lazy image that never loads shows *nothing* — a
+missing box, a coverage problem. **That is not what it does.** The placeholder is a real, decoded,
+1×1 GIF, so `apply_natural_size` gives the element an intrinsic **ratio of 1:1**, and every
+downstream sizing rule then works perfectly from a wrong premise:
+
+```text
+  gismart.com                                Chrome     ours
+  section:nth-of-type(3)/img:nth-of-type(1)  258x258   258x851    ← ours TALLER
+  section:nth-of-type(3)/img:nth-of-type(2)  258x258   258x928
+  section:nth-of-type(3)/img:nth-of-type(4)  258x258   258x1005
+  section:nth-of-type(5)/…/img               419x851   419x419    ← ours SQUARE
+```
+
+Note the two directions. It is not "our images are small" or "our images are tall" — it is that
+**every one of them is the shape the 1×1 placeholder implies rather than the shape the real asset
+implies**, so the error's sign depends on the real image. That is why it reads as scattered
+geometry noise in the cluster ledger and never as one cause. `coverage` is **0.983** — the boxes are
+all there. This is a FUNCTION defect wearing SHAPE's clothing, and it is the fourth distinct time
+this project has recorded that shape (`typeof null`, the correct-but-empty Array, the half-installed
+`performance.mark`, now a correct-but-placeholder image).
+
+### CORRECTED
+
+* **`IntersectionObserver: confirmed` is true and was answering a question nobody asked.** The map
+  recorded that the API exists and fires. What it does not record — and what decides whether a page
+  renders — is whether the *page's own* lazy-load path completes end to end. A confirmed API is not
+  a confirmed capability when the capability is a chain.
+* **`loading="lazy"` is the minority spelling.** `gismart.com`: `data-lazy` 41, `data-src` 41,
+  `data-srcset` 17, `loading="lazy"` **0**. The map ranks the attribute the spec added; the corpus
+  ships the attribute the ecosystem invented.
+
+### RE-RANK — this is a FUNCTION-leg row, and the constitution check at t836 just said that is the ceiling
+
+Check #70 recorded that scorability is flat at **101/131 = 77.1%** and that no render fix can move
+it. This audit produces the first concrete, corpus-measured instance of the *next* rung: a site that
+scores (0.7153, gap 0.035 to the bar) and whose remaining error is not layout math at all. It goes
+on the map above further replaced-element geometry.
+
+⚠ **NOT DIAGNOSED, DELIBERATELY.** Two candidates survive and this audit refuses to pick between
+them without measuring: (a) the site's lazy-load script never runs to completion for us, or (b) it
+is `IntersectionObserver`-gated and every one of these images is below the fold (`y` = 1261, 2301,
+9425, 13415, 14216 against a 720px viewport), so the observer legitimately never fires for a page we
+never scroll — while the oracle's Chrome rasterises full-page and does. **The discriminator is
+cheap and named: find one `data-lazy` image ABOVE the fold and see whether its `src` swapped.** On
+this page none of the 41 is above the fold, which is itself the reason the two cannot be separated
+here — the next probe needs a site whose first hero image is lazy, or a synthetic fixture.
+
+Set `LAST_SURFACE_AUDIT: 838`.

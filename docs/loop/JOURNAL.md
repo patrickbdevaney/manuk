@@ -44853,3 +44853,94 @@ strongest signal on the board and is downstream of the mirroring, which is still
 now REFUTED for it by measurement (inline base direction is Chrome-exact to 1px), which is worth
 more than the tick's fix: the next probe starts somewhere else.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 838 — a 1×1 placeholder is not a missing image, it is a WRONG RATIO (2026-08-01)
+
+TICK SHAPE: measurement + cadence (surface audit #55) — a near-bar reduction that found a FUNCTION
+defect wearing SHAPE's clothing, and refused to guess its cause
+
+HYPOTHESIS: aim at the nearest scorable site to the bar on the fresh t832 sweep. `gismart.com`,
+shape **0.7153**, gap **0.0347**, coverage 0.983, n=281. One nudge from an M1 crossing.
+
+`--shape-dump` put a cluster on screen immediately, and the striking thing is that it points **both
+ways**:
+
+```text
+                                             Chrome     ours
+  section:nth-of-type(3)/img:nth-of-type(1)  258x258   258x851    ← ours TALLER
+  section:nth-of-type(3)/img:nth-of-type(2)  258x258   258x928
+  section:nth-of-type(3)/img:nth-of-type(4)  258x258   258x1005
+  section:nth-of-type(5)/…/img               419x851   419x419    ← ours SQUARE
+```
+
+`boxes --images` gave the answer in one line: **`natural 1x1`** on every one of them. The markup is
+
+```html
+<img class="fit" data-lazy
+     src="data:image/gif;base64,…1×1 transparent GIF…"
+     data-src="https://…/footer-1.png" data-srcset="…640w, …768w">
+```
+
+**41 of this page's images are that shape** (`data-lazy` 41 · `data-src` 41 · `data-srcset` 17 ·
+`loading="lazy"` **0**). The real URL is in `data-src` and the site's own JavaScript moves it to
+`src`. For us it never moves, so the element keeps the placeholder — and the placeholder is a real,
+decoded, 1×1 GIF, so `apply_natural_size` hands it an intrinsic **ratio of 1:1**.
+
+⚠⚠⚠ **AND THEN EVERY SIZING RULE THIS SESSION JUST FIXED WORKS PERFECTLY FROM A WRONG PREMISE.** The
+boxes are not missing — coverage is **0.983**. They are the shape a 1×1 image implies instead of the
+shape the real asset implies, which is why the error's SIGN depends on the real image and the
+cluster ledger reads it as scattered geometry noise rather than as one cause. **A lazy image that
+never loads does not render nothing; it renders confidently at the wrong aspect ratio.** That is the
+fourth time this project has recorded this exact shape — `typeof null === 'object'`, the
+correct-but-empty Array, the half-installed `performance.mark`, and now a correct-but-placeholder
+image: **a wrong answer of the RIGHT TYPE**, invisible to every check that asks whether a thing is
+there.
+
+⚠⚠ **NOT DIAGNOSED, AND THE REFUSAL IS THE RESULT.** Two candidates survive: (a) the site's
+lazy-load script never runs to completion for us, or (b) it is `IntersectionObserver`-gated and all
+41 images are below the fold (`y` = 1261, 2301, 9425, 13415, 14216 against a 720px viewport), so the
+observer legitimately never fires for a page we never scroll — while the oracle's Chrome rasterises
+full-page and does. These have **completely different fixes** and t826's rule applies: one suspect
+at a time, or neither is measured. **The discriminator is named and cheap: find one `data-lazy`
+image ABOVE the fold and see whether its `src` swapped.** None of these 41 is, which is precisely
+why they cannot separate the two here — the next probe needs a site with a lazy hero image, or a
+synthetic fixture.
+
+Also in this tick: **surface audit #55** (due at 838, hook-enforced), banked in
+`docs/loop/SURFACE-AUDIT.md` with `LAST_SURFACE_AUDIT: 838`. What it ADDED: the JS-driven
+`data-src` swap, which was **not on the map at all** — the map has `IntersectionObserver`
+(confirmed) and `loading="lazy"`, and the corpus ships neither. What it CORRECTED: *"`IntersectionObserver:
+confirmed` is true and was answering a question nobody asked"* — a confirmed API is not a confirmed
+capability when the capability is a CHAIN, and what decides whether the page renders is whether the
+page's own lazy path completes end to end. Filed `unknown`, because this audit measured the symptom
+and deliberately did not guess the cause.
+
+RE-RANK: this is a **function-leg** row, and check #70 (t836) had just recorded that the function leg
+is the real ceiling — scorability flat at 101/131 = 77.1%, untouchable by any render fix. This is the
+first corpus-measured instance of the next rung: a site that SCORES (0.7153, 0.035 from the bar) and
+whose remaining error is not layout math at all.
+
+MEASURED: nothing changed in the engine, so nothing was priced. `manuk-layout` 112 green, tree
+byte-identical to t837.
+
+And **self-audit (tick 838)**, whose result is a single ✗ and it is the one this session already
+chased: **`verify wall: 958s EXCEEDS the 300s target`**. Wall audit #28 (t837) took that number
+apart six hours earlier — 321s attributed, **604s that the receipt's own `unattributed_seconds`
+field declines to attribute** — and reported it to the observer rather than trimming the third that
+is visible. The two instruments agree, which is the useful part: the self-audit says the wall is
+3× over, the wall audit says two thirds of it is unexplained, and **nothing should be optimised
+until the 604s is named.** Everything else the audit checks is green (49 process defects recorded,
+392 clusters, 815 pattern rows, every gate declaring how to break it).
+
+PERF: none. WIKI: none — the artefacts are `SURFACE-AUDIT.md` #55 and the both-directions table.
+
+PATTERN: ⚠⚠⚠ **A 1×1 PLACEHOLDER IS NOT A MISSING IMAGE, IT IS A WRONG RATIO** — and a wrong ratio
+is invisible to coverage (0.983 here), invisible to a missing-box cluster, and reads as geometry
+noise because its sign flips per image. ⚠⚠ **A CONFIRMED API IS NOT A CONFIRMED CAPABILITY WHEN THE
+CAPABILITY IS A CHAIN.** `IntersectionObserver` has been `confirmed` on the map for hundreds of
+ticks and the map still could not predict that 41 images on a near-bar site would render at the
+wrong shape. Map rows should name the CHAIN (`lazy image reaches its real src`), not the API that is
+one link of it. ⚠ **THE CORPUS SHIPS THE ATTRIBUTE THE ECOSYSTEM INVENTED, NOT THE ONE THE SPEC
+ADDED** — `data-lazy` 41 vs `loading="lazy"` 0 on one page. Ranking by spec surface ranks the wrong
+thing.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
