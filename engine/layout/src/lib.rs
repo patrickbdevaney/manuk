@@ -3705,23 +3705,60 @@ impl Ctx<'_> {
     /// label where Chrome gives it the 544px the label leaves. Taffy shrinks the 1e6 down to the
     /// free space, which is what makes this the Chrome answer rather than an unbounded one.
     fn replaced_default_size(&self, node: NodeId, avail_width: Option<f32>) -> Option<(f32, f32)> {
-        if !matches!(
-            self.dom.tag_name(node),
-            Some("svg" | "canvas" | "video" | "object" | "embed")
-        ) {
+        // ── **`<img>` WAS NOT ON THIS LIST, AND IT IS THE ONE THE WEB IS MADE OF.**
+        //
+        // The list was written for the DEFAULT OBJECT SIZE (300×150), which `<img>` correctly does
+        // not have — and that exclusion silently did a second job it was never meant to do: it kept
+        // images out of the seam that reports a replaced element's **intrinsic** size to taffy. So a
+        // flex item `<img>` told taffy its content wanted **zero**, taffy's automatic minimum size
+        // (CSS Flexbox §4.5, `min-width:auto`) floored at nothing, and a row of logos shrank to
+        // slivers instead of overflowing a scroll container.
+        //
+        // `<img>` is admitted here but still gets **no default object size**: the guard below
+        // returns `None` when neither a definite axis nor a ratio is known, so a sourceless or
+        // not-yet-decoded image falls through to the broken-image path exactly as before. What it
+        // gains is the case where we DO know the size — which, once the bytes have arrived, is
+        // every image on the page.
+        let is_img = self.dom.tag_name(node) == Some("img");
+        if !is_img
+            && !matches!(
+                self.dom.tag_name(node),
+                Some("svg" | "canvas" | "video" | "object" | "embed")
+            )
+        {
             return None;
         }
         let s = self.style_of(node);
         let ratio = s.aspect_ratio.filter(|r| *r > 0.0);
+        // No default object size for `<img>`: with nothing known, say nothing. `300×150` here would
+        // resurrect the bug t689 fixed (an image whose bytes never arrive is 16×16, not a
+        // full-line-by-150 band), and a *wrong* answer from this seam is worse than none, because
+        // taffy trusts it as the item's content size.
+        if is_img
+            && ratio.is_none()
+            && !matches!(s.width, Dim::Px(_))
+            && !matches!(s.height, Dim::Px(_))
+        {
+            return None;
+        }
         let width = match (s.width, ratio, s.height) {
             (Dim::Px(w), ..) => w,
             (_, Some(r), Dim::Px(h)) => h * r,
             (_, Some(_), _) => avail_width.filter(|a| a.is_finite()).unwrap_or(1.0e6),
+            // ⚠ **THE DEFAULT OBJECT SIZE MUST NOT LEAK INTO `<img>` ON EITHER AXIS.** The guard at
+            // the top of this function catches an image with NOTHING known; this catches the one
+            // that cost a real regression — an image with a definite WIDTH and no ratio, which took
+            // the `150.0` height below and rendered a 36×0 icon as 36×150. Caught by the 16-site
+            // control on `777juegos.com` (whose footer is a row of unloaded payment icons Chrome
+            // measures at height ZERO), not by any fixture. An `<img>` with an underivable axis has
+            // no answer to give here, and `None` sends it back to the broken-image path (t689).
+            _ if is_img => return None,
             _ => 300.0,
         };
         let height = match (s.height, ratio) {
             (Dim::Px(h), _) => h,
             (_, Some(r)) => width / r,
+            _ if is_img => return None,
             _ => 150.0,
         };
         Some((width.max(0.0), height.max(0.0)))
@@ -8516,6 +8553,87 @@ mod tests {
         assert!(
             (bw - 100.0).abs() < 1.0 && (bhh - 100.0).abs() < 1.0,
             "a border-box float's specified HEIGHT is its border box too (100x100), got {bw}x{bhh}"
+        );
+    }
+
+    /// **A FLEX ITEM `<img>` TOLD TAFFY ITS CONTENT WANTED ZERO, SO IT SHRANK TO A SLIVER.**
+    ///
+    /// CSS Flexbox §4.5: a flex item's `min-width:auto` — the default — is its **automatic minimum
+    /// size**, which for a replaced element is its intrinsic width. Chrome therefore refuses to
+    /// shrink a row of logos below their own size and lets the container overflow (which is the
+    /// entire point of the `display:flex; overflow-x:scroll` carousel). We shrank them to fit.
+    ///
+    /// The cause was one omission with two jobs: `replaced_default_size` — the seam that answers
+    /// "how big is this replaced item?" for taffy — listed `svg|canvas|video|object|embed` and not
+    /// `<img>`. The list was written for the DEFAULT OBJECT SIZE (300×150), which `<img>` correctly
+    /// does not have; excluding it there silently also excluded it from reporting its **intrinsic**
+    /// size, so an image flex item measured as content-of-zero.
+    ///
+    /// Measured on `promo.golesliga1max.pe`, whose `#slider-equipos { display:flex;
+    /// overflow-x:scroll }` holds fifteen 74×82 team badges — Chrome renders each at 74×82, we
+    /// rendered each at **18×82**, and that one row is 15 of the site's 26 shape misses.
+    ///
+    /// ```text
+    ///   four 1000×266 images in a 320px flex row   Chrome        before      after
+    ///                                              1000x266 ea   68x266 ea   1000x266 ea   ✗→✓
+    /// ```
+    ///
+    /// ⚠ `<img>` is admitted to that seam but still gets **no default object size**: with neither a
+    /// definite axis nor a ratio known it returns `None` and falls through to the broken-image path,
+    /// so t689's "an image whose bytes never arrive is 16×16, not a full-line band" still holds.
+    #[test]
+    fn a_replaced_flex_item_is_floored_at_its_intrinsic_width() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0'><div id=row>\
+               <img id=a><img id=b><img id=c><img id=d></div></body>",
+            "#row{display:flex;width:320px} \
+             #row img{aspect-ratio:1000/266;width:1000px}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let g = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            (rects[&n].width, rects[&n].height)
+        };
+        for id in ["a", "b", "c", "d"] {
+            let (w, h) = g(id);
+            assert!(
+                (w - 1000.0).abs() < 2.0 && (h - 266.0).abs() < 2.0,
+                "flex item #{id}: `min-width:auto` floors a replaced item at its intrinsic size, so \
+                 Chrome overflows the row at 1000x266 rather than shrinking — got {w}x{h}"
+            );
+        }
+
+        // ── **AND THE DEFAULT OBJECT SIZE MUST NOT COME WITH IT.** This half exists because the
+        // first version of the fix caused a real regression that no fixture caught: admitting
+        // `<img>` to the replaced-size seam also handed it the `300×150` fallback, so an image with
+        // a definite WIDTH and no ratio — an icon whose bytes have not arrived — took a **150px**
+        // height. `777juegos.com`'s footer is a row of exactly those (Chrome measures them at
+        // height 0) and it cost 8.75 shape points on the 16-site control.
+        //
+        // The assertion is deliberately *"not 150"* rather than a Chrome-exact number: Chrome puts
+        // an alt-text line box here (36×34) and we produce 36×0, which is a separate pre-existing
+        // gap this tick did not touch and must not silently claim. What this gate pins is the thing
+        // that regressed — an `<img>` never gets the default object size.
+        let (dom2, root2) = layout_html(
+            "<body style='margin:0'><div id=row><img id=x></div></body>",
+            "#row{display:flex;width:320px} #row img{width:36px}",
+            1200.0,
+        );
+        let rects2 = root2.node_rects(&dom2);
+        let n = dom2
+            .descendants(dom2.root())
+            .find(|&n| dom2.element(n).and_then(|e| e.attr("id")) == Some("x"))
+            .expect("id");
+        let h = rects2[&n].height;
+        assert!(
+            h < 100.0,
+            "an <img> with a definite width and NO ratio must never take the 300x150 default \
+             object size — Chrome gives it a 34px alt line box, we give 0, and 150 is the \
+             regression this pins; got height {h}"
         );
     }
 

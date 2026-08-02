@@ -44581,3 +44581,84 @@ grep, which found a worse defect than the one that produced the lesson. ⚠ **FA
 SEPARATELY, INCLUDING THE HALVES YOU ADDED FOR TIDINESS**: one third of this fix was unreachable and
 only the per-half mutation could tell, because the whole-fix test passed either way.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 835 — a flex item `<img>` told taffy its content wanted ZERO, so a carousel shrank to slivers (2026-08-01)
+
+TICK SHAPE: capability (flex automatic minimum size / replaced items) — aimed by `--shape-dump`,
+and the FIRST VERSION OF THE FIX SHIPPED A REGRESSION THAT ONLY THE CONTROL CAUGHT
+
+HYPOTHESIS: `promo.golesliga1max.pe` sat at shape 0.5873 with `coverage 1.000` and n=63. The dump
+named it in one command — 15 of its 26 misses are one row of team badges, each **74x82 in Chrome and
+18x82 for us**. Height exact, width collapsed to a quarter. Its CSS is
+`#slider-equipos { display:flex; overflow-x:scroll }`.
+
+**CSS Flexbox §4.5 — the automatic minimum size.** A flex item's `min-width:auto` (the default) is
+its content-based minimum, which for a replaced element is its intrinsic width. Chrome therefore
+REFUSES to shrink a row of logos below their own size and lets the container overflow, which is the
+entire point of a `display:flex; overflow-x:scroll` carousel. We shrank them to fit.
+
+The cause was one omission doing two jobs. `replaced_default_size` — the seam that answers *"how big
+is this replaced item?"* for taffy — listed `svg|canvas|video|object|embed` and **not `<img>`**. That
+list was written for the DEFAULT OBJECT SIZE (300×150), which `<img>` correctly does not have; and
+excluding it there silently also excluded it from reporting its **intrinsic** size. So an image flex
+item measured as content-of-zero and taffy floored it at nothing.
+
+```text
+  four 1000×266 images in a 320px flex row   Chrome        before      after
+                                             1000x266 ea   68x266 ea   1000x266 ea   ✗→✓
+```
+
+⚠⚠⚠ **AND THE FIRST VERSION OF THIS FIX CAUSED A REAL REGRESSION THAT NO FIXTURE CAUGHT.** Admitting
+`<img>` to that seam also handed it the `300×150` fallback. I had written a guard — return `None`
+when *neither* axis nor a ratio is known — and it was **the wrong guard**: it covers an image with
+nothing known, and the case that actually broke is an image with a definite **width** and no ratio,
+which sailed past it and took the `150.0` height. `777juegos.com`'s footer is a row of exactly those
+(unloaded payment icons, which Chrome measures at height **0**) and it cost **-8.75 shape points**.
+
+The control caught it, and then the *repeat* proved it: t832 had already recorded `777juegos` as a
+drifty site (0.7317 vs 0.7439 on identical code), so one bad row was not evidence. Two runs per
+binary settled it — t834: 0.7250 / 0.7317, t835-first-cut: 0.6707 / 0.6585. Deterministic, ~6pt, the
+engine. The fix is `_ if is_img => return None` on **both** arms, so an `<img>` with an underivable
+axis says nothing rather than inventing a number, and falls back to the broken-image path (t689).
+
+MEASURED — **OLD BINARY (t834) vs NEW, 16 sites, same hour**:
+
+```
+  promo.golesliga1max.pe   0.5873 → 0.8254   +0.2381   ★ CROSSED 0.75
+  www.ta3lemkonline.com    0.5449 → 0.5733   +0.0284   ← the ADVERSARIAL control moved, up
+  777juegos.com            0.7375 → 0.7317   -0.0058   (inside its measured ±1.2pt drift; coverage
+                                                        0.941→0.965, i.e. a different page state)
+  13 others                                  +0.0000
+  mean +0.0163 · M1 crossings 1 · ZERO engine regressions · coverage byte-identical on 15 of 16
+```
+
+`manuk-layout` **111 green** (110 + 1). Both halves RED-proven separately: mutating `is_img` off in
+the measure seam fails the intrinsic-floor assertion; restoring the `150.0` leak fails the
+default-object assertion.
+
+⚠ RESIDUE, banked with its refutations attached so the next tick does not re-derive it. The second
+defect on this fixture is **not fixed and is now precisely bounded**: a `min-width:0` flex item image
+in a 320px row is `160x43` in Chrome and `160x266` for us — the width already correct, so only the
+picture's proportions give it away. Refuted, each by measurement: it is **not** the measure seam (I
+wrote the known-width→ratio derivation into the closure and it moved no number, so it was removed
+under t834's own rule); it is **not** cross-axis `stretch` (`align-items:flex-start` measures
+identically at 160x266). What remains: **taffy applies `aspect_ratio` to the item's SPECIFIED width
+rather than its FLEXED width**, so the cross size is computed from 1000 (→266) and not from 160
+(→43). That is a fix on the way OUT of taffy, in the slot adoption, and it is a tick of its own.
+
+PERF: none — the seam is memoized and this changes which branch it returns from.
+
+WIKI: `docs/wiki/box-layout.md` — "A flex item `<img>` told taffy its content wanted ZERO".
+
+PATTERN: ⚠⚠⚠ **AN EXCLUSION WRITTEN FOR ONE REASON WAS SILENTLY DOING A SECOND JOB.** `<img>` was
+kept off the replaced-size list because it has no default object size — correct — and that same line
+also kept it from reporting its intrinsic size, which is a completely different question. **When a
+guard tests a TAG rather than the PROPERTY it cares about, it will be read as authoritative for
+every property that tag has.** The fix is two guards on two properties, not one list. ⚠⚠ **THE
+CORRECTIVE GUARD I WROTE PRE-EMPTIVELY WAS THE WRONG GUARD, AND I BELIEVED IT BECAUSE I HAD WRITTEN
+IT.** It guarded "nothing known" while the live failure was "one axis known" — and a fixture written
+by the same hypothesis cannot find that. Only the 16-site control did, one tick after t834 recorded
+that a control is evidence about the sites it contains. ⚠ **A KNOWN-DRIFTY SITE STILL DESERVES THE
+REPEAT, NOT THE BENEFIT OF THE DOUBT**: `777juegos` had a recorded ±1.2pt spread, which is exactly
+the reason to run it twice per binary rather than to dismiss an 8.75pt drop as more of the same.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

@@ -3741,3 +3741,52 @@ sweep, not a control padded until something moves.
 
 Gate: `an_abspos_replaced_element_takes_its_height_from_its_ratio` (`manuk-layout`), RED-proven by
 mutating out the derivation.
+
+## A flex item `<img>` told taffy its content wanted ZERO (t835)
+
+CSS Flexbox §4.5: a flex item's `min-width:auto` — the default — is its **automatic minimum size**,
+which for a replaced element is its intrinsic width. Chrome therefore refuses to shrink a row of
+logos below their own size and lets the container overflow, which is the entire point of a
+`display:flex; overflow-x:scroll` carousel. We shrank them to fit.
+
+Aimed by `fidelity --shape-dump` on `promo.golesliga1max.pe` (shape 0.5873, coverage 1.000, n=63):
+**15 of its 26 misses were one row of team badges**, each `74x82` in Chrome and `18x82` for us.
+
+The cause was one omission doing two jobs. `replaced_default_size` — the seam that tells taffy how
+big a replaced item is — listed `svg|canvas|video|object|embed` and **not `<img>`**. That list was
+written for the DEFAULT OBJECT SIZE (300×150), which `<img>` correctly does not have; excluding it
+there silently also excluded it from reporting its **intrinsic** size.
+
+```text
+  four 1000×266 images in a 320px flex row   Chrome        before      after
+                                             1000x266 ea   68x266 ea   1000x266 ea   ✗→✓
+```
+
+### The first version of the fix shipped a regression, and only the control caught it
+
+Admitting `<img>` to the seam also handed it the `300×150` fallback. The guard written for that —
+return `None` when *neither* axis nor a ratio is known — was **the wrong guard**: the case that broke
+is an image with a definite **width** and no ratio, which sailed past it and took the `150.0` height.
+`777juegos.com`'s footer is a row of exactly those (unloaded payment icons, which Chrome measures at
+height **0**) and it cost **-8.75 shape points**.
+
+The fix is `_ if is_img => return None` on **both** arms: an `<img>` with an underivable axis says
+nothing rather than inventing a number, and falls back to the broken-image path (t689).
+
+Priced against the t834 binary, 16 sites, same hour: `promo.golesliga1max.pe` **0.5873 → 0.8254 ★
+crossed 0.75**, the adversarial control `ta3lemkonline` +0.0284, `777juegos` -0.0058 (inside its
+measured ±1.2pt drift, coverage 0.941→0.965), 13 unchanged, mean +0.0163, zero engine regressions.
+
+### Residue, bounded and with its refutations attached
+
+A `min-width:0` flex item image in a 320px row is `160x43` in Chrome and `160x266` for us — the width
+already correct, so only the picture's proportions give it away. **Not** the measure seam (a
+known-width→ratio derivation written into the closure moved no number and was removed under t834's
+rule); **not** cross-axis `stretch` (`align-items:flex-start` measures identically). What remains:
+taffy applies `aspect_ratio` to the item's **specified** width rather than its **flexed** width, so
+the cross size comes from 1000 (→266) instead of 160 (→43). The fix is on the way OUT of taffy, in
+the slot adoption, and it is a tick of its own.
+
+Gate: `a_replaced_flex_item_is_floored_at_its_intrinsic_width` (`manuk-layout`), both halves
+RED-proven separately — mutating `is_img` off in the seam fails the intrinsic-floor assertion;
+restoring the `150.0` leak fails the default-object assertion.

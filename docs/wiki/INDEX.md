@@ -188,6 +188,9 @@
   - L3650 · §10.4 runs BLOCK → INLINE too, and the block path only ever ran it one way (t833)
   - L3694 · An absolutely positioned image was ZERO PIXELS TALL, always (t834)
   - L3722 · The falsification pass deleted a third of the fix
+  - L3745 · A flex item <img> told taffy its content wanted ZERO (t835)
+  - L3765 · The first version of the fix shipped a regression, and only the control caught it
+  - L3780 · Residue, bounded and with its refutations attached
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1405,4 +1408,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1316 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1319 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
