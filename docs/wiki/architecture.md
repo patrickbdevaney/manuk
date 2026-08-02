@@ -327,3 +327,37 @@ responsive, and it has to stay true on every repaint, not just the first.
 
 Still open on this path: a frame's own timers/fetches do not drive a repaint, and input is not routed
 into a frame (script can change the bank's form; a user cannot click its button).
+
+## The agent's click point IS layout geometry, so a containing-block bug is an actuation bug (I3)
+
+`A11yNode::iter()` — and therefore `interesting()`, `to_viewport_lines()` and every agent-facing
+enumeration — walks in **DOM pre-order**, not geometric order. That is deliberate and correct: DOM
+order is already the reading order, including for `dir=rtl`, which is what `dir=rtl` means. So a
+layout fix that changes where boxes *are* does not change the order the agent sees them in.
+
+What it does change is the **coordinates**. `to_viewport_lines` emits `role "name" @(cx,cy)` straight
+from the layout rect, and that is the number an agent acts on. Before t843, all fourteen carets of an
+AdminLTE sidebar reported the **same centre**, because `top:50%` resolved against the drawer instead
+of the row (see box-layout.md). An agent told to expand the seventh menu item would have clicked the
+same pixel as the first.
+
+**A containing-block bug is a silent mis-actuation, not a visual blemish**, and nothing in
+`manuk-agent` or `manuk-a11y` could catch it — both *consume* the geometry rather than check it.
+
+`every_drawer_row_exposes_its_own_click_point_to_the_agent` (in `manuk-page`, so it runs HTML →
+cascade → layout → a11y tree → click point) asserts two things: three rows expose three distinct
+click points, **and** each point falls inside its own row. The second assertion is what makes it a
+contract rather than a smoke test — distinctness alone would pass if every control were merely
+displaced by a *different* wrong amount.
+
+**The general form, and it is what I3 actually asks for:** the semantic model does not need its own
+copy of layout's numbers; it needs an assertion that the numbers it **publishes** are the ones layout
+computed *for the element the agent named*. That is a per-subsystem contract, not a per-feature
+checkbox.
+
+⚠ Recorded because it cost a build: the first fixture put the caret as a **sibling** of the row
+rather than inside it, so the caret's nearest positioned ancestor was never the row, and the test
+failed against a *correct* engine — with both coordinates reading `(215, 66)`, the same symptom as
+the real bug from a different cause. **A fixture that reproduces the right symptom from the wrong
+structure is the most expensive kind of green**, and this one only failed loudly because the fix was
+already in.

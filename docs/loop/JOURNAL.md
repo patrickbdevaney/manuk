@@ -45580,3 +45580,79 @@ shared root cause"* had no answer here, and looking for one would have manufactu
 what was *left unasserted* — which is the failure mode a gate-count cannot show, because the missing
 gate is missing.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 845 — the I3 gate check #71 asked for, and the check's own claim was WRONG (2026-08-02)
+
+TICK SHAPE: capability — the semantic-model assertion t841 and t843 owed, built after verifying the
+claim that motivated it, which did not survive
+
+HYPOTHESIS: check #71's steer item 2 — *"before more reading-order fixes, add the assertion that
+makes them semantic-model work rather than incidentally so."* The stated motivation was that
+`reading_order` is the order an agent walks the page in, so t841's RTL fix meant `manuk-agent` had
+been reading every RTL page's navigation backwards.
+
+⚠⚠⚠ **THAT MOTIVATION IS WRONG, AND CHECKING IT BEFORE BUILDING ON IT IS THE POINT.**
+`A11yNode::iter()` — and therefore `interesting()`, `to_viewport_lines()` and every agent-facing
+enumeration — is **DOM pre-order**, not geometric order (`agent/src/automation.rs:61`,
+`agent/src/forms.rs:63`, `translate.rs:76` all say "document order" explicitly). DOM order is
+**already the correct reading order for RTL** — that is what `dir=rtl` means — so t841 did not
+change the agent's ordering at all, and neither did t843. The claim in check #71 was written from
+the *name* of the sweep column rather than from the code, and it is corrected here rather than left
+in the ledger to be built on.
+
+**THE REAL I3 GAP, VERIFIED, AND IT IS SHARPER THAN THE ONE I ASSERTED.** The agent's ordering is
+safe; its **coordinates** are not. `to_viewport_lines` emits `role "name" @(cx,cy)` taken straight
+from the layout rect, and that is the number an agent acts on. Before t843, all fourteen carets of an
+AdminLTE sidebar reported the **same centre**, because `top:50%` resolved against the drawer instead
+of the row. An agent told to expand the seventh menu item would have clicked the same pixel as the
+first. **A containing-block bug is a silent MIS-ACTUATION, not a visual blemish** — and nothing in
+`manuk-agent` or `manuk-a11y` could have caught it, because both consume the geometry rather than
+check it.
+
+BUILT — `every_drawer_row_exposes_its_own_click_point_to_the_agent` in `manuk-page`, so it runs the
+whole chain (HTML → Stylo cascade → layout → a11y tree → the agent's click point) rather than a
+layout box in isolation. Two assertions:
+
+1. **Three rows, three click points** — a shared centre is the signature of every caret resolving
+   against the drawer.
+2. **And each point is inside its own row** — distinctness alone would pass if every caret were
+   merely displaced by a *different* wrong amount.
+
+MEASURED — RED-proven by reverting t843's `rects.extend(...)` in `manuk_layout::position_absolutes`
+and rebuilding the whole chain:
+
+```text
+  with the fix:      carets at y = 22 / 66 / 110      test PASSES
+  mutant (reverted): carets 0 and 1 both at (215, 66)  "an agent told to expand one row would
+                                                        actuate another"
+```
+
+⚠ **THE FIRST FIXTURE WAS WRONG AND THE GATE CAUGHT ITSELF.** It put the caret as a *sibling* of the
+row (`<li><a class=row>…</a><a class=caret>…</a></li>`) instead of inside it, so the caret's nearest
+positioned ancestor was never the row and the test failed against a correct engine. The failure
+message named the two coordinates and they were *both* `(215, 66)` — the same shape as the real bug,
+from a different cause. **A fixture that reproduces the right SYMPTOM from the wrong STRUCTURE is the
+most expensive kind of green, and this one only failed loudly because the fix was already in.** The
+structure now matches AdminLTE's: a `position:relative` block row inside the out-of-flow drawer, with
+the abspos control as its child.
+
+`manuk-page --lib` green (24 tests). `manuk-layout` 114 unchanged.
+
+PERF: none — a test-only addition.
+
+WIKI: `docs/wiki/architecture.md` — "the agent's click point IS layout geometry, so a
+containing-block bug is an actuation bug (I3)".
+
+PATTERN: ⚠⚠⚠ **A CLAIM ABOUT ANOTHER SUBSYSTEM IS A HYPOTHESIS, EVEN WHEN YOU WROTE IT LAST TICK.**
+Check #71 asserted the agent orders by geometry; three greps refuted it. The assertion was plausible
+because the metric column is *called* `reading_order` and the sweep prints it beside `shape` — **I
+reasoned from the instrument's vocabulary instead of from the consumer's code**, which is the same
+failure as t817's wrong label and t824's wrong column name, one level up. ⚠⚠ **AND THE CORRECTED
+CLAIM IS THE BETTER ONE.** "The agent reads RTL backwards" was alarming and false; "the agent's
+click point is layout geometry, so every containing-block bug is a silent mis-actuation" is narrower,
+true, and *gateable* — which the first was not, because a correct thing cannot be RED-proven.
+⚠⚠ **I3's REAL SHAPE, NAMED**: the semantic model does not need its own copy of layout's numbers, it
+needs an assertion that the numbers it PUBLISHES are the ones layout computed *for the element the
+agent named*. That is a per-subsystem contract, not a per-feature checkbox, and this is the first one
+written down.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

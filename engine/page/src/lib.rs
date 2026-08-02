@@ -10063,6 +10063,95 @@ mod tests {
             .any(|l| l.starts_with("button \"Sign in\" @(")));
     }
 
+    /// **I3 — THE AGENT'S CLICK POINT IS LAYOUT GEOMETRY, SO A CONTAINING-BLOCK BUG IS AN
+    /// ACTUATION BUG.** Every row of a drawer must expose a DISTINCT click point for its own
+    /// control, and each control's point must fall inside the row it belongs to.
+    ///
+    /// Written because constitution check #71 asked whether t841/t843's `reading_order` wins carried
+    /// their semantic-model exposure, and answering it corrected the question. The agent does **not**
+    /// order by geometry — `A11yNode::iter()` is DOM pre-order, which is already the correct reading
+    /// order for RTL — so neither tick changed the agent's ORDER. What they changed is the
+    /// **coordinates**: `to_viewport_lines` emits `role "name" @(cx,cy)` straight from the layout
+    /// rect, and before t843 all fourteen carets of an AdminLTE sidebar reported the *same* centre,
+    /// because `top:50%` resolved against the drawer instead of the row. An agent told to expand the
+    /// seventh menu item would have clicked the same pixel as the first — a *silent mis-actuation*,
+    /// not a visual blemish, and nothing in the agent or a11y crates could have caught it.
+    ///
+    /// The layout half is gated in `manuk-layout`
+    /// (`a_relative_ancestor_inside_an_out_of_flow_subtree_is_a_containing_block`). This is the
+    /// half I3 actually asks for: the assertion runs on the SEMANTIC surface, through the real
+    /// pipeline, in the units an agent acts in.
+    ///
+    /// To watch it go RED, revert the `rects.extend(...)` in `manuk_layout::position_absolutes`:
+    /// all three carets collapse onto one centre and both assertions fail.
+    #[test]
+    fn every_drawer_row_exposes_its_own_click_point_to_the_agent() {
+        let fonts = FontContext::new();
+        let html = r##"<!DOCTYPE html><title>T</title><style>
+            body{margin:0}
+            .drawer{position:absolute;top:0;left:0;width:230px}
+            ul{list-style:none;margin:0;padding:0}
+            .drawer li>div.row{position:relative;height:44px}
+            a.caret{position:absolute;right:10px;top:50%;margin-top:-7px;width:10px;height:14px}
+            </style><body>
+            <div class="drawer"><ul>
+              <li><div class="row">One<a class="caret" href="#">Expand one</a></div></li>
+              <li><div class="row">Two<a class="caret" href="#">Expand two</a></div></li>
+              <li><div class="row">Three<a class="caret" href="#">Expand three</a></div></li>
+            </ul></div></body>"##;
+        let page = Page::load(html, "http://example.test/", &fonts, 1200.0);
+        let tree = page.a11y_tree();
+        let point = |name: &str| -> (f32, f32) {
+            tree.find(&manuk_a11y::Role::Link, name)
+                .unwrap_or_else(|| panic!("{name} is in the a11y tree"))
+                .bbox
+                .unwrap_or_else(|| panic!("{name} was laid out, so it has geometry"))
+                .center()
+        };
+        let carets = [
+            point("Expand one"),
+            point("Expand two"),
+            point("Expand three"),
+        ];
+        // (1) THREE ROWS, THREE CLICK POINTS. A shared centre is the signature of every caret
+        //     resolving against the drawer instead of its own row.
+        for (i, a) in carets.iter().enumerate() {
+            for (j, b) in carets.iter().enumerate().skip(i + 1) {
+                assert!(
+                    (a.1 - b.1).abs() > 1.0,
+                    "carets {i} and {j} share a click point ({:?} vs {:?}) — an agent told to \
+                     expand one row would actuate another",
+                    a,
+                    b
+                );
+            }
+        }
+        // (2) AND EACH POINT IS INSIDE ITS OWN ROW. Distinctness alone would pass if every caret
+        //     were merely displaced by a different wrong amount.
+        // The rows are 44px tall and stacked from the drawer's origin, so row N spans
+        // `44N .. 44N+44`. Asserted from the CSS rather than from a lookup, because the rows are
+        // generic `<div>`s and the a11y tree does not surface those by name.
+        for (i, caret) in carets.iter().enumerate() {
+            let (top, bottom) = (44.0 * i as f32, 44.0 * i as f32 + 44.0);
+            let caret = *caret;
+            let rb = manuk_a11y::Rect {
+                x: 0.0,
+                y: top,
+                width: 230.0,
+                height: bottom - top,
+            };
+            let row = i;
+            assert!(
+                caret.1 >= rb.y && caret.1 <= rb.y + rb.height,
+                "the caret for row {row} clicks at y={} and the row spans {}..{} — the agent's \
+                 click point must land in the row it names",
+                caret.1,
+                rb.y,
+                rb.y + rb.height
+            );
+        }
+    }
+
     /// E1 acceptance: Ctrl+/− **reflows** rather than magnifying a bitmap. Zooming in
     /// must scale `font_size` (so glyphs rasterize larger — crisp) and therefore grow
     /// the content, while zooming out shrinks it. Repeated calls must not compound.

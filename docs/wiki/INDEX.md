@@ -27,6 +27,7 @@
   - L256 · drop() frees to the ALLOCATOR; only a trim frees to the KERNEL — and eviction is judged on the second (tick 571)
   - L292 · Two design decisions recorded as DECIDED-BUT-UNDONE
   - L303 · A frame is a bitmap, so its pixels need explicit refreshing (tick 232)
+  - L331 · The agent's click point IS layout geometry, so a containing-block bug is an actuation bug (I3)
 
 ## BOX LAYOUT — taffy mapping realities and quirks (flex / grid / sizing)
 `docs/wiki/box-layout.md`
@@ -1417,4 +1418,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1328 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1329 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

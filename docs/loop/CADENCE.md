@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **581** | ticks 1–843 |
-| median tick cycle | **25m** | 580 intervals |
-| median, last 10 | **52m** | 10 intervals |
+| ticks landed | **582** | ticks 1–844 |
+| median tick cycle | **25m** | 581 intervals |
+| median, last 10 | **61m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 527.7h elapsed |
-| median verify wall | **63s** | 520 ticks |
+| **ticks per hour** | **1.09** | 530.9h elapsed |
+| median verify wall | **63s** | 521 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **379**
-* **✅ rows in the capability ledger**: 144 → **438**
+* **✅ rows in the capability ledger**: 144 → **439**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**283 of 581 ticks** (49%) moved a
+**283 of 582 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -678,5 +678,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **841** | 2026-08-02 03:19 | 63m | capability | 63s | +372/−32 | 379 | 81 | 56.0% · | the engine ran HALF of UAX #9 for 800 ticks: glyphs reordered, INLINE BOXES did not (2026- |
 | **842** | 2026-08-02 04:29 | 71m | measurement | 63s | +358/−33 | 379 | 81 | 56.0% · | the clean --jobs 2 sweep the last five fixes owe, and the first RTL fix it can price (2026 |
 | **843** | 2026-08-02 04:44 | 14m | capability | 63s | +222/−33 | 379 | 81 | 56.0% · | a `position:relative` row inside a drawer was INVISIBLE as a containing block (2026-08-02) |
+| **844** | 2026-08-02 07:57 | 3.2h | measurement | 63s | +238/−33 | 379 | 81 | 56.0% · | the constitution check, and the I3 gap it found in the last two winning ticks (2026-08-02) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
