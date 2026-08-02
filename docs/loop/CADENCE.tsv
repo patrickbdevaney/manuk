@@ -576,4 +576,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 837	d96fd580	1785642596	2026-08-01T23:49:56-04:00	3556	capability	63	10	342	38	379	81	3896	6960	0	435	0	the out-of-flow pass's `viewport` held the DOCUMENT height (2026-08-01)
 838	15970704	1785643617	2026-08-02T00:06:57-04:00	1021	measurement	63	6	205	35	379	81	3896	6960	0	435	0	a 1×1 placeholder is not a missing image, it is a WRONG RATIO (2026-08-01)
 839	fb447be6	1785646355	2026-08-02T00:52:35-04:00	2738	capability	63	9	293	35	379	81	3896	6960	0	436	0	`IntersectionObserver.observe()` never delivered its INITIAL observation (2026-08-02)
-840	7d34fe76	1785647137	2026-08-02T01:05:37-04:00	782	measurement	63	5	117	32	379	81	3896	6960	0	436	0	777juegos is 0.006 from the bar and TWO obvious mechanisms are REFUTED (2026-08-02)
+840	c9fc1dd5	1785651366	2026-08-02T02:16:06-04:00	5011	measurement	63	9	508	40	379	81	3896	6960	0	437	0	777juegos is 0.006 from the bar and TWO obvious mechanisms are REFUTED (2026-08-02)

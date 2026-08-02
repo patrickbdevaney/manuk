@@ -2765,8 +2765,9 @@ impl Ctx<'_> {
                 return (BoxContent::Inline(vec![]), 0.0);
             }
             let align = self.style_of(node).text_align;
+            let rtl = self.style_of(node).direction == manuk_css::Direction::Rtl;
             let (frags, _atomics, h) =
-                self.layout_inline(items, cx, cy, cw, align, 0.0, floats, None);
+                self.layout_inline(items, cx, cy, cw, align, 0.0, floats, None, rtl);
             return (BoxContent::Inline(frags), h);
         }
 
@@ -2788,8 +2789,17 @@ impl Ctx<'_> {
                 no_wrap: true,
                 break_word: false,
             }];
-            let (frags, _atomics, h) =
-                self.layout_inline(items, cx, cy, cw, TextAlign::Left, 0.0, floats, None);
+            let (frags, _atomics, h) = self.layout_inline(
+                items,
+                cx,
+                cy,
+                cw,
+                TextAlign::Left,
+                0.0,
+                floats,
+                None,
+                self.style_of(node).direction == manuk_css::Direction::Rtl,
+            );
             return (BoxContent::Inline(frags), h);
         }
 
@@ -2852,8 +2862,17 @@ impl Ctx<'_> {
             // `text-indent` on the block establishing this IFC applies to its first line box;
             // percentages resolve against the container width.
             let text_indent = bcs.text_indent.resolve(cw, 0.0);
-            let (mut frags, atomics, mut h) =
-                self.layout_inline(items, cx, cy, cw, align, text_indent, floats, Some(&bcs));
+            let (mut frags, atomics, mut h) = self.layout_inline(
+                items,
+                cx,
+                cy,
+                cw,
+                align,
+                text_indent,
+                floats,
+                Some(&bcs),
+                bcs.direction == manuk_css::Direction::Rtl,
+            );
             // `text-overflow: ellipsis` truncates a clipped, non-wrapping single line with `…`. Only
             // fires on a box that clips (`overflow` ≠ visible) and doesn't wrap (`nowrap`/`pre`); a
             // line that fits is untouched, so nothing without a real overflow changes.
@@ -4886,8 +4905,17 @@ impl Ctx<'_> {
         // run of a container (`text-indent:40px` on a mixed container → run 1 at x=40, run 2 after
         // the block child at x=0), so handing it to every flush would over-indent every run but the
         // first. Measured, named in the journal, and left for its own tick rather than guessed at.
-        let (frags, atomics, h) =
-            self.layout_inline(items, cx, start, cw, bcs.text_align, 0.0, floats, Some(bcs));
+        let (frags, atomics, h) = self.layout_inline(
+            items,
+            cx,
+            start,
+            cw,
+            bcs.text_align,
+            0.0,
+            floats,
+            Some(bcs),
+            bcs.direction == manuk_css::Direction::Rtl,
+        );
         boxes.push(LayoutBox {
             rect: Rect {
                 x: cx,
@@ -5800,6 +5828,11 @@ impl Ctx<'_> {
         text_indent: f32,
         floats: &FloatContext,
         strut_style: Option<&manuk_css::ComputedStyle>,
+        // The IFC's **bidi base direction**, from the `direction` of the block that establishes it.
+        // Passed rather than read off `strut_style` because two call sites legitimately have no
+        // block style in hand (an anonymous flex item that IS a text node; a form control's
+        // synthetic value text) and still sit inside a `dir=rtl` document.
+        base_rtl: bool,
     ) -> (Vec<TextFragment>, Vec<LayoutBox>, f32) {
         // The STRUT — the containing block's font metrics and `line-height`, folded into every line box
         // this IFC produces. See `close_line`. `None` (a caller with no block style in hand) yields a
@@ -5945,6 +5978,7 @@ impl Ctx<'_> {
                     self.fonts,
                     strut,
                     false, // ended by a FORCED break (`<br>`) — takes `text-align-last`
+                    base_rtl,
                 );
                 first_line = false;
                 pen = 0.0;
@@ -6207,6 +6241,7 @@ impl Ctx<'_> {
                     self.fonts,
                     strut,
                     true, // a WRAPPED line — the only kind `justify` stretches
+                    base_rtl,
                 );
                 first_line = false;
                 let (l, w) = open_band(&mut y, est_h);
@@ -6242,6 +6277,7 @@ impl Ctx<'_> {
                 self.fonts,
                 strut,
                 false, // the LAST line of the block — never justified
+                base_rtl,
             );
         }
 
@@ -6289,6 +6325,123 @@ struct LineFrag {
     content_bearing: bool,
 }
 
+/// **UAX #9 rule L2, applied to a line's INLINE BOXES** — reorder them from logical (source) order
+/// into visual order, in place, preserving the line's total advance to the float.
+///
+/// ⚠ **The engine already had the OTHER half of bidi and that is exactly why this was invisible.**
+/// `FontContext::shape_bidi` runs the bidirectional algorithm inside a single text run, so one
+/// Arabic word, or a sentence in one text node, comes out right; `engine/text`'s
+/// `g_bidi_base_direction` gate has asserted that since t?. But a line is not a run — it is a
+/// sequence of inline boxes, one per `<a>` / `<span>` / `<em>` / `inline-block`, each measured and
+/// placed on its own — and *nothing* reordered those. Measured against Chrome on a `dir=rtl`
+/// paragraph of three `<a>`s: the widths matched to the pixel, the line was correctly flush right,
+/// and the anchors read **backwards**, which is what a real RTL page (`possssno.sbs`, 503 of 575
+/// elements misplaced at coverage 1.00) looks like from the inside.
+///
+/// **Spaces are modelled as items, not as gaps.** The flow leaves inter-word space as the distance
+/// between one fragment's end and the next one's start; under reordering that space is a
+/// *character* with its own bidi level and its own place in the visual sequence, so the permutation
+/// has to carry it. Reversing positions in place instead — mirroring the gaps — composes wrongly the
+/// moment there are two levels (an LTR run embedded in RTL), because the array stays in logical
+/// order while the nested reversal has already moved its members.
+///
+/// **Inert on pure-LTR content, by construction:** with no odd level on the line the L2 loop has an
+/// empty range and every `x` is untouched, so a page with no RTL text cannot reach a single
+/// arithmetic operation here.
+fn reorder_line_bidi(line: &mut [LineFrag], base_rtl: bool) {
+    if line.len() < 2 {
+        return;
+    }
+    // A line whose fragments are not laid out left-to-right by increasing x is not a flow the
+    // permutation below can model: `InlineItem::AbsPseudo` (the `position:absolute` custom-bullet
+    // `::before`) contributes ZERO advance and paints at its own `dx`, so it overlaps its
+    // neighbour. Bail rather than reorder a line one of whose boxes is not in the flow at all.
+    for w in line.windows(2) {
+        if w[1].x - (w[0].x + w[0].width) < -0.01 {
+            return;
+        }
+    }
+    /// One thing that occupies inline advance: a fragment of `line`, or the white space the flow
+    /// left between two of them.
+    enum Slot {
+        Frag(usize),
+        Space(f32),
+    }
+    let mut slots: Vec<Slot> = Vec::with_capacity(line.len() * 2);
+    let mut text = String::new();
+    // Byte offset into `text` at which each slot's first character starts.
+    let mut at: Vec<usize> = Vec::with_capacity(line.len() * 2);
+    for i in 0..line.len() {
+        if i > 0 {
+            let gap = line[i].x - (line[i - 1].x + line[i - 1].width);
+            if gap > 0.01 {
+                at.push(text.len());
+                text.push(' ');
+                slots.push(Slot::Space(gap));
+            }
+        }
+        at.push(text.len());
+        if line[i].text.is_empty() {
+            // An atomic inline (`inline-block`, a replaced box) or an inline padding edge. CSS
+            // Writing Modes §2.1: it participates in bidi as U+FFFC OBJECT REPLACEMENT CHARACTER,
+            // a neutral that takes the direction of what surrounds it.
+            text.push('\u{FFFC}');
+        } else {
+            text.push_str(&line[i].text);
+        }
+        slots.push(Slot::Frag(i));
+    }
+    let levels = manuk_text::bidi_levels(&text, base_rtl);
+    if levels.is_empty() {
+        return;
+    }
+    let slot_levels: Vec<u8> = at.iter().map(|&o| levels[o]).collect();
+    let max = slot_levels.iter().copied().max().unwrap_or(0);
+    // The lowest ODD level present, counting an even level as the odd one above it (UAX #9 L2's
+    // "including intermediate levels not actually present"). When every level is even this is
+    // `max + 1` and the loop below does not run — the identity, which is every LTR page.
+    let lowest_odd = slot_levels
+        .iter()
+        .map(|&l| if l % 2 == 1 { l } else { l + 1 })
+        .min()
+        .unwrap_or(1);
+    if lowest_odd > max {
+        return;
+    }
+    // `order` holds slot indices in VISUAL order. L2 scans the LOGICAL level array and reverses the
+    // corresponding window of `order`, from the highest level down; the windows nest, so the
+    // reversals compose.
+    let mut order: Vec<usize> = (0..slots.len()).collect();
+    for lvl in (lowest_odd..=max).rev() {
+        let mut i = 0;
+        while i < slot_levels.len() {
+            if slot_levels[i] >= lvl {
+                let mut j = i + 1;
+                while j < slot_levels.len() && slot_levels[j] >= lvl {
+                    j += 1;
+                }
+                order[i..j].reverse();
+                i = j;
+            } else {
+                i += 1;
+            }
+        }
+    }
+    // Re-lay the line from its own start. Every slot keeps its advance, so the line's total width —
+    // which alignment, justification and the float band all already agreed on — is unchanged.
+    let mut pen = line[0].x;
+    for &s in &order {
+        match slots[s] {
+            Slot::Frag(i) => {
+                let w = line[i].width;
+                line[i].x = pen;
+                pen += w;
+            }
+            Slot::Space(w) => pen += w,
+        }
+    }
+}
+
 /// Commit a line's fragments at vertical `y` within band `[line_left, +line_avail)`,
 /// applying `align`. Returns the y of the next line (`y + line_height`).
 #[allow(clippy::too_many_arguments)]
@@ -6309,6 +6462,10 @@ fn close_line(
     // line stretches it across the whole column, which is the most recognisable rendering bug the
     // property has.
     justified: bool,
+    // The IFC's **bidi base direction** (`direction: rtl` / `dir="rtl"` on the block that
+    // establishes it) — the paragraph level UAX #9 resolves every run against. See
+    // `reorder_line_bidi`.
+    base_rtl: bool,
 ) -> f32 {
     // ── **A LINE BOX WITH NOTHING IN IT DOES NOT EXIST** (CSS 2.1 §9.4.2):
     //
@@ -6523,6 +6680,10 @@ fn close_line(
             }
         }
     }
+    // ── **UAX #9 RULE L2 — the line's INLINE BOXES are reordered into visual order.** Runs after
+    // justification (which reads the flow-order gaps) and before the alignment offset (a uniform
+    // shift, which reordering commutes with).
+    reorder_line_bidi(line, base_rtl);
     let offset = match align {
         TextAlign::Center => (line_avail - line_width).max(0.0) / 2.0,
         TextAlign::Right => (line_avail - line_width).max(0.0),
@@ -9027,6 +9188,86 @@ mod tests {
             (hw - 14.0).abs() < 1.0 && (hh - 14.0).abs() < 1.0,
             "a max-height clamp must pull the WIDTH in through the ratio (14x14), got {hw}x{hh}"
         );
+    }
+
+    /// **G_BIDI_LINE — UAX #9 RULE L2: A LINE'S INLINE BOXES ARE REORDERED, NOT JUST ITS GLYPHS.**
+    ///
+    /// The engine has run the bidirectional algorithm inside a single text run since the shaper
+    /// landed (`FontContext::shape_bidi`, gated by `engine/text`'s `g_bidi_base_direction`) — so one
+    /// Arabic word comes out right, and the *whole other half* of UAX #9 was missing: a LINE is a
+    /// sequence of inline BOXES (`<a>`, `<span>`, `<em>`, an `inline-block`), each measured and
+    /// placed separately, and nothing reordered those. Every widths matched, the line was correctly
+    /// flush right, and the links read **backwards**.
+    ///
+    /// Chrome-measured (`file://`, 1200×800, 400px containers), x relative to the container:
+    ///
+    /// ```text
+    ///                                        Chrome            before        after
+    ///   dir=rtl, three RTL-script <a>        370 / 343 / 312   312/343/370   370/343/312  ✗→✓
+    ///   dir=ltr, three RTL-script <a>         58 /  31 /   0     0/ 34/ 61    58/ 31/  0  ✗→✓
+    ///   dir=rtl, three LATIN <a>             303 / 334 / 364   303/334/364   303/334/364  ✓ (control)
+    /// ```
+    ///
+    /// ⚠ **The third row is the control that makes this a BIDI fix rather than a "reverse the links
+    /// on an RTL page" fix.** Latin text in an RTL paragraph is a single LTR run at level 2, so its
+    /// boxes stay in source order and only the *line* is flush right — reversing them would be just
+    /// as wrong as not reversing the second row, and a rule that only looked at the container's
+    /// `direction` would get exactly one of the three right. The second row is the same point from
+    /// the other side: RTL content inside an **LTR** paragraph reorders too.
+    ///
+    /// To watch it go RED, delete the `reorder_line_bidi` call in `close_line`: rows 1 and 2 read
+    /// back in source order while row 3 is unchanged.
+    #[test]
+    fn a_lines_inline_boxes_are_reordered_into_bidi_visual_order() {
+        // Persian, so the anchors' own text is strongly RTL — the levels have to come from the
+        // CONTENT, not from the container.
+        let (dom, root) = layout_html(
+            "<body style='margin:0;font-size:16px'>\
+               <div id=r dir=rtl><a id=r1>سلام</a> <a id=r2>دنیا</a> <a id=r3>فیلم</a></div>\
+               <div id=l dir=ltr><a id=l1>سلام</a> <a id=l2>دنیا</a> <a id=l3>فیلم</a></div>\
+               <div id=m dir=rtl><a id=m1>one</a> <a id=m2>two</a> <a id=m3>three</a></div>\
+             </body>",
+            "div{width:400px}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let x = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            rects[&n].x
+        };
+        // Row 1 — an RTL paragraph of RTL runs reads right-to-left: the FIRST anchor is RIGHTMOST.
+        assert!(
+            x("r1") > x("r2") && x("r2") > x("r3"),
+            "dir=rtl RTL-script anchors must read right-to-left, got r1={} r2={} r3={}",
+            x("r1"),
+            x("r2"),
+            x("r3")
+        );
+        // Row 2 — the same runs inside an LTR paragraph still reorder among themselves.
+        assert!(
+            x("l1") > x("l2") && x("l2") > x("l3"),
+            "RTL-script anchors inside dir=ltr must still reorder, got l1={} l2={} l3={}",
+            x("l1"),
+            x("l2"),
+            x("l3")
+        );
+        // Row 3 — THE CONTROL. Latin in an RTL paragraph is one LTR run; the boxes keep source
+        // order and only the line is flush right.
+        assert!(
+            x("m1") < x("m2") && x("m2") < x("m3"),
+            "LATIN anchors in an RTL paragraph must keep source order, got m1={} m2={} m3={}",
+            x("m1"),
+            x("m2"),
+            x("m3")
+        );
+        // ⚠ The line's flush-RIGHT alignment (`text-align: start` resolving to `right` under RTL)
+        // is deliberately NOT asserted here: it is a different property, it is already correct on
+        // the SHIPPING cascade (measured above through `boxes`, which runs Stylo), and this test's
+        // cascade does not apply it — so asserting it here would gate a cascade difference under a
+        // layout name and go red for a reason that has nothing to do with rule L2.
     }
 
     /// **An RTL grid's COLUMN AXIS runs right-to-left** — `direction` reverses a grid's inline-axis

@@ -1387,6 +1387,7 @@
   - L1471 · Chrome is NARROWER than its own spec text, and only the measurement says so
   - L1495 · Chrome does not break after a solidus (t791)
   - L1527 · A text-bearing inline-block sits on its own baseline (t795)
+  - L1562 · UAX #9 rule L2: a line's inline BOXES are reordered — and having the other half of bidi is what hid it
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1414,4 +1415,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1325 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1326 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

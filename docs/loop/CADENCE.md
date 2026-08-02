@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **578** | ticks 1–840 |
 | median tick cycle | **25m** | 577 intervals |
-| median, last 10 | **43m** | 10 intervals |
+| median, last 10 | **50m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 524.0h elapsed |
+| **ticks per hour** | **1.10** | 525.2h elapsed |
 | median verify wall | **63s** | 517 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -28,7 +28,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **379**
-* **✅ rows in the capability ledger**: 144 → **436**
+* **✅ rows in the capability ledger**: 144 → **437**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **281 of 578 ticks** (49%) moved a
@@ -674,6 +674,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **837** | 2026-08-01 23:49 | 59m | capability | 63s | +342/−38 | 379 | 81 | 56.0% · | the out-of-flow pass's `viewport` held the DOCUMENT height (2026-08-01) |
 | **838** | 2026-08-02 00:06 | 17m | measurement | 63s | +205/−35 | 379 | 81 | 56.0% · | a 1×1 placeholder is not a missing image, it is a WRONG RATIO (2026-08-01) |
 | **839** | 2026-08-02 00:52 | 46m | capability | 63s | +293/−35 | 379 | 81 | 56.0% · | `IntersectionObserver.observe()` never delivered its INITIAL observation (2026-08-02) |
-| **840** | 2026-08-02 01:05 | 13m | measurement | 63s | +117/−32 | 379 | 81 | 56.0% · | 777juegos is 0.006 from the bar and TWO obvious mechanisms are REFUTED (2026-08-02) |
+| **840** | 2026-08-02 02:16 | 84m | measurement | 63s | +508/−40 | 379 | 81 | 56.0% · | 777juegos is 0.006 from the bar and TWO obvious mechanisms are REFUTED (2026-08-02) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

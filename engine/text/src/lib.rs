@@ -1162,6 +1162,32 @@ thread_local! {
     static METRICS_CTX: FontContext = FontContext::new();
 }
 
+/// The **UAX #9 resolved embedding level of every BYTE** of `text`, as one paragraph whose base
+/// direction is `base_rtl`.
+///
+/// `shape_bidi` already runs the bidirectional algorithm *inside* one text run, so the glyphs of a
+/// single Arabic or Hebrew word come out in the right visual order. That is only half of UAX #9:
+/// rule **L2** reorders the *whole line*, and a line is made of INLINE BOXES — a footer's twenty
+/// `<a>` elements, an `<em>` inside a sentence, an `inline-block` chip — which the shaper never
+/// sees because each is measured and placed separately. Layout owns that half, and it needs the
+/// levels the shaper computes internally. Exposing them here keeps ONE bidi implementation for the
+/// engine: a second copy in the layout crate would be free to disagree with the glyphs it places.
+///
+/// Byte-indexed (not char-indexed) because the caller's natural key is a `&str` slice offset, and a
+/// level is constant across a code point's bytes.
+pub fn bidi_levels(text: &str, base_rtl: bool) -> Vec<u8> {
+    let base = if base_rtl {
+        unicode_bidi::Level::rtl()
+    } else {
+        unicode_bidi::Level::ltr()
+    };
+    unicode_bidi::BidiInfo::new(text, Some(base))
+        .levels
+        .iter()
+        .map(|l| l.number())
+        .collect()
+}
+
 /// The advance width, in px, of the `0` (ZERO) glyph for the font that `families` /
 /// `bold` / `italic` resolve to at `size_px` — i.e. the value of the CSS **`ch`** unit.
 ///

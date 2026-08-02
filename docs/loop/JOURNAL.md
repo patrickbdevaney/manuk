@@ -45114,3 +45114,134 @@ is not evidence of a shared mechanism.** ⚠ The `--why` chain earned its place 
 the dump ranks misses but flattens the tree, and only the chain showed that the bad box's parent was
 already correct — which is what turned "a subtree is wrong" into "one element is wrong".
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 841 — the engine ran HALF of UAX #9 for 800 ticks: glyphs reordered, INLINE BOXES did not (2026-08-02)
+
+TICK SHAPE: capability — one primitive, Chrome-verified on a three-row fixture whose third row is a
+control that refutes the lazy version of the same fix
+
+HYPOTHESIS: the board's CO-#1 is shape on fully-covered pages, so I aimed at the near-bar sites from
+the t832 sweep with `coverage == 1.000` — every box drawn, only wrong positions. `possssno.sbs`
+(shape **0.6974**, coverage **1.000**, 575 scored, **503 misplaced**) went first, and `--shape-dump`
+answered in one run:
+
+```text
+  x +1118   c[1118 2 42x16]   m[0    2 42x16]   …/footer/…/p(1)/a(1)
+  x +1064   c[1065 -1 94x19]  m[1   -1 94x19]   …/p(4)/a(1)
+  x -1050   c[17  -1 76x19]   m[1067 -1 76x19]  …/p(6)/a(11)
+```
+
+Identical `y`, identical `width`, identical `height`, and the **x mirrored across the container**.
+The first anchor of each paragraph is at Chrome's RIGHT edge and at our LEFT. `curl` named it in one
+line: `<html lang="fa" dir="rtl">`.
+
+**THE MECHANISM, AND IT IS A HALF-BUILT SPEC, NOT A BUG.** `FontContext::shape_bidi` has run the
+Unicode Bidirectional Algorithm since the shaper landed — `unicode_bidi::BidiInfo`, visual runs,
+per-run direction — and `engine/text`'s `g_bidi_base_direction` gate asserts it. That is UAX #9
+applied *inside one text run*. **Rule L2 applies to a LINE**, and a line is a sequence of inline
+BOXES — a footer's twenty `<a>`s, an `<em>` mid-sentence, an `inline-block` chip — each measured and
+placed separately by `layout_inline`, and **nothing reordered those**. So one Arabic word was
+correct and twenty Arabic links were exactly backwards. `close_line` now runs L2 over the line's
+fragments before the alignment offset.
+
+**Spaces are modelled as ITEMS, not as gaps, and that is the whole of the implementation
+difficulty.** The flow leaves inter-word space as the distance between one fragment's end and the
+next one's start. Under reordering that space is a *character*, with its own bidi level and its own
+place in the visual sequence, so the permutation has to carry it. The first version reversed
+positions in place and mirrored the gaps; it is correct for one level and **composes wrongly the
+moment there are two** (an LTR run embedded in RTL), because the array stays in logical order while
+the nested reversal has already moved its members. Slots — `Frag(i)` or `Space(w)` — make L2 the
+textbook loop over an index permutation and make the line's total advance exactly conserved, so
+alignment, justification and the float band all still agree on the number they already agreed on.
+
+MEASURED — the three-row fixture, `file://`, 1200×800, 400px containers, x relative to container:
+
+```text
+                                       Chrome            before        after
+  dir=rtl, three RTL-script <a>        370 / 343 / 312   312/343/370   370/343/312   ✗→✓
+  dir=ltr, three RTL-script <a>         58 /  31 /   0     0/ 34/ 61    58/ 31/  0   ✗→✓
+  dir=rtl, three LATIN <a>             303 / 334 / 364   303/334/364   303/334/364   ✓ control
+```
+
+⚠⚠ **THE THIRD ROW IS THE ENTIRE DIFFERENCE BETWEEN A BIDI FIX AND A "REVERSE THE LINKS ON AN RTL
+PAGE" FIX.** Latin text in an RTL paragraph is a single LTR run at level 2: its boxes keep source
+order and only the *line* is flush right. A rule that read the container's `direction` and reversed
+would get row 1 right and rows 2 and 3 wrong — and row 2 is the same point from the other side, an
+RTL run reordering inside an **LTR** paragraph. **All three come from the levels, so all three are
+right.** Every number above is exact, not within-tolerance.
+
+MEASURED — **OLD BINARY (t840 tree, rebuilt) vs NEW, 20 sites, same hour, `--jobs 2`**:
+
+```
+  possssno.sbs           0.6974 → 0.8783   +0.1809   ← CROSSES 0.75. reading-order 524 → 1.
+  www.ta3lemkonline.com  0.5492 → 0.5733   +0.0241   ← the standing ADVERSARIAL control, real RTL
+  17 others                                +0.0000
+  M1 crossings +1 · ZERO attributable regressions
+```
+
+⚠ **THREE APPARENT REGRESSIONS, ALL THREE REFUTED BY A SAME-BINARY SPREAD, AND THE REFUTATION IS THE
+POINT.** `fragrantica −0.0128`, `nysainfo −0.0011`, `7info −0.0008`. Running the OLD binary twice and
+the NEW binary twice on the same four-site batch:
+
+```text
+                       old run1   old run2   new run1   new run2
+  www.fragrantica.com  0.425625   0.426108   0.415962   0.426784   ← spread 0.011 on EITHER binary
+  nysainfo.pl          0.749263   0.748159   0.749263   0.748159   ← the SAME two values, both binaries
+  7info.ru             0.647131   0.647922   0.647131      —
+```
+
+`nysainfo` produces *the identical pair of numbers* under both binaries, and `fragrantica`'s own
+same-binary spread (0.011) is larger than its "regression" (0.0128) and brackets it — the new binary
+reaches the TOP of the old binary's range. None of the three is attributable. `777juegos +0.0122` is
+refused for the same reason in the other direction: `0.7317`/`0.7439` is that site's recorded drift
+pair from t839/t840, it is LTR, and it has no RTL content to be moved by this.
+
+⚠ **`reading_order 524 → 1` is the finding I did not go looking for.** It is the certificate's second
+term (`reading-order clean on ≥95%`, currently the worst-performing term after shape), and a
+backwards line is *exactly* what it is built to catch. It also lands on the agentic surface, not just
+the visual one: an agent or a screen reader that walks boxes in visual order was reading every RTL
+page's navigation backwards.
+
+SCOPE, stated honestly: **3 of the 200-site corpus carry `<html dir=rtl>`** (`possssno.sbs`,
+`haraj.com.sa`, `www.ta3lemkonline.com`), so the corpus-wide arithmetic is small — 1 crossing, and
+`haraj.com.sa` is bot-walled and unscored. The reason to build it anyway is that the corpus is a
+CrUX sample of the *English-reading* web and Arabic/Hebrew/Persian/Urdu is a population, not a tail:
+the fix is not tuned to these three sites, it is the spec, and every one of them was broken the same
+way. ⚠ The corpus cannot price this and I am not claiming it did.
+
+RESIDUE, measured and NOT fixed here because it is a second primitive:
+* **A fixed-width block in an RTL containing block is flush LEFT for us and flush RIGHT in Chrome.**
+  Same fixture, `#r` at Chrome `x=800` (1200 − 400) and ours at `x=0`. CSS 2.1 §10.3.3: the
+  over-constrained equation ignores `margin-right` under `ltr` and **`margin-left` under `rtl`**. One
+  miss per block under parent-relative shape, which is why it is not the mass here — but it is why
+  an RTL page's whole sidebar is on the wrong side. The fixture is `/tmp/rtl2.html`, already written.
+* `www.ta3lemkonline.com`'s `reading_order` stayed at **815** while its shape rose, so its remaining
+  divergence is NOT this one; it is the next probe's subject and it starts pre-narrowed.
+
+`manuk-layout` 113 green (was 112). RED-proven by deleting the `reorder_line_bidi` call in
+`close_line`: rows 1 and 2 read back in source order, row 3 unchanged — the mutant fails exactly the
+two assertions it should and passes the control.
+
+PERF: inert on LTR content **by construction, not by fast path** — with no odd level on the line the
+L2 range `lowest_odd..=max` is empty and no `x` is touched. A page with no RTL text does not reach an
+arithmetic operation in the new code; it pays one pass building the level string per line.
+
+WIKI: `docs/wiki/text-layout.md` — "UAX #9 rule L2: a line's inline BOXES are reordered, and having
+the other half of bidi is what hid it".
+
+PATTERN: ⚠⚠⚠ **A SPEC IMPLEMENTED AT ONE GRANULARITY READS AS IMPLEMENTED.** Bidi was present,
+correct, cached, and *gated* — at the level of a text run. The half that operates on the level ABOVE
+(the line, made of boxes) was never written, and every instrument that asked "do we do bidi?" — the
+gate, the crate's dependency list, the shaping cache — answered yes truthfully. This is t838's *"a
+confirmed API is not a confirmed capability when the capability is a CHAIN"* with the chain running
+**up** instead of along: ask of every algorithm *at what granularity is this implemented, and does
+the spec also define it one level up?* ⚠⚠ **THE CONTROL ROW REFUTED THE CHEAP VERSION OF MY OWN
+FIX.** Latin-in-RTL keeps source order, and the reading that would have shipped without that row —
+"the container is RTL, so reverse the boxes" — gets it backwards. Two of the three fixture rows exist
+only to make the fix falsifiable; this is the fourth consecutive tick where the control row *was* the
+diagnosis (t831, t833, t839). ⚠⚠ **A REGRESSION IS NOT A REGRESSION UNTIL ITS SITE'S SAME-BINARY
+SPREAD IS MEASURED.** Three sites went down; all three moved by less than the value that site
+produces twice in a row on unchanged code, and one produced *the identical pair of numbers* under
+both binaries. The cheap instrument for this is not more runs of the comparison — it is two runs of
+the OLD binary alone.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.

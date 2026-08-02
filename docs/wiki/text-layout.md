@@ -1558,3 +1558,67 @@ never moves is telling you about your fixes, not about the site.**
 ⚠ It was found by a probe built to ask a different question — sub-pixel accumulation, whose answer was
 "no bug". The container height in the same output read 22 against Chrome's 18, and nobody had asked.
 **A probe is worth more than its hypothesis.**
+
+## UAX #9 rule L2: a line's inline BOXES are reordered — and having the other half of bidi is what hid it
+
+`FontContext::shape_bidi` has run the Unicode Bidirectional Algorithm since the shaper landed:
+`unicode_bidi::BidiInfo` over the run's text, visual runs, each shaped with its own direction, gated
+by `engine/text`'s `g_bidi_base_direction`. That is UAX #9 applied **inside one text run**, and it is
+correct.
+
+**Rule L2 applies to a LINE**, and a line is not a run — it is a sequence of inline *boxes*: a
+footer's twenty `<a>` elements, an `<em>` mid-sentence, an `inline-block` chip, each measured and
+positioned separately by `layout_inline`. Nothing reordered those. So one Arabic word came out right
+and twenty Arabic links came out exactly backwards, on every RTL page, for the engine's whole life.
+
+`close_line` now runs L2 over the line's fragments, after justification (which reads the flow-order
+gaps) and before the alignment offset (a uniform shift, which reordering commutes with).
+
+Chrome-measured, `file://`, 1200×800 window, 400px containers, x relative to the container:
+
+```text
+                                       Chrome            before        after
+  dir=rtl, three RTL-script <a>        370 / 343 / 312   312/343/370   370/343/312   ✗→✓
+  dir=ltr, three RTL-script <a>         58 /  31 /   0     0/ 34/ 61    58/ 31/  0   ✗→✓
+  dir=rtl, three LATIN <a>             303 / 334 / 364   303/334/364   303/334/364   ✓ control
+```
+
+⚠ **The third row is the difference between a bidi fix and a "reverse the links on an RTL page"
+fix.** Latin text in an RTL paragraph is one LTR run at level 2: its boxes keep source order and only
+the *line* is flush right. Reading the container's `direction` and reversing would get row 1 right
+and rows 2 and 3 wrong. The second row is the same point from the other side — an RTL run reorders
+inside an **LTR** paragraph. All three fall out of the levels, so all three are exact.
+
+**Spaces are modelled as items, not as gaps.** The flow leaves inter-word space as the distance
+between one fragment's end and the next one's start; under reordering that space is a *character*
+with its own level and its own place in the visual sequence, so the permutation must carry it.
+Reversing positions in place and mirroring the gaps is correct for a single level and composes
+**wrongly** with two (an LTR run embedded in RTL), because the array stays in logical order while the
+nested reversal has already moved its members. Slots (`Frag(i)` | `Space(w)`) make L2 the textbook
+loop over an index permutation, and conserve the line's total advance exactly — so alignment,
+justification and the float band still agree on the width they already agreed on.
+
+**Inert on LTR content by construction, not by a fast path:** with no odd level on the line, L2's
+`lowest_odd..=max` range is empty and no `x` is touched.
+
+Measured, old-binary control, 20 sites, same hour: `possssno.sbs` **0.6974 → 0.8783** (crossing the
+0.75 bar, and `reading_order` **524 → 1**), `www.ta3lemkonline.com` **0.5492 → 0.5733**, 17 others
+flat, zero attributable regressions.
+
+⚠ **This SUPERSEDES a refutation recorded at t837**, which read:
+
+> *"REFUTED en route… `possssno.sbs`'s footer is horizontally MIRRORED under `<html lang="fa"
+> dir="rtl">`, and **RTL is NOT the cause** — a `dir="rtl"` inline fixture measures `a1` at 492
+> against Chrome's 493… Our inline base direction is Chrome-correct."*
+
+Both halves of that sentence are true and the conclusion does not follow. Our inline base *direction*
+**is** Chrome-correct — that is precisely why the line is flush right — and the t837 fixture was
+row 3 above, **Latin text**, which is the one case that is supposed to keep source order. A fixture
+built from the alphabet the reader types cannot ask a question about the script the page is written
+in. **When probing a script-dependent behaviour, the fixture must contain that script.**
+
+**Residue, measured here and not fixed:** a fixed-width block in an RTL containing block is flush
+LEFT for us and flush RIGHT in Chrome (`#r` at Chrome `x=800` = 1200−400, ours `x=0`). CSS 2.1
+§10.3.3 — the over-constrained equation ignores `margin-right` under `ltr` and **`margin-left` under
+`rtl`**. One miss per block under parent-relative shape, which is why it is not the mass; it is why
+an RTL page's whole sidebar sits on the wrong side.
