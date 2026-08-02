@@ -45245,3 +45245,136 @@ produces twice in a row on unchanged code, and one produced *the identical pair 
 both binaries. The cheap instrument for this is not more runs of the comparison — it is two runs of
 the OLD binary alone.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 842 — the clean --jobs 2 sweep the last five fixes owe, and the first RTL fix it can price (2026-08-02)
+
+TICK SHAPE: measurement — a bankable burndown point, not a fix
+
+HYPOTHESIS: shape has been unmeasured since t832. Five engine fixes have landed on top of it
+(t833 · t835 · t837 `%`-height on an out-of-flow box · t839 `IntersectionObserver`'s initial
+observation · t841 UAX #9 rule L2 over a line's inline boxes), plus two measurement ticks that
+changed nothing (t836, t838, t840). The board's standing cadence rule — *bank a clean `--jobs 2`
+sweep after ~5-6 fixes and do not let it grow far past 6* — is due exactly, and
+`fidelity-progress.sh` / `phase0-milestones.sh` only move on a fresh clean sweep, so the loop's own
+headline is blind.
+
+EXPECTATION, stated before the run so it can be wrong: t832 measured M1 at **13.0%** (17 of 131
+in-scope) and in-scope shape≥0.75 at **19.1%** (25 of 131). Of the five fixes only two banked a
+crossing under their own old-binary control (t837's `app.ordertime.com` 0.8621 → 1.0000 was already
+above the bar, so it crossed nothing; t841's `possssno.sbs` 0.6974 → 0.8783 is one). So the honest
+prediction is **M1 ~13.0-13.7% and in-scope pass ~19.1-19.8%** — a small move, and a materially
+LOWER number means one of the five has a cost the near-bar controls could not see.
+
+⚠ The board's own steer names the limit of the last tick in advance: *"the RTL arc crossed ~0 because
+corpus-crux-trend is RTL-light… rank by corpus-sample frequency, do the width→dy (#1) and flex
+families that hit the MOST sample sites first."* Three of 200 sites carry `<html dir=rtl>`. This
+sweep is the instrument that will say whether that steer is right about t841 too, and the answer is
+expected to be *yes, mostly* — which is why the tick AFTER this one takes §3 family #1.
+
+RESULT — **200 of 200 completed, `--jobs 2`, one binary (the committed t841 tree, provenance verified
+by BEHAVIOUR: the t841 RTL fixture re-read `370/343/312` on the exact binary that ran the sweep,
+because `cargo build` reported `Finished in 0.49s` and a byte-identical artefact is a provenance
+claim I will not take on trust for a bankable number).**
+
+```
+                              t825     t832     t842
+  M1 GATE (shape AND jarring) 10.0%    13.0%    14.6%     (19 of 130 sites)
+  in-scope shape>=0.75        13.1%    19.1%    19.2%     (25 of 130)
+  jarring-clean               27.7%    26.7%    29.2%     (38 of 130)
+  scorability (scored/in-scope) 101/130 101/131  103/130  = 79.2%
+  shape_mean                  50.6%    52.1%    52.5%
+  cov_mean                    85.2%    84.5%    84.3%
+  COMMON-SET BAND (100 sites scored in BOTH t832 and t842)     -0.26 pts · 14 up · 11 down
+```
+
+**M1 beat the stated expectation (13.0-13.7%) at 14.6%, and it did NOT come from where the burndown
+plan says the points are.** `shape>=0.75` moved 25 → 25 — *zero net* — and the common-set band is
+**−0.26 pts, i.e. flat**. Every one of the +1.6 M1 points came through the **jarring** term
+(26.7% → 29.2%), which is exactly what t841 predicted and nothing else this window aimed at.
+Attribution, from the row diff rather than from the headline:
+
+```
+  possssno.sbs        reading_order 515 → 1     shape 0.6974 → 0.7896   ← t841, CROSSES
+  app.ordertime.com   reading_order   1 → 0     shape 0.8621 → 1.0000   ← t837
+```
+
+⚠⚠⚠ **THE SWEEP'S WORST REGRESSION ROW IS A PAGE-STATE ARTEFACT, AND ONLY A RE-MEASURE COULD SAY
+SO.** Four sites fell below the bar between t832 and t842, headed by
+`secure5.entertimeonline.com` **0.8205 → 0.0000** at coverage 1.000 → 0.731 — a shape of *exactly
+zero*, which under the ratchet is the loudest possible row. Running the t840 binary and the t841
+binary twice each, same hour:
+
+```text
+                               old r1     old r2     new r1     new r2
+  secure5.entertimeonline.com  0.820513   0.820513   0.820513   0.820513   ← IDENTICAL ×4
+  simplepdf.com                0.742138   0.742138   0.742138   0.742138   ← IDENTICAL ×4
+  sestra.cc                    0.747642   0.758216   0.747642   0.750588   ← overlapping
+  www.puentedemando.com        0.766165   0.770463   0.770463   0.770463   ← new at old's TOP
+```
+
+`secure5` reproduces its t832 value to six decimals on **both** binaries — the 0.0000 existed only
+inside that one sweep run. `simplepdf` is deterministic at 0.742138 on both, so its "loss" is the
+site, not us. `sestra` and `puentedemando` are inside their own same-binary spread. **Zero
+attributable engine regressions**, and the loudest row in the sweep was the emptiest.
+
+Gains beside t841's: `promo.golesliga1max.pe` 0.5873 → 0.8413 (+0.254, newly passing) and
+`www.freesupertips.com` unscored → 0.7517 (a **scorability** gain — scored 101 → 103, 79.2%).
+
+MECHANISM RANKING, banked for the next tick (the oracle's own signature, ranked by DISTINCT SITES):
+
+```
+  35 sites · 3757 hits   missing box: <div>
+  27 sites · 1442 hits   missing box: <a>
+  27 sites · 1433 hits   missing box: <span>
+  26 sites ·  264 hits   mis-sized: height ~64px  (<div>)   [median 88px]
+  26 sites ·  254 hits   mis-sized: height ~16px  (<div>)   [median 20px]
+  25 sites ·  379 hits   mis-sized: height ~128px (<div>)   [median 182px]
+  23 sites ·  755 hits   missing box: <img>
+  22 sites ·  265 hits   mis-sized: width ~8px    (<a>)     [median 13px]
+  15 sites ·  427 hits   missing box: <li>
+  15 sites ·   43 hits   missing box: <button>
+```
+
+CROSSING-RANKED NEAR-BAR (fresh, from this sweep — the table the next render tick is aimed from):
+
+```text
+  shape   dist    h_ov ovl reord dead     n    cov    site
+  0.7439  0.0061    11   0    0    1     82  0.965   777juegos.com        (mechanism REFUTED ×2 at t840)
+  0.7421  0.0079     5   0    0    0    159  0.803   simplepdf.com
+  0.7415  0.0085     1   0    1    0    352  0.683   seduniaselat.com
+  0.7338  0.0162     5  17   14    1   1127  0.983   www.puentedemando.com
+  0.7264  0.0236     8   0    6    0    424  0.993   sestra.cc
+  0.6951  0.0549     0   5   22    0    656  0.936   www.ikea.com
+```
+
+⚠ **THE BOARD'S STEER ABOUT t841 IS CONFIRMED IN ITS ARITHMETIC AND WRONG IN ITS CONCLUSION.** It
+predicted *"the RTL arc crossed ~0 because corpus-crux-trend is RTL-light"*, and the corpus is indeed
+RTL-light — 3 of 200. But t841 produced **the only clean crossing in this window**, and the whole
++1.6 M1 points, because the fix moved the JARRING term and the jarring term is where the near-bar
+cohort is actually blocked (`reading_order` non-zero on 5 of the 6 rows in the table above). **A
+corpus with few instances of a defect can still have the defect's METRIC TERM as its binding
+constraint.** Frequency ranks how many sites a fix touches; it does not rank how much of the GATE
+each touch buys.
+
+MEASURED: nothing changed in the engine. `manuk-layout` 113 green, tree byte-identical to t841 apart
+from the sweep artefact and this entry.
+
+PERF: none — measurement only. Sweep wall ~55 min for 200 sites at `--jobs 2`.
+
+WIKI: none [forced] — no engine source changed; the artefacts are `docs/loop/SWEEP-t842-rows.tsv`,
+the banked `FIDELITY-PROGRESS.tsv` row, and the two tables above.
+
+PATTERN: ⚠⚠⚠ **A METRIC'S TERMS ARE NOT INTERCHANGEABLE, AND THE BURNDOWN PLAN RANKS ONLY ONE OF
+THEM.** M1 is `shape≥0.75 AND jarring-clean`. Nine ticks of shape work moved `shape≥0.75` by **zero
+net sites** and the common-set band by **−0.26 pts**, while one fix to the *reading-order* term moved
+the gate by 1.6 points. The ranked worklist in `PHASE0-RENDER-BURNDOWN.md` §3 is a ranking of *shape*
+mechanisms; it has no row for the jarring conjunct at all. **Rank by what the GATE is a conjunction
+of, not by what the largest column is.** ⚠⚠ **THE LOUDEST ROW IN A SWEEP IS THE ONE MOST LIKELY TO
+BE THE SWEEP.** `0.8205 → 0.0000` is the largest single-site drop this loop has recorded, and it
+reproduces at 0.820513 to six decimals on both binaries, twice each. A shape of exactly zero at
+coverage 0.73 is a *page state*, not a layout engine. **Before diagnosing an outlier inside a batch
+run, re-measure it alone — the second-cheapest instrument in this loop after the control row.**
+⚠ A prediction stated before the run was WRONG in the right direction (13.0-13.7% predicted, 14.6%
+actual) and being wrong is what made the jarring-term finding visible: the number arrived without an
+explanation, so it needed one.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
