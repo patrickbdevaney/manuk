@@ -4059,3 +4059,102 @@ of which appears in Part VI. Part VI should carry those two numbers.
    move until something boots them.
 
 **Next check due: tick 844.**
+
+## Check #71 — tick 844 (2026-08-02)
+
+**HORIZON: H0 (Pareto Web Parity), re-scoped by PART VII leg 1 — "daily-driver rendering parity,
+breadth-first, usage-weighted; the bar is *reliably renders and runs the representative real
+internet*, NOT a WPT percentage."** The loop's operational form of that gate is M1: `shape≥0.75 AND
+jarring-clean` on the in-scope CrUX corpus, target 95%.
+
+**GATE OR SCOREBOARD? — GATE, and this is the least ambiguous window in a long time.** Eight ticks,
+four of them fixes, every one priced against the representative corpus and none against a WPT count:
+
+```
+  t836  measure   flex-line cross size — fix REFUSED (encoded a rule the tick had measured FALSE)
+  t837  fix       %-height on an out-of-flow box resolved against the DOCUMENT, not the viewport
+  t838  measure   a 1×1 lazy placeholder is a WRONG RATIO, not a missing image
+  t839  fix       IntersectionObserver.observe() never delivered its INITIAL observation
+  t840  measure   777juegos — two obvious mechanisms REFUTED, banked as refutations
+  t841  fix       UAX #9 rule L2 over a line's INLINE BOXES (bidi was glyph-level only)
+  t842  measure   clean --jobs 2 sweep: M1 13.0% → 14.6%
+  t843  fix       a position:relative row inside an out-of-flow subtree was invisible as a CB
+```
+
+**M1 13.0% → 16.2%** across the window (17 → 21 of 130 in-scope sites), scorability 77.1% → 79.2%.
+Zero WPT-flip ticks. `WPT:TOTAL` stayed a bookkeeping mark exactly as §VI.3 requires.
+
+### INVARIANTS
+
+* **I2 (never patch deps) held.** t841 consumed `unicode-bidi` as a library and added a public helper
+  in `engine/text` rather than a second bidi implementation in `engine/layout` — one bidi for the
+  engine, so the glyph order and the box order cannot disagree. The fork surface is still empty.
+* **I4 (Pareto discipline) held — and the window produced a CORRECTION to how the loop applies it.**
+  The board steered *against* t841 in advance: *"the RTL arc crossed ~0 because corpus-crux-trend is
+  RTL-light… rank by corpus-sample frequency."* The corpus IS RTL-light — 3 of 200 carry
+  `<html dir=rtl>` — and t842 then measured that t841 produced **the window's only clean crossing and
+  all of its M1 movement**. I4 says weight by *actual usage*; it does not say weight by
+  *instances-in-this-sample*. **A corpus with few instances of a defect can still have that defect's
+  METRIC TERM as its binding constraint**, and Arabic/Hebrew/Persian/Urdu is a population, not a
+  tail — exactly the kind of thing a CrUX sample of the English-reading web under-counts.
+* **I3 (semantic model in lockstep) — BENT, and this is the finding of the check.** Both fixes that
+  moved M1 this window moved it through `reading_order`, and `reading_order` **is a semantic-model
+  property wearing a visual property's clothes**: it is the order an agent, or a screen reader, walks
+  the page in. t841's RTL fix meant every RTL page's navigation had been read backwards by
+  `manuk-agent`, and t843's meant every drawer row's caret was reported at one shared position. The
+  loop has been treating reading-order as a rendering term because that is the column it lives in.
+  **Neither tick asserted its `manuk-a11y` / `manuk-agent` exposure, and there is no gate anywhere
+  that says the semantic tree's order matches Chrome's.** I3 says every renderer subsystem lands
+  with its semantic-model exposure; here the exposure and the renderer are the same number, and only
+  the renderer half is gated.
+* **I5 (oracle is the discovery engine) held, and the aiming chain is now three links.** t842's sweep
+  ranked the cohort → `--shape-dump` + the root-cause table named the element → a 12-line reduction
+  from the site's own stylesheets named the mechanism. t843 went from "which site" to "which line of
+  CSS" inside one tick.
+* **PART VII honoured** — no `scripts/` file touched in t836-t843.
+
+### PART VI CORRECTION
+
+§VI.2 still reads *"CSS layout breadth is the weak spot: css-flexbox 5.5%, css-grid 4.7%."*
+Check #70 already flagged the instrument as stale; this window makes the correction concrete, and it
+is not only a change of units:
+
+> **§VI.2 should read: the H0 render gauge is M1 on the in-scope CrUX corpus — `shape≥0.75` AND
+> `jarring-clean` — currently 16.2% (21/130), against a scorability ceiling of 79.2% (103/130). M1 is
+> a CONJUNCTION, and `docs/loop/PHASE0-RENDER-BURNDOWN.md` §3 ranks mechanisms for only one of its
+> two conjuncts.** Nine ticks of shape work moved `shape≥0.75` by zero net sites and the common-set
+> band by −0.26 points; two fixes to the jarring conjunct moved the gate by 3.2 points.
+> `reading_order` is non-zero on 5 of the 6 sites in the current near-bar table and on 5 of the 6
+> sites that are already `shape≥0.75` and fail M1 on jarring alone.
+
+### HARNESS, reported not patched (PART VII)
+
+1. **`manuk-wpt` is still in neither the wall's crate-test list nor CI's** — reported at #69 and #70,
+   unchanged. `fidelity::shape_tests` still runs only by hand.
+2. **The wall ran 1049s and 1081s on the two fix ticks this window** against 79-81s on the two
+   measurement ticks (docs-only, which skip the receipt). Not a blocker and not mine to change; noted
+   because the fix/measure alternation makes the average look better than the fix-tick cost is.
+3. No false-RED this window: `F2` read 5.53x, 6.73x and passed on quiet boxes. The #70 item is not
+   recurring right now.
+
+### THE STEER
+
+1. **RANK BY WHAT THE GATE IS A CONJUNCTION OF.** The next render ticks come from the cohort t842
+   exposed: **sites already at `shape≥0.75` that fail M1 on jarring alone** — after t843 that is
+   `www.tz.de` (reord 4, h_ov 3), `www.freesupertips.com` (reord 4), `payb.jp` (reord 6),
+   `desiviral.net` (overlap 5). Each is one mechanism from a crossing, and they are cheaper than any
+   shape nudge on the near-bar list.
+2. **CLOSE THE I3 GAP THE CHEAP WAY.** Before more reading-order fixes, add the assertion that makes
+   them semantic-model work rather than incidentally so: `manuk-agent`'s observation order for a page
+   must match the geometric reading order the fidelity instrument scores. It is the same number in
+   two subsystems and nothing checks that they agree.
+3. **THE CEILING QUESTION IS UNCHANGED AND IS NOW THE LARGER HALF.** 27 in-scope sites do not render
+   at all (79.2% scorability). Render work still pays — +3.2 points this window — but 21/130 cannot
+   reach 95% until something boots them, and the throw-killer worklist has not been worked since the
+   t777 batch.
+4. **REFUSALS ARE STILL BEING BANKED CORRECTLY.** t836 refused a fix that improved two of three
+   fixture families because it would have encoded a rule the same tick measured to be false, and t840
+   banked two refutations instead of a guess. That is the behaviour §III's standing rule asks for and
+   it is worth naming while it is happening rather than only after a bad tick.
+
+**Next check due: tick 852.**

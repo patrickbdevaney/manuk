@@ -45495,3 +45495,88 @@ function, unchanged, means two different things depending on which tree it is ha
 that walks UP the DOM has an implicit precondition about which tree it is walking, and that
 precondition is not in its signature.**
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 844 — the constitution check, and the I3 gap it found in the last two winning ticks (2026-08-02)
+
+TICK SHAPE: measurement/governance — the DUE constitution re-read (check #71), plus a probe of the
+cohort its steer names, banked with one divergence narrowed to a named CSS declaration
+
+HYPOTHESIS: the constitution check is due (last at t836, cadence 8). It is the only instrument that
+reads *up* — at `CONSTITUTION.MD` — and the question it exists to ask is whether the last eight ticks
+moved an EXIT-GATE condition or only the scoreboard.
+
+RESULT — **check #71 recorded in `docs/loop/CONSTITUTION-CHECK.md`. Gate, not scoreboard, and the
+least ambiguous window in a long time**: eight ticks, four fixes, every one priced against the
+representative CrUX corpus and none against a WPT count. **M1 13.0% → 16.2%** (17 → 21 of 130),
+scorability 77.1% → 79.2%, `WPT:TOTAL` untouched as §VI.3 requires.
+
+⚠⚠⚠ **THE CHECK FOUND AN I3 BEND, AND IT IS IN THE TWO TICKS THAT WON.** Both fixes that moved M1
+this window (t841, t843) moved it through **`reading_order`** — and `reading_order` is **a
+semantic-model property wearing a visual property's clothes**. It is the order an agent, or a screen
+reader, walks the page in. t841 means `manuk-agent` had been reading every RTL page's navigation
+**backwards**; t843 means every drawer row's caret was reported at one shared position. I3 says every
+renderer subsystem lands with its semantic-model exposure — here the exposure and the renderer are
+**the same number**, and only the renderer half is gated. Neither tick asserted its `manuk-a11y` /
+`manuk-agent` exposure, and **no gate anywhere says the semantic tree's order matches Chrome's.**
+The loop has been treating reading-order as a rendering term because that is the column it lives in.
+
+⚠⚠ **I4 CORRECTION, from the board's own steer being right in its arithmetic and wrong in its
+conclusion.** It said in advance: *"the RTL arc crossed ~0 because corpus-crux-trend is RTL-light…
+rank by corpus-sample frequency."* The corpus IS RTL-light (3 of 200) and t841 still produced the
+window's only clean crossing and all of its M1 movement. **I4 says weight by ACTUAL USAGE; it does
+not say weight by instances-in-this-sample.** A CrUX sample of the English-reading web under-counts
+Arabic/Hebrew/Persian/Urdu, which is a population, not a tail.
+
+PART VI CORRECTED — §VI.2's *"css-flexbox 5.5%, css-grid 4.7%"* is stale in its instrument (check #70
+flagged it; this check makes the replacement concrete and it is not only a change of units):
+
+> the H0 render gauge is **M1 on the in-scope CrUX corpus — `shape≥0.75` AND `jarring-clean` — 16.2%
+> (21/130), against a scorability ceiling of 79.2% (103/130). M1 is a CONJUNCTION, and
+> `PHASE0-RENDER-BURNDOWN.md` §3 ranks mechanisms for only one of its two conjuncts.**
+
+PROBED — the cohort the steer names (already `shape≥0.75`, failing M1 on jarring alone). **Three
+sites, three DIFFERENT mechanisms — there is no shared root cause here, and saying so is the
+result:**
+
+```text
+  www.freesupertips.com  reading_order 4   body/div(1)/div(1) ⇄ body/div(1)/div(3)
+  payb.jp                reading_order 6   body/div(2)/div(1)/div(1) ⇄ …/div(2)
+  desiviral.net          overlap 5         body/aside × body/footer ; body/aside × body/header
+```
+
+NARROWED AND BANKED — `desiviral.net`'s largest cluster is not its M1 blocker but it is precisely
+diagnosed, so the next tick that wants it does not start from zero. **68 hits: `h2 > a` is `197x58`
+in Chrome and `197x38` for us — same x, same WIDTH, one line short.** The `<h2>` carries Tailwind's
+`line-clamp-2`, i.e. `display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+overflow:hidden`. **Chrome lays out all three lines and CLIPS; we DELETE the lines past the clamp**,
+so the clamped block is the right height in both engines while the descendant inline's rect is not.
+The 72 downstream `y ~44px` drift hits are that one difference cascading.
+
+⚠ **NOT FIXED HERE, deliberately, and the reason is the tick-selection rule rather than the
+difficulty.** It is a *shape* term on a site whose M1 blocker is *overlap*, so fixing it crosses
+nothing; and making line-clamp clip rather than drop changes the paint path and the existing
+`line_clamp_caps_lines_and_appends_ellipsis` gate's premise. **A cluster's size ranks how much of a
+page it explains, not whether fixing it moves the gate** — this window has now measured that
+distinction twice.
+
+MEASURED: nothing changed in the engine. `manuk-layout` 114 green, tree byte-identical to t843 apart
+from this entry and the check.
+
+PERF: none.
+
+WIKI: none [forced] — no engine source changed; the artefacts are check #71 in
+`docs/loop/CONSTITUTION-CHECK.md` and the three-mechanism cohort table above.
+
+PATTERN: ⚠⚠⚠ **A METRIC TERM CAN BELONG TO A DIFFERENT SUBSYSTEM THAN THE COLUMN IT SITS IN.**
+`reading_order` sits in the render sweep beside `shape` and `coverage`, so two ticks fixed it as
+rendering; it is the agent surface's ordering contract, and under I3 those ticks owed a semantic-model
+assertion they did not know they owed. **Ask of every metric which SUBSYSTEM would notice if it were
+wrong — not which report prints it.** ⚠⚠ **A COHORT SELECTED BY A METRIC IS NOT A COHORT WITH A
+MECHANISM.** Three sites, all `shape≥0.75`, all failing M1 on jarring alone, and three unrelated
+causes. The selection was still correct — each is one mechanism from a crossing — but *"find the
+shared root cause"* had no answer here, and looking for one would have manufactured a false family.
+⚠ **THE CONSTITUTION CHECK EARNED ITS CADENCE THIS TIME.** It was written after a tick that banked
+721k of the wrong subtests; here it found nothing wrong with WHAT was built and something real about
+what was *left unasserted* — which is the failure mode a gate-count cannot show, because the missing
+gate is missing.
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
