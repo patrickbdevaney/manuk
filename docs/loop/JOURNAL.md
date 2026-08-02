@@ -45034,3 +45034,83 @@ spelling of the thing in the same fixture, always.** ⚠ **A CAPABILITY FIX WITH
 STILL A CAPABILITY FIX** — but only if the reason is measured. Here it is: the corpus's lazy images
 are below a fold the oracle does not have.
 Ledgered in `docs/loop/WEB-PATTERNS.md`.
+
+## Tick 840 — 777juegos is 0.006 from the bar and TWO obvious mechanisms are REFUTED (2026-08-02)
+
+TICK SHAPE: measurement — a reduction that did not converge, banked with its refutations rather than
+with a guess
+
+HYPOTHESIS: `777juegos.com` is the cheapest crossing on the board — shape **0.7439**, **0.006** from
+0.75, only **80 scored elements**, 22 misses. One mechanism should cross it. `--shape-dump` named the
+dominant one immediately and it looked like a gift:
+
+```text
+  body/div(3)/div(1)/div(1)          Chrome 1200x713   ours 1200x1001
+  …/div(2)                           Chrome 1200x684   ours 1200x898
+  …/div(2)/div(1)/div(1)             Chrome 1200x684   ours 1200x898
+```
+
+**713 is exactly Chrome's `innerHeight`** — the same number t837's fixture measured — so the outer
+container is viewport-height in Chrome and content-height for us. The site's CSS has exactly one
+viewport-height rule, `.load-app { display:flex; align-items:center; justify-content:center;
+height:100vh }`, and t837 had just finished fixing a *different* height that was resolving against
+the document. It looked like the same family.
+
+**⓵ `height:100vh` IS CORRECT — REFUTED.** Fixture, 1200×800 window:
+
+```text
+                                          Chrome    ours
+  display:flex; height:100vh              1185x713  1200x720
+  plain block; height:100vh               1185x713  1200x720
+  display:flex; height:100vh + a 1000px child  1185x713  1200x720
+```
+
+All three agree (720 vs 713 is our harness viewport against Chrome's `innerHeight`, not a defect —
+the same 7px seen at t837). `vh` resolves correctly on the flex path, the block path, and with
+overflowing content.
+
+**⓶ A FLEX ITEM STRETCHED AGAINST A DEFINITE LINE IS CORRECT — REFUTED.** The `--why` chain showed
+what the shape-dump could not: the wrong box is `div#app-container`, a flex **item** at `1200x1001`
+inside a parent flex container that is correctly `1200x720`. So the reading became *"a flex item
+grows to its content instead of being stretched to a definite line."* Fixture:
+
+```text
+                                                     Chrome   ours
+  flex item, height:auto, 900px content, 400px line  300x400  300x400   ✓
+  …the same with overflow:hidden on the container    300x400  300x400   ✓
+```
+
+Both exact. `align-items:stretch` against a definite container height works, and it works with
+content that overflows.
+
+**SO THE TICK STOPS HERE.** Two named mechanisms, each the obvious reading of the evidence, each
+refuted by a two-row fixture, and no third hypothesis that is more than a guess. t826's rule is the
+governing one — *a residue measured with two suspects set together names neither* — and t836's is the
+corollary: a fix that looks right on fixtures that cannot distinguish it is worth less than nothing.
+
+RESIDUE, narrowed and with both refutations attached so the next probe starts where this one ended:
+* The wrong box is **`div#app-container`**, `position:relative`, a flex item, `1200x1001` against
+  Chrome's `1200x713`, inside a correctly-sized `1200x720` flex parent.
+* It is **not** `height:100vh` (⓵) and **not** flex-item stretch against a definite line (⓶).
+* Its own parent chain is Chrome-exact all the way down to it, so the error originates AT this
+  element — which is what makes it worth another tick rather than a subtree hunt.
+* Untried and cheapest first: `position:relative` on a flex item; `min-height` interaction; and
+  whether the site's JS resizes it after load (this page is the one whose coverage reads 0.941 on one
+  run and 0.965 on the next, so it has a live post-load mutation somewhere).
+
+MEASURED: nothing changed in the engine, so nothing was priced. `manuk-layout` 112 green, tree
+byte-identical to t839.
+
+PERF: none. WIKI: none [forced] — no engine source changed; the artefacts are the two refutation
+tables and the narrowed residue.
+
+PATTERN: ⚠⚠⚠ **THE CHEAPEST CROSSING ON THE BOARD IS NOT THE CHEAPEST TICK.** `777juegos` was picked
+because it needed 0.006 and had 80 elements, and both facts are true and neither predicts how hard
+the mechanism is. **Distance to the bar ranks the PRIZE; it says nothing about the SEARCH.** ⚠⚠ **A
+NUMBER THAT MATCHES A NUMBER FROM LAST TICK IS A MAGNET.** `713` had just been the answer at t837,
+and it pulled this tick straight at the viewport-height family — which cost one fixture to refute and
+would have cost a whole tick to "fix" if the fixture had been vaguer. **A coincidence of magnitudes
+is not evidence of a shared mechanism.** ⚠ The `--why` chain earned its place beside `--shape-dump`:
+the dump ranks misses but flattens the tree, and only the chain showed that the bad box's parent was
+already correct — which is what turned "a subtree is wrong" into "one element is wrong".
+Ledgered in `docs/loop/WEB-PATTERNS.md`.
