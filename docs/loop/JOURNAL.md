@@ -45934,3 +45934,150 @@ builds ~6 min and ~3 min in a detached worktree (removed).
 WIKI: `docs/wiki/conformance-and-oracles.md` — the integer `delta × n` test proves a verdict
 change, never its cause; only the same-hour old-binary control attributes, and a sweep row is a
 LOWER BOUND on the same binary's solo reading.
+
+## Tick 848 — the M1 cohort re-measured SOLO, because t847 proved a sweep row is a lower bound (2026-08-02)
+
+TICK SHAPE: capability — the cheapest crossings on the board, but re-measured before any of them is
+treated as work.
+
+HYPOTHESIS: t847's fresh sweep re-cuts the cohort the constitution check named — **sites already at
+`shape>=0.75` that fail M1 on the JARRING conjunct alone** — and four of the ten are ONE hit from a
+crossing (`www.kicktipp.com` reord 1, `ubys.bingol.edu.tr` reord 1,
+`www.library.chiyoda.tokyo.jp` overlap 1, `littlecaesarsbcs.libellum.com.mx` overlap 1).
+
+⚠⚠⚠ **BUT t847 ALSO PROVED THAT A SWEEP ROW IS A LOWER BOUND, AND THIS COHORT IS SELECTED BY EXACTLY
+THE COLUMN THAT MOVES.** `possssno.sbs` sits in this cohort at `overlap 19 / reorder 20` and reads
+**`overlap 0 / reorder 1 / shape 0.897391` on both solo runs of the same binary** — i.e. it is not in
+the cohort at all, it PASSES. Selecting work from a sweep column without re-measuring it solo is how
+a tick gets spent on the instrument's weather. **The first move is the control, not the fix.**
+
+RESULT — **the cohort reproduces solo on 9 of 10** (only `possssno.sbs` differs, as t847 established),
+so the cohort is real and the control was worth the run rather than a formality. Five of the ten are
+ONE jarring hit from an M1 crossing, and `--why` on the first two named the mechanism in two commands:
+
+```
+  ubys.bingol.edu.tr    nav > a > span:1  ⇄  span:2
+        span#  display=Inline    position=Static    box=[31 17 41x16]
+        span#  display=Block     position=Absolute  box=[-1 -1  1x1]   ← Bootstrap `.sr-only`
+```
+
+**CSS 2.1 §10.3.7 / §10.6.4 — AN INSETLESS `position:absolute` BOX SITS AT ITS STATIC POSITION, AND ON
+AN INLINE LINE THAT INCLUDES THE ADVANCE OF EVERYTHING BEFORE IT.** We recorded the container's
+content-box origin instead. Chrome-measured, `body{margin:0;font:16px Arial}`, a 400px
+`position:relative` wrapper, `a{display:block}`:
+
+```text
+                                                   Chrome   before   after
+  <span>Hello</span><span class=sr-only>             35       -1      35    ✗→✓
+  <span>Hello</span><span position:absolute>         36        0      36    ✗→✓
+  <span position:absolute>FIRST</span><span>Hello     0        0       0     ✓ control
+  …a WRAPPED first span, then an abspos span         61        0      61    ✗→✓
+  the in-flow spans themselves                        0        0       0     ✓ control
+  dir=rtl wrapper                                   334        0       0     ✓ INERT by the guard
+```
+
+⚠⚠⚠ **THE CODE SAID THIS OUT LOUD AND LEFT IT UNBUILT** — the comment at the seed reads *"Text
+preceding it on the line should push the static position along that line; that refinement is not
+modelled here, and the box lands at the line start instead."* That is the t704 shape again: **a build
+spec whose second half is unbuilt is an untriaged tick with good prose**, and it is invisible to every
+instrument because the code is *honest* about it. Grep for "not modelled here" as a defect class.
+
+⚠⚠ **THE FIXTURE FOUND A SECOND DEFECT IN THE SAME SECTION AND I DID NOT FIX IT IN THE SAME TICK.**
+`left:200px; top:auto` belongs at **y=294** and lands at **234**, the containing block's top:
+`position_absolutes` anchors to the static position only when **all four** insets are `auto`, but
+§10.3.7 is written PER AXIS. It is a bigger prize than this tick (a full-size box 60px out, against a
+1×1 `.sr-only`), it is one `all_auto` → two per-axis booleans, and it is *measured* — which is exactly
+why it should be its own tick with its own attribution rather than smuggled into this binary.
+
+⚠⚠ **THE ONE APPARENT REGRESSION WAS THE SITE, AND TWO RUNS OF THE OLD BINARY ALONE SETTLED IT** —
+t847's lesson, applied the very next tick. `payb.jp` read `0.825662` before and `0.733612` after, a
+`-0.092` whose `delta × n` is **exactly 66.0 elements** at identical coverage and identical `shape_n`.
+The old binary alone, twice more, read **0.677824** and **0.733612**:
+
+```text
+  payb.jp     OLD  0.825662 / 0.677824 / 0.733612      spread 0.148
+              NEW  0.750349 / 0.733612                 INSIDE the old range
+```
+
+The new values sit inside the old binary's own spread and the integer proves only that 66 elements
+changed verdict, not who changed them. `www.unoeste.br` likewise (its `shape_n` moves 275↔269 between
+runs — the page itself differs). `gismart.com` **0.729537** and `celeb.gate.cc` **0.783158**,
+byte-identical on both binaries, are the clean controls.
+
+⚠ **HONEST SCOPE: ZERO MOVEMENT ON THIS COHORT, AND THE REASON IS THE BOX SIZE.** All eight other
+cohort sites are byte-identical old vs new. The fix demonstrably moves the real page —
+`ubys.bingol.edu.tr`'s `.sr-only` span goes `[-1 -1 1x1]` → `[56 -1 1x1]` — but a 1×1 clipped box is
+below what `shape` can register, and ubys' reading-order pair still inverts. **`.sr-only` is on a very
+large fraction of the web and this is the spec; it is banked on the fixture, not on a corpus delta,
+and saying that plainly is better than implying a crossing it did not buy.** The per-axis defect above
+is where the visible movement is, and it is now aimed.
+
+PERF: one `HashSet` of the preceding in-flow siblings' subtrees, built **only** for a block that
+actually has an out-of-flow child, and only in the pure-IFC branch. Inert on RTL by the caller's guard
+and on every block with no abspos child by the early return.
+
+WIKI: `docs/wiki/box-layout.md` — the static position of an insetless abspos box includes the inline
+advance, attribution is by subtree, and the per-axis residue.
+
+SELF-AUDIT (tick 848, due since 838 — the pre-flight hook blocked the commit until it ran). **One
+prescribed-but-not-executed item, and it is the harness ceiling this session spent hours inside:**
+*"verify wall: 1407s EXCEEDS the 300s target — Part 21.2 item 1 has regressed."* Everything else is
+green: 49 process defects each naming a closing MECHANISM, every gate declaring how to break it, the
+journal unbroken over the last 5 ticks, the pattern ledger at 845 rows and moving with the engine.
+
+**The 1407s is not gate creep, it is a COLD REBUILD, and this session found why.** `verify.sh:191`
+runs `scripts/disk-hygiene.sh` *during* the wall; that script's `rm -rf target/debug` is guarded only
+by `pct >= 95` and carries **no build-active check at all**, while the wall's own artifact set (~76-90G
+of mozjs-statically-linked gate binaries) is larger than this box's free space. So the build drives
+`/home` past 95%, the wall deletes its own `target/debug` mid-run, and the next wall starts cold —
+forever. The tell that names it, and nothing else does, is a missing *input* rather than a compile
+error: `error: extern location for manuk_text does not exist: …libmanuk_text-….rlib` and
+`error: couldn't read …serde_core-…/out/private.rs`. Everything else it emits is
+`linking with cc failed` on a **different test binary every run**, each of which builds clean alone in
+~16s. **A failure that names a different subject every run is a RESOURCE failure wearing the subject's
+name.** Eight RED walls across t846-t848 were all this.
+
+The agent-side remedy — which is what landed t846, t847 and t848 — is **free headroom BEFORE the wall,
+never re-run into the same ceiling**: `rm -rf target/debug target/release` takes `/home` to ~120G free,
+the wall peaks at ~92%, and it lands on the first attempt. Reported, not patched: `scripts/` and the
+cron are observer-owned (CONSTITUTION.MD PART VII). ⚠ Two crontab lines — `disk-hygiene.sh` and
+`loop-watchdog.sh` — are additionally **dead from a quoting bug** (`bash -lc \'…\'`), logging
+`unexpected EOF while looking for matching '` on every fire; `scripts/ops-check.sh:25` already knows
+and alerts on the stale hygiene log.
+
+SURFACE AUDIT #56 (tick 848, due since 838 — the pre-flight blocked on this one too). Sources are the
+web, not memory: the Interop 2026 focus-area list, the four vendor announcements, Baseline 2026 and
+its monthly digests, and Ladybird's 2026 newsletters.
+
+**The map is CURRENT, and that is what made the gap visible.** All 20 Interop 2026 focus areas and 3
+of the 4 investigation efforts already have rows with honest statuses, and every Baseline 2026 newly-
+and widely-available item landed on an existing row (`lh`/`rlh` gated, multi-keyword `display` gated,
+`Content-Encoding: zstd` missing, `:active-view-transition` missing). **The one Interop 2026 item with
+no row is the accessibility-tree investigation — specifically the ACCESSIBLE NAME.** `accname` matched
+**zero rows in the whole file** while its neighbours are green: a11y STATES gated, a11y interactive
+ROLES gated, focus management gated, `inert` gated.
+
+⚠⚠⚠ **A BLIND SPOT WITH GREEN EDGES IS INVISIBLE TO A COVERAGE COUNT.** The previous audits hunted
+rows that were WRONG (six phantoms). This one found a row that was ABSENT, and absent *because* the
+capabilities either side of it are gated — `280 gated / 108 missing / 35 partial / 9 works` reads like
+a map with no holes. And `STATUS.md`'s platform map item 8 has said for ~800 ticks that whether the
+tree's *roles, names and focus order* are correct is UNMEASURED, so the map and the status file
+disagreed and nothing compared them.
+
+⚠⚠ **IT IS THE SAME ARGUMENT AS t845, ONE FIELD OVER.** t845 established that the agent's click point
+IS layout geometry, so a containing-block bug is a silent mis-actuation. The agent's element
+*identity* is the accessible NAME — a wrong accname is a wrong click on a page where every box is in
+the right place. Added `unknown`, with a probe (not a build) as the next step on that axis.
+
+Eight rows added, all `unknown`: accname · `command`/`commandfor` invoker attributes (**the map gated
+`ToggleEvent.source`, the event that reports which element opened a popover, while the attributes that
+do the opening had no row — a gated CONSUMER of an unmeasured PRODUCER**) · CSS `if()` ·
+`::scroll-marker`/`::scroll-button` (the snap axis was gated, the carousel's own controls were not) ·
+`interesttarget` · Translator/LanguageDetector/Summarizer (**a half-present family is the shape t772
+proved routes a page into a wall instead of to its fallback**) · Compute Pressure · `writing-suggestions`.
+`MEASURED` is unchanged at 432 and `unknown` rises 3 → 11, which is the ratchet working as designed:
+a bigger, uglier map is a good tick, and only rot is punished.
+
+RE-RANK: it does NOT displace the render burndown, for an arithmetic reason rather than an
+enthusiastic one — M1 is `shape>=0.75 AND jarring-clean` and accname moves neither term. It is now the
+top row on the AGENTIC axis.

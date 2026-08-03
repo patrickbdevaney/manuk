@@ -3948,3 +3948,57 @@ spread bounds what a single reading proves, not what the arithmetic does. Then `
 `--shape-dump` runs said **zero fixed, sixteen broken, every one an `svg` or `svg/path`** — and *zero
 fixed / N broken is a class error, not a tuning error*. No threshold would have found it, because the
 number was never about magnitude.
+
+## The static position of an insetless `position:absolute` box includes the INLINE ADVANCE (t848)
+
+CSS 2.1 §10.3.7 / §10.6.4: when `left`/`right` (or `top`/`bottom`) are both `auto`, the box sits at
+its **static position** — where its hypothetical box would have started. In an inline formatting
+context that is *after* everything already on the line, not at the line's start edge.
+
+The engine recorded the container's content-box origin as it stepped over the out-of-flow child, and
+the comment beside it named the gap rather than closing it: *"Text preceding it on the line should
+push the static position along that line; that refinement is not modelled here, and the box lands at
+the line start instead."*
+
+Chrome-measured, `body{margin:0;font:16px Arial}`, a 400px `position:relative` wrapper,
+`a{display:block}`, x of the absolutely positioned span:
+
+```text
+                                                   Chrome   before   after
+  <span>Hello</span><span class=sr-only>             35       -1      35    ✗→✓
+  <span>Hello</span><span position:absolute>         36        0      36    ✗→✓
+  <span position:absolute>FIRST</span><span>Hello     0        0       0     ✓ control
+  …a WRAPPED first span, then an abspos span         61        0      61    ✗→✓
+  the in-flow spans themselves                        0        0       0     ✓ control
+  dir=rtl wrapper                                   334        0       0     ✓ INERT by the guard
+```
+
+Row 1 carries `margin:-1px`, so 35 is 36 less the margin: **the margin is applied after the static
+position and the two must not be conflated.** Row 4 is why the search is `(line_top, then x)` and not
+`max(x)` — a fragment that wrapped onto a later line is genuinely later even though its right edge is
+further left.
+
+**Attribution is by SUBTREE.** `refine_inline_static_positions` collects every node under the in-flow
+siblings that *precede* the out-of-flow child (a prefix, never the whole set — content after it must
+not push it along), then takes the furthest-along fragment or atomic inline belonging to that set.
+
+### What it deliberately does not cover, with numbers
+
+* **Bare text directly in the block.** `<a>Bare text<span position:absolute>` belongs at **x=64** and
+  stays at 0. A `TextFragment`'s `node` is the deepest *element* ancestor, so such a fragment reports
+  the block itself and there is no way to tell WHICH bare-text sibling produced it. Guessing would
+  move boxes on pages this rule should not touch.
+* **`left:200px; top:auto`** belongs at **y=294** and lands at **234**. `position_absolutes` anchors
+  to the static position only when **all four** insets are `auto`; §10.3.7 is written PER AXIS. A
+  separate defect in the same section — bigger, because it moves full-size boxes rather than a 1×1
+  `.sr-only`.
+* **RTL**, excluded at the call site: under an RTL base direction the inline start is the right edge,
+  and the fragments have already been through UAX #9 rule L2, so "the trailing edge of the last
+  preceding fragment" is the wrong end of the wrong box.
+
+### The lesson worth carrying
+
+**A build spec whose second half is unbuilt is an untriaged tick with good prose.** This one sat in
+the source, correctly described, invisible to every instrument — because the code was *honest* about
+it and honest text does not fail a gate. `"not modelled here"` is worth grepping for as a defect
+class, not read as documentation.

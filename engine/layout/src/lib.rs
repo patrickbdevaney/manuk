@@ -31,7 +31,7 @@
 //!   is the upgrade.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use manuk_css::{
     BoxSizing, Clear, ComputedStyle, Dim, Display, Float, IntrinsicSize, Overflow, Position, Rgba,
@@ -2071,6 +2071,83 @@ impl Ctx<'_> {
         0.0
     }
 
+    /// **CSS 2.1 §10.3.7 / §10.6.4 — an insetless `position:absolute` box sits where its
+    /// hypothetical box would have started, and on an inline line that includes the ADVANCE of
+    /// everything before it.** The seed in the pure-IFC branch records the container's content-box
+    /// origin, which is right only when the abs box is the first thing in the parent. This replaces
+    /// it once the line is laid out.
+    ///
+    /// Chrome, `<a style="display:block"><span>Hello</span><span class="sr-only">SR</span></a>` in
+    /// a 400px `position:relative` wrapper: the `.sr-only` span belongs at **x=35** (36px of
+    /// "Hello", less its `margin:-1px`) and we put it at **x=-1** — the line start. That is
+    /// Bootstrap's `.sr-only`, on every framework page that ships it, plus every badge, caret and
+    /// tooltip written as `position:absolute` after inline content with only `top` set.
+    ///
+    /// **Attribution is by SUBTREE, and content it cannot attribute is left on the seed.** A
+    /// `TextFragment`'s `node` is the deepest *element* ancestor of its text, so bare text sitting
+    /// directly in the block reports the block itself rather than the child text node — there is no
+    /// way to tell *which* bare-text sibling such a fragment came from, and guessing would move
+    /// boxes on pages this rule should not touch. Elements and atomic inlines (the shape every real
+    /// instance of this idiom takes) are attributable and are what this handles.
+    ///
+    /// **RTL is deliberately excluded** by the caller: under an RTL base direction the inline start
+    /// is the right edge, and `frags` have already been through UAX #9 rule L2, so "the trailing
+    /// edge of the last preceding fragment" is the wrong end of the wrong box. Named as residue
+    /// rather than guessed at.
+    fn refine_inline_static_positions(
+        &self,
+        kids: &[NodeId],
+        frags: &[TextFragment],
+        atomics: &[LayoutBox],
+    ) {
+        if !kids.iter().any(|&k| self.kid_is_out_of_flow(k)) {
+            return;
+        }
+        for (i, &k) in kids.iter().enumerate() {
+            if !self.kid_is_out_of_flow(k) {
+                continue;
+            }
+            // Every node under an in-flow sibling that PRECEDES this one in source order. Anything
+            // after it must not push it along, which is why this is a prefix and not the whole set.
+            let mut before: HashSet<NodeId> = HashSet::new();
+            for &prev in &kids[..i] {
+                if self.kid_is_out_of_flow(prev) {
+                    continue;
+                }
+                before.insert(prev);
+                before.extend(self.dom.descendants(prev));
+            }
+            if before.is_empty() {
+                continue;
+            }
+            // The furthest-along point flow reached: latest line first, then rightmost on it. A
+            // fragment that wrapped onto a later line is genuinely later, so `line_top` outranks `x`.
+            let mut best: Option<(f32, f32)> = None;
+            let mut take = |top: f32, right: f32| {
+                let better = match best {
+                    None => true,
+                    Some((t, r)) => top > t + 0.5 || ((top - t).abs() <= 0.5 && right > r),
+                };
+                if better {
+                    best = Some((top, right));
+                }
+            };
+            for f in frags {
+                if f.node.is_some_and(|n| before.contains(&n)) {
+                    take(f.line_top, f.x + f.width);
+                }
+            }
+            for b in atomics {
+                if b.node.is_some_and(|n| before.contains(&n)) {
+                    take(b.rect.y, b.rect.x + b.rect.width);
+                }
+            }
+            if let Some((top, right)) = best {
+                self.static_pos.borrow_mut().insert(k, (right, top));
+            }
+        }
+    }
+
     /// Does `node`'s containing block resolve `direction` to `rtl`? Used only by CSS 2.1 §10.3.3's
     /// over-constrained rule, which is defined against the CONTAINING BLOCK's `direction` rather
     /// than the box's own — and `direction` is inherited, so the two agree everywhere except the
@@ -2898,10 +2975,10 @@ impl Ctx<'_> {
             // grid parents return earlier still through paths that place abs children by other
             // means. Only the pure-IFC parent lost them.
             //
-            // `(cx, cy)` is the content-box origin, which is exact when the abs box is the first
-            // thing in the parent (the idiom above). Text *preceding* it on the line should push
-            // the static position along that line; that refinement is not modelled here, and the
-            // box lands at the line start instead.
+            // `(cx, cy)` is the content-box origin — the correct answer only when the abs box is the
+            // first thing in the parent. `refine_inline_static_positions` below replaces it with the
+            // real inline advance once the line has been laid out; this is the seed, and the fallback
+            // for anything that refinement cannot attribute.
             for &k in &kids {
                 if self.kid_is_out_of_flow(k) {
                     self.static_pos.borrow_mut().insert(k, (cx, cy));
@@ -2924,6 +3001,13 @@ impl Ctx<'_> {
                 Some(&bcs),
                 bcs.direction == manuk_css::Direction::Rtl,
             );
+            // ── **CSS 2.1 §10.3.7 / §10.6.4 — THE STATIC POSITION INCLUDES THE INLINE ADVANCE.**
+            //    Now that the line exists, replace the seed above with where flow actually got to.
+            //    Inert unless this block has an out-of-flow child, and skipped under an RTL base
+            //    direction (see the helper).
+            if bcs.direction != manuk_css::Direction::Rtl {
+                self.refine_inline_static_positions(&kids, &frags, &atomics);
+            }
             // `text-overflow: ellipsis` truncates a clipped, non-wrapping single line with `…`. Only
             // fires on a box that clips (`overflow` ≠ visible) and doesn't wrap (`nowrap`/`pre`); a
             // line that fits is untouched, so nothing without a real overflow changes.
@@ -7897,6 +7981,139 @@ mod tests {
         assert!(
             rects.contains_key(&a) || true,
             "the unstyled node is laid out with the initial style, not fatal"
+        );
+    }
+
+    /// **CSS 2.1 §10.3.7 / §10.6.4 — THE STATIC POSITION INCLUDES THE INLINE ADVANCE.** An
+    /// insetless `position:absolute` box sits where its hypothetical box would have started; on an
+    /// inline line that is *after* everything before it, not at the line's start edge.
+    ///
+    /// The engine recorded the container's content-box origin — exact only when the abs box is the
+    /// first thing in its parent, which the code said out loud and left unbuilt: *"Text preceding it
+    /// on the line should push the static position along that line; that refinement is not modelled
+    /// here."* That is Bootstrap's `.sr-only`, on every framework page that ships it, plus every
+    /// badge, caret and tooltip written as `position:absolute` after inline content.
+    ///
+    /// Chrome-measured, `body{margin:0;font:16px Arial}`, a 400px `position:relative` wrapper,
+    /// `a{display:block}`, x of the absolutely positioned span:
+    ///
+    /// ```text
+    ///                                                    Chrome   before   after
+    ///   <span>Hello</span><span class=sr-only>              35       -1      35    ✗→✓
+    ///   <span>Hello</span><span position:absolute>          36        0      36    ✗→✓
+    ///   <span position:absolute>FIRST</span><span>Hello      0        0       0     ✓ control
+    ///   …a WRAPPED first span, then <span position:absolute> 61        0      61    ✗→✓
+    ///   the in-flow spans themselves                          0        0       0     ✓ control
+    ///   dir=rtl wrapper                                     334        0       0     ✓ INERT
+    /// ```
+    ///
+    /// Row 1 carries `margin:-1px`, so 35 is 36 less the margin — the margin is applied *after* the
+    /// static position and the two must not be conflated. Row 4 is why the search is
+    /// `(line_top, then x)` rather than `max(x)`: a fragment that wrapped onto a later line is
+    /// genuinely later even though its right edge is further left.
+    ///
+    /// ⚠ **MEASURED RESIDUE, NAMED RATHER THAN GUESSED (both reproduce in this fixture):**
+    /// * **Bare text directly in the block** (`<a>Bare text<span position:absolute>`) belongs at
+    ///   **x=64** and stays at 0. A `TextFragment`'s `node` is the deepest *element* ancestor, so
+    ///   such a fragment reports the block itself and there is no way to tell WHICH bare-text
+    ///   sibling it came from. Attribution is by subtree, and what it cannot attribute keeps the
+    ///   old seed.
+    /// * **`left:200px; top:auto`** belongs at **y=294** and lands at 234 — the containing block's
+    ///   top. `position_absolutes` anchors to the static position only when **all four** insets are
+    ///   `auto`, but §10.3.7 is written PER AXIS. A separate defect in the same section, exposed by
+    ///   this fixture and deliberately not fixed in the same tick.
+    /// * **RTL is excluded by the caller** — under an RTL base direction the inline start is the
+    ///   right edge and `frags` have already been through UAX #9 rule L2, so "the trailing edge of
+    ///   the last preceding fragment" is the wrong end of the wrong box. The row above asserts the
+    ///   guard's INERTNESS, not correctness: Chrome's answer there is 334.
+    ///
+    /// To watch it go RED, drop the `refine_inline_static_positions` call: rows 1, 2 and 4 read the
+    /// line start and all three controls stay green.
+    #[test]
+    fn an_insetless_absolute_box_starts_after_the_inline_content_before_it() {
+        let (dom, root) = layout_html(
+            "<div class=w><a id=a1><span id=s1>Hello</span><span id=s2 class=sr>SR</span></a></div>\
+             <div class=w><a id=a2><span id=s3>Hello</span><span id=s4 class=ab>PLAIN</span></a></div>\
+             <div class=w><a id=a3><span id=s5 class=ab>FIRST</span><span id=s6>Hello</span></a></div>\
+             <div class=w><a id=a5><span id=s9>wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww \
+                wrapped</span><span id=s10 class=ab>AFTERWRAP</span></a></div>\
+             <div class=w dir=rtl><a id=a7><span id=s12>Hello</span><span id=s13 class=ab>RTL</span></a></div>",
+            "body{margin:0} .w{position:relative;width:400px} a{display:block} \
+             .ab{position:absolute} \
+             .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;border:0}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let x = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            rects[&n].x
+        };
+        // `Hello` is 36px at 16px Arial, so every "after Hello" row is 36 (less any margin).
+        let hello_end = x("s1")
+            + rects[&dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("s1"))
+                .unwrap()]
+                .width;
+        for (id, want, why) in [
+            (
+                "s2",
+                hello_end - 1.0,
+                "Bootstrap's .sr-only starts AFTER the text before it, less its own margin:-1px",
+            ),
+            (
+                "s4",
+                hello_end,
+                "a plain insetless abspos span starts at the inline advance, not the line start",
+            ),
+            (
+                "s5",
+                0.0,
+                "control: an abspos box that is FIRST has nothing before it and stays at the start",
+            ),
+            (
+                "s12",
+                0.0,
+                "control: the in-flow span itself is untouched",
+            ),
+            (
+                "s13",
+                0.0,
+                "the RTL guard is INERT — Chrome puts this at 334 and closing that is separate work",
+            ),
+        ] {
+            assert!(
+                (x(id) - want).abs() < 1.0,
+                "#{id} is at x={} and it belongs at {want} — {why}",
+                x(id)
+            );
+        }
+        // The wrapped row: the abs box follows the SECOND line, so it is both lower and further
+        // LEFT than the first line's right edge — the case a `max(x)` search would get wrong.
+        let s9 = dom
+            .descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("s9"))
+            .expect("s9");
+        let s10 = dom
+            .descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("s10"))
+            .expect("s10");
+        let (w, a) = (rects[&s9], rects[&s10]);
+        assert!(
+            a.x > 1.0 && a.x < w.width,
+            "the abs box after a WRAPPED span sits at the end of the LAST line (x={} of a {}px \
+             wrapped box), not at the line start and not past the container",
+            a.x,
+            w.width
+        );
+        assert!(
+            a.y > w.y + 1.0,
+            "…and on that last line, not the first (y={} vs the box top {})",
+            a.y,
+            w.y
         );
     }
 

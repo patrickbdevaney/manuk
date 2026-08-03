@@ -3324,3 +3324,71 @@ this page none of the 41 is above the fold, which is itself the reason the two c
 here — the next probe needs a site whose first hero image is lazy, or a synthetic fixture.
 
 Set `LAST_SURFACE_AUDIT: 838`.
+
+## Audit #56 — tick 848 (2026-08-02)
+
+SOURCES (web, not memory): the Interop 2026 focus-area list
+(`github.com/web-platform-tests/interop/blob/main/2026/README.md`, and the vendor announcements at
+`webkit.org/blog/17818/`, `web.dev/blog/interop-2026`, `igalia.com/news/interop-2026.html`,
+`hacks.mozilla.org/2026/02/launching-interop-2026/`); Baseline 2026 (`web.dev/baseline/2026` and the
+2026 monthly digests); Ladybird's 2026 newsletters (`ladybird.org/newsletter/2026-06-30/`,
+`2026-01-31/`) for what an independent engine finds hard and in what order.
+
+### THE RECONCILIATION — the map is CURRENT, and that is the finding that made the gap visible
+
+All **20** Interop 2026 focus areas and **3 of the 4** investigation efforts already have rows, with
+honest statuses: container style queries `missing`, anchor positioning `missing`, `attr()` partial,
+`contrast-color()` partial, CSS zoom **gated**, custom highlights `missing`, dialogs+popovers
+**gated**, fetch uploads/ranges **gated**, IndexedDB **gated**, JSPI `missing`, media pseudo-classes
+partial, Navigation API **gated**, scoped custom element registries `missing`, scroll-driven
+animations `missing`, scroll snap **gated**, `shape()` partial, view transitions **gated**, WebRTC
+`missing` *(explicitly out of scope, STATUS.md)*, WebTransport `missing`, JPEG XL `missing`, WebVTT
+**gated**. Baseline 2026's newly- and widely-available lists likewise all landed on existing rows —
+`lh`/`rlh` **gated**, multi-keyword `display` **gated**, `Content-Encoding: zstd` `missing`,
+`:active-view-transition` `missing`, `shape()`, `contrast-color()`.
+
+**The one Interop 2026 item with NO row is the accessibility-tree investigation — and specifically the
+ACCESSIBLE NAME.** `accname` matched **zero rows in the whole file**, while its neighbours are green:
+a11y STATES gated by `G_A11Y_STATE`, a11y interactive ROLES gated by `G_A11Y_ROLES`, focus management
+gated, `inert` gated. **That is exactly what makes an absent row invisible — the capability looks
+covered because everything beside it is.** And `STATUS.md`'s platform map item 8 has said for ~800
+ticks that whether the tree's *roles, names and focus order* are correct is UNMEASURED, so the map
+and the status file disagreed and nothing compared them.
+
+It is doubly weighted here: **the agent identifies elements by name.** t845 established that the
+agent's click point IS layout geometry; the same argument applies one field over — the agent's
+element *identity* is the accessible name, and a wrong accname is a wrong click on a page where every
+box is in the right place.
+
+### WHAT WAS ADDED — 8 rows, all `unknown`, `MEASURED` unchanged at 432
+
+| row | why it was invisible |
+|---|---|
+| **accessible NAME computation (accname)** | states and roles are gated; the name has never had a row |
+| **`command` / `commandfor` invoker attributes** | the map gated `ToggleEvent.source`, the EVENT that reports which element opened a popover, while the ATTRIBUTES that do the opening had no row — **a gated consumer of an unmeasured producer** |
+| **CSS `if()`** | not present under any spelling |
+| **`::scroll-marker` / `::scroll-marker-group` / `::scroll-button`** | `carousel` matched only the `scroll snap` row: the snap axis is measured, the carousel's own controls are not |
+| **`interesttarget` / interest invokers** | zero rows |
+| **Translator / LanguageDetector / Summarizer** | the map stopped at `Prompt API (LanguageModel)`; a **half-present family** is the exact shape t772 proved routes a page into a wall rather than to its fallback |
+| **Compute Pressure (`PressureObserver`)** | zero rows |
+| **`writing-suggestions`** | zero rows |
+
+### WHAT WE HAD BEEN WRONG ABOUT
+
+Not a phantom this time — a **blind spot with green edges**. The previous audits have been hunting
+rows that were WRONG (six phantoms). This one found a row that was ABSENT, and absent specifically
+because the capabilities either side of it are gated, which is the failure mode a coverage count
+cannot see: `280 gated / 108 missing / 35 partial / 9 works` looked like a map with no holes.
+
+### RE-RANK
+
+**It does not displace the render burndown**, and the honest reason is arithmetic rather than
+enthusiasm: M1 is `shape≥0.75 AND jarring-clean` on the CrUX corpus and accname moves neither term.
+But it is now the **top-ranked row on the agentic axis**, above the remaining function-leg work,
+because it is one probe away from a verdict — the same "cheap measure-and-pin probe" shape that has
+paid every time — and because a wrong name is a silent mis-actuation exactly like t845's click point.
+
+**Next: a probe, not a build.** Take the accname precedence order (aria-labelledby > aria-label >
+native `<label>`/`alt`/`caption` > `title` > content), run it against Chrome's computed
+`accessibleName` on a fixture that exercises each rung, and record the verdict. `unknown` is the
+honest status until then, and the invariant this loop is graded on is MEASURED, not `missing`.
