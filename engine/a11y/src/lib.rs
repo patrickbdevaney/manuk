@@ -657,34 +657,70 @@ impl A11yNode {
 
     /// The deepest node whose `bbox` contains `(x, y)` — hit-testing for click-by-
     /// coordinate. Deepest wins, since a button inside a `main` should beat the `main`.
+    ///
+    /// Occlusion-aware: the box on the highest stacking layer (`z`) that contains the point wins,
+    /// so a `position:fixed`/high-`z` overlay beats content beneath it. **Between two nodes on the
+    /// same layer that are not related, the smaller box wins** — a button laid over a card is the
+    /// more specific target.
+    ///
+    /// ⚠⚠⚠ **A DESCENDANT ALWAYS BEATS ITS ANCESTOR ON THE SAME LAYER, WHATEVER THE AREAS SAY.**
+    /// This used to be a flat pre-order scan resolving *every* pair by area, with `<=` letting the
+    /// deeper node win an **exact** tie because pre-order sees it later. That is only correct while
+    /// an ancestor's box is never *smaller* than the descendant's — which held by accident, because
+    /// a boxless inline's rect was lifted verbatim from its children and so was byte-identical to
+    /// them.
+    ///
+    /// t853 gave every inline its own content area, and Wikipedia's `.hlist li { display: inline }`
+    /// promptly produced a `<li>` a third of a pixel wider and a quarter-pixel taller than the `<a>`
+    /// inside it. Float dust, and it inverted the answer: **16 links on the G6 page became
+    /// unclickable**, because the shell walks *up* from whatever was hit looking for an `<a href>`
+    /// and an ancestor `<li>` has no link above it. The geometry was right; the tie-break was
+    /// resolving an ancestor/descendant question with a rule that only ever meant to order
+    /// *unrelated* overlapping boxes.
+    ///
+    /// Chrome's `elementFromPoint` has no such ambiguity — the topmost, deepest element wins, full
+    /// stop. So the walk is now a recursion that resolves the relationship structurally rather than
+    /// numerically: a subtree reports its own best, and a hitting node loses to any hitting
+    /// descendant on the same layer. Area only ever compares *siblings' subtrees*, which is the
+    /// only place it was ever the right question.
     pub fn hit_test(&self, x: f32, y: f32) -> Option<&A11yNode> {
-        // Occlusion-aware: the box on the highest stacking layer (`z`) that contains the
-        // point wins — so a `position:fixed`/high-`z` overlay beats content beneath it.
-        // Within a layer, the smallest (deepest) box wins; on an exact area tie the deeper
-        // node wins, and since `iter()` is pre-order "deeper" is "seen later" (`<=`).
-        let mut best: Option<&A11yNode> = None;
-        for n in self.iter() {
-            // `pointer-events: none` — transparent to hit-testing; the point passes through to the
-            // element behind, so a decorative overlay never steals an agent's coordinate click.
-            if !n.hittable {
-                continue;
-            }
-            let Some(b) = n.bbox else { continue };
-            if !(x >= b.x && x < b.right() && y >= b.y && y < b.bottom()) {
-                continue;
-            }
-            let area = b.width * b.height;
-            match best {
-                None => best = Some(n),
-                Some(bn) => {
-                    let ba = bn.bbox.map_or(f32::MAX, |r| r.width * r.height);
-                    if n.z > bn.z || (n.z == bn.z && area <= ba) {
-                        best = Some(n);
-                    }
-                }
+        fn area(n: &A11yNode) -> f32 {
+            n.bbox.map_or(f32::MAX, |r| r.width * r.height)
+        }
+        // Two candidates from DIFFERENT subtrees: higher layer wins, then the smaller box. `<=`
+        // keeps the later (document-order) node on an exact tie, which is what the flat scan did.
+        fn across<'a>(a: &'a A11yNode, b: &'a A11yNode) -> &'a A11yNode {
+            if b.z > a.z || (b.z == a.z && area(b) <= area(a)) {
+                b
+            } else {
+                a
             }
         }
-        best
+        fn go<'a>(n: &'a A11yNode, x: f32, y: f32) -> Option<&'a A11yNode> {
+            let mut best: Option<&A11yNode> = None;
+            for c in &n.children {
+                if let Some(cand) = go(c, x, y) {
+                    best = Some(match best {
+                        None => cand,
+                        Some(b) => across(b, cand),
+                    });
+                }
+            }
+            // `pointer-events: none` — transparent to hit-testing; the point passes through to the
+            // element behind, so a decorative overlay never steals an agent's coordinate click.
+            let hits = n.hittable
+                && n.bbox
+                    .is_some_and(|b| x >= b.x && x < b.right() && y >= b.y && y < b.bottom());
+            match (best, hits) {
+                // The descendant wins unless this node is on a HIGHER layer — a positioned ancestor
+                // painted above its own overflowing content is the one case where it should not.
+                (Some(b), true) => Some(if n.z > b.z { n } else { b }),
+                (Some(b), false) => Some(b),
+                (None, true) => Some(n),
+                (None, false) => None,
+            }
+        }
+        go(self, x, y)
     }
 }
 
@@ -1228,6 +1264,72 @@ mod tests {
             state: A11yState::default(),
             children: vec![],
         }
+    }
+
+    /// ⚠⚠⚠ **A DESCENDANT BEATS ITS ANCESTOR EVEN WHEN THE ANCESTOR'S BOX IS SMALLER** — the case
+    /// the old flat area scan got wrong, and it is not hypothetical geometry.
+    ///
+    /// Wikipedia's `.hlist li { display: inline }` puts an `<a>` inside an inline `<li>`. Both are
+    /// boxless, so both take their geometry from the same line, and once t853 gave each inline its
+    /// own content area the `<li>` came out a third of a pixel wider and a quarter-pixel taller
+    /// than the `<a>` it contains. Under smallest-area-wins the **ancestor** took the click, and
+    /// the shell — which walks *up* from the hit node looking for an `<a href>` — found no link
+    /// above an `<li>`. **16 links on the G6 page became unclickable on float dust.**
+    ///
+    /// Chrome's `elementFromPoint` has no such ambiguity: topmost, then deepest, full stop.
+    ///
+    /// Goes RED by restoring the area comparison for the ancestor/descendant pair — the parent
+    /// `NodeId(1)` is returned and every nested link on the web becomes a click on its wrapper.
+    #[test]
+    fn hit_test_prefers_a_descendant_over_a_smaller_ancestor() {
+        let link = A11yNode {
+            node: NodeId(2),
+            role: Role::Link,
+            name: "Collie".into(),
+            // Marginally LARGER than its parent, in both axes — the float dust that inverted this.
+            bbox: Some(Rect {
+                x: 740.0,
+                y: 3193.75,
+                width: 34.5,
+                height: 16.25,
+            }),
+            z: 0,
+            hittable: true,
+            state: A11yState::default(),
+            children: vec![],
+        };
+        let li = A11yNode {
+            node: NodeId(1),
+            role: Role::ListItem,
+            name: String::new(),
+            bbox: Some(Rect {
+                x: 740.33,
+                y: 3193.75,
+                width: 34.43,
+                height: 16.0,
+            }),
+            z: 0,
+            hittable: true,
+            state: A11yState::default(),
+            children: vec![link],
+        };
+        let root = A11yNode {
+            node: NodeId(0),
+            role: Role::Document,
+            name: String::new(),
+            bbox: None,
+            z: 0,
+            hittable: true,
+            state: A11yState::default(),
+            children: vec![li],
+        };
+        assert_eq!(
+            root.hit_test(755.0, 3200.0).map(|n| n.node),
+            Some(NodeId(2)),
+            "the <a> inside an inline <li> must take the click even though the <li>'s box is \
+             smaller — an ancestor is never a more specific target than its own descendant, and \
+             resolving that pair by AREA is how 16 Wikipedia links became unclickable"
+        );
     }
 
     #[test]

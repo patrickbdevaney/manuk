@@ -525,6 +525,37 @@ impl LayoutBox {
         // Each contribution walks up only as far as the first ancestor that HAS a box — that
         // ancestor owns its own border box and must not be inflated by content that merely
         // overflows it.
+        //
+        // ── **THE FRAGMENT'S OWN OWNER TAKES ITS FRAGMENTS, AND NOTHING ELSE VERTICALLY.**
+        //
+        // Seeded first, before any lifting, because the lift below has to be able to ask *does this
+        // ancestor own an inline box?* and get the answer from a map that is already complete.
+        for (&owner, &r) in &frags {
+            if !boxes.contains_key(&owner) && dom.is_element(owner) {
+                add(&mut out, owner, r);
+            }
+        }
+        // ⚠⚠⚠ **A NON-REPLACED INLINE'S BOX IS RESOLVED PER AXIS** — the same shape as the static
+        // position (t849), and getting one axis right while unioning the other is what produced a box
+        // 13px too short *and* 10px too low on the commonest icon idiom on the web.
+        //
+        // Chrome-measured, `16px/1.2 sans-serif`:
+        //
+        // ```text
+        //   <span><i 8x40 inline-block></i></span>   [11,93, 8,17]   <- the 40px icon OVERFLOWS it
+        //   <span 10px><b 40px>x</b></span>          [11,48,22,11]   <- the 44px child does too
+        // ```
+        //
+        // * **Block axis** — the inline box is the element's OWN content area (its font's ascent +
+        //   descent, on the line's baseline), and a taller descendant does *not* grow it. That box
+        //   arrives here as the element's own fragments, which `collect_inline_node` now guarantees
+        //   exist even when the element carries no text of its own.
+        // * **Inline axis** — the box IS the advance of everything inside it, so a descendant's
+        //   extent must still be unioned in.
+        //
+        // So: an ancestor that owns fragments takes only the horizontal extent of what it lifts. An
+        // ancestor that owns none takes the whole rect, which is the pre-existing behaviour and the
+        // only thing standing between an exotic boxless element and having no geometry at all.
         let mut lift =
             |start: NodeId, r: Rect, out: &mut std::collections::HashMap<NodeId, Rect>| {
                 let mut cur = dom.parent(start);
@@ -533,17 +564,19 @@ impl LayoutBox {
                         break;
                     }
                     if dom.is_element(n) {
-                        add(out, n, r);
+                        match out.get_mut(&n).filter(|_| frags.contains_key(&n)) {
+                            Some(e) => {
+                                let l = e.x.min(r.x);
+                                e.width = (e.x + e.width).max(r.x + r.width) - l;
+                                e.x = l;
+                            }
+                            None => add(out, n, r),
+                        }
                     }
                     cur = dom.parent(n);
                 }
             };
         for (&owner, &r) in &frags {
-            // The fragment's own owner is boxless by construction (an inline element), so it takes
-            // the fragment directly before the walk begins.
-            if !boxes.contains_key(&owner) && dom.is_element(owner) {
-                add(&mut out, owner, r);
-            }
             lift(owner, r, &mut out);
         }
         for (&node, &r) in &boxes {
@@ -6024,6 +6057,56 @@ impl Ctx<'_> {
                         holds_line: false,
                     });
                 }
+                // ── ⚠⚠⚠ **AN INLINE THAT CARRIES NO FRAGMENT OF ITS OWN STILL HAS AN INLINE BOX.**
+                //
+                // `<span class="icon"><i></i></span>` — an inline whose entire content is an ATOMIC
+                // inline (a sprite `<i>`, an `<img>`, an icon glyph in an `inline-block`) or a
+                // nested inline (`<a><em>x</em></a>`) — emits items that all belong to something
+                // ELSE. It is not empty, so the branch above does not fire; it has no padding, so
+                // neither edge spacer fires; and it owns no `Word`, because the text belongs to the
+                // descendant. So it reached `node_rects` with **no fragment at all**, and the only
+                // geometry left to find was the child's box.
+                //
+                // Chrome-measured, `16px/1.2 sans-serif` (`--headless=new --dump-dom`):
+                //
+                // ```text
+                //                                              Chrome           before
+                //   <span><i 8x4  inline-block></i></span>      [11, 1, 8,17]    [11,11,8, 4]
+                //   <span><i 8x40 inline-block></i></span>      [11,93, 8,17]    [11,70,8,40]
+                //   <span 10px><b 40px>x</b></span>             [11,48,22,11]    [11,21,22,44]
+                // ```
+                //
+                // The inline box is the element's OWN content area — its font's ascent + descent, on
+                // the line's baseline — and Chrome does **not** grow it to cover a taller descendant
+                // (rows 2 and 3: the child overflows it and the parent is unmoved). `node_rects`
+                // owns the other half of that rule, per axis; this only has to make sure the element
+                // reports a box at all.
+                //
+                // TWO reporters, at the head and the tail of the element's items, because an inline
+                // that wraps spans several lines and Chrome's rect covers the first line's content
+                // top through the last line's bottom. One reporter would report only the line it
+                // happened to land on. Both are zero-width and `holds_line: false`, so neither
+                // brings a line into existence, neither consumes a pending space, and — because
+                // `report_ascent` is `Some` — neither feeds a `line_height` floor into `close_line`.
+                // The line boxes are byte-identical; only the reported geometry changes.
+                //
+                // Reaching here implies `pad_l == pad_t == pad_b == 0` — any of those would have
+                // emitted an edge spacer that already carries this node — so the reported box is the
+                // bare content area, with no padding term to add.
+                else if !out[mark..].iter().any(|it| it.owner() == Some(node)) {
+                    let ts = text_style(&s, self.fonts);
+                    let lm = self.fonts.line_metrics(ts.font_key, ts.font_size);
+                    let reporter = || InlineItem::Spacer {
+                        width: 0.0,
+                        node: Some(node),
+                        space_before: false,
+                        report_height: lm.ascent.round() + lm.descent.round(),
+                        report_ascent: Some(lm.ascent.round()),
+                        holds_line: false,
+                    };
+                    out.push(reporter());
+                    out.insert(mark, reporter());
+                }
             }
             _ => {}
         }
@@ -7120,6 +7203,26 @@ enum InlineItem {
         height: f32,
         node: Option<NodeId>,
     },
+}
+
+impl InlineItem {
+    /// **The element whose geometry this item reports** — the deepest element ancestor of a word's
+    /// text, the owner of a padding edge, the element a `<br>` is. `None` for an item that reports
+    /// nobody's box: an `Atomic` (its `LayoutBox` already carries its own node) and an `AbsPseudo`
+    /// (generated content, which is not an element).
+    ///
+    /// `collect_inline_node` asks this one question — *did anything I just emitted claim MY node?* —
+    /// to decide whether the element needs a reporter of its own. Written as an accessor rather than
+    /// inline so that adding a variant forces the answer to be given, instead of silently defaulting
+    /// to "no" and handing the element a duplicate box.
+    fn owner(&self) -> Option<NodeId> {
+        match self {
+            InlineItem::Word { node, .. }
+            | InlineItem::Spacer { node, .. }
+            | InlineItem::Break { node, .. } => *node,
+            InlineItem::Atomic { .. } | InlineItem::AbsPseudo { .. } => None,
+        }
+    }
 }
 
 /// **The baseline of the LAST in-flow line box inside `b`**, in `b`'s own coordinate space, or

@@ -2683,6 +2683,83 @@ fn rewrite_parse_only(
 mod tests {
     use super::*;
 
+    /// ⚠⚠⚠ **THE TWO UA SHEETS ARE HAND-MAINTAINED TWINS AND THEY DRIFT — SO MAKE THE DRIFT A
+    /// GATE INSTEAD OF A COMMENT.**
+    ///
+    /// `UA_CSS` (Stylo, the SHIPPING cascade) and `apply_ua_defaults` (`MinimalCascade`, which is
+    /// what `manuk-agent` and every non-`stylo` build run) must agree about which elements are
+    /// **block**. They have now disagreed three ticks running, in both directions:
+    ///
+    /// * **t851** — `MinimalCascade` gave `box-sizing: border-box` to all four form tags and
+    ///   `stylo_engine.rs` gave it to none. Each sheet's error hid the other's from whichever test
+    ///   you happened to write.
+    /// * **t853** — `UA_CSS` blocks `form, fieldset, center, menu, dl` and `summary`; this list
+    ///   carried the table family and **none of the rest**, so under `MinimalCascade` a `<form>`
+    ///   was a *boxless inline*. Once an inline reported its own content area, the form's box came
+    ///   out **smaller than the button inside it**, and `A11yNode::hit_test` — smallest-area-wins —
+    ///   gave the agent's coordinate click to the form instead of the control.
+    ///
+    /// The comment above `apply_ua_defaults` has said *"keep in lockstep"* the whole time. A
+    /// comment cannot go red. This reads the shipping sheet's own `display: block` rule as the
+    /// source of truth and asserts the minimal cascade agrees, tag by tag.
+    ///
+    /// **How it goes RED:** delete any tag from either list. Removing `form` from
+    /// `apply_ua_defaults` reproduces the t853 mis-actuation exactly.
+    #[test]
+    fn both_ua_sheets_agree_on_which_elements_are_block() {
+        // The shipping sheet's block rule, read out of the sheet rather than re-typed — a copy
+        // would drift for the same reason the two sheets did.
+        let decl = "{ display: block; }";
+        let rule = UA_CSS
+            .split(decl)
+            .next()
+            .expect("UA_CSS has a `display: block` rule");
+        let selectors = &rule[rule
+            .rfind("*/")
+            .map(|i| i + 2)
+            .unwrap_or(0)
+            .max(rule.rfind('}').map(|i| i + 1).unwrap_or(0))..];
+        let tags: Vec<&str> = selectors
+            .split(',')
+            .map(|t| t.trim())
+            .filter(|t| !t.is_empty() && t.chars().all(|c| c.is_ascii_alphanumeric()))
+            .collect();
+        assert!(
+            tags.len() > 20 && tags.contains(&"form") && tags.contains(&"div"),
+            "the UA_CSS block rule did not parse — got {tags:?}. This assertion exists so a \
+             reformatting of the sheet cannot silently turn this gate into a no-op over an empty \
+             list, which is the vacuous-gate failure mode."
+        );
+
+        let mut drifted = Vec::new();
+        for tag in &tags {
+            let mut s = crate::ComputedStyle::initial();
+            let el = manuk_dom::ElementData {
+                name: (*tag).to_string(),
+                attrs: Vec::new(),
+                namespace: None,
+            };
+            crate::apply_ua_defaults(&mut s, &el);
+            // `table` and `caption` are block-level in CSS's sense and carry their own more
+            // specific inner display in the minimal cascade; everything else must be plain Block.
+            let ok = matches!(
+                s.display,
+                crate::Display::Block | crate::Display::Table | crate::Display::TableCaption
+            );
+            if !ok {
+                drifted.push(format!("{tag} -> {:?}", s.display));
+            }
+        }
+        assert!(
+            drifted.is_empty(),
+            "THE TWO UA SHEETS HAVE DRIFTED. `stylo_engine.rs`'s UA_CSS says these are \
+             `display: block`; `apply_ua_defaults` (MinimalCascade — what manuk-agent runs) does \
+             not: {drifted:?}.\n  A block element laid out as a boxless inline gets its geometry \
+             lifted from its children, which is how a <form> ended up SMALLER than the <button> \
+             inside it and stole the agent's click (t853)."
+        );
+    }
+
     /// `supports_condition` is the ONE evaluator behind both `@supports` and `CSS.supports()`.
     /// These assert it at the Rust boundary, so a JS-side regression and an engine-side one fail
     /// in different places.

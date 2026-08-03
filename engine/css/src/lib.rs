@@ -3633,6 +3633,28 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
     let (display, top_bottom_em, weight, scale): (Display, f32, u16, f32) = match tag {
         "html" | "body" | "div" | "section" | "article" | "header" | "footer" | "nav" | "main"
         | "aside" | "figure" | "figcaption" | "address" => (Block, 0.0, 400, 1.0),
+        // ⚠⚠⚠ **THE TWIN SHEETS HAD DRIFTED AGAIN, AND THIS TIME IT IS THIS ONE THAT IS SHORT.**
+        // `stylo_engine.rs` — the SHIPPING cascade — says
+        // `form, fieldset, table, caption, center, menu, dl { display: block }` and
+        // `summary { display: block }`; this list carried the table family and **none of the rest**,
+        // so a `<form>` was laid out as a *boxless inline* everywhere `MinimalCascade` runs — which
+        // is `manuk-agent`, the crate whose whole job is clicking things.
+        //
+        // The cost was not cosmetic. `<form><button>Go</button></form>` gave the form the button's
+        // lifted box, and once an inline reports its own content area (t853) the form's box became
+        // *smaller* than the button it contains — so `A11yNode::hit_test`, which resolves ties by
+        // smallest-area-wins, handed the agent's coordinate click to the **form**. A wrapper
+        // element the author never meant to be clickable swallowed the click on the control inside
+        // it.
+        //
+        // This is the t851 pattern one turn further on: two hand-maintained UA sheets, each
+        // concealing the other's gap from whichever test you happened to write, and the drift only
+        // becomes visible when something starts *depending* on the answer. Margins are left to the
+        // metrics that already exist (`dl`/`menu` take 1em there, the rest take none), so this is a
+        // `display` correction and nothing else.
+        // (`summary` is already blocked below, with its bold weight; `table`/`caption` carry
+        // their own inner display.)
+        "form" | "fieldset" | "center" | "menu" | "dl" => (Block, 0.0, 400, 1.0),
         "p" | "blockquote" => (Block, 1.0, 400, 1.0),
         "h1" => (Block, 0.67, 700, 2.0),
         "h2" => (Block, 0.75, 700, 1.5),

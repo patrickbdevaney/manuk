@@ -1622,3 +1622,65 @@ LEFT for us and flush RIGHT in Chrome (`#r` at Chrome `x=800` = 1200−400, ours
 §10.3.3 — the over-constrained equation ignores `margin-right` under `ltr` and **`margin-left` under
 `rtl`**. One miss per block under parent-relative shape, which is why it is not the mass; it is why
 an RTL page's whole sidebar sits on the wrong side.
+
+## An inline element's box is ITS OWN content area, resolved PER AXIS (t853)
+
+`<span class="icon"><i></i></span>` — an inline whose entire content is an **atomic** inline (a sprite
+`<i>`, an `<img>`, an icon glyph in an `inline-block`) or a nested inline (`<a><em>x</em></a>`) —
+emits nothing that belongs to *itself*: no `Word` (the text is the descendant's), no edge spacer (no
+padding), and it is not empty so the empty-inline reporter does not fire. It arrived at `node_rects`
+with **no fragment at all**, and the only geometry left to lift was the child's box.
+
+Chrome-measured, `16px/1.2 sans-serif` (`--headless=new --dump-dom` + `getBoundingClientRect`):
+
+```text
+                                              Chrome           before
+  <span><i 8x4  inline-block></i></span>      [11, 1, 8,17]    [11,11,8, 4]
+  <span><i 8x40 inline-block></i></span>      [11,93, 8,17]    [11,70,8,40]
+  <span 10px><b 40px>x</b></span>             [11,48,22,11]    [11,21,22,44]
+  <span></span>            (truly empty)      [11,38, 0, 0]
+```
+
+**Two facts, and the second is what makes the obvious fix wrong.**
+
+1. An inline that contributes content **has an inline box of its own** — its font's ascent + descent,
+   on the line's baseline. Row 1 is 17 tall because the *span's* font says so; nothing inside it is
+   17 tall.
+2. That box is **not unioned with its descendants in the block axis.** Rows 2 and 3 have a 40px icon
+   and a 44px `<b>` inside a 17px and an 11px parent; Chrome reports the parent unmoved and lets the
+   child overflow. In the **inline** axis the opposite holds — the box *is* the advance of everything
+   in it, which is why row 1 is 8 wide.
+
+So the rule is **per axis**, the same shape as the static position (t849). Rows 2 and 3 are the ones
+worth keeping in a gate: the common icon is *smaller* than its line, so a both-axes union is correct
+on row 1 and only row 2 tells you it is a coincidence.
+
+**Where each half lives.** `collect_inline_node` guarantees the element has fragments at all — two
+zero-width `Spacer` reporters, one at the head and one at the tail of its items, because an inline
+that wraps spans several lines and Chrome's rect runs from the first line's content top to the last
+line's bottom. Both are `holds_line: false` with `report_ascent: Some(..)`, so neither brings a line
+into existence, neither consumes a pending space, and neither feeds a `line_height` floor into
+`close_line` — the line boxes come out byte-identical. `node_rects` then owns the axis split: an
+ancestor that owns fragments takes only the **horizontal** extent of what it lifts; one that owns
+none takes the whole rect, which is the pre-existing behaviour and the only thing keeping an exotic
+boxless element from having no geometry at all.
+
+⚠ **THIS IS AN I3 FIX, NOT A SHAPE FIX, AND THE DIFFERENCE IS NOT RHETORICAL.** `node_rects` is a
+shared producer:
+
+```text
+  LayoutBox::node_rects()  →  manuk_a11y::build_tree_with_rects  →  A11yNode.bbox  →  the click point
+```
+
+The agent clicks the **centre of the bbox**. Reported as the 4px icon box, the click point for an
+icon button was computed 3.5px low in a box 13px too short — on the single most common clickable
+idiom there is. Ranked on M1 that is a sub-tolerance `shape` term the corpus cannot price; ranked on
+I3 it is a mis-actuation surface, and **nothing in the burndown's ranker (`in-scope sites × dy`) can
+see it** (CONSTITUTION-CHECK #72). The gate therefore asserts the a11y bbox *and* `node_rects` in the
+same file: five consecutive geometry ticks passed I3 only because the producer is shared, and a fix
+to the producer itself is exactly where that accident stops protecting you.
+
+**Residue, named rather than hidden:** the reporters bound the element's first and last lines, so a
+boxless inline whose content wraps across **three or more** lines reports the outer two and not any
+middle line's horizontal extent. Chrome unions every fragment. One line's worth of width on a
+multi-line boxless inline, and it is a strict improvement on lifting the child's box.

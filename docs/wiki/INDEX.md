@@ -1408,6 +1408,7 @@
   - L1495 · Chrome does not break after a solidus (t791)
   - L1527 · A text-bearing inline-block sits on its own baseline (t795)
   - L1562 · UAX #9 rule L2: a line's inline BOXES are reordered — and having the other half of bidi is what hid it
+  - L1626 · An inline element's box is ITS OWN content area, resolved PER AXIS (t853)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1435,4 +1436,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1346 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1347 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

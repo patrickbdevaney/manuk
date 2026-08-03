@@ -588,3 +588,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 850	a2d876f0	1785728245	2026-08-02T23:37:25-04:00	4494	capability	63	8	399	34	379	81	3896	6960	0	443	0	a button centres its content vertically, and no stylesheet can say so (2026-08-02)
 851	831c2bf3	1785732451	2026-08-03T00:47:31-04:00	4206	capability	63	10	298	35	379	81	3896	6960	0	444	0	three form controls are 20px too tall, and one UA rule says so (2026-08-02)
 852	b5696564	1785732786	2026-08-03T00:53:06-04:00	335	measurement	63	5	231	33	379	81	3896	6960	0	444	0	the constitution check, and an I3 defect the loop filed as a shape number (2026-08-03)
+853	89d2e3dd	1785742017	2026-08-03T03:26:57-04:00	9231	capability	63	12	805	62	380	81	3896	6960	0	447	0	an icon-wrapping `<span>` is its own line box, and that is the agent's click point (2026-08-03)

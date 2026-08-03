@@ -46371,6 +46371,146 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 853 — an icon-wrapping `<span>` is its own line box, and that is the agent's click point (2026-08-03)
+
+TICK SHAPE: capability — the I3 residue check #72 named, landed with the click-point assertion the
+constitution asks for **in the same tick**.
+
+HYPOTHESIS: a non-replaced inline element's border box is **its own content area** (its font's
+ascent + descent, on the line's baseline), resolved **per axis**: the height is the element's own
+metrics and is NOT unioned with a taller descendant; the width IS the advance of everything inside
+it. We had neither half. An inline that carries no fragment of its own — `<span class="icon"><i></i>
+</span>`, or `<a><em>x</em></a>` — emits nothing that belongs to *itself* (no `Word`: the text is the
+descendant's; no edge spacer: no padding; not empty, so the empty-inline reporter does not fire), so
+`node_rects` fell back to lifting the child's box.
+
+RESULT — **Chrome-exact on all four rows, on the shipping cascade.** Chrome-measured
+(`--headless=new --dump-dom` + `getBoundingClientRect`, body `16px/1.2 sans-serif`):
+
+```text
+                                              Chrome           before      after
+  #a  <span><i 8x4  inline-block></i></span>  [11, 1, 8,17]    [11,11,8, 4]  ✓ 8x17
+  #c  <span><i 8x40 inline-block></i></span>  [11,93, 8,17]    [11,70,8,40]  ✓ 8x17
+  #b  <span 10px><b 40px>x</b></span>         [11,48,22,11]    [11,21,22,44] ✓ 22x11
+  #s5 <span>hi</span>          (CONTROL)      [11,39,12.45,17] 17           ✓ 17 unmoved
+```
+
+⚠⚠⚠ **THE SECOND ROW IS THE ONE THAT MAKES IT A RULE RATHER THAN A COINCIDENCE.** The common icon is
+*smaller* than its line, so a both-axes union of the child is correct on `#a` and wrong everywhere
+else — `#c`'s 40px icon and `#b`'s 44px `<b>` both **overflow** their parent inline box, and Chrome
+reports the parent unmoved at 17 and 11. Horizontally the opposite holds (`#a` is 8 wide, the icon's
+advance). So it is the t849 shape again: **resolved PER AXIS**, and a fix that got one axis right
+while unioning the other produced a box 13px too short *and* 10px too low.
+
+Two halves, one in each place that owns the fact: `collect_inline_node` guarantees the element has
+fragments at all — **two** zero-width `Spacer` reporters, head and tail of its items, because a
+boxless inline that wraps spans several lines and Chrome's rect runs from the first line's content
+top to the last line's bottom. Both are `holds_line: false` with `report_ascent: Some(..)`, so
+neither brings a line into existence, neither consumes a pending space, and neither feeds a
+`line_height` floor into `close_line`: **the line boxes come out byte-identical** (118/118 layout
+tests unmoved). `node_rects` then owns the axis split — an ancestor that owns fragments takes only
+the *horizontal* extent of what it lifts.
+
+⚠⚠⚠ **RANKED AS I3, AND THE GATE ASSERTS THE CLICK POINT, NOT JUST THE BOX.** Check #72's finding was
+that five consecutive geometry ticks passed I3 **because `node_rects` is a shared producer, not
+because anyone checked** — and a fix to the producer itself is exactly where that accident stops
+protecting us. So `g_inline_box_click_point_is_the_inline_box` walks
+`node_rects → build_tree_with_rects → A11yNode.bbox` and asserts the agent's target *is* the inline
+box: before, the click point for an icon button was the centre of a 4px-tall box, **3.5px low**. Its
+RED message reads `the agent's click target for the icon-wrapper #a is 4.00px tall, against the
+17.00px inline box it should be`. Per steer #2, **the honest report is that the instrument cannot
+price this** — the burndown ranks by `in-scope sites × dy` and nothing in it computes an actuation
+cost — not that it bought nothing. VI.3 ranks by usage weight, and this is a universal idiom.
+
+⚠⚠⚠ **THE FIX WENT RED ON `manuk-agent` AND THE RED WAS A THIRD DEFECT — THE TWIN UA SHEETS, AGAIN,
+IN THE OTHER DIRECTION.** `click_at_hit_tests_the_button_under_the_coordinate` failed with
+`hit_test` returning the **`<form>`** (NodeId 4) instead of the `<button>` (NodeId 5). The cause is
+not this tick's rule; it is what this tick's rule made *visible*:
+
+```text
+  MinimalCascade, <form><button>Go</button></form>       before        after
+    form   (a BOXLESS INLINE — no `display:block` rule)  [8, 8,43.34,25]  [8,8,784,25]
+    button (a real box)                                  [8, 8,43.34,25]  [8,8, 43.34,25]
+```
+
+`stylo_engine.rs`'s UA sheet says `form, fieldset, table, caption, center, menu, dl {display:block}`
+and `summary {display:block}`. `apply_ua_defaults` — **`MinimalCascade`, which is what `manuk-agent`
+runs, with no `stylo` feature** — carried the table family and **none of the rest**. So a `<form>`
+was laid out as a boxless inline, took the button's lifted box, and tied on area; `hit_test` resolves
+a tie by *smallest wins, deepest breaks it*, so the button won by being seen later. Give the inline
+its own 17px content area and the form's box becomes **smaller than the button inside it** — and the
+wrapper silently swallows the agent's click on the control.
+
+**This is the t851 pattern one turn further on, and the third sighting in three ticks.** Two
+hand-maintained UA sheets, each concealing the other's gap from whichever test you happen to write.
+So it is fixed as a **gate, not a comment**: `both_ua_sheets_agree_on_which_elements_are_block` reads
+the shipping sheet's own `display:block` selector list out of `UA_CSS` and asserts `apply_ua_defaults`
+agrees tag by tag. RED-proven by deleting `form` from the minimal list — `["form -> Inline"]`. It
+carries a sanity assertion on its own parse (`tags.len() > 20 && contains form && div`), because a
+lockstep gate over an empty list is the vacuous-gate failure mode this project keeps catching.
+
+⚠ The comment above `apply_ua_defaults` has read *"keep in lockstep with the UA sheet in
+stylo_engine.rs"* the whole time. **A comment cannot go red.**
+
+⚠⚠⚠ **AND THE SECOND RED WAS THE TIE-BREAK, NOT THE GEOMETRY — `G6` FELL 99.7% → 95.6%, SIXTEEN
+LINKS UNCLICKABLE ON FLOAT DUST.** Wikipedia's `.hlist li { display: inline }` puts an `<a>` inside
+an inline `<li>`; both are boxless, both take their geometry from the same line, and before this
+tick both got the SAME lifted rect — byte-identical, so `hit_test`'s smallest-area-wins rule fell
+through to its exact-tie clause and the deeper node won by being later in pre-order. Give each
+inline its own content area and the two rects differ by a third of a pixel:
+
+```text
+  <li display:inline>  [740.33, 3193.75, 34.43 x 16.00]   <- a hair SMALLER
+    <a>Collie</a>      [740.00, 3193.75, 34.50 x 16.25]
+```
+
+The `<li>` wins on area, and the shell walks **up** from whatever was hit looking for an `<a href>`
+— above an `<li>` there is none. **The geometry was right and the tie-break was wrong**: a rule
+written to order *unrelated overlapping* boxes was being asked an *ancestor/descendant* question,
+and it only ever gave the right answer while an ancestor's box could not be smaller than its
+child's — which held by accident, because a boxless inline's rect was lifted verbatim from its
+children.
+
+Chrome's `elementFromPoint` has no such ambiguity: topmost, then deepest, full stop. `hit_test` is
+now a recursion that resolves the relationship **structurally** — a subtree reports its own best and
+a hitting node loses to any hitting descendant on the same layer; area compares only *sibling
+subtrees*, which is the one place it was ever the right question. `z` still wins first, so the
+occlusion and `pointer-events:none` gates are unmoved.
+
+**MEASURED, same file, same hour** (`/tmp/manuk-g6.html`, 476 links — the page is live, so the file
+is pinned and all three readings use the same bytes):
+
+```text
+  HEAD (stashed tree, rebuilt)                 99.7%   1 missed
+  this tick, geometry only                     95.6%  16 missed
+  this tick, geometry + hit_test               99.7%   1 missed   <- byte-identical to HEAD
+```
+
+**Exactly restored, not improved** — the same single residual miss, the same 365 found. Gated by
+`hit_test_prefers_a_descendant_over_a_smaller_ancestor` with those exact float-dust rects, RED-proven
+by restoring the area comparison for the ancestor pair.
+
+⚠⚠ **TWO PRE-EXISTING REDS FOUND WHILE SWEEPING, BOTH ATTRIBUTED BY THE OLD BINARY, NEITHER MINE.**
+Running the *whole* `manuk-page` suite (the wall runs **19 of 104** gates) surfaced:
+
+1. `tests::static_import_scanner_finds_specifiers_and_skips_the_rest` — **FAILS at HEAD**, verified by
+   stashing the layout diff and re-running: `comments, strings, dynamic import() and import.meta must
+   not be scanned as static imports`.
+2. `g_reflect_numeric` — **BAR 0: it does not fail, it SPINS.** `numeric_reflection_coercion_...`
+   burns 100% of a core indefinitely (`user 2m57s` of a 3m00s cap; first seen as a 34-minute run
+   inside the suite). **The OLD BINARY, built from a stashed tree and run in the same hour, hangs
+   identically — 3m00.2s, `user 2m56.7s`.** Same lesson as t846-852: a clean reading attributes
+   nothing until the old binary has refused to reproduce it, and here it reproduced it exactly.
+
+Bar 0 outranks every visual divergence (Part 24.3), so **the hang is tick 854** — named here rather
+than folded into this tick, because the capability fix is complete and green and mixing them would
+make neither attributable.
+
+PERF: none. The fix adds one zero-width, non-content-bearing reporter pair per inline element that
+carries no fragment of its own; line boxes are byte-identical and the layout suite is 118/118.
+
+WIKI: docs/wiki/text-layout.md — "An inline element's box is ITS OWN content area, resolved PER AXIS"
+
 ## Tick 852 — the constitution check, and an I3 defect the loop filed as a shape number (2026-08-03)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 844),

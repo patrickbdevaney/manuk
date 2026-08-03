@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **589** | ticks 1–852 |
-| median tick cycle | **25m** | 588 intervals |
-| median, last 10 | **88m** | 10 intervals |
+| ticks landed | **590** | ticks 1–853 |
+| median tick cycle | **25m** | 589 intervals |
+| median, last 10 | **1.8h** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.07** | 547.8h elapsed |
-| median verify wall | **63s** | 528 ticks |
+| **ticks per hour** | **1.07** | 550.4h elapsed |
+| median verify wall | **63s** | 529 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **379**
-* **✅ rows in the capability ledger**: 144 → **444**
+* **live gates**: 27 → **380**
+* **✅ rows in the capability ledger**: 144 → **447**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**288 of 589 ticks** (49%) moved a
+**289 of 590 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **288** capability ticks, median cycle **25m**
+* **289** capability ticks, median cycle **25m**
 * median diff per tick: **+260 / −34** lines across 8 files
 
 ## Every tick
@@ -686,5 +686,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **850** | 2026-08-02 23:37 | 75m | capability | 63s | +399/−34 | 379 | 81 | 56.0% · | a button centres its content vertically, and no stylesheet can say so (2026-08-02) |
 | **851** | 2026-08-03 00:47 | 70m | capability | 63s | +298/−35 | 379 | 81 | 56.0% · | three form controls are 20px too tall, and one UA rule says so (2026-08-02) |
 | **852** | 2026-08-03 00:53 | 6m | measurement | 63s | +231/−33 | 379 | 81 | 56.0% · | the constitution check, and an I3 defect the loop filed as a shape number (2026-08-03) |
+| **853** | 2026-08-03 03:26 | 2.6h | capability | 63s | +805/−62 | 380 | 81 | 56.0% · | an icon-wrapping `<span>` is its own line box, and that is the agent's click point (2026-0 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
