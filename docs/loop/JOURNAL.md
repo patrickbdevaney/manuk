@@ -46371,6 +46371,86 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 876 — `render-failed` is the pixel classifier winning a race it should have lost (2026-08-03)
+
+TICK SHAPE: measurement — t875's own steer said the scorability ceiling (106/130 in-scope = 81.5%)
+is the larger half, and the instrument names exactly one unscored reason as ours: *"render-failed —
+we fetched the page and FAILED TO PAINT IT, the only reason on this list that is our own bug rather
+than a property of the origin, and the one that most deserves to count against the score."* Two
+sites carry it. This tick took one of them and it is **not ours**.
+
+⚠⚠⚠ **THE FINDING — `webfenix.movilidadbogota.gov.co` IS THE t865 MODULE-CORS WALL WEARING THE ONE
+LABEL THAT SAYS "YOUR BUG".** Measured three ways in the same hour:
+
+```text
+  Chrome, LIVE url                          22 <div>
+  Chrome, the SNAPSHOT the oracle scores      4 <div>     ← the reference builds the same shell we do
+  manuk, LIVE url                             4 boxes
+```
+
+The document is Angular and ships `runtime` / `polyfills` / `main` as `type="module"`. A module
+script is ALWAYS CORS-fetched, the oracle renders a fetched copy from a foreign origin, and the
+bundles never load **for the reference either** — which is precisely what `Unmeasurable::
+OracleModuleShell` exists to say and what eleven other rows in this sweep are correctly labelled.
+
+⚠⚠⚠ **AND THE REASON IT GOT THE WRONG LABEL IS ONE LINE, AND IT IS A RACE BETWEEN TWO CLASSIFIERS.**
+
+```rust
+  // fidelity.rs — the PIXEL classifier, inside `compare()`:
+  unmeasurable: (ink(&ma) < BLANK_INK && ink(&mb) >= ORACLE_MIN_INK).then_some(RenderFailed)
+
+  // main.rs:1265 — the DOM classifier, which KNOWS about module shells:
+  if f.unmeasurable.is_none() { … unscoreable_reason(probed, shape_n, ours, ships_modules) … }
+```
+
+The pixel check runs first and the DOM check *"never overwrites a reason already established — the
+earlier cause is the true one"*. That comment is right about a bot-wall and wrong here: this
+document's oracle ink is its own **splash screen**, which the shell paints and the app does not, so
+`oracle painted something` is satisfied by the very shell that proves the page is unscoreable.
+`document_ships_module_scripts` is consulted by one classifier and not the other — **one rule, two
+implementations, and the one that runs first is the one that does not know it.**
+
+THE FIX, named precisely and NOT taken here: a `RenderFailed` on a document that ships module
+scripts AND whose ORACLE probe is below `CERT_MIN_SHAPE_SAMPLE` must yield to
+`OracleModuleShell(probed)`, decided in the single site `unscoreable_reason` already owns. It is
+**not** a headline change — both labels are UNSCORED and both count against the bar, so the
+certificate's arithmetic does not move; it changes only what the loop is told to go and fix. It is
+left for its own tick because the falsification has to run BOTH directions: a genuinely blank paint
+on a module site whose oracle DID build the page is still ours, and a fix that launders that is
+worse than the mislabel.
+
+**FOUR LOADER HYPOTHESES RETIRED, each with a Chrome A/B over a local origin** (a delaying
+`http.server` so completion order is forced to disagree with document order). The failing console
+string is `TypeError: can't access property "call", N is undefined` — the webpack module registry —
+so the obvious causes were the module loader, and none of them is:
+
+```text
+                                                        Chrome           manuk
+  dynamic <script src> insertion executes                 ✓                ✓
+  …its onload fires, onerror does not                     ✓                ✓
+  native runtime import() resolves a module                ✓                ✓
+  import.meta.url present                                 ✓                ✓
+  three type=module scripts execute in DOCUMENT order
+  when the FIRST is served 1.2s slower than the last      runtime,polyfills,main   IDENTICAL
+```
+
+That last row is the one worth keeping: module scripts are deferred and ordered, and ours are
+ordered correctly **even when the network answers them backwards** — which is the failure mode that
+produces exactly this webpack error on a real engine.
+
+⚠ **ONE SITE THAT DID NOT REDUCE, recorded so the next reader does not re-spend it** (carried from
+t875): `simplepdf.com` puts a 7-icon social row in a container **30px wide where Chrome says 330** —
+one item instead of the sum. **Six fixtures refuted six hypotheses**: flex max-content with gaps,
+intrinsically-sized flex items, a nowrap row shrinking below its items' sum, cross-sizing inside a
+column container, `rem` resolution, and CSS `order` (which is fully implemented and Chrome-exact on
+all nine rows of a fresh flex/column/grid fixture, despite a stale *"parsed but not yet used in
+layout"* comment in `manuk-css` and an unreachable duplicate match arm beside it).
+
+PERF: none — measurement only.
+
+WIKI: none — the artefacts are the retired hypotheses above and the named one-line fix, both of
+which belong to the next tick's write-up rather than to a topic file. [no-pattern]
+
 ## Tick 875 — the four-tick batch priced on the whole corpus, and the five crossings are all there (2026-08-03)
 
 TICK SHAPE: measurement — a clean `--jobs 2` sweep of all 200 CrUX-trend sites, banked as
