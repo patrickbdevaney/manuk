@@ -46371,6 +46371,89 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 875 — the four-tick batch priced on the whole corpus, and the five crossings are all there (2026-08-03)
+
+TICK SHAPE: measurement — a clean `--jobs 2` sweep of all 200 CrUX-trend sites, banked as
+`docs/loop/SWEEP-t875-rows.tsv`. The cadence rule (182fff1b) says sweep after ~5-6 fixes of either
+class; t871-874 landed four render primitives, every one measured only on a hand-picked cohort of
+8-11 sites. A cohort cannot see a corpus-wide regression, and a ranking four ticks old is a ranking
+that has moved.
+
+**THE RESULT — the five claimed M1 crossings are all present corpus-wide, and nothing was lost:**
+
+```text
+  NEW M1 passers   possssno.sbs · www.marktplaats.nl · ubys.bingol.edu.tr ·
+                   www.library.chiyoda.tokyo.jp · desiviral.net          ← exactly the five claimed
+  LOST M1 passers  (none)
+```
+
+`fidelity-progress.sh` on its own in-scope denominator:
+
+```text
+                          t857 (serial)   t867 (parallel-6)   t875 (--jobs 2)
+  scored                       101              106                106
+  shape >= 0.75                 24               29                 30
+  jarring-clean               27.9%            31.2%              33.8%
+  M1 GATE (both)              12.0%            16.4%              16.9%
+  shape_mean                  53.6%            54.4%              56.5%
+  COMMON-SET BAND                 —                —          +3.36 pts (103 sites, 32 up, 3 down)
+  no trap / regression / staleness / exclusion flag
+```
+
+⚠⚠⚠ **AND THE HEADLINE DELTA IS NOT CLEANLY DIFFERENCEABLE, WHICH CUTS IN OUR FAVOUR HERE.** t867
+ran **parallel-6** and its own tick proved parallelism is not free — *"1 in 12 crosses the M1 bar on
+scheduling alone"*, reading **higher** than the serial t857 on both scored (106 vs 101) and M1
+(16 vs 14). t875 is `--jobs 2`, the only bankable kind. So this sweep is being differenced against a
+baseline that was **inflated by its own scheduling**, and it still comes out ahead on every column.
+The five crossings do not rest on that comparison at all: each was attributed by an OLD-BINARY
+control — the pre-fix tree rebuilt from `git stash` and re-run in the same hour, on identical
+denominators — which is the strongest evidence this loop has.
+
+⚠⚠ **THE RANKING HAS MOVED, AND THE COHORT I WAS WORKING FROM IS SPENT.** The "over the shape bar,
+failing ONLY on jarring" list is what t868 recomputed and what these four ticks drained; five of its
+thirteen are gone. Corpus-wide the jarring mass moved:
+
+```text
+                  t867     t875
+  reading_order   2197     1767     -430
+  overlap          555      551
+  h_overflow      1263     1299      +36
+  dead_target      239      261      +22
+```
+
+The `reading_order` drop is the largest single movement in the ledger this session and is the shape
+of `text-align` + BFC + `transform` landing together. **`h_overflow` and `dead_target` rose** — not
+attributed, and named here rather than explained: both are counted over a slightly different scored
+set (127 vs 125 rows) and neither has a per-site control behind it. The next measurement tick should
+difference those two on a fixed site list before anyone reads them as a cost.
+
+⚠ **THE LARGEST APPARENT PER-SITE DROP IS AN ARITHMETIC ARTEFACT.** `vk.com` reads -0.250, and its
+`shape_n` is **4 → 2**: two elements against four, on a row the instrument itself labels
+`oracle-module-shell-5` / `thin-overlap-2`. A ratio over two elements is not a score.
+
+**THE STEER THIS SWEEP HANDS THE NEXT TICK** — and it is the board's own, now with a number on it:
+`fidelity-progress.sh` prints a **SCORABILITY CEILING of 106/130 in-scope sites = 81.5%**, so M1 is
+capped there no matter how much geometry lands. The 24 unscored decompose as **render-fail 2 ·
+shell-only 11 · thin-overlap 3 · timeout 3 · other 5**, and eleven of the twenty-four are
+`shell-only`, most of which t865 already proved are **our snapshot's shell, not the site's** — the
+`type="module"` CORS wall, whose fix is a loopback reverse proxy, not an engine change. That leaves
+roughly a dozen genuinely ours. The geometry vein is still productive (eight sites remain in the
+over-bar/jarring-only cohort), but the ceiling is the larger half and it has not been worked since
+t865.
+
+ONE SITE THAT DID NOT REDUCE, recorded so the next reader does not re-spend it: `simplepdf.com`
+(h-overflow 5) puts a 7-icon social row in a container **30px wide where Chrome says 330** — one
+item instead of the sum — and **six fixtures refuted six hypotheses**: flex max-content with gaps,
+intrinsically-sized flex items, a nowrap row shrinking below its items' sum, cross-sizing inside a
+column container, `order` (already implemented and Chrome-exact on all nine rows of a fresh
+fixture), and `rem` resolution. The reduction is real and is not any of those; it needs a fresh
+angle rather than a seventh guess.
+
+PERF: none — measurement only.
+
+WIKI: none — the artefact of this tick is `docs/loop/SWEEP-t875-rows.tsv` and the
+`docs/loop/FIDELITY-PROGRESS.tsv` row it banks. [no-pattern]
+
 ## Tick 874 — a `transform` applied unless the box was a flex container, and then it did not (2026-08-03)
 
 TICK SHAPE: capability (render/geometry) — the fourth site from the "over the shape bar, failing ONLY

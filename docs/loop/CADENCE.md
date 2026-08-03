@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **608** | ticks 1–873 |
-| median tick cycle | **26m** | 607 intervals |
-| median, last 10 | **37m** | 10 intervals |
+| ticks landed | **609** | ticks 1–874 |
+| median tick cycle | **26m** | 608 intervals |
+| median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.08** | 563.8h elapsed |
-| median verify wall | **63s** | 547 ticks |
+| **ticks per hour** | **1.08** | 564.8h elapsed |
+| median verify wall | **63s** | 548 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **461**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**299 of 608 ticks** (49%) moved a
+**300 of 609 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **299** capability ticks, median cycle **26m**
-* median diff per tick: **+263 / −34** lines across 8 files
+* **300** capability ticks, median cycle **26m**
+* median diff per tick: **+264 / −34** lines across 8 files
 
 ## Every tick
 
@@ -705,5 +705,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **871** | 2026-08-03 15:23 | 38m | capability | 63s | +313/−33 | 385 | 81 | 56.0% · | a centred float measured its widest ITEM, and the space before an icon was a constant (202 |
 | **872** | 2026-08-03 16:11 | 49m | capability | 63s | +313/−34 | 385 | 81 | 56.0% · | a box sized before it is placed left its `.sr-only` behind (2026-08-03) |
 | **873** | 2026-08-03 16:50 | 39m | capability | 63s | +233/−33 | 385 | 81 | 56.0% · | a plain block overlaps a float and a BFC root does not, and only the first half was built  |
+| **874** | 2026-08-03 17:53 | 62m | capability | 63s | +318/−32 | 385 | 81 | 56.0% · | a `transform` applied unless the box was a flex container, and then it did not (2026-08-03 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
