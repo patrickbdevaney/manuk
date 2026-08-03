@@ -22,6 +22,7 @@ pub mod interact;
 pub mod memtabs;
 pub mod oracle;
 pub mod parity;
+pub mod proxy;
 pub mod reftest;
 pub mod test262;
 

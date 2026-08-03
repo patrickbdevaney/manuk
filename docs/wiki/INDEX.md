@@ -677,6 +677,9 @@
   - L279 · The one-origin proxy works, and a naive one half-boots the app it was built to rescue (t880)
   - L302 · The fifth is the whole finding
   - L313 · What that means for the build
+  - L327 · The one-origin proxy, built (t881) — and what it actually bought
+  - L344 · THE INSTRUMENT COUNTED ITSELF, AND THE ACCEPTANCE TEST CAUGHT IT ON THE FIRST RUN
+  - L363 · Measured, all five of t880's sites, one binary
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1500,4 +1503,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1407 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1410 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

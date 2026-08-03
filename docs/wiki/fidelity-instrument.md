@@ -323,3 +323,61 @@ CDNs, and chasing them is the bot-wall treadmill in a different costume. The ans
 That is cheap (both renders are one `--dump-dom` each), it is falsifiable in both directions, and it
 makes the half-boot a *detected* state rather than a silent one. Build the proxy behind it, never in
 front of it.
+
+## The one-origin proxy, built (t881) — and what it actually bought
+
+`tests/wpt/src/proxy.rs`. Bind `127.0.0.1:0`; serve the document at **its own path** under that
+origin (no `<base>` — the point is that the author's relative URLs resolve as the author wrote them);
+proxy every other path upstream through `curl`; put `Access-Control-Allow-Origin: *` on **every**
+response. `chrome::capture_seen_all_paths` reaches for it only when the snapshot reference came in
+**under the shell floor** *and* the document ships module scripts — most of the modern corpus ships
+modules, so gating on that alone would double this crate's Chrome bill on healthy sites for nothing.
+
+**The site's OWN hosts are one origin; a third party is not.** `static.allticketscol.com` is the
+document host's registrable domain wearing a deployment convention, and it is re-served under
+`/__manuk_origin__/<scheme>/<host>/…` — *under its own name*, because collapsing two hosts onto one
+root would fetch `example.com/main.js` when the page asked for `static.example.com/main.js`, and a
+proxy that answers the **wrong** upstream produces a subtly wrong reference rather than an obviously
+broken one. A genuine third-party CDN is left alone: it either already sends ACAO (which is why it
+works from any origin in a real browser) or the acceptance test refuses the row.
+
+### THE INSTRUMENT COUNTED ITSELF, AND THE ACCEPTANCE TEST CAUGHT IT ON THE FIRST RUN
+
+The first acceptance counter read every `<` followed by a letter. Only the **proxied** render carries
+the injected probe, so every `i<lim`, `j<toks.length` and `i<str.length` inside `PROBE_ALL_PATHS_JS`
+counted as page content the live render had "lost". Measured on `portal.ensuretyfinance.com`: proxy
+**55** against live **48**, and the refusal's own tag-delta line named the whole difference —
+
+```text
+    only LIVE has:  —
+    only PROXY has: pre×2 a×1 lim×1 script×1 str×1 toks×1
+```
+
+— *nothing* missing from the proxy, seven artefacts added by it, six of them fragments of the probe's
+own JavaScript. That is t780-783 one layer up (*the probe's own sentinel widened its subject*): an
+instrument that measures itself reports **its own presence as the site's absence**. The fix is
+symmetric rather than a carve-out for our probe — a `<` inside `<script>`/`<style>` is data on both
+sides, so the content is skipped on both. The refusal line printing its tag histogram is what made
+this a two-minute finding instead of a hypothesis.
+
+### Measured, all five of t880's sites, one binary
+
+```text
+                                    LIVE   PROXY   verdict     probed elements   label before → after
+  pt88.app                           435     435   ACCEPTED          2 → 206      module-shell → thin-overlap
+  booking.directferries.com           85      86   ACCEPTED          1 →  21      module-shell → thin-overlap
+  portal.ensuretyfinance.com          48      49   ACCEPTED          0 →  22      module-shell → thin-overlap
+  webfenix.movilidadbogota.gov.co     92      93   ACCEPTED          4 →  50      module-shell → render-failed
+  allticketscol.com                 1192     168   REFUSED           —            module-shell (unchanged)
+```
+
+⚠⚠⚠ **AND THE HONEST HEADLINE IS THAT M1 DID NOT MOVE.** Four rows stopped being unscored *for an
+instrument reason* and immediately became unscored *for OUR reason* — `thin-overlap` and
+`render-failed` — because once the reference is a real page, it is visible that we render almost none
+of it. The denominator is unchanged and no site crossed the bar. What changed is **where the loop is
+told to look**: the largest single cohort the board ranked as a measurement defect is now four named
+engine gaps and one refused row, and the refused row says exactly what is missing (`app-evento-card
+×47` — the app booted and its data fetch did not).
+
+This is the same shape the board's t777 block predicted for throw-killers: *the function leg is a
+chain*, and clearing one link exposes the next rather than scoring the site.

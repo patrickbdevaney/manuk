@@ -46371,6 +46371,101 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 881 — the one-origin proxy, built BEHIND the acceptance test t880 asked for (2026-08-03)
+
+TICK SHAPE: instrument — build the loopback reverse proxy named-and-not-built since t865, in the
+shape t880's measurement forced: **the proxied render is usable as a reference only when it AGREES
+with the LIVE render**, and the agreement check ships in the same tick as the proxy, not after it.
+
+HYPOTHESIS: `oracle-module-shell` is the largest single unscored cohort (11 of the 24 in-scope
+unscored rows) and t880 proved it is a MEASUREMENT channel, not an engine gap — four of five sites
+recover their exact live `<div>` count when served through one origin. The fifth (`allticketscol.com`,
+38 of 336) is the half-boot t865 refused, and it half-boots because the bundles live on
+`static.allticketscol.com`. So: (1) a proxy that serves the document AND every one of the site's OWN
+hosts under a single `http://127.0.0.1:PORT`, (2) an acceptance test that compares the proxied render
+against the live one and REFUSES the reference when they disagree, keeping the honest
+`oracle-module-shell` label and the unmoved denominator.
+
+**BUILT** — `tests/wpt/src/proxy.rs`, reached from `chrome::capture_seen_all_paths` only when the
+snapshot reference came in **under the shell floor** *and* the document ships module scripts. Most of
+the modern corpus ships modules, so gating on that alone would double this crate's Chrome bill on
+every healthy site for nothing; gating on the shell floor confines the two extra `--dump-dom` runs to
+the rows that are unscored today. The site's OWN hosts are re-served under
+`/__manuk_origin__/<scheme>/<host>/…` — under their own name, because collapsing two hosts onto one
+root would answer `example.com/main.js` when the page asked for `static.example.com/main.js`, and a
+proxy that answers the WRONG upstream produces a subtly wrong reference instead of an obviously
+broken one.
+
+**MEASURED, all five of t880's sites, one binary, same hour:**
+
+```text
+                                    LIVE   PROXY   verdict     probed elements   label before → after
+  pt88.app                           435     435   ACCEPTED          2 → 206      module-shell → thin-overlap
+  booking.directferries.com           85      86   ACCEPTED          1 →  21      module-shell → thin-overlap
+  portal.ensuretyfinance.com          48      49   ACCEPTED          0 →  22      module-shell → thin-overlap
+  webfenix.movilidadbogota.gov.co     92      93   ACCEPTED          4 →  50      module-shell → render-failed
+  allticketscol.com                 1192     168   REFUSED           —            module-shell (unchanged)
+```
+
+Four of five recover, reproducing t880's throwaway measurement exactly, and the half-boot is
+**detected** rather than silently scored.
+
+⚠⚠⚠ **AND THE HONEST HEADLINE IS THAT M1 DID NOT MOVE, WHICH IS THE RESULT AND NOT A DISAPPOINTMENT.**
+Every one of the four accepted rows stopped being unscored *for an INSTRUMENT reason* and immediately
+became unscored *for OURS* — `thin-overlap` on three, `render-failed` on one — because once the
+reference is a real page it is visible that **we render almost none of it** (pt88.app: the oracle now
+carries 206 box-bearing elements and we share 3). The denominator is unchanged, no site crossed the
+bar, and the certificate's arithmetic is identical. What changed is where the loop is told to look:
+the largest cohort the board ranked as a measurement defect is now four NAMED ENGINE GAPS and one
+refused row. This is the board's own t777 shape recurring — *the function leg is a chain* — and it is
+the fifth consecutive cohort (after `shell-only` t856, `css-starved` t860, `oracle-timeout` t861,
+`render-failed` t877) whose label had to be re-derived before it could be worked.
+
+⚠⚠⚠ **THE ACCEPTANCE TEST'S FIRST RUN CAUGHT THE INSTRUMENT COUNTING ITSELF — ON THE THIRD SITE, NOT
+THE FIFTH.** `count_open_tags` read every `<` followed by a letter. Only the PROXIED render carries
+the injected probe, so every `i<lim`, `j<toks.length` and `i<str.length` inside `PROBE_ALL_PATHS_JS`
+counted as page content the LIVE render had "lost": `portal.ensuretyfinance.com` came in at proxy 55
+against live 48 and was **refused as a half-boot while being a byte-for-byte complete reference**.
+Three live dumps in a row read 48/48/48, so the variance was not the site — and the refusal's own
+tag-delta line named the whole difference:
+
+```text
+    only LIVE has:  —
+    only PROXY has: pre×2 a×1 lim×1 script×1 str×1 toks×1
+```
+
+*Nothing* missing from the proxy; seven artefacts added by it, six of them fragments of the probe's
+own JavaScript. That is t780-783 aimed one layer up — **an instrument that measures itself reports its
+own presence as the site's absence** — and the fix is symmetric rather than a carve-out: a `<` inside
+`<script>`/`<style>` is data on both sides, so the content is skipped on both. **The diagnostic that
+found it was written into the refusal path deliberately** (a refusal without its evidence is the next
+tick's guesswork), and it paid for itself on its first execution.
+
+⚠⚠ **THE REFUSED ROW NOW SAYS WHAT IS MISSING, WHICH IS THE HALF t880 COULD NOT PROVIDE.**
+`allticketscol.com`: `only LIVE has: span×360 div×298 img×115 button×75 app-evento-card×47
+article×47 h3×46 p×38` against `only PROXY has: … app-mensaje×1 mat-dialog-container×1`. The Angular
+app **boots** under the proxy (it renders a Material dialog and a message component that the shell
+never reached) and its data fetch does not — 47 event cards never arrive. So the residual is one
+named XHR endpoint, not "the proxy does not work", and it is a next tick with a target rather than a
+hypothesis.
+
+GATE: `a_proxied_render_is_a_reference_only_when_it_agrees_with_the_live_one` (proxy.rs) carries
+t880's five sites as assertions and is **RED-proven** by widening the band to `lo*10 >= hi`, which
+accepts `allticketscol`'s 38-of-336 — precisely the reference the loop must never score against.
+`open_tags_are_counted_the_same_way_on_both_sides` is RED-proven by deleting the `<script>` skip
+(counts 5 where 1 is right). Plus the same-site host test with the ccTLD guard
+(`movilidadbogota.gov.co`, not `gov.co` — a wide registrable suffix would make every Colombian
+government domain "the same site"), the rewrite test asserting the SVG namespace **does not move**,
+and a loopback end-to-end that asserts `Access-Control-Allow-Origin: *` on the served document.
+`manuk-wpt` lib suite 96/96.
+
+PERF: none on the engine. The instrument pays two extra `--dump-dom` runs **only** on rows that are
+unscored today (~11 of 209); a healthy site never enters the path, and `G1`'s own `file://` corpus
+ships no module scripts so the wall is untouched.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "The one-origin proxy, built (t881) — and what it actually
+bought" [no-pattern]
+
 ## Tick 880 — the proxy works on four of five, and the fifth is the reason to build the acceptance test first (2026-08-03)
 
 TICK SHAPE: measurement — constitution check #75's steer #2: the largest single unscored cohort is

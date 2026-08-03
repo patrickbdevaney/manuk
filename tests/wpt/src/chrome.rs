@@ -544,8 +544,106 @@ pub fn capture_seen_all_paths(
     // DOM in which the probe is present as TEXT and its output never existed. `parse_seen_probe_json`
     // already asks exactly the right question — *"did Chrome run the script?"* — and for five ticks
     // nobody heard it, because the caller discarded the error.
-    parse_seen_probe_json(&String::from_utf8_lossy(&out.stdout))
-        .map_err(|_| Unmeasurable::ProbeBlocked)
+    let seen = parse_seen_probe_json(&String::from_utf8_lossy(&out.stdout))
+        .map_err(|_| Unmeasurable::ProbeBlocked)?;
+    // ⚠⚠⚠ **THE SNAPSHOT REFERENCE IS A SHELL AND THE DOCUMENT SHIPS MODULES — TRY ONE ORIGIN.**
+    //
+    // This is the `oracle-module-shell` cohort (t865 named it, t880 measured the fix): a module
+    // script is always CORS-fetched, a site does not send `Access-Control-Allow-Origin` for its own
+    // bundle, so the app never boots for the ORACLE and the instrument charges Chrome's missing page
+    // to us. Serving document and subresources through one loopback origin removes the wall by
+    // construction.
+    //
+    // **The condition is deliberately narrow, and the cost is why.** Most of the modern corpus ships
+    // module scripts, so gating on that alone would double this crate's Chrome bill across every
+    // healthy site for nothing. Gating on *the reference came in under the shell floor* confines the
+    // extra work to the ~11 rows that are unscored today.
+    //
+    // On refusal — or on any failure inside the proxy path — the snapshot's shell is returned
+    // unchanged, and the row keeps its honest `oracle-module-shell` label. See
+    // [`crate::proxy::renders_agree`].
+    if seen.len() < crate::fidelity::CERT_MIN_SHAPE_SAMPLE
+        && crate::fidelity::document_ships_module_scripts(&html)
+    {
+        if let Some(better) = one_origin_reference(url, &html, vw, vh) {
+            return Ok(better);
+        }
+    }
+    Ok(seen)
+}
+
+/// Render the reference through [`crate::proxy`] — ONE origin — and return it **only if it agrees
+/// with the LIVE render**.
+///
+/// Two extra Chrome runs (the proxied page, and the live page for the acceptance test) on a cohort
+/// of ~11 sites. `None` means "keep the snapshot's honest shell", and every failure inside is that
+/// same answer: a proxy that cannot be shown to agree with the live page is not a reference.
+fn one_origin_reference(
+    url: &str,
+    html: &str,
+    vw: u32,
+    vh: u32,
+) -> Option<HashMap<String, crate::oracle::Seen>> {
+    let chrome = chrome_bin()?;
+    let (scheme, host, _) = crate::proxy::split_url(url)?;
+    let bound = crate::proxy::Bound::bind(url)?;
+    let root = bound.root();
+    // No `<base>`: the whole point is that the document is served at its OWN path under a real
+    // origin, so the author's relative URLs resolve exactly as the author wrote them. A `<base>`
+    // pointing back at the site would undo the tick.
+    let rewritten = crate::proxy::rewrite_document(html, scheme, host, &root);
+    let doc = if let Some(i) = rewritten.find("<head>") {
+        let (a, b) = rewritten.split_at(i + 6);
+        format!("{a}{b}{PROBE_ALL_PATHS_JS}")
+    } else {
+        format!("{rewritten}{PROBE_ALL_PATHS_JS}")
+    };
+    let proxy = bound.serve(doc);
+    let secs = chrome_timeout_secs();
+
+    let mut pcmd = Command::new(&chrome);
+    pcmd.args(base_flags(vw, vh))
+        .arg("--virtual-time-budget=6000")
+        .arg("--dump-dom")
+        .arg(proxy.document_url());
+    let pout = output_with_deadline(pcmd, secs)?;
+    if !pout.status.success() {
+        return None;
+    }
+    let pdump = String::from_utf8_lossy(&pout.stdout).into_owned();
+
+    let mut lcmd = Command::new(&chrome);
+    lcmd.args(base_flags(vw, vh))
+        .arg("--virtual-time-budget=6000")
+        .arg("--dump-dom")
+        .arg(url);
+    let lout = output_with_deadline(lcmd, secs)?;
+    if !lout.status.success() {
+        return None;
+    }
+    let ldump = String::from_utf8_lossy(&lout.stdout).into_owned();
+    let live_n = crate::proxy::count_open_tags(&ldump);
+    let proxy_n = crate::proxy::count_open_tags(&pdump);
+    if !crate::proxy::renders_agree(live_n, proxy_n) {
+        // **A REFUSAL WITHOUT ITS EVIDENCE IS THE NEXT TICK'S GUESSWORK.** The loop's very next
+        // question is always "what did the proxy miss (or invent)", and the answer is a two-line
+        // diff of tag histograms — so it is printed here rather than rediscovered by hand. The
+        // cohort is ~11 sites, so this is never noise on a healthy sweep.
+        let (a, b) = crate::proxy::tag_delta(&ldump, &pdump);
+        eprintln!(
+            "  PROXY REFERENCE REFUSED: one-origin render carries {proxy_n} open tags against the \
+             live page's {live_n} — a half-built reference is strictly WORSE than an honest shell, \
+             so the row keeps `oracle-module-shell`\n    only LIVE has: {a}\n    only PROXY has: {b}"
+        );
+        return None;
+    }
+    let seen = parse_seen_probe_json(&pdump).ok()?;
+    eprintln!(
+        "  PROXY REFERENCE ACCEPTED: one-origin render agrees with live ({proxy_n} vs {live_n} open \
+         tags) — scoring against {} probed elements instead of the snapshot's shell",
+        seen.len()
+    );
+    Some(seen)
 }
 
 /// Minimal blocking GET (the harness already links reqwest-free; use curl for zero new deps).
