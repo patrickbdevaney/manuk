@@ -222,6 +222,9 @@
   - L4424 · CSS 2.1 §9.5's other half — a BFC root is placed BESIDE a float, not under it (t873)
   - L4461 · What is deliberately not built
   - L4469 · Measured, OLD binary vs NEW in the same hour
+  - L4486 · transform was silently discarded on a flex item that is itself a flex container (t874)
+  - L4507 · Reach
+  - L4515 · A second finding, measured and NOT fixed
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1489,4 +1492,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1396 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1399 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

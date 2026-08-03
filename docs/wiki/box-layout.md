@@ -4482,3 +4482,42 @@ also change every percentage the child resolves, so it is measured, named, and l
 Gated by `a_bfc_root_is_placed_beside_a_float_and_a_plain_block_is_not`, which asserts **both**
 halves — the plain block must still span the full width, so a fix that simply shortened every block
 beside a float fails the gate rather than passing it.
+
+## `transform` was silently discarded on a flex item that is itself a flex container (t874)
+
+The rule "bake a box's `transform` into its subtree's coordinates" is written in **`layout_block`**
+(every ordinary box) and again in the **out-of-flow pass** (every absolutely-positioned box).
+`extract_placed` — the third emitter, the one that returns a flex/grid item **that is itself a flex
+or grid container** — had neither, so the transform did not apply at all.
+
+A **leaf** flex item is laid out through `layout_block` and was therefore always right. That is what
+hid this: the same page transforms correctly or not at all depending only on whether the transformed
+box happens to carry `display:flex`.
+
+Chrome-measured, a 120×40 flex item inside a `display:flex` row:
+
+```text
+                                            Chrome              before              after
+  display:block  translateX(50px)         [170,  0]           [170,  0]           [170,  0]   ✓ leaf
+  display:flex   translateX(50px)         [170,  0]           [120,  0]           [170,  0]
+  display:grid   translateY(10px)         [120,142]           [120,132]           [120,142]
+  display:flex   scale(2)                 [ 60,178 240x80]    [120,198 120x40]    [ 60,178 240x80]
+```
+
+### Reach
+
+Every **slide-in drawer**, hover-lift card, carousel track and centred modal that is a flex container
+inside a flex container — which is how the framework CSS of the moment writes all four. On
+`desiviral.net` it is an off-canvas `aside.fixed.flex.-translate-x-full`: the sidebar **stayed on
+screen**, overlapping the header and the footer, because the translate that hides it never applied.
+`overlap 5 → 0`, and the site crossed the M1 bar.
+
+### A second finding, measured and NOT fixed
+
+An out-of-flow child of a flex container is emitted **twice** — once by the flex path and once by the
+out-of-flow pass — and `node_rects` unions the two. Before this fix the two copies disagreed and the
+union was visible as a **doubled width** (an `aside` reported 512px wide with a 256px `w-64`); now
+they coincide and it is invisible again. Per Flexbox §4 an absolutely-positioned child *"does not
+participate in flex layout"* and should not be emitted by that path at all, but deleting a box is
+how elements vanish, and the out-of-flow pass's ownership of every such case needs its own tick to
+establish. Named here so the next reader does not have to rediscover it from a doubled width.

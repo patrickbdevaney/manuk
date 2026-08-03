@@ -606,3 +606,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 870	86784db5	1785782712	2026-08-03T14:45:12-04:00	6251	capability	63	8	432	66	385	81	3896	6960	0	458	0	the moat has a number: 797/1250, and the first three readings were my own harness (2026-08-03)
 871	faca46a4	1785784983	2026-08-03T15:23:03-04:00	2271	capability	63	8	313	33	385	81	3896	6960	0	459	0	a centred float measured its widest ITEM, and the space before an icon was a constant (2026-08-03)
 872	03ff5054	1785787895	2026-08-03T16:11:35-04:00	2912	capability	63	8	313	34	385	81	3896	6960	0	460	0	a box sized before it is placed left its `.sr-only` behind (2026-08-03)
+873	9a79d355	1785790253	2026-08-03T16:50:53-04:00	2358	capability	63	8	233	33	385	81	3896	6960	0	461	0	a plain block overlaps a float and a BFC root does not, and only the first half was built (2026-08-03)

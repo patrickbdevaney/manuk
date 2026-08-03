@@ -5696,6 +5696,38 @@ impl Ctx<'_> {
                 node: Some(p.dom),
                 content: BoxContent::Block(children),
             };
+            // ⚠⚠⚠ **`transform` — THE THIRD PLACE THIS RULE HAD TO BE WRITTEN, AND IT WAS MISSING.**
+            //
+            // `layout_block` bakes a box's `transform` into its subtree's coordinates, and the
+            // out-of-flow pass does the same for an absolutely-positioned box. This branch — the one
+            // that emits a flex/grid item **that is itself a flex or grid container** — did neither,
+            // so a `transform` on such a box was silently DISCARDED. A leaf item is laid out through
+            // `layout_block` and was therefore always right, which is exactly why it survived: the
+            // same page transforms the same way correctly or not at all depending on whether the
+            // transformed box happens to have `display:flex`.
+            //
+            // Chrome-measured, a 120x40 flex item inside a `display:flex` row:
+            //
+            // ```text
+            //                                              Chrome            before
+            //   display:block  translateX(50px)          [170,  0]         [170,  0]   ✓ leaf path
+            //   display:flex   translateX(50px)          [170,  0]         [120,  0]
+            //   display:grid   translateY(10px)          [120,142]         [120,132]
+            //   display:flex   scale(2)                  [ 60,178 240x80]  [120,198 120x40]
+            // ```
+            //
+            // THE REACH is every slide-in drawer, hover-lift card, carousel track and centred modal
+            // that is a flex container inside a flex container — which is how the framework CSS of
+            // the moment writes all four. On `desiviral.net` it is an off-canvas
+            // `aside.fixed.flex.-translate-x-full`: the sidebar stayed ON screen, overlapping the
+            // header and the footer, because the translate that hides it never applied.
+            let mut boxx = boxx;
+            let s = self.style_of(p.dom);
+            if !s.transform.is_empty() {
+                let origin = (abs_x + p.slot.width / 2.0, abs_y + p.slot.height / 2.0);
+                let m = resolve_transform(&s.transform, p.slot.width, p.slot.height, origin);
+                boxx.transform_affine(&m);
+            }
             (boxx, p.slot.y + p.slot.height)
         } else if !self.dom.is_element(p.dom) {
             // ANONYMOUS ITEM. It has no element, therefore no background, border, padding or
@@ -11948,6 +11980,50 @@ mod tests {
     /// The gate asserts both halves in one fixture, because the plain block is what makes the
     /// assertion about BFCs rather than about floats: it must STILL span the full width, and a fix
     /// that simply shortened every block beside a float would fail on that row.
+    /// ⚠⚠⚠ **`transform` WAS SILENTLY DISCARDED ON A FLEX ITEM THAT IS ITSELF A FLEX CONTAINER.**
+    ///
+    /// The rule is written in `layout_block` (every ordinary box) and again in the out-of-flow pass
+    /// (every absolutely-positioned box). `extract_placed` — the third emitter, the one that returns
+    /// a flex/grid item that is itself a flex or grid container — had neither, so the transform did
+    /// not apply at all. A LEAF item goes through `layout_block` and was always right, which is what
+    /// hid it: the same page transforms correctly or not at all depending only on whether the
+    /// transformed box happens to carry `display:flex`.
+    ///
+    /// Self-comparison, so no absolute geometry is hard-coded: the same item, the same transform,
+    /// `display:block` against `display:flex`. Chrome puts both at the same x; ours put the flex one
+    /// back at its untransformed slot.
+    #[test]
+    fn a_transform_applies_to_a_flex_item_that_is_itself_a_flex_container() {
+        let x_of = |disp: &str| -> f32 {
+            let html = format!(
+                r#"<div id="host"><div class="it">1</div><div id="t" style="{disp}">A</div></div>"#
+            );
+            let css = "html,body{margin:0;padding:0}\
+                       #host{display:flex;width:800px;height:60px}\
+                       .it,#t{width:120px;height:40px}";
+            let (dom, root) = layout_html(&html, css, 800.0);
+            let rects = root.node_rects(&dom);
+            let t = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("t"))
+                .expect("id t");
+            rects[&t].x
+        };
+        let plain = x_of("display:block;transform:translateX(50px)");
+        let flexed = x_of("display:flex;transform:translateX(50px)");
+        let untransformed = x_of("display:flex");
+        assert!(
+            (flexed - untransformed).abs() > 1.0,
+            "the transform must MOVE the flex-container item at all — transformed {flexed}, \
+             untransformed {untransformed}"
+        );
+        assert!(
+            (flexed - plain).abs() < 1.0,
+            "a `transform` applies to a flex item whether or not that item is itself a flex \
+             container — display:block {plain}, display:flex {flexed}"
+        );
+    }
+
     #[test]
     fn a_bfc_root_is_placed_beside_a_float_and_a_plain_block_is_not() {
         let html = r#"<div id="w"><p id="f">F</p><div id="plain">x</div></div>

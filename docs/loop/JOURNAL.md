@@ -46371,6 +46371,83 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 874 — a `transform` applied unless the box was a flex container, and then it did not (2026-08-03)
+
+TICK SHAPE: capability (render/geometry) — the fourth site from the "over the shape bar, failing ONLY
+on jarring" cohort, and the fifth M1 crossing in four ticks.
+
+⚠⚠⚠ **THE FINDING — ONE RULE, THREE EMITTERS, AND THE THIRD NEVER GOT IT.** "Bake a box's
+`transform` into its subtree's coordinates" is written in `layout_block` (every ordinary box) and
+again in the out-of-flow pass (every absolutely-positioned box). `extract_placed` — the emitter for a
+flex/grid item **that is itself a flex or grid container** — had neither, so `transform` on such a
+box was **silently discarded**. Chrome-measured, a 120×40 flex item in a `display:flex` row:
+
+```text
+                                            Chrome              before
+  display:block  translateX(50px)         [170,  0]           [170,  0]          ✓ the leaf path
+  display:flex   translateX(50px)         [170,  0]           [120,  0]
+  display:grid   translateY(10px)         [120,142]           [120,132]
+  display:flex   scale(2)                 [ 60,178 240x80]    [120,198 120x40]
+```
+
+**A LEAF flex item goes through `layout_block` and was always right**, which is exactly what hid it:
+the same page transforms correctly or not at all depending only on whether the transformed box
+happens to carry `display:flex`. This is the project's most-repeated shape — one rule, N
+implementations — with N=3 and the third one absent rather than wrong.
+
+THE REACH is every slide-in drawer, hover-lift card, carousel track and centred modal that is a flex
+container inside a flex container, which is how the CSS frameworks of the moment write all four. On
+`desiviral.net` it is an off-canvas `aside.fixed.flex.-translate-x-full`: **the sidebar never left
+the screen**, so it sat on top of the header and the footer.
+
+⚠⚠ **THE ROUTE TO IT WENT THROUGH A NUMBER THAT MADE NO SENSE, AND THAT WAS THE USEFUL PART.** The
+`aside` reported **512px wide against a `w-64` (16rem = 256px)**. Four hypotheses were checked and
+refuted with fixtures before the real one: `rem` resolution (exact, 3 rows), transform-not-reaching-
+descendants (exact, 6 rows), a phantom flex item stealing space (exact, 5 rows), and `height:100%`
+against the document (real — see below — but not the width). The 512 was a **union of two boxes**:
+an out-of-flow child of a flex container is emitted TWICE, once by the flex path and once by the
+out-of-flow pass, and before this fix the two copies **disagreed by the transform**. A doubled width
+was the visible shadow of a duplicate that is otherwise invisible.
+
+⚠⚠ **AND THAT DUPLICATE IS NAMED, NOT FIXED.** Flexbox §4 says an absolutely-positioned child *"does
+not participate in flex layout"* and it should not be emitted by that path at all. With the transform
+applied the two copies now coincide, so nothing is measurable — but deleting a box is how elements
+vanish, and establishing that the out-of-flow pass owns every such case needs its own tick and its own
+falsification. Written into the wiki so the next reader does not rediscover it from a doubled width.
+
+⚠ **ALSO SIGHTED, NOT CHASED:** `height:100%` on a `position:fixed` box resolves against the
+**document**, not the viewport (a fixed sidebar in a 3000px document: Chrome 713, ours 3000). It is a
+real divergence with a clean fixture and it did not change this site's verdict, so it is recorded
+here rather than folded in — mixing it would make neither attributable.
+
+**MEASURED, solo, against t873's readings of the same sites:**
+
+```text
+                                shape before   after      jarring
+  desiviral.net                   0.8185      0.8468      overlap 5 → 0 CLEAN   ← M1 CROSSING
+  www.otomoto.pl                  0.769 (t867) 0.8023     h 1→0, ro 12→11
+  www.unoeste.br                  0.777 (t867) 0.7934     ov 3, ro 3, dt 1 unchanged
+  en.wikipedia.org                0.48522     0.48597     jarring identical
+  www.library.chiyoda.tokyo.jp · ubys.bingol · possssno.sbs · www.marktplaats.nl ·
+  littlecaesarsbcs · blog.rust-lang.org · www.a11yproject.com   ALL BYTE-IDENTICAL
+```
+
+Six byte-identical controls, no site fell.
+
+GATE: `a_transform_applies_to_a_flex_item_that_is_itself_a_flex_container` — a self-comparison
+(`display:block` against `display:flex`, same item, same transform) plus a *"it must move at all"*
+clause, so a fix that applied some other transform still fails. RED-proven (`transformed 120,
+untransformed 120`). Layout suite 124 → 125 green.
+
+I3: the box this moves is a drawer/modal/card — a real click surface — and it moves onto Chrome's
+position. On desiviral the sidebar was covering the header's controls with an invisible panel, which
+is the worst kind of I3 defect: the click lands on the wrong element and nothing looks wrong.
+
+PERF: one `is_empty()` check per flex/grid container child.
+
+WIKI: `docs/wiki/box-layout.md` — "`transform` was silently discarded on a flex item that is itself a
+flex container"
+
 ## Tick 873 — a plain block overlaps a float and a BFC root does not, and only the first half was built (2026-08-03)
 
 TICK SHAPE: capability (render/geometry) — the third site from the "over the shape bar, failing ONLY
