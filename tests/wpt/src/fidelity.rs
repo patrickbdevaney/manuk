@@ -1458,8 +1458,19 @@ fn ink(means: &[[f64; 3]]) -> f64 {
 /// score below [`CERT_MIN_SHAPE_SAMPLE`] either way — this supplies the REASON that refusal never
 /// had, and the two reasons blame opposite parties:
 ///
-/// * the **oracle** built almost nothing → [`Unmeasurable::ShellOnly`]. Its `file://` copy has a
-///   `null` origin, so a JS-rendered page never builds. Not our bug, and not evidence about the site.
+/// * the **oracle** built almost nothing → [`Unmeasurable::ShellOnly`]. Not our bug, and not
+///   evidence about the site. ⚠⚠⚠ **THE CAUSE THIS LINE USED TO GIVE WAS ALREADY REFUTED, IN THIS
+///   FILE, 1,300 LINES ABOVE (measured t856).** It read *"Its `file://` copy has a `null` origin, so
+///   a JS-rendered page never builds"* — the same claim t674 killed on [`Unmeasurable::ShellOnly`]'s
+///   own docs by serving the identical document over `http://127.0.0.1` and getting a byte-identical
+///   dump. **The real cause is neither origin nor timing: it is that the oracle's document is ONE
+///   CURL'd FILE WITH NO SUBRESOURCES.** Rendered from `file:///tmp/…`, a relative
+///   `src="main-5UYZQ2ZL.js"` resolves to `file:///tmp/main-5UYZQ2ZL.js` and a root-relative
+///   `src="/esaj/_next/…"` to `file:///esaj/_next/…`; both 404, so the bundle never runs. Only
+///   ABSOLUTE-URL scripts still load, which is why the shortfall varies per site instead of being
+///   total. t674's experiment was sound and its conclusion was over-broad: serving the same
+///   single file over localhost 404s those paths too, so it could not distinguish "the origin" from
+///   "the files are not there."
 /// * the oracle built the page and **we** did not → [`Unmeasurable::ThinOverlap`]. Ours.
 ///
 /// The split matters because it was the gap: `www.ebay.com` had `probed 25 · common 4`, so

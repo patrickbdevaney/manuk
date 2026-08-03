@@ -622,6 +622,12 @@
   - L1846 · The trap: a this-blind promotion is WORSE than the throw
   - L1860 · One source, two eval sites
 
+## THE FIDELITY INSTRUMENT — what it can and cannot see
+`docs/wiki/fidelity-instrument.md`
+
+  - L3 · shell-only-N is the oracle rendering ONE CURL'd FILE, so every RELATIVE bundle 404s (t856)
+  - L65 · The ranked fix, and its trade — stated, not taken
+
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
 
@@ -1438,4 +1444,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1349 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1351 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
