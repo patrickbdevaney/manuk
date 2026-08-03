@@ -671,6 +671,9 @@
   - L199 · What survives parallelism and what does not
   - L208 · Parallelism MANUFACTURES Bar-0 rows
   - L217 · The usable rule
+  - L225 · Two classifiers, one rule, and the one that ran first could not apply it (t877)
+  - L246 · What it was mislabelling
+  - L265 · The override is deliberately narrow, and the gate proves the narrowness
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1492,4 +1495,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1399 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1402 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

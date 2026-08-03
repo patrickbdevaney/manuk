@@ -221,3 +221,57 @@ the banked series **serial** for the burndown slope, or re-baseline it explicitl
 `crashed` row solo before believing it.
 
 [[conformance-and-oracles]] [[performance]]
+
+## Two classifiers, one rule, and the one that ran first could not apply it (t877)
+
+An unscoreable row's reason is decided in two places that do not know the same things:
+
+```rust
+  // fidelity.rs, inside `compare()` — the PIXEL classifier, from the two screenshots:
+  unmeasurable: (ink(&ma) < BLANK_INK && ink(&mb) >= ORACLE_MIN_INK).then_some(RenderFailed)
+
+  // main.rs — the DOM classifier, which KNOWS about module shells:
+  if f.unmeasurable.is_none() { … unscoreable_reason(probed, common, ours, ships_modules) … }
+```
+
+The pixel one runs first and used to be final, on the rule that *"the earlier cause is the true
+one"*. That rule is right about a bot-wall — a property of the origin, which nothing downstream
+knows better — and **wrong here**, because `document_ships_module_scripts` is consulted by the DOM
+classifier and has never been available to the pixel one.
+
+`RenderFailed` is the single reason the instrument describes as *"our own bug … the one that most
+deserves to count against the score"*, so a mislabel here aims ticks at an engine defect that does
+not exist.
+
+### What it was mislabelling
+
+On a `type="module"` SPA the oracle's ink can be the app's own **splash screen** — the shell that
+paints while the bundles load. Since a module script is always CORS-fetched and the oracle renders a
+fetched copy from a foreign origin, those bundles never load *for the reference either*. So the very
+shell that proves the page cannot be scored from a snapshot was the evidence used to blame us:
+
+```text
+  webfenix.movilidadbogota.gov.co     Chrome LIVE 22 <div>  ·  Chrome SNAPSHOT 4  ·  ours 4
+```
+
+`unscoreable_reason` now arbitrates the pixel verdict instead of deferring to it. **Both** of the
+t875 sweep's `render-failed` rows relabel:
+
+```text
+  webfenix.movilidadbogota.gov.co   render-failed → oracle-module-shell-8
+  d2rwkn96gppqo1.cloudfront.net     render-failed → oracle-module-shell-9
+```
+
+### The override is deliberately narrow, and the gate proves the narrowness
+
+It requires **both** that the document ships module scripts **and** that the ORACLE itself came in
+under `CERT_MIN_SHAPE_SAMPLE`. A blank paint on a module page whose oracle *did* build the document
+stays `RenderFailed` and stays ours — laundering a real blank render would be worse than the mislabel
+this fixes. `a_blank_render_is_ours_unless_the_oracle_only_built_a_module_shell` asserts both
+clauses and was RED-proven twice: once by removing the override, and once by **widening** it (dropping
+the oracle-built-the-page clause), which is the direction a careless fix would take.
+
+Neither label moves the arithmetic — both are UNSCORED and both count against the bar. This changes
+only what the loop is told to go and fix. It is the **fourth** consecutive cohort named as ours and
+proven not ours: `shell-only` (t856), `css-starved` (t860), `oracle-timeout` (t861), `render-failed`
+(here).

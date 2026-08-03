@@ -1689,7 +1689,39 @@ pub fn unscoreable_reason(
     common: usize,
     ours: usize,
     oracle_doc_ships_modules: bool,
+    // ⚠⚠⚠ **THE PIXEL CLASSIFIER'S VERDICT, ARBITRATED HERE RATHER THAN AHEAD OF HERE.**
+    //
+    // `compare()` books [`Unmeasurable::RenderFailed`] from the SCREENSHOTS — our ink ≈ 0 while the
+    // oracle's is not — and the call site used to treat that as final, on the rule that *"the
+    // earlier cause is the true one"*. That rule is right about a bot-wall and wrong about this,
+    // because the two classifiers do not know the same things: the pixel one has never heard of
+    // `document_ships_module_scripts` and the DOM one has. One rule, two implementations, and the
+    // one that ran first was the one that could not apply it.
+    //
+    // Measured on `webfenix.movilidadbogota.gov.co` (Angular, `runtime`/`polyfills`/`main` as
+    // `type="module"`), three readings in one hour: **Chrome LIVE 22 `<div>`, Chrome from the
+    // SNAPSHOT 4, ours 4.** The reference builds the same shell we do, because a module script is
+    // always CORS-fetched and the bundles never load from a foreign origin — the exact wall t865
+    // named. What satisfied *"the oracle painted something"* was the app's own **splash screen**:
+    // the shell that proves the page unscoreable was the evidence used to blame us for it.
+    //
+    // ⚠ **AND THE OVERRIDE IS DELIBERATELY NARROW, because laundering a real blank render is worse
+    // than the mislabel it fixes.** It requires BOTH that the document ships module scripts AND
+    // that the ORACLE itself came in under the shell floor. A blank paint on a module page whose
+    // oracle DID build the page stays `RenderFailed` and stays ours — that is the second direction
+    // the gate proves.
+    //
+    // Neither label moves the arithmetic: both are UNSCORED and both count against the bar. This
+    // changes only what the loop is told to go and fix.
+    pixel_render_failed: bool,
 ) -> Option<Unmeasurable> {
+    if pixel_render_failed {
+        return if oracle_doc_ships_modules && probed < CERT_MIN_SHAPE_SAMPLE {
+            Some(Unmeasurable::OracleModuleShell(probed))
+        } else {
+            Some(Unmeasurable::RenderFailed)
+        };
+    }
     if probed < CERT_MIN_SHAPE_SAMPLE {
         // **The shell is named by its CAUSE where the cause is knowable.** One decision site, not
         // two: refining a `ShellOnly` at the call site would put the same rule in two places, which
@@ -2621,7 +2653,7 @@ mod shape_tests {
         // `comix.to` — the ORACLE built 3 elements from its `file://` copy. Not our bug, and not
         // evidence about the site.
         assert_eq!(
-            unscoreable_reason(3, 2, 900, false),
+            unscoreable_reason(3, 2, 900, false, false),
             Some(Unmeasurable::ShellOnly(3))
         );
 
@@ -2629,7 +2661,7 @@ mod shape_tests {
         // because WE rendered 16% of the page. Deciding on `probed` alone, this returns None and the
         // row goes out unscored with nothing to say.
         assert_eq!(
-            unscoreable_reason(25, 4, 3, false),
+            unscoreable_reason(25, 4, 3, false, false),
             Some(Unmeasurable::ThinOverlap(4)),
             "we drew THREE boxes against the oracle's 25 — below the same floor `ShellOnly` uses, \
              so 'the oracle built the page and we did not' is a claim the numbers support"
@@ -2640,13 +2672,13 @@ mod shape_tests {
         // built the page and we did not") is a claim about our count, and it was decided without
         // our count for as long as the variant existed.
         assert_eq!(
-            unscoreable_reason(25, 4, 25, false),
+            unscoreable_reason(25, 4, 25, false, false),
             Some(Unmeasurable::TreeDivergence(25)),
             "both engines above the floor with a thin intersection is DIVERGENCE, not us rendering \
              less"
         );
         assert_eq!(
-            unscoreable_reason(57, 9, 434, false),
+            unscoreable_reason(57, 9, 434, false, false),
             Some(Unmeasurable::TreeDivergence(434)),
             "www.naukri.com, measured: the oracle's copy has 57 box-bearing elements and ours has \
              434 — 7.6x — with 9 paths shared. Calling that a coverage failure of ours is backwards"
@@ -2656,20 +2688,20 @@ mod shape_tests {
         // on a page where we drew 1,355 boxes. Two engines that each draw ~1,400 and share NONE are
         // misaligned, not one engine rendering nothing.
         assert_eq!(
-            unscoreable_reason(1410, 0, 1355, false),
+            unscoreable_reason(1410, 0, 1355, false, false),
             Some(Unmeasurable::TreeDivergence(1355)),
             "1,355 of our own boxes is not 'we did not build the page', whatever the intersection is"
         );
 
         // `www.ikea.com` — 698 probed, 698 common. Scoreable, so no reason at all: a rule that
         // manufactures a reason for a healthy site is worse than one that stays quiet.
-        assert_eq!(unscoreable_reason(698, 698, 698, false), None);
+        assert_eq!(unscoreable_reason(698, 698, 698, false, false), None);
 
         // The boundary is the certificate's OWN floor, reused rather than invented — so this can
         // never disagree with the thing that refuses to score.
-        assert_eq!(unscoreable_reason(FLOOR, FLOOR, FLOOR, false), None);
+        assert_eq!(unscoreable_reason(FLOOR, FLOOR, FLOOR, false, false), None);
         assert_eq!(
-            unscoreable_reason(FLOOR, FLOOR - 1, 0, false),
+            unscoreable_reason(FLOOR, FLOOR - 1, 0, false, false),
             Some(Unmeasurable::ThinOverlap(FLOOR - 1)),
             "one element below the floor must be REFUSED and NAMED, not scored"
         );
@@ -3125,6 +3157,50 @@ mod shape_tests {
         assert_eq!((a.exact, a.tag_overlap, a.first_bad_depth), (2, 2, None));
     }
 
+    /// ⚠⚠⚠ **THE PIXEL CLASSIFIER AND THE DOM CLASSIFIER DID NOT KNOW THE SAME THINGS, AND THE ONE
+    /// THAT RAN FIRST WAS THE ONE THAT COULD NOT APPLY THE RULE.**
+    ///
+    /// `compare()` books `RenderFailed` from the screenshots — our ink ≈ 0, the oracle's is not —
+    /// and that was final. But on a `type="module"` document the oracle's ink can be the app's own
+    /// **splash screen**: the shell that proves the page cannot be scored from a snapshot was the
+    /// evidence used to blame us for it. Measured on `webfenix.movilidadbogota.gov.co`: Chrome LIVE
+    /// 22 `<div>`, Chrome from the SNAPSHOT **4**, ours **4**.
+    ///
+    /// Both clauses are asserted, and the SECOND is the one that matters: laundering a genuine blank
+    /// render would be worse than the mislabel this fixes, so a module page whose ORACLE built the
+    /// document stays `RenderFailed` and stays ours.
+    #[test]
+    fn a_blank_render_is_ours_unless_the_oracle_only_built_a_module_shell() {
+        const FLOOR: usize = super::CERT_MIN_SHAPE_SAMPLE;
+        // The oracle built a SHELL and the document ships modules → the wall, not our paint.
+        assert_eq!(
+            super::unscoreable_reason(4, 0, 4, true, true),
+            Some(super::Unmeasurable::OracleModuleShell(4)),
+            "a blank render on a module document whose ORACLE built only a shell is the CORS wall"
+        );
+        // …the oracle BUILT the page: a blank paint there is ours, module scripts or not.
+        assert_eq!(
+            super::unscoreable_reason(FLOOR, FLOOR, 0, true, true),
+            Some(super::Unmeasurable::RenderFailed),
+            "a blank render on a module document whose ORACLE built the page is still OURS"
+        );
+        // …no module scripts at all: a shell-sized oracle does not excuse us either.
+        assert_eq!(
+            super::unscoreable_reason(4, 0, 4, false, true),
+            Some(super::Unmeasurable::RenderFailed),
+            "without module scripts there is no CORS wall to blame, so a blank render stays ours"
+        );
+        // …and with no blank render, the arbitration is inert: the ordinary rules decide.
+        assert_eq!(
+            super::unscoreable_reason(4, 0, 4, true, false),
+            Some(super::Unmeasurable::OracleModuleShell(4)),
+        );
+        assert_eq!(
+            super::unscoreable_reason(FLOOR, FLOOR, FLOOR, true, false),
+            None
+        );
+    }
+
     #[test]
     fn an_unscored_site_must_name_its_cause() {
         use super::{classify_fetch, Unmeasurable};
@@ -3298,12 +3374,12 @@ mod shape_tests {
         );
         // The decision lives in ONE place, and it is driven by the ORACLE's document bytes.
         assert_eq!(
-            super::unscoreable_reason(3, 3, 900, true),
+            super::unscoreable_reason(3, 3, 900, true, false),
             Some(Unmeasurable::OracleModuleShell(3)),
             "a shell whose document ships a module script is the instrument's own"
         );
         assert_eq!(
-            super::unscoreable_reason(3, 3, 900, false),
+            super::unscoreable_reason(3, 3, 900, false, false),
             Some(Unmeasurable::ShellOnly(3)),
             "…and one that does not is still the site's — a false positive here would HIDE real work"
         );

@@ -1262,13 +1262,24 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                     // the certificate's *"the instrument could not say why"* row.
                     // Never overwrites a reason already established (a bot-wall, a blank render):
                     // the earlier cause is the true one, and this is the residue.
-                    if f.unmeasurable.is_none() {
+                    // ⚠ **ONE established reason may be superseded, and exactly one**: the PIXEL
+                    // classifier's `RenderFailed`, which is decided from the screenshots and has
+                    // never heard of `document_ships_module_scripts`. `unscoreable_reason` arbitrates
+                    // it — see the `pixel_render_failed` parameter there. Every other earlier cause
+                    // (a bot-wall, a 404) still wins outright: those are properties of the origin and
+                    // nothing downstream knows better.
+                    let pixel_render_failed = matches!(
+                        f.unmeasurable,
+                        Some(manuk_wpt::fidelity::Unmeasurable::RenderFailed)
+                    );
+                    if f.unmeasurable.is_none() || pixel_render_failed {
                         if let Some(reason) = manuk_wpt::fidelity::unscoreable_reason(
                             probed,
                             shape_n,
                             mboxes.len(),
                             // The bytes the ORACLE was handed, not our post-parse DOM.
                             manuk_wpt::fidelity::document_ships_module_scripts(&html),
+                            pixel_render_failed,
                         ) {
                             eprintln!("  UNMEASURABLE [{}]: {}", reason.tag(), reason.explain());
                             // **THE ONE MEASUREMENT THAT DECIDES WHERE THE NEXT TICKS GO** (t783).

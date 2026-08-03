@@ -4549,3 +4549,92 @@ tick earlier. Caught only because pogoda's stable solo value had been measured t
 3. **Never difference a parallel-6 row against a solo row** — and keep the banked series serial, or
    re-baseline it explicitly. Re-measure any `crashed` row SOLO before believing it.
 4. **The instrument debt is paid; the next window is engine work.** If it is not, say so out loud.
+
+## Check #75 — tick 877 (2026-08-03)
+
+**Horizon:** H0 — Pareto Web Parity, PART VII component **1 (daily-driver rendering parity)** for
+ticks 871–875, component **1's INSTRUMENT** for 876–877. No work on components 2, 3 or 4 this window.
+**Gate:** `DAILY-DRIVER-CERTIFICATION.md` milestone **M1 RENDER** — `shape ≥ 0.75` **AND**
+`jarring-clean` on ≥ 95% of the in-scope CrUX corpus. Latest reading, sweep **t875** (200 sites,
+**`--jobs 2`** — the bankable kind, unlike t867's parallel-6): **M1 16.9% (22 of 130)** ·
+shape ≥ 0.75 **23.1% (30)** · jarring-clean **33.8% (44)** · shape_mean **56.5%** · cov_mean
+**86.2%** · **scorability ceiling 106/130 = 81.5%**.
+
+Read this window: `CONSTITUTION.MD` Parts I–VII in full, check #74, `STATUS.md`, the current
+`lever-board.sh` output, `docs/loop/FIDELITY-PROGRESS.tsv`, the t875 sweep, journal ticks 869–877.
+
+### → Gate, or scoreboard?
+
+**GATE, and for the first time this session with M1 crossings to show for it.** Five sites crossed
+the M1 bar in four consecutive ticks — `possssno.sbs`, `www.marktplaats.nl` (t871),
+`ubys.bingol.edu.tr` (t872), `www.library.chiyoda.tokyo.jp` (t873), `desiviral.net` (t874) — and the
+t875 corpus sweep confirms **all five and zero losses**. Every one was attributed by an OLD-BINARY
+control (the pre-fix tree rebuilt from `git stash`, re-run in the same hour, identical denominators),
+which is the strongest evidence this loop has. That answers check #74's steer directly: it asked for
+a shape tick that *finds the mechanism rather than inheriting a guess*, and four of them landed.
+
+**VI.3 CORRECTED:** its M1 instrument row read **14.0% (18/129), shape_mean 53.6% (t857)**. It is now
+**16.9% (22/130), shape_mean 56.5% (t875)**. The trend across three sweeps is 12.0 → 16.4 → 16.9,
+with the middle reading **inflated by its own scheduling** (t867 ran parallel-6; its own tick proved
+parallelism manufactures crossings). Measured serial-to-serial the movement is real and it is the
+first sustained movement M1 has had.
+
+### → Is VI.3's ranking still the north star?
+
+**Yes, and it was re-derived rather than remembered — which is the finding of the window.** t868
+recomputed the board's t777 leg-2/leg-3 ratio on fresh data and found it **inverted 6.5×**: 13 sites
+sit *over* the shape bar failing only on a jarring dimension, against 2 in the near-bar cohort the
+board ranks first. Working the 13 produced five crossings in four ticks. **A ranking is a
+measurement, and measurements go stale** — t875 shows the cohort has already moved again (five gone,
+two new entrants).
+
+No big-but-tail number has crept back. `RATCHET.tsv`'s WPT marks were byte-identical across the whole
+window, which VI.3 names as the *expected* shape of on-mandate work.
+
+### → Is any invariant being bent?
+
+**I3 — better than check #72 and #74 found it, but still not asserted.** Every geometry tick this
+window moved `node_rects`, which is the a11y bbox, which is the agent's click point. Unlike t868 (which
+check #74 caught bending I3 by touching `node_rects` without a click-point assertion), the boxes moved
+here are **real click surfaces** and they moved *toward* Chrome: an off-canvas drawer that never left
+the screen and was covering the header (t874), a nav anchor 29px too narrow and 18px too tall (t871), a
+content column rendered under a float (t873). Each journal entry says so explicitly. **But the
+assertion check #72 asked for still does not exist** — the argument remains "the geometry improved, so
+the click point improved", which is an inference, not a gate. Carried, now for the third check running,
+and it should be a tick rather than a paragraph.
+
+**I5 held.** Zero regressions traded. One reading that looked like a loss (`sestra.cc`, −0.01 with
+reading-order 3→5) was refused as a result after three solo runs on the new binary alone spanned
+0.9225–0.9394 with reading-order 2–5 — **the old reading sits inside the new binary's own spread on
+every column.**
+
+### → PART VI corrections
+
+* **VI.2 / H0.1** — the M1 row is updated above (14.0% → 16.9%).
+* **VI.2 / I5** — the reconciliation says *"the primary discovery engine is now the INSTRUMENTED
+  LOG"*. This window says something narrower and sharper: **the discovery engine was the four-line
+  fixture against `chromium --dump-dom`, and its yield came from REFUTATION.** Every one of the four
+  render fixes was found by a fixture that killed the obvious hypothesis first — RTL inline
+  reordering on `possssno` (byte-identical to Chrome, refuted in two minutes, and the LTR bisect that
+  followed found `text-align:center`); four hypotheses refuted on `desiviral` before the real one; six
+  on `simplepdf`, which still has not reduced; four loader hypotheses retired on `webfenix` with a
+  delaying local origin. **A fixture that refutes your hypothesis is the cheapest possible outcome**
+  and it is the thing that made these ticks converge.
+
+### → THE STEER
+
+1. **The instrument's "our own bug" cohort was not ours, and that keeps happening.** t877 makes
+   `render-failed` the **fourth** consecutive cohort named as ours and proven not — after `shell-only`
+   (t856), `css-starved` (t860) and `oracle-timeout` (t861). Both of t875's `render-failed` rows
+   relabel to `oracle-module-shell`. **Before the next scorability tick, re-run the sweep's unscored
+   partition and re-read it**: the worklist the board quotes (24 unscored, ~12 "genuinely ours") has
+   never survived a re-derivation intact.
+2. **The real scorability blocker is not an engine tick.** Eleven of the 24 are `shell-only` /
+   `oracle-module-shell` — t865's `type="module"` CORS wall — whose named fix is a **loopback reverse
+   proxy** giving document, bundle and XHR one origin. That is instrument work in agent territory
+   (`manuk-wpt`), it is the largest single unscored cohort, and it has been named and not built since
+   t865.
+3. **The geometry vein is still live** — eight sites remain over the shape bar failing only on
+   jarring, re-ranked on t875 — but it is now the *second* lever, not the first, because the ceiling
+   caps M1 at 81.5% no matter how much geometry lands.
+4. **Land the I3 click-point assertion.** Third check running.

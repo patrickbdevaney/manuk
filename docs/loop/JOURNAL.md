@@ -46371,6 +46371,75 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 877 — the fourth cohort named as ours and proven not ours (2026-08-03)
+
+TICK SHAPE: capability (instrument) — t876 named this fix precisely and refused to take it in the
+same tick, because the falsification had to run BOTH directions. This is that tick.
+
+**THE CHANGE, in the one decision site `unscoreable_reason` already owns:** the PIXEL classifier's
+`RenderFailed` is now *arbitrated* rather than deferred to. A blank render on a document that ships
+`type="module"` scripts **and** whose ORACLE probe came in under `CERT_MIN_SHAPE_SAMPLE` is the t865
+CORS wall, not our paint — because on such a page the oracle's ink is the app's own **splash
+screen**, and a module bundle is CORS-fetched, so it never loads for the reference either.
+
+**BOTH of the t875 sweep's `render-failed` rows relabel, verified live on the same binary:**
+
+```text
+  webfenix.movilidadbogota.gov.co   render-failed → oracle-module-shell-8
+  d2rwkn96gppqo1.cloudfront.net     render-failed → oracle-module-shell-9
+```
+
+That is the whole cohort. `render-failed` is the single reason the instrument describes as *"our own
+bug … the one that most deserves to count against the score"*, and on this sweep **none of it was
+ours** — the **fourth** consecutive cohort named as ours and proven not: `shell-only` (t856),
+`css-starved` (t860), `oracle-timeout` (t861), `render-failed` (here).
+
+⚠⚠⚠ **THE SHAPE, and it is worth naming because it is not "a wrong threshold":** two classifiers
+decided the same field and **did not know the same things**. `document_ships_module_scripts` was
+available to the DOM one and had never been available to the pixel one, and the pixel one ran first
+under a rule — *"the earlier cause is the true one"* — that is correct for a bot-wall (a property of
+the origin, which nothing downstream knows better) and wrong for a verdict about our own engine.
+**One rule, two implementations, and the one that runs first is the one that cannot apply it** —
+the same shape as t874's third `transform` emitter, one tick apart, in a different crate.
+
+⚠⚠ **THE OVERRIDE IS NARROW ON PURPOSE, AND THE GATE PROVES THE NARROWNESS RATHER THAN THE FIX.**
+`a_blank_render_is_ours_unless_the_oracle_only_built_a_module_shell` asserts five rows and was
+RED-proven **twice**:
+
+```text
+  override REMOVED   → "a blank render on a module document whose ORACLE built only a shell
+                        is the CORS wall"                                          FAILS
+  override WIDENED   → "a blank render on a module document whose ORACLE built the page
+   (drops the oracle-built-the-page clause)   is still OURS"                       FAILS
+```
+
+The second is the one that matters: **laundering a genuine blank render would be worse than the
+mislabel this fixes**, and the widened form is exactly the shape a careless fix takes. A gate that
+only proves the fix works cannot refuse it.
+
+NOT A HEADLINE CHANGE, and asserted rather than hoped: both labels are UNSCORED and both count
+against the bar, so the certificate's arithmetic does not move by a single site. The scorability
+ceiling stays 106/130. What changes is the worklist — two of the ~12 "genuinely ours" unscored rows
+were never ours, and the real fix for both is the loopback reverse proxy t865 named, not an engine
+tick.
+
+CADENCE: the constitution re-read came due at this tick (every 8; last at 868) and is banked as
+check #75. Its hardest findings: **VI.3's M1 instrument row was stale** (14.0%/t857 → 16.9%/t875, the
+first sustained movement M1 has had); **I3 is still being satisfied by inference, not assertion** —
+carried for the THIRD check running, and the boxes this window moved are real click surfaces (a
+drawer covering the header, a nav anchor 29px narrow, a column under a float), which makes the
+missing assertion more conspicuous rather than less; and **the discovery engine this window was the
+four-line fixture, with its yield coming from REFUTATION** — every one of the four render fixes was
+found by a fixture that killed the obvious hypothesis first. The steer: re-derive the unscored
+partition before the next scorability tick (four cohorts named-as-ours have now been proven not),
+and the largest single unscored cohort is t865's `type="module"` CORS wall, whose named fix is a
+loopback reverse proxy and which has been named-and-not-built since t865.
+
+PERF: none — one `matches!` on a field that is `None` for every scored row.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "Two classifiers, one rule, and the one that ran first
+could not apply it"
+
 ## Tick 876 — `render-failed` is the pixel classifier winning a race it should have lost (2026-08-03)
 
 TICK SHAPE: measurement — t875's own steer said the scorability ceiling (106/130 in-scope = 81.5%)
