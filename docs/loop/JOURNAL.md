@@ -46371,6 +46371,80 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 857 — the sweep the board asked for since t777, and neither M1 loss is ours (2026-08-03)
+
+TICK SHAPE: measurement — a clean `--jobs 2` CrUX sweep, 200 sites, on a quiet box with no build
+beside it. The cadence rule is *"after ~5-6 fixes of either class, bank the rows"*, and
+`status-update.sh` had been printing *"the sweep is 427h old — a capability tick must measure THIS
+tree"* on every wall of this session. Three capability fixes had landed unpriced (t853 inline-box
+geometry, t854 the Bar-0 span clamp, t855 the stale assertion).
+
+HYPOTHESIS, recorded in the stub **before the rows landed** so the reading could not be fitted to
+them: M1 and shape ≈ FLAT (t853 is Chrome-exact on a universal idiom of *small magnitude*, which
+check #72 finding 2 says is below the corpus's tolerance); scorability ≈ flat (t856 showed its
+largest unscored class is an instrument bound); the rows' value is the WORKLIST, not the headline.
+
+RESULT — **banked, and the hypothesis held on shape while the headline moved DOWN for reasons that
+are not ours.**
+
+```text
+                      t847            t857
+  M1 (shape∧jarring)  20/130 15.4%    18/129 14.0%     <- DOWN 1.4 pts
+  shape ≥0.75         24/130 18.5%    24/129 18.6%     <- COUNT FLAT (24 → 24)
+  jarring-clean       38/130 29.2%    36/129 27.9%
+  scored / in-scope   101/130         101/129
+  shape_mean          52.9%           53.6%            <- UP 0.7
+  cov_mean            84.3%           84.0%
+  COMMON-SET BAND     —               +0.68 pts (98 sites in both · 15 up · 7 down >2pt)
+```
+
+⚠⚠⚠ **THE HEADLINE FELL AND THE COMMON SET DID NOT MOVE AT ALL — 2 LOST, 2 GAINED — AND BOTH LOSSES
+ARE VISIBLY NOT ENGINE.** This took a 30-second set-diff of the two TSVs, not an old-binary rebuild,
+because the rows carry their own reasons:
+
+```text
+  rpsc.rajasthan.gov.in   t847 shape=0.941 n=1135  →  t857 UNREACHABLE (no HTTP status at all)
+  dashboard.twitch.tv     t847 shape=0.909 n=11    →  t857 shape=0.889 n=9 → thin-overlap-9
+```
+
+The first left the corpus (which is also why the denominator went 130 → 129); the second **fell below
+the sample floor** — its shape moved 0.02 while its sample went 11 → 9 elements, so it was dropped for
+being unmeasurable, not for being wrong. **A site scored on ELEVEN elements was never a stable M1
+member.** The two gains (`app.ordertime.com`, `littlecaesarsbcs.libellum.com.mx`) both have
+**byte-identical shape** across the two sweeps, so they crossed on the other conjunct.
+
+⚠⚠ **SO THE HONEST STATEMENT IS "NET ZERO ON THE COMMON SET, BAND +0.68" — NOT "M1 REGRESSED 1.4
+POINTS".** The tool prints its own warning next to the number (`PASS-COUNT = NOISY ±2-4 sites`) and
+this is exactly that: a 2-site move where one site left the internet and one has an 11-element
+sample. Reporting the headline drop as a regression would have been as wrong as reporting a
+2-site rise as progress — the same error in the other direction, which is the one this loop is more
+prone to.
+
+⚠⚠ **AND THE PRE-REGISTERED PREDICTION IS WHAT MAKES THAT CREDIBLE.** The stub said shape would be
+flat *because* t853 is a small-magnitude fix on a universal idiom. shape is `24 → 24`. Had the stub
+not been written first, "flat is what I expected" would be unfalsifiable after the fact.
+
+⚠⚠ **THE WORKLIST THE TOOL PRINTS IS OVERSTATED BY ~11 SITES, AND t856 IS WHY.**
+`fidelity-progress.sh` reports `SCORABILITY CEILING 101/129 = 78.3%` with a throw-killer worklist of
+`render-fail 2 · shell-only 13 · thin-overlap 2 · timeout 2 · css-starved 3 · other 6`. t856 measured
+that cohort site by site: **10 of 12 `shell-only` rows are the oracle rendering one curl'd file whose
+relative bundles 404** — the pages render fine in Chrome (48–1115 tags) and our own row reads
+`coverage 1.000000` against a one-element reference. **The two ticks compose: the printed ceiling is
+pessimistic and its largest single line is not engine work.** The residue that IS ours is
+`render-failed` (2), `css-starved` (3), `timeout` (2) and the `tree-divergence` rows — and the
+instrument's own text for `tree-divergence` now names t856's mechanism unprompted (*"the oracle
+renders a curl SNAPSHOT from file://, we render the LIVE url"*).
+
+⚠ **RANKED MECHANISM RESIDUE from this sweep's own oracle clustering**, for the next render tick:
+`missing box: <img>` **16 sites / 643 hits** and `missing box: <li>` **14 sites / 410 hits** are the
+two largest single mechanisms, both ahead of every geometry band. The geometry bands are a long tail
+of ~16px and ~32px width/height/y errors across 15–18 sites each.
+
+PERF: none — measurement only. `www.ebay.com` again tripped OURS-IS-SLOW (23.6s vs Chromium 10.1s).
+
+WIKI: none — the artefact is `docs/loop/SWEEP-t857-rows.tsv`, banked into
+`docs/loop/FIDELITY-PROGRESS.tsv`.
+
 ## Tick 856 — the oracle renders ONE CURL'd FILE, so every relative bundle 404s (2026-08-03)
 
 TICK SHAPE: measurement — the board's #1 is the scorability ceiling ("29 of 130 in-scope sites do not
