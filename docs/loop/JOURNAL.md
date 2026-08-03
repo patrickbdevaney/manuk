@@ -46371,6 +46371,98 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 861 — an oracle timeout is the REFERENCE hanging, and I measured the wrong binary four times (2026-08-03)
+
+TICK SHAPE: instrument fidelity (attribution) — the board's M1 PRIORITY ORDER says SCORABILITY
+FIRST, and check #73's steer #1 was literally *"`curl` the nine"*: the nine unscored rows that still
+claim to be ours (`render-failed` 2 · `timeout` 2 · `tree-divergence` 5).
+
+HYPOTHESIS (pre-registered, before any probe): at least one of the nine is not ours, because the two
+tested so far — `shell-only` (t856) and `css-starved` (t860) — were both false. Specific prediction
+for the two `timeout-150s` rows: the sweep's own note says that across **438 successful runs the
+slowest took 132s and ZERO ever reached 150s**, so a site that hits 150s in nine consecutive sweeps
+is not "a slow site" — it is a different phenomenon.
+
+RESULT — **all nine serve HTTP 200 in under 4s, and the two timeout rows are GOOGLE CHROME hanging.**
+
+```text
+                        chromium    google-chrome-stable    OUR ENGINE    curl
+  www.friulioggi.it       1.04s       >120s  (killed)         27.5s       0.6-4.0s
+  bbs.ruliweb.com         1.10s       >120s  (killed)         34.0s       1.5-2.0s
+  blog.rust-lang.org         -         2.26s (scores)            -           -     <- control
+```
+
+Same snapshot, same flags, **one binary apart**. `chrome_bin()` runs `which google-chrome-stable`
+first and only falls through to `chromium`, so the oracle runs the half that hangs. Our engine
+renders both pages.
+
+**Nine consecutive sweeps** carried these two as `timeout-150s` — t800, t807, t812, t820, t825,
+t832, t842, t847, t857 — and nothing had ever asked whose clock burned. Falsified in both
+directions before believing it: `MANUK_CHROME_TIMEOUT_SECS=45` makes the row read `timeout-45s`
+(so the deadline is Chrome's), and `--site-budget 600` does NOT rescue either site (so it is not the
+sweep's budget).
+
+⚠⚠⚠ **I MEASURED THE WRONG BINARY FOUR TIMES, AND EVERY REFUTATION WAS CORRECT ABOUT A BROWSER THE
+INSTRUMENT NEVER INVOKES.** In order: *the origin is slow* (curl 1.3s — refuted), *our net stack is
+slow* (it logged `timed out after 30.0s`, then the same curl hung on the next attempt — the site is
+**intermittent**, and my first comparison was two different moments wearing one conclusion; a tight
+curl/ours interleave x4 fixed it), *the injected probe* (`pathOf` walks every previous sibling for
+`nth-of-type`, O(n^2) on 1199 sibling `<a>`s, and `capture()` runs 4x — plausible, and **1.04s**),
+*the screenshot* (**1.05s** — and the run's own output already disproved it, because the visual
+score printed **75.0%** on a row that came back UNMEASURABLE, so the screenshot had plainly
+succeeded). All four ran against `chromium`, because that is what `command -v chromium` finds and
+what a human types.
+
+**This is t858's lesson one level down — in the BINARY rather than the code path.** t858 corrected
+t856 for explaining a cohort from a comment instead of from `capture_seen_all_paths`; here I read
+the code correctly and still spent four measurements on the wrong subject, because `chrome_bin()`
+resolves a PATH at runtime and the answer depends on the box. The standing rule this earns:
+**when a subprocess is the subject, the resolved PATH is part of the instrument** — print it, or
+reproduce with `$(which ...)` in the same order the code does.
+
+⚠⚠ **WHAT CHANGED, AND DELIBERATELY WHAT DID NOT.** `Unmeasurable::OracleTimeout(u64)` now carries
+the two Chrome-side deadlines; the sweep's per-site budget keeps the bare `Timeout`, whose text now
+says out loud that it bounds BOTH engines together so it cannot be read as ours either. **THE
+DENOMINATOR DOES NOT MOVE** — `oracle-timeout-N` is COUNTED and UNSCORED exactly as before, and the
+gate asserts it against the EXCLUDED partition. "The reference failed" is the most tempting licence
+this instrument has ever been offered to launder its hardest sites out of the denominator and raise
+the headline for free, which is the `EXCLUDED-RISING` failure the fixed-denominator rule exists to
+forbid. The comparison being unsound is a reason to stop MIS-ATTRIBUTING it, never to stop COUNTING
+it. **This tick buys attribution, not arithmetic, and no headline number moves.**
+
+Also corrected here: the **`css-starved` string t860 falsified but did not rewrite**. It still ended
+*"OURS and IN-SCOPE: the sheets were cut by our own load deadline, not refused by the origin"* — a
+sentence measured false on 3 of 3. A reason string is re-read on every sweep, so leaving a falsified
+one in place re-sells the same wrong tick forever. That is check #73's steer #2, applied to its own
+first instance.
+
+MEASURED end-to-end on the rebuilt binary: both sites now report `oracle-timeout-45s`;
+`blog.rust-lang.org` still scores (`cov 100.0% · shape 1 of 1 · CERTIFICATE HOLDS`), so the change
+is inert on every site that was already measurable.
+
+⚠ **SIGHTED, NOT CHASED — banked because it is real and is NOT what this row was measuring.** Our
+own load path spends **two sequential full `load_budget()` windows** on one navigation: `load_async`
+arms one for its enhancement phases (`initial images+masks` alone = 10.79s of an 18.76s ledger) and
+the caller's `finish_loading` then arms a second, which on `bbs.ruliweb.com` expires in full. Every
+call site in the tree does `load_async().await; finish_loading().await;`. The declared promise is a
+12s budget; the delivered ceiling is ~2x that plus the unbudgeted document phases. That is a
+PART VII component-4 row (`no pathological hangs or runaway resource use`), not a scorability one —
+fixing it would not have made either site scorable, since Chrome is the binding constraint. Its own
+tick, so both stay attributable.
+
+THE NINE, for the next tick: 200 on all of them. `render-failed` 2 (`otomoto.pl` cov 0.004 on a
+1291-tag page; `webfenix` cov **1.000** with n=8, which is coverage against a near-empty reference)
+and `tree-divergence` 5 remain untested. Three of the five tree-divergence rows are SPA shells
+shipping their own `<base href="/">`; I hypothesised that this collides with the oracle's `file://`
+snapshot and **refuted it myself** by reading `chrome.rs:518` — the oracle inserts its `<base>`
+immediately after `<head>`, ahead of the page's own, and the first `<base href>` wins. Recorded so
+the next tick does not re-run a dead hypothesis.
+
+PERF: none — the instrument's taxonomy only. No engine path changed.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "An oracle timeout is the REFERENCE hanging", the
+four wrong turns, and why the denominator deliberately did not move.
+
 ## Tick 860 — a stylesheet that 404s is not a page we failed to style (2026-08-03)
 
 TICK SHAPE: instrument fidelity (scorability) — the board's M1 PRIORITY ORDER says SCORABILITY FIRST,

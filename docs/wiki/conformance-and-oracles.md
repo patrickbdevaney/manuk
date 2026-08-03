@@ -2942,3 +2942,77 @@ The same window's other fix (CSS 2.1 §10.3.3 under `rtl`) moved nothing, and th
 rather than the fix being wrong: **5 of the 101 scored sites carry any RTL markup at all.** A corpus
 that cannot exercise a mechanism cannot price it, in either direction — which is an argument about
 the corpus, not a verdict on the fix.
+
+## An oracle timeout is the REFERENCE hanging, and for 57 ticks it was booked as ours (t861)
+
+**`bbs.ruliweb.com` and `www.friulioggi.it` carried `timeout-150s` in NINE consecutive sweeps** —
+t800, t807, t812, t820, t825, t832, t842, t847, t857 — and in all that time nobody asked *whose
+clock burned*. The reason string said only *"a child process did not return within 150s and was
+killed"*, and every consumer of the ranked backlog reads that as this engine.
+
+**It is Google Chrome. Measured, with a control, same snapshots, same flags, one binary apart:**
+
+```text
+                        chromium    google-chrome-stable    OUR ENGINE
+  www.friulioggi.it       1.04s       >120s  (killed)         27.5s
+  bbs.ruliweb.com         1.10s       >120s  (killed)         34.0s
+  blog.rust-lang.org         —         2.26s (scores)            —      <- the control
+```
+
+`chrome_bin()` prefers `google-chrome-stable` over `chromium`, so **the oracle runs the half that
+hangs.** Our engine renders both pages; `curl` serves both in under 2s, interleaved against our own
+fetch in the same seconds.
+
+### The four wrong turns this took, because each one looked like the answer
+
+1. **"The origin is slow."** `curl` returned 200 in 1.3–2.0s. Refuted.
+2. **"Our net stack is slow."** It looked that way — one run logged `timed out after 30.0s` on a URL
+   curl served in 1.3s. Then the *same* curl hung on the next attempt: `bbs.ruliweb.com` is
+   **intermittent**, and the first comparison was two different moments wearing one conclusion. A
+   tight interleave (curl, ours, curl, ours ×4) is what made it attributable — and it showed ours at
+   33.8–40.0s against curl at 1.5–2.0s, which is real but is **not** what the row was measuring.
+3. **"It is the injected probe."** `pathOf` walks every previous sibling for `nth-of-type`, which is
+   O(n²) on a page with 1199 sibling `<a>`s, and `capture()` runs up to four times. Plausible,
+   cheap to test, and **wrong**: Chrome + probe finished in 1.04s.
+4. **"It is the screenshot."** Also wrong — 1.05s, and the run's own output proves it, because the
+   visual score printed **75.0%** on a row that came back UNMEASURABLE. The screenshot had succeeded.
+
+**Every one of those four measurements was run against `chromium`, because that is what
+`command -v chromium` finds and what a human types.** The instrument runs `which
+google-chrome-stable` FIRST. Four consecutive refutations were all measuring a browser the oracle
+never invokes — the t858 lesson (*replicate the instrument, not your model of it*) reappearing one
+level down, in the **binary** rather than the code path. `chrome_bin()`'s candidate list is four
+names long and the answer changes with the box.
+
+> **When a subprocess is the subject, the resolved PATH is part of the instrument.** Print it, or
+> reproduce with `$(which …)` in the same order the code does.
+
+### What changed, and deliberately what did not
+
+`Unmeasurable::OracleTimeout(u64)` now carries the two Chrome-side deadlines
+(`capture_seen_all_paths`, the screenshot); the sweep's own per-site budget keeps the bare
+`Timeout`, and its text now says out loud that it bounds **both engines together**, so it cannot be
+read as ours either.
+
+⚠⚠ **THE DENOMINATOR DOES NOT MOVE.** `oracle-timeout-N` is COUNTED and UNSCORED exactly as a plain
+timeout was, and the gate asserts it against the EXCLUDED partition. "The reference failed" is the
+most tempting licence this instrument has ever been offered to launder its hardest sites out of the
+denominator and raise the headline for free — the `EXCLUDED-RISING` failure §0's fixed-denominator
+rule exists to forbid. **The comparison being unsound is a reason to stop mis-attributing it, never
+a reason to stop counting it.** What this buys is attribution, not arithmetic: the ranked backlog
+stops selling engine ticks for a defect in the reference binary.
+
+Legacy rows still parse: `timeout-150s` reads back as `Timeout`, because nobody knew whose clock
+those nine sweeps measured and re-labelling history would invent a measurement that was never made.
+
+Gated by `an_unscored_site_must_name_its_cause` — RED-proven in both directions (drop the
+`oracle-timeout-` parse arm and the round-trip reads back as `Timeout`, re-blaming us; strip the
+word ORACLE from `explain()` and the attribution assertion fails).
+
+### The third cohort in a row that was not ours
+
+`shell-only` (t856), `css-starved` (t860), `timeout` (t861). Three consecutive named-as-ours cohorts,
+three cheap tests, three refutations. The sweep's printed `SCORABILITY CEILING` is a **floor on our
+fidelity, not a ceiling on our engine** — and the `css-starved` string, which t860 falsified but did
+not rewrite, is corrected here too. A reason string is re-read on every sweep; leaving a falsified
+one in place re-sells the same wrong tick forever.

@@ -532,7 +532,7 @@ pub fn capture_seen_all_paths(
         .arg("--dump-dom")
         .arg(format!("file://{}", tmp.display()));
     let secs = chrome_timeout_secs();
-    let out = output_with_deadline(cmd, secs).ok_or(Unmeasurable::Timeout(secs))?;
+    let out = output_with_deadline(cmd, secs).ok_or(Unmeasurable::OracleTimeout(secs))?;
     let _ = std::fs::remove_file(&tmp);
     if !out.status.success() {
         return Err(Unmeasurable::ProbeBlocked);
@@ -905,7 +905,7 @@ pub fn capture_url_screenshot(
         .arg(format!("--screenshot={}", dest.display()))
         .arg(format!("file://{}", tmp.display()));
     let secs = chrome_timeout_secs();
-    let out = output_with_deadline(cmd, secs).ok_or(Unmeasurable::Timeout(secs))?;
+    let out = output_with_deadline(cmd, secs).ok_or(Unmeasurable::OracleTimeout(secs))?;
     let _ = std::fs::remove_file(&tmp);
     if !out.status.success() {
         return Err(Unmeasurable::ProbeBlocked);

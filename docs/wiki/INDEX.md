@@ -392,6 +392,10 @@
   - L2902 · Attributing a per-site sweep delta (t847) — the integer test is NOT the control
   - L2931 · A sweep row is a LOWER BOUND on the same binary's solo reading
   - L2939 · A corollary about corpus reach
+  - L2946 · An oracle timeout is the REFERENCE hanging, and for 57 ticks it was booked as ours (t861)
+  - L2966 · The four wrong turns this took, because each one looked like the answer
+  - L2990 · What changed, and deliberately what did not
+  - L3012 · The third cohort in a row that was not ours
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1447,4 +1451,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1354 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1358 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

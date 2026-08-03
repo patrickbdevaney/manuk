@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **595** | ticks 1–860 |
-| median tick cycle | **25m** | 594 intervals |
-| median, last 10 | **60m** | 10 intervals |
+| ticks landed | **596** | ticks 1–861 |
+| median tick cycle | **25m** | 595 intervals |
+| median, last 10 | **58m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.07** | 554.2h elapsed |
-| median verify wall | **63s** | 534 ticks |
+| **ticks per hour** | **1.07** | 555.2h elapsed |
+| median verify wall | **63s** | 535 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **381**
-* **✅ rows in the capability ledger**: 144 → **452**
+* **✅ rows in the capability ledger**: 144 → **453**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**291 of 595 ticks** (49%) moved a
+**291 of 596 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -692,5 +692,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **856** | 2026-08-03 05:32 | 57m | measurement | 63s | +309/−32 | 381 | 81 | 56.0% · | the oracle renders ONE CURL'd FILE, so every relative bundle 404s (2026-08-03) |
 | **858** | 2026-08-03 06:34 | 62m | measurement | 63s | +518/−186 | 381 | 81 | 56.0% · | t856's CONCLUSION stands and its stated MECHANISM was wrong (2026-08-03) |
 | **860** | 2026-08-03 07:15 | 41m | instrument | 63s | +540/−42 | 381 | 81 | 56.0% · | a stylesheet that 404s is not a page we failed to style (2026-08-03) |
+| **861** | 2026-08-03 08:14 | 59m | instrument | 63s | +315/−41 | 381 | 81 | 56.0% · | an oracle timeout is the REFERENCE hanging, and I measured the wrong binary four times (20 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -87,6 +87,35 @@ pub enum Unmeasurable {
     /// charge its own slowness to your account"*): the differential crawl solved this with a per-site
     /// process and a watchdog, and the certification sweep never inherited either.
     Timeout(u64),
+    /// **THE REFERENCE BROWSER HUNG, AND FOR 57 TICKS THAT WAS BOOKED AS OUR TIMEOUT.** Carries the
+    /// deadline in seconds.
+    ///
+    /// [`Self::Timeout`] above is emitted from THREE places — the box-probe deadline, the screenshot
+    /// deadline, and the sweep's own per-site budget — and only the third says anything about this
+    /// engine. The first two are `output_with_deadline` giving up on **Chrome**, and its sentence
+    /// (*"a child process did not return"*) reads as ours to every consumer of the ranked backlog.
+    /// Two sites carried it in **nine consecutive sweeps** (t800 → t857) and nothing had ever asked
+    /// whose clock burned.
+    ///
+    /// Measured (t861), same snapshots, same flags, one binary apart:
+    ///
+    /// ```text
+    ///                        chromium   google-chrome-stable   OUR ENGINE
+    ///   www.friulioggi.it       1.04s      >120s  (killed)        27.5s
+    ///   bbs.ruliweb.com         1.10s      >120s  (killed)        34.0s
+    ///   blog.rust-lang.org         —        2.26s (scores)           —
+    /// ```
+    ///
+    /// [`crate::chrome::chrome_bin`] prefers `google-chrome-stable` over `chromium`, so the oracle
+    /// runs the binary that hangs. Our engine renders **both** pages; `curl` serves both in under
+    /// 2s, interleaved against our own fetch in the same seconds.
+    ///
+    /// ⚠ **THE DENOMINATOR DOES NOT MOVE.** This variant is COUNTED and UNSCORED exactly as
+    /// [`Self::Timeout`] is — see the scorability assertions in this module's tests. Excluding a site
+    /// because the reference failed is how a metric flatters itself, and §0's fixed-denominator rule
+    /// exists to forbid precisely that. What changes is the LABEL: the ranked backlog stops sending
+    /// engine work after a defect in the reference binary. Attribution, not arithmetic.
+    OracleTimeout(u64),
     /// **The ORACLE rendered a shell, so there is nothing to compare against.** Carries the number of
     /// elements Chrome's probe actually produced.
     ///
@@ -266,6 +295,7 @@ impl Unmeasurable {
             Self::RenderFailed => "render-failed".into(),
             Self::ShellOnly(n) => format!("shell-only-{n}"),
             Self::Timeout(secs) => format!("timeout-{secs}s"),
+            Self::OracleTimeout(secs) => format!("oracle-timeout-{secs}s"),
             Self::Crashed => "crashed".into(),
             Self::NeverRan => "never-ran".into(),
             Self::ThinOverlap(n) => format!("thin-overlap-{n}"),
@@ -291,6 +321,14 @@ impl Unmeasurable {
                 .parse()
                 .ok()
                 .map(Self::TreeDivergence),
+            // ⚠ Checked BEFORE the bare `timeout-` arm, and it must stay there: the legacy tag is a
+            // strict suffix of this one. Rows banked before t861 still read back as `Timeout`, which
+            // is the honest thing for them to say — nobody knew whose clock they measured.
+            _ if s.starts_with("oracle-timeout-") && s.ends_with('s') => s
+                ["oracle-timeout-".len()..s.len() - 1]
+                .parse()
+                .ok()
+                .map(Self::OracleTimeout),
             _ if s.starts_with("timeout-") && s.ends_with('s') => s["timeout-".len()..s.len() - 1]
                 .parse()
                 .ok()
@@ -350,10 +388,24 @@ impl Unmeasurable {
                     .into()
             }
             Self::Timeout(secs) => format!(
-                "a child process did not return within {secs}s and was killed. The sweep runs sites in \
-                 ONE process, so an unbounded child stalls the WHOLE corpus and the run yields no \
-                 certificate at all — the sites that already finished are lost with it, which is \
-                 strictly worse than the silent drop the fixed-denominator rule exists to prevent"
+                "THE WHOLE SITE — both engines together — exceeded the sweep's own per-site budget of \
+                 {secs}s and was killed. This is the ONLY timeout that can be about our engine, and it \
+                 still does not say so: it bounds the pair, so read it beside oracle-timeout before \
+                 spending an engine tick on it. The sweep runs sites in ONE process, so an unbounded \
+                 child stalls the WHOLE corpus and the run yields no certificate at all — the sites \
+                 that already finished are lost with it, which is strictly worse than the silent drop \
+                 the fixed-denominator rule exists to prevent"
+            ),
+            Self::OracleTimeout(secs) => format!(
+                "THE REFERENCE BROWSER did not return within {secs}s and was killed — this is the \
+                 ORACLE's clock, NOT ours, and it is not evidence about this engine. Measured t861 on \
+                 the two sites that carried the old bare `timeout` tag for NINE consecutive sweeps: \
+                 the same snapshot, the same flags, one binary apart — chromium 1.0s, \
+                 google-chrome-stable >120s (killed), our own engine 27.5s and 34.0s respectively, \
+                 with a scoring control (blog.rust-lang.org) at 2.26s on the same binary. chrome_bin() \
+                 prefers google-chrome-stable, so the oracle runs the half that hangs. COUNTED and \
+                 UNSCORED exactly as a plain timeout is — the denominator does not move, because a \
+                 metric that drops the sites its reference could not render is flattering itself"
             ),
             Self::ShellOnly(n) => format!(
                 "the ORACLE rendered only {n} element(s) — a shell, not the page. Scoring this \
@@ -383,8 +435,14 @@ impl Unmeasurable {
                  design — the giveaway is coverage ~1.000 with shape ~0 (every element present, \
                  because there was no CSS to drop it; almost none placed, because there was no CSS to \
                  place it). The ORACLE has always discarded these runs; this instrument scored them, \
-                 which charged network weather to the layout engine's account. OURS and IN-SCOPE: the \
-                 sheets were cut by our own load deadline, not refused by the origin"
+                 which charged network weather to the layout engine's account. ⚠ THE CLAUSE THAT USED \
+                 TO END THIS SENTENCE — 'OURS and IN-SCOPE: the sheets were cut by our own load \
+                 deadline, NOT refused by the origin' — WAS FALSE ON 3 OF 3 WHEN SOMEBODY FINALLY \
+                 curl'ED IT (t860): all three were 404 at the origin, which is the same answer Chrome \
+                 gets, so those pages were perfectly scorable and one of them (m.youm7.com) was an \
+                 outright M1 PASS being counted as a render failure. A 404/410 no longer lands here. \
+                 What remains is a genuine non-arrival — a deadline cut, a refused connection, a 403 \
+                 or a 5xx — so this MAY be ours; curl the sheet before assuming it"
             ),
             Self::Crashed => "THE SWEEP PROCESS DIED while rendering this site (SIGSEGV/OOM/kill) — \
                  our own bug, like render-failed, and the most expensive kind: it takes the whole \
@@ -2979,6 +3037,12 @@ mod shape_tests {
             // page is four digits — so the round-trip is asserted on a value the parser could
             // plausibly choke on rather than on a friendly `4`.
             Unmeasurable::TreeDivergence(1487),
+            // `OracleTimeout` is new (t861). Its tag has the OLD tag as a strict suffix
+            // (`oracle-timeout-45s` contains `timeout-45s`), so this round-trip is the one that
+            // catches a parser whose arms are ordered wrong — it would read back as `Timeout(45)`
+            // and re-blame us for the reference browser's hang, which is the exact defect the
+            // variant exists to end.
+            Unmeasurable::OracleTimeout(45),
         ] {
             assert_eq!(
                 Unmeasurable::from_tag(&u.tag()),
@@ -3021,6 +3085,41 @@ mod shape_tests {
                  denominator, never join the EXCLUDED tier"
             );
         }
+        // ── **THE REFERENCE BROWSER'S HANG IS NOT OUR TIMEOUT — AND IT STILL COUNTS (t861).**
+        //
+        // Two sites carried a bare `timeout-150s` in NINE consecutive sweeps (t800 → t857) and the
+        // reason string said only *"a child process did not return"*, which every consumer of the
+        // ranked backlog reads as ours. Measured on the same snapshots, same flags, one binary apart:
+        // chromium 1.0s, `google-chrome-stable` >120s (killed), our own engine 27.5s / 34.0s, with a
+        // scoring control at 2.26s on the same hanging binary. `chrome_bin()` prefers
+        // `google-chrome-stable`, so the oracle runs the half that hangs.
+        //
+        // Both halves are asserted together on purpose, because each one alone is a way to get this
+        // wrong: name it honestly (or the backlog keeps buying engine ticks for a defect in the
+        // reference), and keep counting it (or "the oracle failed" becomes a licence to launder every
+        // hard site out of the denominator — the `EXCLUDED-RISING` failure that §0's fixed
+        // denominator exists to forbid).
+        let ot = Unmeasurable::OracleTimeout(150).tag();
+        assert!(
+            !excluded_prefixes.iter().any(|p| ot.starts_with(p))
+                && !excluded_exact.contains(&ot.as_str()),
+            "{ot} must stay IN the in-scope denominator: the reference failing is not a reason to \
+             stop counting the site, only a reason to stop blaming this engine for it"
+        );
+        assert_eq!(
+            Unmeasurable::from_tag("timeout-150s"),
+            Some(Unmeasurable::Timeout(150)),
+            "the NINE sweeps banked before t861 must keep reading back as a bare timeout — nobody \
+             knew whose clock they measured, and re-labelling history would invent a measurement"
+        );
+        assert!(
+            Unmeasurable::OracleTimeout(150)
+                .explain()
+                .contains("ORACLE")
+                && !Unmeasurable::Timeout(150).explain().contains("ORACLE"),
+            "each timeout must name WHOSE clock burned; that is the whole content of this variant"
+        );
+
         assert_eq!(
             classify_fetch(404, "gone"),
             Some(Unmeasurable::HttpStatus(404)),
