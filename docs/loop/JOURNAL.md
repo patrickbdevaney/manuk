@@ -46371,6 +46371,100 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 882 — a `<template>`'s `innerHTML` went to its CHILD LIST, and Vue keeps ONE template (2026-08-03)
+
+TICK SHAPE: capability — the board's named binding constraint (*"pick 3-5 booted-but-thin sites and
+find WHY a booted page renders <20%"*), aimed at the cohort t881 had just converted from an
+instrument defect into named engine gaps.
+
+⚠⚠⚠ **THE LOG WAS THE DISCOVERY ENGINE AGAIN, AND IT NAMED THE FUNCTION.** One run of `pt88.app`
+through the fidelity path, one grep:
+
+```text
+  UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening.
+    error=can't access property "firstChild", l is null
+    insertStaticContent@module.js:33:1246
+```
+
+The real shipped bundle (fetched, not guessed) says exactly what `l` is — Vue 3's `runtime-dom`:
+
+```js
+  Pw.innerHTML = tI(s==="svg" ? `<svg>${t}</svg>` : s==="mathml" ? `<math>${t}</math>` : t);
+  const a = Pw.content;
+  if (s==="svg" || s==="mathml") { const l = a.firstChild; for(; l.firstChild;) a.appendChild(l.firstChild); a.removeChild(l) }
+  e.insertBefore(a, n)
+```
+
+and `Pw = Dr && Dr.createElement("template")` is a **module-level singleton**, written on every
+static block the app renders.
+
+⚠⚠⚠ **THE BUG: `set_inner_html` WROTE TO THE ELEMENT'S CHILD LIST, AND A `<template>`'s CHILD LIST
+IS ALWAYS EMPTY IN A BROWSER.** DOM Parsing is explicit — *"if context is a template element, then
+set context to the template element's template contents"* — so `innerHTML` replaces the CONTENT
+fragment, never the children. Writing to the children survived only because
+`Dom::template_content` materialises the fragment **lazily and once**, moving the direct children in
+on first access. So the one ordering anybody had ever tested worked, and every other ordering did
+not. Measured against Chrome, four lines each:
+
+```text
+                                                       Chrome   manuk
+  innerHTML, THEN read .content                            1       1    <- the only case ever tested
+  read .content, THEN innerHTML                            1       0    ... and .childNodes was 1
+  innerHTML TWICE (2nd writes two nodes)                   2       1    <- the FIRST write's node
+  t.innerHTML = t.innerHTML  (getter reads the contents)  kept   ERASED
+```
+
+A cached-then-stale fragment is exactly what Vue's singleton produces: from the second static block
+onward `a.firstChild` is `null` and `l.firstChild` throws — **inside an async render, where nothing
+is listening**, which is `G_SILENT_FAIL`'s whole reason for existing. One throw, and the app is over.
+
+⚠⚠ **AND THE SAME DEFECT HAD A SECOND HALF NOBODY HAD LOOKED AT — THE GETTER.** `serialize_inner`
+walked the child list too, so `t.innerHTML` returned `""` for every template that had content, and
+the round-trip `t.innerHTML = t.innerHTML` was an **eraser**. Both halves are RED-proven
+independently (revert the setter → `pre:0/0 kids:1 twice:0 rt:false`; revert only the getter →
+`rt:false` alone).
+
+**MEASURED, the t881 cohort, one binary apart, same hour** — and the t881 rows are a genuine
+old-binary control: the proxy that makes these references real landed one tick ago and nothing else
+in the tree moved.
+
+```text
+                                      t881 (proxy, no fix)          t882 (this tick)
+  pt88.app                    thin-overlap-3 · 3 common     SCORED · shape 62.9% on 132
+  portal.ensuretyfinance.com  thin-overlap-1 · 1 common     SCORED · shape 86.4% on 22, coverage 100%
+  webfenix.movilidad…gov.co   render-failed                 SCORED · shape 10.9% on 46 (flaps — see below)
+  booking.directferries.com   thin-overlap-3                thin-overlap-3   (not Vue — unchanged)
+  allticketscol.com           module-shell (refused)        module-shell (refused) — unchanged
+```
+
+**`portal.ensuretyfinance.com` crosses the M1 shape bar** (0.864, coverage 100%, 0 missing boxes).
+`pt88.app` goes from **three comparable elements to 132 scored**. Stated with its caveat:
+**`webfenix` FLAPPED** — scored on one run and `render-failed` on the next in the same hour, so it is
+reported as a site the fix reaches and NOT as a crossing.
+
+CONTROLS, same binary, same hour, both fully covered and above the bar — no regression signal:
+`news.ycombinator.com` shape **80.1%** on 805 scored (coverage 100%, 0 missing) ·
+`blog.rust-lang.org` shape **99.6%** on 1664 (coverage 100%, 0 missing).
+
+⚠ **THE RESIDUE IS NAMED AND IS A DIFFERENT MECHANISM, SO IT IS A DIFFERENT TICK.** The fixture that
+found this also caught a second divergence and it is *not* fixed here: an `<svg>` parsed by the
+FRAGMENT parser comes back `nodeName: "SVG"` in the **xhtml** namespace where Chrome gives `svg` in
+`http://www.w3.org/2000/svg`. Document parsing is right (`g_foreign_content_ns` gates it); the
+`parse_fragment_in` → `clone_into` path drops the namespace. Vue's hoisting does not read the
+namespace, so it is not what killed the page — it is the next tick, with its own gate.
+
+GATE: `G_TEMPLATE_CONTENT` gains four claims — `pre:1/1` (`.content` read BEFORE the write still
+receives it), `kids:0` (the element's child list stays empty), `twice:2` (a second write replaces the
+contents), `rt:true` (the getter reads the contents). **Every one of the nine claims is Chrome's
+byte-exact answer**, taken from `chromium --dump-dom` on the gate's own HTML, and the four new ones
+are RED-proven in both halves as above.
+
+PERF: none — one tag comparison on the `innerHTML` path, and the redirect replaces a walk of an
+always-empty child list with a walk of the fragment.
+
+WIKI: `docs/wiki/dom-semantics.md` — "A `<template>`'s `innerHTML` is its CONTENTS — and a lazy
+fragment is what made one ordering work"
+
 ## Tick 881 — the one-origin proxy, built BEHIND the acceptance test t880 asked for (2026-08-03)
 
 TICK SHAPE: instrument — build the loopback reverse proxy named-and-not-built since t865, in the

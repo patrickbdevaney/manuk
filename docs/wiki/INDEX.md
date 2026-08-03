@@ -659,6 +659,7 @@
   - L1909 · The fix is ONE accessor at the ROOT of the chain, not WebIDL's shape
   - L1924 · The table is taught by the iface() calls, not written twice
   - L1932 · The named limits
+  - L1952 · A <template>'s innerHTML is its CONTENTS — and a lazy fragment is what made one ordering work
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -1503,4 +1504,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1410 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1411 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

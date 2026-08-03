@@ -1948,3 +1948,48 @@ for free.**
   mechanisms for one rule is a smell, and it is written down at both sites rather than hidden.
 
 [[js-engine]] [[frameworks]] [[conformance-and-oracles]] [[fidelity-instrument]]
+
+## A `<template>`'s `innerHTML` is its CONTENTS — and a lazy fragment is what made one ordering work
+
+DOM Parsing is explicit about the redirect: *"if context is a template element, then set context to
+the template element's template contents"*. A `<template>` element's own child list is **always
+empty** in a real browser; `.content` is the only place its markup lives. `manuk_html::set_inner_html`
+wrote to the child list, and `serialize_inner` read from it.
+
+**Why that survived for so long, and it is the instructive part.** `Dom::template_content`
+materialises the content fragment **lazily and once**, moving the element's direct children into it
+on first access. So the single ordering anybody had ever written a test for — *set `innerHTML`, then
+read `.content`* — worked by accident, and nothing else did:
+
+```text
+                                                       Chrome   manuk (before)
+  innerHTML, THEN read .content                            1       1    <- the only case tested
+  read .content, THEN innerHTML                            1       0    ... and .childNodes was 1
+  innerHTML TWICE (2nd writes two nodes)                   2       1    <- the FIRST write's node
+  t.innerHTML = t.innerHTML  (getter half)                kept   ERASED
+```
+
+**What it cost.** Vue 3's `runtime-dom` keeps ONE module-level `<template>` and writes it on every
+static block:
+
+```js
+  Pw.innerHTML = tI(s==="svg" ? `<svg>${t}</svg>` : t);
+  const a = Pw.content;
+  if (s==="svg" || s==="mathml") { const l = a.firstChild; for(; l.firstChild;) a.appendChild(l.firstChild); a.removeChild(l) }
+```
+
+From the second block onward `a` is the stale fragment, `a.firstChild` is `null`, and `l.firstChild`
+throws *"can't access property firstChild, l is null"* — **inside an async render, where nothing is
+listening**. One throw and the app is over: measured on `pt88.app`, which went from **three**
+comparable elements to **132 scored** once the redirect landed, and `portal.ensuretyfinance.com`
+crossed the M1 shape bar (0.864, coverage 100%).
+
+**The shape to carry forward:** *a lazily-materialised cache turns an ORDERING bug into a bug that
+only one ordering can see.* When a capability is implemented by a lazy accessor, the gate must write
+the state in every order, not just the order the implementation happened to make work.
+
+**Named residue, a DIFFERENT mechanism.** The fragment parser loses foreign content: an `<svg>` in
+`template.innerHTML` comes back `nodeName: "SVG"` in the **xhtml** namespace where Chrome gives `svg`
+in `http://www.w3.org/2000/svg`. Document parsing is correct (`g_foreign_content_ns`); the
+`parse_fragment_in` → `clone_into` path drops the namespace. Vue's hoisting does not read the
+namespace, so it is not what killed the page — it is its own tick.

@@ -16,6 +16,22 @@
 //!   * **`.content.querySelector('.x')`** finds a node inside the fragment.
 //!   * **`.content.cloneNode(true)`** appended into the live tree brings BOTH children with it.
 //!   * **An imperatively-built template** (`createElement` + `innerHTML`) still exposes its content.
+//!
+//! ⚠⚠⚠ **AND THE `imp:` CLAIM ABOVE WAS SATISFIED BY THE ONE ORDERING THAT HAPPENED TO WORK (t882).**
+//! `innerHTML` wrote to the ELEMENT'S CHILD LIST — DOM Parsing redirects it to the template CONTENTS
+//! — and that survived only because `Dom::template_content` materialises the fragment **lazily and
+//! once**, moving the direct children in on first access. *Set, then read* therefore worked; every
+//! other order did not, and a template's own child list is **always empty** in a real browser.
+//! Measured against Chrome: `.content` read BEFORE the write `1` vs **`0`** (`.childNodes` **1** vs
+//! 0); a SECOND write of two nodes `2` vs **`1`** — the first write's node; `t.innerHTML =
+//! t.innerHTML` **kept** vs **ERASED**, because the getter walked the child list too. Vue 3 keeps ONE
+//! module-level template and writes it per static block, so `pt88.app` died on *"can't access
+//! property firstChild, l is null"* inside an async render. The four claims below are the orderings
+//! `imp:` is structurally incapable of seeing.
+//!
+//! **A lazily-materialised cache turns an ORDERING bug into a bug only one ordering can see** — so a
+//! gate over a lazy accessor must write the state in EVERY order, not the order the implementation
+//! happened to make work.
 
 use manuk_text::FontContext;
 
@@ -36,6 +52,23 @@ const HTML: &str = r#"<!doctype html><html><body><template id="tpl"><div class="
     it.innerHTML = '<b>y</b>';
     var b = it.content.querySelector('b');
     r.push('imp:' + (b ? b.textContent : 'null'));
+    // ⚠⚠⚠ innerHTML TARGETS THE TEMPLATE CONTENTS, NOT THE CHILD LIST — the three orderings that
+    // separate "it happened to work" from "it is implemented". `imp:` above only ever exercised the
+    // first one.
+    //   (1) .content read BEFORE the write. A lazy fragment materialised empty and then never saw
+    //       the write, because the write went to the element's child list.
+    var pre = document.createElement('template');
+    var cached = pre.content;                      // materialise it FIRST
+    pre.innerHTML = '<b>z</b>';
+    r.push('pre:' + cached.childNodes.length + '/' + pre.content.childNodes.length);
+    //   (2) A template's own child list is ALWAYS empty in a browser.
+    r.push('kids:' + pre.childNodes.length);
+    //   (3) A SECOND write replaces the content. Vue 3 keeps ONE module-level template and writes it
+    //       per static block, so this is the ordering every Vue page depends on.
+    pre.innerHTML = '<i>1</i><i>2</i>';
+    r.push('twice:' + pre.content.childNodes.length);
+    //   (4) The getter reads the contents, so `t.innerHTML = t.innerHTML` is not an ERASER.
+    r.push('rt:' + (pre.innerHTML.indexOf('<i>1</i>') === 0));
     document.getElementById('out').textContent = r.join(' ');
   </script></body></html>"#;
 
@@ -54,6 +87,11 @@ fn template_content_holds_the_parsed_children() {
         "fec:x",      // firstElementChild is the parsed <div class=x>
         "clone:hi/s", // cloneNode(true) brings BOTH children into the live tree
         "imp:y",      // an imperatively-built template also exposes its content
+        // The three orderings `imp:` cannot see — innerHTML must target the template CONTENTS.
+        "pre:1/1", // .content read BEFORE the write still receives it (was 0/0)
+        "kids:0",  // the template element's own child list stays empty (was 1)
+        "twice:2", // a SECOND write replaces the contents (was 1 — the FIRST write's node)
+        "rt:true", // the getter reads the contents, so a round-trip is not an eraser
     ] {
         assert!(
             got.contains(claim),

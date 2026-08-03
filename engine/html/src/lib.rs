@@ -101,6 +101,14 @@ impl StreamParser {
 }
 
 pub fn serialize_inner(dom: &Dom, node: NodeId) -> String {
+    // The other half of the template redirect (see `set_inner_html`): a `<template>`'s markup lives
+    // in its template contents, so serializing its child list returns `""` for every template that
+    // has any content at all — and a round-trip `t.innerHTML = t.innerHTML` would ERASE it.
+    // Read-only, so it takes the fragment if one exists and never materialises one.
+    let node = match dom.get_template_contents(node) {
+        Some(frag) if dom.tag_name(node) == Some("template") => frag,
+        _ => node,
+    };
     let mut out = String::new();
     for child in dom.children(node) {
         serialize_node(dom, child, &mut out);
@@ -196,6 +204,39 @@ fn push_escaped_attr(s: &str, out: &mut String) {
 /// into `node` (a pragmatic fragment parse; true context-aware fragment parsing —
 /// e.g. `<tr>` inside a table — is a follow-on).
 pub fn set_inner_html(dom: &mut Dom, node: NodeId, html: &str) {
+    // ⚠⚠⚠ **A `<template>`'s `innerHTML` REPLACES ITS TEMPLATE CONTENTS, NEVER ITS CHILD LIST**
+    // (DOM Parsing: *"if context is a template element, then set context to the template element's
+    // template contents"*). A `<template>` element's own child list is **always empty** in a real
+    // browser, and `.content` is the only place its markup lives.
+    //
+    // Writing to the child list instead was survivable ONLY for a template whose `.content` had
+    // never been read: `Dom::template_content` materialises the fragment lazily and MOVES the
+    // direct children in on first access, so `t.innerHTML = …; t.content` happened to work. The
+    // instant the order reverses — or the template is written twice — the cached fragment goes
+    // stale and every later write lands somewhere nothing reads:
+    //
+    // ```text
+    //                                                    Chrome   manuk (before)
+    //   innerHTML, then read .content                        1        1
+    //   read .content, then innerHTML                        1        0   <- and .childNodes = 1
+    //   innerHTML twice (2nd writes two nodes)               2        1   <- the FIRST write's node
+    // ```
+    //
+    // Measured on `pt88.app` (Vue 3): `insertStaticContent` keeps ONE module-level template and
+    // writes it on every static block — `Pw.innerHTML = '<svg>…</svg>'; const a = Pw.content;
+    // const l = a.firstChild; while (l.firstChild) …` — so the second write onward reads a stale
+    // fragment and the page dies on `can't access property "firstChild", l is null`, inside an
+    // async render where nothing is listening. That one throw is the whole app.
+    //
+    // The context tag is read from the ORIGINAL element, before the redirect: a fragment has no tag
+    // name, and `template` is exactly the context the tree builder needs for the "in template"
+    // insertion mode.
+    let context = dom.tag_name(node).unwrap_or("div").to_string();
+    let node = if context == "template" {
+        dom.template_content(node)
+    } else {
+        node
+    };
     // Detach existing children.
     let existing: Vec<NodeId> = dom.children(node).collect();
     for c in existing {
@@ -205,7 +246,6 @@ pub fn set_inner_html(dom: &mut Dom, node: NodeId, html: &str) {
     // table-scoped content (`<tr>`, `<td>`, `<option>`, `<li>`, …) survives instead of
     // being dropped as it would at document level. The parsed nodes are children of the
     // fragment's synthetic root element.
-    let context = dom.tag_name(node).unwrap_or("div").to_string();
     let fragment = parse_fragment_in(html, &context);
     let root = fragment
         .find_first("html")
