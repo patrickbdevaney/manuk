@@ -625,8 +625,8 @@
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
 
-  - L3 · shell-only-N is the oracle rendering ONE CURL'd FILE, so every RELATIVE bundle 404s (t856)
-  - L65 · The ranked fix, and its trade — stated, not taken
+  - L3 · shell-only-N is the oracle rendering a DIFFERENT DOCUMENT than the site serves (t856, mechanism corrected t858)
+  - L94 · The ranked fix — RETRACTED at t858, because it is already there
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`

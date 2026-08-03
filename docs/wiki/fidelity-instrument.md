@@ -1,14 +1,14 @@
 # THE FIDELITY INSTRUMENT — what it can and cannot see
 
-## `shell-only-N` is the oracle rendering ONE CURL'd FILE, so every RELATIVE bundle 404s (t856)
+## `shell-only-N` is the oracle rendering a DIFFERENT DOCUMENT than the site serves (t856, mechanism corrected t858)
 
 `shell-only-N` says **the ORACLE built fewer than `CERT_MIN_SHAPE_SAMPLE` elements** — it is a claim
 about Chrome's count, never ours. The board's #1 (the scorability ceiling) names it as part of
 *"29 of 130 in-scope sites do not render at all"*, so what it actually measures decides whether those
 are engine ticks or nothing at all.
 
-**The oracle's document is one `curl` of the URL** (`chrome::fetch_document`), written to
-`/tmp/manuk-fetch-*.body` and rendered by Chrome from `file://`. Measured across the whole 12-site
+**The oracle's document is one `curl` of the URL** (`chrome::fetch_document`), rendered by Chrome from
+`file://` with a `<base href>` injected (see the t858 correction below). Measured across the whole 12-site
 `shell-only` cohort — raw tag count in the curl'd body, Chrome on that file (the oracle's own path),
 and Chrome on the LIVE url:
 
@@ -31,21 +31,50 @@ and Chrome on the LIVE url:
 All twelve answer **HTTP 200** — none is bot-walled at the fetch. On **ten of twelve** the site
 renders perfectly well (live 48–1115 tags) and the oracle physically cannot see it.
 
-⚠⚠⚠ **THE MECHANISM, AND IT IS NOT THE ORIGIN.** From `file:///tmp/x.html`, a relative
-`src="main-5UYZQ2ZL.js"` (allticketscol, Angular) resolves to `file:///tmp/main-5UYZQ2ZL.js` and a
-root-relative `src="/esaj/_next/static/chunks/…"` (esaj, Next.js) to `file:///esaj/…`. **Both 404, so
-the bundle never runs.** Absolute URLs still load — `vk.com` goes `0 → 215` on exactly that, which is
-why the shortfall varies per site instead of being uniform, and is the tell that separates this cause
-from a blanket scheme restriction.
+⚠⚠⚠ **CORRECTED AT t858 — THE MECHANISM STATED HERE AT t856 WAS WRONG, AND THE CONCLUSION SURVIVES
+IT.** t856 wrote *"the oracle renders from `file://`, so every relative bundle resolves to
+`file:///tmp/…` and 404s"*. **It does not.** `chrome::capture_seen_all_paths` — the very function
+that produces the `probed` count this reason is computed from — inserts `<base href="{url}">` into
+the document before handing it to Chrome (`chrome.rs:520`). Relative subresources therefore resolve
+against the real origin. Re-measured with the tag inserted exactly as the oracle inserts it:
 
-⚠⚠⚠ **TWO COMMENTS IN THIS ONE FILE ASSERTED CONTRADICTORY CAUSES, AND THE TRUE CAUSE WAS A THIRD
-THING NEITHER TESTED.** `unscoreable_reason` said *"its `file://` copy has a `null` origin, so a
-JS-rendered page never builds"*. `Unmeasurable::ShellOnly`'s own docs, 1,300 lines above, record t674
-**killing that exact claim** by serving the identical document over `http://127.0.0.1` and getting a
-byte-identical dump. t674's experiment was sound; its conclusion was over-broad — **serving the same
-single file over localhost 404s `/esaj/_next/…` just as hard**, so it could not distinguish *"the
-origin blocks the fetch"* from *"the files are not there."* A refuted cause left standing in a second
-comment is worse than no comment: it is a wrong answer with a citation.
+```text
+                     t856 (no base tag)      corrected (base, as the oracle does it)
+  allticketscol.com   36 tags                 38 tags · sheets 10 · font Lato   <- CSS LOADS
+  trivago.be          —                     1622 tags · sheets  0 · Times New Roman
+  house.udn.com        5 tags                  8 tags · sheets  0 · Times New Roman
+```
+
+`allticketscol` alone falsifies it: relative stylesheets resolve and load. **t856 measured a plain
+`file://` copy without the base tag — a different pipeline from the one whose numbers it was
+explaining.** Right answer, wrong reason, which is the failure mode that survives longest because the
+conclusion keeps checking out.
+
+⚠⚠⚠ **THE DEMONSTRATED MECHANISM FOR THE WORST ROW IS `document.URL`.** `house.udn.com`'s entire
+document is a five-tag stub:
+
+```html
+  <script language="javascript">
+  if (document.URL.indexOf("house.udn.com") != -1) { window.location.href = "/house/index"; }
+  </script>
+```
+
+The oracle's `document.URL` is `file:///tmp/manuk-shape-….html`, so `indexOf` is **-1 and the redirect
+never fires.** `<base href>` cannot help — it changes URL *resolution*, not `document.URL`. This is a
+CLASS, not one site: anything branching on `location.hostname`, `document.URL` or `location.protocol`
+takes the wrong branch for the oracle.
+
+⚠⚠ **THE CONCLUSION IS UNCHANGED AND BETTER SUPPORTED.** Even with the base tag the oracle builds
+**38 tags for allticketscol against 1115 live** and **8 for house.udn.com against 949**, while our own
+rows read `coverage 1.000000` against a one-element reference. The cohort is an instrument bound, not
+engine work.
+
+⚠ **WITHDRAWN, not caveated:** t858 also counted that 36 of 101 scored sites carry at least one
+relative stylesheet `href` and nearly published that as *"36% are compared against an unstyled
+Chrome"*. With a `<base href>` present a relative href is not by itself fatal, so that count measures
+href SHAPE, not CSS delivery; the probe that would have settled it returned no reporter on all 20
+sample sites, which is a probe failure and not a result. The one established instance is `trivago.be`:
+five `<link rel=stylesheet>`, **zero** loaded by the oracle. One site, named — not a rate.
 
 ⚠⚠ **ONE ROW REFUTES THE SIMPLE STORY, AND IT IS THE MOST INFORMATIVE ONE.**
 `forums.moneysavingexpert.com` is inverted: curl gets **2583** tags, Chrome-on-file builds **2345** —
@@ -62,17 +91,15 @@ follow-up.
 true statement about that site, which is what stops this finding from being *"the reason is always
 wrong"*.
 
-### The ranked fix, and its trade — stated, not taken
+### The ranked fix — RETRACTED at t858, because it is already there
 
-Give the saved document a **`<base href="ORIGINAL_URL">`** before handing it to Chrome. Relative and
-root-relative subresources then resolve against the real origin over https, the document itself stays
-a byte-stable local file, and ten sites become visible to the instrument.
-
-⚠ **The trade is real and belongs to whoever sets the instrument's contract:** the oracle's render
-would depend on live subresources, so *"the document snapshot is cached, so three repeats are three
-renders of the same bytes"* (`fidelity.rs:1263`, asserted by a determinism test) weakens to *the same
-HTML with whatever the CDN served this minute*. That is a change to what the certificate MEANS, not
-just to what it can reach, so it is named here and not smuggled into a measurement tick.
+t856 proposed injecting `<base href="ORIGINAL_URL">` as the fix. **`chrome.rs:520` has done it all
+along**; proposing it was the visible symptom of having reconstructed the pipeline from a comment
+instead of reading it. What remains open is harder and is not a one-liner: the oracle's document
+answers `file:///tmp/…` to `document.URL`, so origin-conditional boot code cannot run correctly for
+it, and no amount of URL rewriting changes that. Serving the snapshot from a loopback origin **at the
+site's own hostname** would, and that is a real design question for whoever owns the instrument's
+contract — not a tick.
 
 ⚠ **Until it lands, do not spend throw-killer ticks on this cohort.** Ten of the twelve have no
 engine defect visible in this data at all — the pages render in Chrome and our own score is

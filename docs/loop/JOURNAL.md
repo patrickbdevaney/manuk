@@ -46371,6 +46371,80 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 858 — t856's CONCLUSION stands and its stated MECHANISM was wrong (2026-08-03)
+
+TICK SHAPE: measurement (self-correction) — I criticised a comment in t856 for being *"a wrong answer
+with a citation"* and then shipped one in the same tick. This corrects it.
+
+WHAT t856 CLAIMED: that the oracle renders one curl'd file from `file://`, so a relative
+`src="main-…js"` resolves to `file:///tmp/main-…js` and 404s, and that is why the `shell-only` cohort
+is unscorable.
+
+⚠⚠⚠ **THE ORACLE ALREADY INSERTS `<base href="{url}">` AND I DID NOT READ THE CODE THAT DOES IT.**
+`chrome.rs:520`, in `capture_seen_all_paths` — the exact function that produces the `probed` count
+`shell-only-N` is computed from:
+
+```rust
+    let html = fetch_document(url)?;
+    let base = format!("<base href=\"{url}\">");
+    let doc = if let Some(i) = html.find("<head>") { … }
+```
+
+So relative subresources **do** resolve against the real origin. My t856 measurement rendered a plain
+`file://` copy **without** the base tag, which is a different pipeline from the one whose numbers I
+was explaining. Re-measured with the tag inserted exactly as the oracle inserts it:
+
+```text
+                    t856 (no base)          corrected (base, as the oracle does it)
+  allticketscol.com  36 tags                 38 tags · sheets 10 · font Lato   <- CSS LOADS
+  trivago.be         —                     1622 tags · sheets  0 · Times New Roman
+  house.udn.com       5 tags                  8 tags · sheets  0 · Times New Roman
+```
+
+`allticketscol` alone falsifies the stated mechanism: **relative stylesheets resolve and load.**
+
+⚠⚠⚠ **AND THE REAL MECHANISM FOR THE WORST ROW IS A THIRD THING, DEMONSTRATED.** `house.udn.com`'s
+entire document is a five-tag stub:
+
+```html
+  <script language="javascript">
+  if(document.URL.indexOf("house.udn.com") != -1) { window.location.href="/house/index"; }
+  </script>
+```
+
+The oracle's `document.URL` is `file:///tmp/manuk-shape-….html`, so `indexOf` returns **-1 and the
+redirect never fires.** `<base href>` cannot help: it changes URL *resolution*, not `document.URL`.
+**Origin-conditional boot code takes the wrong branch for the oracle**, and that is a class — any site
+branching on `location.hostname` / `document.URL` / `location.protocol` does it.
+
+⚠⚠ **WHAT SURVIVES UNCHANGED IS THE CONCLUSION, AND IT IS THE PART THE BOARD ACTS ON.** The cohort is
+still an instrument bound rather than engine work, and the evidence is *stronger* now, not weaker:
+even with the base tag the oracle builds **38 tags for allticketscol against 1115 live** and **8 for
+house.udn.com against 949**. Our own rows read `coverage 1.000000` against a one-element reference.
+t856's operational instruction — *do not spend throw-killer ticks on this cohort* — stands.
+
+⚠⚠ **WHAT I AM NOT CLAIMING, having measured it badly.** Mid-tick I counted that 36 of 101 scored
+sites reference at least one stylesheet with a relative `href` and read that as *"36% are compared
+against an unstyled Chrome"*. With a `<base href>` present a relative href is **not** by itself
+fatal — `allticketscol` proves it — so that count measures href SHAPE and not CSS delivery. The
+follow-up probe that would have settled it returned no reporter on all 20 sample sites (a probe
+failure, not a result), so **the number is withdrawn rather than published with a caveat.** The one
+thing it did establish is that `trivago.be` has five `<link rel=stylesheet>` and the oracle loads
+**zero** — one site, named, not a rate.
+
+⚠ **THE LESSON, and it is the one t856 itself stated:** *replicate the instrument, not your model of
+it.* I reconstructed the oracle's pipeline from a comment and a `curl` line instead of from
+`capture_seen_all_paths`, and got a right answer for a wrong reason — which is the failure mode that
+survives longest, because the conclusion keeps checking out.
+
+CORRECTED IN PLACE: the doc comment on `unscoreable_reason` and the `shell-only` section of
+`docs/wiki/fidelity-instrument.md`, both of which shipped the wrong mechanism at t856.
+
+PERF: none — measurement only.
+
+WIKI: docs/wiki/fidelity-instrument.md — corrected, with the base-tag measurement and the
+`document.URL` class
+
 ## Tick 857 — the sweep the board asked for since t777, and neither M1 loss is ours (2026-08-03)
 
 TICK SHAPE: measurement — a clean `--jobs 2` CrUX sweep, 200 sites, on a quiet box with no build

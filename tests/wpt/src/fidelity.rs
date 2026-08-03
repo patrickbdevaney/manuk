@@ -1459,18 +1459,25 @@ fn ink(means: &[[f64; 3]]) -> f64 {
 /// had, and the two reasons blame opposite parties:
 ///
 /// * the **oracle** built almost nothing → [`Unmeasurable::ShellOnly`]. Not our bug, and not
-///   evidence about the site. ⚠⚠⚠ **THE CAUSE THIS LINE USED TO GIVE WAS ALREADY REFUTED, IN THIS
-///   FILE, 1,300 LINES ABOVE (measured t856).** It read *"Its `file://` copy has a `null` origin, so
-///   a JS-rendered page never builds"* — the same claim t674 killed on [`Unmeasurable::ShellOnly`]'s
-///   own docs by serving the identical document over `http://127.0.0.1` and getting a byte-identical
-///   dump. **The real cause is neither origin nor timing: it is that the oracle's document is ONE
-///   CURL'd FILE WITH NO SUBRESOURCES.** Rendered from `file:///tmp/…`, a relative
-///   `src="main-5UYZQ2ZL.js"` resolves to `file:///tmp/main-5UYZQ2ZL.js` and a root-relative
-///   `src="/esaj/_next/…"` to `file:///esaj/_next/…`; both 404, so the bundle never runs. Only
-///   ABSOLUTE-URL scripts still load, which is why the shortfall varies per site instead of being
-///   total. t674's experiment was sound and its conclusion was over-broad: serving the same
-///   single file over localhost 404s those paths too, so it could not distinguish "the origin" from
-///   "the files are not there."
+///   evidence about the site. ⚠⚠⚠ **THE CAUSE THIS LINE USED TO GIVE WAS REFUTED IN THIS FILE 1,300
+///   LINES ABOVE, AND THE REPLACEMENT t856 WROTE WAS ALSO WRONG (corrected t858).** The original —
+///   *"its `file://` copy has a `null` origin, so a JS-rendered page never builds"* — is the claim
+///   t674 killed by serving the identical document over `http://127.0.0.1`. t856 replaced it with
+///   *"relative bundles resolve to `file:///…` and 404"*, which is **false for this pipeline**:
+///   [`crate::chrome::capture_seen_all_paths`] inserts `<base href="{url}">` before handing the
+///   document to Chrome, so relative subresources resolve against the real origin —
+///   `allticketscol.com` loads **10 stylesheets and its author font** that way. t856 measured a
+///   plain `file://` copy *without* the base tag, i.e. a different pipeline from the one it was
+///   explaining.
+///
+///   **What IS demonstrated:** the oracle's `document.URL` is `file:///tmp/manuk-shape-….html`, so
+///   **origin-conditional boot code takes the wrong branch.** `house.udn.com`'s whole document is a
+///   five-tag stub guarded by `if (document.URL.indexOf("house.udn.com") != -1) location.href = …`,
+///   which is `-1` here, so the redirect never fires and the oracle sees the stub forever. `<base
+///   href>` cannot fix that — it changes URL *resolution*, not `document.URL`. Measured with the
+///   base tag in place, the oracle still builds **38 tags for allticketscol against 1115 live** and
+///   **8 for house.udn.com against 949**, so the operational conclusion is unchanged: these rows are
+///   an instrument bound, not a throw-killer worklist.
 /// * the oracle built the page and **we** did not → [`Unmeasurable::ThinOverlap`]. Ours.
 ///
 /// The split matters because it was the gap: `www.ebay.com` had `probed 25 · common 4`, so

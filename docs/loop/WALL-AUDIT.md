@@ -916,3 +916,55 @@ reported, not patched. The one thing an agent tick can say is which number to ch
 DENOMINATOR.** It failed at 7.70x on a loaded box and passed on a quiet re-run of the identical
 tree; `mid` read 34.35ms on the red run, the fastest all session. Re-run, never retune — but it cost
 a full 925s wall to learn that, twice in three windows.
+
+---
+
+## Audit #29 — tick 857 (wall 68s)
+
+**Where the seconds go:**
+
+```text
+    27s  T  (crate tests)   █████████ 40%
+    10s  G6 (clickability)  ███ 15%
+     6s  G1 (fidelity)      ██ 9%
+     5s  P  (parity 72/72)  █ 7%
+     4s  D                  █ 6%
+     3s  F  (perf floors)   █ 4%
+     1s  F4 · 1s B · 0s G_VIEWPORT / G_TEARDOWN / G_STALE_NODE / G_SILENT_FAIL
+```
+
+**Verdict: the wall is lean, and nothing is trimmed.** 68s against a re-baselined mark of 189s and a
+Tier-0 target of 300s. The audit's own note applies literally — *"an audit that finds the wall already
+lean is a fine result — say so."* Working its four admissible questions in order:
+
+1. **Redundancy** — `T` is 40% and is seven crate suites, each a distinct crate's unit tests. They do
+   not stand up overlapping SpiderMonkey runtimes (the JS gates that do are the `G_*` binaries, which
+   together total under 2s here). `cargo-nextest` remains the named future win and is still not worth
+   a dependency at 68s.
+2. **Parallelism** — the gates run concurrently under `CARGO_BUILD_JOBS`; `F`/`F4` are deliberately
+   serial because a benchmark sharing the machine is not a benchmark. Nothing has gone accidentally
+   serial: the largest single item (`T`, 27s) is itself seven suites.
+3. **Caching** — incrementals are in RAM, live fetches are snapshot-cached. `G6` (10s) re-`curl`s the
+   Wikipedia page each wall, which is the one recomputation left — and it is **load-bearing, not
+   waste**: t853's regression was found precisely because G6 measures a *real page* that a fixture
+   could not have reproduced. Caching it would trade the gate's whole value for 10 seconds.
+4. **Scope** — no gate builds materially more than it asserts on; `B` is 1s.
+
+⚠⚠⚠ **THE FINDING THIS AUDIT ACTUALLY HAS IS ON THE OTHER SIDE OF THE LEDGER, AND IT IS NOT A TRIM.**
+The wall runs **19 of 104** `manuk-page` gates. Two real defects surfaced this window *only* because
+t853 ran the whole crate for an unrelated regression sweep:
+
+* **t854** — `g_reflect_numeric` did not fail, it **spun** (`user 2m57s` of a 3m00s cap) on an
+  unclamped `colspan="2147483648"`. A Bar-0 hang, invisible for the gate's entire existence.
+* **t855** — `static_import_scanner_…` had been **permanently red** since t624 superseded one clause
+  of a five-clause `is_empty()`.
+
+Neither is a wall-time problem and neither can be fixed by trimming. But *"the wall is 68s"* and
+*"the wall checks 18% of the gates"* are the same sentence read from two ends, and only one of them
+gets audited every 20 ticks. **Recorded as a coverage observation for the harness owner** — the
+choice of which gates ride the per-tick wall is `scripts/` territory (PART VII), so this audit
+reports it and does not touch it. A cheap middle path, if it is wanted: a rotating slice, or a
+`--full` lane run off the tick path at the same cadence as this audit.
+
+⚠ Coverage is sacred and nothing here proposes otherwise. No gate dropped, no floor widened, nothing
+moved to CI.
