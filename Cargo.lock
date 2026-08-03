@@ -3268,6 +3268,7 @@ name = "manuk-js"
 version = "0.1.0"
 dependencies = [
  "getrandom 0.3.4",
+ "manuk-a11y",
  "manuk-css",
  "manuk-dom",
  "manuk-html",

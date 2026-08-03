@@ -283,7 +283,19 @@ pub fn skip_reason(rel: &str, body: &str) -> Option<&'static str> {
     {
         return Some("reftest (Bar 2 — pixel, deferred)");
     }
-    if body.contains("testdriver.js") {
+    // ⚠⚠⚠ **"needs testdriver" WAS TRUE OF THE FILE AND FALSE OF THE TEST, FOR 457 TESTS (t870).**
+    // The rule's own reason names the thing it is about: *synthetic input*. But `accname`,
+    // `wai-aria` and `html-aam` pull `testdriver.js` in for exactly two READ-ONLY accessors —
+    // `get_computed_role` and `get_computed_label` — which synthesise nothing. Every other engine
+    // needs WebDriver for those because it can only reach its a11y tree through a driver
+    // round-trip; I3's claim is that ours is synchronous and in-process, so `__axRoleName` answers
+    // them directly and `TEST_DRIVER_AX_SHIM` below supplies the two entry points.
+    //
+    // The test therefore stays skipped only if it reaches for the parts we genuinely cannot do.
+    // Keyed on the ACTIONS the file actually calls, not on the script tag — a file-level skip is
+    // what hid an entire spec-authored suite behind a reason that was accurate about the import
+    // and wrong about the test.
+    if body.contains("testdriver.js") && !ax_only_testdriver(body) {
         return Some("needs testdriver (synthetic input)");
     }
     if !body.contains("testharness.js") {
@@ -359,6 +371,36 @@ pub async fn run_one(
 
     let fut = async {
         let (html, final_url) = manuk_page::fetch_html(&url).await.ok()?;
+        // The `test_driver` shim goes in AHEAD of the test's own scripts, because `aria-utils.js`
+        // calls `get_computed_label` during load — a post-load injection would be too late, and a
+        // post-load SNAPSHOT would answer questions about a document the test had already changed.
+        // ⚠⚠⚠ **AFTER `</head>`, NOT AFTER `<head>` — and both earlier placements scored a clean,
+        // total, entirely-INSTRUMENT 0.0% across 1,250 subtests.** `testdriver.js` assigns
+        // `window.test_driver_internal = { … }` WHOLESALE at its line 2423, so anything installed
+        // before it is replaced, not merged — first on `test_driver` (overwritten by
+        // `testdriver.js`'s own methods) and then on `test_driver_internal` (overwritten by that
+        // assignment). Injecting at the top of `<body>` runs after every `<script src>` in the head
+        // and still long before the tests' `promise_test`s execute on load.
+        //
+        // The failure mode is worth naming because it is the one this instrument is built to catch
+        // in the ENGINE and just produced in ITSELF: a 0% that looks exactly like a capability zero
+        // and is entirely the harness. What separated them was reading a FAILURE MESSAGE rather
+        // than a score — `get_computed_label is not a function` is not an assertion about a11y.
+        let html = if html.contains("testdriver.js") {
+            let at = html
+                .find("<body>")
+                .map(|i| i + "<body>".len())
+                .or_else(|| html.find("</head>").map(|i| i + "</head>".len()));
+            match at {
+                Some(i) => {
+                    let (a, b) = html.split_at(i);
+                    format!("{a}{TEST_DRIVER_AX_SHIM}{b}")
+                }
+                None => format!("{html}{TEST_DRIVER_AX_SHIM}"),
+            }
+        } else {
+            html
+        };
         let mut page = manuk_page::Page::load_async(&html, &final_url, fonts, 800.0).await;
         page.finish_loading(fonts, 800.0).await;
         Some(page)
@@ -565,3 +607,66 @@ mod tests {
         );
     }
 }
+
+/// Does this file use `testdriver.js` ONLY for the two read-only accessibility accessors?
+///
+/// `get_computed_role` / `get_computed_label` synthesise nothing — they ask the engine what it
+/// already knows. Everything else `testdriver` offers (clicks, keys, pointer actions, permissions,
+/// bidi) genuinely needs a driver we do not have, and a file that touches any of it stays skipped.
+///
+/// Conservative by construction: an UNKNOWN `test_driver.*` call means "not ax-only", so a suite
+/// that grows a new dependency starts being skipped again rather than silently reporting failures
+/// that are the harness's fault.
+fn ax_only_testdriver(body: &str) -> bool {
+    let mut rest = body;
+    // ⚠ **THE CALLS ARE NOT IN THE TEST FILE.** `accname` and `wai-aria` tests are declarative —
+    // the markup carries `data-expectedrole` / `data-expectedlabel`, and the two `test_driver`
+    // reads happen inside the shared `/wai-aria/scripts/aria-utils.js`. The first draft of this
+    // predicate scanned the test body for `test_driver.`, found none, concluded "not ax-only" and
+    // skipped **60 of the 61 files** it was written to admit. Including that helper IS the ax
+    // marker, and it is checked here rather than by following the import, because the import is a
+    // fixed, spec-owned path.
+    let mut saw_ax = body.contains("wai-aria/scripts/aria-utils.js");
+    while let Some(i) = rest.find("test_driver.") {
+        rest = &rest[i + "test_driver.".len()..];
+        let name: String = rest
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .collect();
+        match name.as_str() {
+            "get_computed_role" | "get_computed_label" => saw_ax = true,
+            // `bless`/`set_test_context` are harness plumbing the shim below satisfies trivially.
+            "set_test_context" => {}
+            _ => return false,
+        }
+    }
+    saw_ax
+}
+
+/// The `test_driver` shim, injected into the TEST DOCUMENT and nowhere else.
+///
+/// ⚠ It must never exist on a real page — a site that finds `window.test_driver` has found an
+/// automation surface. So it lives here, in the harness, rather than in the engine prelude; the
+/// engine ships only `__axRoleName`, which is a bare accessor with no automation semantics.
+pub const TEST_DRIVER_AX_SHIM: &str = r#"<script>
+(function () {
+  // ⚠⚠⚠ **SHIM `test_driver_internal`, NOT `test_driver` — the first draft shimmed the wrong one
+  // and scored 0.0% across 1,250 subtests.** `testdriver.js` loads AFTER this script and assigns
+  // its own `test_driver`, whose methods delegate to `window.test_driver_internal`. So a shim on
+  // `test_driver` is silently overwritten and every test fails with
+  // `test_driver_internal.get_computed_label is not a function` — a clean, total, entirely
+  // INSTRUMENT zero that looks exactly like a capability zero. `test_driver_internal` is the
+  // documented vendor seam (it is what `testdriver-vendor.js` exists to fill), and it is the one
+  // that survives.
+  var ti = globalThis.test_driver_internal || {};
+  function ax(el) {
+    try { return (el && el.__nodeId != null) ? globalThis.__axRoleName(el.__nodeId) : null; }
+    catch (e) { return null; }
+  }
+  // WPT awaits these, so a Promise is the contract even though our answer is synchronous — which
+  // is the point: every other engine's await is a driver round-trip and ours is a function call.
+  ti.get_computed_role  = function (el) { var r = ax(el); return Promise.resolve(r ? r[0] : null); };
+  ti.get_computed_label = function (el) { var r = ax(el); return Promise.resolve(r ? r[1] : null); };
+  globalThis.test_driver_internal = ti;
+})();
+</script>"#;

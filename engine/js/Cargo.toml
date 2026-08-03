@@ -35,6 +35,10 @@ spidermonkey-noicu = ["_sm", "mozjs/jit", "mozjs/libz-sys"]
 [dependencies]
 tiny-skia.workspace = true
 manuk-dom.workspace = true
+# The in-process accessibility tree, for `__axRoleName` — the WPT accname/wai-aria suites read a
+# computed role and accessible name that only this crate can answer. `manuk-a11y` depends on
+# `manuk-dom`/`manuk-html` only, so this adds no cycle.
+manuk-a11y.workspace = true
 # Canvas `fillText` shapes and rasterizes through the SAME swash pipeline as DOM text
 # (`engine/text`), rather than growing a second one — so a glyph drawn into a canvas and the
 # same glyph drawn in a paragraph come from one shaper, one fallback chain and one raster cache.

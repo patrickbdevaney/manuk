@@ -603,3 +603,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 867	386cb37e	1785774329	2026-08-03T12:25:29-04:00	5354	measurement	63	7	376	33	384	81	3896	6960	0	456	0	the first full sweep in 10 ticks, and PARALLELISING IT IS NOT FREE (2026-08-03)
 868	6c927c0e	1785776152	2026-08-03T12:55:52-04:00	1823	capability	63	11	454	39	385	81	3896	6960	0	457	0	the leg-2/leg-3 ranking is INVERTED on fresh data, and my fix did not buy what I predicted (2026-08-03)
 869	2c85f62a	1785776461	2026-08-03T13:01:01-04:00	309	measurement	63	5	164	34	385	81	3896	6960	0	457	0	the a11y oracle was never DOWNLOADED, and that is why the moat is unmeasured (2026-08-03)
+870	1500f26b	1785778874	2026-08-03T13:41:14-04:00	2413	capability	63	11	345	34	385	81	3896	6960	0	457	0	the moat has a number: 797/1250, and the first three readings were my own harness (2026-08-03)

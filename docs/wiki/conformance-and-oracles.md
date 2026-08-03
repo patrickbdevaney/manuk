@@ -3136,3 +3136,56 @@ not move.** The fix that would work is a loopback reverse proxy serving document
 XHR under one origin — named, sized, and left to its own tick.
 
 [[fidelity-instrument]] [[frameworks]] [[js-engine]]
+
+## A 0% on a suite nobody has run is indistinguishable from a capability zero (tick 870)
+
+The WPT accessibility suites — `accname`, `wai-aria`, `html-aam`, 1,250 subtests, written by the
+spec authors and scored by all four vendors in Interop's accessibility investigation — had never
+been run here. Wiring them up produced, in order:
+
+| attempt | reading | what was actually wrong |
+|---|---|---|
+| shim `test_driver` before the head scripts | **0 / 1250** | `testdriver.js` loads after and assigns its OWN `test_driver`; mine was replaced |
+| shim `test_driver_internal` before the head scripts | **0 / 1250** | `testdriver.js:2423` assigns `window.test_driver_internal = { … }` **wholesale** — replaced, not merged |
+| shim `test_driver_internal` at the top of `<body>` | **797 / 1250** | — |
+
+Two clean, total, entirely-harness zeroes on a capability that had genuinely never been measured. The
+finding *"the accessibility tree scores 0% on the spec's own tests"* was one commit away from being
+banked, and it would have been believed, because it is exactly the number an unmeasured subsystem is
+expected to produce.
+
+**What separated them was refusing to publish a score without reading a failure MESSAGE.**
+
+```text
+  promise_test: Unhandled rejection with value:
+    object "TypeError: window.test_driver_internal.get_computed_label is not a function"
+```
+
+That is not an assertion about accessibility. **The score said "the engine"; the message said "the
+harness."** A score is a single number that any of a dozen causes can produce; a failure message
+names one. This is t650's *"100% of nothing is 100%"* inverted — **0% of nothing is 0%** — and the
+rule generalises past both:
+
+> **The first run of a new instrument measures the instrument.** Do not report its number as a
+> finding about the subject until at least one failure has been read and found to be about the
+> subject.
+
+### The sibling error, in the same tick
+
+The predicate deciding which testdriver tests to admit scanned each TEST file for `test_driver.` and
+found none — because the calls live in the shared `/wai-aria/scripts/aria-utils.js` those files
+import. It skipped **60 of the 61 files it was written to admit**, and reported that as a clean
+"needs testdriver" skip. An instrument's *filter* fails as silently as its *measurement*, and neither
+shows up as an error.
+
+### And the skip reason had been true of the file and false of the test for the whole corpus
+
+The rule read `if body.contains("testdriver.js") → "needs testdriver (synthetic input)"`. Its own
+reason names what it is about — **synthetic input** — and these suites import `testdriver.js` for
+exactly two **read-only** accessors that synthesise nothing. A file-level skip hid a spec-authored,
+1,250-subtest suite behind a sentence that was accurate about the import and wrong about the test.
+Keyed on the actions the file actually calls now, and conservative: an unknown `test_driver.*` call
+means "not ax-only", so a suite that grows a new dependency is skipped again rather than silently
+reporting failures that are the harness's.
+
+[[browser-capabilities]] [[fidelity-instrument]]

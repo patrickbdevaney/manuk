@@ -9189,6 +9189,54 @@ unsafe fn host_rect(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     true
 }
 
+/// `__axRoleName(nodeId)` → `[computedRole, accessibleName]` from the **in-process accessibility
+/// tree**, or `null`.
+///
+/// ⚠⚠⚠ **THIS IS I3 BEING CASHED RATHER THAN ASSERTED.** WPT's `accname` / `wai-aria` / `html-aam`
+/// suites — 457 tests, spec-authored, and what all four vendors score themselves on in Interop's
+/// accessibility investigation — read exactly two values per element:
+/// `test_driver.get_computed_role(el)` and `test_driver.get_computed_label(el)`. Those live behind
+/// **WebDriver** for every other engine, because an incumbent can only reach its a11y tree through
+/// a driver round-trip. I3's whole claim is that ours is *"a synchronous in-process semantic
+/// model"* — so here the same two answers are a function call.
+///
+/// Surface-audit #58 (t869) found the reason the tree's role+name correctness had been `unmeasured`
+/// since t618: the three suites were **never in the WPT sparse-checkout**, so the corpus reported no
+/// failures because it contained no tests. This is the other half — the seam that lets them run.
+///
+/// ⚠ Deliberately **NOT** wired into `test_driver` anywhere in the engine: that object must not
+/// exist on a real page (a site could detect the automation surface). The WPT harness injects the
+/// shim into the test document itself; this function is the only engine-side part.
+unsafe fn host_ax_role_name(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let id = arg_f64(cx, vp, argc, 0).unwrap_or(-1.0);
+    let dom = CURRENT_DOM.with(|c| c.get());
+    if id < 0.0 || !dom_is_live(dom) {
+        *vp = NullValue();
+        return true;
+    }
+    let node = manuk_dom::NodeId(id as u64);
+    let dom_ref = &*dom;
+    // `role_of` returning `None` is an honest "this element maps to no ARIA role" and is reported
+    // as the empty string rather than guessed at — a plausible `generic` here would turn a missing
+    // mapping into a passing test, which is the exact failure this measurement exists to find.
+    let role = manuk_a11y::role_of(dom_ref, node);
+    let role_str = role.as_ref().map(|r| r.as_str()).unwrap_or("");
+    let name = match &role {
+        Some(r) => manuk_a11y::accessible_name(dom_ref, node, r),
+        None => String::new(),
+    };
+    let js = format!(
+        "[{},{}]",
+        serde_json::to_string(role_str).unwrap_or_else(|_| "\"\"".into()),
+        serde_json::to_string(&name).unwrap_or_else(|_| "\"\"".into())
+    );
+    match eval_in_current_global(cx, &js) {
+        Some(v) => *vp = v,
+        None => *vp = NullValue(),
+    }
+    true
+}
+
 /// `__urlParse(href, base)` → the parsed parts, or `null` if it is not a URL.
 ///
 /// (Named apart from the BOM shim's own `__parseUrl`, which builds `window.location`: the shim runs
@@ -9984,6 +10032,14 @@ pub unsafe fn install(
         global.handle(),
         c"__rect".as_ptr(),
         host_fn!(host_rect),
+        1,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__axRoleName".as_ptr(),
+        host_fn!(host_ax_role_name),
         1,
         0,
     );

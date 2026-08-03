@@ -46371,6 +46371,90 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 870 — the moat has a number: 797/1250, and the first three readings were my own harness (2026-08-03)
+
+TICK SHAPE: capability + measurement — surface audit #58 (t869) re-ranked this above check #74's
+shape steer for exactly one tick, on I3 grounds. This is that tick.
+
+RESULT — **the first honest measurement the accessibility tree has ever had:**
+
+```text
+                  subtests            files
+  accname          306 / 481  63.6%     19
+  wai-aria         238 / 434  54.8%     30
+  html-aam         253 / 335  75.5%     15
+  ─────────────────────────────────────────
+  TOTAL            797 /1250  63.8%     64      HANG/CRASH 0 · NO_REPORT 0
+```
+
+`CONSTELLATION.tsv` row 21 has said since **tick 618** that *"the TREE's role+name correctness is
+still unmeasured"*, and I3 calls that tree *"the single most durable moat"*. It is now measured,
+against the corpus the spec authors wrote and all four vendors score themselves on.
+
+**WHAT IT TOOK, and neither half was hard:**
+
+1. **The tests were never downloaded** (t869's finding). Our WPT sparse-checkout is an explicit
+   nine-directory list and `accname`/`wai-aria`/`html-aam` were simply never on it. One
+   `git sparse-checkout add` → 457 files.
+2. **The runner skipped every one of them anyway**, on a rule whose own reason names what it is
+   about: *"needs testdriver (synthetic input)"*. True of the FILE, false of the TEST — these suites
+   pull `testdriver.js` in for exactly two **read-only** accessors, `get_computed_role` and
+   `get_computed_label`, which synthesise nothing.
+
+⚠⚠⚠ **AND THOSE TWO ACCESSORS ARE I3 BEING CASHED RATHER THAN ASSERTED.** They exist in WPT because
+every other engine can only reach its a11y tree through a **WebDriver round-trip**. I3's whole claim
+is that ours is *"a synchronous in-process semantic model"* — so `__axRoleName(nodeId)` calls
+`manuk_a11y::role_of` and `::accessible_name` directly and returns before the promise the test awaits
+has anything to wait for. The thing that makes this suite expensive for everyone else is the thing
+this architecture makes trivial. ⚠ Deliberately NOT in the engine prelude: `test_driver` must not
+exist on a real page, so the shim is injected by the WPT harness into the test document and the
+engine ships only a bare accessor with no automation semantics.
+
+⚠⚠⚠ **THE INSTRUMENT LIED TO ME THREE TIMES, AND EACH TIME IT LIED AS A CLEAN TOTAL ZERO.**
+This is the failure this project has booked more than any other, produced here by the instrument I
+was building to find it:
+
+| attempt | reading | what was actually wrong |
+|---|---|---|
+| shim `test_driver` before the head scripts | **0/1250** | `testdriver.js` loads after and assigns its OWN `test_driver`; mine was replaced |
+| shim `test_driver_internal` before the head scripts | **0/1250** | `testdriver.js:2423` assigns `window.test_driver_internal = { … }` **wholesale** — replaced, not merged |
+| shim `test_driver_internal` at the top of `<body>` | **797/1250** | — |
+
+A `0.0%` on a suite nobody has ever run is **indistinguishable from a capability zero**, and I would
+have banked "the a11y tree scores 0% on the spec's own tests" as a finding. What separated them was
+refusing to publish a score without reading a **failure message**: `get_computed_label is not a
+function` is not an assertion about accessibility. **The score said "the engine"; the message said
+"the harness", and only one of them was ever going to be right.** Same shape as t650's *"100% of
+nothing is 100%"*, inverted — 0% of nothing is 0%.
+
+Also earned: the skip predicate's first draft scanned the TEST file for `test_driver.` and found
+none, because the calls live in the shared `/wai-aria/scripts/aria-utils.js` the tests import. It
+skipped **60 of the 61 files it was written to admit**. Keyed on the import now, and conservative by
+construction — an unknown `test_driver.*` call means "not ax-only", so a suite that grows a new
+dependency starts being skipped again rather than silently reporting failures that are ours.
+
+NOT A REGRESSION, checked rather than assumed: the narrowed skip rule can only admit a file that
+either imports `aria-utils.js` or calls nothing but the two accessors. `domparsing` and `dom` contain
+**zero** files matching either, so their numbers cannot have moved by this change.
+
+WHAT THE 36% SAYS — the residue, for the next tick: `accname/name/shadowdom` is **0/6** (the name
+computation does not cross a shadow boundary at all), and the `aria-owns` family fails as a block —
+we do not relocate content for name computation. `wai-aria/role` at 0/401 before this tick's fix now
+carries the bulk of the remaining gap and is a straight role-mapping burndown.
+
+HARNESS (one line per PART VII, not worked): the first wall on this tree returned
+`manuk-shell tests FAILED`, which `verify.sh` classes as *"a real red. Never retried, never
+excused."* Verified rather than assumed, because this tick DID change `manuk-js` and `manuk-shell`
+links it: the suite is green standalone (74+2) and the full wall re-run on the byte-identical tree is
+green end to end in 68s. That is the documented `manuk-shell`-under-parallel-build false-RED —
+**second occurrence this session, and both followed a heavy release build in the same shell**, which
+is a sharper trigger than "parallel build" and is offered to the observer as such.
+
+PERF: none — one host accessor, called only from the WPT harness's injected shim.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "A 0% on a suite nobody has run is indistinguishable
+from a capability zero: read a failure MESSAGE before believing a score".
+
 ## Tick 869 — the a11y oracle was never DOWNLOADED, and that is why the moat is unmeasured (2026-08-03)
 
 TICK SHAPE: measurement — both cadence gates came due at this tick (self-audit and surface audit,
