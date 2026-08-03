@@ -1140,7 +1140,21 @@ const PRELUDE: &str = r#"
         DocumentFragment: globalThis.__protoNode,
       };
 
+      // ── **THE TAG → INTERFACE-NAME MAP, TAUGHT BY THE `iface()` CALLS THEMSELVES.**
+      //
+      // `Object.prototype.toString.call(el)` must read `[object HTMLDivElement]`, and the only place
+      // that already knows a `DIV` is an `HTMLDivElement` is the ~70-entry `iface('HTMLDivElement',
+      // tagIs('DIV'))` list below. Writing a SECOND list beside it is this project's most-repeated
+      // defect shape — *one rule, N implementations* (t720-724) — so the predicate carries its own
+      // tags (`tagIs`/`tagIn` stamp `__tags`) and `iface` harvests them here. A new interface added to
+      // the list below gets its brand for free; one added WITHOUT a tag predicate falls through to
+      // the honest coarse answer rather than to a stale hard-coded name.
+      var TAG_IFACE = Object.create(null);
+
       function iface(name, test) {
+        if (test && test.__tags) {
+          for (var __t = 0; __t < test.__tags.length; __t++) { TAG_IFACE[test.__tags[__t]] = name; }
+        }
         var C = globalThis[name];
         if (typeof C !== 'function') {
           // Constructible and inert — NOT throwing. A base class that throws on `super()` is
@@ -1159,7 +1173,11 @@ const PRELUDE: &str = r#"
       }
       var isEl   = function(o){ return !!o && o.nodeType === 1; };
       var isNode = function(o){ return !!o && typeof o.nodeType === 'number'; };
-      var tagIs  = function(t){ return function(o){ return isEl(o) && o.tagName === t; }; };
+      var tagIs  = function(t){
+        var f = function(o){ return isEl(o) && o.tagName === t; };
+        f.__tags = [t];   // what teaches TAG_IFACE; see the map's comment above
+        return f;
+      };
 
       // ── The prototype accessor bridge — what Svelte 5 needs, and what nothing else asks for.
       //
@@ -4323,8 +4341,11 @@ const PRELUDE: &str = r#"
       // that absence, so a later tick cannot quietly make this list a claim instead of a fact.
       var tagIn = function () {
         var set = Object.create(null);
-        for (var i = 0; i < arguments.length; i++) { set[arguments[i]] = 1; }
-        return function (o) { return isEl(o) && !!set[o.tagName]; };
+        var tags = [];
+        for (var i = 0; i < arguments.length; i++) { set[arguments[i]] = 1; tags.push(arguments[i]); }
+        var f = function (o) { return isEl(o) && !!set[o.tagName]; };
+        f.__tags = tags;   // ONE interface over several tags — `<td>`/`<th>` are both HTMLTableCellElement
+        return f;
       };
 
       // Document metadata + the sectioning/grouping elements every server-rendered page is built from.
@@ -4443,7 +4464,7 @@ const PRELUDE: &str = r#"
       iface('CanvasPattern',  function (o) { return !!o && !!o.__pattern; });
       // SVG's `path` — the one SVG element interface the earlier list reached for and missed. SVG
       // tag names are case-sensitive and stay lowercase, unlike HTML's.
-      iface('SVGPathElement', function (o) { return isEl(o) && o.tagName === 'path'; });
+      iface('SVGPathElement', tagIs('path'));
 
       // ── **THE REST OF THE SVG ELEMENT FAMILY.** `SVGPathElement` was added alone at t608 because
       // one page reached for it; a re-measure of 262 platform globals found the other seven still
@@ -4453,7 +4474,7 @@ const PRELUDE: &str = r#"
       var __svgTag = { g: 'SVGGElement', rect: 'SVGRectElement', circle: 'SVGCircleElement',
                        use: 'SVGUseElement', text: 'SVGTextElement', image: 'SVGImageElement' };
       Object.keys(__svgTag).forEach(function (t) {
-        iface(__svgTag[t], function (o) { return isEl(o) && o.tagName === t; });
+        iface(__svgTag[t], tagIs(t));
       });
       // `SVGGeometryElement` is the WebIDL base of the shape elements — every one of them is one.
       var __svgGeom = { path: 1, rect: 1, circle: 1, ellipse: 1, line: 1, polyline: 1, polygon: 1 };
@@ -6857,6 +6878,128 @@ const PRELUDE: &str = r#"
         });
         globalThis.DOMException = DE;
       }
+
+      // ── **THE BRAND — `Object.prototype.toString.call(node)` MUST NAME THE INTERFACE.** ──────
+      //
+      // ⚠⚠⚠ **MEASURED, AND IT IS A WHOLE-PAGE WIPE, NOT A COSMETIC READ (t862).** `www.otomoto.pl`
+      // is server-rendered — the ~1,300-tag document arrives complete — and this engine scored it
+      // `render-failed`, coverage **0.4%**, a BLANK page, in nine consecutive sweeps. The chain, read
+      // out of the page's own console:
+      //
+      // ```text
+      //   {}.toString.call(div)  ==  "[object Object]"     (Chrome: "[object HTMLDivElement]")
+      //     -> tippy.js `isElement(t)` = str.indexOf('Element]') > -1   ->  FALSE
+      //     -> tippy() returns its ARRAY of instances instead of instances[0]
+      //     -> TypeError: can't access property "popperOptions", r.props is undefined
+      //     -> TypeError: r.destroy is not a function
+      //     -> React error boundary -> Next.js "client-side exception" -> renders /_error
+      //     -> THE SERVER-RENDERED DOM IS TORN DOWN AND REPLACED WITH NOTHING
+      // ```
+      //
+      // The brand check is the oldest duck-typing idiom on the web and it is everywhere — tippy,
+      // lodash's `isElement`, jQuery, every `isPlainObject`, every serializer. `[object Object]` is
+      // not a missing answer a caller routes around; it is a WRONG answer of the RIGHT TYPE
+      // (t733-736), which is the shape that gets believed.
+      //
+      // **Why an accessor on `EventTarget.prototype` rather than WebIDL's data property per
+      // interface prototype.** The spec puts a non-writable `Symbol.toStringTag` on each interface
+      // prototype object, valued the interface name. That requires per-tag prototypes, and this
+      // engine has exactly five DOM prototypes (`dom_protos`): every element, whatever its tag, is
+      // `instance -> HTMLElement.prototype -> ...`. A data property on `HTMLElement.prototype` would
+      // therefore brand a `<div>` and an `<a>` identically — right shape, wrong answer. One accessor
+      // at the ROOT of the chain, resolving from the object it is called on, gets every element its
+      // own correct name from the ONE table `iface()` already builds. Tiering the prototypes properly
+      // is its own tick; this is the observable, and the observable is what pages read.
+      //
+      // ⚠ **THE HONEST LIMITS, named rather than smoothed over.** An SVG element gets `SVGElement`
+      // where Chrome gives `SVGSVGElement`/`SVGCircleElement` for the tags we do not name — coarser,
+      // and still TRUE, since every one of them is an `SVGElement`. Non-node platform objects
+      // (`CSSStyleRule`, `IDBDatabase`, a 2D context) are not in this chain and keep `[object
+      // Object]`; their `instanceof` predicates are duck-typed, so there is no object to hang a
+      // brand on without inventing one.
+      (function () {
+        var ET = globalThis.__protoEventTarget;
+        if (!ET) { return; }
+        var SVG_NS = 'http://www.w3.org/2000/svg';
+        // The prototypes themselves are branded by IDENTITY. They are `NODE_CLASS` objects with
+        // undefined reserved slots (deliberately — see `dom_protos`), so `this.nodeType` is
+        // `undefined` on them and the nodeType switch below cannot name them.
+        var PROTOS = [
+          [globalThis.__protoEventTarget,      'EventTarget'],
+          [globalThis.__protoNode,             'Node'],
+          [globalThis.__protoElement,          'Element'],
+          [globalThis.__protoHTMLElement,      'HTMLElement'],
+          [globalThis.__protoDocument,         'Document'],
+          [globalThis.__protoDocumentFragment, 'DocumentFragment'],
+          [globalThis.__protoShadowRoot,       'ShadowRoot']
+        ];
+        function brand(o) {
+          if (o === globalThis) { return 'Window'; }
+          for (var i = 0; i < PROTOS.length; i++) {
+            if (PROTOS[i][0] && o === PROTOS[i][0]) { return PROTOS[i][1]; }
+          }
+          if (!o) { return undefined; }
+          switch (o.nodeType) {
+            case 1: {
+              var named = TAG_IFACE[o.tagName];
+              if (named) { return named; }
+              // Not in the interface list. Namespace first — calling an SVG element an
+              // `HTMLUnknownElement` would be actively wrong, not merely vague.
+              if (o.namespaceURI === SVG_NS) { return 'SVGElement'; }
+              // A name containing `-` is a valid custom-element name and the spec gives it plain
+              // `HTMLElement`; anything else the HTML spec does not define is `HTMLUnknownElement`.
+              // Getting that pair backwards is the one way this can be actively wrong, which is why
+              // it reuses `KNOWN_SET` — the same set `iface('HTMLUnknownElement', …)` narrows on.
+              if (!KNOWN_SET[o.tagName] && o.tagName.indexOf('-') === -1) { return 'HTMLUnknownElement'; }
+              return 'HTMLElement';
+            }
+            case 3:  return 'Text';
+            case 4:  return 'CDATASection';
+            case 7:  return 'ProcessingInstruction';
+            case 8:  return 'Comment';
+            // Chrome brands an HTML document `HTMLDocument`, an XML one `XMLDocument`, and
+            // `document.implementation.createDocument()` really does build the latter here.
+            case 9:  return (typeof o.contentType === 'string' && o.contentType.indexOf('html') === -1)
+                              ? 'XMLDocument' : 'HTMLDocument';
+            case 10: return 'DocumentType';
+            // A shadow root and a fragment are both nodeType 11; `host` is what separates them.
+            case 11: return o.host ? 'ShadowRoot' : 'DocumentFragment';
+          }
+          return undefined;   // not a node: leave the built-in tag alone
+        }
+        try {
+          Object.defineProperty(ET, Symbol.toStringTag, {
+            configurable: true,
+            get: function () { return brand(this); }
+          });
+        } catch (e) { /* never worth taking the page down for a brand */ }
+        // `window` is not in the DOM chain, and `Object.prototype.toString.call(window)` is how a
+        // library tells a real global from a sandboxed stand-in.
+        try {
+          Object.defineProperty(globalThis, Symbol.toStringTag, {
+            configurable: true, value: 'Window'
+          });
+        } catch (e) {}
+        // ── `node.constructor.name` — the SAME question, asked through the other door, and it was
+        // answering `"Object"` for every node because `Object.prototype.constructor` was the nearest
+        // one in the chain. Resolved from the same table so the two can never disagree. Falls back to
+        // `Object` (today's answer) when the interface object does not exist, because a `constructor`
+        // that is `undefined` is worse than one that is merely coarse — `new x.constructor()` throws.
+        try {
+          Object.defineProperty(ET, 'constructor', {
+            configurable: true,
+            get: function () {
+              var n = brand(this);
+              var C = n && globalThis[n];
+              return typeof C === 'function' ? C : Object;
+            },
+            set: function (v) {
+              Object.defineProperty(this, 'constructor',
+                { value: v, writable: true, configurable: true });
+            }
+          });
+        } catch (e) {}
+      })();
 
       // ── **THE INERT INTERFACE SURFACE, INSTALLED LAST.** ────────────────────────────────────
       // Everything real has had its chance to define itself by now. Whatever is still `undefined`

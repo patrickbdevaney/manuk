@@ -46371,6 +46371,114 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 862 — `[object Object]` is why a server-rendered page rendered NOTHING (2026-08-03)
+
+TICK SHAPE: capability (function leg, and it lands on the M1 SCORABILITY ceiling the board ranks
+first). t861's closing line named the next subject: *"THE NINE, for the next tick — `render-failed` 2
+and `tree-divergence` 5 remain untested."* This is the first of the two `render-failed` rows.
+
+HYPOTHESIS (pre-registered): `www.otomoto.pl` carries `render-failed`, and `render-failed` is the ONE
+reason on the unscored list that the instrument says out loud is *"our own bug rather than a property
+of the origin"*. Two cohorts named as ours have now been proven not-ours (shell-only t856, css-starved
+t860), so the pre-registered prediction was **this one IS ours** — the pixel test that raises it
+compares OUR ink against the ORACLE's, which is the second population, not a self-report.
+
+RESULT — **it is ours, it is one line of JavaScript identity, and the fix takes the site from a blank
+page to 96.8% coverage.**
+
+```text
+                     BEFORE (same binary, 08:16)      AFTER (08:31)
+  coverage                 0.004                        0.968
+  missing boxes             1078                           35
+  screenshot           BLANK WHITE                    the page
+  reason              render-failed                   (scored) shape 0.762, n=1047
+```
+
+⚠⚠⚠ **THE MECHANISM, AND IT IS A DOM WIPE, NOT A COSMETIC READ.** otomoto.pl is server-rendered:
+the ~1,300-tag document arrives complete, and we parse all of it. Then its own scripts delete it.
+
+```text
+  {}.toString.call(div)  ==  "[object Object]"        (Chrome: "[object HTMLDivElement]")
+    -> tippy.js  isElement(t) = str.indexOf('Element]') > -1   ->  FALSE
+    -> tippy() returns its ARRAY of instances instead of instances[0]
+    -> TypeError: can't access property "popperOptions", r.props is undefined
+    -> TypeError: r.destroy is not a function
+    -> React error boundary -> Next.js "client-side exception" -> renders /_error
+    -> THE SERVER-RENDERED DOM IS TORN DOWN AND REPLACED WITH NOTHING
+```
+
+Both console errors are explained by one branch: `tippy()` ends `return isElement(targets) ?
+instances[0] : instances`, so a false brand hands the caller an **Array** where it expects an
+instance. An array has no `.props` and no `.destroy`, which is precisely the pair the page threw.
+
+**WHY THIS SAT FOR NINE SWEEPS.** `[object Object]` is not an absent answer a caller routes around —
+it is a **WRONG answer of the RIGHT TYPE** (t733-736), the shape this project keeps finding at the
+bottom of silent failures. `typeof div === 'object'` is true, `div.nodeType === 1` is true,
+`div instanceof Element` is true (`Symbol.hasInstance` has been right here for ticks). Every
+instrument that asks *does the element exist* says yes. Only the brand is wrong, and the brand is the
+oldest duck-typing idiom on the web: tippy, lodash's `isElement`, jQuery, every `isPlainObject`.
+
+⚠⚠ **THE PROBE THAT FOUND IT WAS FOUR LINES, AND THE ORACLE SUPPLIED THE EXPECTED VALUE.** Same
+engine as t725-732 and t784-796: a fixture with `Object.prototype.toString.call(...)` on a dozen node
+kinds, run once through our engine and once through `chromium --dump-dom`, diffed. Chrome's answers
+are in the gate verbatim — including the two that are easy to get backwards and that I would have got
+backwards from memory: `<my-thing>` is `HTMLElement` (a valid custom-element name) while `<out>` is
+`HTMLUnknownElement`, and `document` is **`HTMLDocument`**, not `Document`.
+
+⚠ **ONE RULE, ONE IMPLEMENTATION — deliberately, because the second list is the recurring defect.**
+The only place that already knows a `DIV` is an `HTMLDivElement` is the ~70-entry `iface('HTMLDivElement',
+tagIs('DIV'))` list. Writing a parallel table beside it is t720-724's *"one rule, N implementations"*
+in its purest form, so `tagIs`/`tagIn` now stamp their tags onto the predicate and `iface()` harvests
+them into `TAG_IFACE`. A new interface added to that list gets its brand for free. The two SVG
+`iface()` calls that hand-rolled `o.tagName === t` inline were switched to `tagIs(t)` — byte-identical
+predicate, and now they teach the map too.
+
+**THE SHAPE OF THE FIX, and why it is NOT WebIDL's shape.** The spec puts a `Symbol.toStringTag` data
+property on each interface **prototype**. That needs per-tag prototypes; this engine has five DOM
+prototypes total (`dom_protos`) and every element, whatever its tag, is
+`instance -> HTMLElement.prototype -> Element.prototype -> Node.prototype -> EventTarget.prototype`.
+A data property on `HTMLElement.prototype` would therefore brand a `<div>` and an `<a>` **identically**
+— the right shape carrying the wrong answer. So: ONE accessor at the ROOT of the chain, resolving
+from the object it is called on. Same accessor pair resolves `node.constructor`, which was answering
+the string `"Object"` for every node in the document.
+
+⚠ **THE HONEST LIMITS, named in the gate rather than smoothed over.** An SVG element we do not name
+individually brands `SVGElement` where Chrome gives `SVGSVGElement` — coarser, still TRUE. Non-node
+platform objects (`CSSStyleRule`, `IDBDatabase`, a 2D context) are not in this chain and keep
+`[object Object]`; their `instanceof` predicates are duck-typed, so there is no object to hang a brand
+on without inventing one. And `document.doctype` needed a **second mechanism** — it is not a reflector
+at all but `Object.create(DocumentType.prototype)`, so it takes WebIDL's own form on its prototype.
+Two mechanisms for one rule is a smell and it is written down at both sites, not hidden.
+
+⚠ **WHAT THIS IS NOT: an M1 crossing.** M1 is a CONJUNCTION — shape >= 0.75 **AND** jarring-clean —
+and otomoto.pl comes back `shape 0.762 · overlap 3 · reading-order 12`. It clears the shape bar and
+fails the jarring one. What it buys is the leg the board ranks FIRST: one site off the unscored list,
+so the M1 **ceiling** rises by one. Reporting it as a pass would be the conjunction error this loop
+booked at t841-845.
+
+ALSO MEASURED, and it moves the same ceiling: `webfenix.movilidadbogota.gov.co`, the OTHER
+`render-failed` row, now paints (visual 92.2%) and reclassifies to **`shell-only-8`** — the ORACLE
+built an 8-element shell. That is the fourth cohort in a row named as ours and measured not-ours.
+Both `render-failed` rows are now resolved and neither is a render failure any more.
+
+SIGHTED, NOT CHASED — banked because it is real and is a different subject: `<svg>` parses with
+`tagName === 'svg'` (lowercase, correctly) while `iface('SVGElement', ...)` narrows on `'SVG'`, so
+`svgEl instanceof SVGElement` is **false** today. The brand path routes around it by namespace, which
+is why it did not surface here. Its own tick, with its own RED proof.
+
+HARNESS (one line, per PART VII — not touched, not debugged): the first wall on this tree came back
+`manuk-shell tests FAILED`, which `verify.sh` classes as *"a real red. Never retried, never excused."*
+It is not reproducible — the suite is green standalone (74+2), green in three concurrent double-runs,
+and the FULL wall re-run on the byte-identical tree is green end to end. That is the documented
+`manuk-shell`-under-parallel-build false-RED class, and it is recorded here rather than worked on.
+
+PERF: none measurable. One accessor pair installed once per global at prelude time; the getter runs
+only when a page calls `Object.prototype.toString` or reads `.constructor` on a node, and it is a
+map lookup plus a seven-element identity scan.
+
+WIKI: `docs/wiki/dom-semantics.md` — "A DOM node must NAME its interface — `[object Object]` is a
+wrong answer of the right type".
+
 ## Tick 861 — an oracle timeout is the REFERENCE hanging, and I measured the wrong binary four times (2026-08-03)
 
 TICK SHAPE: instrument fidelity (attribution) — the board's M1 PRIORITY ORDER says SCORABILITY

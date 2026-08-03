@@ -13241,6 +13241,17 @@ const WINDOW_PRELUDE: &str = r#"
                 return ns === null || ns === undefined || ns === '';
             };
         }
+        // `Object.prototype.toString.call(document.doctype)` — see G_BRAND. Every OTHER node is
+        // branded by one accessor at the root of the real DOM prototype chain, and a doctype is the
+        // one node that is NOT in that chain (it is `Object.create(DocumentType.prototype)`, minted
+        // below). So it takes WebIDL's own form instead: the interface name as a non-enumerable data
+        // property on the interface prototype. Two mechanisms for one rule is a smell, and it is
+        // recorded here rather than hidden — the second exists because the object is a JS stand-in
+        // rather than a reflector, which is the same reason the three methods above are here.
+        try {
+            Object.defineProperty(g.DocumentType.prototype, Symbol.toStringTag,
+                                  { configurable: true, value: 'DocumentType' });
+        } catch (e) {}
         // `document.doctype` was `null` on every page, including one that plainly declares `<!doctype
         // html>`. A great deal of feature-detection and quirks-mode branching reads it.
         try {

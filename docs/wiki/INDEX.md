@@ -626,6 +626,11 @@
   - L1822 · ⚠ The gate that owns this ground passes, and the reason is worth more than the fix
   - L1846 · The trap: a this-blind promotion is WORSE than the throw
   - L1860 · One source, two eval sites
+  - L1875 · A DOM node must NAME its interface — [object Object] is a wrong answer of the right type (tick 862)
+  - L1899 · Why nine sweeps did not find it
+  - L1909 · The fix is ONE accessor at the ROOT of the chain, not WebIDL's shape
+  - L1924 · The table is taught by the iface() calls, not written twice
+  - L1932 · The named limits
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -1451,4 +1456,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1358 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1363 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

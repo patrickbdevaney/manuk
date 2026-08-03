@@ -595,3 +595,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 858	861eb8c2	1785753253	2026-08-03T06:34:13-04:00	3715	measurement	63	8	518	186	381	81	3896	6960	0	451	0	t856's CONCLUSION stands and its stated MECHANISM was wrong (2026-08-03)
 860	62793943	1785755737	2026-08-03T07:15:37-04:00	2484	instrument	63	10	540	42	381	81	3896	6960	0	452	0	a stylesheet that 404s is not a page we failed to style (2026-08-03)
 861	ae621d9d	1785759297	2026-08-03T08:14:57-04:00	3560	instrument	63	9	315	41	381	81	3896	6960	0	453	0	an oracle timeout is the REFERENCE hanging, and I measured the wrong binary four times (2026-08-03)
+862	f9bad894	1785761667	2026-08-03T08:54:27-04:00	2370	capability	63	10	557	38	382	81	3896	6960	0	454	0	`[object Object]` is why a server-rendered page rendered NOTHING (2026-08-03)

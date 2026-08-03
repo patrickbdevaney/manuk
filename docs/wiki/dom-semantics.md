@@ -1871,3 +1871,80 @@ on an object no document consulted. That is how every error tracker, ad-blocker 
 DOM.
 
 [[js-engine]] [[frameworks]] [[conformance-and-oracles]]
+
+## A DOM node must NAME its interface — `[object Object]` is a wrong answer of the right type (tick 862)
+
+`Object.prototype.toString.call(someDiv)` answered **`[object Object]`** here, where every browser
+answers `[object HTMLDivElement]`. `node.constructor.name` answered the string **`"Object"`**. Both
+were true of every node in every document, on every page, for the whole life of this engine.
+
+That is not a cosmetic read. It cost `www.otomoto.pl` — a **server-rendered** page whose ~1,300-tag
+document arrives complete over the wire — its entire DOM, in nine consecutive certification sweeps:
+
+```text
+  {}.toString.call(div)  ==  "[object Object]"        (Chrome: "[object HTMLDivElement]")
+    -> tippy.js  isElement(t) = str.indexOf('Element]') > -1   ->  FALSE
+    -> tippy() ends `return isElement(targets) ? instances[0] : instances`
+    -> the caller is handed an ARRAY where it expects an instance
+    -> TypeError: can't access property "popperOptions", r.props is undefined
+    -> TypeError: r.destroy is not a function
+    -> React error boundary -> Next.js "client-side exception" -> renders /_error
+    -> THE SERVER-RENDERED DOM IS TORN DOWN AND REPLACED WITH NOTHING
+```
+
+Coverage `0.004` and a blank white screenshot, tagged `render-failed` — the one unscored reason the
+fidelity instrument says out loud is *our* bug. After the fix: coverage **0.968**, `shape 0.762` over
+1,047 elements, scored.
+
+### Why nine sweeps did not find it
+
+Every instrument that asks *"is this element there"* said yes. `typeof div === 'object'` — true.
+`div.nodeType === 1` — true. `div instanceof Element` — **true**, because `Symbol.hasInstance` has
+been correct here for many ticks. Only the *brand* was wrong, and a brand is not something a caller
+feature-detects; it is something a caller believes. This is the [[conformance-and-oracles]] pattern
+booked at t733-736: **the dominant bug shape is a wrong answer of the RIGHT type**, findable only by a
+probe that carries the EXPECTED value — here, four lines of `toString.call(...)` run through our
+engine and through `chromium --dump-dom`, diffed.
+
+### The fix is ONE accessor at the ROOT of the chain, not WebIDL's shape
+
+WebIDL puts a `Symbol.toStringTag` data property on each interface **prototype object**. That requires
+per-tag prototypes, and this engine has five (`dom_bindings::dom_protos`): every element, whatever its
+tag, is
+
+```text
+  instance -> HTMLElement.prototype -> Element.prototype -> Node.prototype -> EventTarget.prototype
+```
+
+A data property on `HTMLElement.prototype` would therefore brand a `<div>` and an `<a>` **identically**
+— the right shape carrying the wrong answer. So the brand is an **accessor on `EventTarget.prototype`**,
+resolving from the object it is called on, and the same pair resolves `constructor`. Tiering the
+prototypes properly is a separate tick; the observable is what pages read.
+
+### The table is taught by the `iface()` calls, not written twice
+
+The only place that already knows a `DIV` is an `HTMLDivElement` is the ~70-entry
+`iface('HTMLDivElement', tagIs('DIV'))` list. A parallel table beside it is [[js-engine]]'s
+*"one rule, N implementations"* (t720-724) in its purest form, so `tagIs`/`tagIn` stamp their tags
+onto the predicate and `iface()` harvests them. **A new interface added to that list gets its brand
+for free.**
+
+### The named limits
+
+* An SVG element we do not name individually brands `SVGElement` where Chrome gives `SVGSVGElement` —
+  coarser, and still a true statement about it. The fallback is chosen by `namespaceURI`, because
+  calling an SVG element an `HTMLUnknownElement` would be actively wrong rather than merely vague.
+* `<my-thing>` is `HTMLElement` (a valid custom-element name) and `<out>` is `HTMLUnknownElement`.
+  Getting that pair backwards is the one way the element arm can be actively wrong, so it reuses the
+  same `KNOWN_SET` that `iface('HTMLUnknownElement', …)` narrows on.
+* `document` is **`HTMLDocument`**, not `Document` — a detail nobody recalls correctly, which is why
+  `G_BRAND`'s expectations are transcribed from a real `chromium --dump-dom` run of the gate's own
+  fixture rather than from memory.
+* Non-node platform objects (`CSSStyleRule`, `IDBDatabase`, a 2D context) keep `[object Object]`.
+  Their `instanceof` predicates are duck-typed, so there is no object to hang a brand on without
+  inventing one.
+* `document.doctype` needs a **second mechanism**: it is not a reflector but
+  `Object.create(DocumentType.prototype)`, so it takes WebIDL's own form on its prototype. Two
+  mechanisms for one rule is a smell, and it is written down at both sites rather than hidden.
+
+[[js-engine]] [[frameworks]] [[conformance-and-oracles]] [[fidelity-instrument]]
