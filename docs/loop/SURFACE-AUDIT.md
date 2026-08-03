@@ -3443,3 +3443,73 @@ concluded *"the map is CURRENT"* from a check that read the focus-area **titles*
 area's **contents** — which are not in the title list — produced a row immediately. **A focus area is not
 an atom; the ones named "web compat" and "investigation" are containers, and a title-level reconciliation
 cannot see inside them.**
+
+## Audit #58 — tick 869 (2026-08-03)
+
+SOURCES (web, not memory): the Interop 2026 focus-area + investigation list re-fetched in full from
+`github.com/web-platform-tests/interop/blob/main/2026/README.md`; `web.dev/blog/interop-2026`;
+`webkit.org/blog/17818/announcing-interop-2026/`; and — the search that mattered —
+`webkit.org/blog/15400/improving-web-accessibility-with-web-platform-tests/` plus
+`web-platform-tests/interop` issue #526 and `web-platform-tests/interop-accessibility` issue #3, for
+**how** the accessibility investigation is actually scored.
+
+### THE RECONCILIATION — the map is clean, and that is not the finding
+
+All **20** Interop 2026 focus areas carry a verdict. So do the four investigation efforts. Nothing new
+to add: audits #56 and #57 did that work, and it held.
+
+### ⚠⚠⚠ THE FINDING — THE SAME STRUCTURAL HOLE, THIRD AUDIT RUNNING, AND NOW ITS MECHANISM
+
+Audit #56 (t848) named the accessible NAME as the one Interop item with no row, and weighted it
+doubly: *"the agent identifies elements by name … a wrong accname is a wrong click on a page where
+every box is in the right place."* Audit #57 (t859) recorded it as **"the only structural hole still
+open."** It is tick 869 and it is still open — and `CONSTELLATION.tsv` row 21 has said since **tick
+618** that *"the TREE's role+name correctness is still unmeasured."*
+
+**This audit's contribution is not the hole. It is why nobody has ever closed it, and the answer is
+one line:**
+
+```text
+  $ ls ~/wpt
+  common  css  cssom  dom  domparsing  encoding  html  mathml  resources  svg  url  …
+  $ ls ~/wpt/accname ~/wpt/wai-aria ~/wpt/html-aam
+  ABSENT · ABSENT · ABSENT
+```
+
+**The measuring instrument was never downloaded.** Our WPT checkout is a nine-directory partial, and
+the three suites that measure exactly the thing our constitution calls our moat are not among them.
+The map said "unmeasured", the status file said "unmeasured", three audits said "unmeasured" — and
+the reason was never that it was hard. It was that the tests were not on disk, and no instrument
+looks at what is *missing from the corpus*, only at what the corpus reports.
+
+That is a new shape for the ledger: **an absent MEASUREMENT hides exactly as well as an absent
+capability, and neither `map-reconcile.sh` nor the WPT runner can see one.** A directory that was
+never fetched reports no failures.
+
+### AND THE MEASUREMENT EXISTS, IS SPEC-AUTHORED, AND IS WHAT FOUR VENDORS SCORE THEMSELVES ON
+
+WPT tests computed role and accessible name through **`testdriver.js` → WebDriver
+`get_computed_role` / `get_computed_label`**, which is precisely what makes a single automated test
+run on Chromium, Gecko and WebKit alike; Interop has scored it since the 2023 investigation and
+carries it forward in 2026. So there is a ready-made, adversarial, cross-browser-validated oracle for
+the capability `I3` calls *"the single most durable moat"*, and this project has never run one test
+from it.
+
+⚠ **And the seam is ours to exploit rather than to reimplement.** Those tests need
+`get_computed_role`/`get_computed_label` because an incumbent can only reach its a11y tree through a
+WebDriver round-trip. **I3's whole claim is that ours is synchronous and in-process** — so the two
+testdriver entry points can be bound straight to `manuk_a11y` instead of a driver protocol. The thing
+that makes the suite expensive for everyone else is the thing this architecture makes cheap, which is
+the constitutional claim being cashed rather than asserted.
+
+### RE-RANK — this outranks the shape burndown for one tick
+
+Check #74 closed by saying the next window is engine work and named the 13 jarring-only sites. This
+displaces it by exactly one tick, on I3 grounds: fetch `accname` + `wai-aria` + `html-aam`, bind the
+two testdriver entry points to the in-process tree, and get **the first honest number the moat has
+ever had.** A capability that has been `partial` and unmeasured for 250 ticks, is constitutionally
+the differentiator, and whose test corpus is one `git sparse-checkout` away, is not a thing to leave
+for a fourth audit to re-notice.
+
+MEASURED count unchanged (no rows added — the hole was already on the map; what changed is that it is
+now actionable).

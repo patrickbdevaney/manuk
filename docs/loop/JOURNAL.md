@@ -46371,6 +46371,65 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 869 — the a11y oracle was never DOWNLOADED, and that is why the moat is unmeasured (2026-08-03)
+
+TICK SHAPE: measurement — both cadence gates came due at this tick (self-audit and surface audit,
+each every 10, both last run at 859). Banked as self-audit and **surface audit #58**.
+
+⚠⚠⚠ **THE FINDING — THE SAME STRUCTURAL HOLE FOR A THIRD AUDIT, AND FINALLY ITS MECHANISM.**
+Audit #56 (t848) named the accessible NAME as the one Interop item with no row on the map. Audit #57
+(t859) recorded it as *"the only structural hole still open."* `CONSTELLATION.tsv` row 21 has said
+since **tick 618** that *"the TREE's role+name correctness is still unmeasured."* Four independent
+records, 250 ticks, one conclusion, nothing done.
+
+This audit's contribution is not the hole — it is **why nobody ever closed it**:
+
+```text
+  $ ls ~/wpt
+  common  css  cssom  dom  domparsing  encoding  html  mathml  resources  svg  url
+  $ ls ~/wpt/accname ~/wpt/wai-aria ~/wpt/html-aam
+  ABSENT · ABSENT · ABSENT
+```
+
+**The measuring instrument was never downloaded.** Our WPT checkout is a nine-directory partial and
+the three suites that measure exactly the capability I3 calls *"the single most durable moat"* are
+not among them. It was never hard; the tests were not on disk.
+
+**The new ledger shape: an absent MEASUREMENT hides exactly as well as an absent capability, and
+nothing we own can see either.** `map-reconcile.sh` compares the map against the gates; the WPT
+runner reports what the corpus contains. **A directory that was never fetched reports no failures** —
+so the corpus's own silence read as coverage, three audits running.
+
+**And the oracle exists, is spec-authored, and is what four vendors score themselves on.** WPT tests
+computed role and accessible name via `testdriver.js` → WebDriver `get_computed_role` /
+`get_computed_label`; Interop has scored it since the 2023 accessibility investigation and carries it
+into 2026. ⚠ The seam is ours to exploit rather than reimplement: those two entry points exist
+because an incumbent can only reach its a11y tree through a driver round-trip, and **I3's entire
+claim is that ours is synchronous and in-process** — so they bind straight to `manuk_a11y`. The thing
+that is expensive for everyone else is the thing this architecture makes cheap. That is the
+constitutional claim being CASHED rather than asserted.
+
+SELF-AUDIT: 1 prescribed-but-not-executed item — **the verify wall at 876s against a 300s target**.
+HARNESS, one line per PART VII, not worked: the wall is dominated by the release-LTO relink of
+`manuk-wpt` that the `parity` gate triggers whenever engine source changes, and this session made it
+worse by rebuilding the release binary for measurements between edits. `Cargo.toml`'s release profile
+and `scripts/` are both observer-owned. Everything else in the self-audit is green (49 process
+defects recorded with mechanisms, 392 clusters, 899 pattern rows, every gate declaring how to break
+it).
+
+RE-RANK, and it displaces check #74's own closing steer by exactly one tick: #74 said the instrument
+debt was paid and the next window is engine work on the 13 jarring-only sites. This outranks it on I3
+grounds for ONE tick — fetch `accname` + `wai-aria` + `html-aam`, bind the two testdriver entry
+points to the in-process tree, and take **the first honest number the moat has ever had.** A
+capability that is constitutionally the differentiator, has been `partial` for 250 ticks, and whose
+adversarial test corpus is one sparse-checkout away is not a thing to leave for a fourth audit to
+re-notice.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefacts are `docs/loop/SURFACE-AUDIT.md` audit #58 and the self-audit run,
+which are the loop's own governance instruments rather than engine knowledge. [no-pattern]
+
 ## Tick 868 — the leg-2/leg-3 ranking is INVERTED on fresh data, and my fix did not buy what I predicted (2026-08-03)
 
 TICK SHAPE: capability (render/geometry) — the first shape tick of the session, taken because t867's
