@@ -46371,6 +46371,101 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 865 — the biggest unscored cohort is OUR SNAPSHOT's shell, and t674's control could not see it (2026-08-03)
+
+TICK SHAPE: instrument fidelity (scorability) — the board's M1 PRIORITY ORDER puts SCORABILITY first,
+and after t862/t864 cleared both `render-failed` rows the largest in-scope unscored group is
+`shell-only` at **13 sites**.
+
+HYPOTHESIS (pre-registered): t856 established that `shell-only` is the ORACLE's count, not ours, and
+the variant's own doc says *"a site still landing here is one whose scripts do not run for the ORACLE
+at all"* — but nobody had asked WHY they do not run. Prediction: it is not a property of the sites,
+because a browser plainly renders them.
+
+RESULT — **it is our snapshot, the mechanism is CORS on `type="module"`, and Chrome renders every one
+of these pages from its live URL.**
+
+```text
+                            oracle snapshot   LIVE url
+  allticketscol.com               0 divs        312
+  comix.to                        1 div        1258
+  pt88.app                        2 divs        147
+  booking.directferries.com       1 div           8
+```
+
+A `type="module"` script is **always** fetched in CORS mode. The oracle renders a fetched COPY of the
+document from a foreign origin, and a site has no reason to send `Access-Control-Allow-Origin` for its
+own bundle — measured: `allticketscol.com/main-*.js` answers **200 with no ACAO** to a foreign
+`Origin`. So the entry bundle never loads and the app never boots. **8 of the 13 sites carrying this
+reason ship module scripts.**
+
+⚠⚠⚠ **t674 REFUTED THIS EXACT CAUSE, AND ITS CONTROL COULD NOT SEPARATE THE HYPOTHESES.** The
+`ShellOnly` doc comment has said since t674 that the cross-origin explanation was *"plausible, stated
+as fact, and load-bearing"* and that **one probe killed it**: serving the same document over
+`http://127.0.0.1` gives a byte-identical dump. I reproduced that arm today exactly (comix.to 1 div
+either way, pt88.app 2 either way) — and it kills nothing, because **`127.0.0.1` is just as
+cross-origin to the site as `file://` is.** The control moved the document from one foreign origin to
+a *different* foreign origin: both arms are the treatment, and there is no comparison in the
+experiment. The control that actually varies the mechanism is removing the CORS **check**, and it
+moves `pt88.app` from **2 divs to 98**.
+
+So the correction is not "t674 was careless" — it is a distinct failure shape worth its own name:
+**a control that changes a VARIABLE without changing the MECHANISM reads as a refutation and is
+silence.** The comment it wrote then hardened into eleven ticks of "not the cause".
+
+⚠⚠⚠ **THE CHEAP FIX WAS MEASURED AND REFUSED — and refusing it is the substance of this tick.**
+An INLINE module is not CORS-fetched, so the snapshot could inline every bundle it fetches. Four
+lines, and it half-works:
+
+```text
+                     snapshot   INLINED   live
+  pt88.app              2         71       147
+  allticketscol.com     0         15       312
+  comix.to              1          2      1258
+```
+
+The app boots, then issues its own same-origin `fetch()` for data — still cross-origin from the
+snapshot — and stops half-built. **A half-built reference is strictly WORSE than an honest shell**:
+the count clears the shell floor, `ShellOnly` stops firing, and the instrument starts scoring our
+complete render against Chrome's partial one *as though the difference were ours*. That is
+t772-775's law — *absence routes to the fallback; HALF-presence routes into a wall* — aimed at the
+instrument instead of the engine. Shipping it would have manufactured 8 sites' worth of phantom
+engine backlog and looked like progress on the scorability leg.
+
+WHAT LANDED: `Unmeasurable::OracleModuleShell(n)`, decided in the ONE place `ShellOnly` is decided
+(`unscoreable_reason` gained the fact, rather than a second rule refining its answer at the call
+site), from a scan of the bytes **the ORACLE was handed** — t861's rule that when a subprocess is the
+subject you reproduce what the subprocess was actually given. Verified end to end on the rebuilt
+binary: `pt88.app` → `oracle-module-shell-3`, `allticketscol.com` → `oracle-module-shell-1`,
+`esaj.tjsp.jus.br` (no module scripts) → still `shell-only-4`, and the scoring control
+`littlecaesarsbcs` byte-identical at 0.948718.
+
+⚠⚠ **THE DENOMINATOR DOES NOT MOVE.** Counted and unscored exactly as `shell-only` is, asserted
+against the EXCLUDED partition — the same refusal as t861. "The reference failed" is the most
+tempting licence this instrument is ever offered, and this is the third variant in five ticks that
+has been offered it.
+
+THE FIX THAT WOULD WORK, named and deliberately NOT built: the oracle must load the page through ONE
+real origin — a loopback reverse proxy serving document, subresources and XHR under a single
+`http://127.0.0.1:PORT` with the probe injected on the way through. Then nothing is cross-origin by
+construction. `manuk-wpt` already depends on `hyper`/`hyper-util`. Its own tick, because a proxy that
+rewrites URLs wrongly produces a *different* wrong reference rather than an obviously broken one.
+
+REFUTED ALONG THE WAY, banked so no one re-runs them: `--disable-web-security` is not the fix (no
+change on `file://`, and it broke 2 of 4 runs outright — it is only useful as the mechanism PROBE);
+serving from a localhost HTTP origin changes nothing (t674's arm, re-measured); and the
+class-signature path artefact I set out to test on the `tree-divergence` cohort is **already fixed** —
+sigs are ablated by default (`MANUK_G1_CLASS_SIG` restores them), so those paths carry no signature
+and cannot be re-keyed by a class list.
+
+SIGHTED, NOT CHASED: `forums.moneysavingexpert.com` serves **428 divs** and the oracle probed **9** —
+that is not a module-boot failure and it is not what this row measured.
+
+PERF: none — one byte scan of a document already in memory, on the unscored path only.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "A control that changes a variable without changing
+the mechanism is silence, not a refutation".
+
 ## Tick 864 — we were running BOTH halves of every Angular build (2026-08-03)
 
 TICK SHAPE: capability (function leg, landing on the M1 SCORABILITY ceiling the board ranks first).

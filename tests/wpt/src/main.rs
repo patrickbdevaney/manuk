@@ -1263,9 +1263,13 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                     // Never overwrites a reason already established (a bot-wall, a blank render):
                     // the earlier cause is the true one, and this is the residue.
                     if f.unmeasurable.is_none() {
-                        if let Some(reason) =
-                            manuk_wpt::fidelity::unscoreable_reason(probed, shape_n, mboxes.len())
-                        {
+                        if let Some(reason) = manuk_wpt::fidelity::unscoreable_reason(
+                            probed,
+                            shape_n,
+                            mboxes.len(),
+                            // The bytes the ORACLE was handed, not our post-parse DOM.
+                            manuk_wpt::fidelity::document_ships_module_scripts(&html),
+                        ) {
                             eprintln!("  UNMEASURABLE [{}]: {}", reason.tag(), reason.explain());
                             // **THE ONE MEASUREMENT THAT DECIDES WHERE THE NEXT TICKS GO** (t783).
                             // A `tree-divergence` row says the two path spaces do not line up and

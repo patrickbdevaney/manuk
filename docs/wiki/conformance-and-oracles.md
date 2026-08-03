@@ -3064,3 +3064,75 @@ mozjs rebuild, and in-process containment of a SpiderMonkey memory fault is sett
 without the process boundary. The tick pays what it can pay — the reproducer and the attribution.
 
 [[fidelity-instrument]] [[js-engine]] [[architecture]]
+
+## A control that changes a VARIABLE without changing the MECHANISM is silence, not a refutation (tick 865)
+
+The `Unmeasurable::ShellOnly` doc comment carried this correction from tick 674:
+
+> **⚠ THE CAUSE THIS COMMENT ASSERTED WAS WRONG, AND IT WAS NEVER MEASURED.** It read: *"from
+> `file://` the page's own origin is `null`, so a JS-rendered site's fetches and module loads are
+> cross-origin and blocked."* Plausible, stated as fact, and load-bearing — it would have bought a
+> loopback HTTP server. One probe killed it: the **same document served over `http://127.0.0.1` gives
+> a byte-identical dump.**
+
+Every sentence of that is well-reasoned, and the refutation is **empty**. `127.0.0.1` is *just as
+cross-origin to the site as `file://` is.* The probe moved the document from one foreign origin to a
+different foreign origin — both arms are the treatment, neither is a control, and a null result was
+guaranteed before it ran. The arm reproduces today (comix.to 1 div either way, pt88.app 2 either way)
+and still says nothing.
+
+The control that actually varies the mechanism is **removing the CORS check**:
+
+```text
+  pt88.app, identical snapshot, identical flags
+    http://127.0.0.1                            2 divs
+    http://127.0.0.1 + --disable-web-security  98 divs
+```
+
+The original hypothesis was right, and it sat marked "measured false" for eleven ticks. This is the
+sibling of *"every number has a harness"*: **before believing a refutation, ask which variable the
+control moved and whether the mechanism could tell the difference.** A control that cannot separate
+the hypotheses does not return "no" — it returns nothing, and nothing gets written down as "no".
+
+### The mechanism, and the size of it
+
+A `type="module"` script is **always** fetched in CORS mode. The oracle renders a fetched COPY of the
+document from a foreign origin, and a site has no reason to send `Access-Control-Allow-Origin` for
+its own bundle — `allticketscol.com/main-*.js` answers `200` with **no ACAO** to a foreign `Origin`.
+The entry bundle never loads, the app never boots, and the reference is a shell of the instrument's
+own making. Chrome renders every one of these pages from its live URL:
+
+```text
+                            oracle snapshot   LIVE url
+  allticketscol.com               0 divs        312
+  comix.to                        1 div        1258
+  pt88.app                        2 divs        147
+```
+
+**8 of the 13 in-scope sites carrying `shell-only`** ship module scripts — the largest unscored
+cohort, and an instrument defect rather than engine backlog.
+
+### The cheap fix was measured and REFUSED
+
+An INLINE module is not CORS-fetched, so the snapshot can inline every bundle it fetches. Four lines:
+
+```text
+                     snapshot   INLINED   live
+  pt88.app              2         71       147
+  allticketscol.com     0         15       312
+  comix.to              1          2      1258
+```
+
+It boots the app and then stops, because the booted app's own same-origin `fetch()` is still
+cross-origin from the snapshot. **A half-built reference is strictly worse than an honest shell:**
+the count clears the shell floor, `ShellOnly` stops firing, and the instrument starts scoring our
+complete render against Chrome's partial one *as though the difference were ours* — manufacturing
+eight sites of phantom engine backlog while looking like progress. That is
+*absence routes to the fallback; HALF-presence routes into a wall*, aimed at the instrument.
+
+What landed instead is the LABEL — `oracle-module-shell-N`, decided in the one place `ShellOnly` is
+decided, from a scan of the bytes the ORACLE was handed. **Counted and unscored; the denominator does
+not move.** The fix that would work is a loopback reverse proxy serving document, subresources and
+XHR under one origin — named, sized, and left to its own tick.
+
+[[fidelity-instrument]] [[frameworks]] [[js-engine]]

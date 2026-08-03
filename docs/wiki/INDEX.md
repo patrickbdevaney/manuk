@@ -399,6 +399,9 @@
   - L3020 · A quiet UNSCORED label can be hiding a Bar 0 (tick 863)
   - L3036 · Four discriminators localized a nine-of-nine segfault with NOT ONE symbol
   - L3053 · Why a dead reproducer is worse than an open bug
+  - L3068 · A control that changes a VARIABLE without changing the MECHANISM is silence, not a refutation (tick 865)
+  - L3097 · The mechanism, and the size of it
+  - L3115 · The cheap fix was measured and REFUSED
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1463,4 +1466,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1370 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1373 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

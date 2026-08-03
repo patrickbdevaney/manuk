@@ -143,10 +143,77 @@ pub enum Unmeasurable {
     /// Check whether the snapshot fetch was bot-walled before treating the row as evidence about the
     /// site.
     ///
+    /// ⚠⚠⚠ **AND t674's REFUTATION ABOVE DOES NOT HOLD — ITS CONTROL COULD NOT SEPARATE THE TWO
+    /// HYPOTHESES (measured t865).** Serving the snapshot from `http://127.0.0.1` and getting a
+    /// byte-identical dump was read as killing *"cross-origin blocks the module load"*. It kills
+    /// nothing: **`127.0.0.1` is just as cross-origin to the site as `file://` is.** The control
+    /// changed the document's origin from one foreign origin to a different foreign origin, so both
+    /// arms are the treatment and the experiment has no comparison in it. Re-measured today, the
+    /// localhost arm reproduces exactly (comix.to 1 div either way, pt88.app 2 either way) — and the
+    /// control that actually varies the mechanism, **removing the CORS CHECK**, moves `pt88.app`
+    /// from **2 divs to 98**.
+    ///
+    /// The mechanism, stated so it can be attacked: a `type="module"` script is **always** fetched in
+    /// CORS mode, and a site has no reason to send `Access-Control-Allow-Origin` for its own bundle
+    /// (measured: `allticketscol.com/main-*.js` answers `200` with **no ACAO** to a foreign `Origin`).
+    /// So the entry bundle never loads and the app never boots. **8 of the 13 in-scope sites carrying
+    /// this reason ship module scripts**, and Chrome renders every one of them from its LIVE URL:
+    ///
+    /// ```text
+    ///                          oracle snapshot   LIVE url
+    ///   allticketscol.com          0 divs         312
+    ///   comix.to                   1 div         1258
+    ///   pt88.app                   2 divs         147
+    ///   booking.directferries.com  1 div            8
+    /// ```
+    ///
+    /// See [`Self::OracleModuleShell`] for what is done about it, and — importantly — for the cheap
+    /// fix that was measured and REFUSED.
+    ///
     /// Naming the condition does NOT fix the oracle; it stops the oracle LYING. It converted the last
     /// of t611's *"unscored with NO recorded reason"* rows — the residue that tick could not explain —
     /// into a stated one, and removed a false number from the certificate.
     ShellOnly(usize),
+    /// **The oracle rendered a shell AND the document is a `type="module"` SPA — so the shell is OUR
+    /// SNAPSHOT'S, not the site's.** Carries the oracle's element count, exactly as
+    /// [`Self::ShellOnly`] does.
+    ///
+    /// This is [`Self::ShellOnly`] with its cause named. A module script is **always** fetched in CORS
+    /// mode; the oracle renders a fetched copy of the document from a foreign origin; a site does not
+    /// send `Access-Control-Allow-Origin` for its own bundle. The entry bundle therefore never loads,
+    /// the app never boots, and the reference is a shell of the instrument's own making. Chrome loads
+    /// every one of these pages perfectly from its live URL.
+    ///
+    /// ⚠⚠⚠ **THE CHEAP FIX WAS MEASURED AND REFUSED, AND THAT IS THE POINT OF THIS VARIANT.**
+    /// Inlining each module bundle into the snapshot (an INLINE module is not CORS-fetched) is four
+    /// lines and it half-works, which is worse than not working:
+    ///
+    /// ```text
+    ///                       snapshot   INLINED   live
+    ///   pt88.app               2         71       147
+    ///   allticketscol.com      0         15       312
+    ///   comix.to               1          2      1258
+    /// ```
+    ///
+    /// The app boots, then makes its own same-origin `fetch()` for data — still cross-origin from the
+    /// snapshot — and stops half-built. And a half-built reference is **strictly worse than an honest
+    /// shell**: the element count climbs past the shell floor, `ShellOnly` stops firing, and the
+    /// instrument starts scoring our complete render against Chrome's partial one, as though the
+    /// difference were ours. That is t772-775's law aimed at the instrument — *absence routes to the
+    /// fallback; HALF-presence routes into a wall.*
+    ///
+    /// **The fix that would work, named and NOT built here:** the oracle must load the page through
+    /// ONE real origin — a loopback reverse proxy serving document, subresources and XHR under a
+    /// single `http://127.0.0.1:PORT`, with the probe injected on the way through. Then nothing is
+    /// cross-origin by construction. `manuk-wpt` already depends on `hyper`/`hyper-util`. It is its
+    /// own tick because it is a subsystem, and because a proxy that rewrites URLs incorrectly would
+    /// produce a *different* wrong reference rather than an obviously broken one.
+    ///
+    /// ⚠ **COUNTED and UNSCORED, exactly as [`Self::ShellOnly`] is — the denominator does not move.**
+    /// Same rule as [`Self::OracleTimeout`]: "the reference failed" is the most tempting licence this
+    /// instrument is ever offered to launder its hardest sites out of the denominator. What changes
+    /// is the LABEL, so the ranked backlog stops sending ENGINE ticks at an INSTRUMENT defect.
+    OracleModuleShell(usize),
     /// **Both engines rendered, and they have too few elements IN COMMON to compare.** Carries the
     /// size of the comparable set.
     ///
@@ -294,6 +361,7 @@ impl Unmeasurable {
             Self::ProbeBlocked => "probe-blocked".into(),
             Self::RenderFailed => "render-failed".into(),
             Self::ShellOnly(n) => format!("shell-only-{n}"),
+            Self::OracleModuleShell(n) => format!("oracle-module-shell-{n}"),
             Self::Timeout(secs) => format!("timeout-{secs}s"),
             Self::OracleTimeout(secs) => format!("oracle-timeout-{secs}s"),
             Self::Crashed => "crashed".into(),
@@ -336,6 +404,10 @@ impl Unmeasurable {
             _ if s.starts_with("css-starved-") => {
                 s["css-starved-".len()..].parse().ok().map(Self::CssStarved)
             }
+            _ if s.starts_with("oracle-module-shell-") => s["oracle-module-shell-".len()..]
+                .parse()
+                .ok()
+                .map(Self::OracleModuleShell),
             _ if s.starts_with("shell-only-") => {
                 s["shell-only-".len()..].parse().ok().map(Self::ShellOnly)
             }
@@ -413,6 +485,21 @@ impl Unmeasurable {
                  probe now re-reads at DOMContentLoaded/load/T+3s), so a site still landing here is \
                  one whose scripts do not run for the ORACLE at all — check whether the snapshot \
                  fetch was bot-walled before treating it as evidence about the site"
+            ),
+            Self::OracleModuleShell(n) => format!(
+                "the ORACLE rendered only {n} element(s) — and this document is a `type=\"module\"` \
+                 SPA, so THE SHELL IS OUR SNAPSHOT'S, NOT THE SITE'S. A module script is ALWAYS \
+                 fetched in CORS mode; the oracle renders a fetched copy from a foreign origin; a \
+                 site does not send Access-Control-Allow-Origin for its own bundle (measured: \
+                 allticketscol.com/main-*.js answers 200 with NO ACAO). The entry bundle never loads \
+                 and the app never boots — Chrome renders every one of these pages from its LIVE url \
+                 (allticketscol 0 divs snapshot vs 312 live; comix.to 1 vs 1258; pt88.app 2 vs 147). \
+                 ⚠ INLINING the bundle is NOT the fix and was measured: it half-boots the app \
+                 (pt88 2->71 of 147, allticketscol 0->15 of 312) because the booted app's own \
+                 same-origin fetch() is still cross-origin, and a HALF-BUILT reference is worse than \
+                 an honest shell — it clears the shell floor and the instrument starts charging \
+                 Chrome's missing half to us. The fix is a loopback reverse PROXY so document, \
+                 bundle and XHR share ONE origin. COUNTED and UNSCORED; the denominator does not move"
             ),
             Self::ThinOverlap(n) => format!(
                 "the oracle rendered the page and only {n} element(s) are COMMON to both engines, \
@@ -1509,6 +1596,51 @@ fn ink(means: &[[f64; 3]]) -> f64 {
     n as f64 / means.len() as f64
 }
 
+/// **Does this document boot through a `type="module"` script?** — the one fact that turns a bare
+/// [`Unmeasurable::ShellOnly`] into an attributable [`Unmeasurable::OracleModuleShell`].
+///
+/// Deliberately a scan of the RESPONSE BYTES rather than a parse: it runs on the exact document the
+/// oracle handed Chrome, before any engine has touched it, so it cannot inherit a parser difference
+/// between the two sides — and t861's rule is that when a subprocess is the subject, you reproduce
+/// what the subprocess was actually given.
+///
+/// Conservative on purpose. A false POSITIVE relabels a genuinely-shell site as an instrument
+/// defect and would hide real work, so the match requires an actual `type` attribute whose value is
+/// `module` inside a `<script` tag — `nomodule` (which contains neither) and `type="modulepreload"`
+/// on a `<link>` do not qualify.
+pub fn document_ships_module_scripts(html: &str) -> bool {
+    let lower = html.to_ascii_lowercase();
+    let mut rest = lower.as_str();
+    while let Some(i) = rest.find("<script") {
+        rest = &rest[i + "<script".len()..];
+        let Some(end) = rest.find('>') else {
+            return false;
+        };
+        let tag = &rest[..end];
+        // `type` followed by `=` then optional quote then exactly `module` then a delimiter.
+        let mut scan = tag;
+        while let Some(t) = scan.find("type") {
+            let after = scan[t + 4..].trim_start();
+            if let Some(v) = after.strip_prefix('=') {
+                let v = v.trim_start();
+                let v = v
+                    .strip_prefix('"')
+                    .or_else(|| v.strip_prefix('\''))
+                    .unwrap_or(v);
+                if v.starts_with("module")
+                    && !v["module".len()..]
+                        .starts_with(|c: char| c.is_ascii_alphanumeric() || c == '-')
+                {
+                    return true;
+                }
+            }
+            scan = &scan[t + 4..];
+        }
+        rest = &rest[end..];
+    }
+    false
+}
+
 /// **Why this site cannot be scored — ONE rule, in one place, for both ways of being unscoreable.**
 ///
 /// `probed` is what the ORACLE built; `common` is how many of those elements *both* engines
@@ -1552,9 +1684,21 @@ fn ink(means: &[[f64; 3]]) -> f64 {
 /// [`Unmeasurable::TreeDivergence`]: two documents, or two states of one document, not one engine
 /// rendering less. Both outcomes are UNSCORED and both count against the bar — the certificate's
 /// arithmetic does not move — so this changes only what the loop is told to go and fix.
-pub fn unscoreable_reason(probed: usize, common: usize, ours: usize) -> Option<Unmeasurable> {
+pub fn unscoreable_reason(
+    probed: usize,
+    common: usize,
+    ours: usize,
+    oracle_doc_ships_modules: bool,
+) -> Option<Unmeasurable> {
     if probed < CERT_MIN_SHAPE_SAMPLE {
-        Some(Unmeasurable::ShellOnly(probed))
+        // **The shell is named by its CAUSE where the cause is knowable.** One decision site, not
+        // two: refining a `ShellOnly` at the call site would put the same rule in two places, which
+        // is the defect this function's own header comment exists to prevent.
+        if oracle_doc_ships_modules {
+            Some(Unmeasurable::OracleModuleShell(probed))
+        } else {
+            Some(Unmeasurable::ShellOnly(probed))
+        }
     } else if common < CERT_MIN_SHAPE_SAMPLE {
         // ⚠ **THE TEST IS `ours` AGAINST THE SAME FLOOR, NOT `ours` AGAINST `probed`** — and the
         // first draft of this tick got that wrong in a way the cohort measurement caught. `ours >=
@@ -2469,12 +2613,15 @@ mod shape_tests {
     /// Every case below is a real row from a real sweep, and the middle one is the whole point.
     #[test]
     fn an_unscored_site_names_which_engine_failed_it() {
-        use super::{unscoreable_reason, Unmeasurable, CERT_MIN_SHAPE_SAMPLE as FLOOR};
+        use super::{
+            document_ships_module_scripts, unscoreable_reason, Unmeasurable,
+            CERT_MIN_SHAPE_SAMPLE as FLOOR,
+        };
 
         // `comix.to` — the ORACLE built 3 elements from its `file://` copy. Not our bug, and not
         // evidence about the site.
         assert_eq!(
-            unscoreable_reason(3, 2, 900),
+            unscoreable_reason(3, 2, 900, false),
             Some(Unmeasurable::ShellOnly(3))
         );
 
@@ -2482,7 +2629,7 @@ mod shape_tests {
         // because WE rendered 16% of the page. Deciding on `probed` alone, this returns None and the
         // row goes out unscored with nothing to say.
         assert_eq!(
-            unscoreable_reason(25, 4, 3),
+            unscoreable_reason(25, 4, 3, false),
             Some(Unmeasurable::ThinOverlap(4)),
             "we drew THREE boxes against the oracle's 25 — below the same floor `ShellOnly` uses, \
              so 'the oracle built the page and we did not' is a claim the numbers support"
@@ -2493,13 +2640,13 @@ mod shape_tests {
         // built the page and we did not") is a claim about our count, and it was decided without
         // our count for as long as the variant existed.
         assert_eq!(
-            unscoreable_reason(25, 4, 25),
+            unscoreable_reason(25, 4, 25, false),
             Some(Unmeasurable::TreeDivergence(25)),
             "both engines above the floor with a thin intersection is DIVERGENCE, not us rendering \
              less"
         );
         assert_eq!(
-            unscoreable_reason(57, 9, 434),
+            unscoreable_reason(57, 9, 434, false),
             Some(Unmeasurable::TreeDivergence(434)),
             "www.naukri.com, measured: the oracle's copy has 57 box-bearing elements and ours has \
              434 — 7.6x — with 9 paths shared. Calling that a coverage failure of ours is backwards"
@@ -2509,20 +2656,20 @@ mod shape_tests {
         // on a page where we drew 1,355 boxes. Two engines that each draw ~1,400 and share NONE are
         // misaligned, not one engine rendering nothing.
         assert_eq!(
-            unscoreable_reason(1410, 0, 1355),
+            unscoreable_reason(1410, 0, 1355, false),
             Some(Unmeasurable::TreeDivergence(1355)),
             "1,355 of our own boxes is not 'we did not build the page', whatever the intersection is"
         );
 
         // `www.ikea.com` — 698 probed, 698 common. Scoreable, so no reason at all: a rule that
         // manufactures a reason for a healthy site is worse than one that stays quiet.
-        assert_eq!(unscoreable_reason(698, 698, 698), None);
+        assert_eq!(unscoreable_reason(698, 698, 698, false), None);
 
         // The boundary is the certificate's OWN floor, reused rather than invented — so this can
         // never disagree with the thing that refuses to score.
-        assert_eq!(unscoreable_reason(FLOOR, FLOOR, FLOOR), None);
+        assert_eq!(unscoreable_reason(FLOOR, FLOOR, FLOOR, false), None);
         assert_eq!(
-            unscoreable_reason(FLOOR, FLOOR - 1, 0),
+            unscoreable_reason(FLOOR, FLOOR - 1, 0, false),
             Some(Unmeasurable::ThinOverlap(FLOOR - 1)),
             "one element below the floor must be REFUSED and NAMED, not scored"
         );
@@ -3118,6 +3265,69 @@ mod shape_tests {
                 .contains("ORACLE")
                 && !Unmeasurable::Timeout(150).explain().contains("ORACLE"),
             "each timeout must name WHOSE clock burned; that is the whole content of this variant"
+        );
+
+        // ── **A `type="module"` SPA THE ORACLE COULD NOT BOOT IS THE INSTRUMENT'S SHELL, NOT THE
+        //     SITE'S (t865)** — and it MUST STILL COUNT.
+        //
+        // A module script is always fetched in CORS mode; the oracle renders a fetched copy of the
+        // document from a foreign origin; a site does not send `Access-Control-Allow-Origin` for its
+        // own bundle. So the entry bundle never loads. Chrome renders every one of these pages from
+        // its LIVE url — allticketscol.com 0 divs from the snapshot against 312 live.
+        //
+        // Same two halves as the timeout above, for the same two reasons: name it (or 8 of the 13
+        // sites carrying `shell-only` keep buying ENGINE ticks for an INSTRUMENT defect), and keep
+        // counting it (or "the oracle failed" launders the hardest sites out of the denominator).
+        let ms = Unmeasurable::OracleModuleShell(3).tag();
+        assert!(
+            !excluded_prefixes.iter().any(|p| ms.starts_with(p))
+                && !excluded_exact.contains(&ms.as_str()),
+            "{ms} must stay IN the in-scope denominator — the reference failing is never a reason to \
+             stop counting the site"
+        );
+        assert_eq!(
+            Unmeasurable::from_tag(&ms),
+            Some(Unmeasurable::OracleModuleShell(3)),
+            "the tag must round-trip, and it must NOT be read back as a bare `shell-only`"
+        );
+        assert!(
+            Unmeasurable::OracleModuleShell(3).explain().contains("OUR SNAPSHOT")
+                && !Unmeasurable::ShellOnly(3).explain().contains("OUR SNAPSHOT"),
+            "the two shells must read differently: one is the SITE's, one is the INSTRUMENT's, and \
+             the whole content of the new variant is which"
+        );
+        // The decision lives in ONE place, and it is driven by the ORACLE's document bytes.
+        assert_eq!(
+            super::unscoreable_reason(3, 3, 900, true),
+            Some(Unmeasurable::OracleModuleShell(3)),
+            "a shell whose document ships a module script is the instrument's own"
+        );
+        assert_eq!(
+            super::unscoreable_reason(3, 3, 900, false),
+            Some(Unmeasurable::ShellOnly(3)),
+            "…and one that does not is still the site's — a false positive here would HIDE real work"
+        );
+        // ⚠ The detector is deliberately conservative: it must not fire on the two lookalikes.
+        assert!(
+            super::document_ships_module_scripts(r#"<script type="module" src="/a.js"></script>"#),
+            "the plain Vite/Angular form must be detected"
+        );
+        assert!(
+            super::document_ships_module_scripts("<SCRIPT TYPE=MODULE SRC=/a.js></SCRIPT>"),
+            "…case-insensitively, and unquoted — this is author markup, not a spec fixture"
+        );
+        assert!(
+            !super::document_ships_module_scripts(r#"<script nomodule src="/legacy.js"></script>"#),
+            "`nomodule` is the OTHER half of a differential build and contains no `type` at all"
+        );
+        assert!(
+            !super::document_ships_module_scripts(r#"<link rel="modulepreload" href="/a.js">"#),
+            "`modulepreload` is a <link> hint, not a script that boots anything"
+        );
+        assert!(
+            !super::document_ships_module_scripts(r#"<script type="module-worker" src="/a.js"></script>"#),
+            "a type that merely STARTS with `module` is not `module` — the prefix match must end at \
+             a delimiter, or every future `module-*` type relabels a real shell as ours"
         );
 
         assert_eq!(

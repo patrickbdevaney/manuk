@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **599** | ticks 1–864 |
-| median tick cycle | **26m** | 598 intervals |
-| median, last 10 | **40m** | 10 intervals |
+| ticks landed | **600** | ticks 1–865 |
+| median tick cycle | **26m** | 599 intervals |
+| median, last 10 | **38m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.07** | 557.0h elapsed |
-| median verify wall | **63s** | 538 ticks |
+| **ticks per hour** | **1.07** | 557.5h elapsed |
+| median verify wall | **63s** | 539 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **455**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**293 of 599 ticks** (49%) moved a
+**293 of 600 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **293** capability ticks, median cycle **26m**
-* median diff per tick: **+261 / −34** lines across 8 files
+* median diff per tick: **+262 / −34** lines across 8 files
 
 ## Every tick
 
@@ -696,5 +696,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **862** | 2026-08-03 08:54 | 40m | capability | 63s | +557/−38 | 382 | 81 | 56.0% · | `[object Object]` is why a server-rendered page rendered NOTHING (2026-08-03) |
 | **863** | 2026-08-03 09:28 | 34m | measurement | 63s | +180/−33 | 382 | 81 | 56.0% · | the brand fix, measured on a cohort; and a DETERMINISTIC single-site Bar 0 (2026-08-03) |
 | **864** | 2026-08-03 10:03 | 36m | capability | 63s | +331/−33 | 383 | 81 | 56.0% · | we were running BOTH halves of every Angular build (2026-08-03) |
+| **865** | 2026-08-03 10:34 | 31m | instrument | 63s | +436/−47 | 383 | 81 | 56.0% · | the biggest unscored cohort is OUR SNAPSHOT's shell, and t674's control could not see it ( |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
