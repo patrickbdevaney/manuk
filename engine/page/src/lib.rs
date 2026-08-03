@@ -9943,21 +9943,60 @@ mod tests {
             vec!["./m.js".to_string(), "./s.js".to_string()]
         );
 
-        // …and the non-import forms are NOT mistaken for specifiers: a `from`/`import` inside a comment
-        // or string, a dynamic `import(...)` (resolved lazily, not part of the static graph), and
-        // `import.meta` all yield nothing.
-        assert!(
-            scan_static_import_specifiers(
-                r#"
+        // ── …and the non-import forms are NOT mistaken for specifiers.
+        //
+        // ⚠⚠⚠ **THIS WAS ONE `is_empty()` OVER FIVE SEPARATE RULES, AND IT WENT PERMANENTLY RED
+        // WHEN EXACTLY ONE OF THEM WAS DELIBERATELY CHANGED.** t624 made a *literal* `import("m")`
+        // specifier collectable on purpose — `module_dynamic_import_hook` resolves from
+        // `MODULE_GRAPH_SOURCES`, the same pre-fetched map (`js/src/dom_bindings.rs:12374`), so a
+        // specifier missing from it is one `import()` cannot satisfy. The change was right and its
+        // reasoning is written next to it; this assertion was never updated, and from then on the
+        // test said nothing true about the other four rules either. **A lumped assertion does not
+        // fail loudly when one clause is superseded — it fails permanently, and a permanent red is
+        // read as background noise.**
+        //
+        // So the five rules are now five assertions, each independently falsifiable, and the
+        // dynamic case asserts the behaviour we actually want rather than the one we used to.
+        let scanned = scan_static_import_specifiers(
+            r#"
                 // import x from './comment.js';
                 /* import y from './block.js'; */
                 const s = "import z from './string.js'";
                 const p = import('./dynamic.js');
                 const u = import.meta.url;
-                "#
-            )
-            .is_empty(),
-            "comments, strings, dynamic import() and import.meta must not be scanned as static imports"
+                "#,
+        );
+        for (bad, why) in [
+            (
+                "./comment.js",
+                "a `from` inside a LINE comment is not a keyword",
+            ),
+            (
+                "./block.js",
+                "a `from` inside a BLOCK comment is not a keyword",
+            ),
+            (
+                "./string.js",
+                "an `import … from` inside a STRING LITERAL is not code",
+            ),
+        ] {
+            assert!(
+                !scanned.contains(&bad.to_string()),
+                "static import scanner: {why} — got {scanned:?}"
+            );
+        }
+        // `import.meta` must not fire the bare side-effect-import rule: the `.` becomes the previous
+        // token, so the scanner never sees `import` adjacent to a string. Nothing there is a string
+        // at all, so the check is that the scan produced EXACTLY one entry and it is the dynamic one.
+        assert_eq!(
+            scanned,
+            vec!["./dynamic.js".to_string()],
+            "static import scanner: a LITERAL `import('./dynamic.js')` IS collected on purpose \
+             (t624) — the dynamic-import host hook resolves from the same pre-fetched module map, \
+             so a specifier missing from it is one `import()` cannot satisfy, and over-collecting \
+             costs one request while under-collecting costs the feature. A COMPUTED specifier is \
+             invisible to any textual scan and still rejects at runtime. Everything else in the \
+             fixture — two comments, a string, and `import.meta` — must contribute nothing."
         );
     }
 

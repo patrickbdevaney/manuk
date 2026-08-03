@@ -46371,6 +46371,56 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 855 — a five-clause `is_empty()` outlived the decision that made one clause false (2026-08-03)
+
+TICK SHAPE: capability (instrument fidelity) — the second of the two pre-existing reds t853 surfaced
+and attributed to HEAD. A permanently-failing test is a ratchet hole: it trains every future reader
+to expect a red, which is how the *next* real red gets waved through.
+
+HYPOTHESIS: the engine is right and the TEST is stale.
+
+RESULT — **confirmed by reading the consumer, not the comment.**
+`static_import_scanner_finds_specifiers_and_skips_the_rest` asserted, in ONE `is_empty()`, that five
+different things contribute no specifier: a `from` in a line comment, a `from` in a block comment, an
+`import … from` inside a string literal, a dynamic `import(...)`, and `import.meta`.
+
+**t624 changed the fourth on purpose.** A *literal* `import("m")` specifier IS collected now, and the
+standing rule is that a claim about another subsystem is a hypothesis even when it is written in our
+own comment — so it was checked at the consumer: `module_dynamic_import_hook` reads
+`MODULE_GRAPH_SOURCES`, the same pre-fetched map the static graph seeds
+(`engine/js/src/dom_bindings.rs:12374`). A specifier missing from it is one `import()` cannot satisfy.
+Over-collecting costs one request; under-collecting costs the feature. **The code is right.**
+
+Measured before touching anything — the scanner returns exactly:
+
+```text
+  ["./dynamic.js"]
+```
+
+**Every other clause was working perfectly the whole time, invisibly, behind a red.**
+
+⚠⚠⚠ **A LUMPED ASSERTION DOES NOT FAIL LOUDLY WHEN ONE CLAUSE IS SUPERSEDED — IT FAILS PERMANENTLY,
+AND A PERMANENT RED IS READ AS BACKGROUND NOISE.** That is worse than no test. It is the same shape
+as a gate that cannot go red, inverted: a gate that can only *be* red. The five rules are now five
+assertions, each RED-proven separately — deleting the `import(` marker gives
+`left: [] right: ["./dynamic.js"]`, disabling line-comment skipping gives
+`got ["./comment.js", "./dynamic.js"]` on a **different** assertion. Neither mutation can hide inside
+the other.
+
+⚠⚠ **THE RULE THIS ADDS TO THE LEDGER: when you supersede a decision, GREP FOR WHAT ASSERTED IT.**
+t624 documented its reasoning next to the code it changed, which is the discipline as written — and
+it was not enough, because the thing that contradicted it was a test three thousand lines away.
+
+⚠ It survived because the wall runs **19 of 104** gates and `manuk-page --lib` is not among them. It
+surfaced only when t853 ran the whole crate during an unrelated sweep, and it was attributed to HEAD
+— not to that tick — by stashing the diff and re-running. Both of t853's reported reds are now closed
+(the other was t854's Bar-0 hang).
+
+PERF: none — one test file's assertions, no engine change.
+
+WIKI: docs/wiki/js-engine.md — "A five-clause `is_empty()` outlives the decision that makes one
+clause false"
+
 ## Tick 854 — a `colspan` of two billion is not a big table, it is a hang (2026-08-03)
 
 TICK SHAPE: capability — Bar 0. The hang t853 found while sweeping and attributed to HEAD with the

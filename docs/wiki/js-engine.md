@@ -2654,3 +2654,34 @@ everything (`speaker` resolves). The second is the one that keeps the fix honest
 button that checks the permission first disables itself against a clipboard that works. It is now
 `granted` — **not `prompt`**, because the table's own documented rule (quoted at the call site rather
 than dropped) is that `prompt` promises a permission dialog nothing here can ever show.
+
+## A five-clause `is_empty()` outlives the decision that makes one clause false (t855)
+
+`static_import_scanner_finds_specifiers_and_skips_the_rest` asserted, in **one** `is_empty()`, that
+five different things contribute no specifier: a `from` in a line comment, a `from` in a block
+comment, an `import … from` inside a string literal, a dynamic `import(...)`, and `import.meta`.
+
+t624 then changed the fourth on purpose. A **literal** `import("m")` specifier *is* collected now,
+because `module_dynamic_import_hook` resolves from `MODULE_GRAPH_SOURCES` — the same pre-fetched map
+the static graph seeds (`engine/js/src/dom_bindings.rs:12374`) — so a specifier missing from it is one
+`import()` cannot satisfy. Over-collecting costs one request; under-collecting costs the feature. The
+change was right, and the reasoning is written next to it.
+
+The assertion was never updated, and from that moment **the test said nothing true about the other
+four rules either.** Measured: the scanner returns exactly `["./dynamic.js"]` on that fixture — every
+other clause was working perfectly the whole time, invisibly, behind a red.
+
+⚠⚠⚠ **A LUMPED ASSERTION DOES NOT FAIL LOUDLY WHEN ONE CLAUSE IS SUPERSEDED — IT FAILS PERMANENTLY,
+AND A PERMANENT RED IS READ AS BACKGROUND NOISE.** That is worse than no test: it trains every reader
+to expect this suite to be red, which is how the *next* real regression gets waved through. It is the
+same shape as a gate that cannot go red, inverted — a gate that can only *be* red.
+
+⚠⚠ **THE RULE: one assertion per rule, and when you supersede a decision, grep for what asserted it.**
+The five are now five, each RED-proven separately — deleting the `import(` marker gives
+`left: [] right: ["./dynamic.js"]`; disabling line-comment skipping gives
+`got ["./comment.js", "./dynamic.js"]` on a *different* assertion. Neither mutation can hide inside
+the other.
+
+⚠ It survived because the wall runs **19 of 104** gates and `manuk-page --lib` is not among them. It
+surfaced only when t853 ran the whole crate during an unrelated regression sweep, and it was
+attributed to HEAD — not to that tick — by stashing the diff and re-running.

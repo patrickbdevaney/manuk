@@ -589,3 +589,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 851	831c2bf3	1785732451	2026-08-03T00:47:31-04:00	4206	capability	63	10	298	35	379	81	3896	6960	0	444	0	three form controls are 20px too tall, and one UA rule says so (2026-08-02)
 852	b5696564	1785732786	2026-08-03T00:53:06-04:00	335	measurement	63	5	231	33	379	81	3896	6960	0	444	0	the constitution check, and an I3 defect the loop filed as a shape number (2026-08-03)
 853	4aa34557	1785744033	2026-08-03T04:00:33-04:00	11247	capability	63	9	296	34	381	81	3896	6960	0	448	0	an icon-wrapping `<span>` is its own line box, and that is the agent's click point (2026-08-03)
+854	240f7bf3	1785745144	2026-08-03T04:19:04-04:00	1111	capability	63	8	169	43	381	81	3896	6960	0	449	0	a `colspan` of two billion is not a big table, it is a hang (2026-08-03)

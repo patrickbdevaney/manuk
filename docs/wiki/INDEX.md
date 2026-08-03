@@ -1000,6 +1000,7 @@
   - L2610 · An error message that names our file is not evidence that the answer is ours (tick 779)
   - L2633 · The enum-completeness question, which is two-sided
   - L2650 · And one entry that had quietly become false
+  - L2658 · A five-clause is_empty() outlives the decision that makes one clause false (t855)
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1437,4 +1438,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1348 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1349 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
