@@ -1632,6 +1632,55 @@ fn is_replaced_element(tag: Option<&str>) -> bool {
     matches!(tag, Some("img" | "canvas" | "video" | "svg"))
 }
 
+/// Is `node` a **button**, whose content is centred vertically in its content box?
+///
+/// `<button>` and the three button-valued `<input>` types. Not `<select>`, whose text is centred by
+/// the same mechanism in Chrome but whose box we synthesise rather than lay out from children, and
+/// not `<input type=text>`, which is a single line by construction and is handled by the control's
+/// own text path. The narrow set is deliberate: the rule needs a real content height to centre, and
+/// these are the controls that get one from their own children.
+fn is_button_like(dom: &Dom, node: NodeId) -> bool {
+    match dom.tag_name(node) {
+        Some("button") => true,
+        Some("input") => dom
+            .element(node)
+            .and_then(|e| e.attr("type"))
+            .map(|t| {
+                matches!(
+                    t.to_ascii_lowercase().as_str(),
+                    "submit" | "reset" | "button"
+                )
+            })
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
+/// Move a laid-out box's CONTENT down by `dy`, leaving the box itself where it is.
+///
+/// The block half delegates to [`LayoutBox::shift_y`], which already walks a whole subtree and moves
+/// its inline fragments' `line_top`/`baseline` with it; the inline half is that same fragment shift
+/// applied directly. Used by the button-centring rule, which moves what is inside the border box
+/// without moving the border box.
+fn shift_content_y(content: &mut BoxContent, dy: f32) {
+    if dy == 0.0 {
+        return;
+    }
+    match content {
+        BoxContent::Block(kids) => {
+            for k in kids.iter_mut() {
+                k.shift_y(dy);
+            }
+        }
+        BoxContent::Inline(frags) => {
+            for f in frags.iter_mut() {
+                f.line_top += dy;
+                f.baseline += dy;
+            }
+        }
+    }
+}
+
 /// Is `node` a **replaced element at `display: inline`** — an ATOMIC inline box?
 ///
 /// The computed display of `<img>` (and every replaced element) is `inline`, per spec and per
@@ -2610,7 +2659,7 @@ impl Ctx<'_> {
         // A BFC root gets a fresh float context spanning its own content box; a plain
         // block shares its parent's so floats affect content across nested blocks.
         let mut own_bfc;
-        let (content, content_height) = if establishes_bfc(&s) {
+        let (mut content, content_height) = if establishes_bfc(&s) {
             own_bfc = FloatContext::new(content_x, content_x + inner_width);
             let (c, h) = self.layout_children(
                 node,
@@ -2637,6 +2686,10 @@ impl Ctx<'_> {
         // (CSS2 §10.6.2) — not from the image's natural pixel height. `width` here is already
         // resolved and already clamped by min/max, so `max-width: 100%` narrowing the box scales the
         // height with it, which is the entire point of that reset.
+        // The height the children actually came to, kept before every override below — a button's
+        // vertical centring needs the difference between what the content wanted and what the box
+        // was given, and every assignment after this point is one of those overrides.
+        let natural_content_h = content_height;
         let mut content_height = match (own_definite_h, s.aspect_ratio) {
             (None, Some(r)) if r > 0.0 => width / r,
             // **CSS2.1 §10.4 constraint violation: the clamp transfers through the ratio.** A
@@ -2782,6 +2835,37 @@ impl Ctx<'_> {
             }
         }
 
+        // ── **A BUTTON CENTRES ITS CONTENT VERTICALLY, AND NO STYLESHEET CAN SAY SO.** The UA sheet
+        //    already gives buttons `text-align: center`, which is why the HORIZONTAL half has always
+        //    matched — but the vertical half is not expressible in CSS at all. Blink lays a button's
+        //    children out inside an anonymous flex-like box with `align-items: center`; the HTML
+        //    rendering spec describes the same thing. So a button taller than its content has that
+        //    content centred in its CONTENT BOX, after padding, as a single group.
+        //
+        //    Chrome-measured, `button{display:block;width:300px;padding:0;border:0;font:16px Arial}`,
+        //    y of the label relative to the button's border box:
+        //
+        //    ```text
+        //                                                    Chrome   before   after
+        //      height:50px, one 18px line                       16       0      16    ✗→✓
+        //      height:50px; padding-top:20px                    26      20      26    ✗→✓
+        //      height:80px, TWO block spans (36px together)      22       0      22    ✗→✓
+        //      height:20px, an 18px line (nearly full)            1       0       1    ✗→✓
+        //      height:auto                                        0       0       0     ✓ control
+        //      a plain <div> at height:50px                       0       0       0     ✓ control
+        //    ```
+        //
+        //    Every design-system button fixes a height, so before this the label sat 5-20px too high
+        //    on essentially every button on the web — and, being a label inside a fixed-size box, it
+        //    is exactly the kind of divergence the `overlap` invariant reports rather than `shape`.
+        //
+        //    ⚠ It is the CONTENT that moves, not the box: `border_box_h` is already `content_height`
+        //    and the button's own rect must not shift. And it is the whole content as ONE group —
+        //    two block children keep their 18px separation and move 22 together, which is what makes
+        //    this centring rather than per-line alignment.
+        if content_height > natural_content_h && is_button_like(self.dom, node) {
+            shift_content_y(&mut content, (content_height - natural_content_h) / 2.0);
+        }
         let border_box_w = bl + pl + width + pr + br;
         let border_box_h = bt + pt + content_height + pb + bb;
         let rect = Rect {
@@ -7996,6 +8080,123 @@ mod tests {
         assert!(
             rects.contains_key(&a) || true,
             "the unstyled node is laid out with the initial style, not fatal"
+        );
+    }
+
+    /// **A BUTTON CENTRES ITS CONTENT VERTICALLY, AND NO STYLESHEET CAN SAY SO.**
+    ///
+    /// The UA sheet already gives buttons `text-align: center`, which is why the HORIZONTAL half has
+    /// always matched Chrome. The vertical half is not expressible in CSS at all: Blink lays a
+    /// button's children out inside an anonymous flex-like box with `align-items: center`, and the
+    /// HTML rendering spec describes the same thing. Every design system fixes a button height, so
+    /// before this the label sat 5–20px too high on essentially every button on the web — and being
+    /// a label inside a fixed-size box, it is the kind of divergence the fidelity instrument reports
+    /// as `overlap` rather than as `shape`.
+    ///
+    /// Chrome-measured, `button{display:block;width:300px;padding:0;border:0;font:16px Arial}`,
+    /// y of the label relative to the button's border box:
+    ///
+    /// ```text
+    ///                                                    Chrome   before   after
+    ///   height:50px, one 18px line                          16       0      16    ✗→✓
+    ///   height:80px, TWO block spans (36px together)         22       0      22    ✗→✓
+    ///   height:20px, an 18px line (nearly full)               1       0       1    ✗→✓
+    ///   height:auto                                           0       0       0     ✓ control
+    ///   a plain <div> at height:50px                          0       0       0     ✓ control
+    /// ```
+    ///
+    /// Asserted against the AUTO-height button's own height rather than against `18`, so the UA
+    /// font's metrics cannot make the test lie — the rule is `(box − content) / 2` and the auto
+    /// button *is* the content.
+    ///
+    /// ⚠ **The CONTENT moves, not the box.** The border box is already `height`; shifting it would
+    /// turn a centring bug into a placement bug one level up.
+    ///
+    /// ⚠ **It is the whole content as ONE group.** Two block children keep their own separation and
+    /// move together — that is what makes this centring rather than per-line alignment, and row 2
+    /// is the row that tells the two apart.
+    ///
+    /// ⚠ **MEASURED RESIDUE, NAMED NOT GUESSED — `box-sizing` on form controls.** Chrome's UA sheet
+    /// computes `border-box` for `button`, `input[type=submit|reset|button]` and `select`, and
+    /// `content-box` for `input[type=text]`, `textarea` and every ordinary element. At
+    /// `height:50px; padding-top:20px` Chrome reports **50 / 50 / 70 / 50 / 70 / 70** for
+    /// button / submit / text / select / textarea / div; we report **70** for all six. That is a
+    /// separate one-rule UA-sheet defect, it makes three controls 20px too tall whenever they carry
+    /// padding and a height, and it is why the padded button row is absent from the table above —
+    /// its centring cannot be right until its content box is.
+    ///
+    /// ⚠ `input[type=submit]` takes the same code path and its vertical offset already matches
+    /// (16 of 50). Its *horizontal* centring does not — the synthetic-text path draws the label at
+    /// x=0 where Chrome centres it. Measured here, fixed elsewhere.
+    ///
+    /// To watch it go RED, drop the `shift_content_y` call: rows 1–3 read 0 and both controls stay
+    /// green.
+    #[test]
+    fn a_button_centres_its_content_vertically_in_its_content_box() {
+        let (dom, root) = layout_html(
+            "<button id=b1 style='height:50px'><span id=t1>X</span></button>\
+             <button id=b2 style='height:80px'><span id=t2 class=blk>A</span>\
+               <span id=t3 class=blk>B</span></button>\
+             <button id=b3 style='height:20px'><span id=t4>X</span></button>\
+             <button id=b4><span id=t5>X</span></button>\
+             <div id=b5 style='height:50px'><span id=t6>X</span></div>",
+            "body{margin:0} button,div{display:block;width:300px;padding:0;border:0;margin:0} \
+             .blk{display:block}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let r = |id: &str| {
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id");
+            rects[&n]
+        };
+        // The auto-height button IS the natural content height — one line of the UA font. Deriving
+        // the expectation from it keeps every row below independent of the font's metrics.
+        let line = r("b4").height;
+        assert!(
+            line > 1.0,
+            "the auto button must have a real height, got {line}"
+        );
+
+        for (btn, label, want, why) in [
+            (
+                "b1",
+                "t1",
+                (50.0 - line) / 2.0,
+                "one line in a 50px button is centred — this is the row every design-system button is",
+            ),
+            (
+                "b2",
+                "t2",
+                (80.0 - 2.0 * line) / 2.0,
+                "TWO block children centre as ONE GROUP, which is what makes this centring rather \
+                 than per-line alignment",
+            ),
+            (
+                "b3",
+                "t4",
+                (20.0 - line) / 2.0,
+                "a nearly-full button still centres the remainder",
+            ),
+            ("b4", "t5", 0.0, "control: an auto-height button has nothing to centre"),
+            ("b5", "t6", 0.0, "control: a plain <div> is NOT a button and must not move"),
+        ] {
+            let got = r(label).y - r(btn).y;
+            assert!(
+                (got - want).abs() < 1.0,
+                "#{label} sits {got} below #{btn} and Chrome puts it {want} below — {why}",
+                got = got,
+                want = want
+            );
+        }
+        // Row 2's second child must keep its own separation — the group moved, it did not collapse.
+        let sep = r("t3").y - r("t2").y;
+        assert!(
+            (sep - line).abs() < 1.0,
+            "the two block children must stay {line} apart after centring, got {sep} — a per-child \
+             shift would have moved them independently"
         );
     }
 

@@ -204,6 +204,9 @@
   - L4006 · The static position is resolved PER AXIS (t849)
   - L4045 · The drop-guard had to narrow at the same time
   - L4052 · What it bought, measured
+  - L4063 · A button centres its content vertically, and no stylesheet can say so (t850)
+  - L4098 · The box-sizing residue this measured on the way past
+  - L4118 · What it bought, and the finding that outranks it
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1429,4 +1432,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1340 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1343 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

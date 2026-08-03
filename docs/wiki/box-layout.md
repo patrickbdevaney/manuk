@@ -4059,3 +4059,71 @@ The one clean-looking negative — `www.taphouse23.com`, `delta × n` of exactly
 identical coverage and identical `shape_n` — was refuted by two runs of the OLD binary alone
 (`0.408292 / 0.407590 / 0.395643`, `overlap` wandering 10–13), whose range contains every new
 reading. Second consecutive tick where the integer test alone would have condemned a correct fix.
+
+## A button centres its content vertically, and no stylesheet can say so (t850)
+
+The UA sheet already gives buttons `text-align: center`, which is why the **horizontal** half has
+always matched Chrome. The **vertical** half is not expressible in CSS at all: Blink lays a button's
+children out inside an anonymous flex-like box with `align-items: center`, and the HTML rendering
+spec describes the same thing. A button taller than its content centres that content in its **content
+box**, after padding, **as a single group**.
+
+Every design system fixes a button height, so before this the label sat 5–20px too high on
+essentially every button on the web — and, being a label inside a fixed-size box, it is the kind of
+divergence the fidelity instrument reports as `overlap` rather than as `shape`.
+
+Chrome-measured, `button{display:block;width:300px;padding:0;border:0;font:16px Arial}`, y of the
+label relative to the button's border box:
+
+```text
+                                                   Chrome   before   after
+  height:50px, one 18px line                          16       0      16    ✗→✓
+  height:80px, TWO block spans (36px together)         22       0      22    ✗→✓
+  height:20px, an 18px line (nearly full)               1       0       1    ✗→✓
+  height:auto                                           0       0       0     ✓ control
+  a plain <div> at height:50px                          0       0       0     ✓ control
+  display:inline-block button, height:50px             16       0      16    ✗→✓
+```
+
+**The content moves, not the box** — the border box is already `height`, and shifting it would turn a
+centring bug into a placement bug one level up. **And the whole content moves as one group**: row 2's
+two block children keep their own 18px separation and travel 22 together. That is what makes this
+*centring* rather than per-line alignment, and a fixture with a single child cannot tell the two
+apart.
+
+The gate derives its expectations from the **auto-height button's own height** rather than from `18`,
+so the UA font's metrics cannot make it lie: the rule is `(box − content) / 2`, and the auto button
+*is* the content.
+
+### The `box-sizing` residue this measured on the way past
+
+Chrome's UA sheet computes `border-box` for `button`, `input[type=submit|reset|button]` and `select`,
+and `content-box` for `input[type=text]`, `textarea` and every ordinary element. At
+`height:50px; padding-top:20px`:
+
+```text
+              button  submit  text  select  textarea  div
+  Chrome        50      50     70     50       70      70
+  ours          70      70     70     70       70      70
+```
+
+Three controls are 20px too tall whenever they carry padding **and** a height. A padded button's
+centring cannot be right until its content box is, which is why the padded row is absent from the
+table above.
+
+`input[type=submit]` takes the same centring path and its vertical offset already matches (16 of 50);
+its *horizontal* centring does not — the synthetic-text path draws the label at x=0 where Chrome
+centres it.
+
+### What it bought, and the finding that outranks it
+
+Zero corpus movement: 11 of 14 M1-cohort sites byte-identical old vs new, and
+`littlecaesarsbcs.libellum.com.mx` — the site whose `overlap` hit motivated the whole reduction —
+reads its two spans **identically on both binaries**, so the centring did not fire on that button and
+why its content box has no slack is not established.
+
+**Three consecutive ticks (t848, t849, t850) landed spec-correct, Chrome-exact, RED-proven primitives
+and moved the M1 cohort by nothing.** The cohort's remaining jarring hits are not being explained by
+the mechanism families these reductions keep landing on. The next render tick should diagnose ONE
+cohort site end to end with `--why` until its specific failing pair is understood, rather than reduce
+to a family and hope the family is the cause.

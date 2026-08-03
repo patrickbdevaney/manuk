@@ -46179,3 +46179,91 @@ PERF: none — two booleans replace one; no new traversal, no allocation.
 
 WIKI: `docs/wiki/box-layout.md` — the static position is resolved per axis, and the drop-if-unplaceable
 guard narrows with it.
+
+## Tick 850 — a button centres its content vertically, and no stylesheet can say so (2026-08-02)
+
+TICK SHAPE: capability — one primitive, reached by reducing an M1 cohort site's `overlap` hit to a
+fixture and diffing it against Chrome.
+
+HYPOTHESIS + REDUCTION: `littlecaesarsbcs.libellum.com.mx` fails M1 on a single `overlap` between two
+`<span>` children of one `<button>`. Reducing that to a fixture — a block span and an inline span
+inside a block button, plus the same two shapes inside a plain `<div>` as controls — found the
+**divs exact** (`x3`–`x7`, `d1`, `d2` all Chrome-identical, so our anonymous-block handling for mixed
+inline+block children is already right) and the **button off by exactly 7 on both children**.
+
+7 is `(50 − 18 − 18) / 2`. **A button centres its content vertically in its content box, and no
+stylesheet can express it.** The UA sheet already gives buttons `text-align: center` — which is why
+the HORIZONTAL half has always matched — but Blink lays a button's children out inside an anonymous
+flex-like box with `align-items: center`, and the HTML rendering spec describes the same thing.
+
+MEASURED — Chrome, `button{display:block;width:300px;padding:0;border:0;font:16px Arial}`, y of the
+label relative to the button's border box:
+
+```text
+                                                   Chrome   before   after
+  height:50px, one 18px line                          16       0      16    ✗→✓
+  height:80px, TWO block spans (36px together)         22       0      22    ✗→✓
+  height:20px, an 18px line (nearly full)               1       0       1    ✗→✓
+  height:auto                                           0       0       0     ✓ control
+  a plain <div> at height:50px                          0       0       0     ✓ control
+  display:inline-block button, height:50px             16       0      16    ✗→✓
+```
+
+⚠⚠ **THE CONTENT MOVES, NOT THE BOX**, and **the whole content moves as ONE GROUP** — row 2's two
+block children keep their own 18px separation and travel 22 together, which is what makes this
+*centring* rather than per-line alignment. A fixture with one child could not tell the two apart, and
+the gate asserts the separation explicitly.
+
+⚠ The expectations are derived from the **auto-height button's own height** rather than from `18`, so
+the UA font's metrics cannot make the gate lie: the rule is `(box − content) / 2` and the auto button
+*is* the content.
+
+⚠⚠ **MEASURED RESIDUE — `box-sizing` ON FORM CONTROLS, and it is why the PADDED row is absent from
+the table.** Chrome's UA sheet computes `border-box` for `button`, `input[type=submit|reset|button]`
+and `select`, and `content-box` for `input[type=text]`, `textarea` and every ordinary element. At
+`height:50px; padding-top:20px`:
+
+```text
+              button  submit  text  select  textarea  div
+  Chrome        50      50     70     50       70      70
+  ours          70      70     70     70       70      70
+```
+
+Three controls are **20px too tall whenever they carry padding and a height** — a one-rule UA-sheet
+defect, and a padded button's centring cannot be right until its content box is. Named and aimed, not
+merged.
+
+⚠ `input[type=submit]` takes the same code path and its VERTICAL offset already matches (16 of 50);
+its HORIZONTAL centring does not — the synthetic-text path draws the label at x=0 where Chrome centres
+it. Measured here, fixed elsewhere.
+
+RESULT — **zero attributable regressions, and zero corpus movement.** Same-hour A/B over the 14-site
+M1 cohort plus controls, both binaries provenance-verified by BEHAVIOUR (old reads the label at y=0,
+new at y=16): **11 of 14 byte-identical**, including the adversarial RTL control `ta3lemkonline`
+(0.573304). `payb.jp` +42 elements and `www.unoeste.br` +3.45 both moved, and both are sites whose own
+`shape_n`/coverage wander between runs.
+
+⚠⚠⚠ **AND THE ONE CLEAN NEGATIVE WAS THE BATCH, NOT EVEN THE SITE — A THIRD FORM OF THE SAME TRAP.**
+`www.kicktipp.com` read `0.852632 → 0.768421`, a `delta × n` of **exactly −8.00** elements at
+identical coverage and identical `shape_n`. Run alone it reads **0.852632 on BOTH binaries, twice
+each**; run as a paired 4-site batch it reads **0.852632 on both**, byte-identical across all four
+sites. Six readings agree and only the one 14-site run dissents. t847 said a *sweep* row is a lower
+bound; this is the same effect inside a **14-site batch in a single process**, which is a much smaller
+thing than a sweep and still enough to manufacture a clean integer. **The batch size is part of the
+measurement.**
+
+⚠⚠ **THE HONEST RESULT IS THAT THE SITE THAT MOTIVATED THE SEARCH DID NOT MOVE.**
+`littlecaesarsbcs`'s two spans read `[439 536 315x14]` and `[594 540 173x25]` **identically on both
+binaries** — the centring did not fire on that button, so its content box has no slack, and *why* is
+not established. Three consecutive ticks (t848, t849, t850) have now landed spec-correct,
+Chrome-exact, RED-proven primitives and moved the M1 cohort by nothing. **That is itself the finding
+worth acting on: the cohort's remaining jarring hits are not being explained by the mechanism families
+the reductions keep landing on, and the next render tick should diagnose ONE cohort site end to end
+with `--why` until its specific pair is understood, rather than reduce to a family and hope the family
+is the cause.**
+
+PERF: one comparison per block box (`content_height > natural_content_h`), and the shift itself only
+on a button that has slack. Nothing else in the engine sees a new branch on the hot path.
+
+WIKI: `docs/wiki/box-layout.md` — a button centres its content vertically; the content moves as one
+group; the form-control `box-sizing` residue with its six measured numbers.
