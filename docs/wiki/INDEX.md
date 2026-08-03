@@ -219,6 +219,9 @@
   - L4367 · A box laid out at a PROVISIONAL origin left its out-of-flow descendants behind (t872)
   - L4391 · The guard that looked right and was not
   - L4406 · Reach, and what it bought
+  - L4424 · CSS 2.1 §9.5's other half — a BFC root is placed BESIDE a float, not under it (t873)
+  - L4461 · What is deliberately not built
+  - L4469 · Measured, OLD binary vs NEW in the same hour
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1486,4 +1489,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1393 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1396 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -2280,6 +2280,75 @@ impl Ctx<'_> {
     ///
     /// The two that are wrong are exactly the two that lay out at a provisional origin, and the two
     /// that are right are the two that lay out in place. That is the whole rule.
+    /// ⚠⚠⚠ **CSS 2.1 §9.5 — A BOX THAT ESTABLISHES A BFC MUST NOT OVERLAP A FLOAT.**
+    ///
+    /// *"The border box of a table, a block-level replaced element, or an element in the normal flow
+    /// that establishes a new block formatting context must not overlap the margin box of any floats
+    /// in the same block formatting context as the element itself."*
+    ///
+    /// A PLAIN block does overlap a float — only its line boxes shorten — and that half was built.
+    /// The other half was not, so `float:left` image + `overflow:hidden` text block, **the
+    /// media-object idiom and the whole pre-flexbox two-column web**, put the text block under the
+    /// float instead of beside it. Chrome-measured, a 100px left float in a 400px container:
+    ///
+    /// ```text
+    ///                                      Chrome         before
+    ///   plain block                      [  0, 400]     [  0, 400]   ✓ correct to overlap
+    ///   overflow:hidden                  [100, 300]     [  0, 400]
+    ///   display:flow-root                [100, 300]     [  0, 400]
+    ///   overflow:auto                    [100, 300]     [  0, 400]
+    ///   display:table                    [100,  48]     [  0,  48]
+    ///   …right float instead             [  0, 300]     [  0, 400]
+    ///   …both sides                      [100, 200]     [  0, 400]
+    ///   …float 10px tall, box 60px       [100, 300]     [  0, 400]   band is read at the TOP
+    ///   …margin-left:20px                [100, 300]     [ 20, 380]   the margin is ABSORBED
+    ///   …margin-right:20px               [100, 280]     [  0, 380]
+    ///   …margin-left:200px               [200, 200]     [200, 200]   already clears — untouched
+    /// ```
+    ///
+    /// Returns the `(content-left, width)` to hand `layout_block` as the CONTAINING BLOCK, chosen so
+    /// that `x = left + margin-left` lands on the band edge and `width = cw - margins` is the band —
+    /// which is what makes the `margin-left:20px` row come out at 100 rather than 120, matching
+    /// Chrome. Percentage horizontal margins are left alone, because they would then resolve against
+    /// the narrowed width and the arithmetic would not close.
+    ///
+    /// ⚠ **A SPECIFIED width is deliberately NOT handled here** and keeps today's behaviour. Chrome
+    /// shifts such a box beside the float only while it still fits (`width:300px` shifts to 100,
+    /// `width:301px` stays at 0 and overlaps) — the "if necessary, implementations should clear"
+    /// clause. Today we never shift, which is Chrome-exact for the does-not-fit half and wrong for
+    /// the fits half; narrowing `cw` for it would also change every percentage the child resolves.
+    /// Measured, named, and left as its own tick rather than guessed at.
+    fn bfc_float_band(
+        &self,
+        s: &ComputedStyle,
+        cx: f32,
+        cw: f32,
+        top: f32,
+        floats: &FloatContext,
+    ) -> (f32, f32) {
+        if !matches!(s.width, Dim::Auto) || s.width_stretch {
+            return (cx, cw);
+        }
+        if matches!(s.margin.left, Dim::Percent(_)) || matches!(s.margin.right, Dim::Percent(_)) {
+            return (cx, cw);
+        }
+        // The band is read at the box's TOP edge only — a float shorter than the box does not widen
+        // it lower down, which is the `float 10px tall, box 60px` row above.
+        let l = floats.left_float_edge(top, 0.0).unwrap_or(cx).max(cx);
+        let r = floats
+            .right_float_edge(top, 0.0)
+            .unwrap_or(cx + cw)
+            .min(cx + cw);
+        if l <= cx && r >= cx + cw {
+            return (cx, cw); // no float overlaps this band
+        }
+        let ml = s.margin.left.resolve(cw, 0.0);
+        let mr = s.margin.right.resolve(cw, 0.0);
+        let x = (cx + ml).max(l);
+        let right = (cx + cw - mr).min(r);
+        (x - ml, ((right - x).max(0.0)) + ml + mr)
+    }
+
     fn translate_static_positions(&self, root: NodeId, dx: f32, dy: f32) {
         if dx == 0.0 && dy == 0.0 {
             return;
@@ -3396,7 +3465,14 @@ impl Ctx<'_> {
                 } else {
                     cur_y
                 };
-                let r = self.layout_block(k, cw, pch, cx, child_y, prev_margin, floats);
+                // CSS 2.1 §9.5: a normal-flow box that establishes a BFC (and a table) is placed
+                // BESIDE a float rather than under it — see `bfc_float_band`.
+                let (kid_cx, kid_cw) = if establishes_bfc(&ks) || ks.display == Display::Table {
+                    self.bfc_float_band(&ks, cx, cw, child_y + prev_margin.max(0.0), floats)
+                } else {
+                    (cx, cw)
+                };
+                let r = self.layout_block(k, kid_cw, pch, kid_cx, child_y, prev_margin, floats);
                 // Stack against the normal-flow bottom (relative shifts are visual).
                 cur_y = r.flow_bottom;
                 prev_margin = r.margin_bottom;
@@ -11861,6 +11937,50 @@ mod tests {
     /// how the container was placed. Chrome agrees (all three `[56, +15]` from their container);
     /// ours read `[41, +0]` for the float and `[56, +15]` **absolute** for the inline-block, i.e.
     /// missing its container's own y entirely.
+    /// ⚠⚠⚠ **CSS 2.1 §9.5 — A BOX THAT ESTABLISHES A BFC IS PLACED BESIDE A FLOAT, NOT UNDER IT.**
+    ///
+    /// *"The border box of … an element in the normal flow that establishes a new block formatting
+    /// context must not overlap the margin box of any floats in the same block formatting context."*
+    /// A PLAIN block does overlap — only its line boxes shorten — and that half was built. The other
+    /// half was not, which put `float:left` image + `overflow:hidden` text (the media object, and
+    /// the whole pre-flexbox two-column web) UNDER the float instead of beside it.
+    ///
+    /// The gate asserts both halves in one fixture, because the plain block is what makes the
+    /// assertion about BFCs rather than about floats: it must STILL span the full width, and a fix
+    /// that simply shortened every block beside a float would fail on that row.
+    #[test]
+    fn a_bfc_root_is_placed_beside_a_float_and_a_plain_block_is_not() {
+        let html = r#"<div id="w"><p id="f">F</p><div id="plain">x</div></div>
+                      <div id="w2"><p id="f2">F</p><div id="bfc">x</div></div>"#;
+        let css = "html,body{margin:0;padding:0}\
+                   #w,#w2{width:400px;clear:both}\
+                   #f,#f2{float:left;width:100px;height:30px;margin:0}\
+                   #bfc{overflow:hidden}";
+        let (dom, root) = layout_html(html, css, 800.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let plain = rects[&by_id("plain")];
+        let bfc = rects[&by_id("bfc")];
+        // Chrome: plain [0, 400 wide], overflow:hidden [100, 300 wide].
+        assert!(
+            plain.x < 1.0 && (plain.width - 400.0).abs() < 1.0,
+            "a PLAIN block still overlaps the float and spans the full width — got x {} w {}",
+            plain.x,
+            plain.width
+        );
+        assert!(
+            (bfc.x - 100.0).abs() < 1.0 && (bfc.width - 300.0).abs() < 1.0,
+            "a box establishing a BFC must sit BESIDE the 100px float, in the 300px band that is \
+             left — got x {} w {}",
+            bfc.x,
+            bfc.width
+        );
+    }
+
     #[test]
     fn an_out_of_flow_childs_static_position_survives_its_containers_translate() {
         let offset_in = |disp: &str| -> (f32, f32) {

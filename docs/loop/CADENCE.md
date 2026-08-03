@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **606** | ticks 1–871 |
-| median tick cycle | **26m** | 605 intervals |
+| ticks landed | **607** | ticks 1–872 |
+| median tick cycle | **26m** | 606 intervals |
 | median, last 10 | **35m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.08** | 562.3h elapsed |
-| median verify wall | **63s** | 545 ticks |
+| **ticks per hour** | **1.08** | 563.1h elapsed |
+| median verify wall | **63s** | 546 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **385**
-* **✅ rows in the capability ledger**: 144 → **459**
+* **✅ rows in the capability ledger**: 144 → **460**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**297 of 606 ticks** (49%) moved a
+**298 of 607 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **297** capability ticks, median cycle **26m**
-* median diff per tick: **+263 / −34** lines across 8 files
+* **298** capability ticks, median cycle **26m**
+* median diff per tick: **+264 / −34** lines across 8 files
 
 ## Every tick
 
@@ -703,5 +703,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **869** | 2026-08-03 13:01 | 5m | measurement | 63s | +164/−34 | 385 | 81 | 56.0% · | the a11y oracle was never DOWNLOADED, and that is why the moat is unmeasured (2026-08-03) |
 | **870** | 2026-08-03 14:45 | 1.7h | capability | 63s | +432/−66 | 385 | 81 | 56.0% · | the moat has a number: 797/1250, and the first three readings were my own harness (2026-08 |
 | **871** | 2026-08-03 15:23 | 38m | capability | 63s | +313/−33 | 385 | 81 | 56.0% · | a centred float measured its widest ITEM, and the space before an icon was a constant (202 |
+| **872** | 2026-08-03 16:11 | 49m | capability | 63s | +313/−34 | 385 | 81 | 56.0% · | a box sized before it is placed left its `.sr-only` behind (2026-08-03) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

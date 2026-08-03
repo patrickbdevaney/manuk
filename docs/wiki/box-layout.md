@@ -4420,3 +4420,65 @@ every React portal root, dropdown and tooltip anchored inside a floated or inlin
 Gated by `an_out_of_flow_childs_static_position_survives_its_containers_translate`, a
 **self-comparison against `display:block`** (the offset of the absolute box from its container must
 not depend on how the container was placed), with each half RED-proven on its own.
+
+## CSS 2.1 §9.5's other half — a BFC root is placed BESIDE a float, not under it (t873)
+
+*"The border box of a table, a block-level replaced element, or an element in the normal flow that
+establishes a new block formatting context must not overlap the margin box of any floats in the same
+block formatting context as the element itself."*
+
+A **plain** block does overlap a float — only its line boxes shorten around it — and that half was
+built and correct. The other half was not built at all, so `float:left` image + `overflow:hidden`
+text block put the text **under** the float instead of beside it. That is the **media object**, and
+it is the whole pre-flexbox two-column web: sidebar-plus-content, avatar-plus-comment,
+icon-plus-description, `<p class="header-fontsize__title">` beside `<ul class="header-fontsize__list">`.
+
+Chrome-measured, a 100px `float:left` in a 400px container:
+
+```text
+                                     Chrome         before        after
+  plain block                      [  0, 400]     [  0, 400]    [  0, 400]   ✓ correct to overlap
+  overflow:hidden                  [100, 300]     [  0, 400]    [100, 300]
+  display:flow-root                [100, 300]     [  0, 400]    [100, 300]
+  overflow:auto                    [100, 300]     [  0, 400]    [100, 300]
+  display:table                    [100,  48]     [  0,  48]    [100,  48]
+  …right float instead             [  0, 300]     [  0, 400]    [  0, 300]
+  …both sides                      [100, 200]     [  0, 400]    [100, 200]
+  …float 10px tall, box 60px       [100, 300]     [  0, 400]    [100, 300]
+  …margin-left:20px                [100, 300]     [ 20, 380]    [100, 300]
+  …margin-right:20px               [100, 280]     [  0, 380]    [100, 280]
+  …margin-left:200px               [200, 200]     [200, 200]    [200, 200]   already clears
+```
+
+Two details the fixture pinned rather than assumed:
+
+* **The band is read at the box's TOP edge only.** A float 10px tall next to a 60px box does not
+  widen the box lower down — the box stays a rectangle in the band its top sits in.
+* **`margin-left` is ABSORBED, not added.** With a 20px left margin the box lands at 100 and is 300
+  wide, not 120/280. So `bfc_float_band` returns a *containing block* `(left, width)` chosen so that
+  `left + margin-left` lands on the band edge, rather than narrowing the containing block directly.
+
+### What is deliberately not built
+
+A **specified** width keeps today's behaviour. Chrome shifts such a box beside the float only while
+it still fits — `width:300px` shifts to 100, `width:301px` stays at 0 and overlaps, which is §9.5's
+*"if necessary, implementations should clear the said element"*. We never shift, which is Chrome-exact
+for the does-not-fit half and wrong for the fits half. Narrowing the containing block for it would
+also change every percentage the child resolves, so it is measured, named, and left for its own tick.
+
+### Measured, OLD binary vs NEW in the same hour
+
+```text
+  www.library.chiyoda.tokyo.jp   0.8596 → 0.8624   overlap 1 → 0 CLEAN   ← M1 CROSSING
+  en.wikipedia.org               0.48447 → 0.48522  jarring identical
+  www.tz.de                      0.80902 → 0.80952
+  desiviral · freesupertips · ubys · possssno · marktplaats · littlecaesars ·
+  blog.rust-lang · a11yproject                       byte-identical
+  sestra.cc                      0.9322 → 0.9225    NOT A RESULT — the OLD reading sits inside the
+                                                    NEW binary's own three-run spread (0.9225 /
+                                                    0.9394 / 0.9274, reading-order 5 / 2 / 4)
+```
+
+Gated by `a_bfc_root_is_placed_beside_a_float_and_a_plain_block_is_not`, which asserts **both**
+halves — the plain block must still span the full width, so a fix that simply shortened every block
+beside a float fails the gate rather than passing it.

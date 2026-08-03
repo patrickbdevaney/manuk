@@ -46371,6 +46371,95 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 873 — a plain block overlaps a float and a BFC root does not, and only the first half was built (2026-08-03)
+
+TICK SHAPE: capability (render/geometry) — the third site from the "over the shape bar, failing ONLY
+on jarring" cohort, and the fourth M1 crossing in three ticks. The vein t868 recomputed is holding:
+each of these sites reduces to one Chrome-diffable primitive.
+
+⚠⚠⚠ **THE FINDING — CSS 2.1 §9.5 HAS TWO HALVES AND WE BUILT ONE.** *"The border box of a table, a
+block-level replaced element, or an element in the normal flow that establishes a new block
+formatting context must not overlap the margin box of any floats in the same block formatting
+context."* A **plain** block DOES overlap a float — only its line boxes shorten around it — and that
+half was built, correct, and gated. The other half did not exist, so an `overflow:hidden` sibling of
+a float rendered **under** it. Chrome-measured, a 100px `float:left` in a 400px container:
+
+```text
+                                     Chrome         before        after
+  plain block                      [  0, 400]     [  0, 400]    [  0, 400]   ✓ correct to overlap
+  overflow:hidden                  [100, 300]     [  0, 400]    [100, 300]
+  display:flow-root                [100, 300]     [  0, 400]    [100, 300]
+  overflow:auto                    [100, 300]     [  0, 400]    [100, 300]
+  display:table                    [100,  48]     [  0,  48]    [100,  48]
+  …right float instead             [  0, 300]     [  0, 400]    [  0, 300]
+  …both sides                      [100, 200]     [  0, 400]    [100, 200]
+  …float 10px tall, box 60px       [100, 300]     [  0, 400]    [100, 300]
+  …margin-left:20px                [100, 300]     [ 20, 380]    [100, 300]
+  …margin-right:20px               [100, 280]     [  0, 380]    [100, 280]
+  …margin-left:200px               [200, 200]     [200, 200]    [200, 200]   already clears
+```
+
+**THE REACH IS THE MEDIA OBJECT** — `float:left` image beside an `overflow:hidden` text block — which
+is the two-column layout of the entire pre-flexbox web: sidebar-and-content, avatar-and-comment,
+icon-and-description. On `www.library.chiyoda.tokyo.jp` it is `<p class="header-fontsize__title">`
+(a left float) beside `<ul class="header-fontsize__list">` (`overflow:hidden`), and the two rendered
+on top of each other.
+
+⚠⚠ **TWO DETAILS THE FIXTURE PINNED THAT I WOULD HAVE GUESSED WRONG.** (1) The band is read at the
+box's **top edge only** — a float 10px tall beside a 60px box does not widen it lower down. (2)
+`margin-left` is **absorbed, not added**: with a 20px left margin Chrome puts the box at 100 and 300
+wide, not 120 and 280. So the helper returns a *containing block* `(left, width)` chosen so that
+`left + margin-left` lands on the band edge, rather than narrowing the containing block directly —
+which is a different arithmetic from the obvious one and the only one that reproduces Chrome.
+
+⚠ **DELIBERATELY NOT BUILT, AND MEASURED FIRST:** a SPECIFIED width keeps today's behaviour. Chrome
+shifts such a box beside the float only while it still fits — `width:300px` shifts to 100,
+`width:301px` stays at 0 and overlaps (§9.5's *"if necessary, implementations should clear"*). We
+never shift: Chrome-exact for the does-not-fit half, wrong for the fits half. Narrowing the
+containing block for it would also change every percentage the child resolves, so it is named here
+rather than guessed at.
+
+**MEASURED, OLD BINARY (t872) vs NEW, SAME HOUR:**
+
+```text
+  www.library.chiyoda.tokyo.jp   0.8596 → 0.8624   overlap 1 → 0 CLEAN   ← M1 CROSSING, n=356 both
+  en.wikipedia.org               0.48447 → 0.48522  h/ov/ro/dt all identical
+  www.tz.de                      0.80902 → 0.80952  jarring identical, n=1974 both
+  desiviral.net · www.freesupertips.com · ubys.bingol · possssno.sbs · www.marktplaats.nl ·
+  littlecaesarsbcs · blog.rust-lang.org · www.a11yproject.com     ALL BYTE-IDENTICAL
+```
+
+⚠⚠⚠ **AND ONE READING THAT LOOKS LIKE A LOSS AND IS NOT A RESULT.** `sestra.cc` read OLD 0.9322 /
+reading-order 3 against NEW 0.9225 / reading-order 5, which is the shape of a regression. Three more
+solo runs on the NEW binary alone:
+
+```text
+  0.922535  ro 5  h 8  n 426
+  0.939394  ro 2  h 9  n 429
+  0.927400  ro 4  h 9  n 427
+```
+
+**The OLD reading sits inside the NEW binary's own spread on every column** — shape, reading-order,
+h-overflow and the denominator. It is a live card grid whose item count changes between fetches, and
+its inversions are the same construct (`<a><div><div>×3</div></a>`, the 2nd and 3rd inner divs) on a
+different subset of near-identical cards each run. t654-657's rule decides it: *a delta smaller than
+the spread is not a result*. Recorded rather than claimed either way.
+
+GATE: `a_bfc_root_is_placed_beside_a_float_and_a_plain_block_is_not` — it asserts **both** halves in
+one fixture, deliberately: the plain block must STILL span the full width, so a fix that simply
+shortened every block beside a float fails this gate instead of passing it. RED-proven (BFC read
+`x 0 w 400`). Layout suite 123 → 124 green.
+
+I3: a BFC root's border box IS its rect, so this is `node_rects` → the a11y bbox → the click point,
+and the boxes it moves are content columns and nav lists — real click targets, moved onto Chrome's
+position rather than off it.
+
+PERF: two float-list scans per block-level child that establishes a BFC, and only when a float is
+live in the context; the early return costs one `matches!` on every other box. F1/F2 unmoved.
+
+WIKI: `docs/wiki/box-layout.md` — "CSS 2.1 §9.5's other half — a BFC root is placed BESIDE a float,
+not under it"
+
 ## Tick 872 — a box sized before it is placed left its `.sr-only` behind (2026-08-03)
 
 TICK SHAPE: capability (render/geometry) — the second of the "over the shape bar, failing ONLY on
