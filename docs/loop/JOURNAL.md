@@ -46081,3 +46081,101 @@ a bigger, uglier map is a good tick, and only rot is punished.
 RE-RANK: it does NOT displace the render burndown, for an arithmetic reason rather than an
 enthusiastic one — M1 is `shape>=0.75 AND jarring-clean` and accname moves neither term. It is now the
 top row on the AGENTIC axis.
+
+## Tick 849 — the static position is PER AXIS, and `all_auto` made it all-or-nothing (2026-08-02)
+
+TICK SHAPE: capability — the residue t848 measured in its own fixture and deliberately refused to
+smuggle into the same binary.
+
+HYPOTHESIS: CSS 2.1 §10.3.7 (horizontal) and §10.6.4 (vertical) are written **per axis**: with
+`left` and `right` both `auto` the box's *inline* position is its static position, and independently,
+with `top` and `bottom` both `auto` its *block* position is. `position_absolutes` tests all four
+insets at once —
+
+```rust
+let all_auto = s.inset.left.is_auto() && s.inset.right.is_auto()
+            && s.inset.top.is_auto()  && s.inset.bottom.is_auto();
+```
+
+— so setting ONE inset throws away the static position on **both** axes and the box falls back to the
+containing block's origin on the axis that is still `auto`. t848's fixture measured it against Chrome:
+`position:absolute; left:200px` (with `top` auto) belongs at **y=294** and lands at **234**, the
+containing block's top, 60px out. Unlike t848's 1×1 `.sr-only` this moves FULL-SIZE boxes, which is
+why it was aimed rather than merged.
+
+The idiom is everywhere: `position:absolute; right:8px` on a badge or close button, `left:0` on a
+full-bleed underline, `top:100%` on a dropdown — every one of them keeps a static position on the
+other axis and every one of them lost it.
+
+MEASURED — Chrome, `body{margin:0;font:16px Arial}`, 400px `position:relative` wrappers 60px of
+spacer above their line, `a{display:block}`, the abspos span following a 36px `<span>Hello</span>`
+(`y` relative to the wrapper's top):
+
+```text
+                                          Chrome        before          after
+  left:200px  (top auto)               [200, +60]    [200,   0]      [200, +60]   ✗→✓
+  top:0       (left auto)              [ 36,   0]    [  0,   0]      [ 36,   0]   ✗→✓
+  right:10px  (top auto)               [309, +60]    [309,   0]      [309, +60]   ✗→✓
+  all four auto                        [ 36, +60]    [ 36, +60]      [ 36, +60]    ✓ control
+  top:0; left:0                        [  0,   0]    [  0,   0]      [  0,   0]    ✓ control
+```
+
+⚠⚠ **ROWS 2 AND 3 ARE WHAT MAKE THIS *PER AXIS* RATHER THAN "USE THE STATIC POSITION MORE OFTEN".**
+Row 2 takes `x` from flow and `y` from the containing block; row 3 does exactly the opposite. **A
+single boolean — however it is tuned — cannot produce both**, which is the shape of every
+"one rule, N implementations" finding this loop keeps hitting, inverted: one implementation where the
+rule has two independent instances. The fixture carries both directions for that reason and either
+one alone would have admitted a wrong fix.
+
+⚠ **THE `continue` HAD TO NARROW AT THE SAME TIME.** A box flow never recorded a cursor for is still
+dropped rather than rendered in the wrong corner — but only when **both** axes wanted the static
+position. A box with a real inset on one axis is placeable, and dropping it because no cursor exists
+would have turned a placement bug into a MISSING BOX, which is strictly worse and is the failure the
+original `continue` was written to avoid in the first place.
+
+RESULT — **zero attributable regressions, and a small real gain.** Same-hour A/B, both binaries
+provenance-verified by BEHAVIOUR on the fixture (old reads `y=234`, new reads `y=294`), over the
+12-site M1 cohort and then the 16 largest scored sites in the t847 sweep:
+
+```
+  12-site M1 cohort + controls      12 of 12 BYTE-IDENTICAL (incl. ta3lemkonline 0.573304)
+  16 largest scored sites           10 of 16 byte-identical
+      www.fragrantica.com           +1.00 element      clean (same cov, same n)
+      www.tz.de                     +1.00 element      clean
+      www.taphouse23.com            -18.00 elements    clean — and REFUTED, see below
+      trivago.be / trivago.fr       coverage and shape_n BOTH move — the SITE differs, not clean
+      id.vk.ru                      n 1224 -> 1223 — the site differs
+```
+
+⚠⚠⚠ **THE ONE CLEAN NEGATIVE WAS THE SITE, AND TWO RUNS OF THE OLD BINARY ALONE SETTLED IT — THE
+SECOND TICK RUNNING.** `www.taphouse23.com` fell `-0.012649`, a `delta × n` of **exactly −18.00
+elements** at identical coverage and identical `shape_n` — the strongest form of the integer signal.
+The old binary alone:
+
+```text
+  taphouse23   OLD  0.408292 / 0.407590 / 0.395643      overlap 10 / 11 / 13
+               NEW  0.395643 / 0.406184 / 0.396346      overlap 12 / 10 / 11
+```
+
+**The new values sit entirely inside the old binary's own range, and the lowest reading (0.395643) was
+produced by BOTH binaries.** The site's own `overlap` count wanders 10–13 run to run. t847 established
+that the integer test proves a verdict change and not its cause; this is the second consecutive tick
+where it would have condemned a correct fix on its own.
+
+⚠ HONEST SCOPE: **+2 attributable elements across 28 sites.** Chrome-exact on three new rows with two
+controls and RED-proven by restoring the single `all_auto` boolean — but the corpus barely moves,
+because a scored divergence needs the abspos box to be both mis-placed AND large enough to fail the
+tolerance. Banked on the spec and the fixture, and said plainly rather than dressed up.
+
+⚠ HARNESS/METHOD (mine, not the harness's): I wrote a wait loop whose own `pgrep` pattern
+(`release/manuk-wpt fidelity`) appears in the loop's OWN cmdline — the exact self-match hazard the
+lever board's top block warns about. It did not hang **only** because the loop was bounded by
+`seq 1 29` rather than `while`. **A bounded retry loop is the cheap structural defence against a
+self-matching predicate**, and it is worth writing that way even when the predicate looks safe.
+
+TICK SHAPE: capability — one primitive, the residue the previous tick measured and refused to merge.
+
+PERF: none — two booleans replace one; no new traversal, no allocation.
+
+WIKI: `docs/wiki/box-layout.md` — the static position is resolved per axis, and the drop-if-unplaceable
+guard narrows with it.

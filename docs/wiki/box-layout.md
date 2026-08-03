@@ -4002,3 +4002,60 @@ not push it along), then takes the furthest-along fragment or atomic inline belo
 the source, correctly described, invisible to every instrument — because the code was *honest* about
 it and honest text does not fail a gate. `"not modelled here"` is worth grepping for as a defect
 class, not read as documentation.
+
+## The static position is resolved PER AXIS (t849)
+
+CSS 2.1 §10.3.7 solves the horizontal equation for an absolutely positioned box and §10.6.4 solves
+the vertical one — **separately**. `left` and `right` both `auto` makes the box's *inline* position
+its static position; independently, `top` and `bottom` both `auto` makes its *block* position static.
+
+`position_absolutes` tested all four insets at once:
+
+```rust
+let all_auto = s.inset.left.is_auto() && s.inset.right.is_auto()
+            && s.inset.top.is_auto()  && s.inset.bottom.is_auto();
+```
+
+so naming ONE inset threw the static position away on **both** axes, and the box fell back to the
+containing block's origin on the axis that was still `auto`. That is every
+`position:absolute; right:8px` badge and close button, every `left:0` full-bleed underline, every
+`top:100%` dropdown.
+
+Chrome-measured, `body{margin:0;font:16px Arial}`, 400px `position:relative` wrappers with 60px of
+spacer above their line, `a{display:block}`, the abspos span following a 36px `<span>Hello</span>`
+(`y` relative to the wrapper's top):
+
+```text
+                                          Chrome        before          after
+  left:200px  (top auto)               [200, +60]    [200,   0]      [200, +60]   ✗→✓
+  top:0       (left auto)              [ 36,   0]    [  0,   0]      [ 36,   0]   ✗→✓
+  right:10px  (top auto)               [309, +60]    [309,   0]      [309, +60]   ✗→✓
+  all four auto                        [ 36, +60]    [ 36, +60]      [ 36, +60]    ✓ control
+  top:0; left:0                        [  0,   0]    [  0,   0]      [  0,   0]    ✓ control
+```
+
+**Rows 2 and 3 are what make this per-axis rather than "use the static position more often."** Row 2
+takes `x` from flow and `y` from the containing block; row 3 does exactly the opposite. A single
+boolean, however it is tuned, cannot produce both — so a fixture carrying only one direction would
+have admitted a wrong fix.
+
+An axis with a real inset keeps the containing block, because that inset must resolve against the
+containing block's edge and not against the flow cursor.
+
+### The drop-guard had to narrow at the same time
+
+The `continue` that discards a box flow never recorded a cursor for is now conditioned on **both**
+axes wanting the static position. A box with a real inset on one axis is placeable, and dropping it
+because no cursor exists would turn a placement bug into a **missing box** — strictly worse, and the
+exact failure the guard was written to avoid.
+
+### What it bought, measured
+
++2 attributable elements across 28 sites (12-site M1 cohort byte-identical; 10 of the 16 largest
+scored sites byte-identical). Banked on the spec and the fixture, not on a corpus delta: a scored
+divergence needs the abspos box to be both mis-placed **and** large enough to fail the tolerance.
+
+The one clean-looking negative — `www.taphouse23.com`, `delta × n` of exactly **−18.00** elements at
+identical coverage and identical `shape_n` — was refuted by two runs of the OLD binary alone
+(`0.408292 / 0.407590 / 0.395643`, `overlap` wandering 10–13), whose range contains every new
+reading. Second consecutive tick where the integer test alone would have condemned a correct fix.

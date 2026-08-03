@@ -201,6 +201,9 @@
   - L3952 · The static position of an insetless position:absolute box includes the INLINE ADVANCE (t848)
   - L3985 · What it deliberately does not cover, with numbers
   - L3999 · The lesson worth carrying
+  - L4006 · The static position is resolved PER AXIS (t849)
+  - L4045 · The drop-guard had to narrow at the same time
+  - L4052 · What it bought, measured
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1426,4 +1429,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1337 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1340 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

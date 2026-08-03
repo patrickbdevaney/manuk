@@ -4562,30 +4562,45 @@ impl Ctx<'_> {
         let mut new_boxes = Vec::new();
         for node in positioned {
             let s = self.style_of(node);
-            let all_auto = s.inset.left.is_auto()
-                && s.inset.right.is_auto()
-                && s.inset.top.is_auto()
-                && s.inset.bottom.is_auto();
+            // ── **THE STATIC POSITION IS PER AXIS.** CSS 2.1 §10.3.7 solves the horizontal
+            //    equation and §10.6.4 the vertical one, *separately*: with `left` and `right` both
+            //    `auto` the box's INLINE position is its static position, and independently, with
+            //    `top` and `bottom` both `auto` its BLOCK position is. This tested all four insets
+            //    at once, so setting ONE inset threw the static position away on BOTH axes and the
+            //    box fell back to the containing block's origin on the axis still `auto`.
+            //
+            //    Chrome-measured, a 400px `position:relative` wrapper 234px down the page:
+            //    `position:absolute; left:200px` (with `top` auto) belongs at **y=294** and landed
+            //    at **234** — the containing block's top, 60px out. That is every
+            //    `position:absolute; right:8px` badge and close button, every `left:0` full-bleed
+            //    underline, every `top:100%` dropdown: one inset named, the other axis static, and
+            //    the static half discarded.
+            let x_static = s.inset.left.is_auto() && s.inset.right.is_auto();
+            let y_static = s.inset.top.is_auto() && s.inset.bottom.is_auto();
             let mut cb = if s.position == Position::Fixed {
                 viewport
             } else {
                 self.abs_containing_block(node, &rects, viewport)
             };
-            // All insets `auto` → the box sits at its STATIC position, which normal flow recorded on
-            // its way past. Anchor the containing block there so `layout_abs` resolves the box in the
-            // right place instead of at the containing block's origin (which would put every
-            // dropdown in the top-left corner) — and, before this, instead of nowhere at all.
-            if all_auto {
+            // Anchor the containing block at the static position on each axis that asks for it, so
+            // `layout_abs` resolves the box in the right place instead of at the containing block's
+            // origin (which would put every dropdown in the top-left corner) — and, before any of
+            // this existed, instead of nowhere at all. An axis with a real inset keeps `cb`, because
+            // that inset must resolve against the CONTAINING BLOCK's edge and not against the flow
+            // cursor.
+            if x_static || y_static {
                 if let Some(&(sx, sy)) = self.static_pos.borrow().get(&node) {
                     cb = Rect {
-                        x: sx,
-                        y: sy,
+                        x: if x_static { sx } else { cb.x },
+                        y: if y_static { sy } else { cb.y },
                         width: cb.width,
                         height: cb.height,
                     };
-                } else if s.position != Position::Fixed {
+                } else if x_static && y_static && s.position != Position::Fixed {
                     // Never reached in flow layout; a box we truly cannot place is still better
-                    // dropped than rendered in the wrong corner.
+                    // dropped than rendered in the wrong corner. ⚠ Only when BOTH axes wanted the
+                    // static position — a box with a real inset on one axis is placeable and must
+                    // not be dropped just because flow never recorded a cursor for it.
                     continue;
                 }
             }
@@ -7982,6 +7997,115 @@ mod tests {
             rects.contains_key(&a) || true,
             "the unstyled node is laid out with the initial style, not fatal"
         );
+    }
+
+    /// **CSS 2.1 §10.3.7 / §10.6.4 — THE STATIC POSITION IS PER AXIS.** §10.3.7 solves the
+    /// horizontal equation and §10.6.4 the vertical one, *separately*: `left`/`right` both `auto`
+    /// makes the box's INLINE position static, and independently `top`/`bottom` both `auto` makes
+    /// its BLOCK position static.
+    ///
+    /// `position_absolutes` tested all four insets at once (`all_auto`), so naming ONE inset threw
+    /// the static position away on BOTH axes and the box fell back to the containing block's origin
+    /// on the axis that was still `auto`. That is every `position:absolute; right:8px` badge and
+    /// close button, every `left:0` full-bleed underline, every `top:100%` dropdown.
+    ///
+    /// Chrome-measured, `body{margin:0;font:16px Arial}`, 400px `position:relative` wrappers,
+    /// `a{display:block}`, the abspos span following a 36px `<span>Hello</span>`:
+    ///
+    /// ```text
+    ///                                             Chrome        before          after
+    ///   left:200px  (top auto)                 [200, +60]    [200,   0]      [200, +60]   ✗→✓
+    ///   top:0       (left auto)                [ 36,   0]    [  0,   0]      [ 36,   0]   ✗→✓
+    ///   right:10px  (top auto)                 [309, +60]    [309,   0]      [309, +60]   ✗→✓
+    ///   all four auto                          [ 36, +60]    [ 36, +60]      [ 36, +60]    ✓ control
+    ///   top:0; left:0                          [  0,   0]    [  0,   0]      [  0,   0]    ✓ control
+    /// ```
+    ///
+    /// (`y` is relative to the wrapper's top; `+60` is the line, past the 60px spacer.) Rows 2 and 3
+    /// are the ones that make this *per axis* rather than "use the static position more often": row
+    /// 2 takes x from flow and y from the containing block, row 3 does the opposite, and a
+    /// single-boolean fix cannot produce both.
+    ///
+    /// ⚠ The `continue` that drops a box flow never recorded is now conditioned on **both** axes
+    /// wanting the static position. A box with a real inset on one axis is placeable and must not be
+    /// dropped merely because no cursor was recorded for it — the previous code could not reach that
+    /// case because it only looked at the all-auto box.
+    ///
+    /// To watch it go RED, restore the single `all_auto` boolean: rows 1 and 3 lose their `y` to the
+    /// containing block's top, row 2 loses its `x`, and both controls stay green.
+    #[test]
+    fn the_static_position_of_an_absolute_box_is_resolved_per_axis() {
+        let (dom, root) = layout_html(
+            "<div class=w><div class=pad></div><a id=a1><span id=h1>Hello</span>\
+               <span id=b1 style='position:absolute;left:200px'>LEFTSET</span></a></div>\
+             <div class=w><div class=pad></div><a id=a2><span id=h2>Hello</span>\
+               <span id=b2 style='position:absolute;top:0'>TOPSET</span></a></div>\
+             <div class=w><div class=pad></div><a id=a3><span id=h3>Hello</span>\
+               <span id=b3 style='position:absolute;right:10px'>RIGHTSET</span></a></div>\
+             <div class=w><div class=pad></div><a id=a4><span id=h4>Hello</span>\
+               <span id=b4 style='position:absolute'>BOTHAUTO</span></a></div>\
+             <div class=w><div class=pad></div><a id=a5><span id=h5>Hello</span>\
+               <span id=b5 style='position:absolute;top:0;left:0'>BOTHSET</span></a></div>",
+            "body{margin:0} .w{position:relative;width:400px} .pad{height:60px} a{display:block}",
+            1200.0,
+        );
+        let rects = root.node_rects(&dom);
+        let find = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let r = |id: &str| rects[&find(id)];
+        for (wrap, hello, abs) in [
+            ("a1", "h1", "b1"),
+            ("a2", "h2", "b2"),
+            ("a3", "h3", "b3"),
+            ("a4", "h4", "b4"),
+            ("a5", "h5", "b5"),
+        ] {
+            // The wrapper is the containing block; its content top is the spacer, and the line the
+            // abs box's static position belongs to is where `Hello` sits. Both asserted as
+            // RELATIONSHIPS so the UA's default font metrics cannot make the test lie.
+            let (w, h, b) = (r(wrap), r(hello), r(abs));
+            let cb_left = w.x;
+            let cb_top = w.y - 60.0; // the wrapper starts a spacer above its own line
+            let (want_x, want_y, why): (f32, f32, &str) = match abs {
+                "b1" => (
+                    cb_left + 200.0,
+                    h.y,
+                    "left:200px resolves against the containing block, and `top:auto` must STILL \
+                     take the static position — this is the row that was 60px out",
+                ),
+                "b2" => (
+                    h.x + h.width,
+                    cb_top,
+                    "top:0 resolves against the containing block, and `left:auto` must STILL take \
+                     the static position — the same bug on the other axis",
+                ),
+                "b3" => (
+                    cb_left + 400.0 - 10.0 - b.width,
+                    h.y,
+                    "right:10px resolves against the containing block's RIGHT edge, and `top:auto` \
+                     must still be static",
+                ),
+                "b4" => (
+                    h.x + h.width,
+                    h.y,
+                    "control: all four auto is static on both axes",
+                ),
+                _ => (
+                    cb_left,
+                    cb_top,
+                    "control: two insets set is the containing block on both axes",
+                ),
+            };
+            assert!(
+                (b.x - want_x).abs() < 1.0 && (b.y - want_y).abs() < 1.0,
+                "#{abs} is at [{} {}] and it belongs at [{want_x} {want_y}] — {why}",
+                b.x,
+                b.y
+            );
+        }
     }
 
     /// **CSS 2.1 §10.3.7 / §10.6.4 — THE STATIC POSITION INCLUDES THE INLINE ADVANCE.** An
