@@ -46371,6 +46371,81 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 879 — the map is clean against Interop and stale against Baseline, and we gate the scroll SURFACE not the scroll SCHEDULE (2026-08-03)
+
+TICK SHAPE: measurement — the surface audit came due (every 10; last at 869), banked as audit #59 in
+`docs/loop/SURFACE-AUDIT.md`, plus the one probe it named as most urgent.
+
+**THE RESULT THAT IS WORTH STATING PLAINLY: all twenty Interop 2026 focus areas and all four
+investigation efforts already have a row on `CONSTELLATION.tsv`** — checked one at a time rather than
+by a bulk grep, because a grep for `shape()` or `zoom` hits another row's prose and reads as a hit.
+That is audits #34–#58 having done their job. It is also why this audit had to go somewhere the
+focus-area list does not.
+
+⚠⚠⚠ **FINDING 1 — INTEROP IS AN ANNUAL FRAME AND BASELINE IS A MONTHLY ONE, AND TWO OF THE THREE
+GAPS WERE ONLY VISIBLE IN THE MONTHLY ONE.** Reading the 2026 Baseline digests
+(`web.dev/blog/baseline-digest-{feb,mar,apr,may}-2026`) rather than re-reading Interop found `update`
+media feature (Baseline **March 2026** — after audit #58's frame was drawn) and `offset-path`. **An
+audit that only re-reads the Interop list will find the map clean by construction from now on**, which
+is the most confident way there is to be wrong, and is precisely what this instrument exists to
+prevent. The digests are part of the routine from here.
+
+⚠⚠⚠ **FINDING 2 — WE GATE THE SCROLL SURFACE AND NOWHERE THE SCROLL SCHEDULE.**
+`IntersectionObserver`, `scroll snap`, `scroll anchoring` and `infinite scroll` are all gated, and
+every one of them asserts *what ends up on screen*. Interop 2026's web-compat area names **`scroll`
+event timing** as one of its three items precisely because that is a different question: a page that
+reads `scrollTop` inside a scroll handler, or sequences a sticky header against `requestAnimationFrame`,
+gets a different answer per engine, and *"the boxes are in the right place"* cannot see it. **This is
+t712-714 recurring in a new subsystem — an instrument reading the finished answer cannot see a bug in
+the ORDER it was assembled** — and it took an external list to notice.
+
+⚠⚠ **FINDING 3 — A ROW THAT EXISTS FOR ONE OF A FEATURE'S TWO CONSUMERS READS AS COVERED.**
+`CSS shape()` is on the map. `offset-path`, its other consumer — named in the same Baseline note —
+was not. That is t704-710's half-built-spec shape (*"a build spec whose 2nd half is unbuilt is an
+untriaged tick with good prose"*) appearing in the MAP rather than in a build spec.
+
+**THE PROBE, run the same tick because the audit named it as the only addition an existing gate could
+be SILENTLY wrong about rather than simply absent** (a delaying local origin, Chrome A/B):
+
+```text
+                                                    Chrome     manuk
+  window.scrollTo(0,400) → scrollY synchronously      400        400     ✓ exact
+  'onscrollend' in window                             true      FALSE    ✗ absent
+  a `scroll` event fired at all                       NO          NO     — see below
+  scroll handler before the next rAF                  n/a        n/a     UNMEASURED
+```
+
+`scrollend` is **honestly absent**: a feature-detecting site reads `false` and takes its fallback,
+which is the good half of t772-775's rule (a HALF-installed `scrollend` would be the bad half, and is
+the thing not to build).
+
+⚠ **AND THE ORDERING QUESTION IS UNMEASURED BECAUSE THIS PROBE CANNOT MEASURE IT — the reference had
+no answer either.** Headless Chrome fired **no** `scroll` event for a scripted `scrollTo` under
+virtual time: there is no compositor behind it. So the row is pinned `partial` with the two clauses
+that were measured and an explicit statement that the third needs a **driven** scroll (BiDi/CDP
+input, or the shell), not a scripted one. Publishing "we match Chrome on scroll ordering" from a run
+where Chrome produced nothing to match would be t650's *"100% of nothing is 100%"* with a different
+denominator.
+
+ADDED to `CONSTELLATION.tsv` (446 → 449 rows): `scroll` event timing (now `partial`), the `update`
+media feature (`unknown`), `offset-path` / motion path (`unknown`). A bigger, uglier map is the
+point — the ratchet counts capabilities with a VERDICT, and one of the three got one in the same
+tick.
+
+SCALE, recorded as context and explicitly not as a steer: Ladybird publicly reports **2,067,263
+passing WPT subtests** and **97.8% of test262** against our `WPT:TOTAL` mark of 422,865. PART VII
+makes the WPT total *"a bookkeeping mark, not a ranking"* and puts 83%+ out of scope for v1, so this
+changes no priority; it is written down because an unrecorded number that large is what a future
+audit rediscovers and mistakes for news. Their stated hardest problem — **real sites depend on
+undocumented Blink/WebKit quirks, so a spec-correct implementation can be the wrong answer** — is the
+first external confirmation that this project's Chrome-diffed method is load-bearing rather than
+merely convenient.
+
+PERF: none — measurement only.
+
+WIKI: none — the artefacts are `docs/loop/SURFACE-AUDIT.md` audit #59 and three new
+`CONSTELLATION.tsv` rows. [no-pattern]
+
 ## Tick 878 — the I3 assertion three constitution checks have asked for, and only one of its four clauses can go red (2026-08-03)
 
 TICK SHAPE: capability (agentic surface) — check #75's steer #4, carried verbatim by checks #72, #74

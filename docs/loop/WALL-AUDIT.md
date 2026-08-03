@@ -968,3 +968,49 @@ reports it and does not touch it. A cheap middle path, if it is wanted: a rotati
 
 ⚠ Coverage is sacred and nothing here proposes otherwise. No gate dropped, no floor widened, nothing
 moved to CI.
+
+## Audit #30 — tick 878 (wall 250s at t877; the dominant cost is diagnosed and half-fixed already)
+
+```text
+  187s  P · parity (72/72 vs headless Chrome)     75%
+   28s  T · crate tests                           11%
+   17s  B · build                                  7%
+   10s  G6 4% · G1 5s · D 5s · F 2s · F4 1s · everything else 0s
+```
+
+**P is 75% of the wall, and audit #21 already found and half-fixed it.** That audit measured the same
+gate at 175s of a 227s wall and named the cause: the loop spawned a full headless Chrome per fixture,
+serially. The Chrome half is now captured **8-way in parallel** (`CHROME_JOBS` in `parity.rs`), which
+is ~9 rounds × 2.4s ≈ **22s** of the 187. Caching Chrome's answers across runs was considered there
+and **rejected on rigor** — correctly, and it stays rejected: *"a gate whose expected value came from
+MEMORY tests the memory"*, and a Chrome update that changed a box is exactly what this gate exists to
+notice.
+
+**So the residue — ~165s, ≈2.3s × 72 — is the MANUK half, and it is serial by a constitutional
+constraint, not by a false dependency.** Each capture runs our engine including SpiderMonkey, and this
+project's standing rule is that **two JS contexts in one process tear down messily and segfault
+nondeterministically** — the reason every `g_*` gate carries "one `#[test]` on purpose", and the
+reason audit #21 parallelised only the Chrome side (Chrome is a separate PROCESS, so N of them are
+safe by construction).
+
+### Answers to the audit's four admissible questions
+
+1. **REDUNDANCY — "share one SpiderMonkey runtime between gates".** ⚠ **PERMANENTLY INADMISSIBLE FOR
+   THIS PROJECT, and recorded here so no future audit re-proposes it.** It is the first lever the
+   audit script suggests and it is the one thing this codebase has a standing rule against. The ~1.5s
+   of runtime startup per JS gate is not recoverable in-process.
+2. **PARALLELISM.** The Chrome half is parallel (8). The manuk half is not, and the only admissible
+   way to make it so is **subprocesses** — which is exactly what the Chrome half does and what
+   `manuk-wpt fidelity --jobs N` already implements for the sweep. Same corpus, same assertions, no
+   coverage lost, segfault rule respected by construction. **This is the open lever.** Not taken at
+   t878: it is a real change to the parity runner and needs its own falsification (a `--jobs N` that
+   silently drops a fixture would make the wall faster and the gate weaker, which is the failure mode
+   this audit exists to refuse).
+3. **CACHING.** Settled by audit #21 and not reopened.
+4. **SCOPE.** T (28s) builds and runs whole-crate suites; B (17s) is the incremental build. Neither is
+   the lever while P is 75%.
+
+t878 added one `manuk-page` gate (`G_CLICK_POINT`); it contributes 0.44s of run plus its link, in T.
+
+**Nothing was trimmed.** The wall is not lean, but its dominant cost has a known cause, a rejected
+shortcut, and one open, rigor-preserving lever that is a build rather than a tuning.

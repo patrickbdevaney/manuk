@@ -3513,3 +3513,74 @@ for a fourth audit to re-notice.
 
 MEASURED count unchanged (no rows added — the hole was already on the map; what changed is that it is
 now actionable).
+
+## Audit #59 — tick 879 (2026-08-03)
+
+SOURCES (web, not memory): the Interop 2026 focus-area + investigation list re-fetched in full from
+`github.com/web-platform-tests/interop/blob/main/2026/README.md`; `web.dev/blog/interop-2026`;
+`webkit.org/blog/17818/announcing-interop-2026/`; the **2026 Baseline monthly digests**
+(`web.dev/blog/baseline-digest-{feb,mar,apr,may}-2026`); and Ladybird's current public numbers.
+
+### What was CHECKED, and the result that is worth stating plainly
+
+**All twenty Interop 2026 focus areas and all four investigation efforts have a row on
+`CONSTELLATION.tsv`** — checked one at a time, not by a bulk grep, because a grep for `shape()` or
+`zoom` hits another row's prose and reads as a hit. Each has an honest status:
+`container style queries` missing · `anchor positioning` missing · `attr()` partial ·
+`contrast-color()` present · `zoom` gated · `custom highlights` missing · `dialog + popover` gated ·
+`fetch uploads + ranges` gated · `IndexedDB getAllRecords()` works · `JSPI` missing ·
+`media pseudo-classes` partial · `Navigation API` gated · `scoped custom element registries` missing ·
+`scroll-driven animations` missing · `scroll snap` gated · `shape()` present · `view transitions`
+gated · `WebRTC` missing · `WebTransport` missing · and of the investigations, `accessibility
+testing` is the one audit #58 opened and t870 put a number on (797/1250).
+
+That is audits #34–#58 having done their job, and it is the reason this audit had to go somewhere
+Interop does not: **the Baseline monthly digests, which move every month and name things the
+focus-area list never will.**
+
+### ADDED — three capabilities the world names and our map did not
+
+| class | capability | why it was invisible |
+|---|---|---|
+| cross | **`scroll` event TIMING** (ordering vs rAF, coalescing, the `scrollend` pair) | the one Interop 2026 web-compat item with no row. The other two are gated (`ESM` cyclic modules + multiple top-level await; `user-select` unprefixing). |
+| css | **`update` media feature** (`@media (update: fast\|slow\|none)`) | Baseline newly available **March 2026** — after audit #58's frame was drawn. |
+| css | **`offset-path` / motion path** | surfaced *by* the `shape()` Baseline note, which names `clip-path` **and** `offset-path` as its two consumers. |
+
+### WHAT WE HAD BEEN WRONG ABOUT
+
+⚠⚠⚠ **We gate the scroll SURFACE and nowhere the scroll SCHEDULE.** `IntersectionObserver`,
+`scroll snap`, `scroll anchoring` and `infinite scroll` are all gated — and every one of them asserts
+*what* ends up on screen. Interop 2026 picked scroll **event timing** precisely because that is not
+the same question: a page that reads `scrollTop` inside a scroll handler, or sequences a sticky
+header against `requestAnimationFrame`, gets a different answer per engine, and *"the boxes are in
+the right place"* cannot see it. This is t712-714's finding recurring in a new subsystem — **an
+instrument reading the finished answer cannot see a bug in the ORDER it was assembled** — and it
+took an external list to notice, which is what this audit exists for.
+
+⚠⚠ **A row that exists for ONE of a feature's two consumers reads as covered.** `CSS shape()` is on
+the map; `offset-path`, its other consumer, was not. That is the half-built-spec shape of t704-710
+(*"a build spec whose 2nd half is unbuilt is an untriaged tick with good prose"*) appearing in the
+MAP rather than in a build spec.
+
+⚠ **Interop is an annual frame and Baseline is a monthly one.** Two of the three additions came from
+Baseline, not Interop, and both post-date audit #58 by weeks. An audit that only re-reads the Interop
+list will find the map clean *by construction* from now on — the digests have to be part of the
+routine.
+
+### SCALE, recorded as context and explicitly NOT as a steer
+
+Ladybird publicly reports **2,067,263 passing WPT subtests** and **97.8% of test262**, against our
+`WPT:TOTAL` mark of 422,865. Per **PART VII** the WPT total is *"a bookkeeping mark, not a ranking"*
+and `83% and beyond is explicitly OUT OF SCOPE for v1`, so this changes no priority. It is written
+down because a number that large, unrecorded, is the kind of thing a future audit rediscovers and
+mistakes for news. Their stated hardest problem is also worth keeping: **real sites depend on
+undocumented Blink/WebKit quirks, so a spec-correct implementation can be the wrong answer.** Our
+North Star already answers that — Chromium is the *capability* target and every fix this project
+lands is diffed against `chromium --dump-dom`, not against prose — and this is the first external
+confirmation that the choice was load-bearing rather than merely convenient.
+
+### RE-RANK
+
+None of the three additions outranks the current CO-#1. All are `unknown` and cheap to answer;
+`scroll` event timing is the largest of them and is the one to probe first, because it is the only
+one an existing gate could be *silently wrong* about rather than simply absent.

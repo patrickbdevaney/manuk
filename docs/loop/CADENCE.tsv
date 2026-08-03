@@ -611,3 +611,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 875	fff6c295	1785794589	2026-08-03T18:03:09-04:00	596	measurement	63	4	113	32	385	81	3896	6960	0	461	0	the four-tick batch priced on the whole corpus, and the five crossings are all there (2026-08-03)
 876	3771356b	1785795422	2026-08-03T18:17:02-04:00	833	measurement	63	9	348	45	385	81	3896	6960	0	461	0	`render-failed` is the pixel classifier winning a race it should have lost (2026-08-03)
 877	764fad49	1785796681	2026-08-03T18:38:01-04:00	1259	capability	63	7	359	33	386	81	3896	6960	0	461	0	the fourth cohort named as ours and proven not ours (2026-08-03)
+878	729fecbb	1785797227	2026-08-03T18:47:07-04:00	546	capability	63	7	230	34	386	81	3896	6960	0	461	0	the I3 assertion three constitution checks have asked for, and only one of its four clauses can go red (2026-08-03)
