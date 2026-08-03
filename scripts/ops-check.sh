@@ -126,6 +126,20 @@ if [ -x scripts/phase0-milestones.sh ]; then
   [ -n "$ms" ] && note "$ms"
 fi
 
+# 8c. DEATH-TAIL (crossings-per-tick + reachability). Refreshes the derived ledger docs/loop/DEATH-TAIL.tsv
+#     from the clean same-corpus burndown rows, surfaces the one-line bracket (linear vs decay ETA), and
+#     ALERTS only when the death-tail SIGNAL is active (recent crossings-per-tick low AND decelerating) — the
+#     early-warning that 95% may be unreachable without a fresh family-sized batch. Informational, never a gate.
+if [ -x scripts/death-tail.sh ]; then
+  bash scripts/death-tail.sh >/dev/null 2>&1 || true          # refresh the derived ledger
+  dt=$(bash scripts/death-tail.sh --oneline 2>/dev/null || true)
+  [ -n "$dt" ] && note "$dt"
+  dta=$(bash scripts/death-tail.sh --check 2>/dev/null || true)
+  if [ -n "$dta" ]; then
+    while IFS= read -r _l; do [ -n "$_l" ] && { note "ALERT(death-tail): $_l"; alert=$((alert+1)); }; done <<< "$dta"
+  fi
+fi
+
 # Summary line (the observer reads the tail of $LOG each heartbeat).
 note "ops-check: ${heal} healed, ${alert} alert(s) [disk ${DP:-?}% · grind ${NG} · systemd ${st:-n/a} · mapdrift ${MD:-?}]"
 [ "$alert" -gt 0 ] && exit 0   # alerts are informational; ops-check NEVER fails anything.
