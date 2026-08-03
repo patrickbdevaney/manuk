@@ -3392,3 +3392,54 @@ paid every time — and because a wrong name is a silent mis-actuation exactly l
 native `<label>`/`alt`/`caption` > `title` > content), run it against Chrome's computed
 `accessibleName` on a fixture that exercises each rung, and record the verdict. `unknown` is the
 honest status until then, and the invariant this loop is graded on is MEASURED, not `missing`.
+
+## Audit #57 — tick 859 (2026-08-03)
+
+SOURCES (web, not memory): the Interop 2026 focus-area list
+(`github.com/web-platform-tests/interop/blob/main/2026/README.md`) re-read in full rather than recalled
+from audit #56; the Interop 2026 **web-compat** issue (`web-platform-tests/interop` #187) for the item
+that names actual site-breaking bugs; `web.dev/blog/baseline-digest-may-2026` (the newest digest, which
+did not exist at audit #56's date); Servo's layout wiki + 2026 layout PRs
+(`github.com/servo/servo/wiki/Servo-Layout-Engines-Report`, `Layout-revamp-ideas`, PR #41812).
+
+### WHAT THE RECONCILIATION FOUND — two rows, and both are of a kind the map keeps missing
+
+The map held up: **all 20** Interop 2026 focus areas and **5 of the 6** May-2026 Baseline features
+already carried an explicit verdict, and audit #56's finding (accname) is the only structural hole
+still open. Two genuine additions, now on the map as `unknown`:
+
+1. **`text-decoration-skip-ink: all`** — Baseline *newly available* May 2026, **zero hits** in the whole
+   file. The other five items in that digest (container style queries, `:open`, `ToggleEvent.source`,
+   `image-rendering`, `SharedWorker`) all landed on existing rows.
+2. **scroll-event / animation-event ORDERING** — one of the three items Interop 2026's `web compat`
+   area actually contains ("a small collection of WPT selected because failing them causes real
+   websites to not work"). The other two — ESM cyclic module records + multiple top-level `await`, and
+   unprefixing `-webkit-user-select` — already have rows.
+
+⚠ **THE ORDERING ROW IS THE INTERESTING ONE, AND IT IS THE t712-714 CLASS AGAIN.** An instrument that
+diffs the *finished* answer cannot see a bug in the ORDER the answer was assembled — only a probe
+running *inside* the page can. So this is a capability the oracle is **structurally blind to**, on a
+list whose entire selection criterion is "this breaks real sites". That is precisely the sort of item
+that stays off a map drawn by looking at what the instrument reports.
+
+### ⚠⚠ AN INDEPENDENT ENGINE NAMES THIS TICK'S BUG CLASS AS ITS TOP LAYOUT BUG AREA
+
+Servo's own layout wiki: *"Most Servo layout bugs are in the area of interactions between block sizes,
+line breaking, floats, and margin collapsing"*, and its January-2026 PR #41812 is literally
+*"let floats know that margins can collapse thru phantom lines"*. Tick 859 — landed the same day as
+this audit — fixed a float↔margin-collapse interaction that had been wrong for 700 ticks.
+
+**This is external corroboration of a RANKING, which is the rarest thing this audit produces.** The
+loop reached float/margin-collapse by ranking the t857 sweep's own reading-order column; an independent
+memory-safe engine, with a different architecture and a decade of different bugs, reports the same
+neighbourhood as *where its layout bugs live*. Read it as a prior for the next few render ticks: the
+remaining shape/jarring residue is more likely to be **float ↔ block-size ↔ line-breaking interaction**
+than a missing property.
+
+### WHAT WE HAD BEEN WRONG ABOUT
+
+Nothing was found to be falsely claimed this round. The correction is to the audit's own frame: #56
+concluded *"the map is CURRENT"* from a check that read the focus-area **titles**. Reading the web-compat
+area's **contents** — which are not in the title list — produced a row immediately. **A focus area is not
+an atom; the ones named "web compat" and "investigation" are containers, and a title-level reconciliation
+cannot see inside them.**

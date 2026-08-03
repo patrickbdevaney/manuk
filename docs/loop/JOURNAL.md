@@ -46371,6 +46371,108 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 859 — a float is not the first in-flow child, and it was CANCELLING the collapse (2026-08-03)
+
+TICK SHAPE: capability (layout primitive) — ranked from the t857 sweep's own rows, on the conjunct
+the burndown does NOT rank. Also carries the cadence self-audit (due at 859; ran clean, zero
+findings — recorded here rather than burning a tick on a green audit).
+
+⚠ **STUB WRITTEN BEFORE THE FIX, so the reading cannot be fitted to the result.**
+
+HOW IT WAS AIMED — the sweep row, not a cluster. `M1 = shape≥0.75 AND jarring-clean`, and
+`t857` scored `shape 24/129` but `M1 18/129`, so **six sites already pass shape and are held out of
+M1 by a jarring invariant alone**. Cut the t857 TSV for `shape≥0.75 AND some jarring>0`: ten sites,
+and **eight of the ten fail on `reading_order`** — five of them on `reading_order` and NOTHING else
+(`marktplaats.nl`, `kicktipp.com`, `ubys.bingol.edu.tr`, `possssno.sbs`, `payb.jp`). That is the
+board's own "rank by marginal crossings", read off the conjunct the burndown never ranked.
+
+HYPOTHESIS (pre-registered): `kicktipp.com`'s single inversion is `div.illu ⇄ p` inside
+`div.willkommen`, `.illu` is `float:right` (`@media (min-width:530px)`), and **a preceding float
+makes our engine decline the parent↔first-child top-margin collapse**, so the first `<p>` sits 15px
+lower than Chrome puts it and the two read swapped. CSS 2.1 §8.3.1 says the collapse is with the
+first **in-flow** child — an out-of-flow box is *skipped*, never a terminator. Four search helpers
+(`collapse_through_top`, `collapse_through_bottom`, `leading_block_collapse_top`,
+`trailing_block_collapse_bottom`) all `return` on `is_float || is_out_of_flow_positioned` where they
+should `continue`. The block layout loop already gets this right (`first_block` is only cleared by a
+block-level child), so the hoist computation and the placement disagree with each other.
+
+PREDICTION, so it is falsifiable: `kicktipp` `reading_order 1 → 0` and its shape rises (the parent is
+216 tall where Chrome says 201); the corpus-wide M1 effect is UNKNOWN and may be zero — this is a
+high-usage, small-magnitude fix of exactly the class check #72 finding 2 says the instrument prices
+badly, so **the site-level A/B is the result and the sweep headline is not**.
+
+RESULT — **the hypothesis held on every clause, and eight controls held with it.**
+
+The defect was one line, repeated four times, and its comment said it was safe:
+
+```rust
+    if is_float(ks) || is_out_of_flow_positioned(ks) {
+        return mt;   // "conservative: an out-of-flow first child declines the collapse"
+    }
+```
+
+⚠⚠⚠ **"CONSERVATIVE" WAS THE WORD THAT KEPT THIS ALIVE FOR 700 TICKS, AND THERE IS NO CONSERVATIVE
+DIRECTION HERE.** Declining a margin collapse is not a cautious no-op — it leaves the child's margin
+*inside* the parent, which is a band of parent background above the first paragraph and a parent that
+much too tall. It is the bug, spelled the other way. `docs/wiki/box-layout.md` said it out loud
+(*"conservative: never wrong, occasionally incomplete"*), so the claim is quoted and struck there
+rather than silently rewritten.
+
+⚠⚠ **THE ENGINE ALREADY CONTAINED THE RIGHT ANSWER, IN THE OTHER HALF OF THE SAME MECHANISM.**
+`layout_children`'s placement loop clears `first_block` only for a **block-level** child, so a float
+never counted as the first block *there*. The hoist computation and the placement disagreed with each
+other for the whole time — one of them was Chrome-correct and nothing compared them. **When a rule is
+implemented in two places, diff the two implementations before deciding which is wrong**: the shorter
+one had been right since it was written.
+
+CHROME, MEASURED FIRST (`/tmp/mc.html`, 800px, `body{margin:0}`, `p{margin:15px 0}` — parent `y` / first
+`<p>` `y`): float-first `15`/`15` · abspos-first `68`/`68` · **text**-first `159`/`192`. So out-of-flow
+is skipped and real inline content genuinely is not — which is why the gate asserts the text case too,
+or "skip out-of-flow" could over-apply into "collapse through anything".
+
+THE A/B, same hour, `t858` binary banked BEFORE the edit and re-run interleaved:
+
+```text
+                        OLD (t858)          NEW (t859)
+  kicktipp.com          ro 1  shape 85.3%    ro 0  shape 87.4%    <- OURS
+  possssno.sbs          ro 1  shape 89.7%    ro 1  shape 89.7%    <- 3 interleaved pairs, identical
+  www.marktplaats.nl    ro 1  shape 95.2%    ro 1  shape 95.2%
+  ubys.bingol.edu.tr    ro 1  shape 92.8%    ro 1  shape 92.8%
+  payb.jp               ro 6  shape 71.4%    ro 6  shape 67.8%    <- ro FLAT; shape inside its own
+                                                                     known 0.68-0.83 one-binary spread
+  en.wikipedia.org · news.ycombinator · a11yproject · blog.rust-lang · martinfowler
+                        byte-identical on shape AND on all four jarring terms
+```
+
+⚠⚠ **A 1.7-POINT "LOSS" DISSOLVED UNDER THE INTERLEAVED CONTROL, AND IT WOULD HAVE BEEN REPORTED AS
+ONE.** The first `possssno.sbs` pair read NEW 88.0 vs OLD 89.7. Three *interleaved* old/new pairs then
+read **89.7 on all six runs** — the 88.0 was one draw from the site, not a regression. The ratchet is
+absolute, so this was chased to six readings rather than waved off as "under the spread"; the point is
+that "under the spread" and "measured to be zero" are different statements and only the second one
+attributes.
+
+SCOPE, stated because it is small: this fixes ONE of the ten shape≥0.75 sites held out of M1 by a
+jarring term. The other four `reading_order`-only sites are **different mechanisms** — `marktplaats`
+inverts two sibling `<a>` in a footer `<section>`, `ubys` two `<span>` inside one `<a>`, `possssno` an
+`<i>` against a `<span>` inside a nav `<a>` (all three are inline-level pairs, which smells like one
+shared inline-box mechanism and is the obvious next tick). Corpus M1 effect: unpriced here, and
+deliberately — the sweep is 5 hours old and one site does not move a 129-site headline.
+
+⚠ **SIGHTED, NOT CHASED, and banked because it is the largest single jarring cluster the loop has ever
+printed:** `martinfowler.com` reads **OVERLAP 125 · READING-ORDER 67** at shape 74.4% — one hundredth
+of a point under the M1 bar, with two enormous jarring counts on a fully-covered, no-confound anchor
+site. That is a burndown row, not a curiosity.
+
+CADENCE: `scripts/self-audit.sh` was due at 859 and ran **clean** (falsifiability, process-defect
+ledger, enforcement, journal, pattern ledger all green — "methodology and reality agree").
+`LAST_AUDIT_TICK` bumped to 859. Folded into this tick rather than spending a tick on a green audit.
+
+PERF: none. The change removes an early `return` from four O(depth) spine peeks; the walk visits at
+most the out-of-flow children it now steps over, and the layout suite is 120/120 in 7.4s.
+
+WIKI: `docs/wiki/box-layout.md` — "A float is not the FIRST IN-FLOW CHILD", and the struck
+"conservative: never wrong" claim in the tick-151 section it supersedes.
+
 ## Tick 858 — t856's CONCLUSION stands and its stated MECHANISM was wrong (2026-08-03)
 
 TICK SHAPE: measurement (self-correction) — I criticised a comment in t856 for being *"a wrong answer

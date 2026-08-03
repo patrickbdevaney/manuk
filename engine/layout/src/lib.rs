@@ -2052,7 +2052,7 @@ impl Ctx<'_> {
             }
             let ks = self.style_of(k);
             if is_float(ks) || is_out_of_flow_positioned(ks) {
-                return mt; // conservative: an out-of-flow first child declines the collapse
+                continue; // out of flow: not a child for §8.3.1's purposes — SKIP, do not stop
             }
             if is_block_level(self.dom, self.styles, k) {
                 return collapse_margins(mt, self.collapse_through_top(k, cw, depth + 1));
@@ -2091,7 +2091,7 @@ impl Ctx<'_> {
             }
             let ks = self.style_of(k);
             if is_float(ks) || is_out_of_flow_positioned(ks) {
-                return mb; // conservative: an out-of-flow last child declines the collapse
+                continue; // out of flow: not a child for §8.3.1's purposes — SKIP, do not stop
             }
             if is_block_level(self.dom, self.styles, k) {
                 return collapse_margins(mb, self.collapse_through_bottom(k, cw, depth + 1));
@@ -2101,9 +2101,10 @@ impl Ctx<'_> {
         mb
     }
 
-    /// The collapse-through bottom margin of `node`'s last in-flow block child, or `0.0` if the last
-    /// in-flow child is not a block or is out of flow. This is the amount that escapes downward out
-    /// of the parent in a bottom collapse.
+    /// The collapse-through bottom margin of `node`'s last in-flow block child, or `0.0` if that
+    /// child is not a block. This is the amount that escapes downward out of the parent in a bottom
+    /// collapse. Out-of-flow children are **skipped**, not treated as terminators — see
+    /// [`Ctx::leading_block_collapse_top`] for the measurement and the reasoning.
     fn trailing_block_collapse_bottom(&self, node: NodeId, cw: f32) -> f32 {
         for k in rendered_children(self.dom, self.styles, node)
             .into_iter()
@@ -2117,7 +2118,7 @@ impl Ctx<'_> {
             }
             let ks = self.style_of(k);
             if is_float(ks) || is_out_of_flow_positioned(ks) {
-                return 0.0;
+                continue; // out of flow: not a child for §8.3.1's purposes — SKIP, do not stop
             }
             if is_block_level(self.dom, self.styles, k) {
                 return self.collapse_through_bottom(k, cw, 1);
@@ -2127,9 +2128,29 @@ impl Ctx<'_> {
         0.0
     }
 
-    /// The collapse-through top margin of `node`'s first in-flow block child, or `0.0` if the first
-    /// in-flow child is not a block, is out of flow, or carries clearance (clearance blocks the
-    /// parent-child collapse). This is the amount hoisted out of the parent in a top collapse.
+    /// The collapse-through top margin of `node`'s first in-flow block child, or `0.0` if that child
+    /// is not a block or carries clearance (clearance blocks the parent-child collapse). This is the
+    /// amount hoisted out of the parent in a top collapse.
+    ///
+    /// ⚠⚠ **AN OUT-OF-FLOW CHILD IS SKIPPED, NOT A TERMINATOR — and reading it as one CANCELLED the
+    /// collapse on the single commonest float idiom on the web.** CSS 2.1 §8.3.1 collapses a box's
+    /// top margin with its first **in-flow** child's; a float or an absolutely-positioned box is by
+    /// definition not an in-flow child, so it is passed over and the block *after* it is the first
+    /// in-flow child. All four §8.3.1 search helpers here `return`ed on one, described in the comment
+    /// as "conservative" — but conservative in the wrong direction is just wrong: it left the child's
+    /// margin *inside* the parent, which is a visible gap, not a cautious no-op.
+    ///
+    /// Chrome-measured (`file:///tmp/mc.html`, 800px, `p{margin:15px 0}`, `body{margin:0}`):
+    ///
+    /// | first child | Chrome parent y / first `<p>` y | meaning |
+    /// |---|---|---|
+    /// | `float:right` div | `15` / `15` | collapsed **through** the float |
+    /// | `position:absolute` div | `68` / `68` | collapsed **through** the abspos box |
+    /// | text | `159` / `192` | NOT collapsed — real inline content does separate |
+    ///
+    /// The block layout loop never had this bug: `first_block` is cleared only by a *block-level*
+    /// child, so a float already did not count there. The hoist computation and the placement
+    /// disagreed with each other, and the placement was the correct one.
     fn leading_block_collapse_top(&self, node: NodeId, cw: f32) -> f32 {
         for k in rendered_children(self.dom, self.styles, node) {
             if let NodeData::Text(t) = self.dom.data(k) {
@@ -2140,7 +2161,7 @@ impl Ctx<'_> {
             }
             let ks = self.style_of(k);
             if is_float(ks) || is_out_of_flow_positioned(ks) {
-                return 0.0;
+                continue; // out of flow: not a child for §8.3.1's purposes — SKIP, do not stop
             }
             if is_block_level(self.dom, self.styles, k) {
                 if ks.clear != Clear::None {
@@ -7870,6 +7891,103 @@ mod tests {
             "#outer must not carry a 40px internal gap at the bottom (outer.h={}, inner.h={})",
             outer.height,
             inner.height
+        );
+    }
+
+    /// **A FLOAT IS NOT THE FIRST IN-FLOW CHILD, AND WE LET IT CANCEL THE COLLAPSE.**
+    ///
+    /// CSS 2.1 §8.3.1 collapses a box's top margin with its first **in-flow** child's. A float is
+    /// out of flow, so it is skipped and the `<p>` after it is the first in-flow child — but all
+    /// four §8.3.1 search helpers bailed out on one, so the `<p>`'s margin stayed *inside* the
+    /// parent and the parent grew by exactly that margin.
+    ///
+    /// This is `div.willkommen` on `kicktipp.com` — `.illu{float:right}` wrapping the illustration,
+    /// then the prose — and it is the commonest float idiom there is (the pull-quote, the article
+    /// figure, the sidebar thumbnail). It cost that site a **reading-order inversion**: Chrome reads
+    /// the prose first (both at `y=0`, prose at `x=0`), we read the float first because we alone
+    /// pushed the prose down 15px. `shape` was already 0.85 there, so this one number was the whole
+    /// distance to M1.
+    ///
+    /// Chrome-measured, `/tmp/mc.html` at 800px with `body{margin:0}` and `p{margin:15px 0}`:
+    /// float-first parent y=15 / p y=15; abspos-first parent y=68 / p y=68; **text**-first parent
+    /// y=159 / p y=192 (no collapse — real inline content genuinely does separate the margins).
+    ///
+    /// RED PROOF: restore `return 0.0` in `leading_block_collapse_top`'s out-of-flow arm and the
+    /// first two assertions fail with `#p` 15px below `#outer`'s content top. The third assertion is
+    /// the guard that keeps the fix from becoming "collapse through anything".
+    #[test]
+    fn an_out_of_flow_first_child_does_not_cancel_the_parent_child_margin_collapse() {
+        let css = "body{margin:0} p{margin:15px 0} .f{float:right;width:60px;height:40px} \
+                   .a{position:absolute;width:30px;height:20px}";
+
+        // 1. A float before the first in-flow block: the block's top margin still escapes.
+        let (dom, root) = layout_html(
+            r#"<div id="outer"><div class="f"></div><p id="p">alpha</p></div>"#,
+            css,
+            800.0,
+        );
+        let rects = root.node_rects(&dom);
+        let (outer, p) = (rects[&by_id(&dom, "outer")], rects[&by_id(&dom, "p")]);
+        assert!(
+            (p.y - outer.y).abs() < 1.0,
+            "a preceding FLOAT is out of flow — the <p> is still the first in-flow child and its \
+             15px top margin must escape (outer.y={}, p.y={})",
+            outer.y,
+            p.y
+        );
+
+        // 2. Same for an absolutely-positioned first child.
+        let (dom, root) = layout_html(
+            r#"<div id="outer" style="position:relative"><div class="a"></div><p id="p">beta</p></div>"#,
+            css,
+            800.0,
+        );
+        let rects = root.node_rects(&dom);
+        let (outer, p) = (rects[&by_id(&dom, "outer")], rects[&by_id(&dom, "p")]);
+        assert!(
+            (p.y - outer.y).abs() < 1.0,
+            "a preceding position:absolute box is out of flow too (outer.y={}, p.y={})",
+            outer.y,
+            p.y
+        );
+
+        // 3. THE GUARD — real inline text before the block DOES separate the margins, so the <p>
+        //    must still sit 15px inside. Without this, "skip out-of-flow" could be over-applied
+        //    into "skip everything", which Chrome does not do (measured above: 159 vs 192).
+        let (dom, root) = layout_html(
+            r#"<div id="outer">text<p id="p">gamma</p></div>"#,
+            css,
+            800.0,
+        );
+        let rects = root.node_rects(&dom);
+        let (outer, p) = (rects[&by_id(&dom, "outer")], rects[&by_id(&dom, "p")]);
+        assert!(
+            p.y - outer.y > 14.0,
+            "inline text is in-flow content and BLOCKS the collapse — the 15px margin stays inside \
+             (outer.y={}, p.y={})",
+            outer.y,
+            p.y
+        );
+    }
+
+    /// The bottom-edge mirror: a **trailing** float must not cancel the parent↔last-child bottom
+    /// margin collapse either. Chrome (`/tmp/mc.html`): the `<p>`'s 15px bottom margin escapes past
+    /// the trailing float, so the parent's bottom edge is the `<p>`'s bottom edge.
+    #[test]
+    fn a_trailing_float_does_not_cancel_the_bottom_margin_collapse() {
+        let (dom, root) = layout_html(
+            r#"<div id="outer"><p id="p">gamma</p><div class="f"></div></div>"#,
+            "body{margin:0} p{margin:15px 0} .f{float:right;width:60px;height:40px}",
+            800.0,
+        );
+        let rects = root.node_rects(&dom);
+        let (outer, p) = (rects[&by_id(&dom, "outer")], rects[&by_id(&dom, "p")]);
+        assert!(
+            ((outer.y + outer.height) - (p.y + p.height)).abs() < 1.0,
+            "the trailing float is out of flow — the <p>'s bottom margin must still escape \
+             (outer_b={}, p_b={})",
+            outer.y + outer.height,
+            p.y + p.height
         );
     }
 

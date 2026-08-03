@@ -40,174 +40,175 @@
   - L137 · A position:relative percentage top/bottom resolves against the containing-block HEIGHT (tick 147)
   - L159 · Percentage heights resolve against the initial containing block, and max-height:% on an indefinite parent is none (tick 150)
   - L190 · Parent↔child margin collapsing (tick 151)
-  - L235 · overflow establishes a block formatting context — float containment / the clearfix (tick 152)
-  - L261 · An intrinsic-keyword width HUGS its content — not the same as auto (which fills) (tick 153)
-  - L292 · height: stretch / -webkit-fill-available FILLS the parent's definite height (tick 154)
-  - L322 · Scrollbar-gutter reservation — overflow-y:scroll narrows the content box (tick 155)
-  - L360 · Auto margins center an absolutely-positioned box — the inset:0; margin:auto modal idiom (tick 156)
-  - L396 · min-width/max-width/min-height/max-height clamp an absolutely-positioned box (tick 157)
-  - L427 · overflow-x:scroll reserves a horizontal-scrollbar gutter — block-axis mirror (tick 158)
-  - L455 · object-fit — a replaced image fits its box without distorting (tick 181)
-  - L484 · object-position — placing the fitted image within its box (tick 185)
-  - L512 · box-shadow — a LIST of shadow layers, each with spread (tick 189)
-  - L547 · background-image — a LIST of layers, painted back-to-front (tick 190)
-  - L587 · background-position — placing a background image in its box (tick 191)
-  - L627 · border-style — dashed / dotted / double borders (tick 192)
-  - L659 · text-shadow — a shadow behind the glyphs (tick 193)
-  - L687 · Scroll anchoring — the feed stops jumping (tick 203)
-  - L726 · Scroll anchoring is live (tick 204) — with_scroll_anchor
-  - L749 · The width/height attributes are an aspect ratio, and a clamp transfers through it (tick 218)
-  - L784 · The instrument note that outranks the above
-  - L794 · width: stretch was thrown away, and it only mattered where auto does not fill (tick 219)
-  - L827 · The static position of an out-of-flow box (and how it goes missing)
-  - L852 · Where a replaced element's size comes from (three channels, and they must agree)
-  - L878 · overflow is two properties, and layout's copy is lossy
-  - L898 · Bare text inside a flex/grid container is an ITEM, and filtering children to elements deletes it
-  - L914 · The item's style cannot be read off the text node — THE TWO CASCADES DISAGREE
-  - L942 · position:absolute + intrinsic width keywords (tick 274)
-  - L970 · Horizontal rails — measured against Chrome, and one of them is not a bug (tick 277)
-  - L990 · Replaced elements compute inline — atomicity is layout's job, not the cascade's (tick 384)
-  - L1008 · <br> has geometry — the break that ends a line still owns a box (tick 385)
-  - L1021 · The default object size lives in USED-size layout (tick 389)
-  - L1039 · viewBox is an intrinsic ratio — and the default-size model is MEASURED, not recalled (tick 391)
-  - L1052 · BUILD SPEC — inline SVG internals: borrow usvg, don't hand-write geometry (tick 393)
-  - L1084 · Paint half LANDED (tick 394)
-  - L1096 · Geometry half LANDED (tick 704) — and the two things the spec got wrong
-  - L1137 · List markers follow the HTML "ordinal value" algorithm — a running counter, not a sibling index (tick 411)
-  - L1157 · justify-content: normal is NOT flex-start — it is what makes an auto grid track stretch (tick 569)
-  - L1193 · repeat(auto-fill, …) is a shape the cascade must NOT resolve (tick 570)
-  - L1235 · CSS filter — an offscreen GROUP is the whole mechanism, and the blur's integer division is where it nearly died (tick 592)
-  - L1273 · The blur lost 84% of its ink, and the test that caught it was itself wrong first
-  - L1290 · Two coordinate spaces meet at the scratch surface, and only one of them still owes the scroll
-  - L1300 · Colour matrices are spec constants, so they are asserted EXACTLY
-  - L1321 · clip-path — the second capability out of the same offscreen group, at a fraction of the price (tick 593)
-  - L1347 · inset(50%) must be allowed to clip everything, and it is the one place the module's default is wrong
-  - L1367 · mix-blend-mode — the offscreen group's *composite-back* is the backdrop, and that is the third capability out of one mechanism (tick 594)
-  - L1390 · One number is recorded and NOT asserted, on purpose
-  - L1410 · backdrop-filter — the bundle closes, and the property that was LAST is the one that justifies the split (tick 595)
-  - L1438 · The session's recurring lesson collected a fifth time
-  - L1453 · An exact path bbox is the EXTREMA, not the control-point hull (tick 630)
-  - L1461 · The curve is the whole difficulty
-  - L1484 · Elliptical arcs REFUSE, and that is the design
-  - L1496 · What this does NOT fix
-  - L1503 · An image's size is in no stylesheet — so a re-cascade erases it (tick 656)
-  - L1529 · Why it was permanent rather than transient
-  - L1535 · Why no instrument saw it
-  - L1543 · The fix: a standing input belongs between the cascade and the layout
-  - L1567 · The gate asserts three things, and two of them are not decoration
-  - L1582 · www.naukri.com: our <body> is 89,905px wide and Chrome's is 1,200 (tick 684, OPEN)
-  - L1603 · Two mechanisms ELIMINATED, so the next attempt does not re-derive them
-  - L1618 · The PHASE is now named: the external stylesheet (tick 685)
-  - L1646 · The bisection ran, and it narrowed the question again (tick 686)
-  - L1676 · SHAPE is not a per-box metric error — it is one wrong HEIGHT above the content (tick 688)
-  - L1702 · FIRST DIVERGENCE already points at the cause
-  - L1721 · A broken <img> is 16×16 in Chrome and was 784×0 here (tick 689)
-  - L1757 · And a hypothesis Chrome itself killed, before it cost a tick
-  - L1767 · An out-of-flow child neither splits its inline nor escapes it (tick 697)
-  - L1818 · The clearfix had no box to clear with (tick 698)
-  - L1874 · The page was measuring a document with no CSS in it (tick 714)
-  - L1910 · The third instrument class
-  - L1920 · And a correct fix that was refused
-  - L1931 · The retraction (tick 715), and the control that was not enough
-  - L1955 · And the arithmetic that forbids the obvious fix (tick 716)
-  - L1982 · ⚠ And the instrument is calibrated by the bug until it is fixed (tick 718)
-  - L2008 · Fetched at parse, waited for nowhere (tick 719 — the design that landed)
-  - L2044 · The outermost <svg> is sized by a RATIO, never by its viewBox numbers (tick 742)
-  - L2073 · A replaced element has no children, so measuring them reports ZERO
-  - L2098 · The icon-sprite <use href="#icon"> resolved to NOTHING — the reference model (tick 743)
-  - L2163 · A blockified inline is the spec's ANONYMOUS BLOCK — and the margin-collapse predicates could not see it (tick 746)
-  - L2227 · An indefinite MAIN size is INFINITE available main space, not zero (tick 762)
-  - L2286 · row is a LOGICAL direction, and taffy only speaks physical (tick 764)
-  - L2334 · An RTL table's COLUMN AXIS runs right-to-left (tick 765)
-  - L2367 · ⚠ The fix that was reverted to get here
-  - L2382 · An RTL grid's COLUMN AXIS runs right-to-left — and taffy cannot be told (tick 766)
-  - L2429 · What is still wrong, pinned rather than guessed
-  - L2439 · box-sizing applies to a FLOAT too — and the float path is a SECOND width resolution (tick 770)
-  - L2476 · The audit this opens
-  - L2485 · An out-of-flow pseudo takes no advance — the custom-bullet idiom
-  - L2509 · ⚠ Deliberately partial, and named so the next person knows which half exists
-  - L2517 · The two mutations the test demands
-  - L2527 · And the burndown could not see any of it
-  - L2534 · A form control does not inherit the page's font (t787)
-  - L2582 · The 17px a <select> reserves — and the property that says not to (t789)
-  - L2623 · A float belongs to its own block, not to the viewport (t792)
-  - L2652 · order lays items out in order-modified document order (t793)
-  - L2679 · …and the containing block is the float's ORIGIN, not just its limit (t797)
-  - L2704 · A percentage height on a flex item was resolved twice (t798)
-  - L2730 · An anonymous block box INHERITS from the container that made it (t799)
-  - L2749 · The trigger is "…and one block child", which is why it hid
-  - L2777 · The strut is the second symptom of the same omission
-  - L2790 · text-indent is the third literal and is deliberately NOT fixed here
-  - L2797 · Residue, measured in the same fixture
-  - L2805 · A max-width clamp RE-RUNS the auto-margin split (t801)
-  - L2842 · ⚠ Why the min-width half looked fine
-  - L2851 · margin-left:auto alone is what proves it is the SPLIT and not a special case
-  - L2858 · A form control does not inherit the page's line-height either (t802)
-  - L2881 · The two constraints are what make it a fix rather than a trade
-  - L2888 · Residual, named
-  - L2894 · A TEXT NODE IS NEVER OUT OF FLOW (t803)
-  - L2930 · The guard already existed, one function away
-  - L2950 · ⚠ What this fix EXPOSED, and it is a real defect that was being hidden
-  - L2964 · text-align: justify — the slack goes into the WORD GAPS, not into one offset (t805)
-  - L2986 · The three call sites ARE the specification
-  - L2994 · ⚠ Snapshot the gaps BEFORE shifting
-  - L3003 · The space is a character — letter-spacing and the inter-word gap (t806)
-  - L3033 · The padded inline BOX grows; the LINE does not (t808)
-  - L3059 · The containing div is what makes it a fix and not a trade
-  - L3068 · Two arms, because the edges are not symmetric
-  - L3077 · Not rendered is not display: none (t809)
-  - L3099 · The structural guard turned out not to be needed
-  - L3110 · Both cascades, same tick
-  - L3117 · A BFC root sits BESIDE a float, or below it (t811 — ⛔ REVERTED at t812, kept for the retry)
-  - L3149 · Two halves
-  - L3155 · The plain block is the rule's boundary, not an oversight
-  - L3161 · left_float_edge, not left_offset
-  - L3168 · A display:table with no rows is a shrink-to-fit BLOCK (t815)
-  - L3203 · An orphaned table-cell is ATOMIC, not a run of inline text (t816)
-  - L3238 · The control is what makes this a diagnosis rather than a symptom
-  - L3247 · Two edits, one behaviour — and the mutation proves which
-  - L3256 · The residue, named rather than blamed
-  - L3268 · A sub-pixel float excess breaks a flex line — and Bootstrap is written in exactly those percentages (t817)
-  - L3308 · The fix, and why it is where it is
-  - L3316 · Bounds, stated rather than glossed
-  - L3350 · A flex/grid item's SLOT is a finished answer, not an input (t823) — and two things kept recomputing on top of it
-  - L3383 · ⚠ The asymmetry that hid it: a percentage clamp always binds again, a pixel one never does
-  - L3398 · The margin half needs no percentage and no framework
-  - L3405 · The fix
-  - L3421 · t827 addendum — the same rule on the BLOCK axis, and a defect hidden by a later write
-  - L3449 · A shrink-to-fit box hugged its text ONE PADDING too tightly — then still re-wrapped it (tick 830)
-  - L3456 · ⓵ The FILL_SENTINEL discard is asymmetric
-  - L3486 · ⓶ A box sized to its own max-content re-wrapped the run it was measured from
-  - L3509 · What it bought, against an OLD-BINARY CONTROL
-  - L3529 · Two lessons, and the second is about the gate
-  - L3546 · A float is a SECOND width resolution, and it never learned three of the block path's rules (t831)
-  - L3553 · The aim, and it came from the scorer rather than from a hand-rolled probe
-  - L3575 · ⓵ A floated replaced element has no content, so without its ratio it has no size
-  - L3593 · ⓶ min-width / max-width / min-height / max-height did not exist on this path
-  - L3622 · ⓷ And box-sizing: border-box on the block axis
-  - L3629 · Priced against an OLD-BINARY control, 16 sites, same hour
-  - L3650 · §10.4 runs BLOCK → INLINE too, and the block path only ever ran it one way (t833)
-  - L3694 · An absolutely positioned image was ZERO PIXELS TALL, always (t834)
-  - L3722 · The falsification pass deleted a third of the fix
-  - L3745 · A flex item <img> told taffy its content wanted ZERO (t835)
-  - L3765 · The first version of the fix shipped a regression, and only the control caught it
-  - L3780 · Residue, bounded and with its refutations attached
-  - L3794 · The out-of-flow pass's viewport held the DOCUMENT height (t837)
-  - L3824 · What it was priced at, honestly
-  - L3846 · A position:relative ancestor inside an out-of-flow subtree is still a containing block
-  - L3883 · The one-line version is wrong, and two existing gates say so
-  - L3900 · CSS 2.1 §10.3.3: the over-constrained equation ignores margin-left under rtl
-  - L3934 · The diagnostic that settled it: delta × n
-  - L3952 · The static position of an insetless position:absolute box includes the INLINE ADVANCE (t848)
-  - L3985 · What it deliberately does not cover, with numbers
-  - L3999 · The lesson worth carrying
-  - L4006 · The static position is resolved PER AXIS (t849)
-  - L4045 · The drop-guard had to narrow at the same time
-  - L4052 · What it bought, measured
-  - L4063 · A button centres its content vertically, and no stylesheet can say so (t850)
-  - L4098 · The box-sizing residue this measured on the way past
-  - L4118 · What it bought, and the finding that outranks it
-  - L4131 · colspan/rowspan are CLAMPED unsigned longs, and an unclamped one is a HANG (t854)
+  - L239 · A float is not the FIRST IN-FLOW CHILD — it is SKIPPED, and treating it as a terminator cancelled the collapse (tick 859)
+  - L289 · overflow establishes a block formatting context — float containment / the clearfix (tick 152)
+  - L315 · An intrinsic-keyword width HUGS its content — not the same as auto (which fills) (tick 153)
+  - L346 · height: stretch / -webkit-fill-available FILLS the parent's definite height (tick 154)
+  - L376 · Scrollbar-gutter reservation — overflow-y:scroll narrows the content box (tick 155)
+  - L414 · Auto margins center an absolutely-positioned box — the inset:0; margin:auto modal idiom (tick 156)
+  - L450 · min-width/max-width/min-height/max-height clamp an absolutely-positioned box (tick 157)
+  - L481 · overflow-x:scroll reserves a horizontal-scrollbar gutter — block-axis mirror (tick 158)
+  - L509 · object-fit — a replaced image fits its box without distorting (tick 181)
+  - L538 · object-position — placing the fitted image within its box (tick 185)
+  - L566 · box-shadow — a LIST of shadow layers, each with spread (tick 189)
+  - L601 · background-image — a LIST of layers, painted back-to-front (tick 190)
+  - L641 · background-position — placing a background image in its box (tick 191)
+  - L681 · border-style — dashed / dotted / double borders (tick 192)
+  - L713 · text-shadow — a shadow behind the glyphs (tick 193)
+  - L741 · Scroll anchoring — the feed stops jumping (tick 203)
+  - L780 · Scroll anchoring is live (tick 204) — with_scroll_anchor
+  - L803 · The width/height attributes are an aspect ratio, and a clamp transfers through it (tick 218)
+  - L838 · The instrument note that outranks the above
+  - L848 · width: stretch was thrown away, and it only mattered where auto does not fill (tick 219)
+  - L881 · The static position of an out-of-flow box (and how it goes missing)
+  - L906 · Where a replaced element's size comes from (three channels, and they must agree)
+  - L932 · overflow is two properties, and layout's copy is lossy
+  - L952 · Bare text inside a flex/grid container is an ITEM, and filtering children to elements deletes it
+  - L968 · The item's style cannot be read off the text node — THE TWO CASCADES DISAGREE
+  - L996 · position:absolute + intrinsic width keywords (tick 274)
+  - L1024 · Horizontal rails — measured against Chrome, and one of them is not a bug (tick 277)
+  - L1044 · Replaced elements compute inline — atomicity is layout's job, not the cascade's (tick 384)
+  - L1062 · <br> has geometry — the break that ends a line still owns a box (tick 385)
+  - L1075 · The default object size lives in USED-size layout (tick 389)
+  - L1093 · viewBox is an intrinsic ratio — and the default-size model is MEASURED, not recalled (tick 391)
+  - L1106 · BUILD SPEC — inline SVG internals: borrow usvg, don't hand-write geometry (tick 393)
+  - L1138 · Paint half LANDED (tick 394)
+  - L1150 · Geometry half LANDED (tick 704) — and the two things the spec got wrong
+  - L1191 · List markers follow the HTML "ordinal value" algorithm — a running counter, not a sibling index (tick 411)
+  - L1211 · justify-content: normal is NOT flex-start — it is what makes an auto grid track stretch (tick 569)
+  - L1247 · repeat(auto-fill, …) is a shape the cascade must NOT resolve (tick 570)
+  - L1289 · CSS filter — an offscreen GROUP is the whole mechanism, and the blur's integer division is where it nearly died (tick 592)
+  - L1327 · The blur lost 84% of its ink, and the test that caught it was itself wrong first
+  - L1344 · Two coordinate spaces meet at the scratch surface, and only one of them still owes the scroll
+  - L1354 · Colour matrices are spec constants, so they are asserted EXACTLY
+  - L1375 · clip-path — the second capability out of the same offscreen group, at a fraction of the price (tick 593)
+  - L1401 · inset(50%) must be allowed to clip everything, and it is the one place the module's default is wrong
+  - L1421 · mix-blend-mode — the offscreen group's *composite-back* is the backdrop, and that is the third capability out of one mechanism (tick 594)
+  - L1444 · One number is recorded and NOT asserted, on purpose
+  - L1464 · backdrop-filter — the bundle closes, and the property that was LAST is the one that justifies the split (tick 595)
+  - L1492 · The session's recurring lesson collected a fifth time
+  - L1507 · An exact path bbox is the EXTREMA, not the control-point hull (tick 630)
+  - L1515 · The curve is the whole difficulty
+  - L1538 · Elliptical arcs REFUSE, and that is the design
+  - L1550 · What this does NOT fix
+  - L1557 · An image's size is in no stylesheet — so a re-cascade erases it (tick 656)
+  - L1583 · Why it was permanent rather than transient
+  - L1589 · Why no instrument saw it
+  - L1597 · The fix: a standing input belongs between the cascade and the layout
+  - L1621 · The gate asserts three things, and two of them are not decoration
+  - L1636 · www.naukri.com: our <body> is 89,905px wide and Chrome's is 1,200 (tick 684, OPEN)
+  - L1657 · Two mechanisms ELIMINATED, so the next attempt does not re-derive them
+  - L1672 · The PHASE is now named: the external stylesheet (tick 685)
+  - L1700 · The bisection ran, and it narrowed the question again (tick 686)
+  - L1730 · SHAPE is not a per-box metric error — it is one wrong HEIGHT above the content (tick 688)
+  - L1756 · FIRST DIVERGENCE already points at the cause
+  - L1775 · A broken <img> is 16×16 in Chrome and was 784×0 here (tick 689)
+  - L1811 · And a hypothesis Chrome itself killed, before it cost a tick
+  - L1821 · An out-of-flow child neither splits its inline nor escapes it (tick 697)
+  - L1872 · The clearfix had no box to clear with (tick 698)
+  - L1928 · The page was measuring a document with no CSS in it (tick 714)
+  - L1964 · The third instrument class
+  - L1974 · And a correct fix that was refused
+  - L1985 · The retraction (tick 715), and the control that was not enough
+  - L2009 · And the arithmetic that forbids the obvious fix (tick 716)
+  - L2036 · ⚠ And the instrument is calibrated by the bug until it is fixed (tick 718)
+  - L2062 · Fetched at parse, waited for nowhere (tick 719 — the design that landed)
+  - L2098 · The outermost <svg> is sized by a RATIO, never by its viewBox numbers (tick 742)
+  - L2127 · A replaced element has no children, so measuring them reports ZERO
+  - L2152 · The icon-sprite <use href="#icon"> resolved to NOTHING — the reference model (tick 743)
+  - L2217 · A blockified inline is the spec's ANONYMOUS BLOCK — and the margin-collapse predicates could not see it (tick 746)
+  - L2281 · An indefinite MAIN size is INFINITE available main space, not zero (tick 762)
+  - L2340 · row is a LOGICAL direction, and taffy only speaks physical (tick 764)
+  - L2388 · An RTL table's COLUMN AXIS runs right-to-left (tick 765)
+  - L2421 · ⚠ The fix that was reverted to get here
+  - L2436 · An RTL grid's COLUMN AXIS runs right-to-left — and taffy cannot be told (tick 766)
+  - L2483 · What is still wrong, pinned rather than guessed
+  - L2493 · box-sizing applies to a FLOAT too — and the float path is a SECOND width resolution (tick 770)
+  - L2530 · The audit this opens
+  - L2539 · An out-of-flow pseudo takes no advance — the custom-bullet idiom
+  - L2563 · ⚠ Deliberately partial, and named so the next person knows which half exists
+  - L2571 · The two mutations the test demands
+  - L2581 · And the burndown could not see any of it
+  - L2588 · A form control does not inherit the page's font (t787)
+  - L2636 · The 17px a <select> reserves — and the property that says not to (t789)
+  - L2677 · A float belongs to its own block, not to the viewport (t792)
+  - L2706 · order lays items out in order-modified document order (t793)
+  - L2733 · …and the containing block is the float's ORIGIN, not just its limit (t797)
+  - L2758 · A percentage height on a flex item was resolved twice (t798)
+  - L2784 · An anonymous block box INHERITS from the container that made it (t799)
+  - L2803 · The trigger is "…and one block child", which is why it hid
+  - L2831 · The strut is the second symptom of the same omission
+  - L2844 · text-indent is the third literal and is deliberately NOT fixed here
+  - L2851 · Residue, measured in the same fixture
+  - L2859 · A max-width clamp RE-RUNS the auto-margin split (t801)
+  - L2896 · ⚠ Why the min-width half looked fine
+  - L2905 · margin-left:auto alone is what proves it is the SPLIT and not a special case
+  - L2912 · A form control does not inherit the page's line-height either (t802)
+  - L2935 · The two constraints are what make it a fix rather than a trade
+  - L2942 · Residual, named
+  - L2948 · A TEXT NODE IS NEVER OUT OF FLOW (t803)
+  - L2984 · The guard already existed, one function away
+  - L3004 · ⚠ What this fix EXPOSED, and it is a real defect that was being hidden
+  - L3018 · text-align: justify — the slack goes into the WORD GAPS, not into one offset (t805)
+  - L3040 · The three call sites ARE the specification
+  - L3048 · ⚠ Snapshot the gaps BEFORE shifting
+  - L3057 · The space is a character — letter-spacing and the inter-word gap (t806)
+  - L3087 · The padded inline BOX grows; the LINE does not (t808)
+  - L3113 · The containing div is what makes it a fix and not a trade
+  - L3122 · Two arms, because the edges are not symmetric
+  - L3131 · Not rendered is not display: none (t809)
+  - L3153 · The structural guard turned out not to be needed
+  - L3164 · Both cascades, same tick
+  - L3171 · A BFC root sits BESIDE a float, or below it (t811 — ⛔ REVERTED at t812, kept for the retry)
+  - L3203 · Two halves
+  - L3209 · The plain block is the rule's boundary, not an oversight
+  - L3215 · left_float_edge, not left_offset
+  - L3222 · A display:table with no rows is a shrink-to-fit BLOCK (t815)
+  - L3257 · An orphaned table-cell is ATOMIC, not a run of inline text (t816)
+  - L3292 · The control is what makes this a diagnosis rather than a symptom
+  - L3301 · Two edits, one behaviour — and the mutation proves which
+  - L3310 · The residue, named rather than blamed
+  - L3322 · A sub-pixel float excess breaks a flex line — and Bootstrap is written in exactly those percentages (t817)
+  - L3362 · The fix, and why it is where it is
+  - L3370 · Bounds, stated rather than glossed
+  - L3404 · A flex/grid item's SLOT is a finished answer, not an input (t823) — and two things kept recomputing on top of it
+  - L3437 · ⚠ The asymmetry that hid it: a percentage clamp always binds again, a pixel one never does
+  - L3452 · The margin half needs no percentage and no framework
+  - L3459 · The fix
+  - L3475 · t827 addendum — the same rule on the BLOCK axis, and a defect hidden by a later write
+  - L3503 · A shrink-to-fit box hugged its text ONE PADDING too tightly — then still re-wrapped it (tick 830)
+  - L3510 · ⓵ The FILL_SENTINEL discard is asymmetric
+  - L3540 · ⓶ A box sized to its own max-content re-wrapped the run it was measured from
+  - L3563 · What it bought, against an OLD-BINARY CONTROL
+  - L3583 · Two lessons, and the second is about the gate
+  - L3600 · A float is a SECOND width resolution, and it never learned three of the block path's rules (t831)
+  - L3607 · The aim, and it came from the scorer rather than from a hand-rolled probe
+  - L3629 · ⓵ A floated replaced element has no content, so without its ratio it has no size
+  - L3647 · ⓶ min-width / max-width / min-height / max-height did not exist on this path
+  - L3676 · ⓷ And box-sizing: border-box on the block axis
+  - L3683 · Priced against an OLD-BINARY control, 16 sites, same hour
+  - L3704 · §10.4 runs BLOCK → INLINE too, and the block path only ever ran it one way (t833)
+  - L3748 · An absolutely positioned image was ZERO PIXELS TALL, always (t834)
+  - L3776 · The falsification pass deleted a third of the fix
+  - L3799 · A flex item <img> told taffy its content wanted ZERO (t835)
+  - L3819 · The first version of the fix shipped a regression, and only the control caught it
+  - L3834 · Residue, bounded and with its refutations attached
+  - L3848 · The out-of-flow pass's viewport held the DOCUMENT height (t837)
+  - L3878 · What it was priced at, honestly
+  - L3900 · A position:relative ancestor inside an out-of-flow subtree is still a containing block
+  - L3937 · The one-line version is wrong, and two existing gates say so
+  - L3954 · CSS 2.1 §10.3.3: the over-constrained equation ignores margin-left under rtl
+  - L3988 · The diagnostic that settled it: delta × n
+  - L4006 · The static position of an insetless position:absolute box includes the INLINE ADVANCE (t848)
+  - L4039 · What it deliberately does not cover, with numbers
+  - L4053 · The lesson worth carrying
+  - L4060 · The static position is resolved PER AXIS (t849)
+  - L4099 · The drop-guard had to narrow at the same time
+  - L4106 · What it bought, measured
+  - L4117 · A button centres its content vertically, and no stylesheet can say so (t850)
+  - L4152 · The box-sizing residue this measured on the way past
+  - L4172 · What it bought, and the finding that outranks it
+  - L4185 · colspan/rowspan are CLAMPED unsigned longs, and an unclamped one is a HANG (t854)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1444,4 +1445,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1351 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1352 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -200,9 +200,13 @@ the last child's trailing margin.
 block child when the box is a plain `display:block`, `overflow:visible`, establishes no BFC, and has **no
 border and no padding on that edge** (`top_margin_collapses` / `bottom_margin_collapses`). Bottom
 additionally requires **auto height** — a definite height fixes the content box, so the margin cannot
-escape. Clearance on the first child, or a leading/trailing out-of-flow (float/abs) child, declines the
-collapse (conservative: never wrong, occasionally incomplete). `overflow:hidden`/`auto`/`scroll` — the
+escape. Clearance on the first child declines the collapse. `overflow:hidden`/`auto`/`scroll` — the
 card/clearfix margin-containing idiom — deliberately does **not** collapse.
+
+> ⚠ **SUPERSEDED (tick 859).** This paragraph used to also read *"or a leading/trailing out-of-flow
+> (float/abs) child, declines the collapse (**conservative: never wrong**, occasionally incomplete)"*.
+> It was wrong, and the phrase "never wrong" is why it stood for 700 ticks — a rule that declines a
+> collapse leaves a **visible gap**, so it has no safe direction to fail in. See the section below.
 
 **Top — hoist upward.** A cheap left-spine peek `collapse_through_top(node)` computes the first in-flow
 block child's *collapse-through* top margin (its own top margin joined recursively with ITS first block
@@ -231,6 +235,56 @@ gap), plus the eligibility guards `overflow_hidden_contains_child_margin` and
 *non*-collapse). The visible wins are mostly Bar-2 reftests (deferred); the testharness sweep held or
 nudged up — css-flexbox 26.5→26.6%, css-sizing 14.5→14.8%, css-position/overflow/normal-flow flat,
 **HANG/CRASH 0**. Nothing regressed, which is the bar for a mechanism this broad.
+
+## A float is not the FIRST IN-FLOW CHILD — it is SKIPPED, and treating it as a terminator cancelled the collapse (tick 859)
+
+CSS 2.1 §8.3.1 collapses a box's top margin with its first **in-flow** child's. A float and an
+absolutely-positioned box are, by definition, **not in-flow children** — so the search steps over them
+and the block *after* them is the first in-flow child. All four §8.3.1 search helpers
+(`collapse_through_top`, `collapse_through_bottom`, `leading_block_collapse_top`,
+`trailing_block_collapse_bottom`) instead **returned** on one, and the comment called that
+"conservative".
+
+**There is no conservative direction here.** Declining a collapse leaves the child's margin *inside*
+the parent — a band of parent background above the first paragraph, and a parent that much too tall.
+It is not a cautious no-op; it is the bug, spelled the other way.
+
+**Chrome-measured** (`/tmp/mc.html`, 800px, `body{margin:0}`, `p{margin:15px 0}`), reading the parent's
+`y` and the first `<p>`'s `y`:
+
+| first child of the parent | Chrome | reading |
+|---|---|---|
+| `<div style="float:right">` | parent `15`, p `15` | collapsed **through** the float |
+| `<div style="position:absolute">` | parent `68`, p `68` | collapsed **through** the abspos box |
+| a text node | parent `159`, p `192` | **not** collapsed — real inline content does separate |
+
+A trailing float behaves the same on the bottom edge: the last `<p>`'s bottom margin escapes past it.
+
+**The two halves of the engine already disagreed with each other**, which is the tell worth keeping.
+`layout_children`'s placement loop clears `first_block` only for a *block-level* child, so a float
+never counted there — the placement was already Chrome-correct and only the *hoist computation*
+bailed out. When one mechanism is implemented in two places, check whether they agree before deciding
+which is wrong: here the two answers were different and the shorter one was right.
+
+**Why it is worth a tick.** `<div class=illu style="float:right"><img></div>` followed by prose is the
+pull-quote / article-figure / sidebar-thumbnail idiom, and on `kicktipp.com` it cost a **reading-order
+inversion**, not just a gap: Chrome reads the prose first (both at `y=0`, prose at `x=0`), we read the
+float first because we alone pushed the prose down 15px. Measured, same file, same hour, against the
+tick-858 binary:
+
+```text
+                        OLD (t858)        NEW (t859)
+  kicktipp.com          ro 1  shape 85.3%  →  ro 0  shape 87.4%
+  possssno.sbs          ro 1  shape 89.7%  →  ro 1  shape 89.7%   (3 interleaved pairs, identical)
+  marktplaats.nl        ro 1  shape 95.2%  →  ro 1  shape 95.2%
+  ubys.bingol.edu.tr    ro 1  shape 92.8%  →  ro 1  shape 92.8%
+  wikipedia / HN / a11yproject / blog.rust-lang / martinfowler   byte-identical on every term
+```
+
+**Gate.** `an_out_of_flow_first_child_does_not_cancel_the_parent_child_margin_collapse` (float case,
+abspos case, and the *text*-first guard that keeps the fix from becoming "collapse through anything")
+plus `a_trailing_float_does_not_cancel_the_bottom_margin_collapse`. RED-proven by restoring the
+`return 0.0` arm in `leading_block_collapse_top`.
 
 ## `overflow` establishes a block formatting context — float containment / the clearfix (tick 152)
 
