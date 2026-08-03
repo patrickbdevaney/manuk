@@ -294,3 +294,76 @@ fn g_control_line_height_is_normal() {
          globally, rather than on controls, passes every assertion above and fails this one",
     );
 }
+
+/// **BUTTONS AND `<select>` ARE `border-box`; TEXT FIELDS AND `<textarea>` ARE NOT.**
+///
+/// Chrome's UA sheet draws that line, and it is not intuitive: the controls that look most alike end
+/// up on opposite sides of it. We computed `content-box` for all six on the SHIPPING cascade, so a
+/// button, a submit input and a `<select>` were **too tall by exactly their vertical padding plus
+/// borders** on every page that sets a height and padding on them — which is what every design
+/// system does to a button.
+///
+/// Chrome-measured, `height:50px; padding-top:20px`, used border-box height:
+///
+/// ```text
+///               button  submit  text  select  textarea  div
+///   Chrome        50      50     70     50       70      70
+///   before        70      70     70     70       70      70
+///   after         50      50     70     50       70      70
+/// ```
+///
+/// ⚠ **THIS GATE EXISTS BECAUSE THE UNIT TEST CANNOT SEE THE SHIPPING CASCADE.** `manuk-layout`'s
+/// `layout_html` helper runs `MinimalCascade`; the browser runs Stylo. The two UA sheets are
+/// hand-maintained twins and they were wrong in OPPOSITE directions here — `MinimalCascade` applied
+/// `border-box` to all four form tags (too many), `stylo_engine.rs` had no rule at all (too few). A
+/// layout-crate test would have gone green on the half the browser does not use. `Page::load` is the
+/// real pipeline, which is the whole point of asserting it here.
+///
+/// ⚠ It also unblocks the button-centring rule (t850): that divides the slack in the CONTENT box, so
+/// a padded button's label could not be centred correctly until its content box was right. Chrome
+/// puts that label **26px** below the button's top; before this it was 36.
+///
+/// To watch it go RED, drop the `box-sizing: border-box` rule from `stylo_engine.rs`: the button,
+/// submit and select rows read 70 and the three content-box controls stay green.
+#[test]
+fn g_form_control_box_sizing() {
+    const BS_HTML: &str = r#"<!DOCTYPE html><html><head><style>
+      body{margin:0;font:16px Arial}
+      .t{display:block;width:300px;height:50px;padding:20px 0 0 0;border:0;margin:0}
+    </style></head><body>
+      <button id=q1 class=t>btn</button>
+      <input id=q2 class=t type=submit value=submit>
+      <input id=q3 class=t type=text value=text>
+      <select id=q4 class=t><option>opt</option></select>
+      <textarea id=q5 class=t>ta</textarea>
+      <div id=q6 class=t>div</div>
+      <button id=q7 class=t style="box-sizing:content-box">author</button>
+    </body></html>"#;
+    let fonts = FontContext::new();
+    let page = manuk_page::Page::load(BS_HTML, "https://forms.test/", &fonts, 1200.0);
+
+    for (sel, want, why) in [
+        (
+            "#q1",
+            50.0,
+            "a <button> is border-box — the row every design-system button is",
+        ),
+        ("#q2", 50.0, "input[type=submit] is border-box"),
+        (
+            "#q3",
+            70.0,
+            "control: input[type=text] is CONTENT-box, and the two look alike",
+        ),
+        ("#q4", 50.0, "<select> is border-box"),
+        ("#q5", 70.0, "control: <textarea> is CONTENT-box"),
+        ("#q6", 70.0, "control: an ordinary element is content-box"),
+        (
+            "#q7",
+            71.0,
+            "control: the rule is UA-ORIGIN, so an author's own box-sizing still wins (50 + 20 \
+             padding-top + the UA's 1px padding-bottom)",
+        ),
+    ] {
+        assert_h(&page, sel, want, why);
+    }
+}

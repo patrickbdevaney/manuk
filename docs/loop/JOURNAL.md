@@ -46267,3 +46267,106 @@ on a button that has slack. Nothing else in the engine sees a new branch on the 
 
 WIKI: `docs/wiki/box-layout.md` — a button centres its content vertically; the content moves as one
 group; the form-control `box-sizing` residue with its six measured numbers.
+
+## Tick 851 — three form controls are 20px too tall, and one UA rule says so (2026-08-02)
+
+TICK SHAPE: capability — the one-rule residue t850 measured, plus the end-to-end diagnosis of a
+cohort site that t850's own finding demanded.
+
+HYPOTHESIS: Chrome's UA sheet computes `box-sizing: border-box` for `button`,
+`input[type=submit|reset|button]` and `select`, and `content-box` for `input[type=text]`, `textarea`
+and every ordinary element. We compute `content-box` for all six, so those three controls are **too
+tall by exactly their vertical padding + borders** whenever an author sets both a height and padding
+— which is what every design system does to a button. Measured at `height:50px; padding-top:20px`:
+
+```text
+              button  submit  text  select  textarea  div
+  Chrome        50      50     70     50       70      70
+  ours          70      70     70     70       70      70
+```
+
+⚠ It also blocks t850: a padded button's vertical centring divides the slack in its CONTENT box, so
+it cannot be right until the content box is.
+
+RESULT — **all six controls now Chrome-exact, on the SHIPPING cascade, with the author override
+intact.**
+
+```text
+              button  submit  text  select  textarea  div    author box-sizing:content-box
+  Chrome        50      50     70     50       70      70            71
+  before        70      70     70     70       70      70            71
+  after         50      50     70     50       70      70            71
+```
+
+⚠⚠⚠ **THE TWO UA SHEETS WERE WRONG IN OPPOSITE DIRECTIONS, WHICH IS WHAT A HAND-MAINTAINED PAIR
+DOES.** `MinimalCascade`'s `apply_ua_defaults` set `box_sizing = BorderBox` for **all four** form tags
+(`input | button | textarea | select`) — too many, since Chrome leaves `input[type=text]` and
+`<textarea>` content-box. `stylo_engine.rs`, the **shipping** sheet, had **no rule at all** — too few.
+Neither was Chrome. The drift hazard in memory `two-cascades-stale-source-of-truth` predicts a stale
+twin; the actual failure was worse than stale, because **each sheet's error concealed the other's from
+whichever test you happened to write.**
+
+⚠⚠⚠ **AND THAT IS EXACTLY THE TRAP I NEARLY WALKED INTO.** `manuk-layout`'s `layout_html` helper runs
+`MinimalCascade`, so a layout-crate unit test would have gone **green on the half the browser does not
+use** — the t823 lesson (*"a reduction is not confirmed until it runs on the SHIPPING cascade"*)
+firing again, one tick after I wrote the same warning into a wiki page. The gate therefore lives in
+`engine/page/tests/g_form_control_metrics.rs`, which loads through `Page::load`, and it is RED-proven
+by commenting out the rule **in `stylo_engine.rs`** — `#q1` reads 70. ⚠ Running that gate WITHOUT
+`--features stylo,spidermonkey` fails its two pre-existing assertions with completely different
+numbers (`#a1` width 194 vs 53), which is the same fact from the other side and is worth knowing
+before mistaking it for a regression.
+
+⚠ It unblocks t850's padded-button row: Chrome puts a padded button's label **26px** below the
+button's top, we now read 26, and before this we read 36.
+
+RESULT — **zero attributable regressions.** Same-hour A/B over the 12-site M1 cohort, both binaries
+provenance-verified by BEHAVIOUR (old 300×70, new 300×50): **9 of 12 byte-identical**, including
+`ta3lemkonline`. Two rows looked clean and both were refuted:
+
+```text
+  celeb.gate.cc     OLD(batch) 0.783158   NEW 0.768421   ×n = -7.00 elements   ← looked REAL
+                    OLD alone  0.768421 / 0.768421       ← the OLD binary now reads the NEW value
+  chiyoda           OLD 0.675439/0.678363 n=342 cov=0.886
+                    NEW 0.752809/0.752809 n=356 cov=0.922 ← MORE elements, HIGHER coverage: the page
+                                                             loaded further, and it went UP
+```
+
+⚠⚠ **`celeb.gate.cc` HAD BEEN BYTE-IDENTICAL IN EVERY A/B THIS SESSION — AND IT MOVED ON ITS OWN.**
+It was the most stable control I had (0.783158 in four previous comparisons), which is precisely why
+its `−7.00` looked like the real thing. Re-running the OLD binary alone produced the NEW value twice.
+**A control earns its status run by run, not once**, and the cheapest way to keep that honest is to
+re-run the old binary rather than to trust a control's history.
+
+RESIDUE, MEASURED AND AIMED (this is the end-to-end diagnosis t850 asked for). Chased
+`littlecaesarsbcs`'s single M1-blocking `overlap` all the way to Chrome's own numbers for the pair:
+
+```text
+  button > span:nth-of-type(2)      Chrome [758 535 0x16]    ours [594 540 173x25]
+  …its child span                   Chrome [759 540 8x4]     ours [759 540 8x4]   ← IDENTICAL
+```
+
+**The child is byte-exact and the parent inline is 173px wide where Chrome says ZERO.** Reduced to a
+fixture (`<div>A<span><span class=inline-block></span></span>B</div>`) the family is:
+
+```text
+                                          Chrome            ours
+  span wrapping an inline-block         [11,  0, 8, 17]   [11, 10, 8,  4]   ✗ y and height
+  its inline-block child                [11, 10, 8,  4]   [11, 10, 8,  4]    ✓
+  span with spaces around the atom      [10, 18,17, 17]   [15, 28, 8,  4]   ✗ width too
+  empty span                            [11, 36, 0, 17]   [11, 36, 0, 19]   ✗ line-height, not content
+  span with text                        [11, 54,26, 17]   [11, 55,26, 17]   ~1px
+```
+
+**An inline element's rect is its own INLINE BOX — the line's content area at its position — not the
+union of its atomic children's boxes.** `node_rects`'s `lift` walks a boxed child's rect up to boxless
+inline ancestors, so an icon-wrapping `<span>` inherits the 4px-tall icon instead of the 17px line.
+That is 10px of `y` error and 13px of height error on `<span class=icon><i></i></span>`, one of the
+most common idioms on the web. **NOT fixed here** and the reason is scope, stated plainly:
+`node_rects` takes only `&Dom` — it has neither styles nor fonts — so the content area has to be
+recorded at layout time, which means new synthetic fragments in `layout_inline` and a real regression
+surface against `G6` clickability, which reads this same map. It is a tick, not a line.
+
+PERF: none — one UA rule and one narrowed branch in a cascade that already ran.
+
+WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
+layout-crate test cannot see it.

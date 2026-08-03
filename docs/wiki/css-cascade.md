@@ -1902,3 +1902,45 @@ nesting fix's own probe fixture had a nested `@layer` line in it as a *control*,
 that line, and pulling the thread found a top-level defect that had nothing to do with nesting. **A
 capability's neighbours are the cheapest place to find the next defect, because the fixture is already
 open and the reference is already running.**
+
+## Where Chrome draws the form-control `box-sizing` line (t851)
+
+Chrome's UA sheet computes **`border-box`** for `button`, `input[type=submit|reset|button]` and
+`select`, and **`content-box`** for `input[type=text]`, `textarea` and every ordinary element. The
+line is not intuitive — the controls that look most alike end up on opposite sides of it.
+
+Measured at `height:50px; padding-top:20px`, used border-box height:
+
+```text
+              button  submit  text  select  textarea  div    author box-sizing:content-box
+  Chrome        50      50     70     50       70      70            71
+  before        70      70     70     70       70      70            71
+  after         50      50     70     50       70      70            71
+```
+
+So a button, a submit input and a `<select>` were **too tall by exactly their vertical padding plus
+borders** on every page that sets a height and padding on them — which is what every design system
+does to a button. The rule is UA-origin, so an author's own `box-sizing` still wins (the last column).
+
+### Both UA sheets were wrong, in OPPOSITE directions
+
+This engine keeps two hand-maintained UA stylesheets: `engine/css/src/stylo_engine.rs` (CSS text, the
+**shipping** cascade) and `apply_ua_defaults` in `engine/css/src/lib.rs` (`MinimalCascade`).
+
+* `MinimalCascade` set `border-box` for **all four** form tags — too many.
+* `stylo_engine.rs` had **no rule at all** — too few.
+
+Neither matched Chrome. The known hazard (`two-cascades-stale-source-of-truth`) predicts one sheet
+going *stale* relative to the other; what actually happened is worse, because **each sheet's error
+concealed the other's from whichever test you happened to write.**
+
+### A layout-crate test cannot see the shipping cascade
+
+`manuk-layout`'s `layout_html` helper runs `MinimalCascade`. A unit test there would have gone green
+on the half the browser does not use. The gate therefore lives in
+`engine/page/tests/g_form_control_metrics.rs`, which loads through `Page::load`, and it is RED-proven
+by commenting the rule out of **`stylo_engine.rs`**.
+
+⚠ Running that gate **without** `--features stylo,spidermonkey` fails its two pre-existing assertions
+with completely different numbers (`#a1` width 194 against Chrome's 53) — the same fact from the
+other side, and worth recognising before mistaking it for a regression.

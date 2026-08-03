@@ -3717,7 +3717,28 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
             left: Dim::Px(6.0),
             right: Dim::Px(6.0),
         };
-        s.box_sizing = BoxSizing::BorderBox;
+        // **BUTTONS AND `<select>` ARE `border-box`; TEXT FIELDS AND `<textarea>` ARE NOT** — and
+        // this cascade had it the other way round, applying `border-box` to all four tags. Chrome's
+        // UA sheet draws the line where the controls that look most alike end up on opposite sides
+        // of it. Measured at `height:50px; padding-top:20px`, used border-box height:
+        //
+        //     button  submit  text  select  textarea  div
+        //       50      50     70     50       70      70     Chrome
+        //
+        // Kept in lockstep with the `box-sizing: border-box` rule in `stylo_engine.rs`, which is the
+        // SHIPPING cascade and did not have this rule at all. The two sheets were wrong in opposite
+        // directions, which is exactly what a hand-maintained pair of stylesheets does.
+        if matches!(tag, "button" | "select")
+            || (tag == "input"
+                && el.attr("type").is_some_and(|t| {
+                    matches!(
+                        t.to_ascii_lowercase().as_str(),
+                        "submit" | "reset" | "button"
+                    )
+                }))
+        {
+            s.box_sizing = BoxSizing::BorderBox;
+        }
         if matches!(tag, "button") {
             s.background_color = Some(Rgba::new(239, 239, 239, 255));
             s.padding.left = Dim::Px(10.0);

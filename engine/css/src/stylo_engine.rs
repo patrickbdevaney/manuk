@@ -265,6 +265,22 @@ input[type=submit], input[type=reset], input[type=button], button {
   padding: 1px 6px;
   text-align: center;
 }
+/* **BUTTONS AND `<select>` ARE `border-box`; TEXT FIELDS AND `<textarea>` ARE NOT.** Chrome's UA
+   sheet draws that line and it is not intuitive — the controls that look most alike are on opposite
+   sides of it. Measured at `height:50px; padding-top:20px`, used border-box height:
+
+     button  submit  text  select  textarea  div
+       50      50     70     50       70      70     Chrome
+       70      70     70     70       70      70     us, before this rule
+
+   So a button, a submit input and a select were **too tall by exactly their vertical padding plus
+   borders** on every page that sets a height and padding on them — which is what every design system
+   does to a button. It also blocked the button-centring rule landed at t850: that divides the slack
+   in the CONTENT box, so it cannot be right until the content box is.
+   ⚠ UA-origin, so an author's own `box-sizing` still wins — asserted in the gate. */
+input[type=submit], input[type=reset], input[type=button], button, select {
+  box-sizing: border-box;
+}
 input[type=hidden] { display: none; }
 /* `hidden` global attribute — https://html.spec.whatwg.org/#hidden-elements. An element carrying the
    boolean `hidden` attribute is NOT rendered. This is one of the most common visibility toggles on

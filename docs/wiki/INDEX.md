@@ -498,6 +498,9 @@
   - L1823 · And the headline metric could not see it either
   - L1832 · A nested @media lost its declarations, and only its declarations (t785)
   - L1873 · A layer exists to LOSE, and ours won (t790)
+  - L1906 · Where Chrome draws the form-control box-sizing line (t851)
+  - L1925 · Both UA sheets were wrong, in OPPOSITE directions
+  - L1937 · A layout-crate test cannot see the shipping cascade
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1432,4 +1435,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1343 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1346 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
