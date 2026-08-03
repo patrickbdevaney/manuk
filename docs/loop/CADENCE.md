@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **597** | ticks 1–862 |
-| median tick cycle | **25m** | 596 intervals |
-| median, last 10 | **49m** | 10 intervals |
+| ticks landed | **598** | ticks 1–863 |
+| median tick cycle | **25m** | 597 intervals |
+| median, last 10 | **40m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.07** | 555.9h elapsed |
-| median verify wall | **63s** | 536 ticks |
+| **ticks per hour** | **1.07** | 556.4h elapsed |
+| median verify wall | **63s** | 537 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **454**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**292 of 597 ticks** (49%) moved a
+**292 of 598 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -694,5 +694,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **860** | 2026-08-03 07:15 | 41m | instrument | 63s | +540/−42 | 381 | 81 | 56.0% · | a stylesheet that 404s is not a page we failed to style (2026-08-03) |
 | **861** | 2026-08-03 08:14 | 59m | instrument | 63s | +315/−41 | 381 | 81 | 56.0% · | an oracle timeout is the REFERENCE hanging, and I measured the wrong binary four times (20 |
 | **862** | 2026-08-03 08:54 | 40m | capability | 63s | +557/−38 | 382 | 81 | 56.0% · | `[object Object]` is why a server-rendered page rendered NOTHING (2026-08-03) |
+| **863** | 2026-08-03 09:28 | 34m | measurement | 63s | +180/−33 | 382 | 81 | 56.0% · | the brand fix, measured on a cohort; and a DETERMINISTIC single-site Bar 0 (2026-08-03) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

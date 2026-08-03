@@ -396,6 +396,9 @@
   - L2966 · The four wrong turns this took, because each one looked like the answer
   - L2990 · What changed, and deliberately what did not
   - L3012 · The third cohort in a row that was not ours
+  - L3020 · A quiet UNSCORED label can be hiding a Bar 0 (tick 863)
+  - L3036 · Four discriminators localized a nine-of-nine segfault with NOT ONE symbol
+  - L3053 · Why a dead reproducer is worse than an open bug
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -1456,4 +1459,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1363 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1366 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

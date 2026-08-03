@@ -3016,3 +3016,51 @@ three cheap tests, three refutations. The sweep's printed `SCORABILITY CEILING` 
 fidelity, not a ceiling on our engine** — and the `css-starved` string, which t860 falsified but did
 not rewrite, is corrected here too. A reason string is re-read on every sweep; leaving a falsified
 one in place re-sells the same wrong tick forever.
+
+## A quiet UNSCORED label can be hiding a Bar 0 (tick 863)
+
+`redemoura.gupy.io` was filed `thin-overlap-2` by the t857 sweep — an unscored row, one of twenty-odd,
+the kind that gets read as *"the instrument could not measure it"*. Re-measured SOLO on the current
+release binary it **segfaults, 9 of 9**.
+
+`Unmeasurable::ThinOverlap` and `Unmeasurable::Crashed` are not neighbours on any severity scale. The
+instrument's own text for the second one says *"our own bug, like render-failed, and the most expensive
+kind"*, and Part 24.3 puts a crash above every visual divergence in the ledger. **One sweep's quiet
+label was carrying a Bar 0 for the length of that sweep's life.**
+
+Read next to the three preceding re-reads of a reason string — `shell-only` (t856), `css-starved`
+(t860), `timeout` (t861) — this is the fourth, and the first that moves blame **onto** this engine
+rather than off it. A reason string is re-read on every sweep by whoever is picking the next tick, so
+being wrong in the flattering direction is not the only way it costs.
+
+### Four discriminators localized a nine-of-nine segfault with NOT ONE symbol
+
+The gdb backtrace is **eleven consecutive `??` frames** with NaN-boxed values on the stack — entirely
+inside statically-linked SpiderMonkey, no frame of ours. Nothing in it names a subsystem. What named
+one was four cheap A/Bs, none of which needed a symbol:
+
+| probe | result | what it eliminates |
+|---|---|---|
+| **the OLD-BINARY control** (previous tick's sources, rebuilt, re-run the same hour) | 2/2 crash | it is not this tick's change — run this BEFORE believing anything, it has flipped a verdict three times |
+| **debug build, same URL** | 0/4 crash, scores normally | not a logic bug: release-only ⇒ the heap-corruption class |
+| **`MANUK_LOAD_BUDGET_MS=1`** | 0/1, loads clean to the end | the external-script phase fetches nothing in 1ms, so there are no deferred script BODIES — the fault needs them |
+| **`boxes --fetch` (the SYNC `Page::load`)** | exit 0 | the same discriminator from the other side: sync load has no network to fetch external script bodies with |
+
+Together they put the fault inside **`page.run_deferred_scripts(...)`** in `load_async` — confirmed by
+the phase ledger, whose last line before the fault is `author CSS applied before the lifecycle events`,
+the statement immediately preceding that call, and whose `deferred scripts` phase never completes.
+
+### Why a dead reproducer is worse than an open bug
+
+This crash class has been open and TRACKED for a long time; what it had not had since t650 is a
+**reproducer**. The note that parks it records the reproducer as needing *"~10 sites of allocation
+churn, never alone, never on 8× one site"* — which is another way of saying nobody could attach a
+debugger to it. **A parked bug's DIAGNOSIS outlives its REPRODUCER, and the diagnosis is what gets
+remembered**, so the parked verdict kept being inherited while the thing that could act on it rotted.
+One URL, one process, 9/9 is the difference between a tracked bug and an actionable one.
+
+It is deliberately **not fixed here**: localizing the corrupting write needs ASAN or an instrumented
+mozjs rebuild, and in-process containment of a SpiderMonkey memory fault is settled as unachievable
+without the process boundary. The tick pays what it can pay — the reproducer and the attribution.
+
+[[fidelity-instrument]] [[js-engine]] [[architecture]]

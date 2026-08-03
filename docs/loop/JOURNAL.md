@@ -46371,6 +46371,101 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 863 — the brand fix, measured on a cohort; and a DETERMINISTIC single-site Bar 0 (2026-08-03)
+
+TICK SHAPE: measurement (the falsifiable follow-through t862 owes the corpus) — plus a Bar 0 finding
+that arrived inside it and, per Part 24.3, outranks everything else in this entry.
+
+HYPOTHESIS (pre-registered): t862 fixed a GENERIC identity read, so its effect must not be confined to
+the one site that surfaced it. Prediction: at least one MORE unscored site becomes scorable, and the
+already-scored controls do not move beyond the corpus's own ±0.04 drift.
+
+COHORT: the 7 remaining ours-ish unscored rows (5 `tree-divergence`, 2 `thin-overlap`) plus 7 SCORED
+controls spanning the whole shape range (0.13 → 0.95). **Run SOLO, one process per site, sequentially**
+— t846-852's rule that the batch size is part of the measurement.
+
+RESULT 1 — **a SECOND unscored site converts, and no control regresses.**
+
+```text
+                                      t857                          t863 (this run)
+  profissionaliza.cademi.com.br   tree-divergence-34            SCORED  cov 1.000  shape 0.559 (n=34)
+                                  cov 0.147 · shape 0.200
+  pogoda.by                       tree-divergence-13            render-failed  (still unscored)
+  tracker.shadowfax.in            tree-divergence-48            unchanged
+  sports.yahoo.com                tree-divergence-1976          unchanged
+  www.villaggioposeidone.it       tree-divergence-413           unchanged
+  dashboard.twitch.tv             thin-overlap-9                unchanged
+  redemoura.gupy.io               thin-overlap-2                **crashed** — see RESULT 2
+
+  CONTROLS                      cov     shape        ->      cov     shape
+  hipmiluwuutara.org           0.3420  0.1315              0.3420  0.1315   byte-identical
+  littlecaesarsbcs…            1.0000  0.9487              1.0000  0.9487   byte-identical
+  crm.majoo.id                 0.7547  0.3250              0.7547  0.3750   +0.050
+  www.hdnails.it               0.9675  0.4301              0.9666  0.5304   +0.100
+  possssno.sbs                 1.0000  0.8052              1.0000  0.8974   +0.092
+  www.netvasco.com.br          0.9902  0.6430              0.9902  0.6397   -0.003
+  777juegos.com                0.9647  0.7317              0.9412  0.7250   -0.007  (cov -0.024)
+```
+
+Two controls byte-identical across six ticks is the fixed panel check #72 asked for and it held. Three
+moved UP by more than the ±0.04 drift band, none down beyond it. ⚠ **I am NOT claiming those three as
+t862's** — this cohort carries t862 AND t860 AND every layout tick since t857, and nothing here
+attributes between them. What the run establishes is the honest pair: **one more site crossed from
+UNSCORED to SCORED, and nothing regressed.**
+
+⚠⚠⚠ **RESULT 2 — BAR 0. `redemoura.gupy.io` SEGFAULTS, 9 of 9, AND IT IS NOT t862's.**
+
+The OLD-BINARY CONTROL was run before anything else was believed (t799-807's rule, which has changed
+a verdict three times): the two changed files were checked out at `HEAD~1`, the release binary rebuilt,
+and the site re-measured **in the same hour** — it segfaults **2/2**. So the crash is pre-existing.
+
+```text
+  release  (t862 binary)   9 / 9   SIGSEGV
+  release  (t861 binary)   2 / 2   SIGSEGV      <- the old-binary control
+  debug                    0 / 4   clean, scores `thin-overlap-2`
+  MANUK_LOAD_BUDGET_MS=1   0 / 1   clean and complete
+```
+
+**This is the project's long-parked mozjs heap-corruption class** — release-only, debug-clean, and a
+gdb backtrace that is **eleven consecutive `??` frames** with NaN-boxed values on the stack and not one
+symbol of ours. What is NEW, and is the whole content of this finding:
+
+* ⚠⚠⚠ **THE REPRODUCER IS ALIVE AGAIN, AND IT IS NOW A SINGLE SITE.** Since t650 that bug had NO
+  reproducer: its `calc-size` files stopped crashing, and the note recorded that the crash "needs ~10
+  sites of allocation churn, never alone, never on 8× one site." This one is **one URL, one process,
+  9/9**. A parked bug's DIAGNOSIS outlives its REPRODUCER, and a diagnosis with no reproducer is
+  un-actionable — an ASAN session now has something to attach to.
+* **It is localized to `run_deferred_scripts`.** The phase ledger's last line before the fault is
+  `author CSS applied before the lifecycle events sheets=2`, which is the statement immediately
+  preceding `page.run_deferred_scripts(...)` in `load_async` (engine/page/src/lib.rs). `deferred
+  scripts` never completes. That also explains the budget result: at `MANUK_LOAD_BUDGET_MS=1` the
+  external-script phase fetches nothing in 1ms, so there are no deferred script BODIES to execute and
+  the page loads clean to the end.
+* **`boxes --fetch` on the same URL exits 0.** It calls the SYNC `Page::load`, which has no network to
+  fetch external script bodies with — the same discriminator from the other side, and the reason nine
+  sweeps' worth of single-site probing never hit this.
+
+**NOT FIXED HERE, and the reason is a standing decision rather than a shrug.** The faulting frames are
+entirely inside statically-linked SpiderMonkey; localizing the corrupting write needs ASAN or an
+instrumented mozjs rebuild, which the constitution quarantines to a fresh well-resourced context.
+In-process containment of a SpiderMonkey memory fault is settled as NOT achievable (PROCESS-MODEL:
+it needs the process boundary). What this tick owes and pays is the reproducer and the attribution.
+
+⚠ **AND THE ROW IT REPLACES WAS FLATTERING US.** t857 filed this site as `thin-overlap-2` — an
+UNSCORED-but-quiet row. It is a crash, which the instrument itself calls "our own bug, and the most
+expensive kind". One sweep's quiet label was hiding a Bar 0. That is the fourth time a reason string
+has been re-read and found to mean something other than what it said (t856, t860, t861, now this) —
+except that the previous three moved blame OFF this engine and this one moves it ON.
+
+SIGHTED, NOT CHASED: `pogoda.by` moved `tree-divergence-13` → `render-failed` (cov 0.019 → 0.009).
+Both are unscored so the ceiling does not move either way, but the label now says the failure is ours;
+it is the next single-site probe, and it is NOT folded in here.
+
+PERF: none — no engine path changed this tick.
+
+WIKI: `docs/wiki/conformance-and-oracles.md` — "A quiet unscored label can be hiding a Bar 0", and the
+four discriminators that localized a nine-of-nine segfault without a single symbol.
+
 ## Tick 862 — `[object Object]` is why a server-rendered page rendered NOTHING (2026-08-03)
 
 TICK SHAPE: capability (function leg, and it lands on the M1 SCORABILITY ceiling the board ranks
