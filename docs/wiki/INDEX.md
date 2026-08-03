@@ -674,6 +674,9 @@
   - L225 · Two classifiers, one rule, and the one that ran first could not apply it (t877)
   - L246 · What it was mislabelling
   - L265 · The override is deliberately narrow, and the gate proves the narrowness
+  - L279 · The one-origin proxy works, and a naive one half-boots the app it was built to rescue (t880)
+  - L302 · The fifth is the whole finding
+  - L313 · What that means for the build
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1497,4 +1500,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1404 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1407 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

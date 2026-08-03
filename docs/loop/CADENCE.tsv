@@ -612,3 +612,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 876	3771356b	1785795422	2026-08-03T18:17:02-04:00	833	measurement	63	9	348	45	385	81	3896	6960	0	461	0	`render-failed` is the pixel classifier winning a race it should have lost (2026-08-03)
 877	764fad49	1785796681	2026-08-03T18:38:01-04:00	1259	capability	63	7	359	33	386	81	3896	6960	0	461	0	the fourth cohort named as ours and proven not ours (2026-08-03)
 878	729fecbb	1785797227	2026-08-03T18:47:07-04:00	546	capability	63	7	230	34	386	81	3896	6960	0	461	0	the I3 assertion three constitution checks have asked for, and only one of its four clauses can go red (2026-08-03)
+879	e1eba018	1785797544	2026-08-03T18:52:24-04:00	317	measurement	63	6	158	34	386	81	3896	6960	0	461	0	the map is clean against Interop and stale against Baseline, and we gate the scroll SURFACE not the scroll SCHEDULE (2026-08-03)

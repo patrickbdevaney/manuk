@@ -46371,6 +46371,78 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 880 — the proxy works on four of five, and the fifth is the reason to build the acceptance test first (2026-08-03)
+
+TICK SHAPE: measurement — constitution check #75's steer #2: the largest single unscored cohort is
+t865's `type="module"` CORS wall (eleven of the twenty-four in-scope unscored rows), its named fix is
+a **loopback reverse proxy**, and it has been named-and-not-built since t865. This tick did not build
+it. It **tested the design first**, with a throwaway proxy, and the test changed the design.
+
+**THE MEASUREMENT** — `<div>` counts from `chromium --dump-dom`, three ways per site:
+
+```text
+                                     LIVE    PROXY    SNAPSHOT (what the oracle scores today)
+  pt88.app                            147      147       0
+  booking.directferries.com             8        8       1
+  portal.ensuretyfinance.com            8        8       0
+  webfenix.movilidadbogota.gov.co      22       22       4
+  allticketscol.com                   336     → 38 ←     0
+```
+
+**Four of five recover EXACTLY, which settles the open question**: this cohort is a measurement
+channel, not an engine gap, and one origin is genuinely all it takes. t865's diagnosis and its named
+fix are both confirmed, three ticks after t877 proved the same thing about `render-failed`.
+
+⚠⚠⚠ **AND THE FIFTH IS THE FINDING, BECAUSE IT IS THE EXACT FAILURE t865 REFUSED TO ACCEPT FROM A
+DIFFERENT FIX.** `allticketscol.com` recovers **38 of 336** — a half-boot. t865 measured and rejected
+bundle-inlining for precisely this: *"a HALF-BUILT reference is worse than an honest shell — it clears
+the shell floor and the instrument starts charging Chrome's missing half to us."* **A proxy that
+half-boots does the same thing, silently, and looks like progress while doing it.** Had this been
+built straight from the steer, the sweep would have gained a site that scores against a reference
+missing 298 of its own elements, and the loop would have spent ticks chasing "our" missing DOM.
+
+The cause is one line of the document: the bundles live on **`static.allticketscol.com`**, a different
+host. A single-origin proxy rewrites nothing, so those requests go to a foreign origin and are
+CORS-blocked all over again.
+
+**SO THE DESIGN CHANGES, and the change is what makes it buildable.** Proxying "more hosts" is
+unbounded — a page may pull from any number of CDNs, and chasing them is the bot-wall treadmill in a
+different costume. The answer is an **acceptance test** that turns t865's warning into something
+measured:
+
+> **A proxied render is usable as a reference only when it AGREES with the LIVE render.** Compare the
+> two; score the row only if they match; otherwise keep the honest `oracle-module-shell` label and the
+> unmoved denominator.
+
+Cheap (one `--dump-dom` each), falsifiable in both directions, and it makes the half-boot a **detected**
+state rather than a silent one. **Build the proxy behind that test, never in front of it.**
+
+⚠ PROCESS, recorded because the rule exists for a reason: the five proxies were stopped by resolving
+`ps -eo pid,args` to explicit PIDs and killing those, never `pkill -f` on a pattern that appears in the
+killing command's own cmdline (t650, and t846's *"a COUNT is not an IDENTIFICATION"*).
+
+CADENCE — SELF-AUDIT (due every 10; last at 869), run at this tick and **fully green**:
+*"methodology and reality agree."* Tier 0 clear (wall 66s ≤ 300s, oracle frame 265 sites, the SPA
+miner's findings asserted in G2 scenario 14); every prescribed gate stands up rather than being
+written down; every gate declares how to break it, with `G_CONTAIN` **self-proving** (its test input
+IS the bug, which is stronger than a mutation); journal has one entry per tick with no gaps; the
+pattern ledger tracks coverage rather than claiming it. `G_SPAWN` and `G_POOL_ISOLATION` remain
+correctly retired — the second because no thread pool exists, so a gate on it would be **vacuous by
+construction**, which is the distinction this audit exists to keep sharp.
+
+Recorded without softening: a green self-audit is a weaker signal than a red one, and its value this
+window is that the **falsifiability** section stayed green while five new gates were added
+(`the_space_before_an_atomic_inline…`, `text_align_does_not_change…`,
+`an_out_of_flow_childs_static_position…`, `a_bfc_root_is_placed_beside_a_float…`,
+`a_transform_applies_to_a_flex_item…`, plus `G_CLICK_POINT` and
+`a_blank_render_is_ours_unless…`). Every one was RED-proven before landing, and t878's was the tick
+that found three of its own four clauses **cannot** go red and said so in the file.
+
+PERF: none — measurement only, and nothing committed runs a proxy.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "The one-origin proxy works, and a naive one half-boots the
+app it was built to rescue"
+
 ## Tick 879 — the map is clean against Interop and stale against Baseline, and we gate the scroll SURFACE not the scroll SCHEDULE (2026-08-03)
 
 TICK SHAPE: measurement — the surface audit came due (every 10; last at 869), banked as audit #59 in

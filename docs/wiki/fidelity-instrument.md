@@ -275,3 +275,51 @@ Neither label moves the arithmetic — both are UNSCORED and both count against 
 only what the loop is told to go and fix. It is the **fourth** consecutive cohort named as ours and
 proven not ours: `shell-only` (t856), `css-starved` (t860), `oracle-timeout` (t861), `render-failed`
 (here).
+
+## The one-origin proxy works, and a naive one half-boots the app it was built to rescue (t880)
+
+t865 named the largest unscored cohort's cause and its fix: a `type="module"` script is **always**
+CORS-fetched, the oracle renders a fetched copy from a foreign origin, a site does not send
+`Access-Control-Allow-Origin` for its own bundle, so the entry bundle never loads and the app never
+boots — **for the reference as well as for us**. The named fix was *"a loopback reverse PROXY so
+document, bundle and XHR share ONE origin"*. It had never been tested.
+
+It is tested now, with a throwaway proxy, before any of it is built into the instrument. `<div>`
+counts from `chromium --dump-dom`:
+
+```text
+                                     LIVE    PROXY    SNAPSHOT (what the oracle does today)
+  pt88.app                            147      147       0
+  booking.directferries.com             8        8       1
+  portal.ensuretyfinance.com            8        8       0
+  webfenix.movilidadbogota.gov.co      22       22       4
+  allticketscol.com                   336     → 38 ←     0
+```
+
+**Four of five recover EXACTLY.** The design is right, and the cohort really is a measurement channel
+rather than an engine gap.
+
+### The fifth is the whole finding
+
+`allticketscol.com` recovers **38 of 336**, and that is precisely the failure t865 refused to accept
+from bundle-inlining: *"a HALF-BUILT reference is worse than an honest shell — it clears the shell
+floor and the instrument starts charging Chrome's missing half to us."* A proxy that half-boots does
+exactly that, silently, and looks like progress.
+
+The cause is one line of its document: the bundles live on **`static.allticketscol.com`**, a different
+host. A single-origin proxy rewrites nothing, so those requests still go straight to a foreign origin
+and are CORS-blocked all over again.
+
+### What that means for the build
+
+Proxying "more hosts" is unbounded and cannot be the answer — a page may pull from any number of
+CDNs, and chasing them is the bot-wall treadmill in a different costume. The answer is an
+**acceptance test**, which turns t865's warning into something measurable:
+
+> **A proxied render is only usable as a reference when it AGREES with the LIVE render.** Compare the
+> two, and score the row only if they match; otherwise keep the honest `oracle-module-shell` label and
+> the unmoved denominator.
+
+That is cheap (both renders are one `--dump-dom` each), it is falsifiable in both directions, and it
+makes the half-boot a *detected* state rather than a silent one. Build the proxy behind it, never in
+front of it.
