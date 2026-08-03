@@ -648,6 +648,10 @@
   - L94 · The ranked fix — RETRACTED at t858, because it is already there
   - L109 · css-starved-N blamed our load deadline for the AUTHOR's dead link (t860)
   - L141 · ⚠⚠ The exemption needed a SECOND half, and the first half looked complete
+  - L171 · Parallelising the sweep is not free — and here is the control that prices it (tick 867)
+  - L199 · What survives parallelism and what does not
+  - L208 · Parallelism MANUFACTURES Bar-0 rows
+  - L217 · The usable rule
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1469,4 +1473,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1376 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1380 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

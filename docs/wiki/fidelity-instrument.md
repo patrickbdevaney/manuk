@@ -167,3 +167,57 @@ untouched — their fixtures are a refused connection and a cancelled fetch, nei
 the `shell-only` section above). The printed `SCORABILITY CEILING` is a floor on the *instrument's*
 fidelity, not a ceiling on the engine — and `render-failed`, `timeout` and `tree-divergence` have not
 been checked this way yet.
+
+## Parallelising the sweep is not free — and here is the control that prices it (tick 867)
+
+The board's #1 throughput lever asks for the fidelity sweep to run in parallel chunks: *"it runs
+SERIAL now (~2h/200 sites) … target ~15-20min. This alone nearly HALVES the cycle."* The speedup is
+real (≈2h → ≈35min at `-P 6`). The cost had never been measured.
+
+**The control**: 12 SCORED sites spanning the whole shape range (0.00 → 1.00), measured inside a
+`-P 6` chunked sweep and then again **one at a time**, on the same binary, minutes apart.
+
+```text
+  byte-identical                       7 / 12
+  MOVED                                5 / 12
+    www.trivago.be        cov 0.9144 -> 0.9564
+    probidas.lt           cov 0.6378 -> 0.2682     <- 0.37 of coverage, harness alone
+    www.repubblica.it     cov 0.9939 -> 0.9673 · shape 0.4468 -> 0.4249
+    www.puentedemando.com shape 0.7775 -> 0.7792
+    seduniaselat.com      shape 0.7415 -> 0.7500   <- CROSSES THE 0.75 M1 BAR
+```
+
+**One site in twelve crosses the M1 bar on the scheduling alone.** In the same sweep the headline
+moved by +2 M1 sites — so the artefact is the same order of magnitude as the signal it would be read
+as. That is the "every number has a harness" lesson with a price tag attached.
+
+The mechanism is not mysterious: our own load budget is a **wall clock**. Six concurrent renders plus
+six concurrent Chromes contend for cores and network, so a page that finished its subresources inside
+12s serially may not finish them at 6-way concurrency — and coverage is a direct function of what
+arrived before the deadline.
+
+### What survives parallelism and what does not
+
+| reads as | robust under parallelism? |
+|---|---|
+| a site's **reason string** changing (`render-failed` → SCORED, `shell-only` → `oracle-module-shell`) | **yes** — scheduling does not invent a boot or a module script |
+| a site's **shape at three decimal places** | **no** |
+| an **aggregate** M1 / scorability delta against a serially-measured sweep | **no** — the series is not differenceable across the harness change |
+| a **`crashed`** row | **no**, and worse — see below |
+
+### Parallelism MANUFACTURES Bar-0 rows
+
+Two chunks segfaulted, one of them five times, and the retry loop stopped converging. Every one of
+the 27 remaining sites then ran **clean when given its own process**. That is the parked mozjs
+heap-corruption bug's known threshold behaviour reproduced from the other side: it needs allocation
+churn, a batched sweep supplies the churn, so a batched run produces crash rows a solo run does not.
+**A crash count read off a batched sweep is a reading about the batch.** (The reverse of t863, where
+a SOLO run produced a deterministic 9/9 crash — that one is real precisely because it was alone.)
+
+### The usable rule
+
+Use parallel sweeps for **scorability and reason-string** questions, where the label is robust. Keep
+the banked series **serial** for the burndown slope, or re-baseline it explicitly — and re-measure any
+`crashed` row solo before believing it.
+
+[[conformance-and-oracles]] [[performance]]

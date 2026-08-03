@@ -46371,6 +46371,89 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 867 — the first full sweep in 10 ticks, and PARALLELISING IT IS NOT FREE (2026-08-03)
+
+TICK SHAPE: measurement — the board's CO-#1 asks for a fresh sweep whenever shape goes unmeasured,
+and it has been unmeasured since t857 while five capability/instrument ticks landed. The board's #1
+THROUGHPUT lever asks for that sweep to be PARALLELISED (*"it runs SERIAL now (~2h/200 sites); run
+manuk-wpt fidelity on CHUNKS with xargs -P 8 … do it as your next non-render tick"*).
+
+HYPOTHESIS (pre-registered, and it is the tension between two instructions): the board says
+parallelise; `session-846-852` says **the BATCH SIZE is part of the measurement**. Predict that
+parallelism is NOT free, and pre-register the control that decides it — the same 12 sites measured
+BOTH ways on ONE binary in ONE hour.
+
+RESULT 1 — **the sweep, 200/200 sites, same list as t857, arithmetic computed identically:**
+
+```text
+                       t857 (serial)      t867 (parallel-6)
+  in-scope                 128                 128
+  SCORED               101  78.9%          106  82.8%
+  shape >= 0.75         24  18.8%           29  22.7%
+  M1 (shape AND jarring) 14  10.9%           16  12.5%
+```
+
+RESULT 2 — ⚠⚠⚠ **AND THAT AGGREGATE IS NOT DIFFERENCEABLE, BECAUSE THE HARNESS CHANGED.** The
+control: 12 scored sites spanning the whole shape range (0.00 → 1.00), re-measured ONE AT A TIME on
+the same binary, minutes after the parallel run.
+
+```text
+  byte-identical                       7 / 12
+  MOVED                                5 / 12
+    www.trivago.be        cov 0.9144 -> 0.9564
+    probidas.lt           cov 0.6378 -> 0.2682     <- 0.37 of coverage, on the harness alone
+    www.repubblica.it     cov 0.9939 -> 0.9673 · shape 0.4468 -> 0.4249
+    www.puentedemando.com shape 0.7775 -> 0.7792
+    seduniaselat.com      shape 0.7415 -> 0.7500   <- CROSSES THE 0.75 BAR
+```
+
+**One of the twelve crosses the M1 shape bar on the parallelism alone.** Scale that: the headline
+moved +2 M1 sites, and a 12-site control produced 1 bar-crossing artefact — the artefact is the same
+order as the signal. So the honest report has two halves and they must not be merged:
+
+* **The SITE-LEVEL conversions are real and named**, because each is a site whose REASON changed and
+  each traces to a specific tick: `www.otomoto.pl` render-failed → SCORED (t862),
+  `profissionaliza.cademi.com.br` tree-divergence → SCORED (t862), `pogoda.by` tree-divergence →
+  SCORED (t864), `m.youm7.com` and `nortenoticia.com.br` css-starved → SCORED (t860),
+  `dashboard.twitch.tv` thin-overlap → tree-divergence (t866 — we now BUILD the page), and **7 sites
+  shell-only → oracle-module-shell** (t865's relabel, firing exactly where it should).
+* **The AGGREGATE +1.6pt M1 is not safe to read as progress.** A reason-string change cannot be
+  manufactured by scheduling; a shape number at three decimal places plainly can.
+
+⚠⚠ **THE COST IS NOT ONLY NOISE — PARALLELISM MANUFACTURES CRASHES.** Two chunks segfaulted, one of
+them five times over, and the retry loop stopped converging. Then **all 27 remaining sites ran clean
+when given one process each.** That is the parked mozjs heap-corruption bug's known threshold
+behaviour (t863: it needs allocation churn) reproduced from the other side: a batched sweep creates
+the churn, so a batched sweep produces `crashed` rows a solo sweep does not. **A crash count read off
+a batched run is a reading about the batch.**
+
+VERDICT for the observer, since the throughput lever is theirs: parallelising the sweep buys ~4×
+wall-clock (≈2h → ≈35min) and costs (a) per-site comparability against the whole banked t800→t857
+serial series, and (b) manufactured Bar-0 rows. **Both are now measured rather than assumed.** If the
+speed is wanted, the series needs re-baselining and the crash rows need a solo re-measure before they
+are believed; the alternative is to keep the banked series serial and use parallel runs only for
+reason-string/scorability questions, where the label is robust and the third decimal is not.
+
+BANKED: `docs/loop/SWEEP-t867-rows.tsv` (200 rows), labelled parallel-6 here so nobody differences it
+against a serial row set without reading this entry.
+
+⚠ **PROCESS, recorded because it is a documented trap I walked into anyway:** I ran
+`pkill -f "urls-file /tmp/sweep867/chunk_04"` to stop a stuck chunk. **The pattern was in my own
+command line, so pkill matched my own shell and killed it** — exit 144, and the files that command
+was about to write never existed. The memory note says *"NEVER pkill -f a pattern in your own
+cmdline"*; knowing it did not prevent it, because the pattern only LOOKS like it names someone else.
+The habit that does prevent it is the one used afterwards: collect PIDs with `ps`, then `kill` by PID.
+
+ALSO SIGHTED: `d2rwkn96gppqo1.cloudfront.net` moved shell-only-9 → **render-failed**, which is a move
+ONTO this engine and is the next single-site probe. Corpus drift accounted for separately —
+`mexcbt.ed-cl.com` and `videa.hu` went SCORED → unreachable, `www.livescore.cz` and `funinjeet.com`
+came the other way; those are the origins, not us.
+
+PERF: none — measurement only, no engine path changed.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "Parallelising the sweep is not free, and the control that
+prices it".
+
 ## Tick 866 — `performance.timing` is deprecated, universal, and absent (2026-08-03)
 
 TICK SHAPE: capability (function leg, on the board's SCORABILITY-FIRST leg). With both `render-failed`

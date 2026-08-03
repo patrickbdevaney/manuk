@@ -600,3 +600,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 864	60794e17	1785765839	2026-08-03T10:03:59-04:00	2137	capability	63	11	331	33	383	81	3896	6960	0	455	0	we were running BOTH halves of every Angular build (2026-08-03)
 865	bf2457c9	1785767674	2026-08-03T10:34:34-04:00	1835	instrument	63	9	436	47	383	81	3896	6960	0	455	0	the biggest unscored cohort is OUR SNAPSHOT's shell, and t674's control could not see it (2026-08-03)
 866	5c0a38c6	1785768975	2026-08-03T10:56:15-04:00	1301	capability	63	9	374	33	384	81	3896	6960	0	456	0	`performance.timing` is deprecated, universal, and absent (2026-08-03)
+867	386cb37e	1785774329	2026-08-03T12:25:29-04:00	5354	measurement	63	7	376	33	384	81	3896	6960	0	456	0	the first full sweep in 10 ticks, and PARALLELISING IT IS NOT FREE (2026-08-03)
