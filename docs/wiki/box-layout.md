@@ -4363,3 +4363,60 @@ Gates: `the_space_before_an_atomic_inline_is_measured_in_the_font_that_owns_it` 
 `text_align_does_not_change_a_floats_intrinsic_width`, both **self-comparisons** (the same content
 with/without `inline-block`; the same box with/without `text-align:center`) so no font metric is
 hard-coded, and each RED-proven by restoring only its own half.
+
+## A box laid out at a PROVISIONAL origin left its out-of-flow descendants behind (t872)
+
+A `float` and an `inline-block` are **sized before they are placed** — their size is what decides
+where they go — so both lay their content out at `(0,0)` and translate it into position once the
+box lands. `layout_float` says so in its own comment: *"content was laid out at (0,0); shift it to
+the float's content origin"*, and it shifts the child boxes and the text fragments.
+
+`static_pos` — where an insetless `position:absolute` box **would have been** in flow — is a
+**third output of that same inner layout**, and it was not shifted. So every out-of-flow descendant
+of a float or an inline-block was placed against the provisional origin. Chrome-measured, one
+`position:absolute` 1×1 span after `MENU` inside a container with `padding:15px`:
+
+```text
+                                  Chrome      before      after
+  inside float:left              [56, 15]    [41,  0]    [56, 15]
+  inside display:block           [56, 62]    [56, 62]    [56, 62]   ✓ never moved, so never wrong
+  inside display:inline-block    [56,109]    [56, 15]    [56,109]
+  inside display:flex            [15,155]    [15,155]    [15,155]   ✓
+```
+
+**The two that were wrong are exactly the two that lay out at a provisional origin.** That is the
+whole rule, and it is why `display:block` and `display:flex` — which lay out in place — were already
+Chrome-exact and hid the defect for as long as they did.
+
+### The guard that looked right and was not
+
+The obvious test for *"did the inner layout record a static position?"* is whether
+`static_pos.len()` grew. It is **wrong, and silently**: a float calls `shrink_to_fit` *before* it
+lays its content out, that probe lays the same subtree out and records the same key, and the real
+pass then **overwrites** it. Same length, a write that happened, and the float's `.sr-only` stayed
+put. The fix-up landed for `inline-block` and not for `float` on the first attempt for exactly this
+reason. `Ctx::static_pos_writes` is a monotone write counter; a counter cannot be fooled by an
+overwrite.
+
+`close_line` — which places an atomic inline on its line — is a free function with no `&self`, so
+the atomic's provisional origin is banked in `Ctx::atomic_static_origin` and the shift is applied in
+`layout_inline` where the final box comes back. The map is empty for every box with no out-of-flow
+descendant, which is nearly all of them.
+
+### Reach, and what it bought
+
+`.sr-only` (Bootstrap's, and every copy of it) is `position:absolute` with no insets, and it lives
+inside `.sidebar-toggle{float:left;padding:15px}` on every AdminLTE/Bootstrap admin header — plus
+every React portal root, dropdown and tooltip anchored inside a floated or inline-block card.
+
+```text
+                       shape before   after    jarring
+  ubys.bingol.edu.tr       0.9518     0.9578   reading-order 1 → CLEAN   ← M1 CROSSING
+  littlecaesarsbcs…        0.9487     0.9615   clean → clean
+  www.library.chiyoda…     0.8341     0.8596   overlap 1 (unchanged)
+  possssno.sbs / marktplaats / blog.rust-lang / en.wikipedia / a11yproject — byte-identical
+```
+
+Gated by `an_out_of_flow_childs_static_position_survives_its_containers_translate`, a
+**self-comparison against `display:block`** (the offset of the absolute box from its container must
+not depend on how the container was placed), with each half RED-proven on its own.

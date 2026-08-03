@@ -216,6 +216,9 @@
   - L4285 · 1. The space before an atomic was a constant
   - L4315 · 2. text-align was changing an intrinsic measurement
   - L4346 · What it bought, OLD binary vs NEW in the same hour, identical denominators
+  - L4367 · A box laid out at a PROVISIONAL origin left its out-of-flow descendants behind (t872)
+  - L4391 · The guard that looked right and was not
+  - L4406 · Reach, and what it bought
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1483,4 +1486,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1390 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1393 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

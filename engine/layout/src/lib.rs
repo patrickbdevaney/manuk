@@ -801,6 +801,27 @@ struct Ctx<'a> {
     /// stayed in flow. Recorded as normal flow walks past it, because that is the only moment the
     /// information exists.
     static_pos: RefCell<HashMap<NodeId, (f32, f32)>>,
+    /// ⚠⚠⚠ **The provisional origin of an ATOMIC INLINE whose subtree recorded a static position.**
+    ///
+    /// A float and an `inline-block` are both laid out at a provisional `(0,0)` and TRANSLATED into
+    /// place once their size is known — their size is what decides where they go, so the origin
+    /// cannot be known first. The boxes move; a `static_pos` recorded during that inner layout was
+    /// left behind in the provisional space, so every out-of-flow descendant of a float or an
+    /// inline-block was placed relative to the wrong origin. See `translate_static_positions`.
+    ///
+    /// Only populated when the inner layout actually recorded one, so the fix-up pass is a no-op —
+    /// an empty map lookup — on the overwhelming majority of boxes, which have no out-of-flow
+    /// descendant at all.
+    atomic_static_origin: RefCell<HashMap<NodeId, (f32, f32)>>,
+    /// How many times a static position has been WRITTEN, ever. The cheap, exact guard for
+    /// "did the inner layout record one?".
+    ///
+    /// ⚠ The obvious guard — did `static_pos.len()` grow — is WRONG and silently so: a float calls
+    /// `shrink_to_fit` before it lays its content out, that probe lays the same subtree out and
+    /// records the same key, and the real pass then OVERWRITES it. Same length, a write that
+    /// happened, and the float's `.sr-only` stayed at its provisional origin. A counter cannot be
+    /// fooled by an overwrite.
+    static_pos_writes: std::cell::Cell<u64>,
 }
 
 /// Lay out a whole document into a fragment tree, given a viewport width in px.
@@ -831,6 +852,8 @@ pub fn layout_document(
         taffy_item_width: RefCell::new(HashMap::new()),
         taffy_item_height: RefCell::new(HashMap::new()),
         static_pos: RefCell::new(HashMap::new()),
+        atomic_static_origin: RefCell::new(HashMap::new()),
+        static_pos_writes: std::cell::Cell::new(0),
     };
     let root_el = dom
         .find_first("body")
@@ -2235,6 +2258,41 @@ impl Ctx<'_> {
     /// is the right edge, and `frags` have already been through UAX #9 rule L2, so "the trailing
     /// edge of the last preceding fragment" is the wrong end of the wrong box. Named as residue
     /// rather than guessed at.
+    /// ⚠⚠⚠ **A BOX LAID OUT AT A PROVISIONAL ORIGIN CARRIES ITS OUT-OF-FLOW DESCENDANTS' STATIC
+    /// POSITIONS WITH IT.**
+    ///
+    /// `layout_float` says it in its own comment — *"content was laid out at (0,0); shift it to the
+    /// float's content origin"* — and shifts the boxes and the fragments. `static_pos` is a THIRD
+    /// output of that same inner layout and was not shifted, so a `.sr-only` (or any insetless
+    /// `position:absolute`) inside a float was placed at its float-LOCAL would-be position: off by
+    /// the float's own padding and border, and by wherever the float itself ended up.
+    ///
+    /// Chrome-measured, `.sidebar-toggle{float:left;padding:15px}` + Bootstrap's `.sr-only`, the
+    /// shape every AdminLTE/Bootstrap admin header on the web is built from:
+    ///
+    /// ```text
+    ///                                 Chrome      before
+    ///   inside float:left            [56, 15]    [41,  0]   <- off by the padding
+    ///   inside display:block         [56, 62]    [56, 62]   ✓ never moved, so never wrong
+    ///   inside display:inline-block  [56,109]    [56, 15]   <- off by the atomic's own placement
+    ///   inside display:flex          [15,155]    [15,155]   ✓
+    /// ```
+    ///
+    /// The two that are wrong are exactly the two that lay out at a provisional origin, and the two
+    /// that are right are the two that lay out in place. That is the whole rule.
+    fn translate_static_positions(&self, root: NodeId, dx: f32, dy: f32) {
+        if dx == 0.0 && dy == 0.0 {
+            return;
+        }
+        let mut sp = self.static_pos.borrow_mut();
+        for n in self.dom.descendants(root) {
+            if let Some(p) = sp.get_mut(&n) {
+                p.0 += dx;
+                p.1 += dy;
+            }
+        }
+    }
+
     fn refine_inline_static_positions(
         &self,
         kids: &[NodeId],
@@ -2285,6 +2343,7 @@ impl Ctx<'_> {
             }
             if let Some((top, right)) = best {
                 self.static_pos.borrow_mut().insert(k, (right, top));
+                self.static_pos_writes.set(self.static_pos_writes.get() + 1);
             }
         }
     }
@@ -3158,6 +3217,7 @@ impl Ctx<'_> {
             for &k in &kids {
                 if self.kid_is_out_of_flow(k) {
                     self.static_pos.borrow_mut().insert(k, (cx, cy));
+                    self.static_pos_writes.set(self.static_pos_writes.get() + 1);
                 }
             }
             let items = self.collect_inline_group(&flow_kids, cw, Some(node));
@@ -3307,6 +3367,7 @@ impl Ctx<'_> {
                 self.static_pos
                     .borrow_mut()
                     .insert(k, (cx, cur_y + prev_margin.max(0.0)));
+                self.static_pos_writes.set(self.static_pos_writes.get() + 1);
                 continue;
             } else if is_block_level(self.dom, self.styles, k) {
                 (cur_y, prev_margin) = self.flush_inline_run(
@@ -3562,7 +3623,11 @@ impl Ctx<'_> {
 
         // Lay out content at a provisional origin (0,0) in the float's own BFC.
         let mut inner = FloatContext::new(0.0, width);
+        // See `translate_static_positions`: the inner layout has a THIRD output besides the boxes
+        // and the fragments, and it is recorded in float-LOCAL coordinates.
+        let static_before = self.static_pos_writes.get();
         let (content, ch) = self.layout_children(node, 0.0, 0.0, width, None, &mut inner);
+        let static_moved = self.static_pos_writes.get() != static_before;
         // ── ⓷ **AND `box-sizing: border-box` ON THE BLOCK AXIS, which the width arm above already
         // got and this one did not** — a specified height on a border-box float came out padding +
         // border too tall (Chrome-measured: `box-sizing:border-box; padding:10px; height:100px`
@@ -3682,6 +3747,9 @@ impl Ctx<'_> {
                 f.line_top += content_origin_y;
                 f.baseline += content_origin_y;
             }
+        }
+        if static_moved {
+            self.translate_static_positions(node, content_origin_x, content_origin_y);
         }
         boxx
     }
@@ -6001,7 +6069,17 @@ impl Ctx<'_> {
                     let ml = s.margin.left.resolve(cw, 0.0);
                     let mr = s.margin.right.resolve(cw, 0.0);
                     let mut fc = FloatContext::new(0.0, cw);
+                    // An atomic inline is the float's twin: laid out at a provisional origin here and
+                    // translated onto its line in `close_line`, which is a free function with no
+                    // access to `static_pos`. So the origin is banked and the shift applied where the
+                    // final box comes back — see `translate_static_positions`.
+                    let static_before = self.static_pos_writes.get();
                     let r = self.layout_block(node, cw, None, 0.0, 0.0, 0.0, &mut fc);
+                    if self.static_pos_writes.get() != static_before {
+                        self.atomic_static_origin
+                            .borrow_mut()
+                            .insert(node, (r.boxx.rect.x, r.boxx.rect.y));
+                    }
                     let advance = ml + r.boxx.rect.width + mr;
                     let height = r.margin_top + r.boxx.rect.height + r.margin_bottom;
                     // ── **THE INLINE-BLOCK'S OWN BASELINE** (CSS 2.1 §10.8.1). Its last in-flow
@@ -6801,6 +6879,20 @@ impl Ctx<'_> {
                 false, // the LAST line of the block — never justified
                 base_rtl,
             );
+        }
+
+        // ── An atomic inline whose subtree recorded a STATIC POSITION has now been translated onto
+        // its line by `close_line`, and its descendants' would-be-in-flow positions must move by the
+        // same delta. The map is empty for every box that has no out-of-flow descendant, which is
+        // almost all of them, so this costs one `is_empty` on the ordinary page.
+        if !self.atomic_static_origin.borrow().is_empty() {
+            for b in &atomic_boxes {
+                let Some(n) = b.node else { continue };
+                let prov = self.atomic_static_origin.borrow_mut().remove(&n);
+                if let Some((px, py)) = prov {
+                    self.translate_static_positions(n, b.rect.x - px, b.rect.y - py);
+                }
+            }
         }
 
         (frags, atomic_boxes, y - cy)
@@ -11756,6 +11848,54 @@ mod tests {
     /// Chrome agrees the two are identical (`float:left`, `padding:10px 15px`, both **107x39**);
     /// before this fix ours were **102** and **107**. At 32px the miss is ~15px, which is why the
     /// gate runs there.
+    /// ⚠⚠⚠ **A BOX LAID OUT AT A PROVISIONAL ORIGIN LEFT ITS OUT-OF-FLOW DESCENDANTS BEHIND.**
+    ///
+    /// A `float` and an `inline-block` are sized before they are placed — their size is what decides
+    /// where they go — so both lay their content out at `(0,0)` and TRANSLATE it into position.
+    /// `layout_float` shifts the boxes and the fragments and says so in its own comment;
+    /// `static_pos` is a THIRD output of the same inner layout and was not shifted. So every
+    /// insetless `position:absolute` inside a float was placed at its float-LOCAL would-be position.
+    ///
+    /// The assertion is a SELF-comparison against `display:block`, which lays out in place and was
+    /// therefore never wrong — the offset of the absolute box from its container must not depend on
+    /// how the container was placed. Chrome agrees (all three `[56, +15]` from their container);
+    /// ours read `[41, +0]` for the float and `[56, +15]` **absolute** for the inline-block, i.e.
+    /// missing its container's own y entirely.
+    #[test]
+    fn an_out_of_flow_childs_static_position_survives_its_containers_translate() {
+        let offset_in = |disp: &str| -> (f32, f32) {
+            let html = r#"<div id="cb"><a id="c" style="padding:15px"><span>MENU</span><span id="sr">x</span></a></div>"#;
+            let css = format!(
+                "#cb{{position:relative;width:600px}}\
+                 #sr{{position:absolute;width:1px;height:1px;padding:0;margin:0;border:0}}\
+                 #c{{{disp}}}"
+            );
+            let (dom, root) = layout_html(html, &css, 800.0);
+            let rects = root.node_rects(&dom);
+            let by_id = |id: &str| {
+                dom.descendants(dom.root())
+                    .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                    .expect("id")
+            };
+            let c = rects[&by_id("c")];
+            let sr = rects[&by_id("sr")];
+            (sr.x - c.x, sr.y - c.y)
+        };
+        let block = offset_in("display:block");
+        let float = offset_in("display:block;float:left");
+        let inline_block = offset_in("display:inline-block");
+        assert!(
+            (float.0 - block.0).abs() < 1.0 && (float.1 - block.1).abs() < 1.0,
+            "an absolute box's static position inside a FLOAT must be the same offset from its \
+             container as inside a block — block {block:?}, float {float:?}"
+        );
+        assert!(
+            (inline_block.0 - block.0).abs() < 1.0 && (inline_block.1 - block.1).abs() < 1.0,
+            "…and the same inside an INLINE-BLOCK, which is placed the same provisional way — \
+             block {block:?}, inline-block {inline_block:?}"
+        );
+    }
+
     #[test]
     fn the_space_before_an_atomic_inline_is_measured_in_the_font_that_owns_it() {
         let width_of = |second: &str| -> f32 {

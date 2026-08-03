@@ -46371,6 +46371,81 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 872 — a box sized before it is placed left its `.sr-only` behind (2026-08-03)
+
+TICK SHAPE: capability (render/geometry) — the second of the "over the shape bar, failing ONLY on
+jarring" cohort t868 recomputed and t871 opened. That cohort is the highest marginal-M1 vein the
+loop has: **13 sites over the bar against 2 in the near-bar cohort**, and this tick takes the third
+of them.
+
+⚠⚠⚠ **THE FINDING — A FLOAT AND AN `inline-block` ARE SIZED BEFORE THEY ARE PLACED, AND THE THIRD
+OUTPUT OF THAT INNER LAYOUT WAS NEVER MOVED.** Both lay their content out at a provisional `(0,0)`
+because their size is what decides where they go. `layout_float` shifts the child boxes and the text
+fragments and says so in its own comment — *"content was laid out at (0,0); shift it to the float's
+content origin"*. **`static_pos` is a third output of that same inner layout**, and it stayed in the
+provisional space, so every insetless `position:absolute` descendant was placed against the wrong
+origin. Chrome-measured, a 1×1 abspos span after `MENU` in a container with `padding:15px`:
+
+```text
+                                  Chrome      before      after
+  inside float:left              [56, 15]    [41,  0]    [56, 15]
+  inside display:block           [56, 62]    [56, 62]    [56, 62]   ✓ never moved, so never wrong
+  inside display:inline-block    [56,109]    [56, 15]    [56,109]
+  inside display:flex            [15,155]    [15,155]    [15,155]   ✓
+```
+
+**The two that were wrong are exactly the two that lay out at a provisional origin**, and the two
+that were right are the two that lay out in place — which is why `display:block` being Chrome-exact
+hid this for as long as it did. Four ticks this session (t848, t849, t852's steer, and this one) have
+now landed on the static position; each earlier one fixed *what* it was, this one fixes *where*.
+
+⚠⚠⚠ **AND THE GUARD THAT LOOKED RIGHT WAS WRONG, WHICH IS WHY THE FIX LANDED FOR HALF THE CASES ON
+THE FIRST ATTEMPT.** The obvious test for *"did the inner layout record a static position?"* is
+whether `static_pos.len()` grew. A float calls `shrink_to_fit` BEFORE it lays its content out; that
+probe lays the same subtree out and records the same key; the real pass then **overwrites** it.
+Same length, a write that happened. The first build fixed `inline-block` (whose atomic path has no
+such pre-probe) and left `float` — the corpus case — reading exactly as before, and the fixture said
+so immediately. `Ctx::static_pos_writes` is a monotone write counter; a counter cannot be fooled by
+an overwrite. *A guard on a SIZE cannot see a REPLACEMENT.*
+
+**MEASURED, solo, against t871's readings of the same sites in the previous hour:**
+
+```text
+                            shape before   after     jarring
+  ubys.bingol.edu.tr           0.9518     0.9578     reading-order 1 → CLEAN   ← M1 CROSSING
+  littlecaesarsbcs…            0.9487     0.9615     clean → clean
+  www.library.chiyoda.tokyo.jp 0.8341     0.8596     overlap 1 (unchanged)
+  possssno.sbs                 0.9913     0.9913     byte-identical control
+  www.marktplaats.nl           0.9667     0.9667     byte-identical control
+  blog.rust-lang.org           0.99639    0.99639    byte-identical control
+  en.wikipedia.org             0.48447    0.48447    byte-identical control (h/ov/ro all unmoved)
+  www.a11yproject.com          0.37615    0.37615    byte-identical control
+```
+
+**Zero movement on five controls and no site fell.** `littlecaesarsbcs` had been byte-identical at
+0.948718 across four consecutive readings on two binaries (t867, t871-OLD, t871-NEW) — the loop's
+most stable control — and moved UP on this change, which is the control doing its job in the
+direction that is allowed.
+
+THE REACH: `.sr-only` is `position:absolute` with no insets in Bootstrap and every copy of it, and it
+sits inside `.sidebar-toggle{float:left;padding:15px}` on every AdminLTE/Bootstrap admin header —
+plus every React portal root, dropdown and tooltip anchored inside a floated or `inline-block` card.
+
+I3: a static position IS an element's rect, so it is `node_rects` → the a11y bbox → the agent's click
+point (check #72). The `.sr-only` boxes themselves are 1×1 and not click targets, but the same code
+path carries every insetless dropdown and menu panel, and those are.
+
+GATE: `an_out_of_flow_childs_static_position_survives_its_containers_translate` — a **self-comparison
+against `display:block`**: the offset of the absolute box from its container must not depend on how
+the container was placed. Each half RED-proven on its own (float: block `(62.1, 15)` vs float
+`(39.1, -8)`; inline-block: `(54.1, 7)`). Layout suite 122 → 123 green.
+
+PERF: the guard is a `Cell<u64>` compare; the subtree walk runs only for a float or atomic that
+actually recorded a static position, which is a small minority of boxes.
+
+WIKI: `docs/wiki/box-layout.md` — "A box laid out at a PROVISIONAL origin left its out-of-flow
+descendants behind"
+
 ## Tick 871 — a centred float measured its widest ITEM, and the space before an icon was a constant (2026-08-03)
 
 TICK SHAPE: capability (render/geometry) — the shape tick t868 asked for by name: *"the reading-order
