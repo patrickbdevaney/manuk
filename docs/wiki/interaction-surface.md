@@ -2957,3 +2957,45 @@ geometry is reachable at all, so it wants a **measurement**, not a preference.
 Gate: `G_VIEWPORT` (`engine/page/tests/g_viewport.rs`) — **extended, not duplicated** (one `#[test]`
 per JS gate; a second SIGSEGVs), RED-proven by mutating out the schedule call, which yields
 `eager:NONE`.
+
+## A mis-placed box is a SHAPE defect; it becomes an I3 defect only when the reported box and the hittable region come apart (t878)
+
+`G_CLICK_POINT` is the first gate to assert invariant **I3**'s actual chain end-to-end:
+
+```text
+  LayoutBox::node_rects()  →  manuk_a11y::build_tree_with_rects  →  A11yNode.bbox  →  the CLICK POINT
+```
+
+It runs the real pipeline (`Page::load` → `a11y_tree()` → `hit_test`) and asserts that **clicking the
+centre of the box an element reports reaches that element**, plus the adversarial half — **a box that
+should not be there must not eat the click.**
+
+### The finding that came out of building it
+
+All four of the window's render fixes were reverted one at a time against the gate. **Only one goes
+red:**
+
+```text
+  t874  transform discarded in `extract_placed`   → FAILS  (drawer box -260..260 over the button)
+  t873  the §9.5 BFC float band                   → still green
+  t871  `text-align` in the intrinsic probe       → still green
+  t872  the static-position translate             → still green
+```
+
+That is a property of the invariant, not a weak fixture. **When a box is wrongly placed, its own
+centre moves with it** — so the click still lands and only the pixels are wrong. Mis-position is a
+*shape* defect. It becomes an *I3* defect only when the reported box and the hittable region come
+apart, and there are exactly two ways that happens:
+
+1. **A stray box overlays the target.** t874's off-canvas drawer: `transform` discarded, so an
+   invisible full-height panel sat over the header. Nothing looks wrong in a screenshot and every
+   click in that band goes to the wrong element.
+2. **A tie-break resolves an ancestor over its own descendant.** t853: sixteen Wikipedia links became
+   unclickable on rects that were *more* correct than before.
+
+So a geometry tick does **not** automatically need a click-point assertion — but a tick that adds a
+box, removes one, or changes what overlaps what does. That is the rule this gate replaces the old
+inference with.
+
+The three positional clauses are kept as **standing guards** and are documented in the file as such:
+a guard that cannot be shown to go red is not evidence and must not be written up as any.

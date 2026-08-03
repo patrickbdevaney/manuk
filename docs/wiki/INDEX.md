@@ -916,6 +916,8 @@
   - L2907 · The fixture, and the control that was the whole diagnosis
   - L2927 · A gate's shape can assert a case away
   - L2939 · Honest scope, and the residue that is a policy question
+  - L2961 · A mis-placed box is a SHAPE defect; it becomes an I3 defect only when the reported box and the hittable region come apart (t878)
+  - L2973 · The finding that came out of building it
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -1495,4 +1497,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1402 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1404 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

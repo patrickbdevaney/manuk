@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **611** | ticks 1–876 |
-| median tick cycle | **26m** | 610 intervals |
-| median, last 10 | **39m** | 10 intervals |
+| ticks landed | **612** | ticks 1–877 |
+| median tick cycle | **26m** | 611 intervals |
+| median, last 10 | **34m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.08** | 565.2h elapsed |
-| median verify wall | **63s** | 550 ticks |
+| **ticks per hour** | **1.08** | 565.6h elapsed |
+| median verify wall | **63s** | 551 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **385**
+* **live gates**: 27 → **386**
 * **✅ rows in the capability ledger**: 144 → **461**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**300 of 611 ticks** (49%) moved a
+**301 of 612 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **300** capability ticks, median cycle **26m**
+* **301** capability ticks, median cycle **26m**
 * median diff per tick: **+264 / −34** lines across 8 files
 
 ## Every tick
@@ -708,5 +708,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **874** | 2026-08-03 17:53 | 62m | capability | 63s | +318/−32 | 385 | 81 | 56.0% · | a `transform` applied unless the box was a flex container, and then it did not (2026-08-03 |
 | **875** | 2026-08-03 18:03 | 10m | measurement | 63s | +113/−32 | 385 | 81 | 56.0% · | the four-tick batch priced on the whole corpus, and the five crossings are all there (2026 |
 | **876** | 2026-08-03 18:17 | 14m | measurement | 63s | +348/−45 | 385 | 81 | 56.0% · | `render-failed` is the pixel classifier winning a race it should have lost (2026-08-03) |
+| **877** | 2026-08-03 18:38 | 21m | capability | 63s | +359/−33 | 386 | 81 | 56.0% · | the fourth cohort named as ours and proven not ours (2026-08-03) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

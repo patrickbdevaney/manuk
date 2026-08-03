@@ -46371,6 +46371,99 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 878 — the I3 assertion three constitution checks have asked for, and only one of its four clauses can go red (2026-08-03)
+
+TICK SHAPE: capability (agentic surface) — check #75's steer #4, carried verbatim by checks #72, #74
+and #75: *"land the I3 click-point assertion."* `G_CLICK_POINT` is that gate.
+
+**WHAT IT ASSERTS**, and it is deliberately not "the rects are right" — the layout suite does that,
+in layout's own units, and t853 proved a rect can be *more* correct and *less* clickable:
+
+> **Clicking the centre of the box an element reports must reach that element** — and its adversarial
+> half, **a box that should not be there must not eat the click.**
+
+The chain check #72 traced is short and every geometry tick moves it:
+`LayoutBox::node_rects()` → `manuk_a11y::build_tree_with_rects` → `A11yNode.bbox` → **the click
+point**. The gate runs the real pipeline (`Page::load` → `a11y_tree()` → `hit_test`) over the three
+constructs this window's fixes moved: an icon-plus-label link in a padded float (t871), a content
+column beside a BFC-establishing float (t873), and an off-canvas drawer translated off-screen (t874).
+
+⚠⚠⚠ **AND THE HONEST RESULT IS THAT ONLY ONE OF THE FOUR CLAUSES CAN GO RED. NAMING WHICH IS THE
+WHOLE VALUE OF HAVING RUN IT.** All four of this window's render fixes were reverted one at a time
+against the gate:
+
+```text
+  t874  transform discarded in `extract_placed`      → FAILS  (the drawer's box becomes -260..260,
+                                                               the union of the two copies, exactly
+                                                               t874's finding, over the Save button)
+  t873  the §9.5 BFC float band                      → still green
+  t871  `text-align` in the intrinsic probe          → still green
+  t872  the static-position translate                → still green
+```
+
+**The reason is a real property of the invariant, not a weak fixture: when a box is wrongly placed,
+its own centre moves WITH it, so the click still lands and only the pixels are wrong.** A
+mis-positioned element is a *shape* defect; it becomes an *I3* defect only when the reported box and
+the hittable region come apart. That happens in exactly two ways — a stray box overlaying the target
+(t874), or a tie-break resolving an ancestor over its own descendant (t853) — and the first is what
+this gate proves.
+
+So the write-up says so, in the file: three of the four clauses are **standing guards, not proofs**,
+and the module comment states that a guard which cannot be shown to go red *"is not evidence, and is
+not claimed as any"*. The first draft of that comment claimed all three fixes RED-proved their
+clause; four revert runs said otherwise, and PART III's rule about `most likely` in a log applies
+just as hard to a doc comment. **This is a smaller result than the one I set out to write down, and
+it is the one that is true.**
+
+⚠ A FIXTURE DEFECT WORTH ONE LINE: the gate's HTML would not compile as `r#"…"#` because
+`<a href="#">` contains `"#`, which closes the raw string — the lexer then reported the error 44
+lines later at an unrelated `\n`, with a helpful-and-wrong suggestion about an em dash. `r##"…"##`.
+An error message pointing at the wrong line is the ordinary case for a delimiter bug, and the tell
+was that the reported token was fine.
+
+I3 STATUS: the invariant now has an assertion that runs in the wall on every tick, for the first
+time since it was written. It is not yet the assertion check #72 imagined — that one would fire on
+*any* geometry change — but it is the difference between an inference and a gate, and the class it
+does prove is the one where a defect is invisible to a screenshot and fatal to an agent.
+
+CADENCE — WALL-TIME AUDIT (due every 20; last at 857), and it lands on a gate I just added to, so
+it is worth being precise. The t877 wall was **250s**, and it is one section:
+
+```text
+  187s  P · parity (72/72 vs headless Chrome)     75%
+   28s  T · crate tests                           11%
+   17s  B · build                                  7%
+   10s  G6 · 4%   ·   G1 5s · D 5s · F 2s · F4 1s · everything else 0s
+```
+
+**P's cause is already diagnosed and half of it is already fixed.** Wall audit #21 measured this same
+gate at 175s of a 227s wall and found the loop spawned a full headless Chrome per fixture, serially;
+the Chrome half is now captured **8-way in parallel** (`CHROME_JOBS`), which is ~9 rounds × 2.4s ≈
+**22s** of the 187. Caching Chrome's answers was considered and **rejected on rigor** in that audit,
+correctly: *"a gate whose expected value came from MEMORY tests the memory"*, and a Chrome update
+changing a box is exactly what this gate exists to notice.
+
+**So the residue — ~165s, ~2.3s × 72 — is the MANUK half, and it is serial by a constitutional
+constraint rather than a false dependency.** Each capture runs our engine including SpiderMonkey, and
+this project's standing rule is that two JS contexts in one process tear down messily and segfault
+nondeterministically (the reason every `g_*` gate carries "one `#[test]` on purpose", and the reason
+audit #21 parallelised only the Chrome side — Chrome is a separate PROCESS, so N of them are safe by
+construction).
+
+The admissible lever is therefore the one the Chrome half already uses and the one `fidelity --jobs
+N` already implements: run the manuk captures as N **subprocesses**. Same corpus, same assertions,
+no coverage lost, and the segfault rule is respected by construction. It is not taken here — it is a
+real change to the parity runner needing its own falsification, and lever #1 in the audit's own list
+(share a SpiderMonkey runtime between gates) must be recorded as **permanently inadmissible for this
+project** so no future audit re-proposes it.
+
+This tick added one `manuk-page` gate; it contributes 0.44s of run plus its link, in the T section.
+
+PERF: none — one more `manuk-page` test binary; the page loads in 0.44s.
+
+WIKI: `docs/wiki/interaction-surface.md` — "A mis-placed box is a SHAPE defect; it becomes an I3
+defect only when the reported box and the hittable region come apart"
+
 ## Tick 877 — the fourth cohort named as ours and proven not ours (2026-08-03)
 
 TICK SHAPE: capability (instrument) — t876 named this fix precisely and refused to take it in the
