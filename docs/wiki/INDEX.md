@@ -207,6 +207,7 @@
   - L4063 · A button centres its content vertically, and no stylesheet can say so (t850)
   - L4098 · The box-sizing residue this measured on the way past
   - L4118 · What it bought, and the finding that outranks it
+  - L4131 · colspan/rowspan are CLAMPED unsigned longs, and an unclamped one is a HANG (t854)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1436,4 +1437,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1347 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1348 sections across 21 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

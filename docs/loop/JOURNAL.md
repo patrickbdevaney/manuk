@@ -46371,6 +46371,71 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 854 — a `colspan` of two billion is not a big table, it is a hang (2026-08-03)
+
+TICK SHAPE: capability — Bar 0. The hang t853 found while sweeping and attributed to HEAD with the
+old-binary control, taken as its own tick because Bar 0 outranks every visual divergence (Part 24.3).
+
+HYPOTHESIS: `colspan`/`rowspan` are HTML **"clamped unsigned long"** attributes and layout does not
+clamp them. `<td colspan="2147483648">` parses cleanly as a `usize` on a 64-bit target, so the table
+builder is asked for two billion columns and the page never finishes.
+
+RESULT — **confirmed, fixed, and `g_reflect_numeric` now runs in 0.40s instead of spinning.**
+Bisected by scaling the attribute: `colspan` 2 / 10 / 50 / 200 / **1000** all load in ~250ms;
+`2147483648` never returns. `LayoutBox::cell_span` was
+`.and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(1).max(1)` — a parse with no bound.
+
+Chrome-measured (`--headless=new --dump-dom` + `getBoundingClientRect`):
+
+```text
+  <td colspan="2147483648">   colSpan 1000     (2-column table: the cell is 2 cells wide)
+  <td colspan="1000">         colSpan 1000
+  <td rowspan="2147483648">   rowSpan 65534    <- a DIFFERENT bound; one shared constant is wrong
+  <td colspan="3px">          colSpan 3        <- RESIDUAL, named and NOT fixed here
+```
+
+⚠⚠⚠ **ONE RULE, TWO IMPLEMENTATIONS, AND ONLY ONE OF THEM HAD IT.** `engine/js/src/reflect_js.rs`
+implements `clamped unsigned long` correctly, and its own comment says so — *"a colspan of a billion
+is 1000, not the default"*. So `td.colSpan` answered **1000** while `cell_span`, which actually
+builds the table, read **2,147,483,648**. The IDL was right, the geometry hung, and **nothing
+compared the two**. `G_SPAN_CLAMP` now asserts them in one place.
+
+⚠⚠⚠ **A HANG IS NOT A RED, WHICH IS HOW IT SURVIVED ITS WHOLE EXISTENCE.** `g_reflect_numeric` has
+carried `cs.setAttribute('colspan','2147483648')` since it was written and **did not fail — it
+spun**: `user 2m57s` of a 3m00s cap, on a four-element fixture. That reads as *a slow gate*, and the
+wall runs **19 of 104** gates so nothing else was looking. It surfaced only because t853 ran the
+whole `manuk-page` suite for an unrelated regression sweep — and it became a *defect* rather than a
+symptom of that tick only because the **OLD BINARY, from a stashed tree in the same hour, reproduced
+it identically** (3m00.2s, `user 2m56.7s`). The control that has saved four correct fixes from being
+reverted this window also, this time, stopped a real bug from being written off as my own.
+
+⚠⚠ **SO THE GATE FOR A HANG MUST NOT HANG.** A Bar-0 gate that stalls the wall instead of failing it
+recreates the exact condition that hid the bug. `G_SPAN_CLAMP` runs the load on its own thread behind
+a 20s `recv_timeout`; RED-proven by restoring `.max(1)`, which produces
+`test result: FAILED … finished in 20.00s` **with a message** rather than silence. **A gate whose
+failure mode is silence is not a gate.**
+
+⚠ The widths are asserted against a **control cell in the same document**, not Chrome's absolute 46:
+our `border-collapse` cell is 24px where Chrome's is 23 — a 1px-per-cell residual that predates this
+and belongs to the collapsing-border model. `2 × unit` vs `1 × unit` asks *"did the span apply and
+get bounded?"* in either engine. Pinning 46 would fail for a reason the gate does not test; pinning
+our own 48 would freeze the residual as if it were correct.
+
+⚠ **RESIDUAL, named rather than hidden:** HTML's rules for parsing non-negative integers stop at the
+first non-digit, so Chrome reads `colspan="3px"` as **3** and we read 1. That is a *wrong answer*,
+not a hang, and it is a different rule — fixing it here would smuggle an unmeasured behaviour change
+into a Bar-0 fix.
+
+⚠ **STILL OPEN, carried from t853 and not this tick's shape:**
+`tests::static_import_scanner_finds_specifiers_and_skips_the_rest` fails at HEAD
+(*"comments, strings, dynamic import() and import.meta must not be scanned as static imports"*).
+
+PERF: this IS the perf result — an unbounded loop became a bounded one; the gate that spun for over
+three minutes runs in 0.40s.
+
+WIKI: docs/wiki/box-layout.md — "`colspan`/`rowspan` are CLAMPED unsigned longs, and an unclamped one
+is a HANG"
+
 ## Tick 853 — an icon-wrapping `<span>` is its own line box, and that is the agent's click point (2026-08-03)
 
 TICK SHAPE: capability — the I3 residue check #72 named, landed with the click-point assertion the

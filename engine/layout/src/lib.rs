@@ -4368,13 +4368,43 @@ impl Ctx<'_> {
     }
 
     /// A cell's `colspan`/`rowspan` attribute value (≥ 1).
+    /// ⚠⚠⚠ **BAR 0 — AN UNCLAMPED `colspan` IS AN INFINITE LOOP WITH A NUMBER IN IT.**
+    ///
+    /// `colspan` and `rowspan` are HTML **"clamped unsigned long"** attributes, and the clamp is not
+    /// decoration: `<td colspan="2147483648">` parses cleanly as a `usize` on a 64-bit target, and
+    /// the table then tries to build **two billion columns**. Measured here: the page never
+    /// finishes. `g_reflect_numeric` did not fail, it *spun* — `user 2m57s` of a 3m00s cap, on a
+    /// four-element fixture — and because a hang is not a red assertion it read as a slow gate for
+    /// as long as it has existed.
+    ///
+    /// **One rule, two implementations, and only one of them had it.** `reflect_js.rs` implements
+    /// `clamped unsigned long` correctly — *"a colspan of a billion is 1000, not the default"* — so
+    /// `td.colSpan` answered **1000** while the layout that actually builds the table read
+    /// 2,147,483,648. The IDL was right, the geometry was hung, and no test compared them.
+    ///
+    /// Chrome-measured (`--headless=new --dump-dom`), and these are the bounds:
+    ///
+    /// ```text
+    ///   <td colspan="2147483648">   colSpan 1000     (2-col table: 46px, i.e. 2 cells)
+    ///   <td colspan="1000">         colSpan 1000
+    ///   <td rowspan="2147483648">   rowSpan 65534
+    /// ```
+    ///
+    /// ⚠ **RESIDUAL, named rather than hidden:** HTML's rules for parsing non-negative integers stop
+    /// at the first non-digit, so Chrome reads `colspan="3px"` as **3**; `parse::<usize>()` rejects
+    /// it and we fall back to 1. That is a *wrong answer*, not a hang, and it is a different rule
+    /// from this one — fixing it here would smuggle an unmeasured behaviour change into a Bar-0 fix.
     fn cell_span(&self, cell: NodeId, attr: &str) -> usize {
+        // Per HTML: `colspan` clamps into [1, 1000], `rowspan` into [0, 65534]. The `.max(1)` floor
+        // is this engine's own — `rowspan="0"` ("to the end of the row group") is not modelled, and
+        // treating it as 1 is the pre-existing behaviour this must not change.
+        let max = if attr == "colspan" { 1000 } else { 65534 };
         self.dom
             .element(cell)
             .and_then(|e| e.attr(attr))
             .and_then(|v| v.trim().parse::<usize>().ok())
             .unwrap_or(1)
-            .max(1)
+            .clamp(1, max)
     }
 
     /// Gather a table's rows (each a list of cell nodes), flattening row groups.

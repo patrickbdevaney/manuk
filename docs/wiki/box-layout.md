@@ -4127,3 +4127,44 @@ and moved the M1 cohort by nothing.** The cohort's remaining jarring hits are no
 the mechanism families these reductions keep landing on. The next render tick should diagnose ONE
 cohort site end to end with `--why` until its specific failing pair is understood, rather than reduce
 to a family and hope the family is the cause.
+
+## `colspan`/`rowspan` are CLAMPED unsigned longs, and an unclamped one is a HANG (t854)
+
+`<td colspan="2147483648">` parses cleanly as a `usize` on a 64-bit target. The table builder is then
+asked for **two billion columns** and the page never finishes. Chrome-measured
+(`--headless=new --dump-dom`):
+
+```text
+  <td colspan="2147483648">   colSpan 1000     (2-column table: the cell is 2 cells wide)
+  <td colspan="1000">         colSpan 1000
+  <td rowspan="2147483648">   rowSpan 65534    <- a DIFFERENT bound; one shared constant is wrong
+  <td colspan="3px">          colSpan 3        <- residual: HTML integer parsing stops at the first
+                                                  non-digit; `parse::<usize>()` rejects it and we
+                                                  read 1. A wrong answer, not a hang. Not fixed here.
+```
+
+⚠⚠⚠ **ONE RULE, TWO IMPLEMENTATIONS, AND ONLY ONE OF THEM HAD IT.** `engine/js/src/reflect_js.rs`
+implements `clamped unsigned long` correctly and its own comment says so — *"a colspan of a billion
+is 1000, not the default"* — so `td.colSpan` answered **1000** while `LayoutBox::cell_span`, which
+actually builds the table, read **2,147,483,648**. The IDL was right, the geometry hung, and nothing
+compared the two. `G_SPAN_CLAMP` now asserts them together.
+
+⚠⚠⚠ **A HANG IS NOT A RED, WHICH IS HOW IT SURVIVED.** `g_reflect_numeric` has carried this exact
+attribute value since it was written and **did not fail — it spun**: `user 2m57s` of a 3m00s cap on a
+four-element fixture, which reads as *a slow gate*. The wall runs 19 of 104 gates, so nothing else was
+looking. It surfaced only because t853 ran the whole `manuk-page` suite during an unrelated
+regression sweep, and it became a *defect* rather than a symptom of that tick only because the **old
+binary reproduced it identically** (3m00.2s, `user 2m56.7s`) from a stashed tree in the same hour.
+After the fix that gate runs in **0.40s**.
+
+⚠⚠ **SO THE GATE FOR A HANG MUST NOT HANG.** A Bar-0 gate that stalls the wall instead of failing it
+recreates the exact condition that hid the bug. `G_SPAN_CLAMP` runs the load on its own thread behind
+a 20s `recv_timeout`, so the unclamped engine produces `test result: FAILED ... finished in 20.00s`
+with a message, which is a red the wall can read. **A gate whose failure mode is silence is not a
+gate.**
+
+⚠ The widths are asserted against a **control cell in the same document**, not Chrome's absolute 46:
+our `border-collapse` cell is 24px where Chrome's is 23, a 1px-per-cell residual that predates this
+and belongs to the collapsing-border model. `2 × unit` vs `1 × unit` asks *"did the span apply and get
+bounded?"* in either engine; pinning 46 would fail for a reason the gate does not test, and pinning
+our own 48 would freeze the residual as if it were correct.
