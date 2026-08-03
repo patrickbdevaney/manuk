@@ -4158,3 +4158,139 @@ is not only a change of units:
    it is worth naming while it is happening rather than only after a bad tick.
 
 **Next check due: tick 852.**
+
+---
+
+## Check #72 — tick 852
+
+**Horizon:** H0 — Pareto Web Parity, PART VII component **1 (daily-driver rendering parity)**.
+**Gate:** `DAILY-DRIVER-CERTIFICATION.md`, milestone **M1 RENDER** — `shape ≥ 0.75` **AND**
+`jarring-clean` on ≥ 95% of the in-scope CrUX corpus. Latest honest reading: **15.4% (20 of 130)**,
+scorability ceiling **77.7% (101 of 130)** (sweep t847).
+
+Read this window: `CONSTITUTION.MD` Parts I–VII in full, `docs/loop/CONSTITUTION-CHECK.md` #71,
+`STATUS.md`, `docs/loop/PHASE0-RENDER-BURNDOWN.md`, the t847 sweep rows.
+
+### COMPLIANCE — what the window did right, stated so the failures below are not read as the whole
+
+**PART VII / harness ownership held under real pressure.** Eight RED walls across t846–t848 were all
+one infrastructure defect, and not one line of `scripts/` was edited. It was diagnosed precisely
+(`verify.sh:191` calls `disk-hygiene.sh` **during** the wall; that script's `rm -rf target/debug` is
+guarded only by `pct >= 95` and carries **no build-active check**, while the wall's own artifact set is
+larger than this box's free space — so the build deletes its own inputs and reports it as
+`linking with cc failed` on a different gate every run), reported in the journal, and **worked around
+on the agent's own side of the line** by freeing headroom before the wall. That is what PART VII asks
+for, done under the maximum incentive to do otherwise.
+
+**I5 held, and the old-binary control is now the loop's sharpest instrument.** Four separate clean
+`delta × n` integers this window — `gismart −7`, `payb.jp −66`, `taphouse23 −18`, `celeb.gate −7` —
+every one of them refuted by re-running the OLD binary alone. Zero regressions traded for capability.
+
+### FINDING 1 — **I3 IS BEING SATISFIED BY ACCIDENT, AND THE WINDOW'S BEST-AIMED RESIDUE IS AN I3 DEFECT THE LOOP FILED AS A SHAPE NUMBER**
+
+I3: *"Every renderer subsystem lands with its semantic-model exposure or it is not done."* Five ticks
+this window changed **element geometry** (t846, t848, t849, t850, t851). t845 established, and this
+check re-verified from source rather than from memory, that geometry **is** the semantic model:
+
+```
+  LayoutBox::node_rects()  →  manuk_a11y::build_tree_with_rects(dom, rects)  →  A11yNode.bbox
+                           →  hit_test / the agent's click point
+```
+(`engine/a11y/src/lib.rs:1008-1015`, `engine/page/src/lib.rs:6438,6470`.)
+
+Each of those five ticks was therefore an I3 change, and each was gated **only** on `shape`/`overlap`.
+They pass I3 because `node_rects` is a shared producer — **not because anyone checked.** A shared
+producer means I3 compliance is a property of the plumbing, and the moment a fix touches the *producer
+itself* the accident stops protecting us.
+
+**And that is exactly the residue t851 measured and correctly declined to fix in the same tick:**
+
+```text
+  <div>A<span id=o1><span class=inline-block></span></span>B</div>
+                                       Chrome            ours
+    the wrapper <span>               [11,  0, 8, 17]   [11, 10, 8,  4]
+    its inline-block child           [11, 10, 8,  4]   [11, 10, 8,  4]   ← IDENTICAL
+```
+
+`node_rects`'s `lift` walks a boxed child's rect up to boxless inline ancestors, so an icon-wrapping
+`<span>` inherits the **4px-tall icon** instead of its own **17px line box**. Ranked on M1 that is a
+rounding-scale `shape` term. **Ranked on I3 it is a mis-actuation surface**: the agent's click point
+for that element is its bbox centre, so it is computed **3.5px low in a box 13px too short**, on
+`<span class="icon"><i></i></span>` — one of the most common idioms on the web.
+
+⚠ **THE LOOP RANKED IT ONLY ON M1, AND M1 IS THE WRONG RANKER FOR A DEFECT IN THE SHARED PRODUCER.**
+The burndown ranks by `(in-scope sites × dy severity)`. That number is small here. The I3 number is
+not, and nothing computes it.
+
+### FINDING 2 — **USAGE-WEIGHT AND MEASURED-BREADTH DISAGREED FOUR TIMES, AND THE LOOP REPORTED THE DISAGREEMENT AS "ZERO MOVEMENT"**
+
+VI.3's binding rule is *"the score is **usage-weight × failing-breadth**, not failing-subtest-count."*
+Four consecutive ticks landed spec-correct, Chrome-exact, RED-proven primitives with enormous usage
+weight — an insetless abspos box's static position (`.sr-only`, every framework page), the per-axis
+static position (every `right:8px` badge), a button's vertical centring (**every button on the web**),
+form-control `box-sizing` (every design-system button) — and the corpus moved by **+2 attributable
+elements across 28 sites.**
+
+The loop wrote that up honestly each time as "zero corpus movement." **That phrasing is accurate and
+the inference drawn from it would be wrong.** These are not low-value fixes; they are
+**high-usage, low-magnitude** errors, and the fidelity instrument scores a box as correct within a
+tolerance. A 7px label offset inside a 50px button is below that tolerance on most pages *and is
+visible to a human on all of them.* So:
+
+> **The corpus cannot see the class of defect the constitution ranks highest**: universal idiom,
+> small magnitude. `usage-weight × failing-breadth` and `Δ M1` are not the same ordering, and where
+> they disagree the constitution says usage-weight wins.
+
+⚠ This is **not** a reason to stop measuring — it is a reason to stop reading `Δ M1 ≈ 0` as a verdict
+on the fix. t850 already drew the right operational conclusion (*diagnose ONE cohort site end to end
+rather than reduce to a family and hope*) and t851 did exactly that, which is how the I3 residue above
+was found at all. The constitutional framing is the missing half: **a Chrome-exact fix to a universal
+idiom is on-mandate whether or not M1 moves, and the honest report is "the instrument cannot price
+this", not "this bought nothing."**
+
+### FINDING 3 — the corpus's own drift is now larger than four ticks of engine work, and only one site is watched for it
+
+`celeb.gate.cc` was byte-identical (`0.783158`) in four consecutive A/Bs this window — the most stable
+control the loop had — and then **moved on its own** to `0.768421`, which the OLD binary reproduced
+twice. `payb.jp` spans `0.677824–0.825662` on ONE binary. `www.taphouse23.com`'s `overlap` wanders
+10–13. Against that, the window's total attributable engine movement is `+2` elements.
+
+The standing adversarial control (`www.ta3lemkonline.com`) is watched every tick and has been rock
+steady (`0.573304`). **One stable control proves stability about one site.** The loop needs a small
+fixed *panel* of controls re-read every A/B, and it has been improvising the panel per tick from
+whatever the cohort happened to contain.
+
+### HARNESS, reported not patched (PART VII)
+
+1. **The wall self-purge described above.** `disk-hygiene.sh`'s `rm -rf target/debug` needs the same
+   build-active guard its deps-prune already has, or the box needs ~120G free for a cold wall.
+2. **Two crontab lines are DEAD from a quoting bug** — `disk-hygiene.sh` and `loop-watchdog.sh` are
+   wrapped in `bash -lc \'…\'` and log `unexpected EOF while looking for matching '` on **every**
+   fire. `ops-check.sh:25` already knows and alerts on the stale hygiene log.
+3. **`manuk-wpt` is still in neither the wall's crate-test list nor CI's** — reported at #69, #70, #71.
+4. `mem-guard.sh` reports **swap 91–94% full** on every wall of this session.
+
+### THE STEER
+
+1. **FIX `node_rects`'s INLINE RECT, AND RANK IT AS I3, NOT AS SHAPE.** It is the shared producer for
+   layout, the a11y tree and the agent's click point, so it is the highest-leverage box in the engine
+   and the only one where a defect is simultaneously a rendering bug and a mis-actuation bug. Scope is
+   known and honest: `node_rects` takes only `&Dom` — no styles, no fonts — so the line's content area
+   must be recorded at layout time, and `G6` clickability reads the same map, so it needs a real
+   regression control. **Land it with an agent-side assertion in the same tick** (the t845 shape: the
+   click point of an icon-wrapping span falls inside the span), which is what I3 actually asks for and
+   what five geometry ticks in a row have been getting for free.
+2. **STOP READING `Δ M1 ≈ 0` AS A VERDICT ON A CHROME-EXACT FIX.** Report it as *"the instrument
+   cannot price this"* and say why (universal idiom, magnitude under tolerance). Where usage-weight
+   and measured-breadth disagree, VI.3 says usage-weight wins — that is constitutional, not a
+   preference.
+3. **FIX A CONTROL PANEL AND RE-READ IT EVERY A/B.** Four sites, chosen once, carried across ticks:
+   one adversarial RTL (`ta3lemkonline`), one large stable (`celeb.gate.cc` — *now known to drift*,
+   which is itself the reason to watch it), one small deterministic (`mobcup.fm`), one known-bimodal
+   (`payb.jp`). A control's status is earned run by run; the panel makes that cheap instead of
+   improvised.
+4. **THE SCORABILITY CEILING IS STILL THE LARGER HALF AND STILL UNTOUCHED.** 29 of 130 in-scope sites
+   do not render at all (77.7%). Five render ticks this window; the throw-killer worklist has not been
+   worked since t777. 20/130 cannot reach 95% until something boots them.
+
+**Next check due: tick 860.**

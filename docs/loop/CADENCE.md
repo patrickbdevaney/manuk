@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **588** | ticks 1–851 |
-| median tick cycle | **25m** | 587 intervals |
+| ticks landed | **589** | ticks 1–852 |
+| median tick cycle | **25m** | 588 intervals |
 | median, last 10 | **88m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.07** | 547.7h elapsed |
-| median verify wall | **63s** | 527 ticks |
+| **ticks per hour** | **1.07** | 547.8h elapsed |
+| median verify wall | **63s** | 528 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **444**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**288 of 588 ticks** (49%) moved a
+**288 of 589 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -685,5 +685,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **849** | 2026-08-02 22:22 | 1.7h | capability | 63s | +333/−46 | 379 | 81 | 56.0% · | the static position is PER AXIS, and `all_auto` made it all-or-nothing (2026-08-02) |
 | **850** | 2026-08-02 23:37 | 75m | capability | 63s | +399/−34 | 379 | 81 | 56.0% · | a button centres its content vertically, and no stylesheet can say so (2026-08-02) |
 | **851** | 2026-08-03 00:47 | 70m | capability | 63s | +298/−35 | 379 | 81 | 56.0% · | three form controls are 20px too tall, and one UA rule says so (2026-08-02) |
+| **852** | 2026-08-03 00:53 | 6m | measurement | 63s | +231/−33 | 379 | 81 | 56.0% · | the constitution check, and an I3 defect the loop filed as a shape number (2026-08-03) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

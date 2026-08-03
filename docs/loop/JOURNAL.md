@@ -46370,3 +46370,64 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
+
+## Tick 852 — the constitution check, and an I3 defect the loop filed as a shape number (2026-08-03)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 844),
+banked as check #72 in `docs/loop/CONSTITUTION-CHECK.md`.
+
+⚠⚠⚠ **FINDING 1 — I3 IS BEING SATISFIED BY ACCIDENT, AND THE WINDOW'S BEST-AIMED RESIDUE IS AN I3
+DEFECT.** Five ticks this window changed element geometry (t846, t848, t849, t850, t851), and geometry
+IS the semantic model — re-verified from source rather than from memory, per the standing rule that a
+claim about another subsystem is a hypothesis even when you wrote it last tick:
+
+```
+  LayoutBox::node_rects()  →  manuk_a11y::build_tree_with_rects  →  A11yNode.bbox  →  the click point
+  engine/a11y/src/lib.rs:1008-1015 · engine/page/src/lib.rs:6438,6470
+```
+
+All five pass I3 **because `node_rects` is a shared producer, not because anyone checked** — and the
+moment a fix touches the producer itself, that accident stops protecting us. Which is exactly what
+t851's residue is: `node_rects`'s `lift` gives an icon-wrapping `<span>` the **4px-tall icon's box**
+instead of its own **17px line box** (Chrome `[11,0,8,17]` vs ours `[11,10,8,4]`, with the child
+byte-identical). Ranked on M1 that is a rounding-scale `shape` term. **Ranked on I3 it is a
+mis-actuation surface** — the agent's click point is the bbox centre, computed 3.5px low in a box 13px
+too short, on `<span class="icon"><i></i></span>`. **The burndown's ranker (`in-scope sites × dy`)
+cannot see the I3 cost, and nothing else computes it.**
+
+⚠⚠⚠ **FINDING 2 — USAGE-WEIGHT AND MEASURED-BREADTH DISAGREED FOUR TIMES AND THE LOOP REPORTED IT AS
+"ZERO MOVEMENT".** VI.3 binds the loop to `usage-weight × failing-breadth`. Four consecutive
+Chrome-exact, RED-proven primitives with enormous usage weight — `.sr-only`'s static position, the
+per-axis static position, **a button's vertical centring**, form-control `box-sizing` — moved the
+corpus by **+2 attributable elements across 28 sites**. Each write-up said "zero corpus movement",
+which is accurate, and the inference a reader would draw from it is wrong. These are
+**high-usage, low-magnitude** errors and the instrument scores within a tolerance: a 7px label offset
+in a 50px button is under tolerance on most pages **and visible to a human on all of them**. The
+honest report is *"the instrument cannot price this"*, not *"this bought nothing"* — and where the two
+orderings disagree, VI.3 says usage-weight wins. That is constitutional, not a preference.
+
+⚠⚠ **FINDING 3 — THE CORPUS'S OWN DRIFT IS NOW LARGER THAN FOUR TICKS OF ENGINE WORK.**
+`celeb.gate.cc` was byte-identical (0.783158) in four consecutive A/Bs — the most stable control the
+loop had — then moved on its own to 0.768421, which the OLD binary reproduced twice. `payb.jp` spans
+0.677824–0.825662 on ONE binary. Against that, the window's total attributable engine movement is +2
+elements. **One stable control proves stability about one site**; the loop has been improvising its
+control set per tick from whatever the cohort contained, and needs a fixed four-site panel carried
+across ticks.
+
+COMPLIANCE, recorded because it held under maximum pressure: **PART VII survived eight RED walls**
+without a line of `scripts/` being edited — the blocker was diagnosed precisely (the wall calls
+`disk-hygiene.sh` mid-run and its `rm -rf target/debug` has no build-active guard, so the build
+deletes its own inputs) and worked around on the agent's own side by freeing headroom first. And
+**I5 held**: four clean `delta × n` integers this window (−7, −66, −18, −7 elements) were each refuted
+by re-running the OLD binary alone. Zero regressions traded for capability.
+
+THE STEER (full text in check #72): fix `node_rects`'s inline rect and **rank it as I3, landing it
+with an agent-side click-point assertion in the same tick** · stop reading `Δ M1 ≈ 0` as a verdict on
+a Chrome-exact fix · fix a four-site control panel and re-read it every A/B · the scorability ceiling
+(29 of 130 in-scope sites do not render at all) is still the larger half and has not been worked since
+t777.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefact is `docs/loop/CONSTITUTION-CHECK.md` check #72, which is the wiki
+for the loop's own governance. [no-pattern]
