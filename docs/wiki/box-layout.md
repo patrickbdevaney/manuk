@@ -4222,3 +4222,55 @@ our `border-collapse` cell is 24px where Chrome's is 23, a 1px-per-cell residual
 and belongs to the collapsing-border model. `2 × unit` vs `1 × unit` asks *"did the span apply and get
 bounded?"* in either engine; pinning 46 would fail for a reason the gate does not test, and pinning
 our own 48 would freeze the residual as if it were correct.
+
+## An empty inline reports its CONTENT AREA only when it shares a line — alone it has no line box to report against (tick 868)
+
+The code carried this justification for reporting an empty inline's rect as `line-height` tall,
+anchored to the line's top:
+
+> An EMPTY inline keeps the old line-top anchoring: Chrome reports a line-height-tall rect for
+> `<span id="anchor"></span>`, and that is measured behaviour this must not disturb.
+
+Re-measured across five contexts with `chromium --headless --dump-dom` (`16px/1.5 sans-serif`):
+
+```text
+                                          Chrome        before
+  <div><span></span></div>               [0, 0,0, 0]   [0, 0,0, 0]   agree
+  <div><span></span><span></span></div>  [0,48,0, 0]   [0,48,0, 0]   agree
+  <div><span></span>text</div>           [0, 3,0,17]   [0, 0,0,24]   <-
+  <div>text<span></span></div>          [26,27,0,17]  [26,24,0,24]   <-
+  <div style="line-height:3">…</div>     [0,63,0,17]   [0,48,0,48]   <- the error SCALES
+```
+
+The comment was **half-measured, and its half is the one that does not matter.** Both `0x0` rows are
+the case it was looking at, and they are right for a reason with nothing to do with the reported
+height: an empty inline **alone** brings no line box into existence (CSS2 §9.4.2, `holds_line:
+false`), so there is no line for a height to be reported *against* — the fields are never consulted.
+The moment it shares a line with content, Chrome reports the element's **own content area on the
+line's baseline**, which is the identical rule the no-fragment branch forty lines below already
+implements. Two branches, one rule.
+
+**The error scales with `line-height`** — 48 against 17 at `line-height:3` — so it is worst exactly
+where authors are most generous with leading.
+
+### Why this construct is worth a gate
+
+`<a><i class="icon"></i><span>Label</span></a>` is on every navigation bar on the web. An empty `<i>`
+reported 3px too high and 7px too tall, sitting beside its label, is a candidate for flipping a
+reading-order comparison.
+
+**And it was NOT the cause of the reading-order inversions it was reduced from.** Three sites in the
+t867 sweep are over the M1 shape bar and fail only on `reading-order 1`; all three still read `1`
+after this fix. The honest sentence is *"the instrument cannot price this"*, not *"this bought
+nothing"* — the fix is Chrome-exact on a ubiquitous construct — but the next shape tick must find the
+real mechanism rather than inherit the guess. See [[conformance-and-oracles]] on why a Chrome-exact,
+RED-proven, high-usage fix can move the corpus metric by zero.
+
+### Both halves must be asserted
+
+Report the content area, **and** keep the line boxes byte-identical. A fix that grew a `holds_line`
+would move the containing block's height (0/24/48 in the fixture) and turn a geometry correction into
+a layout regression; a fix that reported the content area unconditionally would give the alone-case a
+phantom 17px box that never existed.
+
+[[text-layout]] [[conformance-and-oracles]]

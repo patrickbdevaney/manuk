@@ -4439,3 +4439,113 @@ Not one of the eight ticks moved a WPT number, and per I4/VI.3 that is the right
    two largest single mechanisms in the corpus, both ahead of every geometry band.
 
 **Next check due: tick 868.**
+
+## Check #74 — tick 868 (2026-08-03)
+
+**Horizon:** H0 — Pareto Web Parity, PART VII component **1 (daily-driver rendering parity)**
+throughout; component **3 (Bar 0)** touched at t863; **no** work on components 2 or 4 this window.
+**Gate:** `DAILY-DRIVER-CERTIFICATION.md` milestone **M1 RENDER** — `shape ≥ 0.75` **AND**
+`jarring-clean` on ≥ 95% of the in-scope CrUX corpus. Latest reading, sweep **t867** (200 sites,
+⚠ **parallel-6**, see the caveat below): **M1 16.4% (21 of 128)** · shape ≥ 0.75 **22.7% (29)** ·
+jarring-clean **31.2% (40)** · shape_mean **54.4%** · cov_mean **86.2%** · **scorability ceiling
+106/128 = 82.8%** (t857: 78.9%).
+
+Read this window: `CONSTITUTION.MD` Parts I–VII in full, check #73, `STATUS.md`, the current
+`lever-board.sh` output, `docs/loop/FIDELITY-PROGRESS.tsv`, the t867 sweep, journal ticks 861–868.
+
+### GATE OR SCOREBOARD? — **gate**, and on the conjunct that was actually binding
+
+Eight ticks, and not one of them moved a WPT number. Five moved a site from UNSCORED to SCORED, which
+is movement in the **M1 CEILING** — the term no amount of shape work can pass, because a site that
+does not render cannot be scored at all. `www.otomoto.pl`, `profissionaliza.cademi.com.br`,
+`pogoda.by`, `m.youm7.com`, `nortenoticia.com.br`. Each was a named engine defect found from a corpus
+site, which is VI.3 / VII.1's ranking rule (**real sites moved**) executed literally.
+
+### THE STEER FROM #73
+
+| #73 steer | outcome |
+|---|---|
+| `curl` the nine unscored rows that still claim to be ours | ✅ **t861** — all nine serve 200 in under 4s, and the two `timeout-150s` rows were **Chrome hanging**, not us. |
+| A falsified reason string must be REWRITTEN, not just noted | ✅ **t861** rewrote `css-starved`'s; **t865** rewrote `ShellOnly`'s and corrected t674's refutation. |
+| Fix a four-site control panel and re-read it every A/B (carried from #72, ❌ twice) | ✅ **at last.** `littlecaesarsbcs` and `hipmiluwuutara` are now read in every A/B and came back **byte-identical five ticks running**; t863 added a 7-site range-spanning panel and t867 a 12-site one. |
+| The scorability ceiling is the larger half | ✅ **78.9% → 82.8%**, and the remaining 22 are now classified rather than lumped. |
+
+### ⚠⚠⚠ FINDING 1 — I3 IS BEING BENT, EXACTLY WHERE CHECK #72 SAID IT WOULD BE
+
+Check #72 established that **I3 is satisfied by accident**: `node_rects` → `manuk_a11y` bbox → the
+agent's click point, so every geometry tick is an I3 tick and nothing checks it — *"the moment a fix
+touches the producer itself, that accident stops protecting us."* Check #73 recorded that t853 obeyed
+the resulting steer and was rewarded (it found 16 dead links).
+
+**t868 touched `node_rects`'s geometry again and did NOT land the click-point assertion.**
+`G_EMPTY_INLINE_RECT` asserts the rects and the containing blocks' heights; it says nothing about the
+a11y bbox or the actuation point. The mitigating fact is real and does not excuse it: the element in
+question is a **zero-width** empty inline, so it is not a click target and no bbox centre moved
+horizontally. But the standing steer is not "assert it when you think it matters" — it exists
+precisely because the judgement of when it matters is the thing that has been wrong. **Recorded as a
+bend, not a violation, and carried as steer #1 below.**
+
+### ⚠⚠ FINDING 2 — HALF THIS WINDOW WAS INSTRUMENT WORK, AND THAT WAS CORRECT ONCE
+
+Four of eight ticks (861, 863, 865, 867) were instrument fidelity rather than engine capability. On
+its face that is drift: I5 makes the oracle the *discovery engine*, not the subject. Applying VII.1's
+test honestly — *does this move component 1 toward shippable?* — each one does, and for the same
+reason: **a mislabelled row sends engine ticks at nothing.** t861 found two sites blaming us for
+Chrome's hang; t865 found the largest unscored cohort (13 sites) was our own snapshot's shell. Both
+had been misdirecting the backlog for many sweeps.
+
+But the honest read of the *rate* is that the instrument had accumulated debt and this window paid it
+down, and that debt is now largely paid: the unscored rows are classified, the reason strings say
+whose failure they are, and the sweep's parallelism is priced. **A second consecutive window at this
+ratio would be drift, and should be called as such.**
+
+### ⚠⚠⚠ FINDING 3 — PART VI'S BLOCKER HAS MOVED, AND THE BOARD'S RANKING IS STALE BEHIND IT
+
+For many windows the binding constraint was *"sites do not render at all"*. At **82.8%** scorability
+that is no longer where the mass is: **106 sites are scored and only 29 clear the shape bar**, and the
+t867 readout's own trap-free measure — mean Δshape over the 99 sites scored in **both** t857 and t867
+— is **-0.06 points**. Flat. The blocker is now unambiguously **layout math on pages that render
+fine**.
+
+And the board's own leg ordering was computed against the old shape of the corpus. Recomputed on
+`SWEEP-t867-rows.tsv`:
+
+```text
+  near-bar (0.55 <= shape < 0.75) AND jarring-clean ...  2 sites  (both need +0.17, not +0.06)
+  over the shape bar, failing ONLY on jarring .......... 13 sites
+```
+
+The board says shape-nudge is **~6× more M1-productive** than jarring. On today's corpus it is
+**6.5× less**. That is not a wrong steer; it is a steer whose measurement expired.
+
+### ⚠⚠ FINDING 4 — THE LOOP CAN NOW CONTAMINATE ITS OWN SERIES, AND DID SO WITHIN ONE TICK
+
+t867 measured what the board's #1 throughput lever costs: parallel-6 moved 5 of 12 control sites
+against a serial re-measure on the same binary in the same hour, and **one crossed the 0.75 M1 bar on
+the scheduling alone**. It also *manufactures* Bar-0 rows — two chunks segfaulted, and all 27
+remaining sites then ran clean one process each.
+
+The instructive part is what happened next: **t868 differenced a solo reading against a parallel row
+and briefly read a 0.06 regression on `pogoda.by`** that was entirely the artefact t867 had banked one
+tick earlier. Caught only because pogoda's stable solo value had been measured three times that day.
+**A finding written down is not a finding applied.**
+
+### PART VI CORRECTION
+
+* **Now DONE:** the scorability leg is no longer the larger half (82.8%); the unscored 22 are
+  classified by *whose* failure they are, not lumped; the sweep's parallelism has a measured price.
+* **The real blocker:** shape/geometry on the 106 sites that already render — flat at ±0 over two
+  sweeps, needing +101 sites for M1.
+* **The direct path:** rank by **marginal M1 crossings** from the banked per-site distances, which
+  today means the 13 jarring-only sites before the 2 near-bar ones — and find the actual
+  reading-order mechanism, which t868 proved is **not** the empty-inline rect.
+
+### THE STEER
+
+1. **I3, carried and now overdue:** the next tick that touches `node_rects` lands an agent-side
+   click-point assertion **in the same tick**. #72 asked, #73 saw it pay, #74 saw it skipped.
+2. **Re-rank by the fresh sweep, not the board's t777 ratio:** 13 jarring-only crossings vs 2
+   near-bar. Observer owns the board; this is reported, not edited.
+3. **Never difference a parallel-6 row against a solo row** — and keep the banked series serial, or
+   re-baseline it explicitly. Re-measure any `crashed` row SOLO before believing it.
+4. **The instrument debt is paid; the next window is engine work.** If it is not, say so out loud.

@@ -46371,6 +46371,100 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 868 — the leg-2/leg-3 ranking is INVERTED on fresh data, and my fix did not buy what I predicted (2026-08-03)
+
+TICK SHAPE: capability (render/geometry) — the first shape tick of the session, taken because t867's
+own readout says the shape needle is FLAT (common-set band **-0.06 pts** over the 99 sites scored in
+both t857 and t867) while scorability moved 78.9% → 82.8%. Scorability was this session's work; shape
+was not, and shape is what M1 needs (+101 sites).
+
+⚠⚠⚠ **FINDING 1 — THE BOARD'S LEG-2/LEG-3 RATIO IS INVERTED ON THE FRESH SWEEP, BY 6.5×.**
+The M1 PRIORITY ORDER ranks *"(2) shape-nudge the jarring-clean near-bar cohort"* above *"(3) jarring
+… a LOW-priority FIX target"*, and justifies it with a number: *"a +0.06 shape nudge on the ~6
+jarring-clean near-bar sites = 6 M1 crossings; clearing any single jarring dim everywhere = 1
+crossing (shape-nudge is ~6× more M1-productive here)"*. That was computed at t777. Recomputed on
+`SWEEP-t867-rows.tsv`:
+
+```text
+  near-bar (0.55 <= shape < 0.75) AND jarring-clean       2 sites
+     cyoinatu-onna.com  0.578  (needs +0.172)
+     momon-ga.com       0.572  (needs +0.178)
+
+  over the shape bar, failing ONLY on jarring             13 sites
+     www.marktplaats.nl   0.952   reading-order 1
+     ubys.bingol.edu.tr   0.928   reading-order 1
+     possssno.sbs         0.897   reading-order 1
+     desiviral.net        0.828   overlap 5
+     …9 more
+```
+
+**2 crossings against 13**, and the 2 need a +0.17 nudge rather than +0.06 — an order of magnitude
+out of reach. The ordering did not become wrong; the corpus moved under it. Reported here rather than
+edited into the board, which is observer-owned.
+
+⚠⚠ **FINDING 2 — A CHROME-EXACT LAYOUT FIX, AND THE COMMENT IT CORRECTS WAS HALF-MEASURED.**
+Reducing `possssno.sbs`'s single reading-order inversion gave `<a><i></i><span>Label</span></a>` — an
+empty inline beside a label. A four-line fixture against `chromium --dump-dom`:
+
+```text
+                                          Chrome        before
+  <div><span></span></div>               [0, 0,0, 0]   [0, 0,0, 0]   agree
+  <div><span></span><span></span></div>  [0,48,0, 0]   [0,48,0, 0]   agree
+  <div><span></span>text</div>           [0, 3,0,17]   [0, 0,0,24]   <-
+  <div>text<span></span></div>          [26,27,0,17]  [26,24,0,24]   <-
+  <div style="line-height:3">…</div>     [0,63,0,17]   [0,48,0,48]   <- the error SCALES
+```
+
+The code said, in a comment: *"an EMPTY inline keeps the old line-top anchoring: Chrome reports a
+line-height-tall rect for `<span id="anchor"></span>`, and that is measured behaviour this must not
+disturb."* Both `0x0` rows above are the rows that comment was looking at — and they are right for a
+reason that has **nothing to do with the reported height**: an empty inline alone brings no line box
+into existence (CSS2 §9.4.2), so there is no line for a height to be reported against. The moment it
+shares a line with content, Chrome reports the element's **own content area on the line's baseline** —
+the identical rule the no-fragment branch forty lines below already implements. Two branches now
+state ONE rule. All six cases are byte-identical to Chrome after the fix; the layout suite is 118→120
+green and the three block heights (0/24/48) are unchanged, which is the half that proves no line box
+moved.
+
+⚠⚠⚠ **FINDING 3 — AND IT DID NOT BUY THE CROSSINGS I PREDICTED. MEASURED, NOT ASSUMED.**
+The pre-registered prediction was that this mechanism was behind the three `reading-order 1` sites.
+It is not:
+
+```text
+                        t867          t868 (SOLO)
+  possssno.sbs          ro 1     ->   ro 1
+  www.marktplaats.nl    ro 1     ->   ro 1
+  ubys.bingol.edu.tr    ro 1     ->   ro 1
+  pogoda.by             ro 2     ->   ro 1      (see below — not attributable)
+  littlecaesarsbcs…     clean    ->   clean     byte-identical control
+  hipmiluwuutara.org    12/3/6/0 ->   12/3/6/0  byte-identical control
+```
+
+Zero M1 crossings. The honest sentence is t852's, and it is constitutional (VI.3): *"the instrument
+cannot price this"* is not *"this bought nothing"* — the fix is Chrome-exact on a construct
+(`<i class="icon">` beside a label) that is on every navigation bar on the web, and the error it
+removes GROWS with `line-height`. But the reading-order inversions on those three sites are a
+different mechanism and the next shape tick must find it rather than inherit my guess.
+
+⚠ **AND pogoda.by's APPARENT SHAPE DROP IS t867's OWN ARTEFACT, NOT THIS FIX.** It reads
+`0.818` in the t867 row and `0.7605` here — which would look like a 0.06 regression. `0.760563` is
+pogoda's *stable solo value*, measured identically three times today (t864, t866, t868); `0.818` is
+the PARALLEL sweep's reading. That is exactly the effect t867 measured and banked one tick ago, now
+biting the very next tick that differences against it. **A parallel-6 row must not be differenced
+against a solo row** — and the fix for that is to compare solo-to-solo, which is what the controls
+above do.
+
+CADENCE: the constitution re-read came due mid-tick (every 8; last at 860) and is banked as check #74
+in `docs/loop/CONSTITUTION-CHECK.md`. Its own hardest finding is about THIS tick: **I3 is being bent
+exactly where check #72 predicted** — t868 touched `node_rects`'s geometry and did NOT land the
+agent-side click-point assertion the standing steer asks for. Mitigating and not exculpating: the
+element is a ZERO-WIDTH empty inline, so no click target moved. Carried as steer #1.
+
+PERF: none — the change replaces two constants in one already-emitted zero-width spacer.
+
+WIKI: `docs/wiki/box-layout.md` — "An empty inline reports its content area only when it shares a
+line; alone it has no line box to report against".
+
 ## Tick 867 — the first full sweep in 10 ticks, and PARALLELISING IT IS NOT FREE (2026-08-03)
 
 TICK SHAPE: measurement — the board's CO-#1 asks for a fresh sweep whenever shape goes unmeasured,

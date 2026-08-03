@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **602** | ticks 1–867 |
-| median tick cycle | **26m** | 601 intervals |
-| median, last 10 | **40m** | 10 intervals |
+| ticks landed | **603** | ticks 1–868 |
+| median tick cycle | **26m** | 602 intervals |
+| median, last 10 | **38m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.07** | 559.4h elapsed |
-| median verify wall | **63s** | 541 ticks |
+| **ticks per hour** | **1.08** | 559.9h elapsed |
+| median verify wall | **63s** | 542 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **384**
-* **✅ rows in the capability ledger**: 144 → **456**
+* **live gates**: 27 → **385**
+* **✅ rows in the capability ledger**: 144 → **457**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**294 of 602 ticks** (49%) moved a
+**295 of 603 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **294** capability ticks, median cycle **26m**
+* **295** capability ticks, median cycle **26m**
 * median diff per tick: **+262 / −34** lines across 8 files
 
 ## Every tick
@@ -699,5 +699,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **865** | 2026-08-03 10:34 | 31m | instrument | 63s | +436/−47 | 383 | 81 | 56.0% · | the biggest unscored cohort is OUR SNAPSHOT's shell, and t674's control could not see it ( |
 | **866** | 2026-08-03 10:56 | 22m | capability | 63s | +374/−33 | 384 | 81 | 56.0% · | `performance.timing` is deprecated, universal, and absent (2026-08-03) |
 | **867** | 2026-08-03 12:25 | 89m | measurement | 63s | +376/−33 | 384 | 81 | 56.0% · | the first full sweep in 10 ticks, and PARALLELISING IT IS NOT FREE (2026-08-03) |
+| **868** | 2026-08-03 12:55 | 30m | capability | 63s | +454/−39 | 385 | 81 | 56.0% · | the leg-2/leg-3 ranking is INVERTED on fresh data, and my fix did not buy what I predicted |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

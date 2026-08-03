@@ -6096,15 +6096,44 @@ impl Ctx<'_> {
                     // means both were zero. Deriving `holds_line` from the spec sentence instead of
                     // from the measurement would have made three of these four rows 18 against
                     // Chrome's 0.
+                    // ⚠⚠⚠ **THE COMMENT THAT USED TO SIT HERE WAS HALF-MEASURED, AND ITS HALF WAS
+                    // THE ONE THAT DOES NOT MATTER (corrected t868).** It read: *"an EMPTY inline
+                    // keeps the old line-top anchoring: Chrome reports a line-height-tall rect for
+                    // `<span id="anchor"></span>`, and that is measured behaviour this must not
+                    // disturb."* Re-measured across five contexts (`16px/1.5 sans-serif`,
+                    // `chromium --headless --dump-dom`):
+                    //
+                    // ```text
+                    //                                          Chrome        before
+                    //   <div><span></span></div>               [0, 0,0, 0]   [0, 0,0, 0]   agree
+                    //   <div><span></span><span></span></div>  [0,48,0, 0]   [0,48,0, 0]   agree
+                    //   <div><span></span>text</div>           [0, 3,0,17]   [0, 0,0,24]   <-
+                    //   <div>text<span></span></div>          [26,27,0,17]  [26,24,0,24]   <-
+                    //   <div style="line-height:3">…</div>     [0,63,0,17]   [0,48,0,48]   <- scales
+                    // ```
+                    //
+                    // The `0x0` rows are the ones the old comment was looking at, and they are
+                    // right for a reason that has nothing to do with these fields: an empty inline
+                    // **alone** brings no line box into existence (`holds_line: false`, CSS2
+                    // §9.4.2), so there is no line for a height to be reported against. The moment
+                    // it shares a line with content, Chrome reports the element's **own content
+                    // area on the line's baseline** — the identical rule the no-fragment branch
+                    // below already implements, and the error grows with `line-height` (48 against
+                    // 17 at `line-height:3`), which is exactly the case an icon-and-label nav link
+                    // hits on every site that has one.
+                    //
+                    // So the two branches now state ONE rule. Measured cost: `possssno.sbs` and two
+                    // more sites in the t867 sweep are over the M1 shape bar and fail ONLY on
+                    // `reading-order`, whose example is `<a><i></i><span>label</span></a>` — an
+                    // empty inline reported 3px too high and 7px too tall, next to its label.
+                    let ts = text_style(&s, self.fonts);
+                    let lm = self.fonts.line_metrics(ts.font_key, ts.font_size);
                     out.push(InlineItem::Spacer {
                         width: 0.0,
                         node: Some(node),
                         space_before: false,
-                        report_height: s.line_height.max(0.0),
-                        // An EMPTY inline keeps the old line-top anchoring: Chrome reports a
-                        // line-height-tall rect for `<span id="anchor"></span>`, and that is
-                        // measured behaviour this must not disturb.
-                        report_ascent: None,
+                        report_height: lm.ascent.round() + lm.descent.round(),
+                        report_ascent: Some(lm.ascent.round()),
                         holds_line: false,
                     });
                 }

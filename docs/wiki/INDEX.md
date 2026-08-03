@@ -209,6 +209,9 @@
   - L4152 · The box-sizing residue this measured on the way past
   - L4172 · What it bought, and the finding that outranks it
   - L4185 · colspan/rowspan are CLAMPED unsigned longs, and an unclamped one is a HANG (t854)
+  - L4226 · An empty inline reports its CONTENT AREA only when it shares a line — alone it has no line box to report against (tick 868)
+  - L4256 · Why this construct is worth a gate
+  - L4269 · Both halves must be asserted
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1473,4 +1476,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1380 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1383 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
