@@ -12569,6 +12569,12 @@ fn collect_inline_scripts(dom: &Dom) -> Vec<(NodeId, String, bool, bool)> {
             }
             let ty = el.attr("type").unwrap_or("").trim();
             is_module = ty.eq_ignore_ascii_case("module");
+            // **`nomodule` on a CLASSIC script: this browser understands modules, so it does not run.**
+            // The external half of the same rule is in `fetch_external_scripts`; both call the one
+            // predicate. See `crate::script_is_nomodule_classic` for what running both halves costs.
+            if crate::script_is_nomodule_classic(el.attr("type"), el.attr("nomodule").is_some()) {
+                continue;
+            }
             let is_js = ty.is_empty()
                 || ty.eq_ignore_ascii_case("text/javascript")
                 || ty.eq_ignore_ascii_case("application/javascript")

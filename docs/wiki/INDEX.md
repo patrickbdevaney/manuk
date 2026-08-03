@@ -668,6 +668,10 @@
   - L250 · pagereveal — the MPA activation hook (tick 372)
   - L261 · Promise-returning scrolls + the synchronous scrollY contract (tick 378)
   - L272 · We ran the script and never told the page (tick 652)
+  - L324 · Differential loading: nomodule is HALF of a matched pair, and honouring one half runs the app twice (tick 864)
+  - L356 · The one way this can be actively wrong
+  - L363 · Two stages, two crates, ONE predicate
+  - L372 · Transcribe the oracle; do not derive the expectation
 
 ## THE INTERACTION SURFACE — clicks, scroll, focus, and automation
 `docs/wiki/interaction-surface.md`
@@ -1459,4 +1463,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1366 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1370 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

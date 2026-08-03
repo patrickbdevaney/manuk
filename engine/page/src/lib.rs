@@ -7670,6 +7670,21 @@ async fn fetch_external_scripts(
     let mut origins: HashMap<NodeId, String> = HashMap::new();
     for n in dom.descendants(dom.root()) {
         if dom.tag_name(n) == Some("script") {
+            // **`nomodule` is checked BEFORE the request, exactly as CSP is below.** This browser
+            // runs `type="module"`, so the legacy half of a differential build must not be fetched
+            // at all — downloading it spends the load budget on a bundle we are forbidden to run,
+            // and leaving `src` in place is precisely the "there is nothing to run" path a blocked
+            // or failed fetch already takes. One rule, one implementation:
+            // `manuk_js::script_is_nomodule_classic`, shared with `collect_inline_scripts`.
+            if let Some(el) = dom.element(n) {
+                if manuk_js::script_is_nomodule_classic(
+                    el.attr("type"),
+                    el.attr("nomodule").is_some(),
+                ) {
+                    tracing::debug!("nomodule <script src> skipped — this browser runs modules");
+                    continue;
+                }
+            }
             if let Some(src) = dom.element(n).and_then(|e| e.attr("src")) {
                 if let Ok(u) = Url::parse(base).and_then(|b| b.join(src)) {
                     // **CSP is checked before the request is issued, not after it lands.** A blocked

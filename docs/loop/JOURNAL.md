@@ -46371,6 +46371,94 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 864 — we were running BOTH halves of every Angular build (2026-08-03)
+
+TICK SHAPE: capability (function leg, landing on the M1 SCORABILITY ceiling the board ranks first).
+t863 closed by naming `pogoda.by` as the next single-site probe: it had moved `tree-divergence-13` →
+`render-failed`, and `render-failed` is the one unscored reason the instrument calls ours.
+
+HYPOTHESIS (pre-registered, from the page's own source before any engine ran): `pogoda.by` is an
+Angular app shipping **differential loading** — `runtime`/`polyfills`/`main` twice, once as
+`type="module"` and once as `nomodule defer` — and `grep -rn nomodule engine/ --include=*.rs`
+returns **NOTHING**. So we run both halves. Prediction: the page is not failing to boot, it is
+booting TWICE.
+
+RESULT — **`nomodule` was honoured nowhere in this engine, and the site converts.**
+
+```text
+                    t857 sweep       t863 (solo)        t864 (this fix)
+  pogoda.by      tree-divergence-13  render-failed      SCORED
+                 cov 0.019           cov 0.009          cov 0.634 · shape 0.761 (n=71)
+```
+
+⚠⚠⚠ **RUNNING BOTH HALVES IS NOT A SLOW PAGE — IT IS A BROKEN ONE.** The two attributes are a
+matched pair of mutually exclusive rules:
+
+```html
+  <script src="main-es2015.…js" type="module"></script>   <- modern browsers run THIS
+  <script src="main-es5.…js"    nomodule defer></script>  <- …and MUST NOT run this
+```
+
+A browser that understands modules runs the first and skips the second; one that does not sees an
+unknown `type`, skips the first, and runs the second. We honoured only the first rule, so both
+bundles executed: **two framework runtimes racing over one root element.** HTML's *prepare the
+script element* step 12 is explicit — a `nomodule` attribute on a script whose type is "classic"
+means *return*: do not fetch, do not execute.
+
+**This is not one site's shape.** It is what `ng build` emitted by DEFAULT for years, and what
+Vite's legacy plugin and the webpack module/nomodule recipe emit today. The corpus already carried a
+second instance nobody had connected to it: `www.otomoto.pl` ships `polyfills-…js` as
+`nomodule defer`, and its shape moved **0.762 → 0.797** on this fix alone.
+
+⚠⚠ **ONE RULE, ONE IMPLEMENTATION — and here the rule is genuinely needed at two stages in two
+crates.** The decision has to be made once before the FETCH (`fetch_external_scripts`, manuk-page —
+downloading a bundle we are forbidden to run spends the load budget for nothing) and once before
+EXECUTION (`collect_inline_scripts`, manuk-js — an inline `<script nomodule>` is the "please upgrade
+your browser" banner). Both call one predicate, `manuk_js::script_is_nomodule_classic`. Writing the
+two-attribute test twice is exactly the t720-724 defect shape, and it is the shape that produced the
+`geometry:<tag>` ledger and the two UA sheets.
+
+⚠ **THE ONE WAY THIS CAN BE ACTIVELY WRONG, and the gate asserts it:** `nomodule` applies to CLASSIC
+scripts ONLY. `<script type="module" nomodule>` is **inert per spec and must still run**. A fix that
+skipped both halves would blank the page just as thoroughly as running both — and would pass a gate
+that only asserted "the legacy one did not run". `G_NOMODULE` asserts membership in BOTH directions
+plus execution ORDER.
+
+⚠⚠ **AND THE ORDER EXPECTATION I WROTE FROM REASONING WAS BACKWARDS.** I asserted
+`module inert-nomodule plain`; Chrome on the identical fixture says **`plain module inert-nomodule`**
+— a classic non-`defer` script executes during parsing, a module is deferred past it, so the LAST
+script in source order runs FIRST. The engine was already right and my expectation was the bug. The
+gate now carries Chrome's string with a note saying so, which is the t862 lesson repeating one tick
+later: **transcribe the oracle, do not derive the expectation.**
+
+⚠⚠⚠ **TWO CONTROLS MOVED DOWN AND THE OLD BINARY REPRODUCED BOTH — REFUTED, for the third time
+today.** `www.hdnails.it` shape 0.530 → 0.379 and `possssno.sbs` 0.897 → 0.863 (reading-order 1 →
+20) would each have been read as a regression on the arithmetic alone. Three independent checks, in
+increasing cost:
+
+1. **Neither page contains the string `nomodule`** — and that was verified in the bytes OUR OWN net
+   stack received (`boxes --dump-html`), not in a `curl`, because t861 spent four measurements on a
+   binary the instrument never invokes.
+2. `hdnails` returned **0.430 then 0.379 back-to-back on ONE binary** — the site's own spread covers
+   the whole "drop".
+3. **The OLD-BINARY CONTROL** (t863 sources restored, rebuilt, re-measured the same hour) reproduced
+   `possssno 0.862609 / reading-order 20` **2/2** and `hdnails 0.430127` **2/2**.
+
+Zero regressions traded. The controls that HAVE held all session — `hipmiluwuutara.org` and
+`littlecaesarsbcs…` — were byte-identical again.
+
+SIGHTED, NOT CHASED: `docs/loop/PHASE0-RENDER-BURNDOWN.md` §4 item 2 ("mechanism oracle — the
+signature is computed and discarded") is **already DONE**: `run_oracle_merge` calls
+`oracle::signature_of` (main.rs:3123) and `signature_of`'s own doc comment records the fix. The plan
+doc still lists it as the next instrument step. Observer-owned document, so it is reported here
+rather than edited.
+
+PERF: strictly negative cost — a `nomodule` bundle is no longer FETCHED at all, so an Angular page
+stops downloading and parsing a second copy of its whole application under the load budget.
+
+WIKI: `docs/wiki/frameworks.md` — "Differential loading: `nomodule` is half of a matched pair, and
+honouring one half runs the app twice".
+
 ## Tick 863 — the brand fix, measured on a cohort; and a DETERMINISTIC single-site Bar 0 (2026-08-03)
 
 TICK SHAPE: measurement (the falsifiable follow-through t862 owes the corpus) — plus a Bar 0 finding

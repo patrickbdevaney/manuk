@@ -196,6 +196,40 @@ fn with_runtime<R>(
 ///
 /// Call this once, last, after every `Page` (and therefore every `PageContext`) has been dropped —
 /// dropping a rooted JS object *after* its runtime is gone would crash in turn.
+/// **`nomodule` — the script a module-capable browser MUST NOT RUN, and we were running it.**
+///
+/// ⚠⚠⚠ **THIS IS THE ANGULAR CLI SHAPE, AND IT DOUBLE-BOOTSTRAPS THE APP.** Differential loading
+/// ships every build twice and lets the browser pick exactly one:
+///
+/// ```html
+///   <script src="main-es2015.…js" type="module"></script>
+///   <script src="main-es5.…js"    nomodule defer></script>
+/// ```
+///
+/// A browser that understands `type="module"` runs the first and **skips the second**; one that does
+/// not sees `type="module"` as an unknown type, skips the first, and runs the second. The choice is
+/// made by two mutually exclusive rules, and we were honouring only one of them — so we ran **both
+/// halves of the same application**, which is not a slow page but a broken one: two framework
+/// runtimes racing over one root element.
+///
+/// The rule, from HTML's *prepare the script element* (step 12): *if the element has a `nomodule`
+/// content attribute **and** its script block's type is "classic", then return* — do not fetch, do
+/// not execute. It applies to CLASSIC scripts only; `nomodule` on a `type="module"` element is inert
+/// and must be ignored, which is the one way this predicate can be actively wrong.
+///
+/// **One rule, ONE implementation** (t720-724), because the decision is needed at two different
+/// stages in two different crates: `fetch_external_scripts` (manuk-page) must not spend the load
+/// budget downloading a bundle it will not run, and `collect_inline_scripts` (this crate) must not
+/// execute an inline one. Both call this.
+pub fn script_is_nomodule_classic(ty: Option<&str>, has_nomodule: bool) -> bool {
+    if !has_nomodule {
+        return false;
+    }
+    // "classic" is the empty/absent type and the JavaScript MIME types; anything else is either a
+    // module (handled above) or a data block the script path never runs anyway.
+    !ty.unwrap_or("").trim().eq_ignore_ascii_case("module")
+}
+
 /// Every `<canvas>` a script has drawn into since the last call: `(node id, width, height, RGBA8)`.
 ///
 /// Non-premultiplied RGBA8 — the exact shape `manuk_paint::DecodedImage` wants — so the host can drop

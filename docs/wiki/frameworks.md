@@ -320,3 +320,61 @@ late**: injected scripts are fetched in a later `finish_loading` phase, *after* 
 loop has spun to its 20,000-task ceiling and webpack's timeout has already fired. A real browser
 fetches an injected script **concurrently with** the event loop. That is a scheduling defect and a
 separate fix — named here rather than absorbed into this one's success.
+
+## Differential loading: `nomodule` is HALF of a matched pair, and honouring one half runs the app twice (tick 864)
+
+`grep -rn nomodule engine/ --include=*.rs` returned **nothing**. Every Angular CLI application this
+engine had ever loaded was therefore executing **both halves of itself**.
+
+```html
+  <script src="runtime-es2015.…js"  type="module"></script>
+  <script src="runtime-es5.…js"     nomodule defer></script>
+  <script src="polyfills-es2015.…js" type="module"></script>
+  <script src="polyfills-es5.…js"    nomodule defer></script>
+  <script src="main-es2015.…js"     type="module"></script>
+  <script src="main-es5.…js"        nomodule defer></script>
+```
+
+`type="module"` and `nomodule` are a **matched pair of mutually exclusive rules**, and the pair is
+what makes the technique work at all:
+
+* a browser that understands modules runs the `type="module"` script and, per HTML's *prepare the
+  script element* **step 12**, returns early on any **classic** script carrying `nomodule` — it does
+  not fetch it and does not run it;
+* a browser that does not understand modules sees `type="module"` as an unrecognised type and skips
+  it, and does not recognise `nomodule` either, so it runs the classic one.
+
+Implement only the first rule and you get **both** bundles: two framework runtimes bootstrapping over
+one root element. That is not a slow page; it is a blank one. `pogoda.by` went from `render-failed`
+(coverage **0.009**, a blank screenshot) to **scored, coverage 0.634, shape 0.761** on this one fix.
+
+**It is not one site's shape.** `ng build` emitted it by default for years; Vite's legacy plugin and
+the webpack module/nomodule recipe emit it today. The corpus already held a second, unconnected
+instance — `www.otomoto.pl` ships its polyfills as `nomodule defer`, and its shape moved 0.762 →
+0.797 on the same change.
+
+### The one way this can be actively wrong
+
+`nomodule` applies to **classic scripts only**. `<script type="module" nomodule>` is inert per spec
+and **must still run**. A fix that skipped both halves blanks the page exactly as thoroughly as one
+that runs both — and it would sail past a gate that only asserted *"the legacy bundle did not run"*.
+`G_NOMODULE` asserts membership in both directions, plus order.
+
+### Two stages, two crates, ONE predicate
+
+The decision is needed before the **fetch** (`fetch_external_scripts`, manuk-page — downloading a
+bundle we are forbidden to run spends the load budget for nothing) and before **execution**
+(`collect_inline_scripts`, manuk-js — an inline `<script nomodule>` is the "please upgrade your
+browser" banner). Both call `manuk_js::script_is_nomodule_classic`. Writing the two-attribute test
+twice is the [[js-engine]] *one rule, N implementations* defect that produced the `geometry:<tag>`
+ledger and the two UA stylesheets.
+
+### Transcribe the oracle; do not derive the expectation
+
+The gate's first draft asserted the surviving scripts would run `module inert-nomodule plain`.
+Chrome on the identical fixture says **`plain module inert-nomodule`**: a classic non-`defer` script
+executes during parsing while a module is deferred past it, so the LAST script in source order runs
+FIRST. The engine was already right and the expectation was the bug — the same lesson [[dom-semantics]]
+banked one tick earlier for `Object.prototype.toString`.
+
+[[js-engine]] [[dom-semantics]] [[conformance-and-oracles]]

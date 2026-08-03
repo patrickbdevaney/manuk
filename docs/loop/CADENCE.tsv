@@ -597,3 +597,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 861	ae621d9d	1785759297	2026-08-03T08:14:57-04:00	3560	instrument	63	9	315	41	381	81	3896	6960	0	453	0	an oracle timeout is the REFERENCE hanging, and I measured the wrong binary four times (2026-08-03)
 862	f9bad894	1785761667	2026-08-03T08:54:27-04:00	2370	capability	63	10	557	38	382	81	3896	6960	0	454	0	`[object Object]` is why a server-rendered page rendered NOTHING (2026-08-03)
 863	b5b020c9	1785763702	2026-08-03T09:28:22-04:00	2035	measurement	63	6	180	33	382	81	3896	6960	0	454	0	the brand fix, measured on a cohort; and a DETERMINISTIC single-site Bar 0 (2026-08-03)
+864	60794e17	1785765839	2026-08-03T10:03:59-04:00	2137	capability	63	11	331	33	383	81	3896	6960	0	455	0	we were running BOTH halves of every Angular build (2026-08-03)
