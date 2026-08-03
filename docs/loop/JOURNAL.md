@@ -46371,6 +46371,118 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 860 — a stylesheet that 404s is not a page we failed to style (2026-08-03)
+
+TICK SHAPE: instrument fidelity (scorability) — the board's M1 PRIORITY ORDER says SCORABILITY FIRST,
+so this takes the unscored residue that is supposed to be OURS.
+
+⚠ **STUB WRITTEN BEFORE THE PROBE'S VERDICT.**
+
+HOW IT WAS AIMED. Of the 28 unscored in-scope rows in the t857 sweep, most are bot-walls and
+unreachables (excluded by cert §3). The cohort the instrument explicitly calls **our own bug** is
+`css-starved` (3 sites), and its reason string ends with a claim of authorship: *"OURS and IN-SCOPE:
+the sheets were cut by our own load deadline, **not refused by the origin**"*. That is a testable
+sentence, and the cheapest possible test is `curl`.
+
+HYPOTHESIS (pre-registered): the claim is false on at least one of the three, because
+`fetch_and_apply_stylesheets` books a settled-but-**4xx** fetch into `failed_css` through the same
+`None` arm as a fetch that never settled — `subresource_text` returns `None` for `status >= 400` and
+throws the status away. A sheet the origin does not have is a sheet **Chrome does not get either**,
+so the two engines are equally unstyled and the page is perfectly scorable.
+
+PREDICTION: the 3 css-starved sites become scorable and the scorability ceiling rises by 3; the
+`deadline-cut` gate and `G_SILENT_FAIL` both stay green because their fixtures are a cancelled fetch
+and a refused connection, neither of which is a 404.
+
+RESULT — **3 of 3, and the claim in the reason string was wrong on every one of them.**
+
+```text
+  www.cuneocronaca.it   css/normalize.css      404      (its other 4 sheets serve 200)
+                        css/simple_slider.css  404
+  m.youm7.com           landing/landingstyle.css        404
+  nortenoticia.com.br   cdnjs …/tailwind.min.css?ver=…  404
+```
+
+⚠⚠⚠ **THE REASON STRING ASSERTED ITS OWN INNOCENCE AND NOBODY HAD EVER `curl`ED IT.** The text those
+rows carried ended *"OURS and IN-SCOPE: the sheets were cut by our own load deadline, **not refused by
+the origin**"* — a testable sentence, false on 3 of 3, and the test costs one `curl`. The mechanism is
+one line: `subresource_text` reads `status >= 400` and then **throws the status away**, so a sheet the
+origin does not HAVE reaches the same `None` arm as a sheet that died on the wire, and that arm books
+both into `failed_css` — the number every measurement uses to ask *"did I style this page at all?"*
+
+**A 404 answers that question NO.** The author's `<link>` is dead in their own HTML; Chrome requests
+the same URL, gets the same 404, renders the same page without it. We are not less-styled than the
+reference, we are *identically* styled — which is exactly the state a differential instrument exists
+to score. The line is drawn at **404/410 only**: a `403` is often a bot-wall answering us differently
+than it answers Chrome (ours), and a `5xx` is weather that may have served Chrome fine (not
+attributable). "The resource does not exist" is the one status that is the same answer for every
+client, and the gate asserts the `5xx` half so the fix cannot drift into "stop counting failures".
+
+⚠⚠ **THE FIRST FIX WORKED PERFECTLY AND ONE SITE STAYED BROKEN — BECAUSE AN EXEMPTION KEYED ON A
+FETCH'S OUTCOME IS UNDONE BY ANYTHING THAT STOPS THE FETCH FROM HAVING ONE.** After the 404 arm
+landed, `youm7` and `nortenoticia` scored and `cuneocronaca` did **not**. A 404 sheet never enters
+`external_css`, so the "don't re-fetch" filter re-requested it on every re-entry after a round of
+dynamic scripts — and on a *late* re-entry the load deadline cuts it before it can settle, at which
+point the `cut` block books it as "never settled" and the page is UA-fallback again. The exemption was
+firing correctly on pass 1 and being overwritten on pass 2. Closed with `absent_css`: a 404/410 is a
+**settled** answer, so Part 22.3's "no URL on the wire twice for one navigation" applies to it exactly
+as it applies to a hit — which also deletes one redundant fetch per re-entry per dead sheet.
+
+MEASURED — the pre-860 binary was run on all three at the top of this tick and answered
+`css-starved` on all three; same hour, same box:
+
+```text
+                        BEFORE            AFTER
+  m.youm7.com           css-starved-1  →  cov 1.000  shape 0.870  jarring 0/0/0/0   ← M1 PASS
+  nortenoticia.com.br   css-starved-1  →  cov 1.000  shape 0.180
+  www.cuneocronaca.it   css-starved-2  →              shape 0.404
+  wikipedia / blog.rust-lang / possssno   byte-identical on shape and every jarring term
+```
+
+**`m.youm7.com` is not merely scorable, it PASSES M1** — shape 0.870 with all four jarring invariants
+clean. A site that had been counted against us as "we could not style it" was, the whole time, a page
+we render correctly.
+
+⚠ **THIS IS THE SECOND TIME IN FIVE TICKS THAT THE SCORABILITY CEILING TURNED OUT TO BE OVERSTATED BY
+A REASON NOBODY HAD CHECKED** (t856: 10 of 12 `shell-only` rows were an oracle bound, not engine
+work). Two of the three named "ours" cohorts have now been re-measured and both shrank. The board's
+`SCORABILITY CEILING 101/129 = 78.3%` is a **floor on our fidelity, not a ceiling on our engine** —
+and the remaining named residue (`render-failed` 2, `timeout` 2, `tree-divergence` 5) has not been
+`curl`ed either. That is the next cheap tick, and it should happen before any more of it is treated
+as engine backlog.
+
+CADENCE — **the constitution check was due at exactly this tick** (`#72` closed with *"Next check due:
+tick 860"*), so it is banked here as **check #73** rather than deferred behind the engine work it would
+have blocked. Its own artefact is `docs/loop/CONSTITUTION-CHECK.md`; two of its findings are this
+tick's, generalised, and one is a correction to the governing document itself:
+
+- **Three of #72's four steers landed** (the I3 `node_rects` fix at t853 the very next tick, the
+  "stop reading Δ M1 ≈ 0 as a verdict" discipline, the scorability attack). The miss is the cheapest
+  one — the **fixed four-site control panel** has been re-improvised every tick since, so no two
+  ticks' controls are comparable. Third time of asking.
+- **The generalisation of this tick, as an I5 defect:** the instrument emits a hand-written reason
+  string per unscored site and the loop consumes it as a **ranked backlog**. Two have now been tested
+  — `shell-only` (t856) and `css-starved` (this tick) — and **both were false**. A discovery engine
+  whose divergence labels are unfalsifiable prose does not discover work, it manufactures it.
+  Standing rule: *a reason string that asserts a CAUSE is a hypothesis with a test attached; run that
+  test on one member before any cohort it names is scheduled as engine work.*
+- **`CONSTITUTION.MD` PART VI corrected.** VI.2 still ranked H0 layout by `css-flexbox 5.5%` /
+  `css-grid 4.7%` and VI.3 still fixed the H0 gauge at "WPT breadth excluding encoding = 32.3%" —
+  both tick-86 readings, and both a class of number **PART VII retired** ("the bar is *not* a WPT
+  percentage; 83% and beyond is explicitly OUT OF SCOPE for v1"). Both are now marked retired-as-a-
+  ranking, with M1-on-the-in-scope-corpus named as the instrument that actually governs and the WPT
+  marks named as the regression ratchet they are. VI.2's *structural* claims were re-verified from the
+  tree and stand (`taffy = "0.12"` at `Cargo.toml:83`, no incremental relayout, tiny-skia everywhere).
+- **The steer:** `curl` the nine remaining "ours" rows (`render-failed` 2 · `timeout` 2 ·
+  `tree-divergence` 5) before treating any as engine work; then take the t857 sweep's own top
+  mechanism residue — `missing box: <img>` 16 sites / 643 hits, `missing box: <li>` 14 / 410.
+
+PERF: strictly negative work — one fetch fewer per re-entry per 404 sheet (`cuneocronaca` issued 2
+per round). No new work on any path.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "a 404 stylesheet is not a page we failed to style", and
+why the exemption needed a second, outcome-independent half.
+
 ## Tick 859 — a float is not the first in-flow child, and it was CANCELLING the collapse (2026-08-03)
 
 TICK SHAPE: capability (layout primitive) — ranked from the t857 sweep's own rows, on the conjunct

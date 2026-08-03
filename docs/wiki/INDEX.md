@@ -628,6 +628,8 @@
 
   - L3 · shell-only-N is the oracle rendering a DIFFERENT DOCUMENT than the site serves (t856, mechanism corrected t858)
   - L94 · The ranked fix — RETRACTED at t858, because it is already there
+  - L109 · css-starved-N blamed our load deadline for the AUTHOR's dead link (t860)
+  - L141 · ⚠⚠ The exemption needed a SECOND half, and the first half looked complete
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1445,4 +1447,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1352 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1354 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -4294,3 +4294,148 @@ whatever the cohort happened to contain.
    worked since t777. 20/130 cannot reach 95% until something boots them.
 
 **Next check due: tick 860.**
+
+## Check #73 — tick 860 (2026-08-03)
+
+**Horizon:** H0 — Pareto Web Parity, PART VII component **1 (daily-driver rendering parity)**, with
+component **2 (the agentic surface)** touched at t853 and component **3 (Bar 0)** at t854.
+**Gate:** `DAILY-DRIVER-CERTIFICATION.md`, milestone **M1 RENDER** — `shape ≥ 0.75` **AND**
+`jarring-clean` on ≥ 95% of the in-scope CrUX corpus. Latest honest reading, sweep **t857**
+(`--jobs 2`, 200 sites, clean): **M1 14.0% (18 of 129)** · shape ≥ 0.75 **18.6% (24)** ·
+jarring-clean **27.9% (36)** · shape_mean **53.6%** · cov_mean **84.0%** ·
+printed scorability ceiling **101 / 129 = 78.3%**.
+
+Read this window: `CONSTITUTION.MD` Parts I–VII in full, check #72, `STATUS.md`, the current
+`lever-board.sh` output, `docs/loop/FIDELITY-PROGRESS.tsv`, the t857 sweep write-up, journal ticks
+853–860.
+
+### DID THE STEER FROM #72 LAND? — three of four, and the miss is the cheapest one
+
+| #72 steer | outcome |
+|---|---|
+| 1. Fix `node_rects`'s inline rect, **rank it as I3**, land it with an agent-side click-point assertion in the same tick | ✅ **t853, the very next tick** — and it went further than the steer asked: the fix broke a latent tie in `hit_test` that cost **16 clickable links** on Wikipedia, caught only because the same tick was required to assert clickability. |
+| 2. Stop reading `Δ M1 ≈ 0` as a verdict on a Chrome-exact fix | ✅ held — t857 **pre-registered** "shape flat" in its stub *with the reason* (small magnitude on a universal idiom) and shape came back `24 → 24`. |
+| 3. Fix a four-site control panel and re-read it every A/B | ❌ **not done.** t859 improvised an eight-site set; t860 improvised a three-site set. Both were adequate *for their tick* and neither is comparable across ticks, which was the entire point. |
+| 4. The scorability ceiling is the larger half and untouched | ✅ **worked three times** — t856, t858, t860. See finding 1. |
+
+### COMPLIANCE
+
+**I5 held, and Bar 0 outranked a capability again.** t853's sweep of the *whole* `manuk-page` suite
+(the wall runs 19 of 104 gates) surfaced a 3-minute spin in `g_reflect_numeric`. The old binary,
+rebuilt from a stashed tree and run in the same hour, **hung identically** — so it was correctly
+booked as pre-existing, named as its own tick, and fixed at t854 rather than folded into the
+capability write-up where neither would have been attributable.
+
+**PART VII held.** No `scripts/` file was edited this window. The wall self-purge and the two dead
+crontab lines carried over from #72 are still reported, still not patched.
+
+**I4 held, visibly.** `RATCHET.tsv` is **byte-identical on every WPT mark** across all eight ticks —
+`WPT:TOTAL 422865`, `encoding 360559`, unchanged. Under VI.3 that is the correct shape for a window
+spent on usage-weighted breadth, not a failure to produce.
+
+### FINDING 1 — ⚠⚠⚠ THE INSTRUMENT'S REASON STRINGS ASSERT THEIR OWN AUTHORSHIP, AND NOTHING FALSIFIES THEM. TWO OF THREE "OURS" COHORTS HAVE NOW BEEN RE-MEASURED AND **BOTH SHRANK.**
+
+I5 makes the differential oracle *"the primary mechanism for finding what to build next."* The oracle
+does not merely emit a number — it emits a **hand-written reason string per unscored site**, and the
+loop consumes those strings as a **ranked backlog**. Two ticks, four apart, tested one string each:
+
+```text
+  t856  shell-only-N       "the site served a shell"        →  10 of 12 rows are the ORACLE rendering
+                                                                one curl'd file whose relative bundles
+                                                                404 — the pages render 48–1115 tags in
+                                                                Chrome and our own row reads cov 1.000
+  t860  css-starved-N      "the sheets were cut by our own   →  404 at the origin on 3 of 3. Chrome gets
+                            load deadline, NOT refused by        the same 404 and renders the same page.
+                            the origin"                          Cost: one `curl`.
+```
+
+**Neither string had ever been tested, and both were the loop's own prose about the loop's own
+engine.** The `css-starved` one is the sharper case because it does not describe a symptom — it
+**names a cause and rules another one out**, in bold, in a machine-consumed field. It was false on
+every instance.
+
+Constitutionally this is an **I5 defect, not a measurement nit**: a discovery engine whose divergence
+labels are unfalsifiable prose does not discover work, it **manufactures backlog** — and this loop has
+now been billed twice for it. The correct standing rule, and it is cheap:
+
+> **A reason string that asserts a CAUSE is a hypothesis with a test attached. Before any cohort it
+> names is treated as engine work, run that test on one member.** Where the test is a `curl`, there
+> was never an excuse.
+
+The printed `SCORABILITY CEILING 101/129 = 78.3%` is therefore **a floor on our fidelity, not a
+ceiling on our engine.** `m.youm7.com` is the proof: counted against us as *"we could not style it"*,
+it turned out to be `cov 1.000 · shape 0.870 · jarring 0/0/0/0` — **an outright M1 pass we had been
+scoring as a failure to render.**
+
+### FINDING 2 — THE REMAINING UNSCORED RESIDUE IS NOW SMALL ENOUGH TO ENUMERATE, AND IT HAS NOT BEEN `curl`ED
+
+After t856 and t860 the named residue that still claims to be ours is:
+
+```text
+  render-failed      2        timeout            2        tree-divergence    5
+```
+
+Nine rows. Finding 1 says each carries an untested causal claim, and the two tested so far both
+collapsed. **The next scorability tick is nine `curl`s, not nine engine investigations** — and it must
+happen before any of those nine is scheduled as layout work. That is the direct application of the
+PART III standing rule (advance the gate) to the cheapest available lever on the board's own #1.
+
+### FINDING 3 — PART VI IS STALE IN A WAY THAT MATTERS: IT STILL RANKS BY WPT PERCENTAGES THAT NO LONGER GOVERN
+
+VI.2 names the H0 layout blocker as *"`css-flexbox` **5.5%**, `css-grid` **4.7%**"* and VI.3 fixes the
+H0 gauge at *"WPT breadth excluding encoding = 32.3%"*. Both are tick-86 readings, and **PART VII
+(written later, and explicitly superseding the roadmap for the near term) says the bar is
+*"reliably renders and runs the representative real internet," NOT a WPT percentage** — and that
+*"83% and beyond is explicitly OUT OF SCOPE for v1."*
+
+So PART VI is still handing the loop a ranking instrument that PART VII retired. The tree has moved:
+the governing gauge for the last ~150 ticks has in fact been **M1 on the in-scope CrUX corpus**, and
+`RATCHET.tsv`'s WPT marks are kept as the regression ratchet they are, not as a ranking. VI.2 and VI.3
+are corrected below to say that out loud, so a future check does not re-derive the retired ordering
+from a document that still asserts it. (VI.2's *structural* claims were re-verified from the tree and
+**stand**: `taffy = "0.12"` in `Cargo.toml:83`, no double-dirty-bit incremental relayout, tiny-skia CPU
+raster everywhere.)
+
+### GATE OR SCOREBOARD? — gate, on all four of PART VII's components that moved
+
+- **Component 1 (rendering parity):** t859 (CSS 2.1 §8.3.1 — an out-of-flow first child does not cancel
+  the parent/child margin collapse; the hoist computation and the placement loop had disagreed with
+  each other for ~700 ticks and nothing compared them) and t860 (+3 sites scorable, one of them an
+  outright M1 pass).
+- **Component 2 (agentic surface):** t853 — the I3 steer, landed with the click-point assertion, which
+  is how the 16-link `hit_test` regression was caught *before* it shipped rather than by a sweep.
+- **Component 3 (Bar 0):** t854 — a `colspan` of two billion is a hang, not a big table.
+- **The measurement itself:** t856, t857, t858, t860. t858 is worth naming: it **retracted its own
+  predecessor's stated mechanism while keeping its conclusion**, which is the failure mode that
+  survives longest (right answer, wrong reason) and the loop caught it in two ticks.
+
+Not one of the eight ticks moved a WPT number, and per I4/VI.3 that is the right answer.
+
+### HARNESS, reported not patched (PART VII)
+
+1. **The wall self-purge** — `verify.sh` calls `disk-hygiene.sh` mid-wall and its `rm -rf target/debug`
+   is guarded only by `pct >= 95` with no build-active check. Carried from #72, unchanged.
+2. **Two crontab lines are DEAD from a `\'` quoting bug** (`disk-hygiene.sh`, `loop-watchdog.sh`).
+   Carried from #72, unchanged.
+3. **`manuk-wpt` is in neither the wall's crate-test list nor CI's.** Reported at #69–#72.
+4. **New, measured this tick:** `/home` sits at **92% (24G free)** and `disk-hygiene.sh` reclaims
+   **zero** — the ~95G in `target/debug/deps` is the genuine working set (≤2 generations per stem, both
+   live feature variants), not orphan bloat. Item 1 is therefore not a hypothetical: there is no
+   headroom left to free before a wall, and the prune that used to buy it has nothing left to take.
+
+### THE STEER
+
+1. **`curl` THE NINE.** `render-failed` 2 · `timeout` 2 · `tree-divergence` 5. One tick, nine cheap
+   probes, before any of them is treated as engine work. Two of two tested so far were not ours.
+2. **A REASON STRING THAT NAMES A CAUSE MUST CARRY ITS TEST.** Standing rule from finding 1. When the
+   instrument writes *"OURS because X"*, the tick that consumes it runs the one-command check on X
+   first — and where the string was wrong, **fix the string**, because it will be re-read every sweep.
+3. **FIX THE FOUR-SITE CONTROL PANEL. THIRD TIME OF ASKING.** `ta3lemkonline` (adversarial RTL) ·
+   `celeb.gate.cc` (large, known-drifting) · `mobcup.fm` (small deterministic) · `payb.jp`
+   (known-bimodal). Chosen once, carried across ticks, re-read every A/B. It has been re-improvised
+   every tick since #72 and so no two ticks' controls are comparable.
+4. **THEN THE RANKED MECHANISM RESIDUE**, which the t857 sweep already computed and nothing has taken:
+   `missing box: <img>` **16 sites / 643 hits** and `missing box: <li>` **14 sites / 410 hits** are the
+   two largest single mechanisms in the corpus, both ahead of every geometry band.
+
+**Next check due: tick 868.**

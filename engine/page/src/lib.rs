@@ -1420,6 +1420,19 @@ pub struct Page {
     /// measuring the engine (the differential oracle above all) must be able to ask. A URL is
     /// removed if a later fetch round does deliver it — this set holds what is failed NOW.
     failed_css: std::collections::HashSet<String>,
+    /// Render-blocking stylesheet URLs the origin answered `404`/`410` for. **A settled answer, so
+    /// this navigation must not ask again** — Part 22.3's "no URL on the wire twice" applies to a
+    /// definitive absence exactly as it does to a hit.
+    ///
+    /// ⚠⚠ **WITHOUT THIS THE 404 EXEMPTION LEAKS BACK IN THROUGH THE DEADLINE (t860).** A 404 sheet
+    /// never enters `external_css`, so the `!external_css.contains_key` filter re-requested it on
+    /// every re-entry after a round of dynamic scripts — and on a *late* re-entry the load deadline
+    /// cuts it before it can settle, at which point the `cut` block books it as "never settled" and
+    /// the page is UA-fallback again. `cuneocronaca.it` is the measured case: both its dead sheets
+    /// were correctly exempted on the first pass and re-blamed on the second, so the site stayed
+    /// unscorable with the exemption working perfectly. **An exemption keyed on the OUTCOME of a
+    /// fetch is undone by anything that stops the fetch from having an outcome.**
+    absent_css: std::collections::HashSet<String>,
     /// Mask/background URLs already fetched for this navigation. Same discipline as `external_css`
     /// and `images`: `fetch_and_apply_masks` and `fetch_and_apply_background_images` run once for
     /// `finish_loading` and AGAIN after every round of dynamic scripts, and each call was re-fetching
@@ -4933,6 +4946,7 @@ impl Page {
             scroll_offsets: std::collections::HashMap::new(),
             external_css: HashMap::new(),
             failed_css: std::collections::HashSet::new(),
+            absent_css: std::collections::HashSet::new(),
             fetched_urls: std::collections::HashSet::new(),
             image_attempts: std::collections::HashSet::new(),
             image_by_url: std::collections::HashMap::new(),
@@ -6620,6 +6634,13 @@ impl Page {
     /// means the current layout is (partly) UA-default fallback, NOT this engine's rendering of the
     /// author's page — a measurement that diffs it against a fully-styled reference is charging
     /// network weather to the engine's account. The differential oracle discards such runs.
+    ///
+    /// ⚠ **A `404`/`410` IS NOT COUNTED HERE (t860).** The question this number answers is "am I
+    /// less-styled than the reference browser?", and a sheet the origin does not have is a sheet the
+    /// reference browser does not get either — a dead `<link>` in the author's own HTML, rendered
+    /// identically by both engines and therefore perfectly scorable. Every other failure (a refused
+    /// connection, a `403`, a `5xx`, a deadline cut) still counts. See the `absent` arm of
+    /// [`Self::fetch_and_apply_stylesheets`] for the measurement that forced the distinction.
     pub fn failed_stylesheet_fetches(&self) -> usize {
         self.failed_css.len()
     }
@@ -6652,6 +6673,9 @@ impl Page {
             // is exactly why nobody noticed: "cheap" is not "free", and every one still costs a body
             // clone of a multi-megabyte script.
             .filter(|url| !self.external_css.contains_key(url))
+            // A 404/410 is as settled an answer as a body — asking again cannot change it, and
+            // asking again LATE is how the exemption below gets undone (see `absent_css`).
+            .filter(|url| !self.absent_css.contains(url))
             .collect();
         // Against the load deadline (tick 655). Tick 654 fixed this phase's ORDER — apply the sheets
         // where they are complete, before the phase goes back to the network for `@import`/`@font-face`
@@ -6679,18 +6703,23 @@ impl Page {
         let requested: Vec<String> = ext_urls.clone();
         let fetched = collect_before_deadline(
             ext_urls.into_iter().map(|url| async move {
-                let text = manuk_net::fetch(&url)
-                    .await
-                    .ok()
-                    .and_then(|r| subresource_text(&r));
-                (url, text)
+                // ⚠⚠⚠ **THE STATUS TRAVELS WITH THE MISS, BECAUSE "NO TEXT" HAS TWO CAUSES AND ONLY
+                // ONE OF THEM IS OURS.** `subresource_text` already reads `status >= 400` and then
+                // throws the status away, so a sheet the origin does not HAVE arrived at the `None`
+                // arm below indistinguishable from a sheet that died on the wire — and the `None`
+                // arm books both into `failed_css`, which is the number every measurement uses to
+                // decide whether it styled the page at all. See the `absent` arm below.
+                let r = manuk_net::fetch(&url).await.ok();
+                let absent = matches!(r.as_ref().map(|r| r.status), Some(404 | 410));
+                let text = r.as_ref().and_then(subresource_text);
+                (url, text, absent)
             }),
             self.load_deadline,
         )
         .await;
         {
             let settled: std::collections::HashSet<&str> =
-                fetched.iter().map(|(u, _)| u.as_str()).collect();
+                fetched.iter().map(|(u, ..)| u.as_str()).collect();
             let cut: Vec<&String> = requested
                 .iter()
                 .filter(|u| !settled.contains(u.as_str()))
@@ -6713,12 +6742,50 @@ impl Page {
         // Start from what we already have — a re-entry must ADD sheets, never rebuild the set from
         // scratch (which would drop the ones it just decided not to re-fetch).
         let mut external: HashMap<String, String> = self.external_css.clone();
-        for (url, text) in fetched {
+        for (url, text, absent) in fetched {
             match text {
                 Some(t) => {
                     tracing::info!(bytes = t.len(), %url, "stylesheet applied");
                     self.failed_css.remove(&url);
                     external.insert(url, t);
+                }
+                // ⚠⚠⚠ **A SHEET THE ORIGIN DOES NOT HAVE IS NOT A PAGE WE FAILED TO STYLE — AND
+                // BOOKING IT AS ONE COST THREE IN-SCOPE SITES THEIR SCORABILITY.**
+                //
+                // `failed_css` answers exactly one question: *"is this layout (partly) UA-default
+                // fallback rather than our rendering of the author's design?"* A 404 answers it
+                // **no**. The author's `<link>` is a dead link in their own HTML; Chrome requests
+                // the same URL, gets the same 404, and renders the same page without it. We are not
+                // less-styled than the reference — we are identically-styled, which is precisely
+                // the state a differential measurement is allowed to score.
+                //
+                // Measured (t860, `curl` against the three `css-starved` rows of the t857 sweep —
+                // ALL THREE, not a sample):
+                //
+                // ```text
+                //   cuneocronaca.it   css/normalize.css        404   (4 of its 6 sheets are 200)
+                //                     css/simple_slider.css    404
+                //   m.youm7.com       landing/landingstyle.css 404
+                //   nortenoticia      cdnjs …/tailwind.min.css 404
+                // ```
+                //
+                // The reason string those rows carried asserted the opposite in so many words —
+                // *"the sheets were cut by our own load deadline, NOT refused by the origin"* — and
+                // it was wrong on 3 of 3. This is the second time in five ticks that the
+                // scorability ceiling turned out to be overstated by a reason nobody had `curl`ed
+                // (t856: 10 of 12 `shell-only` rows were an oracle bound, not engine work).
+                //
+                // The line is drawn at **404/410 only**, and narrowly on purpose: a `403` on a
+                // stylesheet is very often a bot-wall answering US differently than it answers
+                // Chrome, which IS a divergence we own, and a `5xx` is weather that may well have
+                // served Chrome fine. Those keep counting. "The resource does not exist" is the one
+                // status that is the same answer for every client.
+                None if absent => {
+                    tracing::info!(%url, "stylesheet 404/410 — the author's link is dead at the \
+                                          origin, so the reference browser renders without it too; \
+                                          NOT counted as a failure to style this page");
+                    self.failed_css.remove(&url);
+                    self.absent_css.insert(url);
                 }
                 // A stylesheet that fails to arrive is not a cosmetic loss — it is the difference
                 // between a site's desktop layout and its mobile one. Say so — and COUNT it, so a
@@ -10512,6 +10579,87 @@ mod tests {
             1,
             "the sheet the deadline cut off must be RECORDED as failed — otherwise the page renders \
              in UA-default fallback and every downstream measurement reads that as our paint bug"
+        );
+    }
+
+    /// **A STYLESHEET THE ORIGIN 404s IS NOT A PAGE WE FAILED TO STYLE.**
+    ///
+    /// `failed_stylesheet_fetches()` answers one question — *"is this layout UA-default fallback
+    /// rather than our rendering of the author's design?"* — and every downstream measurement uses
+    /// it to decide whether the site can be scored at all. A `404` answers it **no**: the author's
+    /// `<link>` is dead in their own HTML, the reference browser gets the same `404`, and both
+    /// engines render the same page without it.
+    ///
+    /// Measured (t860): all three `css-starved` rows of the t857 sweep were 404s at the origin —
+    /// `cuneocronaca.it` (2 of 6 sheets, the other 4 serve 200), `m.youm7.com`, `nortenoticia`'s
+    /// cdnjs tailwind — while the reason string those rows carried said *"cut by our own load
+    /// deadline, NOT refused by the origin"*.
+    ///
+    /// The two halves are asserted together on purpose: the guard is what keeps the fix from
+    /// becoming "stop counting failures". RED-proof: drop the `absent` arm and the first assertion
+    /// reads 1; widen it past 404/410 and the second reads 0.
+    #[test]
+    fn a_stylesheet_the_origin_does_not_have_is_not_counted_as_unstyled() {
+        let fonts = FontContext::new();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("rt");
+
+        // A local one-shot origin, so the STATUS is the only variable. Two ports, two answers.
+        let serve = |status_line: &'static str| {
+            let l = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+            let port = l.local_addr().unwrap().port();
+            std::thread::spawn(move || {
+                for s in l.incoming().take(1).flatten() {
+                    use std::io::{Read, Write};
+                    let mut b = [0u8; 2048];
+                    let _ = (&s).read(&mut b);
+                    let _ = (&s).write_all(
+                        format!(
+                            "{status_line}\r\nContent-Type: text/css\r\nContent-Length: 0\r\n\r\n"
+                        )
+                        .as_bytes(),
+                    );
+                }
+            });
+            port
+        };
+
+        let missing = serve("HTTP/1.1 404 Not Found");
+        let mut page = Page::load(
+            &format!(
+                r#"<head><link rel="stylesheet" href="http://127.0.0.1:{missing}/gone.css"></head><body><p>x</p></body>"#
+            ),
+            "http://ex.test/",
+            &fonts,
+            800.0,
+        );
+        rt.block_on(page.fetch_and_apply_stylesheets(&fonts, 800.0));
+        assert_eq!(
+            page.failed_stylesheet_fetches(),
+            0,
+            "a 404 sheet is a dead link in the AUTHOR's html — Chrome gets the same 404 and renders \
+             the same page, so this layout is not UA-fallback relative to the reference and the \
+             site stays scorable"
+        );
+
+        // THE GUARD — a 5xx is weather that may well have served the reference browser fine, so it
+        // still counts. Same fixture, same code path, one status apart.
+        let broken = serve("HTTP/1.1 503 Service Unavailable");
+        let mut page = Page::load(
+            &format!(
+                r#"<head><link rel="stylesheet" href="http://127.0.0.1:{broken}/down.css"></head><body><p>x</p></body>"#
+            ),
+            "http://ex.test/",
+            &fonts,
+            800.0,
+        );
+        rt.block_on(page.fetch_and_apply_stylesheets(&fonts, 800.0));
+        assert_eq!(
+            page.failed_stylesheet_fetches(),
+            1,
+            "only 404/410 is 'the resource does not exist for anybody' — a 5xx must still be counted"
         );
     }
 

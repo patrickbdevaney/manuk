@@ -195,7 +195,7 @@ It is written by the loop, from the tree, and is re-derived — not remembered �
 
 | Constitution scope | Ground truth |
 |---|---|
-| **H0.1** layout beyond Taffy + incremental relayout | Layout is on Taffy 0.12; **no double-dirty-bit incremental relayout.** CSS layout breadth is the weak spot: `css-flexbox` **5.5%**, `css-grid` **4.7%** — nearly every real site needs these. |
+| **H0.1** layout beyond Taffy + incremental relayout | Layout is on Taffy 0.12 (`Cargo.toml:83`, re-verified check #73); **no double-dirty-bit incremental relayout.** CSS layout breadth is the weak spot. ⚠️ **The two percentages this row used to carry (`css-flexbox` 5.5%, `css-grid` 4.7%) were tick-86 WPT readings and are RETIRED as a ranking instrument** — see VI.3. The governing measurement of layout breadth is now **M1 on the in-scope CrUX corpus** (`shape ≥ 0.75` AND jarring-clean), latest **14.0% (18/129)**, sweep t857. The WPT marks remain a regression ratchet. |
 | **H0.3** Vello/wgpu GPU paint path | **Aspirational comments only.** `manuk-compositor` (526 LOC) describes a tiered Vello-GPU renderer; the actual raster is **tiny-skia CPU**, everywhere. `wgpu 27` is declared and used only for shell windowing. |
 | **I5** the differential oracle is the discovery engine | ⚠️ **CORRECTED (constitution check #51, tick 680) — stale twice over.** The crawl completes (265 sites, 392 clusters), so the original "never completed a full crawl (`ORACLE_CRAWLED: 0`)" is simply out of date. But the deeper correction is about *which* mechanism discovers: **the primary discovery engine is now the INSTRUMENTED LOG, and its yield comes from ATTRIBUTION rather than volume.** Three consecutive findings in four ticks came from one log line each — HTML §7.3.3 absent (`window.__appData__ is undefined at inline.js:1:155`, t677), one source name for every inline script on every page (t679), and our own unbounded virtual clock (`next_in_ms=86400000 vclock_ms=13822876800000`, t680, which had been blamed on the page for six ticks). Each was findable only because the previous tick made the log one degree more specific. That compounds, and it is cheaper per finding than any sweep this project runs. **Standing rule from the same window: `most likely` in a log message is a confession — if a message speculates about state the process is holding, print the state.** The oracle remains the breadth instrument; the log is the depth one. |
 | **H0.7** AccessKit integration | Not started (see VI.1). |
@@ -220,6 +220,30 @@ Consequences, binding on the loop:
    and wrong.
 3. **`orient` ranks by usage-weighted breadth**, degrading the exotic tail per I4. The encoding tail is
    **done for H0 purposes**; further encoding depth is anti-Pareto and constitutionally out of scope.
+
+**⚠️ CORRECTED (check #73, tick 860) — VI.3's OWN NUMBER IS NOW STALE, AND PART VII RETIRED THE WHOLE
+CLASS OF NUMBER.** The `32.3%` above is a tick-86 reading and nothing has recomputed it, because
+**PART VII — written later and explicitly superseding the roadmap for the near term — says the bar is
+*"reliably renders and runs the representative real internet," NOT a WPT percentage*, and that
+*"83% and beyond is explicitly OUT OF SCOPE for v1."*** So VI.3's *lesson* is permanent and binding
+(rank by usage-weight × failing-breadth, never by subtest count) while its *instrument* has been
+replaced. The instrument that governs the loop today is:
+
+> **M1 on the in-scope CrUX corpus** — `shape ≥ 0.75` **AND** jarring-clean, bot-walls excluded per
+> `DAILY-DRIVER-CERTIFICATION.md` §3 — banked every sweep in `docs/loop/FIDELITY-PROGRESS.tsv`.
+> Latest: **14.0% (18/129)**, shape_mean 53.6%, cov_mean 84.0% (t857).
+
+`RATCHET.tsv`'s WPT marks are kept as what they are — **a regression ratchet, not a ranking.** A
+window that leaves every WPT mark byte-identical while moving M1 is the *expected* shape of on-mandate
+work, not an absence of output. A future check must not re-derive the retired ordering from this Part.
+
+**And the corollary that cost this loop twice (check #73, findings 1–2):** the M1 instrument does not
+only emit a number, it emits a **hand-written reason string per unscored site**, and the loop consumes
+those strings as a ranked backlog. Two were tested (`shell-only` at t856, `css-starved` at t860) and
+**both were false** — one blamed our load deadline for the author's own 404'd `<link>`. Under I5 an
+unfalsifiable divergence label does not discover work, it **manufactures backlog**. So:
+**a reason string that asserts a CAUSE is a hypothesis with a test attached; run that test on one
+member before any cohort it names is treated as engine work.**
 
 ### VI.4 — The direct path to the H0 exit gate (leanest ordering, re-derived each cycle)
 

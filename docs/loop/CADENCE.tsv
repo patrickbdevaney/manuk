@@ -593,3 +593,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 855	51088c1d	1785746097	2026-08-03T04:34:57-04:00	953	capability	63	8	224	35	381	81	3896	6960	0	449	0	a five-clause `is_empty()` outlived the decision that made one clause false (2026-08-03)
 856	3efa0997	1785749538	2026-08-03T05:32:18-04:00	3441	measurement	63	6	309	32	381	81	3896	6960	0	449	0	the oracle renders ONE CURL'd FILE, so every relative bundle 404s (2026-08-03)
 858	861eb8c2	1785753253	2026-08-03T06:34:13-04:00	3715	measurement	63	8	518	186	381	81	3896	6960	0	451	0	t856's CONCLUSION stands and its stated MECHANISM was wrong (2026-08-03)
+860	62793943	1785755737	2026-08-03T07:15:37-04:00	2484	instrument	63	10	540	42	381	81	3896	6960	0	452	0	a stylesheet that 404s is not a page we failed to style (2026-08-03)

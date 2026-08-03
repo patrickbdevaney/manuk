@@ -105,3 +105,65 @@ contract — not a tick.
 engine defect visible in this data at all — the pages render in Chrome and our own score is
 `coverage 1.000000` against a one-element reference. Working them would be optimising against an
 artefact, which is the failure this loop has now been caught by four times.
+
+## `css-starved-N` blamed our load deadline for the AUTHOR's dead link (t860)
+
+`Page::failed_stylesheet_fetches()` answers exactly one question — *"is this layout (partly)
+UA-default fallback rather than our rendering of the author's design?"* — and the fidelity instrument
+turns a non-zero answer into `css-starved-N`, which makes the site **UNSCORABLE and books it against
+us**. The reason string it printed ended:
+
+> *"OURS and IN-SCOPE: the sheets were cut by our own load deadline, **not refused by the origin**"*
+
+That is a testable sentence and it was **false on 3 of 3** sites carrying the tag. One `curl` each:
+
+```text
+  www.cuneocronaca.it   css/normalize.css  ·  css/simple_slider.css   404   (its other 4 sheets: 200)
+  m.youm7.com           landing/landingstyle.css                      404
+  nortenoticia.com.br   cdnjs …/tailwindcss/3.4.3/tailwind.min.css    404
+```
+
+**A 404 answers the question NO.** The `<link>` is dead in the author's own HTML; the reference
+browser requests the same URL, gets the same 404, and renders the same page without it. We are not
+*less*-styled than the reference — we are *identically* styled, which is precisely the state a
+differential measurement exists to score.
+
+**The mechanism is a status that was read and then discarded.** `subresource_text` checks
+`status >= 400` and returns `None`, so a sheet the origin does not have arrives at the same `None` arm
+as a sheet that died on the wire, and that arm books both into `failed_css`.
+
+**Where the line is drawn, and why not wider.** Only `404`/`410`. A `403` on a stylesheet is very
+often a bot-wall answering *us* differently than it answers Chrome — a divergence we own. A `5xx` is
+weather that may well have served Chrome fine. *"The resource does not exist"* is the one status that
+is the same answer for every client. The gate asserts the `5xx` half beside the `404` half, so the fix
+cannot drift into "stop counting failures".
+
+### ⚠⚠ The exemption needed a SECOND half, and the first half looked complete
+
+With the 404 arm alone, two of the three sites scored and `cuneocronaca` did not — with the exemption
+firing correctly. A 404 sheet never enters `external_css`, so the *"don't re-fetch what we already
+have"* filter **re-requested it on every re-entry** after a round of dynamic scripts; on a late
+re-entry the load deadline cuts it before it can settle, and the deadline's `cut` block books it as
+"never settled". The exemption fired on pass 1 and was overwritten on pass 2.
+
+> **An exemption keyed on the OUTCOME of a fetch is undone by anything that stops the fetch from
+> having an outcome.**
+
+Closed with `absent_css`: a 404/410 is a **settled** answer, so Part 22.3's *"no URL on the wire twice
+for one navigation"* applies to it exactly as it applies to a hit. That also removes one redundant
+fetch per re-entry per dead sheet.
+
+**Result.** All three score. `m.youm7.com` comes out `cov 1.000 · shape 0.870` with all four jarring
+invariants clean — **an M1 PASS**, on a site that had been counted against us as one we could not
+style. Controls (wikipedia, blog.rust-lang.org, possssno.sbs) byte-identical on every term.
+
+**Gate.** `a_stylesheet_the_origin_does_not_have_is_not_counted_as_unstyled` — a local one-shot origin
+serving `404` (must not count) and `503` (must still count), so the STATUS is the only variable.
+RED-proven both ways: drop the `absent` arm and the first assertion reads 1; widen it past 404/410 and
+the second reads 0. `G_SILENT_FAIL` and `a_stylesheet_the_deadline_cut_off_is_counted_as_failed` are
+untouched — their fixtures are a refused connection and a cancelled fetch, neither of which is a 404.
+
+⚠ **This is the second `unscorable-and-ours` cohort in five ticks to shrink under measurement** (see
+the `shell-only` section above). The printed `SCORABILITY CEILING` is a floor on the *instrument's*
+fidelity, not a ceiling on the engine — and `render-failed`, `timeout` and `tree-divergence` have not
+been checked this way yet.
