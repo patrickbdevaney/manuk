@@ -15,7 +15,7 @@
 | median tick cycle | **26m** | 604 intervals |
 | median, last 10 | **35m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.08** | 560.6h elapsed |
+| **ticks per hour** | **1.08** | 561.7h elapsed |
 | median verify wall | **63s** | 544 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -28,7 +28,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **385**
-* **✅ rows in the capability ledger**: 144 → **457**
+* **✅ rows in the capability ledger**: 144 → **458**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **296 of 605 ticks** (49%) moved a
@@ -701,6 +701,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **867** | 2026-08-03 12:25 | 89m | measurement | 63s | +376/−33 | 384 | 81 | 56.0% · | the first full sweep in 10 ticks, and PARALLELISING IT IS NOT FREE (2026-08-03) |
 | **868** | 2026-08-03 12:55 | 30m | capability | 63s | +454/−39 | 385 | 81 | 56.0% · | the leg-2/leg-3 ranking is INVERTED on fresh data, and my fix did not buy what I predicted |
 | **869** | 2026-08-03 13:01 | 5m | measurement | 63s | +164/−34 | 385 | 81 | 56.0% · | the a11y oracle was never DOWNLOADED, and that is why the moat is unmeasured (2026-08-03) |
-| **870** | 2026-08-03 13:41 | 40m | capability | 63s | +345/−34 | 385 | 81 | 56.0% · | the moat has a number: 797/1250, and the first three readings were my own harness (2026-08 |
+| **870** | 2026-08-03 14:45 | 1.7h | capability | 63s | +432/−66 | 385 | 81 | 56.0% · | the moat has a number: 797/1250, and the first three readings were my own harness (2026-08 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

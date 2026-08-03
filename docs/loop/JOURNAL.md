@@ -46371,6 +46371,113 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 871 — a centred float measured its widest ITEM, and the space before an icon was a constant (2026-08-03)
+
+TICK SHAPE: capability (render/geometry) — the shape tick t868 asked for by name: *"the reading-order
+inversions on those three sites are a different mechanism and the next shape tick must find it rather
+than inherit my guess."* Found, and it is two mechanisms in one family, three steps upstream of the
+symptom the certificate reports.
+
+**THE SYMPTOM WAS `reading-order`; THE DEFECT WAS A WIDTH.** `possssno.sbs` is over the M1 shape bar
+and fails only on one inverted sibling pair, `<a><i></i><span></span></a>`. The pair is inverted
+because our `<a>` is **123px wide against Chrome's 152** and therefore two lines tall instead of one,
+so the label sits *above* the icon rather than beside it. That is the burndown's own §3 thesis —
+*container-WIDTH errors LAUNDER into dy* — arriving with a named mechanism for the first time.
+
+⚠⚠⚠ **FINDING 1 — `text-align` WAS CHANGING AN INTRINSIC MEASUREMENT, AND ONLY FOR ATOMIC INLINES.**
+An intrinsic width is read by laying the subtree out at a 1e6 available width and measuring how far
+the content reaches. `text-align:center` distributes the LEFTOVER space, and at 1e6 the leftover *is*
+the measurement. `content_right_extent` already knew this and handled it **for text** — each line is
+spanned from its own leftmost fragment, so the offset is slack and the span is content. But an atomic
+inline leaves the line as its own `LayoutBox` (`close_line` pushes it to `atomic_boxes`, never to
+`frags`), so it was spanned ALONE: its width counted, its place on the line did not. The engine's own
+trace says it in one line:
+
+```text
+  [max-content] #centred  pref=62.0        [max-content] #plain  pref=97.0
+      child None  [0 0 1000000x22]             child None  [0 0 1000000x22]
+      child span  [500019 0 30x22]             child span  [67 0 30x22]
+```
+
+62 is the `<i>` alone. **A centred float was sized to its widest single ITEM.** Fixed at the root
+rather than at the symptom: `Ctx::intrinsic_probe` is set for the duration of both probes (a `Drop`
+guard — they NEST: a max-content measure lays out inner floats, which shrink-to-fit, which probe
+again) and `layout_inline` lays out at the start edge while it is set. CSS Sizing §5.1: alignment
+cannot change what the content *is*. The existing slack machinery stays as the belt to this braces.
+
+⚠⚠⚠ **FINDING 2 — THE SPACE BEFORE AN ATOMIC INLINE WAS A CONSTANT, AND IT DID NOT SCALE WITH THE
+FONT.** Found first, while reducing the same construct. The `Atomic` and `Spacer` arms of
+`layout_inline` measured the preceding collapsed white space as `measure(" ", SansSerif, 16.0)` —
+under a comment that says so plainly, *"whitespace around an atomic uses the default text space
+width"*. **~5px on every page, in every font, at every size.** The `Word` arm three match-arms away
+has always measured its own space correctly, which is exactly why this survived: the same document
+renders the same space right and wrong depending only on what FOLLOWS it. Chrome-measured,
+`float:left` with `padding:10px 15px`:
+
+```text
+                                                     Chrome    before    after
+  <i>LABEL</i> <span style=inline-block>MM</span>    107x39    102x39    107x39   16px mono
+  …the same at 32px                                  154       139       154      <- the tell
+  …the same, plain inline <span>                     107       107       107      ✓ word path
+  <i>LABEL</i> <img width=20>                         78        73        78
+```
+
+**The error not scaling with the font is what identifies it**: at 32px monospace the space owes 19px
+and we paid 5. `space_before` is now the white space's own `TextStyle` rather than a flag, so the
+width is `measure(" ", its font, its size) + word-spacing + letter-spacing` — the identical
+expression the word arm uses. Two arms, one rule.
+
+⚠⚠ **AND THE FIRST FINDING WAS ONLY REACHABLE BECAUSE THE FIXTURE MISSED.** The first reduction was
+the obvious one — the page is `<html dir="rtl">`, so RTL inline-box reordering was the hypothesis
+(and it is a real known gap: UAX #9 for the LINE, t841-845). The four-line fixture said **byte-
+identical to Chrome on all four rects**. RTL was not it, the fixture cost two minutes, and the
+LTR-only bisect that followed found `text-align:center` in five rows. *A fixture that refutes your
+hypothesis is the cheapest possible outcome.*
+
+**MEASURED — OLD BINARY vs NEW, SAME HOUR, IDENTICAL DENOMINATORS** (the old tree rebuilt from
+`git stash` and re-run against the live corpus, per t799-807):
+
+```text
+                       shape OLD   shape NEW   jarring OLD → NEW         n
+  possssno.sbs            0.897       0.991     reading-order 1 → CLEAN    575   ← M1 CROSSING
+  www.marktplaats.nl      0.952       0.967     reading-order 1 → CLEAN    810   ← M1 CROSSING
+  en.wikipedia.org        0.4792      0.4845    overlap 97→95, ro 80→79   2673
+  www.apple.com           0.4137      0.4260    unchanged                  730
+  www.a11yproject.com     0.3578      0.3761    unchanged                  218
+  blog.rust-lang.org      0.99639     0.99639   unchanged                 1664   control, byte-identical
+  littlecaesarsbcs…       0.94872     0.94872   unchanged                   78   control, byte-identical
+```
+
+`possssno.sbs` went **503 misplaced elements → 4**, and all four jarring invariants clean. **Two M1
+crossings**, which is the first time this session a shape tick has produced any — and it lands
+against t868's recomputed ranking, which found 13 sites over the shape bar failing ONLY on jarring
+against 2 in the near-bar cohort. Every other measured site rose or was byte-identical; two controls
+did not move.
+
+⚠ **ONE APPARENT LOSS, AND IT IS THE SITE, NOT THE FIX.** `pogoda.by` read 0.717 against t867's
+0.818 — but its `shape_n` fell 77→53 and coverage 0.688→0.491, and two further solo runs minutes
+later returned `css-starved-1` (unscorable). Different denominator, different page; not
+differenceable, and its jarring went `reading-order 2 → clean`. t868 had already named pogoda as an
+artefact source.
+
+GATES, both RED-proven by restoring only their own half (the other 120 stayed green in the RED run):
+`the_space_before_an_atomic_inline_is_measured_in_the_font_that_owns_it` (atomic 187.4 vs inline
+191.8 when reverted) and `text_align_does_not_change_a_floats_intrinsic_width` (plain 120.5 vs
+centred 86.0 when reverted). Both are **self-comparisons** — the same content with and without
+`inline-block`, the same box with and without `text-align:center` — so no font metric is hard-coded
+and a font change cannot falsify them. Layout suite 120 → 122 green.
+
+I3: the changed geometry is a float's border box and an inline-block's position on its line — both
+are `node_rects` producers and therefore the agent's click point (check #72's standing steer). The
+click point moves TOWARD Chrome's on every site measured: `possssno.sbs`'s 503 misplaced elements
+became 4, and its nav anchor is a real click target that was 29px too narrow and 18px too tall.
+
+PERF: none measurable. `intrinsic_probe` is a `Cell<bool>` read once per `layout_inline`; the space
+measurement replaces one `measure(" ")` call with another.
+
+WIKI: `docs/wiki/box-layout.md` — "An intrinsic width is what the content IS — `text-align` cannot
+change it, and the space before an atomic inline is a CHARACTER"
+
 ## Tick 870 — the moat has a number: 797/1250, and the first three readings were my own harness (2026-08-03)
 
 TICK SHAPE: capability + measurement — surface audit #58 (t869) re-ranked this above check #74's

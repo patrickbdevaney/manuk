@@ -4274,3 +4274,92 @@ a layout regression; a fix that reported the content area unconditionally would 
 phantom 17px box that never existed.
 
 [[text-layout]] [[conformance-and-oracles]]
+
+## An intrinsic width is what the content IS — `text-align` cannot change it, and the space before an atomic inline is a CHARACTER (t871)
+
+Two defects in one mechanism family — *"what width does an atomic inline contribute to its line?"* —
+found from the single `reading-order` inversion that kept `possssno.sbs` off the M1 bar. The
+construct is `<a class="float"><i class="icon">…</i> <span>Label</span></a>`: **icon plus label**,
+which is how every nav bar, chip, button and tab strip on the web is written.
+
+### 1. The space before an atomic was a constant
+
+`layout_inline`'s `Atomic` and `Spacer` arms measured the preceding collapsed white space as
+
+```rust
+let key = FontKey { family: FontFamily::SansSerif, .. };   // "the default text space width"
+let space_w = if space_before { self.fonts.measure(" ", key, 16.0) } else { 0.0 };
+```
+
+— **~5px on every page, in every font, at every font size.** The `Word` arm three match-arms away
+had always measured its own space correctly, which is exactly why this survived so long: the same
+document rendered the same space right and wrong depending only on what followed it.
+
+The space is not decoration, it is a **character of the inline formatting context**, and it belongs
+to the element that contains it. `space_before` is now the white space's own `TextStyle` (`None`
+where there is none), so the width is `measure(" ", its font, its size) + word-spacing +
+letter-spacing` — the identical expression the word arm uses. Chrome-measured, `float:left` with
+`padding:10px 15px`:
+
+```text
+                                                     Chrome    before    after
+  <i>LABEL</i> <span style=inline-block>MM</span>    107x39    102x39    107x39   16px mono
+  …the same at 32px                                  154       139       154      <- does NOT scale
+  …the same, plain inline <span>                     107       107       107      ✓ word path
+  <i>LABEL</i> <img width=20>                         78        73        78
+```
+
+**The error not scaling with the font is the tell.** At 32px monospace the space owes 19px and we
+paid 5.
+
+### 2. `text-align` was changing an intrinsic measurement
+
+An intrinsic width is read by laying the subtree out at an absurd available width (1e6 for
+max-content, 1.0 for min-content) and measuring how far the content reaches. `text-align:center`
+distributes the **leftover** space — and at 1e6 the leftover *is* the measurement, so every fragment
+lands at x≈500,000.
+
+`content_right_extent` already knew this and handled it **for text**: each line is spanned from its
+own leftmost fragment to its rightmost, so the centring offset is discarded as slack while the span
+survives. But an **atomic inline leaves the line as its own `LayoutBox`** (`close_line` pushes it to
+`atomic_boxes`, not to `frags`), so it was spanned *alone* — contributing its own width and not its
+place on the line.
+
+So a centred float came out sized to its **widest single item**, its last token wrapped, and a
+one-line control became two:
+
+```text
+  .navicon a { float:left; text-align:center; padding:10px 15px }
+  <a><i>فیلم بکن بکن</i> <span>منو</span></a>       Chrome 152x38     ours 123x56
+```
+
+123 = the `<i>`'s 93 plus 30 of padding: the `<span>` contributed **nothing**. And a two-line box
+puts the label above the icon instead of beside it — which is the `reading-order` inversion the M1
+certificate was failing on, arriving as a *width* bug three steps upstream. (This is the burndown's
+own §3 thesis — *container-WIDTH errors LAUNDER into dy* — with a named mechanism.)
+
+CSS Sizing §5.1 settles it: a max-content size is what the box wants given unlimited space, and
+alignment cannot change what the content *is*. `Ctx::intrinsic_probe` is set for the duration of
+both probes (through a `Drop` guard, because the probes nest), and `layout_inline` lays out at the
+start edge while it is. The slack machinery stays as the belt to this braces.
+
+### What it bought, OLD binary vs NEW in the same hour, identical denominators
+
+```text
+                       shape OLD   shape NEW   jarring OLD → NEW      n
+  possssno.sbs            0.897       0.991     reading-order 1 → clean   575   M1 CROSSING
+  www.marktplaats.nl      0.952       0.967     reading-order 1 → clean   810   M1 CROSSING
+  en.wikipedia.org        0.4792      0.4845    overlap 97→95, ro 80→79  2673
+  www.apple.com           0.4137      0.4260    unchanged                 730
+  www.a11yproject.com     0.3578      0.3761    unchanged                 218
+  blog.rust-lang.org      0.99639     0.99639   unchanged                1664   control, byte-identical
+  littlecaesarsbcs…       0.94872     0.94872   unchanged                  78   control, byte-identical
+```
+
+`possssno.sbs` went from **503 misplaced elements to 4**. Every measured site rose or was
+byte-identical; two controls did not move at all.
+
+Gates: `the_space_before_an_atomic_inline_is_measured_in_the_font_that_owns_it` and
+`text_align_does_not_change_a_floats_intrinsic_width`, both **self-comparisons** (the same content
+with/without `inline-block`; the same box with/without `text-align:center`) so no font metric is
+hard-coded, and each RED-proven by restoring only its own half.

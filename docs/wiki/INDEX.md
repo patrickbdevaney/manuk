@@ -212,6 +212,10 @@
   - L4226 · An empty inline reports its CONTENT AREA only when it shares a line — alone it has no line box to report against (tick 868)
   - L4256 · Why this construct is worth a gate
   - L4269 · Both halves must be asserted
+  - L4278 · An intrinsic width is what the content IS — text-align cannot change it, and the space before an atomic inline is a CHARACTER (t871)
+  - L4285 · 1. The space before an atomic was a constant
+  - L4315 · 2. text-align was changing an intrinsic measurement
+  - L4346 · What it bought, OLD binary vs NEW in the same hour, identical denominators
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1479,4 +1483,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1386 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1390 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

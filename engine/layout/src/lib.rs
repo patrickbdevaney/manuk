@@ -112,6 +112,27 @@ impl Rect {
     }
 }
 
+/// Sets [`Ctx::intrinsic_probe`] for the duration of an intrinsic measurement and restores whatever
+/// it was before — the probes NEST (a max-content measure lays out inner floats, which shrink-to-fit,
+/// which probe again), so a plain `set(false)` on the way out would leak the outer probe's state.
+struct IntrinsicProbe<'a, 'b> {
+    ctx: &'a Ctx<'b>,
+    prev: bool,
+}
+
+impl<'a, 'b> IntrinsicProbe<'a, 'b> {
+    fn enter(ctx: &'a Ctx<'b>) -> Self {
+        let prev = ctx.intrinsic_probe.replace(true);
+        Self { ctx, prev }
+    }
+}
+
+impl Drop for IntrinsicProbe<'_, '_> {
+    fn drop(&mut self) {
+        self.ctx.intrinsic_probe.set(self.prev);
+    }
+}
+
 /// The visual style of a text run, resolved for shaping + paint.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextStyle {
@@ -718,6 +739,22 @@ struct Ctx<'a> {
     /// the whole subtree — an O(n²) blow-up on nested flex/grid. Interior-mutable so
     /// `measure_intrinsic` (`&self`) can fill it.
     measure_cache: RefCell<HashMap<(NodeId, u32), (f32, f32)>>,
+    /// **Set while an INTRINSIC width is being probed** — `min_content_width` and
+    /// `max_content_width_uncached` lay the subtree out at an absurd available width (1.0 / 1e6) and
+    /// measure how far its content reaches.
+    ///
+    /// ⚠⚠⚠ `text-align` is meaningless in that probe, and worse than meaningless: it distributes the
+    /// LEFTOVER space, and at a 1e6 available width the leftover *is* the measurement. A centred
+    /// line puts every fragment at x≈500,000; `content_right_extent` already discards that offset as
+    /// slack for TEXT (each line is spanned from its own leftmost fragment) — but an **atomic
+    /// inline** (`inline-block` / `<img>`) leaves the line as its own `LayoutBox`, so it is spanned
+    /// ALONE and contributes only its own width instead of its position on the line. The float ends
+    /// up sized to its widest single item and its last token wraps.
+    ///
+    /// CSS Sizing §5.1 puts it plainly: a max-content size is what the box wants with unlimited
+    /// space, and alignment cannot change what the content *is*. So the probe lays out at the start
+    /// edge and the slack machinery stays as the belt to this braces.
+    intrinsic_probe: std::cell::Cell<bool>,
     /// **The style every node gets when the cascade never saw it.**
     ///
     /// See `style_of`. Held here so the 25 lookup sites can hand out a `&ComputedStyle` with the
@@ -787,6 +824,7 @@ pub fn layout_document(
         styles,
         fonts,
         measure_cache: RefCell::new(HashMap::new()),
+        intrinsic_probe: std::cell::Cell::new(false),
         fallback_style: ComputedStyle::initial(),
         min_content_cache: RefCell::new(HashMap::new()),
         max_content_cache: RefCell::new(HashMap::new()),
@@ -3829,6 +3867,7 @@ impl Ctx<'_> {
             return c;
         }
         let mut fc = FloatContext::new(0.0, 1.0);
+        let _probe = IntrinsicProbe::enter(self);
         let (content, _h) = self.layout_children(node, 0.0, 0.0, 1.0, None, &mut fc);
         // Ceil to the LayoutUnit grid for the same reason max-content does: a box given exactly its
         // min-content width must still fit its longest unbreakable run.
@@ -3953,6 +3992,7 @@ impl Ctx<'_> {
         }
         // Lay the subtree out unconstrained and measure how far its content actually reaches.
         let mut fc = FloatContext::new(0.0, 1.0e6);
+        let _probe = IntrinsicProbe::enter(self);
         let (content, _h) = self.layout_children(node, 0.0, 0.0, 1.0e6, None, &mut fc);
         // The widget strip rides on BOTH intrinsic widths, or a select would hug its text at
         // max-content and reserve at min-content — the box would change size with the space around
@@ -5618,7 +5658,7 @@ impl Ctx<'_> {
         owner: Option<NodeId>,
     ) -> Vec<InlineItem> {
         let mut out = Vec::new();
-        let mut pending_space = false;
+        let mut pending_space: Option<TextStyle> = None;
         let mut first = true;
         // ⚠⚠ **`position: absolute` on a pseudo was IGNORED, and the marker sat in the flow.**
         //
@@ -5687,7 +5727,7 @@ impl Ctx<'_> {
                 None => InlineItem::Word {
                     text,
                     style,
-                    space_before: pending_space && !first,
+                    space_before: pending_space.is_some() && !first,
                     node: owner,
                     no_wrap: true,
                     break_word: false,
@@ -5704,7 +5744,7 @@ impl Ctx<'_> {
         &self,
         node: NodeId,
         out: &mut Vec<InlineItem>,
-        pending_space: &mut bool,
+        pending_space: &mut Option<TextStyle>,
         first: &mut bool,
         owner: Option<NodeId>,
         cw: f32,
@@ -5740,7 +5780,7 @@ impl Ctx<'_> {
                                 height: style.line_height,
                                 node: owner,
                             });
-                            *pending_space = false;
+                            *pending_space = None;
                             *first = true;
                         }
                         let mut run = String::new();
@@ -5795,7 +5835,7 @@ impl Ctx<'_> {
                                 height: style.line_height,
                                 node: owner,
                             });
-                            *pending_space = false;
+                            *pending_space = None;
                             *first = true;
                         }
                         let mut buf = String::new();
@@ -5813,7 +5853,7 @@ impl Ctx<'_> {
                                         break_word,
                                     );
                                 }
-                                *pending_space = true;
+                                *pending_space = Some(style);
                             } else {
                                 buf.push(ch);
                             }
@@ -5842,7 +5882,7 @@ impl Ctx<'_> {
                                 height: style.line_height,
                                 node: owner,
                             });
-                            *pending_space = false;
+                            *pending_space = None;
                             *first = true;
                         }
                         if line.is_empty() {
@@ -5877,7 +5917,7 @@ impl Ctx<'_> {
                                 break_word,
                             );
                         }
-                        *pending_space = true;
+                        *pending_space = Some(style);
                     } else {
                         buf.push(ch);
                     }
@@ -5911,7 +5951,7 @@ impl Ctx<'_> {
                         height: lh,
                         node: Some(node),
                     });
-                    *pending_space = false;
+                    *pending_space = None;
                     *first = true;
                     return;
                 }
@@ -5990,7 +6030,7 @@ impl Ctx<'_> {
                         advance,
                         height,
                         baseline: own_baseline,
-                        space_before: *pending_space && !*first,
+                        space_before: pending_space.filter(|_| !*first),
                         valign: s.vertical_align,
                         // `white-space` is INHERITED, so the atomic's own computed style already
                         // carries the containing block's `nowrap` — same source the text path at
@@ -5998,7 +6038,7 @@ impl Ctx<'_> {
                         no_wrap: matches!(s.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre),
                     });
                     *first = false;
-                    *pending_space = false;
+                    *pending_space = None;
                     return;
                 }
                 // An inline element's horizontal padding + border occupies space in the flow
@@ -6047,13 +6087,13 @@ impl Ctx<'_> {
                     out.push(InlineItem::Spacer {
                         width: pad_l,
                         node: Some(node),
-                        space_before: *pending_space && !*first,
+                        space_before: pending_space.filter(|_| !*first),
                         report_height: v_height,
                         report_ascent: v_ascent,
                         holds_line: pad_l > 0.0,
                     });
                     *first = false;
-                    *pending_space = false;
+                    *pending_space = None;
                 }
                 // N4: inline content also follows the flat tree.
                 let children: Vec<NodeId> = self.dom.flat_children(node);
@@ -6064,12 +6104,12 @@ impl Ctx<'_> {
                     out.push(InlineItem::Spacer {
                         width: pad_r,
                         node: Some(node),
-                        space_before: false,
+                        space_before: None,
                         report_height: v_height,
                         report_ascent: v_ascent,
                         holds_line: true,
                     });
-                    *pending_space = false;
+                    *pending_space = None;
                 }
                 // An inline element that contributed NOTHING to the flow is still a box. Without
                 // this it has no geometry at all: `getBoundingClientRect` returns nothing, it can't
@@ -6131,7 +6171,7 @@ impl Ctx<'_> {
                     out.push(InlineItem::Spacer {
                         width: 0.0,
                         node: Some(node),
-                        space_before: false,
+                        space_before: None,
                         report_height: lm.ascent.round() + lm.descent.round(),
                         report_ascent: Some(lm.ascent.round()),
                         holds_line: false,
@@ -6179,7 +6219,7 @@ impl Ctx<'_> {
                     let reporter = || InlineItem::Spacer {
                         width: 0.0,
                         node: Some(node),
-                        space_before: false,
+                        space_before: None,
                         report_height: lm.ascent.round() + lm.descent.round(),
                         report_ascent: Some(lm.ascent.round()),
                         holds_line: false,
@@ -6282,6 +6322,13 @@ impl Ctx<'_> {
         // synthetic value text) and still sit inside a `dir=rtl` document.
         base_rtl: bool,
     ) -> (Vec<TextFragment>, Vec<LayoutBox>, f32) {
+        // See `Ctx::intrinsic_probe`: during an intrinsic measurement the available width is a
+        // fiction, so the free space `center`/`right` would distribute is a fiction too.
+        let align = if self.intrinsic_probe.get() {
+            TextAlign::Left
+        } else {
+            align
+        };
         // The STRUT — the containing block's font metrics and `line-height`, folded into every line box
         // this IFC produces. See `close_line`. `None` (a caller with no block style in hand) yields a
         // zero strut, which is exactly the old behaviour, so no call site changes meaning by accident.
@@ -6545,16 +6592,41 @@ impl Ctx<'_> {
                     valign,
                     no_wrap,
                 } => {
-                    // Whitespace around an atomic uses the default text space width.
+                    // ⚠⚠⚠ **THE SPACE BEFORE AN ATOMIC IS A CHARACTER OF THE LINE, NOT A CONSTANT.**
+                    //
+                    // This measured `" "` in a hard-coded `16px sans-serif` — *"whitespace around an
+                    // atomic uses the default text space width"* — so the gap between an inline and a
+                    // following `inline-block`/`<img>` was ~5px on EVERY page, whatever the author's
+                    // font and whatever the font size. The word path three arms up has always measured
+                    // its own space correctly; only the atomic and spacer arms invented one.
+                    //
+                    // It is the shape `<a><i class="icon">…</i> <span>Label</span></a>` is written in
+                    // — icon-plus-label, on every nav bar, button and chip on the web — and the error
+                    // does not stay a gap: the atomic is a token in a shrink-to-fit measurement, so a
+                    // float/inline-block ancestor comes out too NARROW by the missing advance, the
+                    // last token wraps, and a one-line control becomes two. Chrome-measured, a
+                    // `float:left` anchor with `padding:10px 15px`:
+                    //
+                    // ```text
+                    //                                                     Chrome    before
+                    //   <i>LABEL</i> <span style=inline-block>MM</span>    107x39   102x39   16px mono
+                    //   …the same at 32px                                  212x71   197x71   the gap
+                    //   …the same, plain inline <span>                     107x39   107x39   ✓ word path
+                    //   <i>LABEL</i> <img width=20>                         78x39    73x39
+                    // ```
+                    //
+                    // **The error does not scale with the font**, which is the tell: at 32px monospace
+                    // the space owes 19px and we still paid 5. `word-spacing`/`letter-spacing` apply to
+                    // it for the same reason they apply in the word arm — it is the same character.
+                    let space_w = space_before.map_or(0.0, |sp| {
+                        self.fonts.measure(" ", sp.font_key, sp.font_size)
+                            + sp.word_spacing
+                            + sp.letter_spacing
+                    });
                     let key = FontKey {
                         family: FontFamily::SansSerif,
                         bold: false,
                         italic: false,
-                    };
-                    let space_w = if space_before {
-                        self.fonts.measure(" ", key, 16.0)
-                    } else {
-                        0.0
                     };
                     (
                         advance,
@@ -6603,15 +6675,17 @@ impl Ctx<'_> {
                 } => {
                     // Inline padding/border: occupies `width`, paints nothing, but its
                     // (empty-text) fragment carries the owning element's geometry.
+                    // Same rule as the `Atomic` arm above: the preceding space is measured in the
+                    // font that owns it, never a fixed default.
+                    let space_w = space_before.map_or(0.0, |sp| {
+                        self.fonts.measure(" ", sp.font_key, sp.font_size)
+                            + sp.word_spacing
+                            + sp.letter_spacing
+                    });
                     let key = FontKey {
                         family: FontFamily::SansSerif,
                         bold: false,
                         italic: false,
-                    };
-                    let space_w = if space_before {
-                        self.fonts.measure(" ", key, 16.0)
-                    } else {
-                        0.0
                     };
                     (
                         width,
@@ -7230,7 +7304,11 @@ enum InlineItem {
         /// `None` when CSS 2.1 §10.8.1's fallback applies (no in-flow line boxes, or `overflow`
         /// other than `visible`) and the bottom margin edge is the baseline.
         baseline: Option<f32>,
-        space_before: bool,
+        /// The style of the collapsed white space that precedes this atomic in the flow, or `None`
+        /// when there is none. It is a **style**, not a flag, because the space is a CHARACTER of
+        /// the inline formatting context and is measured in the font that owns it — see the
+        /// `Atomic` arm of `layout_inline`.
+        space_before: Option<TextStyle>,
         valign: VerticalAlign,
         /// `white-space:nowrap` — an atomic inline is a *token in the run*, exactly like a word,
         /// so it must carry the same break flag. Hardcoding `false` here made every `nowrap` row
@@ -7253,7 +7331,9 @@ enum InlineItem {
     Spacer {
         width: f32,
         node: Option<NodeId>,
-        space_before: bool,
+        /// Same as [`InlineItem::Atomic`]'s: the preceding white space's own style, so its width is
+        /// measured in the font that owns it rather than a fixed default.
+        space_before: Option<TextStyle>,
         report_height: f32,
         /// ⚠⚠ **How far ABOVE the baseline this spacer's reported rect starts** — `None` means
         /// "from the line top", which is what every spacer used to do.
@@ -7385,7 +7465,7 @@ fn push_word(
     out: &mut Vec<InlineItem>,
     buf: &mut String,
     style: TextStyle,
-    pending_space: &mut bool,
+    pending_space: &mut Option<TextStyle>,
     first: &mut bool,
     node: Option<NodeId>,
     no_wrap: bool,
@@ -7403,14 +7483,14 @@ fn push_word(
             text: seg,
             style,
             // Only the first sub-token inherits the preceding space; the rest are contiguous.
-            space_before: i == 0 && *pending_space && !*first,
+            space_before: i == 0 && pending_space.is_some() && !*first,
             node,
             no_wrap,
             break_word,
         });
         *first = false;
     }
-    *pending_space = false;
+    *pending_space = None;
 }
 
 #[cfg(test)]
@@ -11663,6 +11743,87 @@ mod tests {
     /// The reach is a footer link, a nav item, a button — anything that hugs its text through a
     /// padded wrapper. On `kicktipp.com` it was a `<a>` 96px wide against Chrome's 103, and six px
     /// of width is a re-wrapped line, which is a doubled height, which cascades down the subtree.
+    /// ⚠⚠⚠ **THE SPACE BEFORE AN ATOMIC INLINE IS A CHARACTER, MEASURED IN ITS OWN FONT.**
+    ///
+    /// It was `measure(" ", sans-serif, 16.0)` — a constant ~5px whatever the author wrote — so the
+    /// gap between text and a following `inline-block`/`<img>` was wrong on every page that is not
+    /// 16px sans-serif, and *did not scale with the font at all*. The word arm three lines away had
+    /// always measured its own space correctly, which is why this survived: the same page rendered
+    /// the same space right and wrong depending on what came after it.
+    ///
+    /// The assertion is a SELF-comparison — the same content with the second `<span>` `inline-block`
+    /// against plain `inline` — so no font metric is hard-coded and a font change cannot falsify it.
+    /// Chrome agrees the two are identical (`float:left`, `padding:10px 15px`, both **107x39**);
+    /// before this fix ours were **102** and **107**. At 32px the miss is ~15px, which is why the
+    /// gate runs there.
+    #[test]
+    fn the_space_before_an_atomic_inline_is_measured_in_the_font_that_owns_it() {
+        let width_of = |second: &str| -> f32 {
+            let html = format!(
+                r#"<div id="host"><a id="f">LABEL <span id="s"{second}>MM</span></a></div>"#
+            );
+            let css = "#host{width:600px;font-size:32px}\
+                       #f{display:block;float:left;padding:10px 15px}";
+            let (dom, root) = layout_html(&html, css, 800.0);
+            let rects = root.node_rects(&dom);
+            let f = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("f"))
+                .expect("id f");
+            rects[&f].width
+        };
+        let atomic = width_of(r#" style="display:inline-block""#);
+        let inline = width_of("");
+        assert!(
+            (atomic - inline).abs() < 1.0,
+            "the space before an `inline-block` must be the same space as before a plain inline \
+             (both are one character of the same line in the same font) — atomic {atomic}, \
+             inline {inline}"
+        );
+    }
+
+    /// ⚠⚠⚠ **`text-align` CANNOT CHANGE WHAT THE CONTENT IS, AND IT WAS CHANGING THE MEASUREMENT.**
+    ///
+    /// An intrinsic width is read by laying the subtree out at a 1e6 available width and measuring
+    /// how far the content reaches. `text-align:center` distributes the LEFTOVER space — and at 1e6
+    /// the leftover *is* the measurement, so every fragment lands at x≈500,000.
+    /// `content_right_extent` already discarded that offset for TEXT (each line is spanned from its
+    /// own leftmost fragment), but an **atomic inline leaves the line as its own `LayoutBox`** and
+    /// was therefore spanned ALONE — contributing its width and not its place on the line.
+    ///
+    /// So a centred `float`/`inline-block` came out sized to its widest single item, its last token
+    /// wrapped, and a one-line control became two. `.navicon a{float:left;text-align:center}` with
+    /// `<i>icon</i> <span>label</span>` — the icon-plus-label nav bar — is exactly that shape:
+    /// Chrome 152x38, ours 123x56, and the two children then read out of order.
+    ///
+    /// Self-comparison again: the SAME box with and without `text-align:center`. Chrome gives both
+    /// **127x42**; ours gave **127** and **92**.
+    #[test]
+    fn text_align_does_not_change_a_floats_intrinsic_width() {
+        let width_of = |extra: &str| -> f32 {
+            let html = r#"<div id="host"><a id="f">LABEL <span id="s">MM</span></a></div>"#;
+            let css = format!(
+                "#host{{width:600px;font-size:18px}}\
+                 #s{{display:inline-block}}\
+                 #f{{display:block;float:left;padding:10px 15px;{extra}}}"
+            );
+            let (dom, root) = layout_html(html, &css, 800.0);
+            let rects = root.node_rects(&dom);
+            let f = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("f"))
+                .expect("id f");
+            rects[&f].width
+        };
+        let plain = width_of("");
+        let centred = width_of("text-align:center");
+        assert!(
+            (plain - centred).abs() < 1.0,
+            "a float's shrink-to-fit width is its content's max-content width, which `text-align` \
+             cannot change — plain {plain}, text-align:center {centred}"
+        );
+    }
+
     #[test]
     fn shrink_to_fit_counts_the_right_padding_of_a_filled_block_child() {
         // Padding on the CHILD, not on the box being measured — that is the whole point.
