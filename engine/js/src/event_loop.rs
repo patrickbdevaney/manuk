@@ -4879,6 +4879,82 @@ const PRELUDE: &str = r#"
           setResourceTimingBufferSize: function () {},
           toJSON: function () { return { timeOrigin: t0 }; }
         };
+
+        // ── **`performance.timing` — LEGACY, DEPRECATED, AND STILL READ BY THE WHOLE WEB.**
+        //
+        // ⚠⚠⚠ **MEASURED: `dashboard.twitch.tv` dies on it, at module scope, before anything
+        // renders** — `TypeError: can't access property "navigationStart", performance.timing is
+        // undefined`. It was filed `thin-overlap-9`: *"the oracle rendered the page and we did
+        // not"*, which is true and says nothing about why.
+        //
+        // The block above deliberately built the MODERN replacement
+        // (`getEntriesByType('navigation')`) and its comment calls that "the modern, non-deprecated
+        // replacement for `performance.timing`". It is — but the deprecated one is still in every
+        // shipping browser, and code written against it did not disappear when the replacement
+        // landed. Building the successor and not the predecessor is the half-installed-API shape
+        // one rung out: the feature-detect that finds `performance` succeeds, and the very next
+        // property read throws.
+        //
+        // **ONE SOURCE, TWO VIEWS.** These are ACCESSORS over the same `__navTiming` instants the
+        // navigation entry reports — never a second copy — so the two APIs cannot drift into
+        // answering one question two ways. The legacy interface is absolute epoch milliseconds
+        // where the modern one is relative doubles, which is the whole conversion.
+        //
+        // ⚠ **What is 0, what is ABSENT, and why they are different answers.**
+        // * `redirect*` / `unload*` / `secureConnectionStart` are **0** — the spec's value for
+        //   "this phase did not occur", which is what Chrome itself reports for a same-origin
+        //   navigation with no redirect. 0 here is TRUE, not a stand-in.
+        // * An event that has not fired yet is **0**, also per spec, and it becomes real the moment
+        //   `__fireLoad`/`__fireDOMContentLoaded` records it.
+        // * The network phases (`fetchStart`, `domainLookup*`, `connect*`, `request*`, `response*`)
+        //   are **ABSENT**, exactly as `__navTiming` omits them, because this layer does not observe
+        //   them. A `0` there is indistinguishable from a real 0ms and would make every library
+        //   report a confident, wrong TTFB; `undefined` propagates to `NaN`, which is LOUD. Two
+        //   views of one dataset must not disagree about what is unknown.
+        var __epoch = function (rel) { return rel ? Math.round(t0 + rel) : 0; };
+        var __timing = {};
+        [['navigationStart', function () { return t0; }],
+         ['domInteractive',  function () { return __epoch(__navTiming.domInteractive); }],
+         ['domLoading',      function () { return __epoch(__navTiming.domInteractive); }],
+         ['domContentLoadedEventStart',
+                             function () { return __epoch(__navTiming.domContentLoadedEventStart); }],
+         ['domContentLoadedEventEnd',
+                             function () { return __epoch(__navTiming.domContentLoadedEventEnd); }],
+         ['domComplete',     function () { return __epoch(__navTiming.loadEventStart); }],
+         ['loadEventStart',  function () { return __epoch(__navTiming.loadEventStart); }],
+         ['loadEventEnd',    function () { return __epoch(__navTiming.loadEventEnd); }],
+         // The phases that genuinely did not happen. Chrome reports 0 for each of these on a
+         // same-origin navigation with no redirect and no unload handler.
+         ['redirectStart',   function () { return 0; }],
+         ['redirectEnd',     function () { return 0; }],
+         ['unloadEventStart', function () { return 0; }],
+         ['unloadEventEnd',  function () { return 0; }],
+         ['secureConnectionStart', function () { return 0; }]
+        ].forEach(function (pair) {
+          Object.defineProperty(__timing, pair[0], { get: pair[1], enumerable: true, configurable: true });
+        });
+        __timing.toJSON = function () {
+          var o = {};
+          for (var k in this) { if (typeof this[k] !== 'function') { o[k] = this[k]; } }
+          return o;
+        };
+        try {
+          Object.defineProperty(__timing, Symbol.toStringTag,
+                                { value: 'PerformanceTiming', configurable: true });
+        } catch (e) {}
+        // `performance.navigation` is the same interface's other half and the same throw: a library
+        // that reads `timing` reads `navigation.type` two lines later. `TYPE_NAVIGATE` is 0 and is
+        // the truth for every navigation this engine performs; `redirectCount` mirrors
+        // `__navTiming`'s, so the two views agree here as well.
+        var __navigation = { type: 0, redirectCount: __navTiming.redirectCount };
+        try {
+          Object.defineProperty(__navigation, Symbol.toStringTag,
+                                { value: 'PerformanceNavigation', configurable: true });
+        } catch (e) {}
+        Object.defineProperty(globalThis.performance, 'timing',
+                              { value: __timing, enumerable: true, configurable: true });
+        Object.defineProperty(globalThis.performance, 'navigation',
+                              { value: __navigation, enumerable: true, configurable: true });
       }
 
       // `MessageChannel` — React's scheduler prefers it over setTimeout for yielding. Implemented on

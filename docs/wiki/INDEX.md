@@ -213,6 +213,9 @@
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
 
+  - L2 · Building the SUCCESSOR is not building the feature — a deprecated API is still a shipped API (tick 866)
+  - L31 · One source, two views
+  - L39 · What is 0, what is ABSENT, and why they are different answers
 
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
@@ -1466,4 +1469,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1373 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1376 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

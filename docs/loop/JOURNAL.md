@@ -46371,6 +46371,76 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 866 — `performance.timing` is deprecated, universal, and absent (2026-08-03)
+
+TICK SHAPE: capability (function leg, on the board's SCORABILITY-FIRST leg). With both `render-failed`
+rows cleared and the `shell-only` cohort re-attributed to the instrument (t865), the cleanest
+remaining OURS row was `dashboard.twitch.tv` — `thin-overlap-9`, whose own reason string says *"the
+oracle built the page and we did not"*.
+
+HYPOTHESIS (pre-registered): the last three sites that scored near zero did it on ONE throw at module
+scope (welt.de's `HTMLMetaElement`, otomoto's brand check, pogoda's double-bootstrap). Predict the
+same shape here, and predict it names a platform API rather than a layout fact.
+
+RESULT — **one line, and it is a deprecated API that every browser still ships:**
+
+```text
+  TypeError: can't access property "navigationStart", performance.timing is undefined
+```
+
+thrown from the bundle's top level, so nothing after it runs. After the fix `dashboard.twitch.tv`
+goes from **2 box-bearing elements to 59** — a 30× boot — and reclassifies `thin-overlap-9` →
+`tree-divergence-59`. ⚠ **That is NOT a conversion and I am not claiming one**: it is still unscored,
+because the two documents' paths do not line up (the dashboard is a logged-in surface). What moved is
+that we now BUILD a page where we previously built nothing.
+
+⚠⚠⚠ **THE SHAPE IS THE HALF-INSTALLED API, ONE RUNG OUT — AND THE RUNG IS A SUCCESSOR API.**
+This engine deliberately built the modern replacement, `performance.getEntriesByType('navigation')`,
+and the comment above it says so in as many words: *"that is the modern, non-deprecated replacement
+for `performance.timing`, and it is what every RUM/analytics library reads"*. Every word of that is
+true. It is also not a reason the predecessor can be missing: **deprecated does not mean absent**, and
+the code written against the old interface did not disappear when the new one shipped. A page's
+feature-detect finds `performance`, succeeds, and the very next property read throws — which is
+t772-775's law (*absence routes to the fallback, HALF-presence routes into a wall*) with the two
+halves being two GENERATIONS of one API rather than two methods of one object.
+
+The general form, because it is the third time this window: **building the successor is not the same
+as building the feature.** `clearMarks` (t777) was the same rung inside one API; this is the same rung
+across a version boundary.
+
+⚠⚠ **ONE SOURCE, TWO VIEWS — the legacy fields are ACCESSORS, never a second copy.** The instants
+already exist on `__navTiming`, recorded by `__fireDOMContentLoaded`/`__fireLoad`; the legacy
+interface is those same instants converted from relative doubles to absolute epoch milliseconds, read
+through getters. The gate asserts the two views AGREE (`timing.loadEventEnd ==
+timeOrigin + navEntry.loadEventEnd`), because two copies of one dataset is precisely how an instrument
+starts answering one question two ways.
+
+⚠ **WHAT IS 0, WHAT IS ABSENT, AND WHY THEY ARE DIFFERENT ANSWERS** — transcribed from Chrome rather
+than chosen:
+* `redirect*` / `unload*` / `secureConnectionStart` are **0**. Chrome reports 0 for each on a
+  same-origin navigation with no redirect, and 0 is the spec's "this phase did not occur". True, not
+  a stand-in. An event that has not fired yet is also 0, and becomes real when it fires.
+* the network phases (`fetchStart`, `domainLookup*`, `connect*`, `request*`, `response*`) are
+  **ABSENT**, exactly as `__navTiming` already omits them, because this layer does not observe them.
+  A `0` there is indistinguishable from a real 0ms and makes every RUM library report a confident,
+  wrong TTFB; `undefined` propagates to `NaN`, which is loud. The two views must not disagree about
+  what is UNKNOWN, which is why this is copied from `__navTiming`'s choice rather than re-decided.
+
+CONTROLS — no regressions, and two of them byte-identical for the fifth consecutive tick:
+
+```text
+  littlecaesarsbcs…   cov 1.000000  shape 0.948718   byte-identical
+  hipmiluwuutara.org  cov 0.341962  shape 0.131474   byte-identical
+  pogoda.by           cov 0.633929  shape 0.760563   byte-identical (t864's own result)
+  www.otomoto.pl      cov 0.967652  shape 0.792741   0.796562 last read — inside the drift band
+```
+
+PERF: none — two accessor objects built once per global at prelude time; every field is computed on
+read from data that already existed.
+
+WIKI: `docs/wiki/js-and-dom.md` (via `browser-capabilities.md`) — "Building the SUCCESSOR is not
+building the feature: a deprecated API is still a shipped API".
+
 ## Tick 865 — the biggest unscored cohort is OUR SNAPSHOT's shell, and t674's control could not see it (2026-08-03)
 
 TICK SHAPE: instrument fidelity (scorability) — the board's M1 PRIORITY ORDER puts SCORABILITY first,
