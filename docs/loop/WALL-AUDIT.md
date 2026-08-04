@@ -1014,3 +1014,59 @@ t878 added one `manuk-page` gate (`G_CLICK_POINT`); it contributes 0.44s of run 
 
 **Nothing was trimmed.** The wall is not lean, but its dominant cost has a known cause, a rejected
 shortcut, and one open, rigor-preserving lever that is a build rather than a tuning.
+
+## Audit #31 — tick 899 (wall 75s — already lean, and the interesting number is a VARIANCE, not a total)
+
+```text
+    30s  T (crate tests: css 28 · layout 125 · paint 22 · dom 11 · net 97 · agent 126 · shell 74)  40%
+    13s  G6                                                                                        17%
+     7s  B  ·  5s  P  ·  5s  G1  ·  5s  D  ·  3s  F  ·  1s  F4  ·  0s  everything else
+   ────
+    75s  total, against a 300s ceiling — 4x headroom
+```
+
+**Audit #30 (t878) reported 250s and named its dominant cost as the SERIAL manuk half of P (parity),
+with subprocess parallelism as the open lever. That lever is still open and is no longer worth
+taking: P is now 5s of 75.** The wall came down without it — audit #30's own half-fix plus whatever
+else landed since — so the honest entry is that the ranked lever has been overtaken by events. It
+stays recorded as available; it is not ranked.
+
+### Answers to the four admissible questions
+
+1. **REDUNDANCY.** `T` is ~483 crate tests in 30s — **not** dominated by the ~1.5s SpiderMonkey
+   startup this audit's script keeps pointing at, because most of `T` is `manuk-agent` (126),
+   `manuk-layout` (125) and `manuk-net` (97), none of which stand up a JS runtime. The
+   shared-runtime idea remains **permanently inadmissible** for the JS gates (audit #30's standing
+   note: two JS contexts in one process tear down messily and segfault nondeterministically), and
+   here it would not have bought anything anyway.
+2. **PARALLELISM.** Gates run concurrently; the perf floors (`F`) are serial **on purpose** — a
+   benchmark sharing the machine is not a benchmark. Nothing has gone accidentally serial.
+3. **CACHING.** Settled at audit #21, unchanged: incrementals live in RAM, live fetches are
+   snapshot-cached.
+4. **SCOPE.** No gate builds materially more than it asserts on at these magnitudes. `B` is 7s.
+
+**Nothing was trimmed, and trimming a 75s wall would be theatre.**
+
+### The one observation worth carrying forward — a VARIANCE inside the gate section
+
+Across five consecutive ticks this session the gate section read:
+
+```text
+  t895   gate 885s   (the first tick that touched engine/js)
+  t896   gate  98s
+  t897   gate 101s
+  t898   gate  75s   (docs-only)
+  t899   gate  73s   (docs-only)
+```
+
+**885s is not a gate getting slower; it is a rebuild living inside the gate section.** A tick that
+touches `engine/js/src/` invalidates every gate binary, and that cost is billed to `gate` rather than
+to `build` (which read 33s on the same tick). The ratchet mark therefore prices a docs tick and an
+engine tick as if they were the same shape, and an engine tick can look like a 10x wall regression
+when nothing regressed.
+
+⚠ **NAMED, NOT ACTED ON — this is harness territory (CONSTITUTION PART VII) and `scripts/` is
+observer-owned.** Recorded here for the observer, with no change proposed and none made. The agent-side
+adaptation that costs nothing: batch release rebuilds away from a tick landing so the two do not
+contend.
+

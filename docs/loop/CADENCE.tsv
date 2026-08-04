@@ -630,3 +630,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 896	062a55ea	1785835570	2026-08-04T05:26:10-04:00	2546	capability	63	9	601	118	391	81	3896	6960	0	469	0	`textContent = ''` left an empty text node, and it destroys jQuery's element factory (2026-08-04)
 897	530b440d	1785839588	2026-08-04T06:33:08-04:00	4018	capability	63	9	388	33	391	81	3896	6960	0	469	0	`getComputedStyle(el).width` answered with the SPECIFIED value, and the used one was already in hand (2026-08-04)
 898	780cd57a	1785840374	2026-08-04T06:46:14-04:00	786	measurement	63	6	200	33	391	81	3896	6960	0	469	0	the pre-registered expectation was WRONG, and the band is composition plus five named sites (2026-08-04)
+900	1b77dd04	1785840885	2026-08-04T06:54:45-04:00	511	measurement	63	7	279	38	391	81	3896	6960	0	469	0	the map is complete on Interop 2026, and three GATED rows were lying (2026-08-04)

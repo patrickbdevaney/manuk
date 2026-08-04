@@ -46371,6 +46371,110 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 900 — the map is complete on Interop 2026, and three GATED rows were lying (2026-08-04)
+
+TICK SHAPE: measurement — the two cadence instruments that came due together: the **self-audit**
+(every 10; last 890) and the **surface audit** (every 10; last 889). The surface audit is the one that
+checks the MAP rather than the browser, and it exists because twice this project made an
+order-of-magnitude leap and both times a human had to point at it.
+
+⚠⚠⚠ **ALL TWENTY-FOUR INTEROP 2026 ITEMS WERE ALREADY ON THE MAP.** Fetched, not recalled — the
+audit's own rule, and the model cutoff is three months stale. Twenty focus areas (container style
+queries · anchor positioning · `attr()` · `contrast-color()` · `zoom` · custom highlights · dialogs
+and popovers · fetch uploads and ranges · IndexedDB · JSPI · media pseudo-classes · Navigation API ·
+scoped custom element registries · scroll-driven animations · scroll snap · `shape()` · view
+transitions · web compat · WebRTC · WebTransport) plus four investigations (accessibility testing ·
+JPEG XL · mobile testing · WebVTT) — **every one has a row and a status**, as do the three
+Baseline-2026 arrivals (`zstd`, `:active-view-transition`, `contrast-color()`). Map: 280 gated · 112
+missing · 41 partial · 16 unknown · 9 works, **3.5% unknown**.
+
+⚠⚠⚠ **AND AN AUDIT THAT FINDS NOTHING IS A SUSPICIOUS AUDIT — SO THE `gated` ROWS WERE PROBED RATHER
+THAN BELIEVED, AND THREE OF THEM WERE LYING.** One differential fixture, twenty claims the map calls
+settled:
+
+```text
+                                          Chrome            ours
+  getComputedStyle(el).zoom                    2        undefined     <- row said GATED
+  offsetWidth of a zoom:2, width:50px box     50              100     <- and the GEOMETRY is wrong
+  getComputedStyle(el).containerType   inline-size      undefined     <- row said GATED
+  'duplex' in a POST Request                true            false     <- row said GATED
+  CSS.highlights                          object        undefined     <- row said MISSING (correct)
+```
+
+⚠⚠ **FINDING 1 — `zoom` AND `containerType` ARE THE THIRD AND FOURTH MEMBERS OF t897'S CLASS, NOT
+THREE SEPARATE BUGS.** *`getComputedStyle` declines to publish what the pipeline has already
+computed.* `transform` was the first (applied for sixty ticks before it reached JS), `width` and
+`height` the second and third (t897, three ticks ago), and now `zoom` and `containerType`. **Four
+members and nobody has enumerated the set** — every property the cascade or layout resolves should be
+diffed against Chrome in ONE pass rather than discovered one per tick. That is the ranked follow-on.
+
+⚠⚠ **FINDING 2 — `offsetWidth` UNDER `zoom` IS A GEOMETRY DEFECT, not a readback one.** Chrome
+reports the element's own unzoomed box (**50**) while `getBoundingClientRect().width` is the zoomed
+**100**; we report 100 for both. `zoom` is an Interop 2026 focus area, and the two numbers are
+supposed to differ — an engine that returns the same for both has collapsed a distinction pages use.
+
+⚠⚠ **FINDING 3 — A GATE THAT COVERS HALF ITS ROW, AND IT IS t889'S DEFECT ELEVEN TICKS LATER.**
+`fetch uploads + ranges` is gated by `G_MEDIA_SEGMENT_FETCH`, which covers **ranges only**;
+`Request.duplex` — the flag a streaming upload requires — is `false` against Chrome's `true`. t889's
+finding was *"one row for one of a feature's consumers reads as covered"*, and here it is again on a
+differently-shaped row. **The recurrence is the argument for probing gated rows every audit instead of
+trusting the gate's name.**
+
+⚠ **WHAT WE HAD BEEN WRONG ABOUT, stated as the audit demands:** that `gated` means *the capability
+answers correctly to a page*. Three of the twenty probed rows are gated on the BEHAVIOUR and silent on
+the READBACK — and a page branches on the readback. The gate proves the engine does the thing; nothing
+proved the engine would *say* it does.
+
+⚠ **ONE APPARENT DIVERGENCE IS NOT ONE, recorded so a later audit does not file it as backlog:**
+`CSS.supports('color','contrast-color(black)')` is `true` here and **`false` in our reference
+Chromium**, which discards the declaration as invalid. **We are AHEAD, not wrong** — Chromium is the
+CEILING on capability, so being past it is the point. The map's row is accurate.
+
+**ADDED (459 → 460 rows), and it went in as `works` WITH A VERDICT rather than `unknown`, because it
+was measured in the same pass:** *modern ECMAScript built-ins* — `toSorted`/`toReversed`/`toSpliced`/
+`with`, `at`, `findLast`, `Object.groupBy`, `Map.groupBy`, `Promise.withResolvers`, `Array.fromAsync`,
+`Set.union`/`intersection`, `structuredClone`, the RegExp `v` flag, `Error.cause`, `WeakRef`,
+`FinalizationRegistry`, `Intl.Segmenter`/`ListFormat`/`RelativeTimeFormat`, **`Temporal`**, iterator
+helpers. **30 of 30 byte-identical to Chrome.** This was the one Baseline-2026 line with no row and
+the honest result is that SpiderMonkey is fully current: a bundle calling `array.toSorted()` unguarded
+runs here.
+
+**CORRECTED:** `CSS zoom` **gated → partial**, `fetch uploads + ranges` **gated → partial**, and
+`container queries` gains an explicit `containerType`-not-exposed note.
+
+**THE SELF-AUDIT IS GREEN** — methodology and reality agree across every section (gates declare how to
+break them, 49 process defects each naming a closing mechanism, the enforcement hooks wired, 938
+pattern-ledger rows moving with the engine, no journal gaps). Recorded rather than narrated: a green
+self-audit beside an audit that found four defects is the correct shape, because they measure
+different things — one asks whether the loop follows its own method, the other whether the method's
+map is true.
+
+⚠⚠⚠ **THE RATCHET REFUSED THIS TICK TWICE, AND IT WAS RIGHT BOTH TIMES — `CONST:platform 43 < 44`,
+then `CONST:doc 39 < 40`.** Downgrading `fetch uploads + ranges` (class `platform`) and `CSS zoom`
+(class `doc`) from `gated` to `partial` costs each class one gated capability, and *"a class cannot
+lose a gated capability"* is exactly the rule that should fire when a status goes backwards. **It
+fired a second time after the first mark was lowered, which is the ratchet refusing to be satisfied by
+one concession — the right behaviour, and worth recording because a rule that gives up after the
+first fix would have let the second over-count stand.**
+
+**Both marks are lowered deliberately — `platform` 44 → 43 and `doc` 40 → 39 — and the reason is that
+the MARKS WERE WRONG rather than the engine.** Both rows were counted as gated while their readback is measurably broken against
+Chrome (`getComputedStyle(el).zoom` undefined vs `2`; `Request.duplex` false vs `true`). Nothing was
+lost this tick — **a capability we never had stopped being claimed.** Both numbers were over-counts
+from the moment those rows were written.
+
+⚠ **This is the one legitimate path through the ratchet and it is easy to abuse, so the distinction is
+stated rather than assumed.** The standing rule is *never retune a ratchet gate to land your own
+tick*. That rule is about a mark that blocks a CHANGE I want to make. This mark blocks a
+CORRECTION — the tick lands no engine code at all, and the count moves because a false claim was
+withdrawn. **The test that separates them: would the number have been wrong yesterday too?** It would.
+44 was never true.
+
+PERF: none — measurement only, no engine change.
+
+WIKI: none — this tick's artefacts are `docs/loop/SURFACE-AUDIT.md` audit #61 and
+`docs/loop/WALL-AUDIT.md` audit #31, which are the wiki for the loop's own governance. [no-pattern]
+
 ## Tick 899 — all three "regressions" are BATCH ARTEFACTS, and the new binary refuted them without an old one (2026-08-04)
 
 TICK SHAPE: measurement — the control t898 named and deliberately did not run, because attribution

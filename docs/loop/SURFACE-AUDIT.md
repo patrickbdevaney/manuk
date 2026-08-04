@@ -3652,3 +3652,82 @@ that cannot ratchet — the same defect shape as the lumped assertion that faile
 CSS/canvas surfaces with no evidence of corpus pressure behind them; the M1 crossing cohort measured
 at t888 (eight sites one jarring dimension from crossing, +6.2 points) is still the largest known
 lever. Recorded as *"discovered, not urgent"* rather than promoted — which is what the map is for.
+
+## Audit #61 — tick 900 (2026-08-04)
+
+**SOURCES** (searched, not recalled — the audit's own rule, and the cutoff is three months stale):
+
+* <https://github.com/web-platform-tests/interop/blob/main/2026/README.md> — the authoritative Interop
+  2026 list, fetched rather than summarised
+* <https://web.dev/blog/interop-2026> · <https://webkit.org/blog/17818/announcing-interop-2026/> ·
+  <https://hacks.mozilla.org/2026/02/launching-interop-2026/> · <https://www.igalia.com/news/interop-2026.html>
+* <https://web.dev/baseline/2026> and the monthly digests (Jan/Feb/Apr/May 2026)
+* <https://ladybird.org/newsletter/2026-06-30/> — the independent engine that has walked this road
+
+### RECONCILIATION: all 24 Interop 2026 items were ALREADY on the map, and that is the headline
+
+Twenty focus areas — container style queries · anchor positioning · `attr()` · `contrast-color()` ·
+`zoom` · custom highlights · dialogs and popovers · fetch uploads and ranges · IndexedDB · JSPI ·
+media pseudo-classes · Navigation API · scoped custom element registries · scroll-driven animations ·
+scroll snap · `shape()` · view transitions · web compat · WebRTC · WebTransport — plus four
+investigations (accessibility testing · JPEG XL · mobile testing · WebVTT). **Every one has a row and
+a status.** The three Baseline-2026 arrivals (`zstd`, `:active-view-transition`, `contrast-color()`)
+are on it too. Map: 280 gated · 112 missing · 41 partial · **16 unknown** · 9 works — 3.5% unknown.
+
+⚠ **AND AN AUDIT THAT FINDS NOTHING IS A SUSPICIOUS AUDIT, so the `gated` rows were PROBED rather
+than believed.** A differential fixture against Chrome on twenty claims the map calls settled found
+**four defects behind three green-looking rows**:
+
+```text
+                                          Chrome            ours
+  getComputedStyle(el).zoom                    2        undefined     <- row says GATED
+  offsetWidth of a zoom:2, width:50px box     50              100     <- and the geometry is wrong
+  getComputedStyle(el).containerType   inline-size      undefined     <- row says GATED
+  'duplex' in a POST Request                true            false     <- row says GATED
+  CSS.highlights                          object        undefined     <- row says MISSING (correct)
+```
+
+1. **`zoom` and `containerType` are a THIRD and FOURTH member of t897's class**, not three separate
+   bugs: *`getComputedStyle` declines to publish what the pipeline has already computed*. `width`,
+   `height` and `transform` were the first three. **This is now a pattern and should be swept as one**
+   — enumerate every property the cascade or layout resolves and diff the whole object against
+   Chrome, rather than discovering one member per tick.
+2. **`offsetWidth` under `zoom` is a real geometry defect**, not a plumbing one: Chrome reports the
+   element's own unzoomed box (50) while `getBoundingClientRect().width` is the zoomed 100. We report
+   100 for both. `zoom` is an Interop 2026 focus area.
+3. **`fetch uploads and ranges` is gated by `G_MEDIA_SEGMENT_FETCH`, which covers RANGES only.**
+   `Request.duplex` — the flag a streaming upload requires — is `false`. **This is exactly t889's
+   defect** (*"one row for one of a feature's consumers reads as covered"*), recurring eleven ticks
+   later on a differently-shaped row, which is the argument for probing gated rows every audit rather
+   than trusting the gate name.
+
+⚠ **ONE APPARENT DIVERGENCE IS NOT ONE, recorded so a later audit does not file it as a backlog row:**
+`CSS.supports('color','contrast-color(black)')` is **`true` here and `false` in our reference
+Chromium**, and `contrast-color(black)` resolves to white for us and is discarded as invalid by
+Chrome. We are AHEAD, not wrong — Chromium is the CEILING on capability, so being past it is the
+point and not a bug. The map's `gated` row is accurate.
+
+**ADDED (459 → 460 rows):** *modern ECMAScript built-ins* — and it went straight in as **`works` with
+a verdict rather than `unknown`**, because it was measured in the same pass: thirty built-ins
+(`toSorted`/`toReversed`/`toSpliced`/`with`, `at`, `findLast`, `Object.groupBy`, `Map.groupBy`,
+`Promise.withResolvers`, `Array.fromAsync`, `Set.union`/`intersection`, `structuredClone`, the RegExp
+`v` flag, `Error.cause`, `WeakRef`, `FinalizationRegistry`, `Intl.Segmenter`/`ListFormat`/
+`RelativeTimeFormat`, **`Temporal`**, iterator helpers) are **30/30 byte-identical to Chrome**. This
+was the one Baseline-2026 line with no row, and the honest result is that SpiderMonkey is fully
+current — a bundle using `array.toSorted()` unguarded runs here.
+
+**CORRECTED:** three rows lose their green. `CSS zoom (per-element property)` **gated → partial** (the
+property is not readable and `offsetWidth` is wrong under it); `container queries` gains an explicit
+`containerType`-not-exposed note; `fetch uploads + ranges` **gated → partial** (`G_MEDIA_SEGMENT_FETCH`
+covers ranges; `Request.duplex` is false).
+
+**WHAT WE HAD BEEN WRONG ABOUT:** that a `gated` status means the capability answers correctly *to a
+page*. Three of the twenty probed rows are gated on the behaviour and silent on the READBACK, and a
+page branches on the readback. The gate proves the engine does the thing; nothing proved the engine
+would *say* it does.
+
+**RE-RANK:** the getComputedStyle-readback sweep is now the ranked follow-on to t897 and is larger
+than it looked — four known members and no enumeration. It does not outrank t888's crossing cohort on
+M1 points, but it is the cheapest well-understood work on the board and it is the class three of this
+window's ticks have already been paid by.
+
