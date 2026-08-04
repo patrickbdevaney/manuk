@@ -85,6 +85,55 @@ wrong value; it is a **hang**. The same trap exists for `performance.now()`, `Da
 virtual clock, and any monotonically-increasing counter a page polls.
 
 ---
+## `textContent = ''` must create NOTHING — "string replace all" puts the empty case FIRST
+
+The DOM standard's *"string replace all"* reads: **"Let node be null. If string is **not** the empty
+string, set node to a new Text node whose data is string…"** — so clearing a node creates no child.
+Ours created one unconditionally, which made `node.childNodes.length` **1** where Chrome gives **0**
+after the most common clear-a-subtree idiom on the web.
+
+**It is not a count. It destroys jQuery's element factory.** `jQuery.parseHTML` → `buildFragment`
+finishes like this:
+
+```js
+  tmp.innerHTML = wrap[1] + html + wrap[2];
+  jQuery.merge( nodes, tmp.childNodes );
+  tmp = fragment.firstChild;  tmp.textContent = "";
+  fragment.textContent = "";                          // <- HERE
+  while ( ( elem = nodes[ i++ ] ) ) { fragment.appendChild( elem ); }
+```
+
+One leftover empty Text node and that fragment returns `[#text, <div>]`, so **`$('<div/>')[0]` is a
+TEXT NODE** — and `$('<div/>')` is *the* jQuery element-creation idiom.
+
+Traced live on `beb88run.xyz`, the top site of t888's crossing cohort. Slick's `buildOut` does
+`$slides.wrapAll('<div class="slick-track"/>').parent()`; `wrapAll` takes `.eq(0)` (the text node),
+descends `firstElementChild` (null on a text node, so it stays there) and `.append(this)`s the slides
+into it:
+
+```text
+  div.banner-carousel.slick-initialized   ours [0 146 1185x0]   Chrome [0 146 1185x380]
+  boxes in the whole subtree              ours 1                Chrome slick-list > slick-track > 8
+```
+
+**458 boxes — an entire carousel — moved into a text node and gone.**
+
+### What made it survive: the idiom next to it was already right
+
+`innerHTML = ''` goes through `set_inner_html`, which parses an empty string into no children and has
+always been correct. One rule, two implementations, and only one wrong — so a probe of *either alone*
+exonerates the pair. `G_TEXT_CONTENT_REPLACE_ALL` asserts both.
+
+### The coercions, measured rather than assumed
+
+`textContent` is `[LegacyNullToEmptyString] DOMString?`, and Chrome clears for **both** `null` and
+`undefined` — so the setter reads its argument with `arg_string_nullable`, not `arg_string`, which
+would have written the literal `"null"`. But `0` and `false` are **not** empty: they write `"0"` and
+`"false"`. An emptiness test, never a falsiness test.
+
+The MutationObserver record follows the same rule: clearing reports `addedNodes.length === 0`.
+Telling an observer a node arrived when none did is the same lie one level up.
+
 # Backfill — mechanisms recovered from ticks 1–42 (pre-wiki)
 
 ## The FLAT TREE and the node tree are different trees, and every renderer must walk the flat one

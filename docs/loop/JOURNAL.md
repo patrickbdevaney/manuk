@@ -46371,6 +46371,122 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 896 — `textContent = ''` left an empty text node, and it destroys jQuery's element factory (2026-08-04)
+
+TICK SHAPE: capability — the ranked cohort's top site, one layer deeper. t895 unblocked its
+cross-origin AJAX; a live `--tree banner_carousel` probe then showed Slick DOES initialise and the
+carousel still lays out `1185×0` against Chrome's `1185×380` with **exactly one box in the whole
+subtree**.
+
+⚠⚠⚠ **THE DOM STANDARD PUTS THE EMPTY CASE FIRST, AND WE SKIPPED IT.** *"String replace all"* reads:
+**"Let node be null. If string is NOT the empty string, set node to a new Text node whose data is
+string…"** — so clearing a node creates no child. `el_set_text_content` created one unconditionally,
+which made `childNodes.length` **1** where Chrome gives **0** after the most common clear-a-subtree
+idiom on the web.
+
+⚠⚠⚠ **AND IT IS NOT A COUNT — IT DESTROYS jQUERY'S ELEMENT FACTORY.** `jQuery.parseHTML` →
+`buildFragment` finishes like this:
+
+```js
+  tmp.innerHTML = wrap[1] + html + wrap[2];
+  jQuery.merge( nodes, tmp.childNodes );
+  tmp = fragment.firstChild;  tmp.textContent = "";
+  fragment.textContent = "";                          // <- HERE
+  while ( ( elem = nodes[ i++ ] ) ) { fragment.appendChild( elem ); }
+```
+
+One leftover empty Text node and that fragment returns `[#text, <div>]`, so **`$('<div/>')[0]` is a
+TEXT NODE** — and `$('<div/>')` is *the* jQuery element-creation idiom. Slick's `buildOut` does
+`$slides.wrapAll('<div class="slick-track"/>').parent()`; `wrapAll` takes `.eq(0)` (the text node),
+descends `firstElementChild` (null on a text node, so it stays there) and `.append(this)`s every slide
+into it. **458 boxes — the whole carousel — moved into a text node and gone.**
+
+⚠⚠ **THE REDUCTION WAS A SIX-LINE FIXTURE + THE REAL LIBRARY + CHROME, AND IT ELIMINATED TWO
+SUSPECTS BEFORE THE THIRD.** The obvious candidate — our fragment parser on `<div class="x"/>` — is
+**correct**, eleven rows byte-identical to Chrome including `<span/>`, `<ul />`, `<li />`, `<br/>`,
+`<img/>`, `<div/><div/>` and the round-trip `innerHTML`. So is
+`document.implementation.createHTMLDocument`, which is the *other* document jQuery may parse into
+(twelve rows identical, including jQuery's own `support.createHTMLDocument` probe). Only then did the
+instrumented run print the actual tell:
+
+```text
+                                    Chrome        ours
+  $('<div class="track"/>')          1|DIV        2|#text
+  .eq(0).clone(true)                 1|DIV        1|#text
+  wrapAll(...).parent()              1|slick-track 0|undefined
+  #c.innerHTML             <div class="slick-list">…   (empty — the subtree is inside a text node)
+```
+
+⚠⚠ **MEASURED LIVE, AND THE HEADLINE NUMBER GOES DOWN. READ THE COVERAGE BESIDE IT.**
+`beb88run.xyz`, release binary, before and after:
+
+```text
+                          t895 binary        t896 binary
+  structural coverage        79.2%              97.9%     <- +18.7 points
+  paths WE build             1769               2185      <- +416
+  MISSING boxes               458                 46      <- -412, and 458 is t888's exact count
+  MISSING by tag        div×186 img×119     div×41 li×3
+                        a×93 li×44 ul×14      span×2
+                            span×2
+  SHAPE                      86.3%              71.0%     <- the drop
+  shape_n (scored)           1739               2155
+  OVERLAP                      14                 14      <- unmoved
+  READING-ORDER                 4                 20
+```
+
+**This is the t813-818 shape: a shape DROP that is a COVERAGE win.** Every box that rendered before
+still renders; 412 that did not now do; the score falls because the denominator grew by 416 *hard*
+elements whose widths are still wrong. It is **not a trade and not a regression**: you cannot have a
+reading-order violation on a node you do not render, and the site was never an M1 pass (overlap 14
+disqualified it at 0.868 just as it does at 0.710). Stating it plainly rather than quietly, because a
+capability tick that reports only its good number is how this loop has lied to itself before.
+
+⚠⚠ **THE NEXT LAYER IS NAMED AND NOT TAKEN.** The restored subtree is mis-sized, not mis-placed:
+`div.slick-track [592 146 0×1]`, slides `2×602`, `<a>`/`<img>` `0×600` where Chrome has `1183×378`.
+Slick sets an inline `width` on the track and on every slide in `setDimensions`, and it is not
+landing. That is a *width* mechanism, a different subsystem from this one, and folding it in would
+make neither attributable — it is the next tick, with its target already printed.
+
+⚠ **CONTROL PANEL, new binary against `SWEEP-t887-rows.tsv`** (not a same-hour A/B, so it bounds
+rather than attributes — but it is the check that would have caught collateral harm):
+
+```text
+                  coverage             shape              overlap   reading_order
+  sestra.cc       0.9930 -> 0.9976     0.896 -> 0.922      0 -> 0      7 -> 5
+  www.tz.de       0.9536 -> 0.9528     0.814 -> 0.826      2 -> 1      5 -> 4
+  sip777man.site  0.4864 -> 0.4831     0.942 -> 0.943      6 -> 4     16 -> 12
+  celeb.gate.cc   0.9834 -> 0.9896     0.779 -> 0.766      0 -> 0      0 -> 0
+```
+
+Three of four gain shape, every jarring dimension is flat or **better**, and `celeb.gate.cc`'s −0.013
+sits inside the self-drift band t852 measured on it (0.783 → 0.768 with no engine change, reproduced
+twice by the old binary) and stays over the bar.
+
+⚠ **THE WHOLE `manuk-page` SUITE WAS RUN, not the wall's 19 gates** — `textContent` is touched by
+essentially every DOM path, so a subset would not have been evidence. **146 test binaries, zero
+failures.**
+
+GATE: `G_TEXT_CONTENT_REPLACE_ALL` — sixteen claims, every expectation captured from a real
+`google-chrome --headless --dump-dom` run of this exact fixture. **RED-proven** by restoring the
+unconditional `create_text` + `append_child`: eight claims fail, including `jq-first=#text`,
+`wrap-target=#text` and `wrap-kids=UNREACHABLE-target-is-not-an-element` — the live failure, in a
+fixture. Two claims are GUARDS rather than capability: `frag-nonempty`/`el-nonempty` fail if the
+append is skipped unconditionally, and `el-innerHTML-empty` pins the sibling rule that was **already
+right** — `innerHTML = ''` parses to no children and always did, which is exactly why this survived:
+one rule, two implementations, and probing either alone exonerates the pair. The coercions are
+Chrome's and not what a falsiness test would give: `null` and `undefined` clear, `0` and `false` write
+`"0"` and `"false"` — so the setter reads `arg_string_nullable`, not `arg_string`, which would have
+written the literal `"null"`.
+
+PERF: none on the fast path — the fix removes an allocation and an append in the clearing case, and
+adds one `is_empty()` test otherwise. The site's load did rise (36.7s → 53.8s) and that is **not a
+slowdown**: it is 412 more boxes plus the images and layout they pull in, which is exactly the work
+the old binary was not doing. Named, not hidden — `OURS IS SLOW` was already in this row's ledger
+line before this tick.
+
+WIKI: `docs/wiki/dom-semantics.md` — "`textContent = ''` must create NOTHING — "string replace all"
+puts the empty case FIRST"
+
 ## Tick 895 — jQuery's cross-origin gate is ONE absent IDL attribute (2026-08-04)
 
 TICK SHAPE: capability — check #77's steer #1, third tick on the ranked cohort. t894 identified the

@@ -6807,18 +6807,61 @@ unsafe fn el_get_text_content(cx: *mut RawJSContext, _argc: u32, vp: *mut Value)
     true
 }
 
-/// `element.textContent = s` setter → replace all children with a single text node.
+/// `element.textContent = s` setter → the DOM standard's **"string replace all"** algorithm.
+///
+/// ⚠⚠⚠ **`node.textContent = ''` MUST LEAVE THE NODE CHILDLESS, AND OURS LEFT AN EMPTY TEXT NODE.**
+/// The spec is explicit and the empty case is its first step: *"Let node be null. **If string is not
+/// the empty string**, set node to a new Text node whose data is string…"* — so clearing a node
+/// creates nothing. We created one unconditionally, so `el.textContent = ''` — the single most common
+/// way any page empties a subtree — left `childNodes.length === 1` where Chrome leaves `0`.
+///
+/// **It is not a cosmetic count. It destroys jQuery's element factory**, which is how essentially
+/// every jQuery page builds DOM. `jQuery.parseHTML` → `buildFragment` ends with:
+///
+/// ```js
+///   tmp.innerHTML = wrap[1] + html + wrap[2];
+///   jQuery.merge( nodes, tmp.childNodes );
+///   tmp = fragment.firstChild;  tmp.textContent = "";
+///   fragment.textContent = "";                          // <- HERE
+///   while ( ( elem = nodes[ i++ ] ) ) { fragment.appendChild( elem ); }
+/// ```
+///
+/// With an empty Text node left behind, that fragment comes back as `[#text, <div>]` instead of
+/// `[<div>]`, so **`$('<div class="x"/>')[0]` is a TEXT NODE**. Measured on `beb88run.xyz`, the top
+/// site of t888's crossing cohort: Slick's `buildOut` does
+/// `$slides.wrapAll('<div class="slick-track"/>').parent()`, `wrapAll` takes `.eq(0)` — the text node
+/// — descends `firstElementChild` (null on a text node, so it stays there) and `.append(this)`s the
+/// slides into it. **458 boxes, an entire carousel subtree, moved into a text node and gone**, which
+/// is why the container laid out `1185×0` against Chrome's `1185×380`.
+///
+/// ⚠ **One rule, two implementations, and only one was wrong:** `innerHTML = ''` already went through
+/// `set_inner_html`, which parses an empty string into no children and was correct all along. That is
+/// why the defect survived — the idiom next to it behaves properly, so a probe of either one alone
+/// exonerates the pair.
+///
+/// Coercion is Chrome's, measured on this fixture rather than recalled: `null` **and** `undefined`
+/// both give `0` children (`textContent` is a nullable IDL string with `[LegacyNullToEmptyString]`),
+/// while `0` and `false` give `"0"` and `"false"` — so this is `arg_string_nullable`, not `arg_string`,
+/// which would have written the literal `"null"`.
 unsafe fn el_set_text_content(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
-        let value = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        let value = arg_string_nullable(cx, vp, argc, 0).unwrap_or_default();
         let kids: Vec<NodeId> = (*dom).children(node).collect();
         for &k in &kids {
             (*dom).detach(k);
         }
-        let text = (*dom).create_text(value);
-        (*dom).append_child(node, text);
-        // childList: old children replaced by the single new text node.
-        record_mutation(cx, dom, "childList", node, None, None, &[text], &kids);
+        // "If string is not the empty string, set node to a new Text node" — otherwise there is no
+        // node to append, and the mutation record must say so too: an observer told that one node was
+        // ADDED when nothing was is the same lie one level up.
+        let added: Vec<NodeId> = if value.is_empty() {
+            Vec::new()
+        } else {
+            let text = (*dom).create_text(value);
+            (*dom).append_child(node, text);
+            vec![text]
+        };
+        // childList: old children replaced by the new text node, if there is one.
+        record_mutation(cx, dom, "childList", node, None, None, &added, &kids);
     }
     *vp = UndefinedValue();
     true
