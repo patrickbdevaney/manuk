@@ -46371,6 +46371,54 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 893 — two windows have ended with the ranked lever untouched (2026-08-04)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (every 8; last at 885), banked as
+check #77 in `docs/loop/CONSTITUTION-CHECK.md`.
+
+⚠⚠⚠ **FINDING 1 — THE RANKING IS NOT WHAT CHOSE THIS WINDOW'S WORK, TWO WINDOWS RUNNING.** t888
+computed the crossing cohort on trustworthy data — **eight named sites, one jarring dimension each,
++6.2 M1 points, the largest known lever** — and no tick since has worked it. 891 and 892 were both
+*"the thing I tripped over while investigating the thing I tripped over"*. That chain is defensible
+(t891's describer named a 16× cohort; t892 corrected t891 and fixed a real leak) and it is **still not
+the ranked work**. By their own shape lines, 885–892 were five `measurement`, one `instrument`, two
+`capability` — and neither capability tick came off the ranking.
+
+⚠⚠⚠ **FINDING 2 — THE WINDOW'S MOST EXPENSIVE FACT IS THAT THE LOOP COULD NOT TELL WHICH BINARY
+PRODUCED A NUMBER.** `scripts/fidelity-sweep.sh` has pinned `target/release` since it was written, but
+every `SWEEP-t<N>-rows.tsv` in the repo is produced by invoking the binary DIRECTLY, and that path was
+unguarded. t886 swept 200 sites from `target/debug` — **4–5.5× slower, and it understates shape** —
+banked it, and spent its entire attribution budget (a full old-binary rebuild) on a 19-site
+"scorability regression" that was the binary. Two ticks to make and unmake. The instrument refuses now.
+**The lesson, narrower than the law it comes from: when a reading is surprising, check WHAT BINARY
+produced it before checking what the code did.**
+
+⚠⚠ **FINDING 3 — I5 WAS EXERCISED THREE TIMES AND HELD THREE TIMES, AND THE THIRD IS THE ONE TO
+KEEP.** t887's debug/release comparison withdrew a whole tick's headline · t888's Slick bisect killed
+*"it is a layout bug"* in one probe · and **t892's XHR prototype probe refuted t891's own second
+finding before a line was written against it**. That last correction was banked as **gate claims**
+(`protoPatch:1`, `ownOpen:false`) rather than prose, so it cannot be re-derived — *a wrong FIX is
+caught by the next gate; a wrong LABEL by nothing.*
+
+**PART VI CORRECTIONS:** VI.3's M1 row is current (17.8%, t887, re-verified). **VI.2 / I5 gains the
+binary clause** — the discovery engine is the log and the four-line fixture, and both depend on a
+precondition nothing enforced until t887: *a reading is only evidence about the engine if it came from
+the shipping binary.* And the board's scorability ceiling is stale by twenty points (63% → **82.9%**),
+which matters because its own owner-lock opens the BiDi function leg at ~85% — **2.1 points away**, and
+the board cannot see it.
+
+THE STEER (full text in check #77): **work the ranked cohort** — the next tick is *why sixteen XHRs
+reject at `readyState: 0` on `beb88run.xyz`*, which is the named mechanism under the top-ranked site,
+not whatever the next investigation trips over · the scorability ceiling is 2.1 points from the BiDi
+trigger, with nine `shell-only` rows the largest remaining cohort · the **−0.34 pt** common-set band
+from t887 is still unclaimed and the next engine tick reads it before claiming a win · PART VII
+component 2 is still ~4% of the loop with no corpus number, unmoved since check #76.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefact is `docs/loop/CONSTITUTION-CHECK.md` check #77 and the PART VI
+corrections it records. [no-pattern]
+
 ## Tick 892 — t891's second finding was WRONG, and the real one is narrower (2026-08-04)
 
 TICK SHAPE: capability — take t891's named residue, probe it before building on it, and correct the

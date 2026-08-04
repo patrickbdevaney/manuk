@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **625** | ticks 1–892 |
 | median tick cycle | **26m** | 624 intervals |
-| median, last 10 | **28m** | 10 intervals |
+| median, last 10 | **33m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 573.6h elapsed |
+| **ticks per hour** | **1.09** | 573.8h elapsed |
 | median verify wall | **63s** | 564 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -721,6 +721,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **888** | 2026-08-04 01:38 | 9m | measurement | 63s | +174/−33 | 387 | 81 | 56.0% · | the crossing ranking, re-derived on trustworthy data, and the eight are named (2026-08-04) |
 | **889** | 2026-08-04 01:44 | 7m | measurement | 63s | +78/−33 | 387 | 81 | 56.0% · | one row for one of a feature's consumers reads as covered, twice in one read (2026-08-04) |
 | **890** | 2026-08-04 02:12 | 28m | measurement | 63s | +283/−34 | 388 | 81 | 56.0% · | the self-audit is green, and the honest number beside it is 0.9 points (2026-08-04) |
-| **892** | 2026-08-04 02:41 | 29m | capability | 63s | +173/−40 | 388 | 81 | 56.0% · | t891's second finding was WRONG, and the real one is narrower (2026-08-04) |
+| **892** | 2026-08-04 02:51 | 39m | capability | 63s | +166/−33 | 388 | 81 | 56.0% · | t891's second finding was WRONG, and the real one is narrower (2026-08-04) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -4741,3 +4741,87 @@ in Chrome too. *The loudest row in a sweep is the sweep* (t841-845), now with a 
 4. **The `allticketscol` half-boot is one named XHR away.** t881's acceptance test refuses it and says
    why: the app boots under the proxy (`app-mensaje`, `mat-dialog-container` render) and 47
    `app-evento-card` never arrive.
+
+---
+
+## Check #77 — tick 893 (2026-08-04)
+
+**Horizon:** H0 re-scoped by **PART VII**. Component 1's bar is *"reliably renders and runs the
+representative real internet"*, instrumented as **M1 on the in-scope CrUX corpus**. Latest banked:
+**17.8% (23/129)**, sweep t887, release binary, all instrument guards clean.
+
+### → Gate, or scoreboard?
+
+**Neither, for six of the eight ticks — and that is the finding, stated without softening.** By their
+own `TICK SHAPE:` lines, 885–892 were: five `measurement`, one `instrument`, two `capability`. Two of
+the eight touched engine code that a page can observe (891 the rejection describer, 892 the XHR slot
+leak), and **neither was picked from the crossing ranking** — both came out of chasing a defect in the
+loop's own instruments.
+
+The window's honest ledger:
+
+| what it was | ticks | what it bought |
+|---|---|---|
+| **withdrawing a bad measurement** | 886, 887 | t886 swept 200 sites from `target/debug` (4–5.5× slower, and it **understates shape**), banked it, and spent its whole attribution budget — a full old-binary rebuild — on a "19-site scorability regression" that was the binary. Withdrawn, row deleted, guard landed. |
+| **cadence** | 885, 889, 890 | constitution check #76 · surface audit #60 (449 → 459 rows, nine with verdicts) · a fully green self-audit |
+| **ranking** | 888 | the crossing cohort re-derived on trustworthy data: 8 sites one jarring dimension from M1 |
+| **capability** | 891, 892 | `[object Object]` ×16 → named XHR rejections at `readyState:0` · this engine's private slots removed from a page's view of an XHR |
+
+⚠⚠⚠ **THE WINDOW'S MOST EXPENSIVE SINGLE FACT: THE LOOP CANNOT TELL WHICH BINARY PRODUCED A NUMBER,
+AND IT COST TWO TICKS.** `scripts/fidelity-sweep.sh` has pinned `target/release` since it was written,
+but **every `SWEEP-t<N>-rows.tsv` in the repo is produced by invoking the binary directly**, and that
+path was unguarded. The instrument refuses now (`may_bank_a_sweep`, RED-proven). The sharper lesson,
+recorded because it is narrower than the law it comes from: **when a reading is surprising, check WHAT
+BINARY produced it before checking what the code did.**
+
+### → Is VI.3's ranking still the north star?
+
+**Yes, and it survived a direct test this window.** t892's *real* defect (private slots enumerable to
+a page) has essentially zero measurable corpus delta and a large usage weight — every error reporter
+serialises a failing request. A delta-ranked loop never takes it. VI.3 does. `RATCHET.tsv`'s WPT marks
+were byte-identical across all eight ticks, which VI.3 names as the expected shape of on-mandate work.
+
+⚠ **BUT THE RANKING IS NOT WHAT CHOSE THE WINDOW'S WORK.** t888 computed the crossing cohort — eight
+named sites, +6.2 M1 points, the largest known lever — and **no tick since has worked it.** 891 and 892
+were both "the thing I tripped over while investigating the thing I tripped over". That is a
+defensible chain (t891's describer named a 16× cohort; t892 corrected t891) and it is still not the
+ranked work. Two consecutive windows have now ended with the top-ranked lever untouched.
+
+### → Is any invariant being bent?
+
+**I5 held, and it is the invariant this window actually exercised.** Three separate times a conclusion
+was refused until a control ran: t887's debug/release comparison (which withdrew a whole tick's
+headline), t888's Slick bisect (which killed "it is a layout bug" in one probe), and t892's XHR
+prototype probe (which **refuted t891's own second finding before a line was written against it**).
+The third is the one worth keeping — *a wrong FIX is caught by the next gate; a wrong LABEL by
+nothing* — and the correction was banked as **gate claims** (`protoPatch:1`, `ownOpen:false`) rather
+than prose, so it cannot be re-derived.
+
+**I3 is not bent, checked rather than assumed** (as at check #76): neither 891 nor 892 changes an
+element's geometry or the a11y tree — one is a log message, the other a property attribute.
+
+**I4 held.** Nothing chased the tail.
+
+### → PART VI corrections
+
+* **VI.3's M1 row is current** — 16.9% (t875) → **17.8% (t887)**, already corrected at check #76 and
+  re-verified here against `FIDELITY-PROGRESS.tsv`.
+* **VI.2 / I5 gains the binary clause.** The reconciliation says the discovery engine is the
+  instrumented log, and check #75 narrowed that to the four-line fixture. This window adds the
+  precondition both depend on: **a reading is only evidence about the engine if it came from the
+  shipping binary**, and nothing enforced that until t887.
+* **The board's scorability ceiling is stale by twenty points** (63% → 82.9%) and its owner-lock opens
+  the BiDi function leg at ~85%. That is now **2.1 points away**, which the board cannot see.
+
+### → THE STEER
+
+1. **WORK THE RANKED COHORT.** t888 named eight sites and their blocking dimensions; the top one's
+   mechanism is named down to the failing subsystem (Slick never initialises because sixteen XHRs
+   reject at `readyState: 0` — t891). **The next tick is why those XHRs never open**, not whatever the
+   next investigation trips over.
+2. **The scorability ceiling is 2.1 points from the owner-lock's BiDi trigger.** Nine `shell-only` rows
+   are the largest remaining unscored cohort; the board still ranks off 63%.
+3. **Carried, still unclaimed:** the common-set band is **−0.34 pts** over the 103 sites scored in both
+   t875 and t887. The next engine tick reads it before claiming a win.
+4. **Component 2 (the agentic surface) is still at ~4% of the loop and still has no corpus number** —
+   check #76's finding 2, unmoved. The constitution calls it the differentiator; nothing measures it.
