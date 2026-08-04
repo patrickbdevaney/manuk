@@ -4825,3 +4825,122 @@ element's geometry or the a11y tree — one is a log message, the other a proper
    t875 and t887. The next engine tick reads it before claiming a win.
 4. **Component 2 (the agentic surface) is still at ~4% of the loop and still has no corpus number** —
    check #76's finding 2, unmoved. The constitution calls it the differentiator; nothing measures it.
+
+## Check #78 — tick 901 (2026-08-04)
+
+**Horizon:** H0 as re-scoped by **PART VII**. Component 1's bar is *"reliably renders and runs the
+representative real internet"*, instrumented as **M1 on the in-scope CrUX corpus**. Latest banked:
+**17.1% (22/129)**, sweep t898, release binary, `--jobs 2`, all instrument guards clean.
+
+### → Gate, or scoreboard?
+
+**The gate went DOWN and the browser got BETTER, and this window is the first one that can prove both
+halves of that sentence.** Ticks 893–900 by their own `TICK SHAPE:` lines: three `capability`
+(895, 896, 897), four `measurement`, one `governance`.
+
+```text
+                        t887      t898
+  M1 (the gate)        17.8%     17.1%      <- DOWN
+  shape >= 0.75        24.0%     21.7%      <- DOWN
+  scorability        107/129   107/129      <- FLAT
+  cov_mean             86.3%     86.6%      <- up
+  scored ELEMENTS      67241     69032      <- +1791 on the common set
+```
+
+**The three capability ticks are real and corpus-wide, and they are the reason the gate fell.** Nine
+sites gained a mean **+20.2 coverage points** and the entire +1,791-element delta; their shape fell
+−5.74 because the denominator grew by exactly the hard elements that had been missing (t898 §band
+decomposition, t899's solo re-runs confirming both directions). The other 108 of 122 common sites are
+flat to **−0.07 pt**. So: *not* scoreboard-chasing, and *not* a gate advance either — **capability
+moved and the gate did not follow it**, which is a third answer this question has not had before and
+should be allowed to stay a third answer rather than be rounded to one of the two.
+
+⚠ **THE HARD FINDING: FIVE CAPABILITY FIXES MOVED SCORABILITY BY ZERO, AND THE STUB PRE-REGISTERED
+THAT THEY WOULD MOVE IT.** t898 wrote the expectation before the run precisely so it could not be
+fitted afterwards, and it was wrong. **The correction is to the loop's model, not to the fixes:**
+t895/896/897 are DOM-correctness fixes, not boot-throw killers — no site that failed to render now
+renders. The board's standing steer (*"attack throw-killers first — each site cleared RAISES THE
+CAP"*) is about a different lever with a different metric, and reading one against the other is how a
+real win reads as nothing. **Both levers are legitimate; only one of them raises M1's ceiling.**
+
+### → Is VI.3's ranking still the north star?
+
+**Yes, and this window is the strongest evidence it has had.** All three capability ticks have
+enormous usage weight and近-zero *individually attributable* M1 delta:
+
+* **t895** — `'withCredentials' in xhr` is jQuery's ENTIRE cross-origin gate. Absent ⇒ every
+  cross-origin `$.ajax` on every jQuery page returns `done(-1, "No Transport")`. Attributed by the
+  old-binary control: 16 unhandled rejections → 0, shape unmoved.
+* **t896** — `textContent = ''` left an empty Text node ⇒ `$('<div/>')[0]` was a TEXT NODE ⇒ jQuery's
+  `wrapAll` moved a 458-element carousel into it. Nine corpus sites, +1,809 elements.
+* **t897** — `getComputedStyle(el).width` returned the specified value ⇒ `parseInt($(el).css('width'))`
+  was `NaN` web-wide.
+
+A delta-ranked loop takes **none** of the three. VI.3 takes all three, and t896 is the one that then
+showed up corpus-wide. **The ranking is doing exactly what it was written to do.**
+
+⚠ **VI.3 GAINS ONE CLAUSE, learned from t898's failed pre-registration:** *usage weight predicts the
+BREADTH of an effect; it does not predict WHICH metric moves.* A fix on a path every site executes can
+be corpus-wide in coverage and invisible in scorability, because those measure different failures.
+**Name the metric you expect to move, in the stub, before the run** — t898 did, was wrong, and the
+wrongness was worth more than the sweep.
+
+### → Is any invariant being bent?
+
+**I3 is the one this window exercised, and it was being STRENGTHENED without being counted.** I3 names
+the semantic model as *"DOM, computed style, layout geometry, and a first-class accessibility tree"*
+and requires that it *"never lag the renderer"*. **t897 is verbatim I3 work** — computed style was
+lagging the renderer by returning the author's string while layout held the number — and it was
+filed as an ordinary capability tick. Then t900's surface audit found **two more members of the same
+class** (`zoom`, `containerType` both `undefined` where Chrome resolves them), making four with
+`transform` and `width`/`height`.
+
+> **Four known members, no enumeration, and the class is an I3 defect class: the semantic model
+> silently declining to publish what the pipeline already computed.**
+
+Under PART III's standing prioritization rule — *(a) advance the horizon's exit gate, then (b)
+strengthen I3* — that sweep is the correctly-ranked next engine tick, and it was arrived at from the
+constitution rather than from the histogram.
+
+**I4 held** — nothing chased the exotic tail; the one tail-shaped temptation (percentage padding in
+the resolved-value fix) was explicitly refused and named rather than approximated.
+
+**I5 held, and its narrowed form did all the work again.** Every finding this window came from a
+**four-line fixture + the real library + Chrome**, or from the instrumented log: jQuery's own
+`support.cors` line transcribed into a fixture (t895), `buildFragment` transcribed into a fixture
+(t896), a six-element `getComputedStyle` diff (t897), a twenty-claim probe of rows the map called
+settled (t900). The corpus sweep found none of them; it **priced** them.
+
+**I2 held** — no dependency was forked or patched.
+
+### → PART VI corrections
+
+* **VI.3's M1 row:** 17.8% (t887) → **17.1% (t898)**, and the movement is composition, not regression
+  (t898 §band decomposition; t899's solo controls).
+* **The scorability ceiling is UNMOVED at 82.9%** across the whole window, re-measured rather than
+  carried. It is what caps M1, the board still ranks off a stale **63%**, and the owner-lock opens the
+  BiDi function leg at ~85% — **still 2.1 points, and still eight `shell-only` rows plus five
+  `other`.** No tick in this window or the previous one has touched that cohort.
+* **A new standing fact for VI.2:** a `gated` status in `CONSTELLATION.tsv` means *the engine does the
+  thing*, and said nothing about whether the engine will **say** it does. t900 probed twenty gated
+  rows and three were lying on the readback. The map's own semantics needed that clause.
+
+### → THE STEER
+
+1. **THE `getComputedStyle` READBACK SWEEP — enumerate the whole object against Chrome in ONE pass.**
+   Four members found one per tick (`transform`, `width`, `height`, then `zoom` + `containerType`) is
+   four ticks spent on what one diff would have listed. It is I3 work under PART III(b), it is the
+   cheapest well-understood work on the board, and three of this window's ticks were already paid by
+   the class without naming it.
+2. **THE SCORABILITY CEILING IS THE ONLY THING THAT RAISES M1's CAP, AND IT HAS NOT BEEN WORKED FOR
+   TWO WINDOWS.** Eight `shell-only` rows are the largest unscored cohort. 2.1 points opens the BiDi
+   function leg the owner-lock is waiting on. If the next window ends with it untouched again, that is
+   the third consecutive window and the board's ranking should be treated as not being obeyed.
+3. **Carried, and now with one data point against it:** Component 2 (the agentic surface) is still
+   reported at ~4% of the loop with no corpus number — check #76 finding 2, unmoved through #77 and
+   #78. But **t897 was I3 work filed as something else**, so the 4% is an under-count of what the loop
+   actually does for the moat. The honest fix is to label I3 ticks as I3, not to conclude the loop
+   ignores it.
+4. **New, from t900:** probe `gated` rows every surface audit instead of trusting the gate's name. The
+   half-covered-row defect (t889) recurred eleven ticks later at t900 on a differently-shaped row.
+

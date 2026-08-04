@@ -46371,6 +46371,74 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 901 — the gate went DOWN while the browser got BETTER, and I3 was being strengthened uncounted (2026-08-04)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8; last at 893), banked
+as check #78 in `docs/loop/CONSTITUTION-CHECK.md`.
+
+⚠⚠⚠ **FINDING 1 — "GATE OR SCOREBOARD?" HAS A THIRD ANSWER THIS WINDOW, AND IT SHOULD BE ALLOWED TO
+STAY A THIRD ANSWER.** M1 fell 17.8% → 17.1% and shape-pass 24.0% → 21.7% while the browser got
+measurably better: nine sites gained a mean **+20.2 coverage points** and the entire **+1,791-element**
+common-set delta, with the other 108 of 122 sites flat to **−0.07 pt**. So the last eight ticks were
+neither scoreboard-chasing nor a gate advance — **capability moved and the gate did not follow it.**
+Rounding that to either of the two familiar answers would lose the only thing it says.
+
+⚠⚠⚠ **FINDING 2 — FIVE CAPABILITY FIXES MOVED SCORABILITY BY ZERO, AND THE STUB HAD PRE-REGISTERED
+THAT THEY WOULD.** t898 wrote the expectation before the run precisely so it could not be fitted
+afterwards. It was wrong, and **the correction is to the loop's model rather than to the fixes**:
+t895/896/897 are DOM-correctness fixes, not boot-throw killers — no site that failed to render now
+renders. The board's steer (*"attack throw-killers first — each site cleared RAISES THE CAP"*) is
+about a different lever with a different metric. Both are legitimate; **only one raises M1's
+ceiling.** VI.3 gains the clause the failure earns: *usage weight predicts the BREADTH of an effect,
+not WHICH metric moves* — so name the metric in the stub, before the run.
+
+⚠⚠⚠ **FINDING 3 — I3 IS BEING STRENGTHENED WITHOUT BEING COUNTED, AND ITS DEFECT CLASS NOW HAS FOUR
+MEMBERS AND NO ENUMERATION.** I3 names *"DOM, computed style, layout geometry, and a first-class
+accessibility tree"* and requires the semantic model never lag the renderer. **t897 is verbatim I3
+work** — computed style was returning the author's string while layout held the number — and it was
+filed as an ordinary capability tick. t900's surface audit then found two more members of the same
+class:
+
+```text
+  transform     applied for 60 ticks before the number reached JS   (historical)
+  width/height  the specified value, not the used one               (t897)
+  zoom          undefined vs Chrome's 2                             (t900)
+  containerType undefined vs Chrome's inline-size                   (t900)
+```
+
+**The class is "the semantic model silently declines to publish what the pipeline already computed",
+and four members found one per tick is four ticks spent on what one diff would have listed.** Under
+PART III's standing rule — *(a) advance the exit gate, then (b) strengthen I3* — the whole-object
+readback sweep is the correctly-ranked next engine tick, and it was reached from the constitution
+rather than from the histogram. That is the check doing its job.
+
+**I4 held** — nothing chased the exotic tail, and the one tail-shaped temptation (percentage padding
+inside t897's resolved-value fix) was explicitly refused and named rather than approximated.
+**I5 held in its narrowed form**: every finding this window came from a four-line fixture + the real
+library + Chrome, or from the instrumented log — jQuery's own `support.cors` line transcribed (t895),
+`buildFragment` transcribed (t896), a six-element `getComputedStyle` diff (t897), twenty probed map
+rows (t900). **The corpus sweep found none of them; it PRICED them.** **I2 held** — nothing forked.
+
+⚠⚠ **PART VI CORRECTIONS.** VI.3's M1 row 17.8% → **17.1%**, movement attributed as composition. **The
+scorability ceiling is UNMOVED at 82.9%** across the whole window, re-measured rather than carried —
+the board still ranks off a stale **63%**, and the owner-lock's BiDi trigger is still 2.1 points away
+behind eight `shell-only` rows plus five `other`. And a new standing clause for VI.2: **a `gated`
+status means the engine DOES the thing and says nothing about whether it will SAY it does** — t900
+probed twenty gated rows and three were lying on the readback.
+
+THE STEER (full text in check #78): **(1)** the `getComputedStyle` readback sweep, as ONE pass over
+the whole object — I3 work, four known members, the cheapest well-understood item on the board;
+**(2)** the scorability ceiling is the only lever that raises M1's cap and **two consecutive windows
+have now ended without touching it** — a third would mean the ranking is not being obeyed; **(3)**
+Component 2's reported ~4% is an UNDER-count, because t897 was I3 work filed as something else — label
+I3 ticks as I3 rather than conclude the loop ignores the moat; **(4)** probe `gated` rows every
+surface audit, because t889's half-covered-row defect recurred at t900 eleven ticks later.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefact is `docs/loop/CONSTITUTION-CHECK.md` check #78, which is the wiki
+for the loop's own governance. [no-pattern]
+
 ## Tick 900 — the map is complete on Interop 2026, and three GATED rows were lying (2026-08-04)
 
 TICK SHAPE: measurement — the two cadence instruments that came due together: the **self-audit**

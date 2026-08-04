@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **309** capability ticks, median cycle **26m**
-* median diff per tick: **+264 / −34** lines across 8 files
+* median diff per tick: **+263 / −34** lines across 8 files
 
 ## Every tick
 
@@ -728,6 +728,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **896** | 2026-08-04 05:26 | 42m | capability | 63s | +601/−118 | 391 | 81 | 56.0% · | `textContent = ''` left an empty text node, and it destroys jQuery's element factory (2026 |
 | **897** | 2026-08-04 06:33 | 67m | capability | 63s | +388/−33 | 391 | 81 | 56.0% · | `getComputedStyle(el).width` answered with the SPECIFIED value, and the used one was alrea |
 | **898** | 2026-08-04 06:46 | 13m | measurement | 63s | +200/−33 | 391 | 81 | 56.0% · | the pre-registered expectation was WRONG, and the band is composition plus five named site |
-| **900** | 2026-08-04 06:54 | 9m | measurement | 63s | +279/−38 | 391 | 81 | 56.0% · | the map is complete on Interop 2026, and three GATED rows were lying (2026-08-04) |
+| **900** | 2026-08-04 06:58 | 12m | measurement | 63s | +221/−33 | 391 | 81 | 56.0% · | the map is complete on Interop 2026, and three GATED rows were lying (2026-08-04) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
