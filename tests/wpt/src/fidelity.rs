@@ -173,6 +173,20 @@ pub enum Unmeasurable {
     /// Naming the condition does NOT fix the oracle; it stops the oracle LYING. It converted the last
     /// of t611's *"unscored with NO recorded reason"* rows — the residue that tick could not explain —
     /// into a stated one, and removed a false number from the certificate.
+    ///
+    /// ⚠⚠⚠ **AND THE FIX FOR [`Self::OracleModuleShell`] WAS WITHHELD FROM THIS VARIANT FOR
+    /// TWENTY-THREE TICKS BECAUSE OF THE NAME (corrected t903).** The one-origin proxy was built at
+    /// t880 and its trigger asked for `type="module"`, so a row that landed *here* rather than in
+    /// the module variant was never offered it — even though the wall is the ORIGIN, not the module
+    /// loader. Four of the five `shell-only` rows in the t898 sweep ship **no** module script and
+    /// are 3–10× short from the snapshot all the same: `merchant.upi9.pro` is Next.js with classic
+    /// `<script src="/_next/…" defer>` (from `file://` that is `file:///_next/…`);
+    /// `house.udn.com` is a 195-byte document whose entire body is
+    /// `window.location.href="/house/index"`. Both are removed by one origin.
+    ///
+    /// So a row landing here **today** is one the proxy either could not be run for or ran and
+    /// [`crate::proxy::renders_agree`] REFUSED — which is a much narrower and much more actionable
+    /// statement than the one this variant used to make.
     ShellOnly(usize),
     /// **The oracle rendered a shell AND the document is a `type="module"` SPA — so the shell is OUR
     /// SNAPSHOT'S, not the site's.** Carries the oracle's element count, exactly as
@@ -1596,8 +1610,49 @@ fn ink(means: &[[f64; 3]]) -> f64 {
     n as f64 / means.len() as f64
 }
 
+/// **THE ONE DECISION SITE FOR "re-take this reference through one origin".** The answer is the
+/// SHELL FLOOR and nothing else — and `document` is in the signature precisely so a gate can prove
+/// that the answer does not depend on it.
+///
+/// ⚠⚠⚠ **THE FIX USED TO BE GATED ON ITS OWN DISCOVERY STORY (corrected t903).** The one-origin
+/// proxy was built at t880 for the `oracle-module-shell` cohort, so the trigger asked for a
+/// `type="module"` script as well as the floor. Modules are **one way** to reach the origin wall,
+/// not the wall: from a `file://` snapshot every root-relative `<script src="/…">` is
+/// `file:///…`, and so is every same-document navigation. Four `shell-only` rows sat in the t898
+/// sweep with the fix built, wired, and withheld — measured, `curl` plus two `--dump-dom` runs each:
+///
+/// ```text
+///                                  ships type=module?   file:// snapshot   LIVE
+///   esaj.tjsp.jus.br                     NO                     30          300
+///   house.udn.com                        NO                     99          958
+///   merchant.upi9.pro                    NO                     20           68
+///   experiencia.pichincha.com            NO                     53          567
+/// ```
+///
+/// **The cost gate was always the floor, never the module test** — the trigger's own comment said
+/// so while the code did otherwise. A healthy reference is over the floor and pays nothing; the
+/// module conjunct bought no budget and cost four rows. Widening is safe in exactly one direction
+/// and it is the direction that matters: [`crate::proxy::renders_agree`] refuses any proxied render
+/// that disagrees with the live one, so a wider trigger can only convert rows the acceptance test
+/// has already vouched for.
+///
+/// [`document_ships_module_scripts`] survives, because *naming the cause of a shell that is STILL a
+/// shell* is a different job from *deciding whether to try the fix*, and it is the only thing that
+/// tells the ranked backlog which refusals are the proxy's own half-boots.
+pub fn one_origin_worth_trying(probed: usize, document: &str) -> bool {
+    // Read and discarded ON PURPOSE. The whole finding of t903 is that this decision must not
+    // consult the document, and a parameter that a gate can vary is the cheapest way to keep that
+    // true: `one_origin_is_not_gated_on_modules` passes the same bytes with and without a
+    // `type="module"` script and requires ONE answer.
+    let _ = document;
+    probed < CERT_MIN_SHAPE_SAMPLE
+}
+
 /// **Does this document boot through a `type="module"` script?** — the one fact that turns a bare
 /// [`Unmeasurable::ShellOnly`] into an attributable [`Unmeasurable::OracleModuleShell`].
+///
+/// ⚠ **It does NOT decide whether the one-origin reference is attempted** — that is
+/// [`one_origin_worth_trying`], and conflating the two withheld the fix from four rows (t903).
 ///
 /// Deliberately a scan of the RESPONSE BYTES rather than a parse: it runs on the exact document the
 /// oracle handed Chrome, before any engine has touched it, so it cannot inherit a parser difference
@@ -3404,6 +3459,64 @@ mod shape_tests {
             !super::document_ships_module_scripts(r#"<script type="module-worker" src="/a.js"></script>"#),
             "a type that merely STARTS with `module` is not `module` — the prefix match must end at \
              a delimiter, or every future `module-*` type relabels a real shell as ours"
+        );
+
+        // ⚠⚠⚠ **G_ONE_ORIGIN_IS_NOT_GATED_ON_MODULES (t903) — THE FIX MUST NOT BE GATED ON ITS OWN
+        // DISCOVERY STORY.** The one-origin proxy was built at t880 for the `oracle-module-shell`
+        // cohort, and its trigger inherited the cohort's defining test. Modules are ONE WAY to reach
+        // the origin wall; from a `file://` snapshot every root-relative subresource and every
+        // same-document navigation is `file:///…` too. Four `shell-only` rows in the t898 sweep ship
+        // no module script and are 3–10× short from the snapshot regardless (measured t903:
+        // esaj.tjsp.jus.br 30/300 · house.udn.com 99/958 · merchant.upi9.pro 20/68 ·
+        // experiencia.pichincha.com 53/567), and the fix was built, wired, and withheld from all four.
+        //
+        // RED-PROVEN by restoring the conjunct: claims 1 and 3 fail.
+        //
+        // The first fixture is `merchant.upi9.pro`'s ACTUAL `<head>`, captured from the wire this
+        // tick — Next.js, classic `defer` scripts, root-relative `src`, not one `type="module"`.
+        const NEXT_CLASSIC: &str = r#"<!DOCTYPE html><html><head><meta charSet="utf-8"/>
+            <link rel="stylesheet" href="/_next/static/css/b46959c46e04248b.css"/>
+            <script defer="" nomodule="" src="/_next/static/chunks/polyfills-42372ed1.js"></script>
+            <script src="/_next/static/chunks/webpack-dd8919a5.js" defer=""></script>
+            <script src="/_next/static/chunks/pages/index-7d5c9466.js" defer=""></script>
+            </head><body><div id="__next"></div></body></html>"#;
+        assert!(
+            !super::document_ships_module_scripts(NEXT_CLASSIC),
+            "sanity: the fixture must genuinely carry NO module script, or claim 1 proves nothing"
+        );
+        // 1. THE DEFECT ITSELF — a shell reference on a module-free document must still be re-taken.
+        assert!(
+            super::one_origin_worth_trying(4, NEXT_CLASSIC),
+            "a reference under the shell floor must be re-taken through one origin whatever the \
+             document's script types — the wall is the ORIGIN, not the module loader"
+        );
+        // 2. THE COST GATE, which is the only thing that was ever confining this work.
+        assert!(
+            !super::one_origin_worth_trying(super::CERT_MIN_SHAPE_SAMPLE, NEXT_CLASSIC),
+            "a reference AT the floor is a page, not a shell: a healthy site must pay zero extra \
+             Chrome runs here, or the sweep's bill doubles across the whole corpus"
+        );
+        // 3. MODULE-INDEPENDENCE, asserted as an IDENTITY rather than as two separate answers.
+        // Two documents differing ONLY in `type="module"` must get ONE answer; the reverted code
+        // gives two, which is exactly the shape of the defect.
+        let as_module = NEXT_CLASSIC.replace("<script src=", r#"<script type="module" src="#);
+        assert!(
+            super::document_ships_module_scripts(&as_module),
+            "sanity: the mutated fixture must now READ as a module document"
+        );
+        assert_eq!(
+            super::one_origin_worth_trying(4, NEXT_CLASSIC),
+            super::one_origin_worth_trying(4, &as_module),
+            "adding `type=\"module\"` to a document must not change whether the one-origin \
+             reference is attempted — the trigger asks about the REFERENCE's size, never the \
+             document's contents"
+        );
+        // 4. AND THE CAUSE-NAMING SURVIVES, because a shell that is STILL a shell after the proxy
+        // refuses it must say WHY, so the backlog can tell a site's shell from a half-boot of ours.
+        assert_eq!(
+            super::unscoreable_reason(3, 3, 900, true, false),
+            Some(Unmeasurable::OracleModuleShell(3)),
+            "widening the TRIGGER must not collapse the two LABELS into one"
         );
 
         assert_eq!(

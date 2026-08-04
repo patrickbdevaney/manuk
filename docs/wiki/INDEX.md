@@ -708,6 +708,12 @@
   - L552 · Run the control in BOTH directions, or it proves nothing
   - L564 · A --jobs 2 row is bankable for the CORPUS, and is not evidence about ANY SINGLE SITE
   - L580 · Decompose the band before reading it
+  - L595 · A fix gated on its own DISCOVERY STORY reaches only the cohort it was found in (t903)
+  - L617 · Modules are ONE WAY to the origin wall, not the wall
+  - L635 · The acceptance test is what makes widening safe — and it refused half the cohort
+  - L655 · An ACCEPTED proxy that still returns a shell is an ATTRIBUTION, not a failure
+  - L672 · What the two refusals name for the next tick
+  - L679 · The cost, stated rather than discovered later
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1543,4 +1549,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1450 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1456 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

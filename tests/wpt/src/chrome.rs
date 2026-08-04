@@ -546,25 +546,45 @@ pub fn capture_seen_all_paths(
     // nobody heard it, because the caller discarded the error.
     let seen = parse_seen_probe_json(&String::from_utf8_lossy(&out.stdout))
         .map_err(|_| Unmeasurable::ProbeBlocked)?;
-    // ⚠⚠⚠ **THE SNAPSHOT REFERENCE IS A SHELL AND THE DOCUMENT SHIPS MODULES — TRY ONE ORIGIN.**
+    // ⚠⚠⚠ **THE SNAPSHOT REFERENCE IS A SHELL — TRY ONE ORIGIN. THE CAUSE DOES NOT GATE THE FIX.**
     //
-    // This is the `oracle-module-shell` cohort (t865 named it, t880 measured the fix): a module
+    // t865 named the wall and t880 built the fix for the `oracle-module-shell` cohort: a module
     // script is always CORS-fetched, a site does not send `Access-Control-Allow-Origin` for its own
     // bundle, so the app never boots for the ORACLE and the instrument charges Chrome's missing page
     // to us. Serving document and subresources through one loopback origin removes the wall by
     // construction.
     //
-    // **The condition is deliberately narrow, and the cost is why.** Most of the modern corpus ships
-    // module scripts, so gating on that alone would double this crate's Chrome bill across every
-    // healthy site for nothing. Gating on *the reference came in under the shell floor* confines the
-    // extra work to the ~11 rows that are unscored today.
+    // ⚠⚠⚠ **AND THE TRIGGER ALSO ASKED FOR `type="module"`, WHICH IS A SUFFICIENT CONDITION USED AS
+    // A NECESSARY ONE (measured t903).** Modules are one way to reach the origin wall. They are not
+    // the wall. Every ordinary root-relative subresource is `file:///…` from a snapshot, and so is
+    // every same-document navigation. Five `shell-only` rows sat in the t898 sweep with the fix
+    // built, wired, and withheld from them — four measured here, `curl` for the document and two
+    // `--dump-dom` runs each:
+    //
+    // ```text
+    //                                  ships type=module?   file:// snapshot   LIVE
+    //   esaj.tjsp.jus.br                     NO                     30          300
+    //   house.udn.com                        NO                     99          958
+    //   merchant.upi9.pro                    NO                     20           68
+    //   experiencia.pichincha.com            NO                     53          567
+    // ```
+    //
+    // `merchant.upi9.pro` is Next.js with classic `<script src="/_next/…" defer>`; `house.udn.com`
+    // is a 195-byte document whose whole body is `window.location.href="/house/index"`. Neither
+    // involves a CORS-mode fetch, and one origin fixes both.
+    //
+    // **The cost gate is, and always was, the SHELL FLOOR — not the module test.** The comment this
+    // replaces said so itself while the code did otherwise: *"gating on [modules] alone would double
+    // this crate's Chrome bill … gating on the reference came in under the shell floor confines the
+    // extra work to the ~11 rows that are unscored today."* A healthy site is over the floor and
+    // pays nothing here; the module conjunct bought no budget and cost four rows.
     //
     // On refusal — or on any failure inside the proxy path — the snapshot's shell is returned
-    // unchanged, and the row keeps its honest `oracle-module-shell` label. See
-    // [`crate::proxy::renders_agree`].
-    if seen.len() < crate::fidelity::CERT_MIN_SHAPE_SAMPLE
-        && crate::fidelity::document_ships_module_scripts(&html)
-    {
+    // unchanged, and the row keeps its honest `shell-only` / `oracle-module-shell` label. See
+    // [`crate::proxy::renders_agree`], which is what makes widening this safe: a proxied render is a
+    // reference only when it AGREES with the live one, so a wider trigger can only convert rows the
+    // acceptance test has already vouched for.
+    if crate::fidelity::one_origin_worth_trying(seen.len(), &html) {
         if let Some(better) = one_origin_reference(url, &html, vw, vh) {
             return Ok(better);
         }

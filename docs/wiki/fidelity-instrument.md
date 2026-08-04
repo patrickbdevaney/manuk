@@ -591,3 +591,96 @@ t898's method, completed here: the −1.67 pt band accounts for itself exactly.
 
 A band that does not add up is an instrument bug, not a result — the accounting-reconciliation
 mechanism, pointed at the loop's own headline.
+
+## A fix gated on its own DISCOVERY STORY reaches only the cohort it was found in (t903)
+
+The one-origin proxy was built at t880/t881 for the `oracle-module-shell` cohort, and its trigger
+inherited that cohort's *defining test*:
+
+```rust
+  if seen.len() < CERT_MIN_SHAPE_SAMPLE && document_ships_module_scripts(&html)
+```
+
+Twenty-three ticks later the sweep still carried **five `shell-only` rows** with the fix built,
+wired, green, and never offered to any of them. Not one ships a `type="module"` script — and every
+one is 3–10× short from the snapshot regardless. Measured before writing any code, `curl` for the
+document plus two `google-chrome-stable --dump-dom` runs each:
+
+```text
+                                 ships type=module?   file:// snapshot   LIVE
+  esaj.tjsp.jus.br                     NO                     30          300
+  house.udn.com                        NO                     99          958
+  merchant.upi9.pro                    NO                     20           68
+  experiencia.pichincha.com            NO                     53          567
+```
+
+### Modules are ONE WAY to the origin wall, not the wall
+
+`merchant.upi9.pro` is Next.js with classic `<script src="/_next/…" defer>`; from a `file://`
+snapshot that is `file:///_next/…`. `house.udn.com` is a 195-byte document whose entire body is
+`window.location.href="/house/index"`. Neither involves a CORS-mode fetch. **Every root-relative
+subresource and every same-document navigation is broken from a snapshot**, and one origin removes
+all of them by construction — which is what the proxy was for and what the module test hid.
+
+The cost argument the old trigger made was already satisfied without it. Its own comment said so
+while the code did otherwise: *"gating on [modules] alone would double this crate's Chrome bill …
+gating on **the reference came in under the shell floor** confines the extra work to the ~11 rows
+that are unscored today."* A healthy reference is over the floor and pays nothing. The module
+conjunct bought no budget and cost four rows.
+
+> **When a fix is generalised from one diagnosed cohort, check whether the trigger tests the CAUSE
+> you diagnosed or the CONDITION you repair.** A trigger written from the discovery story reaches
+> exactly the rows that produced the story.
+
+### The acceptance test is what makes widening safe — and it refused half the cohort
+
+`proxy::renders_agree` requires a proxied render to AGREE with the live one, so a wider trigger can
+only convert rows that test has already vouched for. Measured, five sites, three runs, identical
+decisions every time:
+
+```text
+                             BEFORE                 AFTER
+  merchant.upi9.pro          shell-only-2           SCORED · shape 0.830 · n=47   <- crosses M1
+  experiencia.pichincha.com  shell-only-8           tree-divergence-25 (oracle 8 -> 34/46 probed)
+  awlyaa.education.dz        shell-only-6           shell-only-6 · proxy ACCEPTED (10 vs 9 tags)
+  esaj.tjsp.jus.br           shell-only-4           shell-only-4 · proxy REFUSED (37 vs 300)
+  house.udn.com              shell-only-1           shell-only-1 · proxy REFUSED (6 vs 927)
+```
+
+**The pre-registered expectation was FOUR rows and the honest answer is ONE scored plus one
+re-attributed.** The two refusals are the design working: a half-built reference is strictly worse
+than an honest shell, and the instrument said so out loud instead of scoring our complete render
+against Chrome's partial one.
+
+### An ACCEPTED proxy that still returns a shell is an ATTRIBUTION, not a failure
+
+`awlyaa.education.dz` is the one worth keeping. The proxy was accepted — 10 open tags against the
+live page's 9 — and the reference is still six elements, because the live page **is** six elements:
+
+```html
+<html><head><title>Request Rejected</title></head><body>The requested URL was rejected.
+Please consult with your administrator.<br><br>Your support ID is: 3937191494515588361 …
+```
+
+That is F5 BIG-IP ASM's block page, served `200 OK`, and `classify_fetch`'s 2xx bot-wall test keys
+off Cloudflare infrastructure markers only, so it reads as a real document. Before this tick the row
+said *"the ORACLE rendered a shell"* as a hypothesis; now the one-origin reference has **proved the
+shell is the site's**. The row is still mislabelled as in-scope engine work and that is its own tick
+— the 2xx bot-wall detector deliberately refuses prose markers, because mislabelling a genuine
+render failure as a bot wall EXCUSES our own bug, which is the expensive direction.
+
+### What the two refusals name for the next tick
+
+`house.udn.com` refuses at **6 tags against 927**: the proxy serves the document, the document's
+only content is a JS navigation to `/house/index`, and the proxied render does not arrive there.
+A same-origin *navigation* is a different case from a same-origin *subresource*, and only the second
+one is covered today. `esaj.tjsp.jus.br` half-boots at 37 of 300.
+
+### The cost, stated rather than discovered later
+
+The widened trigger runs two extra Chrome processes on every under-floor row — ~22 instead of ~11.
+The first batch run of the new binary booked `experiencia.pichincha.com` as **`crashed`**; a solo
+re-run and an identical repeat batch both returned `tree-divergence-25`, and all five proxy
+decisions were byte-identical across the three runs. It is recorded rather than averaged away
+(t881's rule), and it is the predictable shape of the cost: two heavy proxy paths concurrent at
+`--jobs 2` is more resident memory than the same cohort was ever asked for before.

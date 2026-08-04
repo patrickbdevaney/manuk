@@ -46371,6 +46371,117 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 903 — the one-origin fix was gated on `type="module"`, and the origin wall is not a module wall (2026-08-04)
+
+TICK SHAPE: instrument — check #78's steer #2, the scorability ceiling, untouched for two windows.
+
+HYPOTHESIS, PRE-REGISTERED BEFORE THE RUN (VI.3's new clause: name the metric you expect to move,
+in the stub, before the run — t898 did and was wrong, and the wrongness was worth more than the
+sweep). The one-origin proxy landed at t880 and is fully wired, yet the t898 sweep still carries
+**five `shell-only` rows**. The trigger in `chrome.rs` is
+
+```rust
+  if seen.len() < CERT_MIN_SHAPE_SAMPLE && document_ships_module_scripts(&html)
+```
+
+and I claim the second conjunct is a **sufficient condition mistaken for a necessary one**. I expect
+`scored/in-scope` to RISE by up to four rows and **M1 to be FLAT or DOWN** — a newly-scored site
+scores low by construction, which is the composition effect t898/t899 already measured.
+
+MEASURED BEFORE WRITING A LINE OF CODE — `curl` for the document, `google-chrome-stable
+--headless=new --dump-dom` twice per site, open-tag counts:
+
+```text
+                                 ships type=module?   file:// snapshot   LIVE
+  esaj.tjsp.jus.br                     NO                     30          300
+  house.udn.com                        NO                     99          958
+  merchant.upi9.pro                    NO                     20           68
+  experiencia.pichincha.com            NO                     53          567
+```
+
+**Not one of the four ships a module script, and every one of them is 3–10× short from the
+snapshot.** Their origin walls are ordinary ones: `merchant.upi9.pro` is Next.js with root-relative
+`<script src="/_next/…" defer>` (from `file://` that is `file:///_next/…`), `house.udn.com` is a
+195-byte document whose entire body is `window.location.href="/house/index"`. Neither has anything
+to do with CORS-mode module fetches — and both are removed by the SAME one-origin proxy, which was
+never offered to them.
+
+⚠⚠⚠ **THE COST ARGUMENT FOR THE NARROW TRIGGER WAS ALREADY SATISFIED WITHOUT THE MODULE TEST, AND
+THE TRIGGER'S OWN COMMENT SAID SO WHILE THE CODE DID OTHERWISE.** Verbatim: *"gating on [modules]
+alone would double this crate's Chrome bill … gating on* **the reference came in under the shell
+floor** *confines the extra work to the ~11 rows that are unscored today."* A healthy reference is
+over the floor and pays nothing. **The module conjunct bought no budget and cost four rows.**
+
+> **When a fix is generalised out of one diagnosed cohort, check whether the trigger tests the CAUSE
+> you diagnosed or the CONDITION you repair.** A trigger written from the discovery story reaches
+> exactly the rows that produced the story.
+
+⚠⚠⚠ **MEASURED — AND THE PRE-REGISTERED EXPECTATION WAS WRONG BY A FACTOR OF FOUR, IN THE DIRECTION
+THE DESIGN INTENDED.** Old binary re-run **in the same hour** first: it reproduced all five t898 rows
+to the digit (`shell-only-6/2/8/4/1`, same coverage, same shape), so the delta is the change and not
+the corpus. Then the new binary, and `proxy::renders_agree` **refused half the cohort**:
+
+```text
+                             OLD (t898 + same-hour control)   NEW
+  merchant.upi9.pro          shell-only-2  UNSCORED           SCORED · shape 0.830 · n=47
+  experiencia.pichincha.com  shell-only-8  UNSCORED           tree-divergence-25 (oracle 8 → 34/46)
+  awlyaa.education.dz        shell-only-6  UNSCORED           shell-only-6 · proxy ACCEPTED (10 vs 9)
+  esaj.tjsp.jus.br           shell-only-4  UNSCORED           shell-only-4 · proxy REFUSED (37 vs 300)
+  house.udn.com              shell-only-1  UNSCORED           shell-only-1 · proxy REFUSED (6 vs 927)
+```
+
+**+1 scored row — scorability 107/129 → 108/129 (82.9% → 83.7%) — and it lands at shape 0.830, so it
+is also an M1 crossing.** I predicted up to four and got one, because a half-built reference is
+strictly worse than an honest shell and the acceptance test said so out loud twice rather than
+letting the instrument score our complete render against Chrome's partial one. **That refusal is the
+result, not a shortfall of it.**
+
+⚠⚠ **AN ACCEPTED PROXY THAT STILL RETURNS A SHELL IS AN ATTRIBUTION, NOT A FAILURE — and it is the
+row I would have thrown away.** `awlyaa.education.dz`'s proxied render agreed with live at **10 tags
+against 9**, and the reference is still six elements because the live page **is** six elements:
+
+```html
+  <html><head><title>Request Rejected</title></head><body>The requested URL was rejected.
+  Please consult with your administrator.<br><br>Your support ID is: 3937191494515588361 …
+```
+
+That is F5 BIG-IP ASM's block page served `200 OK`. Yesterday the row *asserted* "the ORACLE rendered
+a shell"; today the one-origin reference has **proved the shell is the site's**. It is still filed as
+in-scope engine work and that is a separate tick: `classify_fetch`'s 2xx bot-wall test takes
+**infrastructure markers only, never prose**, deliberately — mislabelling a real render failure as a
+bot wall EXCUSES our own bug, which is the expensive direction — so widening it is a decision to make
+on its own evidence, not a line to slip into this diff.
+
+⚠ **THE TWO REFUSALS NAME THE NEXT LEVER.** `house.udn.com` refuses at **6 tags against 927**: the
+proxy serves the document, the document's only content is a JS navigation to `/house/index`, and the
+proxied render never arrives there. **A same-origin NAVIGATION is a different case from a same-origin
+SUBRESOURCE, and only the second is covered today.** `esaj.tjsp.jus.br` half-boots at 37 of 300.
+
+⚠ **THE COST, STATED RATHER THAN DISCOVERED LATER.** Two extra Chrome processes now run on every
+under-floor row — ~22 instead of ~11. The first new-binary batch booked `experiencia.pichincha.com`
+as **`crashed`**; a solo re-run and an identical repeat batch both returned `tree-divergence-25`, and
+all five proxy decisions were byte-identical across the three runs. **Recorded, not averaged away**
+(t881's rule) — it is the predictable shape of the cost, two heavy proxy paths concurrent at
+`--jobs 2`, and a full sweep should be watched for it.
+
+GATE: `one_origin_is_not_gated_on_modules`, four claims inside
+`fidelity::shape_tests::an_unscored_site_must_name_its_cause`. Claim 3 is the load-bearing one and it
+is an **IDENTITY**, not two answers: two documents differing ONLY in `type="module"` must get ONE
+answer from `one_origin_worth_trying`. The `document` parameter exists for no other reason than to
+let the gate vary it. **RED-PROVEN** by restoring the conjunct — claim 1 fails with *"the wall is the
+ORIGIN, not the module loader"*. The fixture is `merchant.upi9.pro`'s actual `<head>`, off the wire
+this tick.
+
+`document_ships_module_scripts` survives untouched: *naming the cause of a shell that is STILL a
+shell* is a different job from *deciding whether to try the fix*, and claim 4 asserts that widening
+the TRIGGER did not collapse the two LABELS.
+
+PERF: none on the browser. On the instrument, +2 Chrome runs per under-floor row (see the cost note
+above); zero on any row over the shell floor, which is every healthy site and both G1 wall pages.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "A fix gated on its own DISCOVERY STORY reaches only the
+cohort it was found in" [no-pattern]
+
 ## Tick 902 — one diff listed the whole class: 411 of 924 computed-style readings differ (2026-08-04)
 
 TICK SHAPE: capability — check #78's steer #1, taken literally. The `getComputedStyle` readback class
