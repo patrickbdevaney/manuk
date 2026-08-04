@@ -5887,6 +5887,17 @@ unsafe fn clone_node(dom: *mut Dom, node: NodeId, deep: bool) -> NodeId {
     let new = match (*dom).data(node) {
         NodeData::Element(_) => {
             let tag = (*dom).tag_name(node).unwrap_or("div").to_string();
+            // ⚠⚠⚠ **THE SECOND EMITTER OF THE SAME RULE — a clone must carry the NAMESPACE.**
+            // `manuk_html::clone_into` is the other; between them they cover `innerHTML`,
+            // `insertAdjacentHTML`, `createContextualFragment`, `cloneNode` and `importNode`, and
+            // BOTH dropped it. Measured against Chrome, one fixture: a document-parsed `<svg>` is
+            // correct (`http://www.w3.org/2000/svg`, `nodeName: svg`) and **every copy of it came
+            // back xhtml with `nodeName: SVG`** — so `tpl.content.cloneNode(true)`, the single call
+            // every compiler-based framework instantiates an icon through, disagreed with the same
+            // markup shipped in the document. The cost is DOM correctness, not geometry: the boxes
+            // measured identical either way (see the note in `manuk_html::clone_into`), and the
+            // failure is every library that branches on `namespaceURI` or `instanceof SVGElement`.
+            let ns = (*dom).element(node).and_then(|e| e.namespace.clone());
             let attrs: Vec<(String, String)> = (*dom)
                 .element(node)
                 .map(|e| {
@@ -5896,7 +5907,7 @@ unsafe fn clone_node(dom: *mut Dom, node: NodeId, deep: bool) -> NodeId {
                         .collect()
                 })
                 .unwrap_or_default();
-            let el = (*dom).create_element(tag);
+            let el = (*dom).create_element_ns(ns, tag);
             for (k, v) in attrs {
                 (*dom).set_attr(el, k, v);
             }

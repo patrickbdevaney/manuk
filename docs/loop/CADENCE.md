@@ -15,7 +15,7 @@
 | median tick cycle | **26m** | 615 intervals |
 | median, last 10 | **25m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.08** | 566.9h elapsed |
+| **ticks per hour** | **1.08** | 567.5h elapsed |
 | median verify wall | **63s** | 555 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -28,7 +28,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **386**
-* **✅ rows in the capability ledger**: 144 → **462**
+* **✅ rows in the capability ledger**: 144 → **463**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **303 of 616 ticks** (49%) moved a
@@ -712,6 +712,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **878** | 2026-08-03 18:47 | 9m | capability | 63s | +230/−34 | 386 | 81 | 56.0% · | the I3 assertion three constitution checks have asked for, and only one of its four clause |
 | **879** | 2026-08-03 18:52 | 5m | measurement | 63s | +158/−34 | 386 | 81 | 56.0% · | the map is clean against Interop and stale against Baseline, and we gate the scroll SURFAC |
 | **880** | 2026-08-03 19:21 | 29m | measurement | 63s | +1072/−35 | 386 | 81 | 56.0% · | the proxy works on four of five, and the fifth is the reason to build the acceptance test  |
-| **882** | 2026-08-03 19:57 | 36m | capability | 63s | +257/−34 | 386 | 81 | 56.0% · | a `<template>`'s `innerHTML` went to its CHILD LIST, and Vue keeps ONE template (2026-08-0 |
+| **882** | 2026-08-03 20:32 | 70m | capability | 63s | +247/−38 | 386 | 81 | 56.0% · | a `<template>`'s `innerHTML` went to its CHILD LIST, and Vue keeps ONE template (2026-08-0 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

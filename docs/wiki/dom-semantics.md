@@ -1993,3 +1993,48 @@ the state in every order, not just the order the implementation happened to make
 in `http://www.w3.org/2000/svg`. Document parsing is correct (`g_foreign_content_ns`); the
 `parse_fragment_in` → `clone_into` path drops the namespace. Vue's hoisting does not read the
 namespace, so it is not what killed the page — it is its own tick.
+
+## The parser was right and every COPY was wrong — namespaces across `clone_into` and `clone_node`
+
+`G_FOREIGN_CONTENT_NS` has gated document-parsed foreign content since t602. What it did not ask is
+whether a **copy** of a correct element is still correct. It was not, in either of the two places a
+copy is made — `manuk_html::clone_into` (`innerHTML`, `insertAdjacentHTML`,
+`createContextualFragment`) and `dom_bindings::clone_node` (`cloneNode`, `importNode`) — because both
+built every node with `create_element`, which is the HTML namespace unconditionally.
+
+```text
+                                              Chrome              manuk (before)
+  document-parsed <svg>                  2000/svg | svg      2000/svg | svg    ✓
+  innerHTML '<svg>…'                     2000/svg | svg      1999/xhtml | SVG  ✗
+  cloneNode of the CORRECT parsed svg    2000/svg | svg      1999/xhtml | SVG  ✗
+  tpl.content.cloneNode(true)            2000/svg | svg      1999/xhtml | SVG  ✗
+  importNode                             2000/svg | svg      1999/xhtml | SVG  ✗
+  createElementNS control                2000/svg | svg      2000/svg | svg    ✓
+```
+
+**Cloning an element the parser got right produced a wrong one**, which rules the parser out without
+reading a line of it. Two implementations of one rule, in two different crates — so no local reading
+of either would have found it. `nodeName` is the tell a namespace-only check misses: a foreign
+element's name is **not** uppercased, and ours read `SVG`.
+
+### What it costs — measured, because the obvious answer is wrong
+
+The tempting claim is that an `<svg>` in the HTML namespace is an unknown inline element with no
+intrinsic ratio that never paints. **False here**, and checked on both binaries before it was
+written down:
+
+```text
+                                                    Chrome    after    BEFORE
+  innerHTML <svg viewBox="0 0 200 100"> in 400px    400x200   400x200  400x200
+  innerHTML bare <svg>                              300x150   300x150  300x150
+```
+
+Our layout keys on the TAG, so geometry never depended on the namespace. The real cost is the one
+`parsedEqMade` already names one layer up: **the same markup reached two ways produced two different
+DOMs**, so every library that branches on `namespaceURI`, matches `svg|rect`, or asks `instanceof
+SVGElement` — D3, Chart.js, Snap.svg, every icon set that injects markup — was right about parsed SVG
+and wrong about injected SVG, with nothing reporting a disagreement.
+
+**Named residue:** `getComputedStyle(rect).fill` is `undefined` where Chrome says `rgb(255, 0, 0)` —
+SVG presentation attributes do not reach computed style, which is exactly what charting code reads
+back.

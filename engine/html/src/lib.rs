@@ -279,12 +279,28 @@ fn clone_into(src: &Dom, src_node: NodeId, dst: &mut Dom, dst_parent: NodeId) {
     match src.data(src_node) {
         NodeData::Element(el) => {
             let name = el.name.clone();
+            // ⚠⚠⚠ **A COPY MUST CARRY THE NAMESPACE, AND THIS ONE DROPPED IT** — so
+            // `sink.innerHTML = '<svg>…</svg>'` produced an element whose `namespaceURI` was
+            // **xhtml** and whose `nodeName` was **`SVG`** (foreign names are not uppercased), while
+            // the DOCUMENT parser had this right all along.
+            //
+            // ⚠ **WHAT THIS DOES AND DOES NOT BUY, MEASURED RATHER THAN ASSUMED.** The obvious claim
+            // — *"an `<svg>` in the HTML namespace has no intrinsic ratio and does not paint"* — is
+            // FALSE here and was checked before being written: our layout keys on the TAG, so an
+            // injected `<svg viewBox="0 0 200 100">` in a 400px block measured `400x200` and a bare
+            // one `300x150`, byte-identical to Chrome, both before and after this line. What it buys
+            // is the property `parsedEqMade` in `G_FOREIGN_CONTENT_NS` already names one layer up:
+            // **the same markup reached two ways produced two different DOMs.** Every library that
+            // branches on `namespaceURI`, matches an `svg|rect` selector, or asks `instanceof
+            // SVGElement` — D3, Chart.js, Snap.svg, every icon set that injects markup — was right
+            // about parsed SVG and wrong about injected SVG, with nothing reporting a disagreement.
+            let ns = el.namespace.clone();
             let attrs: Vec<(String, String)> = el
                 .attrs
                 .iter()
                 .map(|a| (a.name.clone(), a.value.clone()))
                 .collect();
-            let new = dst.create_element(name);
+            let new = dst.create_element_ns(ns, name);
             for (n, v) in attrs {
                 dst.set_attr(new, n, v);
             }

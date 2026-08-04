@@ -660,6 +660,8 @@
   - L1924 · The table is taught by the iface() calls, not written twice
   - L1932 · The named limits
   - L1952 · A <template>'s innerHTML is its CONTENTS — and a lazy fragment is what made one ordering work
+  - L1997 · The parser was right and every COPY was wrong — namespaces across clone_into and clone_node
+  - L2020 · What it costs — measured, because the obvious answer is wrong
 
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
@@ -1504,4 +1506,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1411 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1413 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

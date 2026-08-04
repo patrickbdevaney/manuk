@@ -46371,6 +46371,83 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 883 — the parser was right and EVERY COPY was wrong (2026-08-03)
+
+TICK SHAPE: capability — t882's named residue, taken as its own tick because it is a different
+mechanism, plus the correction of my own hypothesis about what it costs.
+
+⚠⚠⚠ **THE DEFECT WAS NOT IN THE PARSER, AND THE FIXTURE SAID SO IN ONE RUN.** t882 spotted an
+`<svg>` coming back as `nodeName: "SVG"` in the **xhtml** namespace and filed it as *"the fragment
+parser drops foreign content"*. A nine-claim differential against Chrome refutes that immediately —
+the fragment parse is FINE, and what is broken is every **copy**:
+
+```text
+                                              Chrome              manuk (before)
+  document-parsed <svg>                  2000/svg | svg      2000/svg | svg    ✓ (gated since t602)
+  innerHTML '<svg>…'                     2000/svg | svg      1999/xhtml | SVG  ✗
+  …its <path> child                      2000/svg | path     1999/xhtml | PATH ✗
+  cloneNode of the CORRECT parsed svg    2000/svg | svg      1999/xhtml | SVG  ✗
+  tpl.content.cloneNode(true)            2000/svg | svg      1999/xhtml | SVG  ✗
+  importNode                             2000/svg | svg      1999/xhtml | SVG  ✗
+  createElementNS control                2000/svg | svg      2000/svg | svg    ✓
+```
+
+Cloning an element the parser had got **right** produced a wrong one, which rules the parser out on
+its own. Two emitters, in two crates, of one rule — `manuk_html::clone_into` (innerHTML ·
+insertAdjacentHTML · createContextualFragment) and `dom_bindings::clone_node` (cloneNode ·
+importNode) — and **both** built every node with `create_element`, which is the HTML namespace
+unconditionally. This is the project's *"one rule, N implementations"* shape for the sixth time; the
+new part is that the SECOND implementation was in a different crate from the first, so no local
+reading of either would have found it.
+
+⚠⚠⚠ **AND I WROTE A CONSEQUENCE INTO THE CODE THAT I HAD NOT MEASURED, THEN MEASURED IT AND IT WAS
+FALSE.** The comment said an `<svg>` in the HTML namespace *"has no intrinsic ratio and does not
+paint"*. Checked before landing, both binaries, same fixture:
+
+```text
+                                                    Chrome    after    BEFORE
+  innerHTML <svg viewBox="0 0 200 100"> in 400px    400x200   400x200  400x200
+  innerHTML bare <svg>                              300x150   300x150  300x150
+  #host svg  (selector reach)                             2         2        2
+```
+
+**Byte-identical, before and after** — our layout keys on the TAG, not the namespace, so the
+geometry never depended on this. The honest value is exactly the property `G_FOREIGN_CONTENT_NS`'s
+`parsedEqMade` claim already names one layer up: **the same markup reached two ways produced two
+different DOMs.** Every library that branches on `namespaceURI`, matches `svg|rect`, or asks
+`instanceof SVGElement` — D3, Chart.js, Snap.svg, every icon set that injects markup — was right
+about parsed SVG and wrong about injected SVG, with nothing reporting the disagreement. The comments
+now say that, and say what was checked. *A wrong FIX is caught by the next gate; a wrong LABEL by
+nothing.*
+
+⚠⚠ **A 10.8-POINT SINGLE-SITE LOSS APPEARED AND WAS MANUFACTURED BY THE BATCH SIZE.** A three-site
+run read `blog.rust-lang.org` at **88.8%** against its 99.6% of an hour earlier, with a median `dw`
+of 5 appearing from nowhere — exactly the shape of a real width regression. Three SOLO runs on the
+same new binary: **99.6 · 99.6 · 99.6**, byte-identical, `dw=0`. t846-852's law, on record again:
+*a sweep row is a lower bound and the batch size is part of the measurement.* Nothing was reverted
+and nothing needed to be, because the control was run before the conclusion.
+
+CONTROLS, solo, new binary: `news.ycombinator.com` **80.1%** on 805 (coverage 100%, unchanged to the
+decimal) · `blog.rust-lang.org` **99.6%** on 1664 (100%) · `pt88.app` **70.2%** on 94 against a 282-
+element reference (a live SPA, so its reference size moves run to run — reported, not claimed).
+
+⚠ NAMED RESIDUE, measured this tick and NOT fixed: `getComputedStyle(rect).fill` is **`undefined`**
+where Chrome says `rgb(255, 0, 0)`. SVG presentation attributes do not reach computed style, which is
+what every charting library reads back. Its own tick, with its own gate.
+
+GATE: `G_FOREIGN_CONTENT_NS` gains eight claims covering both emitters — `inner` / `innerkid` /
+`innerName` (a foreign element's `nodeName` is **not** uppercased, which is the tell a namespace-only
+check would miss), `clone` / `clonekid` / `import`, `tplclone` (the framework path end to end, which
+crosses BOTH emitters and so cannot pass while either is broken), and `cloneplain` — **the guard**,
+because a "fix" that stamped the SVG namespace on every clone would pass all seven others. Every
+claim is Chrome's byte-exact answer from `--dump-dom` on the gate's own HTML, and each emitter is
+RED-proven separately (revert `clone_into` → `inner` fails; revert `clone_node` → `clone` fails).
+
+PERF: none — one `Option<String>` clone on a path that already clones the tag name and every
+attribute.
+
+WIKI: `docs/wiki/dom-semantics.md` — "The parser was right and every COPY was wrong"
+
 ## Tick 882 — a `<template>`'s `innerHTML` went to its CHILD LIST, and Vue keeps ONE template (2026-08-03)
 
 TICK SHAPE: capability — the board's named binding constraint (*"pick 3-5 booted-but-thin sites and

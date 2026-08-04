@@ -44,15 +44,31 @@ const HTML: &str = r##"<!doctype html><html><body>
 <div id="d">plain</div>
 <div id="out">-</div>
 <script>
-  var R = [], ns = function(id){
-    var e = document.getElementById(id);
+  var R = [], ns2 = function(e){
     return e ? String(e.namespaceURI).replace('http://www.w3.org/','') : 'MISSING';
-  };
+  }, ns = function(id){ return ns2(document.getElementById(id)); };
   ['s','r','g','c','m','mi','d'].forEach(function(id){ R.push(id + '=' + ns(id)); });
   var made = document.createElementNS('http://www.w3.org/2000/svg','rect');
   R.push('parsedEqMade=' + (document.getElementById('r').namespaceURI === made.namespaceURI));
   // Foreign content also preserves camel-cased attribute names.
   R.push('viewBox=' + (document.getElementById('s').getAttribute('viewBox') !== null));
+  // ⚠⚠⚠ EVERY COPY OF A CORRECT ELEMENT WAS AN INCORRECT ELEMENT (t883). The parser was right and
+  // both copy paths dropped the namespace, so a page that INJECTS an icon disagreed with the same
+  // page shipping it in markup — the `parsedEqMade` disagreement above, one layer along.
+  var host = document.createElement('div');
+  host.innerHTML = '<svg id="i"><path id="ip"/></svg>';   // fragment parse + clone_into
+  R.push('inner=' + ns2(host.firstChild) + ' innerkid=' + ns2(host.firstChild.firstChild));
+  // nodeName is NOT uppercased for a foreign element — the tell that survives a namespace check.
+  R.push('innerName=' + host.firstChild.nodeName);
+  var cl = document.getElementById('s').cloneNode(true);   // cloneNode
+  R.push('clone=' + ns2(cl) + ' clonekid=' + ns2(cl.firstElementChild));
+  R.push('import=' + ns2(document.importNode(document.getElementById('s'), true)));
+  var tp = document.createElement('template');             // the framework path, end to end
+  tp.innerHTML = '<svg><circle r="1"/></svg>';
+  R.push('tplclone=' + ns2(tp.content.cloneNode(true).firstChild));
+  // THE GUARD, again: a copied ordinary element must stay XHTML.
+  var pd = document.getElementById('d').cloneNode(true);
+  R.push('cloneplain=' + ns2(pd) + '/' + pd.nodeName);
   document.getElementById('out').textContent = R.join(' ');
 </script></body></html>"##;
 
@@ -107,6 +123,43 @@ fn an_inline_svg_subtree_is_in_the_svg_namespace() {
             "foreign-content mode also preserves CAMEL-CASED attribute names — `viewBox` must not \
              lowercase to `viewbox`. It is the same switch, so it is the same bug, and asserting it \
              here keeps the fix from being narrowed to `namespaceURI` alone",
+        ),
+        (
+            "inner=2000/svg",
+            "**EVERY COPY OF A CORRECT ELEMENT WAS AN INCORRECT ELEMENT (t883).** `innerHTML` \
+             clones the fragment parse through `manuk_html::clone_into`, which built every node with \
+             `create_element` — the HTML namespace, unconditionally. Injecting an inline SVG icon \
+             through `innerHTML` is one of the web's most common idioms, and an `<svg>` in the HTML \
+             namespace is an unknown INLINE element: no `viewBox`, no intrinsic ratio, no SVG \
+             painting",
+        ),
+        ("innerkid=2000/svg", "…and its children, two levels of the same loss"),
+        (
+            "innerName=svg",
+            "**THE TELL A NAMESPACE CHECK ALONE WOULD MISS**: a foreign element's `nodeName` is NOT \
+             uppercased. Ours read `SVG`, which is how the defect was first spotted — in a probe \
+             that was asking about something else",
+        ),
+        (
+            "clone=2000/svg",
+            "`cloneNode` is the SECOND emitter of the same rule, in a different crate, and it \
+             dropped the namespace off an element the parser had got RIGHT — so the defect was not \
+             the parser at all",
+        ),
+        ("clonekid=2000/svg", "…deeply, since the clone recurses"),
+        ("import=2000/svg", "`importNode` routes through the same clone"),
+        (
+            "tplclone=2000/svg",
+            "**THE FRAMEWORK PATH, END TO END**: `tpl.innerHTML = '<svg>…'` then \
+             `tpl.content.cloneNode(true)` — the single sequence lit-html, Svelte, Solid and Vue \
+             instantiate every icon through. It crosses BOTH emitters, so it is the one claim that \
+             cannot pass while either is broken",
+        ),
+        (
+            "cloneplain=1999/xhtml/DIV",
+            "**THE GUARD**: a copied ordinary element must stay XHTML and must still uppercase its \
+             `nodeName`. Without it, a 'fix' that stamped the SVG namespace on every clone would \
+             pass every claim above",
         ),
     ] {
         assert!(
