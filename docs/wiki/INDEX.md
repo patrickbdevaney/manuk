@@ -732,6 +732,9 @@
   - L727 · The same discipline on the loss side, and there it cost nothing
   - L741 · What a +3 scorability move was actually made of
   - L754 · The number the tick exists to state
+  - L759 · The ranked cause list is a MECHANISM and a TAG, and the tag is the corpus-relevance filter (t909)
+  - L780 · What the t909 sweep actually measured
+  - L795 · Four sweeps, twenty-two ticks, zero engine-attributable M1 crossings
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1567,4 +1570,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1474 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1477 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

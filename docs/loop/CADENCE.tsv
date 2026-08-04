@@ -636,3 +636,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 905	267073e2	1785859167	2026-08-04T11:59:27-04:00	1876	capability	63	11	376	54	394	81	3896	6960	0	471	0	three suspects for the burndown's top two causes, and two of the "defects" were my probe (2026-08-04)
 906	16c70107	1785860961	2026-08-04T12:29:21-04:00	1794	capability	63	11	297	37	395	81	3896	6960	0	472	0	t905's defect was my fixture too, and the REAL one had been named and declined since t859 (2026-08-04)
 907	62d666c7	1785862694	2026-08-04T12:58:14-04:00	1733	capability	63	11	294	39	396	81	3896	6960	0	473	0	a table box's `height` is a MINIMUM, and two unrelated probes found it two ticks apart (2026-08-04)
+908	95b46609	1785867245	2026-08-04T14:14:05-04:00	4551	capability	63	8	375	33	396	81	3896	6960	0	473	0	the property was built and Chrome-exact; only the DEFAULT was missing (2026-08-04)

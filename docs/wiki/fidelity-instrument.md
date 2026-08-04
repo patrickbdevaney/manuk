@@ -755,3 +755,47 @@ network this time and did not last time, and both directions of that trade are o
 
 **M1 is 17.8% at t887 and 17.8% at t904 — flat across 17 ticks**, with the t898 dip in between being
 the composition effect t898/t899 had already decomposed.
+
+## The ranked cause list is a MECHANISM and a TAG, and the tag is the corpus-relevance filter (t909)
+
+The mechanism oracle's output looks like a mechanism ranking. It is two facts:
+
+```text
+  37 site(s) · 2398 hits   missing box: <div>
+  29 site(s) ·  292 hits   geometry/mis-sized: height ~64px    (<div>)
+  29 site(s) ·  288 hits   geometry/mis-sized: height ~256px   (<div>)
+  28 site(s) ·  365 hits   geometry/mis-sized: height ~32px    (<div>)
+  …every ranked cause on this corpus is <div>. `<table>`, `<td>`, `<tr>`, `<th>` appear in NONE.
+```
+
+t907 (a table box's `height` is a minimum) and t908 (the UA `border-spacing` default) are both
+Chrome-exact, both gated, and both **structurally unpriceable by this instrument on this corpus** —
+not small, not lost in the noise: the corpus does not contain the failure. That was knowable before
+either was built, because the ranker prints the tag beside the mechanism.
+
+> **A fix found by a probe is worth taking on usage weight (VI.3), and it is worth knowing in advance
+> that the sweep will score it zero.** Otherwise the flat reading gets re-litigated as a
+> disappointment instead of being predicted as arithmetic.
+
+### What the t909 sweep actually measured
+
+```text
+                       t887      t898      t904      t909
+  M1 (the gate)       17.8%     17.1%     17.8%     18.5%
+  scorability        107/129   107/129   110/129   108/130
+  shape_mean           57.9%     54.6%     57.2%     57.0%
+```
+
+M1's +1 is `ru4.bongacams-ru.com`, `unreachable` at t904 and answering this time — the same site t904
+booked as a *loss* for the same reason. Every scorability change is weather or the instrument
+(`css-starved` twice, a site that now 404s, two returns from `unreachable`). The common-set band is
+**−0.26 pts over 106 sites, 19 up · 68 flat · 19 down**; one noisy site (`mobcup.fm`, n=29) is −0.20
+of it, and stripping it leaves **−0.068 pts — flat, inside the ±0.16 floor.**
+
+### Four sweeps, twenty-two ticks, zero engine-attributable M1 crossings
+
+t887 17.8 → t898 17.1 → t904 17.8 → t909 18.5, and every crossing in all four decomposes to a site's
+network conditions. Beside t904's structural result — 56 of 107 scored sites fail BOTH conjuncts,
+only 2 within 0.06 of the shape bar, only 1 a single jarring dimension from crossing — the reading is
+not that the work is not landing. It is that **M1 has no resolution at this distance from the bar**,
+and the loop's own headline cannot distinguish three correct geometry fixes from nothing at all.

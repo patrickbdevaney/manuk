@@ -46371,6 +46371,98 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 909 — the cadence sweep that prices three geometry fixes (2026-08-04)
+
+TICK SHAPE: measurement — three engine geometry changes have landed since the t904 sweep (t906 the
+specified-width BFC float band, t907 the table box's height-as-a-minimum, t908 the UA
+`border-spacing` default) and none of them has a corpus number. An unmeasured batch is a burndown
+with no slope.
+
+PRE-REGISTERED BEFORE THE RUN, naming the metric per VI.3's clause:
+
+* **M1: I expect it to move by AT MOST ±1 site, and most likely 0.** t904 measured the structure that
+  makes this near-certain — 56 of 107 scored sites fail BOTH conjuncts, only 2 sit within 0.06 of the
+  shape bar, and only 1 is a single jarring dimension from crossing. Three geometry fixes that each
+  correct a few pixels on the sites that use them cannot move a conjunction that far from its bar.
+* **shape_mean on the COMMON SET: I expect a small positive, and I expect it to be under the noise
+  floor t904 established.** That floor is the thing to beat: t904's honest residual over 103 sites
+  was **+0.16 pts**, and two sites moving on their own accounted for more than the entire engine.
+* **scorability: FLAT.** None of the three fixes can make an unrenderable page render.
+* **The honest question this sweep answers is therefore not "did M1 move" but "is there a common-set
+  signal at all, and is it bigger than the corpus's own drift".** If the band comes in positive, the
+  OLD-BINARY control decides whether it is ours — t904 is the precedent where elimination said the
+  code and the control said the corpus.
+
+⚠ **AND THE CONTROL IS PRE-COMMITTED HERE, BEFORE THE NUMBER IS SEEN**, because that is the only
+point at which committing to it is free: **any common-set band above +0.3 pts gets the old binary
+run on its top movers in the same hour, and any M1 crossing in either direction gets three solo runs
+of that site before it is believed.** t899 and t904 both had to reach for this after the fact.
+
+### THE RUN — 200 sites, release binary, `--jobs 2`, 78 minutes, `SWEEP-t909-rows.tsv`
+
+```text
+                       t887      t898      t904      t909
+  M1 (the gate)       17.8%     17.1%     17.8%     18.5%
+  shape >= 0.75        24.0%     21.7%     24.0%     24.0%
+  scorability        107/129   107/129   110/129   108/130
+  shape_mean           57.9%     54.6%     57.2%     57.0%
+  cov_mean             86.3%     86.6%     86.8%     87.3%
+```
+
+**Every pre-registration held, and the one that mattered held in the least useful direction.**
+
+⚠⚠⚠ **M1 MOVED +1 AND THE CROSSING IS A SITE THAT ANSWERED THE NETWORK.** `ru4.bongacams-ru.com`
+was `unreachable` at t904 — where t904 recorded it as an M1 *loss* for exactly that reason — and it
+answered this time at shape 1.000. **Zero engine-attributable crossings, in either direction.** Same
+for scorability: everything that moved is weather or the instrument (`7info.ru` → timeout,
+`pogoda.by` and `www.kuechenmomente.de` → `css-starved`, `www.ta3lemkonline.com` → the site now
+404s, `aksesjambi.com` and `ru4.bongacams-ru.com` back from `unreachable`). t904's one `crashed` row,
+`comix.to`, did **not** recur — it is back to `oracle-module-shell-3`, which retires that scare.
+
+⚠⚠⚠ **THE COMMON-SET BAND IS −0.26 pts, AND ONE SITE IS −0.20 OF IT.** 106 sites, **19 up · 68 flat ·
+19 down** — a symmetry that is what noise looks like. `mobcup.fm` alone (n=29, and a site that
+returned `1.000` then `unreachable` on two solo runs at t904) accounts for −0.195; strip it and the
+band over 105 sites is **−0.068 pts, flat, and inside the ±0.16 floor t904 established.**
+
+⚠⚠⚠ **AND HERE IS THE FINDING THE TICK IS FOR: THE RANKER PRINTS A TAG, AND NOT ONE RANKED CAUSE ON
+THIS CORPUS NAMES A TABLE ELEMENT.**
+
+```text
+  37 site(s) · 2398 hits   missing box: <div>
+  29 site(s) ·  292 hits   geometry/mis-sized: height ~64px    (<div>)
+  29 site(s) ·  288 hits   geometry/mis-sized: height ~256px   (<div>)
+  28 site(s) ·  365 hits   geometry/mis-sized: height ~32px    (<div>)
+  …every one of them <div>; `<table>`, `<td>`, `<tr>`, `<th>` appear in NONE
+```
+
+**t907 and t908 are structurally unpriceable by this instrument on this corpus** — not "small", not
+"lost in the noise": the corpus does not contain the failure. And I could have known it before
+building either one, because the mechanism oracle prints the TAG beside the mechanism and I read the
+mechanism and ignored the tag.
+
+> **The ranked cause list is two facts, not one: a MECHANISM and a TAG, and the tag is the
+> corpus-relevance filter.** A fix found by a probe is worth taking on usage weight (VI.3), and it is
+> worth knowing *in advance* that this sweep will score it zero — otherwise the flat reading gets
+> re-litigated as a disappointment instead of being predicted as arithmetic.
+
+That is not an argument against t907/t908. Default `<table>` geometry has enormous usage weight on
+the real web and both are Chrome-exact and gated; VI.3 is explicit that usage weight beats delta
+when the two disagree, and check #78 already ruled that *"the instrument cannot price this"* is the
+honest report rather than *"this bought nothing"*. It is an argument about **sequencing**: if a tick
+wants the burndown to move, the ranker names the tag it must touch, and that tag is `<div>`.
+
+⚠ **FOUR SWEEPS, TWENTY-TWO TICKS, AND NOT ONE ENGINE-ATTRIBUTABLE M1 CROSSING.** t887 17.8 → t898
+17.1 → t904 17.8 → t909 18.5, and every crossing in all four decomposes to a site's network. Put
+beside t904's structural result — 56 of 107 scored sites fail BOTH conjuncts, only 2 are within 0.06
+of the shape bar, only 1 is a single jarring dimension from crossing — the conclusion is not that the
+work is not landing. It is that **M1 has no resolution at this distance from the bar**, and the
+loop's own headline cannot distinguish three correct geometry fixes from nothing at all.
+
+PERF: none — measurement only; the sweep ran off the tick path on a quiet box at `--jobs 2`.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "The ranked cause list is a MECHANISM and a TAG, and the
+tag is the corpus-relevance filter" [no-pattern]
+
 ## Tick 908 — the property was built and Chrome-exact; only the DEFAULT was missing (2026-08-04)
 
 TICK SHAPE: capability — t907 measured three `<table>` rows, called them *"the table ALGORITHM rather
