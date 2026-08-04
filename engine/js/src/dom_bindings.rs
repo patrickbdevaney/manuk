@@ -13843,6 +13843,122 @@ const WINDOW_PRELUDE: &str = r#"
             cur[parts[parts.length - 1]] = val;
         };
 
+        // ⚠⚠⚠ **PUBLISH AN IndexedDB OBJECT'S METHODS ON ITS INTERFACE PROTOTYPE.**
+        //
+        // Every object in this file was a plain literal carrying its methods as OWN properties. Calls
+        // worked; `instanceof` worked (the `iface()` `Symbol.hasInstance` sees to that). What did not
+        // work is the question the ecosystem's dominant IndexedDB wrapper actually asks. `idb` —
+        // which Firebase, Workbox and a large share of every PWA depend on — builds its whole
+        // convenience API (`db.get(store, key)`, `db.getAll(store)`, `db.put(...)`) behind:
+        //
+        // ```js
+        //   if (!(targetFuncName in (useIndex ? IDBIndex : IDBObjectStore).prototype)) return;
+        // ```
+        //
+        // Our prototypes were EMPTY, so the check failed, no convenience method was ever created, and
+        // the page died on `this.idb.getAll is not a function` — measured on `coinmarketcap.com`,
+        // which also logged `getFromLocalDB TypeError: t.get is not a function` four times in one
+        // load. Chrome answers `true` to all ten of those `in` tests; we answered `false` to all ten.
+        //
+        // **That is t862's law about a different library** — *ask what a library BELIEVES, not what
+        // it can detect.* `typeof store.getAll === 'function'` was true the whole time. Nobody asks
+        // that.
+        //
+        // The fix moves the closures off the instance and puts a dispatcher on the prototype, which
+        // buys three things at once and NOT merely the feature test:
+        //   * `'getAll' in IDBObjectStore.prototype` is true, so `idb` builds its API;
+        //   * with the own property gone, **patching the prototype takes effect** — the property
+        //     `G_PROTOTYPE` exists for, and how every error tracker, ad-blocker and polyfill hooks a
+        //     platform object;
+        //   * a call on a foreign receiver throws `TypeError`, as Chrome's "Illegal invocation" does,
+        //     rather than silently doing something.
+        //
+        // Keys starting with `__` stay own: they are this implementation's private state, not
+        // interface members, and publishing them would put `__enqueue` on a standard prototype.
+        var idbExpose = function (C, obj) {
+            var impl = {};
+            Object.keys(obj).forEach(function (k) {
+                if (typeof obj[k] !== 'function' || k.indexOf('__') === 0) { return; }
+                impl[k] = obj[k];
+                try { delete obj[k]; } catch (e) { return; }
+                if (k in C.prototype) { return; }
+                Object.defineProperty(C.prototype, k, {
+                    configurable: true, writable: true,
+                    value: function () {
+                        var i = this && this.__idbImpl;
+                        if (!i || typeof i[k] !== 'function') {
+                            throw new TypeError('Illegal invocation');
+                        }
+                        return i[k].apply(this, arguments);
+                    }
+                });
+            });
+            try {
+                Object.defineProperty(obj, '__idbImpl', { value: impl, configurable: true });
+                Object.setPrototypeOf(obj, C.prototype);
+            } catch (e) { /* a frozen receiver keeps its own methods; nothing is lost */ }
+            return obj;
+        };
+
+        // ⚠⚠⚠ **AND THE DISPATCHERS ARE INSTALLED EAGERLY, BECAUSE A LAZY PROTOTYPE IS STILL EMPTY
+        // ON THE LOAD THAT MATTERS.** The first version populated `C.prototype` as a side effect of
+        // building an instance, which passes a probe that opens a database first and fails the real
+        // case: on a RETURN visit the schema already exists, no `upgradeneeded` fires, no store is
+        // ever constructed — and `db.get(...)`, the very call that needs the prototype, is the first
+        // thing `idb` reaches for. Chrome answers these `in` tests before a line of page script runs,
+        // so we do too.
+        //
+        // The list is this implementation's OWN method names, and `G_INDEXEDDB_PROTOTYPE` asserts
+        // every published name resolves to a real implementation on a live instance — a name on a
+        // prototype with nothing behind it is t772-775's *half-presence routes into a wall*, which is
+        // strictly worse than the absence it replaces.
+        // ⚠ **AND IT HAS TO CREATE THE CONSTRUCTOR WHEN ONE IS NOT THERE YET, WHICH IT IS NOT.**
+        // `iface()` (the interface-name installer) runs LATER than this prelude, so reading
+        // `globalThis.IDBObjectStore` here found `undefined` and a first draft that skipped on that
+        // silently fell back to populating the prototype when the first instance was built — the
+        // exact lazy behaviour this block exists to replace, and the probe read `false` for all ten
+        // tests until an instance existed. Defining the constructor here is not a collision:
+        // `iface()` keeps a `globalThis[name]` that is already a function and only attaches
+        // `Symbol.hasInstance` to it, which is precisely the division of labour its own comment
+        // describes ("point the constructor at the REAL prototype where one exists").
+        [
+            // ⚠ **THE LIST IS WHAT WE ACTUALLY IMPLEMENT, AND THE FIRST DRAFT'S WAS NOT.**
+            // `G_INDEXEDDB_PROTOTYPE`'s `stubs=none` claim caught six names on its first run —
+            // `IDBObjectStore.getKey` / `openKeyCursor` (genuinely absent here; Chrome has them, and
+            // that is honest residue for its own tick), `update` (a CURSOR method that a regex over
+            // the literal swept in), and `IDBDatabase.createObjectStore` / `deleteObjectStore`
+            // (assigned only onto the versionchange database, so not on a live one). Publishing any
+            // of them would have been the exact half-presence this block's own comment forbids —
+            // written by me, caught by the claim I wrote to catch it, on the run that added it.
+            ['IDBObjectStore', ['put', 'add', 'get', 'delete', 'clear', 'getAll', 'getAllKeys',
+                'getAllRecords', 'count', 'openCursor', 'index', 'createIndex', 'deleteIndex']],
+            ['IDBIndex', ['get', 'getKey', 'getAll', 'getAllKeys', 'getAllRecords', 'count',
+                'openCursor', 'openKeyCursor']],
+            ['IDBDatabase', ['transaction', 'close']],
+            ['IDBTransaction', ['objectStore', 'abort']]
+        ].forEach(function (pair) {
+            var C = globalThis[pair[0]];
+            if (typeof C !== 'function') {
+                C = function () { return this; };
+                try { Object.defineProperty(C, 'name', { value: pair[0] }); } catch (e) { }
+                globalThis[pair[0]] = C;
+            }
+            if (!C.prototype) { return; }
+            pair[1].forEach(function (k) {
+                if (k in C.prototype) { return; }
+                Object.defineProperty(C.prototype, k, {
+                    configurable: true, writable: true,
+                    value: function () {
+                        var i = this && this.__idbImpl;
+                        if (!i || typeof i[k] !== 'function') {
+                            throw new TypeError('Illegal invocation');
+                        }
+                        return i[k].apply(this, arguments);
+                    }
+                });
+            });
+        });
+
         // A TRANSACTION owns request scheduling, `complete`/`error`/`abort`, and an UNDO LOG.
         // `abort()` really rolls back — the writes are applied eagerly underneath, so the undo log
         // is what makes the rollback honest instead of an event that fires while the data stays
@@ -13909,7 +14025,7 @@ const WINDOW_PRELUDE: &str = r#"
                     }
                 });
             });
-            return tx;
+            return idbExpose(globalThis.IDBTransaction, tx);
         };
 
         var mkDatabase = function (name, version, storeMeta) {
@@ -14197,7 +14313,7 @@ const WINDOW_PRELUDE: &str = r#"
                         req = tx.__enqueue(nextCursor);
                         return req;
                     };
-                    return idx;
+                    return idbExpose(globalThis.IDBIndex, idx);
                 };
 
                 store.index = function (iname) {
@@ -14227,7 +14343,7 @@ const WINDOW_PRELUDE: &str = r#"
                     store.indexNames = mkNames(Object.keys(meta.indexes).sort());
                     idbCall({ op: 'upgrade', db: db.name, version: db.version, stores: storesPayload(db.__meta) });
                 };
-                return store;
+                return idbExpose(globalThis.IDBObjectStore, store);
             };
 
             db.transaction = function (storeNames, mode) {
@@ -14238,7 +14354,7 @@ const WINDOW_PRELUDE: &str = r#"
                 }
                 return mkTx(db, ns, mode || 'readonly');
             };
-            return db;
+            return idbExpose(globalThis.IDBDatabase, db);
         };
 
         // A compound (array) index keyPath is persisted as its JSON text, because the store side

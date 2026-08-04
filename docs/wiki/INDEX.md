@@ -1384,6 +1384,11 @@
   - L239 · A localStorage method assignment was ACCEPTED AND DISCARDED (tick 587)
   - L256 · Why it is a capability, not a conformance detail
   - L271 · The fix, and the guard that constrains it
+  - L288 · typeof store.getAll === 'function' was true, and nobody asks that
+  - L308 · What the fix must buy beyond the feature test
+  - L318 · Two traps, both hit
+  - L330 · The stub check caught its own author
+  - L339 · What it bought, stated honestly
 
 ## TEXT AND LAYOUT — fonts, shaping, measurement
 `docs/wiki/text-layout.md`
@@ -1506,4 +1511,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1413 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1418 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

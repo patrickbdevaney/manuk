@@ -284,3 +284,62 @@ storage. The obvious fix is over-broad, and the gate says so.
 > `fetch` and `IntersectionObserver` all wrapped fine — **two host objects in one engine disagreeing about
 > the same idiom**. A tool built to measure the browser found a bug in it, which is the argument for
 > building the instrument out of the same primitives the web uses.
+
+## `typeof store.getAll === 'function'` was true, and nobody asks that
+
+Every IndexedDB object in this engine was a plain literal carrying its methods as **own** properties.
+Calls worked, `instanceof` worked, and the obvious feature test passed. `idb` — the ecosystem's
+dominant IndexedDB wrapper, which Firebase, Workbox and a large share of every PWA depend on — builds
+its whole convenience API (`db.get(store, key)`, `db.getAll(store)`, `db.put(...)`) behind a different
+question:
+
+```js
+  if (!(targetFuncName in (useIndex ? IDBIndex : IDBObjectStore).prototype)) return;
+```
+
+Our prototypes were empty, so no convenience method was ever created and the page died on
+`this.idb.getAll is not a function`. Harvested from the live corpus on `coinmarketcap.com`, which also
+logged `getFromLocalDB TypeError: t.get is not a function` four times in one load. Chrome answers
+`true` to all ten `in` tests; we answered `false` to all ten.
+
+**The shape: ask what a library BELIEVES, not what it can detect.** Same law as t862's
+`{}.toString.call(div)` returning `[object Object]`, aimed at a different property.
+
+### What the fix must buy beyond the feature test
+
+Moving the closures into a private slot and putting a **dispatcher** on the prototype buys three
+things, and a fix that only satisfied the `in` test would buy one:
+
+* the name is on the prototype;
+* **patching the prototype takes effect** — with an own method shadowing it, every ad-blocker, error
+  tracker and polyfill hook was a silent no-op (`G_PROTOTYPE`'s property, on IndexedDB);
+* a foreign receiver throws `TypeError`, as Chrome's *"Illegal invocation"* does.
+
+### Two traps, both hit
+
+**A lazy prototype passes the probe and fails the page.** Populating the prototype as a side effect of
+constructing a store works on a probe that opens a database first, and is useless on a return visit:
+the schema exists, no `upgradeneeded` fires, no store is constructed, and `db.get(...)` — the call
+that needs the prototype — is the first thing `idb` reaches for. Install eagerly.
+
+**`iface()` runs after this prelude**, so `globalThis.IDBObjectStore` is `undefined` when the eager
+block runs, and a version that skipped on that skipped all four interfaces in silence. Create the
+constructor when one is absent; `iface()` adopts a `globalThis[name]` that is already a function and
+only attaches `Symbol.hasInstance`.
+
+### The stub check caught its own author
+
+`stubs=none` walks every published name and requires a real implementation behind it on a live
+instance. First run: six failures — `IDBObjectStore.getKey` / `openKeyCursor` (genuinely absent),
+`update` (a CURSOR method a regex swept into the store's list), and
+`IDBDatabase.createObjectStore` / `deleteObjectStore` (only ever on the versionchange database). A
+name on a prototype with nothing behind it is half-presence, which routes callers into a wall instead
+of into their fallback — strictly worse than the absence it replaced.
+
+### What it bought, stated honestly
+
+`coinmarketcap.com`: SHAPE **26.2% → 26.3%** on the same 2046 elements — **no movement**. The throws
+are gone and the page now fails one layer deeper, at `NotFoundError: no object store named
+local-key-val`, because the wrapper finally works. This failure was on a cached-data path, not the
+first-paint path. *"The instrument cannot price this"* is the honest report, not *"this bought
+nothing"*.

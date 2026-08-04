@@ -46371,6 +46371,113 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 884 — `typeof store.getAll === 'function'` was true, and nobody asks that (2026-08-04)
+
+TICK SHAPE: capability — the board's binding constraint (*"pick 3-5 booted-but-thin sites and find
+WHY a booted page renders <20%"*), worked with meta-instrument #1: run the cohort and **harvest the
+error messages**. Seven sites, one pass, clustered.
+
+```text
+   8×  Failed to execute 'query' on 'Permissions': '<x>' is not a valid enum value   <- OURS IS RIGHT
+   4×  getFromLocalDB TypeError: t.get is not a function                             coinmarketcap
+   2×  this.idb.getAll is not a function                                             coinmarketcap
+   1×  TypeError: Invalid URL:  at dom_event.js:2287                                 sports.yahoo
+   1×  Route did not complete loading: /                                             trivago
+   2×  can't access property "slice"/"indexOf" … is null                             ebay
+```
+
+The eight loudest rows are **not a defect** — `speaker`, `device-info`, `clipboard` and
+`accessibility-events` are not valid `PermissionName` values in Chrome either, so those are pages
+feature-probing and our message matching. Reading a harvest without that check is how a loop spends a
+tick on the reference's own behaviour.
+
+⚠⚠⚠ **THE REAL CLUSTER, AND IT IS t862'S LAW ABOUT A DIFFERENT LIBRARY: ASK WHAT A LIBRARY BELIEVES,
+NOT WHAT IT CAN DETECT.** Every IndexedDB object here is a plain literal carrying its methods as OWN
+properties. Calls worked. `instanceof` worked. `typeof store.getAll === 'function'` was true the whole
+time. `idb` — the ecosystem's dominant IndexedDB wrapper, which Firebase, Workbox and a large share of
+every PWA depend on — builds its **entire** convenience API behind one test:
+
+```js
+  if (!(targetFuncName in (useIndex ? IDBIndex : IDBObjectStore).prototype)) return;
+```
+
+Our prototypes were **empty**. Measured, `chromium --dump-dom` over `http://127.0.0.1` (a `file://`
+origin has no IndexedDB at all — the first run of the fixture returned an empty `#out` from Chrome
+and said nothing about why):
+
+```text
+                                        Chrome   manuk (before)
+  'get'      in IDBObjectStore.prototype  true      false
+  'getAll'   in IDBObjectStore.prototype  true      false
+  'put'      in IDBObjectStore.prototype  true      false
+  'count'    in IDBObjectStore.prototype  true      false
+  'getAll'   in IDBIndex.prototype        true      false
+  'getKey'   in IDBIndex.prototype        true      false
+  'transaction' in IDBDatabase.prototype  true      false
+  'objectStore' in IDBTransaction.prototype true    false
+  idb's OWN gate, verbatim                 true      false
+```
+
+The fix moves the closures off the instance into a private slot and puts a **dispatcher** on the
+prototype, which buys three things and not merely the feature test: the name is there, **patching the
+prototype takes effect** (`G_PROTOTYPE`'s property, which an own method silently shadowed), and a
+foreign receiver throws `TypeError` as Chrome's *"Illegal invocation"* does.
+
+⚠⚠⚠ **A LAZY PROTOTYPE PASSES THE PROBE AND FAILS THE PAGE.** The first draft populated the prototype
+as a side effect of constructing a store — which is fine on a probe that opens a database first, and
+useless on the load that matters: on a RETURN visit the schema already exists, no `upgradeneeded`
+fires, no store is ever constructed, and `db.get(...)` — the call that needs the prototype — is the
+first thing `idb` reaches for. It reads `false` for all ten tests. Installing eagerly then found the
+second half: `iface()` runs **after** this prelude, so `globalThis.IDBObjectStore` was `undefined`
+here and the eager block skipped all four interfaces in silence. The block now creates the constructor
+when one is absent, which `iface()` adopts rather than replaces — its own comment already describes
+that division of labour.
+
+⚠⚠⚠ **AND THE CLAIM I WROTE TO CATCH HALF-PRESENCE CAUGHT MY OWN, ON THE RUN THAT ADDED IT.**
+`stubs=none` walks every published name and requires a real implementation behind it on a live
+instance. First run: **six failures** — `IDBObjectStore.getKey` / `openKeyCursor` (genuinely absent
+here; Chrome has them), `update` (a CURSOR method a regex over the literal swept into the store's
+list), and `IDBDatabase.createObjectStore` / `deleteObjectStore` (assigned only onto the versionchange
+database, so never on a live one). Publishing any of them is exactly the *half-presence routes into a
+wall* this block's own comment forbids. The list is now what we implement, and the two genuinely
+missing store methods are named residue rather than a stub.
+
+**MEASURED on `coinmarketcap.com`, one binary apart, same hour** — and the honest headline is that
+**M1 did not move**:
+
+```text
+                        before                              after
+  SHAPE          26.2% on 2046 scored              26.3% on 2046 scored
+  console        getFromLocalDB TypeError:         getFromLocalDB NotFoundError:
+                 t.get is not a function ×4        no object store named local-key-val ×4
+                 this.idb.getAll is not a fn ×2    (gone)
+```
+
+The throws are **gone** and the page is now failing one layer deeper, at a named store lookup — which
+is the chain the board's t777 block describes, arriving on schedule. The score does not move because
+this failure was on a **cached-data** path, not the first-paint path: the site already scored. VI.3's
+reading applies unchanged — *"the instrument cannot price this"* is the honest report, not *"this
+bought nothing"*, for a defect that breaks the wrapper every Firebase and Workbox app is built on.
+
+⚠ NAMED RESIDUE, each with a message rather than a hypothesis: `IDBObjectStore.getKey` /
+`openKeyCursor` absent (Chrome has both; `idb`'s `db.getKey(...)` needs them) · `no object store named
+local-key-val` on coinmarketcap, now reachable because the wrapper works · `TypeError: Invalid URL:`
+thrown from **our own** `dom_event.js:2287` on sports.yahoo · `Route did not complete loading: /` on
+trivago · `www.amazon.com.mx` answers **202 with a zero-byte body**, which is a bot-wall and not ours.
+
+GATE: `G_INDEXEDDB_PROTOTYPE`, sixteen claims. The first nine are Chrome's byte-exact answers
+(including `idbGate`, the library's own condition reproduced verbatim — asserting the library's actual
+test rather than my model of it); the rest are asserted from the spec and **said to be**, because
+headless Chrome under `--virtual-time-budget` never settles the `open` request. Both halves RED-proven
+separately: remove the eager install → `store.getAll=true` fails; leave the methods as own properties
+→ `own=false` fails. `g_indexeddb`, `g_indexeddb_index`, `g_indexeddb_getallrecords`,
+`g_iface_surface`, `g_iface_surface_2`, `g_prototype`, `g_capability` all still green.
+
+PERF: none — one `Object.keys` walk per IndexedDB object constructed, and a call now costs one
+prototype hop it did not before.
+
+WIKI: `docs/wiki/storage.md` — "`typeof store.getAll === 'function'` was true, and nobody asks that"
+
 ## Tick 883 — the parser was right and EVERY COPY was wrong (2026-08-03)
 
 TICK SHAPE: capability — t882's named residue, taken as its own tick because it is a different
