@@ -5088,3 +5088,121 @@ rather than editing the harness.
 4. **Carried, unchanged and now overdue:** Component 2 (the agentic surface) still has no corpus
    number — check #76 finding 2, unmoved through #77, #78 and #79. Four windows. I3 work is at least
    being labelled now, which was the honest half of the fix; the number is still absent.
+
+## Check #80 — tick 918 (2026-08-04)
+
+**Horizon:** H0 as re-scoped by **PART VII**. Component 1's bar is *"reliably renders and runs the
+representative real internet"*, instrumented as **M1 on the in-scope CrUX corpus**. Latest banked:
+**18.5% (24/130)**, sweep t909 — and **unmeasured since**, which is this check's largest finding.
+
+### → Gate, or scoreboard?
+
+**Neither, and for the first time the window did not pretend otherwise.** Check #79 concluded that
+**M1 has no resolution at this distance from the bar** — four sweeps, twenty-two ticks, not one
+engine-attributable crossing — and steered the loop to *"read the common-set band per window and M1
+per phase."* Ticks 910-918 obeyed that: **no tick in this window read M1 as feedback, and none
+claimed a corpus number it did not have.**
+
+What the window did instead is the honest alternative, and it is worth naming as a shape rather than
+a list: **eight ticks, five engine fixes, every one Chrome-captured and gated, and every one found by
+a four-line differential fixture rather than by the corpus.**
+
+```text
+  t912  instrument   the ranker's #1 cause split into `missing` vs `unaligned`
+  t913  measurement  `vertical-align` on text: 13 cases, all 24 where Chrome grows the line
+  t914  capability   …the fragment was built with `valign: Baseline` HARD-CODED
+  t915  capability   …the offset is the PARENT's font size x 0.375, measured at three sizes
+  t916  capability   …`text-top` aligns the INLINE BOX, which carries its half-leading
+  t917  measurement  form controls: four boxes, one UA rule — BUILT, VERIFIED, and REVERTED
+  t918  capability   …a control's value is not a child text node, so it had no baseline
+```
+
+**The twenty-case `<div>`-height probe went from 18/20 to 20/20 exact over this window.** That is the
+number this window actually moved, and it is not M1's.
+
+### → Is VI.3's ranking still the north star?
+
+**Yes, and check #79's new clause was obeyed on its first opportunity, which is the test that
+matters.** #79 added: *usage weight says whether to build it; the ranker's TAG says whether this
+sweep can score it.* t913 opened by reading the t909 ranker, observing that **every ranked cause is
+`<div>`**, and — because t911/t912 had just shown the `missing box` row to be a mixture — taking its
+`<div>` cause from the **`geometry/mis-sized`** rows instead, which compare boxes that DID align and
+are therefore unaffected by the keying question. That is the clause doing exactly what it was written
+for, one tick after it was written.
+
+⚠ **AND THE #1 ROW'S RE-RANKING IS STILL UNMEASURED.** t912 split `missing` from `unaligned` and
+stated plainly that *"the re-ranked board arrives with the next SWEEP, not with this commit"* — the
+JSONL ledger bakes each divergence's kind in, so t909's rows cannot be re-split retroactively. **The
+loop has been choosing work off a ranking it has already proved is a mixture of two populations, for
+seven ticks, because the corrected ranking does not exist yet.** That is the strongest argument for
+the sweep in the steer below, and it is a better argument than cadence.
+
+### → Is any invariant being bent?
+
+**THE RATCHET HELD UNDER THE HARDEST TEST IT HAS HAD IN THIS RUN, AND IT COST A FINISHED, VERIFIED,
+UNIVERSAL FIX.** t917 measured Chrome's UA form-control defaults directly (`getComputedStyle`, not
+guessed), found **one shared rule where Chrome has four different boxes**, corrected it, and took all
+ten measured control heights exact — every text input and every button on the web is 2px short
+without it. Then `<div><input></div>` went 26 → **28** against Chrome's 24, because a taller control
+pushes further below a baseline that was already wrong.
+
+> **It was reverted whole.** Not landed-with-a-caveat, not traded for the larger win. The tick became
+> a measurement, the numbers were banked so nothing would be re-measured, and t918 landed the
+> *baseline* half — which stands alone, takes the composite case to 24, and is what makes the UA half
+> landable next to it rather than instead of it.
+
+That is the ratchet's own sentence executed literally: *a tick that buys one face by degrading
+another is a trade, and trades are refused.*
+
+**I5 continues to do most of the work, and it is still aimed inward.** The running tally of probe
+defects caught before commit stands at **five** (a missing `--hide-scrollbars`, floats leaking
+between un-isolated rows, a confounded `width:400px`, a probe that could not tell `0,0,0` from
+no-box, a capability probe with no control arm) — and this window added a sixth shape worth naming
+separately: **t913 located the `vertical-align` defect in the CONSUMER and was wrong.** Wiring the
+shift into the branch it named changed nothing; the fragment was *constructed* with
+`valign: Baseline` hard-coded, so the eight arms downstream were **unreachable** rather than unread.
+*A branch that ignores a field and a field that can only hold one value are indistinguishable from
+inside the branch.* t916 then found the sibling shape — `strut_ascent - a` is **exactly zero whenever
+the fragment and the strut share a font**, so `text-top` was a no-op wearing an implementation's
+clothes.
+
+**I3 held and was labelled.** No capability tick this window skipped its semantic-model exposure.
+**I2 held** — no dependency forked. **I4 held** — nothing chased the exotic tail; the two rows this
+window declined (`vertical-align: <length>`, needing an enum variant, and `<sup>`'s 3px half-leading
+residual) were named with their numbers rather than approximated.
+
+**PART VII held across eighteen ticks**, including two harness events worked around agent-side rather
+than fixed: a wedged parity Chrome (0.00 CPU in sixteen minutes, no deadline on the child) killed by
+PID, and a `manuk-shell` false-RED under the parallel-build race that passes 74/74 when run alone.
+
+### → PART VI corrections
+
+* **VI.3's M1 row:** **18.5% (t909), and UNMEASURED for nine ticks.** Five engine fixes have landed
+  against it since.
+* **The ranked cause list is a MECHANISM, a TAG, and — since t912 — a POPULATION** (`missing` where
+  our map is smaller, `unaligned` where it is not). All three must be read before a tick is chosen,
+  and the third is not yet observable.
+* **A new standing fact:** the differential fixture has now produced **eight** engine defects in this
+  run (t906, t907, t908, t914, t915, t916, t918, plus t902's readback class) against **five**
+  self-inflicted false ones. That ratio is the case for the method and the case for the checklist
+  simultaneously.
+
+### → THE STEER
+
+1. **RUN THE SWEEP.** Five engine fixes since t909 is the cadence, but the real reason is t912: the
+   loop is choosing work off a ranking it has proved is a mixture, and only a sweep produces the
+   corrected one. **Pre-register that M1 will not move** — every fix this window is high-usage and
+   low-magnitude, which is the exact profile check #78 and #79 both measured as unpriceable — and
+   read the **`unaligned` row** as the deliverable instead.
+2. **THEN TAKE THE UA FORM-CONTROL BLOCK, WHICH IS NOW HALF-LANDED AND FULLY MEASURED.** t917's five
+   UA rows plus the intrinsic-width fix (`<input size=1>` is 53 in Chrome and 55 with the correct
+   2px border, a constant 2px, and `g_form_control_metrics` already asserts it). t918 removed the
+   blocker; nothing else is in the way.
+3. **THE SCORABILITY CEILING IS NOW FOUR WINDOWS OLD.** t903 moved it once. The named next lever is
+   still concrete and still untaken: **the one-origin proxy does not follow a same-origin
+   NAVIGATION** (`house.udn.com` refuses at 6 tags against the live page's 927 because its whole body
+   is `window.location.href="/house/index"`).
+4. **Carried, and now FIVE windows old:** Component 2 (the agentic surface) has no corpus number.
+   #76 named it, #77, #78, #79 carried it, and this window did not touch it either. At five windows
+   this stops being a carried item and becomes a finding about what the loop will not schedule on its
+   own.

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **645** | ticks 1–916 |
-| median tick cycle | **26m** | 644 intervals |
+| ticks landed | **646** | ticks 1–918 |
+| median tick cycle | **26m** | 645 intervals |
 | median, last 10 | **29m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 587.8h elapsed |
-| median verify wall | **63s** | 584 ticks |
+| **ticks per hour** | **1.10** | 588.9h elapsed |
+| median verify wall | **63s** | 585 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **397**
-* **✅ rows in the capability ledger**: 144 → **474**
+* **live gates**: 27 → **398**
+* **✅ rows in the capability ledger**: 144 → **475**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**317 of 645 ticks** (49%) moved a
+**318 of 646 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **317** capability ticks, median cycle **26m**
+* **318** capability ticks, median cycle **26m**
 * median diff per tick: **+264 / −34** lines across 8 files
 
 ## Every tick
@@ -742,5 +742,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **914** | 2026-08-04 15:53 | 30m | capability | 63s | +227/−55 | 397 | 81 | 56.0% · | the fragment was built with `valign: Baseline` HARD-CODED (2026-08-04) |
 | **915** | 2026-08-04 16:21 | 28m | capability | 63s | +199/−39 | 397 | 81 | 56.0% · | the offset is the PARENT's font size × 0.375, measured at three sizes (2026-08-04) |
 | **916** | 2026-08-04 16:50 | 29m | capability | 63s | +153/−33 | 397 | 81 | 56.0% · | `text-top` aligns the INLINE BOX, and the inline box carries its half-leading (2026-08-04) |
+| **918** | 2026-08-04 17:56 | 66m | capability | 63s | +363/−34 | 398 | 81 | 56.0% · | a control's value is not a child text node, so it had no baseline (2026-08-04) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

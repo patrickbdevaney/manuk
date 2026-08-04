@@ -46371,6 +46371,73 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 918 — a control's value is not a child text node, so it had no baseline (2026-08-04)
+
+TICK SHAPE: capability — t917 measured a two-part job and refused to land half of it. This lands the
+half that stands alone, and it is the half that makes the other half landable.
+
+⚠⚠⚠ **`last_line_baseline` RETURNS `None` FOR AN `<input>`, BECAUSE ITS VALUE LIVES ON THE ELEMENT AND
+NOT IN THE TREE.** CSS 2.1 §10.8.1's fallback then applies — the bottom margin edge becomes the
+baseline — so every text field, button and select sat **entirely above** the line's baseline and made
+the line that held it too tall:
+
+```text
+  <div><input></div>                                                     Chrome 24   before 26
+    ours, fallback baseline = h = 21   ->  above 21, below 0  ->  21 + 6.5              = 27.5 -> 28*
+    Chrome, baseline ~17 from the top  ->  above 17, below 4  ->  max(17.5,17)+max(6.5,4) = 24
+  (*28 is what it became at t917 once the control's own box was corrected to Chrome's 21px)
+```
+
+**This is exactly the half t917 was missing.** That tick corrected the controls' UA boxes to Chrome's
+measured values — all ten heights went exact — and the composite case got *worse*, 26 → 28, because a
+taller control pushes further below a baseline that was already in the wrong place. The whole UA
+block was reverted under the ratchet rather than traded. **The baseline stands alone**: it takes
+`<div><input></div>` to Chrome's 24 with the UA boxes untouched, and it is what will let the UA
+correction land beside it.
+
+**MEASURED — nine of ten exact, and the ten include every guard:**
+
+```text
+                                          Chrome   before   after
+  <div><input></div>                        24       26       24
+  <div><button>b</button></div>             24       26       24
+  <div><select>…</select></div>             24       26       24
+  <div><textarea></textarea></div>          43       43       43   <- excluded, and must stay right
+  <div><input type=checkbox></div>          24       24       24
+  inline-block with text, then text         24       24       24   <- must keep its OWN last line
+  …the same with overflow:hidden            31       31       31   <- must keep the §10.8.1 fallback
+  an EMPTY inline-block                     24       24       24
+  text <input> text                         24       26       24
+  <input style="height:40px">               46       47       47   <- open, 1px
+```
+
+⚠⚠ **THE GUARDS ARE THE INLINE-BLOCK ROWS, AND THEY ARE WHY THIS IS NARROW.** The synthesis must fire
+**only where the real rule cannot**: a text-bearing `inline-block` still uses its own last line, an
+`overflow:hidden` one still takes the fallback (31, not 24), and an empty one is unchanged. A fix
+that gave every atomic a synthetic baseline would satisfy the three control rows and break all three
+of these.
+
+⚠ **`textarea` IS DELIBERATELY EXCLUDED.** It is multi-line, Chrome takes its LAST line, the generic
+fallback already approximates that, and t917 measured it byte-exact at 36. **A row that is already
+right is not a row to route through a new mechanism** — and it is asserted to stay right.
+
+⚠ **NAMED, NOT ASSERTED:** an input with an explicit `height:40px` reads 47 against Chrome's 46.
+Chrome centres the internal editor in a taller control; we place the baseline at
+border+padding+ascent regardless. One pixel, on a control whose height the author overrode.
+
+RATCHET: `manuk-layout` **125/125**, `manuk-css` 28/28; `g_form_control_metrics` — the gate that
+caught t917's regression — **green**, as are `g_vertical_align_on_text`, `g_ratio_inset_float` and
+`g_table_height_is_a_minimum`; and the twenty-case div-height probe is now **20 of 20 exact**, its
+last differing row (`<div><input></div>`) closed by this tick.
+
+GATE: `G_FORM_CONTROL_BASELINE` — nine Chrome-captured claims, of which **four are guards** against
+over-application. **RED-PROVEN** by disabling the tag test: *"`#g1` expected height 24 … got 26."*
+
+PERF: none — one tag comparison and one font-metric lookup, and only on an atomic that produced no
+line box of its own.
+
+WIKI: `docs/wiki/box-layout.md` — the t917 section's second half, landed [no-pattern]
+
 ## Tick 917 — one UA rule for four controls Chrome gives four different boxes, and the fix was REVERTED (2026-08-04)
 
 TICK SHAPE: measurement — the second defect t913 measured and set aside: a bare `<input>` in a `<div>`

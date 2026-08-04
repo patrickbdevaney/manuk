@@ -241,6 +241,7 @@
   - L4733 · A control's own box and the line that holds it are ONE change (t917)
   - L4749 · getComputedStyle did not predict the used box for two of the five
   - L4758 · And then the composite case regressed, so the whole thing was reverted
+  - L4777 · The baseline half landed at t918, and it stands alone
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1589,4 +1590,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1496 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1497 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

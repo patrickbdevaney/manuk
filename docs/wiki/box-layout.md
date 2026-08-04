@@ -4773,3 +4773,20 @@ moving the glyphs was refused for the same reason and the pair shipped together 
 
 **Both halves, for whoever takes it:** the five UA rows above, plus a real internal baseline for form
 controls — and `<div><input></div>` must read 24 when they land.
+
+### The baseline half landed at t918, and it stands alone
+
+`last_line_baseline` returns `None` for an `<input>` because its value lives on the element and not
+in the tree, so §10.8.1's fallback applied. Synthesising the control's own first-line baseline
+(border + padding + the ascent of ITS font — Chrome's UA gives these 13.333px Arial, not the page's
+16px) takes `<div><input></div>` to Chrome's 24 **with the UA boxes untouched**, which is what makes
+the UA correction landable beside it rather than instead of it.
+
+The narrowness is the point. The synthesis fires only where the real rule cannot, and the guards say
+so: a text-bearing `inline-block` still uses its own last line (24), an `overflow:hidden` one still
+takes the fallback (**31**, not 24), an empty one is unchanged, and `textarea` — already byte-exact —
+is excluded entirely. **A row that is already right is not a row to route through a new mechanism.**
+
+Open, 1px: an input with an explicit `height:40px` reads 47 against Chrome's 46, because Chrome
+centres the internal editor in a taller control and we place the baseline at border+padding+ascent
+regardless.

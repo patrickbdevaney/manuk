@@ -6305,6 +6305,38 @@ impl Ctx<'_> {
                     } else {
                         None
                     };
+                    // ⚠⚠⚠ **A FORM CONTROL'S VALUE IS NOT A CHILD TEXT NODE, SO IT HAS NO LINE BOX
+                    // TO TAKE A BASELINE FROM — AND THE §10.8.1 FALLBACK IS THE WRONG ANSWER FOR IT
+                    // (t918).** `last_line_baseline` returns `None` for an `<input>` (its value lives
+                    // on the element, not in the tree), so every text field, button and select sat
+                    // ENTIRELY above the line's baseline and made its line too tall. Chrome gives
+                    // each of them the baseline of its internal editor text.
+                    //
+                    // Measured: `<div><input></div>` is **24** in Chrome and was **26** here, and
+                    // t917 found that correcting the control's own box to Chrome's 21px height took
+                    // the div to **28** — the control got right and its container got further wrong,
+                    // which is why that tick was reverted whole and this one ships both halves.
+                    //
+                    // The synthesised baseline is the control's own first-line baseline:
+                    // border + padding + the ascent of ITS font (Chrome's UA gives these 13.333px
+                    // Arial, not the page's 16px). `textarea` is excluded: it is multi-line and
+                    // Chrome takes its LAST line, which the generic fallback already approximates,
+                    // and t917 measured it byte-exact at 36 — a row that is already right is not a
+                    // row to route through a new mechanism.
+                    let own_baseline = own_baseline.or_else(|| {
+                        let tag = self.dom.tag_name(node)?;
+                        if !matches!(tag, "input" | "button" | "select") {
+                            return None;
+                        }
+                        let ts = text_style(&s, self.fonts);
+                        let lm = self.fonts.line_metrics(ts.font_key, ts.font_size);
+                        Some(
+                            r.margin_top
+                                + s.border_width.top
+                                + s.padding.top.resolve(cw, 0.0)
+                                + lm.ascent.round(),
+                        )
+                    });
                     out.push(InlineItem::Atomic {
                         box_: Box::new(r.boxx),
                         advance,
