@@ -370,6 +370,12 @@ a:link, a:visited { text-decoration: underline; }
 ul { list-style-type: disc; }
 ol { list-style-type: decimal; }
 u, ins { text-decoration: underline; }
+/* ⚠ **Chrome's UA sheet raises/lowers these AND shrinks them, and ours did neither (t914).** With no
+   rule at all a `<sup>` was ordinary inline text on the baseline at full size — so a footnote marker,
+   a citation, a ™, an ordinal and every chemical formula on the web rendered as plain text in the
+   middle of the line. `smaller` is the keyword Chrome uses, not a fixed size. */
+sup { vertical-align: super; font-size: smaller; }
+sub { vertical-align: sub; font-size: smaller; }
 s, del, strike { text-decoration: line-through; }
 abbr[title] { text-decoration: underline; }
 /* ⚠ **`border-spacing: 2px` IS IN CHROME'S UA SHEET AND WAS MISSING FROM OURS (t908).** The

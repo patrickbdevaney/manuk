@@ -1743,3 +1743,53 @@ Growing the line box without moving the glyphs would make every `<sup>` line tal
 still on the baseline — a metric win bought with a visible regression, which is a trade, and trades
 are refused. The correct change shifts the text fragment's box and paint origin by the same amount
 and then takes the union.
+
+## A branch that ignores a field and a field that can only hold one value look identical (t914)
+
+t913 located the `vertical-align` defect precisely: `line_metrics`'s TEXT branch never reads
+`f.valign`, while the atomic branch has eight match arms for it. **Wiring the shift into that branch
+changed nothing.** Every case still read 24.
+
+The cause is one level upstream. The line fragment for a word is built with
+
+```rust
+    valign: VerticalAlign::Baseline,   // hard-coded
+```
+
+so `f.valign` was `Baseline` for every piece of text that has ever existed, and the eight arms
+downstream were **unreachable** rather than unread. The builder is a `move` closure and nobody had
+captured the word's own `vertical-align`; reading it one line earlier, where the node and the styles
+are both still in scope, is the fix.
+
+> **Read the PRODUCER, not only the consumer.** A branch that ignores a field and a field that can
+> only hold one value are indistinguishable from inside the branch — and only one of them is fixed by
+> changing the branch. Same shape as t897, where the layout rect was already a parameter of the
+> function that answered `auto`.
+
+### `<sup>`/`<sub>` had no UA rule at all
+
+Chrome's sheet is `sup { vertical-align: super; font-size: smaller }`. Ours had neither line, so a
+footnote marker, a citation, a ™, an ordinal and every chemical formula rendered as plain baseline
+text at full size. The shrink is now exact — a `<sup>`'s own box is 18×15 against a plain span's
+21×17, in both engines.
+
+### What is asserted, and what is named
+
+Asserted (Chrome-exact): the UA shrink, and four CONTROLS that stay at 24 — a plain line,
+`vertical-align: top`, and a `super` on a 10px span and a 10px `<img>`. **Those last two are the rule
+itself**: a raised inline that still fits inside the strut must NOT grow the line, because CSS 2.1
+§10.8 is a union and not an addition.
+
+Named, not asserted: `super` lands 29 against Chrome's 30, `sub` 26 against 28, `middle` 26 against
+25. The keyword offsets reuse the constants the atomic path already uses (`ascent * 0.35`,
+`ascent * 0.15`) — shared through one `valign_text_shift` so the two implementations cannot drift —
+and they approximate what Chrome derives from the font's `OS/2` superscript offsets. Calibrating
+against those metrics is its own tick. `vertical-align: <length>` / `<percentage>` is a third job:
+the enum has eight keyword variants and no length, so `10px` parses to `Baseline`.
+
+### Both halves in one change
+
+Growing the line box without moving the glyphs would make every `<sup>` line taller with its text
+still on the baseline — a metric win bought with a visible regression, which is a trade, and trades
+are refused. `valign_text_shift` is called from `line_metrics` to size the line and from the
+placement loop to move the baseline.

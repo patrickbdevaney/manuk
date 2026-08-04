@@ -6808,6 +6808,16 @@ impl Ctx<'_> {
                         0.0
                     };
                     let est_h = style.line_height.max(lm.ascent + lm.descent);
+                    // **The word's own `vertical-align`, read HERE because this is the last point at
+                    // which the styles are reachable** — the fragment builder below is a `move`
+                    // closure and `LineFrag` had `valign: Baseline` hard-coded, so a `<sup>`'s text
+                    // arrived at `line_metrics` claiming to be on the baseline. That hard-coded
+                    // literal is the whole of why `vertical-align` worked for atomic inlines and did
+                    // nothing for text (t913): the eight match arms downstream were never reachable
+                    // with anything but `Baseline`.
+                    let word_valign = node
+                        .map(|n| self.style_of(n).vertical_align)
+                        .unwrap_or(VerticalAlign::Baseline);
                     (
                         word_w,
                         space_w,
@@ -6826,7 +6836,7 @@ impl Ctx<'_> {
                             atomic: None,
                             atomic_h: 0.0,
                             atomic_baseline: 0.0,
-                            valign: VerticalAlign::Baseline,
+                            valign: word_valign,
                             content_bearing: true,
                         }),
                     )
@@ -7437,8 +7447,18 @@ fn close_line(
         } else if f.ascent > 0.0 || f.descent > 0.0 {
             let (a, d) = (f.ascent.round(), f.descent.round());
             let hl = half_leading(a, d, f.style.line_height);
-            above = above.max(a + hl);
-            below = below.max(f.style.line_height - a - hl);
+            // ⚠⚠⚠ **`vertical-align` WAS HONOURED FOR ATOMIC INLINES AND DID NOT EXIST FOR TEXT
+            // (t913 measured it, t914 fixes it).** Eight match arms on the branch above and no
+            // mention on this one — so `<sup>` and `<sub>`, which are TEXT and which the UA
+            // stylesheet itself generates, never moved and never grew their line.
+            //
+            // The shift is the SAME function the atomic arms use, so the two paths cannot drift
+            // apart (`valign_text_shift`), and it is applied as a UNION rather than as an addition:
+            // a raised inline that still fits inside the strut must not grow the line. Chrome says
+            // 24 for `super` on a 10px span in a 24px line, and that control is in the gate.
+            let sh = valign_text_shift(f.valign, a, d, ascent, descent);
+            above = above.max(a + hl + sh);
+            below = below.max(f.style.line_height - a - hl - sh);
         } else {
             min_h_down = min_h_down.max(f.style.line_height);
         }
@@ -7546,10 +7566,15 @@ fn close_line(
                 (Some(h), None) => (baseline - y, h - (baseline - y)),
                 (None, _) => (f.ascent.round(), f.descent.round()),
             };
+            // **The other half of t914, and it must ship in the same change as the metric.** Growing
+            // the line box without moving the glyphs would make every `<sup>` line taller with its
+            // text still on the baseline — a metric win bought with a visible regression, which is a
+            // trade. The shift is the same function `line_metrics` used to size the line.
+            let sh = valign_text_shift(f.valign, fa, fd, ascent, descent);
             frags.push(TextFragment {
                 x: fx,
                 line_top: y,
-                baseline,
+                baseline: baseline - sh,
                 width: f.width,
                 text: f.text,
                 style: f.style,
@@ -7560,6 +7585,31 @@ fn close_line(
         }
     }
     y + line_h
+}
+
+/// **The UPWARD shift a `vertical-align` keyword applies to a TEXT fragment's baseline**, in px.
+///
+/// One function, called from both `line_metrics` (to size the line) and the placement loop (to move
+/// the glyphs), because shipping one without the other is the trade this project refuses: a taller
+/// line with its text still on the baseline is a metric win bought with a visible regression.
+///
+/// `a`/`d` are the FRAGMENT's own ascent/descent; `strut_a`/`strut_d` are the line's. The keyword
+/// constants are the ones the ATOMIC arms in `line_metrics` already use — deliberately shared, so
+/// the two implementations of `vertical-align` cannot drift apart. `Top`/`Bottom` are line-relative
+/// rather than baseline-relative and are handled by the atomic path's `min_h_up`/`min_h_down`; for
+/// text they are treated as no shift, which is what they were before.
+fn valign_text_shift(v: VerticalAlign, a: f32, d: f32, strut_a: f32, strut_d: f32) -> f32 {
+    match v {
+        VerticalAlign::Baseline | VerticalAlign::Top | VerticalAlign::Bottom => 0.0,
+        VerticalAlign::Super => strut_a * 0.35,
+        VerticalAlign::Sub => -(strut_a * 0.15),
+        // CSS 2.1 §10.8.1: align the box's vertical midpoint with the baseline plus half the
+        // parent's x-height (approximated as half the ascent, exactly as the atomic arm does).
+        VerticalAlign::Middle => strut_a * 0.25 - (a - d) / 2.0,
+        // The fragment's own text-top meets the strut's text-top; likewise text-bottom.
+        VerticalAlign::TextTop => strut_a - a,
+        VerticalAlign::TextBottom => d - strut_d,
+    }
 }
 
 /// An inline-level token in an inline formatting context: either a text word or an

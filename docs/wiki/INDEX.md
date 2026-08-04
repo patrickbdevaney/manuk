@@ -1551,6 +1551,10 @@
   - L1714 · The cause is one if
   - L1732 · Why it belongs to the <div>-height burndown
   - L1740 · The fix must be both halves at once
+  - L1747 · A branch that ignores a field and a field that can only hold one value look identical (t914)
+  - L1769 · <sup>/<sub> had no UA rule at all
+  - L1776 · What is asserted, and what is named
+  - L1790 · Both halves in one change
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1578,4 +1582,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1485 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1489 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

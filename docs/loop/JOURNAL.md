@@ -46371,6 +46371,91 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 914 — the fragment was built with `valign: Baseline` HARD-CODED (2026-08-04)
+
+TICK SHAPE: capability — t913 measured the `vertical-align` family and specified the fix. This takes
+it, and the root cause turned out to be one level deeper than t913 named.
+
+⚠⚠⚠ **t913 SAID "the TEXT branch of `line_metrics` never reads `f.valign`". TRUE, AND NOT THE
+CAUSE.** Wiring the shift into that branch changed **nothing** — every row still read 24. The reason
+is upstream: the line fragment for a word is built with
+
+```rust
+    valign: VerticalAlign::Baseline,   // hard-coded, engine/layout/src/lib.rs:6829
+```
+
+so `f.valign` was `Baseline` for every piece of text that has ever existed, and the eight match arms
+downstream were **unreachable** rather than unread. The builder is a `move` closure and nobody had
+captured the word's own `vertical-align`; reading it one line earlier, where `node` and the styles
+are both still in scope, is the whole fix.
+
+> **A branch that "ignores" a field and a field that can only hold one value look identical from the
+> branch.** t913 read the consumer and stopped; the producer was the bug. Same shape as t897's
+> computed-style defect, where the rect was already a parameter of the function that answered `auto`.
+
+⚠⚠⚠ **AND `<sup>`/`<sub>` HAD NO UA RULE AT ALL.** Chrome's sheet is
+`sup { vertical-align: super; font-size: smaller }`; ours had neither line, so a footnote marker, a
+citation, a ™, an ordinal and every chemical formula on the web rendered as **plain baseline text at
+full size**. Third UA-default gap in this window after t908's `border-spacing`.
+
+**MEASURED — what is now CHROME-EXACT, and it is the half that is asserted:**
+
+```text
+                                     Chrome   before   after
+  <sup>XX</sup> own box               18x15    21x17    18x15   <- the UA shrink, EXACT
+  plain <span>XX</span> own box       21x17    21x17    21x17   <- the control
+  plain baseline line (CONTROL)         24       24       24
+  vertical-align: top   (CONTROL)       24       24       24
+  super on a font-size:10px span        24       24       24    <- fits the strut: must NOT grow
+  super on a 10px <img> (CONTROL)       24       24       24
+```
+
+⚠⚠ **AND THE RESIDUAL, NAMED AND DELIBERATELY NOT ASSERTED, because asserting it would bank an
+approximation as though it were measured:**
+
+```text
+                                     Chrome   before   after
+  vertical-align: super                 30       24       29    <- 1px short
+  vertical-align: sub                   28       24       26    <- 2px short
+  vertical-align: middle                25       24       26    <- 1px over
+  <sup> / <sub>                         27       24       24    <- shrunk enough to fit the strut
+  vertical-align: text-top              27       24       24
+  vertical-align: text-bottom           28       24       24
+  vertical-align: 10px / -10px / 50%  34/34/36   24       24    <- NO enum variant exists
+```
+
+The keyword offsets reuse the constants the **atomic** arms already use (`ascent * 0.35` for `super`,
+`ascent * 0.15` for `sub`) — shared on purpose, through one `valign_text_shift`, so the two
+implementations of `vertical-align` cannot drift apart. They are approximations of what Chrome
+derives from the font's own `OS/2` superscript/subscript offsets, and calibrating them against those
+metrics is its own tick. The last row is a different job again: `VerticalAlign` has eight keyword
+variants and **no length or percentage**, so `vertical-align: 10px` parses to `Baseline` and cannot
+be represented at all.
+
+⚠⚠⚠ **BOTH HALVES SHIPPED IN ONE CHANGE, AND THAT IS THE RATCHET RATHER THAN A PREFERENCE.** Growing
+the line box without moving the glyphs would make every `<sup>` line taller with its text still on
+the baseline — a metric win bought with a visible regression, which is a trade. `valign_text_shift`
+is called from `line_metrics` (to size the line) and from the placement loop (to move the baseline),
+and the raise is asserted as a RELATIONSHIP between a `<sup>` and a plain `<span>` rather than as a
+coordinate, because the two live in different divs.
+
+RATCHET: `manuk-layout` **125/125**, and every fixture from t905-t913 re-measured against Chrome —
+the combined battery 54/54, the specified-width set 14/14, the border-spacing battery unchanged at
+19/23 with only its named-open rows differing, and the twenty-case div-height probe improved from 18
+to 19 exact with **zero rows moving the wrong way**. The only heights that changed anywhere are lines
+that carry a `vertical-align`, which is the definition of the change.
+
+GATE: `G_VERTICAL_ALIGN_ON_TEXT` — four CONTROL claims (Chrome-exact, and they are what stops a
+future "fix" from simply inflating every line box), three MECHANISM claims asserted as **direction
+only** because the calibration is an open number, and the UA rule's shrink asserted exactly
+(18x15 against a 21x17 control) plus the raise as a relationship. **RED-PROVEN** by restoring the
+hard-coded literal: *"`#v1` must be TALLER than the 24px baseline control … got 24."*
+
+PERF: none measurable — one style lookup per word, on a path that already looks the style up.
+
+WIKI: `docs/wiki/text-layout.md` — "A branch that ignores a field and a field that can only hold one
+value look identical from the branch"
+
 ## Tick 913 — `vertical-align` is honoured for ATOMIC inlines and ignored for TEXT (2026-08-04)
 
 TICK SHAPE: measurement — check #79's steer #1 asks for a `<div>` cause, and t911/t912 established
