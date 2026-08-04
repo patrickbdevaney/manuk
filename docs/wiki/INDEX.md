@@ -714,6 +714,11 @@
   - L655 · An ACCEPTED proxy that still returns a shell is an ATTRIBUTION, not a failure
   - L672 · What the two refusals name for the next tick
   - L679 · The cost, stated rather than discovered later
+  - L688 · "It is the only thing that changed" is an argument, not a control (t904)
+  - L712 · The reconciliation, which is the deliverable
+  - L727 · The same discipline on the loss side, and there it cost nothing
+  - L741 · What a +3 scorability move was actually made of
+  - L754 · The number the tick exists to state
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1549,4 +1554,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1456 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1461 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -46371,6 +46371,171 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 904 — the burndown's near-bar plan crosses NOBODY, and the sweep that priced it (2026-08-04)
+
+TICK SHAPE: measurement — the cadence sweep (t898 is 6 ticks stale) and, more pressingly, **t903
+changed the instrument's own denominator behaviour**, so every burndown decision after it is being
+made against a baseline that no longer describes the instrument taking the readings.
+
+⚠⚠⚠ **FINDING FIRST, BECAUSE IT IS COMPUTED FROM THE BANKED t898 ROWS AND NEEDED NO NEW RUN AT ALL:
+THE BOARD PRICES ITS TWO M1 LEVERS AT 6 AND 1, AND THE MEASURED ANSWER IS 2 AND 1.** The steer
+reads: *"a +0.06 shape nudge on the ~6 jarring-clean near-bar sites = 6 M1 crossings; clearing any
+single jarring dim everywhere = 1 crossing (shape-nudge is ~6× more M1-productive here)."* Recomputed
+from `SWEEP-t898-rows.tsv` through the instrument's OWN partition (`scripts/fidelity-progress.sh:84`,
+transcribed, not paraphrased), the full two-way table M1's conjunction implies:
+
+```text
+  in-scope                                                        129
+  scored                                                          107
+    ├─ M1 PASS      shape >= 0.75  AND  jarring-clean              22
+    ├─ shape ok, jarring DIRTY                                      6
+    ├─ jarring clean, shape UNDER the bar                          23   <- the nudge's cohort
+    └─ BOTH conjuncts fail                                         56   <- the mass
+```
+
+**The nudge's cohort exists — 23 sites — and only TWO of them are within reach of a +0.06 nudge**
+(`jatekshop.eu` at 0.7370, gap 0.0130; `pivaldi.restoplace.ws` at 0.6905, gap 0.0595). The other 21
+sit **0.12 to 0.75** below the bar; no nudge reaches them, they need ordinary shape work. On the
+other side the board's "1" is exactly right, and it is `h_overflow`: of the six sites over the shape
+bar, only `simplepdf.com` is blocked by a single dimension — the other five each need two dims
+cleared at once, so clearing `reading-order` everywhere (the broadest dim, 63 of 107 sites) crosses
+**nobody**.
+
+> **A ranking computed on ONE conjunct of a conjunction prices the wrong work, and it prices it with
+> a number.** t841-845 named this ("M1 is a CONJUNCTION, and the burndown ranks only ONE conjunct");
+> the board's replacement steer swapped which conjunct it ranks and kept the defect.
+
+⚠⚠⚠ **AND MY OWN FIRST TABLE WAS WRONG IN THE OTHER DIRECTION, WHILE REPRODUCING THE HEADLINE
+EXACTLY.** I computed jarring-clean as *all four dims zero*, got **M1 = 22/129 = 17.1%** — the banked
+number, to the digit — and concluded from it that the nudge cohort was **EMPTY** and the lever
+crossed nobody. The instrument uses **`TOL = 2`**, not zero. The headline is insensitive to the
+difference (no over-bar site has a dim in `1..2`) and the *cohorts* are not: at TOL=2 the cohort is
+23 sites, not 0. **A model of an instrument that reproduces its headline has proved nothing about its
+partitions** — t856/t858's *"right answer, wrong reason survives longest"*, caught here before
+publication only because the claim was strong enough to be worth re-deriving from source.
+
+The honest consequence, and it is the tick after this one: **56 of 107 scored sites fail BOTH
+conjuncts, so the only lever with real marginal crossings is a mechanism that moves shape AND clears
+jarring together** — which is what the width→dy laundering has been claimed to be since t743 and has
+never been priced against the crossing-ranked cohort.
+
+⚠ **AND `simplepdf.com` — the one single-dimension crossing — IS A TRAP I ALMOST TOOK.** Its diff
+looks like a clean shared constant (a +21px width on a chain of nested `<div>`s, a +32px `y` on their
+parents) and it is mostly the ORACLE's: Chrome renders `body > div:nth-of-type(1)` — three `<div>`s
+and an `<svg>` we do not — which is the site's OWN boot-fallback panel, shown because the snapshot's
+first-party `fetch()`es fail. The panel is 57px tall, which is exactly the `<header>`'s `dy`. **The
+single best-ranked crossing on the whole board is a reference artefact**, and the check that caught
+it cost one `curl` (`isFirstPartyUrl` and `fallbackShown` are in the document's first 600 bytes).
+
+PRE-REGISTERED BEFORE THE RUN (VI.3's new clause):
+
+* **scorability 107/129 → 108, possibly 109.** t903's widened trigger only reaches rows whose ORACLE
+  probe came in under the shell floor; on this corpus that is the eight shell rows, five of which I
+  measured directly at t903 (one converted, two refused, one re-attributed, one proved a bot wall).
+* **M1 22 → 23** (`merchant.upi9.pro` scores 0.830, above the bar).
+* **t902 moves NEITHER.** Publishing fourteen computed-style properties is a readback fix; it changes
+  what a page's own script can learn, not whether the oracle can score the page. Naming this in
+  advance because t898 pre-registered the opposite for three similar fixes and was wrong.
+* **WATCH: `crashed` rows.** t903 costs two extra Chrome processes per under-floor row and its first
+  batch run booked one `crashed` that neither a solo re-run nor an identical repeat reproduced.
+
+### THE RUN — 200 sites, release binary, `--jobs 2`, 78 minutes, `SWEEP-t904-rows.tsv`
+
+```text
+                       t887      t898      t904
+  M1 (the gate)       17.8%     17.1%     17.8%     <- exactly back where it was 17 ticks ago
+  shape >= 0.75        24.0%     21.7%     24.0%
+  scorability        107/129   107/129   110/129    <- 82.9% -> 85.3%
+  shape_mean           57.9%     54.6%     57.2%
+  cov_mean             86.3%     86.6%     86.8%
+```
+
+**Scorability beat the pre-registration (+3 against a predicted +1 or +2) and M1 hit it exactly.**
+`85.3%` also crosses the owner-lock's ~85% threshold for opening the BiDi function leg — **and it
+must not be read that way yet**, for the reason the rest of this entry is about.
+
+⚠⚠⚠ **+3 SCORED ROWS, AND ONLY ONE OF THEM IS OURS.** Every reason change, diffed row by row:
+
+```text
+  ATTRIBUTABLE (t903)
+    merchant.upi9.pro          shell-only-2  -> SCORED 0.830   <- and it is the M1 crossing
+    experiencia.pichincha.com  shell-only-8  -> tree-divergence-25  (re-attributed, still unscored)
+  WEATHER — in
+    7info.ru                   timeout-150s  -> SCORED 0.680
+    rpsc.rajasthan.gov.in      unreachable   -> SCORED 0.976   <- and an M1 gain
+    app.ordertime.com          tree-div-31   -> SCORED 1.000   <- and an M1 gain
+  WEATHER — out
+    coinmarketcap.com          SCORED 0.265  -> timeout-150s
+    ru4.bongacams-ru.com       SCORED 1.000  -> unreachable    <- an M1 loss
+    pogoda.by                  SCORED 0.803  -> SCORED 0.736   <- an M1 loss (below)
+```
+
+**M1 moved +3/−2 and exactly one crossing in either direction is engine work.** A loop that read
+`17.1% → 17.8%` as its own progress would be reading three sites' network conditions.
+
+⚠⚠⚠ **THE M1 LOSS WAS REFUTED BY THE NEW BINARY ALONE, AND IT DID NOT NEED AN OLD ONE.**
+`pogoda.by` fell 0.803 → 0.736, across the bar. Three solo runs, one binary, ten minutes:
+
+```text
+  run 1   shape 0.789   cov 0.696   n=71     <- ABOVE the bar
+  run 2   shape 0.717   cov 0.520   n=53
+  run 3   —             —           n=0      css-starved-1  (unscored entirely)
+```
+
+The sweep's 0.736 is inside that spread, the sample size swings 53↔71, and the site intermittently
+goes `css-starved` **on one binary in one hour**. No regression was traded. (t899's rule: refute with
+the NEW binary first; the old-binary control is for a delta that REPRODUCES.)
+
+⚠⚠⚠ **AND THE HEADLINE FINDING — ELIMINATION SAID t902 AND THE OLD BINARY SAID THE CORPUS, AND THE
+OLD BINARY WAS RIGHT.** The common-set band (105 sites scored in BOTH sweeps) came in at **+1.21
+pts**, and it is dominated by two sites: `www.freesupertips.com` **0.042 → 0.766** and
+`www.crazyshop.pl` **0.255 → 0.641**. Both re-measured byte-identical across repeat runs, so not
+weather-within-the-hour. And the argument from elimination was as clean as this loop ever gets:
+**t899, t900 and t901 touched no file under `engine/` or `tests/` at all** (verified with
+`git show --stat`), t903 is instrument-only and cannot move a row that was already scored, so t902
+was the *only* engine change in the window. So I built the t901 tree (`git checkout 528ff111 --
+engine tests`, incremental release build) and ran it:
+
+```text
+                          t898      t904 (new)    OLD BINARY, same hour
+  www.freesupertips.com   0.0415     0.766094        0.766094   n=466  cov 0.620506
+  www.crazyshop.pl        0.2553     0.641281        0.641281   n=1405 cov 0.914118
+```
+
+**Identical to six decimal places, on both sites, including the sample counts.** The gain is the
+SITES, not us — they were caught in a different state 3.5 hours earlier. Strip those two and the
+band over the remaining **103** sites is **+0.16 pts, which is flat.** The whole reconciliation:
+
+```text
+  corpus shape_mean   0.5465 -> 0.5718   (+2.53 pts)
+    ├─ composition (5 scored in, 2 out; the newcomers score 0.98 and 1.00)   +1.32
+    └─ common set, 105 sites                                                 +1.21
+         ├─ 2 sites the OLD BINARY reproduces EXACTLY                        +1.05   <- the corpus
+         └─ the other 103 sites                                              +0.16   <- FLAT
+```
+
+> **"It is the only thing that changed" is an argument, not a control.** Elimination narrowed the
+> candidate to one tick and named it with confidence; one 12-minute rebuild refuted it. The corpus
+> is a live population and it moves on its own — the thing this loop has now been told five times
+> (t799-807, t846-852, t861, t899) and reasoned past again here on the strongest-looking evidence
+> yet, because the *code-side* argument was airtight and the *corpus-side* one was never made.
+
+**t902's pre-registration was correct**: it moved neither scorability nor M1. It also did not move
+shape, which nothing predicted in either direction and which the control now says out loud.
+
+⚠ **THE COST t903 NAMED SHOWED UP ONCE, AND IT IS NOT THE WIDENING'S.** One `crashed` row:
+`comix.to`, which was `oracle-module-shell-3` at t898 — a row that already ran the one-origin path
+*before* t903, so the widened trigger did not add its Chrome runs. Recorded, not explained away.
+
+**M1 IS FLAT ACROSS 17 TICKS — 17.8% at t887, 17.8% at t904** — and the sweeps in between are the
+composition dip t898/t899 already decomposed. That is the number this tick exists to state.
+
+PERF: none — measurement only. The sweep ran off the tick path on a quiet box, `--jobs 2`, and the
+verify wall was not running against it.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "'It is the only thing that changed' is an argument, not a
+control" [no-pattern]
+
 ## Tick 903 — the one-origin fix was gated on `type="module"`, and the origin wall is not a module wall (2026-08-04)
 
 TICK SHAPE: instrument — check #78's steer #2, the scorability ceiling, untouched for two windows.

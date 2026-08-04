@@ -684,3 +684,74 @@ re-run and an identical repeat batch both returned `tree-divergence-25`, and all
 decisions were byte-identical across the three runs. It is recorded rather than averaged away
 (t881's rule), and it is the predictable shape of the cost: two heavy proxy paths concurrent at
 `--jobs 2` is more resident memory than the same cohort was ever asked for before.
+
+## "It is the only thing that changed" is an argument, not a control (t904)
+
+The t904 sweep's common-set band came in at **+1.21 pts over 105 sites**, and two sites carried
+almost all of it: `www.freesupertips.com` **0.042 → 0.766** and `www.crazyshop.pl` **0.255 → 0.641**.
+Both re-measured byte-identical across repeat runs, so it was not weather-within-the-hour.
+
+The argument from elimination was as clean as this loop ever gets. Between the two sweeps there are
+five commits. **t899, t900 and t901 touched no file under `engine/` or `tests/` at all** — verified
+with `git show --stat`, not remembered. t903 is instrument-only and structurally cannot move a row
+that was already scored. So **t902 was the only engine change in the window**, and a +0.72 shape gain
+on a real site would have been a major finding about the computed-style readback class.
+
+One rebuild refuted it. `git checkout <t901> -- engine tests`, an incremental release build, the same
+two sites in the same hour:
+
+```text
+                          t898      t904 (new)    OLD BINARY, same hour
+  www.freesupertips.com   0.0415     0.766094        0.766094   n=466   cov 0.620506
+  www.crazyshop.pl        0.2553     0.641281        0.641281   n=1405  cov 0.914118
+```
+
+Identical to six decimal places on both sites, **including the sample counts**. The sites moved. Strip
+them and the band over the remaining 103 sites is **+0.16 pts — flat.**
+
+### The reconciliation, which is the deliverable
+
+```text
+  corpus shape_mean   0.5465 -> 0.5718   (+2.53 pts)
+    ├─ composition (5 scored in, 2 out; the newcomers score 0.98 and 1.00)   +1.32
+    └─ common set, 105 sites                                                 +1.21
+         ├─ 2 sites the OLD BINARY reproduces EXACTLY                        +1.05   <- the corpus
+         └─ the other 103 sites                                              +0.16   <- FLAT
+```
+
+> **Elimination narrows the CODE candidate; it says nothing about the CORPUS candidate.** The
+> code-side argument here was airtight and the corpus-side one was simply never made. A live
+> population is a second explanation for every movement, and it is available at all times without
+> anyone proposing it.
+
+### The same discipline on the loss side, and there it cost nothing
+
+`pogoda.by` fell 0.803 → 0.736 and crossed M1 downward. Three solo runs, ONE binary, ten minutes:
+
+```text
+  run 1   shape 0.789   cov 0.696   n=71     <- ABOVE the bar
+  run 2   shape 0.717   cov 0.520   n=53
+  run 3   —             —           n=0      css-starved-1  (unscored entirely)
+```
+
+The sweep's value sits inside the site's own spread, the sample count swings 53↔71, and the row
+intermittently goes `css-starved`. **Refute with the NEW binary first** (t899): the old-binary
+control is for a delta that reproduces, and this one did not.
+
+### What a +3 scorability move was actually made of
+
+```text
+  ATTRIBUTABLE (t903)   merchant.upi9.pro    shell-only-2 -> SCORED 0.830   <- the M1 crossing
+                        experiencia.pichincha shell-only-8 -> tree-divergence-25 (still unscored)
+  WEATHER — in          7info.ru  ·  rpsc.rajasthan.gov.in  ·  app.ordertime.com
+  WEATHER — out         coinmarketcap.com  ·  ru4.bongacams-ru.com  ·  pogoda.by
+```
+
+Scorability 107 → 110 (82.9% → **85.3%**) crosses the owner-lock's ~85% threshold for opening the
+BiDi function leg. **It should not be spent yet**: two of the three gains are sites that answered the
+network this time and did not last time, and both directions of that trade are one sweep deep.
+
+### The number the tick exists to state
+
+**M1 is 17.8% at t887 and 17.8% at t904 — flat across 17 ticks**, with the t898 dip in between being
+the composition effect t898/t899 had already decomposed.
