@@ -3584,3 +3584,71 @@ confirmation that the choice was load-bearing rather than merely convenient.
 None of the three additions outranks the current CO-#1. All are `unknown` and cheap to answer;
 `scroll` event timing is the largest of them and is the one to probe first, because it is the only
 one an existing gate could be *silently wrong* about rather than simply absent.
+
+---
+
+## Audit #60 — tick 889 (2026-08-04)
+
+**Sources (read, not remembered):** `web.dev/blog/baseline-digest-jun-2026` · a `web.dev` search for
+the June/July 2026 Baseline features (the July digest 404s — it does not exist yet, which is itself
+worth recording so the next audit does not re-fetch it).
+
+⚠⚠⚠ **AUDIT #59'S FINDING 3 RECURRED TWICE IN ONE READ, AND IT IS THE MOST RELIABLE WAY THIS MAP GOES
+WRONG.** *"A row that exists for one of a feature's two consumers reads as covered."*
+
+* `CSS shape() function (clip-path / shape-outside)` is on the map. **`shape-outside: rect()` and
+  `xywh()`** — a different function set on the same property, Baseline **newly available** June 2026 —
+  are not, and a grep for `shape-outside` hits the `shape()` row and reads as covered.
+* `lazy loading (loading=lazy + IO)` is on the map, gated by `G_VIEWPORT`. That row is the **`<img>`**
+  consumer. **`HTMLIFrameElement.loading`** — the *iframe* consumer, and the one that matters for
+  below-the-fold embeds, maps and players — is a separate feature that went Baseline widely available
+  in June, and a grep for `loading=` hits the image row.
+
+The countermeasure is the one #59 already found and it held: **check each candidate individually
+against the row it appears to match**, never on the grep count. Five of the fifteen candidates read as
+present and only three actually were.
+
+⚠⚠ **AND THE AUDIT PROBED RATHER THAN FILING `unknown`, so nine of the ten new rows carry a VERDICT.**
+One fixture, `chromium --dump-dom` against our own engine:
+
+```text
+                                    Chrome      manuk
+  counter-set                        true       FALSE     ← missing
+  shape-outside: rect()              true       FALSE     ← missing
+  shape-outside: xywh()              true       FALSE     ← missing
+  :dir(rtl) matches                     1           0     ← missing
+  CanvasRenderingContext2D.reset()  function  undefined    ← missing
+  getComputedStyle().counterSet   'mycount 7'  undefined   ← missing
+  CSS pow()                          true       true      partial (PARSE-LEVEL)
+  linear() easing                    true       true      partial (PARSE-LEVEL)
+  @media (scripting: enabled)        true       true      partial (behavioural)
+  URL.canParse                     function   function    partial (behavioural)
+  HTMLIFrameElement.loading          true       true      partial (IDL only)
+  field-sizing                       true       FALSE     ← already on the map, twice
+```
+
+⚠ **TWO OF THE `partial`s ARE DELIBERATELY NOT `gated`, AND THE REASON IS THIS PROJECT'S OWN
+PRECEDENT.** `pow()` and `linear()` were answered by `CSS.supports`, which is a **parse-level**
+question — and at t574-583 `@supports` answering *"does it parse"* produced **31 phantom properties**
+on this very map. The rows say so in their receipts. `@media (scripting)`, `URL.canParse` and
+`iframe.loading` were answered behaviourally (a match, a `typeof`, an `in`) and are honestly
+`partial`: present, ungated.
+
+⚠ **A REFERENCE FACT WORTH RECORDING BECAUSE IT LOOKS LIKE A GAP AND IS NOT:** `text-fit` reads
+`false` in **Chrome too** on this box. The search results say Chrome 150 shipped it; our reference
+Chromium predates that. So it is not a divergence, and an audit that filed it as one would have
+manufactured a backlog row.
+
+**ADDED (449 → 459 rows):** `counter-set` · `shape-outside: rect()/xywh()` · CSS gap decorations ·
+`:dir()` · CSS math `pow()` · `<easing-function>` · `@media (scripting)` · `URL.canParse()` ·
+`CanvasRenderingContext2D.reset()` · `HTMLIFrameElement.loading`.
+
+**CORRECTED:** the lumped row *"2026 CSS frontier: if() / @function / inherit() / text-fit / gap
+decorations / progress()"* can no longer carry a verdict for **gap decorations**, which shipped
+(Chrome 149, Baseline June 2026) while the rest of that row has not. Split out. A lumped row is a row
+that cannot ratchet — the same defect shape as the lumped assertion that failed permanently at t855.
+
+**RE-RANK:** none of the ten outranks the current lever. The five `missing` are all small, contained
+CSS/canvas surfaces with no evidence of corpus pressure behind them; the M1 crossing cohort measured
+at t888 (eight sites one jarring dimension from crossing, +6.2 points) is still the largest known
+lever. Recorded as *"discovered, not urgent"* rather than promoted — which is what the map is for.

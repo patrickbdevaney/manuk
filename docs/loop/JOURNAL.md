@@ -46371,6 +46371,68 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 889 — one row for one of a feature's consumers reads as covered, twice in one read (2026-08-04)
+
+TICK SHAPE: measurement — the surface audit came due (every 10; last at 879), banked as audit #60 in
+`docs/loop/SURFACE-AUDIT.md`, with the probe run in the same tick so the new rows carry verdicts
+rather than `unknown`.
+
+⚠⚠⚠ **AUDIT #59'S OWN FINDING RECURRED TWICE IN A SINGLE READ, WHICH MAKES IT THE MOST RELIABLE WAY
+THIS MAP GOES WRONG.** *"A row that exists for one of a feature's two consumers reads as covered."*
+
+* `CSS shape() function (clip-path / shape-outside)` is on the map. **`shape-outside: rect()` /
+  `xywh()`** — a different function set on the same property, Baseline **newly available** June 2026 —
+  is not, and a grep for `shape-outside` hits the `shape()` row and reads as a hit.
+* `lazy loading (loading=lazy + IO)` is on the map and **gated by `G_VIEWPORT`**. That row is the
+  **`<img>`** consumer. `HTMLIFrameElement.loading` — the *iframe* consumer, the one that matters for
+  below-the-fold embeds, maps and players — is a separate feature that went Baseline in June, and a
+  grep for `loading=` hits the image row.
+
+Fifteen candidates were checked **one at a time against the row they appeared to match**, never on the
+grep count. Five read as present; only three were.
+
+⚠⚠⚠ **AND THE AUDIT PROBED INSTEAD OF FILING `unknown`, SO NINE OF THE TEN NEW ROWS CARRY A VERDICT.**
+One fixture, `chromium --dump-dom` against our engine:
+
+```text
+                                    Chrome      manuk
+  counter-set                        true       FALSE     ← missing
+  shape-outside: rect() / xywh()     true       FALSE     ← missing
+  :dir(rtl) matches                     1           0     ← missing
+  CanvasRenderingContext2D.reset()  function  undefined    ← missing
+  getComputedStyle().counterSet   'mycount 7'  undefined   ← missing
+  CSS pow() · linear() easing        true       true      partial (PARSE-LEVEL ONLY)
+  @media (scripting) · URL.canParse  true       true      partial (behavioural)
+  HTMLIFrameElement.loading          true       true      partial (IDL only)
+  field-sizing                       true       FALSE     ← already on the map, twice
+```
+
+⚠⚠ **TWO OF THE `partial`s ARE DELIBERATELY NOT `gated`, ON THIS PROJECT'S OWN PRECEDENT.** `pow()`
+and `linear()` were answered by `CSS.supports`, which asks *"does it parse"* — and at t574-583 that
+exact question produced **31 phantom properties on this very map**. Their receipts say so. The other
+three were answered behaviourally (a media-query match, a `typeof`, an `in`) and are honestly present
+but ungated.
+
+⚠ **ONE REFERENCE FACT RECORDED BECAUSE IT LOOKS LIKE A GAP AND IS NOT:** `text-fit` reads `false` in
+**Chrome too** on this box — the search results say Chrome 150 shipped it and our reference predates
+that. Filing it as a divergence would have manufactured a backlog row out of the reference's own
+version.
+
+**ADDED: 449 → 459 rows.** **CORRECTED:** the lumped *"2026 CSS frontier: if() / @function /
+inherit() / text-fit / gap decorations / progress()"* row can no longer carry a verdict for **gap
+decorations**, which shipped while the rest of the row has not — split out. *A lumped row is a row
+that cannot ratchet*, the same defect shape as t855's lumped assertion.
+
+**RE-RANK: none of the ten outranks the current lever**, and saying so is part of the audit. The five
+`missing` are small contained CSS/canvas surfaces with no corpus pressure behind them; t888's crossing
+cohort (eight sites one jarring dimension from M1, +6.2 points) is still the largest known lever. Filed
+as *discovered, not urgent* — which is what a map is for.
+
+PERF: none — measurement only.
+
+WIKI: none — the artefacts are `docs/loop/SURFACE-AUDIT.md` audit #60 and ten `CONSTELLATION.tsv`
+rows, which are the map this instrument exists to widen. [no-pattern]
+
 ## Tick 888 — the crossing ranking, re-derived on trustworthy data, and the eight are named (2026-08-04)
 
 TICK SHAPE: measurement — recompute the M1 crossing ranking from `SWEEP-t887-rows.tsv` (the first
