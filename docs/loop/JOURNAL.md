@@ -46371,6 +46371,109 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 897 — `getComputedStyle(el).width` answered with the SPECIFIED value, and the used one was already in hand (2026-08-04)
+
+TICK SHAPE: capability — the ranked cohort's top site, one layer further. t896 restored
+`beb88run.xyz`'s carousel subtree; it comes back MIS-SIZED (`slick-track [592 146 0×1]`, `<img>`
+`0×600` vs Chrome `1183×378`), and Slick's `setDimensions` sizes everything from jQuery measurements,
+so the probe went at what jQuery reads.
+
+⚠⚠⚠ **CSSOM MAKES `width`/`height` RESOLVE TO THE *USED* VALUE, AND WE HANDED BACK THE AUTHOR'S
+STRING.** Measured against Chrome on one fixture, six elements, before a line was changed:
+
+```text
+                                     Chrome      ours
+  block, width:auto, pad 5, bd 2      580px      auto
+  block, width:50% of 600             300px       50%
+  abspos sized by left + right        560px      auto
+  flex item, flex:1, in a 400px       400px      auto
+  33.333% width                  199.984px      calc(-0.016662598px + 33.333336%)
+  ANY height                           20px      auto     <- uniformly, every element
+```
+
+⚠⚠⚠ **IT WAS NEVER A LAYOUT GAP — THE NUMBER WAS ONE FIELD AWAY.** `offsetWidth` on the same
+elements was already exact (594 and 300 against Chrome's 594 and 300), and `computed_style_js` has
+taken the element's layout `rect` since the transform work. The binding was declining to publish what
+layout had already computed — **the same shape as `getComputedStyle(el).transform`**, which moved the
+box correctly for sixty ticks before the number reached JavaScript. That is now two members of one
+object with one cause, which is the argument for reading this seam as a class rather than a property.
+
+**What it costs, in the form libraries write it:** `parseInt($(el).css('width'))` is **`NaN`** on
+every jQuery page. jQuery's `getWidthOrHeight` survives only because it falls back to `offsetWidth`
+*when it sees `auto`* — and that fallback is itself gated on `elem.getClientRects().length`, so an
+engine answering `auto` without a working `getClientRects` returns **0** and every measure-then-size
+widget sizes to nothing. Animation libraries that pin a start value (`el.style.width =
+getComputedStyle(el).width` before a transition) read it with no fallback at all.
+
+⚠⚠ **THE BOX REPORTED IS THE ONE THE ELEMENT'S OWN `box-sizing` NAMES, and the plausible answer is
+wrong.** Chrome-measured, because "always the content box" fails immediately:
+
+```text
+  box-sizing:border-box;  width:200px; pad:10; bd:5   offsetWidth 200   Chrome 200px  (BORDER box)
+  box-sizing:content-box; width:200px; pad:10; bd:5   offsetWidth 230   Chrome 200px  (CONTENT box)
+```
+
+⚠⚠ **TWO GUARDS, AND "ALWAYS REPORT THE RECT" BREAKS BOTH.** `display:none` generates no box, so
+CSSOM says report the *computed* value — the author's `70px`, not a used 0. And a non-replaced
+**inline** reports `auto` in Chrome even though it has a real border box; returning its rect would be
+a confident wrong answer on the commonest element on the page.
+
+⚠⚠⚠ **AND THE HONEST NEGATIVE: IT DID NOT FIX THE CAROUSEL.** `beb88run.xyz`'s
+`slick-track` is still `[592 146 0×1]` after the fix. What it *did* do is eliminate the suspect the
+tick was opened on: jQuery's `.width()` was already returning 1185 for `slick-list` via the
+`offsetWidth` fallback, so the number Slick reads at final layout was never the problem. The
+carousel's cause is still open and is now one suspect narrower. **The fix stands on its own merits —
+Chrome-exact on 22 rows, RED-proven, whole-suite green — not on the site it was found through**, and
+saying so is the difference between a result and a story.
+
+⚠ **CONTROL PANEL — same-day A/B, the t896 binary against this one**, which is a real old-binary
+control rather than a sweep comparison:
+
+```text
+                  coverage              shape             overlap  reading_order
+  celeb.gate.cc   0.989648 -> 0.989648  0.7657 -> 0.7657   0 -> 0     0 -> 0     BYTE-IDENTICAL
+  sip777man.site  0.483132 -> 0.483132  0.9431 -> 0.9431   4 -> 4    12 -> 12    BYTE-IDENTICAL
+  www.tz.de       0.952802 -> 0.952286  0.8256 -> 0.8335   1 -> 1     4 -> 4
+  sestra.cc       0.997647 -> 0.990676  0.9222 -> 0.9176   0 -> 0     5 -> 6
+```
+
+**Two byte-identical controls is the strongest available evidence that a change is inert where it
+should be.** `sestra.cc` looked like a −0.005 loss with a reading-order pair added, so it was re-read
+**three times solo on this binary** before being believed:
+
+```text
+  shape 0.924883 / 0.922353 / 0.917647   reading_order 5 / 5 / 6   h_overflow 9 / 8 / 8   n 426/425/425
+```
+
+The site's own spread on ONE unchanged binary covers the entire "regression" — the batched reading is
+simply the bottom of its band, and `shape_n` moves between runs, so the DOM itself differs. *A delta
+smaller than the spread is not a result.* No regression traded.
+
+GATE: `G_RESOLVED_WIDTH_HEIGHT` — twenty-two claims, every one captured from a real
+`google-chrome --headless --dump-dom` run of this exact fixture. **RED-proven** by restoring
+`dim_css(&cs.width)`: nine fail, including `jq-parse-width=NaN`, which is the consequence rather than
+the symptom. Two claims are **reconciliation**, not capability: resolved content width + border +
+padding must equal `offsetWidth`, and for `border-box` the resolved width must BE `offsetWidth` — two
+readings of one box that disagree mean one of them is invented. The fixture's containing block is
+`position:relative` so the abspos row does not depend on the harness viewport (Chrome's first capture
+said `740px` against our 800px viewport, which would have been an instrument mismatch banked as an
+engine fact).
+
+⚠ **One case is deliberately NOT resolved and is named rather than asserted**: `width:auto` with a
+PERCENTAGE padding, which resolves against a containing-block width this seam does not hold. Such an
+element keeps its specified value instead of getting an invented number. Pinning the wrong value in
+the gate would make it fail on the tick that fixes it — the "honest no-stub becomes a lie when the cap
+lands" trap.
+
+The whole `manuk-page` suite was run rather than the wall's 19 gates, because `getComputedStyle` is
+read from everywhere: **zero failures.**
+
+PERF: none measurable — two extra branches and, in the common case, a shorter string than the
+`calc(...)` it replaces. No new layout work: `rect` was already a parameter.
+
+WIKI: `docs/wiki/dom-semantics.md` — "`getComputedStyle(el).width` is the *RESOLVED* value — the USED
+size in px, not the specified one"
+
 ## Tick 896 — `textContent = ''` left an empty text node, and it destroys jQuery's element factory (2026-08-04)
 
 TICK SHAPE: capability — the ranked cohort's top site, one layer deeper. t895 unblocked its

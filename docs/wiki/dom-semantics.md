@@ -464,6 +464,69 @@ not `html === undefined`); and the result's `nodeType` must be **11** (a fragmen
 element. `domparsing/createContextualFragment.html` 2 → 34/35 (the last is `<script>` execution on
 insertion, a separate capability); the area moved **149 → 182 (+33)**, crash-free. [[js-engine]]
 
+## `getComputedStyle(el).width` is the *RESOLVED* value — the USED size in px, not the specified one
+
+CSSOM makes `width`/`height` two of the handful of properties whose resolved value is the **used
+value** whenever the element generates a box. We returned the computed value verbatim:
+
+```text
+                                     Chrome     ours (before)
+  block, width:auto, pad 5, bd 2      580px        auto
+  block, width:50% of 600             300px         50%
+  abspos sized by left + right        560px        auto
+  flex item, flex:1, in a 400px       400px        auto
+  33.333% width               199.984px   calc(-0.016662598px + 33.333336%)
+  ANY height                           20px        auto        <- uniformly
+```
+
+**It was never a layout gap.** `offsetWidth` on the same elements was already exact (594 and 300
+against Chrome's 594 and 300), and `computed_style_js` has taken the element's layout `rect` since
+the transform work — a percentage `translate` resolves against the border box. The binding was
+declining to publish what layout had already computed, which is the *same shape* as the
+`getComputedStyle(el).transform` defect one section up: the box really moved for sixty ticks before
+the number reached JavaScript.
+
+**What it costs.** `parseInt($(el).css('width'))` is `NaN` on every jQuery page. jQuery's
+`getWidthOrHeight` survives only because it falls back to `offsetWidth` **when it sees `auto`** — and
+that fallback is itself gated on `elem.getClientRects().length`, so an engine that answers `auto`
+without a working `getClientRects` returns `0` and every measure-then-size widget sizes to nothing.
+Animation libraries that pin a start value (`el.style.width = getComputedStyle(el).width` before a
+transition) read it with no fallback at all.
+
+### The box reported is the one the element's own `box-sizing` names
+
+Measured, because the plausible answer — always the content box — is wrong:
+
+| declared | `offsetWidth` | Chrome's resolved `width` |
+|---|---|---|
+| `box-sizing:border-box; width:200px; padding:10px; border:5px` | 200 | **`200px`** (the border box) |
+| `box-sizing:content-box; width:200px; padding:10px; border:5px` | 230 | **`200px`** (the content box) |
+
+So the border box is reported unadjusted for `border-box`, and border+padding are subtracted for
+`content-box`.
+
+### Two guards, and "always report the rect" breaks both
+
+* **`display:none`** generates no box, so CSSOM says report the *computed* value — the author's own
+  `70px`, not a used value of 0.
+* **A non-replaced inline** reports `auto` in Chrome even though it has a real border box. Returning
+  its rect would be a confident wrong answer on the commonest element on the page.
+
+### One case is deliberately NOT resolved, and it is named rather than approximated
+
+`width:auto` together with a **percentage padding**: that padding resolves against the containing
+block's width, which this seam does not hold. Such an element keeps its specified value instead of
+getting an invented number. (A percentage padding on a *content-box* element is fine by construction —
+the specified width IS the content box, so the fallback lands on Chrome's answer, and
+`G_RESOLVED_WIDTH_HEIGHT` asserts that.) A replaced element that is `display:inline` — an `<img>` with
+no width attribute — falls into the inline guard for the same reason.
+
+### The reconciliation clause, because two readings of one box must not drift
+
+The gate asserts `resolved content width + border + padding === offsetWidth`, and for `border-box`
+that the resolved width IS `offsetWidth`. Two numbers describing the same box that disagree mean one
+of them is invented — the accounting-reconciliation mechanism, applied to a single element.
+
 ## getComputedStyle must expose the properties the cascade ALREADY computed — undefined is a bug, not a value
 
 `computed_style_js` built a fixed ~30-property snapshot and silently dropped several `ComputedStyle`

@@ -590,6 +590,98 @@ fn dim_css(d: &manuk_css::Dim) -> String {
     }
 }
 
+/// ⚠⚠⚠ **`getComputedStyle(el).width` IS THE *RESOLVED* VALUE — THE USED SIZE IN PX — AND WE WERE
+/// HANDING BACK THE SPECIFIED ONE.**
+///
+/// CSSOM makes `width`/`height` two of the handful of properties whose resolved value is the **used
+/// value**, not the computed one, whenever the element generates a box. We returned `cs.width`
+/// verbatim, so a page read `auto`, `50%`, or a raw `calc(-0.016662598px + 33.333336%)` string where
+/// Chrome reads `580px`, `300px`, `199.984px`.
+///
+/// **The number was already in hand, one field away.** `computed_style_js` has taken the element's
+/// layout `rect` since the transform work (a percentage translate resolves against the border box),
+/// and `offsetWidth` on the same elements was already exact — 594 and 300 against Chrome's 594 and
+/// 300. This was never a layout gap; it was the binding declining to publish what layout had computed.
+/// Same shape as the `getComputedStyle(el).transform` defect: *expose the value the pipeline ALREADY
+/// has.*
+///
+/// **What it costs.** `parseInt($(el).css('width'))` is `NaN` on every jQuery page; jQuery's
+/// `getWidthOrHeight` only survives because it falls back to `offsetWidth` when it sees `auto`, and
+/// that fallback is itself gated on `elem.getClientRects().length`. Every animation library that pins
+/// a start value (`el.style.width = getComputedStyle(el).width` before a transition), every
+/// measure-then-size widget, and every `parseFloat(cs.height)` layout calculation reads this.
+///
+/// **The box it reports is the one the element's own `box-sizing` names** — measured against Chrome
+/// on this exact fixture, because the plausible answer (always the content box) is wrong:
+///
+/// ```text
+///                                              Chrome       what we now emit
+///   box-sizing:border-box; width:200; pad:10; border:5    200px    the BORDER box  (offsetWidth 200)
+///   box-sizing:content-box; width:200; pad:10; border:5   200px    the CONTENT box (offsetWidth 230)
+///   width:auto in a 600px block, pad:5, border:2          580px    the CONTENT box
+/// ```
+///
+/// **Two guards, both Chrome-measured, both of which a naive "always report the rect" would break:**
+/// a `display:none` element has no box and reports its computed value (`auto`), and a non-replaced
+/// **inline** reports `auto` as well — Chrome says `auto` for a bordered `<span>` whose `offsetWidth`
+/// is a real number.
+///
+/// ⚠ **Named, not silently approximated:** percentage/`calc` PADDING resolves against the containing
+/// block's width, which this seam does not have, so such an element keeps its specified value rather
+/// than get a confidently wrong number. Same for a replaced element that is `display:inline` (an
+/// `<img>` with no width attribute), which is folded into the inline guard here — narrower than the
+/// bug being fixed, and a wrong number there would be worse than the honest `auto`.
+fn used_dim_css(
+    cs: &manuk_css::ComputedStyle,
+    rect: Option<[f32; 4]>,
+    horizontal: bool,
+) -> Option<String> {
+    use manuk_css::{BoxSizing, Dim, Display};
+    // No box ⇒ the computed value, per CSSOM. `display:none` is the case every page hits.
+    if cs.display == Display::None {
+        return None;
+    }
+    // A non-replaced inline has no width/height of its own to report. Chrome agrees, and returning
+    // its border box here would be a confident wrong answer on the single most common element type.
+    if cs.display == Display::Inline {
+        return None;
+    }
+    let r = rect?;
+    let border_box = if horizontal { r[2] } else { r[3] };
+    if !border_box.is_finite() {
+        return None;
+    }
+    let used = match cs.box_sizing {
+        // The border box IS the box `box-sizing: border-box` names, so it is reported unadjusted.
+        BoxSizing::BorderBox => border_box,
+        BoxSizing::ContentBox => {
+            let (pa, pb, ba, bb) = if horizontal {
+                (
+                    &cs.padding.left,
+                    &cs.padding.right,
+                    cs.border_width.left,
+                    cs.border_width.right,
+                )
+            } else {
+                (
+                    &cs.padding.top,
+                    &cs.padding.bottom,
+                    cs.border_width.top,
+                    cs.border_width.bottom,
+                )
+            };
+            // A padding we cannot resolve here is a number we must not invent.
+            let px_of = |d: &Dim| match d {
+                Dim::Px(v) => Some(*v),
+                Dim::Auto => Some(0.0),
+                _ => None,
+            };
+            border_box - px_of(pa)? - px_of(pb)? - ba - bb
+        }
+    };
+    Some(format!("{}px", used.max(0.0)))
+}
+
 /// An `Rgba` as a CSS color string.
 fn rgba_css(c: &manuk_css::Rgba) -> String {
     if c.a == 255 {
@@ -1436,8 +1528,11 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         q(scrollbar_width),
         q(&scrollbar_color),
         q(&opacity),
-        q(&dim_css(&cs.width)),
-        q(&dim_css(&cs.height)),
+        // CSSOM: `width`/`height` resolve to the USED value once the element generates a box. The
+        // specified value is the fallback for the cases `used_dim_css` refuses (display:none, a
+        // non-replaced inline, an unresolvable percentage padding) — never the default.
+        q(&used_dim_css(cs, rect, true).unwrap_or_else(|| dim_css(&cs.width))),
+        q(&used_dim_css(cs, rect, false).unwrap_or_else(|| dim_css(&cs.height))),
         q(&dim_css(&cs.margin.top)),
         q(&dim_css(&cs.margin.right)),
         q(&dim_css(&cs.margin.bottom)),
