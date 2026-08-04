@@ -977,13 +977,79 @@ const PRELUDE: &str = r#"
         // every analytics hook and ad-blocker works. This is *not* t884's IndexedDB defect on another
         // interface; it is only the enumerability of state. Fixing the leak is right; claiming the
         // larger bug would have been wrong.
-        var slots = { _ls: null, _m: "GET", _u: "", _id: null, _h: [], _respHeaders: [] };
+        //
+        // `_wc` backs `withCredentials` and `_sent` is the XHR standard's **send() flag** — both are
+        // internal slots for the same reason as the rest of this list, and both are read by the
+        // prototype accessors installed below.
+        var slots = { _ls: null, _m: "GET", _u: "", _id: null, _h: [], _respHeaders: [],
+                      _wc: false, _sent: false };
         for (var __k in slots) {
             Object.defineProperty(this, __k, {
                 value: slots[__k], writable: true, enumerable: false, configurable: true
             });
         }
     };
+    // ⚠⚠⚠ **`withCredentials` IS jQUERY'S ENTIRE CROSS-ORIGIN GATE, AND IT WAS ABSENT.**
+    //
+    // jQuery 3.7.1 — the version on `beb88run.xyz`, and the shape every 1.x/2.x/3.x ships — decides
+    // once, at load, whether it can do cross-origin AJAX at all, and it decides it by asking an XHR
+    // whether it has ONE property (verbatim from the site's own `desktop-js` bundle):
+    //
+    // ```js
+    //   le.cors = "withCredentials" in Qt;            // Qt = new XMLHttpRequest()
+    //   ce.ajaxTransport(function (i) {
+    //     if (le.cors || Qt && !i.crossDomain) return { send: …, abort: … };
+    //   });                                           // …else: l(-1, "No Transport")
+    // ```
+    //
+    // `done(-1, "No Transport")` sets `jqXHR.readyState = 0` and rejects. **That is precisely the
+    // sixteen `readyState: 0` rejections t891 pulled out of this page and t894 identified as jqXHRs**
+    // — a 4-second `await $.ajax()` poll of `https://jp-api2.namesvr.dev/progressive-jackpot`, a
+    // cross-origin URL, on a page served from `beb88run.xyz`.
+    //
+    // The rest of jQuery's detection was already right, which is why this took three ticks to find:
+    // measured on this engine, `new XMLHttpRequest()` succeeds, `<a>.protocol`/`.host` resolve
+    // correctly, and jQuery's `crossDomain` computation returns the right answer for relative,
+    // absolute-same-origin, protocol-relative and foreign URLs. **One absent boolean, and every
+    // cross-origin `$.ajax` on every jQuery page on the web is dead** — a capability we HAVE (this
+    // engine performs cross-origin requests; it does not even enforce CORS yet) that we were failing
+    // to *admit to*. This is t861-870's rule pointed at a different library: **ask what a library
+    // BELIEVES, not what it can detect.**
+    //
+    // ⚠ **HONEST BOUND, so a later reader does not over-read this.** The accessor faithfully carries
+    // the page's intent and `withCredentials = true` is correct today (this engine sends the origin's
+    // cookies subject to `SameSite`). What is NOT yet honoured is the `false` half — a cross-origin
+    // request should then send NO cookies, and ours still sends `SameSite=None` ones. That is the
+    // *pre-existing* behaviour, unchanged by this tick and not made worse by it; closing it needs a
+    // credentials-mode field through `take_fetches`'s tuple (≈20 call sites) and is its own tick.
+    // Named here rather than left to be re-discovered as a defect.
+    Object.defineProperty(XMLHttpRequest.prototype, 'withCredentials', {
+        enumerable: true, configurable: true,
+        get: function () { return this._wc === true; },
+        set: function (v) {
+            // Spec: throw InvalidStateError unless state is UNSENT or OPENED and the send() flag is
+            // unset. Chrome throws on the third case and accepts the first two — measured, not
+            // recalled (`setUnsent=ok`, `setOpened=ok`, `setAfterSend=THREW:InvalidStateError`).
+            if ((this.readyState !== 0 && this.readyState !== 1) || this._sent === true) {
+                throw new DOMException(
+                    "Failed to set the 'withCredentials' property on 'XMLHttpRequest': The value may " +
+                    "only be set if the object's state is UNSENT or OPENED.", 'InvalidStateError');
+            }
+            this._wc = !!v;                     // WebIDL boolean coercion: `'yes'` becomes `true`
+        }
+    });
+    // **The readyState constants — `xhr.readyState === XMLHttpRequest.DONE` is the idiom, and ours
+    // compared against `undefined`.** All five were absent from BOTH the interface object and the
+    // prototype, so the completion branch of every hand-rolled XHR wrapper was unreachable: `4 === undefined`
+    // is false, silently, forever. Property shape is Chrome's, read off `getOwnPropertyDescriptor`:
+    // `{writable:false, enumerable:true, configurable:false}` — WebIDL constants are enumerable, so a
+    // `for…in` over the interface object sees them.
+    [['UNSENT', 0], ['OPENED', 1], ['HEADERS_RECEIVED', 2], ['LOADING', 3], ['DONE', 4]]
+        .forEach(function (kv) {
+            var d = { value: kv[1], writable: false, enumerable: true, configurable: false };
+            Object.defineProperty(XMLHttpRequest, kv[0], d);
+            Object.defineProperty(XMLHttpRequest.prototype, kv[0], d);
+        });
     // **XMLHttpRequest IS AN EventTarget, and it was not one.**
     //
     // `addEventListener`, `removeEventListener` and `dispatchEvent` were all `undefined` here, and
@@ -1043,7 +1109,9 @@ const PRELUDE: &str = r#"
             try { (typeof L.fn === 'function' ? L.fn : L.fn.handleEvent).call(x, ev); } catch (e) {}
         }
     };
-    XMLHttpRequest.prototype.open = function(m, u) { this._m = m || "GET"; this._u = u || ""; this._h = []; this.readyState = 1; };
+    // `_sent` is the XHR standard's **send() flag**, and `open()` clears it: a reused XHR must accept
+    // `withCredentials` again between requests, which is exactly what a connection-pooling wrapper does.
+    XMLHttpRequest.prototype.open = function(m, u) { this._m = m || "GET"; this._u = u || ""; this._h = []; this._sent = false; this.readyState = 1; };
     XMLHttpRequest.prototype.setRequestHeader = function(k, v) { if (k != null) this._h.push([k, v == null ? "" : v]); };
     XMLHttpRequest.prototype.getAllResponseHeaders = function() {
         var h = this._respHeaders; if (!h || !h.length) return "";
@@ -1072,10 +1140,11 @@ const PRELUDE: &str = r#"
         globalThis.__xhrFire(this, 'readystatechange');
         globalThis.__xhrFire(this, 'abort');
         globalThis.__xhrFire(this, 'loadend');
-        this.readyState = 0; // ...then back to UNSENT (XHR standard's abort() steps).
+        this.readyState = 0; // ...then back to UNSENT (XHR standard's abort() steps),
+        this._sent = false;  // ...with the send() flag unset, so the object is reusable.
     };
     XMLHttpRequest.prototype.send = function(body) {
-        var id = ++__fetchId; __xhrObj[id] = this; this._id = id;
+        var id = ++__fetchId; __xhrObj[id] = this; this._id = id; this._sent = true;
         var hdrs = __encHeaders(this._h);
         var payload;
         if (body && body.__isFormData) {

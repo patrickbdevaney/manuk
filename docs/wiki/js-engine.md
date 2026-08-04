@@ -2752,3 +2752,51 @@ later writes needed no change.
 the `on*` handlers) are own data properties where Chrome has prototype **accessors** — which is why
 Chrome's `JSON.stringify(xhr)` is `{}` and ours is still a populated object. Same shape as the
 IndexedDB work in [the storage note](storage.md); its own tick.
+
+### The bottom of that chain — `'withCredentials' in xhr` is jQuery's ENTIRE cross-origin capability
+
+Three ticks walked this: t891 named the sixteen rejected values, t894 identified them as jQuery
+`jqXHR`s at `readyState: 0` **and refuted the obvious explanation** (a 60-second load budget, five
+times the default, changed nothing — 16 rejections, 14 overlap pairs, shape inside its own spread).
+`readyState: 0` on a jqXHR means jQuery never reached the send. The answer is one line of jQuery's own
+support detection, verbatim from the site's shipped 3.7.1 bundle:
+
+```js
+  le.cors = "withCredentials" in Qt;              // Qt = new XMLHttpRequest()
+  ce.ajaxTransport(function (i) {
+    if (le.cors || Qt && !i.crossDomain) return { send: …, abort: … };
+  });                                             // …otherwise: l(-1, "No Transport")
+```
+
+`done(-1, "No Transport")` sets `jqXHR.readyState = 0` and rejects. **We had no `withCredentials`, so
+`support.cors` was `false`, so jQuery refused to issue ANY cross-origin `$.ajax` — on every jQuery page
+on the web.** On `beb88run.xyz` that is a 4-second `await $.ajax()` poll of
+`https://jp-api2.namesvr.dev/progressive-jackpot`; sixteen polls, sixteen unhandled rejections, and a
+jackpot counter stuck on `UPDATING`.
+
+**What makes this the expensive shape rather than an ordinary gap: everything else jQuery checks was
+already right.** Measured on this engine before a line was changed — `new XMLHttpRequest()` succeeds,
+`<a>.protocol`/`.host` resolve, and jQuery's `crossDomain` computation (`originAnchor` vs `urlAnchor`)
+returns the correct answer for relative, absolute-same-origin, protocol-relative and foreign URLs. A
+probe that asked *"can we do cross-origin requests?"* would have said yes, because we can. The library
+was not asking that. **Ask what a library BELIEVES, not what it can detect** — the same rule that found
+tippy's `[object Object]` brand check.
+
+The same block landed the five **readyState constants** (`UNSENT`…`DONE`) on both the interface object
+and the prototype. They were absent from both, so `xhr.readyState === XMLHttpRequest.DONE` — the
+completion branch of every hand-rolled XHR wrapper — was `4 === undefined`: false, silently, forever.
+Chrome's descriptor shape is `{writable:false, enumerable:true, configurable:false}`; WebIDL constants
+are enumerable, so `Object.keys(XMLHttpRequest)` lists all five.
+
+`withCredentials` is a **prototype accessor** over a non-enumerable `_wc` slot, with the XHR standard's
+state check (`InvalidStateError` unless UNSENT/OPENED with the send() flag unset, and `open()`/`abort()`
+clear that flag so a reused object accepts it again). Prototype, not instance, so it cannot undo t892 —
+`JSON.stringify(xhr)` gains nothing. All of it is `G_XHR_CORS_GATE`, twenty-two claims, RED-proven.
+
+**Honest bound, so this is not over-read.** `withCredentials = true` is correct today; the `false` half
+is not yet honoured — a cross-origin request should then send *no* cookies and ours still sends
+`SameSite=None` ones. That is the pre-existing behaviour, unchanged by exposing the property, and
+closing it needs a credentials-mode field through `take_fetches`'s tuple (~20 call sites). Also still
+absent and deliberately so: `responseURL` and `responseXML` (both need host plumbing), and
+`upload`/`XMLHttpRequestUpload` — that one is *named in the standing absence list* because this engine
+does not stream a request body, and `G_IFACE_SURFACE_2` asserts the absence on purpose.

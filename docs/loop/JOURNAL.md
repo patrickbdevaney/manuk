@@ -46371,6 +46371,102 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 895 — jQuery's cross-origin gate is ONE absent IDL attribute (2026-08-04)
+
+TICK SHAPE: capability — check #77's steer #1, third tick on the ranked cohort. t894 identified the
+sixteen rejected objects as jQuery `jqXHR`s stuck at `readyState: 0` and named the next probe: *inside
+jQuery's own path — which transport it selected, and what it found missing.* It found it.
+
+⚠⚠⚠ **jQUERY DECIDES ITS ENTIRE CROSS-ORIGIN CAPABILITY BY ASKING AN XHR FOR ONE PROPERTY, AND WE HAD
+NO SUCH PROPERTY.** Verbatim from the site's own shipped `desktop-js` bundle (jQuery 3.7.1):
+
+```js
+  le.cors = "withCredentials" in Qt;              // Qt = new XMLHttpRequest()
+  ce.ajaxTransport(function (i) {
+    if (le.cors || Qt && !i.crossDomain) return { send: …, abort: … };
+  });                                             // …otherwise: l(-1, "No Transport")
+```
+
+`done(-1, "No Transport")` sets `jqXHR.readyState = 0` and rejects. **`support.cors` was `false` here,
+so jQuery refused to issue ANY cross-origin `$.ajax` — on every jQuery page on the web.** On
+`beb88run.xyz` that is `Home/desktop-js`'s `await window.$.ajax({url: i.dataset.progressiveJackpotUrl
++ "/progressive-jackpot"})` — `https://jp-api2.namesvr.dev`, cross-origin — re-armed every 4s by its
+own `complete:` handler. Sixteen polls, sixteen `await`s throwing inside an async function, sixteen
+unhandled rejections, and the jackpot counter stuck on `UPDATING`.
+
+⚠⚠⚠ **EVERYTHING ELSE jQUERY CHECKS WAS ALREADY RIGHT, WHICH IS WHY THIS TOOK THREE TICKS.** Measured
+before a line was changed, by transcribing jQuery's own detection into a fixture:
+
+```text
+  xhrSupported (new XMLHttpRequest())        true      <- fine
+  origin.protocol / origin.host        https: / jq.test <- fine
+  crossDomain '/api/thing'                   false     <- fine
+  crossDomain 'https://jq.test/api/thing'    false     <- fine
+  crossDomain '//jq.test/api/thing'          false     <- fine
+  crossDomain 'https://other.test/api/thing' true      <- fine
+  'withCredentials' in xhr                   FALSE     <- everything
+```
+
+A probe asking *"can this engine do cross-origin requests?"* answers **yes** — it can, and it does not
+even enforce CORS yet. The library was not asking that. This is t861-870's rule on a different
+library: **ask what a library BELIEVES, not what it can detect.**
+
+⚠⚠ **ATTRIBUTED BY THE OLD BINARY, REBUILT FROM THE REVERTED TREE AND RUN IN THE SAME HOUR** (I5, and
+it is the only thing that turns 0 into a result — a live site moves on its own):
+
+```text
+                                   OLD (07:37)   NEW (07:29)
+  UNHANDLED PROMISE REJECTION          16            0
+  MEAN SHAPE                         86.3%        86.3%
+  scored elements                     1739         1739
+```
+
+Sixteen, exactly reproduced, four hours after t894 read the same number — then zero. **Shape does not
+move, and that is the honest report, not a disappointment:** the rejections stopping is the boot-path
+fix; the carousel still needs the data to *arrive and be rendered*, which is the next layer of the
+same chain t777 named (boot-throw → the page gets further → the next gap).
+
+⚠ **A SECOND MEMBER IN THE SAME BLOCK, AND IT IS THE QUIETER ONE.** All five readyState constants were
+absent from **both** the interface object and the prototype, so `xhr.readyState ===
+XMLHttpRequest.DONE` — the completion branch of every hand-rolled XHR wrapper — evaluated `4 ===
+undefined`: false, silently, forever. Chrome's descriptor shape was read off
+`getOwnPropertyDescriptor`, not recalled: `{writable:false, enumerable:true, configurable:false}`, and
+WebIDL constants are enumerable so `Object.keys(XMLHttpRequest)` lists all five.
+
+`withCredentials` is a **prototype accessor** over a non-enumerable `_wc` slot with the standard's
+state check (`InvalidStateError` unless UNSENT/OPENED with the send() flag unset; `open()` and
+`abort()` clear that flag so a reused object accepts it again). On the prototype precisely so it
+cannot undo t892 — the gate asserts `JSON.stringify(xhr)` gains neither the property nor the two new
+slots.
+
+⚠ **THE BOUND, STATED SO IT IS NOT OVER-READ.** `withCredentials = true` is correct today (this engine
+sends the origin's cookies subject to `SameSite`). The `false` half is **not** honoured — a
+cross-origin request should then send no cookies and ours still sends `SameSite=None` ones. That is
+the *pre-existing* behaviour, unchanged by exposing the property and not made worse by it; closing it
+needs a credentials-mode field through `take_fetches`'s 5-tuple (~20 call sites) and is its own tick.
+Also deliberately still absent: `responseURL` and `responseXML` (both need the host to carry the final
+URL / a document parse), and `upload`/`XMLHttpRequestUpload` — that one is **named in the standing
+absence list and asserted by `G_IFACE_SURFACE_2`**, because this engine does not stream a request
+body, and naming an interface we cannot back is the trap that list exists to prevent.
+
+GATE: `G_XHR_CORS_GATE` — twenty-two claims, every expectation captured from a real
+`google-chrome --headless --dump-dom` run of the same fixture. The two with teeth are jQuery's own
+expressions on jQuery's own values (`jq-support.cors`, `jq-transport-for-crossdomain`). **RED-proven**
+by deleting the block: `jq-support.cors=false`, `jq-transport-for-crossdomain=MISSING`,
+`done-idiom=false`, `coerced=yes` (the uncoerced string), `set-after-send=NO-THROW` — the exact
+pre-fix state. The descriptor read is guarded so an absent constant fails ONE claim instead of
+throwing and reporting all twenty-two as missing; a gate that cannot say what broke is worth less than
+its cost. Neighbouring gates re-run green: `g_xhr_eventtarget`, `g_xhr_eventtarget_stream`,
+`g_xhr_progress`, `g_rejection_describes_its_value`, `g_iface_surface`, `g_iface_surface_2`,
+`g_capability`, `g_cookie_attributes`, `g_send_beacon`.
+
+PERF: none. Two `defineProperty` calls and ten constant definitions, once per global at prelude
+install; no per-request work is added. The live navigation is unchanged at the phase level (both
+binaries exhaust the same 12s budget on the same six phases).
+
+WIKI: `docs/wiki/js-engine.md` — "The bottom of that chain — `'withCredentials' in xhr` is jQuery's
+ENTIRE cross-origin capability"
+
 ## Tick 894 — the load budget is NOT what starves beb88run, and the objects are jqXHRs (2026-08-04)
 
 TICK SHAPE: measurement — check #77's steer #1, taken literally: work the ranked cohort. The top site

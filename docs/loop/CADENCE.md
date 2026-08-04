@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **626** | ticks 1–893 |
-| median tick cycle | **26m** | 625 intervals |
+| ticks landed | **627** | ticks 1–894 |
+| median tick cycle | **26m** | 626 intervals |
 | median, last 10 | **20m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 574.0h elapsed |
-| median verify wall | **63s** | 565 ticks |
+| **ticks per hour** | **1.09** | 574.9h elapsed |
+| median verify wall | **63s** | 566 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **388**
-* **✅ rows in the capability ledger**: 144 → **466**
+* **live gates**: 27 → **389**
+* **✅ rows in the capability ledger**: 144 → **467**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**306 of 626 ticks** (49%) moved a
+**306 of 627 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -723,5 +723,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **890** | 2026-08-04 02:12 | 28m | measurement | 63s | +283/−34 | 388 | 81 | 56.0% · | the self-audit is green, and the honest number beside it is 0.9 points (2026-08-04) |
 | **892** | 2026-08-04 02:51 | 39m | capability | 63s | +166/−33 | 388 | 81 | 56.0% · | t891's second finding was WRONG, and the real one is narrower (2026-08-04) |
 | **893** | 2026-08-04 03:03 | 12m | measurement | 63s | +93/−32 | 388 | 81 | 56.0% · | two windows have ended with the ranked lever untouched (2026-08-04) |
+| **894** | 2026-08-04 03:55 | 52m | measurement | 63s | +468/−37 | 389 | 81 | 56.0% · | the load budget is NOT what starves beb88run, and the objects are jqXHRs (2026-08-04) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

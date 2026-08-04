@@ -1078,6 +1078,7 @@
   - L2689 · An unhandled rejection must say WHAT was rejected
   - L2710 · The shape of the describer, and why each bound is there
   - L2726 · The second defect it surfaced — and the correction, because the first reading was wrong
+  - L2756 · The bottom of that chain — 'withCredentials' in xhr is jQuery's ENTIRE cross-origin capability
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1523,4 +1524,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1430 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1431 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
