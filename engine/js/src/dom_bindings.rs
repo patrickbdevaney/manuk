@@ -17217,6 +17217,37 @@ const WINDOW_PRELUDE: &str = r#"
             // global. Returns "" when a handler cancelled the report, otherwise the diagnostic the
             // host should log — **including the stack**, which is the difference between a message and
             // an address.
+            g.__describeRejection = function (v) {
+                if (v === null) { return 'null'; }
+                if (typeof v !== 'object') { return String(v); }
+                var s;
+                try { s = String(v); } catch (e) { s = '[object]'; }
+                if (s !== '[object Object]' && s.indexOf('[object ') !== 0) { return s; }
+                var name = '';
+                try { name = (v.constructor && v.constructor.name) || ''; } catch (e) {}
+                var keys = [];
+                // `__`-prefixed keys are THIS ENGINE'S internals (`__nodeId` and friends). Leaking
+                // them into a log line makes a page's object look like it carries state it does not,
+                // and the reader has no way to tell ours from theirs.
+                try {
+                    keys = Object.keys(v).filter(function (k) { return k.indexOf('__') !== 0; }).slice(0, 6);
+                } catch (e) {}
+                var body = '';
+                try {
+                    body = JSON.stringify(v, function (k, val) {
+                        if (k && k.indexOf('__') === 0) { return undefined; }
+                        return typeof val === 'function' ? '[fn]' : val;
+                    });
+                    if (body && body.length > 300) { body = body.slice(0, 300) + '…'; }
+                } catch (e) { body = ''; }
+                // A DOM node or a host object has no useful JSON — its tag/type is the fact.
+                if (!body || body === '{}') {
+                    var tag = '';
+                    try { tag = v.nodeName ? (' <' + String(v.nodeName).toLowerCase() + '>') : ''; } catch (e) {}
+                    return (name || s) + tag + (keys.length ? ' keys=[' + keys.join(',') + ']' : ' (no own keys)');
+                }
+                return (name && name !== 'Object' ? name + ' ' : '') + body;
+            };
             g.__fireUnhandledRejection = function () {
                 var reason = g.__pendingRejectionReason;
                 var promise = g.__pendingRejectionPromise;
@@ -17227,8 +17258,23 @@ const WINDOW_PRELUDE: &str = r#"
                 ev.target = g; ev.currentTarget = g; ev.isTrusted = true;
                 try { g.__fireWindowEvent('unhandledrejection', ev); } catch (e) {}
                 if (ev.defaultPrevented) { return ''; }
+                // ⚠⚠⚠ **`String(reason)` ON A PLAIN OBJECT IS `[object Object]`, AND THAT IS A LOG
+                // LINE THAT COSTS A TICK.** Measured on `beb88run.xyz`: SIXTEEN unhandled rejections
+                // in one load, every one reported as `error=[object Object]`, so the log named the
+                // count and nothing else — while the page was missing a 458-element carousel subtree
+                // and the investigation had no thread to pull.
+                //
+                // A rejected value is very often NOT an `Error`: `fetch` handlers reject with a
+                // `Response`, XHR wrappers with `{status, statusText}`, and half the ad/analytics
+                // bundles on the web reject with a bare config object. This is the standing rule —
+                // *if a message speculates about state the process is holding, print the state* —
+                // applied to the one place that was printing the default `toString` instead.
+                //
+                // The description is bounded on purpose (constructor name, first six own keys, a
+                // clipped JSON body): a log line that dumps an entire object graph is as unreadable
+                // as `[object Object]` and is a denial-of-service on the sweep's own output.
                 var msg;
-                try { msg = (reason && reason.message) ? String(reason.message) : String(reason); }
+                try { msg = (reason && reason.message) ? String(reason.message) : g.__describeRejection(reason); }
                 catch (e) { msg = '(unstringifiable rejection)'; }
                 var loc = '';
                 try {

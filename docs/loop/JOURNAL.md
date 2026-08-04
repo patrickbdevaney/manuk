@@ -46371,6 +46371,77 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 891 — `[object Object]`, sixteen times, is a log line that costs a tick (2026-08-04)
+
+TICK SHAPE: capability (instrument) — take t888's named target (the Slick carousel on `beb88run.xyz`,
+top of the crossing cohort), run its specified first bisect, and fix the thing the bisect ran into.
+
+**THE BISECT, which t888 specified and which resolved in one run.** *"Separate 'the DOM Slick built
+differs' from 'we lay out the DOM it built differently' before touching layout."* Loading the fetched
+document through `Page::load` with a probe:
+
+```text
+  .banner            DIV[3 kids]      ✓
+  .banner-carousel   DIV[8 kids]      ✓   ← the RAW slides, un-enhanced
+  .slick-list        MISSING
+  .slick-track       MISSING
+  .slick-slide       0
+  .slick-initialized 0
+```
+
+**It is not a layout bug.** Slick never initialises, so we hold a *different DOM* — the un-enhanced
+markup — and the 458 "missing boxes" are 458 nodes that were never built. Layout was never going to be
+the fix, and one probe cost less than reading a line of `layout_block`.
+
+⚠⚠⚠ **AND THE NEXT QUESTION HAD NO THREAD TO PULL, BECAUSE THE LOG SAID `[object Object]` SIXTEEN
+TIMES.** That is the entire diagnostic the page produced. `String(reason)` on a plain object is
+`[object Object]`, and the unhandled-rejection reporter — the instrument this project built precisely
+because *"every modern framework renders inside an async function, so this is where their failures go
+to die"* — was printing the default `toString`.
+
+**A rejected value is very often not an `Error`**: `fetch` handlers reject with a `Response`, XHR
+wrappers with `{status, statusText}`, and a large share of the ad/analytics bundles on the web reject
+with a bare config object. This is t684-692's standing rule — *if a message speculates about state the
+process is holding, print the state* — aimed at the one place still printing a default `toString`.
+
+**MEASURED, the same page, one binary apart:**
+
+```text
+  before   16×  error=[object Object]
+  after    16×  error={"readyState":0,"getResponseHeader":"[fn]","getAllResponseHeaders":"[fn]",
+                       "setRequestHeader":"[fn]","overrideMimeType":"[fn]","sta…
+```
+
+**They are XHR objects, rejected at `readyState: 0` — UNSENT.** Sixteen AJAX calls that never opened.
+That is jQuery's `$.ajax` rejecting with the jqXHR, and it is why Slick has nothing to build from. The
+carousel investigation now has a named target where an hour ago it had a count.
+
+⚠⚠ **AND THE DESCRIPTION ITSELF SURFACED A SECOND DEFECT OF A CLASS THIS WINDOW ALREADY FIXED ONCE.**
+`getResponseHeader` / `getAllResponseHeaders` / `setRequestHeader` / `overrideMimeType` appear in
+`JSON.stringify(xhr)`, which means they are **own enumerable properties** on the instance. In Chrome
+they are on `XMLHttpRequest.prototype` and `JSON.stringify(xhr)` is `{}`. That is **exactly t884's
+IndexedDB finding on a different interface** — and it is named here rather than folded in, because a
+tick that fixes what it happened to notice while fixing something else is two ticks neither of which
+can be attributed.
+
+⚠ **THE DESCRIPTION IS BOUNDED, AND `__`-PREFIXED KEYS ARE FILTERED.** Constructor name, first six own
+keys, a JSON body clipped at 300 chars — a log line that dumps an object graph is as unreadable as
+`[object Object]` and is a denial-of-service on the sweep's own output. The internals filter earns its
+place immediately: without it a plain `<div>` reports `keys=[__nodeId]`, advertising OUR expando as
+the page's own state with no way for a reader to tell whose it is.
+
+GATE: `G_REJECTION_DESCRIBES_ITS_VALUE` — six claims, RED-proven by restoring `String(reason)` (the
+fetch-shaped object claim fails immediately). It asserts the payload IS printed, that an empty object
+says so rather than reading as a mystery, that a host object falls back to its tag with the internals
+filtered, and — **the guard** — that a primitive passes through untouched, because a describer that
+wrapped every value in constructor-and-keys ceremony would make the common case worse than the bug.
+`window.__describeRejection` exposes the same function the reporter uses, so the behaviour is
+assertable rather than only observable in a log the harness does not capture.
+
+PERF: none on the render path — the describer runs only when a rejection is already being reported.
+
+WIKI: `docs/wiki/js-engine.md` — "An unhandled rejection must say WHAT was rejected"
+
 ## Tick 890 — the self-audit is green, and the honest number beside it is 0.9 points (2026-08-04)
 
 TICK SHAPE: measurement — the self-audit came due (every 10; last at 880). **Fully green, 62 checks,

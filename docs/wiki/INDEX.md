@@ -1075,6 +1075,9 @@
   - L2633 · The enum-completeness question, which is two-sided
   - L2650 · And one entry that had quietly become false
   - L2658 · A five-clause is_empty() outlives the decision that makes one clause false (t855)
+  - L2689 · An unhandled rejection must say WHAT was rejected
+  - L2710 · The shape of the describer, and why each bound is there
+  - L2726 · The second defect it surfaced, named and not folded in
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -1520,4 +1523,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1427 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1430 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

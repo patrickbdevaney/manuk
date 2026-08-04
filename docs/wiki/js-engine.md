@@ -2685,3 +2685,47 @@ the other.
 ⚠ It survived because the wall runs **19 of 104** gates and `manuk-page --lib` is not among them. It
 surfaced only when t853 ran the whole crate during an unrelated regression sweep, and it was
 attributed to HEAD — not to that tick — by stashing the diff and re-running.
+
+## An unhandled rejection must say WHAT was rejected
+
+`String(reason)` on a plain object is `[object Object]`. The unhandled-rejection reporter — built
+because *"every modern framework renders inside an async function, so this is where their failures go
+to die"* — was printing that default `toString`, and on `beb88run.xyz` it printed it **sixteen times
+in one load**. The log named the count and nothing else, while the page was missing a 458-element
+carousel subtree.
+
+**A rejected value is very often not an `Error`**: `fetch` handlers reject with a `Response`, XHR
+wrappers with `{status, statusText}`, and a large share of the ad/analytics bundles on the web reject
+with a bare config object.
+
+```text
+  before   16x  error=[object Object]
+  after    16x  error={"readyState":0,"getResponseHeader":"[fn]","getAllResponseHeaders":"[fn]",
+                       "setRequestHeader":"[fn]","overrideMimeType":"[fn]","sta...
+```
+
+They are **XHR objects rejected at `readyState: 0` — UNSENT**: sixteen AJAX calls that never opened,
+which is why Slick had nothing to build from. A count became a target.
+
+### The shape of the describer, and why each bound is there
+
+Constructor name · first six own keys · a JSON body clipped at 300 chars. **Bounded on purpose** — a
+log line that dumps an object graph is as unreadable as `[object Object]` and is a denial-of-service on
+the sweep's own output. A primitive passes through untouched, because a describer that wrapped every
+value in constructor-and-keys ceremony would make the common case worse than the bug. A host object
+has no useful JSON, so its tag is the fact.
+
+**`__`-prefixed keys are filtered**, because they are this engine's internals. Without that a plain
+`<div>` reports `keys=[__nodeId]`, advertising our expando as the page's own state with no way for a
+reader to tell whose it is.
+
+`window.__describeRejection` exposes the same function the reporter uses, so the behaviour is
+assertable (`G_REJECTION_DESCRIBES_ITS_VALUE`) rather than only observable in a log the test harness
+does not capture.
+
+### The second defect it surfaced, named and not folded in
+
+`getResponseHeader` / `setRequestHeader` / `overrideMimeType` appear in `JSON.stringify(xhr)`, so they
+are **own enumerable properties** on the instance; in Chrome they are on `XMLHttpRequest.prototype` and
+`JSON.stringify(xhr)` is `{}`. That is the same defect as the IndexedDB one — see
+[the storage note](storage.md) — on a different interface, and it is its own tick.
