@@ -195,7 +195,7 @@ It is written by the loop, from the tree, and is re-derived — not remembered �
 
 | Constitution scope | Ground truth |
 |---|---|
-| **H0.1** layout beyond Taffy + incremental relayout | Layout is on Taffy 0.12 (`Cargo.toml:83`, re-verified check #73); **no double-dirty-bit incremental relayout.** CSS layout breadth is the weak spot. ⚠️ **The two percentages this row used to carry (`css-flexbox` 5.5%, `css-grid` 4.7%) were tick-86 WPT readings and are RETIRED as a ranking instrument** — see VI.3. The governing measurement of layout breadth is now **M1 on the in-scope CrUX corpus** (`shape ≥ 0.75` AND jarring-clean), latest **14.0% (18/129)**, sweep t857. The WPT marks remain a regression ratchet. |
+| **H0.1** layout beyond Taffy + incremental relayout | Layout is on Taffy 0.12 (`Cargo.toml:83`, re-verified check #73); **no double-dirty-bit incremental relayout.** CSS layout breadth is the weak spot. ⚠️ **The two percentages this row used to carry (`css-flexbox` 5.5%, `css-grid` 4.7%) were tick-86 WPT readings and are RETIRED as a ranking instrument** — see VI.3. The governing measurement of layout breadth is now **M1 on the in-scope CrUX corpus** (`shape ≥ 0.75` AND jarring-clean), latest **16.9%**, sweep t875. The WPT marks remain a regression ratchet. |
 | **H0.3** Vello/wgpu GPU paint path | **Aspirational comments only.** `manuk-compositor` (526 LOC) describes a tiered Vello-GPU renderer; the actual raster is **tiny-skia CPU**, everywhere. `wgpu 27` is declared and used only for shell windowing. |
 | **I5** the differential oracle is the discovery engine | ⚠️ **CORRECTED (constitution check #51, tick 680) — stale twice over.** The crawl completes (265 sites, 392 clusters), so the original "never completed a full crawl (`ORACLE_CRAWLED: 0`)" is simply out of date. But the deeper correction is about *which* mechanism discovers: **the primary discovery engine is now the INSTRUMENTED LOG, and its yield comes from ATTRIBUTION rather than volume.** Three consecutive findings in four ticks came from one log line each — HTML §7.3.3 absent (`window.__appData__ is undefined at inline.js:1:155`, t677), one source name for every inline script on every page (t679), and our own unbounded virtual clock (`next_in_ms=86400000 vclock_ms=13822876800000`, t680, which had been blamed on the page for six ticks). Each was findable only because the previous tick made the log one degree more specific. That compounds, and it is cheaper per finding than any sweep this project runs. **Standing rule from the same window: `most likely` in a log message is a confession — if a message speculates about state the process is holding, print the state.** The oracle remains the breadth instrument; the log is the depth one. |
 | **H0.7** AccessKit integration | Not started (see VI.1). |
@@ -231,7 +231,7 @@ replaced. The instrument that governs the loop today is:
 
 > **M1 on the in-scope CrUX corpus** — `shape ≥ 0.75` **AND** jarring-clean, bot-walls excluded per
 > `DAILY-DRIVER-CERTIFICATION.md` §3 — banked every sweep in `docs/loop/FIDELITY-PROGRESS.tsv`.
-> Latest: **14.0% (18/129)**, shape_mean 53.6%, cov_mean 84.0% (t857).
+> Latest: **16.9% (22/130)**, shape_mean 56.5%, cov_mean 86.2% (t875, corrected check #76).
 
 `RATCHET.tsv`'s WPT marks are kept as what they are — **a regression ratchet, not a ranking.** A
 window that leaves every WPT mark byte-identical while moving M1 is the *expected* shape of on-mandate

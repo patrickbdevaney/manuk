@@ -46371,6 +46371,78 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 885 — "M1 did not move" is three different facts, and the differentiator is getting 4% (2026-08-04)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (every 8; last at 877), banked as
+check #76 in `docs/loop/CONSTITUTION-CHECK.md`.
+
+⚠⚠⚠ **FINDING 1 — THREE TICKS THIS WINDOW WROTE "M1 DID NOT MOVE" AND MEANT THREE DIFFERENT THINGS,
+ONE OF WHICH WAS A CROSSING.**
+
+```text
+  t882  <template> innerHTML   "M1 did not move"  →  IT MOVED: portal.ensuretyfinance crossed at
+                                                    0.864, and three rows went from unscored-for-an-
+                                                    INSTRUMENT-reason to scored
+  t883  copy namespaces        "M1 did not move"  →  geometry PROVABLY unchanged, measured on both
+                                                    binaries — the instrument CANNOT price it
+  t884  IndexedDB prototypes   "M1 did not move"  →  the failure was OFF the first-paint path; the
+                                                    site already scored
+```
+
+To any later audit that reads as *"four ticks bought nothing"*. VI.3's corollary already covers the
+middle row (*"the instrument cannot price this" ≠ "this bought nothing"*); the first row is worse than
+that — **a crossing that its own tick under-reported**. Standing correction banked: a tick writing "M1
+did not move" must say WHICH of the three it means.
+
+⚠⚠⚠ **FINDING 2 — PART VII'S NAMED DIFFERENTIATOR IS GETTING 4% OF THE LOOP, COUNTED RATHER THAN
+FELT.** Of the last 24 ticks (861–884), by their own `TICK SHAPE:` lines: **11 measurement/instrument
+· 12 rendering/function · ONE agentic surface** (t878). The constitution says component 2 is *"the
+differentiator, not a feature — it earns the most polish"*, and defines "complete" as *an agent can
+reliably drive the same top-N real sites a human daily-drives, **measured against the same
+representative corpus** as rendering parity*. **There is no such measurement.** Component 1 has M1
+banked every sweep; component 2 has gates and no corpus number — which is precisely the condition
+under which a loop optimises the thing it can see. Building that number is the highest-leverage
+constitutional correction available.
+
+⚠⚠⚠ **FINDING 3 — THE LOOP IS BLIND ON ITS OWN HEADLINE AND HAS BEEN FOR NINE TICKS.** Last sweep
+**t875**; 876–884 are unpriced corpus-wide, four of them capability fixes. And this window has a
+specific reason to distrust local readings taken meanwhile: t883 watched a three-site batch
+manufacture a **10.8-point** loss on `blog.rust-lang.org` that three solo runs refuted
+(99.6/99.6/99.6). Nine ticks of per-site readings are not a sweep.
+
+⚠⚠ **I3'S CARRIED ITEM IS CLOSED, AND THE NEW ANSWER IS CHECKED RATHER THAN ASSUMED.** Checks #72,
+#74 and #75 each carried *"land the I3 click-point assertion"*; **t878 landed `G_CLICK_POINT`**, so it
+comes off after three checks. For this window's DOM ticks the question is whether they moved the
+semantic model silently, and it was answered from the tree: `engine/a11y/src/lib.rs` **does not branch
+on element namespace at all**, so t883 has no AX consequence, and a `<template>`'s contents never
+generate boxes, so t882 has none. The previous three checks each found I3 bent *by assumption* — this
+one looked.
+
+⚠⚠ **I5 HELD TWICE, IN THE SAME DIRECTION.** t883's manufactured loss was refused because the control
+ran before the conclusion. t884's error harvest discarded its own **loudest eight rows**
+(`Failed to execute 'query' on 'Permissions'`) as the reference's own behaviour — those
+`PermissionName` values are invalid in Chrome too. *The loudest row in a sweep is the sweep*, second
+instance.
+
+**PART VI CORRECTED IN `CONSTITUTION.MD`:** the M1 row was two sweeps stale — *14.0% (18/129),
+shape_mean 53.6%, cov_mean 84.0% (t857)* → **16.9% (22/130), shape_mean 56.5%, cov_mean 86.2%
+(t875)**. And VI.3's cohort-label corollary earns a second clause: `shell-only` (t856), `css-starved`
+(t860), `oracle-timeout` (t861), `render-failed` (t877) and `oracle-module-shell` (t880-881) were each
+named as ours and each proved to be the instrument — **five for five, so the prior on a cohort label
+is that it is wrong**.
+
+THE STEER (full text in check #76): **run a sweep before the next capability tick** · build the
+**corpus number for PART VII component 2**, which the constitution requires and nothing computes ·
+the function-leg vein is live and its residue already has messages rather than hypotheses
+(`IDBObjectStore.getKey`/`openKeyCursor` absent · `no object store named local-key-val` ·
+`TypeError: Invalid URL:` from our own `dom_event.js:2287` · `Route did not complete loading: /`) ·
+`allticketscol` is one named XHR from passing t881's acceptance test.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefact is `docs/loop/CONSTITUTION-CHECK.md` check #76 and the PART VI
+correction in `CONSTITUTION.MD`, which is the governance record itself. [no-pattern]
+
 ## Tick 884 — `typeof store.getAll === 'function'` was true, and nobody asks that (2026-08-04)
 
 TICK SHAPE: capability — the board's binding constraint (*"pick 3-5 booted-but-thin sites and find

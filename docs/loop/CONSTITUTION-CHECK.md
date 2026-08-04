@@ -4638,3 +4638,106 @@ every column.**
    jarring, re-ranked on t875 — but it is now the *second* lever, not the first, because the ceiling
    caps M1 at 81.5% no matter how much geometry lands.
 4. **Land the I3 click-point assertion.** Third check running.
+
+---
+
+## Check #76 — tick 885 (2026-08-04)
+
+**Horizon:** H0, re-scoped by **PART VII** (which supersedes the roadmap for the near term). The gate
+in force is PART VII's four components, and component 1's bar is *"reliably renders and runs the
+representative real internet"* — **not a WPT percentage** — instrumented as **M1 on the in-scope CrUX
+corpus** (`shape ≥ 0.75` AND jarring-clean, bot-walls excluded).
+
+### → Gate, or scoreboard?
+
+**Gate — and the window's honest yield is smaller than its page count, for a reason worth naming.**
+Ticks 877–884 landed one agentic-surface gate, one surface audit, one instrument subsystem and four
+capability fixes. Three of the four capability ticks reported **"M1 did not move"** in their own
+headline. That is true, and it is **three different facts wearing one sentence**:
+
+| tick | what it said | what was actually true |
+|---|---|---|
+| t882 `<template>` innerHTML | "M1 did not move" | **it moved** — `portal.ensuretyfinance.com` crossed at 0.864, and three rows went from unscored-for-an-INSTRUMENT-reason to scored |
+| t883 copy namespaces | "M1 did not move" | **geometry provably unchanged** — measured on both binaries; the fix is DOM correctness the instrument *cannot* price |
+| t884 IndexedDB prototypes | "M1 did not move" | **the failure was off the first-paint path** — a cached-data read, so the site already scored |
+
+Lumping those three under one sentence reads, to any later audit, as *"four ticks bought nothing"*.
+VI.3's corollary already covers the second row (*"the instrument cannot price this" ≠ "this bought
+nothing"*); the first row is worse than that — it is a **crossing that its own tick under-reported**.
+**Standing correction: a tick that writes "M1 did not move" must say WHICH of the three it means.**
+
+### → Is VI.3's ranking still the north star?
+
+**Yes, and this window is the strongest evidence yet that usage-weight beats measurable delta.** t884
+is the case: `idb` — the wrapper Firebase and Workbox are built on — could not construct its API
+because our IndexedDB methods were own properties rather than prototype members. Enormous usage
+weight, and a corpus delta of **+0.1 points on one site**. Under a delta-ranked loop that tick never
+happens. Under VI.3 it is correct, and it is the third consecutive window where the two orderings
+disagreed.
+
+No big-but-tail number crept back. `RATCHET.tsv`'s WPT marks were byte-identical across all eight
+ticks — which VI.3 names as the *expected* shape of on-mandate work.
+
+⚠⚠⚠ **BUT THE LOOP IS BLIND ON ITS OWN HEADLINE AND HAS BEEN FOR NINE TICKS.** The last sweep is
+**t875**; ticks 876–884 are unpriced corpus-wide. That is the same *"the next clean sweep will price
+it"* pattern the board flagged at t777 and it has recurred. Worse, this window has a specific reason
+to distrust its own local readings: t883 watched a three-site batch manufacture a **10.8-point** loss
+on `blog.rust-lang.org` that three solo runs refuted (99.6/99.6/99.6). A per-site reading taken during
+a batch is not a corpus number, and nine ticks of them are not a sweep.
+
+### → Is any invariant being bent?
+
+**I3 — the carried item is CLOSED, and the new answer is CHECKED rather than assumed.** Checks #72,
+#74 and #75 all carried *"land the I3 click-point assertion"*; **t878 landed `G_CLICK_POINT`**, so it
+comes off the list after three checks. For this window's DOM ticks the honest question is whether they
+moved the semantic model without saying so, and the answer was verified from the tree rather than
+reasoned about: `engine/a11y/src/lib.rs` **does not branch on element namespace at all**, so t883's
+namespace fix has no AX consequence, and a `<template>`'s contents never generate boxes, so t882's has
+none either. Not bent — and *checked*, which is the part that matters, because the last three checks
+each found this bent by assumption.
+
+**I5 held, twice, in the same direction.** t883's manufactured loss was refused because the control
+ran *before* the conclusion. t884's error harvest correctly discarded its own **loudest eight rows**
+(`Failed to execute 'query' on 'Permissions'`) as the reference's behaviour rather than a defect —
+`speaker`, `device-info`, `clipboard` and `accessibility-events` are invalid `PermissionName` values
+in Chrome too. *The loudest row in a sweep is the sweep* (t841-845), now with a second instance.
+
+**I4 held.** Nothing chased the tail.
+
+### → PART VI corrections
+
+* **VI.2 / VI.3 — the M1 row is stale by two sweeps.** It reads *"14.0% (18/129), shape_mean 53.6%,
+  cov_mean 84.0% (t857)"*. Ground truth from `FIDELITY-PROGRESS.tsv`: **t875 — M1 16.9%, shape_mean
+  56.5%, cov_mean 86.2%**. Corrected in `CONSTITUTION.MD`.
+* **VI.3's corollary earns a second clause.** It already says a reason string asserting a CAUSE is a
+  hypothesis to test before working the cohort it names. The window adds the *converse* and it is now
+  five-for-five: `shell-only` (t856), `css-starved` (t860), `oracle-timeout` (t861), `render-failed`
+  (t877) and `oracle-module-shell` (t880-881) were each named as ours and each proved to be the
+  instrument. **The prior on a cohort label is that it is wrong.**
+* **VI.2 / I5 — the discovery engine, re-derived once more.** Check #75 said it was the four-line
+  fixture against `chromium --dump-dom`, and that stands for render work. For the FUNCTION leg this
+  window it was something narrower and cheaper: **run the cohort and grep the log**, which produced a
+  named function (`insertStaticContent`) at t882 and a named library gate (`idb`'s `in` test) at t884
+  — one run each, no bisection.
+
+### → THE STEER
+
+1. **RUN A SWEEP BEFORE THE NEXT CAPABILITY TICK.** Nine ticks unpriced, four of them capability
+   fixes whose own headlines disagree about what they bought. This is the one item that blocks
+   honest ranking, and it has been deferred once already this window.
+2. **PART VII COMPONENT 2 IS GETTING 4% OF THE LOOP.** Counted, not felt: of the last 24 ticks
+   (861–884), **one** — t878 — was shaped `capability (agentic surface)`, against 11 measurement/
+   instrument and 12 rendering/function. The constitution says component 2 is *"the differentiator,
+   not a feature — it earns the most polish"* and that "complete" means *an agent can reliably drive
+   the same top-N real sites a human daily-drives, measured against the same corpus*. **There is no
+   such measurement.** Component 1 has M1; component 2 has gates but no corpus number. Building one is
+   the highest-leverage constitutional correction available, and it is exactly the shape of work this
+   loop is good at.
+3. **The function-leg vein is live and cheap** — two ticks, two named mechanisms, from one grep each.
+   Its remaining named residue already has messages rather than hypotheses: `IDBObjectStore.getKey` /
+   `openKeyCursor` absent · `no object store named local-key-val` (coinmarketcap) · `TypeError:
+   Invalid URL:` thrown from **our own** `dom_event.js:2287` (sports.yahoo) · `Route did not complete
+   loading: /` (trivago).
+4. **The `allticketscol` half-boot is one named XHR away.** t881's acceptance test refuses it and says
+   why: the app boots under the proxy (`app-mensaje`, `mat-dialog-container` render) and 47
+   `app-evento-card` never arrive.
