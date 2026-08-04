@@ -4944,3 +4944,147 @@ settled (t900). The corpus sweep found none of them; it **priced** them.
 4. **New, from t900:** probe `gated` rows every surface audit instead of trusting the gate's name. The
    half-covered-row defect (t889) recurred eleven ticks later at t900 on a differently-shaped row.
 
+## Check #79 — tick 910 (2026-08-04)
+
+**Horizon:** H0 as re-scoped by **PART VII**. Component 1's bar is *"reliably renders and runs the
+representative real internet"*, instrumented as **M1 on the in-scope CrUX corpus**. Latest banked:
+**18.5% (24/130)**, sweep t909, release binary, `--jobs 2`, all instrument guards clean.
+
+### → Gate, or scoreboard?
+
+**Neither, and this window is the first that can prove the gate CANNOT follow.** Check #78 reached
+the honest third answer — *"capability moved and the gate did not follow it"* — and left it there.
+t904 and t909 supply the mechanism.
+
+```text
+                        t887      t898      t904      t909
+  M1 (the gate)        17.8%     17.1%     17.8%     18.5%
+  scorability        107/129   107/129   110/129   108/130
+  shape_mean           57.9%     54.6%     57.2%     57.0%
+```
+
+**Across four sweeps and twenty-two ticks there is not one engine-attributable M1 crossing.** Every
+one decomposes to a site's network: t904's +3 scored were two returns from `unreachable` plus one
+`timeout`; t909's single M1 gain is `ru4.bongacams-ru.com`, which t904 had booked as an M1 *loss* for
+going unreachable and which simply answered this time. The two ticks that could have moved it, t906
+and t908, are Chrome-exact and gated and moved nothing.
+
+**And t904 measured why, from the banked rows, with no new run:**
+
+```text
+  scored                                                          107
+    ├─ M1 PASS      shape >= 0.75  AND  jarring-clean              22
+    ├─ shape ok, jarring DIRTY                                      6   (only ONE is a single dim from crossing)
+    ├─ jarring clean, shape UNDER the bar                          23   (only TWO within 0.06 of it)
+    └─ BOTH conjuncts fail                                         56   <- the mass
+```
+
+> **M1 has no resolution at this distance from the bar.** Three sites of 107 are reachable by either
+> single lever; 56 fail both conjuncts at once. A metric whose every observed movement is network
+> weather is not measuring the engine, and the loop has spent four sweeps reading it as though it
+> were.
+
+This is **not** an argument to change the gate — the bar is the bar, and PART VII says the bar is
+"runs the representative real internet", not a number that moves conveniently. It is an argument
+that **the gate must stop being used as the per-window feedback signal**, because at this distance it
+returns noise. The common-set band already exists for that job and is honest: t904 +0.16 pts residual
+over 103 sites, t909 −0.068 over 105. Both are flat, and both say so without pretending otherwise.
+
+### → Is VI.3's ranking still the north star?
+
+**Yes — and t909 hands it the clause it has been missing since check #78.** VI.3 ranks by
+usage-weighted breadth. Check #78 found usage-weight and measured-breadth disagreeing four times and
+ruled correctly that usage-weight wins. **What nobody could do until t909 was tell WHICH WAY they
+would disagree, in advance.**
+
+The sweep's mechanism oracle publishes **two** facts per ranked cause, and the loop had been reading
+one:
+
+```text
+  37 site(s) · 2398 hits   missing box: <div>
+  29 site(s) ·  292 hits   geometry/mis-sized: height ~64px    (<div>)
+  …every ranked cause on this corpus is <div>. `<table>`, `<td>`, `<tr>`, `<th>` appear in NONE.
+```
+
+**The TAG is the corpus-relevance filter.** t907 (a table box's `height` is a minimum) and t908 (the
+UA `border-spacing: 2px` default) are mainstream on the real internet, Chrome-exact, and gated — and
+**structurally unpriceable on this corpus, which was knowable before either was built.** That is a
+sequencing fact, not a verdict on the work: VI.3 still says take them on usage weight, and PART VII's
+*"maximize real sites moved per fix, verified against the oracle corpus"* still says a tick aimed at
+the burndown must touch a `<div>` cause.
+
+**VI.3 gains one clause, the operational twin of check #78's:** *usage weight says whether to build
+it; the ranker's TAG says whether this sweep can score it. Read both before starting, and predict the
+flat reading rather than re-litigating it afterwards.*
+
+### → Is any invariant being bent?
+
+**I5 did more work this window than in any window on record, and every instance was inside the
+loop's own instruments.** Five fixture defects across t905-t910, all caught by reading the numbers
+rather than the verdict, **none reaching a commit**: a missing `--hide-scrollbars` (a phantom 15px),
+floats leaking between un-isolated rows (a phantom 120px BFC shift), a confounded `width:400px` that
+produced an entire wrong defect *and its `CONSTELLATION.tsv` row* at t905, a probe that could not
+distinguish Chrome's `0,0,0` from no-box, and a capability probe with no control arm that nearly
+booked a false map error against `multicol`.
+
+> The differential fixture is still this project's best discovery engine — t784-796 got nine engine
+> defects from it in thirteen ticks, and this window got three more, all gated and all RED-proven.
+> What is new is that its failure mode is characterised well enough to be a checklist: **one variable
+> per case · a control arm · never fix the measured dimension · absence is not zero.**
+
+**And I5's harder half held too.** t904's old-binary control **refuted an argument from elimination
+that was airtight on the code side**: t899/t900/t901 touched no file under `engine/` or `tests/`
+(verified with `git show --stat`), t903 is instrument-only, so t902 was the *only* engine change in
+the window — and the t901 binary reproduced both large movers to six decimal places, sample counts
+included. *"It is the only thing that changed" is an argument, not a control.*
+
+**I3 was labelled as I3 for the first time, which was check #78's steer #3.** t902 is verbatim I3
+work — the semantic model declining to publish what the pipeline had already computed — and it was
+filed and gated as the *class* (411 of 924 readings differing, 51 properties absent entirely) rather
+than as the next single member. The under-count check #76 named is closing.
+
+**I4 is the one worth watching, and the honest report is that it was neither bent nor obeyed.**
+t907/t908 are table geometry: mainstream on the open web, absent from this corpus. That is not the
+exotic tail I4 forbids — a default `<table>` is not `text-justify: inter-ideograph` — but it is the
+first work this window whose corpus-breadth was zero, and the tag clause above exists so the next one
+is a decision rather than a discovery.
+
+**I2 held** — no dependency forked or patched. **PART VII held** — `scripts/` untouched across nine
+ticks, including one where a wedged parity Chrome (0.00 CPU in sixteen minutes, no deadline on the
+child) stalled a wall for twenty-two minutes and was worked around agent-side by killing that one PID
+rather than editing the harness.
+
+### → PART VI corrections
+
+* **VI.3's M1 row:** 17.8% (t904) → **18.5% (t909)**, and the movement is one site's DNS.
+* **Scorability:** 82.9% → 85.3% (t904) → **83.1% (t909)**. The owner-lock opens the BiDi function
+  leg at ~85%; it was touched for exactly one sweep by two sites returning from `unreachable`, and
+  **it must not be spent on that.** The honest reading is that scorability sits at 83-85% and its
+  per-sweep churn (±3 sites) is the same size as its trend.
+* **A new standing fact for VI.3:** the mechanism oracle's ranked list is a MECHANISM **and a TAG**.
+  Sixteen ticks of burndown ranking have read the mechanism only.
+* **A new standing fact for the loop's instruments:** the fixture-probe checklist above. Five
+  instances in six ticks is a rate, not a run of bad luck.
+
+### → THE STEER
+
+1. **THE NEXT ENGINE TICK MUST NAME A `<div>` CAUSE FROM THE t909 RANKER, AND `missing box: <div>`
+   (37 sites, 2398 hits) IS THE LARGEST THING ON THE BOARD THAT NOTHING HAS TOUCHED.** t907's probe
+   opened the question and answered a different one; the question is still open. This is the only
+   work that can move the burndown, and the tag clause now says so before the sweep rather than
+   after.
+2. **STOP READING M1 PER-WINDOW.** Four sweeps of network weather is enough evidence. Read the
+   **common-set band** for per-window feedback (it is honest, it is flat, and it says so), and read
+   M1 per *phase*. This is a change to how the loop consumes its own metric, not to the metric.
+3. **THE SCORABILITY CEILING IS STILL THE ONLY THING THAT RAISES M1's CAP, AND IT HAS NOW GONE THREE
+   WINDOWS.** Check #78 said *"if the next window ends with it untouched again, that is the third
+   consecutive window and the board's ranking should be treated as not being obeyed."* t903 touched
+   it — the widened one-origin trigger converted one row and re-attributed another — and that is the
+   first movement in three windows, but the cohort that remains (3 `shell-only`, 3
+   `oracle-module-shell`, 3 `thin-overlap`, 3 `tree-divergence`, 4 `timeout`) is unmoved. The named
+   next lever is concrete and pre-measured: **the one-origin proxy does not follow a same-origin
+   NAVIGATION** (`house.udn.com` refuses at 6 tags against the live page's 927 because its entire
+   body is `window.location.href="/house/index"`).
+4. **Carried, unchanged and now overdue:** Component 2 (the agentic surface) still has no corpus
+   number — check #76 finding 2, unmoved through #77, #78 and #79. Four windows. I3 work is at least
+   being labelled now, which was the honest half of the fix; the number is still absent.

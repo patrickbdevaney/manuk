@@ -46371,6 +46371,106 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 910 — the map is honest in the NEGATIVE direction, and the probe was the finding again (2026-08-04)
+
+TICK SHAPE: measurement — **three** cadence instruments came due at once: the **self-audit**
+(`scripts/self-audit.sh`, last at 900, hook-blocking), the **surface audit** (banked as check #62 in
+`docs/loop/SURFACE-AUDIT.md`), and — surfaced by `tick.sh` refusing the commit — the **constitution
+re-read** (due every 8, last at 901), banked as check #79.
+
+**SELF-AUDIT: clean.** Methodology and reality agree — every gate declares how to break it, the
+process-defect ledger (49) names a mechanism per defect rather than a lesson, the cluster registry is
+the ledger, the receipt/journal/tick-shape enforcement is mechanical, and the pattern ledger (950
+rows) moves with the engine.
+
+⚠⚠⚠ **SURFACE AUDIT #62 AUDITED THE MAP FROM THE SIDE t900 DID NOT: the 112 `missing` and 16
+`unknown` rows.** t900 probed twenty `gated` rows and found three lying. t905 supplied the reason to
+look the other way round — **`aspect-ratio` had no row at all** while being fully built and
+Chrome-exact, which STATUS.md records as the *fifth* time a tick was aimed at something that already
+existed (`localStorage`, `FormData`, `position:sticky`, `IntersectionObserver`). **A negative row is
+the same failure wearing different clothes.**
+
+**RESULT: zero map errors on the sample.** Ten `missing` rows chosen for being observable in a box;
+every one that could be answered was answered correctly negative. `content-visibility:auto` +
+`contain-intrinsic-size:300px 111px` → Chrome 111, ours 24. `grid-template-columns: subgrid` → Chrome
+puts the grandchild in the 100px track, ours spans all 300. `column-count` in every form → Chrome
+grows the box, ours does not. **The map is honest in the negative direction**, which is the opposite
+of t900's finding in the positive direction and is worth banking as a contrast rather than as a null.
+
+⚠⚠⚠ **AND THE FINDING IS THE PROBE, FOR THE FIFTH TIME IN SIX TICKS. SIX OF TEN PROBES COULD NOT
+ANSWER THEIR OWN QUESTION** — each fixed the very dimension the capability would have changed:
+`writing-mode:vertical-rl` was given `height:200px`; `column-span:all` and `-webkit-box` children were
+given `height:10px`; `justify-self:end` moves `x` and the probe recorded only width and height; and
+the `@scope` rule (`i{…}`, specificity 0,0,1) lost to the fixture's own `#q6 > i` (1,0,1), so
+**Chrome did not apply it either** and the probe measured its own cascade mistake.
+
+⚠⚠⚠ **A SEVENTH WAS MISREAD FOR WANT OF A CONTROL ARM, AND IT NEARLY BECAME A FALSE MAP ERROR.**
+`column-count:3` gave Chrome 144 and us 120 — far short of one 300px column of that text — so it read
+as *"both engines do multicol, slightly differently"* and `multicol → missing` looked wrong. One
+no-feature control row settled it:
+
+```text
+                          Chrome   ours
+  no columns (CONTROL)     72       72
+  column-count:3          120       72     <- ours is IDENTICAL to the control
+  column-count:2           96       72
+  column-width:100px       96       72
+```
+
+We ignore multicol entirely. **The map was right, and the only reason it briefly looked wrong is that
+the probe had nothing to compare its own output against.**
+
+> **A capability probe needs a NO-FEATURE CONTROL ARM in the same fixture, and it must never fix the
+> dimension the capability changes.** Without the control, *"different from Chrome in the direction
+> support would take it"* is indistinguishable from *"different from Chrome"*.
+
+**RUNNING TALLY, BECAUSE THE RATIO IS THE POINT — five fixture defects across t905-t910:** a missing
+`--hide-scrollbars` (15px), floats leaking between un-isolated rows (120px), a confounded
+`width:400px`, a probe that could not tell `0,0,0` from no-box, and now a capability probe with no
+control arm. **Every one was caught by reading the numbers rather than the verdict, and none reached
+a commit.** The differential fixture is still this project's best discovery engine — t784-796 got
+nine engine defects out of it in thirteen ticks, and this session got three more, all gated. What is
+new is that its failure mode is now characterised well enough to be a checklist: **one variable per
+case · a control arm · never fix the measured dimension · absence is not zero.**
+
+⚠⚠⚠ **CONSTITUTION CHECK #79 — THE GATE CANNOT FOLLOW, AND THIS WINDOW CAN PROVE IT.** Check #78
+reached the honest third answer (*"capability moved and the gate did not follow it"*) and left it
+there. t904 and t909 supply the mechanism: **across four sweeps and twenty-two ticks there is not one
+engine-attributable M1 crossing** — every one decomposes to a site's network — and t904's partition
+says why. Three sites of 107 are reachable by either single lever; **56 fail BOTH conjuncts at once.**
+M1 has no resolution at this distance from the bar. The steer that follows is a change to how the
+loop CONSUMES its metric, not to the metric: **read the common-set band per window** (honest, flat,
+and it says so) **and M1 per phase.**
+
+**VI.3 gains the clause it has been missing since #78.** Usage-weight and measured-breadth disagreed
+four times at #78 and the ruling was that usage-weight wins; what nobody could do was say WHICH WAY
+they would disagree, in advance. t909's ranker publishes a **TAG** beside every mechanism, and the tag
+is the corpus-relevance filter — so *usage weight says whether to build it; the tag says whether this
+sweep can score it.* Read both before starting, and predict the flat reading instead of
+re-litigating it afterwards.
+
+**I5 did more work this window than in any on record**, and the whole of it was aimed at the loop's
+own instruments: five fixture defects, none reaching a commit, plus t904's old-binary control
+refuting an elimination argument that was airtight on the code side. **PART VII held** across nine
+ticks including a wedged parity Chrome (0.00 CPU in sixteen minutes) that stalled a wall for
+twenty-two — worked around by killing that one PID, not by editing the harness.
+
+**THE STEER (full text in check #79):** the next engine tick must name a `<div>` cause from the t909
+ranker, and **`missing box: <div>` — 37 sites, 2398 hits — is the largest untouched thing on the
+board** · stop reading M1 per-window · the scorability cohort's named next lever is concrete and
+pre-measured (**the one-origin proxy does not follow a same-origin NAVIGATION**: `house.udn.com`
+refuses at 6 tags against the live page's 927 because its whole body is
+`window.location.href="/house/index"`) · Component 2 still has no corpus number, four windows on.
+
+RE-RANK: nothing moves at the top. The t909 sweep's ranked causes are all `<div>`, and the map's
+negative rows are honest on this sample, so there is no unbuilt-but-mapped or built-but-unmapped work
+to promote. This audit's output is a **probe checklist**, not a backlog item.
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefacts are `docs/loop/SURFACE-AUDIT.md` check #62 and the self-audit run,
+which are the wiki for the loop's own governance. [no-pattern]
+
 ## Tick 909 — the cadence sweep that prices three geometry fixes (2026-08-04)
 
 TICK SHAPE: measurement — three engine geometry changes have landed since the t904 sweep (t906 the

@@ -3731,3 +3731,74 @@ than it looked — four known members and no enumeration. It does not outrank t8
 M1 points, but it is the cheapest well-understood work on the board and it is the class three of this
 window's ticks have already been paid by.
 
+
+---
+
+## Audit #62 — tick 910 (2026-08-04)
+
+**SUBJECT: the 112 `missing` and 16 `unknown` rows — do any of them describe a capability that is
+actually BUILT?** t900 audited the map from the other side (probe `gated` rows; three were lying) and
+t905 supplied the reason to audit this side: **`aspect-ratio` had no row at all** while being fully
+built and Chrome-exact, and STATUS.md's platform map records that as the *fifth* time a tick was
+aimed at something that already existed (`localStorage`, `FormData`, `position:sticky`,
+`IntersectionObserver`). A negative row is the same failure wearing different clothes.
+
+### The probe, and the result
+
+Ten `missing` rows chosen for being observable in a box: `content-visibility` /
+`contain-intrinsic-size` · `multicol` · `writing-mode` vertical text · `justify-self` in block layout
+· legacy `-webkit-box` · `@scope` · `field-sizing: content` · `subgrid` · `column-span: all` ·
+container STYLE queries. One fixture, `--dump-dom` against
+`google-chrome-stable --headless=new --hide-scrollbars`, our side through `manuk-wpt boxes`.
+
+**ZERO map errors.** Every row that could be answered was answered *correctly negative*:
+`content-visibility:auto` + `contain-intrinsic-size:300px 111px` → Chrome 111, ours 24;
+`grid-template-columns: subgrid` → Chrome puts the grandchild in the 100px track, ours spans all 300;
+`column-count` in every form → Chrome grows the box, ours does not. On this sample the map is honest
+in the negative direction, which is the opposite of what t900 found in the positive direction and is
+worth recording as a contrast rather than as a null.
+
+### ⚠⚠⚠ THE FINDING IS THE PROBE, AND IT IS THE FIFTH TIME THIS SESSION
+
+**Six of the ten probes were structurally incapable of answering their own question**, because each
+fixed the very dimension the capability would have changed:
+
+* `writing-mode: vertical-rl` was given `height: 200px`, so both engines returned 200.
+* `column-span: all` and `-webkit-box` children were given `height: 10px`.
+* `justify-self: end` moves `x`; the probe recorded only width and height.
+* The `@scope` rule (`i { … }`, specificity 0,0,1) lost to the fixture's own `#q6 > i` (1,0,1), so
+  **Chrome did not apply it either** — the probe measured its own cascade mistake.
+
+**And a seventh was MISREAD for want of a control arm.** `column-count:3` gave Chrome 144 and us 120,
+and 120 is far short of what one 300px column of that text would be — so it read as *"both engines do
+multicol, slightly differently"*, and the map row looked wrong. Adding one no-feature control row
+settled it in a line:
+
+```text
+                          Chrome   ours
+  no columns (CONTROL)     72       72
+  column-count:3          120       72     <- ours is IDENTICAL to the control
+  column-count:2           96       72
+  column-width:100px       96       72
+```
+
+We ignore multicol entirely. The map was right, and the only reason it briefly looked wrong is that
+the probe had nothing to compare its own output against.
+
+> **A capability probe needs a NO-FEATURE CONTROL ARM in the same fixture, and it must never fix the
+> dimension the capability changes.** Without the control, "different from Chrome in the direction
+> support would take it" is indistinguishable from "different from Chrome".
+
+**Running tally, because the ratio is the point: five fixture defects across t905-t910** — a missing
+`--hide-scrollbars` (15px), floats leaking between un-isolated rows (120px), a confounded
+`width:400px`, a probe that could not tell `0,0,0` from no-box, and now a capability probe with no
+control arm. Each was caught by reading the numbers rather than the verdict; none reached a commit.
+The differential fixture is still this project's best discovery engine (t784-796: nine engine defects
+in thirteen ticks) — and its failure mode is now well enough characterised to be a checklist:
+**one variable per case · a control arm · never fix the measured dimension · absence is not zero.**
+
+### RE-RANK
+
+Nothing changes at the top: the t909 sweep's ranked causes are all `<div>`, and the map's negative
+rows are honest on this sample, so there is no unbuilt-but-mapped or built-but-unmapped work to
+promote. The audit's output is a **probe checklist**, not a backlog item.
