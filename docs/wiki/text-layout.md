@@ -1684,3 +1684,62 @@ to the producer itself is exactly where that accident stops protecting you.
 boxless inline whose content wraps across **three or more** lines reports the outer two and not any
 middle line's horizontal extent. Chrome unions every fragment. One line's worth of width on a
 multi-line boxless inline, and it is a strict improvement on lifting the child's box.
+
+## `vertical-align` is implemented for atomic inlines and absent for text (t913)
+
+Thirteen cases against a 24px baseline control, `google-chrome-stable --headless=new
+--hide-scrollbars --window-size=1200,800`:
+
+```text
+                                        Chrome   ours
+  plain baseline (CONTROL)                24      24    ok
+  vertical-align: super                   30      24    -6
+  vertical-align: sub                     28      24    -4
+  <sup> / <sub>                           27      24    -3
+  vertical-align: top                     24      24    ok
+  vertical-align: middle                  25      24    -1
+  vertical-align: 10px / -10px            34      24    -10
+  vertical-align: 50%                     36      24    -12
+  vertical-align: text-top                27      24    -3
+  vertical-align: text-bottom             28      24    -4
+  super on a font-size:10px span          24      24    ok   <- CONTROL
+  super on a 10px <img>                   24      24    ok   <- CONTROL
+```
+
+**The last two rows are why this is not "add the offset".** A raised inline that still fits inside
+the strut does not grow the line. The rule is CSS 2.1 §10.8's union — *the line box is the union of
+the SHIFTED inline boxes and the strut* — and a shift only matters once it pushes a box past the
+strut's edge. A fix that added the offset unconditionally would break both control rows.
+
+### The cause is one `if`
+
+`line_metrics` branches on the fragment kind:
+
+```rust
+  if f.atomic_h > 0.0 {           // image / inline-block / replaced
+      let (a, b) = match f.valign { … Super => (h + ascent*0.35, -(ascent*0.35)) … };
+  } else if f.ascent > 0.0 … {    // TEXT
+      let (a, d) = (f.ascent.round(), f.descent.round());   // <- f.valign is never read
+```
+
+Eight match arms on one path and no mention on the other. `valign` appears at its assignment site,
+the struct field, the atomic metric arms and the atomic placement arms — **nowhere else**. A text
+fragment consults it neither for the line's height nor for its own paint position.
+
+> **`<sup>` and `<sub>` are TEXT.** The case the UA stylesheet itself generates is the case that was
+> never wired, which is why every atomic test passes and the whole family fails.
+
+### Why it belongs to the `<div>`-height burndown
+
+`<sup>`/`<sub>` carry footnotes, citations, ™/®, prices, ordinals and chemical formulae, and
+`vertical-align: <length>` is the standard icon-alignment idiom. Each sits inside a `<div>` that is
+then 3-12px short, and a per-line error is precisely what laundres downward through a subtree
+(t743). The ranker's magnitude bands — 8px through 256px on 27-29 sites each — are what a small
+per-line error looks like after it accumulates.
+
+### The fix must be both halves at once
+
+Growing the line box without moving the glyphs would make every `<sup>` line taller with its text
+still on the baseline — a metric win bought with a visible regression, which is a trade, and trades
+are refused. The correct change shifts the text fragment's box and paint origin by the same amount
+and then takes the union.

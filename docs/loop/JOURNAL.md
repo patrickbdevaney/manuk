@@ -46371,6 +46371,96 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 913 — `vertical-align` is honoured for ATOMIC inlines and ignored for TEXT (2026-08-04)
+
+TICK SHAPE: measurement — check #79's steer #1 asks for a `<div>` cause, and t911/t912 established
+that the `missing box` row is a mixture, so the honest place to take one is the
+**`geometry/mis-sized`** rows, which compare boxes that DID align. On the t909 ranker those are, in
+order, all the same thing:
+
+```text
+  29 site(s) · 292 hits   height ~64px   (<div>)   [median 88px]
+  29 site(s) · 288 hits   height ~256px  (<div>)   [median 360px]
+  28 site(s) · 365 hits   height ~32px   (<div>)   [median 44px]
+  27 site(s) · 293 hits   height ~16px   (<div>)   [median 20px]
+  27 site(s) · 143 hits   height ~8px    (<div>)   [median 13px]
+```
+
+**A `<div>`'s height is its content's height**, so a twenty-case probe went at the constructs that
+determine it — line count, `<br>`, margin collapse through a child, an inline-block, a sized `<img>`,
+an unsized `<img>`, a broken `<img>`, a padded child, `line-height: 1` and `normal`, a taller inline
+font, whitespace-only content, nested blocks, wrapping, and the five form controls.
+
+**Eighteen of twenty were exact.** Two were not, and one of them is a whole family.
+
+⚠⚠⚠ **`vertical-align` NEVER GROWS THE LINE BOX. MEASURED, THIRTEEN CASES AGAINST A 24px CONTROL:**
+
+```text
+                                        Chrome   ours
+  plain baseline (CONTROL)                24      24    ok
+  vertical-align: super                   30      24    -6
+  vertical-align: sub                     28      24    -4
+  <sup>                                   27      24    -3
+  <sub>                                   27      24    -3
+  vertical-align: top                     24      24    ok
+  vertical-align: middle                  25      24    -1
+  vertical-align: 10px                    34      24    -10
+  vertical-align: -10px                   34      24    -10
+  vertical-align: 50%                     36      24    -12
+  vertical-align: text-top                27      24    -3
+  vertical-align: text-bottom             28      24    -4
+  super on a font-size:10px span          24      24    ok
+  super on a 10px <img>                   24      24    ok
+```
+
+⚠⚠⚠ **AND THE LAST TWO ROWS ARE WHY THIS IS NOT "ADD THE OFFSET".** A raised inline that still fits
+inside the strut does **not** grow the line — Chrome says 24 for both. The rule is CSS 2.1 §10.8's
+union: *the line box is the union of the SHIFTED inline boxes and the strut*, and a shift only
+matters when it pushes a box past the strut's edge. A fix that added the offset would break those two
+control rows, which is exactly why they are in the fixture.
+
+⚠⚠⚠ **THE CAUSE IS ONE `if`, AND IT IS THE SHAPE THIS PROJECT NAMES MOST OFTEN.** `line_metrics`
+(`engine/layout/src/lib.rs:7407`) branches on the fragment kind:
+
+```rust
+  if f.atomic_h > 0.0 {           // an image / inline-block / replaced box
+      let (a, b) = match f.valign { … Super => (h + ascent*0.35, -(ascent*0.35)) … };
+  } else if f.ascent > 0.0 … {    // TEXT
+      let (a, d) = (f.ascent.round(), f.descent.round());   // <- f.valign is never read
+```
+
+**`vertical-align` is fully implemented for ATOMIC inlines and does not exist for TEXT** — eight arms
+of a match on one path and no mention on the other. `<sup>`/`<sub>` are text. So the case the UA
+stylesheet itself generates is the case that was never wired, which is why the atomic tests pass and
+the family fails.
+
+**The grep confirms the scope: `valign` appears at the assignment site, the struct field, the atomic
+metric arms, and the atomic placement arms. Nowhere else.** A text fragment consults it neither for
+the line's height nor for its own paint position.
+
+⚠⚠ **NOT FIXED HERE, AND THE REASON IS THE RATCHET RATHER THAN THE CLOCK.** Growing the line box
+without also moving the GLYPHS would make every `<sup>` line taller with its text still sitting on
+the baseline — a metric win bought with a visible regression, which is a trade and trades are
+refused. The correct change is both halves at once in `layout_inline`: shift the text fragment's box
+and paint origin by the same amount, then take the union. That is a tick, and it now has every number
+it needs.
+
+⚠ **THE SECOND DEFECT, MEASURED AND SEPARATE:** a bare `<input>` in a `<div>` gives Chrome 24 and us
+**26**. Two pixels, one control, its own mechanism.
+
+**WHY THIS IS WORTH A `<div>`-HEIGHT TICK AND NOT A TYPOGRAPHY FOOTNOTE:** `<sup>`/`<sub>` carry
+footnotes, citations, ™/®, prices, ordinals and chemical formulae, and
+`vertical-align: <length>` is the standard icon-alignment idiom. Every one of those sits inside a
+`<div>` whose height is then 3-12px short — and a line-height error is the error the burndown's own
+analysis says LAUNDERS downward through a whole subtree (t743: *"one wrong height cascades down"*).
+The magnitude bands on the ranker, 8px through 256px, are what a small per-line error looks like
+after it accumulates.
+
+PERF: none — measurement only; no engine code changed.
+
+WIKI: `docs/wiki/text-layout.md` — "`vertical-align` is implemented for atomic inlines and absent for
+text" [no-pattern]
+
 ## Tick 912 — the ranker now asks the question t782 added, three months and one level out (2026-08-04)
 
 TICK SHAPE: instrument — t911 measured that the board's #1 cause is a mixture of two populations and
