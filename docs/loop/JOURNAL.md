@@ -46371,6 +46371,76 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 888 — the crossing ranking, re-derived on trustworthy data, and the eight are named (2026-08-04)
+
+TICK SHAPE: measurement — recompute the M1 crossing ranking from `SWEEP-t887-rows.tsv` (the first
+sweep in this window taken on the shipping binary) and name the mechanism blocking the top site,
+because *"recompute a ranking before obeying it"* is a standing rule and every ranking the board
+carries predates t887.
+
+⚠⚠⚠ **THE BOARD'S SCORABILITY NUMBER IS STALE BY TWENTY POINTS, AND THAT INVERTS ITS ORDER.** The
+lever-board has ranked *"SCORABILITY FIRST"* since 2026-07-30 off a measured ceiling of **63%**
+(48 of 130 in-scope sites not rendering). On t887 the ceiling is **82.9% (107/129)**, and the
+remaining 22 unscored rows are `shell-only 9 · other 5 · timeout 4 · render-fail 2 · thin-overlap 2`
+— no cohort above nine. The board's own owner-lock says the BiDi function leg opens *"when the
+scorability ceiling clears ~85%"*; it is 2.1 points away.
+
+**THE TWO CROSSING COHORTS, computed from the fresh rows:**
+
+```text
+  COHORT A — over the shape bar, failing ONLY on jarring          8 sites  → +6.2 M1 points
+    sip777man.site   shape 0.942   h=1  o=6   r=16
+    sestra.cc        shape 0.896   h=8  o=0   r=7
+    beb88run.xyz     shape 0.868   h=0  o=14  r=4
+    www.unoeste.br   shape 0.860   h=0  o=3   r=2   d=1
+    www.tz.de        shape 0.814   h=3  o=2   r=5
+    www.otomoto.pl   shape 0.797   h=0  o=3   r=11
+    www.freesupertips.com  0.776   h=1  o=1   r=4
+    simplepdf.com    shape 0.756   h=5  o=0   r=0    ← the ONLY single-dimension blocker
+
+  COHORT B — jarring-clean, below the shape bar                  12 sites
+    nearest is profissionaliza.cademi.com.br at 0.588 — a 0.162 gap. No cheap crossing.
+```
+
+**Cohort A is the lever and it is not close.** Eight sites are one jarring dimension from crossing;
+the nearest jarring-clean site needs +0.162 of shape. Blocking dimensions across the eight:
+`reading_order` in **7**, `overlap` in 6, `h_overflow` in 5, `dead_target` in 1 — and only
+`simplepdf.com` has a single dimension as its sole blocker. This is the t868 vein, re-measured: 13
+sites then, 8 now, and the same shape.
+
+⚠⚠ **AND THE TOP SITE'S MECHANISM IS NAMED, which makes it a tick rather than a hypothesis.**
+`beb88run.xyz` (0.868, overlap 14) is missing an entire subtree — `div×186 img×119 a×93 li×44 ul×14
+span×2`, **458 boxes** — and the paths carry x-coordinates of 1303 · 4740 · 5925 · 12991 · 15361 ·
+17731 · 18358, which is one very long horizontal row. Asked Chrome what the missing node is:
+
+```text
+  body>div:nth-of-type(3)              DIV.banner                            [0 146 1185×380]
+  …>div:nth-of-type(2)                 DIV.banner-carousel slick-initialized [0 146 1185×380]
+  …>div:nth-of-type(1)                 DIV.slick-list draggable              [0 146 1185×380]  overflow hidden/hidden
+```
+
+**A Slick carousel**: `slick-list` clips (`overflow:hidden`) a `slick-track` laid out as one row of
+absolutely-positioned slides. We emit **no box for `slick-list` at all**, so the whole track escapes
+its clip and 14 sibling pairs collide. That is the *overlap* symptom with a *containment* cause — the
+standing rule that a reading-order/overlap symptom is a width or a transform upstream, one variant
+further out: here it is the **clipping container itself**. Slick is on a large slice of the
+template-built web, so this is a class, not a site.
+
+**NOT FIXED HERE, and the reason is scope stated plainly:** the missing box is a JS-built subtree
+behind an initialised carousel, so the reduction has to separate *"the DOM Slick built differs"* from
+*"we lay out the DOM it built differently"* before a line of layout is touched — two candidate
+subsystems that share no code. It is the next tick, with its target named and its first bisect
+already specified.
+
+⚠ CAVEAT carried from t887 and not resolved: the common-set band was **−0.34 pts** over the 103 sites
+scored in both t875 and t887. This tick adds nothing to that either way — it is a ranking, not a
+change — but the next engine tick should read it before claiming a win.
+
+PERF: none — measurement only, no engine change.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — the cohort computation is recorded there beside the sweep
+it came from. [no-pattern]
+
 ## Tick 887 — tick 886 measured a DEBUG BINARY, and its headline is withdrawn (2026-08-04)
 
 TICK SHAPE: instrument — chase t886's own finding one level down, discover the finding was the

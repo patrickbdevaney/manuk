@@ -436,3 +436,55 @@ make every future Δ diff against it.
 quoting it. The sharper form: **when a reading is surprising, check WHAT BINARY produced it before
 checking what the code did.** t886 spent its entire attribution budget, including a full old-binary
 rebuild, on a question whose answer was in `ls -la target/`.
+
+## The M1 crossing ranking, computed from a sweep rather than remembered (t888, from SWEEP-t887)
+
+`M1 = shape ≥ 0.75 AND jarring-clean`, so there are exactly two ways to cross it, and which one is
+cheaper is a **measurement**, not a preference. From `SWEEP-t887-rows.tsv` (release binary, all guards
+clean):
+
+```text
+  COHORT A — over the shape bar, failing ONLY on jarring          8 sites  → +6.2 M1 points
+    sip777man.site   0.942   h=1  o=6   r=16
+    sestra.cc        0.896   h=8  o=0   r=7
+    beb88run.xyz     0.868   h=0  o=14  r=4
+    www.unoeste.br   0.860   h=0  o=3   r=2   d=1
+    www.tz.de        0.814   h=3  o=2   r=5
+    www.otomoto.pl   0.797   h=0  o=3   r=11
+    www.freesupertips.com  0.776   h=1  o=1   r=4
+    simplepdf.com    0.756   h=5  o=0   r=0    ← the ONLY single-dimension blocker
+
+  COHORT B — jarring-clean, below the shape bar                  12 sites
+    nearest 0.588 — a 0.162 gap. No cheap crossing.
+```
+
+Cohort A is the lever and it is not close. Blocking dimensions across the eight: `reading_order` 7 ·
+`overlap` 6 · `h_overflow` 5 · `dead_target` 1.
+
+**Recompute it every sweep.** The same vein held 13 sites at t868 and 8 at t887 — the membership turns
+over, and a ranking obeyed from memory ranks a cohort that has moved.
+
+**Also stale by twenty points: the board's scorability ceiling.** It has ranked "SCORABILITY FIRST"
+off a measured 63% since 2026-07-30; on t887 it is **82.9% (107/129)**, with the 22 unscored spread as
+`shell-only 9 · other 5 · timeout 4 · render-fail 2 · thin-overlap 2` — no cohort above nine.
+
+### The named mechanism at the top of cohort A
+
+`beb88run.xyz` is missing **458 boxes** (`div×186 img×119 a×93 li×44 ul×14 span×2`) at x-coordinates
+of 1303 · 4740 · 5925 · 12991 · 15361 · 17731 · 18358 — one very long horizontal row. Chrome says the
+missing node is:
+
+```text
+  body>div:nth-of-type(3)   DIV.banner                            [0 146 1185×380]
+  …>div:nth-of-type(2)      DIV.banner-carousel slick-initialized [0 146 1185×380]
+  …>div:nth-of-type(1)      DIV.slick-list draggable              [0 146 1185×380]  overflow hidden/hidden
+```
+
+A **Slick carousel**. `slick-list` clips a `slick-track` laid out as one row of slides; we emit no box
+for `slick-list`, so the track escapes its clip and 14 sibling pairs collide. That is an *overlap*
+symptom with a *containment* cause — the usual "a reading-order/overlap symptom is a width or a
+transform upstream", one variant further out: the clipping container itself. Slick is on a large slice
+of the template-built web, so it is a class rather than a site.
+
+**The first bisect for whoever takes it:** separate *"the DOM Slick built differs"* from *"we lay out
+the DOM it built differently"* before touching layout — two candidate subsystems that share no code.
