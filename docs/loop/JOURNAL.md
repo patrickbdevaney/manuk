@@ -46371,6 +46371,72 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 916 — `text-top` aligns the INLINE BOX, and the inline box carries its half-leading (2026-08-04)
+
+TICK SHAPE: capability — the third and last of t913's `vertical-align` residuals that a formula can
+close. t914 wired the family, t915 measured the `super`/`sub` offsets; `text-top`/`text-bottom` were
+still reading 24 against Chrome's 27 and 28.
+
+⚠⚠⚠ **THE OLD FORMULA WAS `strut_ascent - a`, WHICH IS EXACTLY ZERO WHENEVER THE FRAGMENT AND THE
+STRUT SHARE A FONT.** So `vertical-align: text-top` did nothing at all on the overwhelming majority
+of real markup — the case where a `<span>` inherits its parent's font — and the arm looked
+implemented. **A formula that degenerates to a no-op on the common case is indistinguishable from an
+unimplemented one, and reads as implemented in every review.**
+
+⚠⚠⚠ **CSS 2.1 §10.8.1 ALIGNS TWO DIFFERENT BOXES, AND THAT IS THE WHOLE BUG.** It aligns *the top of
+the aligned subtree's **INLINE BOX*** with *the top of the parent's **CONTENT AREA***:
+
+* the **content area** is `ascent + descent` — the glyphs,
+* the **inline box** is `line-height` tall — the glyphs **plus half-leading above and below**.
+
+At `line-height: 1.5` on 16px text the half-leading is ~2.5px, so aligning the box's top with the
+content area's top shifts the fragment **DOWN** by exactly that, and the line grows below. The old
+formula compared two ascents and never saw the leading at all. `text-bottom` is the mirror.
+
+```text
+                              Chrome   before   after
+  vertical-align: text-top      27       24       27
+  vertical-align: text-bottom   28       24       28
+```
+
+Both exact, and the same floored `half_leading` the line itself uses — computing a shift against a
+different rounding than the line it moves within lands the box outside the box it asked for.
+
+**THE FAMILY, THREE TICKS ON.** t913 measured thirteen cases, every one of them 24:
+
+```text
+                                     Chrome   t913   t914   t915   t916
+  super                                30      24     29     30     30
+  sub                                  28      24     26     28     28
+  text-top                             27      24     24     24     27
+  text-bottom                          28      24     24     24     28
+  top / plain / super-on-10px (CTRL)   24      24     24     24     24
+  middle                               25      24     26     26     26   <- open
+  <sup> / <sub>                        27      24     24     24     24   <- open
+  10px / -10px / 50%                 34/34/36  24     24     24     24   <- unrepresentable
+```
+
+⚠ **WHAT REMAINS, AND WHY IT IS NOT ANOTHER FORMULA.** `<sup>`/`<sub>` sit at 24 while their own box
+is byte-exact (18×15 against a 21×17 control) and their offset is now verified at three font sizes —
+so the residual is in how a SMALLER fragment's half-leading folds into the line, not in the offset,
+and it is the one row of this family that a fourth formula tick should not simply guess at.
+`middle` is 26 against 25 and stays DIRECTION-only. `vertical-align: <length>`/`<percentage>` needs
+an enum variant and is a css-crate tick.
+
+RATCHET: `manuk-layout` **125/125**; the combined battery 54/54, the specified-width set 14/14, and
+**all ten of t915's calibration rows still exact**; the div-height probe holds at 19 of 20 with only
+the separate `<input>` row differing. The only boxes that moved are lines carrying
+`vertical-align: text-top` or `text-bottom`.
+
+GATE: `G_VERTICAL_ALIGN_ON_TEXT` gains `#v10` and `#v11` as **exact** claims. **RED-PROVEN** by
+restoring `strut_a - a`: *"`#v10` expected 27 … got 24"* — and note that the reverted formula is not
+obviously wrong to read, which is the point of gating it.
+
+PERF: none — one more `f32` argument, and a floor.
+
+WIKI: `docs/wiki/text-layout.md` — "A formula that degenerates to a no-op on the common case reads as
+implemented" [no-pattern]
+
 ## Tick 915 — the offset is the PARENT's font size × 0.375, measured at three sizes (2026-08-04)
 
 TICK SHAPE: capability — t914 shipped the `vertical-align`-on-text family using the ATOMIC arms' own

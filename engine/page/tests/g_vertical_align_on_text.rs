@@ -175,6 +175,20 @@ fn g_vertical_align_on_text() {
              atomic arms' approximation."
         );
     }
+    // ── t916: `text-top` / `text-bottom`, now EXACT. The old formula was `strut_ascent - a`, which
+    // is ZERO whenever the fragment and the strut share a font — so these did nothing at all on the
+    // overwhelming majority of real markup. CSS 2.1 §10.8.1 aligns the top of the aligned subtree's
+    // INLINE BOX (which includes its half-leading) with the top of the parent's CONTENT AREA (which
+    // does not), and at `line-height: 1.5` that is a ~2.5px downward shift.
+    for (sel, want) in [("#v10", 27.0), ("#v11", 28.0)] {
+        let got = h(&page, sel);
+        assert!(
+            (got - want).abs() < 1.01,
+            "G_VERTICAL_ALIGN_ON_TEXT: `{sel}` expected {want} (Chrome) — the inline box carries \
+             its half-leading and the content area does not; got {got}"
+        );
+    }
+
     // `middle` is still an open number (Chrome 25, ours 26) and is asserted as DIRECTION only —
     // banking 26 would freeze an approximation as though it had been measured.
     assert!(

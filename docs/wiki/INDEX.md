@@ -1557,6 +1557,8 @@
   - L1790 · Both halves in one change
   - L1798 · The offset is the PARENT's font size × 0.375 (t915)
   - L1820 · The strut tuple gained a member rather than the constant gaining a fudge
+  - L1830 · A formula that degenerates to a no-op on the common case reads as implemented (t916)
+  - L1858 · The family, four ticks on
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1584,4 +1586,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1491 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1493 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -7464,7 +7464,15 @@ fn close_line(
             // apart (`valign_text_shift`), and it is applied as a UNION rather than as an addition:
             // a raised inline that still fits inside the strut must not grow the line. Chrome says
             // 24 for `super` on a 10px span in a 24px line, and that control is in the gate.
-            let sh = valign_text_shift(f.valign, a, d, ascent, descent, strut.3);
+            let sh = valign_text_shift(
+                f.valign,
+                a,
+                d,
+                ascent,
+                descent,
+                strut.3,
+                f.style.line_height,
+            );
             above = above.max(a + hl + sh);
             below = below.max(f.style.line_height - a - hl - sh);
         } else {
@@ -7578,7 +7586,15 @@ fn close_line(
             // the line box without moving the glyphs would make every `<sup>` line taller with its
             // text still on the baseline — a metric win bought with a visible regression, which is a
             // trade. The shift is the same function `line_metrics` used to size the line.
-            let sh = valign_text_shift(f.valign, fa, fd, ascent, descent, strut.3);
+            let sh = valign_text_shift(
+                f.valign,
+                fa,
+                fd,
+                ascent,
+                descent,
+                strut.3,
+                f.style.line_height,
+            );
             frags.push(TextFragment {
                 x: fx,
                 line_top: y,
@@ -7613,7 +7629,14 @@ fn valign_text_shift(
     strut_a: f32,
     strut_d: f32,
     parent_font: f32,
+    lh: f32,
 ) -> f32 {
+    // The same half-leading `close_line` uses — FLOORED, with the remainder going below, because a
+    // shift computed against a different rounding than the line it moves within lands the box
+    // outside the box it asked for.
+    fn hl(a: f32, d: f32, lh: f32) -> f32 {
+        ((lh - (a + d)) / 2.0).floor()
+    }
     match v {
         VerticalAlign::Baseline | VerticalAlign::Top | VerticalAlign::Bottom => 0.0,
         // ⚠⚠⚠ **CALIBRATED AGAINST CHROME AT THREE FONT SIZES (t915), NOT REUSED FROM THE ATOMIC
@@ -7636,9 +7659,16 @@ fn valign_text_shift(
         // CSS 2.1 §10.8.1: align the box's vertical midpoint with the baseline plus half the
         // parent's x-height (approximated as half the ascent, exactly as the atomic arm does).
         VerticalAlign::Middle => strut_a * 0.25 - (a - d) / 2.0,
-        // The fragment's own text-top meets the strut's text-top; likewise text-bottom.
-        VerticalAlign::TextTop => strut_a - a,
-        VerticalAlign::TextBottom => d - strut_d,
+        // ⚠⚠ **`text-top` ALIGNS THE INLINE BOX, WHICH INCLUDES ITS HALF-LEADING — NOT THE GLYPH
+        // ASCENT (t916).** The previous line read `strut_a - a`, which is ZERO whenever the
+        // fragment and the strut share a font, so `text-top` did nothing at all on the overwhelming
+        // majority of real markup while Chrome grew the line by 3px. CSS 2.1 §10.8.1 aligns the top
+        // of the *aligned subtree's inline box* with the top of the PARENT'S CONTENT AREA — the
+        // content area is `ascent + descent`, while the inline box is `line-height` tall and sits
+        // half-leading above it, so at `line-height: 1.5` the box's top is ~2.5px above the content
+        // area's and the shift is DOWNWARD by exactly that. `text-bottom` is the mirror.
+        VerticalAlign::TextTop => (strut_a - a) - hl(a, d, lh),
+        VerticalAlign::TextBottom => (d - strut_d) + (lh - a - hl(a, d, lh) - d),
     }
 }
 

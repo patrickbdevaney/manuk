@@ -1825,3 +1825,50 @@ full-size span.
 
 > **A constant fitted to one font is a measurement of that font.** When two derivations agree on the
 > data you have, prefer the one whose inputs the spec names.
+
+
+## A formula that degenerates to a no-op on the common case reads as implemented (t916)
+
+`vertical-align: text-top` was implemented as `strut_ascent - a` — **exactly zero whenever the
+fragment and the strut share a font**, which is the case for nearly every `<span>` on the web. The
+arm existed, was reachable after t914, and did nothing. Chrome grows the line by 3px.
+
+CSS 2.1 §10.8.1 aligns **two different boxes**, and that is the whole bug:
+
+* the **content area** is `ascent + descent` — the glyphs;
+* the **inline box** is `line-height` tall — the glyphs **plus half-leading above and below**.
+
+`text-top` aligns the top of the aligned subtree's *inline box* with the top of the parent's *content
+area*. At `line-height: 1.5` on 16px text the half-leading is ~2.5px, so the fragment shifts DOWN by
+that and the line grows below. The old formula compared two ascents and never saw the leading.
+
+```text
+                              Chrome   before   after
+  vertical-align: text-top      27       24       27
+  vertical-align: text-bottom   28       24       28
+```
+
+Use the **same floored** `half_leading` the line itself uses: a shift computed against a different
+rounding than the line it moves within lands the box outside the box it asked for.
+
+> **A no-op formula is worse than a missing one.** A missing arm is visible; a formula that cancels
+> to zero on the common case reads as implemented in every review, passes every same-font fixture,
+> and only a differential against a real engine can see it.
+
+### The family, four ticks on
+
+```text
+                                     Chrome   t913   t914   t915   t916
+  super                                30      24     29     30     30
+  sub                                  28      24     26     28     28
+  text-top                             27      24     24     24     27
+  text-bottom                          28      24     24     24     28
+  top / plain / super-on-10px (CTRL)   24      24     24     24     24
+  middle                               25      24     26     26     26   <- open
+  <sup> / <sub>                        27      24     24     24     24   <- open
+  10px / -10px / 50%                 34/34/36  24     24     24     24   <- unrepresentable
+```
+
+`<sup>`/`<sub>`'s own box is byte-exact (18×15 against a 21×17 control) and the offset is verified at
+three font sizes, so the remaining 3px is how a SMALLER fragment's half-leading folds into the line —
+the one row of this family a further formula tick should not guess at.
