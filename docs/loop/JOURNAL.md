@@ -46371,6 +46371,101 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 905 — three suspects for the burndown's top two causes, and two of the "defects" were my probe (2026-08-04)
+
+TICK SHAPE: capability — t904 ended by naming the only lever with real marginal crossings (a
+mechanism that moves shape AND clears jarring together). This tick went looking for it in the t904
+sweep's own mechanism ranking, which ranks corpus-wide causes by DISTINCT SITES:
+
+```text
+  36 sites · 2386 hits   missing box: <div>
+  29 sites ·  280 hits   geometry/mis-sized: height ~256px   [median 364px]
+  23 sites · 1154 hits   geometry/mis-sized: width  ~32px    [median 32px]   <- median EXACTLY the label
+```
+
+⚠⚠⚠ **THE 32px BAND'S MEDIAN IS EXACTLY 32, AND EVERY OTHER BAND'S MEDIAN SITS WELL ABOVE ITS
+LABEL.** `height ~256px` medians at 364, `height ~64px` at 89, `width ~8px` at 13 — those are
+power-of-2 buckets with a spread inside them. A bucket whose median lands exactly on its own label is
+a **spike**, and the ebay instance reads like one: Chrome `[48 1158 1104×132]`, ours
+`[32 1156 1136×116]` — **16px further left and 32px wider**, the signature of a 16px-per-side
+horizontal inset that we drop. That is the shared constant this ledger has hunted since tick 267.
+
+⚠⚠⚠ **IT IS NOT. THIRTY CHROME-CAPTURED CLAIMS SAY SO, AND THE FIXTURE COST TEN MINUTES.**
+`padding: 0 16px` · `padding-inline` · `padding-inline-start/end` · `margin: 0 16px` ·
+`margin-inline` · `box-sizing:border-box` with padding · left/right borders · a flex container · a
+grid container · `padding: 0 1rem` · `padding: 0 1em` · `padding: 0 4%` · `direction:rtl` · the
+physical longhands — **parent box and child box, x and width, all thirty exact.**
+
+⚠⚠⚠ **AND THE SECOND SUSPECT DIED THE SAME WAY.** The `height ~256px` cause's own examples are boxes
+with the **right x, the right width, and ZERO height** — ebay `[2400 194 1200×360]` against ours
+`[2400 203 1200×0]`, ikea `[389 5445 739×456]` against `[389 5384 739×0]`. That is the exact
+signature of an unimplemented `aspect-ratio` or of the `padding-top:56.25%` ratio hack it replaced.
+**Twelve more claims**: a bare `aspect-ratio: 16/9`, with a positioned child, under flex, under grid,
+with `min-height`, with `max-height`, `aspect-ratio: 2`, the percentage-padding hack, and float
+containment by `overflow:hidden` / `display:flow-root` — **all Chrome-exact.**
+
+> **The two highest-ranked causes on the corpus are not the two primitives everyone reaches for
+> first, and both were disproved by a four-line fixture before a line of engine code was written.**
+
+⚠⚠⚠ **AND `aspect-ratio` WAS NOT IN `CONSTELLATION.tsv` AT ALL — NEITHER CLAIMED NOR DENIED.** So
+nothing in this project could have told the loop it was already built and already Chrome-exact, and
+the burndown was free to keep it as a live suspect indefinitely. That is the fourth time (after
+`localStorage`, `FormData`, `position:sticky`, `IntersectionObserver`) a tick has been aimed at
+something that already existed, and it is the same law each time: **an absent measurement is not a
+negative measurement.**
+
+⚠⚠⚠ **TWO OF THE THREE "DEFECTS" THIS PROBE PRODUCED WERE THE PROBE, AND BOTH ARE WORTH THE SPACE.**
+
+1. `padding-top:56.25%` read **Chrome 667 against our 675**, a clean 15px, and 15px is a scrollbar.
+   My Chrome invocation omitted **`--hide-scrollbars`** — which the fidelity harness always passes —
+   so the percentage resolved against 1185 instead of 1200. With the flag, Chrome answers **675**, to
+   the pixel. *Every number has a harness, and the harness is part of the number* (Lesson 4), caught
+   here on the first fixture of the tick.
+2. A `display:flow-root` box appeared to sit **120px** left of Chrome's. My fixture put each case in
+   a plain `<div>`, so every row's float **escaped into the next row** and the x values were
+   cumulative. Isolating each case in its own BFC removed it entirely — t780-783's *"the probe's own
+   sentinel widened its subject"*, one tick later, in a different costume.
+
+⚠⚠ **THE THIRD IS REAL, AND ISOLATING THE SECOND ARTEFACT IS WHAT FOUND IT.** A float that escapes a
+non-BFC previous sibling lives in the ancestor's float context, and every following BFC sibling must
+shift past it. One 60px left float inside a plain `<div id=host>`:
+
+```text
+                                       Chrome    ours
+  display:flow-root  after the escape   x=60      x=0     <- WRONG
+  overflow:hidden    after the escape   x=60      x=0     <- WRONG
+  display:flex       after the escape   x=60      x=0     <- WRONG
+  a plain block      after the escape   x=0       x=0     correct to overlap
+  clear:left         after the escape   x=0       x=0     correct
+```
+
+`bfc_float_band` is built, documented, and **Chrome-exact whenever the float and the BFC box share a
+container** — nine claims in this gate prove that half. So the gap is *which float context the band
+is read from*, not the band rule, and this is the pre-flexbox web meeting the modern one: a float
+wrapped in a plain `<div>`, followed by an `overflow:hidden`/`flex` section. The symptom is a wrong
+`x` **plus** the `overlap` and `h_overflow` jarring dims — which makes it exactly the shape-and-
+jarring-together mechanism t904 said was the only lever with real M1 crossings. **NOT fixed here**:
+it is a float-context threading change, the tick was already spent on the measurement, and asserting
+Chrome's numbers now would land the gate RED. The numbers are written into the gate's header ready
+for the tick that takes it.
+
+GATE: `G_RATIO_INSET_FLOAT` — **52 claims**, every one captured from
+`google-chrome-stable --headless=new --hide-scrollbars --window-size=1200,800`, asserted as
+`(x, width, height)` triples because a mechanism that gets the width right and the position wrong is
+what this whole cohort is made of. **RED-PROVEN** by making `bfc_float_band` return its input:
+`#b2 expected x=60 w=340, got x=0 w=400`. It also carries the GUARD half — a plain block MUST overlap
+a float and `clear:left` MUST NOT shift horizontally — because a change that made every box avoid
+every float would satisfy all 52 and be badly wrong.
+
+MAP: three rows appended to `CONSTELLATION.tsv` — `aspect-ratio` **gated** (it had no row at all),
+the escaped-float BFC defect **missing**, and `display:table`'s `height`-as-a-MINIMUM **missing**
+(Chrome 24 against our 20, measured beside the float cases).
+
+PERF: none — no engine code changed. One new page gate, 0.28s.
+
+WIKI: `docs/wiki/box-layout.md` — "The two highest-ranked causes are not the two primitives you
+reach for first" [no-pattern]
+
 ## Tick 904 — the burndown's near-bar plan crosses NOBODY, and the sweep that priced it (2026-08-04)
 
 TICK SHAPE: measurement — the cadence sweep (t898 is 6 ticks stale) and, more pressingly, **t903

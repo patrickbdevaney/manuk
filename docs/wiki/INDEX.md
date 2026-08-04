@@ -225,6 +225,10 @@
   - L4486 · transform was silently discarded on a flex item that is itself a flex container (t874)
   - L4507 · Reach
   - L4515 · A second finding, measured and NOT fixed
+  - L4525 · The two highest-ranked causes are not the two primitives you reach for first (t905)
+  - L4557 · aspect-ratio had no row in the capability map at all
+  - L4564 · Two of the three defects the probe found were the probe
+  - L4576 · And isolating the second artefact is what found the real defect
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1554,4 +1558,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1461 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1465 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

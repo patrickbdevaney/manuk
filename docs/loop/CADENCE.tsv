@@ -632,4 +632,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 898	780cd57a	1785840374	2026-08-04T06:46:14-04:00	786	measurement	63	6	200	33	391	81	3896	6960	0	469	0	the pre-registered expectation was WRONG, and the band is composition plus five named sites (2026-08-04)
 900	ed2c68af	1785841118	2026-08-04T06:58:38-04:00	744	measurement	63	5	221	33	391	81	3896	6960	0	469	0	the map is complete on Interop 2026, and three GATED rows were lying (2026-08-04)
 902	5723057d	1785848302	2026-08-04T08:58:22-04:00	7184	capability	63	8	388	44	392	81	3896	6960	0	470	0	one diff listed the whole class: 411 of 924 computed-style readings differ (2026-08-04)
-904	9f8ab1bb	1785855376	2026-08-04T10:56:16-04:00	7074	measurement	63	9	478	33	392	81	3896	6960	0	470	0	the burndown's near-bar plan crosses NOBODY, and the sweep that priced it (2026-08-04)
+904	7c26e096	1785857291	2026-08-04T11:28:11-04:00	8989	measurement	63	8	484	33	393	81	3896	6960	0	470	0	the burndown's near-bar plan crosses NOBODY, and the sweep that priced it (2026-08-04)

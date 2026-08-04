@@ -4521,3 +4521,75 @@ they coincide and it is invisible again. Per Flexbox §4 an absolutely-positione
 participate in flex layout"* and should not be emitted by that path at all, but deleting a box is
 how elements vanish, and the out-of-flow pass's ownership of every such case needs its own tick to
 establish. Named here so the next reader does not have to rediscover it from a doubled width.
+
+## The two highest-ranked causes are not the two primitives you reach for first (t905)
+
+The t904 sweep's mechanism oracle ranks corpus-wide causes by DISTINCT SITES:
+
+```text
+  36 sites · 2386 hits   missing box: <div>
+  29 sites ·  280 hits   geometry/mis-sized: height ~256px   [median 364px]
+  23 sites · 1154 hits   geometry/mis-sized: width  ~32px    [median 32px]   <- median EXACTLY the label
+```
+
+**A bucket whose median lands exactly on its own label is a spike, not a band.** Every other band
+medians well above its label (`height ~64px` at 89, `width ~8px` at 13) because a power-of-2 bucket
+has a spread inside it. The 32px row does not — and its ebay instance reads like a constant: Chrome
+`[48 1158 1104×132]`, ours `[32 1156 1136×116]`, sixteen pixels further left and thirty-two wider.
+That is the signature of a 16px-per-side horizontal inset being dropped.
+
+It is not one. Thirty Chrome-captured claims, ten minutes of fixture: `padding: 0 16px` ·
+`padding-inline` · `padding-inline-start/end` · `margin: 0 16px` · `margin-inline` ·
+`box-sizing:border-box` with padding · left/right borders · flex container · grid container · `1rem`
+· `1em` · `4%` · `direction:rtl` · physical longhands — parent box and child box, x and width, all
+exact.
+
+The second cause died the same way. Its examples are boxes with the right x, the right width and
+**zero height** (ebay `1200×360` against ours `1200×0`; ikea `739×456` against `739×0`) — the
+signature of unimplemented `aspect-ratio` or of the `padding-top:56.25%` hack it replaced. Twelve
+more claims: bare ratio, positioned child, flex, grid, `min-height`, `max-height`, the percentage
+hack, and float containment by `overflow:hidden`/`flow-root`. All exact.
+
+> **Rank a cause by sites and you learn where to look. You do not learn what to build.** The two
+> highest-ranked causes on this corpus were both disproved by a four-line fixture before a line of
+> engine code was written — which is the cheapest possible outcome and the one to seek first.
+
+### `aspect-ratio` had no row in the capability map at all
+
+Not `gated`, not `missing`, not `unknown` — absent. So nothing in the project could say the
+capability was already built and already correct, and the burndown was free to keep it as a live
+suspect forever. Fourth occurrence of the same law, after `localStorage`, `FormData`,
+`position:sticky` and `IntersectionObserver`: **an absent measurement is not a negative measurement.**
+
+### Two of the three defects the probe found were the probe
+
+1. `padding-top:56.25%` read Chrome **667** against our **675** — a clean 15px, which is a scrollbar.
+   The manual Chrome invocation omitted **`--hide-scrollbars`**, a flag the fidelity harness always
+   passes, so the percentage resolved against 1185 rather than 1200. With the flag: 675, to the pixel.
+2. A `display:flow-root` box appeared 120px left of Chrome's. The fixture put each case in a plain
+   `<div>`, so each row's float **escaped into the next row** and the x values were cumulative.
+   Isolating each case in its own BFC removed it.
+
+Both are the standing laws firing inside one tick — *every number has a harness*, and *the probe's own
+sentinel widens its subject*. A differential fixture is only a control if each case is a control.
+
+### And isolating the second artefact is what found the real defect
+
+A float that escapes a non-BFC previous sibling belongs to the ancestor's float context, and every
+following BFC sibling must shift past it:
+
+```text
+  one 60px left float inside a plain <div id=host>     Chrome    ours
+    display:flow-root  after the escape                 x=60      x=0     <- WRONG
+    overflow:hidden    after the escape                 x=60      x=0     <- WRONG
+    display:flex       after the escape                 x=60      x=0     <- WRONG
+    a plain block      after the escape                 x=0       x=0     correct to overlap
+    clear:left         after the escape                 x=0       x=0     correct
+```
+
+`bfc_float_band` implements CSS 2.1 §9.5 correctly and is Chrome-exact **whenever the float and the
+BFC box share a container**. The gap is *which float context the band is read from*. This is the
+pre-flexbox web meeting the modern one — a float wrapped in a plain `<div>`, followed by an
+`overflow:hidden` or `flex` section — and it produces a wrong `x` **together with** the `overlap` and
+`h_overflow` jarring dims, which makes it the shape-and-jarring-together mechanism t904 identified as
+the only lever with real M1 crossings.
