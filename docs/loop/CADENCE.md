@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **619** | ticks 1–885 |
-| median tick cycle | **26m** | 618 intervals |
-| median, last 10 | **17m** | 10 intervals |
+| ticks landed | **620** | ticks 1–886 |
+| median tick cycle | **26m** | 619 intervals |
+| median, last 10 | **25m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.08** | 570.8h elapsed |
-| median verify wall | **63s** | 558 ticks |
+| **ticks per hour** | **1.08** | 572.3h elapsed |
+| median verify wall | **63s** | 559 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **464**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**305 of 619 ticks** (49%) moved a
+**305 of 620 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -716,5 +716,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **883** | 2026-08-03 21:22 | 50m | capability | 63s | +517/−37 | 387 | 81 | 56.0% · | the parser was right and EVERY COPY was wrong (2026-08-03) |
 | **884** | 2026-08-03 21:31 | 9m | capability | 63s | +211/−35 | 387 | 81 | 56.0% · | `typeof store.getAll === 'function'` was true, and nobody asks that (2026-08-04) |
 | **885** | 2026-08-03 23:51 | 2.3h | measurement | 63s | +365/−33 | 387 | 81 | 56.0% · | "M1 did not move" is three different facts, and the differentiator is getting 4% (2026-08- |
+| **886** | 2026-08-04 01:18 | 87m | measurement | 63s | +362/−109 | 387 | 81 | 56.0% · | the sweep the loop was blind without, and the timeout cohort is OUR CLOCK (2026-08-04) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -4683,3 +4683,53 @@ mod chunk_spawn_budget {
         );
     }
 }
+
+/// **May this run BANK a corpus sweep?** — the t887 guard, as a decision that can be tested.
+///
+/// `banking` is "the caller passed `--rows-out`", i.e. this run is about to write a row file that
+/// `fidelity-progress.sh` will read as a corpus measurement and diff against every previous sweep.
+///
+/// ⚠⚠⚠ **A DEBUG BUILD IS NOT THIS BROWSER.** Measured at t887 on four sites, same hour:
+/// `sip777man` 191.8s debug against 34.8s release, `ikea` 50.7s against 9.2s — **4-5.5×**. That
+/// pushed 22 sites past the 150s site budget where release has 4, dropped `scored` 106 → 92, and
+/// manufactured a "scorability regression" that cost a full tick's attribution budget, old-binary
+/// control included. It also **understates shape**, because a page that does not settle inside the
+/// budget scores what it managed (`sip777man` 90.5% debug vs 94.2% release).
+///
+/// `scripts/fidelity-sweep.sh` has pinned the release binary since it was written; every
+/// `SWEEP-t<N>-rows.tsv` in this repo is produced by invoking the binary DIRECTLY, and that path had
+/// no guard at all. The override exists so the refusal cannot become a reason to delete the check.
+pub fn may_bank_a_sweep(banking: bool, is_debug: bool, override_set: bool) -> bool {
+    !banking || !is_debug || override_set
+}
+
+#[cfg(test)]
+mod bank_guard_tests {
+    use super::may_bank_a_sweep;
+
+    /// **Proven red:** return `true` unconditionally and the second claim — the one that describes
+    /// exactly what tick 886 did — passes.
+    #[test]
+    fn a_debug_build_may_not_bank_a_corpus_sweep() {
+        // THE CASE THIS EXISTS FOR: t886 ran a 200-site sweep from `target/debug` and banked it.
+        assert!(
+            !may_bank_a_sweep(true, true, false),
+            "a debug build banking a sweep is the t886 defect: 4-5.5x slower, 22 timeouts against \
+             release's 4, scored 106 -> 92, and shape UNDERSTATED on every site that ran out of budget"
+        );
+        // The shipping binary banks, which is the whole point — the guard must not block the loop.
+        assert!(may_bank_a_sweep(true, false, false), "release must bank");
+        // A debug build may still MEASURE, it just may not BANK. Per-site diagnosis is how every
+        // engine tick in this loop is verified, and blocking it would trade one defect for a worse one.
+        assert!(
+            may_bank_a_sweep(false, true, false),
+            "a debug run WITHOUT --rows-out is per-site diagnosis and must stay available"
+        );
+        // The deliberate override, so the refusal never becomes a reason to hand-edit the check out.
+        assert!(
+            may_bank_a_sweep(true, true, true),
+            "the explicit override applies"
+        );
+        assert!(may_bank_a_sweep(false, false, false));
+    }
+}

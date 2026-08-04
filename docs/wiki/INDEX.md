@@ -683,6 +683,10 @@
   - L327 · The one-origin proxy, built (t881) — and what it actually bought
   - L344 · THE INSTRUMENT COUNTED ITSELF, AND THE ACCEPTANCE TEST CAUGHT IT ON THE FIRST RUN
   - L363 · Measured, all five of t880's sites, one binary
+  - L385 · A debug binary is not this browser — 4–5.5× slower, and it understates shape as well (t887)
+  - L414 · The half that would have stayed hidden
+  - L421 · The guard
+  - L433 · The lesson, narrower than the law it comes from
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1514,4 +1518,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1421 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1425 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

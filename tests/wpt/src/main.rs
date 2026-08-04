@@ -503,6 +503,48 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
     // five `continue` paths, and a bottom-of-loop flush would silently skip every one of them.
     // Before site N begins, sites 1..N-1 are on disk. That is the invariant, and it is `continue`-proof.
     let rows_out = flag(args, "--rows-out").map(PathBuf::from);
+    // ⚠⚠⚠ **A SWEEP BANKED FROM A DEBUG BUILD IS NOT A MEASUREMENT OF THIS BROWSER, AND THE LOOP HAD
+    // NO GUARD SAYING SO (t887).** `scripts/fidelity-sweep.sh:42` pins `BIN=target/release/manuk-wpt`,
+    // but every `SWEEP-t<N>-rows.tsv` in this repo is produced by invoking this binary DIRECTLY, and
+    // that path was unguarded. Tick 886 ran a full 200-site sweep with `target/debug/manuk-wpt` and
+    // banked it. Measured the next hour on four of its own timed-out sites:
+    //
+    // ```text
+    //                    DEBUG      RELEASE    Chromium
+    //   sip777man.site  191,825ms   34,814ms   12,029ms
+    //   beb88run.xyz    172,591ms   32,198ms   11,273ms
+    //   www.ikea.com     50,717ms    9,193ms    6,690ms
+    //   payb.jp         102,352ms   40,537ms   35,314ms
+    // ```
+    //
+    // **4–5.5× slower**, which pushed 22 sites past the 150s site budget where release has 4, dropped
+    // `scored` 106 → 92, and produced a "scorability regression" the tick then spent its whole
+    // attribution budget on — old-binary control included. It also **understates fidelity**, because a
+    // page that does not settle inside the budget scores what it managed: `sip777man` read 90.5% debug
+    // against 94.2% release, `payb.jp` 64.7% against 74.6%.
+    //
+    // This is the project's own oldest law — *every number has a harness, and the harness is part of
+    // the number* — walked into by the tick that was quoting it. So the instrument refuses now, rather
+    // than the operator remembering. `MANUK_ALLOW_DEBUG_SWEEP=1` is the deliberate override for
+    // someone debugging the sweep itself; it exists so the refusal cannot become a reason to hand-edit
+    // this check out.
+    if !manuk_wpt::fidelity::may_bank_a_sweep(
+        rows_out.is_some(),
+        cfg!(debug_assertions),
+        std::env::var("MANUK_ALLOW_DEBUG_SWEEP").is_ok(),
+    ) {
+        eprintln!(
+            "✗ REFUSING to bank a sweep from a DEBUG build — it is 4-5.5x slower than the shipping\n  \
+             binary, which turns healthy sites into `timeout` rows, drops the scored count, and\n  \
+             UNDERSTATES shape (a page that does not settle inside the budget scores what it managed).\n  \
+             Measured t887: sip777man 191.8s debug vs 34.8s release; ikea 50.7s vs 9.2s.\n\n  \
+             Run:  cargo build --release -p manuk-wpt  &&  ./target/release/manuk-wpt fidelity …\n  \
+             (scripts/fidelity-sweep.sh already pins the release binary; this is the direct-invocation\n  \
+             path, which had no guard at all.)\n\n  \
+             Override with MANUK_ALLOW_DEBUG_SWEEP=1 ONLY when debugging the sweep itself."
+        );
+        std::process::exit(2);
+    }
     // Our OWN per-site budget, strictly under the sweep runner's external `timeout` so that WE file the
     // row rather than being killed holding a marker the next run can only read as `crashed`. See the
     // arming site below for why this exists at all.

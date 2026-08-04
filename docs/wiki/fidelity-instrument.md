@@ -381,3 +381,58 @@ engine gaps and one refused row, and the refused row says exactly what is missin
 
 This is the same shape the board's t777 block predicted for throw-killers: *the function leg is a
 chain*, and clearing one link exposes the next rather than scoring the site.
+
+## A debug binary is not this browser — 4–5.5× slower, and it understates shape as well (t887)
+
+`scripts/fidelity-sweep.sh:42` pins `BIN=target/release/manuk-wpt` and always has. But **every
+`SWEEP-t<N>-rows.tsv` in this repo is produced by invoking `manuk-wpt fidelity --rows-out` directly**,
+and that path had no guard. Tick 886 swept all 200 CrUX sites from `target/debug`.
+
+```text
+                    DEBUG      RELEASE    Chromium    release vs Chrome
+  sip777man.site  191,825ms    34,814ms    12,029ms         2.9×
+  beb88run.xyz    172,591ms    32,198ms    11,273ms         2.9×
+  www.ikea.com     50,717ms     9,193ms     6,690ms         1.4×
+  payb.jp         102,352ms    40,537ms    35,314ms         1.15×
+```
+
+**What that did to the corpus reading:**
+
+```text
+                                   t875     t886(debug)   t887(release)
+  M1                                16.9%      17.4%✗        17.8%
+  scored / in-scope                106/130     92/132✗      107/129
+  timeout rows                        3        22✗            4
+  scorability ceiling                 —        69.7%✗        82.9%
+```
+
+t886 concluded *"we are 4–17× slower than Chromium"* and *"the timeout cohort is the largest unscored
+reason"*. Both are **withdrawn**: on the shipping binary the gap is **1.15–2.9×**, and `payb.jp` is at
+parity. Its old-binary control was sound and its conclusion ("not a code regression") stands — it was
+debug-vs-debug, which is exactly the comparison that cannot see this.
+
+### The half that would have stayed hidden
+
+A page that does not settle inside the load budget scores **what it managed**, so a debug build also
+**understates fidelity**: `sip777man` 90.5% → 94.2%, `beb88run` 81.6% → 86.8%, `payb.jp` 64.7% →
+74.6%. The error makes the browser look *slower and worse at once*, which is the most convincing
+possible shape for a wrong number.
+
+### The guard
+
+`fidelity::may_bank_a_sweep(banking, is_debug, override)` — `manuk-wpt fidelity` now **refuses** to
+write `--rows-out` from a debug build, with `MANUK_ALLOW_DEBUG_SWEEP=1` as the deliberate override so
+the refusal cannot become a reason to delete the check. A debug run *without* `--rows-out` still
+measures: per-site diagnosis is how every engine tick here is verified, and blocking it would trade
+one defect for a worse one.
+
+**The withdrawn row was removed from `FIDELITY-PROGRESS.tsv`, not averaged in** — a debug sweep is not
+a slow measurement of this browser, it is a measurement of a different one, and leaving it in would
+make every future Δ diff against it.
+
+### The lesson, narrower than the law it comes from
+
+*Every number has a harness, and the harness is part of the number* — walked into by the tick that was
+quoting it. The sharper form: **when a reading is surprising, check WHAT BINARY produced it before
+checking what the code did.** t886 spent its entire attribution budget, including a full old-binary
+rebuild, on a question whose answer was in `ls -la target/`.

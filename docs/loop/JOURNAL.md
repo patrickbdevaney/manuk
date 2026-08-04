@@ -46371,6 +46371,107 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 887 — tick 886 measured a DEBUG BINARY, and its headline is withdrawn (2026-08-04)
+
+TICK SHAPE: instrument — chase t886's own finding one level down, discover the finding was the
+instrument, withdraw it, re-measure on the shipping binary, and build the guard that would have
+caught it.
+
+⚠⚠⚠ **THE NAVIGATION LEDGER ANSWERED IN ONE RUN, AND THE ANSWER WAS NOT WHAT I WAS LOOKING FOR.**
+`RUST_LOG=manuk_page=info` on t886's slowest site (`sip777man.site`) prints the whole navigation as a
+phase ledger that reconciles to the total:
+
+```text
+  html parse                          200ms
+  external scripts                    722ms
+  cascade+layout+blocking scripts  10,372ms
+  deferred scripts                101,132ms   ← 75% of the load
+  initial images+masks             19,780ms
+  total                           135,267ms   (unaccounted 11ms)
+```
+
+That is a good instrument doing its job. But the number it was explaining should never have existed.
+
+⚠⚠⚠ **TICK 886 RAN ITS 200-SITE SWEEP WITH `target/debug/manuk-wpt`.**
+`scripts/fidelity-sweep.sh:42` pins `BIN=target/release/manuk-wpt` and has since it was written — but
+**every `SWEEP-t<N>-rows.tsv` in this repo is produced by invoking the binary directly**, and that
+path had no guard at all. Measured the same hour, four of t886's own timed-out sites:
+
+```text
+                    DEBUG      RELEASE    Chromium    release vs Chrome
+  sip777man.site  191,825ms    34,814ms    12,029ms         2.9×
+  beb88run.xyz    172,591ms    32,198ms    11,273ms         2.9×
+  www.ikea.com     50,717ms     9,193ms     6,690ms         1.4×
+  payb.jp         102,352ms    40,537ms    35,314ms         1.15×
+```
+
+**WITHDRAWN, explicitly:** t886's headline — *"we are 4–17× slower than Chromium"* and *"the timeout
+cohort is now the largest unscored reason"* — is **wrong**. On the shipping binary we are **1.15–2.9×**
+slower, and `payb.jp` is essentially at parity. The 22 timeouts were 4. The `scored 106 → 92` drop
+never happened. The old-binary control in that tick was sound and its conclusion ("not a code
+regression") stands — it was debug-vs-debug, which is exactly the comparison that *cannot* see this.
+
+⚠⚠⚠ **AND A DEBUG BUILD UNDERSTATES FIDELITY, WHICH IS THE HALF THAT WOULD HAVE STAYED HIDDEN.** A
+page that does not settle inside the load budget scores what it managed:
+
+```text
+                    DEBUG shape   RELEASE shape
+  sip777man.site        90.5%         94.2%
+  beb88run.xyz          81.6%         86.8%
+  payb.jp               64.7%         74.6%
+```
+
+So the error does not merely add noise in one direction that a careful reader could discount — it
+makes the browser look **slower AND worse** at the same time, which is the most convincing possible
+shape for a wrong number.
+
+**THE SWEEP, RE-RUN ON THE RELEASE BINARY — and this one has every guard clean:**
+
+```text
+                                   t867     t875     t886(debug)   t887(release)
+  M1 (shape≥0.75 AND jarring-clean)  16.4%    16.9%      17.4%✗       17.8%
+  shape ≥ 0.75  (count)              29       30         30           31
+  jarring-clean                      31.2%    33.8%      34.8%✗       34.9%
+  scored / in-scope                 106/128  106/130     92/132✗     107/129
+  timeout rows                        2        3         22✗          4
+  scorability ceiling                  —        —        69.7%✗       82.9%
+```
+
+`fidelity-progress.sh` reports **"✓ no trap/regression/staleness/exclusion flag"** — against t886's
+`SCORABILITY-REGRESSED` and `DENOMINATOR-TRAP`, both of which were the binary. **The t886 row and
+`SWEEP-t886-rows.tsv` are WITHDRAWN from the series rather than averaged into it**: a debug-binary
+sweep is not a slow measurement of this browser, it is a measurement of a different one, and leaving
+it in would have made every future Δ diff against it.
+
+⚠⚠ **THE HONEST RESIDUE, reported and not claimed either way:** the common-set band reads **−0.34 pts**
+over the 103 sites scored in both t875 and t887 (3 up, 8 down by >2pt). The tool's own note applies —
+that is engine or site-drift, and a prior negative band was site-drift — and t875 is seven hours of
+live-web away. It is recorded so the next sweep has something to compare against, not asserted.
+
+**THE GUARD, because the operator remembering is what failed.** `manuk-wpt fidelity` now **refuses**
+to write `--rows-out` from a debug build: `may_bank_a_sweep(banking, is_debug, override)` in
+`fidelity.rs`, wired into `main.rs`, with `MANUK_ALLOW_DEBUG_SWEEP=1` as the deliberate override so
+the refusal can never become a reason to delete the check. Verified live in both directions: debug +
+`--rows-out` refuses with the measured numbers in the message; debug **without** `--rows-out` still
+runs (per-site diagnosis is how every engine tick in this loop is verified, and blocking it would
+trade one defect for a worse one); release is untouched.
+
+This is the project's own oldest law — ***every number has a harness, and the harness is part of the
+number*** — walked into by the tick that was quoting it, one tick after banking the
+"sixth consecutive cohort named as ours and proven not" prior. The lesson that survives is narrower
+and sharper than the law: **when an instrument's reading is surprising, check WHAT BINARY produced it
+before checking what the code did.** t886 spent its entire attribution budget — including a full
+old-binary rebuild — on a question whose answer was in `ls -la target/`.
+
+GATE: `a_debug_build_may_not_bank_a_corpus_sweep`, RED-proven by returning `true` unconditionally
+(which is precisely what t886 did). Four claims: debug+banking refused · release banks · debug
+WITHOUT banking still measures · the explicit override applies.
+
+PERF: none — one boolean before the sweep starts.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "A debug binary is not this browser: 4–5.5× slower, and it
+understates shape as well" [no-pattern]
+
 ## Tick 886 — the sweep the loop was blind without, and the timeout cohort is OUR CLOCK (2026-08-04)
 
 TICK SHAPE: measurement — check #76's steer #1: a full `--jobs 2` sweep of all 200 CrUX-trend sites,
