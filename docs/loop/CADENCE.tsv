@@ -643,3 +643,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 913	c2573943	1785871411	2026-08-04T15:23:31-04:00	2072	measurement	63	11	409	38	397	81	3896	6960	0	474	0	`vertical-align` is honoured for ATOMIC inlines and ignored for TEXT (2026-08-04)
 914	a624dd3e	1785873219	2026-08-04T15:53:39-04:00	1808	capability	63	9	227	55	397	81	3896	6960	0	474	0	the fragment was built with `valign: Baseline` HARD-CODED (2026-08-04)
 915	d41e2e66	1785874871	2026-08-04T16:21:11-04:00	1652	capability	63	9	199	39	397	81	3896	6960	0	474	0	the offset is the PARENT's font size × 0.375, measured at three sizes (2026-08-04)
+916	f2935904	1785876615	2026-08-04T16:50:15-04:00	1744	capability	63	6	153	33	397	81	3896	6960	0	474	0	`text-top` aligns the INLINE BOX, and the inline box carries its half-leading (2026-08-04)

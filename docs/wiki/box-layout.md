@@ -4728,3 +4728,48 @@ must NOT fire — `border-spacing: 0` still collapses to zero, an author's `10px
 `border-collapse: collapse` still ignores spacing entirely — as INSET relationships
 (`cell.x - table.x`) rather than absolute coordinates, so ten stacked tables cannot make one
 regression print as twenty-three.
+
+
+## A control's own box and the line that holds it are ONE change (t917)
+
+Chrome's UA defaults for form controls, read with `getComputedStyle` rather than guessed:
+
+```text
+              border   padding      box-sizing        ours (ONE shared rule)
+  input        2px     1px 2px      content-box       border 1px, padding 1px 2px
+  button       2px     1px 6px      border-box        border 1px, padding 1px 6px
+  select       1px     0            border-box        border 1px, padding 1px 2px
+  textarea     1px     2px          content-box       border 1px, padding 1px 2px
+  checkbox     0       0            border-box        border 1px (inherited)
+```
+
+Four controls, four different answers, one shared rule. Every text input and every button on the web
+was **exactly 2px short in both axes**. Correcting it took all ten measured heights exact.
+
+### `getComputedStyle` did not predict the used box for two of the five
+
+Chrome reports `textarea { padding: 2px }` and `select { padding: 0 }`. Adopting either made a control
+that was **already byte-exact** wrong — the textarea 36 → 38, the select 30×19 → 26×17 — because both
+have an internal shadow subtree the reported longhand does not account for.
+
+> **The used metric is the ground truth; the declaration is not.** Take the UA value only where the
+> RENDERED box confirms it.
+
+### And then the composite case regressed, so the whole thing was reverted
+
+`<div><input></div>` is 24 in Chrome. It was 26 here, and with the *correct* 21px input it became
+**28** — the control's own box got right and the box containing it got further wrong, because our
+form controls take CSS 2.1 §10.8.1's **fallback baseline** (the bottom margin edge) rather than their
+internal text baseline:
+
+```text
+  Chrome   baseline ~17 from the top     ->  above 17, below 4  ->  max(17.5,17) + max(6.5,4) = 24
+  ours     baseline = h = 21 (fallback)  ->  above 21, below 0  ->  21 + 6.5                 = 27.5 -> 28
+```
+
+The ratchet is absolute: a universal improvement to five controls' own boxes does not buy a composite
+row moving away from Chrome. Reverted. Same shape as t913 → t914, where growing the line box without
+moving the glyphs was refused for the same reason and the pair shipped together one tick later.
+
+**Both halves, for whoever takes it:** the five UA rows above, plus a real internal baseline for form
+controls — and `<div><input></div>` must read 24 when they land.

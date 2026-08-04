@@ -46371,6 +46371,77 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 917 — one UA rule for four controls Chrome gives four different boxes, and the fix was REVERTED (2026-08-04)
+
+TICK SHAPE: measurement — the second defect t913 measured and set aside: a bare `<input>` in a `<div>`
+gives Chrome 24 and us 26. It turned out to be a whole UA block, the correction was built and
+verified, **and it was reverted under the ratchet.** Both halves of that are the tick.
+
+⚠⚠⚠ **CHROME'S OWN UA DEFAULTS, READ WITH `getComputedStyle` RATHER THAN GUESSED:**
+
+```text
+              border   padding      box-sizing        ours (ONE shared rule)
+  input        2px     1px 2px      content-box       border 1px, padding 1px 2px
+  button       2px     1px 6px      border-box        border 1px, padding 1px 6px
+  select       1px     0            border-box        border 1px, padding 1px 2px
+  textarea     1px     2px          content-box       border 1px, padding 1px 2px
+  checkbox     0       0            border-box        border 1px (inherited from the shared rule)
+```
+
+**Four controls, four different answers, and one shared rule that could only be right about one of
+them.** Every text input and every button on the web came out **exactly 2px short in both axes**.
+
+**BUILT AND MEASURED — every height went exact:**
+
+```text
+              chrome    before    after
+  input        21        19        21
+  input pad:0  19        17        19
+  checkbox     13        15        13
+  submit       21        19        21
+  button       21        19        21
+  textarea     36        36        36
+  select       19        19        19
+```
+
+**10 of 10 heights exact (5 of 10 whole boxes, up from 2)** — the residual widths are a separate
+defect, our intrinsic text-input content width being 2px wide.
+
+⚠⚠⚠ **AND `getComputedStyle` DID NOT PREDICT THE USED BOX FOR TWO OF THE FIVE.** Chrome reports
+`textarea { padding: 2px }` and `select { padding: 0 }`, and adopting either made a control that was
+**already byte-exact** wrong — the textarea 36 → 38, the select 30×19 → 26×17. Both have an internal
+shadow subtree that the reported longhand does not account for. *The used metric is the ground truth
+and the declaration is not*, so those two rows kept their old values and only the three that the
+RENDERED box confirmed were taken.
+
+⚠⚠⚠ **THEN THE COMPOSITE CASE REGRESSED, AND THAT IS WHY THIS IS A MEASUREMENT TICK.** `<div><input></div>`
+is 24 in Chrome. It was 26 here — **and with the correct 21px input it became 28.** The control's own
+box got right and the box containing it got *further* wrong, because our form controls take CSS 2.1
+§10.8.1's **fallback baseline** (the bottom margin edge) instead of their internal text baseline:
+
+```text
+  Chrome   input baseline ~17 from its top   ->  above 17, below 4   ->  line = max(17.5,17) + max(6.5,4) = 24
+  ours     baseline = h = 21 (the fallback)  ->  above 21, below 0   ->  line = 21 + 6.5           = 27.5 -> 28
+```
+
+**THE RATCHET IS ABSOLUTE AND IT SAYS REVERT, NOT TRADE.** A universal, Chrome-measured improvement
+to five controls' own boxes does not buy a composite row moving away from Chrome. The UA block is
+reverted in this commit; the tree is exactly where it was.
+
+> **A control's own box and the line that holds it are ONE change.** Same shape as t913 → t914, where
+> growing the line box without moving the glyphs was refused for the same reason and the pair shipped
+> together one tick later.
+
+**WHAT THE NEXT TICK NEEDS, ALL OF IT MEASURED HERE:** the five UA rows above (split the shared rule
+into `input` / `button` at 2px, `checkbox` at 0, and leave `textarea`/`select` alone), **plus** a real
+internal baseline for form controls so the line does not grow — and `<div><input></div>` must read 24
+when both land. Neither half is landable alone.
+
+PERF: none — the tree is unchanged.
+
+WIKI: `docs/wiki/box-layout.md` — "A control's own box and the line that holds it are ONE change"
+[no-pattern]
+
 ## Tick 916 — `text-top` aligns the INLINE BOX, and the inline box carries its half-leading (2026-08-04)
 
 TICK SHAPE: capability — the third and last of t913's `vertical-align` residuals that a formula can
