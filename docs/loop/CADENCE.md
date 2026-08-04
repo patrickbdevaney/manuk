@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **642** | ticks 1–913 |
-| median tick cycle | **26m** | 641 intervals |
-| median, last 10 | **31m** | 10 intervals |
+| ticks landed | **643** | ticks 1–914 |
+| median tick cycle | **26m** | 642 intervals |
+| median, last 10 | **30m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 586.3h elapsed |
-| median verify wall | **63s** | 581 ticks |
+| **ticks per hour** | **1.09** | 586.8h elapsed |
+| median verify wall | **63s** | 582 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **474**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**314 of 642 ticks** (49%) moved a
+**315 of 643 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **314** capability ticks, median cycle **26m**
+* **315** capability ticks, median cycle **26m**
 * median diff per tick: **+265 / −34** lines across 8 files
 
 ## Every tick
@@ -739,5 +739,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **911** | 2026-08-04 14:39 | 9m | measurement | 63s | +237/−37 | 396 | 81 | 56.0% · | the board's #1 cause is a KEYING artefact on 38% of its own cohort (2026-08-04) |
 | **912** | 2026-08-04 14:48 | 10m | instrument | 63s | +188/−33 | 396 | 81 | 56.0% · | the ranker now asks the question t782 added, three months and one level out (2026-08-04) |
 | **913** | 2026-08-04 15:23 | 35m | measurement | 63s | +409/−38 | 397 | 81 | 56.0% · | `vertical-align` is honoured for ATOMIC inlines and ignored for TEXT (2026-08-04) |
+| **914** | 2026-08-04 15:53 | 30m | capability | 63s | +227/−55 | 397 | 81 | 56.0% · | the fragment was built with `valign: Baseline` HARD-CODED (2026-08-04) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

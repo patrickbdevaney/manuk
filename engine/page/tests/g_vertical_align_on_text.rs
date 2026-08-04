@@ -79,6 +79,22 @@ const HTML: &str = r##"<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 </body></html>
 "##;
 
+const CAL_HTML: &str = r##"<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;font-family:sans-serif}
+ .f{width:400px;background:#eee;margin-bottom:2px}</style></head><body>
+<div class="f" id="c16" style="font-size:16px;line-height:1.5">x<span style="vertical-align:super">s</span></div>
+<div class="f" id="b16" style="font-size:16px;line-height:1.5">x</div>
+<div class="f" id="c24" style="font-size:24px;line-height:1.5">x<span style="vertical-align:super">s</span></div>
+<div class="f" id="b24" style="font-size:24px;line-height:1.5">x</div>
+<div class="f" id="c32" style="font-size:32px;line-height:1.5">x<span style="vertical-align:super">s</span></div>
+<div class="f" id="b32" style="font-size:32px;line-height:1.5">x</div>
+<div class="f" id="d16" style="font-size:16px;line-height:1.5">x<span style="vertical-align:sub">s</span></div>
+<div class="f" id="d24" style="font-size:24px;line-height:1.5">x<span style="vertical-align:sub">s</span></div>
+<div class="f" id="e16" style="font-size:16px;line-height:3">x<span style="vertical-align:super">s</span></div>
+<div class="f" id="f16" style="font-size:16px;line-height:3">x</div>
+
+</body></html>
+"##;
+
 const SUP_HTML: &str = r##"<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;font:16px/1.5 sans-serif}</style></head><body>
 <div id="d1"><sup id="s1">XX</sup></div>
 <div id="d2"><span id="s2">XX</span></div>
@@ -104,6 +120,15 @@ fn h(page: &manuk_page::Page, sel: &str) -> f32 {
     rect(page, sel).3
 }
 
+fn c_cal(page: &manuk_page::Page, sel: &str, want: f32) {
+    let got = h(page, sel);
+    assert!(
+        (got - want).abs() < 1.01,
+        "G_VERTICAL_ALIGN_ON_TEXT calibration: `{sel}` expected {want} (CAPTURED from \
+         `google-chrome-stable --headless=new --hide-scrollbars --window-size=1200,800`), got {got}"
+    );
+}
+
 #[test]
 fn g_vertical_align_on_text() {
     let fonts = FontContext::new();
@@ -127,28 +152,53 @@ fn g_vertical_align_on_text() {
         );
     }
 
-    // ── THE MECHANISM. Direction only: the calibration is an open number (see the header), so
-    // asserting an exact height here would bank an approximation as though it were measured.
-    for (sel, why) in [
+    // ── THE MECHANISM, and t915 turned two of these three from a DIRECTION into a NUMBER: the
+    // offsets are now measured against Chrome rather than borrowed from the atomic arms.
+    for (sel, want, why) in [
         (
             "#v1",
-            "`vertical-align: super` on TEXT must grow the line (Chrome 30)",
+            30.0,
+            "`vertical-align: super` on TEXT — parent-font x 0.375",
         ),
         (
             "#v2",
-            "`vertical-align: sub` on TEXT must grow the line (Chrome 28)",
-        ),
-        (
-            "#v6",
-            "`vertical-align: middle` on TEXT must grow the line (Chrome 25)",
+            28.0,
+            "`vertical-align: sub` on TEXT — parent-font x 0.25",
         ),
     ] {
         let got = h(&page, sel);
         assert!(
-            got > 24.5,
-            "G_VERTICAL_ALIGN_ON_TEXT: `{sel}` must be TALLER than the 24px baseline control —              {why}; got {got}. Before t914 every one of these read exactly 24, because the line              fragment was built with `valign: Baseline` hard-coded."
+            (got - want).abs() < 1.01,
+            "G_VERTICAL_ALIGN_ON_TEXT: `{sel}` expected {want} (Chrome) — {why}; got {got}. Before \
+             t914 it read exactly 24, because the line fragment was built with `valign: Baseline` \
+             hard-coded; before t915 it read one to two px short, because the offset was the \
+             atomic arms' approximation."
         );
     }
+    // `middle` is still an open number (Chrome 25, ours 26) and is asserted as DIRECTION only —
+    // banking 26 would freeze an approximation as though it had been measured.
+    assert!(
+        h(&page, "#v6") > 24.5,
+        "`vertical-align: middle` on TEXT must still GROW the line (Chrome 25); got {}",
+        h(&page, "#v6")
+    );
+
+    // ── THE CALIBRATION, which is what makes the two numbers above a RULE rather than a fit to one
+    // font size. Chrome-measured at 16/24/32px and at two line-heights: the raise is exactly
+    // `parent-font-size x 0.375` and the drop `x 0.25`, and BOTH are independent of `line-height`.
+    // The `line-height: 3` pair is the row that proves the second half — an offset derived from the
+    // line box would move there and Chrome's does not.
+    let cal = manuk_page::Page::load(CAL_HTML, "https://va.test/", &fonts, 1200.0);
+    c_cal(&cal, "#b16", 24.0);
+    c_cal(&cal, "#b24", 36.0);
+    c_cal(&cal, "#b32", 48.0);
+    c_cal(&cal, "#c16", 30.0);
+    c_cal(&cal, "#c24", 45.0);
+    c_cal(&cal, "#c32", 60.0);
+    c_cal(&cal, "#d16", 28.0);
+    c_cal(&cal, "#d24", 42.0);
+    c_cal(&cal, "#e16", 54.0);
+    c_cal(&cal, "#f16", 48.0);
 
     // ── THE UA RULE, and this half IS Chrome-exact: `sup { font-size: smaller }` shrinks the box.
     let sup = manuk_page::Page::load(SUP_HTML, "https://va.test/", &fonts, 1200.0);

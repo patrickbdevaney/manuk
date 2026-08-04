@@ -6620,9 +6620,17 @@ impl Ctx<'_> {
                 // different notions of the same font.
                 let ts = text_style(bcs, self.fonts);
                 let lm = self.fonts.line_metrics(ts.font_key, ts.font_size);
-                (lm.ascent, lm.descent, ts.line_height)
+                // ⚠ **The PARENT's font size is the fourth member, and `vertical-align` is why
+                // (t915).** CSS 2.1 §10.8.1 raises `super` by *"an appropriate offset for
+                // superscripts of the PARENT's baseline"* — the parent's, not the raised element's,
+                // which is measurable: a `<sup>` at `font-size: smaller` is raised by the same
+                // amount as a same-size span. Chrome-measured at three sizes, the raise is exactly
+                // `parent-font-size × 0.375` and the drop `× 0.25`, both independent of
+                // `line-height`. Deriving it from the strut's ASCENT instead would bake this font's
+                // ascent/em ratio into the constant and be wrong for the next font.
+                (lm.ascent, lm.descent, ts.line_height, ts.font_size)
             })
-            .unwrap_or((0.0, 0.0, 0.0));
+            .unwrap_or((0.0, 0.0, 0.0, 0.0));
         let items = self.break_overwide_words(items, cw);
         // Usable (left_x, width) at vertical `y` for a line of height `h`: the float
         // exclusions intersected with this container's content box, dropping past
@@ -7280,7 +7288,7 @@ fn close_line(
     line_avail: f32,
     align: TextAlign,
     _fonts: &FontContext,
-    strut: (f32, f32, f32),
+    strut: (f32, f32, f32, f32),
     // ⚠ **Is this line ELIGIBLE to be justified?** CSS Text §7.3: `text-align: justify` justifies
     // every line of the block EXCEPT the last one and any line ended by a FORCED break (`<br>`),
     // which take the `text-align-last` value — `start` by default. So this is `true` only at the
@@ -7456,7 +7464,7 @@ fn close_line(
             // apart (`valign_text_shift`), and it is applied as a UNION rather than as an addition:
             // a raised inline that still fits inside the strut must not grow the line. Chrome says
             // 24 for `super` on a 10px span in a 24px line, and that control is in the gate.
-            let sh = valign_text_shift(f.valign, a, d, ascent, descent);
+            let sh = valign_text_shift(f.valign, a, d, ascent, descent, strut.3);
             above = above.max(a + hl + sh);
             below = below.max(f.style.line_height - a - hl - sh);
         } else {
@@ -7570,7 +7578,7 @@ fn close_line(
             // the line box without moving the glyphs would make every `<sup>` line taller with its
             // text still on the baseline — a metric win bought with a visible regression, which is a
             // trade. The shift is the same function `line_metrics` used to size the line.
-            let sh = valign_text_shift(f.valign, fa, fd, ascent, descent);
+            let sh = valign_text_shift(f.valign, fa, fd, ascent, descent, strut.3);
             frags.push(TextFragment {
                 x: fx,
                 line_top: y,
@@ -7598,11 +7606,33 @@ fn close_line(
 /// the two implementations of `vertical-align` cannot drift apart. `Top`/`Bottom` are line-relative
 /// rather than baseline-relative and are handled by the atomic path's `min_h_up`/`min_h_down`; for
 /// text they are treated as no shift, which is what they were before.
-fn valign_text_shift(v: VerticalAlign, a: f32, d: f32, strut_a: f32, strut_d: f32) -> f32 {
+fn valign_text_shift(
+    v: VerticalAlign,
+    a: f32,
+    d: f32,
+    strut_a: f32,
+    strut_d: f32,
+    parent_font: f32,
+) -> f32 {
     match v {
         VerticalAlign::Baseline | VerticalAlign::Top | VerticalAlign::Bottom => 0.0,
-        VerticalAlign::Super => strut_a * 0.35,
-        VerticalAlign::Sub => -(strut_a * 0.15),
+        // ⚠⚠⚠ **CALIBRATED AGAINST CHROME AT THREE FONT SIZES (t915), NOT REUSED FROM THE ATOMIC
+        // ARMS.** t914 shipped this family using the atomic path's `ascent * 0.35` / `* 0.15` — a
+        // deliberate share, so the two implementations could not drift — and named the residual as
+        // an open number: `super` landed 29 against Chrome's 30 and `sub` 26 against 28. The rule is
+        // now measured rather than approximated, and it is clean:
+        //
+        // ```text
+        //   super growth over the same line without it   16px +6   24px +9   32px +12   => × 0.375
+        //   sub  growth                                  16px +4   24px +6              => × 0.25
+        //   and both are UNCHANGED at `line-height: 3`, so it is the FONT SIZE, not the line box
+        // ```
+        //
+        // It is the PARENT's font size (§10.8.1 says *"of the parent's baseline"*), which is what
+        // makes a `<sup>` at `font-size: smaller` raise by the same amount as a full-size span —
+        // and that row is what distinguishes this from `own-font × k`.
+        VerticalAlign::Super => parent_font * 0.375,
+        VerticalAlign::Sub => -(parent_font * 0.25),
         // CSS 2.1 §10.8.1: align the box's vertical midpoint with the baseline plus half the
         // parent's x-height (approximated as half the ascent, exactly as the atomic arm does).
         VerticalAlign::Middle => strut_a * 0.25 - (a - d) / 2.0,

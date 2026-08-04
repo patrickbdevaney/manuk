@@ -1780,8 +1780,8 @@ Asserted (Chrome-exact): the UA shrink, and four CONTROLS that stay at 24 — a 
 itself**: a raised inline that still fits inside the strut must NOT grow the line, because CSS 2.1
 §10.8 is a union and not an addition.
 
-Named, not asserted: `super` lands 29 against Chrome's 30, `sub` 26 against 28, `middle` 26 against
-25. The keyword offsets reuse the constants the atomic path already uses (`ascent * 0.35`,
+**CLOSED AT t915 for `super` and `sub`** — see the calibration below. Still named, not asserted:
+`middle` 26 against 25. The keyword offsets reuse the constants the atomic path already uses (`ascent * 0.35`,
 `ascent * 0.15`) — shared through one `valign_text_shift` so the two implementations cannot drift —
 and they approximate what Chrome derives from the font's `OS/2` superscript offsets. Calibrating
 against those metrics is its own tick. `vertical-align: <length>` / `<percentage>` is a third job:
@@ -1793,3 +1793,35 @@ Growing the line box without moving the glyphs would make every `<sup>` line tal
 still on the baseline — a metric win bought with a visible regression, which is a trade, and trades
 are refused. `valign_text_shift` is called from `line_metrics` to size the line and from the
 placement loop to move the baseline.
+
+
+## The offset is the PARENT's font size × 0.375 (t915)
+
+t914 shipped `vertical-align` on text using the atomic arms' constants (`ascent × 0.35`,
+`× 0.15`) and named the residual. One experiment found the actual rule — Chrome's growth over the
+same line without the shift:
+
+```text
+                                          Chrome   t914
+  super, 16px                               +6       +5
+  super, 24px                               +9       +8
+  super, 32px                              +12      +10
+  sub,   16px                               +4       +2
+  sub,   24px                               +6       +3
+  super, 16px at line-height: 3             +6       +5
+```
+
+`6/16 = 9/24 = 12/32 = 0.375` exactly, and `4/16 = 6/24 = 0.25`. **The `line-height: 3` row settles
+the other half: the offset does not move with the line box.** It is the font size — and per CSS 2.1
+§10.8.1 (*"an appropriate offset for superscripts of the PARENT's baseline"*) the parent's, which is
+measurable rather than doctrinal: a `<sup>` at `font-size: smaller` raises by the same amount as a
+full-size span.
+
+### The strut tuple gained a member rather than the constant gaining a fudge
+
+`strut_ascent × 0.405` reproduces every row above **for this font**, and bakes its ascent/em ratio
+(0.927) into a constant that would be wrong for the next one. `close_line`'s strut is now
+`(ascent, descent, line_height, font_size)` and the offset is derived from the size the spec names.
+
+> **A constant fitted to one font is a measurement of that font.** When two derivations agree on the
+> data you have, prefer the one whose inputs the spec names.

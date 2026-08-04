@@ -46371,6 +46371,63 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 915 — the offset is the PARENT's font size × 0.375, measured at three sizes (2026-08-04)
+
+TICK SHAPE: capability — t914 shipped the `vertical-align`-on-text family using the ATOMIC arms' own
+constants (`ascent × 0.35` for `super`, `× 0.15` for `sub`), shared on purpose so the two
+implementations could not drift, and **named the residual as an open number**: `super` landed 29
+against Chrome's 30, `sub` 26 against 28. This measures the rule instead of approximating it.
+
+⚠⚠⚠ **THE RULE IS CLEAN, AND ONE EXPERIMENT FOUND IT.** Chrome's growth over the same line without
+the shift, at three font sizes and two line-heights:
+
+```text
+                                          Chrome   before(t914)
+  super, 16px                               +6         +5
+  super, 24px                               +9         +8
+  super, 32px                              +12        +10
+  sub,   16px                               +4         +2
+  sub,   24px                               +6         +3
+  super, 16px at line-height: 3             +6         +5
+```
+
+**`6/16 = 9/24 = 12/32 = 0.375` exactly, and `4/16 = 6/24 = 0.25`** — and the `line-height: 3` row is
+the one that settles the other half: **the offset does not move with the line box.** It is the FONT
+SIZE, and per CSS 2.1 §10.8.1 (*"an appropriate offset for superscripts of the PARENT's baseline"*)
+it is the parent's, which is measurable rather than doctrinal: a `<sup>` at `font-size: smaller`
+raises by the same amount as a full-size span.
+
+**All ten calibration rows are now Chrome-exact**, and so are `super` and `sub` in the original
+thirteen-case family (30 and 28, from 24 before t914 and 29/26 after it).
+
+⚠⚠ **THE STRUT TUPLE GAINED A FOURTH MEMBER RATHER THAN THE CONSTANT GAINING A FUDGE.** `strut_ascent
+× 0.405` reproduces every row above for *this* font — and it bakes this font's ascent/em ratio
+(0.927) into a constant that would be wrong for the next one. `close_line`'s strut is now
+`(ascent, descent, line_height, font_size)`, three call sites, and the offset is derived from the
+size the spec names.
+
+⚠ **WHAT IS STILL OPEN, MEASURED AND NAMED** — unchanged from t914 except that two rows left it:
+`<sup>`/`<sub>` land 24 against Chrome's 27 (their own box is byte-exact at 18×15 and their raise is
+3px short, so the residual is the smaller fragment's half-leading, not the offset — which is now
+verified exact at three sizes) · `middle` 26 against 25, still asserted as DIRECTION only, because
+banking 26 would freeze an approximation as though it had been measured · `text-top`/`text-bottom`
+24 against 27/28 · and `vertical-align: <length>`/`<percentage>` remains **unrepresentable**, the
+enum having eight keyword variants and no length.
+
+RATCHET: `manuk-layout` **125/125**; the combined battery 54/54 and the specified-width set 14/14,
+both unchanged; and the twenty-case div-height probe is now **19 of 20 exact** — its
+`vertical-align:super` row went from `-6` at t913 to exact, leaving only the separate `<input>` row.
+
+GATE: `G_VERTICAL_ALIGN_ON_TEXT` gains **ten calibration claims** (three font sizes × super, plus
+sub at two sizes, plus the `line-height: 3` pair that proves the offset is size-driven and not
+line-driven), and its `#v1`/`#v2` claims are **promoted from DIRECTION to EXACT**. **RED-PROVEN** by
+restoring the t914 constants: *"`#v1` expected 30 … got 28.900002."*
+
+PERF: none — one `f32` more in a tuple that is built once per inline formatting context.
+
+WIKI: `docs/wiki/text-layout.md` — the t914 section's open number is closed, with the experiment that
+closed it [no-pattern]
+
 ## Tick 914 — the fragment was built with `valign: Baseline` HARD-CODED (2026-08-04)
 
 TICK SHAPE: capability — t913 measured the `vertical-align` family and specified the fix. This takes
