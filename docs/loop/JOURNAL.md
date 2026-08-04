@@ -46371,6 +46371,67 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 892 — t891's second finding was WRONG, and the real one is narrower (2026-08-04)
+
+TICK SHAPE: capability — take t891's named residue, probe it before building on it, and correct the
+record when the probe refutes it.
+
+⚠⚠⚠ **THE CORRECTION FIRST, BECAUSE IT IS THE FINDING.** t891 saw
+`{"readyState":0,"getResponseHeader":"[fn]","setRequestHeader":"[fn]",…}` in its own new rejection
+describer and wrote that this was *"exactly t884's IndexedDB finding on a different interface"* — XHR
+methods as own properties instead of prototype members. **It is not.** Probed against Chrome before a
+line was written:
+
+```text
+                                        Chrome    manuk
+  'open' in XMLHttpRequest.prototype     true     true     ← already right
+  'send' / 'setRequestHeader' / 'abort'  true     true     ← already right
+  hasOwnProperty(xhr,'open')             false    false    ← already right
+  a page's XMLHttpRequest.prototype.open patch observed?  1 / 1   ← already right
+```
+
+Every analytics hook, ad-blocker and error tracker that wraps `XMLHttpRequest.prototype.open` **works
+today**. The inference was drawn from `JSON.stringify` output without checking the prototype, and it
+would have sent a tick at a defect that does not exist. *A wrong FIX is caught by the next gate; a
+wrong LABEL by nothing* — so the correction is banked as a **claim** (`protoPatch:1`, `ownOpen:false`)
+rather than a sentence, which is what stops a later tick from "fixing" what already works.
+
+**THE REAL DEFECT, which is narrower and still real:** `JSON.stringify(xhr)` returned our private
+slots — `"_ls":null,"_m":"GET","_u":"","_id":null,"_h":[],"_respHeaders":[]` — where Chrome returns
+**`{}`**. Any page that serialises, clones or `for…in`s an XHR sees this engine's internals as its own
+fields, and **every error reporter does at least one of those three**. It is how the leak was found:
+t891's describer printed sixteen rejected XHRs on `beb88run.xyz` with our slots sitting inside the
+page's data, and no reader could tell whose was whose.
+
+**FIXED** by defining the six slots `enumerable: false` in the constructor. Measured:
+
+```text
+                                    before                          after
+  Object.keys(xhr) private slots      6                               0
+  JSON.stringify(fresh xhr)   {…,"_ls":null,"_m":"GET",…}   {…no underscore keys…}
+  xhr._m / xhr._u after open()     'GET' / '/api/thing'      'GET' / '/api/thing'  (unchanged)
+```
+
+Assignment to an existing non-enumerable *writable* property keeps its attributes, so the later
+`x._respHeaders = …` and `this._m = …` writes on the delivery path need no change — checked at all
+four write sites rather than assumed.
+
+⚠ **NAMED AND NOT FIXED, because it is a different mechanism:** the *spec-visible* fields
+(`readyState`, `status`, `responseText`, the `on*` handlers) are still own data properties where
+Chrome has prototype **accessors** — which is why Chrome's `JSON.stringify(xhr)` is `{}` and ours is
+still a populated object. That is the same shape as t884's IndexedDB work and it is its own tick; this
+one removes the leak of things that are *ours*, which is the half with a security-adjacent smell.
+
+GATE: `G_XHR_EVENTTARGET` gains four claims — `privKeys:0` (the leak), `slotsWork:true` (the slots
+still function, so the fix cannot degrade into hiding a broken object), and **the two guard claims**
+`protoPatch:1` / `ownOpen:false` that pin t891's over-claim as false so it cannot be re-derived.
+RED-proven by restoring the plain assignments: `privKeys:6`.
+
+PERF: none — six `defineProperty` calls per XHR construction, against a network request.
+
+WIKI: `docs/wiki/js-engine.md` — the correction is recorded beside the describer that found it.
+[no-pattern]
+
 ## Tick 891 — `[object Object]`, sixteen times, is a log line that costs a tick (2026-08-04)
 
 TICK SHAPE: capability (instrument) — take t888's named target (the Slick carousel on `beb88run.xyz`,

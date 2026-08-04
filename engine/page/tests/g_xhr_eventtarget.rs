@@ -87,6 +87,25 @@ const HTML: &str = r#"<!doctype html><html><body><div id="out">-</div>
     R.push('afterThrow:' + afterThrow);
     R.push('evType:' + evType);
     R.push('evTarget:' + evTarget);
+    // ⚠⚠⚠ THIS ENGINE'S INTERNAL SLOTS ARE NOT PAGE STATE (t892). `JSON.stringify(xhr)` used to
+    // return `..."_ls":null,"_m":"GET","_u":"","_id":null,"_h":[],"_respHeaders":[]` where Chrome
+    // returns `{}` — so any page that serialises, clones or `for...in`s an XHR (every error reporter
+    // does at least one) saw our privates as its own fields. Found by the t891 rejection describer,
+    // which printed sixteen rejected XHRs on beb88run.xyz with our slots inside them.
+    var sx = new XMLHttpRequest();
+    sx.open('GET', '/api/thing');
+    R.push('privKeys:' + Object.keys(sx).filter(function (k) { return k.charAt(0) === '_'; }).length);
+    R.push('slotsWork:' + (sx._m === 'GET' && sx._u === '/api/thing'));
+    // ⚠ THE GUARD, and it is what keeps t891's OVER-CLAIM from being re-introduced: the METHODS are
+    // on the prototype and a page's patch of them IS observed. t891's note called this "t884's
+    // IndexedDB defect on another interface"; it is not, and asserting the true state here is what
+    // stops a later tick from "fixing" something that already works.
+    var origOpen = XMLHttpRequest.prototype.open, hits = 0;
+    XMLHttpRequest.prototype.open = function () { hits++; return origOpen.apply(this, arguments); };
+    try { new XMLHttpRequest().open('GET', '/y'); } catch (e) {}
+    XMLHttpRequest.prototype.open = origOpen;
+    R.push('protoPatch:' + hits);
+    R.push('ownOpen:' + Object.prototype.hasOwnProperty.call(sx, 'open'));
     document.getElementById('out').textContent = R.join(' ');
   };
 </script></body></html>"#;
@@ -111,6 +130,11 @@ fn xhr_is_an_event_target_on_the_buffered_path() {
         "rel:function",
         "dispatch:function",
         "hasOnProgress:true",
+        // t892 — the internal slots are hidden, still work, and the METHODS were never the problem.
+        "privKeys:0",
+        "slotsWork:true",
+        "protoPatch:1",
+        "ownOpen:false",
         // BOTH halves run, `on*` first, listeners in registration order
         "order:on,l1,l2",
         // spec behaviour, not merely a callback array

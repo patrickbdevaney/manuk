@@ -623,3 +623,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 888	f687fd87	1785821885	2026-08-04T01:38:05-04:00	557	measurement	63	6	174	33	387	81	3896	6960	0	464	0	the crossing ranking, re-derived on trustworthy data, and the eight are named (2026-08-04)
 889	ce52cfc3	1785822299	2026-08-04T01:44:59-04:00	414	measurement	63	4	78	33	387	81	3896	6960	0	464	0	one row for one of a feature's consumers reads as covered, twice in one read (2026-08-04)
 890	bb801c42	1785823949	2026-08-04T02:12:29-04:00	1650	measurement	63	9	283	34	388	81	3896	6960	0	465	0	the self-audit is green, and the honest number beside it is 0.9 points (2026-08-04)
+892	467e45bc	1785825677	2026-08-04T02:41:17-04:00	1728	capability	63	9	173	40	388	81	3896	6960	0	466	0	t891's second finding was WRONG, and the real one is narrower (2026-08-04)

@@ -1077,7 +1077,7 @@
   - L2658 · A five-clause is_empty() outlives the decision that makes one clause false (t855)
   - L2689 · An unhandled rejection must say WHAT was rejected
   - L2710 · The shape of the describer, and why each bound is there
-  - L2726 · The second defect it surfaced, named and not folded in
+  - L2726 · The second defect it surfaced — and the correction, because the first reading was wrong
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`

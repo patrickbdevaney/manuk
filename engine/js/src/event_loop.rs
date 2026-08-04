@@ -961,8 +961,28 @@ const PRELUDE: &str = r#"
         // answered NO about an event we actually deliver. A capability we have and deny is the same
         // class of lie as one we claim and lack.
         this.onprogress = null; this.onloadstart = null; this.ontimeout = null;
-        this._ls = null;
-        this._m = "GET"; this._u = ""; this._id = null; this._h = []; this._respHeaders = [];
+        // ⚠⚠⚠ **THIS ENGINE'S INTERNAL SLOTS ARE NOT PAGE STATE, AND THEY WERE ENUMERABLE.**
+        // `JSON.stringify(xhr)` returned `…"_ls":null,"_m":"GET","_u":"","_id":null,"_h":[],
+        // "_respHeaders":[]` where Chrome returns **`{}`** — because in Chrome every one of an XHR's
+        // observable fields is a prototype ACCESSOR and there are no own data properties at all.
+        //
+        // Found by the t891 rejection describer on `beb88run.xyz`, which printed sixteen rejected
+        // XHRs and put our private slots in the log next to the page's own state, with no way for a
+        // reader to tell whose was whose. The same leak reaches any page that serialises, clones or
+        // `for…in`s an XHR — error reporters do all three.
+        //
+        // ⚠ **NARROWER THAN IT FIRST LOOKED, and t891's note over-claimed it.** The METHODS
+        // (`open`/`send`/`setRequestHeader`/`abort`) are already on `XMLHttpRequest.prototype`, and a
+        // page's `XMLHttpRequest.prototype.open = wrapper` IS observed — measured, `patchHit=1`, so
+        // every analytics hook and ad-blocker works. This is *not* t884's IndexedDB defect on another
+        // interface; it is only the enumerability of state. Fixing the leak is right; claiming the
+        // larger bug would have been wrong.
+        var slots = { _ls: null, _m: "GET", _u: "", _id: null, _h: [], _respHeaders: [] };
+        for (var __k in slots) {
+            Object.defineProperty(this, __k, {
+                value: slots[__k], writable: true, enumerable: false, configurable: true
+            });
+        }
     };
     // **XMLHttpRequest IS AN EventTarget, and it was not one.**
     //

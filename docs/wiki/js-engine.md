@@ -2723,9 +2723,32 @@ reader to tell whose it is.
 assertable (`G_REJECTION_DESCRIBES_ITS_VALUE`) rather than only observable in a log the test harness
 does not capture.
 
-### The second defect it surfaced, named and not folded in
+### The second defect it surfaced — and the correction, because the first reading was wrong
 
-`getResponseHeader` / `setRequestHeader` / `overrideMimeType` appear in `JSON.stringify(xhr)`, so they
-are **own enumerable properties** on the instance; in Chrome they are on `XMLHttpRequest.prototype` and
-`JSON.stringify(xhr)` is `{}`. That is the same defect as the IndexedDB one — see
-[the storage note](storage.md) — on a different interface, and it is its own tick.
+t891 read `getResponseHeader` / `setRequestHeader` in `JSON.stringify(xhr)` and concluded the methods
+were own properties — "the IndexedDB defect on another interface". **Probed at t892 before anything was
+built on it, and it is false:**
+
+```text
+                                        Chrome    manuk
+  'open' in XMLHttpRequest.prototype     true     true
+  hasOwnProperty(xhr,'open')             false    false
+  a page's prototype.open patch observed?  1        1
+```
+
+Every analytics hook, ad-blocker and error tracker that wraps `XMLHttpRequest.prototype.open` works
+today. The inference came from `JSON.stringify` output without checking the prototype. *A wrong FIX is
+caught by the next gate; a wrong LABEL by nothing* — so the true state is now pinned as gate claims
+(`protoPatch:1`, `ownOpen:false`), not as a sentence.
+
+**The real defect was narrower:** `JSON.stringify(xhr)` returned this engine's private slots —
+`"_ls":null,"_m":"GET","_u":"","_id":null,"_h":[],"_respHeaders":[]` — where Chrome returns `{}`. Any
+page that serialises, clones or `for…in`s an XHR sees our internals as its own fields, and every error
+reporter does at least one of those. Fixed at t892 by defining the six slots `enumerable: false`;
+assignment to an existing non-enumerable writable property keeps its attributes, so the delivery path's
+later writes needed no change.
+
+**Still open, a different mechanism:** the spec-visible fields (`readyState`, `status`, `responseText`,
+the `on*` handlers) are own data properties where Chrome has prototype **accessors** — which is why
+Chrome's `JSON.stringify(xhr)` is `{}` and ours is still a populated object. Same shape as the
+IndexedDB work in [the storage note](storage.md); its own tick.
