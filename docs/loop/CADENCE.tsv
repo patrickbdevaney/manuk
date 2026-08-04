@@ -638,3 +638,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 907	62d666c7	1785862694	2026-08-04T12:58:14-04:00	1733	capability	63	11	294	39	396	81	3896	6960	0	473	0	a table box's `height` is a MINIMUM, and two unrelated probes found it two ticks apart (2026-08-04)
 908	95b46609	1785867245	2026-08-04T14:14:05-04:00	4551	capability	63	8	375	33	396	81	3896	6960	0	473	0	the property was built and Chrome-exact; only the DEFAULT was missing (2026-08-04)
 910	edcc8d56	1785868213	2026-08-04T14:30:13-04:00	968	measurement	63	6	161	33	396	81	3896	6960	0	473	0	the map is honest in the NEGATIVE direction, and the probe was the finding again (2026-08-04)
+911	63de3370	1785868757	2026-08-04T14:39:17-04:00	544	measurement	63	6	237	37	396	81	3896	6960	0	473	0	the board's #1 cause is a KEYING artefact on 38% of its own cohort (2026-08-04)

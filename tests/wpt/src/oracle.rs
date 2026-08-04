@@ -168,13 +168,52 @@ pub fn diff_page(
     tol: i64,
 ) -> Vec<Divergence> {
     let mut out = Vec::new();
+    // ⚠⚠⚠ **`missing` MEANS THE KEY IS ABSENT, NOT THE BOX — AND UNTIL t912 THE RANKER DID NOT
+    // KNOW THE DIFFERENCE.**
+    //
+    // `manuk.get(id) == None` has three causes and they are not the same bug: the node is absent
+    // from our DOM, the node exists and we gave it no box, or **the node exists WITH a box under a
+    // different path** — `nth-of-type` is absolute, so one inserted sibling re-numbers every key
+    // beneath it (t780-783). All three were being counted as *"Chrome renders it, we render
+    // nothing"*, which is the sentence the board has ranked #1 since t684.
+    //
+    // Measured at t911 over the t909 sweep, from counts the instrument was already printing and
+    // nobody had read against each other: **of the 58 sites carrying a missing-`<div>` count, 22
+    // render AS MANY OR MORE box-bearing paths than Chrome.**
+    //
+    // ```text
+    //   div_miss  oracle    ours  missing   site
+    //        471    2407    2380     1247   sip777man.site      99% as many boxes, 1247 "missing"
+    //        322     665     625      625   www.kroftools.com   94% as many, EVERY path missing
+    //        220     458     601      456   www.jatekshop.eu    WE DRAW MORE, share 2 of 458
+    //        181     696     676      680   a1.ro               676 vs 696, 16 paths in common
+    // ```
+    //
+    // Two engines that each draw ~690 boxes and agree on sixteen paths are not one engine failing
+    // to render; they are two trees numbered differently.
+    //
+    // ⚠ **THIS IS THE SAME CORRECTION t782 MADE, ONE LEVEL OUT.** `TreeDivergence` was split from
+    // `ThinOverlap` after measuring *"the one thing this variant never looked at: our own element
+    // count"* — and that fix reached the UNSCORED path only. A site that SCORES kept feeding raw
+    // `missing` divergences into the ranked cause list, where the question t782 added was never
+    // asked. One rule, two implementations, and the quiet one publishes the priority ledger.
+    //
+    // ⚠ **AND IT IS NOT AN EXONERATION, exactly as t782's is not.** `unaligned` says only *"our map
+    // is not smaller, so this absence is not evidence of a dropped box"*. It is still a divergence,
+    // it is still counted, and the arithmetic of the certificate is unchanged. What changes is that
+    // the loop stops being told a coverage bug is waiting where the evidence does not support one.
+    let we_drew_as_many = manuk.len() >= chrome.len();
     for (id, c) in chrome {
         match manuk.get(id) {
             None => out.push(Divergence {
                 site: site.into(),
                 id: id.clone(),
                 tag: c.tag.clone(),
-                kind: "missing".into(),
+                kind: if we_drew_as_many {
+                    "unaligned".into()
+                } else {
+                    "missing".into()
+                },
                 chrome: format!(
                     "{} [{} {} {}×{}]{}",
                     c.display,
@@ -363,6 +402,12 @@ pub fn signature_of(d: &Divergence) -> String {
         "display" => format!("display: {} → {}   (<{}>)", d.chrome, d.manuk, d.tag),
         // A whole tag going missing is ONE bug, not N. Keyed by tag, not by element.
         "missing" => format!("missing box: <{}>", d.tag),
+        // ⚠ **THE SAME ABSENCE ON A PAGE WHERE OUR MAP IS NOT SMALLER** — see `diff_page`. Ranked
+        // separately because it is a different bug: the board's #1 row was a MIXTURE of these two
+        // populations and had been ranked as their sum since t684. The wording states the evidence
+        // and stops there — `unaligned` is not an exoneration, it is a refusal to call an absence a
+        // dropped box when our own count says otherwise.
+        "unaligned" => format!("unaligned key (we drew as many): <{}>", d.tag),
         // Geometry is bucketed by which dimension is wrong — a systematic width error and a
         // systematic vertical drift are different bugs with different causes.
         _ => {
@@ -1679,6 +1724,89 @@ mod tests {
         let miss = pre_t744.replace("\"dkind\":\"geometry\"", "\"dkind\":\"missing\"");
         let (d, _) = div_from_jsonl(&miss).expect("a missing-box record needs no delta");
         assert_eq!(signature_of(&d), "missing box: <div>");
+    }
+
+    /// **G_UNALIGNED_KEY_IS_NOT_A_MISSING_BOX — an absence is only evidence of a dropped box when
+    /// OUR MAP IS SMALLER (t912).**
+    ///
+    /// `manuk.get(id) == None` has three causes: the node is absent from our DOM, the node exists
+    /// with no box, or **the node exists WITH a box under a different path** — `nth-of-type` is
+    /// absolute, so one inserted sibling re-numbers every key beneath it (t780-783). All three were
+    /// ranked as *"Chrome renders it, we render nothing"*, which is the row the board has had at #1
+    /// since t684.
+    ///
+    /// Measured at t911 over the banked t909 sweep, from counts the instrument was already printing:
+    /// **of the 58 sites carrying a missing-`<div>` count, 22 render AS MANY OR MORE box-bearing
+    /// paths than Chrome** — `a1.ro` draws 676 against Chrome's 696 and shares sixteen.
+    ///
+    /// This is t782's correction one level out: `TreeDivergence` was split from `ThinOverlap` after
+    /// measuring *"the one thing this variant never looked at: our own element count"*, and that fix
+    /// reached the UNSCORED path only. A scoring site kept feeding raw `missing` divergences into
+    /// the ranked cause list.
+    ///
+    /// ⚠ **BOTH DIRECTIONS ARE ASSERTED, and the second is the one that keeps this honest**: on a
+    /// page where we genuinely drew fewer boxes, the absence must STILL be `missing`. A change that
+    /// relabelled every absence would empty the board's top row and look like progress.
+    #[test]
+    fn an_absence_is_only_a_missing_box_when_our_map_is_smaller() {
+        let seen = |tag: &str| Seen {
+            tag: tag.into(),
+            display: "block".into(),
+            rect: [0, 0, 10, 10],
+            font: String::new(),
+        };
+        let chrome: HashMap<String, Seen> = (0..4)
+            .map(|i| (format!("body[0]/div[{i}]"), seen("div")))
+            .collect();
+
+        // ── WE DREW FEWER: one box against Chrome's four. The absences are real evidence.
+        let thin: HashMap<String, Seen> =
+            std::iter::once(("body[0]/div[0]".to_string(), seen("div"))).collect();
+        let d = diff_page("t", &chrome, &thin, 8);
+        assert_eq!(
+            d.len(),
+            3,
+            "three of Chrome's four keys are absent from ours"
+        );
+        assert!(
+            d.iter().all(|x| x.kind == "missing"),
+            "our map is SMALLER, so an absent key is evidence of a dropped box — got {:?}",
+            d.iter().map(|x| x.kind.clone()).collect::<Vec<_>>()
+        );
+        assert_eq!(signature_of(&d[0]), "missing box: <div>");
+
+        // ── WE DREW AS MANY, under different keys. Same absences, different bug.
+        let shifted: HashMap<String, Seen> = (1..5)
+            .map(|i| (format!("body[0]/div[{i}]"), seen("div")))
+            .collect();
+        let d = diff_page("t", &chrome, &shifted, 8);
+        assert_eq!(
+            d.len(),
+            1,
+            "only `div[0]` is absent once the tree is shifted by one"
+        );
+        assert!(
+            d.iter().all(|x| x.kind == "unaligned"),
+            "our map is NOT smaller, so an absent key is NOT evidence of a dropped box — got {:?}",
+            d.iter().map(|x| x.kind.clone()).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            signature_of(&d[0]),
+            "unaligned key (we drew as many): <div>",
+            "and it must rank on its own row — the board's #1 was the SUM of these two populations"
+        );
+
+        // ── THE BOUNDARY, stated because `>=` and `>` disagree here and the data does not say which
+        // is right: an equal-sized map is NOT smaller, so it takes the `unaligned` reading.
+        let equal: HashMap<String, Seen> = (10..14)
+            .map(|i| (format!("body[0]/div[{i}]"), seen("div")))
+            .collect();
+        assert!(
+            diff_page("t", &chrome, &equal, 8)
+                .iter()
+                .all(|x| x.kind == "unaligned"),
+            "an EQUAL count is not a smaller one"
+        );
     }
 
     /// **DISPLACED and MIS-SIZED must not share a row, and the tag-only key merged them.** The old

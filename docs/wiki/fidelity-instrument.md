@@ -850,7 +850,22 @@ ranked number is **a mixture of two populations and the board has been ranking t
 shape as t695-697 (CLUSTERS.md's top rows re-measured to zero) and t780-783 (the board's named cohort
 was an artefact three ticks running).
 
-**The fix, named:** carry each site's own path count into `run_oracle_merge` and split the ranked
-cause into `missing (we drew fewer)` and `unaligned (we drew as many)`. Until then, a `<div>` tick
-should be taken from the `geometry/mis-sized` rows, which compare boxes that DID align and are
-therefore unaffected.
+**The fix, BUILT at t912 (one tick later).** `diff_page` has both maps in hand, so the comparison is
+one line — `manuk.len() >= chrome.len()` — and an absent key on a page where our map is not smaller
+books as `unaligned` with its own ranked row (`unaligned key (we drew as many): <tag>`) instead of
+feeding the `missing box` total.
+
+It is **not an exoneration**, and the wording carries that: *our map is not smaller, so this absence
+is not evidence of a dropped box.* Still a divergence, still counted, certificate arithmetic
+unchanged — the same discipline `TreeDivergence` uses.
+
+Gated by `an_absence_is_only_a_missing_box_when_our_map_is_smaller`, **both directions**: our map
+smaller must STILL book `missing` (a change that relabelled every absence would empty the board's top
+row and look like progress), our map shifted by one key books `unaligned`, and an EQUAL count takes
+the `unaligned` reading because `>=` and `>` disagree at that boundary. RED-proven by pinning the
+comparison to `false`.
+
+⚠ **The re-ranked board arrives with the next SWEEP, not with the commit**: the cause ranking is
+computed during a crawl and the JSONL ledger bakes each divergence's kind in, so the banked t909 rows
+cannot be re-split retroactively. Until that sweep runs, a `<div>` tick should be taken from the
+`geometry/mis-sized` rows, which compare boxes that DID align and are therefore unaffected.

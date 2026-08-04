@@ -46371,6 +46371,62 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 912 — the ranker now asks the question t782 added, three months and one level out (2026-08-04)
+
+TICK SHAPE: instrument — t911 measured that the board's #1 cause is a mixture of two populations and
+named the fix without building it. This builds it.
+
+⚠⚠⚠ **`diff_page` BOOKED EVERY ABSENT KEY AS `missing`, AND `missing` HAS THREE CAUSES.** The node is
+absent from our DOM · the node exists and we gave it no box · **the node exists WITH a box under a
+different path**, because `nth-of-type` is absolute and one inserted sibling re-numbers every key
+beneath it (t780-783). All three printed as *"Chrome renders it, we render nothing"* — the row the
+observer's steer has ranked #1 since t684, and the row check #79's steer sent this window at.
+
+**The split, and the rule is one line because the evidence is one comparison:**
+
+```rust
+  let we_drew_as_many = manuk.len() >= chrome.len();
+  …kind: if we_drew_as_many { "unaligned" } else { "missing" }
+```
+
+`signature_of` gains `unaligned key (we drew as many): <tag>` as its own ranked row. t911's numbers,
+recomputed from the banked t909 sweep with no new run, say how much of the #1 row moves: **of the 58
+sites carrying a missing-`<div>` count, 22 render AS MANY OR MORE box-bearing paths than Chrome** —
+`sip777man.site` 2380 against 2407 with 1247 "missing", `www.kroftools.com` 625 against 665 with
+**every** path missing, `a1.ro` 676 against 696 sharing **sixteen**.
+
+⚠⚠⚠ **THIS IS t782's CORRECTION, ONE LEVEL OUT, AND THE SHAPE IS THE ONE THIS PROJECT KEEPS
+CATCHING.** `TreeDivergence` was split out of `ThinOverlap` after measuring *"the one thing this
+variant never looked at: our own element count"* — and that fix reached the **unscored** path and
+stopped. A site that SCORES kept feeding raw `missing` divergences into the ranked cause list, where
+the question t782 added was never asked. **One rule, two implementations, and the quiet one publishes
+the priority ledger** — which is verbatim what `signature_of`'s own header says about the last time
+this happened to it.
+
+⚠⚠ **IT IS NOT AN EXONERATION, AND THE WORDING IS THE DELIVERABLE.** `unaligned key (we drew as many)`
+states the evidence and stops: *our map is not smaller, so this absence is not evidence of a dropped
+box.* It is still a divergence, still counted, and the certificate's arithmetic is unchanged — the
+same discipline `TreeDivergence` uses. What changes is that the loop stops being sent at a coverage
+bug the evidence does not support.
+
+GATE: `an_absence_is_only_a_missing_box_when_our_map_is_smaller` — **both directions**, because the
+second is what keeps this honest: on a page where we genuinely drew fewer boxes the absence must
+STILL be `missing`, and a change that relabelled every absence would empty the board's top row and
+look like progress. Three claims: our map smaller → three `missing` rows; our map shifted by one key
+→ one `unaligned` row with its own signature; our map EQUAL → `unaligned`, because `>=` and `>`
+disagree at that boundary and the fixture states which was chosen. **RED-PROVEN** by pinning
+`we_drew_as_many = false`: *"our map is NOT smaller … got ["missing"]"*.
+
+⚠ **THE RE-RANKED BOARD ARRIVES WITH THE NEXT SWEEP, NOT WITH THIS COMMIT**, and that is stated
+rather than glossed: the cause ranking is computed during a crawl, and the JSONL ledger has each
+divergence's kind already baked in, so the banked t909 rows cannot be re-split retroactively. What is
+proven today is the mechanism and its two directions; what the top of the board looks like afterwards
+is a measurement, and it belongs to the sweep that produces it.
+
+PERF: none — one `len()` comparison per page, hoisted out of the loop.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — the t911 section gains the fix it named [no-pattern]
+
 ## Tick 911 — the board's #1 cause is a KEYING artefact on 38% of its own cohort (2026-08-04)
 
 TICK SHAPE: measurement — check #79's steer #1 sent this tick at `missing box: <div>`, the t909
