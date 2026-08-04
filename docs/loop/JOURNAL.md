@@ -46371,6 +46371,74 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 911 — the board's #1 cause is a KEYING artefact on 38% of its own cohort (2026-08-04)
+
+TICK SHAPE: measurement — check #79's steer #1 sent this tick at `missing box: <div>`, the t909
+ranker's top cause (37 sites, 2398 hits) and the largest thing on the board nothing has touched. The
+observer's standing steer has ranked it first since t684: *"MISSING_BOX FIRST — a dropped box
+displaces its whole subtree and tanks coverage hardest."*
+
+⚠⚠⚠ **`missing` DOES NOT MEAN "WE DREW NO BOX". IT MEANS "CHROME'S SELECTOR PATH IS NOT A KEY IN OUR
+MAP", AND THOSE ARE DIFFERENT CLAIMS.** `oracle.rs:172` is explicit once read: for each of Chrome's
+keys, `manuk.get(id)` returning `None` books a `missing` divergence. Three distinct causes collapse
+into that one word — the node is absent from our DOM, the node exists with no box, or **the node
+exists with a box under a DIFFERENT path**, because `nth-of-type` is absolute and one inserted
+sibling re-numbers every key beneath it (t780-783).
+
+⚠⚠⚠ **MEASURED ACROSS THE WHOLE COHORT, AND THE THIRD CAUSE IS EVERYWHERE.** The sweep already prints
+both counts on every site; nobody had read them against each other:
+
+```text
+  div_miss  oracle    ours  missing   site
+       592    1549    1045     1538   mayatoys.in
+       471    2407    2380     1247   sip777man.site      <- 99% as many boxes, 1247 "missing"
+       470    4138    2027     2123   meet.google.com
+       322     665     625      625   www.kroftools.com   <- 94% as many, EVERY path missing
+       220     458     601      456   www.jatekshop.eu    <- WE DRAW MORE, and share 2 of 458
+       181     696     676      680   a1.ro               <- 676 vs 696, and 16 paths in common
+        66    2032    2033       96   www.tz.de           <- WE DRAW MORE
+```
+
+**Of the 58 sites carrying a missing-`<div>` count, 22 render AS MANY OR MORE box-bearing paths than
+Chrome.** `a1.ro` draws 676 boxes against Chrome's 696 and shares **sixteen** of them.
+
+> **Two engines that each draw ~690 boxes and agree on 16 paths are not one engine failing to render.
+> They are two trees numbered differently.** The board's #1 cause is, on more than a third of its own
+> cohort, a measurement of key alignment rather than of boxes we failed to draw.
+
+⚠⚠ **AND THE INSTRUMENT ALREADY KNOWS THIS — FOR THE REASON STRING ONLY.** t782 split
+`TreeDivergence` out of `ThinOverlap` after measuring *"the one thing this variant never looked at:
+our own element count"*, and its doc says in as many words that two engines each building a page and
+agreeing on nine elements is not one failing to render. **That correction reached the UNSCORED
+path and stopped there.** A site that scores keeps feeding raw `missing` divergences into the ranked
+cause list, and the ranker never asks the question t782 added. The same defect, one level out, three
+months later.
+
+⚠ **THE SHAPE OF THE MISMATCH ON THE TOP NEAR-BAR SITE POINTS AT ITS OWN CAUSE.** `www.jatekshop.eu`
+is the closest M1 crossing in the corpus (shape 0.7370, gap 0.0130, jarring-clean) and its missing
+sample is not scattered — it is one contiguous subtree, `body/div[1]/footer[1]` and every descendant
+under a chain of `div:nth-of-type(1)`. **A whole subtree going missing at once is what an index shift
+at its root looks like**, not what dropped boxes look like. It also loads in 25.1s against Chrome's
+8.9s, so the 12s budget is a live confound on that site specifically.
+
+**WHAT THIS DOES NOT SAY.** It does not say the cause is empty: 36 of the 58 sites do render fewer
+paths than Chrome, and `morikoshi.net` (307 against **2**) and `www.agoda.com` (798 against 76) are
+real and severe. The finding is that **the ranked number is a mixture of two populations and the
+board has been ranking their sum**, exactly as t695-697 found when CLUSTERS.md's top rows re-measured
+to zero, and t780-783 found when the board's named cohort was an artefact three ticks running.
+
+**THE FIX, NAMED AND NOT BUILT HERE** (it is an instrument change and this tick is already the
+measurement): `run_oracle_merge` should carry each site's own box-bearing path count beside the
+oracle's, and the ranked cause list should **split `missing box` into `missing (we drew fewer)` and
+`unaligned (we drew as many)`** — the same partition t782 made for the reason string, applied to the
+ranker. Until then the honest reading of the #1 row is *"37 sites where Chrome's keys are not our
+keys"*, and steer #1's *"the next engine tick must name a `<div>` cause"* should be taken from the
+`geometry/mis-sized` rows, which compare boxes that DID align and are therefore unaffected by this.
+
+PERF: none — measurement only, computed from the banked t909 sweep log with no new run.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "`missing` means the KEY is absent, not the box" [no-pattern]
+
 ## Tick 910 — the map is honest in the NEGATIVE direction, and the probe was the finding again (2026-08-04)
 
 TICK SHAPE: measurement — **three** cadence instruments came due at once: the **self-audit**

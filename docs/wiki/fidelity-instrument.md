@@ -799,3 +799,58 @@ network conditions. Beside t904's structural result — 56 of 107 scored sites f
 only 2 within 0.06 of the shape bar, only 1 a single jarring dimension from crossing — the reading is
 not that the work is not landing. It is that **M1 has no resolution at this distance from the bar**,
 and the loop's own headline cannot distinguish three correct geometry fixes from nothing at all.
+
+## `missing` means the KEY is absent, not the box (t911)
+
+`oracle.rs:172` books a `missing` divergence when, for one of Chrome's selector-path keys,
+`manuk.get(id)` returns `None`. Three different failures collapse into that one word:
+
+1. the node is absent from our DOM (a function / hydration gap),
+2. the node exists and we gave it no box (a layout gap), or
+3. **the node exists WITH a box under a different path** — `nth-of-type` is absolute, so one inserted
+   sibling re-numbers every key beneath it (t780-783).
+
+The sweep prints both engines' path counts on every site. Read against each other for the first time
+at t911:
+
+```text
+  div_miss  oracle    ours  missing   site
+       471    2407    2380     1247   sip777man.site      <- 99% as many boxes, 1247 "missing"
+       322     665     625      625   www.kroftools.com   <- 94% as many, EVERY path missing
+       220     458     601      456   www.jatekshop.eu    <- WE DRAW MORE, and share 2 of 458
+       181     696     676      680   a1.ro               <- 676 vs 696, and 16 paths in common
+        66    2032    2033       96   www.tz.de           <- WE DRAW MORE
+```
+
+**Of the 58 sites carrying a missing-`<div>` count, 22 render as many or more box-bearing paths than
+Chrome.** `a1.ro` draws 676 against Chrome's 696 and shares sixteen.
+
+> **Two engines that each draw ~690 boxes and agree on 16 paths are not one engine failing to render.
+> They are two trees numbered differently.**
+
+### The instrument already made this correction — for the reason string only
+
+t782 split `TreeDivergence` out of `ThinOverlap` after measuring *"the one thing this variant never
+looked at: our own element count"*. That correction reached the **unscored** path and stopped there.
+A site that scores keeps feeding raw `missing` divergences into the ranked cause list, and the ranker
+never asks t782's question. Same defect, one level out.
+
+### The tell, on the top near-bar site
+
+`www.jatekshop.eu`'s missing sample is not scattered — it is one contiguous subtree,
+`body/div[1]/footer[1]` and every descendant beneath a chain of `div:nth-of-type(1)`. **A whole
+subtree going missing at once is what an index shift at its root looks like**, not what dropped boxes
+look like.
+
+### What this does NOT say
+
+The cause is not empty. 36 of the 58 sites do render fewer paths than Chrome, and `morikoshi.net`
+(307 against **2**) and `www.agoda.com` (798 against 76) are real and severe. The finding is that the
+ranked number is **a mixture of two populations and the board has been ranking their sum** — the same
+shape as t695-697 (CLUSTERS.md's top rows re-measured to zero) and t780-783 (the board's named cohort
+was an artefact three ticks running).
+
+**The fix, named:** carry each site's own path count into `run_oracle_merge` and split the ranked
+cause into `missing (we drew fewer)` and `unaligned (we drew as many)`. Until then, a `<div>` tick
+should be taken from the `geometry/mis-sized` rows, which compare boxes that DID align and are
+therefore unaffected.

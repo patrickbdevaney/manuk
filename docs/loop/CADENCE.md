@@ -15,7 +15,7 @@
 | median tick cycle | **26m** | 638 intervals |
 | median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 585.4h elapsed |
+| **ticks per hour** | **1.09** | 585.5h elapsed |
 | median verify wall | **63s** | 578 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **314** capability ticks, median cycle **26m**
-* median diff per tick: **+266 / −34** lines across 8 files
+* median diff per tick: **+265 / −34** lines across 8 files
 
 ## Every tick
 
@@ -735,6 +735,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **906** | 2026-08-04 12:29 | 30m | capability | 63s | +297/−37 | 395 | 81 | 56.0% · | t905's defect was my fixture too, and the REAL one had been named and declined since t859  |
 | **907** | 2026-08-04 12:58 | 29m | capability | 63s | +294/−39 | 396 | 81 | 56.0% · | a table box's `height` is a MINIMUM, and two unrelated probes found it two ticks apart (20 |
 | **908** | 2026-08-04 14:14 | 76m | capability | 63s | +375/−33 | 396 | 81 | 56.0% · | the property was built and Chrome-exact; only the DEFAULT was missing (2026-08-04) |
-| **910** | 2026-08-04 14:25 | 11m | measurement | 63s | +352/−35 | 396 | 81 | 56.0% · | the map is honest in the NEGATIVE direction, and the probe was the finding again (2026-08- |
+| **910** | 2026-08-04 14:30 | 16m | measurement | 63s | +161/−33 | 396 | 81 | 56.0% · | the map is honest in the NEGATIVE direction, and the probe was the finding again (2026-08- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

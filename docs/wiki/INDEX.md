@@ -735,6 +735,10 @@
   - L759 · The ranked cause list is a MECHANISM and a TAG, and the tag is the corpus-relevance filter (t909)
   - L780 · What the t909 sweep actually measured
   - L795 · Four sweeps, twenty-two ticks, zero engine-attributable M1 crossings
+  - L803 · missing means the KEY is absent, not the box (t911)
+  - L831 · The instrument already made this correction — for the reason string only
+  - L838 · The tell, on the top near-bar site
+  - L845 · What this does NOT say
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1570,4 +1574,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1477 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1481 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
