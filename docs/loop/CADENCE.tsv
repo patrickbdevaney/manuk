@@ -631,3 +631,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 897	530b440d	1785839588	2026-08-04T06:33:08-04:00	4018	capability	63	9	388	33	391	81	3896	6960	0	469	0	`getComputedStyle(el).width` answered with the SPECIFIED value, and the used one was already in hand (2026-08-04)
 898	780cd57a	1785840374	2026-08-04T06:46:14-04:00	786	measurement	63	6	200	33	391	81	3896	6960	0	469	0	the pre-registered expectation was WRONG, and the band is composition plus five named sites (2026-08-04)
 900	ed2c68af	1785841118	2026-08-04T06:58:38-04:00	744	measurement	63	5	221	33	391	81	3896	6960	0	469	0	the map is complete on Interop 2026, and three GATED rows were lying (2026-08-04)
+902	fb6770ee	1785847071	2026-08-04T08:37:51-04:00	5953	capability	63	10	675	139	392	81	3896	6960	0	470	0	one diff listed the whole class: 411 of 924 computed-style readings differ (2026-08-04)

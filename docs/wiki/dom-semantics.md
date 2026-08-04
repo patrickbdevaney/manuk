@@ -464,6 +464,63 @@ not `html === undefined`); and the result's `nodeType` must be **11** (a fragmen
 element. `domparsing/createContextualFragment.html` 2 → 34/35 (the last is `<script>` execution on
 insertion, a separate capability); the area moved **149 → 182 (+33)**, crash-free. [[js-engine]]
 
+## Publish what the cascade HOLDS, and nothing it does not — the whole-object diff
+
+`getComputedStyle` had been failing **one property per tick**: `transform` (applied for sixty ticks
+before the number reached JS), `width`/`height` (t897), `zoom` and `containerType` (t900's surface
+audit). t901's constitution check named it as an **I3 defect class** — *the semantic model silently
+declining to publish what the pipeline already computed* — and ranked the enumeration above the next
+member. **One diff of the whole object against Chrome, 132 properties × 7 representative elements:
+411 differing readings of 924, and the dominant shape was `undefined`, not a wrong value.**
+
+> **Four members found one at a time is four ticks spent on what one diff lists.** When a defect
+> recurs on the same seam, stop fixing members and enumerate the set.
+
+### The split is the deliverable
+
+Chrome emits an initial value for every property it supports. **We must not**, for the ones this
+engine does not honour — that is `@supports`-style false presence, and both of this project's
+standing rules point at it: *"absence routes to the fallback; HALF-presence routes into a wall"*
+(t772) and *"a name is defined IFF the thing it names exists"* (t608).
+
+| | |
+|---|---|
+| **PUBLISHED** (cascade-held, was `undefined`) | `order` · `background-size` · `object-position` · `text-shadow` · `inset` · `grid-column-start`/`-end` · the logical family: `margin-inline-*`, `margin-block-*`, `padding-inline-*`, `padding-block-*`, `inset-inline-*`, `inset-block-*`, `inline-size`, `block-size`, `min`/`max-inline-size`, `min`/`max-block-size` |
+| **DELIBERATELY ABSENT** (no cascade field) | `hyphens` · `touchAction` · `willChange` · `writingMode` · `tabSize` · `containerType` · `scrollBehavior` · `overscrollBehavior` · `caretColor` · `accentColor` · `isolation` · `contain` · `columnCount` · `breakInside` · `unicodeBidi` · `fontStretch` · … (41 in total) |
+
+**Measured: 411 → 321 differing, fourteen properties fixed, zero newly broken.**
+
+### The logical properties are exact aliases, and that is a STATEMENT about this engine
+
+`writing-mode` has no `ComputedStyle` field, so every box is `horizontal-tb` and `inline` **is**
+horizontal. The aliases are therefore exact, not approximate. The day a vertical writing mode lands,
+they stop being aliases — and that block is where it shows up.
+
+### `grid-template-columns` is the instructive OMISSION
+
+The cascade holds it (`Vec<TrackComponent>`), so it looks publishable. But Chrome does not report the
+author's track list: on a rendered grid it reports the **used track sizes in px** — `98.6562px
+197.344px` for `1fr 2fr` in a 300px container — and `none` everywhere else. Emitting `1fr 2fr` would
+be a **wrong answer of the right type**, the shape this project rates most dangerous, because a grid
+library parsing px out of it gets `NaN` from a string that looked valid. The used sizes are not on
+this seam; they need layout's track list. **Absence keeps the caller on its fallback.**
+
+### Two spellings of one box must go through one serialiser
+
+This tick's own first version sent `max-inline-size`/`max-block-size` through `dim_css` (unset →
+`auto`) while the physical `max-width`/`max-height` use `max_dim` (unset → **`none`**). The re-sweep
+caught it in one line: **the logical spelling disagreed with the physical one about the same box, the
+moment a second serialiser was used.** `inline-size`/`block-size` therefore call the same
+`used_dim_css` as `width`/`height`, and the gate asserts the *identity* (`inlineSize === width`)
+rather than the values.
+
+### `word-spacing` does NOT share `letter-spacing`'s rule, and a lumped comment hid that
+
+An unset `letter-spacing` serialises as the keyword `normal` (it permits the font's own kerning;
+`0px` does not). An unset **`word-spacing` serialises as `0px`** — its initial value is the length
+zero. The two look symmetric, are not, and one comment written for both is exactly how the wrong one
+survived. Same shape as the lumped assertion that failed permanently at t855.
+
 ## `getComputedStyle(el).width` is the *RESOLVED* value — the USED size in px, not the specified one
 
 CSSOM makes `width`/`height` two of the handful of properties whose resolved value is the **used

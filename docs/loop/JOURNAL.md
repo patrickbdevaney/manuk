@@ -46371,6 +46371,88 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 902 — one diff listed the whole class: 411 of 924 computed-style readings differ (2026-08-04)
+
+TICK SHAPE: capability — check #78's steer #1, taken literally. The `getComputedStyle` readback class
+had been failing **one member per tick**: `transform` (applied for sixty ticks before the number
+reached JS), `width`/`height` (t897), `zoom` and `containerType` (t900's surface audit). t901 named it
+as an **I3 defect class** and ranked the enumeration above the next member. This tick runs the diff.
+
+⚠⚠⚠ **ONE PASS, 132 PROPERTIES × 7 REPRESENTATIVE ELEMENTS: 411 DIFFERING READINGS OF 924 — AND THE
+DOMINANT SHAPE IS NOT A WRONG VALUE, IT IS `undefined`.** Fifty-one properties were absent from the
+object entirely. *Four members found one at a time is four ticks spent on what one diff lists.*
+
+⚠⚠⚠ **THE SPLIT IS THE DELIVERABLE, NOT THE COUNT.** Chrome emits an initial value for every property
+it supports; **we must not**, for the ones this engine does not honour. That is `@supports`-style
+false presence — t772's *"absence routes to the fallback; HALF-presence routes into a wall"* and
+t608's *"a name is defined IFF the thing it names exists"*. Measured against `ComputedStyle`'s 103
+fields:
+
+```text
+  PUBLISHED (cascade-held, was `undefined`)   order · background-size · object-position ·
+                                              text-shadow · inset · grid-column-start/-end ·
+                                              the LOGICAL family (margin/padding/inset-inline-*
+                                              and -block-*, inline-size, block-size,
+                                              min/max-inline-size, min/max-block-size)
+  DELIBERATELY ABSENT (no cascade field)      41 — hyphens · touchAction · willChange ·
+                                              writingMode · tabSize · containerType ·
+                                              scrollBehavior · caretColor · isolation · …
+```
+
+**MEASURED: 411 → 321 differing readings, fourteen properties fixed, ZERO newly broken.**
+
+⚠⚠ **`grid-template-columns` IS THE OMISSION WORTH THE MOST.** The cascade holds it, so it looks
+publishable — but Chrome reports the **USED track sizes in px** (`98.6562px 197.344px` for `1fr 2fr`
+in a 300px container), not the author's list. Emitting `1fr 2fr` would be a **wrong answer of the
+RIGHT TYPE**, the shape this project rates most dangerous: a grid library parsing px out of it gets
+`NaN` from a string that looked valid. It stays absent, and the gate asserts the absence.
+
+⚠⚠ **THIS TICK'S OWN FIRST VERSION WAS WRONG, AND THE RE-SWEEP CAUGHT IT IN ONE LINE.**
+`max-inline-size`/`max-block-size` went out through `dim_css` (unset → `auto`) while the physical
+`max-width`/`max-height` use `max_dim` (unset → **`none`**). **The logical spelling disagreed with the
+physical one about the same box, the moment a second serialiser was used.** `inline-size` and
+`block-size` therefore call the SAME `used_dim_css` as `width`/`height`, and the gate asserts the
+IDENTITY (`inlineSize === width`) rather than the values — four reconciliation clauses, because two
+readings of one box that can disagree will.
+
+⚠ **A LUMPED COMMENT HID A REAL ASYMMETRY.** The source said *"CSS serializes an unset
+`letter-spacing`/`word-spacing` as `normal`"*. Measured: an unset `letter-spacing` **is** `normal` (it
+permits the font's own kerning; `0px` does not), and an unset **`word-spacing` is `0px`** — its
+initial value is the length zero. One rule written for two properties, only one of which had it. Same
+shape as the lumped assertion that failed permanently at t855.
+
+⚠⚠⚠ **AND THE WHOLE-CRATE RUN FOUND A GATE RED AT HEAD THAT IS NOT A REGRESSION — IT IS A GATE THAT
+ROTTED.** `g_get_property_value`'s `trim-safe` probe used `backdrop-filter` as its stand-in for *"a
+property the snapshot does not carry"*. **`backdrop-filter` later LANDED**, the snapshot correctly
+began reporting `none`, and the claim went red with nothing broken. Attributed by stashing this
+tick's diff and re-running at HEAD — it fails identically there.
+
+> **A gate that asserts a capability's ABSENCE as a proxy for a contract rots the moment the
+> capability arrives.** Same shape as the standing rule *"an honest `no` stub becomes a lie when the
+> cap lands"*, one level up: it was the GATE, not the stub.
+
+Corrected rather than left red, because the contract it tests (CSSOM `getPropertyValue` is total) is
+unchanged and only its EXAMPLE went stale: the probe now uses `hyphens` — genuinely not cascaded here,
+measured in this tick's own diff — **and gains a supported-property clause**
+(`getPropertyValue('backdrop-filter').trim() === 'none'`), so it cannot rot in either direction again.
+**The wall runs 19 of ~105 gates, which is why this sat unseen; the whole crate suite is 148 binaries
+and is now green.**
+
+GATE: `G_COMPUTED_STYLE_PUBLISHES_THE_CASCADE` — 34 claims, every one captured from a real
+`google-chrome --headless --dump-dom` run of this fixture **except one, labelled at its assertion**:
+`stillAbsent` states this engine's honesty boundary, and Chrome (which supports all seventeen) reports
+every one of them — a gate that copied Chrome there would demand we fabricate values for capabilities
+we do not have. **RED-proven** by reverting the batch: 22 claims fail. Four are RECONCILIATION
+(`inlineSize === width`, `maxInlineSize === maxWidth`, …), one is ENUMERATION (`item(i)` must reach
+the new names, or a library that copies a computed style cannot see them), and one is the absence
+GUARD.
+
+PERF: none measurable — the object gains ~20 string slots built from values already in hand, once per
+`getComputedStyle` call. No new layout or cascade work.
+
+WIKI: `docs/wiki/dom-semantics.md` — "Publish what the cascade HOLDS, and nothing it does not — the
+whole-object diff"
+
 ## Tick 901 — the gate went DOWN while the browser got BETTER, and I3 was being strengthened uncounted (2026-08-04)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8; last at 893), banked

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **632** | ticks 1–900 |
-| median tick cycle | **26m** | 631 intervals |
-| median, last 10 | **33m** | 10 intervals |
+| ticks landed | **633** | ticks 1–902 |
+| median tick cycle | **26m** | 632 intervals |
+| median, last 10 | **41m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 577.9h elapsed |
-| median verify wall | **63s** | 571 ticks |
+| **ticks per hour** | **1.09** | 579.6h elapsed |
+| median verify wall | **63s** | 572 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **391**
-* **✅ rows in the capability ledger**: 144 → **469**
+* **live gates**: 27 → **392**
+* **✅ rows in the capability ledger**: 144 → **470**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**309 of 632 ticks** (49%) moved a
+**310 of 633 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **309** capability ticks, median cycle **26m**
-* median diff per tick: **+263 / −34** lines across 8 files
+* **310** capability ticks, median cycle **26m**
+* median diff per tick: **+264 / −34** lines across 8 files
 
 ## Every tick
 
@@ -729,5 +729,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **897** | 2026-08-04 06:33 | 67m | capability | 63s | +388/−33 | 391 | 81 | 56.0% · | `getComputedStyle(el).width` answered with the SPECIFIED value, and the used one was alrea |
 | **898** | 2026-08-04 06:46 | 13m | measurement | 63s | +200/−33 | 391 | 81 | 56.0% · | the pre-registered expectation was WRONG, and the band is composition plus five named site |
 | **900** | 2026-08-04 06:58 | 12m | measurement | 63s | +221/−33 | 391 | 81 | 56.0% · | the map is complete on Interop 2026, and three GATED rows were lying (2026-08-04) |
+| **902** | 2026-08-04 08:37 | 1.7h | capability | 63s | +675/−139 | 392 | 81 | 56.0% · | one diff listed the whole class: 411 of 924 computed-style readings differ (2026-08-04) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

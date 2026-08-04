@@ -902,6 +902,15 @@ fn blend_mode_css(m: manuk_css::BlendMode) -> &'static str {
 /// `undefined` from `getComputedStyle` is not a gap — `cs.borderRadius.split(' ')` is a TypeError
 /// that kills the caller's frame (t596). Every property here already has a true computed value in
 /// `ComputedStyle`; the engine was rendering them and refusing to say so.
+/// A `grid-column-start` / `-end` line, serialised the way `getComputedStyle` reports it.
+fn grid_line_css(l: &manuk_css::GridLine) -> String {
+    match l {
+        manuk_css::GridLine::Auto => "auto".to_string(),
+        manuk_css::GridLine::Line(n) => n.to_string(),
+        manuk_css::GridLine::Span(n) => format!("span {n}"),
+    }
+}
+
 fn extra_computed_props(cs: &manuk_css::ComputedStyle) -> Vec<(&'static str, String)> {
     use manuk_css::*;
     let px = |v: f32| {
@@ -979,8 +988,8 @@ fn extra_computed_props(cs: &manuk_css::ComputedStyle) -> Vec<(&'static str, Str
             }
             .into(),
         ),
-        // CSS serializes an unset `letter-spacing`/`word-spacing` as `normal`, not `0px` — and the
-        // difference is observable: `normal` permits the font's own kerning, `0px` does not.
+        // CSS serializes an unset `letter-spacing` as `normal`, not `0px` — the difference is
+        // observable, because `normal` permits the font's own kerning and `0px` does not.
         (
             "letter-spacing",
             if cs.letter_spacing == 0.0 {
@@ -989,14 +998,13 @@ fn extra_computed_props(cs: &manuk_css::ComputedStyle) -> Vec<(&'static str, Str
                 px(cs.letter_spacing)
             },
         ),
-        (
-            "word-spacing",
-            if cs.word_spacing == 0.0 {
-                "normal".into()
-            } else {
-                px(cs.word_spacing)
-            },
-        ),
+        // ⚠ **`word-spacing` DOES NOT SHARE THAT RULE, and this comment used to claim it did.**
+        // Measured on the t901 whole-object diff, seven elements: Chrome resolves an unset
+        // `word-spacing` to **`0px`** while an unset `letter-spacing` stays **`normal`**. The two
+        // properties look symmetric and are not — `word-spacing`'s initial value is the length `0`,
+        // `letter-spacing`'s is the keyword `normal`. One rule written for two properties, and only
+        // one of them had it; the lumped comment is exactly how that survived.
+        ("word-spacing", px(cs.word_spacing)),
         ("text-indent", dim_css(&cs.text_indent)),
         (
             "text-overflow",
@@ -1152,6 +1160,136 @@ fn extra_computed_props(cs: &manuk_css::ComputedStyle) -> Vec<(&'static str, Str
                 .unwrap_or_else(|| "auto".into()),
         ),
         ("gap", format!("{} {}", px(cs.row_gap), px(cs.column_gap))),
+        // ─────────────────────────────────────────────────────────────────────────────────────────
+        // ⚠⚠⚠ **THE t901 SWEEP BATCH — properties the cascade ALREADY HOLDS and this object refused
+        // to publish.** One diff of the whole `getComputedStyle` object against Chrome, over seven
+        // representative elements and 132 properties, found **411 differing readings of 924** — and
+        // the dominant shape was not a wrong value, it was `undefined`.
+        //
+        // That is invariant **I3**, which says the semantic model *"is never allowed to rot or lag
+        // the renderer"*. It had been failing one member per tick — `transform` (applied for sixty
+        // ticks before the number reached JS), then `width`/`height` (t897), then `zoom` and
+        // `containerType` (t900's surface audit). **Four members found one at a time is four ticks
+        // spent on what one diff lists**, so this is the enumeration.
+        //
+        // ⚠ **AND THE SPLIT IS THE POINT: only the properties the cascade GENUINELY CASCADES are
+        // published here.** Chrome emits an initial value for every property it supports; emitting
+        // one for a property this engine does not honour would be `@supports`-style false presence —
+        // the exact trap t772 named (*"absence routes to the fallback; HALF-presence routes into a
+        // wall"*) and t608's rule (*"a name is defined IFF the thing it names exists"*). The 41
+        // properties with no `ComputedStyle` field — `hyphens`, `touchAction`, `willChange`,
+        // `containerType`, `writingMode`, `tabSize`, … — stay ABSENT on purpose, and a page's
+        // feature detection keeps working.
+        ("order", cs.order.to_string()),
+        (
+            "background-size",
+            match cs.background_size {
+                BackgroundSize::Auto => "auto".to_string(),
+                BackgroundSize::Cover => "cover".to_string(),
+                BackgroundSize::Contain => "contain".to_string(),
+                BackgroundSize::Px(w, h) => format!("{} {}", px(w), px(h)),
+            },
+        ),
+        (
+            "object-position",
+            format!(
+                "{}% {}%",
+                cs.object_position.x * 100.0,
+                cs.object_position.y * 100.0
+            ),
+        ),
+        (
+            "text-shadow",
+            cs.text_shadow
+                .as_ref()
+                .map(|t| {
+                    format!(
+                        "{} {} {} {}",
+                        rgba_css(&t.color),
+                        px(t.dx),
+                        px(t.dy),
+                        px(t.blur)
+                    )
+                })
+                .unwrap_or_else(|| "none".into()),
+        ),
+        // ── LOGICAL PROPERTIES. Exact aliases of the physical ones here, and that is a STATEMENT
+        // about this engine rather than a shortcut: `writing-mode` has no `ComputedStyle` field at
+        // all, so every box is `horizontal-tb` and `inline` IS horizontal. The day a vertical
+        // writing mode lands, these stop being aliases and this block is where that shows up.
+        //
+        // They matter because the logical spellings are what a modern stylesheet is authored in —
+        // Tailwind, Bootstrap 5 and every RTL-aware design system emit `margin-inline-start` — and
+        // `undefined` from a readback is how a layout calculation silently becomes `NaN`.
+        ("margin-inline-start", dim_css(&cs.margin.left)),
+        ("margin-inline-end", dim_css(&cs.margin.right)),
+        ("margin-block-start", dim_css(&cs.margin.top)),
+        ("margin-block-end", dim_css(&cs.margin.bottom)),
+        ("padding-inline-start", dim_css(&cs.padding.left)),
+        ("padding-inline-end", dim_css(&cs.padding.right)),
+        ("padding-block-start", dim_css(&cs.padding.top)),
+        ("padding-block-end", dim_css(&cs.padding.bottom)),
+        ("inset-inline-start", dim_css(&cs.inset.left)),
+        ("inset-inline-end", dim_css(&cs.inset.right)),
+        ("inset-block-start", dim_css(&cs.inset.top)),
+        ("inset-block-end", dim_css(&cs.inset.bottom)),
+        ("min-inline-size", dim_css(&cs.min_width)),
+        ("min-block-size", dim_css(&cs.min_height)),
+        // ⚠ `max-*` serialises an unset value as **`none`**, not `auto` — the same rule the physical
+        // `max-width`/`max-height` already follow via `max_dim`. The first version of this block used
+        // `dim_css` for all four and the re-sweep caught it in one line: the LOGICAL spelling said
+        // `auto` where the PHYSICAL one said `none`, about the same box. That is precisely the
+        // two-spellings-one-box drift the shared `used_dim_css` above exists to prevent, and it
+        // appeared the moment a second serialiser was used.
+        (
+            "max-inline-size",
+            match &cs.max_width {
+                manuk_css::Dim::Auto => "none".to_string(),
+                other => dim_css(other),
+            },
+        ),
+        (
+            "max-block-size",
+            match &cs.max_height {
+                manuk_css::Dim::Auto => "none".to_string(),
+                other => dim_css(other),
+            },
+        ),
+        // The `inset` shorthand. `cs.inset` is held by the cascade and was simply never published;
+        // Chrome serialises the four-value shorthand collapsed when the sides agree.
+        ("inset", {
+            let (t, r, b, l) = (
+                dim_css(&cs.inset.top),
+                dim_css(&cs.inset.right),
+                dim_css(&cs.inset.bottom),
+                dim_css(&cs.inset.left),
+            );
+            if t == r && r == b && b == l {
+                t
+            } else if t == b && r == l {
+                format!("{t} {r}")
+            } else {
+                format!("{t} {r} {b} {l}")
+            }
+        }),
+        // `grid-column-start` / `-end` — cascade-held, and `undefined` today, so a grid library that
+        // reads back an item's placement gets nothing. Chrome's values are exactly what the cascade
+        // holds here (`auto`, or the line number), so publishing them is faithful.
+        ("grid-column-start", grid_line_css(&cs.grid_column.0)),
+        ("grid-column-end", grid_line_css(&cs.grid_column.1)),
+        // ⚠ **`grid-template-columns` IS DELIBERATELY LEFT ABSENT, and it is the most instructive
+        // omission in this batch.** The cascade holds it — `Vec<TrackComponent>` — so it *looks*
+        // publishable. But Chrome does not report the author's track list: on a rendered grid it
+        // reports the **USED track sizes in px** (`98.6562px 197.344px` for `1fr 2fr` in a 300px
+        // container), and `none` on every non-grid element. Emitting `1fr 2fr` would be a **wrong
+        // answer of the RIGHT TYPE** — the shape this project rates as the most dangerous, because a
+        // grid library parsing px out of it gets `NaN` from a string that looked valid. The used
+        // track sizes are not on this seam; publishing them needs layout's track list, which is its
+        // own tick. Absence keeps the caller on its fallback.
+        // ⚠ `inline-size` / `block-size` are the LOGICAL spellings of `width`/`height`, so they
+        // resolve to the USED value exactly as those do (t897) — via the same `used_dim_css`, so the
+        // two spellings of one box can never disagree. `rect` is not available in this function, so
+        // they are emitted beside `width`/`height` in `computed_style_js` instead of here.
     ]
 }
 
@@ -1398,6 +1536,9 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
             "opacity",
             "width",
             "height",
+            // The LOGICAL spellings, emitted from the same `used_dim_css` as the physical pair.
+            "inline-size",
+            "block-size",
             "margin-top",
             "margin-right",
             "margin-bottom",
@@ -1469,7 +1610,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
           fontFamily:{}, lineHeight:{}, textAlign:{}, display:{}, position:{}, overflow:{}, overflowX:{}, overflowY:{}, \
           visibility:{}, whiteSpace:{}, pointerEvents:{}, userSelect:{}, webkitUserSelect:{}, colorScheme:{}, \
           scrollbarWidth:{}, scrollbarColor:{}, opacity:{}, \
-          width:{}, height:{}, marginTop:{}, marginRight:{}, marginBottom:{}, marginLeft:{}, \
+          width:{}, height:{}, inlineSize:{}, blockSize:{}, marginTop:{}, marginRight:{}, marginBottom:{}, marginLeft:{}, \
           paddingTop:{}, paddingRight:{}, paddingBottom:{}, paddingLeft:{}, \
           top:{}, right:{}, bottom:{}, left:{}, zIndex:{}, transform:{}, \
           justifyContent:{}, alignItems:{}, alignSelf:{}, flexDirection:{}, flexWrap:{}, \
@@ -1531,6 +1672,12 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         // CSSOM: `width`/`height` resolve to the USED value once the element generates a box. The
         // specified value is the fallback for the cases `used_dim_css` refuses (display:none, a
         // non-replaced inline, an unresolvable percentage padding) — never the default.
+        q(&used_dim_css(cs, rect, true).unwrap_or_else(|| dim_css(&cs.width))),
+        q(&used_dim_css(cs, rect, false).unwrap_or_else(|| dim_css(&cs.height))),
+        // `inline-size` / `block-size` are the LOGICAL spellings of the same two boxes, and they go
+        // through the SAME function for that reason: two spellings of one box that can disagree is a
+        // reconciliation failure waiting to be discovered by a page. Exact aliases here because
+        // `writing-mode` has no `ComputedStyle` field — every box is `horizontal-tb`.
         q(&used_dim_css(cs, rect, true).unwrap_or_else(|| dim_css(&cs.width))),
         q(&used_dim_css(cs, rect, false).unwrap_or_else(|| dim_css(&cs.height))),
         q(&dim_css(&cs.margin.top)),
