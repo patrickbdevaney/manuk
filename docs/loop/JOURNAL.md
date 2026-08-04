@@ -46371,6 +46371,66 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 894 — the load budget is NOT what starves beb88run, and the objects are jqXHRs (2026-08-04)
+
+TICK SHAPE: measurement — check #77's steer #1, taken literally: work the ranked cohort. The top site
+is `beb88run.xyz` (shape 0.868, overlap 14, one dimension from crossing M1) and t891 named its
+mechanism down to *sixteen XHRs rejecting at `readyState: 0`*. This tick asks why, and gets a
+refutation.
+
+**THE HYPOTHESIS, and it was a good one.** `RUST_LOG=manuk_net=debug` on the page shows our **12-second
+load budget exhausted SIX times** in one navigation:
+
+```text
+  load budget of 12.0s exhausted — painting without subframes
+                                 — painting without page fetches      ← this one
+                                 — painting without images
+                                 — painting without icon masks
+                                 — painting without dynamic scripts
+                                 — painting without background images
+```
+
+*"Painting without page fetches"* is exactly the shape of sixteen AJAX calls that never complete, and
+the loop already suspects this budget: `fidelity-progress.sh` splits `thin-overlap` into
+**`timeout-starved[12s budget]`** and `fast-but-empty[engine]`. The site takes **32s** on the shipping
+binary (t887), so a 12s budget cutting it off is entirely plausible.
+
+⚠⚠⚠ **REFUTED, IN ONE RUN, BY THE CONTROL THE HYPOTHESIS ITSELF SUGGESTS.** `MANUK_LOAD_BUDGET_MS=60000`
+— five times the budget, and the whole navigation now fits inside it:
+
+```text
+                        12s budget      60s budget
+  unhandled rejections      16              16      ← unchanged
+  overlap pairs             14              14      ← unchanged
+  shape                   86.8%           86.3%     ← unchanged (inside its own spread)
+  load                     32s             69s
+```
+
+**Nothing moved.** The XHRs do not fail because we stopped waiting for them — they fail before the
+budget is anywhere near relevant. *A fixture that refutes your hypothesis is the cheapest possible
+outcome*, and this one cost one run and removed the most attractive wrong answer from the board before
+a line of engine code was touched.
+
+⚠⚠ **AND IT DID ESTABLISH WHAT THE OBJECTS ARE, which the next tick needs.** The rejected values carry
+`readyState`, `getResponseHeader`, `getAllResponseHeaders`, `setRequestHeader`, `overrideMimeType` —
+that member set is **jQuery's `jqXHR`**, not a native `XMLHttpRequest`. And `readyState: 0` on a jqXHR
+means jQuery **never reached the send**: it built the object, decided it could not proceed, and
+rejected. So the failure is in `$.ajax`'s *setup*, not in our transport, and the next probe belongs
+inside jQuery's own path (which transport it selected, and what it found missing) rather than in
+`manuk-net`.
+
+⚠ **A SECOND FACT WORTH THE LINE, because it will otherwise be re-discovered as a defect:** the six
+budget-exhaustion warnings are the load path working as designed (`G_LOAD` — a dead subresource must
+not hold the document hostage). They are loud and they are not this bug. An investigation that had
+started from *"six warnings, therefore the cause"* would have spent the tick tuning a budget that
+changes nothing.
+
+PERF: none — measurement only. The 60s run is a control, not a proposal: a 12s budget that costs
+nothing on this site is a 12s budget worth keeping.
+
+WIKI: none — the finding is one refuted hypothesis and one identification, both recorded here; the
+mechanism is not yet understood well enough to write a topic. [no-pattern]
+
 ## Tick 893 — two windows have ended with the ranked lever untouched (2026-08-04)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (every 8; last at 885), banked as

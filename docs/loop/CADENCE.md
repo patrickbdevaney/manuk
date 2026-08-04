@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **625** | ticks 1–892 |
-| median tick cycle | **26m** | 624 intervals |
-| median, last 10 | **33m** | 10 intervals |
+| ticks landed | **626** | ticks 1–893 |
+| median tick cycle | **26m** | 625 intervals |
+| median, last 10 | **20m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 573.8h elapsed |
-| median verify wall | **63s** | 564 ticks |
+| **ticks per hour** | **1.09** | 574.0h elapsed |
+| median verify wall | **63s** | 565 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **466**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**306 of 625 ticks** (49%) moved a
+**306 of 626 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -722,5 +722,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **889** | 2026-08-04 01:44 | 7m | measurement | 63s | +78/−33 | 387 | 81 | 56.0% · | one row for one of a feature's consumers reads as covered, twice in one read (2026-08-04) |
 | **890** | 2026-08-04 02:12 | 28m | measurement | 63s | +283/−34 | 388 | 81 | 56.0% · | the self-audit is green, and the honest number beside it is 0.9 points (2026-08-04) |
 | **892** | 2026-08-04 02:51 | 39m | capability | 63s | +166/−33 | 388 | 81 | 56.0% · | t891's second finding was WRONG, and the real one is narrower (2026-08-04) |
+| **893** | 2026-08-04 03:03 | 12m | measurement | 63s | +93/−32 | 388 | 81 | 56.0% · | two windows have ended with the ranked lever untouched (2026-08-04) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

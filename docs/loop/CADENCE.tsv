@@ -624,3 +624,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 889	ce52cfc3	1785822299	2026-08-04T01:44:59-04:00	414	measurement	63	4	78	33	387	81	3896	6960	0	464	0	one row for one of a feature's consumers reads as covered, twice in one read (2026-08-04)
 890	bb801c42	1785823949	2026-08-04T02:12:29-04:00	1650	measurement	63	9	283	34	388	81	3896	6960	0	465	0	the self-audit is green, and the honest number beside it is 0.9 points (2026-08-04)
 892	43a9b29d	1785826269	2026-08-04T02:51:09-04:00	2320	capability	63	5	166	33	388	81	3896	6960	0	466	0	t891's second finding was WRONG, and the real one is narrower (2026-08-04)
+893	f9094d6d	1785826999	2026-08-04T03:03:19-04:00	730	measurement	63	4	93	32	388	81	3896	6960	0	466	0	two windows have ended with the ranked lever untouched (2026-08-04)
