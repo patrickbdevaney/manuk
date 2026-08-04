@@ -406,3 +406,44 @@ clock is bounded or not. It was testing ordering, and it passed with `Infinity` 
 observation has to happen **after** the drain: the far-future task writes to the DOM and Rust reads it.
 
 [[loop-optimization-mandate]] [[reliability-doctrine]]
+
+## The timeout cohort is our clock, not a regression — and it is now the largest unscored reason
+
+The t886 corpus sweep read `timeout-150s` on **22 of 200** sites, against **3** at t875 and **2** at
+t867, and dropped `scored` from 106 to 92. Three engine ticks had landed in that window, so the
+attribution mattered more than the number.
+
+**Re-measured SOLO on the current binary, quiet box (load average 1.31):**
+
+```text
+                      manuk      chromium     shape
+  sip777man.site    191,825ms     11,460ms    90.5%   ← over the 150s deadline SOLO
+  beb88run.xyz      172,591ms     14,114ms    81.6%   ← over it SOLO
+  www.ikea.com       50,717ms     13,891ms    69.5%
+  payb.jp           102,352ms     37,528ms    64.7%
+```
+
+Every one renders, and renders *well* — `sip777man` at 0.942 is one of the best shape scores in the
+corpus. **We are 4–17× slower than Chromium**, sitting either side of a 150-second deadline, so a
+slightly busier box flips a scored row into a timeout.
+
+**The old-binary control settles it.** `engine/` checked out at t881 (before all three engine ticks),
+rebuilt, same hour, same sites: ikea 50,717 → 46,126 ms, payb 102,352 → **105,074 ms** — the old
+binary is *slower*. Not a regression.
+
+### Why that is still the top finding and not an excuse
+
+*"Not a regression"* is not *"not a problem."* Bar 0 counts a site over **30 seconds on our clock**,
+and the sampled sites are at 50–192. The scorability ceiling is **92/132 = 69.7%**, and **22 of the 40
+unscored rows are our latency** — more than every other reason combined (shell-only 8 · other 4 ·
+thin-overlap 3 · render-fail 2 · css-starved 1). The board has ranked throw-killers since t777 off a
+worklist where `timeout` was 3. It is now the largest single cohort by a factor of three, and closing
+it is a **performance** tick, not a function one.
+
+### The methodological residue
+
+**Nothing in this loop records box load per sweep**, so t886 and t875 are not load-matched and the
+`106 → 92` difference cannot be cleanly attributed to either engine or environment. The
+composition-free comparator — mean Δshape over the 89 sites scored in BOTH sweeps — reads **−0.15
+points** (7 up, 8 down by >2pt): flat. When a cohort sits *at* a deadline, the deadline is part of the
+measurement, and the sweep should record the load it ran under.

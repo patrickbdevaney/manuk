@@ -1342,6 +1342,9 @@
   - L356 · What it said about playhop.com, first run
   - L375 · The fix: a horizon, which is what Chrome's --virtual-time-budget already is
   - L386 · Measured on playhop.com, before → after
+  - L410 · The timeout cohort is our clock, not a regression — and it is now the largest unscored reason
+  - L434 · Why that is still the top finding and not an excuse
+  - L443 · The methodological residue
 
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
@@ -1511,4 +1514,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1418 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1421 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -46371,6 +46371,90 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 886 — the sweep the loop was blind without, and the timeout cohort is OUR CLOCK (2026-08-04)
+
+TICK SHAPE: measurement — check #76's steer #1: a full `--jobs 2` sweep of all 200 CrUX-trend sites,
+banked as `docs/loop/SWEEP-t886-rows.tsv`. Nine ticks were unpriced.
+
+**THE HEADLINE, and it is small and honest:**
+
+```text
+                        t867     t875     t886
+  M1 (shape≥0.75 AND jarring-clean)   16.4%    16.9%    17.4%   (23/132)
+  shape ≥ 0.75                        29       30       30      ← the COUNT did not move
+  jarring-clean                       31.2%    33.8%    34.8%
+  scored / in-scope                  106/128  106/130   92/132  ← ⚠
+  shape_mean                          54.4%    56.5%    59.2%
+```
+
+M1 is up 0.5 points, and **the shape-passer COUNT is flat at 30** — the ratio moved because the
+denominator did. `fidelity-progress.sh`'s own guards fired on the rest and they are right to:
+*"SCORABILITY-REGRESSED: scored 106 → 92"* and *"DENOMINATOR-TRAP: shape_mean 56.5→59.2 ROSE while
+scored FELL — the gain is NOT real."* An instrument that catches its own operator is worth more than
+the number it prints.
+
+⚠⚠⚠ **THE REGRESSION IS 19 SITES AND IT IS `timeout-150s`, WHICH WENT 2 → 3 → 22 ACROSS THREE
+SWEEPS.** Sixteen of the twenty-two scored *fine* at t875, several of them well:
+
+```text
+  sip777man.site 0.942 · beb88run.xyz 0.868 · 7info.ru 0.706 · payb.jp 0.697 · www.ikea.com 0.695
+```
+
+Three engine ticks (882, 883, 884) landed in that window, so this is exactly the reading THE RATCHET
+exists for and it was attributed before anything was claimed.
+
+⚠⚠⚠ **RE-MEASURED SOLO ON THE CURRENT BINARY, QUIET BOX (load average 1.31): ALL FOUR COMPLETE, AND
+THE NUMBER IS OUR OWN CLOCK.**
+
+```text
+                      manuk      chromium     shape
+  sip777man.site    191,825ms     11,460ms    90.5%   ← over the 150s deadline SOLO
+  beb88run.xyz      172,591ms     14,114ms    81.6%   ← over it SOLO
+  www.ikea.com       50,717ms     13,891ms    69.5%
+  payb.jp           102,352ms     37,528ms    64.7%
+```
+
+**The sites did not stop rendering. We are 4–17× slower than Chromium on them**, sitting either side
+of a 150-second deadline, so a slightly busier box converts a scored row into a timeout. The t875
+sweep did not measure a faster engine; it caught a quieter box.
+
+⚠⚠⚠ **AND THE OLD-BINARY CONTROL SETTLES THE ATTRIBUTION — IT IS NOT OURS, AND THE OLD ONE IS
+SLOWER.** `engine/` checked out at `d70e0843` (t881, before all three engine ticks), rebuilt, same
+hour, same sites:
+
+```text
+                   t886 binary    t881 binary (control)
+  www.ikea.com       50,717ms          46,126ms
+  payb.jp           102,352ms         105,074ms      ← the OLD binary is slower
+  shape             69.5 / 64.7        69.5 / 66.7   (payb's own spread is 0.678–0.826)
+```
+
+**This is the SIXTH consecutive cohort named as ours and proven not** — after `shell-only` (t856),
+`css-starved` (t860), `oracle-timeout` (t861), `render-failed` (t877) and `oracle-module-shell`
+(t880-881). Check #76 banked the prior yesterday; it held today.
+
+⚠⚠ **BUT THERE IS A REAL FINDING UNDER IT, AND IT IS NOT A HARNESS EXCUSE.** *"Not a regression"* is
+not *"not a problem"*. Bar 0 counts a site over **30 seconds on our clock**, and four of four sampled
+sites are at **50–192 seconds** while Chromium is at 6–37. That is now the binding constraint on
+`scored`, which is the binding constraint on M1: the scorability ceiling reads **92/132 = 69.7%**, and
+**22 of the 40 unscored rows are our latency**, more than every other reason combined
+(shell-only 8 · other 4 · thin-overlap 3 · render-fail 2 · css-starved 1). The board has ranked
+throw-killers since t777 on a worklist where `timeout` was 3; it is now the largest single cohort by a
+factor of three, and it is a PERFORMANCE tick, not a function one.
+
+⚠ **A CAVEAT ON THE COMPARISON THAT MUST TRAVEL WITH IT:** the t886 and t875 sweeps are not
+load-matched, and nothing in this loop records box load per sweep. The honest reading of *"scored 106
+→ 92"* is therefore **"the timeout cohort is at the deadline, and which side of it a site lands on is
+partly the box"** — not a measured drop in capability. The common-set band, which is the
+composition-free comparator, reads **−0.15 pts over the 89 sites scored in BOTH sweeps** (7 up, 8 down
+by >2pt): flat.
+
+PERF: none landed — but this tick's finding IS a perf finding, and it is the first time the sweep's
+own arithmetic has pointed at latency rather than capability.
+
+WIKI: `docs/wiki/performance.md` — "The timeout cohort is our clock, not a regression — and it is now
+the largest unscored reason" [no-pattern]
+
 ## Tick 885 — "M1 did not move" is three different facts, and the differentiator is getting 4% (2026-08-04)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (every 8; last at 877), banked as
