@@ -697,6 +697,7 @@
   - L433 · The lesson, narrower than the law it comes from
   - L440 · The M1 crossing ranking, computed from a sweep rather than remembered (t888, from SWEEP-t887)
   - L471 · The named mechanism at the top of cohort A
+  - L492 · A negative common-set band is not a regression until you split it on COVERAGE
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1532,4 +1533,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1439 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1440 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

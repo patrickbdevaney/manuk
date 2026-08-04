@@ -488,3 +488,47 @@ of the template-built web, so it is a class rather than a site.
 
 **The first bisect for whoever takes it:** separate *"the DOM Slick built differs"* from *"we lay out
 the DOM it built differently"* before touching layout — two candidate subsystems that share no code.
+
+## A negative common-set band is not a regression until you split it on COVERAGE
+
+`fidelity-progress.sh` reports the common-set band — the mean Δshape over the sites scored in **both**
+sweeps — precisely because a pass-count is noisy at ±2-4 sites. But the band has its own trap, and
+t898 walked into it and back out:
+
+```text
+  reported:  band -1.71 pts DOWN — "could be engine OR site-drift"
+```
+
+**Split the common set on the one variable that separates a regression from a composition change —
+whether COVERAGE moved:**
+
+```text
+  COMMON SET (122 sites)              shape band  -1.67 pts   ·  scored elements 67241 -> 69032
+    COVERAGE-UP cohort (9 sites, cov >= +2 pts)
+        mean coverage  +20.22 pts   mean shape  -5.74 pts   elements +1809  (the ENTIRE gain)
+    EVERYTHING ELSE (113 sites)                   shape  -1.34 pts
+    …minus 5 named outliers (108)                 shape  -0.08 pts     <- FLAT
+```
+
+Nine sites gained twenty coverage points and 1,809 elements; their shape fell because the denominator
+grew by exactly the hard elements that had been missing. That is *a shape drop is a coverage win*
+(t813-818) at corpus scale, and it is how a real capability win shows up as a headline going the wrong
+way. The other 108 sites are flat to within 0.08 pt — which is also the strongest available statement
+that the fixes were **inert where they should be**, a claim a four-site control panel cannot make.
+
+**The method, as a rule:**
+
+1. Take the common set (sites scored in both sweeps). Never the pass count.
+2. Split it: `Δcov >= +2 pts` is the composition cohort. Read `Δshape` and `Δn` there together — a
+   large negative Δshape beside a large positive Δn is a WIN, not a loss.
+3. Read the band over the remainder. That is the number that can contain a regression.
+4. Name the residual outliers individually and run the **OLD-BINARY control** on them. A clean delta
+   attributes nothing until the old binary has refused to reproduce it.
+5. Discard any row whose `shape_n` is too small to carry a verdict — t898 had `vk.com` at n=2 and
+   `mobcup.fm` at n=29 sitting in the down-movers, and neither is a measurement.
+
+⚠ **And read scorability as a SEPARATE lever.** t898 pre-registered *"scorability should rise"* after
+five capability fixes and it did not move at all (107/129 both sweeps). The fixes were DOM-correctness
+fixes, not boot-throw killers: they moved coverage on sites that already scored. Scorability moves
+only when a site that did not render starts rendering. Two levers, two metrics, and reading one
+against the other is how a real win reads as nothing.

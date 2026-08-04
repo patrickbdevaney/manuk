@@ -46371,6 +46371,112 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 898 — the pre-registered expectation was WRONG, and the band is composition plus five named sites (2026-08-04)
+
+TICK SHAPE: measurement — the board's cadence rule (*"after ~5-6 fixes of either class, run a CLEAN
+`--jobs 2` sweep and bank `SWEEP-t<N>-rows.tsv`"*) and check #77's steer #2. Five capability fixes
+have landed since `SWEEP-t887-rows.tsv` — t891, t892, t895, t896, t897 — and three of them are
+jQuery-path fixes whose blast radius is the whole template-built web, which a four-site control panel
+cannot price. Artefact: **`docs/loop/SWEEP-t898-rows.tsv`, 200 sites, `--jobs 2`, shipping release
+binary.**
+
+⚠⚠⚠ **THE PRE-REGISTERED EXPECTATION WAS WRONG, AND IT IS THE MOST USEFUL THING IN THIS TICK.** The
+stub — written before the run, precisely so it could not be fitted afterwards — said *"scorability
+should RISE from 82.9%"*. It did not move at all:
+
+```text
+                          t887          t898        pre-registered
+  scorability          107/129       107/129        RISE          <- MISSED
+  M1 (shape ∧ clean)      17.8%         17.1%       flat/down     <- held
+  shape >= 0.75           24.0%         21.7%       (down)        <- held
+  cov_mean                86.3%         86.6%       RISE          <- held
+  jarring-clean           34.9%         34.9%       —             flat
+```
+
+**The correction it forces is to the BOARD'S MODEL, not to the fixes.** The board's standing steer is
+*"attack throw-killers first — each site cleared RAISES THE CAP"*. t895/t896/t897 are **not
+throw-killers**: no site that failed to render now renders. They are DOM-correctness fixes, and what
+they moved is **coverage on sites that were already scored**. Those are two different levers with two
+different metrics, and reading one against the other is how a real win reads as nothing. The 22
+unscored rows are unchanged and still `shell-only 8 · other 5 · thin-overlap 3 · timeout 3 ·
+render-fail 2 · css-starved 1`.
+
+⚠⚠⚠ **AND THE −1.67 pt COMMON-SET BAND IS NOT A REGRESSION — IT DECOMPOSES, AND 108 OF 122 SITES ARE
+FLAT TO WITHIN 0.08 pt.** `fidelity-progress.sh` reported *"band −1.71 DOWN — could be engine OR
+site-drift"*. Split on the one variable that separates them:
+
+```text
+  COMMON SET (122 sites scored in BOTH t887 and t898)
+    shape band                     -1.67 pts
+    coverage band                  -0.49 pts
+    scored ELEMENTS         67241 -> 69032        +1791
+
+  COVERAGE-UP cohort (9 sites, coverage >= +2 pts)
+    mean coverage delta           +20.22 pts
+    mean shape delta               -5.74 pts
+    elements gained                   +1809      <- the ENTIRE element gain is these nine
+
+  EVERYTHING ELSE (113 sites)      shape -1.34 pts
+  …minus 5 NAMED outliers (108)    shape -0.08 pts      <- FLAT
+```
+
+**t896 landed corpus-wide, and this is the proof a four-site panel could not give.** Nine sites gained
+20 coverage points and 1,809 elements between the two sweeps, and their shape fell — the exact
+signature `beb88run.xyz` was measured with at t896 (cov 79.8% → 97.9%, shape 86.3% → 71.0%). Five of
+the nine had never been looked at:
+
+```text
+  probidas.lt          cov 0.273 -> 0.941   n  452 ->  701   shape  -8.62
+  seduniaselat.com     cov 0.683 -> 0.942   n  352 ->  485   shape -12.55
+  www.taphouse23.com   cov 0.742 -> 0.978   n 1490 -> 1975   shape -11.03
+  beb88run.xyz         cov 0.798 -> 0.979   n 1809 -> 2175   shape -15.53
+  nysainfo.pl          cov 0.345 -> 0.482   n  676 ->  944   shape -14.61
+```
+
+*A shape drop can be a coverage win* (t813-818) — and here it is nine of them at once. **The
+instrument's headline moved DOWN because the browser got better**, which is the failure mode the
+loop's own metric documentation warns about and the reason the band is read beside `shape_n` and never
+alone.
+
+⚠⚠ **FIVE SITES ARE NOT COMPOSITION AND ARE NAMED FOR THE OLD-BINARY CONTROL** — carrying the whole
+remaining −1.26 pts between them, and NOT taken here, because attribution needs a binary and this tick
+is a measurement:
+
+```text
+  www.freesupertips.com   -73.41   cov 0.617->0.627  n 459->458  overlap 4->9   <- #1 suspect; it was
+                                                                                   in t888's cohort A
+                                                                                   (0.776, one dim out)
+  www.crazyshop.pl        -38.81   cov 0.914->0.885  n 1405->1406  overlap 535->37  <- overlap MASSIVELY
+                                                                                       better, shape worse
+  vk.com                  -25.00   cov 0.800->0.095  n 4->2      <- a TWO-element sample; a bot-wall
+                                                                    remnant, not a measurement
+  ubys.bingol.edu.tr       -2.63   cov 0.994->0.437  n 166->73   <- a real coverage LOSS
+  mobcup.fm                -2.51   cov 0.971->0.853  n 33->29    <- 29-element sample
+```
+
+Two of the five (`vk.com` at n=2, `mobcup.fm` at n=29) are samples too small to carry a verdict and
+are flagged rather than counted. `www.freesupertips.com` and `ubys.bingol.edu.tr` are the two that
+matter: one lost 73 shape points at flat coverage, the other lost 56 points of coverage. **Tick 899 is
+the old-binary control on those two**, and the standing rule applies — a clean delta attributes
+nothing until the old binary has refused to reproduce it, and it has refused four times in this loop's
+history.
+
+⚠ **THE UP-MOVERS, because a band read only through its losses is half a number:** `www.timeline.com`
+**+9.19** (cov 0.849 → 0.979, n 1029 → 1186 — the same coverage-win signature, but this one gained
+shape as well), `payb.jp` +3.98 (cov 0.678 → 0.782), `hnhbkis.edu.in` +3.73, `crm.majoo.id` +2.50,
+`possssno.sbs` +2.09.
+
+⚠ **THE SCORABILITY CEILING IS UNMOVED AT 82.9% AND THE BOARD STILL RANKS OFF 63%** — check #77's
+steer #2, now re-measured rather than carried. The owner-lock opens the BiDi function leg at ~85%;
+that is still 2.1 points, and **it is eight `shell-only` rows plus five `other`**, which is the
+cohort no tick this window has touched.
+
+PERF: none — measurement only, no engine change. The sweep is `--jobs 2` on the shipping release
+binary, so the row is bankable (the t887 guard) rather than triage.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — the band decomposition method (split the common set on
+coverage movement before reading the shape band) is recorded there beside the sweep it came from.
+
 ## Tick 897 — `getComputedStyle(el).width` answered with the SPECIFIED value, and the used one was already in hand (2026-08-04)
 
 TICK SHAPE: capability — the ranked cohort's top site, one layer further. t896 restored

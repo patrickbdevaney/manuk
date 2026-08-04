@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **629** | ticks 1–896 |
-| median tick cycle | **26m** | 628 intervals |
+| ticks landed | **630** | ticks 1–897 |
+| median tick cycle | **26m** | 629 intervals |
 | median, last 10 | **33m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 576.4h elapsed |
-| median verify wall | **63s** | 568 ticks |
+| **ticks per hour** | **1.09** | 577.5h elapsed |
+| median verify wall | **63s** | 569 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **469**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**308 of 629 ticks** (49%) moved a
+**309 of 630 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **308** capability ticks, median cycle **26m**
+* **309** capability ticks, median cycle **26m**
 * median diff per tick: **+264 / −34** lines across 8 files
 
 ## Every tick
@@ -726,5 +726,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **894** | 2026-08-04 03:55 | 52m | measurement | 63s | +468/−37 | 389 | 81 | 56.0% · | the load budget is NOT what starves beb88run, and the objects are jqXHRs (2026-08-04) |
 | **895** | 2026-08-04 04:43 | 48m | capability | 63s | +590/−141 | 390 | 81 | 56.0% · | jQuery's cross-origin gate is ONE absent IDL attribute (2026-08-04) |
 | **896** | 2026-08-04 05:26 | 42m | capability | 63s | +601/−118 | 391 | 81 | 56.0% · | `textContent = ''` left an empty text node, and it destroys jQuery's element factory (2026 |
+| **897** | 2026-08-04 06:33 | 67m | capability | 63s | +388/−33 | 391 | 81 | 56.0% · | `getComputedStyle(el).width` answered with the SPECIFIED value, and the used one was alrea |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
