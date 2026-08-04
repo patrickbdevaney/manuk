@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **622** | ticks 1–888 |
-| median tick cycle | **26m** | 621 intervals |
+| ticks landed | **623** | ticks 1–889 |
+| median tick cycle | **26m** | 622 intervals |
 | median, last 10 | **20m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.08** | 572.6h elapsed |
-| median verify wall | **63s** | 561 ticks |
+| **ticks per hour** | **1.09** | 572.7h elapsed |
+| median verify wall | **63s** | 562 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **464**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**305 of 622 ticks** (49%) moved a
+**305 of 623 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **305** capability ticks, median cycle **26m**
-* median diff per tick: **+263 / −34** lines across 8 files
+* median diff per tick: **+262 / −34** lines across 8 files
 
 ## Every tick
 
@@ -719,5 +719,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **886** | 2026-08-04 01:18 | 87m | measurement | 63s | +362/−109 | 387 | 81 | 56.0% · | the sweep the loop was blind without, and the timeout cohort is OUR CLOCK (2026-08-04) |
 | **887** | 2026-08-04 01:28 | 11m | instrument | 63s | +158/−33 | 387 | 81 | 56.0% · | tick 886 measured a DEBUG BINARY, and its headline is withdrawn (2026-08-04) |
 | **888** | 2026-08-04 01:38 | 9m | measurement | 63s | +174/−33 | 387 | 81 | 56.0% · | the crossing ranking, re-derived on trustworthy data, and the eight are named (2026-08-04) |
+| **889** | 2026-08-04 01:44 | 7m | measurement | 63s | +78/−33 | 387 | 81 | 56.0% · | one row for one of a feature's consumers reads as covered, twice in one read (2026-08-04) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

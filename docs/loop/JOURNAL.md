@@ -46371,6 +46371,50 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 890 — the self-audit is green, and the honest number beside it is 0.9 points (2026-08-04)
+
+TICK SHAPE: measurement — the self-audit came due (every 10; last at 880). **Fully green, 62 checks,
+no `✗` and no `⚠`**: *"methodology and reality agree."*
+
+Tier 0 clear · every prescribed gate stands up rather than being written down · **every gate declares
+how to break it** · the process-defect ledger has 49 entries and each names the MECHANISM that closes
+it rather than a lesson · enforcement is mechanical (hook wired and executable, receipt written,
+cadences enforced by the hook and not by memory) · journal has one entry per tick with no gaps ·
+the pattern ledger (923 rows) moves with the engine and marks its coverage estimates as JUDGEMENTS the
+crawl corrects.
+
+**WHAT THE FALSIFIABILITY SECTION HELD UNDER, WHICH IS THE ONLY PART OF A GREEN AUDIT WORTH READING.**
+This window added `G_INDEXEDDB_PROTOTYPE` (16 claims, new), four claims to `G_TEMPLATE_CONTENT`, eight
+to `G_FOREIGN_CONTENT_NS`, and `a_debug_build_may_not_bank_a_corpus_sweep`. **Every one was RED-proven
+before it landed**, and three were proven red *per emitter* rather than in aggregate — the
+`clone_into` / `clone_node` pair, and the setter/getter halves of the template redirect — because a
+gate that goes red for one of two reasons cannot tell you which one you fixed.
+
+⚠⚠ **AND THE NUMBER THAT BELONGS BESIDE THE GREEN, STATED PLAINLY BECAUSE A GREEN AUDIT IS A WEAKER
+SIGNAL THAN A RED ONE.** Ten ticks (881–890) moved M1 from **16.9% to 17.8% — 0.9 points**, and the
+shape-passer count from 30 to 31. Of those ten, **five were the loop repairing its own instruments**:
+the one-origin proxy (881), the debug-binary sweep and its withdrawal (886–887), the re-derived
+crossing ranking (888), the map (889). Three were engine capability (882 `<template>`, 883 namespaces,
+884 IndexedDB prototypes), one was governance (885), one is this.
+
+That ratio is not a complaint — t882 alone converted three sites from unscored-for-an-instrument-reason
+to scored and crossed one, and t887 caught a measurement that would have poisoned every future Δ. It
+is written down because **a green methodology audit says the loop is running correctly, and says
+nothing about whether it is running fast**, and the two get conflated exactly when the audit is clean.
+
+⚠ CARRIED, unchanged and unclaimed: the common-set band from t887 is **−0.34 points** over the 103
+sites scored in both t875 and t887. The next engine tick reads it before claiming a win.
+
+THE STANDING WORK, already measured and needing no re-derivation: t888's cohort — **eight sites one
+jarring dimension from crossing M1** (+6.2 points), `reading_order` blocking seven of them — with the
+top site's mechanism named (a Slick carousel whose `slick-list` clip box we do not emit, so a
+458-element track escapes its container and 14 sibling pairs collide).
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefact is the audit result itself and the `LAST_AUDIT_TICK` mark.
+[no-pattern]
+
 ## Tick 889 — one row for one of a feature's consumers reads as covered, twice in one read (2026-08-04)
 
 TICK SHAPE: measurement — the surface audit came due (every 10; last at 879), banked as audit #60 in
