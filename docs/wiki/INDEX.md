@@ -232,6 +232,9 @@
   - L4596 · What the confound led to instead, which was better
   - L4624 · The original (superseded) reading, kept because the error is the lesson
   - L4626 · And isolating the second artefact is what found the real defect
+  - L4647 · A table box's height is a MINIMUM (t907)
+  - L4670 · Two unrelated probes, two ticks apart, the same number
+  - L4678 · A probe that cannot distinguish ABSENCE from ZERO is measuring its own encoding (t907)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1561,4 +1564,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1468 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1471 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

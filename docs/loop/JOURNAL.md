@@ -46371,6 +46371,72 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 907 — a table box's `height` is a MINIMUM, and two unrelated probes found it two ticks apart (2026-08-04)
+
+TICK SHAPE: capability — the t904 sweep's **#1** corpus cause is `missing box: <div>` (36 sites,
+2386 hits) and nothing had touched it. A 28-case differential probe went looking for *"what does
+Chrome give a box that we give none"* across `content-visibility` · `contain` · `display:contents` ·
+`visibility` · `opacity` · `sticky` · `list-item` · the table displays · `ruby` · the two-value
+`display` syntax · `details`/`summary` · `hidden` · `<template>` · an unknown custom element.
+
+⚠⚠⚠ **AND THE PROBE CONFLATED "NO BOX" WITH A BOX OF ZERO SIZE — THE FOURTH FIXTURE DEFECT IN THREE
+TICKS.** `getBoundingClientRect()` on a `display:none` element returns `0,0,0`, which is exactly what
+it returns for an element with no box at all, so `hidden`, `<template>` and `display:none` all read
+as *"Chrome has a box and we do not"*. They are correct in both engines. **A probe that cannot
+distinguish absence from zero is measuring its own encoding**, and after `--hide-scrollbars`, leaking
+floats and a confounded width, this one was caught by reading the numbers rather than the verdict.
+
+⚠⚠ **WHAT SURVIVED IS SMALL, AND ONE ROW OF IT WAS A SECOND SIGHTING.** `display:table-cell` with
+`height:20px` came back **Chrome 24, ours 20** — the identical reading t905's float battery had
+produced for `display:table` and filed as an open row in `g_ratio_inset_float`. **Two unrelated
+probes, two ticks apart, same number**, which is what turned a one-off into a family worth a rule.
+
+⚠⚠⚠ **CSS 2.1 §17.5.3 — the table's height is the MAXIMUM of the `height` property and the sum of
+the row heights.** A table whose content is taller than its declared height GROWS; a block clamps and
+overflows. `max-height` on a table has no effect for the same reason. We treated a table box's height
+as a used value like any other block's. Chrome-captured, a 200px box at `16px/1.5`:
+
+```text
+                                                      Chrome   before   after
+  display:table; height:20px       (content 24)         24       20      24
+  display:table; height:20px       (three lines, 72)    72       20      72
+  display:inline-table; height:20px                     24       20      24
+  display:table-cell; height:20px                       24       20      24
+  display:table; height:20px; border-box; padding:5px   34       20      34
+  display:table; max-height:10px                        24       10      24
+  display:table; height:60px       (content 24)         60       60      60   already right
+  display:table; min-height:60px                        60       60      60   already right
+  display:table  (no height)                            24       24      24   already right
+  display:BLOCK; height:20px                            20       20      20   MUST still clamp
+```
+
+**The last row is half the deliverable.** A plain block that overflows its declared height is
+*correct*, and a fix phrased as "let boxes grow" instead of "this is the table box's own rule" would
+satisfy every other row and silently break every fixed-height block on the web. It is asserted beside
+the rows that moved.
+
+⚠ **THREE ROWS ARE MEASURED, NAMED AND NOT FIXED**, because they are the table ALGORITHM rather than
+the box's own height rule: a real `<table>`'s **`border-spacing`** (Chrome 30 against our 26 for the
+same cell; `<td>` width 196 against our 200) and a `<td>` **stretching** to fill a taller table
+(Chrome 56, ours 26). Their numbers are in the gate header so the tick that takes them need not
+re-measure.
+
+RATCHET: `manuk-layout` 125/125, and **every fixture from t905 and t906 re-measured against Chrome is
+now exact with zero diffs** — the combined battery 54/54 (it was 52 with two open rows at t905), the
+isolated float/BFC set 12/12, the specified-width set 14/14, the escaped-float set 5/5. The one row
+this tick closed, `#b7`, was t905's last outstanding exclusion.
+
+GATE: `G_TABLE_HEIGHT_IS_A_MINIMUM` — 11 Chrome-captured claims including the `display:block` guard.
+**RED-PROVEN** by disabling both halves of the rule: `#t1 expected h=24, got h=20`.
+`G_RATIO_INSET_FLOAT` goes 53 → **54** claims (`#b7` asserted, its open-row note replaced with the
+closure) and is RED-proven by the same mutation.
+
+PERF: none — one `matches!` on the display value and one `max()` per block, on a path that already
+computed both operands.
+
+WIKI: `docs/wiki/box-layout.md` — "A probe that cannot distinguish ABSENCE from ZERO is measuring its
+own encoding"
+
 ## Tick 906 — t905's defect was my fixture too, and the REAL one had been named and declined since t859 (2026-08-04)
 
 TICK SHAPE: capability — take the defect t905 isolated, pre-registered and pre-wrote the assertions

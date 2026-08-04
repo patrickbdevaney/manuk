@@ -1,4 +1,4 @@
-//! # G_RATIO_INSET_FLOAT — 53 Chrome-captured claims under the burndown's top two causes
+//! # G_RATIO_INSET_FLOAT — 54 Chrome-captured claims under the burndown's top two causes
 //!
 //! ⚠⚠⚠ **THIS GATE EXISTS BECAUSE THREE HYPOTHESES DIED AND NOTHING GUARDED WHAT SURVIVED (t905).**
 //! The t904 sweep's mechanism oracle ranks corpus-wide causes by DISTINCT SITES, and its top two are
@@ -49,8 +49,9 @@
 //! properly. The rule earned twice over: *a differential probe is only a control if each case varies
 //! ONE thing.*
 //!
-//! ⚠ **`display:table` remains open and unasserted**: Chrome applies its `height` as a MINIMUM, so a
-//! 16px/1.5 line in a `height:20px` table is 24 there and 20 here.
+//! ⚠ **`display:table` was the last open row here and CLOSED AT t907** — Chrome applies a table
+//! box's `height` as a MINIMUM (CSS 2.1 §17.5.3), so a 16px/1.5 line in a `height:20px` table is 24.
+//! `#b7` is asserted below; the rule and its guard live in `g_table_height_is_a_minimum`.
 //!
 use manuk_text::FontContext;
 
@@ -214,6 +215,7 @@ fn g_ratio_inset_float() {
     c(&page, "#b4", 60.0, 340.0, 20.0);
     c(&page, "#b5", 60.0, 340.0, 20.0);
     c(&page, "#b6", 60.0, 340.0, 20.0);
+    c(&page, "#b7", 60.0, 35.0, 24.0);
     c(&page, "#b8", 60.0, 80.0, 20.0);
     c(&page, "#b9", 0.0, 400.0, 20.0);
     c(&page, "#b10", 0.0, 340.0, 20.0);

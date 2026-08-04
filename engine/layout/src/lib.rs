@@ -3019,6 +3019,40 @@ impl Ctx<'_> {
             content_height = (content_height - hoist_bottom).max(0.0);
             effective_mb = collapse_margins(mb, hoist_bottom);
         }
+        // ⚠⚠⚠ **A TABLE BOX'S `height` IS A MINIMUM, NOT A USED VALUE (CSS 2.1 §17.5.3).**
+        //
+        // *"the table's height is the maximum of the value of [the] 'height' property … and the sum
+        // of the row heights"* — so a table whose content is taller than its declared height GROWS,
+        // where a block clamps and overflows. `max-height` on a table has no effect at all for the
+        // same reason. This box arrives here with `content_height` already set to the declared
+        // value, so the natural height the children came to has to be folded back in.
+        //
+        // Chrome-measured, `--hide-scrollbars`, a 200px-wide box at `16px/1.5`:
+        //
+        // ```text
+        //                                                       Chrome   before
+        //   display:table; height:20px       (content 24)         24       20
+        //   display:table; height:20px       (three lines, 72)    72       20
+        //   display:inline-table; height:20px                     24       20
+        //   display:table-cell; height:20px                       24       20
+        //   display:table; height:20px; border-box; padding:5px   34       20
+        //   display:table; max-height:10px                        24       10
+        //   display:table; height:60px       (content 24)         60       60   already right
+        //   display:table  (no height)                            24       24   already right
+        //   display:BLOCK; height:20px                            20       20   MUST still clamp
+        // ```
+        //
+        // The last row is the guard: this rule is the table box's alone, and a plain block that
+        // overflows its declared height is correct behaviour that a broader fix would destroy.
+        //
+        // ⚠ NOT covered here, measured and named rather than guessed at: a real `<table>`'s
+        // `border-spacing` (Chrome 30 against our 26 for the same cell, and `<td>` 196 against our
+        // 200), and a `<td>` stretching to fill a table given a taller `height` (Chrome 56, ours
+        // 26). Those are the table ALGORITHM; this is the box's own height rule.
+        let is_table_box = matches!(s.display, Display::Table | Display::TableCell);
+        if is_table_box {
+            content_height = content_height.max(natural_content_h);
+        }
         // min-height / max-height clamp (content-box).
         let min_h = (s.min_height.resolve(pch.unwrap_or(0.0), 0.0) - bs_extra_h).max(0.0);
         let max_h = match s.max_height {
@@ -3031,6 +3065,8 @@ impl Ctx<'_> {
             // common responsive-image reset on the web — collapsed every such image to nothing.
             Dim::Percent(_) if pch.is_none() => f32::INFINITY,
             Dim::Calc { pct, .. } if pct != 0.0 && pch.is_none() => f32::INFINITY,
+            // A table box's `max-height` has no effect (CSS 2.1 §17.5.3) — see `is_table_box` above.
+            _ if is_table_box => f32::INFINITY,
             other => (other.resolve(pch.unwrap_or(0.0), f32::INFINITY) - bs_extra_h).max(0.0),
         };
         // ── **THE BLOCK-AXIS TWIN OF t823, AND IT WAS BANKED THERE BEFORE IT WAS MEASURED HERE.**

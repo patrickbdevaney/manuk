@@ -4643,3 +4643,48 @@ pre-flexbox web meeting the modern one — a float wrapped in a plain `<div>`, f
 `overflow:hidden` or `flex` section — and it produces a wrong `x` **together with** the `overlap` and
 `h_overflow` jarring dims, which makes it the shape-and-jarring-together mechanism t904 identified as
 the only lever with real M1 crossings.
+
+## A table box's `height` is a MINIMUM (t907)
+
+CSS 2.1 §17.5.3: *"the table's height is the maximum of the value of [the] 'height' property … and
+the sum of the row heights."* A table whose content is taller than its declared height **grows**,
+where a block clamps and lets the content overflow — and `max-height` on a table has no effect for
+the same reason. This engine treated a table box's height as a used value like any other block's.
+
+```text
+                                                      Chrome   before   after
+  display:table; height:20px       (content 24)         24       20      24
+  display:table; height:20px       (three lines, 72)    72       20      72
+  display:inline-table; height:20px                     24       20      24
+  display:table-cell; height:20px                       24       20      24
+  display:table; height:20px; border-box; padding:5px   34       20      34
+  display:table; max-height:10px                        24       10      24
+  display:table; height:60px       (content 24)         60       60      60   already right
+  display:BLOCK; height:20px                            20       20      20   MUST still clamp
+```
+
+**The last row is half the deliverable.** A plain block that overflows its declared height is
+correct, and a fix phrased as *"let boxes grow"* rather than *"this is the table box's own rule"*
+would satisfy every other row and silently break every fixed-height block on the web.
+
+### Two unrelated probes, two ticks apart, the same number
+
+`display:table` turned up as an open row in t905's float battery (Chrome 24, ours 20) and was left
+unasserted as a curiosity. `display:table-cell` turned up in t907's missing-box battery with the
+identical reading. **A second sighting under a different subject is what turns a one-off into a
+family worth a rule** — the same shape as t720-724's *"three sightings under three subjects were ONE
+bug"*.
+
+## A probe that cannot distinguish ABSENCE from ZERO is measuring its own encoding (t907)
+
+The missing-box probe asked *"what does Chrome give a box that we give none?"* and reported `hidden`,
+`<template>` and `display:none` as defects. They are correct in both engines:
+`getBoundingClientRect()` on a boxless element returns `0,0,0`, which is byte-identical to a real box
+of zero size. The probe's own encoding erased the distinction it was built to find.
+
+That is the fourth fixture defect in three ticks, after a missing `--hide-scrollbars` (15px), floats
+leaking between un-isolated rows (120px), and a confounded `width:400px`. Each was caught by reading
+the NUMBERS rather than the verdict, and each was cheaper than the fix it would have bought.
+
+> Running tally worth keeping, because the ratio is the point: across t905-t907 these probes produced
+> **seven** apparent defects. **Four were the probe.** Three were real, and all three are now gated.
