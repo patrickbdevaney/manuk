@@ -18,7 +18,14 @@ wasm-bindgen target/wasm32-unknown-unknown/release/manuk_demo.wasm \
   --out-dir demo/www --target web --no-typescript
 
 ls -lh demo/www/manuk_demo_bg.wasm | awk '{print "   wasm: "$5}'
-echo "── demo/www is a complete static site (index.html + wasm + snapshots)"
+
+# The front-page compat panel reads the engine's OWN Phase-0 numbers (M1 render bar, M2 function proxy)
+# from the burndown ledger, so a deploy publishes today's honest figure instead of a hand-edited one that
+# rots. See scripts/demo-compat.sh. Best-effort: a missing ledger must never fail a demo build.
+echo "── refreshing the compat panel from the burndown"
+bash scripts/demo-compat.sh || echo "   (compat.json left as committed)"
+
+echo "── demo/www is a complete static site (index.html + wasm + snapshots + compat.json)"
 
 
 # ── G_DEMO_LIVE. A build that cannot prove the engine PAINTED is not a build of a demo; it is a build of

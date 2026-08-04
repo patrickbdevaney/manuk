@@ -11,13 +11,21 @@ name: demo
 # so no COOP/COEP headers — which a static host cannot set anyway.
 
 on:
+  # Its OWN lane — and that has to be true of the TRIGGER, not just the comment. Triggering on `engine/**`
+  # meant a full wasm build + Pages deploy on EVERY engine tick: the grind pushes dozens of engine commits
+  # an hour, so the demo was redeploying dozens of times an hour, competing for runners and multiplying its
+  # exposure to transient deploy-time OIDC-token flakes (one such timeout is a benign GitHub-infra hiccup;
+  # inviting dozens a day is a self-inflicted red). The demo does not need per-tick freshness — a daily
+  # rebuild folds in the engine's accumulated fidelity gains, and the compat panel reads the live burndown
+  # numbers regardless. Redeploy when the DEMO changes, once a day, or on demand.
   push:
     branches: [main]
     paths:
       - 'demo/**'
-      - 'engine/**'
       - 'scripts/demo-*.sh'
       - '.github/workflows/demo.yml'
+  schedule:
+    - cron: '0 7 * * *'   # 07:00 UTC daily — pick up the engine's overnight progress
   workflow_dispatch:
 
 permissions:

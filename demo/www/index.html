@@ -29,6 +29,26 @@
   .honest{border-left:3px solid var(--accent);padding:.75rem 0 .75rem 1rem;margin:0 0 1rem;
           font-size:.9rem;line-height:1.5;background:color-mix(in srgb,var(--accent) 5%,transparent)}
   .honest b{color:var(--accent)} .honest .no{color:var(--dim)}
+
+  /* Phase-0 compat panel — the engine's own render/function progress, read from the burndown */
+  .compat{border:1px solid var(--line);border-radius:5px;background:var(--panel);
+          padding:.9rem 1rem;margin:0 0 1.25rem}
+  .compat-head{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap;
+               margin-bottom:.7rem}
+  .compat-title{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.09em;
+                color:var(--accent)}
+  .compat-sub{font-size:.74rem;color:var(--dim)}
+  .compat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem}
+  @media(max-width:560px){.compat-grid{grid-template-columns:repeat(2,1fr)}}
+  .cstat{border:1px solid var(--line);border-radius:4px;background:var(--paper);padding:.5rem .55rem;
+         text-align:center}
+  .cstat .cn{display:block;font-family:var(--mono);font-size:1.35rem;font-weight:700;color:var(--accent);
+             line-height:1.05}
+  .cstat.goal .cn{color:var(--ok)}
+  .cstat .cl{display:block;font-size:.62rem;color:var(--ink);margin-top:.28rem;line-height:1.25}
+  .cstat .cl i{display:block;font-style:normal;color:var(--dim);font-size:.58rem;margin-top:.12rem}
+  .compat-note{font-size:.76rem;color:var(--dim);margin:.7rem 0 0;line-height:1.5}
+  .compat-note b{color:var(--ink)} .compat-note a{color:var(--accent)}
   details{font-size:.85rem;color:var(--dim);margin-bottom:1.25rem}
   details summary{cursor:pointer;color:var(--accent)}
   details p{margin:.6rem 0}
@@ -115,12 +135,38 @@
   </p>
   <p class="honest">
     <b>Real:</b> <b>Stylo</b> (Firefox's cascade), <b>Taffy</b> (flex/grid), <b>tiny-skia</b> (the
-    rasterizer), <b>manuk-a11y</b> (the semantic tree an agent reads), and this engine's own DOM,
-    inline/float/table layout, paint, hit-testing and stacking. Scrolling <b>re-renders</b>. Every panel
-    reads the <b>actual</b> engine state.<br>
+    rasterizer), <b>usvg</b>-backed SVG, <b>@container</b>/<b>@supports</b> queries, <b>manuk-a11y</b> (the
+    semantic tree an agent reads), and this engine's own DOM, inline/float/table layout, paint, hit-testing
+    and stacking. Scrolling <b>re-renders</b>. Every panel reads the <b>actual</b> engine state.<br>
     <span class="no"><b>Not real here:</b> no JavaScript, and no live fetching — these are bundled snapshots
     of real sites, stylesheets inlined. Saying so is the only thing that makes the rest believable.</span>
   </p>
+
+  <!-- Phase-0 render/function progress. Numbers are filled at load from compat.json (regenerated from the
+       burndown ledger on every deploy); the hard-coded values below are the honest fallback if it is absent. -->
+  <section class="compat" id="compat" aria-label="Phase-0 compatibility state">
+    <div class="compat-head">
+      <span class="compat-title">Phase-0 render fidelity <span id="c_tick" style="color:var(--dim)">· t904</span></span>
+      <span class="compat-sub">measured against Chromium on a representative CrUX sample — the real web, <b>not</b> this curated set</span>
+    </div>
+    <div class="compat-grid">
+      <div class="cstat"><span class="cn" id="c_shapemean">0.57</span>
+        <span class="cl">avg shape-match<br><i>mean fidelity vs Chromium</i></span></div>
+      <div class="cstat"><span class="cn" id="c_m1">17.8%</span>
+        <span class="cl">clear the M1 bar<br><i>shape ≥ 0.75 AND no jarring breaks</i></span></div>
+      <div class="cstat"><span class="cn" id="c_scored">85%</span>
+        <span class="cl">render, no crash<br><i>the M2-function precondition</i></span></div>
+      <div class="cstat goal"><span class="cn" id="c_target">95%</span>
+        <span class="cl">Phase-0 target<br><i>the daily-driver certificate</i></span></div>
+    </div>
+    <p class="compat-note">
+      The <b id="c_pages">pages</b> below are curated to the near-Chromium end — <b>compare them yourself</b>
+      with the button. The figures above are the <b>strict bar across an uncurated sample</b>, so they read
+      lower on purpose; we drive them in the open. <b>M2</b> — does the site <em>function</em> (its JS runs,
+      forms submit, links navigate) — is certified after M1, and today's honest proxy is the share that boot
+      and render at all. <a href="https://github.com/patrickbdevaney/manuk/blob/main/docs/loop/FIDELITY-PROGRESS.tsv">live burndown ↗</a>
+    </p>
+  </section>
   <details>
     <summary>Why no JavaScript in the demo — and why the agent view is honest without it</summary>
     <p>
@@ -277,6 +323,8 @@ function renderPanel(){
           <dt>selectors</dt><dd>ours (+ <code>:has()</code>)</dd>
           <dt>flex/grid</dt><dd>Taffy</dd>
           <dt>inline/float/table</dt><dd>ours</dd>
+          <dt>queries</dt><dd>@container, @supports</dd>
+          <dt>SVG</dt><dd>usvg + our layout</dd>
           <dt>raster</dt><dd>tiny-skia (CPU)</dd>
           <dt>a11y tree</dt><dd>ours (the agent channel)</dd>
           <dt>JS</dt><dd>SpiderMonkey <span class="hint">(native only)</span></dd>
@@ -293,7 +341,9 @@ function renderPanel(){
         <div class="stat"><span class="n">${c.named}</span><span class="l">named</span></div>
       </div>
       <p class="hint" style="margin:.2rem 0 .5rem">role · name · state · a click box — the structured
-        observation the headless agent gets instead of a screenshot. Hover a row to find it on the page.</p>
+        observation the headless agent gets instead of a screenshot. Hover a row to find it on the page.
+        <span style="color:var(--ink)">This same tree scores <b>797/1250</b> (64%) on WPT's own
+        accessibility suites.</span></p>
       <div class="sec" style="border-top:1px dashed var(--line)"><div class="tree" id="tree"></div></div>`;
     const t=document.getElementById('tree');
     t.innerHTML=nodes.map(n=>{
@@ -491,9 +541,25 @@ window.addEventListener('keydown',e=>{
   else if(e.key==='ArrowLeft'){ if(cur>0) load(cur-1); }
 });
 
+// Fill the Phase-0 compat panel from compat.json (regenerated from the burndown on each deploy). The
+// markup already carries the honest fallback values, so a missing file just leaves those standing.
+async function fillCompat(){
+  try{
+    const c=await (await fetch('./compat.json',{cache:'no-store'})).json();
+    const set=(id,v)=>{const e=document.getElementById(id); if(e&&v!=null) e.textContent=v;};
+    set('c_tick', c.tick?`· ${c.tick}`:'');
+    set('c_shapemean', c.shape_mean!=null?Number(c.shape_mean).toFixed(2):null);
+    set('c_m1', c.m1_pct!=null?c.m1_pct+'%':null);
+    set('c_scored', c.scored_pct!=null?c.scored_pct+'%':null);
+    set('c_target', c.target_pct!=null?c.target_pct+'%':null);
+  }catch{ /* keep the fallback values baked into the markup */ }
+}
+
 (async()=>{
   await init();
   pages=await (await fetch('./pages.json')).json();
+  fillCompat();
+  const pc=document.getElementById('c_pages'); if(pc) pc.textContent=`${pages.length} pages`;
 
   const grp=document.getElementById('pages');
   for(const cls of ['doc','app','platform']){

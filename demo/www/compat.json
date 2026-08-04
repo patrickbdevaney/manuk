@@ -1,0 +1,11 @@
+{
+  "tick": "t904",
+  "m1_pct": 17.8,
+  "shape_pct": 24.0,
+  "jarring_pct": 35.7,
+  "scored_pct": 85,
+  "shape_mean": 0.57,
+  "target_pct": 95,
+  "inscope": 129,
+  "corpus": "representative CrUX sample"
+}
