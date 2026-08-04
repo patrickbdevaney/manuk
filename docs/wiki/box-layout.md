@@ -4573,6 +4573,56 @@ suspect forever. Fourth occurrence of the same law, after `localStorage`, `FormD
 Both are the standing laws firing inside one tick — *every number has a harness*, and *the probe's own
 sentinel widens its subject*. A differential fixture is only a control if each case is a control.
 
+### ⚠ CORRECTED AT t906 — the third defect was the fixture too
+
+t905 concluded from the isolated fixture that a BFC box fails to avoid a float that **escaped a
+previous sibling**. It does not. That fixture's boxes carried `width:400px` as well as the wrapper —
+two variables, one reading. With `width:auto` restored, every escaped-float case is Chrome-exact and
+always was:
+
+```text
+  one 60px left float in a plain <div id=host>, boxes at width:AUTO
+    display:flow-root / overflow:hidden / display:flex   Chrome x=60 w=1140   ours x=60 w=1140
+    a plain block                                        Chrome x=0  w=1200   ours x=0  w=1200
+    clear:left                                           Chrome x=0  w=1200   ours x=0  w=1200
+```
+
+**Three defects across two ticks, and all three were the fixture**: a missing `--hide-scrollbars`,
+floats leaking between un-isolated rows, and a confounded width.
+
+> **A differential probe is only a control if each case varies ONE thing.** Isolation is not a tidiness
+> preference; it is the entire difference between a measurement and a story.
+
+### What the confound led to instead, which was better
+
+The real defect was in `bfc_float_band`'s own comment, named and declined since t859: *"A SPECIFIED
+width is deliberately NOT handled here … Chrome shifts such a box beside the float only while it
+still fits … Measured, named, and left as its own tick."* `width:400px` was the variable, and it led
+straight to the follow-up the file had been asking for. A 100px `float:left` in a 400px `flow-root`:
+
+```text
+                                         Chrome    before    after
+  width:300px  (fits the 300px band)      x=100     x=0       x=100    <- boundary, INCLUSIVE
+  width:301px  (one px too wide)          x=0       x=0       x=0
+  width:200px  margin-left:20px           x=100     x=20      x=100    the margin is ABSORBED
+  width:50%                               x=100     x=0       x=100
+  float 10px tall, box 60px tall          x=100     x=0       x=100    band read at the TOP
+  box-sizing:border-box with padding      x=100     x=0       x=100
+```
+
+Eight of fourteen were wrong — **and the six that were right are half the deliverable.** `301px` and
+`400px` are the spec's *"if necessary, implementations should clear"* half; a fix that shifted
+unconditionally would satisfy the other eight and break these two.
+
+**`cw` is returned UNNARROWED, and that is the whole difference from the `auto` arm.** The stated
+reason for declining this work was that narrowing `cw` would re-resolve every percentage inside the
+box against the band. That objection is answered by not narrowing it, not by declining the shift: an
+auto box takes the band as its containing block because the band is what sizes it, while a specified
+box keeps its width and only its ORIGIN moves. `width:50%` proves it from outside — Chrome resolves
+50% against the 400px container, gets 200, and still shifts the result to 100.
+
+### The original (superseded) reading, kept because the error is the lesson
+
 ### And isolating the second artefact is what found the real defect
 
 A float that escapes a non-BFC previous sibling belongs to the ancestor's float context, and every

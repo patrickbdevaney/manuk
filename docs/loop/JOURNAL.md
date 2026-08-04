@@ -46371,6 +46371,92 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 906 — t905's defect was my fixture too, and the REAL one had been named and declined since t859 (2026-08-04)
+
+TICK SHAPE: capability — take the defect t905 isolated, pre-registered and pre-wrote the assertions
+for. It did not survive first contact, and what replaced it is better.
+
+⚠⚠⚠ **CORRECTION TO t905, AND IT CHANGES WHAT THE NEXT TICK BUILDS.** t905 reported *"a BFC box fails
+to avoid a float that ESCAPED a previous sibling"*, wrote the Chrome numbers into a gate header, and
+filed a `CONSTELLATION.tsv` row saying so. **It is wrong.** That fixture's boxes carried
+`width:400px` **and** wrapped the float in a plain `<div>` — two variables, one reading. Restore
+`width:auto` and every escaped-float case is Chrome-exact, and always was:
+
+```text
+  one 60px left float in a plain <div id=host>, boxes at width:AUTO
+    display:flow-root  after the escape     Chrome x=60 w=1140    ours x=60 w=1140   ok
+    overflow:hidden    after the escape     Chrome x=60 w=1140    ours x=60 w=1140   ok
+    display:flex       after the escape     Chrome x=60 w=1140    ours x=60 w=1140   ok
+    a plain block                           Chrome x=0  w=1200    ours x=0  w=1200   ok
+    clear:left                              Chrome x=0  w=1200    ours x=0  w=1200   ok
+```
+
+**Three defects across two ticks, and all three were the fixture** — a missing `--hide-scrollbars`,
+floats leaking between un-isolated rows, and now a confounded width. The rule, earned three times:
+**a differential probe is only a control if each case varies ONE thing.** The gate header, the wiki
+section and the map row are all corrected in this commit rather than left to age, per the standing
+rule that when you supersede a claim you grep for what asserted it.
+
+⚠⚠⚠ **AND THE REAL DEFECT WAS SITTING IN `bfc_float_band`'s OWN COMMENT, NAMED, MEASURED AND
+DECLINED, SINCE t859.** Verbatim: *"A SPECIFIED width is deliberately NOT handled here … Chrome
+shifts such a box beside the float only while it still fits (`width:300px` shifts to 100,
+`width:301px` stays at 0) … Today we never shift, which is Chrome-exact for the does-not-fit half and
+wrong for the fits half … Measured, named, and left as its own tick rather than guessed at."**The
+confounded fixture led straight to the follow-up tick the file had been asking for for 47 ticks** —
+`.frame2 { width: 400px }` was the variable, not the wrapper.
+
+⚠⚠⚠ **MEASURED — a 100px `float:left` in a 400px `flow-root`, one `--dump-dom` per row, EIGHT of
+FOURTEEN wrong:**
+
+```text
+                                         Chrome    before    after
+  width:300px  (fits the 300px band)      x=100     x=0       x=100    <- boundary, INCLUSIVE
+  width:301px  (one px too wide)          x=0       x=0       x=0
+  width:200px                             x=100     x=0       x=100
+  width:400px  (as wide as the container) x=0       x=0       x=0
+  width:200px  margin-left:20px           x=100     x=20      x=100    the margin is ABSORBED
+  width:200px  margin-left:150px          x=150     x=150     x=150    already clears
+  width:50%                               x=100     x=0       x=100
+  float:right instead, width:200px        x=0       x=0       x=0      no left edge to move
+  both sides, width:200px                 x=100     x=0       x=100
+  float 10px tall, box 60px tall          x=100     x=0       x=100    band read at the TOP
+  overflow:hidden / display:flex          x=100     x=0       x=100
+  box-sizing:border-box with padding      x=100     x=0       x=100
+```
+
+**The six that were already right are half the deliverable.** `301px` and `400px` are the spec's *"if
+necessary, implementations should clear"* half; a fix that shifted unconditionally would satisfy the
+other eight and break these two. Both directions are asserted.
+
+⚠⚠ **`cw` IS RETURNED UNNARROWED, AND THAT IS THE WHOLE DIFFERENCE FROM THE `auto` ARM.** The old
+comment's stated reason for declining this was that *"narrowing `cw` for it would also change every
+percentage the child resolves"* — a real objection, and the answer is to not narrow it rather than to
+decline the shift. An auto box takes the band as its containing block because the band is what sizes
+it; a specified box keeps its own width and only its ORIGIN moves. `width:50%` proves it from
+outside: Chrome resolves 50% against the 400px container, gets 200, and still shifts to 100.
+
+RATCHET: `manuk-layout` 125/125, and every fixture from t905 re-measured against Chrome — the
+escaped-float set went 3 diffs → **0**, the combined gate fixture 52 → **53** exact (t905's excluded
+`#a9` now passes and is asserted), and the isolated float/BFC set is unchanged at 11 of 12. The one
+remaining diff on both is `display:table`, whose `height` Chrome applies as a MINIMUM (24 against our
+20) — still open, still named, still unasserted.
+
+GATE: `G_BFC_SPECIFIED_WIDTH_FLOAT_BAND` — 14 claims, both directions, every number captured from
+`google-chrome-stable --headless=new --hide-scrollbars --window-size=1200,800`. **RED-PROVEN** by
+restoring the exact pre-t906 early return: `#s1 expected x=100, got x=0`. `G_RATIO_INSET_FLOAT` gains
+`#a9` and is RED-proven by the same revert (`#a9 expected x=50, got x=0`), so the correction to t905
+is itself gated rather than merely written down.
+
+MAP: the `CONSTELLATION.tsv` row t905 filed as `missing / a BFC box must avoid an ESCAPED float` is
+**rewritten** as `gated / a fixed-width BFC box sits BESIDE a float when it FITS`, carrying the
+retraction in its own receipt so the next reader sees the error and not just the fix.
+
+PERF: none — one extra float-band query per block-level BFC child that has a specified width, on a
+path that already queried it for the auto case.
+
+WIKI: `docs/wiki/box-layout.md` — "A differential probe is only a control if each case varies ONE
+thing" [no-pattern]
+
 ## Tick 905 — three suspects for the burndown's top two causes, and two of the "defects" were my probe (2026-08-04)
 
 TICK SHAPE: capability — t904 ended by naming the only lever with real marginal crossings (a

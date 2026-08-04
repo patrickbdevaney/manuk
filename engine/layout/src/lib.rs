@@ -2326,10 +2326,68 @@ impl Ctx<'_> {
         top: f32,
         floats: &FloatContext,
     ) -> (f32, f32) {
-        if !matches!(s.width, Dim::Auto) || s.width_stretch {
+        if matches!(s.margin.left, Dim::Percent(_)) || matches!(s.margin.right, Dim::Percent(_)) {
             return (cx, cw);
         }
-        if matches!(s.margin.left, Dim::Percent(_)) || matches!(s.margin.right, Dim::Percent(_)) {
+        // ⚠⚠⚠ **THE SPECIFIED-WIDTH HALF, WHICH THIS FUNCTION NAMED AND DECLINED TO BUILD (t906).**
+        // The comment above used to end *"today we never shift, which is Chrome-exact for the
+        // does-not-fit half and wrong for the fits half … left as its own tick rather than guessed
+        // at."* This is that tick, and the rule is measured rather than guessed — a 100px left float
+        // in a 400px container, `--hide-scrollbars`, one `--dump-dom` per row:
+        //
+        // ```text
+        //                                          Chrome    before
+        //   width:300px  (fits the 300px band)      x=100     x=0      <- the boundary, INCLUSIVE
+        //   width:301px  (one px too wide)          x=0       x=0      correct already
+        //   width:200px                             x=100     x=0
+        //   width:400px  (as wide as the container) x=0       x=0      correct already
+        //   width:200px  margin-left:20px           x=100     x=20     the margin is ABSORBED
+        //   width:200px  margin-left:150px          x=150     x=150    already clears — untouched
+        //   width:50%                               x=100     x=0      the % resolves against `cw`
+        //   float:right instead, width:200px        x=0       x=0      a right float moves no left edge
+        //   both sides, width:200px                 x=100     x=0
+        //   float 10px tall, box 60px tall          x=100     x=0      band read at the TOP, as above
+        //   box-sizing:border-box with padding      x=100     x=0
+        // ```
+        //
+        // **`cw` is returned UNNARROWED here, and that is the whole difference from the `auto` arm.**
+        // The auto box takes the band as its containing block because that is what sizes it; a
+        // specified box keeps its own width, so narrowing `cw` would silently re-resolve every
+        // percentage inside it against the band — which is exactly the objection the old comment
+        // raised, and it is answered by not doing it rather than by declining the shift. `width:50%`
+        // above proves it from the outside: Chrome resolves 50% against the 400px container and
+        // still shifts the result to 100.
+        if !matches!(s.width, Dim::Auto) && !s.width_stretch {
+            let l = floats.left_float_edge(top, 0.0).unwrap_or(cx).max(cx);
+            if l <= cx {
+                return (cx, cw); // no left float overlaps this band
+            }
+            let r = floats
+                .right_float_edge(top, 0.0)
+                .unwrap_or(cx + cw)
+                .min(cx + cw);
+            let ml = s.margin.left.resolve(cw, 0.0);
+            let mr = s.margin.right.resolve(cw, 0.0);
+            // The FIT test is on the BORDER box, because that is what may not overlap the float.
+            let bs_extra = if s.box_sizing == BoxSizing::BorderBox {
+                0.0
+            } else {
+                s.padding.left.resolve(cw, 0.0)
+                    + s.padding.right.resolve(cw, 0.0)
+                    + s.border_width.left
+                    + s.border_width.right
+            };
+            let outer = s.width.resolve(cw, 0.0) + bs_extra + ml + mr;
+            // `<=` is the measured boundary: 300 in a 300px band shifts, 301 does not.
+            if outer <= r - l {
+                // Mirror of the `auto` arm's return: `layout_block` adds `margin-left` back, so the
+                // left it is handed is the band edge LESS that margin — which is what makes
+                // `margin-left:20px` land on 100 rather than 120.
+                return ((l - ml).max(cx - ml), cw);
+            }
+            return (cx, cw);
+        }
+        if s.width_stretch {
             return (cx, cw);
         }
         // The band is read at the box's TOP edge only — a float shorter than the box does not widen

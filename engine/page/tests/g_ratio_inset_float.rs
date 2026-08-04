@@ -1,4 +1,4 @@
-//! # G_RATIO_INSET_FLOAT — 52 Chrome-captured claims under the burndown's top two causes
+//! # G_RATIO_INSET_FLOAT — 53 Chrome-captured claims under the burndown's top two causes
 //!
 //! ⚠⚠⚠ **THIS GATE EXISTS BECAUSE THREE HYPOTHESES DIED AND NOTHING GUARDED WHAT SURVIVED (t905).**
 //! The t904 sweep's mechanism oracle ranks corpus-wide causes by DISTINCT SITES, and its top two are
@@ -36,24 +36,21 @@
 //!    cumulative. Isolating each case in its own BFC removed it — t780-783's *"the probe's own
 //!    sentinel widened its subject"*, one fixture later.
 //!
-//! ⚠⚠ **AND THE THIRD IS REAL, ISOLATED, AND DELIBERATELY NOT ASSERTED HERE.** A float that escapes
-//! a non-BFC previous sibling lives in the ancestor's float context, and every following BFC sibling
-//! must shift past it. Measured against Chrome, one 60px left float inside a plain `<div id=host>`:
+//! ⚠⚠⚠ **AND THE THIRD WAS THE PROBE TOO — CORRECTED AT t906, ONE TICK LATER.** This header
+//! originally reported *"a BFC box fails to avoid a float that ESCAPED a previous sibling"* and left
+//! `#a9` unasserted on that basis. The fixture set `width:400px` on its boxes **and** wrapped the
+//! float in a plain `<div>` — two variables, one reading. With `width:auto` restored, all five
+//! escaped-float cases are Chrome-exact and always were. The real defect was the one
+//! `bfc_float_band` had already named and declined to build: **a SPECIFIED width never shifted
+//! beside a float, even when it fits.** Fixed at t906 and gated by
+//! `g_bfc_specified_width_float_band`; `#a9` is asserted below because it now passes.
 //!
-//! ```text
-//!                                          Chrome    ours
-//!   display:flow-root  after the escape     x=60      x=0     <- WRONG
-//!   overflow:hidden    after the escape     x=60      x=0     <- WRONG
-//!   display:flex       after the escape     x=60      x=0     <- WRONG
-//!   a plain block      after the escape     x=0       x=0     correct to overlap
-//!   clear:left         after the escape     x=0       x=0     correct
-//! ```
+//! Three defects, three fixtures, and **all three were the fixture** until one of them was isolated
+//! properly. The rule earned twice over: *a differential probe is only a control if each case varies
+//! ONE thing.*
 //!
-//! `bfc_float_band` is built and is Chrome-exact whenever the float and the BFC box share a
-//! container (`b2`-`b6`, `b10`-`b12` below) — so the gap is *which floats the band is read from*,
-//! not the band rule. That is a fix, not a line, and asserting Chrome's numbers here would land this
-//! gate RED, so they are written above ready for the tick that takes it. Same treatment for
-//! `display:table`, whose `height` Chrome applies as a MINIMUM (24 against our 20).
+//! ⚠ **`display:table` remains open and unasserted**: Chrome applies its `height` as a MINIMUM, so a
+//! 16px/1.5 line in a `height:20px` table is 24 there and 20 here.
 //!
 use manuk_text::FontContext;
 
@@ -207,6 +204,7 @@ fn g_ratio_inset_float() {
     c(&page, "#a6", 0.0, 400.0, 225.0);
     c(&page, "#a7", 0.0, 400.0, 40.0);
     c(&page, "#a8", 0.0, 400.0, 0.0);
+    c(&page, "#a9", 50.0, 400.0, 40.0);
     c(&page, "#a10", 0.0, 400.0, 225.0);
     c(&page, "#a11", 0.0, 400.0, 225.0);
     c(&page, "#a12", 0.0, 400.0, 225.0);

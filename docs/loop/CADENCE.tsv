@@ -633,3 +633,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 900	ed2c68af	1785841118	2026-08-04T06:58:38-04:00	744	measurement	63	5	221	33	391	81	3896	6960	0	469	0	the map is complete on Interop 2026, and three GATED rows were lying (2026-08-04)
 902	5723057d	1785848302	2026-08-04T08:58:22-04:00	7184	capability	63	8	388	44	392	81	3896	6960	0	470	0	one diff listed the whole class: 411 of 924 computed-style readings differ (2026-08-04)
 904	7c26e096	1785857291	2026-08-04T11:28:11-04:00	8989	measurement	63	8	484	33	393	81	3896	6960	0	470	0	the burndown's near-bar plan crosses NOBODY, and the sweep that priced it (2026-08-04)
+905	267073e2	1785859167	2026-08-04T11:59:27-04:00	1876	capability	63	11	376	54	394	81	3896	6960	0	471	0	three suspects for the burndown's top two causes, and two of the "defects" were my probe (2026-08-04)

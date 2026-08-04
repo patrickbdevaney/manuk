@@ -228,7 +228,10 @@
   - L4525 · The two highest-ranked causes are not the two primitives you reach for first (t905)
   - L4557 · aspect-ratio had no row in the capability map at all
   - L4564 · Two of the three defects the probe found were the probe
-  - L4576 · And isolating the second artefact is what found the real defect
+  - L4576 · ⚠ CORRECTED AT t906 — the third defect was the fixture too
+  - L4596 · What the confound led to instead, which was better
+  - L4624 · The original (superseded) reading, kept because the error is the lesson
+  - L4626 · And isolating the second artefact is what found the real defect
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1558,4 +1561,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1465 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1468 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
