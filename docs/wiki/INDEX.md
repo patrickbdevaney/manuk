@@ -235,6 +235,9 @@
   - L4647 · A table box's height is a MINIMUM (t907)
   - L4670 · Two unrelated probes, two ticks apart, the same number
   - L4678 · A probe that cannot distinguish ABSENCE from ZERO is measuring its own encoding (t907)
+  - L4692 · A capability correct whenever anyone asks for it, and wrong when nobody does (t908)
+  - L4717 · Naming something out of scope is a hypothesis about its size
+  - L4724 · The guards belong beside the fix
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1564,4 +1567,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1471 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1474 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

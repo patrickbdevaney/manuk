@@ -4688,3 +4688,43 @@ the NUMBERS rather than the verdict, and each was cheaper than the fix it would 
 
 > Running tally worth keeping, because the ratio is the point: across t905-t907 these probes produced
 > **seven** apparent defects. **Four were the probe.** Three were real, and all three are now gated.
+
+## A capability correct whenever anyone asks for it, and wrong when nobody does (t908)
+
+`table { border-spacing: 2px }` is in Chrome's UA stylesheet and was not in ours. The separated-
+borders model insets every cell from the table edge and from its neighbours by that much, so a plain
+`<table>` with no author CSS — most of the data tables on the web — had every cell 4px too wide,
+flush against the table edge, and the table 4px too short per row.
+
+```text
+  a 200px table, one `padding:0` cell            Chrome        before    after
+    <td>                                         x=2 w=196     x=0 w=200  ✓
+    <table>                                      h=28          h=24       ✓
+    two cells side by side                       100 / 94      103 / 97   ✓
+    two rows                                     h=54          h=48       ✓
+```
+
+**The property itself was already perfect.** `border-spacing: 10px` matched Chrome to the pixel and
+always had; `border-spacing: 0` matched; `border-collapse: collapse` matched. Parser, cascade and
+layout consumer were all correct. The defect was in the one place nobody writes a test for.
+
+> **A capability that is correct whenever anyone asks for it, and wrong when nobody does, is invisible
+> to every test that sets the property.** Every fixture this engine had for `border-spacing` declared
+> it. Probe the DEFAULT, not just the declaration.
+
+One line; 19 of 23 measured rows went from wrong to exact.
+
+### Naming something out of scope is a hypothesis about its size
+
+t907 measured these same rows, called them *"the table ALGORITHM rather than the box's own height
+rule"*, and deferred them. Two of the three were a one-line UA gap — wrong by two orders of
+magnitude. An out-of-scope note is a useful thing to write and a dangerous thing to trust: it records
+where the evidence stopped, not how big the work is.
+
+### The guards belong beside the fix
+
+A UA declaration is the easiest kind of change to over-apply, so the gate asserts the three ways it
+must NOT fire — `border-spacing: 0` still collapses to zero, an author's `10px` still wins, and
+`border-collapse: collapse` still ignores spacing entirely — as INSET relationships
+(`cell.x - table.x`) rather than absolute coordinates, so ten stacked tables cannot make one
+regression print as twenty-three.

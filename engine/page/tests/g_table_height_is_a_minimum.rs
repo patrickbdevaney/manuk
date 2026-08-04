@@ -32,11 +32,13 @@
 //! is the table box's own rule" would satisfy every other row and silently break every fixed-height
 //! block on the web. It is asserted here beside the ones that changed.
 //!
-//! ⚠ **THREE ROWS ARE MEASURED, NAMED AND NOT FIXED**, because they belong to the table ALGORITHM
-//! rather than to the box's own height rule: a real `<table>`'s **`border-spacing`** (Chrome 30
-//! against our 26 for the same cell, and `<td>` width 196 against our 200), and a `<td>`
-//! **stretching** to fill a table given a taller `height` (Chrome 56, ours 26). Their numbers are
-//! here so the tick that takes them does not have to re-measure.
+//! ⚠ **TWO OF THE THREE ROWS THIS GATE LEFT OPEN WERE CLOSED ONE TICK LATER, AND THEY WERE NOT AN
+//! ALGORITHM AT ALL.** This header called `<table>`'s `border-spacing` part of "the table ALGORITHM";
+//! it was **one missing declaration in the UA stylesheet** (`table { border-spacing: 2px }`), found
+//! at t908 and gated by `G_TABLE_BORDER_SPACING_UA_DEFAULT`. `#t7` and `#t8` are asserted below.
+//! *Naming something as out of scope is a hypothesis about its size, and it was wrong by two orders
+//! of magnitude here.* Still open, and genuinely the algorithm: a `<td>` **stretching** to fill a
+//! table given a taller `height` (Chrome 56, ours 26).
 //!
 use manuk_text::FontContext;
 
@@ -95,6 +97,8 @@ fn g_table_height_is_a_minimum() {
     c(&page, "#t4", 200.0, 20.0);
     c(&page, "#t5", 200.0, 72.0);
     c(&page, "#t6", 200.0, 24.0);
+    c(&page, "#t7", 200.0, 30.0);
+    c(&page, "#t8", 196.0, 26.0);
     c(&page, "#t9", 200.0, 60.0);
     c(&page, "#t11", 200.0, 24.0);
     c(&page, "#t12", 200.0, 34.0);

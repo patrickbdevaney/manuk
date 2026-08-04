@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **636** | ticks 1–906 |
-| median tick cycle | **26m** | 635 intervals |
-| median, last 10 | **45m** | 10 intervals |
+| ticks landed | **637** | ticks 1–907 |
+| median tick cycle | **26m** | 636 intervals |
+| median, last 10 | **37m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 583.4h elapsed |
-| median verify wall | **63s** | 575 ticks |
+| **ticks per hour** | **1.09** | 583.9h elapsed |
+| median verify wall | **63s** | 576 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **395**
-* **✅ rows in the capability ledger**: 144 → **472**
+* **live gates**: 27 → **396**
+* **✅ rows in the capability ledger**: 144 → **473**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**312 of 636 ticks** (49%) moved a
+**313 of 637 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **312** capability ticks, median cycle **26m**
+* **313** capability ticks, median cycle **26m**
 * median diff per tick: **+265 / −34** lines across 8 files
 
 ## Every tick
@@ -733,5 +733,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **904** | 2026-08-04 11:28 | 2.5h | measurement | 63s | +484/−33 | 393 | 81 | 56.0% · | the burndown's near-bar plan crosses NOBODY, and the sweep that priced it (2026-08-04) |
 | **905** | 2026-08-04 11:59 | 31m | capability | 63s | +376/−54 | 394 | 81 | 56.0% · | three suspects for the burndown's top two causes, and two of the "defects" were my probe ( |
 | **906** | 2026-08-04 12:29 | 30m | capability | 63s | +297/−37 | 395 | 81 | 56.0% · | t905's defect was my fixture too, and the REAL one had been named and declined since t859  |
+| **907** | 2026-08-04 12:58 | 29m | capability | 63s | +294/−39 | 396 | 81 | 56.0% · | a table box's `height` is a MINIMUM, and two unrelated probes found it two ticks apart (20 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -46371,6 +46371,69 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 908 — the property was built and Chrome-exact; only the DEFAULT was missing (2026-08-04)
+
+TICK SHAPE: capability — t907 measured three `<table>` rows, called them *"the table ALGORITHM rather
+than the box's own height rule"* and left them for a later tick. **Two of the three were one
+declaration in the UA stylesheet.**
+
+⚠⚠⚠ **`table { border-spacing: 2px }` IS IN CHROME'S UA SHEET AND WAS NOT IN OURS.** The separated-
+borders model insets every cell from the table edge and from its neighbours by that much, so **a
+plain `<table>` with no author CSS at all** — most of the data tables on the web — had every cell 4px
+too wide, sitting flush against the table edge, and the table 4px too short per row:
+
+```text
+  a 200px table, one `padding:0` cell            Chrome        before    after
+    <td>                                         x=2 w=196     x=0 w=200  ✓
+    <table>                                      h=28          h=24       ✓
+    two cells side by side                       100 / 94      103 / 97   ✓
+    two rows                                     h=54          h=48       ✓
+    a cell with height:50px                      table h=54    h=50       ✓
+```
+
+⚠⚠⚠ **AND THE PROPERTY ITSELF WAS ALREADY PERFECT, WHICH IS WHY NOTHING CAUGHT IT.**
+`border-spacing: 10px` matched Chrome to the pixel and always had. `border-spacing: 0` matched.
+`border-collapse: collapse` matched. The parser, the cascade and the layout consumer were all
+correct; the defect was in the one place nobody writes a test for.
+
+> **A capability that is correct whenever anyone asks for it, and wrong when nobody does, is
+> invisible to every test that sets the property.** Every fixture this engine had for
+> `border-spacing` declared it.
+
+**One line, and 19 of the 23 measured rows went from wrong to exact.**
+
+⚠⚠ **THE GUARDS ARE ASSERTED BESIDE THE FIX, because a UA declaration is the easiest kind of change
+to over-apply**: `border-spacing: 0` must still collapse to zero, an author's `10px` must still win,
+and `border-collapse: collapse` must still ignore spacing entirely. All three are in the gate as
+INSET relationships (`cell.x - table.x`) rather than coordinates, so the ten stacked tables in the
+fixture cannot make one regression print as twenty-three.
+
+⚠ **NAMING SOMETHING OUT OF SCOPE IS A HYPOTHESIS ABOUT ITS SIZE, AND t907's WAS WRONG BY TWO ORDERS
+OF MAGNITUDE.** That header is corrected in this commit rather than left standing, and `#t7`/`#t8`
+are folded into `G_TABLE_HEIGHT_IS_A_MINIMUM` (11 → 13 claims) now that they pass.
+
+⚠ **TWO ROWS REMAIN, MEASURED AND NAMED.** (1) The two-value form `border-spacing: 10px 20px` drops
+its VERTICAL component — `ComputedStyle::border_spacing` is a single `f32` fed from
+`clone_border_spacing().horizontal()`, so the table is 44 tall where Chrome says 64. That is a field
+addition across the css crate and it is a tick, not a line. (2) A row/cell does not STRETCH to fill a
+table given a taller `height` (Chrome 56 for one cell in a `height:60px` table, and 27 each for two;
+ours stay at their 24px content height) — **that one really is the table height-distribution
+algorithm.**
+
+RATCHET: `manuk-layout` 125/125, `manuk-css` 28/28 + 2/2, and every fixture from t905-t907
+re-measured against Chrome — combined battery 54/54, float/BFC 12/12, specified-width 14/14, all with
+zero diffs. The table battery went 13 of 23 exact to **19 of 23**.
+
+GATE: `G_TABLE_BORDER_SPACING_UA_DEFAULT` — 19 Chrome-captured claims plus four INSET relationships
+(the default, the zero, the author override, and the collapse guard). **RED-PROVEN** by deleting the
+UA declaration: `#c1 expected w=196, got w=200`. `G_TABLE_HEIGHT_IS_A_MINIMUM` is RED-proven by the
+same deletion on its new `#t7` claim.
+
+PERF: none — one declaration in a UA sheet that is parsed once per process.
+
+WIKI: `docs/wiki/box-layout.md` — "A capability correct whenever anyone asks for it, and wrong when
+nobody does"
+
 ## Tick 907 — a table box's `height` is a MINIMUM, and two unrelated probes found it two ticks apart (2026-08-04)
 
 TICK SHAPE: capability — the t904 sweep's **#1** corpus cause is `missing box: <div>` (36 sites,

@@ -372,7 +372,15 @@ ol { list-style-type: decimal; }
 u, ins { text-decoration: underline; }
 s, del, strike { text-decoration: line-through; }
 abbr[title] { text-decoration: underline; }
-table { display: table; }
+/* ⚠ **`border-spacing: 2px` IS IN CHROME'S UA SHEET AND WAS MISSING FROM OURS (t908).** The
+   separated-borders model insets every cell from the table edge and from its neighbours by this
+   much, so a DEFAULT `<table>` — no author CSS at all, which is most of the data tables on the web
+   — had every cell 4px too wide, flush against the table edge, and the table itself 4px too short
+   per row. Chrome-measured, a 200px table with one `padding:0` cell: `<td>` at x=2 w=196 and the
+   table 28 tall; ours was x=0 w=200 and 24. The property was already parsed, applied and
+   Chrome-exact when an author SET it (`border-spacing:10px` matched to the pixel) — only the
+   default was absent, which is why nothing caught it. */
+table { display: table; border-spacing: 2px; }
 thead, tbody, tfoot { display: table-row-group; }
 tr { display: table-row; }
 td, th { display: table-cell; padding: 1px; }
