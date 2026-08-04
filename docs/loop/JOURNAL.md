@@ -46371,6 +46371,109 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 899 — all three "regressions" are BATCH ARTEFACTS, and the new binary refuted them without an old one (2026-08-04)
+
+TICK SHAPE: measurement — the control t898 named and deliberately did not run, because attribution
+needs a binary. Three sites carried the non-composition half of the −1.67 pt band, and
+`www.freesupertips.com` was the one that mattered: it sat in t888's cohort A at 0.776, **one jarring
+dimension from an M1 crossing**, and lost 73 shape points at flat coverage — the opposite signature to
+the nine composition sites, and the only reading in the sweep that could be a real regression from
+t895/t896/t897.
+
+⚠⚠⚠ **NOT ONE OF THEM REPRODUCES. THREE SOLO RUNS EACH, ON THE CURRENT BINARY, AND EVERY SITE LANDS
+BACK AT ITS PRE-FIX VALUE:**
+
+```text
+                            t887 sweep      t898 sweep      SOLO x3, current binary
+  www.freesupertips.com   shape 0.7756      0.0415          0.7661 · 0.7661 · 0.7661
+                          overlap    1           5          1 · 1 · 1
+                          reading-o  4           9          4 · 4 · 4
+  www.crazyshop.pl        shape 0.6434      0.2553          0.6413 · 0.6413 · 0.6377
+                          reading-o 535          37          535 · 535 · 535
+                          coverage 0.9141    0.8854          0.9141 · 0.9141 · 0.9141
+  ubys.bingol.edu.tr      coverage 0.9940    0.4371          0.9940 · 0.9940 · 0.9940
+                          shape_n    166          73          166 · 166 · 166
+```
+
+**`www.crazyshop.pl` comes back byte-identical to its t887 row on all six dimensions.** There is no
+regression to attribute. The ratchet is intact and no capability was traded.
+
+⚠⚠⚠ **AND THE CONTROL THAT SETTLED IT WAS THE *NEW* BINARY, NOT THE OLD ONE — WHICH IS A CHEAPER
+RULE THAN THE ONE THIS LOOP HAS BEEN USING.** The standing procedure is *"rebuild the old tree and
+re-measure NOW"*, roughly ten minutes of LTO per question. It is the right instrument when the new
+binary REPRODUCES a loss and you need to know whose it is. **When the new binary refuses to reproduce
+it, the delta was never real and there is nothing for an old binary to explain** — one solo run
+answers what a rebuild was queued to answer. The old-binary control stays mandatory for a
+*reproducible* delta; it is not the first move for a suspicious one. Order the two by cost.
+
+⚠⚠ **THE CONTROL RUNS IN BOTH DIRECTIONS, WHICH IS WHAT MAKES IT EVIDENCE RATHER THAN A CONVENIENT
+RESULT.** If solo runs simply flattered every site, this would prove nothing. So the *composition*
+cohort was solo-checked too, and it REPRODUCES:
+
+```text
+  www.taphouse23.com   t887 cov 0.7424 n 1490  ->  t898 cov 0.9782 n 1975  ->  SOLO 0.9782 n 1975
+                                                                                 (exact, to 6 places)
+  probidas.lt          t887 cov 0.2734 n  452  ->  t898 cov 0.9409 n  701  ->  SOLO 0.4001 n  673
+                                                                                 (element gain holds)
+```
+
+**t896's coverage win is real and reproducible; the three losses are not.** A batch reading that
+survives a solo re-run is a measurement; one that does not is a harness reading.
+
+⚠⚠ **THE BAND NOW ACCOUNTS FOR ITSELF COMPLETELY**, which is the accounting-reconciliation mechanism
+applied to the loop's own headline:
+
+```text
+  band over 122 common sites          -1.67 pts
+    5 unreproducible / undersized rows  -1.17 pts   (5 sites)
+    composition (coverage-up) cohort    -0.42 pts   (9 sites, +1809 elements)
+    everything else                     -0.07 pts   (108 sites)      <- FLAT
+                                       ────────
+                                        -1.67 pts   exact
+
+  CORRECTED band, dropping the 5 unreproducible rows:   -0.50 pts
+  …of which -0.42 is the composition cohort, i.e. a COVERAGE WIN wearing a shape loss.
+```
+
+Three ticks of engine work leave 108 of 122 sites flat to within **0.07 pt**, nine sites **+1,809
+elements**, and nothing that can be called a regression once the batch noise is named.
+
+⚠ **THE INSTRUMENT FINDING, and it is the durable half of this tick: THE BATCH UNDER-RENDERS, AND IT
+DOES SO SILENTLY.** All three artefact rows fail in the same direction — `ubys` renders 73 of 166
+elements, `crazyshop`'s reading-order collapses 535 → 37 (a page that laid out largely differently),
+`freesupertips`'s geometry scrambles at a flat element count. The `instrument` column is `46cdbdef` in
+BOTH sweeps, so it is not an instrument change; it is the run. This is t846-852's *"a sweep row is a
+LOWER BOUND, and the BATCH SIZE is part of the measurement"* re-measured at `--jobs 2` — the setting
+the loop treats as clean. **A `--jobs 2` row is bankable for the CORPUS aggregate and is not evidence
+about ANY SINGLE SITE**; a per-site verdict needs a solo re-run, and that is now written into the
+instrument's own wiki page rather than re-learned.
+
+⚠ **THE WALL-TIME AUDIT came due on this tick (cadence: every 20; last at 878) and its honest answer
+is "already lean".** Total **75s** against a 300s ceiling — 4× headroom:
+
+```text
+    30s  T (crate tests: css 28 · layout 125 · paint 22 · dom 11 · net 97 · agent 126 · shell 74)  40%
+    13s  G6                                                                                        17%
+     7s  B  ·  5s  P  ·  5s  G1  ·  5s  D  ·  3s  F  ·  1s  F4  ·  0s  everything else
+```
+
+Against the four admissible questions: **redundancy** — `T` is ~483 crate tests in 30s, so it is not
+dominated by the ~1.5s SpiderMonkey startup the audit warns about, and there is no shared-runtime win
+there; **parallelism** — the gates run concurrently and the perf floors are serial *on purpose* (a
+benchmark sharing the machine is not a benchmark); **caching** — incrementals are in RAM and live
+fetches are snapshot-cached; **scope** — no gate builds materially more than it asserts on. **Nothing
+was trimmed, and trimming a 75s wall would be theatre.**
+
+⚠ One variable is named rather than acted on, because it is harness territory (PART VII): the gate
+section this session ran **885s on the tick that first touched `engine/js` (t895) and 75-101s on every
+tick after**, which is a rebuild cost living inside the gate section rather than a gate getting
+slower. It is recorded here for the observer and was not investigated.
+
+PERF: none — measurement only, no engine change.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "Refute with the NEW binary first; the OLD-binary control
+is for a delta that REPRODUCES"
+
 ## Tick 898 — the pre-registered expectation was WRONG, and the band is composition plus five named sites (2026-08-04)
 
 TICK SHAPE: measurement — the board's cadence rule (*"after ~5-6 fixes of either class, run a CLEAN

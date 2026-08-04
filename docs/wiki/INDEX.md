@@ -698,6 +698,10 @@
   - L440 · The M1 crossing ranking, computed from a sweep rather than remembered (t888, from SWEEP-t887)
   - L471 · The named mechanism at the top of cohort A
   - L492 · A negative common-set band is not a regression until you split it on COVERAGE
+  - L536 · Refute with the NEW binary first; the OLD-binary control is for a delta that REPRODUCES
+  - L552 · Run the control in BOTH directions, or it proves nothing
+  - L564 · A --jobs 2 row is bankable for the CORPUS, and is not evidence about ANY SINGLE SITE
+  - L580 · Decompose the band before reading it
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1533,4 +1537,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1440 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1444 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

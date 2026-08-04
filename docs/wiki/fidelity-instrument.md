@@ -532,3 +532,62 @@ five capability fixes and it did not move at all (107/129 both sweeps). The fixe
 fixes, not boot-throw killers: they moved coverage on sites that already scored. Scorability moves
 only when a site that did not render starts rendering. Two levers, two metrics, and reading one
 against the other is how a real win reads as nothing.
+
+## Refute with the NEW binary first; the OLD-binary control is for a delta that REPRODUCES
+
+The standing rule is *"a clean delta attributes nothing until the old binary has refused to reproduce
+it"* — rebuild the old tree, re-measure now. That is right, and it costs ~10 minutes of LTO per
+question. t899 found the cheaper first move:
+
+> **When the NEW binary refuses to reproduce the loss, the delta was never real and there is nothing
+> for an old binary to explain.**
+
+Three sites carried the non-composition half of t898's −1.67 pt band. Three solo runs each, on the
+current binary, and every one landed back at its pre-fix value — `www.crazyshop.pl` byte-identical to
+its t887 row on all six dimensions. No rebuild was needed. Order the two controls by cost:
+
+1. **Solo re-run on the current binary** (~1 min). If the loss vanishes, it was a batch reading.
+2. **Old-binary control** (~10 min) — only once the loss REPRODUCES, to say whose it is.
+
+### Run the control in BOTH directions, or it proves nothing
+
+If solo runs simply flattered every site, step 1 would be worthless. So the *composition* cohort gets
+the same treatment, and it must REPRODUCE:
+
+```text
+  www.taphouse23.com   t898 cov 0.9782 n 1975  ->  SOLO cov 0.9782 n 1975   (exact, 6 places)
+  probidas.lt          t898 cov 0.9409 n  701  ->  SOLO cov 0.4001 n  673   (element gain holds)
+```
+
+A batch reading that survives a solo re-run is a measurement; one that does not is a harness reading.
+
+### A `--jobs 2` row is bankable for the CORPUS, and is not evidence about ANY SINGLE SITE
+
+The loop treats `--jobs 2` as clean because t771 showed `--jobs 8` costs hard sites their scorability.
+That is still true, and it is not the same claim as *"a `--jobs 2` row is trustworthy per site"*.
+t899's three artefact rows all fail in the same direction — the batch **under-renders**:
+
+```text
+  ubys.bingol.edu.tr   73 of 166 elements rendered      (solo: 166)
+  www.crazyshop.pl     reading-order 535 -> 37          (solo: 535 — the page laid out differently)
+  www.freesupertips.com  geometry scrambled at a FLAT element count (458 vs 466)
+```
+
+The `instrument` column was identical across both sweeps, so it is the run, not the instrument.
+**Per-site verdicts — a crossing, a regression, a cohort membership — require a solo re-run.** The
+aggregate band is what the batch is for.
+
+### Decompose the band before reading it
+
+t898's method, completed here: the −1.67 pt band accounts for itself exactly.
+
+```text
+  5 unreproducible / undersized rows   -1.17 pts   (5 sites)
+  composition (coverage-up) cohort     -0.42 pts   (9 sites, +1809 elements)
+  everything else                      -0.07 pts   (108 sites)   <- FLAT
+                                      ────────
+                                       -1.67 pts
+```
+
+A band that does not add up is an instrument bug, not a result — the accounting-reconciliation
+mechanism, pointed at the loop's own headline.
