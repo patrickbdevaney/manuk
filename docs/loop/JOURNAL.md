@@ -46371,6 +46371,69 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 927 — Chrome's input-baseline model, MEASURED — and the blocker is not the formula (2026-08-04)
+
+TICK SHAPE: measurement — check #81's steer #2 said the `<input>` baseline *"needs a measurement, not
+a third formula"*. This is the measurement. It settles the model exactly and then relocates the
+blocker, which is a different answer from the one the steer expected.
+
+⚠⚠⚠ **THE MODEL, DETERMINED FROM NINE CONTROL HEIGHTS RATHER THAN GUESSED.** The containing `<div>`
+in a 16px/1.5 line, Chrome, against the input's own border-box height:
+
+```text
+  input border-box h     6    16    26    36    46    66   106   21(default)
+  Chrome div height     24    24    26    36    46    66   106   24
+```
+
+**For every `h` past the strut the div is EXACTLY `h`** — which pins the baseline at
+`h − (border-bottom + padding-bottom + descent)`. The editor's text sits on the control's **bottom
+padding edge**, and the box is otherwise flush with the line.
+
+**That refutes both previous attempts from the same table.** The §10.8.1 fallback (baseline at the
+bottom margin edge) gives 26 where Chrome says 24 — t918's starting point. t924's centring model gives
+44 where Chrome says 46. **Bottom-anchored is the third candidate and it is the right one.**
+
+Implemented, it is exact on **all nine heights, the whole ten-claim baseline fixture** (which was
+7/10), **and `<div><input></div>` at 24**. `manuk-layout` 125/125.
+
+⚠⚠⚠ **AND IT STILL COSTS `secure5.entertimeonline.com` 0.18, WITH IDENTICAL COVERAGE AND AN IDENTICAL
+SAMPLE.** Three solo runs, byte-identical at **0.692308** against the clean tree's **0.871795** —
+`cov 1.000000` and `n=39` in **both**. So it is not t813-818's composition effect (a shape drop bought
+with a coverage win), and it is not the element set (t924 settled that), and it is now not the formula
+either.
+
+> **Three different baselines — the §10.8.1 fallback, centred, and bottom-anchored — produce three
+> different wrong scores on this site, and only one of the three is right about Chrome.** When the
+> CORRECT model scores worse than the incorrect one on the same 39 elements, the thing being scored
+> against is the next place to look.
+
+The standing hypothesis, stated so the next tick can kill it cheaply: the oracle scores us against
+Chrome rendering a **`curl`'d snapshot from `file://`**, and this is a login page whose fields are
+built by script. If that snapshot's JS does not run, the reference has the form in a different state
+from the live page, and **moving our inputs to where Chrome LIVE puts them moves them away from where
+the REFERENCE has them**. `fidelity.rs` already carries three variants for exactly this family of
+reference defect (`ShellOnly`, `OracleModuleShell`, `TreeDivergence`), and none of them fires here
+because the page is not a shell — it renders 39 comparable elements, just possibly not the same 39
+states.
+
+**The cheap kill:** dump the oracle's reference for this site and count its `<input>`s against the
+live page's. One `--dump-dom` each. That is the next tick, and it is a measurement about the
+INSTRUMENT rather than the engine.
+
+**REVERTED, for the third time on this item, and the reason is unchanged:** the ratchet does not trade
+a corpus regression for fixture correctness, however exact the fixtures. What is different this time
+is that **the formula is no longer the unknown** — it is measured, it is written down above with the
+nine numbers that determine it, and the next attempt starts by clearing the reference rather than by
+proposing a fourth model.
+
+RATCHET: nothing changed. `secure5.entertimeonline.com` re-measured at **0.871795** on the landed
+tree, `manuk-layout` 125/125, no gate moved.
+
+PERF: none — measurement only.
+
+WIKI: `docs/wiki/box-layout.md` — "When the CORRECT model scores worse, look at what it is scored
+against" [no-pattern]
+
 ## Tick 926 — the constitution check, and the window in which the loop corrected itself three times (2026-08-04)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8; last at 918), banked

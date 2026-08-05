@@ -4861,3 +4861,42 @@ t923 landed one tick earlier on exactly the drift between them.
 
 The single-value rows are what make the new one assertable: a fix that read the second value and
 forgot the shorthand would satisfy the new claim and break four old ones.
+
+
+## Chrome's `<input>` baseline, measured — and when the CORRECT model scores worse (t927)
+
+Nine control heights determine it. The containing `<div>` in a 16px/1.5 line, against the input's own
+border-box height:
+
+```text
+  input border-box h     6    16    26    36    46    66   106   21(default)
+  Chrome div height     24    24    26    36    46    66   106   24
+```
+
+For every `h` past the strut the div is **exactly `h`**, which pins the baseline at
+`h − (border-bottom + padding-bottom + descent)`. **The editor's text sits on the control's bottom
+padding edge** — bottom-anchored, not centred, and not the bottom margin edge.
+
+The same table refutes both earlier attempts: CSS 2.1 §10.8.1's fallback (bottom margin edge) gives
+26 where Chrome says 24 (t918's starting point), and a centred editor gives 44 where Chrome says 46
+(t924). Implemented, the bottom-anchored model is exact on all nine heights, on the whole ten-claim
+baseline fixture (previously 7/10), and on `<div><input></div>`.
+
+### And it still scores worse on the corpus
+
+`secure5.entertimeonline.com`: three solo runs byte-identical at **0.692308** against the clean tree's
+**0.871795**, with `cov 1.000000` and `n=39` in **both** — so not a composition effect, not the
+element set, and now not the formula.
+
+> **Three different baselines produce three different wrong scores on this site, and only one of them
+> is right about Chrome. When the CORRECT model scores worse than the incorrect one on the same 39
+> elements, the thing being scored AGAINST is the next place to look.**
+
+The standing hypothesis: the oracle scores us against Chrome rendering a `curl`'d snapshot from
+`file://`, and this is a login page whose fields are script-built. If that snapshot's JS does not run,
+moving our inputs to where Chrome LIVE puts them moves them away from where the REFERENCE has them.
+`fidelity.rs` carries three variants for this family of reference defect and none fires here, because
+the page is not a shell — it renders 39 comparable elements, just possibly not in the same states.
+
+**The cheap kill:** dump the oracle's reference for the site and count its `<input>`s against the live
+page's. One `--dump-dom` each.
