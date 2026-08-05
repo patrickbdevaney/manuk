@@ -46371,6 +46371,72 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 950 — "ours or the oracle's?" — neither, yet: the subtree is JS-built and time-dependent (2026-08-05)
+
+TICK SHAPE: measurement — t949's steer item 1, taken directly: **probe the named footer subtree in
+both engines and establish whether the sibling difference is ours or the oracle's.** The answer is
+that the question, as posed, cannot be answered by a static probe — and finding that out is the
+result.
+
+**THE SETUP, which was the right one to try.** t949 named an address:
+
+```text
+   footer > div:2 > div:1 > div:1 > div:1 > div:2 > div:1 > …
+     Chrome (in the sweep): block [276 12778 227×22]   ·   ours: (no box)
+```
+
+I fetched `www.tz.de` myself so **both engines get identical bytes** — removing the oracle's
+`file://`-boot confound as a variable rather than reasoning about it — inserted a `<base href>`, and
+appended a script that walks the footer five levels deep printing each node's children by tag.
+
+⚠⚠⚠ **CHROME, ON THE STATIC FETCH, HAS NO `footer > div:2` AT ALL:**
+
+```text
+   L0: footer:1            -> DIVx1        ← ONE div child, not two
+   L1: footer:1/div:1      -> DIVx5, ULx3
+   L2: footer:1/div:1/div:2 -> H3x1, DIVx1
+```
+
+**The sweep's oracle resolved `footer > div:2`; my static Chrome resolves only `div:1`.** Same site,
+same browser, different documents — so **that subtree is constructed by JavaScript and its shape
+depends on WHEN you look.** The 66 unaligned keys are therefore, on this evidence, a **timing /
+DOM-construction** difference rather than a parse difference, and the two candidate blames from t949
+— *"an element we fail to create"* vs *"the oracle's `file://` boot branching differently"* — are
+**both still live, because neither engine's static render is the document the sweep measured.**
+
+⚠⚠ **AND MY PROBE INHERITED EXACTLY THE DEFECT IT WAS BUILT TO INVESTIGATE.** Our engine ran the
+script (the reporter div exists, at `[0 13122 1200×72]`) and produced **72px — three lines — against
+Chrome's six.** That is a real difference on identical bytes and it is *not attributable either*,
+because the same time-dependence applies to us. **A probe that measures a JS-built subtree at an
+unspecified moment measures the moment, not the engine** — which is t741-742's rule (*an observation
+has a TIME*) arriving in a form I did not recognise until I had built the instrument that suffers
+from it.
+
+**WHAT IS ESTABLISHED, stated narrowly:**
+
+1. `www.tz.de`'s footer is **JS-constructed**, and its same-tag sibling count differs between a
+   static render and whatever the sweep captured.
+2. The sweep's `unaligned key` cause is therefore **not** evidence of a parse or layout defect. It
+   may still be an engine defect — a JS/DOM one — or an instrument artefact.
+3. **An ad-hoc static probe cannot separate them.** The sweep already synchronises both engines
+   (`chrome::probe_defer_tail` re-reads at DOMContentLoaded/load/T+3s, per `fidelity.rs`); a
+   comparison outside that harness is not comparing what the harness compared.
+
+**SO THE NEXT ATTEMPT MUST USE THE HARNESS'S OWN SYNCHRONISATION, not a hand-rolled probe** — and
+that is a `manuk-wpt` change (agent territory) rather than a fixture: have the fidelity path, on
+request, dump the two DOMs' child-tag census at the same lifecycle point it takes its geometry. That
+is a small, well-defined instrument addition and it is the only thing that answers t949's question.
+
+⚠ **I am recording this as a DEAD END WITH AN ADDRESS rather than a finding**, because the honest
+content is one sentence — *the subtree is JS-built, so a static comparison proves nothing* — and the
+value is that the next tick will not spend another hour rebuilding the same probe.
+
+RATCHET: no engine change. `manuk-layout` and the page suite green from t945.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefact is a negative methodological result. [no-pattern]
+
 ## Tick 949 — the top cause on a scored site is a DOM-shape difference, not a layout one (2026-08-05)
 
 TICK SHAPE: measurement — t948's named method, executed on the site it named: **rank one scored
