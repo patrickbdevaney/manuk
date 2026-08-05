@@ -59,18 +59,34 @@
 //!   proof came back GREEN and the claim written here would have been false; the tolerance was
 //!   tightened until the proof actually bit, rather than the claim being kept and the proof waved
 //!   through.
+//! - **Drop the wrapper's `metrics`** (the t935 state) → the nested text returns to **6px** below
+//!   the line top while every line-box HEIGHT above stays green. Verified. The two are separable and
+//!   the gate asserts both.
 //! - **Give the spacer `holds_line: true`** → `g_empty_inline_rect` fails with `#s1` at
 //!   `[0 3 0x17]` against Chrome's `[0 0 0x0]`: an empty inline ALONE brings no line box into
 //!   existence (CSS2 §9.4.2, t760) and would get a phantom 17px box back. Verified — and it is a
 //!   DIFFERENT gate that catches it, which is the point of running the whole suite rather than the
 //!   one file this tick wrote.
 //!
-//! ## THE RESIDUE, pinned at OUR number so a future fix must change it deliberately
+//! ## THE RESIDUE THAT WAS PINNED AT OUR NUMBER — CLOSED AT t939, ONE TICK LATER
 //!
-//! ⚠⚠ **The line box is now the right HEIGHT and the inner text sits at the wrong BASELINE inside
-//! it.** In the nested pair, Chrome puts the 12px text **15px** below the line box top and we put it
-//! **6px** below — the new leading all landed BELOW the baseline, where Chrome half-leads it and
-//! lets the outer 24px span's larger ascent push the baseline down the missing 9px.
+//! ⚠⚠ t935 landed the line box's HEIGHT and left the inner text at the wrong BASELINE inside it:
+//! Chrome puts the 12px text **15px** below the line box top and we put it **6px** below. Pinned at
+//! our number on purpose, and changed deliberately here.
+//!
+//! **The cause was one branch.** `close_line` places a fragment as a real inline box *about the
+//! baseline* (`above = ascent + half_leading`) only when it has metrics; without them it falls to
+//! `min_h_down`, **a floor that grows the line DOWNWARD** — correct for a padding edge and a
+//! `<br>`'s reporter, which hold a line open and have no baseline of their own, and wrong for a
+//! text-less wrapper, whose leading must be half-led around the baseline exactly like the text it
+//! stands in for. t935 gave the wrapper its `leading` and no `(ascent, descent)`, so **the entire
+//! new leading landed below the baseline**: the line box was the right height and everything on it
+//! sat 9px too high. t939 gives it metrics, and it takes the branch the engine already had.
+//!
+//! **Ranked, not stumbled on.** The t936 sweep says `reading_order` blocks **9 of the 10 cheapest
+//! M1 crossings** — sites already over the shape bar and failing only jarring — and the standing
+//! finding is that a reading-order symptom is a geometry error upstream. `<a><i></i><span>label</span></a>`
+//! is the shape this fix moves.
 //!
 //! This tick contributes the element's `line_height` (a floor on the line box's total height) and
 //! **not** its ascent/descent, deliberately: those are the metrics `vertical-align: middle /
@@ -198,9 +214,14 @@ fn g_inline_box_leading() {
     let d2 = rect_of(&page, "#d2");
     let offset = inner.y - d2.y;
     assert!(
-        (offset - 6.0).abs() < 1.01,
-        "G_INLINE_BOX_LEADING: the nested 12px text sits {offset} below its line box top; CHROME \
-         PUTS IT AT 15. Asserted at OUR number ON PURPOSE. This tick contributes the wrapper's \
+        (offset - 15.0).abs() < 1.01,
+        "G_INLINE_BOX_LEADING: the nested 12px text must sit 15px below its line box top — CHROME'S \
+         NUMBER, closed at t939. It was 6 at t935: the wrapper carried its `leading` but no metrics, \
+         so `close_line` routed it to `min_h_down`, a floor that grows the line DOWNWARD, and the \
+         whole of the new leading landed BELOW the baseline. Giving the wrapper its own \
+         (ascent, descent) puts it through the branch that places an inline box ABOUT the baseline \
+         (`above = ascent + half_leading`), which is the model the engine already implemented for \
+         text. NOTE the old text of this assertion, kept because it was wrong in an instructive way: This tick contributes the wrapper's \
          line-height (a floor on the line box) and NOT its ascent/descent, because those are the \
          metrics `vertical-align: middle/text-top/text-bottom/sub/super` are defined against — the \
          PARENT's font, never the aligned box's own — and feeding a nested span's ascent in without \

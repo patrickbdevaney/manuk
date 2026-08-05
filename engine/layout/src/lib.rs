@@ -6577,6 +6577,7 @@ impl Ctx<'_> {
                         report_ascent: v_ascent,
                         holds_line: pad_l > 0.0,
                         leading: if v_ascent.is_some() { 0.0 } else { v_height },
+                        metrics: None,
                     });
                     *first = false;
                     *pending_space = None;
@@ -6607,6 +6608,8 @@ impl Ctx<'_> {
                 //
                 // Idempotent where we were already right, because the line box folds a MAX: a
                 // text-bearing element already contributes through its own words.
+                let ts_w = text_style(self.style_of(node), self.fonts);
+                let lm_w = self.fonts.line_metrics(ts_w.font_key, ts_w.font_size);
                 out.push(InlineItem::Spacer {
                     width: 0.0,
                     node: None,
@@ -6622,7 +6625,12 @@ impl Ctx<'_> {
                     // and what Chrome lays out with. Reading the raw field made an auto-height
                     // `<button>` 19.2 tall against a plain line's 18 — a wrong answer of the right
                     // type, and one rule with two implementations.
-                    leading: text_style(self.style_of(node), self.fonts).line_height,
+                    leading: ts_w.line_height,
+                    // **With metrics this fragment is placed ABOUT THE BASELINE** (`close_line`
+                    // branches on `ascent > 0 || descent > 0`); without them it falls to
+                    // `min_h_down`, a floor that grows the line DOWNWARD. t935 shipped it without,
+                    // so the line box came out the right HEIGHT with everything on it 9px too high.
+                    metrics: Some((lm_w.ascent, lm_w.descent)),
                 });
                 // N4: inline content also follows the flat tree.
                 let children: Vec<NodeId> = self.dom.flat_children(node);
@@ -6638,6 +6646,7 @@ impl Ctx<'_> {
                         report_ascent: v_ascent,
                         holds_line: true,
                         leading: if v_ascent.is_some() { 0.0 } else { v_height },
+                        metrics: None,
                     });
                     *pending_space = None;
                 }
@@ -6708,6 +6717,7 @@ impl Ctx<'_> {
                         // `report_ascent` is `Some`, so this never fed a `line_height` floor into
                         // `close_line`; `leading: 0` preserves that byte-for-byte.
                         leading: 0.0,
+                        metrics: None,
                     });
                 }
                 // ── ⚠⚠⚠ **AN INLINE THAT CARRIES NO FRAGMENT OF ITS OWN STILL HAS AN INLINE BOX.**
@@ -6759,6 +6769,7 @@ impl Ctx<'_> {
                         // `report_ascent` is `Some`, so this reporter never fed a `line_height`
                         // floor into `close_line`; `leading: 0` preserves that byte-for-byte.
                         leading: 0.0,
+                        metrics: None,
                     };
                     out.push(reporter());
                     out.insert(mark, reporter());
@@ -7227,6 +7238,7 @@ impl Ctx<'_> {
                     report_ascent,
                     holds_line,
                     leading,
+                    metrics,
                 } => {
                     // Inline padding/border: occupies `width`, paints nothing, but its
                     // (empty-text) fragment carries the owning element's geometry.
@@ -7284,8 +7296,8 @@ impl Ctx<'_> {
                                 word_spacing: 0.0,
                                 shadow: None,
                             },
-                            ascent: 0.0,
-                            descent: 0.0,
+                            ascent: metrics.map_or(0.0, |m| m.0),
+                            descent: metrics.map_or(0.0, |m| m.1),
                             node,
                             report_h: Some(report_height),
                             report_ascent,
@@ -8038,6 +8050,18 @@ enum InlineItem {
         /// padding on a non-replaced inline does not affect line height), while a text-less wrapper
         /// must contribute its FULL leading and claim no rect at all.
         leading: f32,
+        /// **The wrapper's own `(ascent, descent)`, or `None` for a spacer that carries no font.**
+        ///
+        /// `close_line` branches on `ascent > 0 || descent > 0`: with metrics a fragment is placed as
+        /// a real inline box **about the baseline** (`above = ascent + half_leading`), and without
+        /// them it falls to `min_h_down`, a floor that grows the line DOWNWARD from the baseline like
+        /// `vertical-align: top`. That is correct for a padding edge and a `<br>`'s reporter — they
+        /// hold a line open and have no baseline of their own — and it is wrong for a text-less
+        /// WRAPPER, whose leading must be half-led around the baseline exactly like the text it
+        /// stands in for. t935 gave the wrapper its `leading` and left it in the `min_h_down` arm, so
+        /// the whole of the new leading landed BELOW the baseline: the line box was the right height
+        /// and everything on it sat 9px too high.
+        metrics: Option<(f32, f32)>,
     },
     /// A **forced line break** — `<br>`, or a newline inside `white-space: pre`.
     ///

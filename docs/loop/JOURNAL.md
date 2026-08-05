@@ -46371,6 +46371,80 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 939 — the residue t935 pinned, closed one tick later, and it was ONE BRANCH (2026-08-05)
+
+TICK SHAPE: capability — **ranked, not stumbled on.** t938's steer sent engine work back to the
+SCORED half; ranking the fresh t936 sweep by MARGINAL M1 CROSSINGS (the board's own rule) picked this
+one out.
+
+⚠⚠⚠ **THE RANKING, COMPUTED FROM `SWEEP-t936-rows.tsv` RATHER THAN FROM A HISTOGRAM OF TAGS.** M1 is
+a conjunction, so the cheapest crossings are the sites that already clear the shape bar and fail only
+`jarring`:
+
+```text
+   scored 108 · shape ≥ 0.75 on 30 · M1 (also jarring-clean) 20
+   →  10 sites are ONE jarring dimension away from crossing
+
+   blocking dimension, among those 10:     reading_order  9      ← the lever
+                                           overlap        5
+                                           h_overflow     3
+```
+
+`reading_order` blocks **9 of the 10 cheapest crossings**, and the standing finding (t871-874) is
+that a reading-order symptom is a **geometry error upstream, never a reorder**. t935's own named
+residue is a geometry error on exactly the shape `reading_order` fires on —
+`<a><i></i><span>label</span></a>`, an icon wrapper beside its label — which is what promoted it from
+"named bound" to "next tick".
+
+**AND IT WAS ONE BRANCH.** `close_line` places a fragment as a real inline box *about the baseline*
+(`above = ascent + half_leading`) **only when it has metrics**; without them it falls to
+`min_h_down`, **a floor that grows the line DOWNWARD**:
+
+```rust
+   } else if f.ascent > 0.0 || f.descent > 0.0 {   // placed about the baseline
+   } else { min_h_down = min_h_down.max(f.style.line_height); }   // grows downward
+```
+
+t935 gave the wrapper its `leading` and **no `(ascent, descent)`**, so it took the second arm and the
+entire new leading landed **below** the baseline. That is why the line box came out the right HEIGHT
+with everything on it 9px too high — a result that looked like a half-fix and was in fact a fragment
+routed through the wrong one of two arms that were both already correct.
+
+```text
+   the nested pair, 12px text inside a 24px text-less wrapper
+                              Chrome    t935    t939
+     line box height            36       36      36
+     inner text, below top      15        6      15
+```
+
+Every div in the fixture matches Chrome on **height and y**, and the inner text now matches too. The
+model was already right — the engine has implemented §10.8's per-box `half_leading` since t695; the
+wrapper simply was not being treated as a box.
+
+GATE: `G_INLINE_BOX_LEADING` gains its tenth claim, and the residue row is **re-pinned from our 6 to
+Chrome's 15**. RED-proven: drop the wrapper's `metrics` (exactly the t935 state) → the nested text
+returns to 6 while every line-box HEIGHT stays green. **The two are separable and the gate asserts
+both**, which is what makes this a distinct tooth rather than a revision of the last one.
+
+⚠ **THE PADDED-EDGE AND `<br>` SPACERS MUST KEEP THE DOWNWARD FLOOR, and they do — by construction
+rather than by a flag.** `metrics: None` leaves them on the `min_h_down` arm byte-for-byte: they hold
+a line open and have **no baseline of their own**, which is correct for a padding edge (§10.6.1:
+vertical padding on a non-replaced inline does not affect line height) and for a `<br>`'s reporter.
+The discriminator is the metrics themselves, so there is no new predicate to get wrong.
+
+⚠ **WHAT I HAVE NOT SHOWN: that this moves the nine sites.** The ranking says `reading_order` blocks
+them and that the mechanism is upstream geometry; it does **not** say this particular geometry is
+theirs. That is a hypothesis with a sweep-sized test, and the next sweep is the only thing that can
+answer it. Recorded as a prediction rather than as a result, because t936 is one tick old and its
+whole lesson was that a corpus claim needs the corpus.
+
+RATCHET: `manuk-layout` 125/125, full `manuk-page` gate suite on the shipping cascade.
+
+PERF: none — one `line_metrics` lookup per inline element, on a cache the fold already consults.
+
+WIKI: `docs/wiki/text-layout.md` — the residue section rewritten from OPEN to CLOSED, with the
+two-arm mechanism and why the other spacers stay on the downward floor.
+
 ## Tick 938 — I mis-read a tag name one tick ago, and the corrected ceiling is almost entirely NOT ours (2026-08-05)
 
 TICK SHAPE: measurement — probing the bucket t937 labelled **OURS**, which is the only part of the

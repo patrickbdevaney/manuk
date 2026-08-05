@@ -2044,7 +2044,7 @@ the wrong-field version came back GREEN: it produces **28.800003** against Chrom
 gate's ordinary **1.01** tolerance waves that through. The `line-height:normal` row alone now carries
 **0.5**. A proof that does not go red is not a proof.
 
-### The residue, pinned at OUR number (t935)
+### The residue, pinned at OUR number (t935) — CLOSED at t939, and it was ONE BRANCH
 
 The line box is now the right HEIGHT and the inner text sits at the wrong BASELINE inside it: Chrome
 puts the 12px text **15px** below the line box top, we put it **6px** below — the new leading all
@@ -2059,3 +2059,35 @@ trades a `dy` cascade for a `vertical-align` regression.
 **The two errors have different blast radii, and that is the whole argument for splitting them.** The
 height error cascaded down the page; the baseline error is contained to one line, and every element
 below it is now Chrome-exact.
+
+**CLOSED (t939).** `close_line` places a fragment as a real inline box *about the baseline*
+(`above = ascent + half_leading`) **only when it has metrics**; without them it falls to
+`min_h_down`, a floor that grows the line **downward**:
+
+```rust
+   } else if f.ascent > 0.0 || f.descent > 0.0 {   // placed about the baseline
+   } else { min_h_down = min_h_down.max(f.style.line_height); }   // grows downward
+```
+
+t935 gave the wrapper its `leading` and no `(ascent, descent)`, so it took the second arm and the
+entire new leading landed below the baseline — the line box the right HEIGHT with everything on it
+9px too high. Giving the wrapper its own metrics routes it through the arm the engine has had since
+t695.
+
+```text
+   12px text inside a 24px text-less wrapper
+                              Chrome    t935    t939
+     line box height            36       36      36
+     inner text, below top      15        6      15
+```
+
+**The padded-edge and `<br>` spacers must KEEP the downward floor, and they do by construction:**
+`metrics: None` leaves them on the `min_h_down` arm byte-for-byte. They hold a line open and have no
+baseline of their own — correct for a padding edge (§10.6.1) and for a `<br>`'s reporter. The
+discriminator is the metrics themselves, so there is no new predicate to get wrong.
+
+**Ranked, not stumbled on.** The t936 sweep says `reading_order` blocks **9 of the 10 cheapest M1
+crossings** (sites already over the shape bar, failing only jarring), and t871-874's standing finding
+is that a reading-order symptom is upstream geometry. `<a><i></i><span>label</span></a>` is the shape
+this moves. ⚠ That this *does* move those nine sites is a **prediction**, not a result — only the
+next sweep can answer it.

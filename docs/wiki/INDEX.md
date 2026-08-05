@@ -1592,7 +1592,7 @@
   - L2000 · Also measured: a nowrap inline in overflow:hidden reports a CLAMPED width
   - L2008 · The negative result from the same sweep
   - L2017 · As landed (t935) — every line box and every y byte-identical to Chrome
-  - L2047 · The residue, pinned at OUR number (t935)
+  - L2047 · The residue, pinned at OUR number (t935) — CLOSED at t939, and it was ONE BRANCH
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
