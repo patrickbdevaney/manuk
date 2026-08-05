@@ -46371,6 +46371,73 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 958 — a list-box `<select>` is 17px tall where Chrome gives 66, and the model is simply absent (2026-08-05)
+
+TICK SHAPE: measurement — the lead surface audit #36 ranked and the t957 retraction preserved:
+`<select multiple>` renders as a **sized scrolling list box**, not a one-line dropdown. Measured
+against Chrome on a self-contained fixture with inline `<style>`, so the t957 trap does not apply —
+**there is no external CSS for `boxes --html` to fail to load.**
+
+```text
+                                    Chrome        ours       verdict
+   <select>                        53.0 × 19    41 × 17      baseline dropdown
+   <select multiple>               32.4 × 66    41 × 17      ✗  should be a 4-row LIST BOX
+   <select size=4>                 32.4 × 66    41 × 17      ✗
+   <select multiple size=2>        32.4 × 34    41 × 17      ✗
+   <select size=1>                 45.0 × 19    41 × 17      ~  single-line, near
+   <select multiple height:100px>  24.3 × 100   41 × 100     ✓  explicit height IS honoured
+   the div BELOW all six           y = 330      y = 224      ✗  106px too high
+```
+
+⚠⚠⚠ **THE CONTENT BELOW IS 106px TOO HIGH ON A SIX-CONTROL FIXTURE.** That is the control-height
+`dy` cascade the audit predicted, at full size, on the form-heavy pages the CrUX tail is made of —
+every filter sidebar, admin form and faceted search.
+
+**THE MODEL IS ABSENT, NOT WRONG.** `form_control_text` has one `"select"` arm and it returns *the
+selected option's text* — the dropdown, hardcoded, with no branch for `multiple` or `size`. Nothing
+computes a row count anywhere.
+
+⚠ **AND `#a6` IS THE ROW THAT NARROWS IT.** With an explicit `height:100px` we are **exact**. So the
+height *machinery* works; what is missing is the **intrinsic** height a list box derives from its row
+count. That is the whole defect and it is why this is small.
+
+**THE SPECIFICATION, Chrome-measured so the next tick does not re-derive it:**
+
+```text
+   rows = size  if size > 1
+        = 4     if `multiple` and no size        (the HTML default display size)
+        = 1     otherwise                        → the existing dropdown path, unchanged
+
+   list-box height = rows × 16 + 2      4 rows → 66 ✓   ·   2 rows → 34 ✓
+   list-box width  = no dropdown ARROW  (32.4 vs the dropdown's 53 on identical options)
+```
+
+The `+2` is the border; `16` is Chrome's option row height at `16px` — **note it is NOT our 18px
+`line-height:normal` line box**, which is exactly the kind of near-miss that would make a fix look
+right at one font size and drift at another. **The arrow is the width half**: `native_widget_width`
+(`layout/lib.rs:4205`) adds 17px for a `<select>`'s arrow, measured at t-earlier — a list box has no
+arrow, so that addition must be conditional on the same `rows == 1` test.
+
+⚠⚠ **WHY THIS IS A MEASUREMENT TICK AND NOT A FIX, said plainly.** This is the form-control sizing
+path, which the loop handed on as hard three ticks before this window opened (`96bd9b07` — *"the
+reference hypothesis is REFUTED, and the form-control item is HANDED ON"*), and I am deep enough into
+this session that starting a change there with an unbounded blast radius is the wrong trade. **The
+specification above is complete and Chrome-verified**; t934→t935 already demonstrated in this window
+that a measured-and-specified tick converts to a landed fix in the next one without re-deriving
+anything.
+
+⚠ **NOT SPECIFIED, and deliberately: a list box should RENDER ALL ITS ROWS**, not just be tall enough
+for them. `form_control_text` returns one string; showing N options is a content change, not a sizing
+one. **The height is the `dy` cascade and the height is what the audit ranked** — the content is a
+separate, larger item and should be named rather than bundled.
+
+RATCHET: no engine change. `manuk-layout` 125/125 and the page suite green from t945.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the mechanism belongs in the wiki when it lands; this is the measurement that
+specifies it. [no-pattern]
+
 ## Tick 957 — RETRACTION: t953, t955 and t956 measured an unstyled page, and the tool's own help text says so (2026-08-05)
 
 TICK SHAPE: measurement — a withdrawal, published in full, because three consecutive ticks of this
