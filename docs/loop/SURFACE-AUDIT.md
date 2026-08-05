@@ -3853,3 +3853,76 @@ in the receipt, so the next reader sees the correction and not just the correcte
 None. The five surviving rows are honest, the reverted one left no residue, and the one stale row is
 fixed. The audit's output is a **process correction**: superseding a finding means editing the map
 row in the same commit, not only the journal.
+
+---
+
+## Audit #34 — tick 932 (2026-08-05)
+
+**Sources, searched rather than recalled:**
+
+* [Interop 2026 focus areas + investigations](https://github.com/web-platform-tests/interop/blob/main/2026/README.md) — the authoritative list, fetched
+* [Launching Interop 2026 — Mozilla Hacks](https://hacks.mozilla.org/2026/02/launching-interop-2026/) · [Announcing Interop 2026 — WebKit](https://webkit.org/blog/17818/announcing-interop-2026/) · [Interop 2026 — web.dev](https://web.dev/blog/interop-2026)
+* [Baseline 2026 — web.dev](https://web.dev/baseline/2026) and the [January 2026 digest](https://web.dev/blog/baseline-digest-jan-2026)
+* [This Month in Ladybird — January 2026](https://ladybird.org/newsletter/2026-01-31/)
+
+### RECONCILIATION — all 20 focus areas + 4 investigations, checked one by one
+
+**Every Interop 2026 area already has a row, and every row carries a truthful verdict.** This is the
+first audit in a while where the map survived the whole list without an addition, and the *statuses*
+are the informative part rather than the presence:
+
+```text
+  container style queries        missing      CSS anchor positioning        missing
+  CSS attr()                     partial      CSS contrast-color()          gated
+  CSS zoom                       partial      custom highlights             (rows present)
+  dialogs and popovers           gated        fetch uploads and ranges      (rows present)
+  IndexedDB                      gated        JSPI for Wasm                 missing
+  media pseudo-classes           partial      Navigation API                gated
+  scoped custom element regs     missing      scroll-driven animations      missing
+  scroll snap                    gated        CSS shape()                   (rows present)
+  view transitions               gated        cross-document VT             partial
+  WebRTC                         missing      WebTransport                  missing
+  WebVTT (investigation)         gated        JPEG XL (investigation)       missing
+```
+
+Map totals after this audit: **282 gated · 112 missing · 44 partial · 17 unknown · 10 works** — 465
+rows, of which 448 carry a verdict. The invariant the ratchet actually defends (capabilities
+*measured*, not capabilities *green*) is intact.
+
+### ⚠⚠ THE ONE ADDITION: MODULE SERVICE WORKERS, AND IT IS A HALF-INSTALLED API
+
+Baseline Newly available **January 2026**: `navigator.serviceWorker.register(url, {type: 'module'})`
+across all three engines. It is how a modern PWA ships its worker — an `import` on the first line of
+`sw.js`.
+
+Our `Service Worker` row is `gated` and says nothing about the script type, so the map read as though
+this were covered. Reading the producer rather than the row: **`register(url, opts)` reads
+`opts.scope` and never `opts.type`** (`engine/js/src/event_loop.rs:2693-2700`), and the script is
+evaluated through `W.evaluate` — the classic path.
+
+That is the **t772-775 shape exactly — absence routes to a fallback, HALF-presence routes into a
+wall.** The option is accepted silently, the module script then fails to parse, the registration
+promise rejects, and a PWA that awaits it never boots. A page that could have feature-detected its
+way to a classic worker is instead told *yes* and then broken.
+
+Added as its own row with status **`unknown`, deliberately, not `missing`** — the mechanism is read
+from source and a claim about another subsystem is a hypothesis until a probe runs. The row carries
+the probe that settles it: register a worker whose first line is `import {x} from "./m.js"` and
+record whether the promise resolves.
+
+### Also checked, already correctly on the map
+
+`Content-Encoding: zstd` (Baseline Feb 2026) — present, `missing`. The `ic`/`ric` units — present.
+`:active-view-transition` — present. No other Baseline-2026 item was absent.
+
+### RE-RANK
+
+**None, and the reason is worth recording rather than leaving implicit.** The newly-named surface is
+all Interop/Baseline *feature* work, and the binding Phase-0 constraint is still the RENDER metric
+(`shape >= 0.75` on the in-scope corpus). None of the 20 areas outranks the burndown: the ones that
+are `missing` are large and modern (anchor positioning, scroll-driven animations, WebTransport, JSPI)
+but none of them is why a corpus page lays out at the wrong size today. The module-service-worker gap
+is a **function-leg** item and goes in the M2 queue, not ahead of M1.
+
+The audit's value this cycle is therefore the negative one: **the frame is still the right frame**,
+checked against what the four vendors agreed on rather than against memory.

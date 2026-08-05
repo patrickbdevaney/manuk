@@ -50,15 +50,27 @@
 //!   behaviour: the second is measurable only once the first has landed, which is why they land
 //!   together and why neither is a separable tick.
 //!
-//! ## The residue, named rather than blamed
+//! ## The residue, named rather than blamed — and HALVED at t932, deliberately
 //!
-//! ⚠ A `table-cell` inside a table with an **explicit height** must STRETCH to fill it — Chrome
-//! gives `[0 90 300x80]` for the classic `display:table{height:80px}` + `vertical-align:middle`
-//! pair, and we give `[0 92 67x20]`. This fix takes that box from `67x17` to `67x20` (it is a cell,
-//! and it now gets a line box) but does **not** stretch it. That needs anonymous-row generation
-//! *inside* a real table plus cell stretching, which is a different mechanism in a different
-//! function. It is asserted here at OUR number so that a future fix has to come and change it
-//! deliberately — per t814, a residue's stated cause is a guess until it is measured on its own.
+//! ⚠ A `table-cell` inside a table with an **explicit height** must STRETCH to fill it. Chrome gives
+//! `[0 90 300x80]` for the classic `display:table{height:80px}` + `vertical-align:middle` pair. This
+//! row was pinned at OUR number *specifically so that a future fix would have to come and change it
+//! deliberately* — and that is what happened:
+//!
+//! ```text
+//!                    Chrome          at t814        at t932
+//!   #c3          [0 90 300x80]   [0 92  67x20]  [0 90 300x20]
+//! ```
+//!
+//! t932 generated the missing anonymous row **inside** a real table (`collect_table_rows` recognised
+//! only `table-row`/`table-row-group`, so a bare cell child of a `table` was dropped entirely). That
+//! was named here as one of the two things this residue needed, and it moved **three of the four
+//! coordinates from wrong to Chrome-exact**: x, y and width. The pin is now Chrome's on x/y/width
+//! and ours on **height alone**.
+//!
+//! What is left is therefore isolated to one quantity: **cell stretching** — the height-distribution
+//! algorithm that t908 and t925 also name from the real-`<table>` side. Same missing algorithm, three
+//! doors. The next fix must change this line again, and it will only have one number to move.
 
 use manuk_text::FontContext;
 
@@ -174,14 +186,18 @@ fn g_orphan_table_cell() {
          formatter is not the defect and must keep running",
     );
 
-    // ── THE NAMED RESIDUE. Chrome stretches this cell to [0 60 300x80]; we do not.
+    // ── THE NAMED RESIDUE, HALVED AT t932. Chrome stretches this cell to [0 90 300x80]; we now
+    //    match it on x, y and width, and not on height.
     assert_box(
         &page,
         "#c3",
-        [0.0, 92.0, 67.0, 20.0],
-        "a cell in a table with an EXPLICIT HEIGHT must stretch to fill it — Chrome says 300x80, we \
-         say 67x20. Asserted at OUR number ON PURPOSE: this fix gave it a line box (17->20) but not \
-         the stretch, which needs anonymous-row generation INSIDE a real table. A future fix must \
-         come and change this line deliberately",
+        [0.0, 90.0, 300.0, 20.0],
+        "a cell in a table with an EXPLICIT HEIGHT must stretch to fill it — Chrome says \
+         [0 90 300x80]. x, y and WIDTH are Chrome's here; only the HEIGHT is ours. t814 pinned this \
+         at [0 92 67x20] on purpose, naming anonymous-row generation INSIDE a real table as one of \
+         the two things it needed; t932 did that, and it moved three of the four coordinates onto \
+         Chrome. What is left is exactly one quantity — cell stretching, the height-distribution \
+         algorithm t908/t925 name from the real-<table> side. The next fix must change this line \
+         again, and it has only one number to move",
     );
 }

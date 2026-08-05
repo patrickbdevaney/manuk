@@ -46371,6 +46371,180 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 932 — the composed width family is CLEAN, and the one defect in it was a container collapsing to 2% of its size (2026-08-05)
+
+TICK SHAPE: capability — the discovery engine run on burndown family #1 (`PHASE0-RENDER-BURNDOWN.md`
+§3.1, container-WIDTH errors laundered into wrap/line-count → dy). NO hypothesis in the fixture: 25
+composed width cases, one variable each, an identical 400px containing block, controls throughout,
+plus three real-prose LINE-COUNT probes because the family's whole claim is that a width error
+surfaces as a height error.
+
+⚠⚠⚠ **FINDING 1, AND IT IS A NEGATIVE RESULT WORTH MORE THAN THE FIX: THE COMPOSED WIDTH FAMILY IS
+CLEAN.** Twenty-four of twenty-five Chrome-exact, and they are the shapes a real page is actually
+made of — nested percentages (50% of 50% of 400 = 100, and 33.3333% twice = 44.44), `%` width and
+`%` padding on the *same* box in both box-sizings, border-box with px padding and an asymmetric
+border, `width:auto` carrying a full margin/border/padding frame in both box-sizings, `width:auto`
+inside a float and inside an inline-block, `%` inside a flex item and a grid item, `min-width:50%`
+and `max-width:25%`, `calc(100% - 2em)` at two font sizes, the `max-width + margin:0 auto + padding`
+page-wrapper idiom in both box-sizings, and `width:100%` inside a padded parent. **All three
+line-count probes matched exactly too** — the same prose at 317px, 288px and 409px gives 96/96/72 in
+both engines, so family #3 (sub-pixel advance accumulation flipping a wrap boundary) did not
+reproduce at any of the three widths, including the two chosen to sit near a boundary.
+
+That is a real steer for the burndown and it should be written down rather than buried under the fix:
+**family #1's residual mass is NOT in composed block-level width arithmetic.** The loop has assumed
+for many ticks that it is.
+
+⚠⚠⚠ **FINDING 2 — THE TWENTY-FIFTH CASE: A `table-cell` WHOSE PARENT IS A `table` HAS NO ANONYMOUS
+ROW, SO IT WAS DROPPED ON THE FLOOR.** `width:50%` inside a bare cell came out **4px against
+Chrome's 200** — the percentage resolving against a container that had collapsed from 400px to the
+8px width of the letter it contained. A **392px container-width error**, which is burndown family #1
+in the grossest form available: every line of prose inside such a container re-wraps, and the whole
+subtree's height is wrong underneath it.
+
+The follow-up fixture found the mechanism and the discriminator in the same run — with an explicit
+`display:table-row` we are exact, without one the cell matches no arm in `collect_table_rows` and
+vanishes:
+
+```text
+                                            Chrome           before             after
+   two bare cells                     200@0 · 200@200     8@0 · 8@8       200@0 · 200@200
+   bare · real row · bare             400 · 400 · 400   GONE · 400 · GONE  400 · 400 · 400
+   display:table;height:100px + cell     400 wide           8 wide            400 wide
+   a bare cell's width:50% child           200                4                 200
+   explicit table-row     (CONTROL)        400               400                400
+   real <table><tr><td>   (CONTROL)        394               394                394
+```
+
+⚠⚠ **AND IN ONE ARRANGEMENT IT IS A MISSING_BOX, NOT A GEOMETRY ERROR.** `bare cell · real row ·
+bare cell` produced **no box at all** for the first and third cells — Chrome lays out three rows,
+we emitted one. That is the coverage-killing class the board ranks separately from shape, reached
+through a shape-shaped door.
+
+**Why this is not the exotic corner it looks like.** `display:table` + `display:table-cell` with no
+row between them is the pre-flexbox **vertical-centring** idiom and the **equal-height-columns**
+idiom. Both are everywhere in the legacy/CMS markup that makes up the CrUX tail the corpus switch is
+deliberately steering us into.
+
+USAGE WEIGHT, and it is stated as **no information rather than as zero**: 0 of the 85 cached corpus
+snapshots carry `display:table-cell` in their inline CSS, and 5 carry `display:table`. The snapshots
+are the `curl`'d HTML, so external stylesheets — where nearly all CSS lives, and where a layout idiom
+like this one *always* lives — are not in the count. **A lower bound of zero measures the instrument,
+not the web**, and it is not evidence the idiom is absent; it is the reason the severity argument
+(392px, plus a MISSING_BOX) had to carry this tick rather than the frequency one.
+
+GATE: **`G_ANONYMOUS_TABLE_ROW`** (10 claims, 2 CONTROLs). RED-proven **three** ways, each naming a
+different way to get it wrong:
+
+```text
+  stop accumulating bare cells (restore `_ => {}`)   RED  two cells report 8 and 8
+  give each bare cell its OWN row                    RED  two cells report 400 and 400
+  drop the flush before a real row                   RED  `#run_a` reports 200, not 400
+```
+
+⚠ **The middle proof printed something other than what I predicted, and the header now says what was
+measured.** I wrote that one-row-per-cell would be caught by the **x** assertion (stacked at x=0
+instead of 0 and 200) while the widths still passed. It is caught by the **width** assertion first —
+each cell becomes the only one in its row and takes the whole 400. Predicting a proof from the fix is
+the same error as writing a fixture from the fix; the claim is corrected in place rather than left
+reading as though it had been verified.
+
+⚠ **THE FIXTURE CAUGHT MY OWN WRONG CONSTANT, WHICH IS THE POINT OF WRITING CONTROLS.** The
+`<table><tr><td>` control first went RED at 394 against my asserted 198 — I had copied the number
+from the `width:50%` row of the *previous* fixture. Chrome measures 394 on this fixture and the
+engine produces 394. **The gate was right and the constant was wrong**, which is the failure mode
+t902-920 names as the top source of false findings, caught here by the control rather than published.
+
+⚠⚠ **FINDING 3 — OUR SCROLLBAR MODEL IS CORRECT AND THE REFERENCE IT IS SCORED AGAINST HAS NO
+SCROLLBARS. HANDED TO THE OBSERVER, NOT ACTED ON.** `width:50%` inside `overflow-y:scroll` measures
+193 here. Chrome measures **192.5 with real scrollbars and 200 with `--hide-scrollbars`** — and
+`--hide-scrollbars` is what `chrome.rs:949` passes for every reference render, deliberately, because
+a visible scrollbar would shrink the layout viewport and shift every box.
+
+```text
+                                    Chrome           Chrome            ours
+                                 --hide-scrollbars  real scrollbars
+   overflow-y:scroll,  50% child       200              192.5            193
+   overflow-y:scroll,  prose           400              385              385
+   overflow-y:auto (overflows), 50%     200              192.5            200
+```
+
+So on every `overflow-y:scroll` container the engine is **15px narrower than the reference it is
+scored against**, prose re-wraps inside it, and the line-count error cascades — family #1's exact
+mechanism, arising from the instrument rather than the engine. **I did not "fix" this**: making the
+engine stop reserving gutters would trade real-browser correctness for a score, which is the trade
+the ratchet refuses, and the reconciliation belongs on the instrument side (a scrollbar width the
+fidelity harness can set to 0 to match its own reference). 5 of 85 snapshots carry
+`overflow(-y):scroll`, 0 on `html`/`body` — a lower bound, and modest, which is why this is recorded
+for the observer rather than taken as this tick.
+
+⚠ **FINDING 4, named residue with its number:** `overflow-y:auto` that actually overflows should
+reserve a gutter and does not (Chrome-with-scrollbars 192.5, ours 200). The source already documents
+this as deliberate — it needs a second layout pass — and the measurement now sits beside the comment.
+
+⚠⚠⚠ **FINDING 5, AND IT IS THE BEST THING THAT HAPPENED THIS TICK: A GATE I DID NOT KNOW EXISTED
+HAD ALREADY NAMED THIS FIX AS ITS MISSING PIECE, AND IT CAUGHT ME.** The full suite went RED on
+`g_orphan_table_cell` — written at t814 for the *inline* half of the same idiom (an orphan
+`table-cell` with no table at all is ATOMIC, not a run of text). Its residue section says, in
+advance:
+
+> *"…we give `[0 92 67x20]`. That needs **anonymous-row generation inside a real table** plus cell
+> stretching… It is asserted here at OUR number so that a future fix has to come and change it
+> deliberately."*
+
+That fix is this one, and the mechanism I "discovered" from a fixture was already written down with
+its number. **I should have grepped the gate corpus for `table-cell` before writing a line** — the
+standing rule is that the board and the wiki are read first, and a gate header is the densest form
+of both. The cost was low only because the gate was there.
+
+And it did exactly what its author built it to do. Re-measured against Chrome on that fixture:
+
+```text
+                    Chrome          at t814        at t932
+   #c3          [0 90 300x80]   [0 92  67x20]  [0 90 300x20]
+```
+
+**Three of the four coordinates moved from wrong to Chrome-exact — x, y and width** — and the pin is
+re-set to Chrome on those three and ours on **height alone**, so the remaining residue is now
+isolated to exactly one quantity: cell stretching. Every other row of that gate is byte-identical.
+This is a re-pin in the safe direction (strictly more of the assertion is now a claim about Chrome),
+made deliberately as its author demanded, and it is the third door onto the same missing
+height-distribution algorithm — t908 and t925 reached it from real `<table>` markup, t814 from the
+orphan cell, this tick from the bare cell inside a real table.
+
+⚠ **NOT DONE, and it is that SAME missing algorithm reached by a new door:** a cell does not STRETCH
+to fill a taller table. `display:table; height:100px` with one bare cell is 400×**24** here against
+Chrome's 400×**100** — the width is now exact and the height is not, so the `vertical-align:middle`
+half of the centring idiom still does not centre. Recorded in both gates' headers so it is not
+re-measured a fourth time.
+
+RATCHET: `manuk-layout` 125/125, full `manuk-page` gate suite on the shipping cascade — one RED,
+`g_orphan_table_cell`'s deliberately-pinned residue row, moved toward Chrome and re-pinned as that
+gate instructs; no other row of any gate moved.
+
+SURFACE AUDIT #34 (due at 921, run here): all 20 Interop 2026 focus areas and all 4 investigations
+checked one by one against `CONSTELLATION.tsv`, from the fetched authoritative list rather than from
+memory. **Every one already has a row with a truthful verdict** — the first audit in a while where
+the map survived the whole list. Totals 282 gated · 112 missing · 44 partial · 17 unknown · 10 works.
+
+⚠⚠ **ONE ADDITION, AND IT IS A HALF-INSTALLED API: MODULE SERVICE WORKERS.**
+`navigator.serviceWorker.register(url, {type:'module'})` went Baseline in January 2026 and is how a
+modern PWA ships its worker. Our `Service Worker` row is `gated` and silent on the script type, so
+the map read as covered. Reading the producer: **`register(url, opts)` reads `opts.scope` and never
+`opts.type`** (`event_loop.rs:2693-2700`), and the script goes through `W.evaluate` — the classic
+path. That is the t772-775 shape exactly: absence routes to a fallback, HALF-presence into a wall.
+The option is accepted silently, the module script fails to parse, the promise rejects, and a page
+that would have feature-detected its way to a classic worker is told *yes* and then broken. Filed as
+**`unknown`, deliberately, not `missing`** — read from source, and a claim about another subsystem is
+a hypothesis until a probe runs; the row carries the probe that settles it. RE-RANK: none — it is a
+function-leg item for M2, and nothing newly named outranks the render burndown.
+
+PERF: none — one extra match arm and a `Vec` accumulator in a function that already walked the same
+children. Tables that were already correct take an identical path (the accumulator stays empty).
+
+WIKI: `docs/wiki/box-layout.md` — the anonymous-row rule with Chrome's three semantic clauses
+measured, and the negative result that the composed width family is clean.
+
 ## Tick 931 — the sidecar stopped at the taffy border, and the bound t930 named was half its true size (2026-08-05)
 
 TICK SHAPE: capability — burndown #1 (the width/sizing family; container-WIDTH errors launder into

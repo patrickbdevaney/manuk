@@ -4642,7 +4642,10 @@ impl Ctx<'_> {
         }
         let mut row_boxes = Vec::new();
         for r in 0..nrows {
-            let rn = rows.get(r).map(|(n, _)| *n);
+            // `and_then`, not `map`: an ANONYMOUS row (a bare `table-cell` child of a `table`)
+            // carries `None` because it has no DOM node — so it gets no style lookup, paints no
+            // background of its own, and reports no node, which is what an anonymous box is.
+            let rn = rows.get(r).and_then(|(n, _)| *n);
             let rs = rn.and_then(|n| self.styles.get(&n));
             row_boxes.push(LayoutBox {
                 rect: Rect {
@@ -4785,26 +4788,71 @@ impl Ctx<'_> {
     /// background and border paint and what `getBoundingClientRect` reports for a `<tr>`. Emitting
     /// an anonymous row box instead left every `<tr>` on the web without geometry — 31 of Hacker
     /// News' 119 identified elements.
-    fn collect_table_rows(&self, table: NodeId) -> Vec<(NodeId, Vec<NodeId>)> {
+    fn collect_table_rows(&self, table: NodeId) -> Vec<(Option<NodeId>, Vec<NodeId>)> {
         let mut rows = Vec::new();
+        // **A `table-cell` whose parent is a `table` needs an ANONYMOUS ROW generated around it
+        // (CSS 2.1 §17.2.1), and without one it was not merely mis-sized — it vanished.**
+        //
+        // This function used to recognise only `table-row` / `table-row-group`, so a bare cell
+        // matched no arm and was dropped on the floor. The table then had *no rows at all*, took the
+        // rowless shrink-to-fit path, and collapsed to its text: measured against Chrome on a 400px
+        // `display:table`, a bare cell's `width:50%` child came out **4px against Chrome's 200**, and
+        // a bare cell sitting after a real row produced **no box whatsoever** — a MISSING_BOX, not a
+        // geometry near-miss.
+        //
+        // That matters out of proportion to how exotic it looks, because `display:table` +
+        // `display:table-cell` with no row in between is not exotic at all: it is the pre-flexbox
+        // vertical-centring idiom (`display:table` on the parent, `display:table-cell;
+        // vertical-align:middle` on the child) and the equal-height-columns idiom, and both are
+        // everywhere in the legacy/CMS markup that makes up the CrUX tail.
+        //
+        // Chrome-measured semantics, and each row of the fixture pins a different part of the rule:
+        //
+        // ```text
+        //   two bare cells                        ONE anonymous row, side by side (0,0 / 200,0)
+        //   bare cell · real row · bare cell      THREE rows stacked — a real row BREAKS the run
+        //   display:table;height:100px + 1 cell   the cell is 400×100 (the centring idiom works)
+        // ```
+        //
+        // So: consecutive cells accumulate into one anonymous row, and a real `table-row` /
+        // `table-row-group` flushes it first so document order is preserved. The anonymous row
+        // carries `None` for its node — it is an anonymous box with no DOM identity, which is exactly
+        // what the consumer's `Option<NodeId>` already wanted: no style lookup, so no background of
+        // its own, and no node on the emitted `LayoutBox`.
+        let mut anon: Vec<NodeId> = Vec::new();
         for child in self.dom.children(table) {
             if !is_rendered(self.dom, self.styles, child) || !self.dom.is_element(child) {
                 continue;
             }
             match self.style_of(child).display {
-                Display::TableRow => rows.push((child, self.collect_cells(child))),
+                Display::TableCell => anon.push(child),
+                Display::TableRow => {
+                    if !anon.is_empty() {
+                        rows.push((None, std::mem::take(&mut anon)));
+                    }
+                    rows.push((Some(child), self.collect_cells(child)));
+                }
                 Display::TableRowGroup => {
+                    if !anon.is_empty() {
+                        rows.push((None, std::mem::take(&mut anon)));
+                    }
                     for gr in self.dom.children(child) {
                         if is_rendered(self.dom, self.styles, gr)
                             && self.dom.is_element(gr)
                             && self.style_of(gr).display == Display::TableRow
                         {
-                            rows.push((gr, self.collect_cells(gr)));
+                            rows.push((Some(gr), self.collect_cells(gr)));
                         }
                     }
                 }
-                _ => {} // caption / column / colgroup / stray content: skipped
+                // caption / column / colgroup / stray content: skipped, and deliberately does NOT
+                // break the run — only a real row does, which is what the `b1·b2·b3` fixture row
+                // measures.
+                _ => {}
             }
+        }
+        if !anon.is_empty() {
+            rows.push((None, anon));
         }
         rows
     }

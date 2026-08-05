@@ -401,6 +401,108 @@ unconditionally fails.
 
 **Bound.** A **flex item's** intrinsic min/max is still dropped — closed the following tick, below.
 
+## A bare `table-cell` needs an ANONYMOUS ROW, and without one it does not shrink — it VANISHES (tick 932)
+
+**Symptom.** `width:50%` inside a `display:table` > `display:table-cell` came out **4px against
+Chrome's 200** — a percentage resolving against a container that had collapsed from 400px to the 8px
+width of the letter it contained. In a second arrangement the cell produced **no box at all**.
+
+**Mechanism.** CSS 2.1 §17.2.1 generates an anonymous table-row around a `table-cell` whose parent is
+a `table`. `collect_table_rows` recognised only `table-row` and `table-row-group`, so a bare cell
+matched no arm and was dropped. The table then had no rows, took the rowless shrink-to-fit path, and
+collapsed onto its own text. The discriminator is exact and was in the first fixture: **with an
+explicit `display:table-row` we were already correct.**
+
+**Chrome's semantics, measured — three separate clauses, each with its own fixture row:**
+
+```text
+                                            Chrome           before             after
+   two bare cells                     200@0 · 200@200     8@0 · 8@8       200@0 · 200@200
+   bare · real row · bare             400 · 400 · 400   GONE · 400 · GONE  400 · 400 · 400
+   display:table;height:100px + cell     400 wide           8 wide            400 wide
+   a bare cell's width:50% child           200                4                 200
+   explicit table-row     (CONTROL)        400               400                400
+   real <table><tr><td>   (CONTROL)        394               394                394
+```
+
+* **Consecutive cells share ONE anonymous row** — side by side at x=0 and x=200, not stacked.
+* **A real `table-row` BREAKS the run** — `bare · row · bare` is three rows in document order, which
+  is why the accumulator is flushed when a real row or row-group is seen.
+* **The anonymous row carries `None` for its node.** It is an anonymous box: no style lookup, so no
+  background of its own, and no node on the emitted `LayoutBox`. The consumer already took an
+  `Option<NodeId>` (written for the `<tr>`-has-real-geometry fix), so this slots into the shape that
+  was already there.
+
+**Why it is not the corner it looks like.** `display:table` + `display:table-cell` with no row between
+them is the pre-flexbox **vertical-centring** idiom and the **equal-height-columns** idiom — both
+everywhere in the legacy/CMS markup that makes up the CrUX tail. And a 392px container-width error is
+burndown family #1 (`PHASE0-RENDER-BURNDOWN.md` §3.1) in its grossest available form: every line
+inside re-wraps, so the whole subtree's height is wrong beneath it.
+
+**Gate.** `G_ANONYMOUS_TABLE_ROW` (10 claims, 2 CONTROLs), RED-proven three ways — stop accumulating
+bare cells (two cells report 8 and 8); give each bare cell its own row (they report 400 and 400); drop
+the flush before a real row (`#run_a` reports 200). The middle one is the plausible wrong fix: it
+satisfies "a bare cell is no longer dropped" completely and gets the arrangement wrong.
+
+**Bound — the same missing algorithm through a THIRD door.** A cell does not STRETCH to fill a taller
+table: `display:table; height:100px` with one bare cell is 400×**24** against Chrome's 400×**100**.
+Width exact, height not, so the `vertical-align:middle` half of the centring idiom still does not
+centre. t908 and t925 reached this from real `<table>` markup and t814 from the orphan cell.
+
+**`g_orphan_table_cell` had already named this fix as its missing piece, in advance.** That gate
+(t814, the *inline* half of the same idiom) pinned its `#c3` row at OUR `[0 92 67x20]` on purpose,
+writing that it needed *"anonymous-row generation inside a real table plus cell stretching"* and that
+a future fix would have to change the line deliberately. This was that fix, and it moved **three of
+four coordinates onto Chrome** — `[0 90 300x20]` against Chrome's `[0 90 300x80]` — so the residue is
+now isolated to the single remaining quantity. The lesson costs nothing to state and would have saved
+an hour: **grep the gate corpus for the property before writing the fixture**; a gate header is the
+densest form of the wiki there is.
+
+### The negative result from the same sweep, which is worth as much as the fix
+
+The fixture that found this was 25 composed width cases with no hypothesis in it, and **twenty-four
+were already Chrome-exact**: nested percentages (50% of 50% of 400 = 100; 33.3333% twice = 44.44), `%`
+width and `%` padding on the same box in both box-sizings, border-box with px padding and an
+asymmetric border, `width:auto` carrying a full margin/border/padding frame in both box-sizings,
+`width:auto` inside a float and inside an inline-block, `%` inside a flex item and a grid item,
+`min-width:50%` / `max-width:25%`, `calc(100% - 2em)` at two font sizes, the `max-width + margin:0
+auto + padding` page-wrapper idiom in both box-sizings, and `width:100%` inside a padded parent.
+
+**All three real-prose LINE-COUNT probes matched exactly too** (the same paragraph at 317px / 288px /
+409px gives 96/96/72 in both engines), so family #3 — sub-pixel advance accumulation flipping a wrap
+boundary — did not reproduce at any of the three widths, including the two chosen to sit near one.
+
+So: **family #1's residual mass is NOT in composed block-level width arithmetic**, which the loop had
+been assuming for many ticks. Look for it in the box types that opt out of ordinary block sizing —
+tables, replaced content, and scroll containers — rather than in the arithmetic itself.
+
+### The scrollbar finding, recorded because it is an INSTRUMENT question and must not be "fixed" here
+
+`width:50%` inside `overflow-y:scroll` measures 193 here. Chrome measures **192.5 with real
+scrollbars and 200 with `--hide-scrollbars`** — and `--hide-scrollbars` is what `chrome.rs:949`
+passes for every reference render, deliberately, because a visible scrollbar would shrink the layout
+viewport and shift every box.
+
+```text
+                                    Chrome            Chrome           ours
+                                 --hide-scrollbars   real scrollbars
+   overflow-y:scroll,  50% child        200             192.5           193
+   overflow-y:scroll,  prose            400             385             385
+   overflow-y:auto (overflows), 50%     200             192.5           200
+```
+
+**Our engine is right and the reference has no scrollbars.** On every `overflow-y:scroll` container we
+are 15px narrower than what we are scored against, prose re-wraps, and the line-count error cascades —
+family #1's exact mechanism, arising from the instrument rather than the engine. Making the engine
+stop reserving gutters would trade real-browser correctness for a score, which is the trade the
+ratchet refuses; the reconciliation belongs on the instrument side (a scrollbar width the fidelity
+harness can set to 0 to match its own reference). Frequency is modest — 5 of 85 snapshots carry
+`overflow(-y):scroll`, none on `html`/`body` — so this is handed on rather than taken.
+
+Separately and genuinely ours: **`overflow-y:auto` that actually overflows should reserve a gutter and
+does not** (Chrome-with-scrollbars 192.5, ours 200). The source already documents this as deliberate
+residue needing a second layout pass; the measurement now sits beside the comment.
+
 ## An intrinsic keyword is UNREPRESENTABLE in taffy, so it must be RESOLVED before the style is built (tick 931)
 
 **Symptom.** t930 taught `ComputedStyle` to hold an intrinsic keyword on all four min/max properties
