@@ -14,8 +14,8 @@
 use manuk_css::{
     AlignItems as CssAlign, BoxSizing, ComputedStyle, Dim, Direction as CssDirection,
     Display as CssDisplay, FlexDirection as CssDir, FlexWrap as CssWrap, GridLine as CssGridLine,
-    JustifyContent as CssJustify, Position as CssPosition, TrackComponent as CssTrackComponent,
-    TrackSize as CssTrackSize, TrackUnit,
+    IntrinsicSize, JustifyContent as CssJustify, Position as CssPosition,
+    TrackComponent as CssTrackComponent, TrackSize as CssTrackSize, TrackUnit,
 };
 use taffy::prelude::*;
 use taffy::style::{
@@ -387,6 +387,103 @@ impl<'m> TaffyDom<'m> {
         (tree, root)
     }
 
+    /// **An intrinsic sizing keyword is UNREPRESENTABLE in taffy, so it has to be RESOLVED to px
+    /// before the style is built — otherwise it is invisible inside flex and grid.**
+    ///
+    /// `to_taffy_style` maps `cs.width` through `dimension()`, and a `min-content` / `max-content`
+    /// width is stored as `Dim::Auto` plus a keyword sidecar (`width_keyword`, and since t930
+    /// `min_width_keyword` / `max_width_keyword`). The sidecar never crossed into taffy, so every
+    /// one of them silently became `Dimension::Auto` — *"size me from my flex basis"*, which is a
+    /// different, valid answer. t930 fixed this on the block path and left the flex/grid half open;
+    /// measured against Chrome, the gap was wider than the note recorded — plain `width:min-content`
+    /// is wrong on a flex item too, and on a grid item, not just the four min/max properties.
+    ///
+    /// ```text
+    ///   "hello there world", 16px serif: min-content 37.33 · max-content 109.30 · 400px container
+    ///                                                  Chrome   before   after
+    ///     flex item  width:min-content                  37.33      109      37
+    ///     flex item  max-width:min-content              37.33      109      37
+    ///     flex item  min-width:max-content   (20px CB) 109.30       37     109
+    ///     flex item  flex:1; max-width:min-content      37.33      400      37
+    ///     flex item  flex:1; max-width:max-content     109.30      400     109
+    ///     grid item  width:min-content                  37.33      400      37
+    ///     grid item  max-width:min-content              37.33      400      37
+    /// ```
+    ///
+    /// Taffy 0.12 *can* hold a `CompactLength::min_content()`, but its `Dimension` validates as
+    /// `LENGTH | PERCENT | AUTO` only, so handing one to the flexbox algorithm is a tag it never
+    /// reads — a dependency asked a question it does not answer. Resolving to px instead uses the
+    /// measure callback that is already threaded through this tree for exactly this purpose, and it
+    /// is the SAME question the block path asks (`min_content_width` / `max_content_width` both
+    /// bottom out in `measure_intrinsic`), so the two formatting contexts cannot drift apart.
+    ///
+    /// ⚠ **`fit-content` is deliberately LEFT as `Dimension::Auto`, and that is a measurement, not
+    /// an omission.** `fit-content` is `min(max-content, max(min-content, stretch-fit))`, and the
+    /// stretch-fit inside a flex line is not known at style-build time. Taffy's `auto` + `flex-basis:
+    /// auto` + `flex-shrink` *is* that clamp: measured Chrome-exact in a wide container (109.30) and
+    /// in a narrow one (37.33), on `width`, `min-width` and `max-width` alike. Resolving it here
+    /// would replace a correct answer with a guess.
+    ///
+    /// ⚠ **`box-sizing` has NO effect on an intrinsic keyword** — measured, because the grammar
+    /// invites the opposite assumption. With `padding: 0 10px`, Chrome gives a **57.33** border box
+    /// under `content-box` AND under `border-box`. Taffy subtracts the frame from `size` under
+    /// border-box, so the frame is added back there to land on the same border box either way.
+    ///
+    /// ⚠ **NOT DONE, named with its number: a flex/grid item that is ITSELF a flex/grid CONTAINER.**
+    /// `display:flex; width:min-content` nested in a flex row measures **109.30** against Chrome's
+    /// 37.33. Resolving it here would re-enter: the measure callback answers a container's intrinsic
+    /// width by building a *second* `TaffyDom` for that node, whose `add` would reach this function
+    /// again on the same node and recurse without bound — a Bar-0 crash, not a wrong number. It
+    /// needs a root-suppression flag on the nested build, which is a different mechanism; the
+    /// `container` guard at the call site is what keeps the recursion profile unchanged.
+    fn resolve_intrinsic_inline(&mut self, cs: &ComputedStyle, node: DomNodeId, style: &mut Style) {
+        if cs.width_keyword.is_none()
+            && cs.min_width_keyword.is_none()
+            && cs.max_width_keyword.is_none()
+        {
+            return;
+        }
+        // Percentage padding resolves against a containing-block width that does not exist during an
+        // intrinsic measure; `px_right_insets` on the block path treats it as 0 for the same reason.
+        let frame = if cs.box_sizing == BoxSizing::BorderBox {
+            cs.padding.left.resolve(0.0, 0.0).max(0.0)
+                + cs.padding.right.resolve(0.0, 0.0).max(0.0)
+                + cs.border_width.left.max(0.0)
+                + cs.border_width.right.max(0.0)
+        } else {
+            0.0
+        };
+        let measure = &mut self.measure;
+        let mut px = |k: IntrinsicSize| -> Option<f32> {
+            let width = match k {
+                IntrinsicSize::MinContent => AvailableSpace::MinContent,
+                IntrinsicSize::MaxContent => AvailableSpace::MaxContent,
+                IntrinsicSize::FitContent => return None,
+            };
+            let size = measure(
+                node,
+                Size {
+                    width: None,
+                    height: None,
+                },
+                Size {
+                    width,
+                    height: AvailableSpace::MaxContent,
+                },
+            );
+            Some(size.width + frame)
+        };
+        if let Some(v) = cs.width_keyword.and_then(&mut px) {
+            style.size.width = length(v);
+        }
+        if let Some(v) = cs.min_width_keyword.and_then(&mut px) {
+            style.min_size.width = length(v);
+        }
+        if let Some(v) = cs.max_width_keyword.and_then(&mut px) {
+            style.max_size.width = length(v);
+        }
+    }
+
     fn add(&mut self, dom: &Dom, styles: &StyleMap, node: DomNodeId) -> TId {
         let cs = &styles[&node];
         let mut style = to_taffy_style(cs, &mut self.calc);
@@ -412,6 +509,9 @@ impl<'m> TaffyDom<'m> {
                 display: Display::Block,
                 ..Style::DEFAULT
             };
+        }
+        if !container && dom.is_element(node) {
+            self.resolve_intrinsic_inline(cs, node, &mut style);
         }
         let children: Vec<TId> = if container {
             // The FLAT tree, exactly as the block path does — a shadow host that is also a flex or

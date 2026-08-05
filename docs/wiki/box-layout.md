@@ -399,10 +399,69 @@ shipping cascade, so a `MinimalCascade`-aimed proof would have passed against a 
 making the serialisers ignore their keyword. Both carry CONTROL rows that a fix taking the new branch
 unconditionally fails.
 
-**Bound.** A **flex item's** intrinsic min/max is still dropped (`flex:1; max-width:min-content`
-measures 400 against Chrome's 48.17): that path is taffy's, taffy 0.12 has no intrinsic-keyword
-`Dimension`, and the keyword must be resolved to px *before* `to_taffy_style` — which today takes only
-a `ComputedStyle`, with no measurer.
+**Bound.** A **flex item's** intrinsic min/max is still dropped — closed the following tick, below.
+
+## An intrinsic keyword is UNREPRESENTABLE in taffy, so it must be RESOLVED before the style is built (tick 931)
+
+**Symptom.** t930 taught `ComputedStyle` to hold an intrinsic keyword on all four min/max properties
+and taught the block path to honour it, and named "a flex item's intrinsic min/max is still dropped"
+as its bound. Measured against Chrome, the bound was **wider than the note recorded**: not only the
+four min/max properties, but plain `width: min-content` — whose `width_keyword` sidecar has existed
+since t153 — is dropped on a flex item, and on a **grid** item too. Three formatting contexts, one
+sidecar, and only one of them ever read it.
+
+```text
+   "hello there world", 16px serif: min-content 37.33 · max-content 109.30 · 400px container
+                                                    Chrome   before   after
+     flex item  width:min-content                    37.33      109      37
+     flex item  max-width:min-content                 37.33      109      37
+     flex item  min-width:max-content   (20px CB)    109.30       37     109
+     flex item  flex:1; max-width:min-content         37.33      400      37
+     grid item  width:min-content                     37.33      400      37
+     grid item  max-width:min-content                 37.33      400      37
+     flex item  padding:0 10px; max-width:min-content 57.33      129      57
+```
+
+**Mechanism.** `to_taffy_style` maps `cs.width` through `dimension()`, and an intrinsic width is
+stored as `Dim::Auto` **plus a sidecar**. The sidecar never crossed, so every keyword became
+`Dimension::Auto` — *"size me from my flex basis"*. A different, valid answer: the wrong answer of the
+right type, one formatting context over. The before-state is legible from the numbers alone — 109
+(max-content, the flex-basis answer) in a wide container, 37 in a narrow one, 400 when the item also
+grew.
+
+**Why not hand taffy the keyword.** taffy 0.12 *can* build a `CompactLength::min_content()`, and
+`Dimension::from_raw` will take one. But `Dimension` validates as `LENGTH | PERCENT | AUTO`, so the
+flexbox algorithm reads a tag it does not answer — a dependency asked a question outside its grammar,
+which is worse than the bug. **Option 3 of the borrowed-engine table** instead: resolve to px through
+the measure callback that is already threaded through `TaffyDom` for exactly this purpose. It bottoms
+out in the same `measure_intrinsic` the block path's `min_content_width`/`max_content_width` use, so
+the two contexts cannot drift apart.
+
+**`box-sizing` has NO effect on an intrinsic keyword** — measured, because the grammar invites the
+opposite assumption. With `padding: 0 10px`, Chrome gives a **57.33 border box under `content-box`
+AND under `border-box`**. taffy subtracts the frame from `size` under border-box, so the frame is
+added back there to land on the same number either way.
+
+**`fit-content` is deliberately left as `Dimension::Auto`, and that is a measurement.** It is
+`min(max-content, max(min-content, stretch-fit))`, and the stretch-fit inside a flex line does not
+exist when the style is built. taffy's `auto` + `flex-basis: auto` + `flex-shrink` **is** that clamp:
+Chrome-exact in a wide container (109.30) and a narrow one (37.33), on `width`, `min-width` and
+`max-width` alike. Resolving it would replace a correct answer with a guess.
+
+**Gate.** `G_INTRINSIC_FLEX_GRID` (15 claims, six of them CONTROLs). RED-proven three ways — delete
+the resolver call (every fixed row snaps back, all CONTROLs hold); drop the `frame` term (the two
+`box-sizing` rows split, 57 vs 37); resolve `fit-content` eagerly to max-content (the
+`min-width:fit-content` CONTROL goes 37 → 109).
+
+**Bounds, with their numbers.** (1) The **block axis** on a flex item: `height:200px;
+max-height:min-content` measures 200 against Chrome's 18. A block-axis intrinsic size is the content
+height *at the item's resolved width*, which does not exist at style-build time — a different
+mechanism from the inline axis, where both quantities are answerable with no context at all. (2) An
+item that is **itself a flex/grid container**: `display:flex; width:min-content` nested in a flex row
+measures 109.30 against Chrome's 37.33. Resolving it re-enters — the measure callback answers a
+container's intrinsic width by building a *second* `TaffyDom` for that node, whose `add` reaches the
+resolver again on the same node and recurses without bound. **A Bar-0 crash, not a wrong number**;
+the `container` guard at the call site is what keeps the recursion profile identical to before.
 
 ## `height: stretch` / `-webkit-fill-available` FILLS the parent's definite height (tick 154)
 

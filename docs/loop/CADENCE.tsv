@@ -654,4 +654,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 926	b4ae8c7e	1785901396	2026-08-04T23:43:16-04:00	1599	measurement	63	6	138	33	397	81	3896	6960	0	478	0	the constitution check, and the window in which the loop corrected itself three times (2026-08-04)
 927	25d1cf87	1785903261	2026-08-05T00:14:21-04:00	1865	measurement	63	6	145	34	397	81	3896	6960	0	478	0	Chrome's input-baseline model, MEASURED — and the blocker is not the formula (2026-08-04)
 928	1e762c71	1785908153	2026-08-05T01:35:53-04:00	4892	measurement	63	9	356	33	397	81	3896	6960	0	478	0	the reference hypothesis is REFUTED, and the form-control item is HANDED ON (2026-08-04)
-930	dd878277	1785911520	2026-08-05T02:32:00-04:00	3367	capability	63	13	1100	292	399	81	3896	6960	0	479	0	the intrinsic keywords are representable on `width` and UNREPRESENTABLE on all four min/max (2026-08-05)
+930	f75c53a7	1785914405	2026-08-05T03:20:05-04:00	6252	capability	63	11	832	263	400	81	3896	6960	0	480	0	the intrinsic keywords are representable on `width` and UNREPRESENTABLE on all four min/max (2026-08-05)

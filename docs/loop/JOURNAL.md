@@ -46371,6 +46371,149 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 931 — the sidecar stopped at the taffy border, and the bound t930 named was half its true size (2026-08-05)
+
+TICK SHAPE: capability — burndown #1 (the width/sizing family; container-WIDTH errors launder into
+dy), taken as the named residue of t930. HYPOTHESIS, written before the fix: `to_taffy_style` drops
+the intrinsic-keyword sidecar, so `flex:1; max-width:min-content` measures the container width instead
+of the content width, exactly as t930 recorded.
+
+⚠⚠⚠ **THE HYPOTHESIS WAS RIGHT AND THE BOUND I INHERITED WAS HALF ITS TRUE SIZE — PLAIN
+`width: min-content` IS DROPPED ON A FLEX ITEM TOO, AND ON A GRID ITEM.** t930's note said "a FLEX
+ITEM's intrinsic **min/max** is still dropped", which is what I would have fixed if I had trusted it.
+The 21-case Chrome differential written *before* the fix — one variable per case, an identical 400px
+container, six control rows — says the gap is wider: `width_keyword` has existed since t153 and the
+flex/grid path never read it either. **Three formatting contexts, one sidecar, and only one of them
+ever looked at it.**
+
+```text
+   "hello there world" 16px serif   min-content 37.33 · max-content 109.30 · 400px CB unless noted
+                                                    Chrome   before   after
+   block  width:min-content         (REFERENCE)      37.33      37       37   ✓ t930
+   flex   width:100px                  (CONTROL)    100.00     100      100   ✓ never moved
+   flex   width:fit-content            (CONTROL)    109.30     109      109   ✓ never moved
+   flex   min-width:fit-content (20px) (CONTROL)     37.33      37       37   ✓ never moved
+   flex   flex:1                       (CONTROL)    400.00     400      400   ✓ never moved
+   grid   min-width:max-content        (CONTROL)    400.00     400      400   ✓ non-binding min
+   flex   width:min-content                          37.33     109       37   ✗→✓
+   flex   max-width:min-content                      37.33     109       37   ✗→✓
+   flex   min-width:max-content (20px CB)           109.30      37      109   ✗→✓
+   flex   flex:1; max-width:min-content              37.33     400       37   ✗→✓  <- t930's row
+   flex   flex:1; max-width:max-content             109.30     400      109   ✗→✓
+   grid   width:min-content                          37.33     400       37   ✗→✓
+   grid   max-width:min-content                      37.33     400       37   ✗→✓
+   flex   padding:0 10px; max-width:min-content      57.33     129       57   ✗→✓  content-box
+   flex   border-box; pad 0 10px; …min-content       57.33     129       57   ✗→✓  border-box
+```
+
+**The before-state is legible from the numbers alone, which is what identifies the mechanism.** An
+intrinsic width is stored as `Dim::Auto` **plus a sidecar**; the sidecar did not cross, so every
+keyword became `Dimension::Auto` — *"size me from my flex basis"*. Hence 109 (max-content) in a wide
+container, 37 in a narrow one, 400 when the item also grew: not one wrong number but the *flex-basis
+answer*, which is a different, VALID answer. The t922/t930 shape a third time — **a wrong answer of
+the right type** — except this time it is not an enum that could not say what the author wrote, it is
+a value the engine holds correctly and never hands across a boundary.
+
+⚠⚠ **I DID NOT HAND TAFFY THE KEYWORD, AND THE REASON IS THE INTERESTING PART.** taffy 0.12 *can*
+build a `CompactLength::min_content()`, and `Dimension::from_raw` will accept one — the obvious fix,
+and it compiles. But `Dimension` validates as `LENGTH | PERCENT | AUTO`: the flexbox algorithm would
+read a tag it does not answer, whose `value()` is meaningless. That is not "more permissive than
+Chrome" (t930's trap), it is **asking a dependency a question outside its grammar**, which is worse
+because it has no defined answer at all. Option 3 of the borrowed-engine table instead: resolve to px
+through the measure callback already threaded through `TaffyDom` for exactly this purpose. It bottoms
+out in the same `measure_intrinsic` that `min_content_width`/`max_content_width` use on the block
+path, so the two contexts cannot drift apart later.
+
+⚠⚠ **`box-sizing` HAS NO EFFECT ON AN INTRINSIC KEYWORD, AND I ONLY KNOW THAT BECAUSE I MEASURED
+IT.** The grammar invites the opposite assumption. With `padding: 0 10px`, Chrome gives the **same
+57.33 border box** under `content-box` and under `border-box`. taffy subtracts the frame from `size`
+under border-box, so the frame is added back there specifically — the gate asserts the two spellings
+are EQUAL, so a fix that skips this is wrong in exactly one of the two rows and cannot pass both.
+
+⚠⚠ **`fit-content` IS LEFT ALONE, AND THAT IS A MEASUREMENT RATHER THAN AN OMISSION.** It is
+`min(max-content, max(min-content, stretch-fit))`, and the stretch-fit inside a flex line does not
+exist when the style is built. taffy's `auto` + `flex-basis:auto` + `flex-shrink` **is** that clamp,
+Chrome-exact in a wide container (109.30) and a narrow one (37.33), on `width`, `min-width` and
+`max-width` alike. Three of the six CONTROL rows exist to catch the over-generalisation — the fix
+that "helpfully" resolves fit-content too satisfies every ✗→✓ row above and fails `#ctl_nfit`.
+
+USAGE WEIGHT, measured rather than asserted: **8 of the 85 cached corpus snapshots (9.4%) carry an
+intrinsic keyword AND a `display:flex|grid`**; 9 carry a keyword at all and 30 carry flex/grid. A
+**lower bound and stated as one** — the snapshots are the `curl`'d HTML, so external stylesheets,
+where nearly all CSS lives, are not in the count.
+
+GATE: **`G_INTRINSIC_FLEX_GRID`** (15 claims, six of them CONTROLs). RED-proven **three** ways, and
+each proof names a different way to get the fix wrong:
+
+```text
+  delete the `resolve_intrinsic_inline` call in `TaffyDom::add`   RED  `#fw_min` expected 37.33, got 109.30
+  drop the `frame` term (always add 0)                            RED  content-box 57.33 vs border-box 37.33
+  resolve `fit-content` eagerly to max-content                    RED  `#ctl_nfit` expected 37.33, got 109.30
+```
+
+Every width claim is asserted against a **block-path control box laid out in the same document**, not
+against 37.33 — that number is this face's min-content advance and hard-coding it would make the gate
+a font assertion. The claim with teeth is *`flex max-width:min-content` == `block width:min-content`*:
+same measurement, two formatting contexts.
+
+⚠⚠⚠ **TWO BOUNDS, NAMED WITH THEIR NUMBERS, AND ONE OF THEM IS A BAR-0 QUESTION RATHER THAN A
+SCOPE ONE.** (1) The **block axis** on a flex item: `height:200px; max-height:min-content` measures
+200 against Chrome's 18. A block-axis intrinsic size is the content height *at the item's resolved
+width*, which does not exist at style-build time — genuinely a different mechanism from the inline
+axis, where both quantities are answerable with no context at all. (2) An item that is **itself a
+flex/grid container**: `display:flex; width:min-content` nested in a flex row measures 109.30 against
+Chrome's 37.33. **Resolving that one re-enters** — the measure callback answers a container's
+intrinsic width by building a *second* `TaffyDom` for that node, whose `add` reaches the resolver
+again on the same node, unbounded. That is a Bar-0 crash, not a wrong number, and the `container`
+guard at the call site is what keeps the recursion profile identical to before this tick. It is
+recorded in the gate's own header so the next attempt does not rediscover it by hanging.
+
+⚠ **THE CORPUS PANEL WAS NOT RUN, AND SAYING SO IS THE HONEST REPORT.** t930 established, with three
+solo runs of the old binary, that `news.ycombinator`'s spread on ONE unchanged tree is **4.4 points**
+and that the `--jobs 2` panel manufactured a +8-point win that did not exist. This fix touches
+strictly fewer elements than t930's — every element without an intrinsic keyword on a flex or grid
+item takes an `Option::None` arm that is the expression that was already there — so the honest
+prediction is no attributable movement, and a panel run costs an hour to reproduce a number smaller
+than its own error bar. Per t909's tag rule this corpus cannot price these elements anyway. The
+statement of record is **"unmeasured, and here is why the measurement would not resolve it"**, not
+"zero".
+
+⚠⚠ **A GATE HAD GONE RED FOR THE ONE REASON A GATE MUST NEVER GO RED: THE ENGINE IMPROVED — AND IT
+STAYED RED UNNOTICED BECAUSE IT IS NOT IN THE WALL'S 19-OF-104 SUBSET.** The full `manuk-page` suite,
+run as this tick's ratchet check, failed exactly once: `g_rowless_table`'s `#t4`, asserting 91×22
+against a tree producing 97.171875×26. **Attributed before it was touched** — stash the change, re-run
+in the same hour, byte-identical failure — so it is not this tick's, exactly as t930 recorded when it
+found the same row while sweeping. Then re-measured in headless Chrome on that exact fixture rather
+than trusting either note:
+
+```text
+                       Chrome        ours
+   #t1  display:table   35.58×20     36×20
+   #t2  long run       213.45×20    213×20
+   #t3  table-row/cell 108.52×20    109×20
+   #t4  <table><tr><td> 97.17×26     97×26   <- the pin said 91×22
+   #t5  width:200px    200.00×20    200×20
+   #t6  inline-table    72.06×20     72×20
+```
+
+The row was deliberately pinned at **our** number when the gate was written, with a 6×4 cell-metric
+gap recorded as pre-existing. **That gap has closed** — every row of the fixture is now Chrome-exact —
+so the pin was asserting a number the engine had correctly stopped producing. Re-pinned to Chrome's
+97×26, which makes the assertion strictly *stronger*: it is now a claim about the reference rather
+than about us. This is the opposite of retuning a gate to land a tick, and it is worth separating the
+two: the failure is independently attributable to a tree that is not mine, and the new pin is harder
+to satisfy than the old one.
+
+RATCHET: `manuk-layout` 125/125, and the full `manuk-page` gate suite on the shipping cascade — one
+failure, pre-existing, attributed to a stale pin and closed above rather than left red.
+
+PERF: none — one guarded branch that is `Option::None` for every element without an intrinsic keyword
+on a flex/grid item, and the measure callback it calls is the memoized one taffy already invokes
+several times per solve. The recursion profile is unchanged by construction (the `container` guard).
+
+WIKI: `docs/wiki/box-layout.md` — why an intrinsic keyword must be resolved to px *before* the taffy
+style is built, what `box-sizing` does not do to it, and the two bounds with their numbers.
+
 ## Tick 930 — the intrinsic keywords are representable on `width` and UNREPRESENTABLE on all four min/max (2026-08-05)
 
 TICK SHAPE: capability — the discovery engine, run on the width/sizing family the burndown ranks #1

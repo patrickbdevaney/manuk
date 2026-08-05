@@ -46,11 +46,19 @@
 //!   produce. `#t5` remains asserted, because it pins the BEHAVIOUR (an author's width survives)
 //!   whether or not this particular expression is what delivers it.
 //!
-//! ⚠ **`#t4` is asserted at OUR 91×22, not Chrome's 97×26.** That is a real `<table><tr><td>`, which
-//! takes the table formatter in both states and is completely unmoved by this change; the 6×4
-//! difference is a pre-existing cell-metric gap. Asserting Chrome's number would make this gate fail
-//! for something it does not test — but asserting OUR number pins that the fix did not disturb the
-//! real-table path, which is the thing worth holding here.
+//! ⚠⚠ **`#t4` WAS asserted at OUR 91×22 rather than Chrome's 97×26, and re-pinned to Chrome at
+//! t931 — because the engine moved and the pin did not.** A real `<table><tr><td>` takes the table
+//! formatter in both states, so this row was originally pinned to our own number to prove the
+//! rowless fix did not disturb the real-table path, with the 6×4 gap recorded as a pre-existing
+//! cell-metric difference. That gap has since closed: re-measured in headless Chrome on this exact
+//! fixture at t931, `#t4` is **97.17×26** — our number to the pixel, and every other row of the
+//! fixture (`35.58 · 213.45 · 108.52 · 200 · 72.06`, all ×20) is Chrome-exact too.
+//!
+//! So the gate had gone RED for the one reason a gate must never go red: **the engine improved.**
+//! It is not in the wall's 19-of-104 subset, which is why it stayed red unnoticed; t930 found it
+//! while sweeping and named it rather than folding it in. Re-pinning to the reference makes the
+//! assertion STRICTER (it is now a claim about Chrome, not about us), and it is attributable on its
+//! own — the failure reproduced byte-identically on the pre-t931 tree in the same hour.
 
 use manuk_text::FontContext;
 
@@ -145,10 +153,11 @@ fn g_rowless_table() {
     assert_size(
         &page,
         "#t4",
-        91.0,
-        22.0,
-        "a real `<table><tr><td>`: asserted at OUR number, not Chrome's 97x26. It takes the table \
-         formatter in both states and is unmoved by this change; the 6x4 gap is a pre-existing \
-         cell-metric difference. Pinning it here proves the fix did not disturb the real-table path",
+        97.0,
+        26.0,
+        "a real `<table><tr><td>`, re-measured in headless Chrome on THIS fixture at t931: 97.17x26. \
+         This row was pinned at OUR 91x22 while a 6x4 cell-metric gap was open; the gap has since \
+         closed, so the pin was asserting a number the engine had correctly stopped producing. It is \
+         now a claim about Chrome rather than about us, which is strictly stronger",
     );
 }

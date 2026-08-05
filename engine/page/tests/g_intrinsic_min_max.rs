@@ -64,14 +64,14 @@
 //!   SHIPPING cascade, so a proof aimed at `MinimalCascade` would have passed against a broken
 //!   engine.
 //!
-//! ## NOT covered, named rather than left looking handled
+//! ## NOT covered here, named rather than left looking handled
 //!
-//! **A FLEX ITEM's intrinsic min/max is still dropped** — `display:flex` + `flex:1;
-//! max-width:min-content` measures 400 against Chrome's 48.17. That path is taffy's: `to_taffy_style`
-//! maps `min_size`/`max_size` to a `Dimension`, taffy 0.12 has no intrinsic-keyword variant, and the
-//! keyword would have to be resolved to px *before* the style is built — which needs the measurer
-//! plumbed into a function that today takes only a `ComputedStyle`. A different mechanism, with its
-//! number recorded here.
+//! **The flex/grid half is `G_INTRINSIC_FLEX_GRID` (t931), not this gate.** This one runs entirely
+//! on the block path. t931 measured the crossing into taffy and found the gap wider than this note
+//! originally recorded — plain `width: min-content` was dropped on a flex item and on a grid item
+//! too, not just the four min/max properties — and closed it for flex/grid **leaves** by resolving
+//! the keyword to px through the measure callback. Two bounds remain open there, both with their
+//! numbers: the BLOCK axis on a flex item, and an item that is itself a flex/grid CONTAINER.
 
 use manuk_text::FontContext;
 
