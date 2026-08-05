@@ -46371,6 +46371,96 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 937 — half the scorability ceiling is the REFERENCE failing, and the worklist has been sending engine ticks at it (2026-08-05)
+
+TICK SHAPE: measurement — following t936's own steer ("the ceiling, not the geometry") into the 27
+unscored in-scope sites, and asking the question the ranked backlog does not: **whose failure is
+each one?**
+
+⚠⚠⚠ **THE ANSWER IS THAT ROUGHLY HALF OF THEM ARE THE ORACLE'S, AND THE INSTRUMENT'S OWN SOURCE
+SAYS SO IN AS MANY WORDS.** Partitioned from `SWEEP-t936-rows.tsv` by the reason tag, using
+`fidelity.rs`'s own definitions rather than my reading of the names:
+
+```text
+   29 unscored, in-scope
+   ── the REFERENCE failed (14) ────────────────────────────────────────────
+        6  oracle-module-shell   a `type=module` SPA the ORACLE could not boot
+        5  tree-divergence       both engines built a page; the paths do not correspond
+        3  shell-only            "the ORACLE rendered only N element(s) — a shell, not the page"
+   ── OURS (8) ─────────────────────────────────────────────────────────────
+        3  empty-2xx             we produced nothing
+        2  css-starved
+        2  thin-overlap          "Unlike shell-only this is OURS" — fidelity.rs:521
+        1  crashed
+   ── neither, by construction (7) ─────────────────────────────────────────
+        7  timeout-150s          "bounds the PAIR" — Self::Timeout, fidelity.rs:476
+```
+
+**`fidelity.rs:3410` states the hazard in the imperative, and it is describing what has been
+happening:**
+
+> *"name it (**or 8 of the 13 sites carrying `shell-only` keep buying ENGINE ticks for an INSTRUMENT
+> defect**), and keep counting it (or 'the oracle failed' launders the hardest sites out of the
+> denominator)."*
+
+The counting half is honoured — these sites stay in the denominator, correctly, and §0's
+fixed-denominator rule is not bent. **The naming half is not reaching the worklist.**
+`fidelity-progress.sh` prints all 27 under a heading called **`throw-killer worklist`**, with
+`shell-only 9` as its second-largest entry, and the board's M1 PRIORITY ORDER block — owner-locked
+2026-07-30 and unchanged since — reads *"ATTACK THROW-KILLERS FIRST — get the ~48 unscored sites to
+render (render-fail/shell-only/timeout = a touched API that throws/hangs aborts boot)"*. That
+sentence is true of `render-fail`. It is **not** true of `shell-only`, and `fidelity.rs` has said so
+since t865.
+
+⚠⚠ **AND THE MECHANISM IS ALREADY DIAGNOSED, WITH ITS FIX NAMED, IN THE INSTRUMENT ITSELF.** A
+`type="module"` script is *always* fetched in CORS mode; the oracle renders a `curl`'d copy of the
+document from a foreign origin; a site does not send `Access-Control-Allow-Origin` for its own
+bundle. So the entry bundle never loads **for the reference**, and Chrome-from-the-live-url renders
+the page perfectly (`allticketscol.com` 0 divs from the snapshot against 312 live). The recorded fix
+is a **loopback reverse proxy so document, bundle and XHR share ONE origin** — and inlining the
+bundle is recorded as measured-and-rejected, because it half-boots the app and *"a HALF-BUILT
+reference is worse than an honest shell."*
+
+⚠⚠ **EVEN THE `OURS` COLUMN IS SOFTER THAN IT LOOKS, AND t936 ALREADY SHOWED IT.** Of the 8:
+`crashed` (pivaldi.restoplace.ws) does not reproduce on a solo run, and `css-starved` (pogoda.by)
+scores **above the 0.75 bar** solo. Two of eight are batch artefacts. The genuinely engine-attributable
+unscored population is therefore **around 6 of 29**, not 27 — and `thin-overlap` (2) is the only
+bucket the instrument affirmatively labels as ours.
+
+**SO THE CEILING IS NOT WHAT IT IS BEING READ AS.** M1 is capped at 80.0% (108/135) by scorability,
+and that is real and binding. But the cap is **not** 27 sites of boot-halting JS throws waiting for
+throw-killers. It is ~14 sites of reference failure, ~7 of a shared clock, and ~6 of genuine engine
+failure. **A worklist that ranks by unscored-count sends the next several ticks at the largest
+bucket, and the largest bucket is the instrument.**
+
+⚠ **WHAT I DID NOT DO, AND WHY.** The proxy is the highest-value single item on this list — it is
+worth up to 14 sites of denominator, more than any engine primitive available — and it lives in
+`manuk-wpt`, which the board designates agent territory. I did not build it, because it changes what
+the METRIC MEASURES rather than what the browser DOES, and the standing instruction is that every
+tick is pure browser capability (PART VII / `V1-SCOPE.md`). A change that moves ~14 sites onto the
+scoreboard without the engine improving is exactly the shape the loop is least able to audit in its
+own favour. **Handed up with its mechanism, its measured-and-rejected alternative, and its size,
+rather than taken.**
+
+⚠ **I did not re-classify the rows either.** The tags are correct as emitted; it is the *consumer*
+that flattens them, and `fidelity-progress.sh` is `scripts/` — observer-owned, and PART VII forbids
+me to touch it. One line in this journal, per the standing rule, and on with browser work.
+
+STEER, ranked by what it would actually buy:
+1. **The loopback reverse proxy** (instrument, observer's call) — up to 14 sites, mechanism known,
+   alternative already falsified.
+2. **`thin-overlap` (2 sites)** — the only bucket the instrument affirmatively calls ours, and the
+   real "booted but the DOM never populated" chain the board's block describes.
+3. **`empty-2xx` (3 sites)** — we produced nothing against a 200 response; whose failure is
+   unestablished and one probe would settle it.
+4. Geometry is NOT on this list. Six Chrome-exact geometry ticks (t930-t935) could not move the
+   ceiling by construction, which t936 measured and this tick explains.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefact is the partition above; the mechanisms are already documented in
+`tests/wpt/src/fidelity.rs`'s own doc comments, which is precisely the point of this tick. [no-pattern]
+
 ## Tick 936 — the sweep the loop was overdue, and the headline drop accounts for itself EXACTLY (2026-08-05)
 
 TICK SHAPE: measurement — the clean `--jobs 2` sweep, banked as `docs/loop/SWEEP-t936-rows.tsv`
