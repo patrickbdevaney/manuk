@@ -2757,12 +2757,41 @@ impl Ctx<'_> {
             width -= bs_extra_w;
         }
         width = width.max(0.0);
+        // ⚠⚠⚠ **AN INTRINSIC KEYWORD ON `min-width`/`max-width` IS A REAL CONSTRAINT, AND IT WAS
+        // BEING READ AS "UNSET" (t930).** `min-content`/`max-content`/`fit-content` collapse to
+        // `Dim::Auto` for length resolution — which this clamp reads as **0** on the min and as **no
+        // limit** on the max, so the declaration parsed to a different, valid value and vanished.
+        // Chrome-measured, "hello there world" (min-content 48.17, max-content 163.77) in a 400px
+        // containing block:
+        //
+        // ```text
+        //                                        Chrome   before   after
+        //   max-width: min-content                48.17    400      48
+        //   max-width: max-content               163.77    400     164
+        //   min-width: max-content   (20px CB)   163.77     20      164
+        // ```
+        //
+        // The same three measure functions the `width` arm above uses, so the Bar-0/recursion
+        // profile is identical and they return **content-box** widths — which is why the
+        // `bs_extra_w` subtraction (a border-box conversion for a *specified* length) must not run
+        // for them, exactly as it is skipped for a keyword `width`.
+        let kw_w = |k: IntrinsicSize| match k {
+            IntrinsicSize::MinContent => self.min_content_width(node),
+            IntrinsicSize::MaxContent => self.max_content_width(node),
+            IntrinsicSize::FitContent => self.shrink_to_fit(node, (cw - extra).max(0.0)),
+        };
         // min-width / max-width clamp (max applied first, then min wins), converted to the
         // content box to match `width`.
-        let min_w = (s.min_width.resolve(cw, 0.0) - bs_extra_w).max(0.0);
-        let max_w = match s.max_width {
-            Dim::Auto => f32::INFINITY,
-            other => (other.resolve(cw, f32::INFINITY) - bs_extra_w).max(0.0),
+        let min_w = match s.min_width_keyword {
+            Some(k) => kw_w(k).max(0.0),
+            None => (s.min_width.resolve(cw, 0.0) - bs_extra_w).max(0.0),
+        };
+        let max_w = match s.max_width_keyword {
+            Some(k) => kw_w(k).max(0.0),
+            None => match s.max_width {
+                Dim::Auto => f32::INFINITY,
+                other => (other.resolve(cw, f32::INFINITY) - bs_extra_w).max(0.0),
+            },
         };
         let unclamped_width = width;
         // A taffy item's slot is ALREADY clamped — re-clamping squares any percentage (see the top of
@@ -3053,9 +3082,27 @@ impl Ctx<'_> {
         if is_table_box {
             content_height = content_height.max(natural_content_h);
         }
+        // ⚠⚠ **THE BLOCK-AXIS HALF OF THE SAME t930 DEFECT, AND IT IS ONE VALUE RATHER THAN THREE.**
+        // A box's min-content and max-content **block** sizes are the same quantity — the height its
+        // content naturally takes — so all three keywords on `min-height`/`max-height` name
+        // `natural_content_h`, which this function already has. Chrome-measured, a two-line box
+        // (content height 48):
+        //
+        // ```text
+        //                                                Chrome   before   after
+        //   height:200px; max-height:min-content            48      200      48
+        //   height:1px;   min-height:min-content            48        1      48
+        // ```
+        //
+        // Both were the clamp reading `Dim::Auto` as "unset". Content-box already, so no
+        // `bs_extra_h` conversion — same reason as the inline axis above.
         // min-height / max-height clamp (content-box).
-        let min_h = (s.min_height.resolve(pch.unwrap_or(0.0), 0.0) - bs_extra_h).max(0.0);
+        let min_h = match s.min_height_keyword {
+            Some(_) => natural_content_h.max(0.0),
+            None => (s.min_height.resolve(pch.unwrap_or(0.0), 0.0) - bs_extra_h).max(0.0),
+        };
         let max_h = match s.max_height {
+            _ if s.max_height_keyword.is_some() && !is_table_box => natural_content_h.max(0.0),
             Dim::Auto => f32::INFINITY,
             // A percentage `max-height` against an **indefinite** containing-block height is
             // treated as `none` (CSS2 §10.7) — the cap simply does not apply. Resolving it
@@ -3759,10 +3806,22 @@ impl Ctx<'_> {
         } else {
             0.0
         };
-        let min_w = (s.min_width.resolve(cw, 0.0) - bs_extra_w).max(0.0);
-        let max_w = match s.max_width {
-            Dim::Auto => f32::INFINITY,
-            other => (other.resolve(cw, f32::INFINITY) - bs_extra_w).max(0.0),
+        // The float copy of the t930 intrinsic-keyword clamp; see `layout_block`.
+        let kw_w = |k: IntrinsicSize| match k {
+            IntrinsicSize::MinContent => self.min_content_width(node),
+            IntrinsicSize::MaxContent => self.max_content_width(node),
+            IntrinsicSize::FitContent => self.shrink_to_fit(node, cw.max(0.0)),
+        };
+        let min_w = match s.min_width_keyword {
+            Some(k) => kw_w(k).max(0.0),
+            None => (s.min_width.resolve(cw, 0.0) - bs_extra_w).max(0.0),
+        };
+        let max_w = match s.max_width_keyword {
+            Some(k) => kw_w(k).max(0.0),
+            None => match s.max_width {
+                Dim::Auto => f32::INFINITY,
+                other => (other.resolve(cw, f32::INFINITY) - bs_extra_w).max(0.0),
+            },
         };
         let unclamped_width = width;
         if max_w.is_finite() {
@@ -3836,12 +3895,19 @@ impl Ctx<'_> {
         let indefinite_pct = |d: Dim| {
             matches!(d, Dim::Percent(_)) || matches!(d, Dim::Calc { pct, .. } if pct != 0.0)
         };
-        let min_h = if indefinite_pct(s.min_height) {
+        // An intrinsic keyword on the block axis is the content height — see the `layout_block`
+        // twin. It is the SAME expression this function's `Dim::Auto` height arm uses, and it is
+        // spelled out rather than shared because the two paths carry different names for it.
+        let natural_h = ch.max(inner.lowest_bottom().max(0.0));
+        let min_h = if s.min_height_keyword.is_some() {
+            natural_h.max(0.0)
+        } else if indefinite_pct(s.min_height) {
             0.0
         } else {
             (s.min_height.resolve(0.0, 0.0) - bs_extra_h).max(0.0)
         };
         let max_h = match s.max_height {
+            _ if s.max_height_keyword.is_some() => natural_h.max(0.0),
             Dim::Auto => f32::INFINITY,
             other if indefinite_pct(other) => f32::INFINITY,
             other => (other.resolve(0.0, f32::INFINITY) - bs_extra_h).max(0.0),
@@ -5318,10 +5384,22 @@ impl Ctx<'_> {
         // first, then min wins, both converted to the content box. An abspos box ignored these
         // entirely, so a `max-width` dialog or `min-width` tooltip took its unconstrained size.
         // Clamp BEFORE laying out children so they see the constrained width.
-        let min_w = (s.min_width.resolve(cw, 0.0) - bs_extra_w).max(0.0);
-        let max_w = match s.max_width {
-            Dim::Auto => f32::INFINITY,
-            other => (other.resolve(cw, f32::INFINITY) - bs_extra_w).max(0.0),
+        // The abspos copy of the t930 intrinsic-keyword clamp; see `layout_block`.
+        let kw_w = |k: IntrinsicSize| match k {
+            IntrinsicSize::MinContent => self.min_content_width(node),
+            IntrinsicSize::MaxContent => self.max_content_width(node),
+            IntrinsicSize::FitContent => self.shrink_to_fit(node, (cw - frame).max(0.0)),
+        };
+        let min_w = match s.min_width_keyword {
+            Some(k) => kw_w(k).max(0.0),
+            None => (s.min_width.resolve(cw, 0.0) - bs_extra_w).max(0.0),
+        };
+        let max_w = match s.max_width_keyword {
+            Some(k) => kw_w(k).max(0.0),
+            None => match s.max_width {
+                Dim::Auto => f32::INFINITY,
+                other => (other.resolve(cw, f32::INFINITY) - bs_extra_w).max(0.0),
+            },
         };
         let mut content_w = content_w.min(max_w).max(min_w);
         // Lay out content at a provisional origin, then re-origin once placed.
@@ -5366,8 +5444,15 @@ impl Ctx<'_> {
         // that cannot fail — which is the exact shape this project calls a vacuous gate.
         // `min-height` / `max-height` clamp (CSS2 §10.7) — the CB height is always definite here, so
         // a `%` bound resolves against it (unlike the in-flow case's indefinite-parent → `none`).
-        let min_h = (s.min_height.resolve(cb.height, 0.0) - bs_extra_h).max(0.0);
+        // The abspos copy of the t930 intrinsic-keyword clamp — the content height, exactly as in
+        // the `definite_ch.unwrap_or_else` arm above.
+        let natural_h = ch.max(inner.lowest_bottom().max(0.0));
+        let min_h = match s.min_height_keyword {
+            Some(_) => natural_h.max(0.0),
+            None => (s.min_height.resolve(cb.height, 0.0) - bs_extra_h).max(0.0),
+        };
         let max_h = match s.max_height {
+            _ if s.max_height_keyword.is_some() => natural_h.max(0.0),
             Dim::Auto => f32::INFINITY,
             other => (other.resolve(cb.height, f32::INFINITY) - bs_extra_h).max(0.0),
         };

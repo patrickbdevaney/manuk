@@ -1150,6 +1150,26 @@ pub struct ComputedStyle {
     pub max_width: Dim,
     pub min_height: Dim,
     pub max_height: Dim,
+    /// ⚠⚠⚠ **The intrinsic sizing keywords on the four min/max properties — the sidecar
+    /// [`Self::width_keyword`] has always had and these never did.**
+    ///
+    /// `min-content` / `max-content` / `fit-content` are legal on `min-width`, `max-width`,
+    /// `min-height` and `max-height` exactly as they are on `width`/`height` (CSS Sizing L3 §5), and
+    /// both cascades collapsed them to `Dim::Auto` — which the clamp reads as **0** on a min and as
+    /// **no limit** on a max. So the declaration parsed to a different, valid value and vanished:
+    /// `max-width: min-content` left the box filling its container, `min-width: max-content` let it
+    /// crush below its content. A wrong answer of the right type, the shape this project rates most
+    /// dangerous, and the same defect `vertical-align: <length>` had at t922.
+    ///
+    /// `None` = `auto`/`none`/a length/`stretch` (all of which resolve as a plain [`Dim`]).
+    pub min_width_keyword: Option<IntrinsicSize>,
+    pub max_width_keyword: Option<IntrinsicSize>,
+    /// The block-axis pair. All three keywords name the **content height** for a block box (its
+    /// min-content and max-content block sizes are the same thing), so layout does not need to
+    /// distinguish them — but the *specified* keyword is kept rather than a `bool`, because
+    /// `getComputedStyle` must serialise back the keyword the author wrote.
+    pub min_height_keyword: Option<IntrinsicSize>,
+    pub max_height_keyword: Option<IntrinsicSize>,
     pub float: Float,
     pub clear: Clear,
     pub position: Position,
@@ -1312,6 +1332,10 @@ impl ComputedStyle {
             max_width: Dim::Auto,
             min_height: Dim::Auto,
             max_height: Dim::Auto,
+            min_width_keyword: None,
+            max_width_keyword: None,
+            min_height_keyword: None,
+            max_height_keyword: None,
             float: Float::None,
             clear: Clear::None,
             position: Position::Static,
@@ -3993,6 +4017,43 @@ fn parse_dimension_attr(v: &str) -> Option<f32> {
     }
 }
 
+/// Which **intrinsic sizing keyword** a declared value names, if any — `min-content`,
+/// `max-content`, `fit-content` or `fit-content(<length>)` (treated as plain `fit-content`).
+///
+/// ONE function for all seven sizing properties (`width`, `height` and the four min/max), because
+/// the defect t930 fixed was exactly that `width` had this logic inline and the min/max properties
+/// had none: the keyword fell through `parse_dim` to `Dim::Auto` and meant *0* on a min and *no
+/// limit* on a max. Duplicating the match is how the next property gets missed the same way.
+/// `stretch` / `-webkit-fill-available` / `-moz-available` are deliberately NOT here — they are
+/// definite fills, not content-derived sizes, and carry their own flags.
+fn intrinsic_kw(v: &str) -> Option<IntrinsicSize> {
+    let low = v.trim().to_ascii_lowercase();
+    match low.as_str() {
+        "min-content" => Some(IntrinsicSize::MinContent),
+        "max-content" => Some(IntrinsicSize::MaxContent),
+        _ if low == "fit-content" || low.starts_with("fit-content(") => {
+            Some(IntrinsicSize::FitContent)
+        }
+        _ => None,
+    }
+}
+
+/// [`intrinsic_kw`] for the four **min/max** sizing properties, where the functional
+/// `fit-content(<length>)` form is **not valid** and must fall back to the initial value.
+///
+/// Chrome-measured rather than inferred from the grammar — `<div style="min-width:fit-content(50px);
+/// max-width:fit-content(50px); max-height:fit-content(50px)">` reads back `0px` / `none` / `none`,
+/// i.e. the declaration was dropped. Accepting it here would have been a *more* permissive parser
+/// that renders a box Chrome does not.
+fn intrinsic_kw_bare(v: &str) -> Option<IntrinsicSize> {
+    match v.trim().to_ascii_lowercase().as_str() {
+        "min-content" => Some(IntrinsicSize::MinContent),
+        "max-content" => Some(IntrinsicSize::MaxContent),
+        "fit-content" => Some(IntrinsicSize::FitContent),
+        _ => None,
+    }
+}
+
 /// Apply one declaration onto a computed style. Unknown properties/values are
 /// silently ignored (CSS error recovery). `parent_fs` resolves `em`/`%` fonts.
 fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
@@ -4263,14 +4324,7 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             // one so block width resolution hugs the content instead of filling (`stretch` /
             // `-webkit-fill-available` are definite fills → not tagged), at parity with the stylo map.
             let low = v.trim().to_ascii_lowercase();
-            s.width_keyword = match low.as_str() {
-                "min-content" => Some(IntrinsicSize::MinContent),
-                "max-content" => Some(IntrinsicSize::MaxContent),
-                _ if low == "fit-content" || low.starts_with("fit-content(") => {
-                    Some(IntrinsicSize::FitContent)
-                }
-                _ => None,
-            };
+            s.width_keyword = intrinsic_kw(v);
             // The inline mirror of `height_stretch`: DEFINITE, and it FILLS — which only differs
             // from `auto` for the boxes that shrink-to-fit (float / abspos / inline-block / replaced
             // / form control), and that is precisely where it matters.
@@ -4297,10 +4351,26 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             );
             s.height = values::parse_dim(v, s.font_size);
         }
-        "min-width" => s.min_width = values::parse_dim(v, s.font_size),
-        "max-width" => s.max_width = values::parse_dim(v, s.font_size),
-        "min-height" => s.min_height = values::parse_dim(v, s.font_size),
-        "max-height" => s.max_height = values::parse_dim(v, s.font_size),
+        // The four min/max sizing properties take the same intrinsic keywords `width`/`height` do,
+        // and until t930 they were parsed with `parse_dim` alone — which answers `Dim::Auto` for a
+        // keyword it does not know, i.e. **0 on a min and no-limit on a max**. Tag the keyword
+        // beside the `Dim` exactly as the `width` arm above does, at parity with the stylo map.
+        "min-width" => {
+            s.min_width_keyword = intrinsic_kw_bare(v);
+            s.min_width = values::parse_dim(v, s.font_size);
+        }
+        "max-width" => {
+            s.max_width_keyword = intrinsic_kw_bare(v);
+            s.max_width = values::parse_dim(v, s.font_size);
+        }
+        "min-height" => {
+            s.min_height_keyword = intrinsic_kw_bare(v);
+            s.min_height = values::parse_dim(v, s.font_size);
+        }
+        "max-height" => {
+            s.max_height_keyword = intrinsic_kw_bare(v);
+            s.max_height = values::parse_dim(v, s.font_size);
+        }
         "margin" => set_shorthand(&mut s.margin, v, s.font_size, true),
         "margin-top" => s.margin.top = values::parse_dim(v, s.font_size),
         "margin-right" => s.margin.right = values::parse_dim(v, s.font_size),

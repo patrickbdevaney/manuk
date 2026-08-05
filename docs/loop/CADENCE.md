@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **655** | ticks 1–928 |
-| median tick cycle | **26m** | 654 intervals |
+| ticks landed | **656** | ticks 1–930 |
+| median tick cycle | **26m** | 655 intervals |
 | median, last 10 | **32m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 596.5h elapsed |
-| median verify wall | **63s** | 594 ticks |
+| **ticks per hour** | **1.10** | 597.5h elapsed |
+| median verify wall | **63s** | 595 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **397**
-* **✅ rows in the capability ledger**: 144 → **478**
+* **live gates**: 27 → **399**
+* **✅ rows in the capability ledger**: 144 → **479**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**322 of 655 ticks** (49%) moved a
+**323 of 656 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **322** capability ticks, median cycle **26m**
-* median diff per tick: **+261 / −34** lines across 8 files
+* **323** capability ticks, median cycle **26m**
+* median diff per tick: **+262 / −34** lines across 8 files
 
 ## Every tick
 
@@ -752,5 +752,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **926** | 2026-08-04 23:43 | 27m | measurement | 63s | +138/−33 | 397 | 81 | 56.0% · | the constitution check, and the window in which the loop corrected itself three times (202 |
 | **927** | 2026-08-05 00:14 | 31m | measurement | 63s | +145/−34 | 397 | 81 | 56.0% · | Chrome's input-baseline model, MEASURED — and the blocker is not the formula (2026-08-04) |
 | **928** | 2026-08-05 01:35 | 82m | measurement | 63s | +356/−33 | 397 | 81 | 56.0% · | the reference hypothesis is REFUTED, and the form-control item is HANDED ON (2026-08-04) |
+| **930** | 2026-08-05 02:32 | 56m | capability | 63s | +1100/−292 | 399 | 81 | 56.0% · | the intrinsic keywords are representable on `width` and UNREPRESENTABLE on all four min/ma |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

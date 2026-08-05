@@ -343,6 +343,67 @@ untouched; width-only scope because block auto-height already resolves to conten
 Sweep: css-sizing 14.8%→**15.1% (+5)**, css-flexbox 26.8%, css-grid 9.2%, css-position 28.8%,
 CSS2/normal-flow 15.4% — neighbors flat, **HANG/CRASH 0**.
 
+## The same keywords on the four min/max properties were UNREPRESENTABLE — and the sidecar is the fix (tick 930)
+
+**Symptom.** `min-content`/`max-content`/`fit-content` resolved exactly on `width` and `height`
+(tick 146/153 above) and were **silently dropped** on `min-width`, `max-width`, `min-height` and
+`max-height` — twelve of a twenty-case Chrome differential, with every control exact:
+
+```text
+  "hello there world"   min-content 48.17 · max-content 163.77 · 400px CB unless noted
+                                          Chrome   before   after
+  width:min-content         (CONTROL)      48.17     48       48
+  max-width:min-content                    48.17    400       48
+  max-width:max-content                   163.77    400      164
+  min-width:max-content     (20px CB)     163.77     20      164
+  min-width:fit-content     (20px CB)      48.17     20       48   <- NOT max-content: the
+                                                                      stretch-fit is 20
+  width:400px; max-width:min-content       48.17    400       48
+  height:200px; max-height:min-content     48       200       48
+  height:1px;   min-height:min-content     48         1       48
+```
+
+**Cause — a missing representation, not a missing rule.** `Dim` has no intrinsic variant, and the four
+min/max properties were plain `Dim` with no keyword sidecar (`width` has had `width_keyword` since
+t153). So on **both** cascades the keyword fell through to `Dim::Auto`, which the clamp reads as **0
+on a min** and as **no limit on a max**. The declaration parsed to a different, *valid* value and did
+nothing. ⚠ The t153 section above ends *"min/max-width clamps still apply after (CSS Sizing L3)"* —
+true of a *length* clamp, and it is exactly the sentence that made the gap look closed.
+
+**Fix.** Four more sidecars — `min_width_keyword` / `max_width_keyword` / `min_height_keyword` /
+`max_height_keyword`, all `Option<IntrinsicSize>` — parsed on both cascades and consumed by the
+min/max clamp in **three** layout paths (`layout_block`, `layout_float`, abspos: each carries its own
+copy of §10.4). The inline axis calls the *same* `min_content_width` / `max_content_width` /
+`shrink_to_fit` the `width` arm uses, so the Bar-0 and recursion profile is unchanged and there is no
+new sizing code. The block axis is **one value, not three**: a box's min-content and max-content
+*block* sizes are the same quantity, so all three keywords name the natural content height. Both are
+content-box already, so the `box-sizing` conversion must NOT run for them — the same reason it is
+skipped for a keyword `width`.
+
+**⚠ `fit-content(<length>)` IS INVALID ON ALL FOUR, and only a measurement says so.** The grammar
+reads as though the functional form goes wherever the keyword goes; Chrome drops it —
+`min-width:fit-content(50px)` reads back `0px`, `max-width:fit-content(50px)` reads back `none`. The
+`width` parser deliberately accepts it, so the min/max arms need a **separate, narrower** parser
+(`intrinsic_kw_bare`; `minsize_intrinsic_kw` / `maxsize_intrinsic_kw` on the Stylo side) rather than
+the obvious reuse. Sharing one function would make us *more permissive than Chrome* — laying out a box
+Chrome does not — and no fixture written from the fix would ever show it.
+
+**The CSSOM half is not optional.** `getComputedStyle(el).maxWidth` returned **`"none"`** — the string
+that means *there is no cap* — while the box was capped. Both the physical and the logical spellings
+(`max-inline-size` / `max-block-size`) now route through one `max_dim_css`, because
+`extra_computed_props` already records catching those two drifting apart once.
+
+**Gate.** `G_INTRINSIC_MIN_MAX` (layout, 14 claims) + `G_INTRINSIC_MIN_MAX_CSSOM` (16 claims). RED-proven
+three ways — deleting the `layout_block` arms, deleting **only** the Stylo sidecar (the fixture runs the
+shipping cascade, so a `MinimalCascade`-aimed proof would have passed against a broken engine), and
+making the serialisers ignore their keyword. Both carry CONTROL rows that a fix taking the new branch
+unconditionally fails.
+
+**Bound.** A **flex item's** intrinsic min/max is still dropped (`flex:1; max-width:min-content`
+measures 400 against Chrome's 48.17): that path is taffy's, taffy 0.12 has no intrinsic-keyword
+`Dimension`, and the keyword must be resolved to px *before* `to_taffy_style` — which today takes only
+a `ComputedStyle`, with no measurer.
+
 ## `height: stretch` / `-webkit-fill-available` FILLS the parent's definite height (tick 154)
 
 **Symptom.** `height:stretch` on a block inside a 200px-tall parent came out **18px** (content height) —

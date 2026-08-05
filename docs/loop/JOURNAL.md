@@ -46371,6 +46371,146 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 930 — the intrinsic keywords are representable on `width` and UNREPRESENTABLE on all four min/max (2026-08-05)
+
+TICK SHAPE: capability — the discovery engine, run on the width/sizing family the burndown ranks #1
+(container-WIDTH errors launder into dy). HYPOTHESIS, written before the fix: `min-content` /
+`max-content` / `fit-content` resolve exactly on `width` and `height` and are **silently dropped** on
+`min-width` / `max-width` / `min-height` / `max-height`, because those four are plain `Dim` with no
+keyword sidecar and `parse_dim` collapses the keyword to `Dim::Auto` — which a min reads as **0** and
+a max reads as **no limit**. A wrong answer of the right type, again.
+
+⚠⚠⚠ **THE HYPOTHESIS WAS RIGHT AND THE BREADTH WAS LARGER THAN I GUESSED: TWELVE OF TWENTY CASES,
+AND EVERY CONTROL EXACT.** The discovery fixture was a 25-case width/sizing sweep with no hypothesis
+in it at all — one variable per case, an identical 400px containing block, a control arm. **Twenty-four
+of the twenty-five were already exact** (percentage padding resolving against the CB *width* in both
+axes, `box-sizing`, `calc(100% − 50px)`, auto-margin centring, negative margins, `aspect-ratio`,
+`inset:0`, shrink-to-fit on float and inline-block). The twenty-fifth was `max-width: min-content` —
+Chrome `48.17 × 72`, ours `400 × 24` — and the follow-up fixture that isolated *that* found the whole
+family:
+
+```text
+   "hello there world"   min-content 48.17 · max-content 163.77 · 400px CB unless noted
+                                                    Chrome   before   after
+   width:min-content                  (CONTROL)      48.17     48       48    ✓ always right
+   width:max-content                  (CONTROL)     163.77    164      164    ✓ always right
+   height:min-content / max-content   (CONTROL)      48        48       48    ✓ always right
+   max-width:min-content                             48.17    400       48    ✗→✓
+   max-width:max-content                            163.77    400      164    ✗→✓
+   max-width:fit-content                            163.77    400      164    ✗→✓
+   min-width:min-content              (20px CB)      48.17     20       48    ✗→✓
+   min-width:max-content              (20px CB)     163.77     20      164    ✗→✓
+   min-width:fit-content              (20px CB)      48.17     20       48    ✗→✓
+   width:400px; max-width:min-content                48.17    400       48    ✗→✓
+   width:10px;  min-width:max-content               163.77     10      164    ✗→✓
+   height:200px; max-height:min-content              48       200       48    ✗→✓
+   height:1px;   min-height:min-content              48         1       48    ✗→✓
+   inline-block, max-width:min-content               48.17    164       48    ✗→✓
+   flex item, flex:1; max-width:min-content          48.17    400      400    ✗ OPEN — see below
+```
+
+**The mechanism is a missing representation, not a missing rule.** `ComputedStyle` has carried a
+keyword sidecar for `width` (`width_keyword`) and for `height` (`height_intrinsic`) for many ticks.
+The four min/max properties are plain `Dim`, and `Dim` has no intrinsic variant — so on **both**
+cascades the keyword fell through to `Dim::Auto`, which the clamp reads as **0 on a min** and as **no
+limit on a max**. The declaration parsed to a different, *valid* value and then silently did nothing:
+`max-width: min-content` left the box filling its container, `min-width: max-content` let it crush
+below its own content. That is the t922 `vertical-align: <length>` shape exactly — **a wrong answer of
+the right type** — and it is the second time in nine ticks that the defect was an enum that could not
+say what the author wrote.
+
+**Blast radius: seven consumers, and they are all one line each.** The sidecar (`engine/css`), its
+parse arm on the minimal cascade, its map from Stylo, the min/max clamp in **three** layout paths
+(`layout_block`, `layout_float`, abspos — each carries its own copy of §10.4 for reasons its own
+comments record), and the CSSOM serialisation. The measure functions were already there: the keyword
+arms call the same `min_content_width` / `max_content_width` / `shrink_to_fit` the `width` arm has
+always used, so the Bar-0 and recursion profile is unchanged and no new sizing code exists.
+
+⚠⚠ **`fit-content(<length>)` IS INVALID ON ALL FOUR, AND I ONLY KNOW THAT BECAUSE I MEASURED IT.**
+The grammar reads as though the functional form is allowed wherever the keyword is; Chrome drops it:
+`min-width:fit-content(50px)` → `0px`, `max-width:fit-content(50px)` → `none`, `max-height` the same.
+The `width` parser deliberately accepts it, so the min/max arms needed a *separate*, narrower parser
+(`intrinsic_kw_bare`, and `minsize_intrinsic_kw` on the Stylo side) rather than the obvious reuse.
+Sharing the one function would have made us **more permissive than Chrome** — laying out a box Chrome
+does not — which is the failure mode that never shows up in a fixture written from the fix.
+
+⚠ **THE I3 HALF, PUBLISHED IN THE SAME TICK.** A value the engine honours must read back, or a script
+asking what it just set gets a different answer from the one the pixels use. Before this,
+`getComputedStyle(el).maxWidth` on `max-width: min-content` returned **`"none"`** — the string that
+means *there is no cap* — while the box was capped. All eight spellings are now byte-identical to
+Chrome (`minWidth`/`maxWidth`/`minHeight`/`maxHeight` and the four logical `*-inline-size`/
+`*-block-size`), and both spellings now route through **one** serialiser, because
+`extra_computed_props` already records catching these two drifting apart once.
+
+USAGE WEIGHT, measured rather than asserted: **5 of the 85 cached corpus snapshots (5.9%) carry at
+least one of these declarations**. That is a **lower bound and stated as one** — the snapshots are the
+`curl`'d HTML, so external stylesheets, which is where nearly all CSS lives, are not in the count.
+
+GATES: **`G_INTRINSIC_MIN_MAX`** (14 layout claims) and **`G_INTRINSIC_MIN_MAX_CSSOM`** (16 CSSOM
+claims). RED-proven **three** ways, and the third one is the one that matters:
+
+```text
+  delete the keyword arms from `layout_block`'s width clamp   RED  `#mx_min` expected 48.17, got 400
+  delete the sidecar from `stylo_map.rs` ALONE                RED  same failure, same numbers
+  make the CSSOM serialisers ignore their keyword argument    RED  missing `minW:min-content`
+```
+
+The middle proof is t925's lesson made routine: this fixture runs the **shipping** cascade, so a proof
+aimed at `MinimalCascade` would have passed against a broken engine. Both gates carry CONTROL rows
+(`max-width:200px`, `min-width:300px`, unset → `auto`/`none`, real lengths) that a too-broad fix —
+one that takes the new branch unconditionally — fails while satisfying every `✗→✓` row.
+
+⚠ **NOT DONE, NAMED WITH ITS NUMBER RATHER THAN LEFT LOOKING HANDLED: a FLEX ITEM's intrinsic min/max
+is still dropped** (`display:flex` + `flex:1; max-width:min-content` measures 400 against Chrome's
+48.17). That path is taffy's — `to_taffy_style` maps `min_size`/`max_size` onto a `Dimension`, taffy
+0.12 has **no intrinsic-keyword variant**, and the keyword would have to be resolved to px *before* the
+style is built, which needs the measurer plumbed into a function that today takes only a
+`ComputedStyle`. A different mechanism; recorded in the gate's own header so the next attempt does not
+re-measure it.
+
+⚠⚠ **A PRE-EXISTING RED FOUND WHILE SWEEPING, ATTRIBUTED BY THE STASHED TREE, NOT MINE.**
+`g_rowless_table`'s `#t4` asserts `91x22` and the tree produces `97.171875x26` — which is Chrome's
+number, so the engine has moved *toward* Chrome and the gate's pin has gone stale. **The stashed tree
+reproduces it byte-identically in the same hour**, so it is not this tick's. It is not in the wall's
+19-of-104 subset, which is why it has been red unnoticed; named here rather than folded in, and it is
+a gate-pin question (re-measure `#t4` against Chrome and re-pin), not a layout bug.
+
+⚠⚠⚠ **THE CORPUS CONTROL ATTRIBUTES NOTHING, AND IT TOOK THE OLD BINARY TO ESTABLISH THAT — THE
+PANEL RUN ALONE WOULD HAVE PUBLISHED A +8-POINT WIN THAT DOES NOT EXIST.** Five anchor sites, both
+binaries, same hour, release, `--jobs 2`:
+
+```text
+                       OLD (--jobs 2)              NEW (--jobs 2)
+  news.ycombinator     cov 0.986  shape 0.710      cov 1.000  shape 0.790   <- +8.0 pts?
+  blog.rust-lang       cov 1.000  shape 0.996      byte-identical
+  www.a11yproject      cov 0.965  shape 0.376      byte-identical
+  www.wikipedia        cov 1.000  shape 0.530      byte-identical
+  martinfowler         cov 0.983  shape 0.778      byte-identical
+```
+
+Four of five byte-identical, and the fifth looked like the biggest single-site move this loop has
+recorded. **It is not the binary. Three SOLO runs of the OLD binary give 100.0% / 79.0% three times**
+— the NEW binary's number, on the old tree. The `0.986 / 0.710` reading is what `--jobs 2` does to
+that site, not what the code does. And the NEW binary's own three solo runs are **74.6 / 79.0 / 79.0**,
+so the site's spread on ONE unchanged tree is **4.4 points** — larger than any claim available here.
+
+> **The panel that was supposed to be the control needed a control.** I ran the A/B in the parallel
+> configuration on both sides, which I would have called sound, and the artefact appeared on the side
+> I had a story for. `t654-657` says a delta smaller than the spread is not a result; this is the
+> sharper version — a delta LARGER than the spread, from the harness.
+
+So: **no attributable corpus movement in either direction**, which is what a fix of this class should
+produce. Every element without an intrinsic keyword on a min/max property takes an `Option::None` arm
+that is the expression that was already there, and per t909's tag rule this corpus cannot price the
+elements that do carry one anyway.
+
+RATCHET: `manuk-layout` **125/125**, `manuk-css` 28/28+2, and ten layout-adjacent page gates green on
+the shipping cascade — `g_max_width_auto_margin`, `g_form_control_metrics`,
+`g_control_line_height_is_normal`, `g_form_control_box_sizing`, `g_abspos_bare_text`,
+`g_abspos_static_ifc`, `g_client_box_is_the_padding_box`, `g_display_contents`,
+`g_flex_item_slot_is_final`, `g_flex_percent_height`, `g_float_containing_block`,
+`g_grid_implied_track_stretch`, `g_table_height_is_a_minimum`, `g_table_border_spacing_ua_default`.
+
 ## Tick 929 — the sweep, with the binary's build time recorded beside it (2026-08-05)
 
 TICK SHAPE: measurement — check #81's steer #1. Three engine fixes since t919 (t922's

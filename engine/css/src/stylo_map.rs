@@ -136,6 +136,40 @@ fn size_intrinsic_kw(s: &Size) -> Option<crate::IntrinsicSize> {
     }
 }
 
+/// The [`size_intrinsic_kw`] twin for `max-width`/`max-height`, whose stylo type is a separate
+/// `GenericMaxSize` (its "unset" variant is `None`, not `Auto`) and therefore needs its own match.
+///
+/// ⚠ Without this, `maxsize_to_dim` folded `min-content`/`max-content`/`fit-content` into the same
+/// `Dim::Auto` it uses for `none` — i.e. **the cap simply did not apply**, which is how
+/// `max-width: min-content` left a box filling its container on the shipping cascade (t930).
+/// ⚠ `FitContentFunction` is deliberately absent: `fit-content(<length>)` is **not valid** on the
+/// min/max properties (Chrome-measured — it reads back as the initial value), so it must not become
+/// a constraint here. Same reason `intrinsic_kw_bare` exists on the minimal-cascade side.
+fn maxsize_intrinsic_kw(s: &MaxSize) -> Option<crate::IntrinsicSize> {
+    use crate::IntrinsicSize as IS;
+    use stylo::values::generics::length::GenericMaxSize as GM;
+    match s {
+        GM::MinContent => Some(IS::MinContent),
+        GM::MaxContent => Some(IS::MaxContent),
+        GM::FitContent => Some(IS::FitContent),
+        _ => None,
+    }
+}
+
+/// The `min-width`/`min-height` twin — a `Size` like `width`, but with the same
+/// `fit-content(<length>)` exclusion as [`maxsize_intrinsic_kw`], which is why it cannot just be
+/// [`size_intrinsic_kw`].
+fn minsize_intrinsic_kw(s: &Size) -> Option<crate::IntrinsicSize> {
+    use crate::IntrinsicSize as IS;
+    use stylo::values::generics::length::GenericSize as GS;
+    match s {
+        GS::MinContent => Some(IS::MinContent),
+        GS::MaxContent => Some(IS::MaxContent),
+        GS::FitContent => Some(IS::FitContent),
+        _ => None,
+    }
+}
+
 /// `max-width`/`max-height` `MaxSize` → `Dim` (`none`/keywords → `Dim::Auto` = no limit).
 fn maxsize_to_dim(s: &MaxSize) -> Dim {
     match s {
@@ -497,10 +531,22 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     s.height_intrinsic = size_is_intrinsic(&ch);
     s.height_stretch = size_is_stretch(&ch);
     s.height = size_to_dim(&ch);
-    s.min_width = size_to_dim(&cv.clone_min_width());
-    s.min_height = size_to_dim(&cv.clone_min_height());
-    s.max_width = maxsize_to_dim(&cv.clone_max_width());
-    s.max_height = maxsize_to_dim(&cv.clone_max_height());
+    // ⚠ The four min/max properties take the SAME intrinsic keywords `width`/`height` do, and until
+    // t930 only the `Dim` was read — so a keyword landed on `Dim::Auto`, which the clamp reads as 0
+    // on a min and as no-limit on a max. The keyword sidecar is what makes the declaration
+    // representable at all; see `ComputedStyle::min_width_keyword`.
+    let cmnw = cv.clone_min_width();
+    let cmnh = cv.clone_min_height();
+    let cmxw = cv.clone_max_width();
+    let cmxh = cv.clone_max_height();
+    s.min_width_keyword = minsize_intrinsic_kw(&cmnw);
+    s.min_height_keyword = minsize_intrinsic_kw(&cmnh);
+    s.max_width_keyword = maxsize_intrinsic_kw(&cmxw);
+    s.max_height_keyword = maxsize_intrinsic_kw(&cmxh);
+    s.min_width = size_to_dim(&cmnw);
+    s.min_height = size_to_dim(&cmnh);
+    s.max_width = maxsize_to_dim(&cmxw);
+    s.max_height = maxsize_to_dim(&cmxh);
 
     // Margin / padding.
     s.margin = Sides {

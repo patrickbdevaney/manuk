@@ -590,6 +590,39 @@ fn dim_css(d: &manuk_css::Dim) -> String {
     }
 }
 
+/// The CSS keyword an [`manuk_css::IntrinsicSize`] serialises back to.
+fn intrinsic_css(k: manuk_css::IntrinsicSize) -> &'static str {
+    match k {
+        manuk_css::IntrinsicSize::MinContent => "min-content",
+        manuk_css::IntrinsicSize::MaxContent => "max-content",
+        manuk_css::IntrinsicSize::FitContent => "fit-content",
+    }
+}
+
+/// `min-width`/`min-height` (and their logical spellings) — the **keyword wins over the `Dim`**,
+/// because an intrinsic keyword collapses to `Dim::Auto` for length resolution and would otherwise
+/// serialise as `auto` (t930). Chrome-measured: `min-width: min-content` reads back `"min-content"`,
+/// on both the physical and the logical spelling.
+fn min_dim_css(d: &manuk_css::Dim, kw: Option<manuk_css::IntrinsicSize>) -> String {
+    match kw {
+        Some(k) => intrinsic_css(k).to_string(),
+        None => dim_css(d),
+    }
+}
+
+/// `max-width`/`max-height` — as [`min_dim_css`], but an unset `Dim::Auto` means **`none`**, not
+/// `auto`. Both spellings route through here so the physical and logical pair cannot drift, which
+/// is the drift `extra_computed_props` already records having caught once.
+fn max_dim_css(d: &manuk_css::Dim, kw: Option<manuk_css::IntrinsicSize>) -> String {
+    match kw {
+        Some(k) => intrinsic_css(k).to_string(),
+        None => match d {
+            manuk_css::Dim::Auto => "none".to_string(),
+            other => dim_css(other),
+        },
+    }
+}
+
 /// ⚠⚠⚠ **`getComputedStyle(el).width` IS THE *RESOLVED* VALUE — THE USED SIZE IN PX — AND WE WERE
 /// HANDING BACK THE SPECIFIED ONE.**
 ///
@@ -1237,27 +1270,28 @@ fn extra_computed_props(cs: &manuk_css::ComputedStyle) -> Vec<(&'static str, Str
         ("inset-inline-end", dim_css(&cs.inset.right)),
         ("inset-block-start", dim_css(&cs.inset.top)),
         ("inset-block-end", dim_css(&cs.inset.bottom)),
-        ("min-inline-size", dim_css(&cs.min_width)),
-        ("min-block-size", dim_css(&cs.min_height)),
+        (
+            "min-inline-size",
+            min_dim_css(&cs.min_width, cs.min_width_keyword),
+        ),
+        (
+            "min-block-size",
+            min_dim_css(&cs.min_height, cs.min_height_keyword),
+        ),
         // ⚠ `max-*` serialises an unset value as **`none`**, not `auto` — the same rule the physical
-        // `max-width`/`max-height` already follow via `max_dim`. The first version of this block used
+        // `max-width`/`max-height` already follow. The first version of this block used
         // `dim_css` for all four and the re-sweep caught it in one line: the LOGICAL spelling said
         // `auto` where the PHYSICAL one said `none`, about the same box. That is precisely the
         // two-spellings-one-box drift the shared `used_dim_css` above exists to prevent, and it
-        // appeared the moment a second serialiser was used.
+        // appeared the moment a second serialiser was used. ⚠ t930 made it structural: both
+        // spellings now call the SAME `max_dim_css`, rather than repeating the rule in two places.
         (
             "max-inline-size",
-            match &cs.max_width {
-                manuk_css::Dim::Auto => "none".to_string(),
-                other => dim_css(other),
-            },
+            max_dim_css(&cs.max_width, cs.max_width_keyword),
         ),
         (
             "max-block-size",
-            match &cs.max_height {
-                manuk_css::Dim::Auto => "none".to_string(),
-                other => dim_css(other),
-            },
+            max_dim_css(&cs.max_height, cs.max_height_keyword),
         ),
         // The `inset` shorthand. `cs.inset` is held by the cascade and was simply never published;
         // Chrome serialises the four-value shorthand collapsed when the sides agree.
@@ -1508,10 +1542,6 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         BoxSizing::ContentBox => "content-box",
         BoxSizing::BorderBox => "border-box",
     };
-    let max_dim = |d: &manuk_css::Dim| match d {
-        manuk_css::Dim::Auto => "none".to_string(),
-        other => dim_css(other),
-    };
     // The ordered dash-case property names this snapshot exposes — the backing list for the
     // array-like `CSSStyleDeclaration` surface (`.length`, `.item(i)`). A library that copies a
     // computed style does `for (i=0;i<s.length;i++) s.item(i)`, so an absent `length`/`item` makes
@@ -1709,10 +1739,13 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         q(&format!("{}px", cs.row_gap)),
         q(&format!("{}px", cs.column_gap)),
         q(box_sizing),
-        q(&dim_css(&cs.min_width)),
-        q(&max_dim(&cs.max_width)),
-        q(&dim_css(&cs.min_height)),
-        q(&max_dim(&cs.max_height)),
+        // ⚠ The keyword sidecar wins over the `Dim` — an intrinsic `min-content`/`max-content`/
+        // `fit-content` collapses to `Dim::Auto` for length resolution and would read back as
+        // `auto`/`none`, i.e. as UNSET. Chrome returns the keyword (measured, t930).
+        q(&min_dim_css(&cs.min_width, cs.min_width_keyword)),
+        q(&max_dim_css(&cs.max_width, cs.max_width_keyword)),
+        q(&min_dim_css(&cs.min_height, cs.min_height_keyword)),
+        q(&max_dim_css(&cs.max_height, cs.max_height_keyword)),
         // Serialised back to the CSS keywords a script wrote, because feature detection reads them
         // back: a carousel library checks `scrollSnapType` to decide whether to run its own JS
         // fallback, and an empty string sends it down the polyfill path over a working native snap.
