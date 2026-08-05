@@ -46371,6 +46371,81 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 955 — the layout was never the problem: we do not apply the rule (2026-08-05)
+
+TICK SHAPE: measurement — check #84's steer item 1, *"STOP MEASURING. Take the t953 footer."* Taken,
+and it went further than the footer.
+
+**THE CHAIN, four measurements, each one the obvious next question.**
+
+t953 left a footer 180px too wide and twice too tall, with `/tmp/tzfd.html` reproducing both numbers
+on identical bytes. Walking UP from it:
+
+```text
+                            Chrome              ours
+   .id-SiteWrap          1024 × 13142       1184 × 21919      ← the ancestor, and the whole page
+   <footer>              1004 ×   472       1184 ×  1002
+   .id-SiteFooter-content 1004 ×   432      1184 ×  1002
+   SiteWrap contains footer?   yes                yes
+```
+
+**Our entire page is 21,919px tall against Chrome's 13,142** — 67% taller — because everything is
+160px wider and re-wraps. And it is one ancestor: `.id-SiteWrap` is 1024 in Chrome and 1184 here.
+
+**The CSS is plain.** Two rules in a 285KB stylesheet mention it, both top level, neither in a media
+query, neither removing anything:
+
+```css
+   .id-SiteWrap{background:#fff;max-width:1024px;padding:0;position:relative}   /* offset 198394 */
+   .id-SiteWrap{padding:10px}                                                    /* offset 198502 */
+```
+
+⚠⚠⚠ **AND WE DO NOT APPLY IT. Asked for the COMPUTED values on that element, on identical bytes:**
+
+```text
+                          Chrome        ours
+   max-width              1024px        none
+   background-color       white         not white
+```
+
+**Both declarations of the same rule are absent.** Not mis-computed — **absent.** This is not a
+`max-width` defect: t930's battery proved `max-width` resolves correctly, and t947's 22-case
+block-axis battery was byte-perfect. **The rule is not reaching the element.**
+
+⚠⚠⚠ **WHICH RETROSPECTIVELY EXPLAINS THE ENTIRE WINDOW.** Five composed batteries came back clean
+(width 24/25, inline 20/22, block-axis **22/22**, and two real stylesheets reduced to nothing) while
+the corpus sat at `shape_mean` 55.3%. t947 called those two statements irreconcilable and guessed at
+document divergence; t948 refuted that. **The reconciliation is that our layout math is right and the
+CASCADE is not delivering all of the CSS.** Every fixture I wrote inlined its styles in a `<style>`
+block of a few hundred bytes. Not one exercised a 285KB external sheet — so not one could see this.
+
+**WHAT IS NOT ESTABLISHED, and it is the whole of the next tick.** Three candidates, and the
+measurement above does not separate them:
+
+1. **A parse bail** — something ~70% into the file aborts the rest. The rule is at offset 198394 of
+   285026, and a truncation would take everything after it.
+2. **A selector-matching failure** for `.id-SiteWrap` specifically.
+3. **The stylesheet not fully fetched or decoded** — `prod_click.css` is 285KB and t772-775 already
+   caught mojibake'd stylesheets reaching Stylo.
+
+**(1) is the one worth testing first and it is one probe:** ask for a computed value from a rule at
+the very END of the file, and one from the very START. If early applies and late does not, it is
+truncation, and the offset bisects in a handful of runs. **This is a cascade/parse question, not a
+layout one, and it has been sitting under every layout tick this window.**
+
+⚠ **A caution I am putting in front of my own result:** one site, one stylesheet. This may be a
+defect specific to `prod_click.css` (a construct our parser chokes on) rather than a general
+truncation, and a 285KB sheet is exactly the input most likely to contain something exotic. The probe
+above distinguishes those too — a general truncation shows up on *any* large sheet, a construct
+failure does not. **Do not let this window's last measurement become its first unverified claim.**
+
+RATCHET: no engine change. `manuk-layout` and the page suite green from t945; `manuk-wpt` 98/98.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the mechanism is one probe away and the wiki entry should be written when it is
+known, not now. [no-pattern]
+
 ## Tick 954 — the surface audit, on the axis that actually finds things (2026-08-05)
 
 TICK SHAPE: measurement — the cadence surface audit (due every 10 ticks; last at 942), banked as
