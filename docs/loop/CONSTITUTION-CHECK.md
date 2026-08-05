@@ -5493,3 +5493,77 @@ unscorable for reasons the engine cannot touch.
    beside the geometry gate.
 4. **Stop reading per-site sweep rows as evidence about a site** (t930, t936, t942 — three controls,
    three reversed verdicts). Rank with them; attribute only with a same-hour solo old-binary run.
+
+## Check #84 — tick 954 (2026-08-05)
+
+**Horizon:** H0 as re-scoped by **PART VII**, instrumented as **M1 on the in-scope CrUX corpus**.
+Latest banked: **14.8% (20/135), sweep t936**. Check #83 established the bar is unreachable on this
+instrument; nothing since has changed that.
+
+### → Gate, or scoreboard?
+
+**Neither, and the window since #83 was almost entirely MEASUREMENT — which was correct and is now
+finished.** Ticks 945-954: one capability tick (t945's click-point control), one instrument tick
+(t951), and eight measurement ticks. That ratio would be alarming in an ordinary window. It is not
+here, because #83's finding was that *the metric is the binding constraint*, and the only way to act
+on that is to measure the metric until it says something actionable. **It now has:**
+
+```text
+   t953   the tz.de FOOTER is 1004×472 in Chrome and 1184×1002 in ours,
+          its inner child is 1004 wide in BOTH, and /tmp/tzfd.html reproduces
+          both numbers on identical bytes
+   t954   <select multiple> renders as a SIZED LIST BOX and we have no
+          select-sizing path — a control-height dy, one fixture to probe
+```
+
+**Two engine-side leads with addresses and numbers, which the window did not have at #83.** The
+measurement phase has produced what it was for and should end.
+
+### → Is `orient`'s ranking still the north star?
+
+**Yes, and it has been sharpened twice.** t946/t947 established that **property-family sweeps yield
+and site reductions do not** (five batteries; the two site-derived reductions came back exact).
+t954 established that **the axis of a surface audit determines what it can find** — Interop and
+Baseline returned nothing to re-rank twice running, and an independent engine's release notes
+returned a `dy` bug on the first try. Both are VI.3-compatible refinements of *usage-weight ×
+failing-breadth*: they are statements about **where to look**, which VI.3 never specified.
+
+### → Is any invariant being bent?
+
+**I5 is being honoured harder than the letter requires, and it is worth recording as a positive.**
+Three controls reversed three verdicts this window (t930 news.ycombinator, t936 the scorability
+regression, t942 possssno.sbs) and each reversal was published. A fourth — t951's first-draft
+diagnostic returning a constant for all 66 rows — was caught before landing by looking at the output
+rather than trusting the design.
+
+⚠ **I3: the steer is CLOSED, by falsification rather than by execution (t945).** Checks #72/#82/#83
+carried *"land a click-point assertion beside the geometry fix"* three times. t945 landed it and
+measured that **it does not discriminate**: `G_CLICK_POINT` passes on the current tree, on pre-t939
+and on pre-t935. The rule that replaces it is sharper and is now in the pattern ledger — **a geometry
+error is an I3 event only when it moves a box RELATIVE TO ITS OWN CENTRE.** A steer that is issued
+three times and then falsified once has been answered; it should not be issued a fourth.
+
+⚠⚠ **PART VII was tested and I made one edge call.** t951 changed `tests/wpt/src/oracle.rs` — an
+INSTRUMENT, not `engine/`. I took it on the board's *"the fidelity instrument in manuk-wpt is
+agent-territory"* and flagged it in the commit as **the tick to revert** if the observer reads the
+line more narrowly. It touched no engine code and no gate. `scripts/` remains untouched across 25
+ticks, through a 826s wall, a 100%-full swap and an audit whose every remedy is harness-owned.
+
+### → PART VI correction
+
+**None this check, and that is deliberate.** #82 corrected VI.2's H0.1 row with the composed-width
+negative result; #83 corrected it again with the ceiling arithmetic. The row now carries both halves
+and a third amendment in three checks would be churn. **The next correction should be written when
+the t953 footer divergence has a mechanism** — that is a fact about layout, and VI.2's row is about
+layout breadth.
+
+### Steer
+
+1. **STOP MEASURING. Take the t953 footer** — it is the only lead with numbers, an address and a
+   local reproduction, and the window spent five ticks earning it.
+2. **Then `<select multiple>`** — one control, one fixture, and a control-height `dy` on form-heavy
+   pages.
+3. **`tab-size`** — one shaper rule, and every tab-indented `<pre>` currently wraps in the wrong
+   place.
+4. **Do not open a site-shaped hunt** (t946, t950 both came back empty), and do not re-issue the I3
+   click-point steer (t945 falsified it).

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **675** | ticks 1–951 |
-| median tick cycle | **26m** | 674 intervals |
+| ticks landed | **676** | ticks 1–952 |
+| median tick cycle | **26m** | 675 intervals |
 | median, last 10 | **6m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 604.9h elapsed |
-| median verify wall | **63s** | 614 ticks |
+| **ticks per hour** | **1.12** | 605.0h elapsed |
+| median verify wall | **63s** | 615 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **484**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**330 of 675 ticks** (49%) moved a
+**330 of 676 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **330** capability ticks, median cycle **26m**
-* median diff per tick: **+259 / −34** lines across 8 files
+* median diff per tick: **+260 / −34** lines across 8 files
 
 ## Every tick
 
@@ -772,5 +772,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **949** | 2026-08-05 09:28 | 5m | measurement | 63s | +99/−32 | 403 | 81 | 56.0% · | the top cause on a scored site is a DOM-shape difference, not a layout one (2026-08-05) |
 | **950** | 2026-08-05 09:53 | 25m | measurement | 63s | +177/−34 | 403 | 81 | 56.0% · | "ours or the oracle's?" — neither, yet: the subtree is JS-built and time-dependent (2026-0 |
 | **951** | 2026-08-05 09:58 | 5m | capability | 63s | +93/−32 | 403 | 81 | 56.0% · | the instrument now names ONE address instead of 66 leaves, and the first draft of it lied  |
+| **952** | 2026-08-05 10:05 | 7m | measurement | 63s | +305/−34 | 403 | 81 | 56.0% · | the DOM is right and the BOXES are absent, and t951's address was my own truncation (2026- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

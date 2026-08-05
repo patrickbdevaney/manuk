@@ -46371,6 +46371,141 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 954 — the surface audit, on the axis that actually finds things (2026-08-05)
+
+TICK SHAPE: measurement — the cadence surface audit (due every 10 ticks; last at 942), banked as
+#36, plus the correction it forces to my own steer ordering.
+
+**THIRD AXIS IN THREE AUDITS, ON PURPOSE.** #34 took Interop/Baseline, #35 the Chrome-only frontier,
+#36 takes **what an independent Rust engine chose to build** — a different signal from either: not
+what the vendors agreed matters, and not what one vendor shipped first, but **what a team in our
+exact position found it could not do without.** Servo's 2026 release notes are a worklist written by
+someone with our constraints, and it is the first axis in this window to return a `dy` bug.
+
+Fourteen named Servo additions checked against `CONSTELLATION.tsv` and then against `engine/` by
+grep, so each verdict is evidence rather than a guess. Present and correct: `color-mix()`,
+`activeElement`, StorageManager, `::details-content`. Absent:
+
+```text
+   tab-size                    css   missing   0 files
+   text-align: match-parent    css   missing   0 files
+   revert-rule                 css   missing   0 files
+   <select multiple>           html  unknown   "multiple" in 25 files, none a select-sizing path
+```
+
+⚠⚠⚠ **`<select multiple>` IS A `dy` BUG WEARING A FORM CONTROL'S CLOTHES.** A multi-select renders as
+a **sized scrolling list box**, not a one-line dropdown — so on every filter sidebar, admin form and
+faceted search that uses one, **the control is the wrong height and the entire column below it is
+displaced.** That is the burndown's dominant error term, arriving through a control, on exactly the
+form-heavy pages the CrUX tail is full of. Filed **`unknown`, not `missing`** — `multiple` appears in
+25 engine files and none is a select-sizing path, which is a grep result and not a probe, and the row
+carries the probe that settles it (`<select multiple size=4>` against Chrome, compare the box).
+
+`tab-size` is the cheap second: every `<pre>` indenting with tabs collapses each tab to one space's
+advance, so indented code loses its structure **and every line's wrap point moves**. An advance-width
+rule in the shaper, not a layout algorithm.
+
+Map now **474 rows · 283 gated · 118 missing · 44 partial · 18 unknown · 10 works.**
+
+⚠⚠ **AND IT PRODUCED A RE-RANK — the first any audit in this window has.** #34 and #35 both concluded
+*"none, the render metric binds"*. This axis found something that **is** the render metric. The
+corrected order for the next invocation:
+
+```text
+   1.  the tz.de FOOTER (t953)      — numbers, an address, and /tmp/tzfd.html reproduces it locally
+   2.  <select multiple>            — one control, one fixture, a control-height dy
+   3.  tab-size                     — one shaper rule, every tab-indented <pre>
+   4.  overlap / h_overflow dims    — demoted: site-shaped hunts, and t946/t950 both came back empty
+```
+
+**THE METHODOLOGICAL POINT, since three audits in one window now support it: the axis you check
+against determines what you can find.** Interop and Baseline are lists of what the *platform is
+adding*, and this engine's gap is not there — both audits correctly found nothing to re-rank. **An
+independent engine's release notes are a list of what a browser needs to EXIST**, and that is the
+axis that found a `dy` bug. The instrument's own instruction is *"search the web, not from memory"*;
+this window adds *"and vary the axis, or a clean audit only means you asked the same question
+again."*
+
+CONSTITUTION CHECK #84 (due every 8 ticks; last at 944), banked in the same tick because both
+cadences came due together. Its finding: **the measurement phase #83 called for has produced what it
+was for and should END.** Ticks 945-954 were eight measurement ticks to two others — a ratio that
+would be alarming in an ordinary window and was correct in this one, because #83's finding was that
+the metric binds and the only way to act on that is to measure it until it says something actionable.
+**It now says two things with addresses**: the `tz.de` footer (t953) and `<select multiple>` (t954).
+
+The check also **closes the I3 steer by falsification** — #72/#82/#83 carried *"land a click-point
+assertion"* three times; t945 landed it and measured that it does not discriminate, and the rule that
+replaces it is sharper. **A steer issued three times and then falsified once has been answered.** And
+it records the one PART VII edge call of the window (t951's `oracle.rs` change, flagged in its own
+commit as the tick to revert if the observer reads the scope line more narrowly than I did).
+
+RATCHET: no engine change. `manuk-layout` and the page suite green from t945; `manuk-wpt` 98/98.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefacts are `docs/loop/SURFACE-AUDIT.md` #36,
+`docs/loop/CONSTITUTION-CHECK.md` #84, and four `CONSTELLATION.tsv` rows. [no-pattern]
+
+## Tick 953 — one query, and the answer is that our FOOTER IS TWICE AS TALL (2026-08-05)
+
+TICK SHAPE: measurement — t952's one query, which was the whole point of the four ticks before it:
+*"ask our own engine for the box of one named footer descendant. If it has a box, the probe is
+dropping it. If it does not, it is layout."*
+
+**It has a box. Three of them. With the right sizes.** Both engines on identical bytes, the 1st, 10th
+and 50th footer descendants tagged in the page itself so the same element is asked for on both sides:
+
+```text
+                      ours                        the sweep said, for this class
+   FD0    [  10 12700 1004×412]
+   FD1    [  30 12759  227×187]
+   FD2    [ 522 12798  227× 22]        Chrome [276 12778 227×22]  vs ours (no box)
+```
+
+**`FD2` is 227×22 and the sweep's unaligned example is 227×22.** We render that element, at the right
+size, 20px from Chrome's `y` — and the sweep reports `(no box)` for it. So the probe is not dropping
+it and layout has not lost it: **the two engines have it at different selector PATHS**, which is the
+`nth-of-type` re-numbering t949 hypothesised from the leaves and t950/t951/t952 each failed to
+confirm. It took tagging the elements themselves to see it, because a path is exactly what is in
+dispute.
+
+⚠⚠⚠ **AND ASKING THE QUESTION THREE LEVELS UP GAVE THE REAL ONE. OUR FOOTER IS TWICE AS TALL AND
+180px TOO WIDE:**
+
+```text
+                    Chrome            ours
+   <footer>       1004 × 472      1184 × 1002
+   its 1st child  (1004 wide)      1004 × 412      ← the INNER container agrees
+```
+
+The footer's own child is **1004 wide in both engines** — so the content is sized correctly — while
+our `<footer>` box is **1184**. And the height is not a rounding error: **1002 against 472, more than
+double.** A footer whose columns are laid out 180px wider than Chrome's wraps them onto extra rows,
+and the height follows. That is one box, at one address, on a 13,000px page, and it is the mechanism
+family the burndown has called #1 from the start — **a container-WIDTH error laundering into a
+height** — caught with numbers rather than inferred.
+
+**WHAT THIS WINDOW ACTUALLY COST TO REACH, said plainly because it is the lesson.** t949 read the
+leaf paths and guessed re-numbering. t950 built a static probe and learned the subtree is JS-built.
+t951 shipped a diagnostic whose first draft returned a constant. t952 corrected an address I had
+truncated myself, and established the DOM is byte-identical. **Five ticks to arrive at one query that
+takes ninety seconds** — and the query only worked because it stopped comparing *paths* and started
+tagging *elements*. **When the identifier is what is in dispute, every instrument keyed on that
+identifier is blind, and the way out is to put your own identifier on the object.**
+
+⚠ **NOT ESTABLISHED, and it is the next tick:** *why* the footer is 1184 wide when its child is 1004
+and Chrome's footer is 1004. The footer's own CSS is in `www.tz.de`'s external stylesheet and has not
+been read. Everything needed is now local — `/tmp/tzfd.html` reproduces both numbers on identical
+bytes — so this is a reduction with an address and a target width, which is the position this window
+has been trying to reach since t946.
+
+RATCHET: no engine change. `manuk-layout` and the page suite green from t945; `manuk-wpt` 98/98.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefact is a located divergence with numbers; the mechanism is one tick
+away and will be documented when it is known. [no-pattern]
+
 ## Tick 952 — the DOM is right and the BOXES are absent, and t951's address was my own truncation (2026-08-05)
 
 TICK SHAPE: measurement — reading the diagnostic t951 shipped, and correcting what t951 said about it.

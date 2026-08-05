@@ -3977,3 +3977,60 @@ measured that ~2-3 of the 29 unscored in-scope sites are engine-attributable at 
 oracle's or the origin's, 7 bound a clock shared with Chrome. **The M1 ceiling is not a capability
 backlog.** Adding capabilities, from this list or any other, cannot move it. That is an argument
 about the METRIC, not about the map, and it is the thing most worth carrying out of this window.
+
+---
+
+## Audit #36 — tick 954 (2026-08-05) — the SERVO axis
+
+**Sources, searched rather than recalled:**
+
+* [April in Servo — new Android UI, focus, forms, security fixes](https://servo.org/blog/2026/05/31/april-in-servo/) (fetched, full feature list) · [February in Servo — faster layout, pause/resume scripts](https://servo.org/blog/2026/03/31/february-in-servo/)
+* [Servo 0.4.0 released — LWN](https://lwn.net/Articles/1086555/) · [Servo Browser Engine Starts 2026 With Many Notable Improvements — Phoronix](https://www.phoronix.com/news/Servo-January-2026)
+
+**Third axis in three audits, on purpose.** #34 took Interop/Baseline, #35 the Chrome-only frontier,
+#36 takes **what an independent Rust engine chose to build** — which is a different signal from both:
+not what the vendors agreed matters, and not what one vendor shipped first, but **what a team in our
+exact position found it could not do without.** Servo has walked this road and its release notes are
+a worklist written by someone with our constraints.
+
+### RECONCILIATION — four additions, and one of them is a `dy` bug
+
+Checked fourteen named Servo additions against `CONSTELLATION.tsv`, then against `engine/` by grep so
+each verdict is evidence rather than a guess. Already present and correct: `color-mix()` (gated),
+`activeElement` (gated), StorageManager (gated), `::details-content` (partial). Absent:
+
+```text
+   tab-size                    css   missing   0 files
+   text-align: match-parent    css   missing   0 files
+   revert-rule                 css   missing   0 files
+   <select multiple>           html  unknown   "multiple" in 25 files, none a select-sizing path
+```
+
+⚠⚠ **`<select multiple>` IS THE ONE THAT MATTERS, AND IT IS A `dy` BUG.** A multi-select renders as a
+**sized scrolling list box**, not a one-line dropdown — so on every filter sidebar, admin form and
+faceted search that uses one, the control is the wrong height and **the entire column below it is
+displaced**. That is the burndown's dominant error term arriving through a form control, on exactly
+the form-heavy pages the CrUX tail is full of. Filed **`unknown`, not `missing`**: `multiple` appears
+in 25 engine files and none of them is a select-sizing path, which is a grep result and not a probe.
+The row carries the probe that settles it — render `<select multiple size=4>` against Chrome and
+compare the box.
+
+`tab-size` is the cheap second: every `<pre>` that indents with tabs currently collapses each tab to
+one space's advance, so indented code loses its structure **and every line's wrap point moves**. It
+is an advance-width rule in the shaper, not a layout algorithm.
+
+Map now **474 rows · 283 gated · 118 missing · 44 partial · 18 unknown · 10 works.**
+
+### RE-RANK
+
+⚠ **Yes — a partial one, and it is the first re-rank any audit in this window has produced.** #34 and
+#35 both concluded "none, the render metric binds". This axis found something that **is** the render
+metric: `<select multiple>` is a control-height error, and a control-height error is a `dy` cascade.
+It does not outrank the located `tz.de` footer divergence from t953 (which has numbers, an address
+and a local reproduction), but it belongs **above** the remaining `overlap`/`h_overflow` dimension
+work, because it is a single named control with a one-fixture probe rather than a site-shaped hunt.
+
+**The methodological point, since three audits in one window now support it:** the axis you check
+against determines what you can find. Interop and Baseline are lists of what the *platform* is
+adding, and this engine's gap is not there. **An independent engine's release notes are a list of
+what a browser needs to exist**, and that is the axis that found a `dy` bug.

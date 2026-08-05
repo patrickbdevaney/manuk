@@ -8,11 +8,11 @@
 > filesystem, git, the crawl output or the verify receipt.
 
 ```
-TICK:              952
+TICK:              954
 LAST_AUDIT_TICK:   951          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
-LAST_SURFACE_AUDIT: 942         (surface audit due every 10 ticks — from docs/loop/SURFACE-AUDIT.md)
-LAST_CONSTITUTION_CHECK: 944     (constitution re-read due every 8 ticks — from docs/loop/CONSTITUTION-CHECK.md; anchors the loop to CONSTITUTION.MD)
-LOOP_BUDGET:       4048 ticks remaining (target tick 5000) — from docs/loop/AUTOLOOP; the loop STOPS and reports at 0
+LAST_SURFACE_AUDIT: 954         (surface audit due every 10 ticks — from docs/loop/SURFACE-AUDIT.md)
+LAST_CONSTITUTION_CHECK: 954     (constitution re-read due every 8 ticks — from docs/loop/CONSTITUTION-CHECK.md; anchors the loop to CONSTITUTION.MD)
+LOOP_BUDGET:       4046 ticks remaining (target tick 5000) — from docs/loop/AUTOLOOP; the loop STOPS and reports at 0
 LAST_WALL_AUDIT:   941         (wall-time audit due every 20 ticks — scripts/wall-audit.sh; hunts wall bloat without cutting a gate)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
 LAST_WALL_TIME:    63s
