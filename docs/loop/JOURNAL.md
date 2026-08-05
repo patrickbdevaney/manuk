@@ -46371,6 +46371,101 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 938 — I mis-read a tag name one tick ago, and the corrected ceiling is almost entirely NOT ours (2026-08-05)
+
+TICK SHAPE: measurement — probing the bucket t937 labelled **OURS**, which is the only part of the
+scorability ceiling engine work can touch. It went smaller.
+
+⚠⚠⚠ **CORRECTION TO t937, ONE TICK OLD, AND IT IS THE SAME ERROR t937 WAS ABOUT.** t937 partitioned
+the 29 unscored in-scope sites and wrote:
+
+> *"── OURS (8) ── 3 `empty-2xx` **we produced nothing** · 2 css-starved · 2 thin-overlap · 1 crashed"*
+
+**`empty-2xx` is not ours.** Probed, and the instrument says it in its own words:
+
+```text
+  nitter.net          empty-200: "the origin answered 200 with a ZERO-BYTE body — there was
+  www.amazon.com.be   empty-202:  no document to measure. This is the true cause behind the old
+  www.amazon.com.mx   empty-202:  'Chrome rendered NO [id] elements' line, which blamed the
+                                  corpus for the network's answer"
+```
+
+I wrote *"we produced nothing"* from the tag NAME. The tag means the **origin** produced nothing.
+That is precisely the failure t937 documented in the worklist — a reason tag read as engine work
+because of what it is called — and I committed it inside the tick that named it. **Reading a tag
+name is not reading the instrument; `fidelity.rs` carries a sentence for every one of these and I
+quoted three of them and guessed the fourth.**
+
+**The corrected partition:**
+
+```text
+   29 unscored, in-scope
+   ── NOT OURS (17) ──────────────────────────────────────────────────────
+        6  oracle-module-shell   the ORACLE could not boot a type=module SPA
+        5  tree-divergence       both built a page; the paths do not correspond
+        3  shell-only            "the ORACLE rendered only N element(s)"
+        3  empty-2xx             the ORIGIN answered 2xx with a ZERO-BYTE body   ← corrected
+   ── neither, by construction (7) ───────────────────────────────────────
+        7  timeout-150s          "bounds the PAIR" — Self::Timeout
+   ── OURS (5, and two do not reproduce) ─────────────────────────────────
+        2  thin-overlap          "Unlike shell-only this is OURS" — reproduces
+        2  css-starved           pogoda.by scores ABOVE the 0.75 bar on a solo run
+        1  crashed               does not reproduce solo (t936)
+```
+
+⚠⚠⚠ **SO THE ENGINE-ATTRIBUTABLE, REPRODUCIBLE UNSCORED POPULATION IS 2 OR 3 SITES OUT OF 29 — AND
+M1'S 80% SCORABILITY CAP IS, TO A FIRST APPROXIMATION, NOT MOVABLE BY THIS ENGINE AT ALL.** That is
+the sharpened form of the standing *"M1 HAS NO RESOLUTION"* finding, and it now has a per-site
+accounting behind it rather than a sweep-level intuition. 17 of 29 are the reference or the network;
+7 bound a clock shared with Chrome; 2-3 are ours.
+
+The board's owner-locked block says *"Each site cleared RAISES THE CAP"*. **There are two or three
+sites to clear.** Clearing all of them moves the cap from 80.0% to about 82%.
+
+⚠⚠ **A HYPOTHESIS RAISED AND REFUTED IN THE SAME TICK, recorded so nobody re-tests it.** The one
+reproducible OURS site, `redemoura.gupy.io`, dies with a legible chain in the log — which is PART
+VI's *"the log is the depth instrument"* working exactly as documented:
+
+```text
+  ERROR page.console: TypeError: window.gtag is not a function
+  ERROR page.console: Error rendering page: Error: Route did not complete loading: /_error
+  WARN  UNHANDLED PROMISE REJECTION … Request failed with status code 401  (AxiosError)
+```
+
+`window.gtag` undefined would be an enormous finding — the Google Analytics snippet defines it with a
+top-level `function gtag(){}` in a classic script, and if our global-object binding did not attach
+top-level function declarations to `window`, a large fraction of the web would break the same way.
+**Measured against Chrome, it is not that:**
+
+```text
+   typeof gtag === 'function'        Chrome ✓   ours ✓
+   typeof window.gtag === 'function' Chrome ✓   ours ✓
+   window.topVar (top-level var)     Chrome ✓   ours ✓
+   window.K (top-level class) absent Chrome ✓   ours ✓   (lexical bindings correctly NOT on window)
+```
+
+Top-level function declarations, `var`s, and the lexical exclusion of `class`/`let`/`const` are all
+Chrome-exact. So `gtag` is absent on that site for a site-specific reason (its external GA script,
+or ordering), and the *page* dies on the line after — a **401 from the site's own API**, which needs
+credentials we do not have. One site, site-specific, and not a lever.
+
+⚠ **WHAT THIS TICK DELIBERATELY DID NOT DO: chase that site further.** It is one site, its proximate
+cause is an authenticated API, and t937's own ranking put `thin-overlap` at 2 sites. The finding that
+justifies the tick is the partition correction, not the rabbit hole — and stopping is the part the
+loop is historically worst at.
+
+STEER, unchanged from t937 in order but sharper in magnitude: the ceiling is the **instrument's** and
+the **network's**, not the engine's. Engine work should go back to the SCORED half — where
+`shape_mean` is 55.3% and 108 sites are measurable — and stop being ranked against an unscored count
+that is 26/29 outside its reach. **The M1 conjunction cannot reach 95% while 17 of 135 in-scope sites
+are unscorable for reference/network reasons; that is arithmetic, and it belongs in front of the
+owner rather than inside a burndown row.**
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefact is the corrected partition and a refuted hypothesis; both are
+recorded here and neither describes a mechanism the engine implements. [no-pattern]
+
 ## Tick 937 — half the scorability ceiling is the REFERENCE failing, and the worklist has been sending engine ticks at it (2026-08-05)
 
 TICK SHAPE: measurement — following t936's own steer ("the ceiling, not the geometry") into the 27
