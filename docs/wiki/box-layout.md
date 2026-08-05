@@ -4790,3 +4790,43 @@ is excluded entirely. **A row that is already right is not a row to route throug
 Open, 1px: an input with an explicit `height:40px` reads 47 against Chrome's 46, because Chrome
 centres the internal editor in a taller control and we place the baseline at border+padding+ascent
 regardless.
+
+
+## `None` from a baseline lookup has two meanings (t924)
+
+`last_line_baseline` returning `None` can mean either:
+
+* **"this control's value lives on the ELEMENT"** — an `<input>`, whose text is not in the tree, where
+  CSS 2.1 §10.8.1's bottom-margin-edge fallback is simply wrong; or
+* **"this box genuinely has no in-flow line box"** — a `<button>` wrapping a block, where the fallback
+  is CORRECT and Chrome uses it too.
+
+t918 synthesised a baseline for `input | button | select` on the strength of the first meaning and was
+reverted by the corpus. Measured, a `<div>` around each, with no synthesis at all:
+
+```text
+  <input>                                   Chrome 24   ours 26   <- the ONLY one that is wrong
+  <button><span>Sign In</span></button>            24         24
+  <button>Sign In</button>                         24         24
+  <button></button>                                24         24
+  <select><option>a</option></select>              24         24
+  <button><div class=icon></div></button>          28         29   <- 1px, a different mechanism
+```
+
+`secure5.entertimeonline.com` — the site that caught t918 — contains
+`<button><div class='icon-Eye_18'></div></button>`: content a single empty block, so no line box, so
+the synthesis fired where Chrome takes the fallback.
+
+### And the element set was two thirds of it, not all of it
+
+Narrowed to `<input>` alone, the site still falls 0.872 → 0.692 (two solo runs, byte-identical). So
+the `<input>` formula itself is wrong on a **styled** control — the site's real fields are
+script-created and styled, while every isolated fixture used a default-height input where the formula
+happens to be exact.
+
+The model t918 named as open — Chrome centres the editor vertically in a taller control — was tried
+and **overshot**: `<input style="height:40px">` is 46 in Chrome, 47 without centring, **44 with it**.
+
+> **Narrowing a defect is a result; guessing the remainder is not.** The next attempt starts with a
+> settled element set (a measured claim now, not an assumption), a refuted centring model, a
+> two-line discriminating fixture, and a corpus reproducer with a known-good number to return to.

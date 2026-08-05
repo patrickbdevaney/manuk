@@ -46371,6 +46371,65 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 924 — `<button>` and `<select>` were never the problem, and `<input>` is not a formula I have (2026-08-04)
+
+TICK SHAPE: measurement — t919 left the properly-posed question: not *"what is a control's baseline"*
+(nine fixtures answer that) but *"which real-page control does the formula get wrong, and why"*, with
+`secure5.entertimeonline.com` as the reproducer. This narrows it by two thirds and then refuses to
+guess the rest.
+
+⚠⚠⚠ **`None` FROM `last_line_baseline` HAS TWO MEANINGS, AND t918 CONFLATED THEM.** Measured, a
+`<div>` around each, Chrome against ours **with no synthesis at all**:
+
+```text
+  <input>                                   Chrome 24   ours 26   <- the ONLY one that is wrong
+  <button><span>Sign In</span></button>            24         24
+  <button>Sign In</button>                         24         24
+  <button></button>                                24         24
+  <select><option>a</option></select>              24         24
+  <button><div class=icon></div></button>          28         29   <- 1px, a DIFFERENT mechanism
+```
+
+**`<button>` and `<select>` are already correct without any synthesis**, because for them `None`
+means *"this box genuinely has no in-flow line box"* and CSS 2.1 §10.8.1's bottom-margin-edge fallback
+is what Chrome uses too. Only an `<input>` means *"the value lives on the ELEMENT"*, where the
+fallback is simply wrong.
+
+**That is exactly what the corpus caught.** `secure5.entertimeonline.com` has two buttons, and one is
+`<button><div class='icon-Eye_18'></div></button>` — content a single empty block, so no line box, so
+t918 handed it a synthetic baseline where Chrome takes the fallback. **19 of its 19 `<input>`s in the
+served HTML are `type=hidden`** (correctly `display:none` and boxless in both engines — verified), so
+the visible fields are JS-created and the buttons were the reachable suspect.
+
+⚠⚠⚠ **AND NARROWING TO `<input>` ALONE STILL COSTS THE SITE 0.18.** Two solo runs, byte-identical at
+**0.692308** against the clean tree's **0.871795**. So the element set was two thirds of the defect
+and not the whole of it: **the `<input>` formula itself is wrong on a styled control**, and the site's
+real fields are styled ones built by script.
+
+⚠⚠ **I THEN TRIED THE MODEL t918 NAMED AS OPEN — Chrome CENTRES the editor in a taller control — AND
+IT OVERSHOT.** `<input style="height:40px">` is 46 in Chrome, was 47 without centring, and **44 with
+it**. One measurement in, one measurement past. At that point I was fitting a formula to a site I
+cannot inspect, which is the failure mode the ratchet had already rejected once this window, so the
+attempt is reverted whole and the tree is exactly where t919 left it.
+
+> **Narrowing a defect is a result; guessing the remainder is not.** Three ticks have now touched this
+> (t917 built and reverted the UA half, t918 built and reverted the baseline half, this one removed
+> two thirds of the search space) and the honest state is: **the input baseline needs Chrome's actual
+> model, measured, not a third approximation.**
+
+**WHAT THE NEXT ATTEMPT HAS THAT THIS ONE DID NOT:** the element set is settled (`<input>` only —
+`<button>`/`<select>` must be left alone, and that is now a measured claim rather than an assumption);
+the centring model is measured and REFUTED at one point (44 against 46); `<input style="height:40px">`
+is a two-line fixture that discriminates; and `secure5.entertimeonline.com` remains the corpus
+reproducer with a known-good number to return to.
+
+RATCHET: nothing changed. `secure5.entertimeonline.com` re-measured at **0.871795** on the landed
+tree, `manuk-layout` 125/125, and no gate moved in either direction.
+
+PERF: none — measurement only.
+
+WIKI: `docs/wiki/box-layout.md` — "`None` from a baseline lookup has two meanings" [no-pattern]
+
 ## Tick 923 — the FONT SIZE arrived and the ALIGNMENT did not, because only one takes the recovery path (2026-08-04)
 
 TICK SHAPE: capability — t922 left `<sup>`/`<sub>` at 24 against Chrome's 27 and called it *"a
