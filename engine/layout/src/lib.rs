@@ -6669,7 +6669,41 @@ impl Ctx<'_> {
                     //
                     // The two rows we already matched are the fallback cases, which is exactly why
                     // this survived: the rule we implemented is a real rule, applied everywhere.
-                    let own_baseline = if matches!(s.overflow_x, Overflow::Visible)
+                    // ⚠⚠⚠ **A REPLACED ELEMENT NEVER PARTICIPATES IN THIS SEARCH — ITS BASELINE IS
+                    // THE BOTTOM MARGIN EDGE, FULL STOP.** §10.8.1's rule is about an inline-block's
+                    // *last in-flow line box*, and a replaced element has none by definition: what
+                    // it displays is not a line. Running the search on one asks our own internal box
+                    // structure a question the spec never asks it, and `<svg>` answers.
+                    //
+                    // **Measured — an inline `<svg>` against an `<img>` of the SAME 16x16 size**, in
+                    // a 16px sans-serif block, both Chrome and ours:
+                    //
+                    // ```text
+                    //                                     Chrome    before    after
+                    //   <div><svg 16x16></div>              20        30        20
+                    //     ...the svg's own y within it       0        14         0
+                    //   <div><img 16x16></div>              20        20        20   <- the CONTROL
+                    //   <div><svg display:block></div>      16        16        16
+                    //   <div><svg vertical-align:top></div> 18        18        18
+                    // ```
+                    //
+                    // The arithmetic identifies it exactly: the svg's box reported a baseline of
+                    // **0** — its own TOP — so all 16px hung BELOW the baseline and the line came to
+                    // `strut ascent 14 + 16 = 30`, with the glyph pushed 14px down. `<img>` was
+                    // right all along because an image's box has no inner content to find a line
+                    // box in, so it always took the fallback. **The rule was right and its DOMAIN
+                    // was wrong**, and the control that proves it was already in the same fixture.
+                    //
+                    // Inline `<svg>` is on **34.5% of the burndown corpus** and icon-plus-label —
+                    // `<button><svg/> Label</button>` — on 23.4%: nav bars, toolbars, chips, every
+                    // icon button on the modern web, each one 10px too tall and dragging everything
+                    // below it down.
+                    let is_replaced = matches!(
+                        self.dom.tag_name(node),
+                        Some("img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe")
+                    );
+                    let own_baseline = if !is_replaced
+                        && matches!(s.overflow_x, Overflow::Visible)
                         && matches!(s.overflow_y, Overflow::Visible)
                     {
                         last_line_baseline(&r.boxx).map(|b| r.margin_top + (b - r.boxx.rect.y))

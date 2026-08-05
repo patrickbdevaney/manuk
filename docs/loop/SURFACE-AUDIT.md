@@ -4146,3 +4146,40 @@ t963 ran.
 > two used together** — the negative on `<button>`/`<input>` cost one probe and saved a window.
 
 Map now **476 rows** (+2: relative colors, execCommand undo/redo), both `unknown`.
+
+### ⚠⚠⚠ AMENDMENT to #37's Finding 3, written at t967 — I NAMED THE WRONG ORGAN
+
+Finding 3 above reported *"a block containing a lone form control is up to 10px taller here than in
+Chrome"* and ranked it as a form-control defect at 51–56% corpus frequency. **The control was not the
+cause and the number was inferred, not measured.** Finding 3's wrapper heights were computed as *the
+next control's `y` minus this one's* — the `<div>`s carried no ids — and that quantity is only the
+wrapper's height if nothing else is on the line.
+
+**Re-measured with ids on the wrappers, the rows split cleanly:**
+
+```text
+   the <div> around …                    Chrome     ours
+     <button>Search</button>               24        22     wrapper == control, both engines
+     <input placeholder="…">               24        22     wrapper == control, both engines
+     <button><svg/></button>               24        32     ✗
+     <button><svg/> Search</button>        24        32     ✗
+```
+
+**Every diverging row contains an inline `<svg>`, and every clean row does not.** t967 then isolated
+it away from `<button>` entirely — a bare `<div><svg 16x16></div>` is **30 here against Chrome's 20**,
+while a 16×16 `<img>` in the same fixture is 20 in both — and fixed it: **a replaced element's
+baseline is its bottom margin edge, and the §10.8.1 last-line-box search was being run on it.**
+
+**What the audit got right and what it got wrong, kept separate because they rank differently:**
+
+* ✅ The corpus-as-axis method found a real, high-frequency `dy` term where three source-based audits
+  found none. Inline `<svg>` is **34.5%** of the corpus — *higher* than the `<button>`-with-an-icon
+  figure the finding leaned on, and it was in the frequency table the whole time.
+* ✅ The negative result on `<button>`/`<input>` (within ~2px) **stands, and is now better
+  supported**: those rows are the ones that were already clean.
+* ❌ The attribution was wrong, from a quantity that was inferred rather than measured, in an audit
+  whose own headline is *"frequency ranks where to look; a probe says whether anything is there."*
+  **Putting an id on the box you intend to talk about costs nothing and is not optional.**
+* ⚠ Still open, and genuinely a form-control question: `<div><button><svg/></button></div>` is **32
+  against Chrome's 24** *after* the svg fix — the same shape one level up, an inline-block's baseline
+  when its last line box holds a vertically-aligned replaced item.

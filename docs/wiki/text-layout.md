@@ -2249,3 +2249,59 @@ unstyled 4-row list box is **70**, not 82.8, and the same law reproduces it exac
 (`4 x (1.2 x 13.333 + 1) + 2 = 70`). We inherit the parent's size. Any fixture that measures a select
 without setting `font-size` is measuring that defect as well, and will blame whatever it was actually
 testing.
+
+## A replaced element's baseline is its bottom margin edge, and `<img>` was right by ACCIDENT (t967)
+
+**An inline `<svg>` made its line box 30px where Chrome gives 20, and sat 14px down inside it. An
+`<img>` of the identical 16×16 size was correct in both engines, on the same kind of line, in the
+same fixture.** That control is the identification.
+
+```text
+   16px sans-serif block, one 16x16 thing on the line
+                                          Chrome   before   after
+     <div><svg 16x16></div>                 20       30       20
+       ...the svg's own y inside it          0       14        0
+     <div><img 16x16></div>                 20       20       20    <- THE CONTROL
+     <div><svg display:block></div>         16       16       16
+     <div><svg vertical-align:top></div>    18       18       18
+```
+
+⚠⚠⚠ **THE ARITHMETIC NAMES THE VALUE.** The svg's box reported a baseline of **0** — its own TOP —
+so all 16px hung *below* the baseline and the line came to `strut ascent 14 + 16 = 30`, with the
+glyph pushed 14px down. Both numbers are measured, not inferred.
+
+⚠⚠ **THE RULE WAS RIGHT AND ITS DOMAIN WAS WRONG, which is exactly why it survived so long.** CSS 2.1
+§10.8.1 gives an inline-block the baseline of its *last in-flow line box*, falling back to the bottom
+margin edge when it has none. That is a real rule, Chrome-measured, and it was applied to **every**
+atomic inline:
+
+```rust
+   // engine/layout/src/lib.rs — collect_inline_node, the Atomic push site
+   let own_baseline = if !is_replaced                       // <- t967
+       && matches!(s.overflow_x, Overflow::Visible)
+       && matches!(s.overflow_y, Overflow::Visible)
+   { last_line_baseline(&r.boxx).map(|b| r.margin_top + (b - r.boxx.rect.y)) } else { None };
+```
+
+**A replaced element has no in-flow line boxes by definition** — what it displays is not a line — so
+running the search on one asks our internal box structure a question the spec never asks it. `<svg>`
+answers because, unlike `<img>`, it has element children to build a box out of. **`<img>` took the
+fallback every time by accident, and that is why it looked correct.**
+
+**The guard is a NARROWING, not a removal**, and `G_REPLACED_BASELINE` pins that in both directions:
+widen it to every atomic and a text-bearing `display:inline-block` goes to 22 where Chrome gives
+19.19 — the §10.8.1 main clause undone along with its exception.
+
+**Why it is worth a tick.** Inline `<svg>` is on **34.5% of the CrUX-trend corpus**
+(`docs/loop/CORPUS-CONSTRUCTS.md`) — nav bars, toolbars, chips, every icon on the modern web. A line
+box 10px too tall drags everything below it down the page.
+
+⚠ **STILL OPEN: the icon INSIDE a `<button>`.** `<div><button><svg/></button></div>` is **32 against
+Chrome's 24** after this fix, with the button 10px below its own wrapper's top. Same shape one level
+up — an inline-block's baseline when its last line box holds a vertically-aligned replaced item — and
+a different computation. Do not conflate the two.
+
+⚠ **AND THE METHOD NOTE THAT COST AN AUDIT.** Surface audit #37 attributed this to form controls
+because it derived wrapper heights as *the next control's `y` minus this one's* — the `<div>`s had no
+ids. Every diverging row contained an `<svg>` and every clean row did not, which the inferred quantity
+could not show. **Put an id on the box you intend to talk about.**

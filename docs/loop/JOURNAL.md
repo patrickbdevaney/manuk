@@ -46371,6 +46371,90 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 967 — a replaced element has no line box to take a baseline from, and `<svg>` answered anyway (2026-08-05)
+
+TICK SHAPE: pattern-class — inline `<svg>`, which t965's corpus instrument prices at **34.5% of the
+burndown corpus**, the sixth most common construct measured and the highest-frequency `dy` term found
+this session.
+
+⚠⚠⚠ **AN INLINE `<svg>` MADE ITS LINE BOX 30px WHERE CHROME GIVES 20, AND AN `<img>` OF THE
+IDENTICAL 16×16 SIZE WAS CORRECT IN BOTH ENGINES ON THE SAME KIND OF LINE.** That control is what
+turns this from a guess into an identification — it was in the same fixture, and it never moved.
+
+```text
+   16px sans-serif block, one 16x16 thing on the line
+                                          Chrome   before   after
+     <div><svg 16x16></div>                 20       30       20
+       ...the svg's own y inside it          0       14        0
+     <div><svg style=width/height></div>    20       30       20
+     <div><img 16x16></div>                 20       20       20    <- THE CONTROL
+     <div><svg display:block></div>         16       16       16
+     <div><svg vertical-align:top></div>    18       18       18
+     <div><svg no width/height></div>     1204     1214     1204
+   ─────────────────────────────────────────────────────────────────
+     y of #end, after seven rows          1316     1347     1317
+```
+
+**THE ARITHMETIC NAMES THE VALUE, not a direction.** The svg's box reported a baseline of **0** — its
+own TOP — so all 16px hung *below* the baseline and the line came to `strut ascent 14 + 16 = 30`,
+with the glyph pushed **14px** down. Both numbers are the measured ones.
+
+⚠⚠ **THE RULE WAS RIGHT AND ITS DOMAIN WAS WRONG, which is why it survived.** CSS 2.1 §10.8.1 gives
+an inline-block the baseline of its *last in-flow line box*, falling back to the bottom margin edge
+when it has none — a real rule, landed earlier, Chrome-measured, and applied to **every** atomic
+inline. **A replaced element has no in-flow line boxes by definition**: what it displays is not a
+line. Running the search on one asks our own internal box structure a question the spec never asks
+it, and `<svg>` — unlike `<img>` — has element children to build a box out of, so it answers. **`<img>`
+was right all along by accident.** The guard is a narrowing, and the gate pins that it is: widening it
+to every atomic makes a text-bearing `inline-block` 22 where Chrome gives 19.19, which is the earlier
+rule undone.
+
+RED-PROVEN BOTH WAYS, each applied, run and reverted:
+
+1. **Restore the unconditional search** → `#wsvg` reads **30** against 20 and the svg sits at y=14.
+   The original defect.
+2. **Widen the guard to every atomic** → `#wib` reads **22** against Chrome's 19.19 — the §10.8.1
+   main clause disabled along with the exception.
+
+⚠⚠⚠ **AND THIS TICK CORRECTS THE AUDIT I PUBLISHED AN HOUR AGO. I NAMED THE WRONG ORGAN.** Surface
+audit #37's Finding 3 reported *"a block containing a lone form control is up to 10px taller than
+Chrome's"* and ranked it as a form-control defect. **The wrapper heights in that finding were
+INFERRED — the next control's `y` minus this one's — because the `<div>`s carried no ids.** Measured
+directly, the rows split cleanly:
+
+```text
+   the <div> around …                    Chrome     ours
+     <button>Search</button>               24        22    wrapper == control, BOTH engines
+     <input placeholder="…">               24        22    wrapper == control, BOTH engines
+     <button><svg/></button>               24        32    ✗
+     <button><svg/> Search</button>        24        32    ✗
+```
+
+**Every diverging row contains an inline `<svg>` and every clean row does not.** The audit's *method*
+was right — its corpus axis found a real high-frequency `dy` term where three source-based audits
+found none, and inline `<svg>` at 34.5% was sitting in its own frequency table, ranked *above* the
+icon-button figure the finding leaned on. Its *attribution* was wrong, from a quantity it inferred
+rather than measured, in an audit whose own headline is *"frequency ranks where to look; a probe says
+whether anything is there."* **Put an id on the box you intend to talk about.** Amended in place in
+`SURFACE-AUDIT.md` rather than quietly left standing.
+
+⚠ **STILL OPEN, MEASURED, AND NOT CLAIMED: the icon inside a `<button>`.** `<div><button><svg/></button></div>`
+is **32 against Chrome's 24** *after* this fix, with the button sitting 10px below its own wrapper's
+top. That is the same shape one level up — an inline-block's baseline when its last line box holds a
+vertically-aligned replaced item — and it is a different computation from the one this tick pins. The
+gate says so explicitly so the two are never conflated.
+
+RATCHET: `manuk-layout` 125/125; `g_inline_box_geometry`, `g_inline_box_leading`,
+`g_inline_vertical_padding`, `g_svg_bbox`, `g_svg_client_rect`, `g_select_width`, `g_select_listbox`,
+`g_tab_stop`, `g_intrinsic_min_max` and `g_form` all green. The `<img>` control is byte-identical
+before and after.
+
+PERF: none — one tag comparison per atomic inline, replacing a subtree walk for the elements that
+take the new branch.
+
+WIKI: `docs/wiki/text-layout.md` — "A replaced element's baseline is its bottom margin edge, and
+`<img>` was right by accident".
+
 ## Tick 966 — the surface audit, and its axis was the CORPUS rather than a source (2026-08-05)
 
 TICK SHAPE: measurement — the cadence surface audit (due every 10 ticks, last at 954), banked as
