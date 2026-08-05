@@ -29,7 +29,7 @@
 //!                                                     Chrome        before        after
 //!   two bare cells                              200@0 · 200@200    8@0 · 8@8   200@0 · 200@200
 //!   bare · real row · bare  (three rows)        400 · 400 · 400   GONE·400·GONE  400 · 400 · 400
-//!   display:table;height:100px + one bare cell     400 wide          8 wide       400 wide
+//!   display:table;height:100px + one bare cell     400x100          8 wide      400x100 (t933)
 //!   a bare cell's `width:50%` child                  200               4           200
 //!   explicit table-row              (CONTROL)        400              400          400
 //!   real <table><tr><td>            (CONTROL)        394              394          394
@@ -62,15 +62,17 @@
 //! - **Drop the flush before a real row** → `bare · row · bare` becomes two rows, the leading and
 //!   trailing cells share one anonymous row, and `#run_a` reports **200** instead of 400. Verified.
 //!
-//! ## NOT covered, named with its number
+//! ## The bound this gate named — CLOSED one tick later, at t933
 //!
-//! **A cell does not STRETCH to fill a taller table.** `display:table; height:100px` with one bare
-//! cell is 400×**24** here against Chrome's 400×**100**: the width is now exact and the height is
-//! not. That is the height-distribution residue t908 and t925 both named on real `<table>` markup
-//! (`a <td> does not stretch to fill a taller table`) — the same missing algorithm reached by a
-//! different door, not a new defect and not something this fix was ever going to close. The
-//! `vertical-align: middle` half of the centring idiom therefore still does not centre; the box is
-//! merely the right width now instead of 2% of it.
+//! When this gate was written, `display:table; height:100px` with one bare cell was 400×**24**
+//! against Chrome's 400×**100**: the width was exact and the height was not, so the
+//! `vertical-align: middle` half of the centring idiom still did not centre. That was named here as
+//! the height-distribution residue t908 and t925 had already reported from the real-`<table>` side —
+//! the same missing algorithm reached by a different door.
+//!
+//! **t933 built it**: a table's surplus height is distributed over its rows, proportionally to
+//! natural height and excluding rows that specified one. `#mid` now asserts the whole box at
+//! **400×100**, and this was the fourth of four gates waiting on that one algorithm.
 
 use manuk_text::FontContext;
 
@@ -155,12 +157,14 @@ fn g_anonymous_table_row() {
     // ── The centring idiom, and the percentage child that first exposed this.
     let mid = rect_of(&page, "#mid");
     assert!(
-        (mid.width - 400.0).abs() < 1.01,
+        (mid.width - 400.0).abs() < 1.01 && (mid.height - 100.0).abs() < 1.01,
         "G_ANONYMOUS_TABLE_ROW: the `display:table` + `display:table-cell; vertical-align:middle` \
-         centring idiom — the cell spans the 400px table (Chrome). Got {}. NOTE its HEIGHT is still \
-         24 against Chrome's 100: a cell does not stretch to fill a taller table, which is the \
-         t908/t925 height-distribution residue and deliberately NOT asserted here.",
-        mid.width
+         centring idiom — the cell spans the 400px table AND fills its 100px height (Chrome: \
+         400x100). Got {}x{}. The height half was deliberately NOT asserted when this gate was \
+         written at t932, because a cell did not stretch to fill a taller table; t933 landed the \
+         row-height distribution and the assertion is now the whole box.",
+        mid.width,
+        mid.height
     );
     let pct = rect_of(&page, "#pct");
     assert!(

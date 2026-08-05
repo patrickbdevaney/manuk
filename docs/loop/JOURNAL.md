@@ -46371,6 +46371,99 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 933 — the algorithm four gates named and none built (2026-08-05)
+
+TICK SHAPE: capability — the most-named open item in layout, taken because t932's own sweep said to
+look at the box types that opt OUT of ordinary block sizing. **And taken by GREPPING THE GATE CORPUS
+FIRST**, which is t932's lesson applied one tick later: `ls engine/page/tests/ | grep table` before a
+line of fixture.
+
+⚠⚠⚠ **FOUR GATES HAD ALREADY NAMED THIS ONE ALGORITHM, EACH FROM A DIFFERENT DOOR, EACH PINNED AT
+OUR OWN NUMBER WITH ITS MECHANISM WRITTEN BESIDE IT.** Not four bugs — one:
+
+```text
+  t814  g_orphan_table_cell#c3          [0 92 67x20]  vs Chrome [0 90 300x80]   "needs … cell stretching"
+  t908  g_table_height_is_a_minimum#t10 (not asserted) vs Chrome 196x56          "genuinely the algorithm"
+  t925  the border-spacing tick's residue                                        "a <td> does not STRETCH"
+  t932  g_anonymous_table_row#mid       400x24        vs Chrome 400x100          height "deliberately NOT asserted"
+```
+
+**All four now assert Chrome.** The practice is the finding, not this instance of it: a residue pinned
+at our own number, with the mechanism named beside it and an instruction that a future fix must change
+the line deliberately, is what let four independent sightings converge instead of being re-measured a
+fifth time.
+
+**The mechanism, and t908 is half of it.** t908 taught the table BOX to grow to its declared height —
+correctly, and it is gated. Nothing inside it moved. So the rows kept their natural heights and the
+declared height became **empty space at the bottom**: the box was right and every row was wrong. A
+`<td>` that should be 56 tall was 26.
+
+⚠⚠⚠ **CSS 2.1 §17.5.3 DECLINES TO SPECIFY THE DISTRIBUTION — *"implementation-dependent"* — SO THE
+SPEC CANNOT SETTLE THIS AND EVERY NUMBER HAD TO BE MEASURED.** Two clauses, each with a fixture row
+that discriminates it and no other row that can:
+
+```text
+  200px table, spacing 2 (194 for rows)        Chrome      proportional?  equal-share?
+    two rows, natural 26 + 26                  97 · 97        97 · 97       97 · 97
+    two rows, natural 26 + 74               50.4 · 143.6   50.4 · 143.6     73 · 121
+    row1 height:100px, row2 natural 26        100 · 94        154 · 40         ✗
+```
+
+* **PROPORTIONAL to natural height, not equal shares.** The two models agree on every equal-natural
+  row and disagree only where the naturals differ, which is why the fixture carries a pair differing
+  by a factor of three. Without that row the gate passes against the wrong algorithm.
+* **A row that SPECIFIES a height is EXCLUDED from the surplus, not merely counted in it.** Row1
+  keeps exactly its 100 and row2 absorbs all 70px. Proportional-over-both gives 154 — and the RED
+  proof prints 153.97, so this is not a rounding argument.
+
+⚠ **The first half of the fix — a row's own `height` as a MINIMUM on its natural height — is
+unobservable on its own**, and that is why it is one tick and not two: it changes nothing until there
+is a surplus to exclude it from. The same shape t814 recorded about its own two edits.
+
+GATE: **`G_TABLE_ROW_HEIGHT_DISTRIBUTION`** (13 claims, 2 CONTROLs). RED-proven **three** ways, each
+naming a different way to get it wrong:
+
+```text
+  delete the distribution block         RED  `#one_c` 56 -> 26
+  distribute in EQUAL shares            RED  `#uneq_a` 50.4 -> 73
+  include specified-height rows         RED  `#spec_a` 100 -> 153.97
+```
+
+⚠ **The CONTROLs are t908's rule and they are what the plausible mis-phrasing breaks.** A fix written
+as *"make rows fill the table"* rather than *"distribute the SURPLUS"* shrinks a row whose content is
+taller than the declared height, and passes everything else. A declared height shorter than the
+content is a minimum: the table grows to 30 and the row stays 26.
+
+⚠⚠ **THE FIXTURE CAUGHT ME AGAIN, AND IT WAS THE SAME MISTAKE AS LAST TICK.** I computed the gate's
+expected values from the *exploratory* fixture, which reset `td { padding: 0 }`. The gate's own
+fixture uses UA defaults, so the natural heights are 26 and 74, not 24 and 72, and the proportional
+split is **50.4 / 143.6** rather than 48.5 / 145.5. Chrome on the gate's own fixture said so
+immediately. **A constant is only measured on the fixture that asserts it** — carrying a number
+across two fixtures is exactly as unsound as carrying it from memory, and this is twice in two ticks.
+
+⚠ **NOT DONE, and it is a deliberate NON-ANSWER rather than a rule:** when EVERY row specifies a
+height, the surplus is left as space at the bottom. Chrome's behaviour there is **unmeasured**, so the
+code keeps the pre-existing behaviour rather than inventing a distribution the fixture cannot defend.
+Named in the gate with the reason, so the next reader measures it instead of assuming it was decided.
+
+⚠ **NAMED IN PASSING, NOT FOLDED IN: a row BOX is not inset by the horizontal border-spacing.** Chrome
+reports a `<tr>` as **196** wide in a 200px table (the cells' span); we report 200. Measured on this
+tick's fixture and left alone — it is a different quantity from row *height*, it moves no cell, and
+folding it in would have made this gate's three RED proofs ambiguous about which edit they were
+proving.
+
+RATCHET: `manuk-layout` 125/125, full `manuk-page` gate suite on the shipping cascade. **Seven table
+gates green, three of which now assert CHROME where they previously asserted our own number** —
+`g_orphan_table_cell#c3` `[0 90 300x80]`, `g_table_height_is_a_minimum#t10` `196x56` (asserted for the
+first time), `g_anonymous_table_row#mid` `400x100`. Every re-pin moves an assertion FROM us TO the
+reference, which is the only direction a re-pin may go.
+
+PERF: none — one pass over the row array, guarded by `s.height` being non-`Auto`, in a function that
+already walked it three times. A table with no declared height takes no new branch at all.
+
+WIKI: `docs/wiki/box-layout.md` — Chrome's two distribution clauses with the discriminating rows, and
+why the spec cannot be the source here.
+
 ## Tick 932 — the composed width family is CLEAN, and the one defect in it was a container collapsing to 2% of its size (2026-08-05)
 
 TICK SHAPE: capability — the discovery engine run on burndown family #1 (`PHASE0-RENDER-BURNDOWN.md`

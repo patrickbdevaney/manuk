@@ -4623,6 +4623,71 @@ impl Ctx<'_> {
                 }
             }
         }
+        // ── **A TABLE'S EXTRA HEIGHT IS DISTRIBUTED OVER ITS ROWS — the algorithm five ticks named
+        // and none built** (t814 `g_orphan_table_cell#c3`, t908 `g_table_height_is_a_minimum#t10`,
+        // t925, t932 `g_anonymous_table_row#mid`). t908 taught the table BOX to grow to its declared
+        // height, so the box was right and nothing inside it moved: the rows kept their natural
+        // heights and the declared height became empty space at the bottom. Chrome puts that space
+        // *in* the rows, and a `<td>` that should be 56 tall was 24.
+        //
+        // **A row's own `height` is a MINIMUM on its natural height** — the first half, and it does
+        // nothing observable on its own, which is why it lands here rather than as its own tick.
+        let row_min_specified: Vec<bool> = (0..nrows)
+            .map(|r| {
+                let Some(Some(rn)) = rows.get(r).map(|(n, _)| *n) else {
+                    return false;
+                };
+                match self.style_of(rn).height {
+                    Dim::Auto => false,
+                    other => {
+                        row_h[r] = row_h[r].max(other.resolve(0.0, 0.0));
+                        true
+                    }
+                }
+            })
+            .collect();
+        // **The second half: distribute the surplus, PROPORTIONALLY to natural height, over the rows
+        // that did NOT specify one.** Both clauses are measured, not chosen — CSS 2.1 §17.5.3 leaves
+        // the distribution implementation-dependent, so the only honest source is Chrome:
+        //
+        // ```text
+        //   200px table, spacing 2 (so 194 for rows)      Chrome        proportional?  equal share?
+        //     two rows, natural 24 + 24                   97 · 97          97 · 97       97 · 97
+        //     two rows, natural 24 + 72                   48.5 · 145.5     48.5 · 145.5  73 · 121
+        //     row1 height:100px, row2 natural 24          100 · 94         156.5 · 37.5  ✗
+        // ```
+        //
+        // The **second** row is the discriminator between proportional and equal-share; the **third**
+        // is what proves a specified-height row is EXCLUDED rather than merely counted, since
+        // proportional-over-everything gives 156.5 and Chrome gives 100.
+        if nrows > 0 {
+            if let Some(want) = match s.height {
+                Dim::Auto => None,
+                other => Some(other.resolve(0.0, 0.0)),
+            } {
+                // The rows share what is left after the spacing gutters (one above each row and one
+                // below the last), which is the same accounting the positioning loop below does.
+                let avail = want - spacing_v * (nrows as f32 + 1.0);
+                let extra = avail - row_h.iter().sum::<f32>();
+                let flexible: f32 = (0..nrows)
+                    .filter(|&r| !row_min_specified[r])
+                    .map(|r| row_h[r])
+                    .sum();
+                // `extra <= 0` is the ordinary case and t908's rule: a declared height SHORTER than
+                // the content is a minimum, so the table grows and nothing here fires.
+                if extra > 0.0 && flexible > 0.0 {
+                    for r in 0..nrows {
+                        if !row_min_specified[r] {
+                            row_h[r] += extra * row_h[r] / flexible;
+                        }
+                    }
+                }
+                // `flexible == 0` — EVERY row specified a height, or every row is empty. Chrome's
+                // behaviour there is UNMEASURED, so the surplus is deliberately left as space at the
+                // bottom rather than distributed on a guess: that is the pre-existing behaviour, and
+                // inventing one would be a rule this fixture cannot defend.
+            }
+        }
         // Row y positions.
         let mut row_y = vec![content_y + spacing_v; nrows.max(1)];
         let mut yy = content_y + spacing_v;

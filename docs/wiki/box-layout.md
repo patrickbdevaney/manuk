@@ -401,6 +401,66 @@ unconditionally fails.
 
 **Bound.** A **flex item's** intrinsic min/max is still dropped — closed the following tick, below.
 
+## A table's SURPLUS height is distributed over its rows — and the spec refuses to say how (tick 933)
+
+**Symptom.** t908 taught the table BOX to grow to its declared height, correctly and gated. Nothing
+inside it moved: the rows kept their natural heights and the declared height became **empty space at
+the bottom**. The box was right and every row was wrong — a `<td>` that should be 56 tall was 26.
+
+**Why it took four gates to close.** This one algorithm was named from four different doors, each
+time pinned at OUR number with the mechanism written beside it:
+
+```text
+  t814  g_orphan_table_cell#c3          [0 92 67x20]  vs Chrome [0 90 300x80]
+  t908  g_table_height_is_a_minimum#t10 (unasserted)  vs Chrome 196x56
+  t925  the border-spacing tick's residue             "a <td> does not STRETCH"
+  t932  g_anonymous_table_row#mid       400x24        vs Chrome 400x100
+```
+
+All four now assert Chrome. **The practice is the lesson, not the instance**: a residue pinned at our
+own number, with its mechanism named and an explicit instruction that a future fix must change the
+line deliberately, is what let four independent sightings converge instead of being re-measured a
+fifth time.
+
+**CSS 2.1 §17.5.3 declines to specify the distribution** — *"the distribution of the remaining space
+is implementation-dependent"* — so the spec cannot be the source and every number below is a
+measurement of Chrome.
+
+```text
+   200px table, spacing 2 (194 usable)        Chrome       proportional?   equal-share?
+     two rows, natural 26 + 26                97 · 97         97 · 97        97 · 97
+     two rows, natural 26 + 74             50.4 · 143.6    50.4 · 143.6      73 · 121
+     row1 height:100px, row2 natural 26      100 · 94         154 · 40          ✗
+```
+
+* **Proportional to natural height, not equal shares.** The two models agree on every *equal-natural*
+  row and disagree only where the naturals differ — so a fixture without a lopsided pair passes
+  against the wrong algorithm.
+* **A row that SPECIFIES a height is EXCLUDED from the surplus**, not merely counted in it. Row1 keeps
+  exactly its 100 and row2 absorbs all 70px.
+* **A row's own `height` is a MINIMUM on its natural height** — the other half of the fix, and
+  unobservable on its own, which is why it is one tick and not two.
+
+**Gate.** `G_TABLE_ROW_HEIGHT_DISTRIBUTION` (13 claims, 2 CONTROLs), RED-proven three ways: delete the
+distribution (`#one_c` 56→26); distribute in equal shares (`#uneq_a` 50.4→73); include
+specified-height rows (`#spec_a` 100→153.97 — not a rounding argument).
+
+**The CONTROLs are t908's rule and they are what the plausible mis-phrasing breaks.** A fix written as
+*"make rows fill the table"* rather than *"distribute the SURPLUS"* shrinks a row whose content is
+taller than the declared height and passes everything else.
+
+**Two things deliberately left, with their reasons.** When EVERY row specifies a height the surplus is
+left at the bottom — Chrome's behaviour there is **unmeasured**, so the code keeps the pre-existing
+behaviour rather than inventing a rule the fixture cannot defend. And a **row BOX is not inset by the
+horizontal border-spacing**: Chrome reports a `<tr>` as 196 wide in a 200px table, we report 200 —
+a different quantity from row height, moving no cell, and folding it in would have made the three RED
+proofs ambiguous.
+
+⚠ **A constant is only measured on the fixture that asserts it.** The gate's first values were carried
+over from the *exploratory* fixture, which reset `td { padding: 0 }`; the gate's own fixture uses UA
+defaults, so the naturals are 26 and 74 and the split is 50.4/143.6, not 48.5/145.5. Carrying a number
+across two fixtures is exactly as unsound as carrying it from memory.
+
 ## A bare `table-cell` needs an ANONYMOUS ROW, and without one it does not shrink — it VANISHES (tick 932)
 
 **Symptom.** `width:50%` inside a `display:table` > `display:table-cell` came out **4px against

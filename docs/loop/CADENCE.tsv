@@ -656,3 +656,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 928	1e762c71	1785908153	2026-08-05T01:35:53-04:00	4892	measurement	63	9	356	33	397	81	3896	6960	0	478	0	the reference hypothesis is REFUTED, and the form-control item is HANDED ON (2026-08-04)
 930	f75c53a7	1785914405	2026-08-05T03:20:05-04:00	6252	capability	63	11	832	263	400	81	3896	6960	0	480	0	the intrinsic keywords are representable on `width` and UNREPRESENTABLE on all four min/max (2026-08-05)
 931	e47d73c7	1785917193	2026-08-05T04:06:33-04:00	2788	capability	63	12	874	261	401	81	3896	6960	0	481	0	the sidecar stopped at the taffy border, and the bound t930 named was half its true size (2026-08-05)
+932	de5b3dd9	1785919405	2026-08-05T04:43:25-04:00	2212	capability	63	12	723	276	402	81	3896	6960	0	482	0	the composed width family is CLEAN, and the one defect in it was a container collapsing to 2% of its size (2026-08-05)

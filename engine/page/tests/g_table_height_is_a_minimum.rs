@@ -37,8 +37,15 @@
 //! it was **one missing declaration in the UA stylesheet** (`table { border-spacing: 2px }`), found
 //! at t908 and gated by `G_TABLE_BORDER_SPACING_UA_DEFAULT`. `#t7` and `#t8` are asserted below.
 //! *Naming something as out of scope is a hypothesis about its size, and it was wrong by two orders
-//! of magnitude here.* Still open, and genuinely the algorithm: a `<td>` **stretching** to fill a
-//! table given a taller `height` (Chrome 56, ours 26).
+//! of magnitude here.*
+//!
+//! ⚠⚠ **AND THE THIRD — "genuinely the algorithm" — WAS CLOSED AT t933, FIVE TICKS AFTER FOUR
+//! SEPARATE GATES NAMED IT.** A `<td>` stretching to fill a table given a taller `height` was
+//! Chrome 56 / ours 26; `#t10` is now asserted at **196x56**, Chrome's number. t908 taught the
+//! table BOX to grow and nothing inside it moved, so the declared height became empty space at the
+//! bottom — the box was right and every row was wrong. t933 distributes that surplus over the rows
+//! (proportionally to natural height, excluding rows that specified one), which also closed
+//! `g_orphan_table_cell#c3` and `g_anonymous_table_row#mid`. Four doors, one algorithm.
 //!
 use manuk_text::FontContext;
 
@@ -100,6 +107,8 @@ fn g_table_height_is_a_minimum() {
     c(&page, "#t7", 200.0, 30.0);
     c(&page, "#t8", 196.0, 26.0);
     c(&page, "#t9", 200.0, 60.0);
+    // CLOSED AT t933 — this row was the one the header called "genuinely the algorithm".
+    c(&page, "#t10", 196.0, 56.0);
     c(&page, "#t11", 200.0, 24.0);
     c(&page, "#t12", 200.0, 34.0);
     c(&page, "#t13", 200.0, 60.0);

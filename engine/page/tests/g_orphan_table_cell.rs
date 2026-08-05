@@ -50,27 +50,30 @@
 //!   behaviour: the second is measurable only once the first has landed, which is why they land
 //!   together and why neither is a separable tick.
 //!
-//! ## The residue, named rather than blamed — and HALVED at t932, deliberately
+//! ## The residue that was named rather than blamed — and is now CLOSED (t932 + t933)
 //!
-//! ⚠ A `table-cell` inside a table with an **explicit height** must STRETCH to fill it. Chrome gives
-//! `[0 90 300x80]` for the classic `display:table{height:80px}` + `vertical-align:middle` pair. This
-//! row was pinned at OUR number *specifically so that a future fix would have to come and change it
-//! deliberately* — and that is what happened:
+//! ⚠⚠ A `table-cell` inside a table with an **explicit height** must STRETCH to fill it. This row was
+//! pinned at OUR number *specifically so that a future fix would have to come and change it
+//! deliberately*, and t814 named the two things it would need. **Both landed, one per tick, and the
+//! row is now asserted entirely at Chrome's numbers:**
 //!
 //! ```text
-//!                    Chrome          at t814        at t932
-//!   #c3          [0 90 300x80]   [0 92  67x20]  [0 90 300x20]
+//!                    Chrome          at t814        at t932        at t933
+//!   #c3          [0 90 300x80]   [0 92  67x20]  [0 90 300x20]  [0 90 300x80]
 //! ```
 //!
-//! t932 generated the missing anonymous row **inside** a real table (`collect_table_rows` recognised
-//! only `table-row`/`table-row-group`, so a bare cell child of a `table` was dropped entirely). That
-//! was named here as one of the two things this residue needed, and it moved **three of the four
-//! coordinates from wrong to Chrome-exact**: x, y and width. The pin is now Chrome's on x/y/width
-//! and ours on **height alone**.
+//! * **t932 — anonymous-row generation INSIDE a real table.** `collect_table_rows` recognised only
+//!   `table-row`/`table-row-group`, so a bare cell child of a `table` was dropped entirely. Moved x,
+//!   y and width onto Chrome.
+//! * **t933 — cell stretching.** t908 had taught the table BOX to grow to its declared height and
+//!   nothing inside it moved, so the height became empty space at the bottom: the box was right and
+//!   every row was wrong. t933 distributes that surplus over the rows, proportionally to natural
+//!   height and excluding rows that specified one. Moved the height.
 //!
-//! What is left is therefore isolated to one quantity: **cell stretching** — the height-distribution
-//! algorithm that t908 and t925 also name from the real-`<table>` side. Same missing algorithm, three
-//! doors. The next fix must change this line again, and it will only have one number to move.
+//! **Four gates named this one algorithm before anything was built** — this file, t908's
+//! `g_table_height_is_a_minimum#t10`, t925, and t932's `g_anonymous_table_row#mid` — and all four
+//! now assert Chrome. A residue pinned at our own number with its mechanism written beside it is what
+//! made that possible; the practice is the point, not this instance of it.
 
 use manuk_text::FontContext;
 
@@ -191,7 +194,7 @@ fn g_orphan_table_cell() {
     assert_box(
         &page,
         "#c3",
-        [0.0, 90.0, 300.0, 20.0],
+        [0.0, 90.0, 300.0, 80.0],
         "a cell in a table with an EXPLICIT HEIGHT must stretch to fill it — Chrome says \
          [0 90 300x80]. x, y and WIDTH are Chrome's here; only the HEIGHT is ours. t814 pinned this \
          at [0 92 67x20] on purpose, naming anonymous-row generation INSIDE a real table as one of \
