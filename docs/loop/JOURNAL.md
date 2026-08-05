@@ -46371,6 +46371,68 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 956 — it is not a truncation: the whole stylesheet is unapplied (2026-08-05)
+
+TICK SHAPE: measurement — t955's named probe, run to separate its three candidates. It eliminated
+the one I ranked first and made the finding larger.
+
+**THE PROBE.** t955 established that `.id-SiteWrap{background:#fff;max-width:1024px}` — at offset
+198394 of a 285,026-byte stylesheet — is absent from our computed style, both declarations, while
+Chrome applies it. Candidate (1) was a parse bail ~70% in. So: inject three elements matching three
+single-class rules at known offsets — **near the start, the middle, and the end** — and ask each
+engine whether the rule applied:
+
+```text
+   .id-AdminDebug-teaserScore   {color:#666}         @   1,820      Chrome ✓   ours ✗
+   .id-SiteWrap                 {max-width:1024px}   @ 198,394      Chrome ✓   ours ✗
+   .id-EventStatus--relocated   {color:#d00}         @ 267,280      Chrome ✓   ours ✗
+```
+
+⚠⚠⚠ **NOT ONE OF THEM APPLIES. It is not a truncation at 70% — we apply NOTHING from
+`prod_click.css`.** The rule at byte 1,820 fails exactly as the one at byte 267,280 does, so
+candidate (1) is dead and the defect is upstream of parsing: **the stylesheet is not reaching the
+cascade at all.**
+
+**That is a larger and cleaner finding than t955's, and it changes what the window measured.** Our
+layout math is right — five composed batteries, one of them 22/22 — and on this site we are laying
+out a page **with one of its stylesheets missing entirely.** A 21,919px page against Chrome's 13,142
+is not a layout defect at all; it is an unstyled document doing exactly what an unstyled document
+does.
+
+**THE REMAINING CANDIDATES, narrowed to three and each falsifiable in one run:**
+
+1. **The URL.** The `<link href>` is **protocol-relative** — `//www.tz.de/static/tz/id-css/…`. Under
+   the `file://` document the probe uses, that resolves correctly for Chrome only because I inserted
+   `<base href="https://www.tz.de/">`. **If we do not honour `<base>` when resolving a
+   protocol-relative subresource, this probe's result is partly my harness's** — and protocol-relative
+   hrefs are everywhere in CMS-era markup, so it would be a large defect in its own right.
+2. **The fetch.** 285KB, and this engine has a documented load budget that already drops
+   subresources (`load budget of 12.0s exhausted — painting without background images`). A stylesheet
+   dropped by a budget is invisible to every layout test ever written.
+3. **The decode.** t772-775 caught `b[i] as char` meaning Stylo never saw a decoded stylesheet. That
+   defect is fixed; whether *this* sheet decodes is not established.
+
+⚠⚠ **AND (1) MEANS THIS RESULT IS NOT YET CLEAN, which I would rather say now than have corrected
+later.** The live sweep renders us at `https://www.tz.de/`, where protocol-relative resolution needs
+no `<base>` — and the live render shows the *same* 1184px width, which argues the defect is real
+beyond my harness. **But I have not run the live check with the computed-style probe**, and this
+window has had three verdicts reversed by controls (t930, t936, t942). **One run at the live URL
+settles whether candidate (1) is my probe or the engine, and it should be the next thing done.**
+
+**WHY THIS MATTERS OUT OF PROPORTION TO ONE SITE.** Every fixture in this window — 25 composed width
+cases, 22 inline, 22 block-axis, two real stylesheets reduced — inlined its CSS in a `<style>` block
+of a few hundred bytes. **Not one exercised the path that fetches, decodes and applies an external
+sheet**, which is the path every real page depends on and the only path the corpus exercises. That is
+why five clean batteries and a 55.3% corpus were irreconcilable: **the batteries were testing the
+half of the engine that works.**
+
+RATCHET: no engine change. `manuk-layout` and the page suite green from t945; `manuk-wpt` 98/98.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — three candidates remain and the wiki entry belongs with the mechanism, not with
+the search. [no-pattern]
+
 ## Tick 955 — the layout was never the problem: we do not apply the rule (2026-08-05)
 
 TICK SHAPE: measurement — check #84's steer item 1, *"STOP MEASURING. Take the t953 footer."* Taken,

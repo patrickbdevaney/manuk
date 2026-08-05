@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **677** | ticks 1–954 |
-| median tick cycle | **26m** | 676 intervals |
+| ticks landed | **678** | ticks 1–955 |
+| median tick cycle | **26m** | 677 intervals |
 | median, last 10 | **6m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 605.1h elapsed |
-| median verify wall | **63s** | 616 ticks |
+| **ticks per hour** | **1.12** | 605.2h elapsed |
+| median verify wall | **63s** | 617 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **484**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**330 of 677 ticks** (49%) moved a
+**330 of 678 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -774,5 +774,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **951** | 2026-08-05 09:58 | 5m | capability | 63s | +93/−32 | 403 | 81 | 56.0% · | the instrument now names ONE address instead of 66 leaves, and the first draft of it lied  |
 | **952** | 2026-08-05 10:05 | 7m | measurement | 63s | +305/−34 | 403 | 81 | 56.0% · | the DOM is right and the BOXES are absent, and t951's address was my own truncation (2026- |
 | **954** | 2026-08-05 10:11 | 6m | measurement | 63s | +108/−32 | 403 | 81 | 56.0% · | the surface audit, on the axis that actually finds things (2026-08-05) |
+| **955** | 2026-08-05 10:14 | 4m | measurement | 63s | +95/−32 | 403 | 81 | 56.0% · | the layout was never the problem: we do not apply the rule (2026-08-05) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
