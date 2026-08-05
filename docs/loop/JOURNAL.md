@@ -46371,6 +46371,67 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 969 — flex is CLEAN, 20/20 item-exact, and the first control I built could not have failed (2026-08-05)
+
+TICK SHAPE: measurement — a property-family battery on `display:flex`, which t965's corpus instrument
+ranks **fourth at 46.2%** (a floor: external stylesheets are invisible to a `curl`-and-grep, so the
+real figure is higher). It is the highest-frequency layout construct with no differential reading in
+this session, and check #82's composed-width negative did not cover it.
+
+**THE RESULT: 20 cases, 45 items, ALL item-exact within 2px against headless Chrome.**
+
+```text
+   row 3 auto items · gap:10px · grow 1/1 · grow 1/2 · basis 100+300 grown ·
+   shrink from 500+500 · space-between · center · align-items:center ·
+   align-items:flex-end · column · wrap 3x45% · min-width:auto overflow ·
+   min-width:0 override · nested flex in row · item padding+border ·
+   percentage widths 30/70 · auto-margin push · default stretch · <button> items
+```
+
+⚠⚠⚠ **AND THE FIRST POSITIVE CONTROL I BUILT COULD NOT HAVE FAILED, WHICH IS THE PART WORTH
+KEEPING.** A battery that reports 20/20 is worth nothing until it has been shown to detect something,
+so I appended t968's known `+10px` icon defect to the same harness. **It came back Δ = 0.0 and I very
+nearly published that as proof the harness works.** The reason is the whole lesson: I put the control
+*inside a flex container*, where those `<span display:inline-block>`s are **FLEX ITEMS** and never
+take the inline-block baseline path at all. **The control was written in the layout mode that
+excludes the defect it was controlling for.**
+
+Rebuilt in a **block** container — an inline formatting context, which is where t968 measured it —
+and run in the SAME invocation as the 20 cases:
+
+```text
+   POSITIVE CONTROL, same harness, same 2px tolerance     Chrome   ours     Δh
+     block > inline-block > svg                             20      34    +14.0  DETECTED
+     block > inline-block > img                             20      24     +4.0  DETECTED
+   ────────────────────────────────────────────────────────────────────────────
+     …and in the same run: 20/20 flex cases item-exact, 0 diverging
+```
+
+**The clean result and the proof that clean is detectable now come from one run of one harness.**
+That is what makes this a measurement rather than a claim — and the near-miss is a sharper version of
+a rule this project already has: *a gate's setup can assert a case away.* Here the setup asserted the
+**control** away, which is worse, because the control is the thing that was supposed to catch that.
+
+⚠ **THE NUMBERS DISCRIMINATE, so 20/20 is not a battery of identities.** `flex:1` against `flex:2`
+distributes 200/400; `flex:1 1 100px` against `flex:1 1 300px` also lands 200/400 (the same widths by
+a different route, which is the discriminating pair); an auto margin pushes the second item to
+x=582.2 against our 582.0; a wrapped 45% item is 270. Every one of those is a real distribution and
+we match it.
+
+**WHAT THIS NARROWS.** VI.2's H0.1 row lists the residue as *tables · inline composition · scroll
+containers*, after check #82 cleared composed block-level width arithmetic (24/25). **Flex
+distribution now measures clean too**, on the corpus's fourth most common construct — so the residue
+is narrower again, and the two things this session actually found broken (`<select>`'s absent
+intrinsic model, a replaced element's baseline) both sit squarely in **inline composition**, which is
+the one member of that list nothing has cleared.
+
+RATCHET: no engine change — measurement only. `manuk-layout` 125/125 and every gate green from t967.
+
+PERF: none.
+
+WIKI: none [forced] — the artefact is this entry's battery and its control; the mechanism it
+confirms is an ABSENCE of one. [no-pattern]
+
 ## Tick 968 — t967 fixed the line the icon is ON; this is the line that CONTAINS it (2026-08-05)
 
 TICK SHAPE: measurement — t967's named residue, isolated to two distinct mechanisms with a box-tree
