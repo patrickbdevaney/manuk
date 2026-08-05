@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **687** | ticks 1–966 |
-| median tick cycle | **26m** | 686 intervals |
-| median, last 10 | **4m** | 10 intervals |
+| ticks landed | **688** | ticks 1–967 |
+| median tick cycle | **26m** | 687 intervals |
+| median, last 10 | **16m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 610.0h elapsed |
-| median verify wall | **63s** | 626 ticks |
+| **ticks per hour** | **1.13** | 610.4h elapsed |
+| median verify wall | **63s** | 627 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **488**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**332 of 687 ticks** (48%) moved a
+**333 of 688 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **332** capability ticks, median cycle **26m**
+* **333** capability ticks, median cycle **26m**
 * median diff per tick: **+259 / −34** lines across 8 files
 
 ## Every tick
@@ -784,5 +784,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **963** | 2026-08-05 12:37 | 89m | pattern-class | 63s | +402/−62 | 406 | 81 | 56.0% · | a list-box `<select>` LANDS, and half of its specification was REFUTED by measuring it (20 |
 | **964** | 2026-08-05 14:23 | 1.8h | pattern-class | 63s | +621/−33 | 406 | 81 | 56.0% · | a `<select>` is as wide as its WIDEST option, and that was never a multi-select bug (2026- |
 | **966** | 2026-08-05 15:02 | 39m | measurement | 63s | +410/−34 | 407 | 81 | 56.0% · | the surface audit, and its axis was the CORPUS rather than a source (2026-08-05) |
+| **967** | 2026-08-05 15:28 | 26m | pattern-class | 63s | +165/−33 | 407 | 81 | 56.0% · | a replaced element has no line box to take a baseline from, and `<svg>` answered anyway (2 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

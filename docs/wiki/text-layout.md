@@ -2305,3 +2305,54 @@ a different computation. Do not conflate the two.
 because it derived wrapper heights as *the next control's `y` minus this one's* — the `<div>`s had no
 ids. Every diverging row contained an `<svg>` and every clean row did not, which the inferred quantity
 could not show. **Put an id on the box you intend to talk about.**
+
+### …and the OTHER half: the line box that CONTAINS the icon (t968, specified not built)
+
+t967 fixed the line an inline `<svg>` sits **on**. It does not fix the inline-block that **contains**
+one — the icon-button shape, 23.4% of the burndown corpus.
+
+```text
+   the wrapper <div> around …                    Chrome    ours
+     <button>Ay</button>                  TEXT     24       22    ✓
+     <a href><svg 16x16></a>              INLINE   20       20    ✓
+     <button><svg 16x16></button>                  26       36    ✗  +10
+     <span inline-block><svg 16x16></span>         20       34    ✗  +14
+     <span inline-block><img 16x16></span>         20       24    ✗   +4
+```
+
+⚠⚠ **THE `<img>` ROWS SEPARATE TWO MECHANISMS** — they are wrong by 4, the `<svg>` rows by 14.
+
+**MECHANISM 1 — an atomic-only inline-block has no `TextFragment`, so `last_line_baseline` returns
+`None`.** `close_line` files atomics in `atomic_boxes` and text in `frags`; `last_line_baseline` reads
+`frags`. So an `<img>`-only inline-block takes §10.8.1's *"no in-flow line boxes"* fallback — the
+bottom margin edge (20) — giving `20 + strut descent 3.5 ≈ 24`. **Chrome gives 20**: a line box
+holding only an atomic still has a baseline, the atomic's own bottom edge (16), so `16 + 4 = 20`.
+**The fallback is being taken on a line box that exists.**
+
+**MECHANISM 2 — an `<svg>`'s inner content reports a baseline at the box's own TOP.** From the box
+tree, dumped rather than inferred:
+
+```text
+   span <InlineBlock>  [0 168 16x20]        span <InlineBlock>  [0 188 16x20]
+     svg <Inline>      [0 168 16x16]          img <Inline>      [0 188 16x16]
+       rect <Inline>   [0 168 16x16]        (nothing below)
+```
+
+The `<rect>` sits at the span's own `y`, so a fragment beneath it gives `baseline − box.y = 0`, and
+`own_baseline = 0` hangs the whole 20px below the outer baseline: `strut ascent 14.5 + 20 ≈ 34`.
+
+**THE RULE, Chrome-verified:**
+
+```text
+   an inline-block's baseline is its LAST LINE BOX's baseline (§10.8.1), and
+     · a line box holding only an ATOMIC still has one — the atomic's own
+     · a REPLACED element's inner boxes are NOT line boxes of the inline-block
+       containing it, and must not be searched   (t967's rule, one level up)
+   the bottom-margin-edge fallback is for a box with NO line box at all
+```
+
+⚠ **Mechanism 1 is a MISSING INPUT, not a missing guard**: `last_line_baseline` cannot see atomics
+because they are filed in a different vector, so fixing it means giving the line-close path a way to
+report an atomic's baseline upward — a change to the contract every inline item goes through.
+Applying only t967's rule one level up moves the `<svg>` rows 34 → 24 and leaves every row 4px short;
+strictly better, still wrong, and it would make mechanism 1 harder to see.

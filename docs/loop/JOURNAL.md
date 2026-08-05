@@ -46371,6 +46371,85 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 968 — t967 fixed the line the icon is ON; this is the line that CONTAINS it (2026-08-05)
+
+TICK SHAPE: measurement — t967's named residue, isolated to two distinct mechanisms with a box-tree
+dump rather than an inference, and specified for whoever takes it.
+
+**t967 stopped an inline `<svg>` from corrupting its own line box. It does not stop the svg's inner
+content from corrupting any inline-block that CONTAINS it**, which is the icon-button shape — 23.4%
+of the burndown corpus.
+
+```text
+   the wrapper <div> around …                    Chrome    ours
+     <button>Ay</button>                  TEXT     24       22    ✓ wrapper == control
+     <a href><svg 16x16></a>              INLINE   20       20    ✓
+     <button><svg 16x16></button>                  26       36    ✗  +10
+     <button><svg> Ay</button>                     26       36    ✗  +10
+     <button><svg vertical-align:middle></button>  24       32    ✗   +8
+     <button><img 16x16></button>                  26       28    ✗   +2
+     <span inline-block><svg 16x16></span>         20       34    ✗  +14
+     <span inline-block><img 16x16></span>         20       24    ✗   +4
+```
+
+⚠⚠⚠ **TWO MECHANISMS, AND THE `<img>` ROWS SEPARATE THEM.** The `<img>` rows are wrong by 4 and the
+`<svg>` rows by 14 — the same 10px gap this session has now seen three times.
+
+**MECHANISM 1 — an inline-block whose only content is an ATOMIC has no `TextFragment`, so
+`last_line_baseline` returns `None` and we take the wrong fallback.** `close_line` puts atomics in
+`atomic_boxes` and text in `frags`; `last_line_baseline` reads `frags`. An `<img>`-only inline-block
+therefore yields `None` → §10.8.1's *"no in-flow line boxes"* fallback → the bottom margin edge (20)
+→ outer line `20 + strut descent 3.5 = 23.5` ≈ **24**. **Chrome gives 20**, because a line box holding
+only an atomic still HAS a baseline — the atomic's own bottom edge, 16 — giving `16 + 4 = 20`. The
+fallback is being taken on a line box that exists.
+
+**MECHANISM 2 — the `<svg>`'s inner content contributes a fragment whose baseline is the box's own
+TOP, and `last_line_baseline` believes it.** Verified from the box tree, not inferred — this is the
+same class of claim that cost me audit #37's Finding 3, so it was dumped:
+
+```text
+   span <InlineBlock>  [0 168 16x20]        span <InlineBlock>  [0 188 16x20]
+     svg <Inline>      [0 168 16x16]          img <Inline>      [0 188 16x16]
+       rect <Inline>   [0 168 16x16]        (nothing below)
+```
+
+The `<rect>` is an `<Inline>` box at **y = 168 — the span's own top** — so a fragment beneath it
+reports `baseline − box.y = 0`. `own_baseline = 0` puts the whole 20px below the outer baseline:
+`strut ascent 14.5 + 20 = 34.5` ≈ **34**, which is the measured number. `<img>` has no such subtree,
+which is exactly why it stops at mechanism 1's 24.
+
+**THE SPECIFICATION, Chrome-verified, for whoever takes it:**
+
+```text
+   an inline-block's baseline is its LAST LINE BOX's baseline (CSS 2.1 §10.8.1), and
+     · a line box holding only an ATOMIC still has one — the atomic's own baseline
+     · a REPLACED element's inner boxes are NOT line boxes of the inline-block that
+       contains it, and must not be searched  (the same rule t967 applied one level down)
+   the bottom-margin-edge fallback is for a box with NO line box at all, and neither
+     of these is that box
+```
+
+⚠⚠ **WHY THIS IS A MEASUREMENT TICK AND NOT A FIX, said plainly.** Mechanism 1 is not a guard to
+add — it is a **missing input**: `last_line_baseline` cannot see atomics because `close_line` files
+them in a different vector, so fixing it means giving the line-box close path a way to report an
+atomic's baseline upward. That is a change to the contract every inline item goes through, in the
+hottest path in the engine, and this session is nine ticks deep. **t961 set this boundary and t967's
+own success came from respecting it**: attempt it, and if the design does not fall out in one read,
+specify and stop. It did not.
+
+⚠ **What a partial fix would buy, priced so it is not mistaken for the whole:** applying t967's rule
+one level up — *do not descend into a replaced element's subtree* — moves the `<svg>` rows from 34 to
+24 and leaves every row 4px short of Chrome. Strictly better and still wrong, and landing it alone
+would make mechanism 1 harder to see, not easier. Named, deliberately not taken.
+
+RATCHET: no engine change — the file was read and the tree dumped, not edited. `manuk-layout` 125/125
+and every gate green from t967.
+
+PERF: none — measurement only.
+
+WIKI: `docs/wiki/text-layout.md` — the replaced-baseline section, extended with the containing-block
+half and its two mechanisms.
+
 ## Tick 967 — a replaced element has no line box to take a baseline from, and `<svg>` answered anyway (2026-08-05)
 
 TICK SHAPE: pattern-class — inline `<svg>`, which t965's corpus instrument prices at **34.5% of the
