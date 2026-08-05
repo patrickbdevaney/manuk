@@ -5402,3 +5402,94 @@ journal entry.**
    the identical shape and which has not been executed.
 3. **Carry the negative result into VI.2**: family #1 is not composed width arithmetic. Say it where
    the next reader looks, not only where this window wrote it.
+
+## Check #83 — tick 944 (2026-08-05)
+
+**Horizon:** H0 as re-scoped by **PART VII**. Component 1's bar is *"reliably renders and runs the
+representative real internet"*, instrumented as **M1 on the in-scope CrUX corpus** (`shape ≥ 0.75`
+AND jarring-clean). Latest banked: **14.8% (20/135), sweep t936** — this window's own sweep.
+
+### → THE FINDING, and it outranks the "gate or scoreboard?" question this once
+
+⚠⚠⚠ **M1 ≥ 95% IS ARITHMETICALLY OUT OF REACH, AND NO AMOUNT OF ENGINE WORK CLOSES IT.** t937/t938
+partitioned every unscored in-scope site by **whose failure it is**, using `fidelity.rs`'s own
+definitions rather than the tag names:
+
+```text
+   in-scope 135 · scored 108 · unscored 27
+     17  NOT OURS      oracle-module-shell 6 · tree-divergence 5 · shell-only 3 · empty-2xx 3
+      7  NEITHER       timeout-150s — "bounds the PAIR", by construction
+      5  OURS          thin-overlap 2 · css-starved 2 · crashed 1, and two do not reproduce solo
+
+   M1 target 95%                                  = 128 of 135
+   ceiling if the 17 can never score              =  87.4%  (118/135)
+   ceiling if the 7 pair-timeouts also never score=  82.2%  (111/135)
+```
+
+**The target is 8-13 points above the ceiling.** `empty-2xx` is the origin answering with a zero-byte
+body; `oracle-module-shell` is Chrome failing to boot a `type=module` SPA from a `file://` snapshot;
+`shell-only` is *"the ORACLE rendered only N elements"*. **None of these is a browser defect, and
+`fidelity.rs:3410` says so in the imperative** — *"name it, or 8 of the 13 sites carrying shell-only
+keep buying ENGINE ticks for an INSTRUMENT defect."*
+
+This is a **PART VI-level correction and an owner-level decision**, not a burndown row. The options
+are visible and none of them is the agent's to take: fix the instrument (the loopback reverse proxy
+`fidelity.rs` already names, worth up to 14 sites); or re-state the bar against the **scorable**
+denominator; or accept that 95% means something different from what it says. **What must not happen
+is the loop grinding engine ticks against a number whose remaining distance is 87% instrument.**
+
+### → Gate, or scoreboard?
+
+**Neither, and this time that is the correct answer rather than a confession.** Six capability ticks
+landed (930-933, 935, 939), every one Chrome-differential and RED-proven three ways, closing four
+gates that had pinned residues at our own number since t814. The t936 sweep then showed **no
+attributable movement in either direction** — and t942's old-binary control showed that the one site
+that *looked* like a crossing was already clean before both fixes.
+
+So: the gate did not move, the scoreboard did not move, and **the window's real product is the
+measurement above.** Per I4 and VI.3 that is a legitimate outcome — *"an area that is 5% and used by
+every site outranks an area that is 48% and used by the tail"* is a ranking rule, and a window that
+discovers the ranking instrument is broken has done more for the ranking than another primitive
+would.
+
+### → Is any invariant being bent?
+
+**I2 held under direct pressure (t931)** — taffy 0.12 would have accepted a `CompactLength::min_content()`
+through `Dimension::from_raw`, and it compiles; `Dimension` validates as `LENGTH|PERCENT|AUTO`, so
+the flexbox algorithm would read a tag it does not answer. Took option 3 instead. The obvious edit
+was the invariant-violating one.
+
+**I5 held, and is the reason this window found anything.** Every capability tick came from a Chrome
+differential; three separate composed-layout batteries (t932 width, t934 inline, t940 flex-footer)
+came back **clean**, which is what redirected the search from arithmetic to box types.
+
+⚠ **I3 — the open item from check #82 is still open and is now two windows old.** t935's residue was
+closed at t939 on the geometry axis, but the *ranking* correction check #82 asked for — *"rank
+t935's baseline residue as I3, not as shape, and land it with an agent-side click-point assertion in
+the same tick"* — was **not executed**. t939 landed the fix with a layout gate and no click-point
+assertion. Naming it again rather than quietly dropping it: this is the third window in which an I3
+steer has been issued and satisfied only by the shared `node_rects` producer.
+
+**PART VII held absolutely.** Not a line of `scripts/` was edited across fourteen ticks, through a
+369s→826s wall, a 100%-full swap, an overdue wall audit whose every remedy is harness-owned, and a
+metric ceiling that is an instrument defect. Each was written down and handed on.
+
+### → PART VI correction
+
+VI.2's H0.1 row was corrected at check #82 with the composed-width negative result. **It now needs
+the second half: the row describes layout breadth as the constraint, and the measurement above says
+the METRIC is the constraint.** Both are true and the second dominates — driving `shape_mean` from
+55.3% upward is real work with real value, and it cannot reach the stated bar while 17 sites are
+unscorable for reasons the engine cannot touch.
+
+### Steer
+
+1. **Put the arithmetic in front of the owner.** M1 ≥95% cannot be met on this instrument; the
+   ceiling is 82-87%. That is a decision about the bar, and it is not the agent's.
+2. **Engine work goes to the SCORED half** — 108 measurable sites, `shape_mean` 55.3%, `cov_mean`
+   86.6% — and is ranked by marginal crossings off the row file, which is what t939 did and what
+   worked as a *search* even though the fix did not move the corpus.
+3. **Execute check #82's I3 item** rather than issuing it a third time: a click-point assertion
+   beside the geometry gate.
+4. **Stop reading per-site sweep rows as evidence about a site** (t930, t936, t942 — three controls,
+   three reversed verdicts). Rank with them; attribute only with a same-hour solo old-binary run.

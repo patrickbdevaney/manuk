@@ -46371,6 +46371,70 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 944 — the constitution check, and the bar cannot be met on this instrument (2026-08-05)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 936),
+banked as check #83.
+
+⚠⚠⚠ **THE FINDING, AND IT IS AN OWNER-LEVEL DECISION RATHER THAN A BURNDOWN ROW: M1 ≥ 95% IS
+ARITHMETICALLY OUT OF REACH, AND NO AMOUNT OF ENGINE WORK CLOSES IT.**
+
+```text
+   in-scope 135 · scored 108 · unscored 27
+     17  NOT OURS   oracle-module-shell 6 · tree-divergence 5 · shell-only 3 · empty-2xx 3
+      7  NEITHER    timeout-150s — "bounds the PAIR", by construction
+      5  OURS       thin-overlap 2 · css-starved 2 · crashed 1, two of which do not reproduce solo
+
+   M1 target 95%                                   = 128 of 135
+   ceiling if the 17 can never score               =  87.4%  (118/135)
+   ceiling if the 7 pair-timeouts also never score =  82.2%  (111/135)
+```
+
+**The target sits 8-13 points above the ceiling.** `empty-2xx` is the origin answering with a
+zero-byte body. `oracle-module-shell` is Chrome failing to boot a `type=module` SPA from a `file://`
+snapshot. `shell-only` is, verbatim, *"the ORACLE rendered only N element(s)"*. None is a browser
+defect, and `fidelity.rs:3410` has said so in the imperative since t865.
+
+PART VI's H0.1 row is corrected in this commit to carry it: **the row says layout breadth is the
+constraint and the measurement says the METRIC is.** Both are true; the second dominates. Driving
+`shape_mean` (55.3%) up on the 108 scorable sites is real work with real value **and cannot reach the
+stated bar.** The three options — fix the instrument (the loopback reverse proxy `fidelity.rs`
+already names, worth up to 14 sites), re-state the bar against the scorable denominator, or accept
+that 95% means something other than what it says — are all owner decisions, and none is mine.
+
+**GATE OR SCOREBOARD: neither, and this time that is the correct answer rather than a confession.**
+Six capability ticks landed this window (930-933, 935, 939), every one Chrome-differential and
+RED-proven three ways, closing four gates that had pinned residues at our own number since t814. The
+t936 sweep showed no attributable movement either way, and t942's old-binary control showed the one
+site that *looked* like a crossing was already clean before both fixes. **The window's product is the
+measurement above** — and per I4/VI.3 a window that discovers its ranking instrument is broken has
+done more for the ranking than another primitive would.
+
+**INVARIANTS.** I2 held under direct pressure at t931 (taffy would have accepted a tag its flexbox
+algorithm does not read; took option 3 instead — the obvious edit was the violating one). I5 held and
+is why anything was found: three composed-layout batteries came back CLEAN, which is what redirected
+the search from arithmetic to box types. **PART VII held absolutely across fourteen ticks** — not a
+line of `scripts/` edited, through a 369s→826s wall, a 100%-full swap, an overdue wall audit whose
+every remedy is harness-owned, and a metric ceiling that is an instrument defect. Each was written
+down and handed on.
+
+⚠⚠ **I3 IS THE ONE THAT IS BENT, AND IT IS NOW TWO WINDOWS OLD.** Check #82 asked for t935's baseline
+residue to be *"ranked as I3, not as shape, and landed with an agent-side click-point assertion in the
+same tick."* t939 landed the fix with a layout gate and **no click-point assertion**. Named again
+rather than quietly dropped: this is the third window in which an I3 steer has been issued and
+satisfied only by the shared `node_rects` producer. **A steer issued three times and executed zero
+times is not a steer.**
+
+⚠ **BOX HEALTH, one line and on with browser work (PART VII):** swap is 100% full (8Gi/8Gi, stale
+pages from an earlier spike; RAM otherwise free at 17Gi), which dropped `CARGO_BUILD_JOBS` to 8 of 32
+and took this tick's wall from 369s to **826s**. The remedy is `swapoff -a && swapon -a` and needs
+root. Handed to the observer.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefacts are `docs/loop/CONSTITUTION-CHECK.md` #83 and the PART VI
+correction in `CONSTITUTION.MD`. [no-pattern]
+
 ## Tick 943 — I ran the audit and filed it in the wrong ledger, and the cadence caught me (2026-08-05)
 
 TICK SHAPE: measurement — closing a process defect from two ticks ago, found by the instrument that
