@@ -46371,6 +46371,75 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 928 — the reference hypothesis is REFUTED, and the form-control item is HANDED ON (2026-08-04)
+
+TICK SHAPE: measurement — t927's named cheap kill, run; and then the last standing combination tried
+and refused. This tick's value is that it closes hypotheses rather than opening one, and says so.
+
+⚠⚠⚠ **THE CHEAP KILL RAN AND KILLED THE HYPOTHESIS, NOT THE BUG.** t927 supposed that the oracle
+scores us against a `curl`'d snapshot whose script-built login fields never materialise, so a
+correct input position would move us *away* from the reference. One `--dump-dom` each settles it:
+
+```text
+                  tags   inputs   visible-inputs   buttons
+  oracle ref        99      19          3             2
+  live page         99      19          3             2
+```
+
+**Structurally identical.** The reference is not a different page state, so the explanation for
+`secure5.entertimeonline.com` is not there and three ticks of suspicion about it are closed.
+
+⚠⚠⚠ **AND THE LAST COMBINATION — BOTH HALVES AT ONCE, WHICH IS WHAT t917 AND t927 EACH SAID THE OTHER
+NEEDED — ALSO FAILS.** t917 landed the UA box alone and `<div><input></div>` went 26 → 28; t927 landed
+the bottom-anchored baseline alone and the site fell 0.872 → 0.692; the obvious synthesis is that
+*"a control's own box and the line that holds it are ONE change"*. Applied together:
+
+```text
+  input border-box h        6   16   26   36   46   66   106   21(default)
+  Chrome div height        24   24   26   36   46   66   106   24
+  both halves together     24   24   27   37   47   67   107   24     <- 1px WORSE on six rows
+  secure5                                    0.692308 (unchanged)
+```
+
+**The pair is not the answer either.** It regresses the isolated heights by a pixel *and* leaves the
+corpus row exactly where the baseline alone left it.
+
+> **Four attempts, four reverts, and the tree is byte-identical to where t917 found it.** t917 (UA box
+> alone), t918 (baseline for input|button|select), t927 (baseline for `<input>`, bottom-anchored),
+> t928 (both together). Every one was Chrome-exact on its fixtures; every one cost a corpus site or a
+> composite case; every one was reverted rather than traded.
+
+**I AM STOPPING WORK ON THIS ITEM AND SAYING SO, WHICH IS THE DELIVERABLE.** Four ticks is past the
+point where another variation is a hypothesis rather than a habit, and the loop's own record says the
+next one would be a fifth guess. What is banked instead is a fully-specified handoff — everything a
+future attempt would otherwise re-measure:
+
+* **THE MODEL IS MEASURED.** `baseline = h − (border-bottom + padding-bottom + descent)`, from nine
+  control heights (the div is exactly `h` for every `h` past the strut). Two rival models are
+  refuted with numbers: §10.8.1's fallback gives 26 where Chrome says 24, a centred editor 44 where
+  Chrome says 46.
+* **THE ELEMENT SET IS SETTLED.** `<input>` only. `<button>` (with text, with a block, empty) and
+  `<select>` are already exact with no synthesis at all — measured, six rows.
+* **THE UA BOX IS MEASURED.** Chrome's own defaults via `getComputedStyle`: input 2px/1px 2px,
+  button 2px/1px 6px, select 1px/0, textarea 1px/2px, checkbox 0/0 — and `textarea`/`select` must
+  keep OUR padding, because adopting Chrome's declared value breaks controls that are byte-exact.
+* **THE THIRD PART IS NAMED:** the intrinsic content width is 2px wide (`<input size=1>` is 53 in
+  Chrome and becomes 55 once the border is correct), which `g_form_control_metrics` already asserts.
+* **THE REPRODUCER IS `secure5.entertimeonline.com`**, with a known-good **0.871795 / cov 1.000000 /
+  n=39** to return to, and the reference hypothesis about it is dead.
+
+**What is NOT known, stated plainly:** why a Chrome-exact input baseline moves seven of that site's
+thirty-nine elements out of tolerance when the reference has the same structure. That is the whole
+remaining question, and it deserves a tick that starts by diffing the two renders element-by-element
+rather than by proposing a model.
+
+RATCHET: nothing changed. `secure5.entertimeonline.com` re-measured at **0.871795**, `manuk-layout`
+125/125, no gate moved, and `git status` shows no code in the tree.
+
+PERF: none — measurement only.
+
+WIKI: `docs/wiki/box-layout.md` — the form-control section gains its handoff [no-pattern]
+
 ## Tick 927 — Chrome's input-baseline model, MEASURED — and the blocker is not the formula (2026-08-04)
 
 TICK SHAPE: measurement — check #81's steer #2 said the `<input>` baseline *"needs a measurement, not

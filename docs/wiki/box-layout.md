@@ -4900,3 +4900,41 @@ the page is not a shell — it renders 39 comparable elements, just possibly not
 
 **The cheap kill:** dump the oracle's reference for the site and count its `<input>`s against the live
 page's. One `--dump-dom` each.
+
+
+## The form-control baseline: four attempts, four reverts, and a handoff (t928)
+
+```text
+  t917  the UA box alone            all ten control heights exact   <div><input></div> 26 -> 28
+  t918  baseline, input|button|select   nine fixtures, four guards   secure5 0.872 -> 0.692
+  t927  baseline, <input> only, bottom-anchored   nine heights + 10/10 fixture   secure5 unchanged at 0.692
+  t928  both halves together        six isolated heights 1px WORSE   secure5 unchanged at 0.692
+```
+
+**Every attempt was Chrome-exact on its fixtures and cost a corpus site or a composite case, and
+every one was reverted rather than traded.** The tree is byte-identical to where t917 found it.
+
+### What is settled, so nobody re-measures it
+
+* **The model.** `baseline = h − (border-bottom + padding-bottom + descent)`, from nine control
+  heights — the containing div is exactly `h` for every `h` past the strut. Rivals refuted with
+  numbers: §10.8.1's bottom-margin-edge fallback gives 26 where Chrome says 24; a centred editor
+  gives 44 where Chrome says 46.
+* **The element set.** `<input>` only. `<button>` — with text, with a block child, empty — and
+  `<select>` are already exact with no synthesis.
+* **The UA box.** Chrome's `getComputedStyle` defaults: input 2px / 1px 2px · button 2px / 1px 6px ·
+  select 1px / 0 · textarea 1px / 2px · checkbox 0 / 0. **`textarea` and `select` must keep OUR
+  padding** — adopting Chrome's declared value breaks controls that are byte-exact, because both have
+  an internal shadow subtree the longhand does not describe.
+* **The third part.** The intrinsic content width is 2px wide (`<input size=1>` is 53 in Chrome and
+  becomes 55 once the border is right); `g_form_control_metrics` already asserts it.
+* **The reproducer.** `secure5.entertimeonline.com`, known-good **0.871795 / cov 1.000000 / n=39**.
+* **A dead hypothesis.** The oracle's reference for that site is *structurally identical* to the live
+  page — 99 tags, 19 inputs, 3 visible, 2 buttons in both — so "the snapshot has a different form
+  state" is refuted.
+
+### What is not known
+
+Why a Chrome-exact input baseline moves seven of that site's thirty-nine elements out of tolerance
+when the reference has the same structure. **The next attempt should start by diffing the two renders
+element-by-element, not by proposing a fifth model.**

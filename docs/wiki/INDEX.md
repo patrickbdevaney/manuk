@@ -247,6 +247,9 @@
   - L4835 · A RED proof aimed at the wrong cascade is a green light (t925)
   - L4866 · Chrome's <input> baseline, measured — and when the CORRECT model scores worse (t927)
   - L4885 · And it still scores worse on the corpus
+  - L4905 · The form-control baseline: four attempts, four reverts, and a handoff (t928)
+  - L4917 · What is settled, so nobody re-measures it
+  - L4936 · What is not known
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1604,4 +1607,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1511 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1514 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
