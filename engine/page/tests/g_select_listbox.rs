@@ -57,14 +57,15 @@
 //! tolerance here is 3px and the DIFFERENCE rows below — which cancel the chrome entirely — are
 //! asserted exactly.
 //!
-//! **The WIDTH is unchanged, and that is a measured decision, not an omission.** t958 specified
-//! dropping the 17px dropdown-arrow strip for a list box. Measured, in isolation, it is a
-//! **regression**: total width error across the six controls goes **44.2px -> 81.4px**. Our width
-//! comes from the *selected* option and Chrome's list box sizes to the *widest*, so the arrow was
-//! silently compensating for the wrong measurement — and the one row where removing it is exact
-//! (14.9 vs 15) is the single-option case, where widest and selected are the same string. The width
-//! needs both halves at once (drop the arrow, size to the widest option, and account for a ~6px term
-//! that appears only when the option count exceeds the row count). Named, not bundled.
+//! **The WIDTH is not asserted here — it is `G_SELECT_WIDTH`'s, and it LANDED at t964.** This gate
+//! left it alone deliberately: t958 specified dropping the 17px dropdown-arrow strip for a list box,
+//! and measured in isolation that is a **regression** (total width error across the six controls
+//! 44.2px → 81.4px), because our width came from the *selected* option where Chrome's comes from the
+//! *widest*, so the arrow was silently compensating for the wrong measurement. t964 landed both
+//! halves together — and found the plain dropdown was wrong by the same mechanism (62 against
+//! Chrome's 76). ⚠ The "~6px term when the option count exceeds the row count" this file used to
+//! predict **did not exist**: five options in four rows measures the same 59.36 as five in ten. It
+//! was an artefact of comparing against `alpha` instead of `gamma`.
 //!
 //! ## How this goes RED
 //!

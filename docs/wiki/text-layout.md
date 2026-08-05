@@ -2204,21 +2204,45 @@ is a 4px error over two rows at 16px, which any reasonable tolerance would pass.
 ⚠⚠ **`<select multiple size=1>` IS THE DROPDOWN'S HEIGHT (21), NOT A ONE-ROW LIST BOX (22.2).** That
 is why the model is gated on `rows > 1` rather than on the presence of `multiple`. Measured.
 
-⚠⚠⚠ **THE WIDTH IS A DIFFERENT PROBLEM AND THE OBVIOUS HALF OF IT IS A REGRESSION.** A list box has
-no dropdown arrow, so `native_widget_width`'s 17px strip looks like it should go. Measured across six
-list boxes, removing it **triples the total width error, 44.2px -> 81.4px**:
+⚠⚠⚠ **THE WIDTH IS A `widest option + 6` RULE, AND IT WAS NEVER A MULTI-SELECT BUG (t964).** A
+`<select>` renders ONE option and RESERVES room for all of them — open a country picker showing
+"Chad" and every entry must fit without the box moving. We sized every select to the option it
+happened to be displaying, so **the ordinary dropdown was wrong too**: 62 against Chrome's 76.
 
 ```text
-                                  Chrome    arrow KEPT    arrow DROPPED
-   total absolute width error          —          44.2             81.4
-   the ONE row it fixes (1 option)  14.9       32 (+17)       15 (-0.1)
+   16px sans-serif    alpha 39.16   gamma 53.36   quickbrownfox 102.28
+
+                                                Chrome   before   after
+     list box  alpha..eps          size=4        59.36     45      59
+     list box  alpha..eps          size=10       59.36     45      59    scrolling is irrelevant
+     list box  alpha+quickbrownfox size=2       108.28     45     108
+     list box  ONE option "a"      size=3        14.91     15      15    unmoved
+     DROPDOWN  alpha+quickbrownfox              125.00     62     125    the real headline
 ```
 
-**Our width comes from the SELECTED option; Chrome's list box sizes to the WIDEST.** The arrow was
-silently compensating for measuring the wrong string, and the only row where dropping it is exact is
-the one-option case, where the two strings are the same. The width needs both halves at once — drop
-the arrow, size to the widest option — plus a ~6px term that appears only when the option count
-exceeds the row count (a scrollbar reservation that `--hide-scrollbars` does not suppress).
+The engine's missing term is exactly `widest − shown` — a RESERVE added to the extent that already
+contains the rendered option, which is why it is a difference and not the whole width (adding
+`widest` whole double-counts to 98.5 against 59.36). The `6` is the control's own border and option
+padding, which our UA already contributes.
+
+⚠⚠ **THE TWO HALVES ARE INSEPARABLE, measured in both directions.** Dropping the arrow for a list
+box *without* sizing to the widest option triples the total width error (44.2px → 81.4px across six
+controls); keeping it *with* the widest-option reserve gives 76.36 against 59.36. The arrow is real
+physics and the old width error was silently compensating for it, so either change alone trades a
+right answer for a wrong reason.
+
+⚠⚠ **THERE IS NO SCROLLBAR TERM, and the prediction that there was one was an artefact of the
+comparison.** t963 wrote that a ~6px term appears when the option count exceeds the row count. Five
+options in FOUR rows measures 59.36 and five options in TEN rows measures 59.36. The gap being
+explained was the difference between `alpha` (rendered) and `gamma` (widest) — **the residual
+invented to explain the gap WAS the gap.**
+
+⚠ **`appearance: none` takes the WIDGET off the control, not the OPTIONS.** Only the arrow term is
+conditional; a restyled design-system select still has to hold its own entries.
+
+⚠ **Measured and deliberately NOT modelled: `<select multiple size=1>` is 95 in Chrome** where every
+formula here predicts ~62. Nine of ten controls on the t963 fixture are exact and this one is not. A
+corner with no real-web population is not worth a constant fitted to one number.
 
 ⚠ **Chrome's UA gives an unstyled `<select>` its OWN ~13.333px font**, not the inherited one: an
 unstyled 4-row list box is **70**, not 82.8, and the same law reproduces it exactly

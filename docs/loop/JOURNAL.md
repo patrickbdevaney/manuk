@@ -46371,6 +46371,81 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 964 — a `<select>` is as wide as its WIDEST option, and that was never a multi-select bug (2026-08-05)
+
+TICK SHAPE: pattern-class — form controls, continuing t963's ranked lead; the half t963 measured as
+unlandable alone, landed with the half that makes it right.
+
+⚠⚠⚠ **THE DEFECT IS ON THE PLAIN `<select>`, NOT ON THE MULTI-SELECT.** I opened this to finish
+t963's residue — a list box has no dropdown arrow — and the probe answered a bigger question. A
+`<select>` renders **one** option and **reserves room for all of them**: open a country picker
+showing "Chad" and every entry must fit without the box moving. We sized every select to the option
+it happened to be displaying. **The ordinary dropdown measured 62 against Chrome's 76 on this
+fixture**, and `<select>` is on approximately every form on the web.
+
+```text
+   16px sans-serif    alpha 39.16   gamma 53.36   quickbrownfox 102.28
+
+                                                Chrome   before   after
+     list box  alpha..eps          size=4        59.36     45      59
+     list box  alpha..eps          size=10       59.36     45      59    scrolling is irrelevant
+     list box  alpha+quickbrownfox size=2       108.28     45     108
+     list box  alpha+quickbrownfox size=5       108.28     45     108
+     list box  ONE option "a"      size=3        14.91     15      15    control, unmoved
+     list box  width:300px         size=3       300.00    300     300    control, definite wins
+     DROPDOWN  alpha+quickbrownfox              125.00     62     125    ← the real headline
+```
+
+**THE RULE IS ONE LINE: `widest option + 6`, plus a 17px arrow strip when it is a dropdown.** The `6`
+is the control's own border and option padding, which our UA already contributes, so the engine's
+missing term is exactly `widest − shown` — a *reserve*, which is why it is subtracted rather than
+added whole (RED-proven: adding it whole double-counts to 98.5 against 59.36).
+
+⚠⚠ **AND t963'S PREDICTED SCROLLBAR TERM DOES NOT EXIST.** t963 wrote that the width needed "a ~6px
+term that appears only when the option count exceeds the row count". Five options in **four** rows
+measures **59.36**, and five options in **ten** rows measures **59.36**. There is no such term: it was
+an artefact of my comparing Chrome's number against `alpha` (the rendered option) instead of `gamma`
+(the widest). **The residual I invented to explain the gap WAS the gap** — the same shape of error as
+t963's arrow, one tick apart, and the second one was in my own write-up rather than in the engine.
+Corrected in `g_select_listbox.rs`'s doc as well as here.
+
+⚠ **THE TWO HALVES ARE INSEPARABLE AND THE GATE CARRIES BOTH DIRECTIONS.** t963 measured that
+dropping the arrow alone triples the width error. This tick measures the mirror: keeping the arrow
+for a list box gives 76.36 against 59.36. So the gate has one row that fails if the arrow is dropped
+too broadly (`#w8`, the dropdown) and one that fails if it is kept too broadly (`#w2`, the list box).
+
+⚠ **`appearance: none` TAKES THE WIDGET OFF, NOT THE OPTIONS.** The old function returned 0 for it
+outright. That was right for the arrow and wrong for the reserve — restoring the early return makes
+`#w9` read 45.16 against 108.27, which would clip its own entries on every restyled design-system
+select. Only the arrow term is conditional now.
+
+RED-PROVEN FIVE WAYS, each applied, run and reverted:
+
+1. **Drop the `widest − shown` reserve** → `#w2` reads **45.16** against 59.35. The original defect.
+2. **Drop the arrow for every select** → `#w8` reads **108.28** against 125.27.
+3. **Keep the arrow for list boxes** → `#w2` reads **76.36** against 59.35.
+4. **Add the reserve without subtracting the shown text** → `#w2` reads **98.5** against 59.35.
+5. **Restore the `appearance:none` early return** → `#w9` reads **45.16** against 108.27.
+
+⚠ **NAMED RESIDUE, MEASURED AND DELIBERATELY NOT MODELLED: `<select multiple size=1>` is 95 in
+Chrome** where every formula here predicts ~62, and we render 62. **Nine of the ten controls on
+t963's fixture are now exact** (76 · 59 · 59 · 59 · 84 · 30 · 62 · 15 · 45 against Chrome's
+76 · 59.4 · 59.4 · 59.4 · 84.3 · 30.5 · 62 · 14.9 · 45.2); this one is not. It is a corner with no
+real-web population worth a model, and fitting a constant to a single unexplained number is exactly
+what this tick just caught itself doing with the phantom scrollbar term.
+
+RATCHET: `manuk-layout` 125/125; `g_select_listbox`, `g_form`, `g_appearance_none`,
+`g_intrinsic_min_max`, `g_inline_box_geometry` and `g_tab_stop` all green. The one-option and
+explicit-width rows are byte-identical — with a single option `widest` and `shown` are the same
+string and the reserve is exactly zero.
+
+PERF: one `measure()` per `<option>` on the two intrinsic-width paths, against a measure cache keyed
+on `(font, size, text)`. A select with N options costs N cached measures the first time its intrinsic
+width is asked for, and the result is memoized in `max_content_cache`.
+
+WIKI: `docs/wiki/text-layout.md` — the `<select>` section, rewritten: the width rule, the phantom
+scrollbar term, and why the two halves are inseparable.
+
 ## Tick 963 — a list-box `<select>` LANDS, and half of its specification was REFUTED by measuring it (2026-08-05)
 
 TICK SHAPE: pattern-class — form controls on form-heavy pages (filter sidebars, admin forms, faceted

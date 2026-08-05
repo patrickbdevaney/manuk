@@ -4244,14 +4244,38 @@ impl Ctx<'_> {
         w
     }
 
-    /// **The part of a control's intrinsic width that is the WIDGET, not the text** — today, a
-    /// `<select>`'s dropdown arrow.
+    /// **The part of a control's intrinsic width that is NOT the text it drew** — for a `<select>`,
+    /// the dropdown arrow *and* the difference between the option it renders and the widest one it
+    /// must fit.
     ///
-    /// A select sizes to its selected option, and every engine then adds room for the arrow it
-    /// draws beside it. Measured against headless Chrome, and the number is a constant rather than
-    /// a proportion, which is what identifies it: **159 vs our 142 with a long option, 30 vs our 13
-    /// with a one-character one — the same 17px either way.** A text-measurement difference would
-    /// have scaled with the text.
+    /// ⚠⚠⚠ **A `<select>` IS AS WIDE AS ITS WIDEST OPTION, NOT ITS SELECTED ONE**, and this function
+    /// used to say the opposite in its own first sentence. The control renders one option and
+    /// *reserves* room for all of them — open the dropdown and every entry must fit without the box
+    /// moving. Chrome-measured (16px sans-serif, `alpha` 39.16 wide, `gamma` 53.36, `quickbrownfox`
+    /// 102.28):
+    ///
+    /// ```text
+    ///                                                  Chrome    widest + 6    ours (selected + 6)
+    ///   list box, options alpha..eps, size=4            59.36        59.36              45
+    ///   list box, alpha + quickbrownfox, size=2        108.28       108.28              45
+    ///   list box, one option "a", size=3                14.91        14.91              15
+    ///   DROPDOWN, options alpha..eps                    76.00     76.36 (+arrow)        62
+    /// ```
+    ///
+    /// The rule is one line — **`widest option + 6`, plus the arrow when it is a dropdown** — and it
+    /// is independent of the row count and of whether the list scrolls (5 options in 4 rows measures
+    /// the same 59.36 as 5 options in 10 rows). The `6` is the control's own border and option
+    /// padding, which our UA already contributes, so what is missing is exactly the *delta* below.
+    ///
+    /// ⚠⚠ **AND THE TWO HALVES MUST LAND TOGETHER — t963 measured that either alone is a
+    /// regression.** Dropping the arrow for a list box without sizing to the widest option triples
+    /// the width error (44.2px → 81.4px across six controls), because the arrow was silently
+    /// compensating for measuring the wrong string. The arrow is real physics and the compensation
+    /// was an accident; removing one without the other trades a right answer for a wrong reason.
+    ///
+    /// The arrow itself is a constant rather than a proportion, which is what identifies it as a
+    /// widget and not a text-measurement error: **159 vs our 142 with a long option, 30 vs our 13
+    /// with a one-character one — the same 17px either way.**
     ///
     /// ⚠ **`appearance: none` is the condition, and without it this would be a TRADE.** That
     /// declaration takes the native widget off the control — Chrome drops to 139px on the same
@@ -4267,10 +4291,31 @@ impl Ctx<'_> {
         if self.dom.tag_name(node) != Some("select") {
             return 0.0;
         }
-        if self.style_of(node).appearance_none {
-            return 0.0;
+        // **The widest-option reserve, and it applies even under `appearance: none`.** Removing the
+        // native widget removes the ARROW; it does not make the control narrower than the options it
+        // has to hold. Only the arrow term is conditional.
+        let style = text_style(self.style_of(node), self.fonts);
+        let measure = |t: &str| {
+            self.fonts.measure(t, style.font_key, style.font_size)
+                + style.letter_spacing * t.chars().count() as f32
+        };
+        let widest = self
+            .dom
+            .descendants(node)
+            .filter(|c| self.dom.tag_name(*c) == Some("option"))
+            .map(|o| measure(self.dom.text_content(o).trim()))
+            .fold(0.0f32, f32::max);
+        // The text the control actually LAID OUT — `form_control_text`'s answer, which is what the
+        // extent this reserve is added to already contains. Subtracting it is what makes this a
+        // reserve rather than a double-count.
+        let shown = form_control_text(self.dom, node).map_or(0.0, |t| measure(t.trim()));
+        let reserve = (widest - shown).max(0.0);
+        // A LIST BOX has no dropdown arrow — Chrome-measured: the same options give 59.36 as a list
+        // box and 76.00 as a dropdown, a 16.6px strip that appears only when `rows == 1`.
+        if select_list_rows(self.dom, node).is_some() || self.style_of(node).appearance_none {
+            return reserve;
         }
-        17.0
+        reserve + 17.0
     }
 
     /// Shrink-to-fit width, CSS2 §10.3.5: `min(max-content, max(available, min-content))`.
