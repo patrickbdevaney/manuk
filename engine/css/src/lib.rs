@@ -1167,8 +1167,14 @@ pub struct ComputedStyle {
     pub overflow_x: Overflow,
     pub overflow_y: Overflow,
     pub table_layout: TableLayout,
-    /// `border-spacing` (px) between table cells in the separated-borders model.
+    /// `border-spacing` (px) between table cells in the separated-borders model — the HORIZONTAL
+    /// component. `border-spacing` takes one or TWO lengths and the second is the vertical one
+    /// (`border_spacing_v`); a single value sets both.
     pub border_spacing: f32,
+    /// The VERTICAL half of `border-spacing`. Kept separate because a table with
+    /// `border-spacing: 10px 20px` insets its ROWS by 20 and its COLUMNS by 10, and folding the two
+    /// made the row inset silently equal to the column one (t925: Chrome 64, ours 44).
+    pub border_spacing_v: f32,
     /// `border-collapse: collapse` — cells share borders (no border-spacing).
     pub border_collapse: bool,
     /// `box-sizing` — whether `width`/`height` measure the content box or the border box.
@@ -1316,6 +1322,7 @@ impl ComputedStyle {
             overflow_y: Overflow::Visible,
             table_layout: TableLayout::Auto,
             border_spacing: 0.0,
+            border_spacing_v: 0.0,
             border_collapse: false,
             box_sizing: BoxSizing::ContentBox,
             justify_content: JustifyContent::Normal,
@@ -1422,6 +1429,7 @@ pub fn scale_style(style: &ComputedStyle, k: f32) -> ComputedStyle {
         height: dim(style.height, k),
         inset: sides_dim(style.inset, k),
         border_spacing: style.border_spacing * k,
+        border_spacing_v: style.border_spacing_v * k,
         text_indent: dim(style.text_indent, k),
         ..style.clone()
     }
@@ -1487,7 +1495,8 @@ pub fn diff_style(old: &ComputedStyle, new: &ComputedStyle) -> RestyleDamage {
         || old.position != new.position
         || old.inset != new.inset
         || old.table_layout != new.table_layout
-        || old.border_spacing != new.border_spacing;
+        || old.border_spacing != new.border_spacing
+        || old.border_spacing_v != new.border_spacing_v;
     if reflow {
         RestyleDamage::Reflow
     } else {
@@ -4370,13 +4379,17 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         }
         "border-collapse" => s.border_collapse = v.trim() == "collapse",
         "border-spacing" => {
-            // Only the first (horizontal) length is used in this slice.
-            if let Some(px) = v
+            // ⚠⚠⚠ **TWO LENGTHS, AND THE SECOND ONE WAS DROPPED (t925).** The comment this replaces
+            // said *"Only the first (horizontal) length is used in this slice"* — accurate, and the
+            // consequence was that `border-spacing: 10px 20px` inset the ROWS by 10 instead of 20:
+            // Chrome makes that table **64** tall and we made it 44. One value still sets both, per
+            // the shorthand.
+            let mut it = v
                 .split_whitespace()
-                .next()
-                .and_then(|t| values::parse_length_px(t, s.font_size))
-            {
-                s.border_spacing = px;
+                .filter_map(|t| values::parse_length_px(t, s.font_size));
+            if let Some(h) = it.next() {
+                s.border_spacing = h;
+                s.border_spacing_v = it.next().unwrap_or(h);
             }
         }
         "box-sizing" => {

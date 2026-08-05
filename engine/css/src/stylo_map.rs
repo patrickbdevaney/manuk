@@ -873,6 +873,9 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     s.border_collapse = cv.clone_border_collapse()
         == stylo::properties::longhands::border_collapse::computed_value::T::Collapse;
     s.border_spacing = cv.clone_border_spacing().horizontal().to_f32_px();
+    // The vertical half — see `ComputedStyle::border_spacing_v`. Stylo models the pair; taking only
+    // `horizontal()` is what made a two-value `border-spacing` inset rows by the column value.
+    s.border_spacing_v = cv.clone_border_spacing().vertical().to_f32_px();
 
     // transform: map the 2D operations onto our affine list (3D/perspective skipped — our
     // paint model is 2D). Angles are taken in radians; translate lengths keep %/calc via `Dim`.

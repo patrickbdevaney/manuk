@@ -649,3 +649,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 921	edc80a9c	1785893769	2026-08-04T21:36:09-04:00	3719	capability	63	12	206	36	397	81	3896	6960	0	476	0	the one-origin proxy is defeated by a page that gates on its own HOSTNAME (2026-08-04)
 922	6b29c664	1785895756	2026-08-04T22:09:16-04:00	1987	capability	63	9	213	33	397	81	3896	6960	0	477	0	`vertical-align: <length>` was UNREPRESENTABLE, so it parsed to `baseline` and vanished (2026-08-04)
 923	b5ba2939	1785897604	2026-08-04T22:40:04-04:00	1848	capability	63	6	135	33	397	81	3896	6960	0	477	0	the FONT SIZE arrived and the ALIGNMENT did not, because only one takes the recovery path (2026-08-04)
+924	4c1b0519	1785899489	2026-08-04T23:11:29-04:00	1885	measurement	63	12	160	46	397	81	3896	6960	0	478	0	`<button>` and `<select>` were never the problem, and `<input>` is not a formula I have (2026-08-04)

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **650** | ticks 1–923 |
-| median tick cycle | **26m** | 649 intervals |
+| ticks landed | **651** | ticks 1–924 |
+| median tick cycle | **26m** | 650 intervals |
 | median, last 10 | **32m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 593.6h elapsed |
-| median verify wall | **63s** | 589 ticks |
+| **ticks per hour** | **1.09** | 594.1h elapsed |
+| median verify wall | **63s** | 590 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **397**
-* **✅ rows in the capability ledger**: 144 → **477**
+* **✅ rows in the capability ledger**: 144 → **478**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**321 of 650 ticks** (49%) moved a
+**321 of 651 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -747,5 +747,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **921** | 2026-08-04 21:36 | 62m | capability | 63s | +206/−36 | 397 | 81 | 56.0% · | the one-origin proxy is defeated by a page that gates on its own HOSTNAME (2026-08-04) |
 | **922** | 2026-08-04 22:09 | 33m | capability | 63s | +213/−33 | 397 | 81 | 56.0% · | `vertical-align: <length>` was UNREPRESENTABLE, so it parsed to `baseline` and vanished (2 |
 | **923** | 2026-08-04 22:40 | 31m | capability | 63s | +135/−33 | 397 | 81 | 56.0% · | the FONT SIZE arrived and the ALIGNMENT did not, because only one takes the recovery path  |
+| **924** | 2026-08-04 23:11 | 31m | measurement | 63s | +160/−46 | 397 | 81 | 56.0% · | `<button>` and `<select>` were never the problem, and `<input>` is not a formula I have (2 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -46371,6 +46371,53 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 925 — `border-spacing` takes TWO lengths and the second one was dropped (2026-08-04)
+
+TICK SHAPE: capability — the last of t908's named-open table rows that is a length rather than an
+algorithm.
+
+⚠⚠⚠ **`ComputedStyle::border_spacing` WAS ONE `f32`, AND THE COMMENT ABOVE THE PARSER SAID SO.**
+Verbatim: *"Only the first (horizontal) length is used in this slice."* Accurate, and the consequence
+is that `border-spacing: 10px 20px` inset the **rows** by 10 instead of 20 — Chrome makes that table
+**64** tall and we made it **44**.
+
+```text
+                                 Chrome   before   after
+  border-spacing: 10px 20px        64       44       64
+  border-spacing: 10px             44       44       44   <- one value still sets BOTH
+  border-spacing: 0                24       24       24
+  the UA default (2px)             28       28       28
+```
+
+**The single-value rows are what make the new one assertable**: they pin that one length still sets
+both axes, so a fix that read the second value and forgot the shorthand would satisfy the new claim
+and break four old ones.
+
+⚠⚠ **AND THE RED PROOF FOUND THE SHIPPING PATH THE FIRST ATTEMPT MISSED.** Mutating MinimalCascade's
+parser left the gate GREEN — because `stylo_map.rs` reads the pair from Stylo's own
+`clone_border_spacing()`, and the page gate runs the **shipping** cascade. The proof only bites when
+the Stylo mapping is the one reverted (`.vertical()` → `.horizontal()`), which fails with
+*"`#u5` expected h=64 … got 44"*. **A RED proof aimed at the wrong cascade is a green light**, and
+this is the fourth time this project has had to say so — the standing note is
+`live-cascade-is-stylo-not-minimal`, and it applies to falsification exactly as it applies to fixes.
+
+Both cascades are updated: Stylo's `.vertical()`, and MinimalCascade's parser (which now reads two
+lengths and falls back to the first), because t923 landed one tick ago on precisely the drift between
+them.
+
+RATCHET: `manuk-layout` **125/125**, `manuk-css` 28/28; the border-spacing battery goes **19 → 20 of
+23** exact, and the combined battery 54/54, specified-width 14/14 and
+`g_vertical_align_on_text`/`g_table_height_is_a_minimum` are unchanged. The three rows still
+differing are the same ones t908 named: a `<td>` does not STRETCH to fill a taller table (Chrome 56
+for one cell in a `height:60px` table, 27 each for two), which is the height-distribution algorithm
+and not a length.
+
+GATE: `G_TABLE_BORDER_SPACING_UA_DEFAULT` gains `#u5`. **RED-PROVEN** against the shipping cascade.
+
+PERF: none — one more `f32` on `ComputedStyle` and one more read per table.
+
+WIKI: `docs/wiki/box-layout.md` — "A RED proof aimed at the wrong cascade is a green light"
+
 ## Tick 924 — `<button>` and `<select>` were never the problem, and `<input>` is not a formula I have (2026-08-04)
 
 TICK SHAPE: measurement — t919 left the properly-posed question: not *"what is a control's baseline"*

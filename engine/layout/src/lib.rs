@@ -4426,6 +4426,13 @@ impl Ctx<'_> {
         } else {
             s.border_spacing
         };
+        // The BLOCK-axis inset, which is a different length: `border-spacing: 10px 20px` puts 10
+        // between columns and 20 between rows (t925).
+        let spacing_v = if s.border_collapse {
+            0.0
+        } else {
+            s.border_spacing_v
+        };
         let rows = self.collect_table_rows(node);
 
         // Placement grid: each cell claims the next free slot in its row, spanning
@@ -4544,18 +4551,18 @@ impl Ctx<'_> {
             if p.rowspan > 1 {
                 let last = (p.row + p.rowspan - 1).min(nrows.saturating_sub(1));
                 let spanned: f32 = (p.row..=last).map(|r| row_h[r]).sum::<f32>()
-                    + spacing * (p.rowspan - 1) as f32;
+                    + spacing_v * (p.rowspan - 1) as f32;
                 if *bh > spanned {
                     row_h[last] += *bh - spanned;
                 }
             }
         }
         // Row y positions.
-        let mut row_y = vec![content_y + spacing; nrows.max(1)];
-        let mut yy = content_y + spacing;
+        let mut row_y = vec![content_y + spacing_v; nrows.max(1)];
+        let mut yy = content_y + spacing_v;
         for r in 0..nrows {
             row_y[r] = yy;
-            yy += row_h[r] + spacing;
+            yy += row_h[r] + spacing_v;
         }
         // Position each cell at its start row and stretch it over its spanned rows.
         let mut row_cells: Vec<Vec<LayoutBox>> = vec![Vec::new(); nrows.max(1)];

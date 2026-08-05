@@ -123,6 +123,13 @@ fn g_table_border_spacing_ua_default() {
     c(&page, "#u9", 200.0, 60.0);
     c(&page, "#u10", 200.0, 54.0);
 
+    // ── t925: the TWO-VALUE form. `border-spacing: 10px 20px` puts 10 between COLUMNS and 20
+    // between ROWS, and `ComputedStyle` carried one `f32` fed from `clone_border_spacing()
+    // .horizontal()` — so the row inset silently took the column value and the table came out 44
+    // where Chrome says 64. The single-value rows above are what make this assertable: they pin
+    // that one length still sets both.
+    c(&page, "#u5", 200.0, 64.0);
+
     // ── THE INSET, stated as a relationship rather than a coordinate.
     inset(&page, "#u1", "#c1", 2.0); // the UA default — the row this tick landed
     inset(&page, "#u3", "#c4", 0.0); // `border-spacing: 0` still collapses

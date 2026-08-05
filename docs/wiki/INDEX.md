@@ -244,6 +244,7 @@
   - L4777 · The baseline half landed at t918, and it stands alone
   - L4795 · None from a baseline lookup has two meanings (t924)
   - L4820 · And the element set was two thirds of it, not all of it
+  - L4835 · A RED proof aimed at the wrong cascade is a green light (t925)
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1601,4 +1602,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1508 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1509 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -4830,3 +4830,34 @@ and **overshot**: `<input style="height:40px">` is 46 in Chrome, 47 without cent
 > **Narrowing a defect is a result; guessing the remainder is not.** The next attempt starts with a
 > settled element set (a measured claim now, not an assumption), a refuted centring model, a
 > two-line discriminating fixture, and a corpus reproducer with a known-good number to return to.
+
+
+## A RED proof aimed at the wrong cascade is a green light (t925)
+
+`border-spacing` takes two lengths and `ComputedStyle` carried one `f32`, so
+`border-spacing: 10px 20px` inset rows by the COLUMN value: Chrome 64, ours 44. The parser's own
+comment said so — *"Only the first (horizontal) length is used in this slice"* — which is the useful
+half of a comment that documents a gap and the dangerous half of one nobody re-reads.
+
+**The first RED proof passed.** Mutating MinimalCascade's parser left the gate green, because
+`stylo_map.rs` reads the pair from Stylo's `clone_border_spacing()` and a `manuk-page` gate runs the
+**shipping** cascade. The proof only bites when the Stylo mapping is reverted
+(`.vertical()` → `.horizontal()`).
+
+> **Falsification has to hit the path the gate actually runs.** The standing note
+> `live-cascade-is-stylo-not-minimal` has been about fixes; it applies identically to RED proofs, and
+> a proof aimed at the other cascade is indistinguishable from a gate that cannot fail.
+
+Both cascades were updated — Stylo's `.vertical()` and MinimalCascade's two-length parse — because
+t923 landed one tick earlier on exactly the drift between them.
+
+```text
+                                 Chrome   before   after
+  border-spacing: 10px 20px        64       44       64
+  border-spacing: 10px             44       44       44   <- one value still sets BOTH
+  border-spacing: 0                24       24       24
+  the UA default (2px)             28       28       28
+```
+
+The single-value rows are what make the new one assertable: a fix that read the second value and
+forgot the shorthand would satisfy the new claim and break four old ones.
