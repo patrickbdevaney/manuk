@@ -46371,6 +46371,89 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 929 — the sweep, with the binary's build time recorded beside it (2026-08-05)
+
+TICK SHAPE: measurement — check #81's steer #1. Three engine fixes since t919 (t922's
+`vertical-align` length/percentage, t923's `<sup>`/`<sub>` UA recovery, t925's two-value
+`border-spacing`), and the stronger reason is the one that steer gave: **the last sweep caught a
+regression that nine Chrome-exact fixtures did not.** The sweep is load-bearing for the ratchet, not
+only for the scoreboard.
+
+⚠ **THE BINARY'S BUILD TIME IS RECORDED BEFORE THE RUN, WHICH IS t920'S LESSON MADE MECHANICAL.**
+`target/release/manuk-wpt` built **23:58**, sweep launched **00:20**. t919 read a zero from a binary it
+never identified, concluded the code was inert, and by the time t920 asked the question the binary had
+been overwritten and the cause was permanently unrecoverable. Two lines of `ls` prevent that, and they
+cost nothing.
+
+PRE-REGISTERED BEFORE THE RUN:
+
+* **M1: FLAT.** All three fixes are high-usage/low-magnitude, and two of them (`border-spacing`,
+  `<sup>`) are exactly the class t909's tag rule says this corpus cannot price — **every ranked cause
+  on it is `<div>`**. I expect 0, ±1 from a site's network.
+* **scorability: FLAT.** Nothing in the window can make an unrenderable page render.
+* **common-set band: inside ±0.2 pts**, which is the floor t904 (+0.16) and t909 (−0.07) and t919
+  (+0.05) have established between them.
+* **THE DELIVERABLE IS THE `unaligned` ROW.** t912 built the split, t919's sweep showed zero, and t920
+  proved the mechanism works in this exact configuration (`--jobs 2 --rows-out`, live, two sites,
+  `unaligned key (we drew as many): <div>` at the top of the ranking). **If it is absent again with a
+  binary whose build time I have written down, that is a different and much sharper finding than
+  t919's** — and if it is present, t911's measurement gets its corpus-wide number at last.
+
+⚠ **CONTROLS PRE-COMMITTED:** any common-set band beyond ±0.3 pts gets the old binary on its top
+movers in the same hour; any M1 crossing in either direction gets three solo runs of that site before
+it is believed. Both were needed at t919 and both were reached for after the fact.
+
+### THE RUN — 200 sites, release binary built 23:58, launched 00:20, `--jobs 2`, 78 minutes
+
+```text
+                       t904      t909      t919      t929
+  M1 (the gate)       17.8%     18.5%     17.6%     17.9%
+  scorability        110/129   108/130   107/131   114/134
+  shape_mean           57.2%     57.0%     58.1%     57.3%
+  common-set band        —      −0.26     +0.05     −0.05
+```
+
+**Three of four pre-registrations held exactly.** M1 +1 and its single crossing is
+`secure5.entertimeonline.com` — the site I spent four ticks failing to fix, arriving in M1 on its own
+while the tree carries none of that work. The common-set band is **−0.05 pts over 106 sites, 17 up ·
+69 flat · 20 down**, inside the ±0.2 floor. **Scorability was the miss**: predicted flat, came in
+**+7 scored / +3 in-scope**, and it decomposes entirely to the network — three sites returned from
+`bot-wall-429`, two from `timeout-150s`, one from `unreachable`, one from `tree-divergence`, against
+two that left. Not one engine-attributable change in either direction, for the fifth sweep running.
+
+⚠⚠⚠ **AND `unaligned` FIRED ZERO TIMES AGAIN — THIS TIME WITH THE BINARY'S BUILD TIME ON THE
+RECORD.** That is the sharp finding the stub asked for, and it means **t920's retraction was itself
+too broad.** t919 said the mechanism was inert; t920 refuted that with a live two-site run and
+retracted the whole finding. Both were partly right:
+
+```text
+  2 sites, `--jobs 2 --rows-out`, live      unaligned key (we drew as many): <div>  x32, <input> x3, <span> x3
+  200 sites, same flags, binary verified    ZERO, while 32 sites meet the condition by the
+                                            sweep's OWN printed counts (`ours >= oracle`, missing > 0)
+```
+
+**The mechanism works; it does not work at sweep scale.** The difference is not the code path, not
+the binary, and not `--jobs` — all three are now controlled — so it is the `--jobs` **spawn loop**
+(a chunk re-spawns for its remainder until every URL has a row, and each re-spawn prints its own
+ranking) or something else about running 100 sites in one child. That is a bounded question with an
+obvious next probe, and it is stated rather than guessed.
+
+⚠⚠ **AND MY OWN ANALYSIS PARSER IS WRONG, WHICH RETROSPECTIVELY WEAKENS t911.** Splitting the log on
+`side-by-side:` lines associates each site NAME with the NEXT block's numbers: this sweep's table
+shows `www.agoda.com  oracle=57 ours=437`, which are naukri's numbers from t920's probe verbatim.
+**The COUNT is name-independent and stands** (32 sites here, 26 at t919, 22 at t911); **the per-site
+attributions in t911 do not.** Every conclusion drawn from that count survives; every sentence naming
+a specific site through that parser needs re-deriving.
+
+> **A parser that mis-associates names produces a table that is right in aggregate and wrong in every
+> row.** It is the same shape as the instrument defects this loop hunts, in the throwaway analysis
+> code nobody gates — and it survived three ticks because the aggregate kept agreeing with itself.
+
+PERF: none — measurement only.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "The mechanism works and does not work at sweep scale"
+[no-pattern]
+
 ## Tick 928 — the reference hypothesis is REFUTED, and the form-control item is HANDED ON (2026-08-04)
 
 TICK SHAPE: measurement — t927's named cheap kill, run; and then the last standing combination tried

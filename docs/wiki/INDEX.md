@@ -756,6 +756,8 @@
   - L939 · The one-origin proxy cannot lie about the hostname (t921)
   - L968 · The cohort was checked, not generalised from one site
   - L975 · What was kept anyway
+  - L984 · The mechanism works, and does not work at sweep scale (t929)
+  - L1005 · The analysis parser was mis-associating names
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1607,4 +1609,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1514 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1516 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

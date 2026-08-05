@@ -980,3 +980,37 @@ forwarded raw. Before, a proxied page that navigated was measured as an **unprob
 document: the "half-built reference" this module exists to refuse, arriving through a door nobody had
 checked. It is latent today because `renders_agree` refuses those rows for other reasons first. **A
 latent correction with the tests green is worth keeping; claiming it moved a number would not be.**
+
+## The mechanism works, and does not work at sweep scale (t929)
+
+t912 split the ranker's `missing box` cause into `missing` (our map is smaller) and `unaligned` (it is
+not). t919's 200-site sweep fired it **zero** times and concluded the wiring was inert. t920 refuted
+that with a live two-site run and retracted the whole finding. **Both were partly right:**
+
+```text
+  2 sites, `--jobs 2 --rows-out`, live       unaligned key (we drew as many): <div> x32, <input> x3, <span> x3
+  200 sites, same flags, binary build time   ZERO — while 32 sites meet the condition by the sweep's
+  recorded before the run                    OWN printed counts (`ours >= oracle`, missing > 0)
+```
+
+The code path, the binary and the `--jobs` value are all now controlled, so the difference is scale:
+the `--jobs N` **spawn loop** (a chunk re-spawns for its remainder until every URL has a row, each
+re-spawn printing its own ranking) or something else about 100 sites in one child. Bounded question,
+obvious next probe, stated rather than guessed.
+
+> **"It works" and "it works in the artefact you read" are different claims, and a two-site probe
+> cannot distinguish them.** t920 was right that the mechanism is not broken and wrong to retract the
+> observation; the observation was about the sweep, and the sweep still shows zero.
+
+### The analysis parser was mis-associating names
+
+Splitting the log on `side-by-side:` lines pairs each site NAME with the NEXT block's numbers — this
+sweep's table shows `www.agoda.com  oracle=57 ours=437`, which are naukri.com's numbers verbatim.
+
+**The COUNT is name-independent and stands** (32 sites here, 26 at t919, 22 at t911). **The per-site
+attributions in t911 do not.** Every conclusion drawn from the count survives; every sentence naming a
+specific site through that parser needs re-deriving.
+
+> **A parser that mis-associates names produces a table that is right in aggregate and wrong in every
+> row** — the same shape as the instrument defects this loop hunts, in throwaway analysis code nobody
+> gates, and it survived three ticks because the aggregate kept agreeing with itself.
