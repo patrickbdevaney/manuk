@@ -46371,6 +46371,76 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 949 — the top cause on a scored site is a DOM-shape difference, not a layout one (2026-08-05)
+
+TICK SHAPE: measurement — t948's named method, executed on the site it named: **rank one scored
+site's divergences and find what actually explains them.**
+
+`www.tz.de` — coverage 95.1%, shape 83.9%, 1,864 elements common to both engines, and a median
+divergence of `dx=0 dy=5 dw=0 dh=0`. Its ranked causes:
+
+```text
+    66 hit(s)   unaligned key (we drew as many): <div>        ← #1, and it is not geometry
+    26 hit(s)   geometry/mis-sized: width  ~32px   (<div>)
+    24 hit(s)   geometry/mis-sized: height ~16px   (<div>)
+    22 hit(s)   geometry/mis-sized: width  ~256px  (<div>)
+    18 hit(s)   unaligned key (we drew as many): <a>
+    17 hit(s)   geometry/displaced: y ~8192px      (<span>)
+    16 hit(s)   geometry/displaced: y ~16px        (<div>)
+    16 hit(s)   geometry/mis-sized: width  ~128px  (<div>)
+```
+
+⚠⚠⚠ **THE #1 CAUSE IS A KEY THAT DOES NOT RESOLVE, AND `oracle.rs` IS EXPLICIT THAT THIS IS NOT AN
+EXONERATION.** `"unaligned key (we drew as many)"` means Chrome has an element at a path and **we
+produce `(no box)` there**, while our total element count matches — so it is not "we rendered less".
+Every example is deep in the FOOTER and 12-14 levels down:
+
+```text
+   footer > div:2 > div:1 > div:1 > div:1 > div:2 > div:1 > div:1 > div:1 > div:1 > div:1
+     Chrome: block [276 12778 227×22] {Roboto/16}   ·   ours: (no box)
+```
+
+**One same-tag sibling difference upstream re-numbers every `nth-of-type` beneath it**, which is the
+mechanism `fidelity.rs` already names in its `tree-divergence` text — *"one inserted SAME-TAG sibling
+near the root re-numbering the nth-of-type keys beneath it"* — except here it is inside the footer
+rather than near the root, so it never trips the whole-document `tree-divergence` tag. It just
+silently costs 84 elements (66 `<div>` + 18 `<a>`) of coverage on a site the instrument scores.
+
+**So on the most-scored site I have examined, the largest single cause is our footer DOM having a
+different same-tag sibling count from Chrome's — a DOM-shape fact, not a layout one.** Whether that
+is ours (an element we fail to create, or create an extra of) or the instrument's (the oracle's
+`file://` boot taking a different branch, which `fidelity.rs` documents for the unscored sites) is
+**not established here, and I am not asserting it.** The path is written down above; one probe of
+that footer subtree in both engines settles it.
+
+⚠⚠ **AND IT RECONCILES t948 WITH THE BURNDOWN, which looked contradictory one tick ago.** t948
+measured `dw = dh = 0` at the median and read it as "widths and heights are right". The ranked list
+shows the median was hiding a real minority: **~87 width mis-sizings and ~36 height mis-sizings** on
+this one site, in power-of-two bands from 8px to 256px. Both statements are true — *the typical box
+is exact, and a substantial minority is not* — and `PHASE0-RENDER-BURNDOWN.md` §3.1's
+width→wrap→`dy` laundering has room to be exactly right about that minority. **A median is not a
+distribution, and I read one as the other for a tick.**
+
+⚠ **The `y ~8192px` drift on 17 `<span>`s** is the same story at the other end of the scale: a
+container far up a 13,000px page is wrong, and everything under it inherits thousands of pixels. That
+is one box, not seventeen.
+
+**WHAT THE NEXT TICK SHOULD DO, in order, and none of it needs a new instrument:**
+
+1. **Probe the named footer subtree in both engines** and establish whether the sibling difference is
+   ours or the oracle's. It is the #1 cause and it has an address.
+2. **If ours** — it is a DOM/parse defect, and the loop has been treating this corpus gap as a layout
+   problem for many windows on the strength of a metric called *shape*.
+3. Only then return to the geometry minority, which now has bands (`width ~32px`, `~128px`, `~256px`)
+   rather than a median of zero.
+
+RATCHET: no engine change. `manuk-layout` and the page suite green from t945.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefact is a ranked cause list with an address; the mechanism is not yet
+established well enough to describe. [no-pattern]
+
 ## Tick 948 — the hypothesis was wrong and the measurement it forced is the sharpest of the window (2026-08-05)
 
 TICK SHAPE: measurement — t947's own named first move, run before anything else, exactly as it was
