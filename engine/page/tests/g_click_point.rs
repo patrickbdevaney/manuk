@@ -70,6 +70,15 @@ const HTML: &str = r##"<!doctype html>
   .media img { float: left; width: 120px; height: 80px; }
   .media .body { overflow: hidden; }
 
+  /* 4 — the TYPOGRAPHIC WRAPPER: a link whose label lives inside a font-size-changing
+         span that holds no text of its own (t935 line-box height, t939 baseline). The
+         wrapper's own leading decides how tall the line is and where the baseline sits,
+         so it decides where the label's box — and the agent's click point — end up. */
+  .brandbar { clear: both; width: 600px; font: 16px/1.5 monospace; }
+  .brandbar a { display: inline-block; padding: 4px 8px; }
+  .brandbar .big { font-size: 32px; }
+  .brandbar .txt { font-size: 12px; }
+
   /* 3 — the off-canvas drawer: a flex container inside a flex container,
          translated fully off-screen (t874). */
   .app { display: flex; flex-direction: column; width: 600px; clear: both; }
@@ -85,6 +94,8 @@ const HTML: &str = r##"<!doctype html>
     <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="thumb">
     <div class="body"><a href="#">Read the article</a></div>
   </div>
+
+  <div class="brandbar"><a href="#"><span class="big"><span class="txt">Dashboard</span></span></a></div>
 
   <div class="app">
     <div class="drawer"><a href="#">Offscreen drawer link</a></div>
@@ -157,6 +168,32 @@ fn the_click_point_of_every_named_control_reaches_it() {
     centre_reaches("Read the article");
     // 3 — the in-flow control the off-canvas drawer used to cover (t874).
     centre_reaches("Save");
+    // 4 — the typographic wrapper (t935 height · t939 baseline · check #82's I3 steer).
+    //
+    // ⚠⚠⚠ **A CONTROL, NOT A ✗→✓ ROW — AND THAT IS THE MEASUREMENT.** Checks #82 and #83 both
+    //     asked for a click-point assertion beside t935/t939's geometry fix, on the reasoning that
+    //     a wrapper holding no text of its own decides the line's height and baseline, therefore
+    //     moves the label's box, therefore moves the agent's click point. t945 landed the
+    //     assertion and then asked whether it BITES. It does not:
+    //
+    // ```text
+    //       current tree                              PASS
+    //       pre-t939 (leading, no metrics)            PASS   ← the 9px baseline error
+    //       pre-t935 (no wrapper carrier at all)      PASS   ← the 12px line-box error
+    // ```
+    //
+    //     **The box moves and its own centre moves with it**, so the click still lands on the
+    //     label. That is this file's own t853 lesson arriving from the other direction — *"a rect
+    //     that is right in px can still be un-clickable"* has a converse, and this is it: **a rect
+    //     that is WRONG in px can still be perfectly clickable.**
+    //
+    //     So the I3 steer, for this class of defect, is **not applicable** — established by
+    //     measurement rather than by skipping it a fourth time. The row stays as a CONTROL: it
+    //     documents the finding in the place a future reader will look, and it still guards the
+    //     shape against a future change that *does* break clickability on it. **The general rule
+    //     it buys: a geometry error is an I3 event only when it moves a box RELATIVE to its own
+    //     centre — a displacement that carries the centre along is a SHAPE bug and nothing more.**
+    centre_reaches("Dashboard");
 
     // ── THE ADVERSARIAL HALF: a box that should not be there must not eat the click. ───────────
     //

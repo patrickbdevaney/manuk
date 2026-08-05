@@ -46371,6 +46371,67 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 945 — I executed the steer, and the steer's premise was wrong (2026-08-05)
+
+TICK SHAPE: capability — executing check #82/#83's I3 item, which had been issued three times and
+executed zero times. It is executed now, and **the answer is that it does not apply** — which is a
+result, and is why executing it was worth more than issuing it a fourth time.
+
+**THE STEER, quoted so the supersession is legible:**
+
+> *"rank t935's baseline residue as I3, not as shape, and land it with an agent-side click-point
+> assertion in the same tick"* — check #82, repeated as item 3 of check #83.
+
+The reasoning was sound on its face: `node_rects → manuk_a11y::build_tree_with_rects → A11yNode.bbox
+→ the click point`. A wrapper `<span>` holding no text of its own decides the line box's height
+(t935) and where its baseline sits (t939); both move the label's box; the agent clicks that box's
+centre. So both looked like I3 events that only the shared producer was protecting.
+
+⚠⚠⚠ **LANDED THE ASSERTION, THEN ASKED WHETHER IT BITES. IT DOES NOT.** A new row in
+`G_CLICK_POINT` — `<a><span class="big"><span class="txt">Dashboard</span></span></a>`, the exact
+shape t935/t939 moved — clicks the centre of the box the element reports and requires the click to
+reach it. Run against all three engine states, same tree, same hour:
+
+```text
+   current tree                              PASS
+   pre-t939  (leading, no metrics)           PASS   ← the 9px baseline error
+   pre-t935  (no wrapper carrier at all)     PASS   ← the 12px line-box error
+```
+
+**The box moves and its own centre moves with it**, so the click lands on the label either way. That
+is `g_click_point`'s own t853 lesson arriving from the other direction: its header says *"a rect that
+is right in px can still be un-clickable"*, and this is the converse — **a rect that is WRONG in px
+can still be perfectly clickable.**
+
+**THE RULE THIS BUYS, which is the durable part and is sharper than the steer it replaces:**
+
+> **A geometry error is an I3 event only when it moves a box RELATIVE TO ITS OWN CENTRE. A
+> displacement that carries the centre along is a SHAPE bug and nothing more.**
+
+t851's residue — an icon-wrapping `<span>` given a 4px-tall icon box instead of its own 17px line box
+— *was* an I3 event by that rule (the box shrank around a different centre). t935/t939's is not (the
+box translated). **Three checks issued the same steer because "geometry moves the click point" is
+true in general and false for this case**, and nothing had asked which.
+
+⚠ **THE ROW STAYS, as a CONTROL rather than a ✗→✓.** It documents the finding where a future reader
+will look, and it still guards the shape against a change that *does* break clickability on it.
+Deleting it would leave the next check to re-derive the same steer from the same true-in-general
+premise.
+
+⚠ **WHAT I AM NOT CLAIMING: that I3 is safe in general.** The producer-accident that checks #72 and
+#82 identified is real and unchanged — four of this window's capability ticks touched element
+geometry, and t932 touched `collect_table_rows`, a *producer*. This tick establishes one thing
+precisely: **for the t935/t939 defect class, the click-point invariant is not the instrument**, so
+the steer should stop being re-issued for it.
+
+RATCHET: `G_CLICK_POINT` gains a fourth control row and stays green; the three mutation runs each
+restored the tree, verified byte-identical by `diff -q`.
+
+PERF: none.
+
+WIKI: none [forced] — the artefact is the gate's own header, which is where a click-point claim
+belongs; the rule it establishes is recorded there and in this entry. [no-pattern]
+
 ## Tick 944 — the constitution check, and the bar cannot be met on this instrument (2026-08-05)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks; last at 936),

@@ -666,3 +666,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 939	d4ecd62e	1785931516	2026-08-05T08:05:16-04:00	699	capability	63	4	177	33	403	81	3896	6960	0	484	0	the residue t935 pinned, closed one tick later, and it was ONE BRANCH (2026-08-05)
 942	f020cd04	1785933463	2026-08-05T08:37:43-04:00	1947	measurement	63	7	263	34	403	81	3896	6960	0	484	0	the control said no, and the surface audit found the first expensive-to-retrofit API (2026-08-05)
 943	7726382e	1785933695	2026-08-05T08:41:35-04:00	232	measurement	63	6	190	34	403	81	3896	6960	0	484	0	I ran the audit and filed it in the wrong ledger, and the cadence caught me (2026-08-05)
+944	f512486b	1785934982	2026-08-05T09:03:02-04:00	1287	measurement	63	6	135	32	403	81	3896	6960	0	484	0	the constitution check, and the bar cannot be met on this instrument (2026-08-05)
