@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **690** | ticks 1–969 |
-| median tick cycle | **26m** | 689 intervals |
+| ticks landed | **691** | ticks 1–970 |
+| median tick cycle | **26m** | 690 intervals |
 | median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 611.5h elapsed |
-| median verify wall | **63s** | 629 ticks |
+| **ticks per hour** | **1.13** | 611.9h elapsed |
+| median verify wall | **63s** | 630 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **488**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**333 of 690 ticks** (48%) moved a
+**334 of 691 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **333** capability ticks, median cycle **26m**
+* **334** capability ticks, median cycle **26m**
 * median diff per tick: **+258 / −34** lines across 8 files
 
 ## Every tick
@@ -787,5 +787,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **967** | 2026-08-05 15:28 | 26m | pattern-class | 63s | +165/−33 | 407 | 81 | 56.0% · | a replaced element has no line box to take a baseline from, and `<svg>` answered anyway (2 |
 | **968** | 2026-08-05 15:53 | 24m | measurement | 63s | +94/−32 | 407 | 81 | 56.0% · | t967 fixed the line the icon is ON; this is the line that CONTAINS it (2026-08-05) |
 | **969** | 2026-08-05 16:32 | 39m | measurement | 63s | +248/−78 | 407 | 81 | 56.0% · | flex is CLEAN, 20/20 item-exact, and the first control I built could not have failed (2026 |
+| **970** | 2026-08-05 16:58 | 25m | pattern-class | 63s | +203/−34 | 407 | 81 | 56.0% · | t968 said this needed a contract change; it needed the rule it already had (2026-08-05) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

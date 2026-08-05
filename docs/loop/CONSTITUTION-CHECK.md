@@ -5678,3 +5678,113 @@ addition does not consume it.
    highlight widget calls, and it currently answers with the wrong box entirely.
 4. **Chrome's UA `<select>` font is ~13.333px and we inherit the parent's** — measured at t963, one
    UA rule, and it contaminates every form-control fixture that does not set `font-size`.
+
+## Check #86 — tick 971 (2026-08-05)
+
+**Horizon:** H0 as re-scoped by **PART VII**, instrumented as **M1 on the in-scope CrUX corpus**.
+Latest banked: **16.7% (22/132), sweep t965** — this window's own sweep, and the first non-stale
+reading since t936. Check #83's ceiling finding is unchanged and nothing here bears on it.
+
+### → Gate, or scoreboard?
+
+**Gate — and for the first time with a MEASURED justification instead of an argument.** Ticks
+964–970: three capability fixes landed (`<select>` widest-option width, a replaced element's
+baseline, the inline-block that contains one), three measurement ticks, one audit tick. **t967 and
+t970 were chosen because inline `<svg>` measures 34.5% of the burndown corpus and the icon-button
+shape 23.4%** — not because a source-based audit said icons matter, and not because I stumbled into
+them.
+
+⚠ **The honest qualifier, and it is the same one #85 carried: NOT RE-MEASURED.** No sweep since t965.
+These are on-mandate *by construction* — the construct's frequency on the scoring population is
+measured, the fix is Chrome-differential and RED-proven — and that is a different claim from "the
+number moved". The next sweep is the test, and t965 established that `<svg>` at 34.5% is the first
+fix this session that the corpus can actually see.
+
+### → Is `orient`'s ranking still the north star?
+
+**Yes, and this window gave VI.3's first term a NUMBER for the first time.** VI.3 has said *rank by
+usage-weight × failing-breadth* since tick 86, and "usage-weight" has been an argument from the open
+web while the metric was computed over 200 specific pages. `docs/loop/CORPUS-CONSTRUCTS.md` (t965)
+measures it on the scoring population in one command, three minutes, no build. It immediately did
+three things a source-based axis could not:
+
+* **priced two landed fixes at zero** (`<select multiple>` and a tab in a `<pre>` are each 0 of 171),
+  which is the complete explanation of a flat metric and was available *before* the work;
+* **priced Interop 2026's entire focus list at ~0** on this corpus — not a criticism of Interop,
+  which ranks the developer frontier, but it explains why #34 and #35 both returned "no re-rank";
+* **found the highest-frequency `dy` term of the session** (inline `<svg>`, 34.5%), which three
+  source-based audits had walked past.
+
+**The refinement that goes with it, and it must travel with the instrument: frequency ranks where to
+LOOK; a differential probe says whether anything is THERE.** The probe on `<button>`/`<input>` — the
+corpus's #1 and #2 — came back within ~2px of Chrome. That negative cost one probe and saved a window
+of grinding the two commonest controls on the web for nothing.
+
+### → Is any invariant being bent?
+
+**No, and I5 is the story of this window rather than a box ticked.** **Three of my own published
+findings were corrected by my own later measurement, each in place rather than quietly:**
+
+```text
+   t963 predicted a "~6px scrollbar term" in the <select> width  ->  t964: it DOES NOT EXIST.
+        The residual invented to explain the gap WAS the gap (I compared against the
+        rendered option instead of the widest).
+   audit #37 blamed a wrapper divergence on FORM CONTROLS               ->  t967: it is the
+        inline <svg>. The wrapper heights were INFERRED (next control's y minus this one's)
+        because the <div>s had no ids. Amended in the audit itself.
+   t968 deferred a fix as "a MISSING INPUT, not a missing guard" and    ->  t970: wrong on both.
+        priced the partial fix at 24                                        The atomics were
+        already in the walk, and "skip the subtree" reaches 24 while
+        "contribute your own bottom edge" reaches Chrome's 20.
+```
+
+**A deferral is a prediction about work not yet done.** t968's was tested one tick later and was half
+right, and the half it got wrong was the half that mattered. Recording that is worth more than the
+fix, because the loop defers constantly and has never before priced one of its own deferrals.
+
+⚠ **I4 is served better than at any previous check**, for the reason in the section above: work is
+now selected by measured usage-weight on the population that scores it.
+
+**PART VII held under its sharpest test yet.** The self-audit run this tick reports **the verify wall
+at 1113s against its 300s Tier-0 target — a real regression against a Tier-0 item** — and *every*
+remedy it names (mold/lld, cargo-nextest, workspace-hack, risk-based gate scheduling) is
+`scripts/` or Cargo configuration, which is observer territory. **Recorded, not acted on**, for a
+40th consecutive tick, through a 1148s wall in this same session. Wall audit #35 also established the
+wall is **bistable** (78s and 1148s the same day, same tree shape), so the 1113s is a reading of the
+box as much as of the code — which is a reason to hand it over precisely, not a reason to touch it.
+
+### → PART VI correction
+
+⚠⚠ **VI.2's H0.1 residue list loses a member and gains a rank.** The row names *tables · inline
+composition · scroll containers* after #82 cleared composed block-level width arithmetic (24/25).
+t969 ran a 20-case, 45-item flex battery — **all item-exact within 2px**, with a positive control in
+the same run that detects a known 14px defect — so **flex distribution is clean too**, on the corpus's
+fourth most common construct. And t965's frequency table re-ranks what remains:
+
+> **Tables are 7.0% of the corpus and `<td colspan>` 2.9%, against `<button>` 55.6%, `<input>` 51.5%
+> and inline `<svg>` 34.5%.** Tables remain real work and they are not the top of a usage-weighted
+> list computed over the pages that produce the number.
+
+**Both defects this window actually found — `<select>`'s absent intrinsic size model and a replaced
+element's baseline, twice — sit in INLINE COMPOSITION, the one member of that list nothing has
+cleared.** That is now the ranked direction, and it is the first time the residue list has been
+narrowed by a measurement rather than by a hypothesis.
+
+The t953 footer mechanism reserved at #84 is still open; this correction does not consume it.
+
+### Steer
+
+1. **SWEEP after the next two or three fixes.** t967/t970 are the first fixes this session the corpus
+   can see (34.5% / 23.4%); everything before them was structurally invisible. Read the result as
+   pricing THOSE, and expect the common-set band to be the honest number — t965's headline `+1.9 pts`
+   was **one site's coverage event** (oilprice.com, 0.528 → 0.988) carrying 61% of the movement.
+2. **THE UA CONTROL-HEIGHT −2.** Our `<button>`/`<input>`/`<select>` are 22px where Chrome gives 24,
+   uniformly, at 16px — one UA constant across the corpus's #1 and #2 constructs. Measured at t963
+   (on `<select>`), t966 (on `<button>`/`<input>`) and again as t970's named residue. It is the
+   highest-frequency single number left standing.
+3. **Chrome's UA `<select>` font is ~13.333px and we inherit the parent's** — an unstyled 4-row list
+   box is 70 in Chrome, not 82.8, and the t963 row-height law reproduces that exactly.
+4. **`Range.getBoundingClientRect()` answers the VIEWPORT WIDTH** (1200) for every range — found at
+   t959, never investigated. `Range.prototype` has 27 methods and neither `getBoundingClientRect` nor
+   `getClientRects` is among them, so something else is answering. Every editor and text-selection UI
+   calls it.

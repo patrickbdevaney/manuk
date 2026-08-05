@@ -46371,6 +46371,64 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 971 — the constitution check, and the window in which I corrected myself three times (2026-08-05)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks, last at 963),
+banked as check #86, plus the self-audit that came due with it.
+
+**GATE, and for the first time with a MEASURED justification.** t967 and t970 were selected because
+inline `<svg>` measures **34.5%** of the burndown corpus and the icon-button shape **23.4%** — not
+because an audit said icons matter. VI.3 has demanded *usage-weight × failing-breadth* since tick 86
+and this window is the first that had a **number for the first term on the population that scores
+us** (`docs/loop/CORPUS-CONSTRUCTS.md`, t965). ⚠ Still unpriced: no sweep since t965, so these are
+on-mandate *by construction*, which is a different claim from "the number moved".
+
+⚠⚠⚠ **THE FINDING IS I5, AND IT IS THAT I CORRECTED MYSELF THREE TIMES IN SEVEN TICKS — each in
+place, each by my own later measurement:**
+
+```text
+   t963 predicted a "~6px scrollbar term" in the <select> width  ->  t964: IT DOES NOT EXIST.
+        The residual invented to explain the gap WAS the gap.
+   audit #37 blamed a wrapper divergence on FORM CONTROLS        ->  t967: it is the inline <svg>.
+        The wrapper heights were INFERRED, not measured.
+   t968 deferred a fix as "a MISSING INPUT, not a missing guard" ->  t970: wrong on both counts.
+        and priced the partial fix at 24                             "Skip the subtree" reaches 24;
+                                                                     "contribute your own bottom
+                                                                     edge" reaches Chrome's 20.
+```
+
+**A deferral is a prediction about work not yet done, and this loop has never before priced one of
+its own.** t968's was tested one tick later and was half right — and the half it got wrong is the half
+that mattered, because it was the half that said *don't do this yet*.
+
+⚠⚠ **PART VI CORRECTED: the H0.1 residue list loses a member and gains a rank.** t969's 20-case,
+45-item flex battery is all item-exact with a positive control in the same run, so **flex
+distribution is clean** — and t965's frequency table says **tables are 7.0% of the corpus against
+`<button>` 55.6%, `<input>` 51.5% and `<svg>` 34.5%**, while the row ranks tables first. Both defects
+this window found sit in **inline composition**, the one member nothing has cleared. First time the
+residue list has been narrowed by a measurement rather than a hypothesis.
+
+⚠⚠ **PART VII HELD UNDER ITS SHARPEST TEST: the self-audit reports the verify wall at 1113s against
+its 300s Tier-0 target — a real regression against a Tier-0 item — and every remedy it names
+(mold/lld, cargo-nextest, workspace-hack, risk-based gate scheduling) is `scripts/` or Cargo
+configuration.** Recorded and handed over, not acted on, for a 40th consecutive tick and through a
+1148s wall in this same session. Wall audit #35 also established the wall is **bistable** (78s and
+1148s the same day on the same tree shape), so 1113s reads the box as much as the code — a reason to
+hand it over precisely rather than to touch it.
+
+THE STEER (full text in check #86): sweep after the next 2–3 fixes and read the COMMON-SET BAND, not
+the headline (t965's `+1.9 pts` was one site's coverage event carrying 61% of it) · **the UA
+control-height −2** is the highest-frequency single number left standing (our controls are 22px where
+Chrome gives 24, across `<button>` 55.6% and `<input>` 51.5%) · Chrome's UA `<select>` font is
+~13.333px and we inherit the parent's · `Range.getBoundingClientRect()` answers the viewport width.
+
+RATCHET: no engine change — measurement only. Every gate green from t970.
+
+PERF: none.
+
+WIKI: none [forced] — the artefacts are `docs/loop/CONSTITUTION-CHECK.md` check #86 and the
+self-audit's recorded finding. [no-pattern]
+
 ## Tick 970 — t968 said this needed a contract change; it needed the rule it already had (2026-08-05)
 
 TICK SHAPE: pattern-class — inline composition, which t969's flex negative left as the only member of
