@@ -566,6 +566,30 @@ pub enum WordBreak {
     KeepAll,
 }
 
+/// `tab-size` — **the distance between tab stops in a preserved-whitespace run**, and the reason it
+/// is an enum rather than a number is that CSS gives it two incompatible units.
+///
+/// A `<number>` is a count of **space advances** in whatever font the run is set in, so it is not a
+/// length until a font is in hand; a `<length>` is absolute. Collapsing the first into the second at
+/// parse time would bake in the parse-time font size and be wrong for every element that inherits it
+/// (which is all of them — the property is inherited, and it is set on `body`/`pre` far more often
+/// than on the element that renders the tab).
+///
+/// The initial value is `8`, which is what an unstyled `<pre>` on the open web is laid out with.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TabSize {
+    /// A count of space advances — resolved against the run's own font at layout time.
+    Spaces(f32),
+    /// An absolute length in px.
+    Px(f32),
+}
+
+impl Default for TabSize {
+    fn default() -> Self {
+        TabSize::Spaces(8.0)
+    }
+}
+
 /// `box-sizing`: whether `width`/`height` size the content box (CSS default) or the
 /// border box (padding + border counted inside the given dimension).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1007,6 +1031,8 @@ pub struct ComputedStyle {
     pub letter_spacing: f32,
     /// `word-spacing` — extra px added to each inter-word space. `0` = `normal`. Inherited.
     pub word_spacing: f32,
+    /// `tab-size` — the distance between tab stops in a preserved-whitespace run. Inherited.
+    pub tab_size: TabSize,
     pub margin: Sides<Dim>,
     pub padding: Sides<Dim>,
     pub border_width: Sides<f32>,
@@ -1277,6 +1303,7 @@ impl ComputedStyle {
             direction: Direction::Ltr,
             letter_spacing: 0.0,
             word_spacing: 0.0,
+            tab_size: TabSize::default(),
             margin: Sides::all(Dim::Px(0.0)),
             padding: Sides::all(Dim::Px(0.0)),
             border_width: Sides::all(0.0),
@@ -1397,6 +1424,7 @@ impl ComputedStyle {
         s.direction = parent.direction;
         s.letter_spacing = parent.letter_spacing;
         s.word_spacing = parent.word_spacing;
+        s.tab_size = parent.tab_size;
         // `text-shadow` is inherited (a shadow on a heading carries to its inline `<span>`s).
         s.text_shadow = parent.text_shadow;
         // `list-style-*` is inherited (that is how `ul{list-style:none}` silences its `li`s).
@@ -1514,6 +1542,7 @@ pub fn diff_style(old: &ComputedStyle, new: &ComputedStyle) -> RestyleDamage {
         || old.word_break != new.word_break
         || old.letter_spacing != new.letter_spacing
         || old.word_spacing != new.word_spacing
+        || old.tab_size != new.tab_size
         || old.float != new.float
         || old.clear != new.clear
         || old.position != new.position
@@ -4317,6 +4346,25 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 0.0
             } else {
                 values::parse_length_px(v.trim(), s.font_size).unwrap_or(0.0)
+            }
+        }
+        // `tab-size` (and its `-moz-` alias, which is still what a lot of shipped CSS writes): a
+        // BARE NUMBER is a count of space advances, anything with a unit is a length. The two are
+        // kept apart all the way to layout — see `TabSize`. A negative or unparseable value keeps
+        // the initial 8, which is what an unstyled `<pre>` renders with.
+        "tab-size" | "-moz-tab-size" => {
+            let t = v.trim();
+            s.tab_size = if let Ok(n) = t.parse::<f32>() {
+                if n >= 0.0 {
+                    TabSize::Spaces(n)
+                } else {
+                    TabSize::default()
+                }
+            } else {
+                match values::parse_length_px(t, s.font_size) {
+                    Some(px) if px >= 0.0 => TabSize::Px(px),
+                    _ => TabSize::default(),
+                }
             }
         }
         "width" => {

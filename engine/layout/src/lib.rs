@@ -6212,6 +6212,61 @@ impl Ctx<'_> {
         out
     }
 
+    /// **The tab-stop interval in px for a run set in `style`.**
+    ///
+    /// `tab-size` is a `<number>` far more often than a `<length>`, and a number is a count of
+    /// SPACE ADVANCES in the run's own font — so it becomes a length only here, where the font is
+    /// in hand. Resolving it at parse time would bake in the parse-time font size and be wrong for
+    /// every element that inherits it, which is the normal case (`pre { tab-size: 4 }` is set on the
+    /// container, not on the text node that renders the tab).
+    fn tab_stop(&self, cs: &ComputedStyle, style: TextStyle) -> f32 {
+        match cs.tab_size {
+            manuk_css::TabSize::Spaces(n) => {
+                n * self.fonts.measure(" ", style.font_key, style.font_size)
+            }
+            manuk_css::TabSize::Px(px) => px,
+        }
+    }
+
+    /// Push a **preserved** run, emitting each `\t` in it as its own [`InlineItem::Tab`].
+    ///
+    /// Shared by the `pre` and `pre-wrap` paths, which differ only in `no_wrap` and in how they cut
+    /// the text up before they get here. A run with no tab in it produces exactly the one `Word` it
+    /// always did, so every existing preformatted line is byte-identical.
+    fn push_preserved_run(
+        &self,
+        out: &mut Vec<InlineItem>,
+        text: &str,
+        style: TextStyle,
+        node: Option<NodeId>,
+        stop: f32,
+        no_wrap: bool,
+        first: &mut bool,
+    ) {
+        for (i, seg) in text.split('\t').enumerate() {
+            if i > 0 {
+                out.push(InlineItem::Tab {
+                    stop,
+                    style,
+                    node,
+                    no_wrap,
+                });
+                *first = false;
+            }
+            if !seg.is_empty() {
+                out.push(InlineItem::Word {
+                    text: seg.to_string(),
+                    style,
+                    space_before: false,
+                    node,
+                    no_wrap,
+                    break_word: false,
+                });
+                *first = false;
+            }
+        }
+    }
+
     /// `owner` is the deepest **element** ancestor seen so far; each word records it so
     /// inline elements (`<a>`, `<button>`) — which never get a `LayoutBox` — can still
     /// have their geometry recovered from the runs they produced (§4a).
@@ -6265,15 +6320,19 @@ impl Ctx<'_> {
                             () => {
                                 if !run.is_empty() {
                                     if run_ws {
-                                        out.push(InlineItem::Word {
-                                            text: std::mem::take(&mut run),
+                                        // A preserved whitespace run may contain TABS, and a tab is
+                                        // not a character with a width — `"\t\t"` is two stops, not
+                                        // two zero-width glyphs. See `InlineItem::Tab`.
+                                        let ws = std::mem::take(&mut run);
+                                        self.push_preserved_run(
+                                            out,
+                                            &ws,
                                             style,
-                                            space_before: false,
-                                            node: owner,
-                                            no_wrap: false,
-                                            break_word: false,
-                                        });
-                                        *first = false;
+                                            owner,
+                                            self.tab_stop(cs, style),
+                                            false,
+                                            first,
+                                        );
                                     } else {
                                         push_word(
                                             out,
@@ -6364,16 +6423,17 @@ impl Ctx<'_> {
                             continue;
                         }
                         // One word per line: `pre` never wraps, and the literal text (indentation
-                        // included) is measured as written.
-                        out.push(InlineItem::Word {
-                            text: line.to_string(),
+                        // included) is measured as written — EXCEPT at a tab, which is not a
+                        // character with a width and has to reach the pen. See `InlineItem::Tab`.
+                        self.push_preserved_run(
+                            out,
+                            line,
                             style,
-                            space_before: false,
-                            node: owner,
-                            no_wrap: true,
-                            break_word: false,
-                        });
-                        *first = false;
+                            owner,
+                            self.tab_stop(cs, style),
+                            true,
+                            first,
+                        );
                     }
                     return;
                 }
@@ -7035,6 +7095,76 @@ impl Ctx<'_> {
                 prev_no_wrap = false;
                 continue;
             }
+            // ⚠⚠⚠ **A TAB IS PLACED HERE, BEFORE THE TUPLE, BECAUSE ITS ADVANCE IS AN OUTPUT OF THE
+            // PEN AND THE TUPLE'S ADVANCE IS AN INPUT TO IT.** Every other item computes
+            // `(advance, …, builder)` first and consumes `advance` to decide wrapping; only the
+            // builder ever sees `x`. A tab has no width — it advances to the next multiple of
+            // `stop` — so it is the one inline thing that cannot be expressed that way, and it gets
+            // the same treatment `Break` gets for the same reason (t960/t961).
+            //
+            // **The rule, Chrome-measured at four `tab-size` values (t959):** the pen moves to the
+            // next multiple of `stop` STRICTLY GREATER than where it is. "Strictly" is the whole
+            // discriminator: `tab-size:2` on `"ab\tcd"` measures the same 6 characters as
+            // `tab-size:4` does, because `"ab"` already sits exactly ON a 2-space stop and the tab
+            // still has to move — an implementation that rounds UP instead of going to the NEXT
+            // stop gives 4 characters there and passes the `tab-size:4` row anyway.
+            if let InlineItem::Tab {
+                stop,
+                style,
+                node,
+                no_wrap,
+            } = item
+            {
+                let lm = self.fonts.line_metrics(style.font_key, style.font_size);
+                let est_h = style.line_height.max(lm.ascent + lm.descent);
+                if cur.is_empty() {
+                    let (l, w) = open_band(&mut y, est_h);
+                    line_left = l;
+                    line_avail = w - if first_line { text_indent } else { 0.0 };
+                }
+                let x = if cur.is_empty() {
+                    if first_line {
+                        text_indent
+                    } else {
+                        0.0
+                    }
+                } else {
+                    pen
+                };
+                // `tab-size: 0` advances nothing — Chrome-measured, and it is also what keeps this
+                // from dividing by zero.
+                let adv = if stop > 0.0 {
+                    ((x / stop).floor() + 1.0) * stop - x
+                } else {
+                    0.0
+                };
+                cur.push(LineFrag {
+                    x,
+                    // The advance IS the fragment's width, so the run's extent (and therefore its
+                    // container's shrink-to-fit width) counts the tab — `content_right_extent`
+                    // reads `x + width` and never re-measures the text.
+                    width: adv,
+                    // Empty, not `"\t"`: paint must draw no glyph for it, and a tab has no glyph.
+                    text: String::new(),
+                    style,
+                    ascent: lm.ascent,
+                    descent: lm.descent,
+                    node,
+                    report_h: None,
+                    report_ascent: None,
+                    atomic: None,
+                    atomic_h: 0.0,
+                    atomic_baseline: 0.0,
+                    valign: VerticalAlign::Baseline,
+                    content_bearing: true,
+                });
+                pen = x + adv;
+                // The tab inherits its run's break behaviour: inside `white-space: pre` the word
+                // after it must be as unbreakable as the word before it was, and inside `pre-wrap`
+                // white space is a real break opportunity and stays one.
+                prev_no_wrap = no_wrap;
+                continue;
+            }
             // Per-item main-axis advance, leading space, cross-axis height, and the LineFrag
             // builder (positioned once the line's x is known).
             let (advance, space_w, est_h, no_wrap, make_frag): (
@@ -7228,8 +7358,10 @@ impl Ctx<'_> {
                         }),
                     )
                 }
-                // Handled above: a break never becomes a fragment on the line it ends.
+                // Handled above: a break never becomes a fragment on the line it ends, and a tab's
+                // advance cannot be computed before the pen is known.
                 InlineItem::Break { .. } => unreachable!("Break is consumed before this match"),
+                InlineItem::Tab { .. } => unreachable!("Tab is consumed before this match"),
                 InlineItem::Spacer {
                     width,
                     node,
@@ -8076,6 +8208,39 @@ enum InlineItem {
         height: f32,
         node: Option<NodeId>,
     },
+    /// A **preserved TAB** — `\t` inside `white-space: pre` / `pre-wrap` (a `<pre>`, a `<textarea>`,
+    /// any code sample or diff pasted from a tab-indenting editor).
+    ///
+    /// ⚠⚠⚠ **IT IS ITS OWN VARIANT BECAUSE ITS ADVANCE IS A FUNCTION OF THE PEN, AND NOTHING ELSE
+    /// IN AN IFC IS.** A tab does not have a width: it advances to the next multiple of `stop`,
+    /// so `"ab\tcd"` and `"a\tcd"` do not differ by one character's width — the tab absorbs the
+    /// difference. That is why it cannot ride in a `Word`:
+    ///
+    ///  * `FontContext::measure` is cached on `(font, size, text)` alone, which is what makes the
+    ///    cache sound, and a position-dependent advance would poison it for every run that does not
+    ///    start at column 0 (t960);
+    ///  * `layout_inline` turns every item into `(advance, …, builder)` where the **advance is a
+    ///    constant computed before `x` is known** — only the builder receives `x` (t961).
+    ///
+    /// So the tab is placed by its own branch in the placement loop, where `pen` exists, exactly as
+    /// `Break` is — a newline is not a character with a width either, and it is the same shape for
+    /// the same reason.
+    Tab {
+        /// The tab-stop interval **in px**, already resolved: `tab-size × the space advance` for a
+        /// `<number>`, or the length itself. Resolved at collection time because that is where the
+        /// run's own font is in hand. `0` means `tab-size: 0`, which advances nothing.
+        stop: f32,
+        /// The run's style — the tab is a character of the line and contributes its font's
+        /// ascent/descent to the line box, so a line that is nothing but tabs is still line-tall.
+        style: TextStyle,
+        node: Option<NodeId>,
+        /// ⚠ **The run's `white-space` no-wrap flag, carried because the tab sits BETWEEN two words
+        /// of it.** `layout_inline` forbids a break only when the item and the one before it are
+        /// both `no_wrap`; a tab that reported `false` would hand the word after it a break
+        /// opportunity its `white-space: pre` run never had, and a long `<pre>` line — which is
+        /// exactly what a tab-indented code sample is — would start wrapping.
+        no_wrap: bool,
+    },
 }
 
 impl InlineItem {
@@ -8092,7 +8257,8 @@ impl InlineItem {
         match self {
             InlineItem::Word { node, .. }
             | InlineItem::Spacer { node, .. }
-            | InlineItem::Break { node, .. } => *node,
+            | InlineItem::Break { node, .. }
+            | InlineItem::Tab { node, .. } => *node,
             InlineItem::Atomic { .. } | InlineItem::AbsPseudo { .. } => None,
         }
     }

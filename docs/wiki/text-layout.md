@@ -2091,3 +2091,80 @@ crossings** (sites already over the shape bar, failing only jarring), and t871-8
 is that a reading-order symptom is upstream geometry. `<a><i></i><span>label</span></a>` is the shape
 this moves. ⚠ That this *does* move those nine sites is a **prediction**, not a result — only the
 next sweep can answer it.
+
+## A TAB has no width — its advance is an OUTPUT of the pen (t959–t962)
+
+**The defect, and it is not a rounding error.** A `\t` in a preserved-whitespace run contributed
+**zero advance**. `ab\tcd` was laid out as `abcd`; `a\tb\tc\td` measured **31px against Chrome's
+240.8 — eight times too narrow**. `tab-size` looked like the missing thing (a surface audit filed it
+as a missing CSS property) and was the *smaller* half: there was nothing for it to scale.
+
+```text
+   monospace 16px, shrink-to-fit <pre>        Chrome     before
+   "ab\tcd"                    (tab-size 8)     96.3       31
+   "ab\tcd"   tab-size:4                        57.8       31
+   "ab\tcd"   tab-size:0                        38.5       31
+   "a\tb\tc\td"                (tab-size 8)    240.8       31
+   "ab cd"    an ordinary SPACE     CONTROL     48.2       39   <- always worked
+```
+
+**THE RULE, and the row that discriminates it.** A tab advances the pen to the next multiple of
+`tab-size × the space advance` **that is strictly greater than where the pen is**. `tab-size` defaults
+to 8; `tab-size: 0` advances nothing.
+
+The discriminator is `tab-size: 2` on `"ab\tcd"`: `"ab"` sits *exactly on* a two-space stop and the
+tab must still move, to the next one — so `tab-size:2` and `tab-size:4` measure the **same 6
+characters for two different reasons**. An implementation that rounds the pen UP to a multiple passes
+the `tab-size:4` row and fails only that one; one that inserts `tab-size` spaces passes both and fails
+the multi-tab row. A gate for this must carry all three.
+
+⚠⚠⚠ **AND THIS IS WHY IT IS NOT A ONE-LINE FIX — the engine had two separate places that assume an
+advance is a CONSTANT, and a tab's is not.** Three ticks were spent finding the second one:
+
+```rust
+   // engine/text/src/lib.rs — position-INDEPENDENT and cached by text alone
+   pub fn measure(&self, text: &str, key: FontKey, size: f32) -> f32 {
+       let ck: RunKey = (key, size.to_bits(), false, text.to_owned());
+
+   // engine/layout/src/lib.rs — the ADVANCE is fixed before `x` exists; only the BUILDER gets x
+   let (advance, space_w, est_h, no_wrap, make_frag): (…, Box<dyn FnOnce(f32) -> LineFrag>)
+```
+
+* **`measure()` cannot hold it.** Its result depends only on `(font, size, text)`, which is what makes
+  the cache sound. `"ab\tcd"` and `"a\tcd"` do not differ by one character's width — the tab absorbs
+  the difference — so any width for `\t` inside `measure` is wrong for every run that does not start
+  at column 0, and it would silently poison a cache keyed on text.
+* **`InlineItem`'s advance/builder split cannot hold it either.** The placement loop consumes
+  `advance` to decide wrapping and to move the pen; by the time `x` is known the width is already
+  fixed.
+
+**So the tab is placed by its own branch, before the tuple, exactly as `Break` is** — a newline is not
+a character with a width either, and it is the same shape for the same reason:
+
+```rust
+   if let InlineItem::Tab { stop, style, node, no_wrap } = item {
+       let x = if cur.is_empty() { … } else { pen };
+       let adv = if stop > 0.0 { ((x / stop).floor() + 1.0) * stop - x } else { 0.0 };
+       …
+       pen = x + adv;
+       prev_no_wrap = no_wrap;   // a `pre` run's next word must stay as unbreakable as its last
+       continue;
+   }
+```
+
+**`TabSize` is an enum and not a number, deliberately.** CSS gives `tab-size` two incompatible units:
+a `<number>` is a count of **space advances in the run's own font** — not a length until a font is in
+hand — and a `<length>` is absolute. The property is *inherited* and is set on `body`/`pre` far more
+often than on the element that renders the tab, so collapsing the number to px at parse time bakes in
+the parse-time font size and is wrong for everything downstream. `G_TAB_STOP` pins this with the same
+markup at 16px and 32px: the stop must double when the font does.
+
+**Where a text error becomes a LAYOUT error.** The tab fragment's `width` IS its advance, so
+`content_right_extent` (which reads `x + width` and never re-measures the text) counts it, and a
+shrink-to-fit box around tabbed text stops hugging one tab too tightly. That is the standing
+"container-WIDTH errors LAUNDER into dy" mechanism: a narrower run re-wraps its prose, the line count
+changes, and a whole-subtree height error follows.
+
+**Safety.** A run with no tab in it goes through `split('\t')` and produces exactly the one `Word` it
+always did, so every existing preformatted line is byte-identical. `pre-line` still collapses tabs,
+which is what the spec asks for.

@@ -883,6 +883,11 @@ pub fn cascade_via_stylo_sized(
                 // `Spacing<Length>` we'd otherwise map by hand).
                 cs.letter_spacing = m.letter_spacing;
                 cs.word_spacing = m.word_spacing;
+                // `tab-size` for the same reason: stylo 0.19's servo build carries it as a
+                // `NonNegative<LengthOrNumber>` we do not map, so without this recovery the shipping
+                // cascade would render every `<pre>` at the initial 8 regardless of what the page
+                // asked for — and 4 is what most syntax-highlighting themes set.
+                cs.tab_size = m.tab_size;
                 cs.background_repeat = m.background_repeat;
                 // `box-shadow`: stylo_map already fills this from Stylo's own computed value (richer
                 // selector matching), so only fall back to MinimalCascade's parse when Stylo left it

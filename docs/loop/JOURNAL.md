@@ -46371,6 +46371,99 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 962 — the tab stop LANDS: the pen is an input to the advance, and that is the whole design (2026-08-05)
+
+TICK SHAPE: pattern-class — preserved-whitespace text (`<pre>`, `<textarea>`, every code sample and
+diff view on the technical web), specified over t959→t961 and built here.
+
+HYPOTHESIS (written before the code): t959 measured that a TAB contributes **zero advance** — `ab\tcd`
+renders as `abcd`, and `a\tb\tc\td` is 31px against Chrome's 240.8, eight times too narrow. t960 and
+t961 then established that neither `measure()` (cached on text alone) nor `InlineItem`'s
+advance-before-`x` tuple can express it. The fix is therefore: a `Tab` item collected from the
+preserved-whitespace paths, and a placement branch that computes its advance FROM THE PEN — the same
+shape `Break` already has, for the same reason.
+
+**IT LANDED, AND THE HYPOTHESIS SURVIVED CONTACT UNCHANGED.** The design t960/t961 specified from
+reading the file is the design that compiled: `InlineItem::Tab { stop, style, node, no_wrap }`,
+collected by a shared `push_preserved_run` from both the `pre` and `pre-wrap` paths, and placed by its
+own branch above the tuple match in `layout_inline`:
+
+```rust
+   let x   = if cur.is_empty() { … } else { pen };
+   let adv = if stop > 0.0 { ((x / stop).floor() + 1.0) * stop - x } else { 0.0 };
+```
+
+⚠⚠⚠ **OUR MONOSPACE ADVANCE IS 9.63px AND CHROME'S IS 9.64, SO THE GATE'S CHARACTER UNITS ARE
+CHROME'S PIXELS.** The gate asserts in units of a measured 10-character control rather than in px —
+a px literal would assert this box's installed face rather than the rule — and the two happen to
+coincide to within a hundredth of a pixel, which means every row below is directly comparable to
+t959's Chrome column:
+
+```text
+                                     Chrome   before   after
+   "ab\tcd"           x of `cd`       77.1     19.3     77.1     (8 chars)
+   tab-size:4         x of `cd`       38.5     19.3     38.5     (4 chars)
+   tab-size:2         x of `cd`       38.5     19.3     38.5     ← THE DISCRIMINATOR
+   tab-size:0         x of `cd`       19.3     19.3     19.3     (advances nothing)
+   "a\tb\tc\t"        x of `d`       231.2     28.9    231.2     (24 chars)
+   leading "\t"       x of `x`        77.1      0.0     77.1     (indentation)
+   pre-wrap "ab\t"    x of `cd`       77.1     19.3     77.1
+   inline-block <pre>   width         96.3     38.5     96.3     (shrink-to-fit)
+   "ab cd " CONTROL   x of `ef`       57.8     57.8     57.8     ← must not move
+```
+
+⚠⚠ **RED-PROVEN THREE WAYS, EACH RUN AND REVERTED — because it passed on its first run, which is
+worth nothing on its own.** The three mutations are not interchangeable, and that is the point:
+
+1. **Drop the `Tab` push** (the run goes back to one `Word`) → `#t8` reads **19.3**, the original
+   defect exactly: `ab\tcd` laid out as `abcd`.
+2. **`ceil` instead of `floor(..)+1`** (round up to a multiple rather than advance to the NEXT stop) →
+   **only `#t2` fails**, 19.3 against 38.5. Every other row in the file still passes. A gate without
+   that row would have shipped this.
+3. **`adv = stop`** (insert one tab-size instead of advancing to a stop) → `#t8` reads **96.3** where
+   8 characters is 77.1.
+
+⚠ **`tab-size` IS AN ENUM, NOT A NUMBER, AND THAT IS THE ONE DESIGN DECISION NOT IN THE t959–t961
+SPEC.** A `<number>` is a count of space advances *in the run's own font*; a `<length>` is absolute.
+The property is inherited and is set on `body`/`pre` far more often than on the element that renders
+the tab, so resolving the number to px at parse time bakes in the parse-time font size. `TabSize::
+{Spaces(f32), Px(f32)}` keeps them apart to layout, and the gate pins it with the same markup at 16px
+and 32px — the stop must double when the font does. Parsed under `-moz-tab-size` too, which is still
+what a lot of shipped CSS writes, and recovered into the shipping Stylo cascade beside
+`letter-spacing`/`word-spacing` (stylo 0.19's servo build carries it as a value we do not map).
+
+⚠ **THE ONE THING THE SPEC MISSED, found by the compiler's own shape.** `layout_inline` forbids a
+break only when an item *and the one before it* are `no_wrap`. A tab that reported `false` would hand
+the word after it a break opportunity its `white-space: pre` run never had — so a long tab-indented
+`<pre>` line, which is precisely the input this tick exists for, would have started wrapping. The tab
+carries its run's flag; `prev_no_wrap = no_wrap`.
+
+CADENCE DISCHARGED (both were due and both are clean):
+* **WALL-TIME AUDIT @ t961 — the wall is 78s and it is LEAN; nothing trimmed, and that is the
+  result.** Where the seconds go: `T` 31s (40%), `G6` 17s (22%), `B` 8s, then a long flat tail
+  (`P`/`G1`/`D` 5s each). Against the four admissible questions: no REDUNDANCY worth taking (the two
+  costs are a text suite and a clickability gate, which share no runtime); PARALLELISM is intact (the
+  perf floors are serial *on purpose*); CACHING is already RAM-incremental; and SCOPE is per-crate
+  already. 78s is well under the 300s re-measure trigger. `LAST_WALL_AUDIT` → 961.
+* **SELF-AUDIT — "methodology and reality agree."** 29 gates declare how to break them, 49 process
+  defects each name their closing mechanism, and the journal has no gaps. `LAST_AUDIT_TICK` → 962.
+
+⚠ **KNOWN, AND NOT MINE TO FIX: `G_TAB_STOP` IS NOT IN THE WALL.** `verify.sh` names its ~19 gates
+explicitly and is observer-owned (PART VII), so this gate runs in the workspace suite and in CI but
+not in the per-tick wall. Recorded rather than worked around; the standing `gates-not-in-the-wall`
+finding covers it.
+
+RATCHET: `manuk-layout` 125/125, `G_TAB_STOP` green, and the CONTROL row (`ab cd` in a `<pre>`) is
+unmoved at 57.8 — an ordinary space was never broken and this did not touch it. A run with no tab in
+it goes through `split('\t')` and yields exactly the one `Word` it always did, so every existing
+preformatted line is byte-identical.
+
+PERF: none. One `split('\t')` per preserved-whitespace run (which is a `memchr` returning the whole
+string when there is no tab) and one branch per inline item.
+
+WIKI: `docs/wiki/text-layout.md` — "A TAB has no width — its advance is an OUTPUT of the pen", with
+the two places that assume an advance is a constant and why neither can hold a tab stop.
+
 ## Tick 961 — the second reason the tab fix is not one line, and the boundary that stopped me (2026-08-05)
 
 TICK SHAPE: measurement — one more architectural fact for t959's specification, and the record of a
