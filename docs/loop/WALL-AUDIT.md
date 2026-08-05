@@ -1158,3 +1158,50 @@ forbids.
 is slow for a good reason and a fixable one, and the fixable half is tooling that PART VII reserves
 to the observer. Handed over with a 235s line item so `cargo-nextest` can be priced against a number
 rather than a feeling.
+
+## Audit #35 — tick 962 (2026-08-05) — 78s, and the number that moved is a VARIANCE
+
+```text
+   ══ WALL-TIME AUDIT @ tick 961 — total 78s ══
+     31s  T          ████████████████████████████████████████  40%
+     17s  G6         ██████████████████████                    22%
+      8s  B          ██████████                                10%
+      5s  P · 5s G1 · 5s D · 3s F · 1s G_FORM · 1s F4 · the rest at 0s
+```
+
+⚠⚠⚠ **THE HEADLINE IS THAT #34's 369s BECAME 78s WITH NO GATE REMOVED, AND `P` WENT 235s → 5s.**
+Audit #34 measured `P` at 64% of a 369s wall and handed `cargo-nextest` to the observer with a
+priced line item. Whatever changed since — build state, the observer's tooling, or contention on the
+box during #34's measurement — **the section that was 64% of the wall is now 6%**, and `P` is where
+403 test binaries live. This audit's job is to say which, and it honestly cannot from the receipt
+alone: `sections` is a per-run file and the ledger keeps only the last one.
+
+⚠⚠ **SO THE FINDING IS ABOUT THE INSTRUMENT, NOT THE WALL: A SINGLE-SAMPLE WALL NUMBER IS A
+READING OF THE BOX AS MUCH AS OF THE CODE.** #31 already named this ("the interesting number is a
+VARIANCE, not a total") and #34 then reported 369s as a growth trend on one sample. Both readings
+were real; neither was a trend. **This same session watched a green wall take 1148s** (tick 962,
+under a `manuk-css` edit that cascades the whole workspace) — 15× the 78s measured 40 minutes
+earlier, same tree shape, same gates. The wall is bistable on load, exactly as the loop's own
+`status-update.sh` comment says (`load1` past ~3 balloons gate runtime ~10×), and an audit that
+reports one sample as a level is going to keep alternating between "lean" and "bloated".
+
+**Against the four admissible questions, at 78s:**
+
+1. **REDUNDANCY** — `T` (31s) and `G6` (17s) are 62% of the wall and share nothing: one is the text
+   suite, the other is the clickability gate on a real page. No two gates found standing up
+   overlapping SpiderMonkey runtimes for the same assertion. `cargo-nextest` remains the named
+   remedy for `P` when `P` is large, and remains observer-owned (PART VII).
+2. **PARALLELISM** — gates launch concurrently under `CARGO_BUILD_JOBS`; the perf floors (`F`) are
+   deliberately serial and must stay so. Nothing found accidentally serialised.
+3. **CACHING** — incrementals in RAM, live fetches snapshot-cached. Nothing new found recomputed.
+4. **SCOPE** — a narrower per-gate build target is real and is a `verify.sh` concern.
+
+⚠ **NOTHING TRIMMED, AND THAT IS THE RESULT.** 78s is well inside the 300s re-measure trigger, and
+the one lever on the agent's side — consolidating gates into fewer binaries — is barred by the
+standing *one `#[test]` per JS gate, or SIGSEGV* constraint. Two gates were ADDED this window
+(`G_TAB_STOP`, `G_SELECT_LISTBOX`), both RED-proven, both chosen rather than absorbed, per #34's
+rule that the cost be recorded where the slowness is.
+
+**Handed over, so the next audit is not another single sample:** the honest instrument for this
+ledger is `sections` banked PER RUN with `load1`, not the last run overwritten. That is a
+`verify.sh`/`status-update.sh` change and is observer territory; recorded here rather than acted on.

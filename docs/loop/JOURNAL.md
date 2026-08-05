@@ -46371,6 +46371,113 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 963 — a list-box `<select>` LANDS, and half of its specification was REFUTED by measuring it (2026-08-05)
+
+TICK SHAPE: pattern-class — form controls on form-heavy pages (filter sidebars, admin forms, faceted
+search), which is what surface audit #36 ranked and t958 measured and specified.
+
+⚠⚠⚠ **THE HEADLINE IS THE `dy` CASCADE, AND IT IS 288px ON TEN CONTROLS.** A `<select multiple>` or
+`<select size=N>` is a **sized scrolling list box**, not a one-line dropdown. There was no branch for
+either attribute anywhere — `form_control_text`'s `"select"` arm returns the selected option and
+nothing computed a row count — so every one of them rendered one line tall and everything below it
+moved up. Measured on the gate's own fixture, in headless Chrome and in this engine, before and
+after:
+
+```text
+   height, border box                    Chrome    before    after
+     #d0   <select>                        21.0      22       22    control, unmoved
+     #m4   multiple                        82.8      22       85    4 rows (HTML's default size)
+     #s4   size=4                          82.8      22       85
+     #s2   multiple size=2                 42.4      22       44
+     #f32  multiple size=3   32px         120.2      41      122
+     #f10  multiple size=3   10px          41.0      15       43
+     #s1   size=1                          21.0      22       22    control, unmoved
+     #m1   multiple size=1                 21.0      22       22    control — a DROPDOWN
+     #one  multiple size=3, ONE option     62.6      22       65    rows, not options
+     #fix  multiple height:100px          100.0     100      100    control — definite wins
+   ──────────────────────────────────────────────────────────────────
+     y of the div BELOW all ten           601.6     313      613
+     ...its error                             —   -288.6    +11.4
+```
+
+⚠⚠⚠ **THE ROW HEIGHT IS `1.2 × font-size + 1` AND IT IS NOT THE FONT'S LINE BOX.** t958 gave the
+number for one font size (16), which is exactly the shape of constant that looks right once and
+drifts everywhere. Fitted here against Chrome at six sizes, residual ≤ 0.03px:
+
+```text
+   size=3, sans-serif      9px   15.5px    16px     17px    20px     32px
+     Chrome, border box  37.39    60.78   62.60    66.17   77.00   120.20
+     (h - 2) / rows      11.80    19.59    20.19    21.39   25.00    39.40
+     1.2 x size + 1      11.80    19.60    20.20    21.40   25.00    39.40
+```
+
+A 16px sans-serif **line box** is 18 in Chrome and 18 here — we agree exactly at four sizes — and a
+16px list-box **row** is 20.2. It is also **font-family independent** (16px monospace gives the same
+62.6) and **immune to `line-height`** (`line-height: 40px` on the select leaves it at 62.6): Chrome
+forces its own row metric, so any fix derived from our text metrics is wrong for a reason no
+single-size fixture would ever show. **The `+2` t958 recorded is the element's own BORDER**, which
+the ordinary box model already adds — Chrome-verified by `border: 5px` giving 70.6, exactly
+62.6 − 2 + 10.
+
+⚠⚠⚠ **AND THE OTHER HALF OF t958'S SPECIFICATION IS REFUTED — MEASURED, NOT ARGUED.** t958 said "the
+arrow is the width half": drop `native_widget_width`'s 17px dropdown-arrow strip for a list box. I
+built it, measured it, and reverted it, because **in isolation it is a regression**:
+
+```text
+   width, six list boxes        Chrome    arrow KEPT    arrow DROPPED
+     total absolute error            —          44.2             81.4
+     ...and the ONE row it fixes  14.9       32 (+17)       15 (-0.1)   <- ONE option
+```
+
+**Our width comes from the SELECTED option and Chrome's list box sizes to the WIDEST**, so the 17px
+arrow was silently compensating for measuring the wrong string — and the single row where removing it
+is exact is the one-option case, where "widest" and "selected" are the same string. The width needs
+both halves at once, plus a ~6px term that appears only when the option count exceeds the row count
+(a scrollbar reservation the `--hide-scrollbars` reference does not suppress). **Named as the next
+item, not bundled** — and this is the second time this window that a specification written from one
+measurement did not survive a second one.
+
+⚠⚠ **A SEPARATE DEFECT FOUND WHILE BUILDING THE FIXTURE, with its number.** Chrome's UA gives an
+unstyled `<select>` **its own ~13.333px font**, not the inherited one: an unstyled 4-row list box is
+**70**, not 82.8, and the whole row-height law reproduces it (`4 × (1.2 × 13.333 + 1) + 2 = 70`). We
+inherit `body`'s 16px. My first gate fixture had no explicit `font-size` and every row was off by
+that alone — **the fixture would have measured the UA font-size defect and blamed the row model.**
+Every select in the gate now carries an explicit `font-size`, one variable per case. Recorded here so
+the UA-metrics item is a known number rather than a rediscovery.
+
+RED-PROVEN FOUR WAYS, each applied, run and reverted, and **the row that failed was not always the
+row I expected** — the write-up records what fired:
+
+1. **Delete the `list_h` override** → the four-rows-minus-two-rows difference is **0** against
+   Chrome's 40.4; `#below` reads 313 against 613. The original defect.
+2. **Use `style.line_height` as the row height** → that difference reads **36** (2 × our 18px line
+   box) against 40.4. ⚠ At 16px that is 4px over two rows: a single-font-size fixture with any real
+   tolerance passes this mutation, which is why the gate carries 10px and 32px.
+3. **Rows = the OPTION COUNT** → the difference is **0** again, because `#s4` and `#s2` carry the same
+   five options and a count-based model makes two differently-sized controls identical.
+4. **Treat `size=1` as a list box** → `#m1` grows to **24.2**; Chrome says 21, the dropdown's height.
+   The list-box model applies only above one row, and that is Chrome-measured, not assumed.
+
+RATCHET: `manuk-layout` 125/125; `g_form`, `g_inline_box_geometry`, `g_intrinsic_min_max`,
+`g_letter_spacing_space`, `g_max_width_auto_margin` and t962's `g_tab_stop` all green. The four
+control rows (`#d0`, `#s1`, `#m1`, `#fix`) are byte-identical before and after — a `<select>` that is
+not a list box takes no new branch at all.
+
+⚠ **PROCESS, recorded because it cost a wall run: `LAST_WALL_AUDIT` IS NOT A STATUS.md FIELD.**
+t962 discharged the wall-time audit and I set the number by editing `STATUS.md` — which worked for
+exactly one tick, because `status-update.sh` **derives** it from `docs/loop/WALL-AUDIT.md`'s
+`## Audit #N — tick M` headers and regenerated it straight back to 941. The audit was real; the
+*record* of it was not written where the instrument reads. Banked properly as **wall audit #35**,
+whose own finding is that **a single-sample wall number reads the box as much as the code**: #34
+reported 369s with `P` at 64%, this one reads 78s with `P` at 6%, and this same session watched a
+green wall take **1148s** under a `manuk-css` edit. Nothing trimmed; two gates added and recorded as
+chosen rather than absorbed.
+
+PERF: none — one attribute read per `<select>`, on a path that already reads the element.
+
+WIKI: `docs/wiki/text-layout.md` — "A list-box `<select>` is sized by ROWS, and the row is not a line
+box".
+
 ## Tick 962 — the tab stop LANDS: the pen is an input to the advance, and that is the whole design (2026-08-05)
 
 TICK SHAPE: pattern-class — preserved-whitespace text (`<pre>`, `<textarea>`, every code sample and

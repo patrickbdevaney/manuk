@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **684** | ticks 1–961 |
-| median tick cycle | **26m** | 683 intervals |
+| ticks landed | **685** | ticks 1–963 |
+| median tick cycle | **26m** | 684 intervals |
 | median, last 10 | **4m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 606.1h elapsed |
-| median verify wall | **63s** | 623 ticks |
+| **ticks per hour** | **1.13** | 607.0h elapsed |
+| median verify wall | **63s** | 624 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **404**
-* **✅ rows in the capability ledger**: 144 → **485**
+* **live gates**: 27 → **405**
+* **✅ rows in the capability ledger**: 144 → **486**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**330 of 684 ticks** (48%) moved a
+**331 of 685 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **330** capability ticks, median cycle **26m**
-* median diff per tick: **+258 / −34** lines across 8 files
+* **331** capability ticks, median cycle **26m**
+* median diff per tick: **+259 / −34** lines across 8 files
 
 ## Every tick
 
@@ -781,5 +781,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **959** | 2026-08-05 10:30 | 3m | measurement | 63s | +82/−33 | 403 | 81 | 56.0% · | a TAB has no width at all, which is larger than the property that named it (2026-08-05) |
 | **960** | 2026-08-05 10:33 | 3m | measurement | 63s | +78/−32 | 403 | 81 | 56.0% · | why the tab fix is not one line, recorded before the next attempt starts in the wrong plac |
 | **961** | 2026-08-05 11:09 | 36m | measurement | 63s | +652/−53 | 404 | 81 | 56.0% · | the second reason the tab fix is not one line, and the boundary that stopped me (2026-08-0 |
+| **963** | 2026-08-05 12:03 | 55m | pattern-class | 63s | +645/−37 | 405 | 81 | 56.0% · | a list-box `<select>` LANDS, and half of its specification was REFUTED by measuring it (20 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

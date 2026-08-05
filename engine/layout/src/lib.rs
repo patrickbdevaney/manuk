@@ -1036,6 +1036,55 @@ fn form_control_text(dom: &Dom, node: NodeId) -> Option<String> {
     }
 }
 
+/// **How many ROWS a `<select>` renders as a LIST BOX** — `None` when it is the ordinary one-line
+/// dropdown, which is every `<select>` this engine has ever drawn.
+///
+/// A `<select multiple>` or `<select size=N>` is not a dropdown at all: it is a **sized scrolling
+/// list box**, and its height is a function of its row count rather than of its text. We had no
+/// branch for either attribute, so a filter sidebar's four-row multi-select rendered **17px tall
+/// where Chrome gives 66** — and because a control's height displaces everything after it, the
+/// content below a six-control fixture landed **106px too high** (t958).
+///
+/// HTML's *display size*: `size` when it is present and at least 1, else 4 for `multiple`, else 1.
+/// **The list-box model applies only above one row**, which is Chrome-measured rather than assumed:
+/// `<select multiple size=1>` is 21px — the dropdown's height — not the 22.2 a one-row list box
+/// would be.
+fn select_list_rows(dom: &Dom, node: NodeId) -> Option<f32> {
+    if dom.tag_name(node) != Some("select") {
+        return None;
+    }
+    let el = dom.element(node)?;
+    let rows = el
+        .attr("size")
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .filter(|n| *n >= 1)
+        .unwrap_or(if el.attr("multiple").is_some() { 4 } else { 1 });
+    (rows > 1).then_some(rows as f32)
+}
+
+/// **The height of ONE list-box row, in px** — Chrome-measured at nine `(font-size, size)` pairs and
+/// fitted, not guessed:
+///
+/// ```text
+///   size=3, sans-serif      9px   15.5px    16px     17px    20px     32px
+///     Chrome, border box  37.39    60.78   62.60    66.17   77.00   120.20
+///     (h - 2) / rows      11.80    19.59    20.19    21.39   25.00    39.40
+///     1.2 x size + 1      11.80    19.60    20.20    21.40   25.00    39.40
+/// ```
+///
+/// ⚠⚠ **IT IS NOT THE FONT'S LINE BOX, AND THAT IS THE WHOLE POINT.** A 16px sans-serif line box is
+/// **18** in Chrome and 18 here (we agree exactly, at four sizes); a 16px list-box row is **20.2**.
+/// Reusing the line box would look right at a glance and drift at every font size. It is also
+/// **font-family independent** (16px monospace gives the same 62.6 as sans-serif) and **immune to
+/// `line-height`** (`line-height: 40px` on the select leaves it at 62.6) — Chrome forces its own row
+/// metric, so a fix derived from our text metrics would be wrong for a reason no fixture would show.
+///
+/// The `+ 2` border is NOT here: it is the element's own `border`, which the ordinary box model
+/// already adds (Chrome-verified — `border: 5px` gives 70.6, exactly 62.6 − 2 + 10).
+fn select_row_height(font_size: f32) -> f32 {
+    1.2 * font_size + 1.0
+}
+
 fn is_block_level(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
     if let NodeData::Element(_) = dom.data(node) {
         if matches!(
@@ -3350,9 +3399,21 @@ impl Ctx<'_> {
         // child nodes; a `<button>` uses its real children so it is not handled here).
         if let Some(text) = form_control_text(self.dom, node) {
             let style = text_style(self.style_of(node), self.fonts);
+            // ⚠ **A LIST-BOX `<select>` IS SIZED BY ITS ROW COUNT, NOT BY ITS TEXT.** Computed here
+            // rather than after the inline pass because it must also override the empty-value
+            // early-return below: a `<select multiple>` with no options is still four rows tall.
+            // An explicit `height` still wins — this is the *content* height, and `layout_block`
+            // has always preferred a definite one (Chrome-verified: `height: 100px` was already
+            // exact before this branch existed, which is what proved the machinery was there and
+            // only the intrinsic number was missing).
+            let list_h = select_list_rows(self.dom, node)
+                .map(|rows| rows * select_row_height(self.style_of(node).font_size));
             if text.is_empty() {
                 // An empty field still occupies one line's height.
-                return (BoxContent::Inline(vec![]), style.line_height);
+                return (
+                    BoxContent::Inline(vec![]),
+                    list_h.unwrap_or(style.line_height),
+                );
             }
             let items = vec![InlineItem::Word {
                 text,
@@ -3373,7 +3434,7 @@ impl Ctx<'_> {
                 None,
                 self.style_of(node).direction == manuk_css::Direction::Rtl,
             );
-            return (BoxContent::Inline(frags), h);
+            return (BoxContent::Inline(frags), list_h.unwrap_or(h));
         }
 
         // N4: the FLAT tree — a shadow host lays out its shadow content, and a `<slot>`

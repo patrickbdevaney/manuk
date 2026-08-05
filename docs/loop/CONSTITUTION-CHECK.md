@@ -5567,3 +5567,114 @@ layout breadth.
    place.
 4. **Do not open a site-shaped hunt** (t946, t950 both came back empty), and do not re-issue the I3
    click-point steer (t945 falsified it).
+
+## Check #85 — tick 963 (2026-08-05)
+
+**Horizon:** H0 as re-scoped by **PART VII**, instrumented as **M1 on the in-scope CrUX corpus**
+(`shape ≥ 0.75` AND jarring-clean, bot-walls excluded). Latest banked: **14.8% (20/135), sweep
+t936**. Check #83's finding stands unchanged — the 95% bar is 8–13 points above what this instrument
+can produce — and nothing in this window bears on it.
+
+### → Gate, or scoreboard?
+
+**Gate, and for the first time in three checks that is the plain answer.** Check #84 said the
+measurement phase *"has produced what it was for and should end."* It ended, and **both of its named
+leads are now landed capability**:
+
+```text
+   #84's lead                          became            what it bought
+   <select multiple> has no            t963              a 288px dy cascade on ten
+   select-sizing path                                    controls, 313 -> 613 against
+                                                         Chrome's 601.6
+   tab-size filed missing (#36)        t959-t961 spec    a tab had ZERO advance;
+                                       -> t962           a\tb\tc\td was 31px against
+                                                         Chrome's 240.8
+```
+
+Ticks 955–963: one retraction (t957), five measurement ticks, **two capability ticks**, and the two
+capability ticks are exactly the two leads the measurement ticks were for. That is the intended shape
+of the cycle rather than an accident of what was in front of me.
+
+⚠ **AND THE HONEST CAVEAT, stated because the last three checks have earned it: NEITHER FIX IS
+PRICED.** No sweep has run since t936. Both are Chrome-differential and RED-proven on their own
+fixtures — that is a claim about correctness, not about M1 — and the board's own cadence rule says to
+bank a clean `--jobs 2` sweep after ~5–6 fixes of either class. **The next tick that is not blocked
+should be that sweep**, and it should be read as pricing t962/t963, not as a verdict on them
+(check #82's standing finding: a Chrome-exact, high-usage, low-magnitude fix is one the instrument
+cannot price, and "Δ M1 ≈ 0" is not a refutation of it).
+
+### → Is `orient`'s ranking still the north star?
+
+**Yes, and this window sharpened it a third time — the sharpening is now a rule about
+SPECIFICATIONS, not about ranking.** Three times in nine ticks a specification written from one
+measurement failed against a second one:
+
+* **t957** retracted three ticks built on a probe whose own help text said it does not load external
+  CSS;
+* **t960/t961** amended t959's tab specification twice — `measure()` cannot hold a tab stop, and
+  neither can `InlineItem`'s advance/builder split — each found by opening a file the specification
+  itself pointed at;
+* **t963** built the second half of t958's `<select>` specification (drop the dropdown arrow for a
+  list box), measured it, and **reverted it**: in isolation it triples the width error, 44.2px →
+  81.4px, because the arrow was silently compensating for our sizing to the *selected* option where
+  Chrome sizes to the *widest*.
+
+> **A specification derived from a single fixture is a hypothesis, and the half you did not measure
+> is the half that is wrong.** t963's refutation cost one build and one probe; shipping it would have
+> cost a regression at a ratchet mark, which this project has already priced as worse than a
+> regression at code.
+
+This is VI.3-compatible and additive: VI.3 says *what* to rank, checks #84 and this one say *where to
+look* and *how much of a specification you may trust*.
+
+### → Is any invariant being bent?
+
+**No, and I3 is positively served by both ticks under the t945 rule.** *A geometry error is an I3
+event only when it moves a box RELATIVE TO ITS OWN CENTRE* — and both of these do exactly that, in
+the correcting direction. A tab-indented `<pre>`'s inline children were all at the wrong x within
+their parent, so every click point inside a code sample was wrong; a list box was 60px short, so its
+own bbox centre — which is the agent's click point — sat in the wrong place and every control after
+it was displaced. Neither needed a new assertion: the correction *is* the I3 improvement, and t945
+established that a click-point gate does not discriminate on this class.
+
+**I4 holds on both.** Tab-indented preformatted text is documentation, config listings, diff views
+and `<textarea>` content; multi-selects are filter sidebars, admin forms and faceted search. Neither
+is tail work, and both were reached by the ranked path rather than by novelty.
+
+**PART VII holds, and the method is worth recording.** `scripts/` untouched for a 34th consecutive
+tick. The Chrome reference numbers in t963 were taken by driving `google-chrome --headless=new`
+directly from the agent's own shell against a self-contained fixture — an agent-side measurement, not
+a harness change — after `manuk-wpt boxes` proved to be a Manuk-only dump. Two cadence obligations
+(the wall-time audit, overdue at 941, and the self-audit) were **run, not deferred**; the wall audit
+found the wall lean at 78s and trimmed nothing, which is a result and is recorded as one.
+
+### → PART VI correction
+
+⚠⚠ **VI.2's H0.1 row gains a FOURTH member of its named residue class, with a number.** The row
+already says the gap lives in the box types that opt *out* of ordinary block sizing — **tables,
+inline composition, scroll containers** — after check #82's negative result cleared composed block
+width arithmetic. t963 adds:
+
+> **FORM CONTROLS WHOSE INTRINSIC SIZE MODEL IS ABSENT RATHER THAN WRONG.** A `<select multiple>`
+> had no row-count path at all, so it rendered one line tall and displaced everything below it by
+> **288px on a ten-control fixture**. The *machinery* was present and correct — an explicit
+> `height:100px` was already exact — and only the intrinsic number was missing, which is the same
+> shape as t934/t935's text-less inline wrapper. **A box type whose intrinsic size is computed by
+> nobody is invisible to every fixture that sets a size**, and that is why this class survives
+> property-family sweeps: the sweep varies a property, and the defect is the absence of a branch.
+
+The t953 footer mechanism that check #84 reserved the next correction for is still open; this
+addition does not consume it.
+
+### Steer
+
+1. **RUN THE CLEAN `--jobs 2` SWEEP.** Six fixes are unpriced since t936 and the loop is blind on its
+   own headline. Read it as pricing, not as a verdict.
+2. **The `<select>` WIDTH, both halves at once** — drop the arrow *and* size to the widest option,
+   and account for the ~6px term that appears only when the option count exceeds the row count. t963
+   proved each half alone is wrong; the numbers are in `docs/wiki/text-layout.md`.
+3. **`Range.getBoundingClientRect()` returns the VIEWPORT WIDTH (1200) for every range** — found in
+   passing at t959 and not investigated. It is the API every editor, text-selection UI and
+   highlight widget calls, and it currently answers with the wrong box entirely.
+4. **Chrome's UA `<select>` font is ~13.333px and we inherit the parent's** — measured at t963, one
+   UA rule, and it contaminates every form-control fixture that does not set `font-size`.

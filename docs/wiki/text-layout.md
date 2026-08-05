@@ -2168,3 +2168,60 @@ changes, and a whole-subtree height error follows.
 **Safety.** A run with no tab in it goes through `split('\t')` and produces exactly the one `Word` it
 always did, so every existing preformatted line is byte-identical. `pre-line` still collapses tabs,
 which is what the spec asks for.
+
+## A list-box `<select>` is sized by ROWS, and the row is NOT a line box (t958, t963)
+
+**A `<select multiple>` or `<select size=N>` is a sized scrolling list box, not a dropdown**, and the
+engine had no branch for either attribute — `form_control_text`'s `"select"` arm returns the selected
+option and nothing computed a row count. Every multi-select rendered **one line tall**, and because a
+control's height displaces everything after it, the content below ten controls landed **288px too
+high**. Filter sidebars, admin forms and faceted search are where these live.
+
+```text
+   HTML's DISPLAY SIZE            rows = size          when size >= 1
+                                       = 4            when `multiple` and no usable size
+                                       = 1            otherwise
+   the LIST-BOX model applies only when rows > 1
+   content height  =  rows x (1.2 x font-size + 1)     border/padding add as normal
+```
+
+⚠⚠⚠ **THE ROW HEIGHT IS NOT THE FONT'S LINE BOX, and the two are close enough at one font size to
+hide it.** Chrome-measured at six sizes, residual ≤ 0.03px:
+
+```text
+   size=3, sans-serif      9px   15.5px    16px     17px    20px     32px
+     Chrome, border box  37.39    60.78   62.60    66.17   77.00   120.20
+     (h - 2) / rows      11.80    19.59    20.19    21.39   25.00    39.40
+     1.2 x size + 1      11.80    19.60    20.20    21.40   25.00    39.40
+```
+
+A 16px sans-serif line box is **18** in Chrome and 18 here; a 16px list-box row is **20.2**. The row
+metric is also **font-family independent** (16px monospace gives the same 62.6) and **immune to
+`line-height`** (`line-height: 40px` leaves it at 62.6) — Chrome forces its own, so a fix derived
+from our text metrics is wrong for a reason no single-size fixture reveals. Substituting the line box
+is a 4px error over two rows at 16px, which any reasonable tolerance would pass.
+
+⚠⚠ **`<select multiple size=1>` IS THE DROPDOWN'S HEIGHT (21), NOT A ONE-ROW LIST BOX (22.2).** That
+is why the model is gated on `rows > 1` rather than on the presence of `multiple`. Measured.
+
+⚠⚠⚠ **THE WIDTH IS A DIFFERENT PROBLEM AND THE OBVIOUS HALF OF IT IS A REGRESSION.** A list box has
+no dropdown arrow, so `native_widget_width`'s 17px strip looks like it should go. Measured across six
+list boxes, removing it **triples the total width error, 44.2px -> 81.4px**:
+
+```text
+                                  Chrome    arrow KEPT    arrow DROPPED
+   total absolute width error          —          44.2             81.4
+   the ONE row it fixes (1 option)  14.9       32 (+17)       15 (-0.1)
+```
+
+**Our width comes from the SELECTED option; Chrome's list box sizes to the WIDEST.** The arrow was
+silently compensating for measuring the wrong string, and the only row where dropping it is exact is
+the one-option case, where the two strings are the same. The width needs both halves at once — drop
+the arrow, size to the widest option — plus a ~6px term that appears only when the option count
+exceeds the row count (a scrollbar reservation that `--hide-scrollbars` does not suppress).
+
+⚠ **Chrome's UA gives an unstyled `<select>` its OWN ~13.333px font**, not the inherited one: an
+unstyled 4-row list box is **70**, not 82.8, and the same law reproduces it exactly
+(`4 x (1.2 x 13.333 + 1) + 2 = 70`). We inherit the parent's size. Any fixture that measures a select
+without setting `font-size` is measuring that defect as well, and will blame whatever it was actually
+testing.

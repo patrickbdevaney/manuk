@@ -1594,6 +1594,7 @@
   - L2017 · As landed (t935) — every line box and every y byte-identical to Chrome
   - L2047 · The residue, pinned at OUR number (t935) — CLOSED at t939, and it was ONE BRANCH
   - L2095 · A TAB has no width — its advance is an OUTPUT of the pen (t959–t962)
+  - L2172 · A list-box <select> is sized by ROWS, and the row is NOT a line box (t958, t963)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1621,4 +1622,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1528 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1529 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

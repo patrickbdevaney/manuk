@@ -683,3 +683,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 959	2f9a9834	1785940211	2026-08-05T10:30:11-04:00	175	measurement	63	5	82	33	403	81	3896	6960	0	484	0	a TAB has no width at all, which is larger than the property that named it (2026-08-05)
 960	2e9a109d	1785940385	2026-08-05T10:33:05-04:00	174	measurement	63	4	78	32	403	81	3896	6960	0	484	0	why the tab fix is not one line, recorded before the next attempt starts in the wrong place (2026-08-05)
 961	c209d0ca	1785942547	2026-08-05T11:09:07-04:00	2162	measurement	63	11	652	53	404	81	3896	6960	0	485	0	the second reason the tab fix is not one line, and the boundary that stopped me (2026-08-05)
+963	8c8c1bda	1785945820	2026-08-05T12:03:40-04:00	3273	pattern-class	63	11	645	37	405	81	3896	6960	0	486	0	a list-box `<select>` LANDS, and half of its specification was REFUTED by measuring it (2026-08-05)
