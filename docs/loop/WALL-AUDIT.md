@@ -1109,3 +1109,52 @@ parallel-build race that passes 74/74 when run alone. **The wall's cost is domin
 build is contending with it, not by what it asserts** — which is the same finding as audit #32 and is
 harness territory. The agent-side adaptation that costs nothing and was used here: land the tick, let
 the wall own the box, and do release rebuilds between ticks rather than beside them.
+
+---
+
+## Audit #34 — tick 941 (2026-08-05) — 369s, and the growth is MINE
+
+**Total 369s**, against a Tier-0 ceiling of **300s** — 23% over, and the first audit in this ledger
+to find the wall genuinely past its target rather than lean. `t940`'s self-audit had already flagged
+the same number independently.
+
+```text
+   235s  P   page gates          ████████████████ 64%
+    58s  T   crate tests         ███ 16%
+    38s  B   build               ██ 10%
+    17s  G6                      █  5%
+     5s  G1 · 4s D · 3s F · 1s F4 · the rest at 0s
+```
+
+⚠⚠ **The section that grew is `P`, and this window put six binaries into it.** `engine/page/tests/`
+is now **403 files**, each its own test binary — its own link, its own process, its own SpiderMonkey
+runtime start (~1.5s apiece by this audit's own note). Six are from ticks 930-935:
+`g_intrinsic_min_max`, `g_intrinsic_min_max_cssom`, `g_intrinsic_flex_grid`,
+`g_anonymous_table_row`, `g_table_row_height_distribution`, `g_inline_box_leading`.
+
+Every one is a real ratchet tooth, RED-proven three ways, and would be added again. **The point of
+recording it is that the cost is chosen rather than absorbed:** a loop adding ~6 gates per window to
+a section that is 64% of the wall is choosing a slower wall every window, and the ledger should say
+so in the same place it says the wall is slow.
+
+**Against the four admissible questions:**
+
+1. **REDUNDANCY** — `P` at 64% is the whole story, and `cargo-nextest` (shares the test binary,
+   parallelises harder than `cargo test`) is the named remedy, as it was in #33 for `T`. **Not acted
+   on: `scripts/verify.sh` and Cargo config are observer-owned (PART VII).**
+2. **PARALLELISM** — gates already launch concurrently under `CARGO_BUILD_JOBS`; the perf floors are
+   deliberately serial and must stay so. Nothing found accidentally serialised.
+3. **CACHING** — incrementals already live in RAM, live fetches are snapshot-cached. Nothing new
+   found recomputed.
+4. **SCOPE** — a narrower per-gate build target is real and is a `verify.sh` concern.
+
+⚠ **What was deliberately NOT done: consolidating the six new gates into fewer binaries.** It is the
+only lever on the agent's side of the line and it is barred by a standing constraint — **one
+`#[test]` per JS gate, or SIGSEGV** — because each loads a real `manuk_page::Page` with SpiderMonkey.
+Trading a known-good gate architecture for wall seconds is what this audit's own last paragraph
+forbids.
+
+**Verdict: the wall is NOT bloated with redundancy — it is 403 gates doing 403 distinct things.** It
+is slow for a good reason and a fixable one, and the fixable half is tooling that PART VII reserves
+to the observer. Handed over with a 235s line item so `cargo-nextest` can be priced against a number
+rather than a feeling.

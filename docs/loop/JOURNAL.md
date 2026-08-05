@@ -46371,6 +46371,131 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 943 — I ran the audit and filed it in the wrong ledger, and the cadence caught me (2026-08-05)
+
+TICK SHAPE: measurement — closing a process defect from two ticks ago, found by the instrument that
+exists to find it.
+
+⚠⚠ **t941 RAN THE WALL AUDIT, WROTE ITS FINDINGS INTO THE JOURNAL, EDITED `STATUS.md` — AND THE
+AUDIT WAS STILL OVERDUE.** The next tick's pre-flight said so:
+
+```text
+   ✗ WALL-TIME AUDIT OVERDUE (last: tick 919, now 941).
+```
+
+`STATUS.md` is **generated**, and `LAST_WALL_AUDIT` is not a field anybody sets — `status-update.sh`
+derives it from `docs/loop/WALL-AUDIT.md`'s own `## Audit #N — tick NNN` headers:
+
+```bash
+   WALL_AUDIT=$(grep -oP '^## Audit #[0-9]+ — tick \K[0-9]+' docs/loop/WALL-AUDIT.md | sort -n | tail -1)
+```
+
+So my `sed` on the generated file was overwritten by the next generation, exactly as designed. **The
+audit had been performed and not recorded**, which is the failure mode this project rates worst:
+work that happened, is believed to have happened, and leaves no artefact where the loop looks.
+Recorded now as **`WALL-AUDIT.md` Audit #34**, in the ledger, with the section breakdown, the four
+admissible questions answered, and the note that six of this window's ticks are what grew `P`.
+
+⚠ **AND THE STANDING RULE ALREADY SAID SO, WHICH IS WHY THIS IS A PROCESS DEFECT RATHER THAN A
+SURPRISE.** The memory note `LAST_*_AUDIT from ledger '## Audit #N' headers` has existed since t504.
+I read the number in `STATUS.md`, saw a field with the right name, and edited *the display instead of
+the source* — the same shape as t938's *"reading a tag name is not reading the instrument"*, two
+ticks apart. **Twice in one window I have taken a rendered surface for the thing it renders.**
+
+The general form, which is the part worth keeping: **`STATUS.md` is generated, so every field in it
+has a SOURCE, and the source is what a tick must write.** `LAST_AUDIT_TICK` and
+`LAST_CONSTITUTION_CHECK` happen to be carried forward from `STATUS.md` itself (so editing them
+works, which is what taught me the wrong habit); `LAST_SURFACE_AUDIT`, `LAST_WALL_AUDIT` and the
+oracle/crawl fields are derived from ledgers. **The two classes look identical in the file and are
+not.** That asymmetry is worth knowing before the next cadence item comes due.
+
+⚠ **The instrument caught it in one tick, which is the good news and should be said plainly.** The
+gap between "did the work" and "the loop can see the work" was closed by the next pre-flight, at a
+cost of one journal entry. That is what a blocking cadence check is for, and it is a point in favour
+of the checks being blocking rather than advisory.
+
+RATCHET: no engine change. `STATUS.md` regenerated from `status-update.sh` so the field is derived
+rather than asserted.
+
+PERF: none.
+
+WIKI: none [forced] — the artefact is `docs/loop/WALL-AUDIT.md` Audit #34 and a process correction.
+[no-pattern]
+
+## Tick 942 — the control said no, and the surface audit found the first expensive-to-retrofit API (2026-08-05)
+
+TICK SHAPE: measurement — testing t939's own unproven prediction, and the cadence surface audit
+(due every 10 ticks; last at 932).
+
+⚠⚠⚠ **I PREDICTED t939 WOULD MOVE `possssno.sbs`, THE SOLO RUN AGREED, AND THE OLD-BINARY CONTROL
+SAID NO.** t939 shipped the wrapper-baseline fix and recorded, deliberately, that *"that this moves
+the nine sites is a PREDICTION, not a result."* This is that test.
+
+```text
+   possssno.sbs                shape    overlap  reading_order
+     t936 batch row (--jobs 2)  0.957      6          9         ← blocked from M1 by jarring
+     NEW binary, solo           0.991      0          0         ← clean: it CROSSES
+     OLD binary (pre-t935), solo, SAME HOUR
+                                0.991      0          0         ← IDENTICAL
+```
+
+**The site was already clean before either fix.** Its batch row was an artefact, and the "crossing"
+is `--jobs 2` contention exactly as t936 diagnosed for the scorability drop — the same false-win
+shape as t930's news.ycombinator +8 points, now caught on the *jarring* axis instead of the *shape*
+axis. Had I published the solo run alone, I would have claimed an M1 crossing that does not exist and
+attributed it to a fix that did not cause it.
+
+⚠⚠ **THAT IS THE THIRD TIME THIS WINDOW A CONTROL CHANGED THE VERDICT, AND THE PATTERN IS NOW THE
+FINDING.** t930 (news.ycombinator's +8 points), t936 (the whole scorability regression), t942 (this).
+**A per-site reading from a batch sweep is not evidence about a site.** The batch row and the solo
+run disagree so reliably that the sweep should be read as a corpus-level instrument only — the
+per-site numbers in `SWEEP-t<N>-rows.tsv` are fine for RANKING (they told me where to look, and that
+worked) and are not fine for ATTRIBUTION.
+
+**So t939's effect remains unmeasured, and the other two sites I checked were unmoved**
+(`www.otomoto.pl` still `ord 11 · ovl 3`; `sestra.cc` still `ord 6 · h_ov 8`). The honest status of
+t935/t939 is: Chrome-exact on their fixtures, RED-proven three ways each, and **zero attributable
+corpus movement so far**. Per t909's tag rule this corpus may simply be unable to price them.
+
+**SURFACE AUDIT #35** — deliberately taken on a *different axis* from #34, because a map checked
+against the same list twice is checked once. #34 took Interop/Baseline; this one took the
+**Chrome-only frontier**. Three capabilities the world names and the map did not, each confirmed
+absent by grep over `engine/` so `missing` is a verdict rather than a guess:
+
+```text
+   Soft Navigations API          js    SPA route changes are invisible to LCP/INP/CLS
+   HTML-in-Canvas                js    real DOM elements composited into a canvas
+   Declarative Partial Updates   html  out-of-order HTML streaming, no JS DOM manipulation
+```
+
+Map now **470 rows · 283 gated · 115 missing · 44 partial · 17 unknown · 10 works.**
+
+⚠⚠ **THE ONE THAT MATTERS IS NOT THE ONE WITH THE BIGGEST NAME.** **HTML-in-Canvas is the first named
+2026 API whose SHAPE would be expensive to retrofit here** — it couples the **layout tree** to the
+**canvas compositor** (searchable, accessible, translatable DOM inside a WebGL/WebGPU scene), and
+`manuk-compositor` is 526 LOC of aspirational Vello comments over a tiny-skia **CPU** raster with no
+seam of that shape anywhere. Recorded as **WATCH, do not build**: it is Chrome-only, adoption
+unknown, and building for it now would violate I4 as squarely as chasing the encoding tail did. But
+if it spreads, the cost is *architectural* rather than incremental — and catching that class early is
+the only thing this instrument exists for. The other two are cheap: Soft Navigations is a
+*measurement* surface (nothing on a page breaks — the page works and the site's own RUM reports
+nothing), and Declarative Partial Updates is parser-side, adjacent to streaming machinery we have.
+
+RE-RANK: none, and with a **stronger reason than "they rank low"** — t937/t938 measured that ~2-3 of
+29 unscored in-scope sites are engine-attributable at all. **The M1 ceiling is not a capability
+backlog, so adding capabilities cannot move it.** That is an argument about the metric, not the map,
+and it is the thing most worth carrying out of this window.
+
+RATCHET: the old-binary control required checking out `f76edd46`'s `engine/layout/src/lib.rs`,
+rebuilding, measuring, and restoring. The restore is verified byte-identical (`diff -q` against the
+pre-control copy) and `manuk-layout` is **125/125** on the restored tree — recorded because a control
+that leaves the tree subtly different is worse than no control.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefacts are `docs/loop/SURFACE-AUDIT.md` #35, three new
+`CONSTELLATION.tsv` rows, and a refuted attribution. [no-pattern]
+
 ## Tick 941 — the wall audit, and the honest answer is that I am the reason it grew (2026-08-05)
 
 TICK SHAPE: measurement — the wall-time audit (due every 20 ticks; last at 919), run because the

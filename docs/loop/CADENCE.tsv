@@ -664,3 +664,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 937	f55d61b0	1785928891	2026-08-05T07:21:31-04:00	381	measurement	63	4	128	32	403	81	3896	6960	0	483	0	half the scorability ceiling is the REFERENCE failing, and the worklist has been sending engine ticks at it (2026-08-05)
 938	34ad7ba6	1785930817	2026-08-05T07:53:37-04:00	1926	measurement	63	9	201	45	403	81	3896	6960	0	484	0	I mis-read a tag name one tick ago, and the corrected ceiling is almost entirely NOT ours (2026-08-05)
 939	d4ecd62e	1785931516	2026-08-05T08:05:16-04:00	699	capability	63	4	177	33	403	81	3896	6960	0	484	0	the residue t935 pinned, closed one tick later, and it was ONE BRANCH (2026-08-05)
+942	f020cd04	1785933463	2026-08-05T08:37:43-04:00	1947	measurement	63	7	263	34	403	81	3896	6960	0	484	0	the control said no, and the surface audit found the first expensive-to-retrofit API (2026-08-05)

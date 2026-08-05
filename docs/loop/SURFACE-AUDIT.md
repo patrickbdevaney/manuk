@@ -3926,3 +3926,54 @@ is a **function-leg** item and goes in the M2 queue, not ahead of M1.
 
 The audit's value this cycle is therefore the negative one: **the frame is still the right frame**,
 checked against what the four vendors agreed on rather than against memory.
+
+---
+
+## Audit #35 — tick 942 (2026-08-05)
+
+**Sources, searched rather than recalled:**
+
+* [15 updates from Google I/O 2026 — Chrome for Developers](https://developer.chrome.com/blog/chrome-at-io26) · [What's new in web UI](https://developer.chrome.com/blog/new-in-web-ui-io26)
+* [2026 Browser Updates: Chrome 148, Safari 26.5 & Interop 2026](https://www.smartform.dev/blog/2026-browser-updates-chrome-148-safari-265-interop-2026) · [CSS in 2026 — LogRocket](https://blog.logrocket.com/css-in-2026/)
+
+Audit #34 (ten ticks ago) took the **Interop/Baseline** axis and found the map complete but for one
+row. This one deliberately took a **different axis — the Chrome-only frontier** — because a map
+checked against the same list twice is checked once.
+
+### ⚠⚠ THREE CAPABILITIES THE WORLD HAS NAMED AND THE MAP DID NOT
+
+Each confirmed absent by grep over `engine/` (0 files), so `missing` is a verdict rather than a
+guess. All three are Chrome-only and none is Baseline:
+
+```text
+  Soft Navigations API              js    an SPA's route changes are invisible to LCP/INP/CLS
+  HTML-in-Canvas                    js    real DOM elements composited into a canvas
+  Declarative Partial Updates       html  out-of-order HTML streaming, no JS DOM manipulation
+```
+
+Map totals: **470 rows · 283 gated · 115 missing · 44 partial · 17 unknown · 10 works.**
+
+### The one that matters, and it is not the one with the biggest name
+
+**HTML-in-Canvas is the first named 2026 API whose SHAPE would be expensive to retrofit here**, and
+that is the only kind of finding this instrument exists to produce early. It couples the **layout
+tree** to the **canvas compositor** — searchable, accessible, translatable DOM inside a WebGL/WebGPU
+scene — and `manuk-compositor` is 526 LOC of aspirational Vello comments over a **tiny-skia CPU
+raster**, with no seam of that shape anywhere. Recorded as **WATCH, do not build**: it is Chrome-only,
+its adoption is unknown, and building for it now would violate I4 as squarely as chasing the encoding
+tail did. But if it spreads, the cost is architectural rather than incremental, and the map should
+have been carrying it before that becomes obvious.
+
+The other two are cheap by comparison: Soft Navigations is a **measurement** surface (nothing on a
+page breaks without it — the page works and the site's own RUM reports nothing), and Declarative
+Partial Updates is parser-side, adjacent to streaming machinery this engine already has.
+
+### RE-RANK
+
+**None, and for the same reason as #34** — the binding Phase-0 constraint is the RENDER metric, and
+none of these three is why a corpus page lays out wrong today. ⚠ But this window produced a *stronger*
+reason than "they rank low", and it belongs here rather than only in a journal entry: **t937/t938
+measured that ~2-3 of the 29 unscored in-scope sites are engine-attributable at all** — 17 are the
+oracle's or the origin's, 7 bound a clock shared with Chrome. **The M1 ceiling is not a capability
+backlog.** Adding capabilities, from this list or any other, cannot move it. That is an argument
+about the METRIC, not about the map, and it is the thing most worth carrying out of this window.
