@@ -46371,6 +46371,66 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 952 — the DOM is right and the BOXES are absent, and t951's address was my own truncation (2026-08-05)
+
+TICK SHAPE: measurement — reading the diagnostic t951 shipped, and correcting what t951 said about it.
+
+⚠⚠⚠ **CORRECTION TO t951, ONE TICK OLD.** Its journal and commit both say the new diagnostic reports
+*"our tree has nothing below `body/div:1/div:1` — a level-3 divergence rather than a footer-local
+one"*, and calls that surprising. **It is not what the instrument said. It is what my `cut -c1-90`
+said.** I truncated the output while reading it and then reasoned about the stump. Untruncated, on
+`www.tz.de`:
+
+```text
+   5 ×   our tree has nothing below  body:1/div:1/div:1/footer:1
+   1 ×   …/div:2/div:15/div:1/div:1/div:1/div:1/div:4/div:1/div:1/div:1/div:1/div:1   (15 deep)
+   1 ×   …/div:2/div:12/div:2/div:2/div:1/div:1/div:2/div:1/div:1                     (12 deep)
+```
+
+**The dominant address is `footer:1`** — which is footer-LOCAL, exactly what t949 originally read
+from the leaf paths, and the opposite of what I "corrected" it to. It also reconciles cleanly with
+the 1,864 common elements that t951 called an open contradiction: everything outside the footer
+aligns, and the footer subtree does not. **There was never a contradiction; there was a truncated
+string.** Third time this window I have taken a rendered surface for the thing it renders (t938's tag
+name, t943's generated `STATUS.md` field, this) — and the first two are *in the journal above*, which
+is what makes this one embarrassing rather than merely wrong.
+
+⚠⚠⚠ **AND THE ACTUAL FINDING IS SHARPER THAN EITHER READING: OUR DOM IS CORRECT AND OUR BOXES ARE
+NOT.** The obvious next question — do we build the footer at all? — is one line to answer, on
+identical bytes with the count encoded as a box width so no text extraction is needed:
+
+```text
+   footer.querySelectorAll('*').length      Chrome 173   ·   ours 173
+```
+
+**Byte-identical.** We construct every one of the footer's 173 descendants. So the sweep's *"nothing
+below `footer:1`"* is **not** a DOM-construction failure, not a parse failure, and not the
+same-tag-sibling re-numbering t949 hypothesised. The elements exist and **produce no recorded box**.
+
+That is a genuinely different class of defect from anything this window has chased, and it is
+engine-side or probe-side rather than instrument-keying:
+
+* the footer subtree may be laid out with zero-size or `display:none` boxes where Chrome's have size;
+* or it may fall outside whatever the box probe records (a budget, a viewport cutoff, a paint
+  elision) — `www.tz.de` is a **13,000px** page and the footer sits at `y ≈ 12,700`.
+
+**The second is a live hypothesis and cheap to falsify**, and it would be an instrument bound rather
+than an engine bug — which is exactly the distinction this window has been unable to make three
+separate times. Neither is established here; both have an address.
+
+**WHAT THE NEXT TICK SHOULD DO:** render `tz.de` and ask our own engine for the box of one named
+footer descendant. If it has a box, the probe is dropping it and this is instrument work. If it does
+not, it is layout, and the address is `footer:1` at `y≈12700` on a 13,000px page. **One query
+separates them, and the whole window has been trying to reach a question this small.**
+
+RATCHET: no engine change. `manuk-layout` and the page suite green from t945; `manuk-wpt` 98/98 from
+t951.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefact is a correction and a narrowed hypothesis with an address.
+[no-pattern]
+
 ## Tick 951 — the instrument now names ONE address instead of 66 leaves, and the first draft of it lied (2026-08-05)
 
 TICK SHAPE: capability (instrument) — t950's steer: the `unaligned key` cause, the #1 divergence on a
