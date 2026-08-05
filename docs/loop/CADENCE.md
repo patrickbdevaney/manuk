@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **680** | ticks 1–957 |
-| median tick cycle | **26m** | 679 intervals |
+| ticks landed | **681** | ticks 1–958 |
+| median tick cycle | **26m** | 680 intervals |
 | median, last 10 | **5m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 605.3h elapsed |
-| median verify wall | **63s** | 619 ticks |
+| **ticks per hour** | **1.12** | 605.4h elapsed |
+| median verify wall | **63s** | 620 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **484**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**330 of 680 ticks** (49%) moved a
+**330 of 681 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -777,5 +777,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **955** | 2026-08-05 10:14 | 4m | measurement | 63s | +95/−32 | 403 | 81 | 56.0% · | the layout was never the problem: we do not apply the rule (2026-08-05) |
 | **956** | 2026-08-05 10:19 | 5m | measurement | 63s | +112/−32 | 403 | 81 | 56.0% · | it is not a truncation: the whole stylesheet is unapplied (2026-08-05) |
 | **957** | 2026-08-05 10:23 | 4m | measurement | 63s | +104/−32 | 403 | 81 | 56.0% · | RETRACTION: t953, t955 and t956 measured an unstyled page, and the tool's own help text sa |
+| **958** | 2026-08-05 10:27 | 4m | measurement | 63s | +97/−32 | 403 | 81 | 56.0% · | a list-box `<select>` is 17px tall where Chrome gives 66, and the model is simply absent ( |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

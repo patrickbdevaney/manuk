@@ -46371,6 +46371,66 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 959 — a TAB has no width at all, which is larger than the property that named it (2026-08-05)
+
+TICK SHAPE: measurement — surface audit #36's second lead. The audit filed `tab-size` as a missing
+CSS property; the measurement says the property is the smaller half.
+
+```text
+   monospace 16px, shrink-to-fit <pre>          Chrome     ours
+   "ab\tcd"                    (tab-size 8)      96.3       31
+   "ab\tcd"   tab-size:4                         57.8       31
+   "ab\tcd"   tab-size:0                         38.5       31
+   "a\tb\tc\td"                (tab-size 8)     240.8       31
+   "ab cd"    (an ordinary SPACE)   CONTROL      48.2       39
+```
+
+⚠⚠⚠ **A TAB CONTRIBUTES ZERO ADVANCE.** Our four tab rows are all **31** — which is exactly four
+characters at our monospace advance (the control gives 39 for five characters, so 7.8/char, and
+4 × 7.8 = 31). **`ab\tcd` renders as `abcd`.** `tab-size` having no effect is a *consequence*; the
+tab itself is not being advanced at all.
+
+**The magnitude is not subtle.** `a\tb\tc\td` is **240.8 in Chrome and 31 here — eight times too
+narrow.** Every tab-indented `<pre>` on the web renders with its indentation structure entirely
+gone: documentation code samples, config-file listings, diff views, anything pasted from an editor
+that indents with tabs. And because the run is narrower, **its wrap points move**, so this is a `dy`
+term on exactly the text-dense technical pages the corpus contains.
+
+**THE SPECIFICATION, Chrome-measured, and it is one rule:**
+
+```text
+   a TAB advances the pen to the next multiple of  (tab-size × the SPACE advance)
+     tab-size defaults to 8
+     tab-size: 0  →  the tab advances nothing        (p4 = 4 chars, verified)
+
+   the "next multiple" is what the tab-size:2 row proves: "ab" already sits at
+   column 2, so the tab goes to column 4 — not to column 2 + 2 — giving 6 chars
+   (57.8), which is the same number tab-size:4 gives for a different reason.
+```
+
+⚠ **That last equality is the discriminator and it is worth keeping**: `tab-size:4` and `tab-size:2`
+both measure 57.8 on `ab\tcd`, for two different reasons, and a fix that implements *"add tab-size
+spaces"* rather than *"advance to the next stop"* produces 8 chars for `tab-size:4` and 6 for
+`tab-size:2` — passing one row and failing the other. **Any gate for this must carry both.**
+
+⚠⚠ **A SECOND DEFECT FOUND WHILE BUILDING THE PROBE, named with its number.**
+`Range.getBoundingClientRect()` returns **1200** — the full viewport width — for every range, in a
+document where the ranges span a few dozen pixels. My first probe used it to measure text extent and
+had to be rewritten around a shrink-to-fit box. That is the API every editor, every text-selection
+UI and every "highlight this phrase" widget calls, and it currently answers the viewport. **Not
+investigated further here; recorded so it is not re-discovered.**
+
+⚠ **WHY THIS IS A MEASUREMENT TICK.** The fix is in the text-measurement path, which every page on
+the web goes through — the blast radius is the whole corpus, and this session is deep enough that
+opening it is the wrong trade. The specification above is complete, Chrome-verified, and carries its
+own discriminator; t934→t935 and t958 have established the pattern in this window.
+
+RATCHET: no engine change. `manuk-layout` 125/125 and the page suite green from t945.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the mechanism belongs in the wiki when it lands. [no-pattern]
+
 ## Tick 958 — a list-box `<select>` is 17px tall where Chrome gives 66, and the model is simply absent (2026-08-05)
 
 TICK SHAPE: measurement — the lead surface audit #36 ranked and the t957 retraction preserved:
