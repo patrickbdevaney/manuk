@@ -869,3 +869,53 @@ comparison to `false`.
 computed during a crawl and the JSONL ledger bakes each divergence's kind in, so the banked t909 rows
 cannot be re-split retroactively. Until that sweep runs, a `<div>` tick should be taken from the
 `geometry/mis-sized` rows, which compare boxes that DID align and are therefore unaffected.
+
+## A gate that builds its own inputs proves the function, not the wiring (t919)
+
+t912 split the ranker's #1 cause — `missing box: <div>`, 37 sites and 2,398 hits — into `missing`
+(our map is smaller) and `unaligned` (it is not), on the strength of t911's measurement that **22 of
+58 sites render as many or more box-bearing paths than Chrome**. It was unit-gated in both
+directions and RED-proven by pinning the comparison to `false`.
+
+**On the next sweep, `unaligned` fired zero times in 200 sites.** The `missing box` total did not
+move: 2,398 hits then, 2,389 now.
+
+It should have fired on **26** sites, by the sweep's own printed numbers.
+`compare_structure_detail` reports `probed = chrome.len()` and `mboxes.len() = manuk.len()` — the
+same two quantities `diff_page` compares — and 26 sites print `ours >= oracle` with a non-zero
+missing count (`naukri.com` 437 against 57; `chat.google.com` 2005 against 2004).
+
+> **The gate constructs its own maps and passes; the sweep runs the same function on real ones and
+> the branch is never taken.** A gate that builds its own inputs proves the function, not the wiring.
+
+Third occurrence of the shape in one run: t782's correction reached the reason string and not the
+ranker; t913 located the `vertical-align` defect in the consumer branch when the producer was
+hard-coded; and now this. **Instrument the call site, do not infer it from a neighbouring line.**
+
+## Nine Chrome-captured claims are not a proof about the web (t919)
+
+The same sweep caught a regression in the window it was measuring. `secure5.entertimeonline.com` fell
+**0.872 → 0.692** on 39 elements, and the pre-committed control resolved it in one pass:
+
+```text
+  three solo runs, CURRENT binary        0.692308  0.692308  0.692308   byte-identical
+  two solo runs,   t913 tree (OLD)       0.871795  0.871795
+  bisect: t914 / t915 / t916 trees       0.871795 each
+          t918 tree (HEAD)               0.692308   <- the regression
+  with t918's layout hunk reverted       0.871795
+```
+
+t918's form-control baseline synthesis is **Chrome-exact on nine isolated fixtures, four of them
+guards**, and costs 0.18 shape on a real page. The ratchet does not weigh those against each other —
+*a tick that buys one face by degrading another is a trade, and trades are refused* — so the engine
+hunk and its gate were both removed.
+
+> **A fixture that refutes your hypothesis is the cheapest outcome; being refuted by the CORPUS is
+> the second-cheapest and the one no fixture can substitute for.** Same shape as t853, where
+> `hit_test`'s smallest-wins rule cost sixteen clickable links and was found by G6 on a real page.
+
+The next attempt has a sharper question than the first: not *what is a control's baseline* — the nine
+fixtures answer that — but *which real-page control does the formula get wrong, and why*. The named
+candidate is already on the board (an input with an explicit `height:40px` reads 47 against Chrome's
+46, because Chrome centres the internal editor in a taller control), and
+`secure5.entertimeonline.com` is now the reproducer.

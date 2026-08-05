@@ -743,6 +743,8 @@
   - L831 · The instrument already made this correction — for the reason string only
   - L838 · The tell, on the top near-bar site
   - L845 · What this does NOT say
+  - L873 · A gate that builds its own inputs proves the function, not the wiring (t919)
+  - L895 · Nine Chrome-captured claims are not a proof about the web (t919)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1590,4 +1592,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1497 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1499 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

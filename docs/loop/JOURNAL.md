@@ -46371,6 +46371,125 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 919 — the corrected ranking, and the sweep that produces it (2026-08-04)
+
+TICK SHAPE: measurement — check #80's steer #1. Five engine fixes have landed since the t909 sweep,
+which is the cadence; but the binding reason is t912: **the loop has been choosing work off a ranking
+it has already proved is a mixture of two populations, for seven ticks**, because the corrected one
+does not exist until a crawl produces it. The JSONL ledger bakes each divergence's kind in, so t909's
+rows cannot be re-split retroactively.
+
+PRE-REGISTERED BEFORE THE RUN, per VI.3's clause:
+
+* **M1: FLAT. I expect 0, and ±1 from a site's network.** Every fix in this window is
+  high-usage/low-magnitude — a 2px control baseline, a 3-6px `vertical-align` line growth, a
+  `border-spacing` default — which is the exact profile checks #78 and #79 both measured as
+  unpriceable by this instrument. Saying so in advance because the alternative is discovering it
+  afterwards and reading it as disappointment.
+* **scorability: FLAT.** Nothing in the window can make an unrenderable page render.
+* **common-set band: positive but under the noise floor.** t904's honest residual was +0.16 pts and
+  t909's −0.07; anything inside ±0.2 is flat and I will say so.
+* **THE DELIVERABLE IS THE `unaligned` ROW, NOT ANY OF THE ABOVE.** t911 measured that 22 of the 58
+  sites carrying a missing-`<div>` count render as many or more box-bearing paths than Chrome. If
+  t912's split is right, roughly that fraction of the #1 cause should now appear under
+  `unaligned key (we drew as many)` and the `missing box` row should FALL by about that much. **A
+  `missing box` row that does not move is t912 not working**, and that is the falsifiable claim this
+  sweep exists to settle.
+
+⚠ **THE CONTROL IS PRE-COMMITTED, BEFORE THE NUMBER IS SEEN** (t904 and t909 both had to reach for
+this afterwards): any common-set band above ±0.3 pts gets the old binary on its top movers in the
+same hour, and any M1 crossing in either direction gets three solo runs of that site before it is
+believed.
+
+### THE RUN — 200 sites, release binary, `--jobs 2`, 78 minutes, `SWEEP-t919-rows.tsv`
+
+```text
+                       t904      t909      t919
+  M1 (the gate)       17.8%     18.5%     17.6%
+  scorability        110/129   108/130   107/131
+  shape_mean           57.2%     57.0%     58.1%
+  common-set band        —      −0.26     +0.05
+```
+
+**EVERY METRIC PRE-REGISTRATION HELD.** M1 −1 (predicted 0, ±1 from a site's network), scorability −1
+(predicted flat), and the common-set band **+0.05 pts over 104 sites, 21 up · 66 flat · 17 down** —
+predicted *"positive but under the noise floor"*, and ±0.05 is as flat as this instrument reads.
+
+⚠⚠⚠ **AND THE ONE THING THE SWEEP EXISTED TO SETTLE CAME BACK NEGATIVE. `unaligned` FIRED ZERO
+TIMES.** The falsifiable claim was written before the run — *"a `missing box` row that does not move
+is t912 not working"* — and the row did not move: 2,398 hits at t909 against **2,389** now, split
+across two cluster rows instead of one. The string `unaligned` does not appear once in 200 sites of
+output.
+
+**It should have fired on 26 of them**, by the sweep's own printed numbers: `compare_structure_detail`
+reports `probed = chrome.len()` and `mboxes.len() = manuk.len()` — **the same two quantities
+`diff_page` compares** — and 26 sites print `ours >= oracle` with a non-zero missing count
+(`naukri.com` 437 against 57, `chat.google.com` 2005 against 2004, `tukrd.com` 2682 against 2680).
+
+> **t912 is unit-gated, RED-proven, and INERT in the artefact it was built to change.** The gate
+> constructs its own maps and passes; the sweep runs the same function on real ones and the branch
+> never taken. A gate that builds its own inputs proves the function, not the wiring — and this is
+> the third time this run that a correction reached one path and stopped (t782's reason-string, t913's
+> consumer branch, and now this).
+
+The cause is not diagnosed here and is deliberately not guessed at: the two populations are printed
+by one function and compared by another, and the next tick's job is to instrument the actual
+`manuk.len()`/`chrome.len()` at the `diff_page` call site rather than infer it from a neighbouring
+line. **Naming it as unexplained is the honest state.**
+
+⚠⚠⚠ **AND THE SWEEP CAUGHT A REGRESSION IN MY OWN WINDOW — t918 — WHICH IS REVERTED IN THIS COMMIT.**
+`secure5.entertimeonline.com` fell **0.872 → 0.692** on 39 elements. The pre-committed control ran:
+
+```text
+  three solo runs, CURRENT binary        0.692308  0.692308  0.692308   byte-identical
+  two solo runs,   t913 tree (OLD)       0.871795  0.871795
+  bisect: t914 tree                      0.871795
+          t915 tree                      0.871795
+          t916 tree                      0.871795
+          t918 tree (HEAD)               0.692308   <- the regression
+  with t918's layout hunk reverted       0.871795
+```
+
+**t918's form-control baseline synthesis is Chrome-exact on nine isolated fixtures — four of them
+guards — and costs 0.18 shape on a real page.** The ratchet does not weigh those against each other:
+*a tick that buys one face by degrading another is a trade, and trades are refused.* The engine hunk
+and `G_FORM_CONTROL_BASELINE` are both removed; `<div><input></div>` goes back to 26 against Chrome's
+24, which is where t917 left it.
+
+> **A fixture that refutes your hypothesis is the cheapest outcome — and this one was refuted by the
+> CORPUS, which is the second-cheapest and the one no fixture can substitute for.** Same shape as
+> t853, where `hit_test`'s smallest-wins rule cost sixteen clickable links and was found by G6 on a
+> real page and never by a fixture. Nine Chrome-captured claims are not a proof about the web.
+
+**What the next attempt needs, and it is now a sharper question than t917's:** not *"what is the
+control's baseline"* — the nine fixtures answer that — but *"which real-page control does the formula
+get wrong, and why"*. The named candidate is already on the board: an input with an explicit
+`height:40px` reads 47 against Chrome's 46, because Chrome centres the internal editor in a taller
+control and we place the baseline at border+padding+ascent regardless. **`secure5.entertimeonline.com`
+is now the reproducer**, and it is a better one than any fixture I would have written.
+
+⚠⚠⚠ **THE RATCHET REFUSED THIS TICK ON ITS FIRST RUN, AND IT WAS RIGHT TO.** Removing
+`G_FORM_CONTROL_BASELINE` took the GATES count **398 → 397**, and *"an engine cannot become less
+capable or less measured"* is exactly the rule that should fire when a gate disappears. The mark is
+lowered **deliberately**, which is the escape hatch the ratchet itself names — and the reason is
+stated here rather than in a commit message, because a lowered mark with no argument is how a ratchet
+stops being one:
+
+> **The gate asserted a behaviour this tick reverted for a measured regression.** Keeping it would
+> make the wall permanently red; keeping the mark at 398 would make every future tick pay for a
+> capability that no longer exists. The capability count is 397 because the engine really does do one
+> fewer thing than it did an hour ago, and that is the honest number.
+
+This is **not** the forbidden move — retuning a mark to land your own tick (`honest-answer-is-not-a-
+fixed-answer`). The mark is being lowered to match a capability that was *removed on purpose, under
+the ratchet's own instruction*, and the tick it lets through is the one that removes it. If the
+form-control baseline lands again with the real-page case fixed, the mark goes back up on its own.
+
+PERF: none — measurement, plus a revert.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "A gate that builds its own inputs proves the function, not
+the wiring" [no-pattern]
+
 ## Tick 918 — a control's value is not a child text node, so it had no baseline (2026-08-04)
 
 TICK SHAPE: capability — t917 measured a two-part job and refused to land half of it. This lands the

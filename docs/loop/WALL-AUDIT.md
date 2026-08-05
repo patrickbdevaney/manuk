@@ -1070,3 +1070,42 @@ observer-owned.** Recorded here for the observer, with no change proposed and no
 adaptation that costs nothing: batch release rebuilds away from a tick landing so the two do not
 contend.
 
+
+---
+
+## Audit #33 — tick 919 (2026-08-04)
+
+**Total 70s**, against a banked mark of 189s and a Tier-0 ceiling of 300s. The wall is **lean**, and
+the audit's own text says an audit that finds it lean is a fine result — so this one says so rather
+than manufacturing a trim.
+
+```text
+    28s  T   (crate tests)   ████████████ 40%
+    11s  G6                  ████ 16%
+     6s  D                   ██  9%
+     5s  P                   █   7%
+     5s  G1                  █   7%
+     3s  F   (perf floors)   █   4%
+     1s  F4 · 1s B · the twenty-odd named gates at 0s each
+```
+
+**Against the four admissible questions:**
+
+1. **REDUNDANCY** — `T` is 40% and is the only candidate worth naming: seven crate suites, each
+   standing up its own binary. `cargo-nextest` shares the test binary and parallelises harder, and
+   the self-audit has named it before. **Not acted on: `scripts/verify.sh` is observer-owned (PART
+   VII).** Recorded for the observer with no change proposed.
+2. **PARALLELISM** — the gates run concurrently under `CARGO_BUILD_JOBS`; the perf floors are
+   deliberately serial (a benchmark sharing the machine is not a benchmark). Nothing has become
+   accidentally serial: `F` is 3s, which is what it costs when it has the box to itself.
+3. **CACHING** — incrementals are in RAM, live fetches are snapshot-cached. Nothing found.
+4. **SCOPE** — no gate builds more than it asserts on; the twenty-odd named gates cost 0s each
+   because they share the already-built `manuk-page` test binary.
+
+⚠ **THE ONE HONEST OBSERVATION THIS AUDIT ADDS.** Every wall this window measured **63-70s warm** and
+**930-1050s when a release rebuild was in flight**, a 15× spread that has nothing to do with the
+gates. Four ticks in this window paid it, and one (`t918`) took a `manuk-shell` **false RED** from the
+parallel-build race that passes 74/74 when run alone. **The wall's cost is dominated by whether a
+build is contending with it, not by what it asserts** — which is the same finding as audit #32 and is
+harness territory. The agent-side adaptation that costs nothing and was used here: land the tick, let
+the wall own the box, and do release rebuilds between ticks rather than beside them.
