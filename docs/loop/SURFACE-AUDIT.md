@@ -4034,3 +4034,115 @@ work, because it is a single named control with a one-fixture probe rather than 
 against determines what you can find. Interop and Baseline are lists of what the *platform* is
 adding, and this engine's gap is not there. **An independent engine's release notes are a list of
 what a browser needs to exist**, and that is the axis that found a `dy` bug.
+
+## Audit #37 — tick 966 (2026-08-05) — the axis is the CORPUS, and it re-ranks everything
+
+**Sources, searched rather than recalled:**
+
+* [Interop 2026 focus areas](https://github.com/web-platform-tests/interop/blob/main/2026/README.md) (fetched, full list) · [Announcing Interop 2026 — WebKit](https://webkit.org/blog/17818/announcing-interop-2026/) · [Interop 2026 — web.dev](https://web.dev/blog/interop-2026)
+* [This Month in Ladybird — July 2026](https://ladybird.org/newsletter/2026-07-31/) (fetched, full feature list) · [May 2026](https://ladybird.org/newsletter/2026-05-31/)
+
+**A fourth axis, and it is not a source — it is a POPULATION.** #34 took Interop/Baseline, #35 the
+Chrome-only frontier, #36 an independent engine's release notes. Each asked *"what does the world say
+matters?"* This one asks the question those three cannot: **"and how much of it is on the pages that
+compute our score?"** t965 built the instrument that answers it (`docs/loop/CORPUS-CONSTRUCTS.md` —
+`curl` all 200 CrUX-trend URLs, grep the markup, three minutes, no build).
+
+### RECONCILIATION — two genuine absences, and both are cheap to state
+
+Checked all 20 Interop 2026 focus areas plus 14 named Ladybird July additions against
+`CONSTELLATION.tsv` by grep, then against `engine/` by grep. Present and mapped: container queries,
+anchor positioning, `attr()`, `contrast-color()`, CSS zoom, custom highlights, popover, IndexedDB,
+JSPI, media pseudo-classes, Navigation API, scoped registries, scroll-driven animations, scroll snap,
+`shape()`, view transitions, WebRTC, WebTransport, `contenteditable`, `system-ui`, JPEG XL, WebVTT.
+**Zero occurrences in the map AND zero in the engine:**
+
+```text
+   CSS RELATIVE COLORS   rgb(from …) / oklch(from … l c h)    css    missing   0 files
+   execCommand undo / redo                                    app    missing   0 files
+```
+
+Relative colors are CSS Color 5 and are how a design system derives a hover/disabled shade from one
+token (`oklch(from var(--brand) calc(l - .1) c h)`); absent, the declaration fails to parse and the
+element falls back to an inherited colour — a **visible** divergence, not a silent one. `undo`/`redo`
+are the residue of an editing subsystem that already has eleven gates. Both added as `unknown` rows.
+
+### ⚠⚠⚠ THE RE-RANK, and it is the largest this instrument has produced
+
+**Interop 2026 — the list of what four vendors agreed matters most — is almost entirely ABSENT from
+the corpus that scores us.** Priced on the same 171 pages:
+
+```text
+    3/171  1.8%  container-type / @container        0/171  0.0%  anchor-name / position-anchor
+    3/171  1.8%  popover attribute                  0/171  0.0%  view-transition-name
+    2/171  1.2%  scroll-timeline / animation-…      0/171  0.0%  IndexedDB (inline)
+    2/171  1.2%  scroll-snap-type                   0/171  0.0%  @function
+    1/171  0.6%  RELATIVE COLOR rgb(from …)         6/171  3.5%  zoom:
+    1/171  0.6%  oklch()/lab()/lch() at all         7/171  4.1%  <dialog>
+```
+
+against, from the same run:
+
+```text
+   95/171  55.6%  <button>            69/171  40.4%  <input placeholder>
+   88/171  51.5%  <input>             40/171  23.4%  <button> with an SVG child
+   84/171  49.1%  @media              19/171  11.1%  appearance:none on a control
+```
+
+**This is not a criticism of Interop** — it ranks the *frontier for developers*, which is the right
+job for it and the wrong input for a burndown. It is a statement that **the axis this audit has used
+three times running and the metric the loop is scored on measure different populations**, and that
+every "no re-rank found" verdict in #34 and #35 was partly an artefact of asking a list about a
+corpus it was never about.
+
+### ⚠⚠ AND THE PROBE SAYS THE TOP-RANKED CONSTRUCTS ARE ALREADY FINE — a NEGATIVE result, run before
+### the ranking was believed
+
+Frequency says where to look; it does not say there is anything there. A differential probe on
+`<button>` and `<input>` — the corpus's #1 and #2 — against headless Chrome:
+
+```text
+                                        Chrome      ours      Δw     Δh
+   <button>Search</button>             66.7 x 24   65 x 22   -1.7    -2
+   <button><svg/></button>             32.0 x 24   30 x 23   -2.0    -1
+   <button><svg/> Search</button>      87.1 x 24   85 x 23   -2.1    -1
+   …the same, padding:8px 16px        107.1 x 38  105 x 37   -2.1    -1
+   <input placeholder="…">            238.0 x 24  245 x 22   +7.0    -2
+   <input value="…">                  238.0 x 24  245 x 22   +7.0    -2
+   <input size=10 placeholder="…">    145.0 x 24  149 x 22   +4.0    -2
+   <button appearance:none>            86.7 x 38   85 x 36   -1.7    -2
+```
+
+**The defect class t963 found on `<select>` — an intrinsic size model that is ABSENT rather than
+wrong — does not generalise to `<button>` or `<input>`.** Both are within ~2px. Had the frequency
+table alone been believed, the next several ticks would have gone grinding the corpus's two commonest
+controls for a 2px return.
+
+### THE ONE MEASURED LEAD, with its numbers
+
+⚠⚠ **A BLOCK CONTAINING A LONE FORM CONTROL IS UP TO 10px TALLER HERE THAN IN CHROME, AND IN CHROME
+IT IS EXACTLY THE CONTROL'S HEIGHT.** Reading the wrapper `<div>`s rather than the controls:
+
+```text
+   the <div> around …            control h      Chrome div     ours div
+     <button>Search</button>         22/24          24            32     +10
+     <button><svg/></button>         23/24          24            32      +9
+     <button><svg/> Search</button>  23/24          24            25      +2
+   ─────────────────────────────────────────────────────────────────────────
+     y of #end, after nine controls                244           249
+```
+
+Chrome's wrapper is **exactly** the control's border box every time; ours adds a content-dependent
+0–10px below it. That is the inline-block baseline/strut interaction t934/t935 worked in, arriving
+through the corpus's most common construct — **and it is a `dy` term on 51–56% of the corpus**, which
+is an order of magnitude more pages than the `<select>` work this session landed. Not built here; the
+probe, the numbers and the fixture (`/tmp/fc.html`) are the specification, exactly as #36 → t958 →
+t963 ran.
+
+### THE METHODOLOGICAL POINT, since this audit changed its own method
+
+> **Frequency ranks where to LOOK. A differential probe says whether anything is THERE. Neither is
+> the other, and this audit produced its best finding and its most useful negative result from the
+> two used together** — the negative on `<button>`/`<input>` cost one probe and saved a window.
+
+Map now **476 rows** (+2: relative colors, execCommand undo/redo), both `unknown`.

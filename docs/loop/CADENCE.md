@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **685** | ticks 1–963 |
-| median tick cycle | **26m** | 684 intervals |
+| ticks landed | **686** | ticks 1–964 |
+| median tick cycle | **26m** | 685 intervals |
 | median, last 10 | **4m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 607.6h elapsed |
-| median verify wall | **63s** | 624 ticks |
+| **ticks per hour** | **1.12** | 609.3h elapsed |
+| median verify wall | **63s** | 625 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **487**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**331 of 685 ticks** (48%) moved a
+**332 of 686 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **331** capability ticks, median cycle **26m**
+* **332** capability ticks, median cycle **26m**
 * median diff per tick: **+259 / −34** lines across 8 files
 
 ## Every tick
@@ -782,5 +782,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **960** | 2026-08-05 10:33 | 3m | measurement | 63s | +78/−32 | 403 | 81 | 56.0% · | why the tab fix is not one line, recorded before the next attempt starts in the wrong plac |
 | **961** | 2026-08-05 11:09 | 36m | measurement | 63s | +652/−53 | 404 | 81 | 56.0% · | the second reason the tab fix is not one line, and the boundary that stopped me (2026-08-0 |
 | **963** | 2026-08-05 12:37 | 89m | pattern-class | 63s | +402/−62 | 406 | 81 | 56.0% · | a list-box `<select>` LANDS, and half of its specification was REFUTED by measuring it (20 |
+| **964** | 2026-08-05 14:23 | 1.8h | pattern-class | 63s | +621/−33 | 406 | 81 | 56.0% · | a `<select>` is as wide as its WIDEST option, and that was never a multi-select bug (2026- |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

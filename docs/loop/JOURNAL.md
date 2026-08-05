@@ -46371,6 +46371,170 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 966 — the surface audit, and its axis was the CORPUS rather than a source (2026-08-05)
+
+TICK SHAPE: measurement — the cadence surface audit (due every 10 ticks, last at 954), banked as
+audit #37 in `docs/loop/SURFACE-AUDIT.md`. Lands in the same commit as t965's sweep, which it
+blocked.
+
+**A FOURTH AXIS, AND IT IS NOT A SOURCE — IT IS A POPULATION.** #34 took Interop/Baseline, #35 the
+Chrome-only frontier, #36 an independent engine's release notes; each asked *"what does the world say
+matters?"* and #34/#35 both returned "no re-rank". This one asks what those three cannot: **"and how
+much of it is on the pages that compute our score?"** — using the instrument t965 built an hour
+earlier.
+
+⚠⚠⚠ **FINDING 1 — INTEROP 2026 IS ALMOST ENTIRELY ABSENT FROM THE CORPUS THAT SCORES US.** All 20
+focus areas fetched and priced on the same 171 pages: anchor positioning **0%**, view transitions
+**0%**, inline IndexedDB **0%**, `@container` 1.8%, popover 1.8%, scroll-driven 1.2%, scroll-snap
+1.2%, `<dialog>` 4.1%, CSS zoom 3.5%. Against `<button>` **55.6%**, `<input>` **51.5%**,
+`<input placeholder>` **40.4%**. **This is not a criticism of Interop** — it ranks the frontier for
+developers, which is the right job for it and the wrong input for a burndown. It does mean the "no
+re-rank found" verdicts in #34 and #35 were partly an artefact of asking a list about a corpus it was
+never about.
+
+⚠⚠⚠ **FINDING 2 — AND THE PROBE SAYS THE TOP-RANKED CONSTRUCTS ARE ALREADY FINE.** Before believing
+the frequency table, a differential probe on the corpus's #1 and #2:
+
+```text
+                                        Chrome      ours      Δw     Δh
+   <button>Search</button>             66.7 x 24   65 x 22   -1.7    -2
+   <button><svg/> Search</button>      87.1 x 24   85 x 23   -2.1    -1
+   <input placeholder="…">            238.0 x 24  245 x 22   +7.0    -2
+   <input size=10 placeholder="…">    145.0 x 24  149 x 22   +4.0    -2
+   <button appearance:none>            86.7 x 38   85 x 36   -1.7    -2
+```
+
+**t963's defect class — an intrinsic size model that is ABSENT rather than wrong — does NOT
+generalise to `<button>` or `<input>`.** Both are within ~2px. Had the frequency table alone been
+believed, the next several ticks would have gone grinding the corpus's two commonest controls for a
+2px return. **A negative result that cost one probe and saved a window.**
+
+⚠⚠ **FINDING 3 — THE ONE REAL LEAD, and it is in the WRAPPER, not the control.** Reading the
+`<div>`s instead of the controls:
+
+```text
+   the <div> around …            control h      Chrome div     ours div
+     <button>Search</button>         22/24          24            32     +10
+     <button><svg/></button>         23/24          24            32      +9
+     <button><svg/> Search</button>  23/24          24            25      +2
+   ────────────────────────────────────────────────────────────────────────
+     y of #end, after nine controls                244           249
+```
+
+**Chrome's wrapper is EXACTLY the control's border box every time; ours adds a content-dependent
+0–10px below it.** That is the inline-block baseline/strut interaction t934/t935 worked in, arriving
+through the corpus's most common construct — a `dy` term on **51–56% of the corpus**, an order of
+magnitude more pages than the `<select>` work this session landed. Specified, not built: the probe,
+the numbers and the fixture are the specification, the same shape as #36 → t958 → t963.
+
+RECONCILIATION: 20 Interop focus areas and 14 named Ladybird July additions checked against
+`CONSTELLATION.tsv` by grep and then against `engine/` by grep. Two genuine absences, both zero in
+the map AND zero in the tree: **CSS relative colors** (`oklch(from var(--brand) …)`, how a design
+system derives a shade from one token — absent, the declaration fails to parse and the colour falls
+back) and **`execCommand` undo/redo** (the residue of a subsystem with eleven existing gates). Both
+added as `unknown`; map 474 → **476 rows**.
+
+THE METHOD CHANGED, and the change is the durable part: **frequency ranks where to LOOK, a
+differential probe says whether anything is THERE, and neither is the other.**
+
+RATCHET: no engine change — measurement only.
+
+PERF: none.
+
+WIKI: none [forced] — the artefacts are `docs/loop/SURFACE-AUDIT.md` #37 and two `CONSTELLATION.tsv`
+rows. [no-pattern]
+
+## Tick 965 — the sweep the cadence asked for, and it prices my last two ticks at ZERO (2026-08-05)
+
+TICK SHAPE: measurement — the clean `--jobs 2` CrUX sweep the board's cadence rule and my own
+constitution-check steer (#85) both demanded after five unpriced fixes, plus the attribution work that
+makes it a result rather than a number.
+
+**THE SWEEP, banked as `docs/loop/SWEEP-t965-rows.tsv` (200 rows, merged, no contamination flag):**
+
+```text
+                              t936      t965
+   M1 (shape>=0.75 AND jarring-clean)   14.8%     16.7%     +1.9 pts
+   shape >= 0.75, in-scope              22.2%     24.2%     +2.0
+   jarring-clean                        30.4%     34.1%     +3.7
+   shape_mean                           55.3%     56.5%     +1.2
+   cov_mean                             86.6%     87.5%     +0.9
+   scored / in-scope                  108/135   109/132
+   COMMON-SET BAND (102 sites in both)              +0.63 pts
+```
+
+⚠⚠⚠ **AND NONE OF IT IS MINE. `oilprice.com` IS 61% OF THE BAND AND IT IS A COVERAGE EVENT, NOT A
+GEOMETRY ONE.** Diffing the row files rather than reasoning about the means — the standing rule, and
+it paid again:
+
+```text
+   movers > 2pt, 117 sites common to both sweeps      8 UP · 8 DOWN
+     sum of UP    +0.988      of which oilprice.com   +0.599
+     sum of DOWN  -0.338
+     net          +0.650  over 117  =  +0.56 pts     (the reported band, reproduced)
+     net WITHOUT oilprice.com                          +0.04 pts   ← zero
+```
+
+```text
+   oilprice.com    cov 0.528 -> 0.988   shape 0.024 -> 0.622   n 637 -> 646
+   payb.jp         cov 0.781 -> 0.782   shape 0.672 -> 0.775   n 826 -> 827
+   possssno.sbs    cov 1.000 -> 1.000   shape 0.957 -> 0.880   n 575 -> 575
+   www.tz.de       cov 0.951 -> 0.904   shape 0.832 -> 0.777   n 1878 -> 1813
+```
+
+**`oilprice.com` went from rendering half the page to rendering all of it.** A tab stop and a control
+height cannot move coverage from 0.53 to 0.99 — that is the site or the network, not the engine. And
+the next three largest movers are the loop's own documented volatile set: `payb.jp` spans
+0.678–0.826 on ONE binary (recorded at t852), `possssno.sbs` reversed a verdict at t942, and
+`www.tz.de` lost 65 nodes between the two runs. **Every large mover is site drift.**
+
+⚠⚠⚠ **SO I ASKED WHETHER THE CORPUS CAN EVEN CONTAIN MY FIXES, AND THE ANSWER IS NO — IN ONE COMMAND
+THAT TOOK THREE MINUTES AND THAT I SHOULD HAVE RUN BEFORE THE WORK.** `curl`ing all 200 corpus URLs
+(171 return a real body — the same population the metric scores) and grepping the markup:
+
+```text
+   <select multiple> or size>=2   ...  0 of 171    t963 CANNOT move this corpus
+   a TAB inside a <pre>           ...  0 of 171    t962 CANNOT move this corpus
+   <select> (any)                 ... 19 of 171    t964 can, on 11% of pages
+```
+
+**Both fixes are Chrome-exact and RED-proven and structurally invisible here.** That is not a verdict
+on them — I4 ranks the real web and the surface audit that found them ranks against the web too — but
+it is the *complete* explanation of a flat metric, and it was available in advance. **A flat number
+after a correct fix is not always the instrument's resolution; sometimes it is the corpus's
+contents, and those are two different diagnoses with two different responses.**
+
+⚠⚠ **THE BY-PRODUCT IS A NEW RANKING INSTRUMENT, AND IT CORRECTS PART VI's RESIDUE ORDER.** The same
+three-minute command gives usage-weight **on the pages that produce the number**, which VI.3 has
+always asked for and never had. Banked as `docs/loop/CORPUS-CONSTRUCTS.md`:
+
+```text
+    95/171  55.6%  <button>            32/171  18.7%  display:grid
+    88/171  51.5%  <input>             19/171  11.1%  <select>
+    84/171  49.1%  @media              12/171   7.0%  <table> with <tr>
+    79/171  46.2%  display:flex         5/171   2.9%  <td colspan|rowspan>
+    52/171  30.4%  <iframe>             3/171   1.8%  <pre>
+```
+
+**FORM CONTROLS ARE #1 AND #2 AND THEY BEAT TABLES EIGHT TO ONE**, while VI.2's H0.1 row ranks the
+remaining mass as *tables · inline composition · scroll containers*. t963 identified the defect
+*shape* — **a control whose intrinsic size model is ABSENT rather than wrong, invisible to every
+fixture that sets a size** — and found it on the corpus's fourteenth most common control instead of
+its first two. `<button>` and `<input>` are where that same shape should be looked for next.
+
+⚠ **THE ONE WAY THE INSTRUMENT LIES, stated in the file itself:** it greps what `curl` returns, so
+**markup rows are exact and CSS rows are lower bounds** — every external stylesheet is invisible to
+it, and `display:flex` at 46.2% is a floor. Every comparison drawn above is markup-to-markup for
+exactly that reason.
+
+RATCHET: no engine change. The sweep is a clean `--jobs 2` run with the denominator intact and
+`fidelity-progress.sh` raises no trap/regression/staleness/exclusion flag.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefact IS `docs/loop/CORPUS-CONSTRUCTS.md`, which is the retrievable
+form of this tick's mechanism. [no-pattern]
+
 ## Tick 964 — a `<select>` is as wide as its WIDEST option, and that was never a multi-select bug (2026-08-05)
 
 TICK SHAPE: pattern-class — form controls, continuing t963's ranked lead; the half t963 measured as
