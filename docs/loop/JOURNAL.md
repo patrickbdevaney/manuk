@@ -46371,6 +46371,72 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 947 — the block axis is clean too, and five clean batteries is now a claim about the INSTRUMENT (2026-08-05)
+
+TICK SHAPE: measurement — t946's steer ("sweep another property family; that is what still yields"),
+taken on the **block axis**: the unswept mirror of t930's width battery, chosen because `overlap` —
+the #2 blocker of the cheapest M1 crossings — is a HEIGHT error (t946 measured `otomoto`'s `div:3`
+lying over both `div:4` and `div:5`).
+
+**Twenty-two composed block-axis cases. Every one Chrome-exact.**
+
+```text
+   percentage height against a definite parent · nested 50% of 50% · % height with padding in
+   BOTH box-sizings · % height against an AUTO parent (height/min/max, all three) ·
+   height vs min-height vs max-height, including min-BEATS-max · height:auto containing a float,
+   with and without a BFC · margin collapsing THROUGH an empty box · a collapsed top margin,
+   with and without a BFC · aspect-ratio deriving height, and losing to an explicit height ·
+   calc(100% − 2em) at two font sizes · inline-block height · height:100% with padding-top
+```
+
+Chrome and ours agree to the pixel on all 22, including the three that discriminate a real rule:
+`min-height:50%` **beats** `max-height:25%` (100, not 50); a `%` height against an auto parent is
+content (24, not 0); and `margin-collapse` through an empty box gives **0** while the same margin
+under a BFC gives **44**.
+
+⚠⚠⚠ **THAT IS FIVE CLEAN BATTERIES IN ONE WINDOW, AND AT FIVE IT STOPS BEING A RESULT ABOUT CSS AND
+BECOMES ONE ABOUT THE INSTRUMENT.**
+
+```text
+   t932  composed WIDTH, 25 cases              24 of 25 exact  (the 25th → anonymous table rows)
+   t934  composed INLINE, 22 cases             20 of 22 exact
+   t940  simplepdf's real footer CSS           every box exact
+   t946  sestra's comment-separated link row   every box exact
+   t947  composed BLOCK AXIS, 22 cases         22 of 22 exact
+```
+
+**The corpus says `shape_mean` is 55.3% over 108 scored sites. Every battery I can construct says the
+layout math is right.** Those two statements cannot both be simple, and the reconciliation is not
+"there are more properties to sweep" — the batteries above cover the width axis, the block axis,
+inline composition, and two real stylesheets lifted verbatim from failing sites.
+
+**THE HYPOTHESIS THIS LEAVES, stated as one and not as a finding:** the residual shape error may not
+be layout math at all. The instrument renders the **oracle against a `curl`'d snapshot from
+`file://`** and **us against the LIVE url** — `fidelity.rs` says so itself, and it is why
+`oracle-module-shell` and `tree-divergence` exist as reason tags at all. If the two engines are
+laying out **two different documents**, every geometry comparison downstream is confounded, and it
+would explain precisely this shape: perfect agreement on any fixture where both engines see the same
+DOM, and 55% on live pages where they may not.
+
+⚠ **I am NOT claiming that.** `cov_mean` is 86.6%, the instrument keys on selector paths through a
+shared snapshot, and t937/t938 already showed the tag taxonomy is more subtle than its names. **The
+test is cheap and specific and I did not run it**: take a mid-scoring site and compare the two
+engines' element counts and DOM shape directly, before comparing any geometry. That is the next
+tick's first move and it is written down here so it is not re-derived.
+
+**What this window has established, taken together:** ~2-3 of 29 unscored sites are
+engine-attributable (t937/938) · the M1 bar is 8-13 points above the instrument's ceiling (check #83)
+· five composed batteries find no layout-math defect · and the six capability fixes that did land,
+all Chrome-exact and RED-proven, produced no attributable corpus movement (t936, t942). **Every one
+of those is a statement about the measurement, and they point the same way.**
+
+RATCHET: no engine change. `manuk-layout` and the page suite green from t945.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefact is a clean battery and a named hypothesis; neither describes a
+mechanism the engine implements. [no-pattern]
+
 ## Tick 946 — four reductions, four clean, and the discovery engine has saturated for THIS class (2026-08-05)
 
 TICK SHAPE: measurement — check #83's steer item 2 (engine work into the SCORED half, ranked by
