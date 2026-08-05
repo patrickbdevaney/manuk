@@ -46371,6 +46371,77 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 920 — t919's headline was WRONG, and I broke my own most-highlighted rule to get it (2026-08-04)
+
+TICK SHAPE: measurement — t919 named its own follow-on: *"instrument the actual `manuk.len()` /
+`chrome.len()` at the `diff_page` call site rather than infer it from a neighbouring line."* Done, and
+it refuted t919 in three commands.
+
+⚠⚠⚠ **CORRECTION TO t919. `unaligned` IS NOT INERT. IT WORKS, IN THE SWEEP'S EXACT CONFIGURATION.**
+t919 concluded from a 200-site sweep that fired it zero times that *"t912 is unit-gated, RED-proven,
+and INERT in the artefact it was built to change"*, and generalised that into a lesson about gates
+that build their own inputs. **All of it was built on one unchecked assumption.** Instrumenting the
+call site:
+
+```text
+  [t920 PROBE] diff_page sees chrome=57  manuk=437     www.naukri.com
+  [t920 PROBE] diff_page sees chrome=59  manuk=61      chat.google.com
+```
+
+`we_drew_as_many` is TRUE, the kind is set, and the rows reach the ranking:
+
+```text
+  === G1 ROOT CAUSES — ranked by sites explained ===
+     1 site(s) ·   32 hit(s)   unaligned key (we drew as many): <div>
+     1 site(s) ·    3 hit(s)   unaligned key (we drew as many): <input>
+     1 site(s) ·    3 hit(s)   unaligned key (we drew as many): <span>
+```
+
+**And it works under `--jobs 2 --rows-out`, which is the only bankable sweep configuration** — the
+`--jobs N` path re-spawns itself as N children and merges their partial rows, and each child produces
+its own `unaligned` rows exactly as the serial one does.
+
+⚠⚠⚠ **THE INTERMEDIATE READING THAT NEARLY BECAME A SECOND WRONG FINDING.** My first parallel test
+ran `--jobs 2` **without `--rows-out`** and produced zero `unaligned` — which read as *"the parallel
+path is a second implementation"*, a finding this project has genuinely made four times and would
+have believed. It is not: `--jobs` **requires** `--rows-out` (the chunks are merged into it) and bails
+with an error when it is absent, so that arm never ran the parallel path at all. **The probe measured
+its own missing flag.** Sixth fixture defect in this run, and the first one that produced a false
+finding about a DIFFERENT subsystem rather than about the engine.
+
+⚠⚠⚠ **AND THE RULE I BROKE IS THE ONE WRITTEN LARGEST IN MY OWN NOTES.**
+
+> **CHECK WHAT BINARY PRODUCED A SURPRISING READING BEFORE CHECKING WHAT THE CODE DID** (t881-887,
+> where a `target/debug` sweep faked a 19-site regression).
+
+t919 had a surprising reading — a mechanism that is unit-gated, RED-proven and green on its own tests
+firing zero times across 200 sites — and went straight to *"the wiring is wrong"*, wrote a wiki
+section about it, and banked a lesson. **The first question was never asked.** The sweep's binary has
+since been overwritten, so which build it was cannot now be recovered — which is itself the cost of
+not asking at the time.
+
+**WHAT SURVIVES t919 UNCHANGED, and it is most of it:** the metric pre-registrations all held (M1 −1,
+scorability −1, common-set band +0.05 pts, every one predicted); and **the t918 regression stands
+completely**, because it was never inferred — three solo runs on the current binary at 0.692308
+byte-identical, two on the t913 tree at 0.871795, a four-point bisect landing on t918, and the revert
+restoring 0.871795. *That* finding asked the binary question at every step, which is exactly the
+contrast worth keeping.
+
+**WHAT IS RETRACTED:** t919's headline, its wiki section *"A gate that builds its own inputs proves
+the function, not the wiring"*, and its claim that this was the third occurrence of a
+correction-reaching-one-path. The section is rewritten in this commit rather than deleted, because
+the retraction is the more useful artefact.
+
+⚠ **AND THE ORIGINAL QUESTION IS STILL OPEN, NOW PROPERLY POSED.** t911 measured that 22 of 58 sites
+render as many or more box-bearing paths than Chrome; the t919 sweep showed no `unaligned` rows and a
+`missing box` total essentially unchanged. Since the mechanism demonstrably works, **the next sweep is
+the measurement** — and it should be read for the `unaligned` row specifically, with the binary's
+build time recorded beside it.
+
+PERF: none — the probe was temporary and is removed; the tree carries no instrumentation.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — t919's section, retracted and rewritten [no-pattern]
+
 ## Tick 919 — the corrected ranking, and the sweep that produces it (2026-08-04)
 
 TICK SHAPE: measurement — check #80's steer #1. Five engine fixes have landed since the t909 sweep,

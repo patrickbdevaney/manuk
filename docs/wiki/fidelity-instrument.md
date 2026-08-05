@@ -870,27 +870,43 @@ computed during a crawl and the JSONL ledger bakes each divergence's kind in, so
 cannot be re-split retroactively. Until that sweep runs, a `<div>` tick should be taken from the
 `geometry/mis-sized` rows, which compare boxes that DID align and are therefore unaffected.
 
-## A gate that builds its own inputs proves the function, not the wiring (t919)
+## ⚠ RETRACTED — "a gate that builds its own inputs proves the function, not the wiring" (t919, corrected t920)
 
-t912 split the ranker's #1 cause — `missing box: <div>`, 37 sites and 2,398 hits — into `missing`
-(our map is smaller) and `unaligned` (it is not), on the strength of t911's measurement that **22 of
-58 sites render as many or more box-bearing paths than Chrome**. It was unit-gated in both
-directions and RED-proven by pinning the comparison to `false`.
+t912 split the ranker's #1 cause into `missing` (our map is smaller) and `unaligned` (it is not). The
+t919 sweep fired `unaligned` **zero times in 200 sites**, and this section concluded that the split
+was inert — that the gate constructed its own maps and passed while the real ones never took the
+branch.
 
-**On the next sweep, `unaligned` fired zero times in 200 sites.** The `missing box` total did not
-move: 2,398 hits then, 2,389 now.
+**That was wrong, and one probe at the call site refuted it:**
 
-It should have fired on **26** sites, by the sweep's own printed numbers.
-`compare_structure_detail` reports `probed = chrome.len()` and `mboxes.len() = manuk.len()` — the
-same two quantities `diff_page` compares — and 26 sites print `ours >= oracle` with a non-zero
-missing count (`naukri.com` 437 against 57; `chat.google.com` 2005 against 2004).
+```text
+  [PROBE] diff_page sees chrome=57  manuk=437     www.naukri.com
+  [PROBE] diff_page sees chrome=59  manuk=61      chat.google.com
 
-> **The gate constructs its own maps and passes; the sweep runs the same function on real ones and
-> the branch is never taken.** A gate that builds its own inputs proves the function, not the wiring.
+  === G1 ROOT CAUSES — ranked by sites explained ===
+     1 site(s) ·   32 hit(s)   unaligned key (we drew as many): <div>
+     1 site(s) ·    3 hit(s)   unaligned key (we drew as many): <input>
+```
 
-Third occurrence of the shape in one run: t782's correction reached the reason string and not the
-ranker; t913 located the `vertical-align` defect in the consumer branch when the producer was
-hard-coded; and now this. **Instrument the call site, do not infer it from a neighbouring line.**
+It works, and it works under `--jobs 2 --rows-out` — the only bankable sweep configuration, where the
+`--jobs N` path re-spawns itself as N children and merges their partial rows.
+
+> **CHECK WHAT BINARY PRODUCED A SURPRISING READING BEFORE CHECKING WHAT THE CODE DID.** t919 had a
+> mechanism that was unit-gated, RED-proven and green on its own tests firing zero times across 200
+> sites, and went straight to *"the wiring is wrong"* — wrote this section, banked a lesson, and never
+> asked the first question. The sweep's binary has since been overwritten, so which build it was
+> cannot be recovered; that is the cost of not asking at the time.
+
+**A second false finding was nearly banked on top of it.** The first parallel test ran `--jobs 2`
+**without `--rows-out`** and produced zero `unaligned`, which reads as *"the parallel path is a second
+implementation"* — a shape this project has genuinely found four times and would have believed.
+`--jobs` *requires* `--rows-out` and bails when it is absent, so that arm never ran the parallel path
+at all. **The probe measured its own missing flag.**
+
+What survives from t919 unchanged: every metric pre-registration held, and the **t918 regression
+stands completely** — it was never inferred (three solo runs current, two on the old tree, a
+four-point bisect, and a revert that restored the number). That finding asked the binary question at
+every step, which is the contrast worth keeping.
 
 ## Nine Chrome-captured claims are not a proof about the web (t919)
 

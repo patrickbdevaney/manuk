@@ -743,8 +743,8 @@
   - L831 · The instrument already made this correction — for the reason string only
   - L838 · The tell, on the top near-bar site
   - L845 · What this does NOT say
-  - L873 · A gate that builds its own inputs proves the function, not the wiring (t919)
-  - L895 · Nine Chrome-captured claims are not a proof about the web (t919)
+  - L873 · ⚠ RETRACTED — "a gate that builds its own inputs proves the function, not the wiring" (t919, corrected t920)
+  - L911 · Nine Chrome-captured claims are not a proof about the web (t919)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
