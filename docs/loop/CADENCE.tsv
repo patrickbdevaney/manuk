@@ -672,3 +672,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 947	686da65e	1785935984	2026-08-05T09:19:44-04:00	443	measurement	63	4	102	32	403	81	3896	6960	0	484	0	the block axis is clean too, and five clean batteries is now a claim about the INSTRUMENT (2026-08-05)
 948	e63abae2	1785936213	2026-08-05T09:23:33-04:00	229	measurement	63	4	103	32	403	81	3896	6960	0	484	0	the hypothesis was wrong and the measurement it forced is the sharpest of the window (2026-08-05)
 949	f18d535f	1785936523	2026-08-05T09:28:43-04:00	310	measurement	63	4	99	32	403	81	3896	6960	0	484	0	the top cause on a scored site is a DOM-shape difference, not a layout one (2026-08-05)
+950	9ebb6556	1785938020	2026-08-05T09:53:40-04:00	1497	measurement	63	5	177	34	403	81	3896	6960	0	484	0	"ours or the oracle's?" — neither, yet: the subtree is JS-built and time-dependent (2026-08-05)

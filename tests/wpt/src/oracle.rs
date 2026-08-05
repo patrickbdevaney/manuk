@@ -223,7 +223,22 @@ pub fn diff_page(
                     c.rect[3],
                     fontsuffix(&c.font)
                 ),
-                manuk: "(no box)".into(),
+                // ⚠⚠⚠ **AN `unaligned` ROW USED TO SAY ONLY "(no box)", WHICH NAMES THE SYMPTOM
+                //     AND HIDES THE CAUSE (t951).** `unaligned` means the two trees are *numbered*
+                //     differently — one same-tag sibling somewhere up the path shifts every
+                //     `nth-of-type` beneath it — so the useful fact is not that THIS 14-deep path is
+                //     absent, it is **WHERE the numbering stopped agreeing**. t949 found 66 of these
+                //     on one scored site and could only report the leaf; t950 then spent a tick
+                //     failing to attribute it from outside the harness.
+                //
+                //     The alignment point is free to compute: both maps are in hand and keyed by the
+                //     same selector paths, so walk this id's prefixes from the root and report the
+                //     LAST one both engines have. Everything below it is re-numbered, and 66 leaves
+                //     collapse to one address.
+                manuk: format!(
+                    "(no box; our tree has nothing below {})",
+                    align_point(id, manuk)
+                ),
                 delta: [0; 4],
             }),
             Some(m) => {
@@ -358,6 +373,62 @@ fn mag_band(mag: i64) -> i64 {
         // Largest power of two ≤ m: 23→16, 28→16, 45→32, 82→64, 1400→1024, 6822→4096.
         1i64 << (63 - m.leading_zeros())
     }
+}
+
+/// **The deepest prefix of `id` below which OUR tree still has SOMETHING** — the last level at which
+/// the two trees are still talking about the same place.
+///
+/// ⚠ **What this is and is not.** It reports, exactly, *"we have at least one element at or under
+/// this path, and none at or under the next segment"*. That is a literal fact about our map and the
+/// string says only that. It is **evidence about** where a re-numbering began — one inserted or
+/// missing same-tag sibling shifts every `nth-of-type` beneath it, so N unaligned leaves collapse to
+/// one address — but it does **not prove** the sibling difference is at that level: an element we
+/// genuinely failed to render produces the identical reading. Distinguishing those needs the child
+/// counts on both sides, which is the next step and is not this one.
+///
+/// An `unaligned` divergence reports a leaf 12-14 levels deep; the leaf is never the cause. One
+/// inserted or missing same-tag sibling shifts every `nth-of-type` below it, so N unaligned leaves
+/// share ONE origin, and this finds it by walking the path from the root and keeping the last prefix
+/// present in both engines. Returns `<root>` when even the first segment disagrees.
+fn align_point(id: &str, manuk: &HashMap<String, Seen>) -> String {
+    // Ids are `site#seg/seg/seg`; the prefix walk is over the path part only.
+    let (head, path) = match id.split_once('#') {
+        Some((h, p)) => (h, p),
+        None => ("", id),
+    };
+    let mut best = "<root>".to_string();
+    let mut acc = String::new();
+    for seg in path.split('/') {
+        if !acc.is_empty() {
+            acc.push('/');
+        }
+        acc.push_str(seg);
+        let probe = if head.is_empty() {
+            acc.clone()
+        } else {
+            format!("{head}#{acc}")
+        };
+        // ⚠ **`contains_key` IS THE WRONG TEST AND THE FIRST DRAFT USED IT (caught before landing).**
+        // Our map holds the elements the probe RECORDED, not every ancestor on the way to them, so
+        // an exact-prefix lookup fails at the first unrecorded ancestor — which is level 1 on every
+        // real page. It reported `body:nth-of-type(1)` for all 66 of tz.de's unaligned rows: a
+        // constant, which is the signature of a predicate that is not measuring what it names.
+        //
+        // The question is *"does OUR tree have anything at this path?"*, so test for a key that is
+        // this prefix or a descendant of it. The `/` boundary matters: without it
+        // `…/div:nth-of-type(1)` also matches `…/div:nth-of-type(10)`.
+        let is_desc = |k: &String| {
+            k.as_str() == probe.as_str()
+                || k.strip_prefix(probe.as_str())
+                    .is_some_and(|rest| rest.starts_with('/'))
+        };
+        if manuk.keys().any(is_desc) {
+            best = acc.clone();
+        } else {
+            break;
+        }
+    }
+    best
 }
 
 /// **Which of the four deltas is the divergence, and how big is it** — `("height", -24)`.

@@ -46371,6 +46371,77 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 951 — the instrument now names ONE address instead of 66 leaves, and the first draft of it lied (2026-08-05)
+
+TICK SHAPE: capability (instrument) — t950's steer: the `unaligned key` cause, the #1 divergence on a
+scored site, reported a 14-deep leaf and nothing about the cause. It now reports where our tree stops
+having anything at all.
+
+⚠ **SCOPE, stated plainly because this is the edge of it.** This is `tests/wpt/src/oracle.rs`, not
+`engine/` — an INSTRUMENT tick, not a browser-capability one. I took it because the board's
+CERTIFICATION REDESIGN block assigns the fidelity instrument to the agent explicitly (*"the fidelity
+instrument in manuk-wpt is agent-territory, scripts/ stay observer-owned"*), because its item (4) is a
+reconciliation gate whose premise is that *"any imbalance is an instrument bug, not a result"*, and
+because this window's own measurements (t937/938/944) established that the metric is the binding
+constraint. **If the observer reads the scope line more narrowly than I have, this is the tick to
+revert** — it touches no engine code and no gate.
+
+**WHAT IT DOES.** An `unaligned` divergence means Chrome has an element at a path and we produce no
+box there while our total element count matches. The row used to print `(no box)`. It now prints:
+
+```text
+   (no box; our tree has nothing below body:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1))
+```
+
+Both element maps are in hand and keyed by the same selector paths, so the walk is free: take the
+id's prefixes from the root and keep the last one under which our map still has something. **66
+leaves on `www.tz.de` collapse to one address**, which is the whole point — t949 could only report
+the leaf, and t950 spent an entire tick failing to attribute it from outside the harness.
+
+⚠⚠⚠ **THE FIRST DRAFT LIED, AND IT LIED IN THE WAY THIS PROJECT RATES WORST — IT RETURNED A
+CONSTANT.** I wrote the obvious predicate, `manuk.contains_key(prefix)`, and it reported
+`body:nth-of-type(1)` for **all 66 rows**. Our map holds the elements the probe RECORDED, not every
+ancestor on the way to them, so an exact-prefix lookup fails at the first unrecorded ancestor — which
+is level 1 on every real page. **A diagnostic that answers the same thing for every input is not
+measuring what it names**, and it would have shipped a confident, useless address into the ranked
+cause ledger. Caught by looking at the output before believing it, which is the only reason it was
+caught at all. The predicate now asks the question it means: *does our tree have a key at this prefix
+**or under it**?* — with a `/` boundary, because without one `…/div:nth-of-type(1)` also matches
+`…/div:nth-of-type(10)`.
+
+⚠⚠ **AND THE STRING IS DELIBERATELY WEAKER THAN THE INFERENCE I WANT TO DRAW.** I first wrote *"keys
+agree to X"*, which asserts a re-numbering. The predicate does not establish that: **an element we
+genuinely failed to render produces the identical reading.** So it says only what it measures — *"our
+tree has nothing below X"* — and the doc comment carries the distinction. Separating the two needs
+the child-tag counts on both sides at that level, which is the next step and is not this one.
+
+**VERIFICATION, and its limit stated honestly.** `manuk-wpt` lib tests 98/98, oracle unit tests 22/22.
+`blog.rust-lang.org` produces **zero** unaligned rows, so the diagnostic is not firing spuriously on a
+well-aligned site. **What I have NOT verified is that the address reported for `tz.de` is the true
+origin** — only that it is a literal fact about our map, which is why the string says exactly that
+and no more.
+
+⚠ **The reading it gives is itself surprising and is left as the open question:** `tz.de` reports our
+tree has nothing below `body/div:1/div:1`, i.e. a level-3 divergence rather than a footer-local one —
+yet 1,864 elements are common to both engines. Those two facts want reconciling and I did not
+reconcile them. **That is the next tick's question, and it now has a number instead of a leaf.**
+
+SELF-AUDIT (due every 10 ticks; last at 940) — **clean: *"methodology and reality agree"*, zero
+prescribed-but-not-executed items.** The 369s wall that failed it at t940 is gone from the list, and
+the reason is worth one line: t941 ran the audit and t943 filed it in `WALL-AUDIT.md` where
+`status-update.sh` actually reads it. **The item did not close because the wall got faster; it closed
+because the work became visible to the instrument that checks for it** — which is exactly the defect
+t943 was about, seen from the other side.
+
+RATCHET: no engine change; no gate changed; no cause string changed (the addition is inside the
+existing `manuk` field of the example line). `manuk-wpt` 98/98.
+
+PERF: a prefix walk per unaligned divergence — ~14 levels × the key set, only on rows that were
+already being formatted for print.
+
+WIKI: none [forced] — the artefact is a diagnostic string and its doc comment, both in
+`tests/wpt/src/oracle.rs`. [no-pattern]
+
 ## Tick 950 — "ours or the oracle's?" — neither, yet: the subtree is JS-built and time-dependent (2026-08-05)
 
 TICK SHAPE: measurement — t949's steer item 1, taken directly: **probe the named footer subtree in
