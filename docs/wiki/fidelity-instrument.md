@@ -935,3 +935,48 @@ fixtures answer that — but *which real-page control does the formula get wrong
 candidate is already on the board (an input with an explicit `height:40px` reads 47 against Chrome's
 46, because Chrome centres the internal editor in a taller control), and
 `secure5.entertimeonline.com` is now the reproducer.
+
+## The one-origin proxy cannot lie about the hostname (t921)
+
+The proxy's named next lever was *"it does not follow a same-origin NAVIGATION"* —
+`house.udn.com`'s entire body is `window.location.href="/house/index"` and the proxied render is 6
+open tags against the live page's 932. That diagnosis was plausible and wrong.
+
+The site's own first ten lines have it:
+
+```html
+  <script language="javascript">
+  if (document.URL.indexOf("house.udn.com") != -1) {
+      window.location.href = "/house/index";
+  }
+  </script>
+```
+
+**Under the proxy `document.URL` is `http://127.0.0.1:PORT/`, the guard is FALSE, and the page never
+navigates.** Not a forwarding bug and not a probe bug — the page asks what host it is on, and the
+proxy's entire purpose is to answer differently.
+
+> **ASK WHAT THE PAGE BELIEVES**, now aimed at our own reference instrument. The one-origin proxy can
+> serve any byte the site would serve and **it cannot lie about the hostname**. Every page that
+> self-checks its origin — a hostname redirect, an environment switch, an analytics guard, a
+> `location.host`-keyed CDN prefix — is structurally outside what this reference can measure.
+
+That is a **limit**, not a bug. Serving under the real hostname needs DNS or TLS interception, which
+is a different instrument. `renders_agree` already refuses these rows, which is correct; the value of
+naming the cause is that no further tick spends itself guessing at the forwarding path.
+
+### The cohort was checked, not generalised from one site
+
+Of the shell rows measured at t903, `esaj.tjsp.jus.br` names its own host **20 times** in its
+document (and refuses at 37 tags against 300), while `awlyaa.education.dz` and `merchant.upi9.pro`
+name it **zero** times — and `merchant.upi9.pro` is precisely the row the proxy already converts.
+**The rows the proxy cannot reach and the rows that mention their own hostname are the same rows.**
+
+### What was kept anyway
+
+An HTML response reached by navigation is a DOCUMENT, and it now gets the same treatment the entry
+document gets — foreign hosts rewritten back through this origin, probe injected — instead of being
+forwarded raw. Before, a proxied page that navigated was measured as an **unprobed, unrewritten**
+document: the "half-built reference" this module exists to refuse, arriving through a door nobody had
+checked. It is latent today because `renders_agree` refuses those rows for other reasons first. **A
+latent correction with the tests green is worth keeping; claiming it moved a number would not be.**

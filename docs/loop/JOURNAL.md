@@ -46371,6 +46371,68 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 921 — the one-origin proxy is defeated by a page that gates on its own HOSTNAME (2026-08-04)
+
+TICK SHAPE: capability + measurement — check #80's steer #3, the scorability lever, four windows old
+with a concrete reproducer: *"the one-origin proxy does not follow a same-origin NAVIGATION —
+`house.udn.com` refuses at 6 tags against the live page's 927 because its whole body is
+`window.location.href="/house/index"`."*
+
+⚠⚠⚠ **THE STEER'S DIAGNOSIS WAS MINE, IT WAS PLAUSIBLE, AND IT WAS WRONG.** I built the fix it
+implies — an HTML response reached by navigation is a DOCUMENT, so it gets the same treatment the
+entry document gets (its foreign hosts rewritten back through this origin, and the probe injected)
+rather than being forwarded raw. It is a real latent defect in the instrument and it is fixed here.
+**It moved the row by nothing: still 6 open tags against the live page's 932.**
+
+⚠⚠⚠ **THE ACTUAL MECHANISM IS IN THE SITE'S OWN FIRST TEN LINES, AND IT IS THIS PROJECT'S OWN LAW
+AIMED AT THE INSTRUMENT:**
+
+```html
+  <script language="javascript">
+  if (document.URL.indexOf("house.udn.com") != -1) {
+      window.location.href = "/house/index";
+  }
+  </script>
+```
+
+**Under the one-origin proxy `document.URL` is `http://127.0.0.1:PORT/`, so the guard is FALSE and
+the page never navigates.** Not a forwarding bug, not a probe bug — the page **asks what host it is
+on**, and the proxy's entire purpose is to answer differently.
+
+> **ASK WHAT THE PAGE BELIEVES.** t861-870 learned it from `{}.toString.call(div)` and t895 from
+> jQuery's `support.cors`; here it applies to our own reference instrument. **The one-origin proxy
+> can serve any byte the site would serve and it cannot lie about the hostname**, so every page that
+> self-checks its origin — a hostname redirect, an env switch, an analytics guard, a
+> `location.host`-keyed CDN prefix — is structurally outside what this reference can measure.
+
+**That is a LIMIT, not a bug**, and it belongs on the record as one: serving under the real hostname
+needs DNS or TLS interception, which is a different instrument (and one this project's scope rules
+would have to weigh separately). `renders_agree` already refuses these rows, which is the correct
+behaviour — the finding is *why* they will keep being refused, so no further tick spends itself
+guessing.
+
+⚠ **AND I CHECKED THE COHORT RATHER THAN GENERALISING FROM ONE SITE.** Of the shell rows measured at
+t903, `esaj.tjsp.jus.br` names its own host **20 times** in its document (and refuses at 37 tags
+against 300); `awlyaa.education.dz` and `merchant.upi9.pro` name it **zero** times — and
+`merchant.upi9.pro` is precisely the one the proxy already converts. **The rows the proxy cannot
+reach and the rows that mention their own hostname are the same rows**, on a sample of four.
+
+**WHAT IS KEPT AND WHY.** The navigated-HTML fix stays: it is a correctness defect independent of
+this site. Before it, a proxied page that navigated was measured as an **unprobed, unrewritten**
+document — the reference would have been a page whose own foreign subresources point back at the real
+origin and which carries no probe at all, which is exactly the "half-built reference" this module
+exists to refuse, arriving through a door nobody had checked. It is latent today because
+`renders_agree` refuses those rows for other reasons first. **A latent correction with the tests
+green is worth keeping; claiming it moved a number would not be.**
+
+RATCHET: `manuk-wpt` lib **98/98**. No row changed in either direction — `house.udn.com`
+`shell-only-1` and `esaj.tjsp.jus.br` `shell-only-4`, both as before.
+
+PERF: none — one content-type test per proxied response, on a path that runs for ~11 rows a sweep.
+
+WIKI: `docs/wiki/fidelity-instrument.md` — "The one-origin proxy cannot lie about the hostname"
+[no-pattern]
+
 ## Tick 920 — t919's headline was WRONG, and I broke my own most-highlighted rule to get it (2026-08-04)
 
 TICK SHAPE: measurement — t919 named its own follow-on: *"instrument the actual `manuk.len()` /

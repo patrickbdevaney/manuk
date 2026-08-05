@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **647** | ticks 1–919 |
-| median tick cycle | **26m** | 646 intervals |
-| median, last 10 | **30m** | 10 intervals |
+| ticks landed | **648** | ticks 1–921 |
+| median tick cycle | **26m** | 647 intervals |
+| median, last 10 | **29m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 591.5h elapsed |
-| median verify wall | **63s** | 586 ticks |
+| **ticks per hour** | **1.09** | 592.0h elapsed |
+| median verify wall | **63s** | 587 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **475**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**318 of 647 ticks** (49%) moved a
+**319 of 648 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **318** capability ticks, median cycle **26m**
-* median diff per tick: **+264 / −34** lines across 8 files
+* **319** capability ticks, median cycle **26m**
+* median diff per tick: **+263 / −34** lines across 8 files
 
 ## Every tick
 
@@ -744,5 +744,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **916** | 2026-08-04 16:50 | 29m | capability | 63s | +153/−33 | 397 | 81 | 56.0% · | `text-top` aligns the INLINE BOX, and the inline box carries its half-leading (2026-08-04) |
 | **918** | 2026-08-04 17:56 | 66m | capability | 63s | +363/−34 | 398 | 81 | 56.0% · | a control's value is not a child text node, so it had no baseline (2026-08-04) |
 | **919** | 2026-08-04 20:34 | 2.6h | measurement | 63s | +138/−50 | 397 | 81 | 56.0% · | the corrected ranking, and the sweep that produces it (2026-08-04) |
+| **921** | 2026-08-04 21:02 | 29m | capability | 63s | +242/−40 | 397 | 81 | 56.0% · | the one-origin proxy is defeated by a page that gates on its own HOSTNAME (2026-08-04) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

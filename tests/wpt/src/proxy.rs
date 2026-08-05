@@ -412,7 +412,18 @@ impl Bound {
     }
 
     /// Start serving `document` at the site's own path under this origin.
-    pub fn serve(self, document: String) -> OneOrigin {
+    ///
+    /// ⚠⚠⚠ **`probe` IS APPLIED TO EVERY HTML RESPONSE, NOT ONLY THE ENTRY DOCUMENT (t921).** The
+    /// entry document arrives here already rewritten and already carrying the probe; anything the
+    /// page then NAVIGATES to was forwarded raw — correct bytes, no `<base>`-equivalent rewriting of
+    /// its own foreign hosts, and **no probe**, so the dump came back with nothing to parse.
+    ///
+    /// `house.udn.com` is the whole case in one file: a 195-byte document whose entire body is
+    /// `window.location.href="/house/index"`. The proxy forwarded `/house/index` upstream and
+    /// returned it verbatim, so the one-origin render was **6 open tags against the live page's
+    /// 927** and `renders_agree` correctly refused it. A same-origin NAVIGATION is not a subresource
+    /// fetch: the thing that arrives is the document being measured.
+    pub fn serve(self, document: String, probe: String) -> OneOrigin {
         let stop = Arc::new(AtomicBool::new(false));
         let doc_url = format!("{}{}", self.root(), self.doc_path);
         let upstream = format!("{}://{}", self.scheme, self.host);
@@ -423,6 +434,10 @@ impl Bound {
         let live = Arc::new(AtomicUsize::new(0));
         let live_t = Arc::clone(&live);
         let doc = Arc::new(document);
+        let probe = Arc::new(probe);
+        let scheme = self.scheme.clone();
+        let host = self.host.clone();
+        let root = format!("http://127.0.0.1:{}", self.port);
         let join = std::thread::spawn(move || {
             while !stop_t.load(Ordering::Relaxed) {
                 match listener.accept() {
@@ -435,8 +450,12 @@ impl Bound {
                         let doc_path = doc_path.clone();
                         let upstream = upstream.clone();
                         let live_c = Arc::clone(&live_t);
+                        let probe = Arc::clone(&probe);
+                        let (scheme, host, root) = (scheme.clone(), host.clone(), root.clone());
                         std::thread::spawn(move || {
-                            let _ = serve_one(sock, &doc, &doc_path, &upstream);
+                            let _ = serve_one(
+                                sock, &doc, &doc_path, &upstream, &probe, &scheme, &host, &root,
+                            );
                             live_c.fetch_sub(1, Ordering::Relaxed);
                         });
                     }
@@ -480,11 +499,16 @@ impl Drop for OneOrigin {
 
 /// Answer one request. Errors are swallowed into a 502 — a proxy that panics takes the accept loop
 /// with it and the sweep would read that as the *site* failing.
+#[allow(clippy::too_many_arguments)]
 fn serve_one(
     mut sock: TcpStream,
     document: &str,
     doc_path: &str,
     upstream: &str,
+    probe: &str,
+    scheme: &str,
+    host: &str,
+    root: &str,
 ) -> std::io::Result<()> {
     let _ = sock.set_read_timeout(Some(std::time::Duration::from_secs(20)));
     let mut buf = Vec::new();
@@ -532,6 +556,22 @@ fn serve_one(
     };
 
     match fetch_upstream(&target) {
+        // **An HTML response is a DOCUMENT, and a document gets the same treatment the entry one
+        // got** — its own foreign hosts rewritten back through this origin, and the probe injected,
+        // because a page reached by navigation is the page being measured. Anything else (script,
+        // css, image, json) is forwarded byte-for-byte as before.
+        Some((status, ctype, body)) if ctype.contains("text/html") && !probe.is_empty() => {
+            let html = String::from_utf8_lossy(&body);
+            let rewritten = rewrite_document(&html, scheme, host, root);
+            let injected = match rewritten.find("<head>") {
+                Some(i) => {
+                    let (a, b) = rewritten.split_at(i + 6);
+                    format!("{a}{b}{probe}")
+                }
+                None => format!("{rewritten}{probe}"),
+            };
+            write_response(&mut sock, status, &ctype, injected.as_bytes())
+        }
         Some((status, ctype, body)) => write_response(&mut sock, status, &ctype, &body),
         None => write_response(&mut sock, 502, "text/plain", b"upstream failed"),
     }
@@ -760,7 +800,7 @@ mod tests {
     fn the_proxy_serves_the_document_at_the_sites_own_path() {
         let bound = Bound::bind("https://example.com/app/index.html").expect("bind");
         let root = bound.root();
-        let proxy = bound.serve("<html><body>hello</body></html>".into());
+        let proxy = bound.serve("<html><body>hello</body></html>".into(), String::new());
         assert_eq!(
             proxy.document_url(),
             format!("{root}/app/index.html"),

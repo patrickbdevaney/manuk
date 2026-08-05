@@ -3802,3 +3802,54 @@ in thirteen ticks) — and its failure mode is now well enough characterised to 
 Nothing changes at the top: the t909 sweep's ranked causes are all `<div>`, and the map's negative
 rows are honest on this sample, so there is no unbuilt-but-mapped or built-but-unmapped work to
 promote. The audit's output is a **probe checklist**, not a backlog item.
+
+---
+
+## Audit #63 — tick 921 (2026-08-04)
+
+**SUBJECT: the six map rows THIS SESSION wrote, re-probed — because two of the fixes behind them were
+reverted, and because a row is written once and read for months.** t900 audited `gated` rows the loop
+inherited; #62 audited the `missing`/`unknown` side. This one audits **the rows the auditor just
+wrote**, which is the shortest possible feedback loop and, as it turns out, not a short enough one.
+
+### The gates: all present, all green, and nothing cites a gate that no longer exists
+
+```text
+  G_RATIO_INSET_FLOAT                 file exists   ok
+  G_BFC_SPECIFIED_WIDTH_FLOAT_BAND    file exists   ok
+  G_TABLE_HEIGHT_IS_A_MINIMUM         file exists   ok
+  G_TABLE_BORDER_SPACING_UA_DEFAULT   file exists   ok
+  G_VERTICAL_ALIGN_ON_TEXT            file exists   ok
+  G_FORM_CONTROL_BASELINE             file ABSENT   (reverted at t919 — cited by the map ZERO times)
+```
+
+The reverted gate is the interesting one and it came out clean: t919 removed the file, lowered the
+GATES ratchet mark deliberately, and rewrote the row it backed. **A revert that leaves a dangling
+gate name in the map is the classic residue, and this one left none.**
+
+### ⚠⚠⚠ THE FINDING: A ROW I WROTE AT t914 WAS STALE BY t916, AND TWO OF MY OWN TICKS WALKED PAST IT
+
+`vertical-align` on TEXT still carried, seven ticks later:
+
+* *"super 29 vs 30, sub 26 vs 28"* — **superseded at t915**, where both became exact.
+* *"approximates what Chrome derives from the font OS/2 superscript offsets"* — **wrong**, and t915
+  measured the actual rule: the PARENT's font size × 0.375 (super) and × 0.25 (sub), verified at
+  16/24/32px and invariant under `line-height`.
+* No mention of **t916** closing `text-top` (27) and `text-bottom` (28) at all.
+
+t915 and t916 each updated the **journal**, the **wiki** and **WEB-PATTERNS.md**. **Only the map fell
+behind** — and the map is the artefact the loop reads when it asks *"is this already built?"*
+
+> **The map is not stale because it is old; it is stale because it is the fourth artefact you update
+> and the first one anybody reads.** A tick that supersedes its own predecessor updates the prose it
+> is proud of and forgets the row it filed. The standing rule *"when you supersede a decision, grep
+> for what asserted it"* has to include `CONSTELLATION.tsv` by name, or it keeps meaning the journal.
+
+The row is rewritten in this commit with all three ticks' measurements and its own staleness recorded
+in the receipt, so the next reader sees the correction and not just the corrected text.
+
+### RE-RANK
+
+None. The five surviving rows are honest, the reverted one left no residue, and the one stale row is
+fixed. The audit's output is a **process correction**: superseding a finding means editing the map
+row in the same commit, not only the journal.

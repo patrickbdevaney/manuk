@@ -745,6 +745,9 @@
   - L845 · What this does NOT say
   - L873 · ⚠ RETRACTED — "a gate that builds its own inputs proves the function, not the wiring" (t919, corrected t920)
   - L911 · Nine Chrome-captured claims are not a proof about the web (t919)
+  - L939 · The one-origin proxy cannot lie about the hostname (t921)
+  - L968 · The cohort was checked, not generalised from one site
+  - L975 · What was kept anyway
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -1592,4 +1595,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1499 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1502 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

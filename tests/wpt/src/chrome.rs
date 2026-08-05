@@ -618,7 +618,7 @@ fn one_origin_reference(
     } else {
         format!("{rewritten}{PROBE_ALL_PATHS_JS}")
     };
-    let proxy = bound.serve(doc);
+    let proxy = bound.serve(doc, PROBE_ALL_PATHS_JS.to_string());
     let secs = chrome_timeout_secs();
 
     let mut pcmd = Command::new(&chrome);
