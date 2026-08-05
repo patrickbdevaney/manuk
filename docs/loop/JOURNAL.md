@@ -46371,6 +46371,91 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 935 — the fix t934 specified, and the two proofs that did not print what I wrote (2026-08-05)
+
+TICK SHAPE: capability — building what t934 measured and specified: **every inline box contributes
+its leading, whether or not it directly contains text** (CSS 2.1 §10.8). The specification was
+written down last tick precisely so this one did not have to re-derive it, and it did not.
+
+**The result is exact.** All eight cases, height AND y, byte-identical to Chrome:
+
+```text
+   div is font:16px/1.5 (strut 24)                     Chrome   before   after
+   <span 24px>outer24</span>                 (CONTROL)   36       36      36
+   <span 24px><span 12px>nested</span></span>            36       24      36   ✗→✓
+   <span 12px>small only</span>              (CONTROL)   24       24      24
+   <span 24px>big</span> and 16px            (CONTROL)   36       36      36
+   plain 16                                  (CONTROL)   24       24      24
+   line-height:normal + the nested pair                  28       18      28   ✗→✓
+   <span 24;line-height:1.5><span 12>…</span></span>     36       24      36   ✗→✓
+   <span 24px><span 12px>n</span>x</span>    (CONTROL)   36       36      36
+```
+
+And the **cascade is gone**, which is the actual prize: in t934's 22-case sweep the seven elements
+below the wrapper were up to 12.8px adrift and are now exact (481/514/504/538/583/607/631 against
+Chrome's 481.3/514.8/504.3/538.8/583.8/607.8/631.8).
+
+**MECHANISM.** `InlineItem::Spacer` gained a `leading` field, kept SEPARATE from `report_height`.
+Those two were the same number, and that conflation is exactly why a wrapper could not be expressed:
+a padded edge must report a tall rect and contribute **zero** leading (§10.6.1 — the div around
+`<a style="padding:10px 20px">` is 20 in Chrome while the anchor is 37, the pill overflowing its
+line), while a text-less wrapper is the mirror image — full leading, **no rect at all**. The wrapper
+carrier is emitted with `node: None` (metrics, never geometry — giving it the element's node would
+put a zero-height rect into `node_rects` for a box whose real rect comes from its children) and
+`holds_line: false` (it must not resurrect the t760 empty-wrapper rule).
+
+⚠⚠⚠ **THE FIRST DRAFT WAS A WRONG ANSWER OF THE RIGHT TYPE, AND `manuk-layout` CAUGHT IT ON THE
+FIRST RUN.** I wrote `leading: self.style_of(node).line_height`. `ComputedStyle::line_height` holds
+the raw **1.2 × font-size** fallback for `line-height: normal`; `text_style` derives it from the FACE
+(`round(ascent + descent + lineGap)`), which is what every other item on the line uses and what
+Chrome lays out with. The difference is 19.2 against 18 at 16px, and it surfaced as
+`a_button_centres_its_content_vertically_in_its_content_box` failing: that test derives its
+expectation from the auto-height button's own height, so a button 1.2px too tall moved every row.
+**One rule, two implementations** — the fix now routes through `text_style` so they cannot drift.
+
+⚠⚠⚠ **TWO OF THE THREE RED PROOFS DID NOT PRINT WHAT I HAD WRITTEN, AND BOTH CORRECTIONS ARE IN THE
+GATE.** This is the third tick running that a proof contradicted its prediction, and the pattern is
+now unmistakable: *predicting a proof from the fix is the same error as writing a fixture from the
+fix.*
+
+* **Proof 2 came back GREEN.** I claimed the wrong-field version reads 29 against Chrome's 28. It
+  reads **28.800003** — and every other row of the gate carries a **1.01** tolerance, which waves
+  that through. The honest options were to delete the claim or make it true; I tightened *that row
+  alone* to **0.5**, re-ran, and it now bites. **A proof that does not go red is not a proof, and a
+  tolerance that hides a 0.8px error in the exact quantity under test is a gate that cannot fail.**
+* **Proof 3 named a gate that does not exist.** I wrote `g_empty_inline_line`; the file is
+  `g_empty_inline_rect`. Run against the real one, `holds_line: true` fails it with `#s1` at
+  `[0 3 0x17]` against Chrome's `[0 0 0x0]` — the t760 phantom line box, back. **A DIFFERENT gate
+  catches it**, which is the argument for running the whole suite rather than the file this tick
+  wrote.
+
+GATE: **`G_INLINE_BOX_LEADING`** (9 claims, 5 CONTROLs). The CONTROLs are most of the file and they
+are what makes the diagnosis a statement about one code path: four of five were already exact, and
+the fifth — `<span 24><span 12>n</span>x</span>`, the same nesting plus **one character** of the
+outer span's own text — was exact too. Only a *structural* defect leaves every text-bearing element
+untouched and breaks exactly the text-less ones; a metrics, font or rounding error would have moved
+all five.
+
+⚠⚠ **THE RESIDUE, PINNED AT OUR NUMBER SO THE NEXT FIX MUST CHANGE IT DELIBERATELY.** The line box is
+now the right HEIGHT and the inner text sits at the wrong BASELINE inside it: Chrome puts the 12px
+text 15px below the line box top, we put it 6px below. The new leading all landed *below* the
+baseline where Chrome half-leads it. This tick contributes the element's `line_height` and **not**
+its ascent/descent, deliberately — those are the metrics `vertical-align: middle/text-top/
+text-bottom/sub/super` are defined against (*the parent's font, never the aligned box's own*, which is
+why the fold filters atomics out), and feeding a nested span's ascent in without re-deriving that rule
+trades a `dy` cascade for a `vertical-align` regression. **The two errors have different blast radii
+and that is the whole argument for splitting them:** the height error cascaded down the page, the
+baseline error is contained to one line, and every element below is now exact.
+
+RATCHET: `manuk-layout` 125/125, full `manuk-page` gate suite on the shipping cascade.
+
+PERF: one zero-width item per inline element. The perf floors are in the wall and F1/F2 are the
+guard; `mid` (1208 nodes) and `large` (8808) both carry inline wrappers, so this is measured rather
+than argued.
+
+WIKI: `docs/wiki/text-layout.md` — the t934 section is rewritten from MEASURED to LANDED, with the
+`leading`/`report_height` split, the wrong-field trap, and the residue with its number.
+
 ## Tick 934 — an inline box that contains only another inline box contributes NO leading, and the loop has been calling this family "already Chrome-correct" (2026-08-05)
 
 TICK SHAPE: measurement — the discovery engine on composed INLINE/line-box cases, the one box class

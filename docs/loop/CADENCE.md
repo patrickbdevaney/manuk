@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **659** | ticks 1–933 |
-| median tick cycle | **26m** | 658 intervals |
-| median, last 10 | **31m** | 10 intervals |
+| ticks landed | **660** | ticks 1–934 |
+| median tick cycle | **26m** | 659 intervals |
+| median, last 10 | **34m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 599.8h elapsed |
-| median verify wall | **63s** | 598 ticks |
+| **ticks per hour** | **1.10** | 600.7h elapsed |
+| median verify wall | **63s** | 599 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **402**
-* **✅ rows in the capability ledger**: 144 → **482**
+* **live gates**: 27 → **403**
+* **✅ rows in the capability ledger**: 144 → **483**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**326 of 659 ticks** (49%) moved a
+**326 of 660 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -756,5 +756,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **931** | 2026-08-05 04:06 | 46m | capability | 63s | +874/−261 | 401 | 81 | 56.0% · | the sidecar stopped at the taffy border, and the bound t930 named was half its true size ( |
 | **932** | 2026-08-05 04:43 | 37m | capability | 63s | +723/−276 | 402 | 81 | 56.0% · | the composed width family is CLEAN, and the one defect in it was a container collapsing to |
 | **933** | 2026-08-05 04:51 | 9m | capability | 63s | +203/−33 | 402 | 81 | 56.0% · | the algorithm four gates named and none built (2026-08-05) |
+| **934** | 2026-08-05 05:44 | 53m | measurement | 63s | +554/−48 | 403 | 81 | 56.0% · | an inline box that contains only another inline box contributes NO leading, and the loop h |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

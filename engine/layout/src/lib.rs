@@ -6576,10 +6576,54 @@ impl Ctx<'_> {
                         report_height: v_height,
                         report_ascent: v_ascent,
                         holds_line: pad_l > 0.0,
+                        leading: if v_ascent.is_some() { 0.0 } else { v_height },
                     });
                     *first = false;
                     *pending_space = None;
                 }
+                // ── **CSS 2.1 §10.8 IS UNCONDITIONAL: *EVERY* INLINE BOX CONTRIBUTES ITS LEADING**,
+                // whether or not it directly contains text. Ours contributed only through the
+                // fragments its text produced, so an element that merely WRAPS another inline
+                // element never reached the fold in `close_line` and was invisible to the line box.
+                //
+                // Measured against Chrome in a `font:16px/1.5` div (strut 24), t934:
+                //
+                // ```text
+                //   <span 24px>outer24</span>                     CONTROL   36    36  ✓
+                //   <span 24px><span 12px>nested</span></span>              36    24  ✗
+                //   line-height:normal, same nesting                        28    18  ✗
+                //   <span 24px><span 12px>n</span>x</span>        CONTROL   36    36  ✓
+                // ```
+                //
+                // **The last row is the discriminator**: one character of the outer span's own text
+                // and we were already exact, which is what identifies this as structural rather than
+                // a metrics, font or rounding error.
+                //
+                // `node: None` on purpose — this carries METRICS, never geometry. Giving it the
+                // element's node would put a zero-height rect into `node_rects` for a box whose real
+                // rect comes from its children. `holds_line: false` is the other half: it must not
+                // resurrect the t760 empty-wrapper rule, where `<div><span></span></div>` is 0 tall
+                // in Chrome and the `any(content_bearing)` early return in `close_line` delivers it.
+                //
+                // Idempotent where we were already right, because the line box folds a MAX: a
+                // text-bearing element already contributes through its own words.
+                out.push(InlineItem::Spacer {
+                    width: 0.0,
+                    node: None,
+                    space_before: None,
+                    report_height: 0.0,
+                    report_ascent: None,
+                    holds_line: false,
+                    // **`text_style`, NOT `cs.line_height`** — and the difference is a real bug the
+                    // layout suite caught on the first run. `ComputedStyle::line_height` holds the
+                    // raw `1.2 × font-size` fallback for `line-height: normal` (19.2 at 16px);
+                    // `text_style` derives it from the FACE (`round(ascent + descent + lineGap)`,
+                    // 18 for Liberation at 16px), which is what every other item on the line uses
+                    // and what Chrome lays out with. Reading the raw field made an auto-height
+                    // `<button>` 19.2 tall against a plain line's 18 — a wrong answer of the right
+                    // type, and one rule with two implementations.
+                    leading: text_style(self.style_of(node), self.fonts).line_height,
+                });
                 // N4: inline content also follows the flat tree.
                 let children: Vec<NodeId> = self.dom.flat_children(node);
                 for c in children {
@@ -6593,6 +6637,7 @@ impl Ctx<'_> {
                         report_height: v_height,
                         report_ascent: v_ascent,
                         holds_line: true,
+                        leading: if v_ascent.is_some() { 0.0 } else { v_height },
                     });
                     *pending_space = None;
                 }
@@ -6660,6 +6705,9 @@ impl Ctx<'_> {
                         report_height: lm.ascent.round() + lm.descent.round(),
                         report_ascent: Some(lm.ascent.round()),
                         holds_line: false,
+                        // `report_ascent` is `Some`, so this never fed a `line_height` floor into
+                        // `close_line`; `leading: 0` preserves that byte-for-byte.
+                        leading: 0.0,
                     });
                 }
                 // ── ⚠⚠⚠ **AN INLINE THAT CARRIES NO FRAGMENT OF ITS OWN STILL HAS AN INLINE BOX.**
@@ -6708,6 +6756,9 @@ impl Ctx<'_> {
                         report_height: lm.ascent.round() + lm.descent.round(),
                         report_ascent: Some(lm.ascent.round()),
                         holds_line: false,
+                        // `report_ascent` is `Some`, so this reporter never fed a `line_height`
+                        // floor into `close_line`; `leading: 0` preserves that byte-for-byte.
+                        leading: 0.0,
                     };
                     out.push(reporter());
                     out.insert(mark, reporter());
@@ -7175,6 +7226,7 @@ impl Ctx<'_> {
                     report_height,
                     report_ascent,
                     holds_line,
+                    leading,
                 } => {
                     // Inline padding/border: occupies `width`, paints nothing, but its
                     // (empty-text) fragment carries the owning element's geometry.
@@ -7217,11 +7269,16 @@ impl Ctx<'_> {
                                 // the anchor itself is 37 — the pill overflows its line, which is the
                                 // whole visual point of the idiom. Feeding the padded height in as a
                                 // floor made that div 37 and pushed every following line down.
-                                line_height: if report_ascent.is_some() {
-                                    0.0
-                                } else {
-                                    report_height
-                                },
+                                // **`leading`, not `report_height`** — the line-box floor and the
+                                // reported rect are different quantities and were the same field
+                                // until t935. A padded edge reports a tall rect and contributes
+                                // ZERO leading (§10.6.1: vertical padding on a non-replaced inline
+                                // does not affect line height — the div around
+                                // `<a style="padding:10px 20px">` is 20 in Chrome while the anchor
+                                // itself is 37, the pill overflowing its line, which is the whole
+                                // visual point of the idiom). A text-less WRAPPER is the mirror
+                                // image: full leading, no rect at all.
+                                line_height: leading,
                                 decoration: Default::default(),
                                 letter_spacing: 0.0,
                                 word_spacing: 0.0,
@@ -7973,6 +8030,14 @@ enum InlineItem {
         /// the padded edge spacer carries its own ascent.
         report_ascent: Option<f32>,
         holds_line: bool,
+        /// **The line-box floor this spacer contributes — CSS 2.1 §10.8's "every inline box".**
+        ///
+        /// Kept SEPARATE from `report_height`, which is what the spacer's own rect claims. The two
+        /// used to be the same number and that conflation is why a wrapper could not be expressed:
+        /// a padded edge must report a tall rect and contribute ZERO leading (§10.6.1 — vertical
+        /// padding on a non-replaced inline does not affect line height), while a text-less wrapper
+        /// must contribute its FULL leading and claim no rect at all.
+        leading: f32,
     },
     /// A **forced line break** — `<br>`, or a newline inside `white-space: pre`.
     ///

@@ -1942,7 +1942,7 @@ The gate takes the whole mixed-font fixture as a **lockstep guard**: a `<sup>` a
 the same size and alignment must produce the same line. If the two sheets drift again, those twelve
 claims disagree while every keyword claim still passes.
 
-## An inline box contributes leading even when it holds no text of its own (tick 934 — MEASURED, not yet fixed)
+## An inline box contributes leading even when it holds no text of its own (tick 934 measured · tick 935 LANDED)
 
 **CSS 2.1 §10.8 is unconditional**: every inline box contributes its `line-height` to the line box,
 whether or not it *directly* contains text. Ours contributes only through the fragments its text
@@ -1970,8 +1970,11 @@ error would move the CONTROL rows too — this is **structural**.
 **An inline element wrapping another inline element emits no item at all**, so it never reaches the
 fold.
 
-**The fix, specified.** Emit, per inline ELEMENT, a zero-width fragment carrying that element's own
-ascent/descent with `content_bearing: false`. Both halves of that flag are load-bearing:
+**The fix, as landed at t935.** `InlineItem::Spacer` gained a `leading` field, kept SEPARATE from
+`report_height`. Those two were the same number, and that conflation is exactly why a wrapper could
+not be expressed: a padded edge must report a tall rect and contribute **zero** leading (§10.6.1),
+while a text-less wrapper is the mirror image — full leading, **no rect at all**. The wrapper carrier
+is emitted with `node: None` (metrics, never geometry) and `holds_line: false`:
 
 * it must **not** resurrect the t760 empty-wrapper rule — `<div><span></span></div>` is 0 tall in
   Chrome, and the early return at `:7527` (`!line.iter().any(|f| f.content_bearing)`) is what
@@ -2011,3 +2014,48 @@ raising its line, `line-height:0`, `vertical-align:super` and a negative length,
 exact), and `white-space:pre` with leading and trailing spaces. Recorded so the next tick does not
 re-sweep the family.
 
+### As landed (t935) — every line box and every y byte-identical to Chrome
+
+```text
+   div is font:16px/1.5 (strut 24)                     Chrome   before   after
+   <span 24px>outer24</span>                 (CONTROL)   36       36      36
+   <span 24px><span 12px>nested</span></span>            36       24      36
+   <span 12px>small only</span>              (CONTROL)   24       24      24
+   <span 24px>big</span> and 16px            (CONTROL)   36       36      36
+   plain 16                                  (CONTROL)   24       24      24
+   line-height:normal + the nested pair                  28       18      28
+   <span 24;line-height:1.5><span 12>…</span></span>     36       24      36
+   <span 24px><span 12px>n</span>x</span>    (CONTROL)   36       36      36
+```
+
+**The cascade is gone, which is the actual prize.** In the 22-case sweep that found the defect, the
+seven elements below the wrapper were up to 12.8px adrift and are now exact.
+
+⚠⚠⚠ **THE TRAP: `ComputedStyle::line_height` IS NOT THE LINE HEIGHT.** It holds the raw
+`1.2 × font-size` fallback for `line-height: normal`; `text_style` derives it from the FACE
+(`round(ascent + descent + lineGap)`), which is what every other item on the line uses and what
+Chrome lays out with — 18 against 19.2 at 16px. The first draft read the raw field and
+`manuk-layout`'s `a_button_centres_its_content_vertically_in_its_content_box` caught it on the first
+run, because that test derives its expectation from the auto-height button's own height. **One rule,
+two implementations**; route through `text_style`.
+
+⚠⚠ **A tolerance can make a gate unfalsifiable in the exact quantity it tests.** The RED proof for
+the wrong-field version came back GREEN: it produces **28.800003** against Chrome's 28, and the
+gate's ordinary **1.01** tolerance waves that through. The `line-height:normal` row alone now carries
+**0.5**. A proof that does not go red is not a proof.
+
+### The residue, pinned at OUR number (t935)
+
+The line box is now the right HEIGHT and the inner text sits at the wrong BASELINE inside it: Chrome
+puts the 12px text **15px** below the line box top, we put it **6px** below — the new leading all
+landed below the baseline, where Chrome half-leads it.
+
+t935 contributes the element's `line_height` and **not** its ascent/descent, deliberately: those are
+the metrics `vertical-align: middle / text-top / text-bottom / sub / super` are defined against —
+*the parent's font, never the aligned box's own* — and the fold at `layout/lib.rs:7549` filters
+atomics out for exactly that reason. Feeding a nested span's ascent in without re-deriving that rule
+trades a `dy` cascade for a `vertical-align` regression.
+
+**The two errors have different blast radii, and that is the whole argument for splitting them.** The
+height error cascaded down the page; the baseline error is contained to one line, and every element
+below it is now Chrome-exact.

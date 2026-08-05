@@ -5309,3 +5309,96 @@ untouched through a wedged parity Chrome, a `manuk-shell` false RED, and four ca
    it; #77-#81 have carried it. At six windows the honest reading is not *"not yet scheduled"* but
    *"the loop will not schedule this on its own"*, and it should either be given a tick by name or be
    explicitly deferred with a reason.
+
+## Check #82 — tick 936 (2026-08-05)
+
+**Horizon:** H0 as re-scoped by **PART VII**. Component 1's bar is *"reliably renders and runs the
+representative real internet"*, instrumented as **M1 on the in-scope CrUX corpus** (`shape ≥ 0.75`
+AND jarring-clean). Latest banked: **sweep t929** — and that date is the whole of this check's
+finding.
+
+### → Gate, or scoreboard?
+
+⚠⚠⚠ **NEITHER — AND THE HONEST ANSWER IS THAT I CANNOT TELL, WHICH IS ITSELF THE DRIFT.** Six ticks
+landed this window and **not one of them has been priced**:
+
+```text
+  t930  capability   intrinsic keywords on all four min/max        UNMEASURED
+  t931  capability   the intrinsic sidecar crossing into taffy      UNMEASURED
+  t932  capability   anonymous table rows (392px container error)   UNMEASURED
+  t933  capability   table row-height distribution                  UNMEASURED
+  t934  measurement  inline-box leading, measured + specified       n/a
+  t935  capability   inline-box leading, landed                     UNMEASURED
+```
+
+**Five capability ticks, zero sweeps.** The board's own cadence rule says a clean `--jobs 2` sweep
+after ~5-6 fixes of either class and that *"an unmeasured batch is a burndown with NO SLOPE"* — and
+the sweep is the **agent's** process, never the observer's, so nobody else was going to notice. I
+recorded the count in t934's journal and then landed a sixth tick anyway. **The count is not the
+control; running the sweep is.**
+
+The mitigating fact, stated because it is real and not because it excuses the above: every one of the
+five is Chrome-differential and RED-proven, and three of them closed residues that four separate gates
+had been pinning at our own number since t814. That is the strongest form of evidence available
+*short of the corpus*, and it is still not the corpus.
+
+**THE STEER, and it is the whole of it: the next tick is the sweep.** Not another primitive, however
+well-ranked. Six fixes deep is past the cadence rule, and the loop is blind on its own headline.
+
+### → Is `orient`'s ranking (VI.3, usage-weight × failing-breadth) still the north star?
+
+**Mostly, with one honest exception that I flagged at the time rather than papering over.** t930
+measured 5.9% of cached snapshots, t931 9.4%, t935's family is "every typographic and icon wrapper on
+the web". But **t932's usage weight measured 0 of 85 and I let SEVERITY carry the tick** — a 392px
+container-width error plus a MISSING_BOX. I reported that as *"no information, not zero"* (the
+snapshots are `curl`'d HTML and a layout idiom always lives in an external stylesheet), which is the
+honest reading, and VI.3 does permit severity to rank when breadth is unmeasurable. **But it is a
+judgement call that the constitution does not explicitly sanction, and it is recorded here as one
+rather than as a measurement.**
+
+### → Is any invariant being bent?
+
+**I2 — HELD UNDER DIRECT PRESSURE, and this is the window's cleanest compliance.** At t931 taffy 0.12
+*would* have accepted a `CompactLength::min_content()` through `Dimension::from_raw`. It compiles. But
+`Dimension` validates as `LENGTH|PERCENT|AUTO`, so the flexbox algorithm would read a tag it does not
+answer. **That is not "more permissive than Chrome" — it is asking a dependency a question outside its
+grammar**, which is worse, because it has no defined answer at all. Took option 3 of the
+borrowed-engine table instead (resolve to px through the measure callback that was already threaded
+through the tree). The obvious edit was the invariant-violating one.
+
+**I3 — SATISFIED, and once again by the shared producer rather than by anyone checking.** Four of the
+five capability ticks changed element geometry, and geometry IS the semantic model
+(`node_rects → manuk_a11y::build_tree_with_rects → A11yNode.bbox → the click point`). t930 published
+its CSSOM half **in the same tick** deliberately. But t932 changed `collect_table_rows` — a *producer* —
+which is precisely the case t852 warned stops protecting us automatically. It happens to be fine
+(cells that previously had no box now have one; strictly more geometry). ⚠ **t935's named residue is
+an I3 item and is not ranked as one:** the inner text of a typographic wrapper sits 9px above where
+Chrome puts it, inside a line box that is now the right height. On M1 that is a rounding-scale shape
+term. **On I3 it is a mis-actuation surface** — the agent's click point is the bbox centre — on
+`<span class="big"><span>label</span></span>`, which is a nav link on a great many sites.
+
+**I4, I5, I8 — held.** Every tick came from a Chrome differential (I5); none touched `scripts/`.
+
+### → PART VI correction
+
+**VI.2's H0.1 row is now materially understated and should say so.** It reads *"CSS layout breadth is
+the weak spot"* with M1 at 16.9% (t875). Two corrections: the banked figure is stale by six ticks in
+one direction and by a whole sweep in the other, and — more useful — **the window produced a
+NEGATIVE result that narrows the row.** t932's 25-case composed-width fixture found **24 of 25
+already Chrome-exact**, including all three real-prose line-count probes. So the residual mass of
+burndown family #1 is **not** in composed block-level width arithmetic, which the loop had been
+assuming for many ticks. It is in the box types that opt *out* of ordinary block sizing — tables
+(t932, t933), scroll containers (the handed-on instrument question), and inline composition (t934,
+t935). **That is a real re-derivation of the direct path and it belongs in VI.2, not only in a
+journal entry.**
+
+### Steer
+
+1. **THE NEXT TICK IS THE SWEEP.** Clean, `--jobs 2`, banked as `SWEEP-t<N>-rows.tsv`. Six fixes
+   unmeasured is past the rule, and five of them are Chrome-exact geometry changes whose corpus
+   effect is genuinely unknown.
+2. **Rank t935's baseline residue as I3, not as shape** — and if it is taken, land it with an
+   agent-side click-point assertion in the same tick, which is the steer check #72 already issued for
+   the identical shape and which has not been executed.
+3. **Carry the negative result into VI.2**: family #1 is not composed width arithmetic. Say it where
+   the next reader looks, not only where this window wrote it.
