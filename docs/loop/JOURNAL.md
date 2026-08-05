@@ -46371,6 +46371,97 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 934 — an inline box that contains only another inline box contributes NO leading, and the loop has been calling this family "already Chrome-correct" (2026-08-05)
+
+TICK SHAPE: measurement — the discovery engine on composed INLINE/line-box cases, the one box class
+t932's own sweep named as unswept and the one that runs on every prose page. No engine change: the
+fix sits in the hottest path in layout and the analysis is complete while the budget to verify it
+across 125 layout tests and the full page suite is not. **Recorded with the mechanism, the
+discriminator and the file:line, which t933 proved is how these converge.**
+
+⚠⚠⚠ **AN INLINE BOX WITH NO DIRECT TEXT OF ITS OWN CONTRIBUTES NOTHING TO THE LINE BOX HEIGHT.**
+CSS 2.1 §10.8 is unconditional — *every* inline box contributes its leading, whether or not it
+directly contains text. Ours contributes only through the fragments its text produces, so a wrapper
+`<span>` with a larger `font-size` is invisible to the line box. Eight cases, one variable each,
+Chrome-measured:
+
+```text
+   div is font:16px/1.5 (strut 24), 400px wide            Chrome    ours
+   <span 24px>outer24</span>                     CONTROL    36        36   ✓
+   <span 24px><span 12px>nested</span></span>               36        24   ✗
+   <span 12px>small only</span>                  CONTROL    24        24   ✓
+   <span 24px>big</span> and 16px                CONTROL    36        36   ✓
+   plain 16                                      CONTROL    24        24   ✓
+   line-height:normal + the nested pair                     28        18   ✗
+   <span 24px;line-height:1.5><span 12px>…</span></span>    36        24   ✗
+   <span 24px><span 12px>n</span>x</span>        CONTROL    36        36   ✓
+```
+
+**The discriminator is the last row and it is exact.** Give the outer span one character of its own
+text and we are correct; take it away and the outer span stops existing for line-height purposes.
+That is not a metrics error, a font error or a rounding error — those would move the CONTROL rows
+too. It is a **structural** one: the line box is folded over the fragments the text produced, so a box
+that produced no fragment was never in the fold.
+
+⚠⚠ **AND IT IS NOT WHAT THE BURNDOWN SAYS IT IS.** `PHASE0-RENDER-BURNDOWN.md` §3 lists
+*"half-leading / strut / vertical-align (`layout/lib.rs:5240-5375`)"* under **"already Chrome-correct,
+do NOT re-grind"**, verified in source. That verdict is *true for the cases it was measured on* —
+every CONTROL row above is one of them — and it is **not true of this clause**, which no fixture had
+reached. A "do not re-grind" entry is a statement about a measurement, not about a subsystem, and
+this is the second time in three ticks that a bound in the ledger turned out to be narrower than the
+sentence that recorded it (t931's flex/grid note was the first).
+
+**Usage weight: this is the shape of nearly every icon, badge and typographic wrapper on the web** —
+`<span class="h1"><span class="txt">…</span></span>`, `<a><span>label</span></a>` with different
+font-sizes, and every `<span class="icon"><i></i></span>`. It is a LINE-HEIGHT error, so it is a **dy**
+error, and dy is the term the burndown says dominates: one wrong line box cascades down every element
+below it, on every page that has one.
+
+**MECHANISM, located rather than guessed:** the line box's height is folded over `LineFrag`s plus the
+strut (`engine/layout/src/lib.rs:7545-7560` — `.fold(strut.0.round(), f32::max)` over
+`line.iter().filter(...)`), and `LineFrag`s are produced from `InlineItem`s, which
+`collect_inline_node` (`:6218`) emits only for text, atomics, spacers and breaks. **An inline element
+that wraps another inline element emits no item**, so it never reaches the fold. `InlineItem::Spacer`
+already carries the "an element with no text is still a box" case for *padding edges and empty
+inlines* — the shape the fix needs exists; what is missing is a **metrics-only** contribution that
+raises the fold without being content-bearing.
+
+**THE FIX, specified so the next tick does not re-derive it:** emit, per inline ELEMENT, a zero-width
+fragment carrying that element's own ascent/descent (its font and `line-height`) with
+`content_bearing: false`. `content_bearing: false` is load-bearing in both directions — it must NOT
+resurrect the t760 empty-wrapper rule (`<div><span></span></div>` is 0 tall in Chrome and the early
+return at `:7527` is what delivers that), and it must NOT enter the `vertical-align` metrics as an
+atomic would (`:7549` filters `atomic_h <= 0.0` for exactly that reason). The change is idempotent
+where we are already correct, because the fold is a `max` and a text-bearing element already
+contributes through its own words — which is precisely why all five CONTROL rows above must not move.
+
+⚠ **SECOND FINDING, smaller and separate: a `nowrap` inline inside `overflow:hidden` reports a
+CLAMPED width.** `white-space:nowrap; overflow:hidden; text-overflow:ellipsis` on a 400px box, with a
+run that needs 544: Chrome reports the span at **544.28** (it overflows and is clipped), we report
+**399**. The height is 17 in both, so we are *not* wrapping — we are truncating the reported box to
+its container. It is the `getBoundingClientRect` of every truncated table cell, nav label and card
+title. Named here with its number rather than folded in: it is a different mechanism from the line
+box and a tick that fixed both could not attribute either.
+
+**WHAT DID NOT MOVE, and it is most of the fixture:** twenty of twenty-two composed inline cases were
+Chrome-exact — `line-height` as a number, a 32px inline raising its line, `line-height:0`,
+`vertical-align:super` and a negative length, an `<img>` and an `inline-block` on the line, inline
+padding/border/margin, `text-align:justify`, `text-indent`, `word-spacing` + `letter-spacing`,
+`sub`/`sup`, `2em` font-size, `text-transform`, an RTL run (x=359, exact) and `white-space:pre` with
+leading and trailing spaces. Reported because a negative result on a swept family is what stops the
+next tick re-sweeping it.
+
+⚠ **SWEEP CADENCE: FOUR unmeasured fixes since the t929 clean sweep** (t930 intrinsic min/max, t931
+the flex/grid crossing, t932 anonymous table rows, t933 row-height distribution). The board's rule is
+a clean `--jobs 2` sweep after ~5-6, and it is the agent's process, never the observer's. Recorded
+here so the next invocation reads it at check-in rather than discovering it: **the burndown has had no
+slope for four capability ticks.**
+
+PERF: none — measurement only, no engine change.
+
+WIKI: `docs/wiki/text-layout.md` — the §10.8 clause, the eight-case table with its discriminator, and
+the fix's specification including the two flags that must stay false.
+
 ## Tick 933 — the algorithm four gates named and none built (2026-08-05)
 
 TICK SHAPE: capability — the most-named open item in layout, taken because t932's own sweep said to

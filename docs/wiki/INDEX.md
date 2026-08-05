@@ -1588,6 +1588,9 @@
   - L1900 · The family, five ticks on
   - L1917 · A property RECOVERED from the second UA sheet is OVERWRITTEN by it, not falling back to it (t923)
   - L1939 · The guard that outlives the fix
+  - L1945 · An inline box contributes leading even when it holds no text of its own (tick 934 — MEASURED, not yet fixed)
+  - L1997 · Also measured: a nowrap inline in overflow:hidden reports a CLAMPED width
+  - L2005 · The negative result from the same sweep
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1615,4 +1618,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1522 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1525 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

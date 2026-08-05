@@ -1941,3 +1941,73 @@ and the drift happened anyway, nine ticks later, in a tick that read that file.
 The gate takes the whole mixed-font fixture as a **lockstep guard**: a `<sup>` and an authored span at
 the same size and alignment must produce the same line. If the two sheets drift again, those twelve
 claims disagree while every keyword claim still passes.
+
+## An inline box contributes leading even when it holds no text of its own (tick 934 — MEASURED, not yet fixed)
+
+**CSS 2.1 §10.8 is unconditional**: every inline box contributes its `line-height` to the line box,
+whether or not it *directly* contains text. Ours contributes only through the fragments its text
+produces, so a wrapper `<span>` with a larger `font-size` is invisible to the line box.
+
+```text
+   div is font:16px/1.5 (strut 24), 400px wide            Chrome    ours
+   <span 24px>outer24</span>                     CONTROL    36        36   ✓
+   <span 24px><span 12px>nested</span></span>               36        24   ✗
+   <span 12px>small only</span>                  CONTROL    24        24   ✓
+   <span 24px>big</span> and 16px                CONTROL    36        36   ✓
+   plain 16                                      CONTROL    24        24   ✓
+   line-height:normal + the nested pair                     28        18   ✗
+   <span 24px;line-height:1.5><span 12px>…</span></span>    36        24   ✗
+   <span 24px><span 12px>n</span>x</span>        CONTROL    36        36   ✓
+```
+
+**The discriminator is the last row.** Give the outer span one character of its own text and we are
+correct; take it away and it stops existing for line-height purposes. A metrics, font or rounding
+error would move the CONTROL rows too — this is **structural**.
+
+**Where it lives.** The line box's height is folded over `LineFrag`s plus the strut
+(`engine/layout/src/lib.rs:7545-7560`, `.fold(strut.0.round(), f32::max)`), and `LineFrag`s come from
+`InlineItem`s, which `collect_inline_node` (`:6218`) emits only for text, atomics, spacers and breaks.
+**An inline element wrapping another inline element emits no item at all**, so it never reaches the
+fold.
+
+**The fix, specified.** Emit, per inline ELEMENT, a zero-width fragment carrying that element's own
+ascent/descent with `content_bearing: false`. Both halves of that flag are load-bearing:
+
+* it must **not** resurrect the t760 empty-wrapper rule — `<div><span></span></div>` is 0 tall in
+  Chrome, and the early return at `:7527` (`!line.iter().any(|f| f.content_bearing)`) is what
+  delivers that;
+* it must **not** enter the `vertical-align` metrics the way an atomic would — `:7549` filters
+  `atomic_h <= 0.0` for exactly that reason.
+
+The change is idempotent where we are already correct, because the fold is a `max` and a text-bearing
+element already contributes through its own words. That is why the five CONTROL rows above are the
+gate's real content.
+
+**Why it is worth more than its size.** This is the shape of nearly every icon, badge and typographic
+wrapper on the web (`<span class="h1"><span class="txt">…</span></span>`, `<a><span>label</span></a>`
+across font sizes, `<span class="icon"><i></i></span>`). It is a line-height error, therefore a **dy**
+error, and one wrong line box cascades down every element below it.
+
+⚠⚠ **The burndown calls this family "already Chrome-correct, do NOT re-grind."** §3 lists
+*half-leading / strut / vertical-align* as verified in source. That verdict is true **for the cases it
+was measured on** — every CONTROL row above is one of them — and not true of this clause, which no
+fixture had reached. **A "do not re-grind" entry is a statement about a measurement, not about a
+subsystem.**
+
+### Also measured: a `nowrap` inline in `overflow:hidden` reports a CLAMPED width
+
+`white-space:nowrap; overflow:hidden; text-overflow:ellipsis` on a 400px box with a run needing 544:
+Chrome reports the span at **544.28** (it overflows and is clipped), we report **399**. The height is
+17 in both, so we are not wrapping — we are truncating the reported box to its container. That is the
+`getBoundingClientRect` of every truncated table cell, nav label and card title. A different mechanism
+from the line box; named rather than folded in, because a tick fixing both could attribute neither.
+
+### The negative result from the same sweep
+
+Twenty of twenty-two composed inline cases were Chrome-exact: `line-height` as a number, a 32px inline
+raising its line, `line-height:0`, `vertical-align:super` and a negative length, an `<img>` and an
+`inline-block` on the line, inline padding/border/margin, `text-align:justify`, `text-indent`,
+`word-spacing` + `letter-spacing`, `sub`/`sup`, `2em` sizing, `text-transform`, an RTL run (x=359,
+exact), and `white-space:pre` with leading and trailing spaces. Recorded so the next tick does not
+re-sweep the family.
+

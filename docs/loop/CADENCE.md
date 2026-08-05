@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **658** | ticks 1–932 |
-| median tick cycle | **26m** | 657 intervals |
-| median, last 10 | **32m** | 10 intervals |
+| ticks landed | **659** | ticks 1–933 |
+| median tick cycle | **26m** | 658 intervals |
+| median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 599.7h elapsed |
-| median verify wall | **63s** | 597 ticks |
+| **ticks per hour** | **1.10** | 599.8h elapsed |
+| median verify wall | **63s** | 598 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **482**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**325 of 658 ticks** (49%) moved a
+**326 of 659 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **325** capability ticks, median cycle **26m**
+* **326** capability ticks, median cycle **26m**
 * median diff per tick: **+262 / −34** lines across 8 files
 
 ## Every tick
@@ -755,5 +755,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **930** | 2026-08-05 03:20 | 1.7h | capability | 63s | +832/−263 | 400 | 81 | 56.0% · | the intrinsic keywords are representable on `width` and UNREPRESENTABLE on all four min/ma |
 | **931** | 2026-08-05 04:06 | 46m | capability | 63s | +874/−261 | 401 | 81 | 56.0% · | the sidecar stopped at the taffy border, and the bound t930 named was half its true size ( |
 | **932** | 2026-08-05 04:43 | 37m | capability | 63s | +723/−276 | 402 | 81 | 56.0% · | the composed width family is CLEAN, and the one defect in it was a container collapsing to |
+| **933** | 2026-08-05 04:51 | 9m | capability | 63s | +203/−33 | 402 | 81 | 56.0% · | the algorithm four gates named and none built (2026-08-05) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
