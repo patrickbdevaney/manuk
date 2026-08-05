@@ -2306,31 +2306,23 @@ because it derived wrapper heights as *the next control's `y` minus this one's* 
 ids. Every diverging row contained an `<svg>` and every clean row did not, which the inferred quantity
 could not show. **Put an id on the box you intend to talk about.**
 
-### …and the OTHER half: the line box that CONTAINS the icon (t968, specified not built)
+### …and the OTHER half: the line box that CONTAINS the icon (t968 specified, t970 LANDED)
 
-t967 fixed the line an inline `<svg>` sits **on**. It does not fix the inline-block that **contains**
-one — the icon-button shape, 23.4% of the burndown corpus.
+t967 fixed the line an inline `<svg>` sits **on**. This is every inline-block that **contains** one —
+the icon-button shape, 23.4% of the burndown corpus.
 
 ```text
-   the wrapper <div> around …                    Chrome    ours
-     <button>Ay</button>                  TEXT     24       22    ✓
-     <a href><svg 16x16></a>              INLINE   20       20    ✓
-     <button><svg 16x16></button>                  26       36    ✗  +10
-     <span inline-block><svg 16x16></span>         20       34    ✗  +14
-     <span inline-block><img 16x16></span>         20       24    ✗   +4
+                                            Chrome   before   after
+   <span inline-block><svg 16x16></span>      20       34       20
+   <span inline-block><img 16x16></span>      20       24       20
+   <div><button><svg 16x16></button></div>    26       36       24
+   <div><a href><svg/></a></div>              20       20       20   control, unmoved
+   y of #end, after eight rows                186      232      179
 ```
 
-⚠⚠ **THE `<img>` ROWS SEPARATE TWO MECHANISMS** — they are wrong by 4, the `<svg>` rows by 14.
-
-**MECHANISM 1 — an atomic-only inline-block has no `TextFragment`, so `last_line_baseline` returns
-`None`.** `close_line` files atomics in `atomic_boxes` and text in `frags`; `last_line_baseline` reads
-`frags`. So an `<img>`-only inline-block takes §10.8.1's *"no in-flow line boxes"* fallback — the
-bottom margin edge (20) — giving `20 + strut descent 3.5 ≈ 24`. **Chrome gives 20**: a line box
-holding only an atomic still has a baseline, the atomic's own bottom edge (16), so `16 + 4 = 20`.
-**The fallback is being taken on a line box that exists.**
-
-**MECHANISM 2 — an `<svg>`'s inner content reports a baseline at the box's own TOP.** From the box
-tree, dumped rather than inferred:
+⚠⚠⚠ **TWO SYMPTOMS, ONE BUG, AND THE `<img>` ROW PROVES IT.** `layout_children` files atomics as
+**sibling boxes**, so §10.8.1's baseline search walks them — and a replaced kid answered in two
+different wrong ways depending on whether it had a subtree:
 
 ```text
    span <InlineBlock>  [0 168 16x20]        span <InlineBlock>  [0 188 16x20]
@@ -2338,21 +2330,34 @@ tree, dumped rather than inferred:
        rect <Inline>   [0 168 16x16]        (nothing below)
 ```
 
-The `<rect>` sits at the span's own `y`, so a fragment beneath it gives `baseline − box.y = 0`, and
-`own_baseline = 0` hangs the whole 20px below the outer baseline: `strut ascent 14.5 + 20 ≈ 34`.
+* **`<svg>`** — the search descended and believed the `<rect>` fragment at the box's own **top**:
+  baseline 0, all 20px below the line's baseline, `strut ascent 14.5 + 20 ≈ 34`.
+* **`<img>`** — the search found nothing, returned `None`, and the caller took the *"no in-flow line
+  boxes"* fallback: the inline-block's own bottom edge (20) rather than the image's (16), `20 + 3.5
+  ≈ 24`. **The fallback taken on a line box that EXISTS.**
 
-**THE RULE, Chrome-verified:**
+**Both are the same error — asking a replaced element's INSIDE a question about line boxes** — and it
+is t967's rule one level up:
 
-```text
-   an inline-block's baseline is its LAST LINE BOX's baseline (§10.8.1), and
-     · a line box holding only an ATOMIC still has one — the atomic's own
-     · a REPLACED element's inner boxes are NOT line boxes of the inline-block
-       containing it, and must not be searched   (t967's rule, one level up)
-   the bottom-margin-edge fallback is for a box with NO line box at all
+```rust
+   BoxContent::Block(kids) => kids.iter().rev().find_map(|k| {
+       let replaced = k.node.is_some_and(|n| matches!(dom.tag_name(n),
+           Some("img"|"canvas"|"video"|"svg"|"object"|"embed"|"iframe")));
+       if replaced { Some(k.rect.y + k.rect.height) } else { last_line_baseline(k, dom) }
+   }),
 ```
 
-⚠ **Mechanism 1 is a MISSING INPUT, not a missing guard**: `last_line_baseline` cannot see atomics
-because they are filed in a different vector, so fixing it means giving the line-close path a way to
-report an atomic's baseline upward — a change to the contract every inline item goes through.
-Applying only t967's rule one level up moves the `<svg>` rows 34 → 24 and leaves every row 4px short;
-strictly better, still wrong, and it would make mechanism 1 harder to see.
+⚠⚠ **"SKIP THE SUBTREE" IS NOT THE RULE — "CONTRIBUTE YOUR OWN BOTTOM EDGE" IS, and the 4px between
+them was measured, not reasoned.** t968 predicted that applying t967's rule here would reach 24 and
+leave every row 4px short. It does: the gate's RED-proof B runs a replaced kid returning `None` and
+reads exactly 24. Returning the edge reaches Chrome's 20.
+
+⚠ **The `<button>` rows land at 24 against Chrome's 26 and that is NOT this rule's residue** — every
+button in the fixture is 2px short, including the text-only one this never touches. It is the
+pre-existing UA control-height difference (our controls are 22 where Chrome gives 24), named on
+`<select>` at t963.
+
+⚠ **And a method note: t968 deferred this as "a MISSING INPUT, not a missing guard" — a change to the
+contract every inline item goes through — after reading `last_line_baseline` alone.** Reading one
+function further, to where atomics rejoin the tree, showed they were already in the walk. **A
+deferral is a prediction about work not yet done, and this one was tested and was half right.**

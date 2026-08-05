@@ -46371,6 +46371,77 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 970 — t968 said this needed a contract change; it needed the rule it already had (2026-08-05)
+
+TICK SHAPE: pattern-class — inline composition, which t969's flex negative left as the only member of
+PART VI's residue list that nothing has cleared, and which both of this session's real defects sit in.
+
+⚠⚠⚠ **t968 DEFERRED THIS AS "A MISSING INPUT, NOT A MISSING GUARD" AND THAT WAS WRONG — IN THE
+DIRECTION THAT COST WORK, NOT THE ONE THAT RISKED IT.** t968 read `last_line_baseline` and concluded
+that fixing an atomic-only inline-block meant teaching the line-close path to report an atomic's
+baseline upward: a change to the contract every inline item goes through. **It does not.** Reading
+one function further — where `layout_children` merges atomics back into the tree — shows they are
+already filed as **sibling boxes**, so §10.8.1's search walks them today and simply asks them the
+wrong question:
+
+```text
+                                            Chrome   before   after
+   <span inline-block><svg 16x16></span>      20       34       20
+   <span inline-block><img 16x16></span>      20       24       20
+   <div><button><svg 16x16></button></div>    26       36       24
+   <div><button><svg/> Ay</button></div>      26       36       24
+   <div><button><img 16x16></button></div>    26       28       24
+   <div><a href><svg/></a></div>              20       20       20   control, unmoved
+   ──────────────────────────────────────────────────────────────────
+   y of #end, after eight rows                186      232      179
+```
+
+**TWO SYMPTOMS, ONE BUG, AND THE `<img>` ROW IS AGAIN WHAT PROVES IT.** `<svg>` has a subtree, so the
+search descended into it and believed a `<rect>` fragment sitting at the box's own **top** — baseline
+0, all 20px below the line's baseline, `14.5 + 20 ≈ 34`. `<img>` has none, so the search returned
+`None` and the caller took §10.8.1's *"no in-flow line boxes"* fallback — **the fallback taken on a
+line box that exists** — using the inline-block's own bottom edge (20) instead of the image's (16),
+`20 + 3.5 ≈ 24`. Both are the same error: **asking a replaced element's INSIDE a question about line
+boxes.** It is t967's rule one level up, and the fix is four lines in the arm that was already there.
+
+⚠⚠ **AND t968's PRICE FOR THE PARTIAL FIX WAS ALSO WRONG, WHICH IS THE MORE USEFUL CORRECTION.** It
+predicted that applying t967's rule here would reach **24** and leave every row 4px short. RED-proof B
+runs exactly that — a replaced kid returning `None` — and it does read 24. **The rule that reaches
+Chrome is not "skip the subtree" but "contribute your own bottom edge"**, and the difference between
+the two is the whole 4px. A deferral is a prediction about work not yet done; this one was tested and
+was half right, and the half it got wrong is the half that mattered.
+
+RED-PROVEN, four ways, each applied, run and reverted:
+
+1. **Restore the plain recursion in the `Block` arm** → `#wcsvg` reads **34** against 20.
+2. **A replaced kid returns `None`** (t968's predicted half-fix) → `#wcsvg` and `#wcimg` both read
+   **24** — strictly better than 34 and still 4px short.
+3. **Drop the t967 guard** → the bare-svg rows return to 30, svg at y=14.
+4. **Widen the guard to every atomic** → a text-bearing `inline-block` goes to 22 against 19.19.
+
+⚠ **THE `<button>` ROWS LAND AT 24 AGAINST CHROME'S 26, AND THAT IS NOT THIS RULE'S RESIDUE.** Every
+button in the fixture is 2px short, *including the text-only one this fix never touches* — it is the
+pre-existing UA control-height difference t963 named on `<select>` (our controls are 22 where Chrome
+gives 24). The gate says so, so the two are never conflated. `#end` moves 232 → 179 against Chrome's
+186: from **46px too long to 7px too short**, and the 7 is four buttons' worth of that −2.
+
+**WHY IT IS WORTH A TICK, in the corpus's own numbers:** inline `<svg>` is **34.5%** of the burndown
+corpus and `<button><svg/> Label</button>` **23.4%** — nav bars, toolbars, chips, icon buttons. t967
+fixed the line each icon sits ON; this fixes every inline-block that CONTAINS one, which is the shape
+they are actually written in.
+
+RATCHET: `manuk-layout` 125/125; `g_replaced_baseline` (extended), `g_inline_box_geometry`,
+`g_inline_box_leading`, `g_inline_vertical_padding`, `g_svg_bbox`, `g_svg_client_rect`,
+`g_select_width`, `g_select_listbox`, `g_tab_stop`, `g_intrinsic_min_max`, `g_intrinsic_flex_grid`,
+`g_anonymous_table_row`, `g_table_row_height_distribution` and `g_form` all green. The `<a>`-inline
+control and the text-bearing inline-block row are byte-identical.
+
+PERF: one tag comparison per kid in a baseline search that already walked them, replacing a subtree
+recursion for the kids that take the new branch.
+
+WIKI: `docs/wiki/text-layout.md` — the containing-block section, rewritten from "specified, not
+built" to the landed rule and its measured half-fix.
+
 ## Tick 969 — flex is CLEAN, 20/20 item-exact, and the first control I built could not have failed (2026-08-05)
 
 TICK SHAPE: measurement — a property-family battery on `display:flex`, which t965's corpus instrument

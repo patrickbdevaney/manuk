@@ -39,20 +39,41 @@
 //! button on the modern web. Each one was 10px too tall, and a line box that is 10px too tall drags
 //! everything below it down the page.
 //!
-//! ⚠ **STILL OPEN, and deliberately not claimed by this gate: the icon INSIDE a `<button>`.** A
-//! `<div>` wrapping `<button><svg/></button>` is **32 here against Chrome's 24**, unchanged by this
-//! fix, and the button sits 10px below its own wrapper's top. That is the same shape one level up —
-//! an inline-block's baseline when its last line box holds a vertically-aligned replaced item — and
-//! it is a *different* computation from the one this gate pins. Measured and named so it is not
-//! mistaken for this defect.
+//! ## …and the same rule ONE LEVEL UP (t970)
+//!
+//! An inline-block that CONTAINS a replaced element was wrong in two different ways, and the `<img>`
+//! row is again what proves they are one bug:
+//!
+//! ```text
+//!                                             Chrome   before   after
+//!   <span inline-block><svg 16x16></span>       20       34       20
+//!   <span inline-block><img 16x16></span>       20       24       20
+//!   <div><button><svg 16x16></button></div>     26       36       24
+//! ```
+//!
+//! `layout_children` files atomics as sibling boxes, so §10.8.1's search walks them. `<svg>` has a
+//! subtree, so the search descended and believed a `<rect>` fragment sitting at the box's own top —
+//! baseline 0, all 20px below the line's baseline, `14.5 + 20 ≈ 34`. `<img>` has none, so the search
+//! returned `None` and the caller took the *"no in-flow line boxes"* fallback — **the fallback taken
+//! on a line box that exists** — giving the inline-block's own bottom edge (20) instead of the
+//! image's (16), `20 + 3.5 ≈ 24`. **A replaced kid contributes its own bottom edge**, and both rows
+//! land on Chrome's 20.
+//!
+//! ⚠ The `<button>` rows now read 24 against Chrome's 26 — a **−2** that every button in the fixture
+//! shares, including the text-only one this fix never touched. That is the pre-existing UA
+//! control-height difference (t963 named it on `<select>`), not a residue of this rule.
 //!
 //! ## How this goes RED
 //!
 //! - **Restore the unconditional `last_line_baseline` search** (drop the `is_replaced` guard) → the
 //!   bare-svg rows read 30 against 20 and the svg sits at y=14. The original defect.
 //! - **Extend the guard to every atomic, not just replaced ones** → a text-bearing `inline-block`
-//!   loses its real baseline and `#ib` grows from 19 to 23, which is the t-earlier §10.8.1 defect
+//!   loses its real baseline and `#ib` grows from 19 to 22, which is the t-earlier §10.8.1 defect
 //!   this guard must not undo.
+//! - **Restore the plain recursion in `last_line_baseline`'s `Block` arm** → `#wcsvg` reads 34.
+//! - **Make a replaced kid return `None` instead of its bottom edge** (the half-fix t968 predicted)
+//!   → `#wcsvg` and `#wcimg` both read **24**, strictly better than 34 and still 4px short of
+//!   Chrome. Measured, not reasoned: this is why the rule contributes an edge rather than skipping.
 
 use manuk_text::FontContext;
 
@@ -72,6 +93,8 @@ div{{margin:0}}
 <div id="wblk"><svg id="sblk" width="16" height="16" style="display:block" viewBox="0 0 16 16"><rect width="16" height="16"/></svg></div>
 <div id="wtop"><svg id="stop" width="16" height="16" style="vertical-align:top" viewBox="0 0 16 16"><rect width="16" height="16"/></svg></div>
 <div id="wib"><span id="ib" style="display:inline-block">Ay</span>Ay</div>
+<div id="wcsvg"><span style="display:inline-block"><svg width="16" height="16" viewBox="0 0 16 16"><rect width="16" height="16"/></svg></span></div>
+<div id="wcimg"><span style="display:inline-block"><img width="16" height="16" src="{GIF}"></span></div>
 </body></html>"##
     )
 }
@@ -158,5 +181,38 @@ fn g_replaced_baseline() {
          Chrome gives 19.19. Reading 23 means the §10.8.1 baseline search was disabled for \
          NON-replaced atomics too — the replaced-element guard is a narrowing, not a removal.",
         h("#wib")
+    );
+
+    // ── AND THE SAME RULE ONE LEVEL UP (t970): an inline-block CONTAINING a replaced element.
+    //    `layout_children` files atomics as sibling boxes, so §10.8.1's baseline search walks them —
+    //    and a replaced kid answered in two different wrong ways depending on whether it had a
+    //    subtree. `<img>` returned None (no subtree) and the caller took the "no line boxes"
+    //    fallback: the inline-block's OWN bottom edge, 24 against Chrome's 20. `<svg>` returned 0
+    //    (its <rect> sits at the box's top), hanging all 20px below the baseline: 34.
+    assert!(
+        (h("#wcsvg") - 20.0).abs() < 1.1,
+        "G_REPLACED_BASELINE: a `display:inline-block` wrapping a 16x16 <svg> gives a line of {} \
+         where Chrome gives 20. Reading 34 means the baseline search DESCENDED into the svg and \
+         believed a fragment sitting at the box's own top; reading 24 means it skipped the subtree \
+         but contributed NOTHING, so the caller fell back to the inline-block's own bottom edge. \
+         Both were measured; the rule is that a replaced kid contributes its OWN bottom edge.",
+        h("#wcsvg")
+    );
+    assert!(
+        (h("#wcimg") - 20.0).abs() < 1.1,
+        "G_REPLACED_BASELINE: a `display:inline-block` wrapping a 16x16 <img> gives a line of {} \
+         where Chrome gives 20. Reading 24 means the search found NOTHING and the caller fell back \
+         to the inline-block's own bottom margin edge — the fallback taken on a line box that \
+         EXISTS. A replaced kid contributes its own bottom edge, which is what makes this row and \
+         the <svg> row above ONE bug rather than two.",
+        h("#wcimg")
+    );
+    assert!(
+        (h("#wcsvg") - h("#wcimg")).abs() < 1.1,
+        "G_REPLACED_BASELINE: the <svg> wrapper ({}) and the <img> wrapper ({}) must agree — they \
+         are the same replaced box at the same size, and any difference between them is the \
+         subtree being searched.",
+        h("#wcsvg"),
+        h("#wcimg")
     );
 }

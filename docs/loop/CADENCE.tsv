@@ -688,3 +688,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 966	f27834d4	1785956549	2026-08-05T15:02:29-04:00	2357	measurement	63	10	410	34	407	81	3896	6960	0	488	0	the surface audit, and its axis was the CORPUS rather than a source (2026-08-05)
 967	5ca019b1	1785958139	2026-08-05T15:28:59-04:00	1590	pattern-class	63	6	165	33	407	81	3896	6960	0	488	0	a replaced element has no line box to take a baseline from, and `<svg>` answered anyway (2026-08-05)
 968	692e7487	1785959590	2026-08-05T15:53:10-04:00	1451	measurement	63	4	94	32	407	81	3896	6960	0	488	0	t967 fixed the line the icon is ON; this is the line that CONTAINS it (2026-08-05)
+969	10c04f6f	1785961958	2026-08-05T16:32:38-04:00	2368	measurement	63	9	248	78	407	81	3896	6960	0	488	0	flex is CLEAN, 20/20 item-exact, and the first control I built could not have failed (2026-08-05)

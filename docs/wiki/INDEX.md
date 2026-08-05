@@ -1596,7 +1596,7 @@
   - L2095 · A TAB has no width — its advance is an OUTPUT of the pen (t959–t962)
   - L2172 · A list-box <select> is sized by ROWS, and the row is NOT a line box (t958, t963)
   - L2253 · A replaced element's baseline is its bottom margin edge, and <img> was right by ACCIDENT (t967)
-  - L2309 · …and the OTHER half: the line box that CONTAINS the icon (t968, specified not built)
+  - L2309 · …and the OTHER half: the line box that CONTAINS the icon (t968 specified, t970 LANDED)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`

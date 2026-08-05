@@ -6706,7 +6706,8 @@ impl Ctx<'_> {
                         && matches!(s.overflow_x, Overflow::Visible)
                         && matches!(s.overflow_y, Overflow::Visible)
                     {
-                        last_line_baseline(&r.boxx).map(|b| r.margin_top + (b - r.boxx.rect.y))
+                        last_line_baseline(&r.boxx, self.dom)
+                            .map(|b| r.margin_top + (b - r.boxx.rect.y))
                     } else {
                         None
                     };
@@ -8411,7 +8412,7 @@ impl InlineItem {
 /// recurses: the line may be several block levels down (`<div><p>text</p></div>` as an
 /// inline-block). A block whose subtree holds no text at all yields `None` and the caller falls back
 /// to the bottom margin edge, which is the same answer an empty inline-block has always got here.
-fn last_line_baseline(b: &LayoutBox) -> Option<f32> {
+fn last_line_baseline(b: &LayoutBox, dom: &Dom) -> Option<f32> {
     match &b.content {
         // Within one inline formatting context the LAST line has the greatest baseline, so the max
         // is the last line's — no ordering assumption about the fragment vector is needed.
@@ -8421,7 +8422,43 @@ fn last_line_baseline(b: &LayoutBox) -> Option<f32> {
             .fold(None, |acc: Option<f32>, x| {
                 Some(acc.map_or(x, |m| m.max(x)))
             }),
-        BoxContent::Block(kids) => kids.iter().rev().find_map(last_line_baseline),
+        // ⚠⚠⚠ **A REPLACED KID IS A LINE BOX, AND ITS BASELINE IS ITS BOTTOM MARGIN EDGE.** When an
+        // inline formatting context contains atomics, `layout_children` files them here as sibling
+        // boxes, so this walk is what an inline-block's §10.8.1 baseline search actually sees. It
+        // used to recurse into every kid, and a replaced element answered in two different wrong
+        // ways depending on whether it had a subtree:
+        //
+        // ```text
+        //   the <div> around …                          Chrome    before    after
+        //     <span inline-block><img 16x16></span>        20        24       20
+        //     <span inline-block><svg 16x16></span>        20        34       20
+        //     <button><svg 16x16></button>                 26        36       26
+        // ```
+        //
+        // `<img>` has nothing under it, so the recursion returned `None` and the caller took the
+        // *"no in-flow line boxes"* fallback — the bottom margin edge of the WHOLE inline-block (20)
+        // instead of the image's own baseline (16), giving `20 + strut descent ≈ 24`. `<svg>` has a
+        // subtree, so the recursion reached a `<rect>` fragment sitting at the box's own top and
+        // answered **0**, hanging the whole 20px below the outer baseline: `14.5 + 20 ≈ 34`.
+        //
+        // **Both are the same error — asking a replaced element's INSIDE a question about line
+        // boxes** — and it is t967's rule one level up: what a replaced element displays is not a
+        // line, so it contributes its own bottom edge and its subtree is never searched. That the
+        // two symptoms differed by exactly the 10px this session kept seeing is what identified them
+        // as one bug.
+        BoxContent::Block(kids) => kids.iter().rev().find_map(|k| {
+            let replaced = k.node.is_some_and(|n| {
+                matches!(
+                    dom.tag_name(n),
+                    Some("img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe")
+                )
+            });
+            if replaced {
+                Some(k.rect.y + k.rect.height)
+            } else {
+                last_line_baseline(k, dom)
+            }
+        }),
     }
 }
 
