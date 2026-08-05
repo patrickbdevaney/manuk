@@ -680,3 +680,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 956	4b323791	1785939567	2026-08-05T10:19:27-04:00	271	measurement	63	4	112	32	403	81	3896	6960	0	484	0	it is not a truncation: the whole stylesheet is unapplied (2026-08-05)
 957	0771ef93	1785939822	2026-08-05T10:23:42-04:00	255	measurement	63	5	104	32	403	81	3896	6960	0	484	0	RETRACTION: t953, t955 and t956 measured an unstyled page, and the tool's own help text says so (2026-08-05)
 958	13f88932	1785940036	2026-08-05T10:27:16-04:00	214	measurement	63	5	97	32	403	81	3896	6960	0	484	0	a list-box `<select>` is 17px tall where Chrome gives 66, and the model is simply absent (2026-08-05)
+959	2f9a9834	1785940211	2026-08-05T10:30:11-04:00	175	measurement	63	5	82	33	403	81	3896	6960	0	484	0	a TAB has no width at all, which is larger than the property that named it (2026-08-05)

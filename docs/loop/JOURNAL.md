@@ -46371,6 +46371,54 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 960 — why the tab fix is not one line, recorded before the next attempt starts in the wrong place (2026-08-05)
+
+TICK SHAPE: measurement — an amendment to t959's specification, found by opening the file t959's
+spec would have sent someone to. Short on purpose: it is one architectural fact, and its whole value
+is arriving before an hour is spent.
+
+**t959 specified the rule correctly** — *a tab advances the pen to the next multiple of
+`tab-size × the space advance`* — and left the impression that it belongs in text measurement. **It
+does not, and it cannot.**
+
+```rust
+   // engine/text/src/lib.rs:937
+   pub fn measure(&self, text: &str, key: FontKey, size: f32) -> f32 {
+       let ck: RunKey = (key, size.to_bits(), false, text.to_owned());
+       if let Some(&w) = self.measure_cache.borrow_mut().get(&ck) { … }
+```
+
+⚠⚠⚠ **`measure()` IS POSITION-INDEPENDENT AND CACHED BY TEXT ALONE, AND A TAB STOP IS NEITHER.**
+Its result depends only on `(font, size, text)` — which is what makes the cache sound — while a tab's
+advance depends on **where the pen already is on the line**. `"ab\tcd"` and `"a\tcd"` do not differ
+by one character's width; the tab absorbs the difference. **Any fix that adds a width for `\t` inside
+`measure` is wrong for every run that does not start at column 0, and it would silently poison a
+cache keyed on text.**
+
+**So the tab must be handled where the pen position exists**, which is the inline path:
+
+* `collect_inline_node` splits a preserved-whitespace run at each `\t` and emits the tab as its own
+  item, exactly as it already splits `pre-wrap` runs at `\n` into `InlineItem::Break`;
+* the line-layout pass advances the pen to the next stop when it meets one, because that is the only
+  place `line_left` and the current `x` are both known.
+
+**That is the same shape as `InlineItem::Break`**, which exists for precisely the reason — a newline
+is not a character with a width either — so the pattern to copy is already in the file.
+
+⚠ **AND IT NARROWS THE BLAST RADIUS, which corrects t959's own caution.** t959 called this "the
+text-measurement path, which every page on the web goes through" and deferred on that basis. **It is
+not:** in normal `white-space` a tab is collapsed to a space and already measures correctly (t959's
+CONTROL row proves spaces work). Only **preserved** tabs are affected — `pre`, `pre-wrap`, `<textarea>`
+— so the surface is the same one `InlineItem::Break` already touches. **The deferral stands on the
+session's depth, not on the risk, and the record should say which.**
+
+RATCHET: no engine change. `manuk-layout` 125/125 and the page suite green from t945.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — an amendment to a specification already recorded in `WEB-PATTERNS.md`.
+[no-pattern]
+
 ## Tick 959 — a TAB has no width at all, which is larger than the property that named it (2026-08-05)
 
 TICK SHAPE: measurement — surface audit #36's second lead. The audit filed `tab-size` as a missing
