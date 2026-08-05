@@ -46371,6 +46371,85 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 957 — RETRACTION: t953, t955 and t956 measured an unstyled page, and the tool's own help text says so (2026-08-05)
+
+TICK SHAPE: measurement — a withdrawal, published in full, because three consecutive ticks of this
+window rest on an instrument I used wrongly and one of them called itself "the finding of the
+window".
+
+⚠⚠⚠ **WHAT IS RETRACTED.**
+
+```text
+   t953  "our FOOTER is 1004×472 in Chrome and 1184×1002 in ours"        WITHDRAWN
+   t955  "we do not apply the rule — max-width:1024px absent"            WITHDRAWN
+   t956  "the whole 285KB stylesheet is unapplied"                       WITHDRAWN
+```
+
+All three were measured with **`manuk-wpt boxes --html FILE --url URL`**, which loads a LOCAL file.
+It does not fetch the document's external subresources. **Every box I compared was the box of an
+unstyled page.**
+
+⚠⚠⚠ **AND THE TOOL SAYS THIS, IN ITS OWN USAGE TEXT, IN WORDS WRITTEN BY SOMEONE WHO ALREADY PAID
+FOR IT:**
+
+> *"`--fetch URL` probes a LIVE page — the boxes of the document as a user would actually get it,
+> subresources and scripts included. **A local snapshot cannot stand in for it**: relative `<link>`s
+> do not resolve from `file://`, so **the CSS silently does not load and every box you measure is the
+> box of an unstyled page**. That mistake cost real time here; a probe that only works on local files
+> invites it."*
+
+I read that text at t946 while looking up the flag, used `--html` for eleven ticks anyway because it
+let me inject probes, and never asked whether the thing it was measuring still had its CSS.
+
+**THE CORRECTED MEASUREMENT.** Same site, `boxes --fetch`, the path that loads subresources:
+
+```text
+                                    Chrome        ours (--html)     ours (--fetch)
+   page height                      13,142         21,919            12,978
+   .id-SiteSkWrap x                  1024              —              1024
+```
+
+**Our page is 12,978px against Chrome's 13,142 — 1.2% apart, not 67%** — and an element sitting at
+`x = 1024` is the `max-width: 1024px` being applied. **We apply the stylesheet. We always did.**
+
+⚠⚠ **WHAT SURVIVES, and it is worth separating carefully from what does not.**
+
+* **t952's DOM count survives** — `footer.querySelectorAll('*').length` is 173 in both engines. A DOM
+  census does not depend on CSS, so that comparison was sound.
+* **t954's surface audit survives** — it is a map reconciliation and touched no geometry.
+* **t948's `dx=dw=dh=0, dy≠0` signature survives** — it came from the FIDELITY path, which renders
+  live, not from `boxes --html`.
+* **t949's ranked cause list survives** — same, from the sweep.
+* **Every gate and every engine fix in this window survives untouched** — t930-t935, t939, t945 are
+  fixture-based, Chrome-differential, RED-proven, and none used `boxes --html` for its claim.
+
+**WHAT IS LOST is the entire t949→t956 investigation**, which chased a footer divergence that does
+not exist at the size I measured it. Seven ticks. The `unaligned key` cause in the sweep is real —
+that came from the fidelity path — but everything I concluded about *why* rests on unstyled boxes.
+
+⚠⚠⚠ **THE LESSON, and it is the sharpest one available because the loop had already written it
+down.** This window caught five instrument artefacts in other people's measurements and my own
+(t930's `--jobs 2` false win, t936's scorability "regression", t942's phantom crossing, t951's
+constant-returning diagnostic, t946's refuted comment hypothesis) — and then produced a sixth by
+**picking a probe for its convenience and not re-reading what the probe measures.** `--html` let me
+inject a script; `--fetch` did not. I optimised for the affordance and lost the subject.
+
+> **The standing rule was already there — *"a probe that only works on local files invites it"* — and
+> the failure mode it names is not ignorance of the rule. It is having read the rule and then chosen
+> the tool for a different reason.**
+
+**FOR THE NEXT INVOCATION.** Do not re-open the tz.de footer. The open leads that remain sound are:
+`<select multiple>` (t954, a control-height `dy`, one fixture), `tab-size` (t954, one shaper rule),
+and the sweep's `unaligned key` cause (t949) — **which must be investigated through the fidelity path
+or `--fetch`, never through `boxes --html`.**
+
+RATCHET: no engine change, and none of this window's engine changes is affected. `manuk-layout`
+125/125 and the page suite green from t945; `manuk-wpt` 98/98.
+
+PERF: none.
+
+WIKI: none [forced] — the artefact is a retraction. [no-pattern]
+
 ## Tick 956 — it is not a truncation: the whole stylesheet is unapplied (2026-08-05)
 
 TICK SHAPE: measurement — t955's named probe, run to separate its three candidates. It eliminated

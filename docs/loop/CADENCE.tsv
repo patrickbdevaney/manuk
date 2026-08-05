@@ -677,3 +677,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 952	5ed92775	1785938738	2026-08-05T10:05:38-04:00	400	measurement	63	7	305	34	403	81	3896	6960	0	484	0	the DOM is right and the BOXES are absent, and t951's address was my own truncation (2026-08-05)
 954	aeb5c860	1785939086	2026-08-05T10:11:26-04:00	348	measurement	63	4	108	32	403	81	3896	6960	0	484	0	the surface audit, on the axis that actually finds things (2026-08-05)
 955	973b982f	1785939296	2026-08-05T10:14:56-04:00	210	measurement	63	4	95	32	403	81	3896	6960	0	484	0	the layout was never the problem: we do not apply the rule (2026-08-05)
+956	4b323791	1785939567	2026-08-05T10:19:27-04:00	271	measurement	63	4	112	32	403	81	3896	6960	0	484	0	it is not a truncation: the whole stylesheet is unapplied (2026-08-05)
