@@ -46371,6 +46371,79 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 973 — `Range.getBoundingClientRect` does not answer the viewport; it THROWS (2026-08-05)
+
+TICK SHAPE: measurement — check #86's last open steer item, run rather than reasoned about, and it
+corrects the tick that filed it.
+
+⚠⚠⚠ **t959 RECORDED THAT `Range.getBoundingClientRect()` "RETURNS 1200 — THE FULL VIEWPORT WIDTH —
+FOR EVERY RANGE". IT DOES NOT. IT IS ABSENT AND IT THROWS.** Probed inside the engine rather than
+inferred from a probe's output:
+
+```text
+   typeof Range                                  function
+   typeof Range.prototype.getBoundingClientRect  undefined
+   typeof Range.prototype.getClientRects         undefined
+   r.getBoundingClientRect()                     TypeError: r.getBoundingClientRect is not a function
+   r.getClientRects()                            TypeError
+   p.getBoundingClientRect().width               400          <- the ELEMENT method works fine
+```
+
+`Range.prototype` carries 27 members (`setStart`, `extractContents`, `surroundContents`,
+`compareBoundaryPoints`, …) and **neither rect method is among them**. t959's "1200" was almost
+certainly the *element's* rect read from a probe that had already fallen back — the tick even says it
+*"had to be rewritten around a shrink-to-fit box"*. **A number recorded from a probe that was being
+rewritten around a failure is a number about the failure.**
+
+⚠⚠ **AND THE CORRECTION CHANGES THE PRIORITY, not just the wording.** *"Returns the wrong box"* is a
+Bar-2 accuracy bug. *"Throws a TypeError"* is the class this project has a doctrine for: it **kills
+the handler**, so the editor's selection code, the highlight widget and the caret library all stop at
+that line rather than drawing something slightly wrong. Same API, and the two diagnoses rank at
+opposite ends of the ledger.
+
+**THE SPECIFICATION, Chrome-measured so the fix does not re-derive it** (16px sans-serif, a 400px-wide
+`<p>` whose text is 265px of "Hello brave new world of ranges here"):
+
+```text
+   range 0..5   "Hello"          [   0, 16,  36.5, 17]
+   range 6..11  "brave"          [40.9, 16,  40.0, 17]
+   range 0..0   collapsed        [   0, 16,   0.0, 17]   <- zero WIDTH, full height
+   range over the whole text     [   0, 16, 265.0, 17]
+   selectNodeContents(p)         [   0, 16, 265.0, 17]
+   p.getBoundingClientRect()     [   0, 16, 400.0, 18]   <- the ELEMENT, for contrast
+   getClientRects().length       1 for both ranges above
+```
+
+⚠ **THE TWO ROWS THAT CARRY THE WHOLE DESIGN.** A range's rect is the **text's** extent (265), not
+its element's (400) — that is the entire reason a selection UI calls it. And it is **17 tall, not the
+18px line box**: the content area of the run, not the line. A fix that unions element rects would
+return 400 × 18 and pass a careless gate on the whole-text-node row while being wrong on every
+partial one.
+
+**WHY IT IS A MEASUREMENT TICK.** The offsets are DOM offsets into a text node and our
+`TextFragment`s carry the **rendered** string — whitespace already collapsed, `text-transform`
+already applied — so `range.startOffset` does not index the fragment's text. Mapping the two requires
+a per-fragment source-offset that fragments do not currently carry; that is a field on the fragment
+and a change in the inline collection path, which is the same contract t968 mispriced and t970 then
+found already half-built. **This tick's job was to replace a wrong hypothesis with a measured
+specification, and that is done** — the next tick starts from Chrome's numbers instead of from
+"returns 1200".
+
+⚠ **A CHEAPER SHAPE, PRICED AND REJECTED**: union the rects of the *elements* the range touches. It
+gets the `selectNodeContents` row and fails every partial-text row by ~135px of width and 1px of
+height, and it hands every caller a plausible wrong box instead of an error. **That is the "wrong
+answer of the right type" this project has already named as its dominant defect class** — the honest
+`TypeError` is a better placeholder than a confident wrong rect, and this is the one place where
+"leave it throwing" is the ratchet-positive choice until the real mapping lands.
+
+RATCHET: no engine change — the probe was written, run and deleted; the tree is unmodified. Every
+gate green from t972.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefact is this specification; it belongs in the wiki when the mapping
+lands. [no-pattern]
+
 ## Tick 972 — a button's UA border is 2px, and the audit's font-size claim was wrong (2026-08-05)
 
 TICK SHAPE: pattern-class — the UA metrics of form controls, which check #86 ranked as *"the

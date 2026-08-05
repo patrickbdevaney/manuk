@@ -691,3 +691,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 969	10c04f6f	1785961958	2026-08-05T16:32:38-04:00	2368	measurement	63	9	248	78	407	81	3896	6960	0	488	0	flex is CLEAN, 20/20 item-exact, and the first control I built could not have failed (2026-08-05)
 970	f3ce13d0	1785963485	2026-08-05T16:58:05-04:00	1527	pattern-class	63	5	203	34	407	81	3896	6960	0	488	0	t968 said this needed a contract change; it needed the rule it already had (2026-08-05)
 971	6b72be28	1785966692	2026-08-05T17:51:32-04:00	3207	measurement	63	7	282	34	408	81	3896	6960	0	488	0	the constitution check, and the window in which I corrected myself three times (2026-08-05)
+972	ce6d686e	1785968106	2026-08-05T18:15:06-04:00	1414	pattern-class	63	4	106	32	408	81	3896	6960	0	488	0	a button's UA border is 2px, and the audit's font-size claim was wrong (2026-08-05)
