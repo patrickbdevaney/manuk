@@ -46371,6 +46371,51 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 961 — the second reason the tab fix is not one line, and the boundary that stopped me (2026-08-05)
+
+TICK SHAPE: measurement — one more architectural fact for t959's specification, and the record of a
+boundary held.
+
+**t960 established that `measure()` cannot carry a tab stop** — it is cached on `(font, size, text)`
+and a tab's advance depends on the pen. **The inline path has the same property one level up, and
+that is the fact this tick adds.** In `layout_inline`, every `InlineItem` is turned into a tuple:
+
+```rust
+   (advance, space_w, …, breakable, Box<dyn Fn(x: f32) -> LineFrag>)
+```
+
+⚠⚠⚠ **THE ADVANCE IS A CONSTANT, COMPUTED BEFORE `x` IS KNOWN.** Only the *fragment builder* receives
+`x`; the width the placement loop consumes to decide wrapping and to move the pen is already fixed by
+then. **A tab is the one inline thing whose advance IS a function of `x`**, so it cannot be expressed
+in this shape — it needs the placement loop to compute the advance for that item after the pen
+position, which is a change to the loop's contract rather than a new match arm.
+
+**So the full picture, for whoever takes it:** the rule is one line (t959), `measure()` cannot hold
+it (t960), and **`InlineItem`'s advance/builder split cannot hold it either (this tick)**. The work
+is a small, real change to `layout_inline`'s placement contract — not large, and not a drop-in.
+`InlineItem::Break` is still the right shape to copy for the *collection* half; it is the placement
+half that needs the new capability.
+
+⚠⚠ **AND I STOPPED THERE, ON A BOUNDARY SET BEFORE I LOOKED.** The rule I gave myself was: *attempt
+it, and if the design does not fall out cleanly in one read of `layout_inline`, revert and report.*
+It did not, so I did. **This session already paid for pushing past a boundary once** — t957 retracted
+three ticks built on a probe I had been warned about in writing — and the second-cheapest lesson
+available is not to re-learn the first one at the end of a long session in the hottest path in the
+engine.
+
+**The deferral is on RISK now, not on session depth**, which corrects t960's own correction: t960
+said the blast radius was narrow and the deferral was about depth. The narrow blast radius is still
+true for the *collection* half; the *placement* half touches the contract every inline item goes
+through, and that is a different thing to change tired.
+
+RATCHET: no engine change, and no engine change was attempted — the file was read, not edited.
+`manuk-layout` 125/125 and the page suite green from t945.
+
+PERF: none.
+
+WIKI: none [forced] — the third and final amendment to a specification recorded in
+`WEB-PATTERNS.md`. [no-pattern]
+
 ## Tick 960 — why the tab fix is not one line, recorded before the next attempt starts in the wrong place (2026-08-05)
 
 TICK SHAPE: measurement — an amendment to t959's specification, found by opening the file t959's
