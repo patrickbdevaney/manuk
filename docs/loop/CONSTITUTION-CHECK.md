@@ -5206,3 +5206,106 @@ PID, and a `manuk-shell` false-RED under the parallel-build race that passes 74/
    #76 named it, #77, #78, #79 carried it, and this window did not touch it either. At five windows
    this stops being a carried item and becomes a finding about what the loop will not schedule on its
    own.
+
+## Check #81 — tick 926 (2026-08-04)
+
+**Horizon:** H0 as re-scoped by **PART VII**. Component 1's bar is *"reliably renders and runs the
+representative real internet"*, instrumented as **M1 on the in-scope CrUX corpus**. Latest banked:
+**17.6% (23/131)**, sweep t919.
+
+### → Gate, or scoreboard?
+
+**Neither, again — and this window is the first in which the loop CORRECTED ITSELF three times.**
+
+```text
+  t919  measurement  sweep; caught t918 as a REGRESSION and reverted it; GATES mark lowered deliberately
+  t920  measurement  RETRACTED t919's headline — the mechanism was never inert; I skipped the binary question
+  t921  capability   the one-origin proxy is limited by HOSTNAME GATING, not by navigation forwarding
+  t922  capability   `vertical-align: <length>`/`<percentage>` were UNREPRESENTABLE
+  t923  capability   `<sup>` got its SIZE from Stylo and its ALIGNMENT overwritten by MinimalCascade
+  t924  measurement  narrowed the input baseline by two thirds, then REFUSED to guess the rest
+  t925  capability   `border-spacing` takes two lengths; the RED proof hit the wrong cascade first
+```
+
+**Three of those seven are the loop catching its own error**, and two are reverts of work it had just
+landed. That is not a failure mode; it is the ratchet and I5 doing exactly what they exist for, at a
+rate the loop has not previously sustained. The honest summary of the window is **"five capability
+fixes, two reverts, one retraction"** — and the retraction is the one worth keeping, because it is the
+only one nothing external forced.
+
+⚠⚠⚠ **THE RETRACTION, RECORDED AS THE WINDOW'S MOST INSTRUCTIVE EVENT.** t919 saw a mechanism that
+was unit-gated, RED-proven and green fire **zero times across 200 sites**, concluded *"the wiring is
+inert"*, wrote a wiki section and banked a lesson. t920 refuted it with one probe at the call site.
+**The rule I skipped is the one written largest in my own notes** — *check what binary produced a
+surprising reading before checking what the code did* (t881-887) — and the sweep's binary had been
+overwritten by the time I asked, so the cause is now permanently unrecoverable. **A rule you can
+recite while breaking it is decoration**, which is the same sentence STATUS.md's Lesson 4 uses about
+its own third recurrence.
+
+### → Is VI.3's ranking still the north star?
+
+**Yes, and the window's own shape is the argument.** Every capability fix here came from a **four-line
+differential fixture**, and the largest single one — `vertical-align`, six ticks from t913 to t923 —
+went from **13 of 14 cases WRONG to 13 of 14 EXACT** off one 13-case fixture written in a measurement
+tick that fixed nothing. `<sup>`/`<sub>`, `vertical-align: -2px` and a two-value `border-spacing` are
+mainstream markup with enormous usage weight and, by the t909 tag rule, **unpriceable on this
+corpus** — which was known in advance and is exactly what VI.3 says to build anyway.
+
+⚠ **M1 IS UNMEASURED FOR SEVEN TICKS**, with three engine fixes (t922, t923, t925) landed against it.
+That is inside the cadence and it is worth naming because the last sweep is also the one that caught
+a regression: **the sweep is now demonstrably load-bearing for the ratchet, not only for the
+scoreboard.** t918 was Chrome-exact on nine fixtures and wrong on the web, and nothing but a corpus
+run was ever going to say so.
+
+### → Is any invariant being bent?
+
+**THE RATCHET WAS TESTED TWICE MORE AND HELD BOTH TIMES.** t919 reverted t918 (a finished,
+nine-claim, four-guard capability) on one site's 0.18 shape drop, bisected across four trees and
+restored the number. t924 built the narrowed version, watched it still cost the site 0.18, tried the
+centring model, **overshot by two pixels**, and reverted the whole attempt rather than fit a third
+approximation to a page it could not inspect. *Narrowing a defect is a result; guessing the remainder
+is not.*
+
+⚠⚠ **AND FALSIFICATION ITSELF FAILED ONCE, WHICH IS NEW.** t925's first RED proof **passed**: it
+mutated MinimalCascade's parser while the gate runs the **shipping Stylo cascade**. A proof aimed at
+the wrong path is indistinguishable from a gate that cannot fail — the `falsify.sh` failure mode, one
+level in. The standing note `live-cascade-is-stylo-not-minimal` has always been about *fixes*; it now
+covers *proofs*.
+
+**I5 held and did most of the work.** **I3 held** — every capability tick this window published its
+result through the semantic model (`vertical-align` reaches computed style; the length variant
+serialises). **I2 held.** **I4 held** — two rows were named-and-left with their numbers (`middle`'s
+1px, the `<td>` stretch) rather than approximated. **PART VII held across 25 ticks**: `scripts/`
+untouched through a wedged parity Chrome, a `manuk-shell` false RED, and four cadence-hook refusals.
+
+### → PART VI corrections
+
+* **VI.3's M1 row:** **17.6% (t919)**, unmeasured since.
+* **A new standing fact, and it is about the GATES count:** a revert that removes a gate must lower
+  the ratchet mark **deliberately, with the reason in the journal** (t919, 398 → 397). The escape
+  hatch exists in the ratchet's own message and had never been used; using it correctly is now on the
+  record so the next one is not mistaken for retuning.
+* **A second:** the two UA sheets are not peers. For the handful of properties `stylo_engine.rs`
+  **recovers** from MinimalCascade, the minimal sheet is the **authority**, and adding a rule to the
+  Stylo sheet alone is worse than not adding it (t923).
+
+### → THE STEER
+
+1. **RUN THE SWEEP AFTER ONE MORE ENGINE TICK.** Three fixes since t919 and the cadence is 5-6, but
+   the stronger reason is above: the last sweep caught a regression that nine Chrome-exact fixtures
+   did not. **Pre-register M1 flat** (all three are high-usage/low-magnitude and two are table
+   geometry, which the t909 tag rule says this corpus cannot price) **and read the `unaligned` row**,
+   which t920 proved works and t919's run never showed.
+2. **THE `<input>` BASELINE IS THE BEST-PREPARED OPEN ITEM ON THE BOARD** and should be taken with a
+   measurement, not a formula: element set settled (`<input>` only, measured), centring model refuted
+   at one point (44 against Chrome's 46), a two-line discriminating fixture
+   (`<input style="height:40px">`), and `secure5.entertimeonline.com` as the corpus reproducer with a
+   known-good 0.871795 to return to.
+3. **THE SCORABILITY CEILING IS FIVE WINDOWS OLD AND ITS NAMED LEVER IS NOW CLOSED AS A LIMIT.** t921
+   showed the one-origin proxy cannot lie about the hostname, so the pages that self-check their
+   origin are outside what that reference can measure at all. **The cohort needs a different lever or
+   an explicit exclusion**, and continuing to carry it as "untouched work" is no longer accurate.
+4. **Carried, SIX windows:** Component 2 (the agentic surface) still has no corpus number. #76 named
+   it; #77-#81 have carried it. At six windows the honest reading is not *"not yet scheduled"* but
+   *"the loop will not schedule this on its own"*, and it should either be given a tick by name or be
+   explicitly deferred with a reason.

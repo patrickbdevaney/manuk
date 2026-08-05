@@ -46371,6 +46371,65 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 926 — the constitution check, and the window in which the loop corrected itself three times (2026-08-04)
+
+TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8; last at 918), banked
+as check #81 in `docs/loop/CONSTITUTION-CHECK.md`.
+
+⚠⚠⚠ **FINDING 1 — SEVEN TICKS, FIVE CAPABILITY FIXES, TWO REVERTS AND ONE RETRACTION, AND THE
+RETRACTION IS THE ONE THAT MATTERS.** t919 saw a mechanism that was unit-gated, RED-proven and green
+fire **zero times across 200 sites**, concluded *"the wiring is inert"*, wrote a wiki section and
+banked a lesson. t920 refuted it with **one probe at the call site**. The rule skipped is the one
+written largest in my own notes — *check what binary produced a surprising reading before checking
+what the code did* — and the sweep's binary had been overwritten by the time the question was asked,
+so the cause is now permanently unrecoverable. **A rule you can recite while breaking it is
+decoration**, which is the sentence STATUS.md's Lesson 4 already uses about its own third recurrence.
+
+⚠⚠⚠ **FINDING 2 — THE RATCHET WAS TESTED TWICE MORE AND HELD BOTH TIMES, ONCE AGAINST WORK THAT WAS
+FINISHED AND GATED.** t919 reverted t918 — nine Chrome-captured claims, four of them guards — on one
+site's 0.18 shape drop, bisected across four trees and restored the number. t924 then built the
+*narrowed* version, watched it still cost that site 0.18, tried the model t918 had named as open, and
+**overshot by two pixels** (44 against Chrome's 46) — and reverted the whole attempt rather than fit a
+third approximation to a page it could not inspect. **Narrowing a defect is a result; guessing the
+remainder is not.**
+
+⚠⚠⚠ **FINDING 3 — FALSIFICATION ITSELF FAILED ONCE, WHICH IS NEW.** t925's first RED proof **passed**:
+it mutated MinimalCascade's parser while the gate runs the **shipping Stylo cascade**. **A proof aimed
+at the wrong path is indistinguishable from a gate that cannot fail** — `falsify.sh`'s own failure
+mode, one level in. The standing note `live-cascade-is-stylo-not-minimal` has always been about
+*fixes*; it now covers *proofs*, and the correct mutation (`.vertical()` → `.horizontal()`) fails
+loudly.
+
+⚠⚠ **FINDING 4 — THE WINDOW'S LARGEST CAPABILITY CAME ENTIRELY FROM ONE FIXTURE THAT FIXED NOTHING.**
+`vertical-align` went from **13 of 14 cases wrong to 13 of 14 exact** across six ticks (t913-t923),
+and every one of them was aimed by the thirteen-case fixture written at t913 — a measurement tick
+whose whole output was a table of numbers. VI.3's ranking is doing what it was written to do:
+`<sup>`/`<sub>`, `vertical-align:-2px` and a two-value `border-spacing` are mainstream markup with
+enormous usage weight and, by t909's tag rule, **unpriceable on this corpus** — known in advance, and
+built anyway.
+
+**PART VI CORRECTIONS:** M1 **17.6% (t919)**, unmeasured for seven ticks with three engine fixes
+against it · a revert that removes a gate must lower the GATES ratchet mark **deliberately, with the
+reason in the journal** (t919, 398 → 397 — the escape hatch is in the ratchet's own message and had
+never been used) · and **the two UA sheets are not peers**: for the properties `stylo_engine.rs`
+recovers from MinimalCascade, the minimal sheet is the **authority**, so adding a rule to the Stylo
+sheet alone is worse than not adding it (t923).
+
+**THE STEER (full text in check #81):** run the sweep after one more engine tick — not for the
+cadence but because **the last one caught a regression nine Chrome-exact fixtures did not**, and
+pre-register M1 flat while reading the `unaligned` row t920 proved works · the `<input>` baseline is
+the best-prepared open item on the board and needs a measurement rather than a third formula (element
+set settled, centring model refuted, discriminating fixture and corpus reproducer all in hand) · the
+scorability lever named for five windows is now **closed as a LIMIT** (t921: the one-origin proxy
+cannot lie about the hostname), so that cohort needs a different lever or an explicit exclusion
+rather than being carried as untouched work · and Component 2 has no corpus number at **six**
+windows, which is no longer "not yet scheduled" but "the loop will not schedule this on its own".
+
+PERF: none — measurement only.
+
+WIKI: none — this tick's artefact is `docs/loop/CONSTITUTION-CHECK.md` check #81, which is the wiki
+for the loop's own governance. [no-pattern]
+
 ## Tick 925 — `border-spacing` takes TWO lengths and the second one was dropped (2026-08-04)
 
 TICK SHAPE: capability — the last of t908's named-open table rows that is a length rather than an
