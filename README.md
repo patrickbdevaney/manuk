@@ -29,9 +29,10 @@ geometry.)
 
 ---
 
-A browser engine built from scratch in Rust — **~129k lines across 18 crates** — with one shared engine
-core driving three front-ends: a **headful GUI browser** (`shell`), a **headless agentic browser** (`agent`)
-an LLM can drive, and the **wasm demo** above.
+A browser engine built from scratch in Rust — **~118k lines of our own source across 18 crates** (the
+vendored Stylo and SpiderMonkey trees are not counted) — with one shared engine core driving three
+front-ends: a **headful GUI browser** (`shell`), a **headless agentic browser** (`agent`) an LLM can
+drive, and the **wasm demo** above.
 
 The goal is a **daily driver**: fast, lean, and correct enough on the *breadth* of the real web to actually
 use — and, uniquely, **agent-native**: the same core exposes a structured surface an automation framework or
@@ -73,18 +74,30 @@ page, not the browser). The live figures — tick number, hang count, cluster co
 [`STATUS.md`](./STATUS.md); it is machine-written from the filesystem, git, and the verify receipt, never
 hand-edited.
 
-**The Phase-0 exit is a certificate, not a percentage.** It is not `ready_pct` (retired) and not a WPT
-count: it is a fidelity certificate measured by a rebuilt instrument on a stratified corpus — Bar 0 clean,
-the four *jarring* invariants (overlap / horizontal-overflow / reading-order / dead-click-target) ≥ 95%,
-parent-relative shape ≥ 0.75 on ≥ 95% of nodes, interactivity ≥ 95%, and only **named** exceptions. That is
-the finish line, and it is finite (see [Roadmap](#roadmap)).
+**The Phase-0 exit is a certificate, not a percentage** — and it is now decomposed into two owner-locked
+milestones, measured *in this order*:
 
-Its **first trustworthy full measurement** (a 72-site stratified sweep, after several instrument bugs were
-found and fixed) puts every term well below bar: **shape ≥ 0.75 on ~5.5%**, jarring invariants 44–75%. So
-there is real distance still to go, and *placement fidelity* — not coverage — is the gap. That gap is **not
-yet resolved to a single cause**: opening individual divergences shows a mix of ancestor-layout displacement
-and element mis-sizing, so the ranked cluster list is a set of grouping hypotheses to be investigated, not a
-cause list. The live certificate figures track in the loop's anchor doc.
+- **M1 — RENDER.** A site *passes* when its **parent-relative shape ≥ 0.75** (three-quarters of its nodes
+  land where Chromium puts them, within tolerance) **and** it is **jarring-clean**: none of the four
+  invariants tripped — overlap, horizontal-overflow, reading-order, dead-click-target. M1 clears when
+  **≥ 95%** of in-scope sites pass *both* terms.
+- **M2 — FUNCTION.** Per-site render ∧ function ≥ 95%, driven over **WebDriver BiDi** — built *after* M1,
+  not alongside it.
+
+Then **v1.0.0**. The sequence is mechanically enforced (`scripts/phase0-milestones.sh`) so it cannot be
+declared out of order. It is not `ready_pct` (retired) and not a WPT count, Bar 0 must be clean, and every
+exclusion is **named**. That is the finish line, and it is finite (see [Roadmap](#roadmap)).
+
+**Where the render bar actually stands.** M1 is re-measured every few ticks on a **200-site representative
+CrUX sample** (131 in-scope, after bot-walled and unreachable sites are excluded and named) and written to a
+public burndown. As of the latest clean sweep (t919): **M1 ≈ 17.6%** of in-scope sites clear *both* terms —
+**shape ≥ 0.75 on ~23%**, **jarring-clean on ~34%** — with **~82% rendering without a crash** (the M2
+precondition, and today's ceiling on the function leg). Node-level shape match averages **~0.58**. Against
+the first trustworthy measurement — shape ≥ 0.75 on ~5.5%, M1 ~2% — that is real movement (**~2% → ~18%**),
+and it sharpens the thesis of this whole section: **coverage is the strength (~92%, above); *placement
+fidelity* is the open gap.** The hosted demo shows these same figures live, read straight from the burndown.
+The gap is **not one cause** — opening individual divergences shows a mix of ancestor-layout displacement and
+element mis-sizing — so the ranked cluster list is a set of grouping hypotheses, not a settled cause list.
 
 ---
 
@@ -228,6 +241,7 @@ engine/
   page/        the shared pipeline: bytes -> DOM -> style -> layout -> paint
 shell/         headful GUI: `render` (headless PNG) + `browse` (winit/wgpu window), tabs, session
 agent/         headless agentic browser: driver + backend-agnostic loop + inference backends
+bidi/          WebDriver BiDi surface — the standard, pinnable automation ingress (M2 is measured over it)
 store/         local encrypted password store + origin-scoped autofill
 demo/          the engine compiled to wasm — the in-browser demo (this repo's GitHub Pages site)
 tests/wpt/     Web Platform Tests harness + results tracking
@@ -254,7 +268,8 @@ scratch, verified against WPT and the oracle.
 | `engine/compositor` | per-tab tiers (focused-GPU / background-CPU / hibernated), damage, scroll | Build | tier transitions, damage union, scroll clamp |
 | `engine/page` | the shared pipeline — headful and headless share this core | Build | load / relayout / paint / links / text |
 | `shell` | headful GUI: `render` (PNG) + `browse` (winit/wgpu), tabs, session, downloads | Build | the human front door |
-| `agent` | headless agentic browser + `InferenceBackend` (Groq / local llama / BYO) | Build | the LLM front door — see below |
+| `agent` | headless agentic browser + `InferenceBackend` (hosted / local llama / BYO) | Build | the LLM front door — see below |
+| `bidi` | WebDriver BiDi — the standard remote-control protocol | Build | the automation ingress; per-site render ∧ function (M2) is measured over it |
 | `store` | encrypted password vault + origin-scoped autofill | Build | crypto core done; UX is Phase-0 polish |
 
 ### The JS-engine modification boundary
@@ -294,7 +309,8 @@ research→implement cascade — lives in [`docs/loop/HORIZON.md`](./docs/loop/H
 from-scratch, memory-safe, agent-native browser** — one a human daily-drives *and* that exposes a unified
 surface for agents to drive, with an optional in-browser "Claude Code for browsers" prompt-to-action layer.
 
-0. **Daily-driver capability** *(in progress, near exit)* — render + JS-platform + media + forms + shell
+0. **Daily-driver capability** *(in progress — the M1 render bar is the live gate, ~18% of in-scope CrUX
+   sites vs a 95% target; M2 function is sequenced after)* — render + JS-platform + media + forms + shell
    parity for the "document + download + un-gated-SPA" web. Exit = the fidelity certificate above. The
    bounded remainder is sized and has a named cut line; the marquee proof is **YouTube plays**.
 1. **UI/UX browser features** — tab-set restore (toggleable), lean tab ops, mute/unmute, pin-to-stay-warm,
