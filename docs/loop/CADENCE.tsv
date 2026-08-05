@@ -659,3 +659,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 932	de5b3dd9	1785919405	2026-08-05T04:43:25-04:00	2212	capability	63	12	723	276	402	81	3896	6960	0	482	0	the composed width family is CLEAN, and the one defect in it was a container collapsing to 2% of its size (2026-08-05)
 933	f76edd46	1785919916	2026-08-05T04:51:56-04:00	511	capability	63	8	203	33	402	81	3896	6960	0	482	0	the algorithm four gates named and none built (2026-08-05)
 934	db301ebc	1785923086	2026-08-05T05:44:46-04:00	3170	measurement	63	12	554	48	403	81	3896	6960	0	483	0	an inline box that contains only another inline box contributes NO leading, and the loop has been calling this family "already Chrome-correct" (2026-08-05)
+935	9f2884ea	1785928107	2026-08-05T07:08:27-04:00	5021	capability	63	7	335	32	403	81	3896	6960	0	483	0	the fix t934 specified, and the two proofs that did not print what I wrote (2026-08-05)

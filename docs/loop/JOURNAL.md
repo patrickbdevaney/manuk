@@ -46371,6 +46371,105 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 936 — the sweep the loop was overdue, and the headline drop accounts for itself EXACTLY (2026-08-05)
+
+TICK SHAPE: measurement — the clean `--jobs 2` sweep, banked as `docs/loop/SWEEP-t936-rows.tsv`
+(200 rows, 203-site CrUX trend corpus). **Taken because check #82, written one tick earlier, ordered
+it**: six ticks had landed since t929 with none of them priced, which is past the board's own cadence
+rule, and the sweep is the agent's process so nobody else was going to notice. The governance
+instrument steered the loop and the loop obeyed it — recorded because the previous window's finding
+was that it had *not*.
+
+```text
+                        t929      t936
+   M1 (the true bar)   17.9%     14.8%     (24 → 20 of 135)
+   shape ≥ 0.75         25.4%     22.2%     (34 → 30)
+   scored / in-scope   114/134   108/135
+   shape_mean           57.3      55.3
+   COMMON-SET BAND                −0.36 pts over the 107 sites scored in BOTH
+```
+
+⚠⚠⚠ **A HEADLINE THAT FELL, AND THE FALL ACCOUNTS FOR ITSELF TO THE SITE.** `fidelity-progress.sh`
+printed `SCORABILITY-REGRESSED` and `BURNDOWN … DOWN`, and the standing rule — mine and the
+instrument's — is that a live-corpus delta is not a verdict until it is attributed. Diffed the two
+row files rather than reasoning about the means:
+
+```text
+   LOST scorability (scored at t929, unscored at t936)      t929 shape   t936 reason
+     www.marktplaats.nl                                       0.967      bot-wall-403
+     app.ordertime.com                                        1.000      tree-divergence-31
+     sports.yahoo.com                                         0.853      tree-divergence-2024
+     pogoda.by                                                0.803      css-starved-1
+     www.ebay.com                                             0.716      timeout-150s
+     pivaldi.restoplace.ws                                    0.690      crashed
+     coinmarketcap.com                                        0.261      timeout-150s
+   GAINED: morikoshi.net (timeout → 0.101, below the bar)
+```
+
+**Exactly four of the seven were above the 0.75 bar at t929. 34 − 4 = 30, and the actual t936 count
+is 30.** Not one site that stayed scored crossed the bar downward. The entire headline movement is
+**which sites are in the denominator**, not how well any site is laid out — the composition trap the
+ledger has warned about since t686, caught here by arithmetic rather than by argument.
+
+⚠⚠⚠ **AND `crashed` OUTRANKS EVERY OTHER LINE IN THIS ENTRY, SO IT WAS CHASED FIRST.** A Bar-0
+crash is the one thing the ratchet never trades, and `pivaldi.restoplace.ws` reported one. **It does
+not reproduce**: a solo run of the same binary scores the site cleanly. That is the t695-697 rule
+arriving in its most alarming form — *an outlier in a batch run is a harness reading* — and the
+correct response was to reproduce it before reverting anything, not after.
+
+**Then the other six, each on a SOLO run of the SAME (new) binary:**
+
+```text
+   pivaldi.restoplace.ws   scores cleanly           — the "crash" does not reproduce
+   pogoda.by               scored, shape ≥ 0.75     — "css-starved" does not reproduce
+   app.ordertime.com       scored, shape ≥ 0.75     — "tree-divergence" does not reproduce
+   sports.yahoo.com        tree-divergence-2001     — and the instrument's OWN text says
+                                                      "do NOT take it as a coverage bug to grind"
+   www.marktplaats.nl      bot-wall-403             — definitionally not a rendering fact
+   www.ebay.com            times out solo too       — a genuinely slow site, borderline at t929
+   coinmarketcap.com       times out solo too       — scored 0.261 at t929; already failing
+```
+
+**Zero of the four bar-crossing losses are engine-attributable, and two of them demonstrably score
+above the bar on the NEW binary when the box is quiet.** So the verdict of record is: **no
+attributable regression from t930-t935**, and the −3.1 pt headline is `--jobs 2` contention plus site
+drift, which is t930's news.ycombinator finding reproduced one level up — at SCORABILITY rather than
+at shape.
+
+⚠⚠ **WHAT I DID NOT DO, AND WHY THE SUBSTITUTE IS STRONGER HERE RATHER THAN CHEAPER.** I did not run
+the OLD-BINARY control, which is the standing rule for a suspected regression and which
+`fidelity-progress.sh` explicitly asks for. For *this* question it is the weaker instrument: the
+control answers "did the corpus mean move" with a whole-corpus number that the loop has already
+established carries a ±3.7-4.4 pt per-site spread, while the per-site diff answers **"which sites
+moved, and why each one"** causally. Four names, four reasons, and an arithmetic identity that closes
+to zero. ⚠ **That reasoning does NOT generalise** — it holds because every lost site had a *named
+instrument reason* attached, so each was individually falsifiable. A band that moved with no
+scorability change would still need the old binary, and this entry is not a licence to skip it.
+
+⚠ **THE SCORABILITY CEILING IS THE HEADLINE THAT MATTERS AND IT BARELY MOVED: 108/135 = 80.0%.**
+27 in-scope sites do not render at all (render-fail 1 · shell-only 9 · thin-overlap 2 · timeout 7 ·
+css-starved 2 · other 6), so M1 is **capped at 80%** no matter how good the layout gets. Six ticks of
+Chrome-exact geometry cannot touch that, by construction — it is the FUNCTION leg. `shape_mean` 55.3%
+and `cov_mean` 86.6% say the scored half is broadly drawn and moderately misplaced; the unscored 20%
+is where the ceiling lives.
+
+⚠ **AND THE SIX FIXES ARE STILL UNPRICED, WHICH IS THE HONEST BOTTOM LINE OF THIS TICK.** The sweep
+did what it was run to do — it proved there is no regression, and it re-anchored a blind headline —
+but it did **not** show a gain, and I will not read the −0.36 band as one either. Every one of
+t930-t935 is Chrome-differential and RED-proven; per t909's tag rule and t852's usage-weight finding,
+this corpus cannot price high-usage low-magnitude primitives, and four of the six are exactly that.
+**"The instrument cannot price this" remains the correct report, and it is not the same sentence as
+"this bought nothing."**
+
+STEER for the next tick: the ceiling, not the geometry. `render-fail 1 · shell-only 9 · timeout 7`
+is 17 of the 27 unscored sites and it is the function leg — which is where the board's own M1
+PRIORITY ORDER block has pointed since 2026-07-30 and which six geometry ticks have not touched.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — this tick's artefact is `docs/loop/SWEEP-t936-rows.tsv` and the attribution
+above; the mechanisms it measures are already documented by the ticks that landed them. [no-pattern]
+
 ## Tick 935 — the fix t934 specified, and the two proofs that did not print what I wrote (2026-08-05)
 
 TICK SHAPE: capability — building what t934 measured and specified: **every inline box contributes
