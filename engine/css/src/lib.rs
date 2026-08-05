@@ -3675,6 +3675,22 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         "pre" => (Block, 1.0, 400, 1.0),
         "hr" => (Block, 0.5, 400, 1.0),
         "b" | "strong" => (Inline, 0.0, 700, 1.0),
+        // ⚠⚠⚠ **`sup`/`sub` LIVE IN BOTH UA SHEETS OR IN NEITHER (t923).** `stylo_engine.rs` gained
+        // `sup { vertical-align: super; font-size: smaller }` at t914 and this sheet did not — and
+        // because `vertical_align` is one of the handful of properties RECOVERED from MinimalCascade
+        // into the Stylo map (`stylo_engine.rs`, the "no computed longhand accessor in stylo 0.19"
+        // block), MinimalCascade's `Baseline` was written straight over Stylo's correct `super`.
+        //
+        // The tell was exact and took one fixture to see: `<span style="font-size:13.333px;
+        // vertical-align:super">` grows its line to Chrome's 27, and `<sup>` — the same font size,
+        // the same raise, from the UA sheet — stayed at 24. The FONT SIZE arrived (the box is 36x15
+        // in both engines, byte-exact); only the alignment was lost, because only the alignment
+        // takes the recovery path.
+        //
+        // `0.8333` is `smaller` on Chrome's scale at 16px (13.333px), which is what both engines
+        // already produce for the box; it is spelled here so the two sheets agree by construction
+        // rather than by coincidence.
+        "sup" | "sub" => (Inline, 0.0, 400, 0.8333),
         "table" => (Table, 0.0, 400, 1.0),
         "thead" | "tbody" | "tfoot" => (TableRowGroup, 0.0, 400, 1.0),
         "tr" => (TableRow, 0.0, 400, 1.0),
@@ -3811,6 +3827,12 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
     }
     if weight != 400 {
         s.font_weight = weight;
+    }
+    // The alignment half of the `sup`/`sub` row above — the size half rides on `scale`.
+    match tag {
+        "sup" => s.vertical_align = VerticalAlign::Super,
+        "sub" => s.vertical_align = VerticalAlign::Sub,
+        _ => {}
     }
     if scale != 1.0 {
         s.font_size *= scale;

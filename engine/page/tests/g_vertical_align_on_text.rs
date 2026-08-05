@@ -79,6 +79,24 @@ const HTML: &str = r##"<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 </body></html>
 "##;
 
+const MIXED_FONT_HTML: &str = r##"<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;font:16px/1.5 sans-serif}
+ .f{width:400px;background:#eee;margin-bottom:2px}</style></head><body>
+<div class="f" id="k0">base</div>
+<div class="f" id="k1"><span style="font-size:8px">s</span>base</div>
+<div class="f" id="k2"><span style="font-size:12px">s</span>base</div>
+<div class="f" id="k3"><span style="font-size:13.333px">s</span>base</div>
+<div class="f" id="k4"><span style="font-size:20px">s</span>base</div>
+<div class="f" id="k5"><span style="font-size:24px">s</span>base</div>
+<div class="f" id="k6"><span style="font-size:13.333px;vertical-align:super">s</span>base</div>
+<div class="f" id="k7"><span style="font-size:12px;vertical-align:super">s</span>base</div>
+<div class="f" id="k8"><span style="font-size:16px;vertical-align:super">s</span>base</div>
+<div class="f" id="k9"><span style="font-size:13.333px;vertical-align:sub">s</span>base</div>
+<div class="f" id="k10"><sup>s</sup>base</div>
+<div class="f" id="k11"><span style="font-size:13.333px;line-height:20px;vertical-align:super">s</span>base</div>
+
+</body></html>
+"##;
+
 const CAL_HTML: &str = r##"<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;font-family:sans-serif}
  .f{width:400px;background:#eee;margin-bottom:2px}</style></head><body>
 <div class="f" id="c16" style="font-size:16px;line-height:1.5">x<span style="vertical-align:super">s</span></div>
@@ -202,6 +220,38 @@ fn g_vertical_align_on_text() {
              and a percentage by that fraction of the element's own line-height; got {got}"
         );
     }
+
+    // ── t923: `<sup>`/`<sub>`, the last non-rounding row, now EXACT. Their FONT SIZE always arrived
+    // (the box is 36x15 in both engines); only the ALIGNMENT was lost, because `vertical_align` is
+    // one of the handful of properties RECOVERED from MinimalCascade into the Stylo map, and
+    // MinimalCascade had no `sup`/`sub` rule — so its `Baseline` was written straight over Stylo's
+    // correct `super`. Two hand-maintained UA sheets, and only the one that does NOT feed the
+    // recovery had the rule.
+    for (sel, want) in [("#v3", 27.0), ("#v4", 27.0)] {
+        let got = h(&page, sel);
+        assert!(
+            (got - want).abs() < 1.01,
+            "G_VERTICAL_ALIGN_ON_TEXT: `{sel}` expected {want} (Chrome) — a UA `sup`/`sub` must \
+             raise like an authored one; got {got}"
+        );
+    }
+
+    // ── THE LOCKSTEP GUARD, and it is what makes the row above more than one number: a `<sup>` and
+    // an authored span at the SAME font size and the SAME alignment must produce the SAME line. If
+    // the two UA sheets drift again, these disagree while every keyword claim above still passes.
+    let mf = manuk_page::Page::load(MIXED_FONT_HTML, "https://va.test/", &fonts, 1200.0);
+    c_cal(&mf, "#k0", 24.0);
+    c_cal(&mf, "#k1", 24.0);
+    c_cal(&mf, "#k2", 24.0);
+    c_cal(&mf, "#k3", 24.0);
+    c_cal(&mf, "#k4", 30.0);
+    c_cal(&mf, "#k5", 36.0);
+    c_cal(&mf, "#k6", 27.0);
+    c_cal(&mf, "#k7", 26.0);
+    c_cal(&mf, "#k8", 30.0);
+    c_cal(&mf, "#k9", 27.0);
+    c_cal(&mf, "#k10", 27.0);
+    c_cal(&mf, "#k11", 27.0);
 
     // `middle` is still an open number (Chrome 25, ours 26) and is asserted as DIRECTION only —
     // banking 26 would freeze an approximation as though it had been measured.

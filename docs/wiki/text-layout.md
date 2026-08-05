@@ -1912,3 +1912,32 @@ placement arms that mirror them, and the computed-style serialisation. The text 
 Eleven of fourteen exact, from thirteen-of-fourteen wrong. What remains is two rounding questions —
 and `<sup>`'s 3px is the same quantity t916 had to get exactly right for `text-top` (how a smaller
 fragment's half-leading folds into the line), so it is a measurement rather than a formula to try.
+
+
+## A property RECOVERED from the second UA sheet is OVERWRITTEN by it, not falling back to it (t923)
+
+`<sup>` rendered at the right size and on the wrong baseline. Twelve mixed-font cases said the
+half-leading arithmetic was already exact — an authored `<span style="font-size:13.333px;
+vertical-align:super">` grows its line to Chrome's 27 — while `<sup>`, the same size and the same
+raise from the UA sheet, stayed at 24. `getComputedStyle` closed it: Chrome resolves both `<sup>` and
+`font-size: smaller` to 13.3333px/20px, and so do we; our `<sup>`'s box is **36×15, byte-identical**.
+
+`vertical_align` is one of the handful of properties `stylo_engine.rs` **recovers from
+MinimalCascade** into the Stylo map (stylo 0.19 exposes no computed longhand for it), and the recovery
+is an unconditional `cs.vertical_align = m.vertical_align`. t914 added
+`sup { vertical-align: super; font-size: smaller }` to the **Stylo** sheet only, so the size came from
+Stylo and was right, and the alignment came from MinimalCascade — which had never heard of `<sup>` —
+and its `Baseline` was written **over Stylo's correct `super`**.
+
+> **For a recovered property the minimal sheet is not a fallback, it is the AUTHORITY.** Adding a rule
+> to the Stylo sheet alone is worse than not adding it: the element now differs from its authored
+> equivalent in exactly one property, which is the hardest shape to see.
+
+The file already carried the warning — *"Keep in lockstep with the UA sheet in `stylo_engine.rs`"* —
+and the drift happened anyway, nine ticks later, in a tick that read that file.
+
+### The guard that outlives the fix
+
+The gate takes the whole mixed-font fixture as a **lockstep guard**: a `<sup>` and an authored span at
+the same size and alignment must produce the same line. If the two sheets drift again, those twelve
+claims disagree while every keyword claim still passes.

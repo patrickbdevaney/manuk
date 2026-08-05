@@ -1570,6 +1570,8 @@
   - L1858 · The family, four ticks on
   - L1877 · vertical-align: <length> parsed to baseline and vanished (t922)
   - L1900 · The family, five ticks on
+  - L1917 · A property RECOVERED from the second UA sheet is OVERWRITTEN by it, not falling back to it (t923)
+  - L1939 · The guard that outlives the fix
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1597,4 +1599,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1504 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1506 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

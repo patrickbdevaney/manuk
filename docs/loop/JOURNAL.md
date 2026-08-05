@@ -46371,6 +46371,78 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 923 — the FONT SIZE arrived and the ALIGNMENT did not, because only one takes the recovery path (2026-08-04)
+
+TICK SHAPE: capability — t922 left `<sup>`/`<sub>` at 24 against Chrome's 27 and called it *"a
+measurement, not a formula to try"*, on the grounds that their own box is byte-exact and the offset is
+verified at three font sizes. The measurement says the residual was never a rounding question at all.
+
+⚠⚠⚠ **TWELVE MIXED-FONT CASES, AND ONLY THE ONE THAT COMES FROM THE UA SHEET WAS WRONG.** A single
+fixture asked how a smaller fragment folds into a 16px/1.5 line — an 8px, 12px, 13.333px, 20px and
+24px span, each with and without `super`/`sub`, plus one with an explicit `line-height`:
+
+```text
+  <span style="font-size:13.333px; vertical-align:super">   Chrome 27   ours 27   ok
+  <sup>  (the SAME size and the SAME raise, from the UA)    Chrome 27   ours 24   <- the only miss
+```
+
+**Every authored case was already exact.** So the question stopped being *"how does half-leading
+fold"* and became *"what does the UA sheet do differently"*, which one `getComputedStyle` answered:
+Chrome resolves both `<sup>` and `font-size: smaller` to **13.3333px / line-height 20px**, and so do
+we — our `<sup>`'s box is **36×15, byte-identical to Chrome's**. The size arrived. Only the raise was
+missing.
+
+⚠⚠⚠ **AND THE REASON IS THAT ONLY ONE OF THEM TAKES THE RECOVERY PATH.** `vertical_align` is one of
+the handful of properties `stylo_engine.rs` **recovers from MinimalCascade** into the Stylo map —
+stylo 0.19 exposes no computed longhand for it — and the recovery is an unconditional
+`cs.vertical_align = m.vertical_align`. t914 added `sup { vertical-align: super; font-size: smaller }`
+to the **Stylo** UA sheet and not to MinimalCascade's, so:
+
+* **font-size** came from Stylo and was right,
+* **vertical-align** came from MinimalCascade, which had never heard of `<sup>`, and its `Baseline`
+  was written **straight over Stylo's correct `super`**.
+
+> **Two hand-maintained UA sheets, and the rule was added to the one that does not feed the
+> recovery.** This is t851's pattern and t846-852's *"BOTH UA sheets were wrong in OPPOSITE
+> directions, each concealing the other"* — with a new edge: **a property that is recovered from the
+> second sheet is not merely absent there, it is OVERWRITTEN from there.** For those properties the
+> minimal sheet is not a fallback, it is the authority, and adding a rule to the Stylo sheet alone is
+> worse than not adding it.
+
+`engine/css/src/lib.rs` already carries the warning in its own comments — *"Keep in lockstep with the
+UA sheet in `stylo_engine.rs`"* — and the drift happened anyway, nine ticks later, in a tick that read
+that file.
+
+**THE FAMILY IS DONE BAR ONE PIXEL — thirteen of fourteen exact, from thirteen-of-fourteen WRONG at
+t913:**
+
+```text
+                                     Chrome   t913   t914   t915   t916   t922   t923
+  super / sub                        30 / 28  24/24  29/26  30/28  30/28  30/28  30/28
+  text-top / text-bottom             27 / 28  24/24  24/24  24/24  27/28  27/28  27/28
+  10px / -10px / 50%               34/34/36     24     24     24     24  34/34/36  =
+  <sup> / <sub>                      27 / 27  24/24  24/24  24/24  24/24  24/24  27/27
+  four CONTROLS                          24     24     24     24     24     24     24
+  middle                                 25     24     26     26     26     26     26   <- open, 1px
+```
+
+GATE: `G_VERTICAL_ALIGN_ON_TEXT` gains `#v3`/`#v4` as exact claims **and a twelve-claim LOCKSTEP
+GUARD** — the mixed-font fixture, which asserts that a `<sup>` and an authored span at the same size
+and alignment produce the same line. That is the half that outlives this tick: **if the two UA sheets
+drift again, those twelve disagree while every keyword claim still passes.** RED-PROVEN by removing
+the MinimalCascade arm: *"`#v3` expected 27 … got 24."*
+
+RATCHET: `manuk-layout` 125/125, `manuk-css` 28/28; the combined battery 54/54, specified-width 14/14,
+calibration 10/10, and `g_form_control_metrics`, `g_ratio_inset_float`,
+`g_bfc_specified_width_float_band`, `g_table_height_is_a_minimum`,
+`g_table_border_spacing_ua_default` all green. The div-height probe holds at 19/20 (the one row is the
+`<input>` case t919 reverted).
+
+PERF: none — one `match` on the tag in a function that already matched on it.
+
+WIKI: `docs/wiki/text-layout.md` — "A property RECOVERED from the second UA sheet is not falling back
+to it, it is being OVERWRITTEN by it"
+
 ## Tick 922 — `vertical-align: <length>` was UNREPRESENTABLE, so it parsed to `baseline` and vanished (2026-08-04)
 
 TICK SHAPE: capability — the last of t913's `vertical-align` residuals that is not a rounding
