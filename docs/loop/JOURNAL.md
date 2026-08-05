@@ -46371,6 +46371,149 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 941 — the wall audit, and the honest answer is that I am the reason it grew (2026-08-05)
+
+TICK SHAPE: measurement — the wall-time audit (due every 20 ticks; last at 919), run because the
+cadence blocked the tick and because t940's self-audit had already flagged the same number.
+
+```text
+   ══ WALL-TIME AUDIT @ tick 939 — total 369s ══   (target 300s, so 23% over)
+      235s  P   page gates          ████████████████ 64%
+       58s  T   crate tests         ███ 16%
+       38s  B   build               ██ 10%
+       17s  G6                      █ 5%
+        5s  G1 · 4s D · 3s F · 1s F4 · the rest at 0s
+```
+
+⚠⚠ **THE WALL IS 64% ONE SECTION, AND THIS SESSION ADDED SIX BINARIES TO IT.** `engine/page/tests/`
+is now **403 files**, each its own test binary — its own link, its own process, its own
+SpiderMonkey runtime start (~1.5s apiece per the audit's own note). Six of those are mine, landed in
+this window:
+
+```text
+   g_intrinsic_min_max · g_intrinsic_min_max_cssom   (t930)
+   g_intrinsic_flex_grid                             (t931)
+   g_anonymous_table_row                             (t932)
+   g_table_row_height_distribution                   (t933)
+   g_inline_box_leading                              (t935)
+```
+
+Every one of them is a real ratchet tooth, RED-proven three ways, and I would add them again. **But
+the cost is not free and the audit exists so that it is named rather than absorbed**: a loop that
+adds ~6 gates per window to a section that is 64% of the wall is choosing a slower wall every window,
+and it should choose that knowingly.
+
+⚠⚠⚠ **AND EVERY ADMISSIBLE REMEDY IS OBSERVER-OWNED, WHICH IS THE FINDING RATHER THAN AN EXCUSE.**
+The audit lists exactly four rigor-preserving optimisations, and rules out dropping a gate, widening
+a floor, sampling, or moving work to CI. Against the 235s:
+
+```text
+   REDUNDANCY   cargo-nextest shares the test binary and parallelises harder than `cargo test`
+                — named by the self-audit too, and it is Cargo tooling
+   PARALLELISM  the gates already launch concurrently (CARGO_BUILD_JOBS); the perf floors are
+                deliberately serial and must stay so
+   CACHING      incrementals already live in RAM; live fetches are snapshot-cached
+   SCOPE        a narrower build target per gate — a workspace/verify.sh concern
+```
+
+All four are `scripts/verify.sh`, Cargo configuration, or the linker (mold/lld). **PART VII forbids
+me to touch any of them**, so this audit's output is a hand-off with a number attached rather than a
+change. ⚠ **What I deliberately did NOT do: consolidate my six gates into fewer binaries.** It would
+be the one lever on my side of the line, and it is barred by a standing constraint — *ONE `#[test]`
+per JS gate, or SIGSEGV* — because every one of these loads a real `manuk_page::Page` with
+SpiderMonkey. Trading a known-good gate architecture for wall seconds is the exact shape the audit
+forbids in its own last paragraph.
+
+**The honest verdict: the wall is NOT bloated with redundancy — it is 403 gates doing 403 distinct
+things, and it is slow for a good reason and a fixable one.** The fixable half is tooling and it is
+not mine. Recorded with the section breakdown so the observer can price `cargo-nextest` against a
+235s line item rather than against a feeling.
+
+⚠ **A CADENCE OBSERVATION, since three audits fired in three consecutive ticks (self-audit t940,
+wall t941, and the constitution check at t936):** the loop's governance instruments now cost roughly
+one tick in three at this cadence. That is not a complaint — each of the three produced a finding
+this window, and check #82 produced the sweep that produced t936-t938. It is a number the observer
+may want, because it is the first window where I noticed the meta-work competing with the work.
+
+PERF: none — measurement only. The wall number IS the measurement.
+
+WIKI: none [forced] — the artefact is the audit's section breakdown and a hand-off; it describes the
+harness, not a browser mechanism. [no-pattern]
+
+## Tick 940 — the self-audit, and a footer that reduced to nothing (2026-08-05)
+
+TICK SHAPE: measurement — the cadence self-audit (due every 10 ticks; last at 930), plus the next
+item on t939's own ranked worklist, taken to its honest end.
+
+**SELF-AUDIT @ 939 — one prescribed-but-not-executed item, and it is not mine to execute.**
+
+```text
+  ✗ verify wall: 369s EXCEEDS the 300s target (Part 21.2 item 1)
+      — named remedies: mold/lld, cargo-nextest, workspace-hack, risk-based gate scheduling
+  ✓ oracle crawl frame 265 sites · SPA miner 9 apps · every gate stands up · falsify.sh present
+  ✓ process-defect ledger 49 · cluster registry 392 · pattern ledger 983 rows
+```
+
+Every remedy the audit names is **build tooling and `scripts/verify.sh`** — harness, observer-owned,
+and PART VII forbids me to touch it. **One line here and on with browser work**, which is the scope
+rule's exact prescription rather than a shrug. Recorded so the cadence sees it and the observer can
+act: the wall has drifted 23% past its target and the audit has now flagged it in consecutive
+windows.
+
+⚠⚠ **AND THE ENGINE ITEM REDUCED TO NOTHING, WHICH IS THE RESULT.** t939's ranking left
+`h_overflow` blocking 3 of the 10 cheapest M1 crossings, and `simplepdf.com` is the one blocked by
+`h_overflow` **alone** — near-bar at shape 0.756, five elements escaping a 1200px viewport, so a
+single-mechanism fix would cross it. Probed to the source:
+
+```text
+  footer > div:2 > div:3 > div:1 > a:6   →  right 1254 > vw 1200   (and its <svg>)
+```
+
+Pulled the real stylesheet (`app-Dc-K3EIe.css`) rather than guessing at CSS-module class names, and
+built a faithful reduction of the actual rules — a `flex-direction:column; align-items:center;
+padding:10px 46px; box-sizing:border-box` footer, `> div { max-width:1230px }`, a `width:100%;
+flex-wrap:wrap; justify-content:space-between` row, and two `width:50%` flex halves with the first
+`flex-direction:column`. **Every box is Chrome-exact:**
+
+```text
+             Chrome                    ours
+   footer    1200 @0                   1200 @0
+   top       1108 @46  right 1154      1108 @46
+   half-1     554 @46                   554 @46
+   half-2     554 @600  right 1154      554 @600
+   links      100 @600 · 41 @878 · 57 @1097 · right 1154   — identical
+```
+
+**So the overflow is not in that composition**, and I stopped there — which was the rule I set before
+building the fixture ("one fixture, and if it doesn't reproduce I stop chasing this site"). Saying so
+matters because the alternative was another three fixtures down a single site, and
+`SINGLE_SITE_TICKS` is a tracked drift signal precisely for that.
+
+**The negative result is the durable half**, and it is the third composed-layout family this window
+has measured clean: t932's 25-case composed WIDTH battery, t934's 22-case composed INLINE battery,
+and now flex-column + `align-items:center` + `width:100%` + `max-width` + nested 50% halves +
+`flex-wrap` + `justify-content:space-between`. **The engine's composed flex/block arithmetic is in
+good shape; what remains is neither composition nor arithmetic**, and three independent batteries now
+say so rather than one.
+
+⚠ **WHAT IS STILL OPEN ON THE RANKED LIST**, carried forward so the next invocation starts from it
+rather than recomputing it (all from `SWEEP-t936-rows.tsv`, the 10 sites one dimension from crossing):
+
+```text
+   reading_order  blocks 9   ← t939 shipped a fix; UNPROVEN until the next sweep
+   overlap        blocks 5   ← untouched
+   h_overflow     blocks 3   ← simplepdf reduced clean; the other two unprobed
+                               (sestra.cc 8 hits · www.tz.de 3)
+```
+
+And the standing caution on all three: t871-874 says a reading-order or overlap symptom is a geometry
+error **upstream**, so none of these is a dimension to fix directly.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefact is a negative result and an executed audit; neither describes a
+mechanism the engine implements. [no-pattern]
+
 ## Tick 939 — the residue t935 pinned, closed one tick later, and it was ONE BRANCH (2026-08-05)
 
 TICK SHAPE: capability — **ranked, not stumbled on.** t938's steer sent engine work back to the
