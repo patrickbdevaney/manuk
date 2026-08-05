@@ -46371,6 +46371,81 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 946 — four reductions, four clean, and the discovery engine has saturated for THIS class (2026-08-05)
+
+TICK SHAPE: measurement — check #83's steer item 2 (engine work into the SCORED half, ranked by
+marginal crossings), worked to its honest end on the two dimensions t939 did not take.
+
+**Two hypotheses raised and refuted, both recorded so nobody re-tests them.**
+
+⚠ **`overlap` (blocks 5 of the 10 cheapest crossings) — DIAGNOSED, not fixed.** `www.otomoto.pl`
+reproduces solo at `ovl 3`, and the shape is legible: `main > div:1 > div:3` collides with **both**
+`div:4` and `div:5`. One box is too tall and is lying over the two after it — a **height** error, not
+a stacking one, exactly as t871-874's rule predicts (an overlap symptom is upstream geometry). Its
+`reading_order` pairs are all `div ⇄ nav` and `button ⇄ nav` inside the same header parent, which is
+a horizontal ordering fact about one flex header. **Both need the site's external CSS to reduce, and
+neither reduced within the budget I set for it.**
+
+⚠⚠ **`h_overflow` on `sestra.cc` — a good hypothesis, cleanly refuted.** Two links escape to
+**right 2623 and 3077** in a 1200px viewport — 2-3× the viewport, so a gross mechanism rather than a
+near-miss, and the shape of a row that should WRAP and does not. The markup is a WordPress tag cloud
+whose links are separated by **HTML comments**:
+
+```html
+   <a href="…">порно с сестрой</a><!--//-->
+   <a class="cat" href="…">…</a><!--//-->
+```
+
+That is a real candidate mechanism — **if a comment suppressed the whitespace break opportunity, the
+whole row becomes one unbreakable token and overflows exactly like this**, and it would be
+generalizable far beyond one site. Measured against Chrome in a 300px box:
+
+```text
+                                                    Chrome   ours
+   plain inline links, newline-separated  (CONTROL)  300x48  300x48
+   a comment between each link (sestra's exact form) 300x48  300x48
+   whitespace on BOTH sides of the comment           300x48  300x48
+   comment between two words, NO whitespace          300x24  300x24   ← must NOT break, and does not
+```
+
+**Byte-identical, all four rows.** Comments neither create nor destroy a break opportunity here. The
+overflow is in the theme's external CSS, and I stopped — the timebox was set before the fixture was
+written, which is the only thing that makes stopping a decision rather than a mood.
+
+⚠⚠⚠ **AND THE PATTERN ACROSS THE WINDOW IS THE REAL FINDING: FOUR SITE-DERIVED REDUCTIONS, FOUR
+CLEAN.**
+
+```text
+   t932  composed WIDTH battery, 25 cases           24 of 25 exact  (the 25th → anonymous table rows)
+   t934  composed INLINE battery, 22 cases          20 of 22 exact
+   t940  simplepdf's real footer CSS, reduced       every box exact
+   t946  sestra's comment-separated link row        every box exact
+```
+
+**The defects this window actually found came from PROPERTY-FAMILY sweeps, never from site
+reductions.** Intrinsic keywords on min/max (t930), the sidecar's crossing into taffy (t931),
+anonymous table rows (t932's 25th case), row-height distribution (t933), inline-box leading (t934/35)
+— every one was found by sweeping *a family of CSS properties* against Chrome, and none by reducing
+*a failing site*. The two site reductions I attempted (t940, t946) both came back exact.
+
+That is a **methodological** result and it contradicts the standing habit: the memory note reads
+*"9 engine defects in 13 ticks, every one from a 4-line fixture + Chrome"*, and that remains true —
+but the fixtures that yield are the ones written from a **property list**, not from a **site**. A
+near-bar site's residual error is, on this evidence, **not reducible to a small fixture**: it lives
+in the interaction of a real stylesheet with a real DOM, which is precisely what a reduction removes.
+
+**So the next invocation should not open a fifth site reduction.** Either sweep another property
+family (which is still yielding), or build an instrument that can attribute *within* a live page —
+the mechanism oracle already computes a `{displaced|mis-sized}:{width|height|y|x} ~Npx` signature per
+element, and ranking a single site's divergences by that signature is the tool this tick lacked.
+
+RATCHET: no engine change; `manuk-layout` and the page suite untouched and green from t945.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefact is two refuted hypotheses and a methodological finding; neither
+describes a mechanism the engine implements. [no-pattern]
+
 ## Tick 945 — I executed the steer, and the steer's premise was wrong (2026-08-05)
 
 TICK SHAPE: capability — executing check #82/#83's I3 item, which had been issued three times and
