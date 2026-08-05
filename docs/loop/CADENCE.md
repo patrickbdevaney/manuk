@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **691** | ticks 1–970 |
-| median tick cycle | **26m** | 690 intervals |
-| median, last 10 | **31m** | 10 intervals |
+| ticks landed | **692** | ticks 1–971 |
+| median tick cycle | **26m** | 691 intervals |
+| median, last 10 | **38m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.13** | 611.9h elapsed |
-| median verify wall | **63s** | 630 ticks |
+| **ticks per hour** | **1.13** | 612.8h elapsed |
+| median verify wall | **63s** | 631 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **407**
+* **live gates**: 27 → **408**
 * **✅ rows in the capability ledger**: 144 → **488**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**334 of 691 ticks** (48%) moved a
+**334 of 692 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -788,5 +788,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **968** | 2026-08-05 15:53 | 24m | measurement | 63s | +94/−32 | 407 | 81 | 56.0% · | t967 fixed the line the icon is ON; this is the line that CONTAINS it (2026-08-05) |
 | **969** | 2026-08-05 16:32 | 39m | measurement | 63s | +248/−78 | 407 | 81 | 56.0% · | flex is CLEAN, 20/20 item-exact, and the first control I built could not have failed (2026 |
 | **970** | 2026-08-05 16:58 | 25m | pattern-class | 63s | +203/−34 | 407 | 81 | 56.0% · | t968 said this needed a contract change; it needed the rule it already had (2026-08-05) |
+| **971** | 2026-08-05 17:51 | 53m | measurement | 63s | +282/−34 | 408 | 81 | 56.0% · | the constitution check, and the window in which I corrected myself three times (2026-08-05 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

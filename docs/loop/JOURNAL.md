@@ -46371,6 +46371,70 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 972 — a button's UA border is 2px, and the audit's font-size claim was wrong (2026-08-05)
+
+TICK SHAPE: pattern-class — the UA metrics of form controls, which check #86 ranked as *"the
+highest-frequency single number left standing"*: `<button>` is **55.6%** of the burndown corpus and
+`<input>` **51.5%**, the two commonest constructs measured.
+
+⚠⚠⚠ **A `<button>`'s UA BORDER IS 2px AND WE DECLARED 1px, SO EVERY BUTTON ON EVERY PAGE WAS 2px
+SHORT IN BOTH AXES.** Read back out of Chrome with `getComputedStyle` rather than guessed
+(`border: 2px outset`, `padding: 1px 6px`, `font: 13.3333px Arial`), and measured on an unstyled
+fixture:
+
+```text
+                                       Chrome        before        after
+     <button>Search</button>          58.2 x 21     56 x 19      58 x 21
+     <input type=button value=Go>     33.8 x 21     32 x 19      34 x 21
+```
+
+One declaration, both axes, on the most common element on the web.
+
+⚠⚠⚠ **AND THE MEASUREMENT REFUTED THE CLAIM THAT SENT ME HERE — THE FOURTH SELF-CORRECTION THIS
+WINDOW.** Surface audit #37 recorded *"Chrome's UA gives an unstyled `<select>` its own ~13.333px
+font and we inherit the body's 16px."* **We do not.** The rule
+`input, select, textarea, button { font-family: Arial, sans-serif; font-size: 13.333px }` has been in
+`UA_CSS` all along, and the unstyled fixture proves it:
+
+```text
+     <select><option>alpha</option>    Chrome  55 x 19    ours  56 x 19    exact height
+     <textarea>x</textarea>            Chrome 182 x 36    ours 182 x 36    exact BOTH
+```
+
+**A font-size error could not leave two controls exactly Chrome's** — a textarea's height is
+`rows × line-height`, the most sensitive number in the set. The audit inferred the cause from a height
+difference whose origin was the border. **Both rows are now PINNED in the gate**, so the claim cannot
+be re-made from an inference.
+
+⚠⚠ **TWO RESIDUES REFUSED AS TRADES, AND BOTH ARE PINNED AT THEIR WRONG VALUES.** A residue nobody
+pins is a residue nobody notices moving:
+
+* **a text `<input>` is 19 against Chrome's 21** — Chrome gives it `2px inset` too, but our width is
+  **already exactly 205**, because a text field's intrinsic width is a `size`-driven formula with its
+  own intercept. Widening the border corrects the height and breaks the width. RED-proof 2 runs the
+  shared `input, textarea, select` rule at 2px and the first row to fail is `<select>` at 57.6 × 21
+  against 55 × 19 — that one rule carries three controls, which is itself why the trade is not a
+  one-liner.
+* **a 4-row `<select multiple>` is 72 against Chrome's 70** — our select carries 1px of vertical
+  padding where Chrome computes 0, but removing it alone takes the single-line `<select>` from an
+  exact 19 to 17, because our dropdown's content height is 15 where Chrome's is 17. ⚠ And the
+  dropdown does **not** follow t963's list-box row law: Chrome gives 21 at a 16px font where
+  `1 × (1.2 × 16 + 1) + 2` would be 22.2. Unifying them would be fitting one law to two metrics.
+
+RED-PROVEN, both applied, run and reverted: **border back to 1px** → `#b` reads 56.2 × 19 against
+58.2 × 21; **the shared control border widened to 2px** → `#s` reads 57.6 × 21 against 55 × 19.
+
+RATCHET: `manuk-layout` 125/125, `manuk-css` 28/28, and **every gate in `engine/page/tests` that
+mentions a button** — run as a set because this rule touches all of them — green. `g_form`,
+`g_appearance_none`, `g_select_width`, `g_select_listbox`, `g_replaced_baseline`,
+`g_intrinsic_min_max`, `g_inline_box_geometry`, `g_ua_block_margins` and `g_tab_stop` included.
+
+PERF: none — one declaration in a sheet that already parsed.
+
+WIKI: none [forced] — the mechanism is one UA constant and its two refused trades, and the gate's own
+module doc is where a reader will look for it; `WEB-PATTERNS.md` carries the pattern row.
+[no-pattern]
+
 ## Tick 971 — the constitution check, and the window in which I corrected myself three times (2026-08-05)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks, last at 963),

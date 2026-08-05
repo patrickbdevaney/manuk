@@ -259,9 +259,29 @@ input[type=checkbox], input[type=radio] {
 /* `:checked` now matches (it did not, until this tick) — so a ticked box can finally LOOK ticked. */
 input[type=checkbox]:checked, input[type=radio]:checked { background-color: #1a73e8; }
 input[type=radio] { border-radius: 7px; }
+/* ⚠⚠ **A BUTTON'S UA BORDER IS 2px, NOT 1px, AND IT IS 2px ON ALL FOUR SIDES OF THE COMMONEST
+   ELEMENT ON THE WEB.** Chrome's UA sheet computes `border: 2px outset` here (read back through
+   `getComputedStyle`, not guessed); we declared 1px, so every button on every page was **2px short
+   in BOTH axes**. Measured on an unstyled fixture, 13.333px UA font:
+
+     <button>Search</button>          Chrome 58.2 x 21    before 56 x 19    after 58 x 21
+     <input type=button value=Go>     Chrome 33.8 x 21    before 32 x 19    after 34 x 21
+
+   `<button>` is on **55.6% of the burndown corpus** (`docs/loop/CORPUS-CONSTRUCTS.md`) — the single
+   most common construct measured — so this is one declaration against more of the corpus than any
+   other number left standing.
+
+   ⚠ **TEXT INPUTS ARE DELIBERATELY NOT CHANGED, and the reason is a measurement.** Chrome gives them
+   `2px inset` too and ours are likewise 2px short in HEIGHT (19 against 21) — but their WIDTH is
+   already **exactly** Chrome's 205, because a text field's intrinsic width is a `size`-driven
+   formula with its own intercept. Widening the border without retuning that formula would trade an
+   exact width for a corrected height, which is a trade, not a fix. Named, measured, not taken.
+
+   ⚠ `outset` vs our `solid` is a PAINT difference (the bevel), not a geometry one; the box is what
+   every sibling is laid out against, so the width lands first. */
 input[type=submit], input[type=reset], input[type=button], button {
   background-color: #efefef;
-  border: 1px solid #767676;
+  border: 2px solid #767676;
   padding: 1px 6px;
   text-align: center;
 }
