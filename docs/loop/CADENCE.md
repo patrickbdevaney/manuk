@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **670** | ticks 1–946 |
-| median tick cycle | **26m** | 669 intervals |
-| median, last 10 | **9m** | 10 intervals |
+| ticks landed | **671** | ticks 1–947 |
+| median tick cycle | **26m** | 670 intervals |
+| median, last 10 | **7m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.11** | 604.2h elapsed |
-| median verify wall | **63s** | 609 ticks |
+| **ticks per hour** | **1.11** | 604.3h elapsed |
+| median verify wall | **63s** | 610 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **484**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**329 of 670 ticks** (49%) moved a
+**329 of 671 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -767,5 +767,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **944** | 2026-08-05 09:03 | 21m | measurement | 63s | +135/−32 | 403 | 81 | 56.0% · | the constitution check, and the bar cannot be met on this instrument (2026-08-05) |
 | **945** | 2026-08-05 09:09 | 6m | capability | 63s | +108/−32 | 403 | 81 | 56.0% · | I executed the steer, and the steer's premise was wrong (2026-08-05) |
 | **946** | 2026-08-05 09:12 | 3m | measurement | 63s | +99/−32 | 403 | 81 | 56.0% · | four reductions, four clean, and the discovery engine has saturated for THIS class (2026-0 |
+| **947** | 2026-08-05 09:19 | 7m | measurement | 63s | +102/−32 | 403 | 81 | 56.0% · | the block axis is clean too, and five clean batteries is now a claim about the INSTRUMENT  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

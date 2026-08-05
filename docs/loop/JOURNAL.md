@@ -46371,6 +46371,75 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 948 — the hypothesis was wrong and the measurement it forced is the sharpest of the window (2026-08-05)
+
+TICK SHAPE: measurement — t947's own named first move, run before anything else, exactly as it was
+written down.
+
+**THE HYPOTHESIS, quoted so its refutation is legible.** t947 asked whether the residual shape error
+is layout math at all, since the instrument renders *the oracle against a `curl`'d snapshot from
+`file://`* and *us against the LIVE url*: if the two engines lay out two different documents, every
+geometry comparison downstream is confounded.
+
+⚠⚠ **THE PREMISE IS REAL AND `fidelity.rs` HAS ALREADY MEASURED IT — AND IT DOES NOT REACH THE
+SCORED HALF.** The file records the mechanism precisely: the oracle's `document.URL` is
+`file:///tmp/manuk-shape-….html`, so **origin-conditional boot code takes the wrong branch** —
+`house.udn.com`'s document is a stub behind `if (document.URL.indexOf("house.udn.com") != -1)`, which
+is `-1` there, so the oracle sees the stub forever (**8 tags against 949 live**; `allticketscol` 38
+against 1115). But those sites are exactly the ones already tagged `shell-only` /
+`oracle-module-shell` / `tree-divergence` and refused a score. On a **scored** site the documents
+agree:
+
+```text
+   www.tz.de     coverage 95.1%   ·   1864 elements COMMON to both engines
+```
+
+**So document divergence explains the unscored sites — which t937/938 already established — and not
+the scored ones. Hypothesis refuted for the half that matters, in one measurement.**
+
+⚠⚠⚠ **AND FORCING IT PRODUCED THE FINDING: THE DIVERGENCE IS PURELY VERTICAL, ON EVERY SITE
+CHECKED.** The `[diag]` line carries a four-term median that nothing had read:
+
+```text
+                            elements   dx    dy      dw   dh    shape
+   www.tz.de                   1864     0      5      0    0    83.9%
+   m.youm7.com                 1205     0     47      0    0    80.6%
+   www.freesupertips.com        379     0     53      0    0    77.6%
+   www.unoeste.br               351     0   1347      0    0    76.6%
+```
+
+**Four sites, 3,799 elements, and `dx = dw = dh = 0` on all four.** The median box is the **right
+width**, the **right height**, and in the **right horizontal position** — and displaced
+**vertically** by a per-site constant ranging from 5px to 1347px.
+
+**That is a very strong statement about where the remaining error is not.** It is not width
+computation, not height computation, not horizontal placement. A page whose every box is correctly
+sized and correctly placed left-to-right, shifted down as a body, is the signature of **a small
+number of boxes near the top of the document having the wrong height** — everything below inherits
+their error, and their own `dh` is a rounding error in a 1,864-element median.
+
+⚠ **AND IT SITS AWKWARDLY WITH THE BURNDOWN'S #1 INSIGHT, which is worth saying rather than
+smoothing over.** `PHASE0-RENDER-BURNDOWN.md` §3.1 says *"container-WIDTH errors launder into
+wrap/line-count → dy"* — a width error that surfaces as a height error. **`dw = 0` on all four sites
+says the median box's width is exact**, so if laundering is happening it is happening through a
+minority of boxes rather than broadly. That does not refute §3.1 — the laundering container could be
+one of the few — but it does mean the *typical* element is correctly sized and merely displaced, and
+t932's 25-case composed-width battery said the same thing from the fixture side.
+
+**THE METHOD THIS HANDS THE NEXT TICK, which is what the window has been missing.** t946 established
+that site reductions come back clean and t947 that property batteries do too; this gives the third
+option, and it needs no new instrument: **for one scored site, sort the divergences into document
+order and find the FIRST element whose `dh` is non-zero.** Everything below it inherits the `dy`. One
+box, named, per site — and `www.tz.de` at `dy = 5` with 1,864 elements is the cheapest place to start
+because the offset is small enough that only a handful of candidates can produce it.
+
+RATCHET: no engine change. `manuk-layout` and the page suite green from t945.
+
+PERF: none — measurement only.
+
+WIKI: none [forced] — the artefact is a refuted hypothesis and a divergence signature; neither
+describes a mechanism the engine implements yet. [no-pattern]
+
 ## Tick 947 — the block axis is clean too, and five clean batteries is now a claim about the INSTRUMENT (2026-08-05)
 
 TICK SHAPE: measurement — t946's steer ("sweep another property family; that is what still yields"),
