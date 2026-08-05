@@ -646,4 +646,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 916	f2935904	1785876615	2026-08-04T16:50:15-04:00	1744	capability	63	6	153	33	397	81	3896	6960	0	474	0	`text-top` aligns the INLINE BOX, and the inline box carries its half-leading (2026-08-04)
 918	777f0ec3	1785880586	2026-08-04T17:56:26-04:00	3971	capability	63	10	363	34	398	81	3896	6960	0	475	0	a control's value is not a child text node, so it had no baseline (2026-08-04)
 919	67817ba5	1785890050	2026-08-04T20:34:10-04:00	9464	measurement	63	6	138	50	397	81	3896	6960	0	475	0	the corrected ranking, and the sweep that produces it (2026-08-04)
-921	cc19e31a	1785891776	2026-08-04T21:02:56-04:00	1726	capability	63	10	242	40	397	81	3896	6960	0	475	0	the one-origin proxy is defeated by a page that gates on its own HOSTNAME (2026-08-04)
+921	edc80a9c	1785893769	2026-08-04T21:36:09-04:00	3719	capability	63	12	206	36	397	81	3896	6960	0	476	0	the one-origin proxy is defeated by a page that gates on its own HOSTNAME (2026-08-04)

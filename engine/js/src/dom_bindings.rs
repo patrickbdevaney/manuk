@@ -1051,6 +1051,10 @@ fn extra_computed_props(cs: &manuk_css::ComputedStyle) -> Vec<(&'static str, Str
                 VerticalAlign::TextBottom => "text-bottom",
                 VerticalAlign::Sub => "sub",
                 VerticalAlign::Super => "super",
+                // Chrome resolves these to a used length, so the readback is a px string; a
+                // percentage has already been resolved against the element's own line-height by
+                // the time anyone can observe it.
+                VerticalAlign::Length(_) | VerticalAlign::Percent(_) => "length",
             }
             .into(),
         ),

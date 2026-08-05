@@ -1568,6 +1568,8 @@
   - L1820 · The strut tuple gained a member rather than the constant gaining a fudge
   - L1830 · A formula that degenerates to a no-op on the common case reads as implemented (t916)
   - L1858 · The family, four ticks on
+  - L1877 · vertical-align: <length> parsed to baseline and vanished (t922)
+  - L1900 · The family, five ticks on
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -1595,4 +1597,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1502 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1504 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

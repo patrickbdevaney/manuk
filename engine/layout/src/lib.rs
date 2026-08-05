@@ -7441,6 +7441,14 @@ fn close_line(
                 VerticalAlign::TextBottom => (h - descent, descent),
                 VerticalAlign::Sub => (h - ascent * 0.15, ascent * 0.15),
                 VerticalAlign::Super => (h + ascent * 0.35, -(ascent * 0.35)),
+                // The atomic mirror of the text arms: the box is raised by the length (or by the
+                // fraction of the line-height), so it contributes that much more above the
+                // baseline and that much less below.
+                VerticalAlign::Length(px) => (bl + px, h - bl - px),
+                VerticalAlign::Percent(r) => {
+                    let px = r * f.style.line_height;
+                    (bl + px, h - bl - px)
+                }
                 VerticalAlign::Top => {
                     min_h_down = min_h_down.max(h);
                     continue;
@@ -7564,6 +7572,9 @@ fn close_line(
                 // above (`(bl, h - bl)`) is the inverse of this line; if the two ever disagree the
                 // box is placed outside the line box it asked for.
                 VerticalAlign::Baseline => baseline - f.atomic_baseline,
+                // Inverse of the pair above, exactly as every other arm here is.
+                VerticalAlign::Length(px) => baseline - f.atomic_baseline - px,
+                VerticalAlign::Percent(r) => baseline - f.atomic_baseline - r * f.style.line_height,
             };
             b.translate(fx, box_top);
             atomic_boxes.push(*b);
@@ -7669,6 +7680,10 @@ fn valign_text_shift(
         // area's and the shift is DOWNWARD by exactly that. `text-bottom` is the mirror.
         VerticalAlign::TextTop => (strut_a - a) - hl(a, d, lh),
         VerticalAlign::TextBottom => (d - strut_d) + (lh - a - hl(a, d, lh) - d),
+        // A length is the raise itself; a percentage is of THIS element's own `line-height`
+        // (CSS 2.1 §10.8.1 — not the strut's, and not the font size).
+        VerticalAlign::Length(px) => px,
+        VerticalAlign::Percent(r) => r * lh,
     }
 }
 

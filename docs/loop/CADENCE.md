@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **648** | ticks 1–921 |
 | median tick cycle | **26m** | 647 intervals |
-| median, last 10 | **29m** | 10 intervals |
+| median, last 10 | **30m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.09** | 592.0h elapsed |
+| **ticks per hour** | **1.09** | 592.5h elapsed |
 | median verify wall | **63s** | 587 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -28,7 +28,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **397**
-* **✅ rows in the capability ledger**: 144 → **475**
+* **✅ rows in the capability ledger**: 144 → **476**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **319 of 648 ticks** (49%) moved a
@@ -744,6 +744,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **916** | 2026-08-04 16:50 | 29m | capability | 63s | +153/−33 | 397 | 81 | 56.0% · | `text-top` aligns the INLINE BOX, and the inline box carries its half-leading (2026-08-04) |
 | **918** | 2026-08-04 17:56 | 66m | capability | 63s | +363/−34 | 398 | 81 | 56.0% · | a control's value is not a child text node, so it had no baseline (2026-08-04) |
 | **919** | 2026-08-04 20:34 | 2.6h | measurement | 63s | +138/−50 | 397 | 81 | 56.0% · | the corrected ranking, and the sweep that produces it (2026-08-04) |
-| **921** | 2026-08-04 21:02 | 29m | capability | 63s | +242/−40 | 397 | 81 | 56.0% · | the one-origin proxy is defeated by a page that gates on its own HOSTNAME (2026-08-04) |
+| **921** | 2026-08-04 21:36 | 62m | capability | 63s | +206/−36 | 397 | 81 | 56.0% · | the one-origin proxy is defeated by a page that gates on its own HOSTNAME (2026-08-04) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

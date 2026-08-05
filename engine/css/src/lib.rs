@@ -575,7 +575,9 @@ pub enum BoxSizing {
 }
 
 /// `vertical-align` for inline-level boxes (the common keywords).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+// `Eq` is dropped because the length/percentage forms carry an `f32` (t922). Nothing compares a
+// `VerticalAlign` for total equality; `PartialEq` is what the matches and tests use.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum VerticalAlign {
     Baseline,
     Top,
@@ -585,6 +587,12 @@ pub enum VerticalAlign {
     TextBottom,
     Sub,
     Super,
+    /// `vertical-align: <length>` — an explicit raise (positive) or drop (negative) in px, already
+    /// resolved from `em`/`rem` against this element's font size at parse time.
+    Length(f32),
+    /// `vertical-align: <percentage>` — of THIS element's own `line-height` (CSS 2.1 §10.8.1), which
+    /// is why it is kept as a ratio and resolved in layout rather than here.
+    Percent(f32),
 }
 
 /// `justify-content` — main-axis distribution of flex items, inline-axis distribution of grid tracks.
@@ -4474,7 +4482,25 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "text-bottom" => VerticalAlign::TextBottom,
                 "sub" => VerticalAlign::Sub,
                 "super" => VerticalAlign::Super,
-                _ => VerticalAlign::Baseline,
+                // ⚠⚠⚠ **THE LENGTH AND PERCENTAGE FORMS WERE UNREPRESENTABLE, SO THEY PARSED TO
+                // `baseline` AND VANISHED (t922).** `vertical-align: -2px` is the standard idiom for
+                // nudging an inline icon or badge against its label, and `50%` is how a raised
+                // marker is expressed relative to its own line. Chrome-measured on 16px/1.5 text:
+                // `10px` and `-10px` each grow the line to **34**, and `50%` to **36** — against 24
+                // for all three before.
+                other => {
+                    let t = other.trim();
+                    if let Some(pct) = t.strip_suffix('%') {
+                        pct.trim()
+                            .parse::<f32>()
+                            .map(|p| VerticalAlign::Percent(p / 100.0))
+                            .unwrap_or(VerticalAlign::Baseline)
+                    } else if let Some(px) = values::parse_length_px(t, s.font_size) {
+                        VerticalAlign::Length(px)
+                    } else {
+                        VerticalAlign::Baseline
+                    }
+                }
             };
         }
         // The `border` family. Widths feed the box model; the color feeds paint; the line

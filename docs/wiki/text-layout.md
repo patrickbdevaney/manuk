@@ -1872,3 +1872,43 @@ rounding than the line it moves within lands the box outside the box it asked fo
 `<sup>`/`<sub>`'s own box is byte-exact (18×15 against a 21×17 control) and the offset is verified at
 three font sizes, so the remaining 3px is how a SMALLER fragment's half-leading folds into the line —
 the one row of this family a further formula tick should not guess at.
+
+
+## `vertical-align: <length>` parsed to `baseline` and vanished (t922)
+
+The `VerticalAlign` enum had eight keyword variants and no length, so the parser's `_ =>` arm
+swallowed both the length and percentage forms into `Baseline`. Not dropped with a warning, not
+stored and ignored — **parsed to a different, valid value**, which is the shape this project rates
+most dangerous. `vertical-align: -2px` is the standard idiom for nudging an inline icon against its
+label, and it was silently a no-op for the whole life of the engine.
+
+```text
+                                     Chrome   before   after
+  vertical-align: 10px                 34       24       34
+  vertical-align: -10px                34       24       34
+  vertical-align: 50%                  36       24       36
+```
+
+**The percentage is of the element's OWN `line-height`** (CSS 2.1 §10.8.1) — not the strut's, and not
+the font size. In a 16px/1.5 fixture those are 24 and 16, and Chrome's 36 is `24 + 0.5 × 24`;
+resolving at parse time against the font size would give 32 and look close enough to bank. That is
+why the variant keeps a ratio and resolves in layout.
+
+Three real match sites: the enum and its parser, the `line_metrics` atomic arms plus the `box_top`
+placement arms that mirror them, and the computed-style serialisation. The text path needed two lines.
+
+### The family, five ticks on
+
+```text
+                                     Chrome   t913   t914   t915   t916   t922
+  super / sub                        30/28    24/24  29/26  30/28  30/28  30/28
+  text-top / text-bottom             27/28    24/24  24/24  24/24  27/28  27/28
+  10px / -10px / 50%               34/34/36     24     24     24     24  34/34/36
+  four CONTROLS                        24      24     24     24     24     24
+  middle                               25      24     26     26     26     26   <- open, 1px
+  <sup> / <sub>                        27      24     24     24     24     24   <- open, 3px
+```
+
+Eleven of fourteen exact, from thirteen-of-fourteen wrong. What remains is two rounding questions —
+and `<sup>`'s 3px is the same quantity t916 had to get exactly right for `text-top` (how a smaller
+fragment's half-leading folds into the line), so it is a measurement rather than a formula to try.

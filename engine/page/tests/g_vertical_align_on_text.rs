@@ -189,6 +189,20 @@ fn g_vertical_align_on_text() {
         );
     }
 
+    // ── t922: the LENGTH and PERCENTAGE forms, which were UNREPRESENTABLE until this tick — the
+    // enum had eight keyword variants and no length, so `vertical-align: -2px` (the standard idiom
+    // for nudging an inline icon against its label) parsed to `baseline` and vanished. A length is
+    // the raise itself; a percentage is of THIS element's own `line-height`, not the strut's and not
+    // the font size — which `#v9` pins, being 50% of a 24px line and not of a 16px font.
+    for (sel, want) in [("#v7", 34.0), ("#v8", 34.0), ("#v9", 36.0)] {
+        let got = h(&page, sel);
+        assert!(
+            (got - want).abs() < 1.01,
+            "G_VERTICAL_ALIGN_ON_TEXT: `{sel}` expected {want} (Chrome) — a length raises by itself \
+             and a percentage by that fraction of the element's own line-height; got {got}"
+        );
+    }
+
     // `middle` is still an open number (Chrome 25, ours 26) and is asserted as DIRECTION only —
     // banking 26 would freeze an approximation as though it had been measured.
     assert!(

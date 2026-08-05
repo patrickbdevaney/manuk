@@ -46371,6 +46371,70 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 922 — `vertical-align: <length>` was UNREPRESENTABLE, so it parsed to `baseline` and vanished (2026-08-04)
+
+TICK SHAPE: capability — the last of t913's `vertical-align` residuals that is not a rounding
+question, and the largest: Chrome 34 / 34 / 36 against our 24 for `10px`, `-10px` and `50%`.
+
+⚠⚠⚠ **THE ENUM HAD EIGHT KEYWORD VARIANTS AND NO LENGTH, SO THE PARSER'S `_ =>` ARM SWALLOWED BOTH
+FORMS INTO `Baseline`.** Not dropped with a warning, not stored and ignored — **parsed to a different,
+valid value**, which is the shape this project rates most dangerous: a wrong answer of the right
+type. `vertical-align: -2px` is the standard idiom for nudging an inline icon or badge against its
+label, and it has been silently a no-op for the whole life of the engine.
+
+```text
+                                     Chrome   before   after
+  vertical-align: 10px                 34       24       34
+  vertical-align: -10px                34       24       34
+  vertical-align: 50%                  36       24       36
+```
+
+⚠⚠ **`#v9` IS THE ONE THAT PINS THE REFERENCE, AND IT IS WHY THE VARIANT KEEPS A RATIO RATHER THAN A
+PX.** CSS 2.1 §10.8.1 makes a percentage *"of the `line-height` of the element itself"* — **not the
+strut's, and not the font size.** In this fixture those are 24px and 16px, and Chrome's 36 is
+`24 + 0.5 × 24`. Resolving at parse time against the font size would have produced 32 and looked
+close enough to bank.
+
+**The blast radius was three real match sites, which is why this was a tick and not a subsystem:** the
+enum and its parser (`engine/css`), the `line_metrics` atomic arms plus the `box_top` placement arms
+that mirror them, and the computed-style serialisation (`engine/js`). The text path needed no new arm
+at all — `valign_text_shift` gained two lines. `Eq` comes off the enum because the variants now carry
+an `f32`; nothing compared a `VerticalAlign` for total equality.
+
+**THE FAMILY, FIVE TICKS ON — eleven of fourteen exact, from thirteen-of-fourteen wrong at t913:**
+
+```text
+                                     Chrome   t913   t914   t915   t916   t922
+  super                                30      24     29     30     30     30
+  sub                                  28      24     26     28     28     28
+  text-top                             27      24     24     24     27     27
+  text-bottom                          28      24     24     24     28     28
+  10px / -10px                         34      24     24     24     24     34
+  50%                                  36      24     24     24     24     36
+  top / plain / super-on-10px (CTRL)   24      24     24     24     24     24
+  middle                               25      24     26     26     26     26   <- open, 1px
+  <sup> / <sub>                        27      24     24     24     24     24   <- open, 3px
+```
+
+⚠ **WHAT REMAINS IS TWO ROUNDING QUESTIONS, AND NEITHER SHOULD BE GUESSED AT.** `middle` is 1px over;
+`<sup>`/`<sub>` are 3px under while their own box is byte-exact (18×15 against a 21×17 control) and
+their offset is verified at three font sizes — so that residual is how a SMALLER fragment's
+half-leading folds into the line, which is the same quantity t916 had to get exactly right for
+`text-top`. It is a measurement, not a formula to try.
+
+RATCHET: `manuk-layout` **125/125**, `manuk-css` 28/28, `manuk-wpt` lib 98/98; the combined battery
+54/54, the specified-width set 14/14, and all ten of t915's calibration rows still exact. The only
+boxes that moved are lines carrying a length or percentage `vertical-align`, which is the definition
+of the change.
+
+GATE: `G_VERTICAL_ALIGN_ON_TEXT` gains three exact claims. **RED-PROVEN** by restoring the parser's
+`Baseline` fallback: *"`#v7` expected 34 … got 24."*
+
+PERF: none — two match arms and a multiply.
+
+WIKI: `docs/wiki/text-layout.md` — "A value that parses to a different VALID value is a wrong answer
+of the right type"
+
 ## Tick 921 — the one-origin proxy is defeated by a page that gates on its own HOSTNAME (2026-08-04)
 
 TICK SHAPE: capability + measurement — check #80's steer #3, the scorability lever, four windows old
