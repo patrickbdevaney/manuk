@@ -5980,7 +5980,7 @@ impl Ctx<'_> {
             Dim::Px(p) => Some(p),
             _ => None,
         };
-        let placed = taffy_tree::solve_subtree(
+        let (placed, solved_h) = taffy_tree::solve_subtree(
             self.dom,
             self.styles,
             node,
@@ -6027,14 +6027,27 @@ impl Ctx<'_> {
         for p in placed.iter_mut() {
             self.mirror_rtl_grid_descendants(p);
         }
-        let mut boxes = Vec::new();
-        let mut max_h = 0.0f32;
-        for p in &placed {
-            let (boxx, bottom) = self.extract_placed(p, cx, cy);
-            max_h = max_h.max(bottom);
-            boxes.push(boxx);
-        }
-        (BoxContent::Block(boxes), max_h)
+        let boxes: Vec<LayoutBox> = placed
+            .iter()
+            .map(|p| self.extract_placed(p, cx, cy).0)
+            .collect();
+        // ⚠⚠⚠ **THE CONTAINER'S HEIGHT IS THE FORMATTING CONTEXT'S ANSWER, NOT ITS CHILDREN'S
+        // BOTTOM EDGE.** `max_h` — how far down the lowest child reaches — was the returned height
+        // for both formatting contexts, and for FLEX it is right: a flex line's cross size *is* its
+        // tallest item. For a GRID it is a different question. A grid container's block size is the
+        // sum of its resolved ROW TRACKS and the row gaps, and **a track has a size whether or not
+        // anything fills it**, so `grid-template-rows: 40px 70px` holding one item is 110 tall in
+        // Chrome and was 40 here — the second track existed, was sized, and vanished from the
+        // container that owned it.
+        //
+        // It cannot be `max_h.max(solved_h)`. Chrome's container is sometimes SHORTER than its own
+        // content: `grid-template-rows: 20px` around a 40px item is 20, and the item overflows.
+        // Taking the larger of the two would keep that case wrong in the safe-looking direction.
+        //
+        // `solved_h` is taffy's own resolved content height for this container — the number the
+        // formatting context computed and the call site then discarded. The `max(0)` is the only
+        // guard: an empty container short-circuits above and never reaches here.
+        (BoxContent::Block(boxes), solved_h.max(0.0))
     }
 
     /// Is this node a GRID container whose inline axis runs right-to-left?

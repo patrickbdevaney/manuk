@@ -266,6 +266,11 @@
   - L5361 · Two grammars that look like one
   - L5369 · Building the fixture so it can actually fail
   - L5383 · Named, measured, not built — a DIFFERENT mechanism
+  - L5399 · A grid container's height is its TRACKS, not its children's bottom edge (t983)
+  - L5422 · The row that decides the SHAPE of the fix
+  - L5429 · Why it hid for so long
+  - L5438 · Where it was found
+  - L5445 · Blast radius
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1636,4 +1641,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1543 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1548 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

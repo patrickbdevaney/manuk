@@ -917,7 +917,26 @@ fn snap_row_item_percent_widths(tree: &mut TaffyDom, root: TId, container_width:
 /// unified taffy tree, measuring block/inline/float/table leaves via `measure`. Returns the
 /// container's direct children as [`Placed`] subtrees (positions relative to the content
 /// origin) — a container child carries its whole positioned subtree so the caller extracts
-/// it directly instead of re-solving.
+/// it directly instead of re-solving — **and the container's own resolved content height**.
+///
+/// ⚠⚠⚠ **That second return value used to be thrown away, and the caller reconstructed the
+/// container's height from the bottom edge of its lowest child.** For flex those two agree, which is
+/// why it survived. For a GRID they are different questions: a grid container's block size is the
+/// sum of its resolved ROW TRACKS plus the row gaps, and a track has a size whether or not anything
+/// fills it. Measured against headless Chrome:
+///
+/// ```text
+///                                                       Chrome   child-extent   tracks
+///    grid-template-rows:100px, one 40px item              100         40          100
+///    grid-template-rows:20px,  one 40px item               20         40           20
+///    grid-template-rows:40px 100px, two 40px items        140         80          140
+///    grid-template-rows:40px 70px,  ONE item              110         40          110
+/// ```
+///
+/// The second row is the one that settles the shape of the fix: Chrome's container is **shorter**
+/// than its own content — the item overflows a track too small for it — so this cannot be a
+/// `max(child_extent, tracks)` that only ever grows. It has to be taffy's answer, and taffy already
+/// computed it.
 pub fn solve_subtree<'m>(
     dom: &Dom,
     styles: &StyleMap,
@@ -925,7 +944,7 @@ pub fn solve_subtree<'m>(
     container_width: f32,
     container_height: Option<f32>,
     measure: impl FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32> + 'm,
-) -> Vec<Placed> {
+) -> (Vec<Placed>, f32) {
     let (mut tree, root) = TaffyDom::build(dom, styles, container, Box::new(measure));
     // Pin the root to the given content size (Manuk resolved width; height when definite).
     let r: usize = root.into();
@@ -967,7 +986,14 @@ pub fn solve_subtree<'m>(
         },
     );
     let child_ids: Vec<TId> = tree.nodes[r].children.clone();
-    child_ids.iter().map(|&c| tree.placed(c)).collect()
+    let placed: Vec<Placed> = child_ids.iter().map(|&c| tree.placed(c)).collect();
+    // `content_box_height`, not `size.height`, and the two are **equal here** — `build` zeroes the
+    // root's margin/padding/border because Manuk applies the container's own frame around the
+    // content origin it passes in. This is the defensive form rather than a fix for a live bug: the
+    // caller's `cy` IS the content origin and it adds the frame back itself, so if that zeroing is
+    // ever removed a border-box height would silently double-count the padding. The claim this
+    // spelling makes — *"the content box"* — stays true either way.
+    (placed, tree.nodes[r].layout.content_box_height())
 }
 
 /// The **max-content width** of a flex/grid container, asked of taffy directly.
@@ -1060,10 +1086,11 @@ mod tests {
         cs.flex_shrink = 0.0; // don't let flex shrink the item below its basis
         styles.insert(sidebar, cs);
 
-        let placed = solve_subtree(&dom, &styles, container, 1000.0, None, |_n, _k, _a| Size {
-            width: 0.0,
-            height: 0.0,
-        });
+        let (placed, _solved_h) =
+            solve_subtree(&dom, &styles, container, 1000.0, None, |_n, _k, _a| Size {
+                width: 0.0,
+                height: 0.0,
+            });
         assert_eq!(placed.len(), 1);
         assert!(
             (placed[0].slot.width - 750.0).abs() < 1.0,
@@ -1099,10 +1126,11 @@ mod tests {
         }
 
         // Leaves measure to zero content (only grow matters here).
-        let placed = solve_subtree(&dom, &styles, container, 300.0, None, |_n, _k, _a| Size {
-            width: 0.0,
-            height: 0.0,
-        });
+        let (placed, _solved_h) =
+            solve_subtree(&dom, &styles, container, 300.0, None, |_n, _k, _a| Size {
+                width: 0.0,
+                height: 0.0,
+            });
         assert_eq!(placed.len(), 2);
         let s0 = placed[0].slot;
         let s1 = placed[1].slot;
@@ -1160,10 +1188,11 @@ mod tests {
             styles.insert(k, cs);
         }
 
-        let placed = solve_subtree(&dom, &styles, container, 600.0, None, |_n, _k, _a| Size {
-            width: 0.0,
-            height: 0.0,
-        });
+        let (placed, _solved_h) =
+            solve_subtree(&dom, &styles, container, 600.0, None, |_n, _k, _a| Size {
+                width: 0.0,
+                height: 0.0,
+            });
         assert_eq!(placed.len(), 3);
         let xs: Vec<f32> = placed.iter().map(|p| p.slot.x).collect();
         assert!(
@@ -1225,10 +1254,11 @@ mod tests {
         }
 
         // Height `None` = the container's own height is indefinite, which is the whole point.
-        let placed = solve_subtree(&dom, &styles, container, 600.0, None, |_n, _k, _a| Size {
-            width: 0.0,
-            height: 0.0,
-        });
+        let (placed, _solved_h) =
+            solve_subtree(&dom, &styles, container, 600.0, None, |_n, _k, _a| Size {
+                width: 0.0,
+                height: 0.0,
+            });
         assert_eq!(placed.len(), 2);
         let (s0, s1) = (placed[0].slot, placed[1].slot);
         assert!(

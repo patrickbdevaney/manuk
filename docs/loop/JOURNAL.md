@@ -46371,6 +46371,135 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 983 — a grid container's height is its TRACKS, and the residue that came from measuring the container after the items agreed (2026-08-06)
+
+TICK SHAPE: primitive — the block size of a flex/grid formatting context. This is t982's named
+residue, built as its own tick because it is a different mechanism.
+
+⚠⚠⚠ **`layout_flex_or_grid` RETURNED THE LOWEST CHILD'S BOTTOM EDGE AND THREW AWAY THE HEIGHT TAFFY
+HAD ALREADY RESOLVED FOR THE CONTAINER.** For FLEX those two are the same number, and that is exactly
+why it survived — a flex line's cross size *is* its tallest item. For a GRID they are different
+questions: a grid container's block size is the sum of its resolved ROW TRACKS plus the row gaps, and
+**a track has a size whether or not anything fills it**.
+
+**MEASURED, headless Chrome vs ours** (`/tmp/gc.html`, a 300px container of 60x40 items):
+
+```text
+                                                  Chrome     before      after
+   grid-template-rows:100px, one 40px item          100         40        100
+   grid-template-rows:20px,  one 40px item           20         40         20
+   grid-template-rows:40px 100px, two items         140         80        140
+   grid-template-rows:40px 70px, ONE item           110         40        110
+   grid-template-rows:100px + padding:10px          120         60        120
+   grid-template-rows:40px 40px; row-gap:30px       110        110      unchanged
+  -- FLEX CONTROLS, the half that was always right --
+   flex row, tallest item 70px                       70         70      unchanged
+   flex column, two 40px items                       80         80      unchanged
+   flex, height:30px around a 40px item               30         30      unchanged
+```
+
+⚠⚠⚠ **ONE ROW DECIDED THE SHAPE OF THE FIX, AND IT IS THE ONE THAT LOOKS LIKE A TYPO.**
+`grid-template-rows: 20px` around a 40px item is **20** in Chrome — the container is SHORTER than its
+own content and the item overflows it.
+
+> So this could not be `max(child_extent, tracks)`. That combination passes every other row in the
+> fixture, reads as the conservative choice, and **keeps the one case that matters wrong in the
+> direction that looks safe.** A fix that only ever grows a box is not a smaller version of the right
+> fix; it is a different rule that happens to agree on the easy half. The RED proof for it fails
+> exactly one assertion of the nine, which is what that row is in the gate for.
+
+⚠⚠⚠ **WHY IT HID: THE ROW-GAP CASE WAS ALREADY RIGHT, FOR THE WRONG REASON.** A `row-gap` sits
+BETWEEN the children, so the lowest child's bottom edge already includes it — `row-gap:30px` between
+two 40px rows read 110 before this tick and 110 after. Every grid whose tracks are exactly as tall as
+their content — which is **every grid that sizes its rows `auto`, the common case** — agreed with
+Chrome for the wrong reason. Only a track bigger or smaller than what fills it separates the two
+models, and a trailing EMPTY track is the sharpest version: there is no child down there at all, so
+the child-extent model cannot even see it.
+
+⚠⚠⚠ **HOW IT WAS FOUND, AND IT IS THE SECOND CONSECUTIVE TICK OF THE SAME HABIT.** Not by aiming at
+it. t982's gate got all ELEVEN of its item offsets Chrome-exact and two of its CONTAINERS stayed 40px
+short. **Measure the container after the items agree.** An item-only readout declares a property
+family finished one layer too early — t981's residue was found the same way, and both times the
+thing that was still wrong was the box that OWNED the boxes that were right.
+
+⚠⚠ **BLAST RADIUS, AND THE HONEST REPORT.** Every flex and grid container on every page now takes its
+height from taffy rather than from its children. Per the standing old-binary rule, an A/B on a fixed
+four-site anchor panel, both binaries built and run in the same hour:
+
+```text
+                     OLD (HEAD)     NEW
+   mean shape          87.3%       87.4%
+   shape >= 0.75        3 / 4       3 / 4
+   h-overflow clean     3 / 4       3 / 4
+   overlap / reading-order / dead-target   4/4 identical on both
+```
+
+**No regression, and no measurable gain either** — +0.1 pt is inside the per-site spread (t654: one
+unchanged tree varies 3.7 pts). The fix is Chrome-exact on nine fixture rows and invisible on those
+four pages, and saying so is the report; a change this broad that moved nothing on the panel is the
+outcome the ratchet asks for, not a disappointing one.
+
+RED-PROVEN TWO WAYS, plus one recipe that **did not fire and is recorded rather than dropped**:
+
+```text
+   return `max_h` (the ORIGINAL code)  -> the 5 track rows fail; ALL 3 flex controls pass,
+                                          which is precisely the confinement that hid it
+   return `max_h.max(solved_h)`        -> ONLY the 20px shrink row fails, at 40 against 20
+   `size.height` for `content_box_height()` -> NOTHING fails. `TaffyDom::build` zeroes the
+                                          ROOT's margin/padding/border (Manuk applies the
+                                          container's own frame), so the two are equal on the
+                                          root BY CONSTRUCTION, on every fixture.
+```
+
+⚠⚠ The third one is the finding inside the finding: **I wrote that RED recipe into the gate's
+documentation before running it, and it was false.** A gate whose "how to break it" list contains a
+step that cannot break it is worse than a gate with a shorter list — the next reader trusts it and
+proves nothing. The recipe is now recorded as a NON-red with its reason, and `content_box_height()`
+is kept as the defensive spelling: it stays correct if that zeroing is ever removed, where
+`size.height` would silently double-count the frame.
+
+RATCHET: `manuk-layout` 125/125, `manuk-css` 30/30 + 2 doc-tests, and the flex/grid gate set green as
+a set — `g_grid_container_height` (new), `g_grid_implicit_tracks`, `g_container_alignment`,
+`g_self_alignment`, `g_flex_percent_height`, `g_flex_percent_linebreak`, `g_intrinsic_flex_grid`,
+`g_flex_item_slot_is_final`. The four unit-test call sites of `solve_subtree` were updated for the
+widened return type rather than left to bind the tuple.
+
+**WALL-TIME AUDIT @ 983 (due since 982; the pre-flight hook blocked this commit until it ran) —
+banked as audit #36. The finding is that 57% of the wall is UNMEASURED, and I can now say exactly
+why.**
+
+```text
+   total 1283s · gate 1216s · build 67s · load1 8.83
+   attributed by the histogram: P 237 · G3 101 · T 88 · B 67 · G6 14 · D 9 · G1 6 · F 3 · F4 1
+   = 526s of 1216s (43%).  690s (57%) lands in no section at all.
+```
+
+The missing 57% is the blind spot `verify.sh` documented for itself at tick 235 — `head_` only
+records time BETWEEN section headers, so the prewarm and the ~23 concurrent `_launch` gates, which
+all run before the first header, are attributed to nothing. A receipt field was built to close it.
+**It reads 0, because `_PREWARM_END=$SECONDS` is assigned at line 102 and `_PREWARM_END=0` is
+executed at line 163 — the initialiser runs sixty-one lines AFTER the assignment and clobbers it.**
+So `unattributed_seconds` degenerates to `total − build`: the entire gate wall, by construction, on
+every run ever recorded.
+
+⚠⚠ That closes a question the loop asked twice. **t981's self-audit reasoned from
+`unattributed = everything` as if it were a measurement** — it correctly deduced that every remedy on
+offer was a build-time remedy against a 47-second build, then had nowhere to go, because the number
+that would have told it where to look is a constant. A diagnostic that returns a constant is worse
+than an absent one; an absent one at least cannot be reasoned from.
+
+It is `scripts/`, observer-owned, PART VII forbids me to touch it — **one line and on with browser
+work**, which is the scope rule's prescription. But the line is now actionable rather than a shrug:
+moving that initialiser above the prewarm loop makes the receipt localise the 690s on the next run at
+zero cost. Nothing was trimmed, and this time that is not a finding of leanness: **there is no
+admissible trim to propose against seconds nobody can name.**
+
+PERF: none — one `f32` read off a `Layout` that was already computed, replacing a fold over the
+children that is no longer performed.
+
+WIKI: `docs/wiki/box-layout.md` — "A grid container's height is its TRACKS, not its children's bottom
+edge".
+
 ## Tick 982 — the grid tracks the author did not write down, and the fixture that could not fail (2026-08-06)
 
 TICK SHAPE: pattern-class — CSS Grid implicit-track sizing and auto-placement flow. Continues t980

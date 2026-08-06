@@ -5395,3 +5395,63 @@ Gated by `G_GRID_IMPLICIT_TRACKS` (Stylo path) and
 each **confined**: dropping `grid_auto_flow` fails the three flow rows and no auto-rows row; dropping
 `grid_auto_rows` fails the three auto-rows rows and no flow row; dropping `grid_auto_columns` fails
 only the row that declares one; folding `RowDense → Row` fails only the `dense` row.
+
+## A grid container's height is its TRACKS, not its children's bottom edge (t983)
+
+`layout_flex_or_grid` returned the container's content height as `max_h` — how far down the lowest
+child reached — and **threw away the height taffy had already resolved for the container itself**.
+For **flex** those two are the same number, which is why it survived a long time: a flex line's cross
+size *is* its tallest item. For a **grid** they are different questions. A grid container's block
+size is the sum of its resolved ROW TRACKS plus the row gaps, and **a track has a size whether or not
+anything fills it**.
+
+```text
+                                                Chrome     before      after
+  grid-template-rows:100px, one 40px item         100         40        100
+  grid-template-rows:20px,  one 40px item          20         40         20
+  grid-template-rows:40px 100px, two items        140         80        140
+  grid-template-rows:40px 70px, ONE item          110         40        110
+  grid-template-rows:100px + padding:10px         120         60        120
+  grid-template-rows:40px 40px; row-gap:30px      110        110      unchanged
+ ── FLEX controls, the half that was always right ──
+  flex row, tallest item 70px                      70         70      unchanged
+  flex column, two 40px items                      80         80      unchanged
+  flex, height:30px around a 40px item             30         30      unchanged
+```
+
+### The row that decides the SHAPE of the fix
+
+`grid-template-rows: 20px` around a 40px item is **20** in Chrome — the container is *shorter than
+its own content* and the item overflows. So the fix can never be `max(child_extent, tracks)`: a
+combination that only ever grows keeps that case wrong in the direction that looks safe. The answer
+has to be the formatting context's own, and **taffy had computed it and the call site discarded it**.
+
+### Why it hid for so long
+
+The `row-gap` row was already correct, because a gap sits *between* the children and the lowest
+child's bottom edge therefore includes it. Every grid whose tracks are exactly as tall as their
+content — which is every grid that sizes its rows `auto`, the common case — agreed with Chrome **for
+the wrong reason**. Only a track bigger or smaller than what fills it can tell the two models apart,
+and a trailing *empty* track is the sharpest version: there is no child down there at all, so the
+child-extent model cannot even see it.
+
+### Where it was found
+
+Not by aiming at it. `G_GRID_IMPLICIT_TRACKS` (t982) got all eleven of its ITEM offsets exact and two
+of its CONTAINERS stayed 40px short. **Measure the container after the items agree** — an item-only
+readout declares a family finished one layer too early, and this is the second consecutive tick where
+the residue came from that habit.
+
+### Blast radius
+
+Every flex and grid container on every page now takes its height from taffy rather than from its
+children. An old-binary A/B on four anchor sites in the same hour moved mean shape 87.3% → 87.4% with
+all four jarring invariants byte-identical: **no regression, and no measurable gain either.** The fix
+is Chrome-exact on the fixture and invisible on those four pages, which is the honest report.
+
+Gated by `G_GRID_CONTAINER_HEIGHT`. RED-proven two ways: returning `max_h` (the original code) fails
+the five track rows while every flex control passes — exactly the confinement that let it survive —
+and returning `max_h.max(solved_h)` fails only the shrink row. ⚠ A third recipe, swapping
+`content_box_height()` for `size.height`, does **not** go red: `TaffyDom::build` zeroes the root's
+frame, so the two are equal by construction. Recorded rather than dropped, because a RED recipe that
+cannot fire is worse than no recipe.

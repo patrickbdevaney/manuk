@@ -1205,3 +1205,67 @@ rule that the cost be recorded where the slowness is.
 **Handed over, so the next audit is not another single sample:** the honest instrument for this
 ledger is `sections` banked PER RUN with `load1`, not the last run overwritten. That is a
 `verify.sh`/`status-update.sh` change and is observer territory; recorded here rather than acted on.
+
+## Audit #36 — tick 983 (2026-08-06) — 1216s, and the receipt field built to explain it reads ZERO by construction
+
+```text
+  total 1283s · gate 1216s · build 67s · disk 62% · load1 8.83
+
+  Where the seconds go, as the histogram reports them:
+     237s  P    parity (§1.1 — 72/72 vs headless Chrome)   19%
+     101s  G3   affordance completeness (§1.8)              8%
+      88s  T    crate tests                                 7%
+      67s  B    build (workspace)                           6%
+      14s  G6 · 9s D · 6s G1 · 3s F · 1s F4                 2%
+     ────
+     526s  ATTRIBUTED (43%)          690s  MISSING (57%)
+```
+
+⚠⚠⚠ **THE HISTOGRAM ACCOUNTS FOR 43% OF THE WALL, AND THE MISSING 57% IS EXACTLY THE BLIND SPOT
+`verify.sh` DOCUMENTED FOR ITSELF AT TICK 235 — WITH THE INSTRUMENT IT BUILT TO CLOSE IT REPORTING
+ZERO.** The comment at `scripts/verify.sh:156` names it in full: `head_` only records time *between*
+section headers, so the `cargo test --no-run` prewarm and the ~23 concurrent `_launch` gate
+invocations — everything before the first `head_` at line 194 — are attributed to nothing. The fix
+was a receipt field, `prewarm_launch_seconds`. It reads **0**, on this run and on t981's:
+
+```text
+   .git/manuk-verify-receipt:  seconds: 1216   build_seconds: 67   prewarm_launch_seconds: 0
+                               unattributed_seconds: 1216      ← the ENTIRE gate wall
+```
+
+**Why it is zero, precisely:** `_PREWARM_END=$SECONDS` is assigned at `verify.sh:102`, inside the
+prewarm loop — and `_PREWARM_END=0` is executed at **line 163**, sixty-one lines *later* in the same
+top-to-bottom script. The initialiser runs after the assignment and clobbers it. So line 712's
+`unattributed_seconds: $(( SECONDS - _BUILD_SECONDS - _PREWARM_END ))` degenerates to
+`total − build` — the whole gate wall, by construction, on every run that has ever been recorded.
+
+That is the answer to a question the loop has now asked twice and could not resolve: t981's self-audit
+read *"the receipt attributes NONE of the 1118 seconds"* and correctly concluded that every remedy the
+audit names is a **build-time** remedy against a 47-second build — but it could not say where the
+other 1071s went, because the field that would say is dead. **A diagnostic that returns a constant is
+worse than an absent one: t981 reasoned from `unattributed = everything` as if it were a measurement.**
+
+⚠ It is `scripts/`, it is observer-owned, and PART VII forbids me to touch it. **One line here and on
+with browser work** — but the line is now actionable rather than a shrug: moving `_PREWARM_END=0`
+above line 97 (or deleting it) makes the receipt localise the 690s on the next run, and costs nothing.
+
+**Against the four admissible questions, at 1216s:**
+
+1. **REDUNDANCY** — `P` (237s, the largest attributed cost) is 72 parity cases against headless
+   Chrome; coverage is sacred and none of it is duplicated elsewhere. `G3` (101s) and `T` (88s) share
+   nothing. No two gates found standing up overlapping SpiderMonkey runtimes for the same assertion.
+2. **PARALLELISM** — the ~23 `_launch` gates are concurrent; `F`/`F4` are deliberately serial and
+   must stay so. Nothing found accidentally serialised. ⚠ But note: **the concurrency is precisely
+   what the histogram cannot see**, so "is the parallel section actually parallel" is not answerable
+   from this instrument at all until the field above is fixed.
+3. **CACHING** — incrementals in RAM, live fetches snapshot-cached. Nothing new found recomputed.
+   `load1: 8.83` on this run against `78s @ load1 low` at #35 — the bistability #35 named is intact
+   and this sample sits at the loaded end of it.
+4. **SCOPE** — narrower per-gate build targets remain real and remain a `verify.sh` concern.
+
+⚠ **NOTHING TRIMMED, AND THAT IS AGAIN THE RESULT — but for a new reason.** #35 found the wall lean
+and could say so with confidence. This audit finds 57% of the wall *unmeasured*, which is not the
+same as finding it lean: there is no admissible trim to propose against seconds nobody can name. The
+one actionable item this audit produces is the one-line ordering fix above, and it is not mine to
+make. The trend across the last four samples — 78s (t962) · 369s (t941) · 1118s (t981) · 1216s (t983)
+— reads as growth only if the bistability is ignored; `load1` should be read beside every one of them.
