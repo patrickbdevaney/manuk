@@ -277,6 +277,10 @@
   - L5524 · column-gap: 10% had nowhere to be stored, so it became zero (t985)
   - L5540 · Which basis, measured rather than assumed
   - L5564 · The CSSOM half, which a geometry-only gate would have missed
+  - L5582 · A transformed ancestor is a containing block, and nothing knew it (t986)
+  - L5606 · The absolute row shows the old test was the *wrong test*
+  - L5613 · One predicate, not a transform special case
+  - L5619 · Named, measured, not built — the t985 shape one level up
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1647,4 +1651,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1554 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1558 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

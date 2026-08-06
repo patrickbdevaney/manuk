@@ -46371,6 +46371,107 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 986 — a transformed ancestor is a containing block, and the old test was the WRONG TEST (2026-08-06)
+
+TICK SHAPE: primitive — containing-block selection for out-of-flow boxes. Found by the **second**
+discovery battery of the window, this one aimed at positioned/overflow/stacking geometry (board
+RENDER items 7-8) rather than at flex/grid sizing.
+
+⚠⚠⚠ **THE DISCOVERY BATTERY IS NOW THE METHOD, AND IT PRICED ITS OWN NEGATIVE SPACE AGAIN.** Sixteen
+rows — abs with both insets, over-constrained insets, all-auto insets, `inset:0;margin:auto`,
+percentage insets, bottom+right, relative offsets, escaping a static parent, `overflow:hidden` as a
+BFC, a scroll gutter, sticky, a transformed containing block, a padded containing block, height from
+top+bottom, and two controls. **Thirteen exact. Three not.** One of the three is a known instrument
+artefact, which the ledger caught before I could file it as a bug:
+
+```text
+   overflow-y:scroll content width   Chrome 300   ours 285
+```
+
+That is the **reference running `--hide-scrollbars`** while our scrollbar model reserves the 15px
+Chrome would also reserve if it had a scrollbar. Recorded in the pattern ledger since t930 as *"an
+INSTRUMENT bug; never fix the engine for it"* — and it presented here as a clean 15px divergence in a
+fixture built for something else. **A ledger entry paid for itself in the one place a fresh reading
+would have looked most convincing.**
+
+⚠⚠⚠ **CSS TRANSFORMS §3: A TRANSFORMED ELEMENT IS THE CONTAINING BLOCK FOR ITS `absolute` AND `fixed`
+DESCENDANTS, WHATEVER ITS OWN `position`.** `abs_containing_block` tested only `position != Static`,
+and `position: fixed` was handed the viewport unconditionally. `filter` and `backdrop-filter` carry
+the same rule.
+
+```text
+                                                       Chrome      before       after
+   fixed    inside transform:translateX(10px)        [ 20, 20]  [ 10,-1328]  [ 20, 20]
+   absolute inside transform, ancestor NOT positioned[ 20, 20]  [ 10,-1200]  [ 20, 20]
+   fixed    inside filter:blur(0px)                  [ 20, 20]  [ 20,-1072]  [ 20, 20]
+   fixed    inside a transformed GRANDparent         [ 20, 20]  [ 10, -816]  [ 20, 20]
+  -- CONTROLS --
+   absolute inside a plain position:relative ancestor[ 20, 20]     same     unchanged
+   a transformed box with an IN-FLOW child           [  0,  0]     same     unchanged
+```
+
+**This is not a rounding error — it is a box on a different part of the page.** Ranked on `shape` it
+is one more `dy`; ranked on **I3** it is a mis-actuation surface, because the out-of-flow children
+of transformed wrappers are exactly the badges, close buttons, dropdown panels and tooltips a user
+clicks. `transform` is on **34.5% of the corpus**.
+
+⚠⚠⚠ **THE `absolute` ROW IS THE ONE WORTH KEEPING, BECAUSE IT SHOWS THE OLD TEST WAS THE *WRONG
+TEST*.** Its wrapper is `position: static`. Under `position != Static` the wrapper was invisible as a
+containing block and the box escaped to the viewport — **the ancestor was right there and failed a
+test that had nothing to do with the rule being applied.**
+
+> That is a distinct failure mode from "the rule is unimplemented", and it is worse to find: the code
+> asked a question, got a truthful answer, and acted correctly on it. There is no missing arm, no
+> `todo!()`, no default — nothing that greps as a gap. **The only way to see it is to know what
+> question SHOULD have been asked**, which means reading the spec rule and not the code.
+
+⚠⚠ **ONE PREDICATE, NOT A `transform` SPECIAL CASE.** `filter: blur(0px)` — a *no-op* blur — is
+enough, measured. Three properties, one rule; narrowing the predicate to `transform` fails exactly
+the filter row and nothing else, which is what that row is in the gate for.
+
+RED-PROVEN THREE WAYS, and the `absolute` and `fixed` halves turn out to be **separately provable**,
+which is why both are asserted rather than one standing for the family:
+
+```text
+   drop the predicate from `abs_containing_block` -> ONLY the absolute row fails; every fixed row
+                                                     passes, because those go through the other walk
+   restore `fixed => viewport`                    -> ONLY the fixed rows fail
+   narrow the predicate to `transform`            -> ONLY the filter row fails
+```
+
+⚠ A fourth recipe — returning the ancestor's BORDER box instead of its padding box — **does not fire
+on this fixture** (no borders on it), and is recorded as such rather than dropped. It is also why
+`padding_box_of` was factored out and shared by both walks: the two differ only in WHICH ancestor
+they stop at, and a divergence in how they measure the one they found would surface only on bordered
+containers.
+
+⚠⚠ **NAMED, MEASURED, NOT BUILT — and it is EXACTLY t985's shape one level up.** `will-change`,
+`contain` and `perspective` obey this rule too. They are **not unhandled values: they have no
+`ComputedStyle` field at all**, so there is nowhere for the information to live and the fix is a
+cascade addition, not a layout one. `will-change: transform` — much the commonest of the three, since
+it is *the* standard compositing hint — is Chrome-exact at `[20, 20]` and reads `[20, -364]` here.
+Fixture `/tmp/tcb.html` row `a4` discriminates it. Two consecutive ticks have now ended at "the value
+has nowhere to live"; that is starting to look like the dominant remaining shape rather than a
+coincidence.
+
+**BLAST RADIUS, and the honest report.** This changes the containing block for out-of-flow boxes on
+any page with a transform or filter. Old-binary A/B, four-site anchor panel, both binaries built and
+run in the same hour: **byte-identical** — 87.4% mean shape on both, `shape >= 0.75` on 3/4 on both,
+all four jarring invariants 4/4 on both. Chrome-exact on six fixture rows and invisible on those four
+pages. Third such report this window, and the pattern is worth stating plainly: **the anchor panel is
+a REGRESSION detector, not a progress meter** — it has now correctly said "nothing broke" three times
+and has never once said "something improved", which is what a four-site panel is for.
+
+RATCHET: `manuk-layout` 125/125, and the positioned/sizing/flex/grid gate set green as a set —
+`g_transform_containing_block` (new), `g_percentage_gap`, `g_fit_content_width`,
+`g_grid_container_height`, `g_grid_implicit_tracks`, `g_container_alignment`, `g_self_alignment`,
+`g_intrinsic_flex_grid`, `g_inline_box_geometry`.
+
+PERF: one extra predicate per ancestor visited in a walk that already ran per out-of-flow box, over
+three `Vec::is_empty()` calls.
+
+WIKI: `docs/wiki/box-layout.md` — "A transformed ancestor is a containing block, and nothing knew it".
+
 ## Tick 985 — a percentage gap had nowhere to be STORED, and the RED proof that aimed at the wrong cascade (2026-08-06)
 
 TICK SHAPE: primitive — percentage resolution for `gap`/`row-gap`/`column-gap`. The second of the

@@ -5333,7 +5333,12 @@ impl Ctx<'_> {
             let x_static = s.inset.left.is_auto() && s.inset.right.is_auto();
             let y_static = s.inset.top.is_auto() && s.inset.bottom.is_auto();
             let mut cb = if s.position == Position::Fixed {
-                viewport
+                // ⚠ NOT unconditionally the viewport. A grouping-property ancestor (`transform`,
+                // `filter`, `backdrop-filter`) is a containing block for `fixed` too — which is the
+                // whole reason `position: fixed` inside a transformed wrapper scrolls with the page
+                // in every browser instead of staying pinned. Absent a grouping ancestor this still
+                // returns the viewport, so an ordinary fixed header is untouched.
+                self.fixed_containing_block(node, &rects, viewport)
             } else {
                 self.abs_containing_block(node, &rects, viewport)
             };
@@ -5480,6 +5485,50 @@ impl Ctx<'_> {
 
     /// The absolute containing block for `node`: the padding box of the nearest
     /// positioned ancestor with a laid-out box, else the viewport/initial CB.
+    /// Does this element establish a containing block for `absolute` **and** `fixed` descendants by
+    /// virtue of a **grouping property**, independently of its `position`?
+    ///
+    /// ⚠⚠⚠ **CSS Transforms §3 makes `transform` a containing block, and nothing here knew it.** The
+    /// rule is not a corner case: a transformed ancestor captures out-of-flow descendants that would
+    /// otherwise escape all the way to the viewport, and `transform` is on 34.5% of the corpus —
+    /// every animated card, carousel slide, `translateZ(0)` compositing hint and CSS-transitioned
+    /// panel. Measured against headless Chrome, a `position:fixed` box inside
+    /// `transform: translateX(10px)` belongs at `[20, 20]` from that ancestor and landed at
+    /// `[10, -1328]`: not a rounding error, a box on a different part of the page.
+    ///
+    /// `filter` and `backdrop-filter` carry the same rule (CSS Filter Effects §, measured:
+    /// `filter: blur(0px)` — a no-op blur — is enough), which is why all three are one predicate
+    /// rather than a `transform` special case.
+    ///
+    /// ⚠ **`will-change`, `contain` and `perspective` obey this rule too and are NOT handled**, for
+    /// a reason worth naming: they have no `ComputedStyle` field at all, so this is the t985 shape
+    /// one level up — not an unhandled value but a value with nowhere to live. `will-change:
+    /// transform` was measured Chrome-exact at `[20, 20]` and reads `[0, -1328]` here.
+    fn establishes_out_of_flow_cb(s: &ComputedStyle) -> bool {
+        !s.transform.is_empty() || !s.filter.is_empty() || !s.backdrop_filter.is_empty()
+    }
+
+    /// The containing block for a `position: fixed` box: the **viewport**, unless an ancestor
+    /// carries a grouping property — in which case that ancestor's padding box wins, and the box
+    /// scrolls with it instead of staying pinned to the screen.
+    fn fixed_containing_block(
+        &self,
+        node: NodeId,
+        rects: &HashMap<NodeId, Rect>,
+        viewport: Rect,
+    ) -> Rect {
+        let mut cur = self.dom.parent(node);
+        while let Some(anc) = cur {
+            if self.dom.is_element(anc) && Self::establishes_out_of_flow_cb(self.style_of(anc)) {
+                if let Some(r) = rects.get(&anc) {
+                    return padding_box_of(*r, self.style_of(anc));
+                }
+            }
+            cur = self.dom.parent(anc);
+        }
+        viewport
+    }
+
     fn abs_containing_block(
         &self,
         node: NodeId,
@@ -5490,16 +5539,12 @@ impl Ctx<'_> {
         while let Some(anc) = cur {
             if self.dom.is_element(anc) {
                 let s = self.style_of(anc);
-                if s.position != Position::Static {
+                // A grouping property qualifies an ancestor here **whatever its `position`** — that
+                // is the whole point of the rule, and testing `position != Static` alone walked
+                // straight past a `transform`ed `static` wrapper to whatever lay outside it.
+                if s.position != Position::Static || Self::establishes_out_of_flow_cb(s) {
                     if let Some(r) = rects.get(&anc) {
-                        // Padding box = border box inset by the border widths.
-                        return Rect {
-                            x: r.x + s.border_width.left,
-                            y: r.y + s.border_width.top,
-                            width: (r.width - s.border_width.left - s.border_width.right).max(0.0),
-                            height: (r.height - s.border_width.top - s.border_width.bottom)
-                                .max(0.0),
-                        };
+                        return padding_box_of(*r, s);
                     }
                 }
             }
@@ -13806,5 +13851,19 @@ mod tests {
              BFC root) contains floats.",
             r("p").height
         );
+    }
+}
+
+/// A containing block is an element's **padding box** — its border box inset by the border widths.
+///
+/// Shared by the `absolute` and `fixed` walks rather than written twice: the two differ only in
+/// WHICH ancestor they stop at, and a divergence in how they measure the one they found would be a
+/// bug that only shows up on bordered containers.
+fn padding_box_of(r: Rect, s: &ComputedStyle) -> Rect {
+    Rect {
+        x: r.x + s.border_width.left,
+        y: r.y + s.border_width.top,
+        width: (r.width - s.border_width.left - s.border_width.right).max(0.0),
+        height: (r.height - s.border_width.top - s.border_width.bottom).max(0.0),
     }
 }

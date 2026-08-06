@@ -5578,3 +5578,55 @@ a fourth — swapping the `gap` shorthand's halves — **cannot fire in the page
 expands the shorthand before we see it, so it lives in the `manuk-css` test instead. That test also
 pins the axis order, which matters: `gap: <row> <column>` puts the **block** axis first, the opposite
 of the `margin`-style analogy.
+
+## A transformed ancestor is a containing block, and nothing knew it (t986)
+
+CSS Transforms §3: an element with a `transform` becomes the containing block for its
+`position: absolute` **and** `position: fixed` descendants — **whatever its own `position` is**.
+`filter` and `backdrop-filter` carry the same rule. `abs_containing_block` tested only
+`position != Static`, and `position: fixed` was handed the viewport unconditionally, so an
+out-of-flow box inside a transformed wrapper escaped past it entirely.
+
+```text
+                                                       Chrome      before       after
+  fixed    inside transform:translateX(10px)         [ 20, 20]  [ 10,-1328]  [ 20, 20]
+  absolute inside transform, ancestor NOT positioned [ 20, 20]  [ 10,-1200]  [ 20, 20]
+  fixed    inside filter:blur(0px)                   [ 20, 20]  [ 20,-1072]  [ 20, 20]
+  fixed    inside a transformed GRANDparent          [ 20, 20]  [ 10, -816]  [ 20, 20]
+ ── controls ──
+  absolute inside a plain position:relative ancestor [ 20, 20]  unchanged
+  a transformed box with an IN-FLOW child            [  0,  0]  unchanged
+```
+
+**Not a rounding error — a box on a different part of the page**, which makes it an I3/jarring-class
+defect rather than a shape one. And not rare: `transform` is on **34.5% of the corpus** — every
+animated card, carousel slide, `translateZ(0)` compositing hint and CSS-transitioned panel — and the
+out-of-flow children inside them are the badges, close buttons, dropdowns and tooltips a user clicks.
+
+### The `absolute` row shows the old test was the *wrong test*
+
+Its wrapper is `position: static`. Under `position != Static` alone the wrapper was invisible as a
+containing block, so the box escaped to the viewport — **the ancestor was right there and failed a
+test that had nothing to do with the rule being applied.** That is a different failure from "the rule
+is unimplemented": the code asked a question, got a truthful answer, and the question was wrong.
+
+### One predicate, not a `transform` special case
+
+`filter: blur(0px)` — a *no-op* blur — is enough, measured. Three properties, one rule; writing it as
+`transform`-only leaves two silent holes of identical shape, and narrowing the predicate to
+`transform` fails exactly the filter row.
+
+### Named, measured, not built — the t985 shape one level up
+
+`will-change`, `contain` and `perspective` obey this rule too, and they are **not unhandled values**:
+they have no `ComputedStyle` field at all, so there is nowhere for the information to live and the fix
+is a cascade addition rather than a layout one. `will-change: transform` — much the commonest of the
+three, since it is *the* standard compositing hint — is Chrome-exact at `[20, 20]` and reads
+`[20, -364]` here.
+
+Gated by `G_TRANSFORM_CONTAINING_BLOCK`. RED-proven three ways, each hitting exactly its own row:
+dropping the predicate from the `absolute` walk fails only the absolute row (the `fixed` rows go
+through the other walk, so the two halves are separately provable); restoring `fixed => viewport`
+fails only the fixed rows; narrowing the predicate to `transform` fails only the filter row. An
+old-binary A/B on four anchor sites in the same hour was **byte-identical** — 87.4% mean shape and all
+four jarring invariants unchanged on both binaries.
