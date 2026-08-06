@@ -482,13 +482,8 @@ impl<'m> TaffyDom<'m> {
             0.0
         };
         let measure = &mut self.measure;
-        let mut px = |k: IntrinsicSize| -> Option<f32> {
-            let width = match k {
-                IntrinsicSize::MinContent => AvailableSpace::MinContent,
-                IntrinsicSize::MaxContent => AvailableSpace::MaxContent,
-                IntrinsicSize::FitContent => return None,
-            };
-            let size = measure(
+        let mut probe = |width: AvailableSpace| -> f32 {
+            measure(
                 node,
                 Size {
                     width: None,
@@ -498,8 +493,28 @@ impl<'m> TaffyDom<'m> {
                     width,
                     height: AvailableSpace::MaxContent,
                 },
-            );
-            Some(size.width + frame)
+            )
+            .width
+                + frame
+        };
+        let mut px = |k: IntrinsicSize| -> Option<f32> {
+            let width = match k {
+                IntrinsicSize::MinContent => AvailableSpace::MinContent,
+                IntrinsicSize::MaxContent => AvailableSpace::MaxContent,
+                // ⚠⚠⚠ **`fit-content` CANNOT BE RESOLVED TO A LENGTH HERE, AND THAT IS WHY THIS ARM
+                // USED TO GIVE UP.** Its definition is
+                //
+                //     fit-content = min(max-content, max(min-content, stretch))
+                //
+                // and the `stretch` term is *the space the formatting context is about to hand this
+                // box* — a number this function does not have and cannot ask for without re-entering
+                // the measure it is inside. So it is not resolved here; it is expressed below as the
+                // BOUNDS it is defined by, with taffy's own `auto` supplying the middle term. The
+                // `None` stays because there is no length to return, not because there is nothing
+                // to do.
+                IntrinsicSize::FitContent => return None,
+            };
+            Some(probe(width))
         };
         if let Some(v) = cs.width_keyword.and_then(&mut px) {
             style.size.width = length(v);
@@ -509,6 +524,52 @@ impl<'m> TaffyDom<'m> {
         }
         if let Some(v) = cs.max_width_keyword.and_then(&mut px) {
             style.max_size.width = length(v);
+        }
+
+        // ── `width: fit-content` — the shrink-to-fit idiom, and the one keyword the taffy path
+        //    dropped while the block path handled it in six places.
+        //
+        // Leaving `size.width` at `auto` IS the `stretch` term of the definition: taffy offers the
+        // box its available space, and clamping that between the two content bounds yields exactly
+        // `clamp(min-content, available, max-content)` — which is `fit-content`, evaluated by the
+        // one participant that knows the available width.
+        //
+        // Measured: `<div style="width:fit-content">abc</div>` in a 200px grid track is **29px** in
+        // Chrome and was **200** here — the box filled its track, which is the opposite of what the
+        // declaration asks for. `width:fit-content` is how a modern page sizes a badge, a pill, a
+        // tooltip or a button to its label.
+        if cs.width_keyword == Some(IntrinsicSize::FitContent) {
+            let min_c = probe(AvailableSpace::MinContent);
+            let max_c = probe(AvailableSpace::MaxContent);
+            // Compose with an author `min-width`/`max-width` rather than overwriting it: an explicit
+            // bound is a separate constraint that still applies on top of the computed width. Only a
+            // definite LENGTH can be compared here — a percentage bound resolves against a
+            // containing block this function does not know, so it is left alone rather than guessed
+            // at (which would replace a right-in-the-common-case answer with a wrong one).
+            let as_len = |d: Dimension| -> Option<f32> {
+                let raw = d.into_raw();
+                (raw.tag() == taffy::style::CompactLength::LENGTH_TAG).then(|| raw.value())
+            };
+            let author_min = as_len(style.min_size.width);
+            let author_max = as_len(style.max_size.width);
+            // ⚠⚠ **ORDER, AND IT IS THE ONE THING A ONE-ROW FIXTURE GETS WRONG.** The `min-content`
+            // term lives INSIDE `fit-content`; `max-width` clamps the RESULT. Taffy resolves
+            // min-over-max, so pushing `min-content` in as a floor and the author's `max-width` in
+            // as a ceiling makes the floor outrank the ceiling — measured, `width:fit-content;
+            // max-width:20px` around a 29px word read **29** against Chrome's **20**. The synthetic
+            // floor is therefore clamped by the ceiling first, and only the author's own `min-width`
+            // is allowed to win over it afterwards, which is the CSS 2.1 §10.4 order.
+            let ceiling = match author_max {
+                Some(a) => max_c.min(a),
+                None => max_c,
+            };
+            let floor = min_c.min(ceiling);
+            let floor = match author_min {
+                Some(a) => floor.max(a),
+                None => floor,
+            };
+            style.max_size.width = length(ceiling);
+            style.min_size.width = length(floor);
         }
     }
 

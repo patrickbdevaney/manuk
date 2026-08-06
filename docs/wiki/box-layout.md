@@ -5455,3 +5455,68 @@ and returning `max_h.max(solved_h)` fails only the shrink row. ⚠ A third recip
 `content_box_height()` for `size.height`, does **not** go red: `TaffyDom::build` zeroes the root's
 frame, so the two are equal by construction. Recorded rather than dropped, because a RED recipe that
 cannot fire is worse than no recipe.
+
+## `width: fit-content` reached the block path and was given up on inside flex and grid (t984)
+
+`fit-content` parses, maps out of Stylo, lives on `ComputedStyle.width_keyword`, and the **block**
+path consumes it in six places via `shrink_to_fit`. The taffy path had one line for it:
+
+```rust
+IntrinsicSize::FitContent => return None,   // taffy_tree.rs
+```
+
+so inside a flex or grid container the keyword was dropped and the box kept `width: auto` — which for
+a grid item means **stretch to the track**, the opposite of what the declaration asks for. This is the
+*half-installed* shape, not the absent one: two of the three intrinsic keywords resolve to a length by
+asking the measure closure, the third cannot, and the arm that could not return a number did nothing.
+
+### Why it cannot be resolved to a length there
+
+```text
+  fit-content = min(max-content, max(min-content, stretch))
+```
+
+The `stretch` term is *the space the formatting context is about to hand this box* — not known inside
+the style-conversion pass, and not askable without re-entering the measure it sits in. So the keyword
+is not resolved; it is expressed as the **bounds it is defined by**, with `size.width` left at `auto`
+so taffy's own offer supplies the middle term. Clamping that offer between the two content bounds is
+`clamp(min-content, available, max-content)` — `fit-content`, evaluated by the one participant that
+knows the available width.
+
+### The ordering, which is the whole subtlety
+
+The `min-content` term lives **inside** `fit-content`; `max-width` clamps the **result**. Taffy
+resolves min-over-max, so a first implementation that pushed `min-content` in as a floor and the
+author's `max-width` in as a ceiling let the floor outrank the ceiling. The synthetic floor is
+therefore clamped by the ceiling first, and only the author's own `min-width` wins over it afterwards
+(CSS 2.1 §10.4).
+
+```text
+                                                    Chrome     before      after
+  fit-content, 200px track, "abc"                      29        200         29
+  fit-content, 20px track (narrower than the word)     29         20         29
+  fit-content, 40px track, wrappable "aa bbbbbb c"     58         40         58
+  fit-content + max-width:20px                         20         20 †       20
+  fit-content + min-width:120px                       120        200        120
+  fit-content on a FLEX item                           29         29         29
+ ── controls ──
+  width:max-content · width:min-content · no keyword · block-path fit-content   all unchanged
+```
+
+**† that row was right before the fix, by accident, and the first version of the fix broke it.** The
+box stretched to its 200px track and `max-width: 20px` clamped it to 20 — the correct answer by a
+route that has nothing to do with `fit-content`. Pushing the floor in made it 29.
+
+> **A row that already passes is not a row you can leave out.** This one is the only thing in the gate
+> that catches the ordering, and it looked like the least interesting row in the fixture.
+
+Gated by `G_FIT_CONTENT_WIDTH`. RED-proven four ways, each read off the whole fixture rather than the
+gate's first failing assertion: deleting the block fails four rows and leaves `#a4`/`#a6` and every
+control passing (the partial agreement that let it survive); resolving to `max-content` fails only the
+wrappable row; not clamping the floor fails only the `max-width` row; dropping the `min-width`
+composition fails only the `min-width` row.
+
+⚠ **Still open, measured in the same battery and deliberately out of scope:** a **percentage
+`column-gap`/`row-gap`** is dropped — `column-gap: 10%` of a 300px grid is 30px in Chrome and 0 here.
+`ComputedStyle.row_gap`/`column_gap` are bare `f32` px, so a percentage has nowhere to be stored; the
+fix is a type widening to `Dim` across the cascade and the taffy mapping, not a missing arm.

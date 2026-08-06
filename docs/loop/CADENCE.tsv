@@ -699,4 +699,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 978	cbb7d5ee	1785996830	2026-08-06T02:13:50-04:00	1227	measurement	63	5	190	33	409	81	3896	6960	0	488	0	I tested my own audit's recommendation and its hit rate was wrong (2026-08-06)
 979	1ea757b8	1785998987	2026-08-06T02:49:47-04:00	2157	measurement	63	9	247	33	410	81	3896	6960	0	488	0	the constitution check, and the rule that cut both ways in one session (2026-08-06)
 981	5506628e	1786043655	2026-08-06T15:14:15-04:00	44668	pattern-class	63	11	676	36	412	81	3896	6960	0	490	0	the CONTAINER half of Box Alignment, and the shorthand that landed exactly half of itself (2026-08-06)
-983	b0aaa716	1786047741	2026-08-06T16:22:21-04:00	4086	primitive	63	11	553	62	413	81	3896	6960	0	491	0	a grid container's height is its TRACKS, and the residue that came from measuring the container after the items agreed (2026-08-06)
+983	c2ed20e4	1786052566	2026-08-06T17:42:46-04:00	8911	primitive	63	9	496	42	414	81	3896	6960	0	492	0	a grid container's height is its TRACKS, and the residue that came from measuring the container after the items agreed (2026-08-06)

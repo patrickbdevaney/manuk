@@ -46371,6 +46371,126 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 984 — `fit-content` was implemented on one path and given up on in the other, and the row that caught the ordering already passed (2026-08-06)
+
+TICK SHAPE: primitive — intrinsic inline sizing inside a flex/grid formatting context. **Found by a
+20-row property-family battery run to DISCOVER rather than to confirm**, which is the change of
+method worth recording as much as the fix.
+
+⚠⚠⚠ **I STOPPED GUESSING THE NEXT DEFECT AND MEASURED FOR IT.** Instead of picking a property from
+memory, I built one fixture covering **twenty** flex/grid features not yet gated — `place-self`,
+`order`, the `gap`/`flex-flow`/`flex`/`grid` shorthands, `span`, `grid-template-areas`,
+`min-content`/`fit-content`, percentage gaps, baseline self-alignment, `space-evenly`, `inline-grid`,
+`aspect-ratio`, `min-height:0`, `flex-basis:content`, `margin:auto` — and diffed all twenty against
+headless Chrome in one run. **Eighteen were exact. Two were not, and I had predicted neither.**
+
+```text
+   width: fit-content   in a 200px grid track   Chrome  29px   ours  200px
+   column-gap: 10%      of a 300px grid         Chrome  30px   ours    0px
+```
+
+That is a much better hit rate than the family-at-a-time method AND it prices the negative space: the
+eighteen exact rows are eighteen properties nobody now has to re-check. **All twenty CONTAINERS were
+also exact, which independently re-confirms t983 on a fixture built for something else.**
+
+⚠⚠⚠ **THE DEFECT IS THE HALF-INSTALLED SHAPE, NOT THE ABSENT ONE.** `fit-content` parses, maps out of
+Stylo, lives on `ComputedStyle.width_keyword`, and the BLOCK path consumes it in **six** places via
+`shrink_to_fit`. The taffy path had exactly one line for it:
+
+```rust
+   IntrinsicSize::FitContent => return None,      // taffy_tree.rs
+```
+
+Two of the three intrinsic keywords resolve to a length by asking the measure closure; the third
+cannot, so the arm that could not return a number **did nothing**. The consequence is the signature
+of this bug class: *the same declaration on the same content is right or wrong depending on whether an
+ancestor happens to be `display:flex`.* And `width:fit-content` lives almost exclusively inside a flex
+or grid container — it is how a page sizes a badge, a pill, a chip, a tooltip or a button to its own
+label, and Tailwind ships it as `w-fit`.
+
+**WHY IT CANNOT BE RESOLVED TO A LENGTH THERE, which is the reason the arm gave up and the reason the
+fix does not look like the other two.**
+
+```text
+   fit-content = min(max-content, max(min-content, stretch))
+```
+
+The `stretch` term is *the space the formatting context is about to hand this box* — not known inside
+the style-conversion pass, and not askable without re-entering the measure it sits in. So the keyword
+is not resolved; it is expressed as **the bounds it is defined by**, leaving `size.width` at `auto` so
+that taffy's own offer supplies the middle term. Clamping that offer between the two content bounds is
+`clamp(min-content, available, max-content)` — which IS `fit-content`, evaluated by the one
+participant that knows the available width. *The right move for a value you cannot compute is to hand
+the definition to whoever can.*
+
+⚠⚠⚠ **THE ROW THAT CAUGHT THE ORDERING ALREADY PASSED BEFORE THE FIX, AND MY FIRST VERSION BROKE IT.**
+`min-content` lives INSIDE `fit-content`; `max-width` clamps the RESULT. Taffy resolves min-over-max.
+So my first implementation — floor `min-content`, ceiling the author's `max-width` — let the floor
+outrank the ceiling:
+
+```text
+   width:fit-content; max-width:20px  around a 29px unbreakable word
+      Chrome                20
+      before the fix        20     <- RIGHT, and by pure accident: the box stretched to its 200px
+                                      track and max-width clamped it. Nothing to do with fit-content.
+      first fix             29     <- I BROKE A PASSING ROW
+      final                 20
+```
+
+> **A row that already passes is not a row you can leave out of a fixture.** It was the least
+> interesting-looking row in the file and it is the only thing in the gate that catches the ordering.
+> The rule this window has now produced twice, from opposite directions: **ask what the WRONG model
+> predicts for every row** — t982's fixture agreed with Chrome under the wrong model and could not
+> fail; this row agreed with Chrome under NO model and could only fail once the fix arrived.
+
+**MEASURED, headless Chrome vs ours** (`/tmp/fc.html`, ten rows):
+
+```text
+                                                    Chrome     before      after
+   fit-content, 200px track, "abc"                     29        200         29
+   fit-content, 20px track (narrower than the word)    29         20         29
+   fit-content, 40px track, wrappable "aa bbbbbb c"    58         40         58
+   fit-content + max-width:20px                        20         20 †       20
+   fit-content + min-width:120px                      120        200        120
+   fit-content on a FLEX item                          29         29         29
+  -- CONTROLS --
+   width:max-content                                  106        106     unchanged
+   width:min-content                                   58         58     unchanged
+   no keyword (a grid item stretches to its track)    200        200     unchanged
+   fit-content on the BLOCK path                       29         29     unchanged
+```
+
+RED-PROVEN FOUR WAYS, each read off the WHOLE fixture rather than the gate's first failing assertion,
+so confinement is measured:
+
+```text
+   delete the fit-content block      -> #a1 200 · #a2 20 · #a3 40 · #a5 200 fail; ALL FOUR controls
+                                        pass and so do #a4 and #a6 — the partial agreement that hid it
+   resolve to `size.width=max_c`     -> ONLY #a3 fails (106 vs 58): with `stretch` thrown away a
+                                        wrappable string stops wrapping into the space it was offered
+   floor NOT clamped by the ceiling  -> ONLY #a4 fails (29 vs 20)   — the first version of this fix
+   drop the author min-width compose -> ONLY #a5 fails (29 vs 120)
+```
+
+⚠⚠ **NAMED, MEASURED, NOT BUILT — and it is a TYPE problem, not a missing arm.** A percentage
+`column-gap`/`row-gap` is dropped: `column-gap: 10%` of a 300px grid is 30px in Chrome and **0** here.
+`ComputedStyle.row_gap`/`column_gap` are bare `f32` px, so a percentage **has nowhere to be stored** —
+this is not an unhandled value, it is a field that cannot represent one, and the fix is a widening to
+`Dim` across the cascade, the Stylo map and the taffy mapping. Fixture row `a12` of `/tmp/fam.html`
+discriminates it. Folding it in here would have mixed a one-line consumer fix with a cross-crate type
+change and made neither attributable.
+
+RATCHET: `manuk-layout` 125/125, `manuk-css` 30/30 + 2 doc-tests, and the sizing/flex/grid gate set
+green as a set — `g_fit_content_width` (new), `g_grid_container_height`, `g_grid_implicit_tracks`,
+`g_container_alignment`, `g_self_alignment`, `g_intrinsic_flex_grid`, `g_intrinsic_min_max`,
+`g_flex_percent_height`, `g_flex_percent_linebreak`, `g_flex_item_slot_is_final`.
+
+PERF: two extra measure probes, and only on a box that actually declares `width: fit-content` — the
+block is behind that equality test, so a page without the keyword pays nothing.
+
+WIKI: `docs/wiki/box-layout.md` — "`width: fit-content` reached the block path and was given up on
+inside flex and grid".
+
 ## Tick 983 — a grid container's height is its TRACKS, and the residue that came from measuring the container after the items agreed (2026-08-06)
 
 TICK SHAPE: primitive — the block size of a flex/grid formatting context. This is t982's named

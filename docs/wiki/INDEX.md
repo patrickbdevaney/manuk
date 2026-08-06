@@ -271,6 +271,9 @@
   - L5429 · Why it hid for so long
   - L5438 · Where it was found
   - L5445 · Blast radius
+  - L5459 · width: fit-content reached the block path and was given up on inside flex and grid (t984)
+  - L5473 · Why it cannot be resolved to a length there
+  - L5486 · The ordering, which is the whole subtlety
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1641,4 +1644,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1548 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1551 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
