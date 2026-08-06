@@ -872,18 +872,20 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
             0 => None,
             v => Some(map_ai(v)),
         };
-        // row-gap / column-gap: `normal` → 0, else the length part.
+        // row-gap / column-gap: `normal` → 0, else the length-or-PERCENTAGE.
+        //
+        // ⚠ The old body funnelled `lp_to_dim` through `Dim::Px(p) => p, _ => 0.0` — so a percentage
+        // arrived from Stylo intact and was thrown away one line later, which is the same
+        // "arrived and dropped" shape t981 found in the `place-*` shorthands. Carrying the `Dim`
+        // through is the whole change on this side.
         use stylo::values::generics::length::GenericLengthPercentageOrNormal as GapVal;
-        let gap_px =
+        let gap_dim =
             |g: stylo::values::computed::length::NonNegativeLengthPercentageOrNormal| match g {
-                GapVal::Normal => 0.0,
-                GapVal::LengthPercentage(lp) => match lp_to_dim(&lp.0) {
-                    Dim::Px(p) => p,
-                    _ => 0.0,
-                },
+                GapVal::Normal => Dim::Px(0.0),
+                GapVal::LengthPercentage(lp) => lp_to_dim(&lp.0),
             };
-        s.row_gap = gap_px(cv.clone_row_gap());
-        s.column_gap = gap_px(cv.clone_column_gap());
+        s.row_gap = gap_dim(cv.clone_row_gap());
+        s.column_gap = gap_dim(cv.clone_column_gap());
     }
 
     // box-sizing.

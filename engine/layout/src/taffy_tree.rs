@@ -294,9 +294,13 @@ pub fn to_taffy_style(cs: &ComputedStyle, calc: &mut Vec<(f32, f32)>) -> Style {
         // own default — stretch on this axis — stands, which is why the initial value was right the
         // whole time and every declared one was wrong.
         align_content: map_justify(cs.align_content),
+        // A gap is a `LengthPercentage` in taffy too, so a percentage crosses intact and is
+        // resolved against the container's inner size on that axis — which is the basis CSS asks
+        // for and the reason the cascade must NOT resolve it (measured: `column-gap: 10%` of a
+        // 300px grid is 30px; of the same grid with `padding: 0 50px` it is 20px, the CONTENT box).
         gap: Size {
-            width: length(cs.column_gap),
-            height: length(cs.row_gap),
+            width: lp(cs.column_gap, calc),
+            height: lp(cs.row_gap, calc),
         },
         flex_direction: map_direction(cs.flex_direction, cs.direction == CssDirection::Rtl),
         flex_wrap: map_wrap(cs.flex_wrap),
@@ -1101,7 +1105,7 @@ mod tests {
         cs.display = CssDisplay::Flex;
         cs.width = Dim::Px(600.0);
         cs.flex_direction = CssDir::Column;
-        cs.column_gap = 8.0;
+        cs.column_gap = Dim::Px(8.0);
         let t = to_taffy_style(&cs, &mut Vec::new());
         assert_eq!(t.display, Display::Flex);
         assert_eq!(t.flex_direction, FlexDirection::Column);

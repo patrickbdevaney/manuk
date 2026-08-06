@@ -46371,6 +46371,98 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 985 — a percentage gap had nowhere to be STORED, and the RED proof that aimed at the wrong cascade (2026-08-06)
+
+TICK SHAPE: primitive — percentage resolution for `gap`/`row-gap`/`column-gap`. The second of the
+two defects t984's twenty-property battery found, built as its own tick because it is a **type**
+change and not a consumer fix.
+
+⚠⚠⚠ **NOT A MISSING ARM — A FIELD THAT COULD NOT REPRESENT THE VALUE.** `ComputedStyle.row_gap` and
+`.column_gap` were bare `f32` px. Every producer funnelled into them accordingly: `parse_length_px`
+in the minimal cascade, and in `stylo_map` an `lp_to_dim` whose result was narrowed **one line later**
+by `Dim::Px(p) => p, _ => 0.0`. So a percentage arrived from Stylo intact and was discarded on the
+next line — the *arrived and dropped* shape t981 found in the `place-*` shorthands, one type down.
+
+> **A missing ARM is a hole you can grep for. A field that cannot hold the value is a hole with a
+> PLAUSIBLE NUMBER sitting in it.** Nothing in this pipeline was ever "unhandled" — every stage did
+> something, and the something was `0.0`. That is why the property looked implemented from every
+> angle: it parsed, it mapped, it reached taffy, and it laid out.
+
+**MEASURED, headless Chrome vs ours** (`/tmp/gp.html`, eight containers):
+
+```text
+                                                        Chrome     before      after
+   column-gap:10%, 300px grid                    2nd x      90         60         90    (gap 30)
+   column-gap:10%, 300px grid + padding:0 50px   2nd x     130        110        130    (gap 20)
+   row-gap:10%, grid with height:200px           2nd y      60         40         60    (gap 20)
+   row-gap:10%, AUTO-height grid                 2nd y      48         40         48    (gap  8)
+   gap:10% 20% shorthand (row THEN column)       3rd y      48         40         48
+   column-gap:10% on a FLEX container            2nd x      90         60         90
+  -- CONTROLS --
+   column-gap:30px                               2nd x      90         90     unchanged
+   no gap declared                               2nd x      60         60     unchanged
+```
+
+**THE BASIS IS THE CONTENT BOX ON THAT AXIS, and exactly one row proves it.** 10% of a 300px grid is
+30px; 10% of the *same* grid with `padding: 0 50px` is **20px**. Every other row in the fixture is
+consistent with a border-box basis. A five-row fixture without the padded one would have shipped the
+wrong basis with five green rows behind it.
+
+⚠⚠ **THE AUTO-HEIGHT ROWS WERE NOT PREDICTED, AND I AM ASSERTING THEM AS A FACT ABOUT TAFFY RATHER
+THAN AS A CONSEQUENCE OF MY FIX.** A `row-gap` percentage on an indefinite block size has a circular
+basis — the height depends on the gap which depends on the height. Chrome resolves it against the
+height computed **with the percentage treated as zero** (40+40=80, gap 8, second row at 48). I
+expected to have to implement that two-pass and found taffy already agrees. It costs nothing to
+assert and it is the row that would go red if taffy ever changed under us.
+
+⚠⚠⚠ **THE CSSOM HALF, WHICH A GEOMETRY-ONLY GATE CANNOT SEE.** Chrome returns
+`getComputedStyle(el).columnGap === "10%"` — the percentage, not a used pixel length. Both readers of
+these fields were formatting `{}px` around a float, so widening the type and stopping at layout would
+have printed **`10px` for a 10% gap**: a plausible wrong answer of the right type, which is the class
+t733 named and this project keeps re-meeting. Proved by RED: with the old serialiser restored, **every
+geometry row still passes and only the CSSOM claim fails.** Both readers now route through `dim_css`.
+
+⚠⚠⚠ **A RED PROOF AIMED AT THE WRONG CASCADE PROVES NOTHING AND LOOKS LIKE A PASS — SECOND TIME IN
+THREE TICKS.** I wrote a fourth recipe — *swap the two halves of the `gap` shorthand* — ran it, and the
+page gate came back **green**. The gate loads a page, so it runs the **Stylo** cascade, and Stylo
+expands `gap` into its two longhands before we ever see it: the minimal cascade's `"gap"` arm is
+structurally unreachable from any `Page::load` test. t983's non-firing recipe was the same error in a
+different disguise (a spelling that is equal by construction).
+
+> The rule this window has now produced twice: **run every RED recipe you write, and when one comes
+> back green, find out WHY before deleting it.** Both times the "why" was worth more than the recipe:
+> here it relocated the proof to `manuk-css`, where swapping the halves reads `Percent(20)` against
+> `Percent(10)` — and that test now also pins the axis ORDER, which matters because
+> `gap: <row> <column>` puts the **block** axis first, the opposite of the `margin`-style analogy an
+> author (or a maintainer) reaches for by default.
+
+RED-PROVEN THREE WAYS in the page gate, plus one relocated:
+
+```text
+   narrow `gap_dim` back to px-only     -> every percentage row reads its un-gapped position;
+                                           both controls hold
+   serialise with `{}px` not `dim_css`  -> EVERY geometry row passes and ONLY `cssom:10%` fails
+   swap the `gap` shorthand halves      -> GREEN here (wrong cascade); relocated to manuk-css,
+                                           where it fails Percent(20) vs Percent(10)
+```
+
+⚠ **STILL OPEN, named not built:** an UNDECLARED gap reads back as `0px` where Chrome says `normal`.
+Pre-existing and unrelated to percentages — `Dim` has no `normal` and the initial value is stored as
+`Px(0.0)` — and the `normal` gap *behaves* as zero in both engines, so only the serialisation
+differs. Inventing a `Dim` variant for it inside a tick about percentages would have widened a type
+twice for two unrelated reasons.
+
+RATCHET: `manuk-css` **31/31** (30 + the new minimal-cascade gap test) + 2 doc-tests, `manuk-layout`
+125/125, and the sizing/flex/grid gate set green as a set — `g_percentage_gap` (new),
+`g_fit_content_width`, `g_grid_container_height`, `g_grid_implicit_tracks`, `g_container_alignment`,
+`g_self_alignment`, `g_intrinsic_flex_grid`, `g_intrinsic_min_max_cssom`, `g_flex_percent_height`,
+`g_flex_percent_linebreak`.
+
+PERF: none — `Dim` is the same width as the `f32` it replaces on these two fields, and the taffy
+mapping swaps one `length()` for one `lp()` in a conversion that already ran per node.
+
+WIKI: `docs/wiki/box-layout.md` — "`column-gap: 10%` had nowhere to be stored, so it became zero".
+
 ## Tick 984 — `fit-content` was implemented on one path and given up on in the other, and the row that caught the ordering already passed (2026-08-06)
 
 TICK SHAPE: primitive — intrinsic inline sizing inside a flex/grid formatting context. **Found by a

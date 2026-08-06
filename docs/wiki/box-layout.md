@@ -5520,3 +5520,61 @@ composition fails only the `min-width` row.
 `column-gap`/`row-gap`** is dropped — `column-gap: 10%` of a 300px grid is 30px in Chrome and 0 here.
 `ComputedStyle.row_gap`/`column_gap` are bare `f32` px, so a percentage has nowhere to be stored; the
 fix is a type widening to `Dim` across the cascade and the taffy mapping, not a missing arm.
+
+## `column-gap: 10%` had nowhere to be stored, so it became zero (t985)
+
+Not a missing arm — a **field that could not represent the value**. `ComputedStyle.row_gap` and
+`.column_gap` were bare `f32` px, and every producer funnelled into them accordingly:
+`parse_length_px` in the minimal cascade, and in `stylo_map` an `lp_to_dim` whose result was
+immediately narrowed by `Dim::Px(p) => p, _ => 0.0`. So a percentage **arrived from Stylo intact and
+was thrown away one line later** — the same *arrived and dropped* shape t981 found in the `place-*`
+shorthands, one type down.
+
+The fix is the widening. `row_gap`/`column_gap` become `Dim`; taffy's `gap` is a `LengthPercentage`
+too, so the percentage crosses intact and is resolved by the participant that knows the basis.
+
+> **A missing ARM is a hole you can grep for. A field that cannot hold the value is a hole with a
+> plausible number sitting in it.** Nothing in the pipeline was ever "unhandled" — every stage did
+> something, and the something was `0.0`.
+
+### Which basis, measured rather than assumed
+
+```text
+                                                       Chrome     before      after
+  column-gap:10%, 300px grid                   2nd x      90         60         90    (gap 30)
+  column-gap:10%, 300px grid + padding:0 50px  2nd x     130        110        130    (gap 20)
+  row-gap:10%, grid with height:200px          2nd y      60         40         60    (gap 20)
+  row-gap:10%, AUTO-height grid                2nd y      48         40         48    (gap  8)
+  gap:10% 20% shorthand (row THEN column)      3rd y      48         40         48
+  column-gap:10% on a FLEX container           2nd x      90         60         90
+ ── controls ──
+  column-gap:30px · no gap declared                    both unchanged
+```
+
+A gap percentage resolves against the container's **content box on that axis**. The padded row is the
+only one that separates *content box* from *border box*: 10% of 300 is 30, 10% of the 200px content
+box is 20, and only one of those is Chrome's.
+
+⚠ **The auto-height rows were not predicted.** A `row-gap` percentage on an indefinite block size has
+a circular basis — the height depends on the gap which depends on the height. Chrome resolves it
+against the height computed **with the percentage treated as zero** (40+40=80, gap 8). Taffy does the
+same, so those rows came out exact with no extra work; they are asserted because that agreement is a
+fact about taffy that could change under us, not a consequence of this fix.
+
+### The CSSOM half, which a geometry-only gate would have missed
+
+`getComputedStyle(el).columnGap` on `column-gap: 10%` returns **`"10%"`** in Chrome — the percentage,
+not a used pixel length. Both readers of these fields formatted `{}px` around a float, so widening the
+type without touching them prints `10px` for a 10% gap: a *plausible wrong answer of the right type*,
+which is a class this project has been caught by before. Both now route through `dim_css`.
+
+⚠ **Still open, named rather than built:** an undeclared gap reads back as `0px` where Chrome says
+`normal`. Pre-existing, nothing to do with percentages (`Dim` has no `normal` and the initial value is
+`Px(0.0)`), and the `normal` gap *behaves* as zero in both engines — only the serialisation differs.
+
+Gated by `G_PERCENTAGE_GAP` (Stylo path + CSSOM) and
+`gap_carries_percentages_and_the_shorthand_sets_row_first` (minimal cascade). RED-proven three ways;
+a fourth — swapping the `gap` shorthand's halves — **cannot fire in the page gate** because Stylo
+expands the shorthand before we see it, so it lives in the `manuk-css` test instead. That test also
+pins the axis order, which matters: `gap: <row> <column>` puts the **block** axis first, the opposite
+of the `margin`-style analogy.

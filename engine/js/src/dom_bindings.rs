@@ -1196,7 +1196,13 @@ fn extra_computed_props(cs: &manuk_css::ComputedStyle) -> Vec<(&'static str, Str
                 .map(|r| format!("{r}"))
                 .unwrap_or_else(|| "auto".into()),
         ),
-        ("gap", format!("{} {}", px(cs.row_gap), px(cs.column_gap))),
+        // ⚠ A gap PERCENTAGE serialises as the percentage, not as a used px — Chrome measured:
+        // `getComputedStyle(el).columnGap` on `column-gap: 10%` returns `"10%"`. `dim_css` is the
+        // shared serialiser that already does this for every other `Dim`-valued property.
+        (
+            "gap",
+            format!("{} {}", dim_css(&cs.row_gap), dim_css(&cs.column_gap)),
+        ),
         // ─────────────────────────────────────────────────────────────────────────────────────────
         // ⚠⚠⚠ **THE t901 SWEEP BATCH — properties the cascade ALREADY HOLDS and this object refused
         // to publish.** One diff of the whole `getComputedStyle` object against Chrome, over seven
@@ -1736,8 +1742,8 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         q(&flex_grow),
         q(&flex_shrink),
         q(&dim_css(&cs.flex_basis)),
-        q(&format!("{}px", cs.row_gap)),
-        q(&format!("{}px", cs.column_gap)),
+        q(&dim_css(&cs.row_gap)),
+        q(&dim_css(&cs.column_gap)),
         q(box_sizing),
         // ⚠ The keyword sidecar wins over the `Dim` — an intrinsic `min-content`/`max-content`/
         // `fit-content` collapses to `Dim::Auto` for length resolution and would read back as

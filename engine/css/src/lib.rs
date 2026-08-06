@@ -1273,9 +1273,16 @@ pub struct ComputedStyle {
     pub flex_direction: FlexDirection,
     /// `flex-wrap` (container).
     pub flex_wrap: FlexWrap,
-    /// `row-gap` / `column-gap` (container), px.
-    pub row_gap: f32,
-    pub column_gap: f32,
+    /// `row-gap` / `column-gap` (container).
+    ///
+    /// ⚠ **`Dim`, not `f32`, and the widening IS the fix.** A bare px float has nowhere to put a
+    /// PERCENTAGE, so `column-gap: 10%` was not an unhandled value — it was a value the field could
+    /// not represent, and it silently became `0`. A gap percentage resolves against the container's
+    /// **content-box size on that axis** (measured against Chrome: 10% of a 300px grid is 30px, and
+    /// of the same grid with `padding: 0 50px` it is 20px), which is a basis only layout knows —
+    /// exactly why it has to survive the cascade as a percentage rather than being resolved here.
+    pub row_gap: Dim,
+    pub column_gap: Dim,
     /// `flex-grow` / `flex-shrink` (item).
     pub flex_grow: f32,
     pub flex_shrink: f32,
@@ -1438,8 +1445,8 @@ impl ComputedStyle {
             justify_items: AlignItems::Stretch,
             flex_direction: FlexDirection::Row,
             flex_wrap: FlexWrap::NoWrap,
-            row_gap: 0.0,
-            column_gap: 0.0,
+            row_gap: Dim::Px(0.0),
+            column_gap: Dim::Px(0.0),
             flex_grow: 0.0,
             flex_shrink: 1.0,
             flex_basis: Dim::Auto,
@@ -4691,10 +4698,12 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             };
         }
         "gap" => {
-            // `gap: <row> [<column>]`.
-            let parts: Vec<f32> = v
+            // `gap: <row> [<column>]`. `parse_dim` rather than `parse_length_px` so a PERCENTAGE
+            // survives to layout, which is the only participant that knows the basis.
+            let parts: Vec<Dim> = v
                 .split_whitespace()
-                .filter_map(|t| values::parse_length_px(t, s.font_size))
+                .map(|t| values::parse_dim(t, s.font_size))
+                .filter(|d| !matches!(d, Dim::Auto))
                 .collect();
             match parts.as_slice() {
                 [r] => {
@@ -4709,13 +4718,15 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             }
         }
         "row-gap" => {
-            if let Some(px) = values::parse_length_px(v.trim(), s.font_size) {
-                s.row_gap = px;
+            let d = values::parse_dim(v.trim(), s.font_size);
+            if !matches!(d, Dim::Auto) {
+                s.row_gap = d;
             }
         }
         "column-gap" => {
-            if let Some(px) = values::parse_length_px(v.trim(), s.font_size) {
-                s.column_gap = px;
+            let d = values::parse_dim(v.trim(), s.font_size);
+            if !matches!(d, Dim::Auto) {
+                s.column_gap = d;
             }
         }
         // `justify-self` — the INLINE-axis twin of `align-self` for a grid item. Same keyword set:
@@ -6352,6 +6363,45 @@ mod tests {
             one("align-content: normal").align_content,
             JustifyContent::Normal
         );
+    }
+
+    /// `gap` on the **minimal (JS-less) cascade**, which is where the shorthand's own expansion
+    /// lives — under Stylo the shorthand is expanded before we ever see it, so `G_PERCENTAGE_GAP`
+    /// structurally cannot test the order of the two halves. This is that gate's missing half, and
+    /// it is here rather than there for the reason t976 recorded: a RED proof aimed at the wrong
+    /// cascade cannot fire.
+    #[test]
+    fn gap_carries_percentages_and_the_shorthand_sets_row_first() {
+        let one = |decl: &str| {
+            let (dom, map) = styled(&format!("span {{ {decl} }}"));
+            let n = query_selector_all(&dom, dom.root(), "span")[0];
+            map.get(&n).cloned().unwrap_or_else(ComputedStyle::initial)
+        };
+
+        // A PERCENTAGE survives the cascade instead of collapsing to 0 — the whole point of the
+        // `f32 → Dim` widening, since only layout knows the basis.
+        assert_eq!(one("column-gap: 10%").column_gap, Dim::Percent(10.0));
+        assert_eq!(one("row-gap: 25%").row_gap, Dim::Percent(25.0));
+        // ...and a plain length still lands, which a percentage-only fix would break.
+        assert_eq!(one("column-gap: 30px").column_gap, Dim::Px(30.0));
+
+        // Each longhand reaches its OWN axis and leaves the other at the initial value.
+        assert_eq!(one("column-gap: 10%").row_gap, Dim::Px(0.0));
+        assert_eq!(one("row-gap: 10%").column_gap, Dim::Px(0.0));
+
+        // ⚠ `gap: <row> <column>` — BLOCK axis first, which is the opposite order to most
+        // two-value shorthands people reach for by analogy (`margin` is top/right). Two DIFFERENT
+        // percentages, so a swap cannot hide.
+        let s = one("gap: 10% 20%");
+        assert_eq!(s.row_gap, Dim::Percent(10.0));
+        assert_eq!(s.column_gap, Dim::Percent(20.0));
+        // One token sets both.
+        let s = one("gap: 12px");
+        assert_eq!((s.row_gap, s.column_gap), (Dim::Px(12.0), Dim::Px(12.0)));
+
+        // The initial value is zero on both axes and must stay so through the type change.
+        let s = ComputedStyle::initial();
+        assert_eq!((s.row_gap, s.column_gap), (Dim::Px(0.0), Dim::Px(0.0)));
     }
 
     /// The three **implicit-track** properties on the minimal (JS-less) cascade. The gate
