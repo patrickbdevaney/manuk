@@ -256,6 +256,11 @@
   - L5187 · The form-control baseline: four attempts, four reverts, and a handoff (t928)
   - L5199 · What is settled, so nobody re-measures it
   - L5218 · What is not known
+  - L5224 · The four Box-Alignment longhands, and the two that never existed (t980, t981)
+  - L5247 · Why the initial value was right the whole time, and only declared values were wrong
+  - L5261 · The place-* shorthands are the sharpest diagnostic in the family
+  - L5276 · The shape of the fix, and the shape that prevents the next one
+  - L5289 · Measured
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1626,4 +1631,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1533 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1538 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

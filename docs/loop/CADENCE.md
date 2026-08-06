@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **699** | ticks 1–979 |
-| median tick cycle | **26m** | 698 intervals |
+| ticks landed | **700** | ticks 1–981 |
+| median tick cycle | **26m** | 699 intervals |
 | median, last 10 | **38m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 621.8h elapsed |
-| median verify wall | **63s** | 638 ticks |
+| **ticks per hour** | **1.10** | 633.1h elapsed |
+| median verify wall | **63s** | 639 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **410**
-* **✅ rows in the capability ledger**: 144 → **488**
+* **live gates**: 27 → **411**
+* **✅ rows in the capability ledger**: 144 → **489**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**337 of 699 ticks** (48%) moved a
+**338 of 700 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **337** capability ticks, median cycle **26m**
-* median diff per tick: **+257 / −34** lines across 8 files
+* **338** capability ticks, median cycle **26m**
+* median diff per tick: **+258 / −34** lines across 8 files
 
 ## Every tick
 
@@ -796,5 +796,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **977** | 2026-08-06 01:53 | 19m | measurement | 63s | +96/−32 | 409 | 81 | 56.0% · | the surface audit finds its best axis INSIDE the engine (2026-08-06) |
 | **978** | 2026-08-06 02:13 | 20m | measurement | 63s | +190/−33 | 409 | 81 | 56.0% · | I tested my own audit's recommendation and its hit rate was wrong (2026-08-06) |
 | **979** | 2026-08-06 02:49 | 36m | measurement | 63s | +247/−33 | 410 | 81 | 56.0% · | the constitution check, and the rule that cut both ways in one session (2026-08-06) |
+| **981** | 2026-08-06 14:10 | 11.3h | pattern-class | 63s | +719/−55 | 411 | 81 | 56.0% · | the CONTAINER half of Box Alignment, and the shorthand that landed exactly half of itself  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

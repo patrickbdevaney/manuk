@@ -278,9 +278,21 @@ pub fn to_taffy_style(cs: &ComputedStyle, calc: &mut Vec<(f32, f32)>) -> Style {
             bottom: length(cs.border_width.bottom),
         },
         align_items: Some(map_align(cs.align_items)),
+        // `justify-items` — the container-level default for a grid item's INLINE-axis alignment.
+        // The block-axis twin above has been here since flex landed; this line had no partner, so a
+        // grid declaring `justify-items: end` put every item at the start of its track (Chrome
+        // x=140 in a 200px track, ours x=0) — the same absence t980 found one level down in
+        // `justify-self`, one level up.
+        justify_items: Some(map_align(cs.justify_items)),
         align_self: cs.align_self.map(map_align),
         justify_self: cs.justify_self.map(map_align),
         justify_content: map_justify(cs.justify_content),
+        // `align-content` — cross-axis distribution of a wrapped flex container's LINES and of a
+        // grid's ROWS. `map_justify` is shared with the line above (taffy's `AlignContent` and
+        // `JustifyContent` are the same type), and `Normal` deliberately maps to `None` so taffy's
+        // own default — stretch on this axis — stands, which is why the initial value was right the
+        // whole time and every declared one was wrong.
+        align_content: map_justify(cs.align_content),
         gap: Size {
             width: length(cs.column_gap),
             height: length(cs.row_gap),

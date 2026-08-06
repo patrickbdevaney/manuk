@@ -1231,8 +1231,21 @@ pub struct ComputedStyle {
     pub box_sizing: BoxSizing,
     /// `justify-content` — flex main-axis distribution (only meaningful on a flex container).
     pub justify_content: JustifyContent,
+    /// `align-content` — distribution along the CROSS axis of a multi-line flex container, and along
+    /// the BLOCK axis (the rows) of a grid. The container-level twin of [`Self::justify_content`],
+    /// and the half that was missing: a wrapped flex container asking for `align-content: flex-end`
+    /// laid its lines out from the top, and a grid asking for `align-content: center` left its rows
+    /// at the start of the box. It shares [`JustifyContent`]'s value set — including `Normal`, which
+    /// is `stretch` on this axis for BOTH formatting contexts, which is why the initial value has
+    /// always looked correct.
+    pub align_content: JustifyContent,
     /// `align-items` — flex cross-axis alignment (only meaningful on a flex container).
     pub align_items: AlignItems,
+    /// `justify-items` — the INLINE-axis alignment a grid container hands to every item that does not
+    /// override it with `justify-self`. The container-level twin of [`Self::align_items`] and the
+    /// inline-axis partner of [`Self::justify_self`] (t980). Does not apply to flex containers, where
+    /// the inline axis is distributed by `justify-content` instead.
+    pub justify_items: AlignItems,
     /// `flex-direction` (container).
     pub flex_direction: FlexDirection,
     /// `flex-wrap` (container).
@@ -1387,7 +1400,9 @@ impl ComputedStyle {
             border_collapse: false,
             box_sizing: BoxSizing::ContentBox,
             justify_content: JustifyContent::Normal,
+            align_content: JustifyContent::Normal,
             align_items: AlignItems::Stretch,
+            justify_items: AlignItems::Stretch,
             flex_direction: FlexDirection::Row,
             flex_wrap: FlexWrap::NoWrap,
             row_gap: 0.0,
@@ -4592,28 +4607,37 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 }
             }
         }
+        // ── The four container-level alignment longhands. They are parsed by TWO shared helpers
+        //    (`values::parse_content_distribution` / `parse_item_alignment`) rather than by four
+        //    hand-written match blocks, because the hand-written form is exactly how `align-content`
+        //    and `justify-items` came to be missing: a reader who sees `justify-content` handled
+        //    directly above `align-items` reads the pair as coverage of the family. One helper per
+        //    axis-independent VALUE SET makes an absent property a missing call, not a missing arm.
         "justify-content" => {
-            s.justify_content = match v.trim() {
-                "center" => JustifyContent::Center,
-                "flex-end" | "end" | "right" => JustifyContent::FlexEnd,
-                "space-between" => JustifyContent::SpaceBetween,
-                "space-around" => JustifyContent::SpaceAround,
-                "space-evenly" => JustifyContent::SpaceEvenly,
-                "flex-start" | "start" | "left" => JustifyContent::FlexStart,
-                // Everything else — including the initial `normal` and an explicit `stretch` — is
-                // `Normal`, which is stretch in grid and flex-start in flex. Falling back to
-                // `FlexStart` here would silently re-introduce the implied-track bug.
-                _ => JustifyContent::Normal,
-            };
+            s.justify_content = values::parse_content_distribution(v, values::AlignAxis::Inline)
         }
-        "align-items" => {
-            s.align_items = match v.trim() {
-                "center" => AlignItems::Center,
-                "flex-end" | "end" => AlignItems::FlexEnd,
-                "flex-start" | "start" => AlignItems::FlexStart,
-                "baseline" => AlignItems::Baseline,
-                _ => AlignItems::Stretch,
-            };
+        "align-content" => {
+            s.align_content = values::parse_content_distribution(v, values::AlignAxis::Block)
+        }
+        "align-items" => s.align_items = values::parse_item_alignment(v, values::AlignAxis::Block),
+        "justify-items" => {
+            s.justify_items = values::parse_item_alignment(v, values::AlignAxis::Inline)
+        }
+        // The `place-*` shorthands set BOTH axes, ALIGN first. `place-content: center` is one token
+        // for `align-content: center; justify-content: center`; two tokens set align then justify.
+        "place-content" => {
+            let mut it = v.split_whitespace();
+            let a = it.next().unwrap_or("normal");
+            let j = it.next().unwrap_or(a);
+            s.align_content = values::parse_content_distribution(a, values::AlignAxis::Block);
+            s.justify_content = values::parse_content_distribution(j, values::AlignAxis::Inline);
+        }
+        "place-items" => {
+            let mut it = v.split_whitespace();
+            let a = it.next().unwrap_or("normal");
+            let j = it.next().unwrap_or(a);
+            s.align_items = values::parse_item_alignment(a, values::AlignAxis::Block);
+            s.justify_items = values::parse_item_alignment(j, values::AlignAxis::Inline);
         }
         "flex-direction" => {
             s.flex_direction = match v.trim() {
@@ -6166,6 +6190,76 @@ mod tests {
         let sheets = vec![Stylesheet::parse(css)];
         let map = MinimalCascade.cascade(&dom, &sheets);
         (dom, map)
+    }
+
+    /// **The four container-level Box-Alignment longhands, on the MINIMAL cascade.**
+    ///
+    /// Two of them (`align-content`, `justify-items`) did not exist anywhere in the engine until
+    /// t981, and the reason they survived is that their axis-twins sat directly beside them and were
+    /// right. The four are now parsed by two shared helpers, so this asserts what those helpers
+    /// cannot express: that all four call sites exist, that the `place-*` shorthands reach BOTH
+    /// halves, and that the ALIGN axis rejects the `left`/`right` keywords the INLINE axis accepts.
+    ///
+    /// The shipping cascade is Stylo (`live-cascade-is-stylo-not-minimal`) and its half is gated by
+    /// `G_CONTAINER_ALIGNMENT`; this covers the JS-less/headless fallback, which has to agree.
+    #[test]
+    fn the_four_container_alignment_longhands_all_parse() {
+        let one = |decl: &str| {
+            let (dom, map) = styled(&format!("span {{ {decl} }}"));
+            let n = query_selector_all(&dom, dom.root(), "span")[0];
+            map.get(&n).cloned().unwrap_or_else(ComputedStyle::initial)
+        };
+
+        // Each longhand reaches its OWN field and leaves the other three at their initial value —
+        // the property-crosstalk a copy-pasted arm would introduce.
+        let s = one("align-content: space-between");
+        assert_eq!(s.align_content, JustifyContent::SpaceBetween);
+        assert_eq!(s.justify_content, JustifyContent::Normal);
+        let s = one("justify-content: space-between");
+        assert_eq!(s.justify_content, JustifyContent::SpaceBetween);
+        assert_eq!(s.align_content, JustifyContent::Normal);
+        let s = one("justify-items: center");
+        assert_eq!(s.justify_items, AlignItems::Center);
+        assert_eq!(s.align_items, AlignItems::Stretch);
+        let s = one("align-items: center");
+        assert_eq!(s.align_items, AlignItems::Center);
+        assert_eq!(s.justify_items, AlignItems::Stretch);
+
+        // `place-*` sets ALIGN first, then JUSTIFY; one token sets both.
+        let s = one("place-content: center end");
+        assert_eq!(s.align_content, JustifyContent::Center);
+        assert_eq!(s.justify_content, JustifyContent::FlexEnd);
+        let s = one("place-items: end");
+        assert_eq!(s.align_items, AlignItems::FlexEnd);
+        assert_eq!(s.justify_items, AlignItems::FlexEnd);
+
+        // `left`/`right` are inline-axis keywords. Legal on `justify-*`; on `align-*` the whole
+        // declaration is invalid, so the initial value must stand rather than the parser inventing
+        // an end-alignment out of a keyword the axis cannot use.
+        assert_eq!(
+            one("justify-content: right").justify_content,
+            JustifyContent::FlexEnd
+        );
+        assert_eq!(
+            one("align-content: right").align_content,
+            JustifyContent::Normal
+        );
+        assert_eq!(
+            one("justify-items: right").justify_items,
+            AlignItems::FlexEnd
+        );
+        assert_eq!(one("align-items: right").align_items, AlignItems::Stretch);
+
+        // `normal` and `stretch` both mean "stretch" on these axes and share one representation —
+        // folding either into `flex-start` is what disabled CSS Grid §11.8 once already.
+        assert_eq!(
+            one("align-content: stretch").align_content,
+            JustifyContent::Normal
+        );
+        assert_eq!(
+            one("align-content: normal").align_content,
+            JustifyContent::Normal
+        );
     }
 
     /// **A real-site crash (tick 380 oracle run: netlify.com).** An at-rule whose name holds

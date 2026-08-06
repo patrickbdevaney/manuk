@@ -828,7 +828,7 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         // 7 LEFT, 8 RIGHT, 11 STRETCH, 14/15/16 SPACE_{BETWEEN,AROUND,EVENLY}.
         // This is the LIVE cascade, so `normal` MUST land on `Normal` here — the arm below is the
         // one that decides whether a grid's `auto` tracks stretch (CSS Grid §11.8).
-        s.justify_content = match av(cv.clone_justify_content().primary()) {
+        let map_cd = |v: u8| match v {
             5 | 3 | 8 => crate::JustifyContent::FlexEnd,
             6 => crate::JustifyContent::Center,
             14 => crate::JustifyContent::SpaceBetween,
@@ -837,6 +837,14 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
             2 | 4 | 7 => crate::JustifyContent::FlexStart,
             _ => crate::JustifyContent::Normal,
         };
+        s.justify_content = map_cd(av(cv.clone_justify_content().primary()));
+        // `align-content` — the CROSS/BLOCK-axis twin, and the half that did not exist. A wrapped
+        // flex container laid every line from the top and a grid left its rows at the start of the
+        // box, whatever the author declared: Chrome puts `align-content: flex-end`'s last line at
+        // y=160 in a 200px box against our y=100. `stretch` (11) lands on `Normal` because that IS
+        // stretch on this axis in both formatting contexts, so the mapping is exact rather than
+        // approximate. Shares `map_cd` with its twin so a future value can only be added to both.
+        s.align_content = map_cd(av(cv.clone_align_content().primary()));
         let map_ai = |v: u8| match v {
             5 | 3 | 13 => crate::AlignItems::FlexEnd,
             6 => crate::AlignItems::Center,
@@ -845,6 +853,14 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
             _ => crate::AlignItems::Stretch,
         };
         s.align_items = map_ai(av(cv.clone_align_items().0));
+        // `justify-items` — the INLINE-axis twin of `align-items`, and the default every grid item
+        // inherits unless it sets `justify-self`. Its initial value is `legacy`, which is the LEGACY
+        // *flag* (bit 5) over an otherwise empty value; `av` masks to the low five bits, so the
+        // initial arrives here as `normal` and maps to `Stretch` — the behaviour `normal` has in a
+        // grid. `.computed` (never `.specified`) is the right half of Stylo's pair: the specified
+        // half can still carry the bare `legacy` keyword, which the computed half has already
+        // resolved away.
+        s.justify_items = map_ai(av(cv.clone_justify_items().computed.0 .0));
         s.align_self = match av(cv.clone_align_self().0) {
             0 => None,
             v => Some(map_ai(v)),

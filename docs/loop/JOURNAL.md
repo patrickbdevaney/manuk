@@ -46371,6 +46371,152 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 981 — the CONTAINER half of Box Alignment, and the shorthand that landed exactly half of itself (2026-08-06)
+
+TICK SHAPE: pattern-class — container-level CSS Box Alignment. Continues t980 one level up, on the
+same method: a property-family battery against headless Chrome with the working twin as the control.
+
+⚠⚠⚠ **TWO OF THE FOUR CONTAINER-LEVEL ALIGNMENT LONGHANDS DID NOT EXIST, AND THE TWO THAT DID ARE
+EXACTLY WHY.** Box Alignment is a 2×2 — an inline axis and a block axis, each with a distribution
+property and an item-default property. We had built one diagonal:
+
+```text
+                     INLINE axis (justify-*)     BLOCK / CROSS axis (align-*)
+   container: distribute   justify-content ✓          align-content   ✗  ABSENT
+   container: item default justify-items   ✗ ABSENT   align-items     ✓
+   item: override          justify-self    ✗ (t980)   align-self      ✓
+```
+
+Absent at all three layers each time: no `ComputedStyle` field, no parse arm, no `stylo_map` line,
+and in `taffy_tree.rs` two lines with no partners. **Three properties, three ticks, one mechanism —
+each missing property sat directly beside its twin in the same struct literal.**
+
+**MEASURED, headless Chrome vs ours, a 300×200 container of 60×40 items, every row an offset from its
+own container** (`/tmp/ac.html`, 56 rows, 26 containers):
+
+```text
+                                                       Chrome        before        after
+    flex-wrap  align-content:flex-start    last line  [  0,  40]   [  0, 100]   [  0,  40]
+    flex-wrap  align-content:center       first line  [  0,  60]   [  0,   0]   [  0,  60]
+    flex-wrap  align-content:flex-end     first line  [  0, 120]   [  0,   0]   [  0, 120]
+    flex-wrap  align-content:space-between last line  [  0, 160]   [  0, 100]   [  0, 160]
+    grid       align-content:center        first row  [  0,  60]   [  0,   0]   [  0,  60]
+    grid       align-content:end           first row  [  0, 120]   [  0,   0]   [  0, 120]
+    grid       align-content:space-between  last row  [  0, 160]   [  0,  40]   [  0, 160]
+    grid       justify-items:end                      [140,   0]   [  0,   0]   [140,   0]
+    grid       justify-items:center                   [ 70,   0]   [  0,   0]   [ 70,   0]
+    grid       place-content:center                   [120,  60]   [120,   0]   [120,  60]
+    grid       place-items:end end                    [140,  60]   [  0,  60]   [140,  60]
+   ── CONTROLS, and none of them moved ──
+    flex-wrap  (undeclared → stretch)     last line   [  0, 100]      same      unchanged
+    flex-wrap  justify-content:center      last item  [120, 100]      same      unchanged
+    grid       justify-content:center                 [120,   0]      same      unchanged
+    grid       align-items:end                        [  0,  60]      same      unchanged
+    grid       (undeclared item)                      [  0,   0]      same      unchanged
+   ── STILL WRONG, and deliberately out of scope (see below) ──
+    grid       grid-auto-flow:column                  [150,   0]   [  0,  80]   [  0,  80]
+    grid       + grid-auto-columns:90px               [ 90,   0]   [  0,  80]   [  0,  80]
+```
+
+54 of 56 rows now exact; the two that remain are one mechanism and it is not an alignment property.
+
+⚠⚠⚠ **THE INITIAL VALUE WAS RIGHT THE WHOLE TIME, WHICH IS WHY NO SWEEP COULD HAVE RANKED THIS.**
+`align-content: normal` behaves as **stretch** on the block axis in both flex and grid — and that is
+also taffy's behaviour when the field is left at its `None` default. So an undeclared container has
+been Chrome-exact forever, on every page, and the property was wrong **only where it was declared**.
+
+> A divergence sweep ranks properties by how often pages get them wrong. It structurally cannot rank
+> a property that is only wrong when *declared*, because the rows that declare it are a minority of a
+> minority and each one looks like an ordinary `dy`. **What finds it is a battery where every row
+> declares one value of one property and a control row declares none.** That control row is not
+> ceremony: it is the only row in the fixture that can fail.
+
+⚠⚠⚠ **THE SHARPEST EVIDENCE WAS A SHORTHAND, BECAUSE IT LANDED EXACTLY HALF OF ITSELF.**
+`place-content: center` and `place-items: end end` each set both axes in one declaration, and before
+this tick each produced one correct coordinate and one wrong one — Stylo expanded the shorthand
+faithfully, one longhand was consumed, and the other was **discarded for want of a field to put it
+in**. From the outside, *"the property arrived and was dropped"* and *"the property never parsed"*
+are the same observation. A two-axis shorthand is the cheapest instrument that separates them,
+because it puts both halves on one declaration and asks which one survived. Both shorthand rows are
+asserted on BOTH coordinates for that reason.
+
+**THE FIX'S SHAPE, chosen against the recurrence rather than against the symptom.** Four longhands
+now share **two** parsers (`values::parse_content_distribution` / `parse_item_alignment`, one per
+value set) instead of four hand-written match blocks, and `stylo_map` shares one `map_cd` closure
+between `justify-content` and `align-content`. That converts a missing property from a *missing arm*,
+which nothing can grep for, into a **missing call site**, which `grep -c` finds in a second. The one
+thing the axes genuinely do not share is `left`/`right` — legal on `justify-*`, invalid on `align-*`
+— so that is threaded as an explicit `AlignAxis` argument rather than papered over: a shared parser
+that silently accepted `align-content: right` would be a *new* divergence introduced by the cleanup,
+and it is asserted in both directions.
+
+RED-PROVEN, three ways, each applied, built, run and reverted by restoring a copied file (never by
+`git checkout` on a file this tick is also editing — t976's slip):
+
+```text
+   drop `align_content` from taffy_tree.rs   -> #a2 reads y=100 against Chrome's 40; controls hold
+   drop `justify_items` from taffy_tree.rs   -> #c2i reads x=0 against Chrome's 140, and EVERY
+                                                align-content row still passes — the confinement
+   fold `align-content: normal` -> FlexStart -> passes all ELEVEN declared rows and fails ONLY the
+                                                undeclared control, which is the row that exists for it
+```
+
+⚠⚠ **NAMED, MEASURED, NOT BUILT — and it is a different mechanism, which is why it is not in this
+tick.** `grid-auto-flow: column` and `grid-auto-rows` / `grid-auto-columns` are unmapped: taffy has
+all three fields and `to_taffy_style` passes none of them. An item Chrome places in the second
+COLUMN at x=150 lands in the third implicit ROW at y=80 — a placement-algorithm defect, not an
+alignment one, and folding it in would have made neither attributable. Fixture rows `#d3`/`#d4` of
+`/tmp/ac.html` already discriminate it. ⚠ `#d1`/`#d2` do NOT discriminate `grid-auto-rows` on this
+fixture — stretch of the auto tracks happens to place the item where the explicit 80px rows would,
+and both read 120; a gate for that property needs a container whose free space is zero.
+
+⚠ **A pre-existing latent bug, seen in a compiler warning while building and recorded rather than
+fixed here:** `engine/css/src/lib.rs` has `"order" => {}` (parsed but unused) shadowing a later real
+`"order"` arm, which rustc reports as unreachable. `flex`'s `order` therefore does nothing on the
+minimal cascade. Not this tick's family; filed so the warning is not re-discovered as noise.
+
+RATCHET: `manuk-css` **29/29** (28 + the new minimal-cascade test) + 2 doc-tests, `manuk-layout`
+125/125, and the flex/grid/alignment gate set green as a set — `g_self_alignment`,
+`g_flex_item_slot_is_final`, `g_flex_order`, `g_flex_percent_height`, `g_flex_percent_linebreak`,
+`g_grid_auto_repeat`, `g_grid_implied_track_stretch`, `g_intrinsic_flex_grid`, `g_text_align_justify`,
+`g_vertical_align_on_text`, `g_css_supports`. The 56-row battery re-ran byte-identical on the
+restored tree after the third RED proof.
+
+PERF: none — two `Option`/`Some` constructions in a style conversion that already ran per node, and
+two shared parsers replacing two inline match blocks.
+
+**SELF-AUDIT @ 981 (due since 971; the pre-flight hook blocked this commit until it ran) — one
+prescribed-but-not-executed item, and it is the same one, but the receipt says something NEW about
+it.**
+
+```text
+  ✗ verify wall: 1118s EXCEEDS the 300s target (Part 21.2 item 1)
+  ✓ every gate declares how to break it (28 + G_CONTAIN self-proving) · falsify.sh present
+  ✓ process-defect ledger 49 · cluster registry 392 clusters · pattern ledger 997 rows
+  ✓ enforcement mechanical not remembered · journal has no gaps · STATUS.md generated
+```
+
+⚠⚠ **The receipt attributes NONE of the 1118 seconds to the build, and that is the finding.**
+
+```text
+   .git/manuk-verify-receipt:  seconds: 1118   build_seconds: 47   unattributed_seconds: 1118
+```
+
+Every remedy the audit's own message names — *mold/lld, cargo-nextest, workspace-hack* — is a
+**build-time** remedy, and the build is **47 seconds of 1118**. Applying all three could not move
+this reading by more than 4%. The wall's cost is in the *gate bodies*, not in compiling them, so the
+fourth named remedy (**risk-based gate scheduling**) is the only one of the four this receipt
+supports. That is a sharper statement than "the wall is slow", and it is the reason to write the
+number down rather than shrug at it: STATUS.md's `LAST_WALL_TIME: 63s` and this receipt's 1118s are
+both real — the wall is **bistable**, and a mean over the two would describe neither state.
+
+It remains harness — `scripts/verify.sh`, observer-owned, PART VII forbids me to touch it. **One
+block here and on with browser work**, which is the scope rule's prescription and not a shrug. This
+is the third consecutive window the wall has been flagged (t939 369s · t9xx 876s · t981 1118s); the
+trend is monotone and the attribution above is new information for whoever acts on it.
+
+WIKI: `docs/wiki/box-layout.md` — "The four Box-Alignment longhands, and the two that never existed".
+
 ## Tick 980 — `align-self` reached taffy and `justify-self` did not (2026-08-06)
 
 TICK SHAPE: pattern-class — grid item self-alignment. Check #87's steer item #1, and the only

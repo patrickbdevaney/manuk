@@ -5220,3 +5220,97 @@ every one was reverted rather than traded.** The tree is byte-identical to where
 Why a Chrome-exact input baseline moves seven of that site's thirty-nine elements out of tolerance
 when the reference has the same structure. **The next attempt should start by diffing the two renders
 element-by-element, not by proposing a fifth model.**
+
+## The four Box-Alignment longhands, and the two that never existed (t980, t981)
+
+CSS Box Alignment is a 2×2: an **inline** axis and a **block/cross** axis, each with a
+**distribution** property (how the container spreads its lines/tracks) and an **item-default**
+property (what a child gets when it says nothing). Manuk had built one diagonal of that square and
+neither of the other two corners, at any layer:
+
+```text
+                     INLINE axis (justify-*)     BLOCK / CROSS axis (align-*)
+   container: distribute   justify-content ✓          align-content   ✗  (t981)
+   container: item default justify-items   ✗ (t981)   align-items     ✓
+   item: override          justify-self    ✗ (t980)   align-self      ✓
+```
+
+Three properties, three ticks, and the same failure each time. Each missing property sat **directly
+beside** its axis-twin in `taffy_tree.rs`'s `ComputedStyle → taffy::Style` mapping, so every reader
+of that block — including the ones who added a property to it — saw a self-alignment property being
+mapped and moved on.
+
+> **A gap survives when the neighbouring line looks like coverage.** The strongest predictor of an
+> unimplemented CSS property is not obscurity; it is having a well-implemented twin in the same
+> struct literal.
+
+### Why the initial value was right the whole time, and only declared values were wrong
+
+`align-content`'s initial `normal` behaves as **stretch** on the block axis, in both flex and grid —
+which is also taffy's default when the field is left at `None`. So an undeclared `align-content`
+produced Chrome-exact geometry, on every page, forever. The property is invisible to any instrument
+that measures pages which do not use it, and wrong on every page that does. The same is true of
+`justify-items`, whose initial `legacy` computes to `normal` → stretch → start for a definite-width
+item.
+
+This is the difference between *"absent"* and *"broken"*, and it decides how you find it: a
+divergence sweep cannot rank a property that is only wrong when declared, because the corpus rows
+that declare it are a minority of a minority. **What finds it is a battery in which every row
+declares one value of one property and a control row declares none.**
+
+### The `place-*` shorthands are the sharpest diagnostic in the family
+
+`place-content: center` and `place-items: end end` each set both axes in one declaration. Before
+t981 each of them landed **exactly half**: Stylo expanded the shorthand correctly, one longhand was
+consumed and the other was discarded because there was no field to put it in.
+
+```text
+   place-content: center      Chrome [120, 60]   ours [120,  0]   <- justify landed, align dropped
+   place-items:   end end     Chrome [140, 60]   ours [  0, 60]   <- align landed, justify dropped
+```
+
+A property that **arrives and is discarded** is indistinguishable from one that never parsed — from
+the outside. A shorthand that sets two axes is the cheapest instrument that can tell them apart,
+because it puts both halves on one declaration and asks which one survived.
+
+### The shape of the fix, and the shape that prevents the next one
+
+Four longhands now share **two** parsers (`values::parse_content_distribution` and
+`parse_item_alignment`, one per value set) rather than four hand-written match blocks, and the Stylo
+map shares one `map_cd` closure between `justify-content` and `align-content`. That turns a missing
+property from a *missing arm* — which nothing can grep for — into a **missing call site**, which
+`grep -c parse_content_distribution` finds in one second.
+
+The one thing the axes genuinely do not share is `left`/`right`: legal on `justify-*`, invalid on
+`align-*` (where the declaration is dropped and the initial value stands). That is threaded as an
+explicit `AlignAxis` argument rather than papered over, because a shared parser that silently accepts
+`align-content: right` would be a *new* divergence introduced by the cleanup.
+
+### Measured
+
+Headless Chrome against a 300×200 container of 60×40 items, every row an offset from its own
+container. Eleven declared rows moved, four control rows did not, and `grid-auto-flow: column`
+remained the family's one open defect (a placement algorithm, not an alignment property).
+
+```text
+   flex-wrap  align-content:flex-start     last line   Chrome [0,  40]   before [0, 100]
+   flex-wrap  align-content:center        first line   Chrome [0,  60]   before [0,   0]
+   flex-wrap  align-content:flex-end      first line   Chrome [0, 120]   before [0,   0]
+   flex-wrap  align-content:space-between  last line   Chrome [0, 160]   before [0, 100]
+   grid       align-content:center          first row  Chrome [0,  60]   before [0,   0]
+   grid       align-content:end             first row  Chrome [0, 120]   before [0,   0]
+   grid       align-content:space-between    last row  Chrome [0, 160]   before [0,  40]
+   grid       justify-items:end                        Chrome [140, 0]   before [0,   0]
+   grid       justify-items:center                     Chrome [ 70, 0]   before [0,   0]
+   ── controls, unmoved ──
+   flex-wrap  (undeclared: stretch)        last line   Chrome [0, 100]   ours   [0, 100]
+   flex-wrap  justify-content:center        last item  Chrome [120,100]  ours   [120,100]
+   grid       justify-content:center                   Chrome [120,  0]  ours   [120,  0]
+   grid       align-items:end                          Chrome [0,   60]  ours   [0,  60]
+```
+
+Gated by `G_CONTAINER_ALIGNMENT` (Stylo path) and
+`the_four_container_alignment_longhands_all_parse` (minimal cascade). RED-proven three ways: drop the
+`align_content` line, drop the `justify_items` line, or fold `align-content: normal` into
+`flex-start` — the third fails **only** the undeclared control row, which is the row that exists for
+it.

@@ -310,6 +310,64 @@ impl CalcParser<'_> {
     }
 }
 
+/// Which axis an alignment longhand distributes along. `left`/`right` are the only keywords that
+/// depend on it: they are legal on `justify-*` (the inline axis) and **invalid** on `align-*`, where
+/// the whole declaration is dropped and the initial value stands. Threading the axis is what keeps
+/// one shared parser from inventing `align-content: right`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum AlignAxis {
+    /// `justify-*` — the inline axis; accepts `left` / `right`.
+    Inline,
+    /// `align-*` — the block/cross axis; `left` / `right` are invalid here.
+    Block,
+}
+
+/// A `<content-distribution> | <content-position>` value — the value set shared by
+/// `justify-content` and `align-content` (CSS Box Alignment §4/§5).
+///
+/// **One function for both axes, deliberately.** These two properties were hand-written as separate
+/// match blocks and only one of them existed; the pair reads as coverage of the family precisely
+/// because the neighbouring arm is right (t980, t981). A shared parser makes a missing property a
+/// missing *call site*, which grep finds, rather than a missing arm, which nothing finds.
+///
+/// Everything unrecognised — including the initial `normal` and an explicit `stretch` — is
+/// [`crate::JustifyContent::Normal`], which is `stretch` in a grid and `flex-start` in a flex
+/// container's main axis. Collapsing `normal` into `FlexStart` here is what silently disabled CSS
+/// Grid §11.8 "Stretch auto Tracks" once already.
+pub fn parse_content_distribution(input: &str, axis: AlignAxis) -> crate::JustifyContent {
+    use crate::JustifyContent as J;
+    let inline = axis == AlignAxis::Inline;
+    match input.trim() {
+        "center" => J::Center,
+        "flex-end" | "end" => J::FlexEnd,
+        "right" if inline => J::FlexEnd,
+        "space-between" => J::SpaceBetween,
+        "space-around" => J::SpaceAround,
+        "space-evenly" => J::SpaceEvenly,
+        "flex-start" | "start" => J::FlexStart,
+        "left" if inline => J::FlexStart,
+        _ => J::Normal,
+    }
+}
+
+/// A `<self-position> | baseline | stretch` value — the value set shared by `align-items`,
+/// `justify-items`, `align-self` and `justify-self`. See [`parse_content_distribution`] for why this
+/// is one function rather than four match blocks, and [`AlignAxis`] for the one keyword pair that
+/// still has to know which axis it is on.
+pub fn parse_item_alignment(input: &str, axis: AlignAxis) -> crate::AlignItems {
+    use crate::AlignItems as A;
+    let inline = axis == AlignAxis::Inline;
+    match input.trim() {
+        "center" => A::Center,
+        "flex-end" | "end" | "self-end" => A::FlexEnd,
+        "right" if inline => A::FlexEnd,
+        "flex-start" | "start" | "self-start" => A::FlexStart,
+        "left" if inline => A::FlexStart,
+        "baseline" | "first baseline" | "last baseline" => A::Baseline,
+        _ => A::Stretch,
+    }
+}
+
 /// Parse a `<length>` to px (no percent/auto). Used for line-height etc.
 pub fn parse_length_px(input: &str, font_size: f32) -> Option<f32> {
     with_first_token(input, |tok| match tok {
