@@ -698,4 +698,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 977	32388cfa	1785995603	2026-08-06T01:53:23-04:00	1119	measurement	63	5	96	32	409	81	3896	6960	0	488	0	the surface audit finds its best axis INSIDE the engine (2026-08-06)
 978	cbb7d5ee	1785996830	2026-08-06T02:13:50-04:00	1227	measurement	63	5	190	33	409	81	3896	6960	0	488	0	I tested my own audit's recommendation and its hit rate was wrong (2026-08-06)
 979	1ea757b8	1785998987	2026-08-06T02:49:47-04:00	2157	measurement	63	9	247	33	410	81	3896	6960	0	488	0	the constitution check, and the rule that cut both ways in one session (2026-08-06)
-981	ec31774e	1786039810	2026-08-06T14:10:10-04:00	40823	pattern-class	63	12	719	55	411	81	3896	6960	0	489	0	the CONTAINER half of Box Alignment, and the shorthand that landed exactly half of itself (2026-08-06)
+981	5506628e	1786043655	2026-08-06T15:14:15-04:00	44668	pattern-class	63	11	676	36	412	81	3896	6960	0	490	0	the CONTAINER half of Box Alignment, and the shorthand that landed exactly half of itself (2026-08-06)

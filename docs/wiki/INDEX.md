@@ -261,6 +261,11 @@
   - L5261 · The place-* shorthands are the sharpest diagnostic in the family
   - L5276 · The shape of the fix, and the shape that prevents the next one
   - L5289 · Measured
+  - L5318 · The grid tracks the author did not write down (t982)
+  - L5352 · Why a divergence sweep can never rank this family
+  - L5361 · Two grammars that look like one
+  - L5369 · Building the fixture so it can actually fail
+  - L5383 · Named, measured, not built — a DIFFERENT mechanism
 
 ## browser-capabilities.md
 `docs/wiki/browser-capabilities.md`
@@ -1631,4 +1636,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1538 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1543 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

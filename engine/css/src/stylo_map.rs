@@ -1031,6 +1031,37 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     // Grid tracks + item placement.
     s.grid_template_columns = template_to_tracks(&cv.clone_grid_template_columns());
     s.grid_template_rows = template_to_tracks(&cv.clone_grid_template_rows());
+    // The IMPLICIT half of the same pair. `grid-template-*` sizes the tracks the author wrote down;
+    // these size the ones auto-placement invents when the items outrun them, and they were the two
+    // lines missing beside the two above. Stylo's `ImplicitGridTracks` is a plain slice of
+    // `<track-size>` — no `repeat()` is representable, which is exactly the grammar difference the
+    // minimal cascade's separate parser records.
+    s.grid_auto_rows = cv
+        .clone_grid_auto_rows()
+        .0
+        .iter()
+        .map(track_size_to_ours)
+        .collect();
+    s.grid_auto_columns = cv
+        .clone_grid_auto_columns()
+        .0
+        .iter()
+        .map(track_size_to_ours)
+        .collect();
+    // `grid-auto-flow` is BITFLAGS in Stylo (`ROW|COLUMN|DENSE`, with row/column mutually exclusive
+    // and `dense` alone normalised to `row dense`), so the axis is read as "is COLUMN set" rather
+    // than by matching a variant — an absent ROW bit on a value that also lacks COLUMN would
+    // otherwise fall through to the wrong axis.
+    {
+        use stylo::values::specified::position::GridAutoFlow as SF;
+        let f = cv.clone_grid_auto_flow();
+        s.grid_auto_flow = match (f.contains(SF::COLUMN), f.contains(SF::DENSE)) {
+            (false, false) => crate::GridAutoFlow::Row,
+            (false, true) => crate::GridAutoFlow::RowDense,
+            (true, false) => crate::GridAutoFlow::Column,
+            (true, true) => crate::GridAutoFlow::ColumnDense,
+        };
+    }
     s.grid_column = (
         grid_line_to_ours(&cv.clone_grid_column_start()),
         grid_line_to_ours(&cv.clone_grid_column_end()),

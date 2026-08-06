@@ -728,6 +728,29 @@ pub enum TrackComponent {
     },
 }
 
+/// `grid-auto-flow` — the axis the **auto-placement algorithm** advances along, plus whether it may
+/// go backwards to back-fill holes.
+///
+/// The two halves are orthogonal and the CSS grammar lets them appear in either order
+/// (`column dense` == `dense column`), which is why this is one enum of four states rather than an
+/// axis plus a flag: taffy models it the same way, so the mapping is total and no state can be
+/// dropped in translation.
+///
+/// **`Row` is the initial value and it is why nothing noticed this was missing** — every grid that
+/// never declares the property flows exactly as a defaulted field does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum GridAutoFlow {
+    /// Fill each row in turn, adding implicit **rows** as needed. The initial value.
+    #[default]
+    Row,
+    /// Fill each column in turn, adding implicit **columns** as needed.
+    Column,
+    /// `row dense` — row flow, but an item smaller than a hole left earlier may move **back** into it.
+    RowDense,
+    /// `column dense`.
+    ColumnDense,
+}
+
 /// A grid item's placement on one axis (`grid-column` / `grid-row`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum GridLine {
@@ -1276,6 +1299,16 @@ pub struct ComputedStyle {
     /// knows the container's size.
     pub grid_template_columns: Vec<TrackComponent>,
     pub grid_template_rows: Vec<TrackComponent>,
+    /// `grid-auto-rows` / `grid-auto-columns` (container) — the sizes given to the **implicit**
+    /// tracks the auto-placement algorithm creates when there are more items than the explicit
+    /// template has room for. A plain `<track-size>+` list with no `repeat()`, because the grammar
+    /// forbids one here: the list is **cycled** over the implicit tracks instead, so
+    /// `grid-auto-rows: 80px 20px` makes the implicit rows 80, 20, 80, 20… Empty = `auto`.
+    pub grid_auto_rows: Vec<TrackSize>,
+    pub grid_auto_columns: Vec<TrackSize>,
+    /// `grid-auto-flow` (container) — which axis auto-placement advances along, and whether it
+    /// back-fills holes (`dense`).
+    pub grid_auto_flow: GridAutoFlow,
     /// `grid-column` / `grid-row` (item) start/end line placement.
     pub grid_column: (GridLine, GridLine),
     pub grid_row: (GridLine, GridLine),
@@ -1416,6 +1449,9 @@ impl ComputedStyle {
             vertical_align: VerticalAlign::Baseline,
             grid_template_columns: Vec::new(),
             grid_template_rows: Vec::new(),
+            grid_auto_rows: Vec::new(),
+            grid_auto_columns: Vec::new(),
+            grid_auto_flow: GridAutoFlow::Row,
             grid_column: (GridLine::Auto, GridLine::Auto),
             grid_row: (GridLine::Auto, GridLine::Auto),
             grid_template_areas: Vec::new(),
@@ -4714,6 +4750,13 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         "order" => {} // parsed but not yet used in layout
         "grid-template-columns" => s.grid_template_columns = parse_track_list(v, s.font_size),
         "grid-template-rows" => s.grid_template_rows = parse_track_list(v, s.font_size),
+        "grid-auto-rows" => s.grid_auto_rows = parse_auto_track_list(v, s.font_size),
+        "grid-auto-columns" => s.grid_auto_columns = parse_auto_track_list(v, s.font_size),
+        "grid-auto-flow" => {
+            if let Some(f) = parse_grid_auto_flow(v) {
+                s.grid_auto_flow = f;
+            }
+        }
         "grid-column" => s.grid_column = parse_grid_line_shorthand(v),
         "grid-row" => s.grid_row = parse_grid_line_shorthand(v),
         "grid-column-start" => s.grid_column.0 = parse_grid_line(v),
@@ -5898,6 +5941,55 @@ fn parse_track_list(v: &str, fs: f32) -> Vec<TrackComponent> {
     out
 }
 
+/// `grid-auto-rows` / `grid-auto-columns` — a plain `<track-size>+` list.
+///
+/// Deliberately **not** `parse_track_list`: the two grammars differ in one way that matters, and
+/// sharing the richer parser would silently accept the difference. `repeat()` is legal in a
+/// *template* and forbidden in an *auto* track list, because the auto list has no length of its own
+/// — it is **cycled** over however many implicit tracks placement ends up creating. Feeding
+/// `repeat(auto-fill, …)` through here would produce a `TrackComponent` this field cannot hold, so
+/// the narrower parser is the honest one: anything that is not a `<track-size>` is dropped, which is
+/// what "invalid at computed-value time" means for a list-valued property.
+fn parse_auto_track_list(v: &str, fs: f32) -> Vec<TrackSize> {
+    split_tracks_top_level(v)
+        .iter()
+        .filter_map(|t| parse_track(t, fs))
+        .collect()
+}
+
+/// `grid-auto-flow: [ row | column ] || dense`.
+///
+/// `||` in the CSS grammar means *one or both, in any order*, so `column dense` and `dense column`
+/// are the same declaration and `dense` alone is legal (it means `row dense`). Returns `None` for a
+/// declaration that names neither, leaving the cascaded value untouched rather than resetting it to
+/// the initial value — an invalid declaration is ignored, not applied.
+fn parse_grid_auto_flow(v: &str) -> Option<GridAutoFlow> {
+    let (mut column, mut dense, mut seen) = (false, false, false);
+    for word in v.split_ascii_whitespace() {
+        match word.to_ascii_lowercase().as_str() {
+            "row" => seen = true,
+            "column" => {
+                column = true;
+                seen = true;
+            }
+            "dense" => {
+                dense = true;
+                seen = true;
+            }
+            _ => return None,
+        }
+    }
+    if !seen {
+        return None;
+    }
+    Some(match (column, dense) {
+        (false, false) => GridAutoFlow::Row,
+        (false, true) => GridAutoFlow::RowDense,
+        (true, false) => GridAutoFlow::Column,
+        (true, true) => GridAutoFlow::ColumnDense,
+    })
+}
+
 /// Split a track list on whitespace, keeping parenthesized groups (`minmax(a, b)`) intact.
 fn split_tracks_top_level(s: &str) -> Vec<String> {
     let mut out = Vec::new();
@@ -6259,6 +6351,72 @@ mod tests {
         assert_eq!(
             one("align-content: normal").align_content,
             JustifyContent::Normal
+        );
+    }
+
+    /// The three **implicit-track** properties on the minimal (JS-less) cascade. The gate
+    /// `g_grid_implicit_tracks` proves the Stylo path; this proves the fallback, and the two
+    /// grammar facts that a shared parser would have flattened.
+    #[test]
+    fn grid_implicit_track_properties_parse_on_the_minimal_cascade() {
+        let one = |decl: &str| {
+            let (dom, map) = styled(&format!("span {{ {decl} }}"));
+            let n = query_selector_all(&dom, dom.root(), "span")[0];
+            map.get(&n).cloned().unwrap_or_else(ComputedStyle::initial)
+        };
+
+        // `[ row | column ] || dense` — both orders, and `dense` alone meaning `row dense`.
+        assert_eq!(one("grid-auto-flow: row").grid_auto_flow, GridAutoFlow::Row);
+        assert_eq!(
+            one("grid-auto-flow: column").grid_auto_flow,
+            GridAutoFlow::Column
+        );
+        assert_eq!(
+            one("grid-auto-flow: column dense").grid_auto_flow,
+            GridAutoFlow::ColumnDense
+        );
+        assert_eq!(
+            one("grid-auto-flow: dense column").grid_auto_flow,
+            GridAutoFlow::ColumnDense
+        );
+        assert_eq!(
+            one("grid-auto-flow: dense").grid_auto_flow,
+            GridAutoFlow::RowDense
+        );
+        // An unrecognised keyword invalidates the DECLARATION, which is ignored — the cascaded
+        // value stands. It must not reset to the initial value, which is what returning
+        // `GridAutoFlow::Row` on a parse failure would do.
+        assert_eq!(
+            one("grid-auto-flow: column; grid-auto-flow: sideways").grid_auto_flow,
+            GridAutoFlow::Column
+        );
+
+        // The auto track list is a `<track-size>+` that CYCLES; it holds several values and the
+        // count is meaningful, so the length is asserted as well as the contents.
+        assert_eq!(
+            one("grid-auto-rows: 80px 20px").grid_auto_rows,
+            vec![TrackSize::Px(80.0), TrackSize::Px(20.0)]
+        );
+        assert_eq!(
+            one("grid-auto-columns: minmax(10px, 1fr)").grid_auto_columns,
+            vec![TrackSize::MinMax(TrackUnit::Px(10.0), TrackUnit::Fr(1.0))]
+        );
+        // Each reaches its OWN axis and leaves the other empty — the crosstalk a copied arm brings.
+        assert!(one("grid-auto-rows: 80px").grid_auto_columns.is_empty());
+        assert!(one("grid-auto-columns: 80px").grid_auto_rows.is_empty());
+
+        // ⚠ `repeat()` is legal in `grid-template-*` and FORBIDDEN in an auto track list — the list
+        // has no length of its own, it is cycled. This is the one grammar difference that made the
+        // two properties get two parsers instead of sharing the richer one.
+        assert!(one("grid-auto-rows: repeat(auto-fill, 80px)")
+            .grid_auto_rows
+            .is_empty());
+        assert_eq!(
+            one("grid-template-rows: repeat(auto-fill, 80px)")
+                .grid_template_rows
+                .len(),
+            1,
+            "the TEMPLATE parser must still accept the repeat the AUTO parser rejects"
         );
     }
 

@@ -13,9 +13,10 @@
 
 use manuk_css::{
     AlignItems as CssAlign, BoxSizing, ComputedStyle, Dim, Direction as CssDirection,
-    Display as CssDisplay, FlexDirection as CssDir, FlexWrap as CssWrap, GridLine as CssGridLine,
-    IntrinsicSize, JustifyContent as CssJustify, Position as CssPosition,
-    TrackComponent as CssTrackComponent, TrackSize as CssTrackSize, TrackUnit,
+    Display as CssDisplay, FlexDirection as CssDir, FlexWrap as CssWrap,
+    GridAutoFlow as CssGridAutoFlow, GridLine as CssGridLine, IntrinsicSize,
+    JustifyContent as CssJustify, Position as CssPosition, TrackComponent as CssTrackComponent,
+    TrackSize as CssTrackSize, TrackUnit,
 };
 use taffy::prelude::*;
 use taffy::style::{
@@ -312,6 +313,20 @@ pub fn to_taffy_style(cs: &ComputedStyle, calc: &mut Vec<(f32, f32)>) -> Style {
             .iter()
             .map(template_component)
             .collect(),
+        // The IMPLICIT tracks, and the axis auto-placement advances along. `grid_template_*` above
+        // has been mapped since grid landed; these three fields exist on taffy's `Style` and nothing
+        // ever wrote them, so a grid with more items than its template holds put every overflow item
+        // in a new ROW of CONTENT height — even when the author said `grid-auto-flow: column` or
+        // sized the implicit tracks. Empty lists are `auto`, which is both CSS's initial value and
+        // taffy's default, so an undeclared grid is unchanged.
+        grid_auto_rows: cs.grid_auto_rows.iter().map(track).collect(),
+        grid_auto_columns: cs.grid_auto_columns.iter().map(track).collect(),
+        grid_auto_flow: match cs.grid_auto_flow {
+            CssGridAutoFlow::Row => GridAutoFlow::Row,
+            CssGridAutoFlow::Column => GridAutoFlow::Column,
+            CssGridAutoFlow::RowDense => GridAutoFlow::RowDense,
+            CssGridAutoFlow::ColumnDense => GridAutoFlow::ColumnDense,
+        },
         grid_column: grid_line(cs.grid_column),
         grid_row: grid_line(cs.grid_row),
         // **The intrinsic ratio has to cross into taffy, or it does not exist inside flex and grid.**

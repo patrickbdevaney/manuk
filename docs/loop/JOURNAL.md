@@ -46371,6 +46371,114 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 982 — the grid tracks the author did not write down, and the fixture that could not fail (2026-08-06)
+
+TICK SHAPE: pattern-class — CSS Grid implicit-track sizing and auto-placement flow. Continues t980
+and t981 on the same method and the same recurrence: a property-family battery against headless
+Chrome with the working twin as the control.
+
+⚠⚠⚠ **THREE PROPERTIES, THREE TICKS, ONE MECHANISM — AND THIS TIME THE TWIN THAT MADE IT LOOK
+COVERED WAS `grid-template-*`.** `grid-template-rows`/`-columns` size the tracks the author wrote
+down. `grid-auto-rows`/`-columns`/`grid-auto-flow` size and place the ones auto-placement *invents*
+when the items outrun them. All three of the latter are fields on taffy's `Style` and **nothing ever
+wrote any of them**, at any layer: no `ComputedStyle` field, no parse arm, no `stylo_map` line, no
+`to_taffy_style` line. So every grid whose items outran its template put the overflow in a new ROW of
+CONTENT height, whatever the author declared.
+
+**MEASURED, headless Chrome vs ours, a 300px-wide grid of 60x40 items** (`/tmp/gi.html`, 10
+containers, every row an offset from its own container):
+
+```text
+                                                       Chrome       before        after
+   grid-auto-flow:column            3rd item          [150,  0]   [  0, 80]   [150,  0]
+   grid-auto-flow:column
+     + grid-auto-columns:90px       3rd item          [ 90,  0]   [  0, 80]   [ 90,  0]
+   grid-auto-rows:80px              5th item          [  0,120]   [  0, 80]   [  0,120]
+   grid-auto-rows:80px 20px         5th item          [  0,120]   [  0, 80]   [  0,120]
+   grid-auto-rows:80px 20px         7th item          [  0,140]   [  0,120]   [  0,140]
+   grid-auto-flow:row dense         back-filled item  [  0,  0]   [  0, 40]   [  0,  0]
+  -- CONTROLS, and none of them moved --
+   (nothing declared)               3rd item          [  0, 40]      same     unchanged
+   the SAME markup without `dense`  2nd item          [  0, 40]      same     unchanged
+   fixed-height container, implicit rows STRETCH      [  0,120]      same     unchanged
+   auto-height, no grid-auto-rows   5th item          [  0, 80]      same     unchanged
+   explicit tracks only                               [  0, 40]      same     unchanged
+```
+
+11 of 11 asserted rows now Chrome-exact. The re-measure on the restored tree after the fourth RED
+proof was byte-identical to the post-fix reading.
+
+⚠⚠⚠ **MY FIRST `grid-auto-rows` FIXTURE COULD NOT HAVE FAILED, AND THE REASON GENERALISES.** In a
+FIXED-height container the undeclared `auto` implicit rows **stretch** into the free space and land
+*exactly* where the declared `80px` rows would — `200 - 40 explicit = 160 over two rows = 80 each`.
+Right answer, wrong model, and the fixture agrees with Chrome either way.
+
+> This is t974's lesson arriving from the other side. There the gate's setup asserted the control
+> away; here the gate's setup would have asserted the DEFECT away. The discriminating fixture is an
+> **auto-height** container — zero free space, nothing to stretch into — and the fixed-height version
+> is kept as a *control*, so a fix that hard-coded implicit rows to content height fails there
+> instead. **Before trusting a row, ask what the WRONG model predicts for it.** If it predicts the
+> same number, the row is decoration.
+
+⚠⚠ **THE `dense` BIT NEEDS THE SAME CARE IN THE OTHER DIRECTION, AND A `column`-ONLY GATE WOULD HAVE
+MISSED HALF THE PROPERTY.** `grid-auto-flow` is `[ row | column ] || dense` — four states, not two.
+`row dense` differs from plain `row` only in that placement may go BACKWARDS to back-fill a hole an
+earlier pinned item left. The gate therefore carries **the same markup twice**, with and without the
+keyword, and folding `RowDense -> Row` in the mapping fails exactly one row of the eleven while every
+other row passes. A gate that tested only `column` would have called the property covered with half
+its value space thrown away.
+
+⚠⚠ **TWO GRAMMARS THAT LOOK LIKE ONE, WHICH IS WHY THIS DID NOT REUSE `parse_track_list`.**
+`repeat()` is legal in `grid-template-*` and **forbidden** in `grid-auto-*`: an auto track list has
+no length of its own, it is **CYCLED** over however many implicit tracks placement creates, so
+`grid-auto-rows: 80px 20px` makes them 80, 20, 80, 20... Sharing the richer template parser would
+have silently accepted `repeat(auto-fill, 80px)` and then had nowhere to put it. Two properties, two
+parsers, and the difference asserted in BOTH directions — the auto parser must reject the repeat the
+template parser must still accept. A single-value fixture also cannot tell cycling from "apply the
+first value to everything", so the cycled row declares two values and asserts the 3rd AND 4th rows.
+
+RED-PROVEN FOUR WAYS, each applied by copying the file aside and restoring it (never `git checkout`
+on a file this tick is editing — t976's slip), and each read off the WHOLE 11-row fixture rather
+than the gate's first failing assertion, so **confinement is measured and not assumed**:
+
+```text
+   drop `grid_auto_flow`     -> the 3 flow rows fail; ALL 3 grid-auto-rows rows still pass
+   drop `grid_auto_rows`     -> the 3 auto-rows rows fail; ALL 3 flow rows still pass
+   drop `grid_auto_columns`  -> only the row that DECLARES one fails (x=150 not 90); its
+                                flow-twin, which declares no column size, is unmoved
+   fold `RowDense -> Row`    -> only the `dense` row fails, at y=40 against Chrome's 0
+```
+
+⚠⚠⚠ **NAMED, MEASURED, NOT BUILT — and the fixture's own containers are what exposed it.** Every
+ITEM offset in this gate is exact, and two of the CONTAINERS are still 40px short (Chrome 200/220,
+ours 160/180). Reduced: **a grid container's block size comes from its items' CONTENT, not from its
+resolved TRACKS.** `grid-template-rows: 100px` around one 40px item is **100 tall in Chrome and 40
+here** — no implicit track, no `grid-auto-*` declaration anywhere, so it predates this tick and is
+untouched by it. Confirmed twice: by construction (an undeclared grid maps the three new fields to
+taffy's own defaults, producing a byte-identical `Style`) and empirically (`/tmp/gh.html` rows
+`k`/`l`/`m` read 40/80/80 identically on every RED variant and on the restored tree). It is a
+track-to-container sizing defect, not an alignment or placement one, and folding it in would have
+made neither attributable. **This is the second consecutive tick where the residue was found by
+measuring the CONTAINER after the ITEMS all agreed** — an item-only readout would have declared the
+family finished both times.
+
+⚠ **What the corpus says about the priority.** `display:grid` is 18.7% of the corpus and the implicit
+half is the normal case for anything rendered from data — a template declares two or three tracks and
+the item count comes from the server. But per t981's finding the property is wrong **only where
+declared**, so like `align-content` this is a high-usage, low-magnitude family the M1 instrument
+cannot price. VI.3 says usage-weight wins where the two orderings disagree; recorded here rather than
+predicted as a sweep movement.
+
+RATCHET: `manuk-css` **30/30** (29 + the new minimal-cascade test) + 2 doc-tests, `manuk-layout`
+125/125, and the flex/grid/alignment gate set green as a set — `g_grid_implicit_tracks` (new),
+`g_container_alignment`, `g_self_alignment`, `g_grid_auto_repeat`, `g_grid_implied_track_stretch`,
+`g_intrinsic_flex_grid`, `g_flex_item_slot_is_final`, `g_flex_order`.
+
+PERF: none — two `Vec` maps over lists that are empty on every grid that declares nothing, and one
+four-arm match, in a style conversion that already ran per node.
+
+WIKI: `docs/wiki/box-layout.md` — "The grid tracks the author did not write down".
+
 ## Tick 981 — the CONTAINER half of Box Alignment, and the shorthand that landed exactly half of itself (2026-08-06)
 
 TICK SHAPE: pattern-class — container-level CSS Box Alignment. Continues t980 one level up, on the

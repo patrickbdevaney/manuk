@@ -5314,3 +5314,84 @@ Gated by `G_CONTAINER_ALIGNMENT` (Stylo path) and
 `align_content` line, drop the `justify_items` line, or fold `align-content: normal` into
 `flex-start` — the third fails **only** the undeclared control row, which is the row that exists for
 it.
+
+## The grid tracks the author did not write down (t982)
+
+`grid-template-rows` / `grid-template-columns` size the **explicit** tracks. When a grid holds more
+items than those tracks have room for, the auto-placement algorithm invents **implicit** tracks, and
+three properties govern them:
+
+| property | what it decides |
+|---|---|
+| `grid-auto-flow` | which axis placement advances along (`row` \| `column`), and whether it may go **backwards** to back-fill a hole (`dense`) |
+| `grid-auto-rows` | the sizes of the implicit **rows**, as a list that is **cycled** |
+| `grid-auto-columns` | the same for implicit **columns** |
+
+All three are fields on taffy's `Style`. **Nothing ever wrote any of them**, at any layer — no
+`ComputedStyle` field, no parse arm, no `stylo_map` line, no `to_taffy_style` line — so every grid
+whose items outran its template put the overflow in a new *row* of *content* height, whatever the
+author declared. Measured against headless Chrome (a 300px grid of 60×40 items, offsets from each
+item's own container):
+
+```text
+                                                     Chrome       before        after
+  grid-auto-flow:column           3rd item          [150,  0]   [  0, 80]   [150,  0]
+  grid-auto-flow:column
+    + grid-auto-columns:90px      3rd item          [ 90,  0]   [  0, 80]   [ 90,  0]
+  grid-auto-rows:80px             5th item          [  0,120]   [  0, 80]   [  0,120]
+  grid-auto-rows:80px 20px        5th item          [  0,120]   [  0, 80]   [  0,120]
+  grid-auto-rows:80px 20px        7th item          [  0,140]   [  0,120]   [  0,140]
+  grid-auto-flow:row dense        back-filled item  [  0,  0]   [  0, 40]   [  0,  0]
+ ── controls, none of which moved ──
+  (nothing declared)              3rd item          [  0, 40]      same     unchanged
+  same grid, no `dense`           2nd item          [  0, 40]      same     unchanged
+  fixed-height container, implicit rows STRETCH     [  0,120]      same     unchanged
+  explicit tracks only                              [  0, 40]      same     unchanged
+```
+
+### Why a divergence sweep can never rank this family
+
+`row` is the initial `grid-auto-flow`; an empty auto track list means `auto`. Both are *also* taffy's
+defaults. An undeclared grid was therefore Chrome-exact forever, and the properties were wrong **only
+where they were declared** — the identical shape as `align-content` one section up. Three ticks
+(t980, t981, t982) found three such properties, each sitting directly beside a complete twin in the
+same struct literal, and none of them was rankable from corpus divergence. What finds them is a
+battery where **every row declares one value of one property and a control row declares none**.
+
+### Two grammars that look like one
+
+`repeat()` is legal in `grid-template-*` and **forbidden** in `grid-auto-*`. An auto track list has no
+length of its own — it is *cycled* over however many implicit tracks placement creates, so
+`grid-auto-rows: 80px 20px` makes them 80, 20, 80, 20… Sharing the richer template parser would
+silently accept `grid-auto-rows: repeat(auto-fill, 80px)` and then have nowhere to put it, so the two
+properties get two parsers and the difference is asserted in both directions.
+
+### Building the fixture so it can actually fail
+
+The first `grid-auto-rows` fixture attempt **could not discriminate**: in a fixed-height container the
+undeclared `auto` implicit rows *stretch* into the free space and happened to land exactly where the
+declared 80px rows would. A fixture where the wrong model and the right model agree is not a test. The
+gate uses an **auto-height** container — zero free space, nothing to stretch into — and keeps the
+fixed-height version as a *control*, so a fix that hard-coded implicit rows to content height fails
+there.
+
+The `dense` bit needs the same care in the other direction: `row dense` differs from `row` only in
+back-filling, so the gate carries the **same markup twice**, with and without the keyword. A gate that
+only tested `column` would call the flow property covered while half its value space was thrown away
+— and folding `RowDense → Row` fails exactly one row of the eleven.
+
+### Named, measured, not built — a DIFFERENT mechanism
+
+**A grid container's block size comes from its items' content, not from its resolved tracks.** A grid
+with `grid-template-rows: 100px` holding one 40px item is 100 tall in Chrome and **40** here — with no
+implicit track and no `grid-auto-*` declaration anywhere, so it predates this tick and is untouched by
+it (the three new lines map to taffy's own defaults when undeclared, and `k`/`l`/`m` read identically
+on every RED variant). It hides because the *tracks* are laid out correctly and only the container's
+own height is short: every item offset in `G_GRID_IMPLICIT_TRACKS` is exact while two of its
+containers are 40px shy.
+
+Gated by `G_GRID_IMPLICIT_TRACKS` (Stylo path) and
+`grid_implicit_track_properties_parse_on_the_minimal_cascade` (minimal cascade). RED-proven four ways,
+each **confined**: dropping `grid_auto_flow` fails the three flow rows and no auto-rows row; dropping
+`grid_auto_rows` fails the three auto-rows rows and no flow row; dropping `grid_auto_columns` fails
+only the row that declares one; folding `RowDense → Row` fails only the `dense` row.

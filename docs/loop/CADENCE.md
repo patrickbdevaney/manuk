@@ -15,7 +15,7 @@
 | median tick cycle | **26m** | 699 intervals |
 | median, last 10 | **38m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.10** | 633.1h elapsed |
+| **ticks per hour** | **1.10** | 634.2h elapsed |
 | median verify wall | **63s** | 639 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,8 +27,8 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **411**
-* **✅ rows in the capability ledger**: 144 → **489**
+* **live gates**: 27 → **412**
+* **✅ rows in the capability ledger**: 144 → **490**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **338 of 700 ticks** (48%) moved a
@@ -796,6 +796,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **977** | 2026-08-06 01:53 | 19m | measurement | 63s | +96/−32 | 409 | 81 | 56.0% · | the surface audit finds its best axis INSIDE the engine (2026-08-06) |
 | **978** | 2026-08-06 02:13 | 20m | measurement | 63s | +190/−33 | 409 | 81 | 56.0% · | I tested my own audit's recommendation and its hit rate was wrong (2026-08-06) |
 | **979** | 2026-08-06 02:49 | 36m | measurement | 63s | +247/−33 | 410 | 81 | 56.0% · | the constitution check, and the rule that cut both ways in one session (2026-08-06) |
-| **981** | 2026-08-06 14:10 | 11.3h | pattern-class | 63s | +719/−55 | 411 | 81 | 56.0% · | the CONTAINER half of Box Alignment, and the shorthand that landed exactly half of itself  |
+| **981** | 2026-08-06 15:14 | 12.4h | pattern-class | 63s | +676/−36 | 412 | 81 | 56.0% · | the CONTAINER half of Box Alignment, and the shorthand that landed exactly half of itself  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
