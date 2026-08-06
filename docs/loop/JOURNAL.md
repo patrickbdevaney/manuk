@@ -46371,6 +46371,82 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 975 — `translate3d` was on the floor, and the comment above the bug was its alibi (2026-08-05)
+
+TICK SHAPE: pattern-class — CSS transforms, which t965's corpus instrument ranks **fifth at 34.5%**
+of the burndown corpus. Found by the property-family battery t969's method prescribes, run against
+the observer's new steer (`78235f39`).
+
+⚠⚠⚠ **`transform: translate3d(20px,10px,0)` LEFT THE ELEMENT AT ITS UNTRANSFORMED POSITION — the
+largest error this property can produce.** And it is not an exotic spelling: `translate3d` is *the*
+idiom for putting an element on its own compositor layer, which is how every animation library,
+carousel, drawer and sticky header on the modern web writes a plain translation.
+
+```text
+   a 100x40 box                          Chrome        before        after
+     translate3d(20px,10px,0)          [ 20, 1070]   [  0, 1060]   [ 20, 1070]
+     scale3d(2,2,1)                    [-50, 1110]   [  0, 1130]   [-50, 1110]
+     rotate3d(0,0,1,45deg)             [0.5, 1170]   [  0, 1200]   [0.5, 1170]
+     matrix3d(… 30,15,0,1)             [ 30, 1355]   [  0, 1340]   [ 30, 1355]
+     translate3d(…) scale(2)           [-30, 1470]   [-50, 1460]   [-30, 1470]
+   ── already correct, and they are the CONTROLS ──
+     rotateZ(90deg)                    [ 30, 1240]   [ 30, 1240]   unmoved
+     translateZ(50px) (no 2D effect)   [  0, 1410]   [  0, 1410]   unmoved
+   ── the eleven 2D rows of the same battery ──                     11/11 unmoved
+```
+
+⚠⚠⚠ **THE COMMENT ABOVE THE `_ => {}` WAS THE ALIBI, AND THAT IS THE TRANSFERABLE PART.**
+`stylo_map.rs` maps Stylo's computed transform list onto our affine ops, and its catch-all carried:
+
+```rust
+   // transform: map the 2D operations onto our affine list (3D/perspective skipped — our
+   // paint model is 2D). …
+   _ => {}
+```
+
+**That sentence is true of a genuine 3D effect and false of `translate3d(x, y, 0)`, which has no 3D
+component at all.** The justification read as a *decision*, so nobody re-checked what was actually
+being discarded — and `rotateZ` was mapped the whole time, which made the family look handled from
+the outside. **A `_` arm with a reason above it is the hardest kind to audit: the reason is doing the
+work that a measurement should do.**
+
+⚠ **AND I FOUND IT IN THE WRONG FILE FIRST.** I fixed `parse_transform`'s `_ => {}` in
+`engine/css/src/lib.rs`, rebuilt, and **nothing moved** — because that parser is the `MinimalCascade`
+path and the shipping cascade is Stylo (`live-cascade-is-stylo-not-minimal`). The measurement is what
+sent me to the real site; the first edit is kept because the JS-less/headless fallback must agree
+with the shipping path, and it is now the second RED-proof's control.
+
+**The projection is exact, not an approximation:** with no `perspective` in force, `z` contributes
+nothing to the on-screen position, so each 3D function's x/y terms **are** its rendered effect.
+`rotate3d` is taken **only about the z axis** for the opposite reason — a rotation about x or y
+foreshortens, which a 2D pipeline cannot express — and `translateZ`/`perspective` are matched
+explicitly so their omission reads as a decision rather than as the `_` arm that hid this.
+
+RED-PROVEN, both applied, run and reverted: **restore `_ => {}`** → `#y01` reads x=0 against 20;
+**drop the axis check on `Rotate3D`** → `#y08` (an X-axis rotation) becomes 98.99 × 98.99 where Chrome
+leaves it 100 × 40 — a wrong answer of the right type, caught by the row that exists for it.
+
+⚠⚠ **ATTRIBUTION, STATED HONESTLY AGAINST THE NEW STEER.** `78235f39` ranks by marginal M1 crossings,
+so I checked whether the 14 one-fix sites use this: **6 of 18 use a `transform` inline and NONE uses a
+3D function or `transform-origin` inline** — external stylesheets are invisible to a curl-and-grep, so
+that is a floor and not a level, but it means **I cannot claim this moves the near-bar cohort.** It is
+landed on its own evidence — a Chrome-exact fix to the most severe failure mode (element not moved at
+all) on a construct measured at 34.5% of the corpus — and not on a crossing prediction.
+
+⚠ **NAMED, MEASURED, NOT BUILT: `transform-origin` is unimplemented** — we always transform about the
+box centre. `origin: 0 0` gives Chrome [0, 220] against our [−50, 200]; `100% 100%` gives Chrome
+[−100, 810] against our [−50, 830]. It needs a new inherited-less CSS property threaded to the matrix
+builder (`layout/lib.rs:922` already takes an `origin` parameter and is only ever handed the centre),
+which is a bigger change than a parser arm and is the next tick in this family.
+
+RATCHET: `manuk-css` 28/28 + 2, `manuk-layout` 125/125, every `engine/page/tests` gate that mentions
+`transform` green as a set, and the eleven 2D rows of the same battery byte-identical.
+
+PERF: none — four match arms in a map that already ran.
+
+WIKI: `docs/wiki/css-cascade.md` — "a `_` arm with a reason above it is the hardest kind to audit",
+with the two-cascades detail that sent the first fix to the wrong file.
+
 ## Tick 974 — the sweep the steer asked for, and TWO non-reproducing sites inverted its SIGN (2026-08-05)
 
 TICK SHAPE: measurement — the clean `--jobs 2` CrUX sweep check #86's steer asked for after three

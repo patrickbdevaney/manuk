@@ -951,6 +951,44 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
                 TOp::Matrix(m) => {
                     ops.push(crate::TransformFn::Matrix([m.a, m.b, m.c, m.d, m.e, m.f]))
                 }
+                // ⚠⚠⚠ **THE 3D SPELLINGS WERE FALLING INTO `_ => {}`, AND THE COMMENT ABOVE IS WHAT
+                // HID IT.** *"3D/perspective skipped — our paint model is 2D"* is true of a genuine
+                // 3D effect and false of `translate3d(x, y, 0)`, which is not a 3D transform at all:
+                // it is **the** idiom for putting an element on its own compositor layer, and it is
+                // how every animation library, carousel, drawer and sticky header on the modern web
+                // writes a plain translation. Dropped, the element stays at its **untransformed**
+                // position — the largest error the property can produce. Measured against Chrome on
+                // a 100×40 box:
+                //
+                // ```text
+                //                                         Chrome        before        after
+                //   translate3d(20px,10px,0)             [ 20, 1070]   [  0, 1060]   [ 20, 1070]
+                //   scale3d(2,2,1)                       [-50, 1110]   [  0, 1130]   [-50, 1110]
+                //   matrix3d(… 30,15,0,1)                [ 30, 1355]   [  0, 1340]   [ 30, 1355]
+                //   rotate3d(0,0,1,45deg)                [0.5, 1170]   [  0, 1200]   [0.5, 1170]
+                //   rotateZ(90deg)                       [ 30, 1240]   [ 30, 1240]   unchanged ✓
+                //   translateZ(50px)  (no 2D effect)     [  0, 1410]   [  0, 1410]   unchanged ✓
+                // ```
+                //
+                // With no `perspective` in force `z` contributes nothing to the on-screen position,
+                // so the x/y terms of each 3D function **are** its rendered effect — this is an
+                // exact projection, not an approximation. `rotate3d` is taken **only about the z
+                // axis** for the opposite reason: a rotation about x or y foreshortens, which a 2D
+                // pipeline cannot express, and inventing one would be a wrong answer of the right
+                // type. `TranslateZ`/`Perspective` are matched explicitly so their omission reads as
+                // a decision rather than as the `_` arm that hid this.
+                TOp::Translate3D(x, y, _z) => {
+                    ops.push(crate::TransformFn::Translate(lp_to_dim(x), lp_to_dim(y)))
+                }
+                TOp::Scale3D(x, y, _z) => ops.push(crate::TransformFn::Scale(*x, *y)),
+                TOp::Rotate3D(x, y, z, a) => {
+                    if *x == 0.0 && *y == 0.0 && *z != 0.0 {
+                        ops.push(crate::TransformFn::Rotate(a.radians()))
+                    }
+                }
+                TOp::Matrix3D(m) => ops.push(crate::TransformFn::Matrix([
+                    m.m11, m.m12, m.m21, m.m22, m.m41, m.m42,
+                ])),
                 _ => {}
             }
         }

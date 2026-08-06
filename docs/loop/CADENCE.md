@@ -15,7 +15,7 @@
 | median tick cycle | **26m** | 693 intervals |
 | median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 618.2h elapsed |
+| **ticks per hour** | **1.12** | 619.0h elapsed |
 | median verify wall | **63s** | 633 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,7 +27,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **408**
+* **live gates**: 27 → **409**
 * **✅ rows in the capability ledger**: 144 → **488**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
@@ -790,6 +790,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **970** | 2026-08-05 16:58 | 25m | pattern-class | 63s | +203/−34 | 407 | 81 | 56.0% · | t968 said this needed a contract change; it needed the rule it already had (2026-08-05) |
 | **971** | 2026-08-05 17:51 | 53m | measurement | 63s | +282/−34 | 408 | 81 | 56.0% · | the constitution check, and the window in which I corrected myself three times (2026-08-05 |
 | **972** | 2026-08-05 18:15 | 24m | pattern-class | 63s | +106/−32 | 408 | 81 | 56.0% · | a button's UA border is 2px, and the audit's font-size claim was wrong (2026-08-05) |
-| **974** | 2026-08-05 23:18 | 5.1h | measurement | 63s | +333/−32 | 408 | 81 | 56.0% · | the sweep the steer asked for, and TWO non-reproducing sites inverted its SIGN (2026-08-05 |
+| **974** | 2026-08-06 00:04 | 5.8h | measurement | 63s | +413/−34 | 409 | 81 | 56.0% · | the sweep the steer asked for, and TWO non-reproducing sites inverted its SIGN (2026-08-05 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -1944,3 +1944,53 @@ by commenting the rule out of **`stylo_engine.rs`**.
 ⚠ Running that gate **without** `--features stylo,spidermonkey` fails its two pre-existing assertions
 with completely different numbers (`#a1` width 194 against Chrome's 53) — the same fact from the
 other side, and worth recognising before mistaking it for a regression.
+
+## A `_` arm with a REASON above it is the hardest kind to audit (t975)
+
+`stylo_map.rs` maps Stylo's computed `transform` list onto our affine ops. Its catch-all carried a
+justification, and the justification was the bug's alibi:
+
+```rust
+   // transform: map the 2D operations onto our affine list (3D/perspective skipped — our
+   // paint model is 2D). …
+   _ => {}          // <- Translate3D, Scale3D, Rotate3D, Matrix3D all landed here
+```
+
+**That sentence is true of a genuine 3D effect and false of `translate3d(x, y, 0)`**, which has no 3D
+component at all — it is *the* idiom for putting an element on its own compositor layer, which is how
+every animation library, carousel, drawer and sticky header on the modern web writes a plain
+translation. Dropped, the element stays at its **untransformed position**, the largest error the
+property can produce:
+
+```text
+   a 100x40 box                        Chrome        before        after
+     translate3d(20px,10px,0)        [ 20, 1070]   [  0, 1060]   [ 20, 1070]
+     scale3d(2,2,1)                  [-50, 1110]   [  0, 1130]   [-50, 1110]
+     rotate3d(0,0,1,45deg)           [0.5, 1170]   [  0, 1200]   [0.5, 1170]
+     matrix3d(… 30,15,0,1)           [ 30, 1355]   [  0, 1340]   [ 30, 1355]
+     rotateZ(90deg)                  [ 30, 1240]   [ 30, 1240]   unmoved  <- ALWAYS worked
+```
+
+⚠⚠ **`rotateZ` being mapped the whole time is why the family looked handled from the outside**, and
+the comment is why nobody re-checked. **A reason written above a catch-all does the work a
+measurement should do** — it converts "we have not looked" into "we decided", and the two are
+indistinguishable from the caller.
+
+⚠⚠⚠ **AND THE FIRST FIX WENT TO THE WRONG FILE.** `parse_transform` in `engine/css/src/lib.rs` has
+the same `_ => {}` and fixing it changed **nothing**, because that parser is the `MinimalCascade`
+path and **the shipping cascade is Stylo** ([[live-cascade-is-stylo-not-minimal]]). The measurement —
+rebuild, re-measure, still wrong — is what pointed at the real site. Both are now fixed, so the
+JS-less/headless fallback agrees with the shipping path.
+
+**The projection is exact, not an approximation.** With no `perspective` in force, `z` contributes
+nothing to the on-screen position, so each 3D function's x/y terms *are* its rendered effect.
+`rotate3d` is taken **only about the z axis** for the opposite reason — a rotation about x or y
+foreshortens, which a 2D pipeline cannot express, and `G_TRANSFORM_3D` carries the row that fails if
+the axis check is dropped (an X rotation becoming 99×99 where Chrome leaves the box 100×40).
+`translateZ` and `perspective` are matched **explicitly** so their omission reads as a decision
+rather than as the arm that hid this.
+
+⚠ **Still unimplemented and measured: `transform-origin`.** We always transform about the box centre;
+`origin: 0 0` gives Chrome [0, 220] against our [−50, 200], and `100% 100%` gives [−100, 810] against
+[−50, 830]. `layout/lib.rs:922` already takes an `origin` parameter and is only ever handed the
+centre.

@@ -5670,6 +5670,63 @@ fn parse_transform(v: &str, fs: f32) -> Vec<TransformFn> {
                     }
                 }
             }
+            // ⚠⚠⚠ **THE 3D FUNCTIONS WERE FALLING INTO `_ => {}` AND BEING SILENTLY DROPPED**, and
+            // `translate3d(x, y, 0)` is not an exotic spelling — it is *the* idiom for putting an
+            // element on its own compositor layer, which is how every animation library, carousel,
+            // drawer and sticky header on the modern web writes a translation. Dropped, the element
+            // is left at its **untransformed** position, which is the largest possible error for the
+            // property. Measured against Chrome, a 100×40 box:
+            //
+            // ```text
+            //   transform: translate3d(20px,10px,0)    Chrome [20, 720]    before [0, 710]
+            // ```
+            //
+            // The 2D projection of each of these is exact, not an approximation: with no
+            // `perspective` in force, `z` contributes nothing to the on-screen position, so the
+            // x/y terms of the 3D function ARE its rendered effect.
+            //
+            // ⚠ `rotate3d` is deliberately handled **only about the z axis**. A rotation about x or
+            // y projects to a foreshortening that this 2D pipeline cannot express, and inventing one
+            // would be a wrong answer of the right type; `rotate3d(0,0,1,θ)` — which is what a page
+            // that wants a plain rotation on its own layer writes — is exactly `rotate(θ)`.
+            "translate3d" => out.push(TransformFn::Translate(
+                dim(0),
+                nums.get(1)
+                    .map(|s| values::parse_dim(s, fs))
+                    .unwrap_or(Dim::Px(0.0)),
+            )),
+            // `translateZ`/`perspective` have no 2D effect without a perspective context. Matching
+            // them explicitly (rather than letting them fall through) says the omission is a
+            // DECISION — the `_` arm is where the bug above lived.
+            "translatez" | "perspective" => {}
+            "scale3d" => out.push(TransformFn::Scale(f(0).unwrap_or(1.0), f(1).unwrap_or(1.0))),
+            "scalez" => {}
+            "rotatez" => out.push(TransformFn::Rotate(
+                nums.first().and_then(|s| angle(s)).unwrap_or(0.0),
+            )),
+            "rotate3d" => {
+                // Only the z-axis case has a 2D meaning — see the note above.
+                let (x, y, z) = (
+                    f(0).unwrap_or(0.0),
+                    f(1).unwrap_or(0.0),
+                    f(2).unwrap_or(0.0),
+                );
+                if x == 0.0 && y == 0.0 && z != 0.0 {
+                    out.push(TransformFn::Rotate(
+                        nums.get(3).and_then(|s| angle(s)).unwrap_or(0.0),
+                    ));
+                }
+            }
+            // `matrix3d` is a 4×4 in column-major order; its 2D projection takes the four linear
+            // terms and the two translations — m11 m12 m21 m22 m41 m42, i.e. indices 0 1 4 5 12 13.
+            "matrix3d" => {
+                if nums.len() == 16 {
+                    let v: Option<Vec<f32>> = nums.iter().map(|n| n.parse::<f32>().ok()).collect();
+                    if let Some(v) = v {
+                        out.push(TransformFn::Matrix([v[0], v[1], v[4], v[5], v[12], v[13]]));
+                    }
+                }
+            }
             _ => {}
         }
         rest = &rest[open + close + 1..];

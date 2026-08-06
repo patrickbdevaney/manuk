@@ -566,6 +566,7 @@
   - L1906 · Where Chrome draws the form-control box-sizing line (t851)
   - L1925 · Both UA sheets were wrong, in OPPOSITE directions
   - L1937 · A layout-crate test cannot see the shipping cascade
+  - L1948 · A _ arm with a REASON above it is the hardest kind to audit (t975)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -1624,4 +1625,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-1531 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+1532 sections across 22 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
