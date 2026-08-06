@@ -46371,6 +46371,62 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 977 — the surface audit finds its best axis INSIDE the engine (2026-08-06)
+
+TICK SHAPE: measurement — the cadence surface audit (due every 10 ticks, last at 966), banked as
+audit #38.
+
+⚠⚠ **A FOURTH VENDOR AXIS, AND IT RETURNS THE SAME STRUCTURAL ANSWER FOR THE THIRD TIME.** #34 took
+Interop/Baseline, #35 the Chrome frontier, #36 Servo, #37 the corpus-as-a-population; this closes the
+vendor set with WebKit. Twelve named Safari 26.x features, reconciled against the map, against
+`engine/` by grep, and **priced on the burndown corpus**:
+
+```text
+   field-sizing 0.0% · margin-trim 0.0% · overflow-block/inline 0.0% · initial-letter 0.0%
+   dynamic-range-limit 0.0% · Grid Lanes 0.0% · :open 0.6% · position-try 0.6%
+   justify-self 1.8%  ·  align-self 8.2%   <- the only one with real weight
+```
+
+**Ten of twelve at or below 0.6%.** #37 found this for Interop's twenty focus areas; a second vendor
+list reproducing it makes it **a property of the axis, not of Interop**. A vendor release list ranks
+the *developer frontier*, and the frontier is not where this corpus lives. Measured three times now —
+it should stop being re-derived.
+
+**The one exception got a probe instead of a map row, and is 5/6 already correct:** `align-self` is
+exact in flex *and* grid (center / flex-end / flex-start / stretch / grid-end). **`justify-self:end`
+in a grid is the single divergence** — the item sits at x=0 where Chrome puts it at x=140, a 140px
+error, priced at 1.8%. Recorded with its number rather than ranked above the burndown.
+
+⚠⚠⚠ **THE FINDING IS A NEW AXIS, AND IT IS CODE-SHAPED RATHER THAN SOURCE-SHAPED.** t975 and t976
+each found a **whole capability** hidden inside the engine's own structure — not behind a missing
+feature but behind a construct that *reads as a decision*:
+
+* t975 — the 3D transform spellings fell into a `_ => {}` whose comment said *"3D/perspective
+  skipped — our paint model is 2D"*: true of a genuine 3D effect, false of `translate3d(x,y,0)`.
+* t976 — `transform-origin` sat behind a parameter that existed, was documented, and was handed a
+  hard-coded constant by all three call sites.
+
+**Neither is findable from any vendor list, from Baseline, or from the corpus** — the property
+parses, the name greps, the doc explains it. So the audit swept the engine's own silent
+fall-throughs: **112 `_ => {}` / `_ => None` arms across `engine/*/src`, of which 28 carry a
+justifying comment.**
+
+> **112 is a worklist, not a defect count** — most catch-alls are correct. The narrow, testable claim
+> is that **the 28 with a justification are the ones no instrument can audit**, because a
+> justification is indistinguishable from a measurement to every reader, including the author. **Two
+> have been checked and both were wrong.** The next audit samples from those 28 rather than from a
+> vendor list; this one enumerates them so the sampling is possible.
+
+RECONCILIATION: map 476 → **478 rows** — `align-self` as `works` (probe-verified, which is weaker
+than gated and stronger than a claim) and `justify-self` as `partial` carrying its measured 140px.
+
+RATCHET: no engine change — measurement only. Every gate green from t976.
+
+PERF: none.
+
+WIKI: none [forced] — the artefacts are `docs/loop/SURFACE-AUDIT.md` #38 and two
+`CONSTELLATION.tsv` rows. [no-pattern]
+
 ## Tick 976 — a defaulted parameter no caller overrides is an unimplemented property (2026-08-06)
 
 TICK SHAPE: pattern-class — CSS transforms, continuing t975's named residue. `transform:` is

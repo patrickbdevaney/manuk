@@ -4183,3 +4183,92 @@ baseline is its bottom margin edge, and the §10.8.1 last-line-box search was be
 * ⚠ Still open, and genuinely a form-control question: `<div><button><svg/></button></div>` is **32
   against Chrome's 24** *after* the svg fix — the same shape one level up, an inline-block's baseline
   when its last line box holds a vertically-aligned replaced item.
+
+## Audit #38 — tick 977 (2026-08-06) — a FOURTH vendor axis says the same thing, and a CODE-shaped one says something new
+
+**Sources, searched rather than recalled:**
+
+* [WebKit Features for Safari 26.5](https://webkit.org/blog/17938/webkit-features-for-safari-26-5/) · [26.4](https://webkit.org/blog/17862/webkit-features-for-safari-26-4/) · [26.2](https://webkit.org/blog/17640/webkit-features-for-safari-26-2/) · [26.0](https://webkit.org/blog/17333/webkit-features-in-safari-26-0/) · [Touring New CSS Features in Safari 26 — CSS-Tricks](https://css-tricks.com/touring-new-css-features-in-safari-26/)
+
+**Fourth vendor axis: WebKit.** #34 took Interop/Baseline, #35 the Chrome frontier, #36 Servo, #37
+the *corpus as a population*. This one closes the vendor set with the one engine not yet asked.
+
+### RECONCILIATION — and it is the third axis in a row to return the same structural answer
+
+Twelve named Safari 26.x features checked against `CONSTELLATION.tsv`, against `engine/` by grep, and
+then **priced on the burndown corpus** with t965's instrument:
+
+```text
+   field-sizing            0/171   0.0%      margin-trim             0/171   0.0%
+   overflow-block/inline   0/171   0.0%      initial-letter          0/171   0.0%
+   dynamic-range-limit     0/171   0.0%      Grid Lanes              0/171   0.0%
+   :open pseudo-class      1/171   0.6%      position-try            1/171   0.6%
+   justify-self            3/171   1.8%      align-self             14/171   8.2%   <- the exception
+```
+
+**Ten of twelve price at or below 0.6%.** #37 found this for Interop 2026's twenty focus areas and
+called it a statement about *populations*; a second vendor list reproducing it makes it a property of
+the axis rather than of Interop. **A vendor release list is a ranking of the developer frontier, and
+the frontier is not where this engine's corpus lives.** That is now measured three times and should
+stop being re-derived.
+
+### THE ONE EXCEPTION, PROBED — and it is 5/6 already correct
+
+`align-self` is the only item on the list with real corpus weight (8.2%), so it got a differential
+probe rather than a map row:
+
+```text
+                                                    Chrome        ours
+     align-self:center on a flex item              [0,  36]     [0,  36]   ✓
+     align-self:flex-end                           [0, 152]     [0, 152]   ✓
+     align-self:flex-start (container centres)     [0, 178]     [0, 178]   ✓
+     align-self:stretch (container centres)     [0,264,60,80] [0,264,60,80] ✓
+     align-self:end in a GRID                      [0, 456]     [0, 456]   ✓
+     justify-self:end in a GRID                    [140, 350]   [  0, 350]  ✗
+```
+
+**`align-self` is correct in flex AND grid; `justify-self` in a grid is unimplemented** — the item
+sits at the track's start where Chrome puts it at the end, a 140px error on the one row. Priced at
+**1.8%** of the corpus, so it is a real but small lever, recorded with its number rather than ranked
+above the burndown.
+
+### ⚠⚠⚠ THE NEW AXIS, and it is CODE-shaped rather than source-shaped
+
+t975 and t976 each found a **whole capability** hidden inside the engine's own structure — not behind
+a missing feature but behind a construct that reads as a decision:
+
+* **t975** — `Translate3D`/`Scale3D`/`Rotate3D`/`Matrix3D` fell into a `_ => {}` whose comment said
+  *"3D/perspective skipped — our paint model is 2D"*: true of a genuine 3D effect, false of
+  `translate3d(x,y,0)`. **The reason was doing the work a measurement should do.**
+* **t976** — `transform-origin` was unimplemented behind a **parameter that existed, was documented,
+  and was passed a hard-coded constant by all three call sites**.
+
+Neither is findable from any vendor list, from Baseline, or from the corpus — the property *parses*,
+the name *greps*, the doc *explains it*. So this audit adds a sweep of the engine's own silent
+fall-throughs:
+
+```text
+   silent `_ => {}` / `_ => None` arms across engine/*/src      112
+     engine/css/src/lib.rs            29        engine/paint/src/lib.rs        7
+     engine/page/src/lib.rs           14        engine/css/src/stylo_map.rs     5
+     engine/js/src/dom_bindings.rs    11        engine/dom/src/lib.rs           5
+     engine/css/src/values.rs          9        engine/a11y/src/lib.rs          4
+     engine/layout/src/lib.rs          9        (compositor, html)              2
+     engine/css/src/stylo_engine.rs    7
+   ── of those, carrying a JUSTIFYING comment (t975's exact shape)   28
+```
+
+**112 is a worklist, not a defect count** — most catch-alls are correct. The audit's claim is
+narrower and testable: **the 28 with a justification are the ones no instrument can audit**, because
+the justification is indistinguishable from a measurement to every reader including the author. The
+two checked so far were both wrong. **The next audit should sample from that 28 rather than from a
+vendor list**, and this one is recording the list so the sampling is possible.
+
+### RE-RANK
+
+**No re-rank on the vendor axis** — ten of twelve items are absent from the corpus, and the one with
+weight is already correct. **A partial re-rank on the code axis:** the 28 justified catch-alls are now
+a named, enumerable population with a 2-for-2 hit rate, which is a better prior than any list this
+audit has checked. `justify-self` in grid is recorded as the vendor axis's one measured lead (1.8%).
+
+Map now **478 rows** (+2: `align-self` gated by probe, `justify-self` grid partial with its number).

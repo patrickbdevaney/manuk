@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **695** | ticks 1–975 |
-| median tick cycle | **26m** | 694 intervals |
+| ticks landed | **696** | ticks 1–976 |
+| median tick cycle | **26m** | 695 intervals |
 | median, last 10 | **39m** | 10 intervals |
 | fastest / slowest | 5s / 5.4d | |
-| **ticks per hour** | **1.12** | 619.9h elapsed |
-| median verify wall | **63s** | 634 ticks |
+| **ticks per hour** | **1.12** | 620.5h elapsed |
+| median verify wall | **63s** | 635 ticks |
 | wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **488**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**336 of 695 ticks** (48%) moved a
+**337 of 696 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **336** capability ticks, median cycle **26m**
+* **337** capability ticks, median cycle **26m**
 * median diff per tick: **+258 / −34** lines across 8 files
 
 ## Every tick
@@ -792,5 +792,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **972** | 2026-08-05 18:15 | 24m | pattern-class | 63s | +106/−32 | 408 | 81 | 56.0% · | a button's UA border is 2px, and the audit's font-size claim was wrong (2026-08-05) |
 | **974** | 2026-08-06 00:04 | 5.8h | measurement | 63s | +413/−34 | 409 | 81 | 56.0% · | the sweep the steer asked for, and TWO non-reproducing sites inverted its SIGN (2026-08-05 |
 | **975** | 2026-08-06 00:55 | 51m | pattern-class | 63s | +253/−38 | 409 | 81 | 56.0% · | `translate3d` was on the floor, and the comment above the bug was its alibi (2026-08-05) |
+| **976** | 2026-08-06 01:34 | 39m | pattern-class | 63s | +181/−33 | 409 | 81 | 56.0% · | a defaulted parameter no caller overrides is an unimplemented property (2026-08-06) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
