@@ -46371,6 +46371,62 @@ PERF: none — one UA rule and one narrowed branch in a cascade that already ran
 WIKI: `docs/wiki/css-cascade.md` — where Chrome draws the form-control `box-sizing` line, and why a
 layout-crate test cannot see it.
 
+## Tick 980 — `align-self` reached taffy and `justify-self` did not (2026-08-06)
+
+TICK SHAPE: pattern-class — grid item self-alignment. Check #87's steer item #1, and the only
+measured lead the vendor axis produced across four surface audits.
+
+⚠⚠ **A GRID ITEM ASKING FOR `justify-self: end` SAT AT THE START OF ITS TRACK — x=0 where Chrome puts
+it at 140** in a 200px column. Its axis-twin `align-self` was correct the whole time, in **both** flex
+and grid, which is exactly what made the pair look handled:
+
+```text
+                                                Chrome        before        after
+     align-self:center on a flex item         [  0,  36]   [  0,  36]   unchanged
+     align-self:flex-end                      [  0, 152]   [  0, 152]   unchanged
+     align-self:flex-start (container centres)[  0, 178]   [  0, 178]   unchanged
+     align-self:stretch (container centres) [0,264,60,80]     same      unchanged
+     align-self:end in a GRID                 [  0, 456]   [  0, 456]   unchanged
+     justify-self:end in a GRID               [140, 350]   [  0, 350]   [140, 350]
+```
+
+**THE PROPERTY WAS ABSENT AT ALL THREE LAYERS WHILE ITS TWIN WAS COMPLETE AT ALL THREE.** No field on
+`ComputedStyle`, no parse arm, no Stylo recovery, and in `taffy_tree.rs` a line with no partner:
+
+```rust
+   align_items: Some(map_align(cs.align_items)),
+   align_self:  cs.align_self.map(map_align),
+   justify_content: map_justify(cs.justify_content),
+   // ...and no `justify_self` at all
+```
+
+> **A gap survives when the neighbouring line looks like coverage.** `align_self` sits directly above
+> where `justify_self` belongs; every reader of that block has seen a self-alignment property being
+> mapped and moved on. This is the same shape as t976's defaulted parameter and t975's justified
+> catch-all — three in one window, each a whole property hidden by something adjacent that was right.
+
+**HOW IT WAS FOUND, and the method is the point:** surface audit #38 priced twelve Safari 26.x
+features on the corpus, ten came back ≤0.6%, and `align-self` (8.2%) was the only one worth probing.
+The probe returned **5/5 correct on `align-self` and one divergence on `justify-self`** (1.8%). The
+control in that probe is what identified the defect — an axis that works next to an axis that does
+not is a much sharper signal than either reading alone.
+
+RED-PROVEN: **delete the `justify_self` line from `taffy_tree.rs`** → `#a5` reads x=0 against Chrome's
+140, and **it is the only row that moves** — which is the assertion that the change is confined to the
+inline axis.
+
+⚠ The gate asserts every row as an **offset from its own container**, so a row going wrong above
+cannot shift a row below into or out of agreement; and the five `align-self` rows are asserted
+because the new line shares `map_align` with them.
+
+RATCHET: `manuk-css` 28/28 + 2, `manuk-layout` 125/125, and every `engine/page/tests` gate mentioning
+grid, flex or align-self green as a set.
+
+PERF: none — one `Option::map` in a style conversion that already ran.
+
+WIKI: none [forced] — the mechanism is one missing line in a three-layer property, and the gate's
+module doc carries it; `WEB-PATTERNS.md` has the pattern row. [no-pattern]
+
 ## Tick 979 — the constitution check, and the rule that cut both ways in one session (2026-08-06)
 
 TICK SHAPE: measurement — the cadence re-read of `CONSTITUTION.MD` (due every 8 ticks, last at 971),

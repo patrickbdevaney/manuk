@@ -1247,6 +1247,11 @@ pub struct ComputedStyle {
     pub flex_basis: Dim,
     /// `align-self` (item); `None` = `auto` (defer to the container's `align-items`).
     pub align_self: Option<AlignItems>,
+    /// `justify-self` — a GRID item's own INLINE-axis alignment within its track, overriding the
+    /// container's `justify-items`. `None` is `auto` (defer to the container). The align-axis twin
+    /// of [`Self::align_self`], and it was the missing half: `align-self` reached taffy and this
+    /// did not, so a `justify-self: end` item sat at the START of its track.
+    pub justify_self: Option<AlignItems>,
     /// `transform` — an ordered list of transform functions (translate/scale/rotate/skew/
     /// matrix), resolved to an affine matrix at layout time (translate `%` is the box's own
     /// size). Empty = `none`.
@@ -1391,6 +1396,7 @@ impl ComputedStyle {
             flex_shrink: 1.0,
             flex_basis: Dim::Auto,
             align_self: None,
+            justify_self: None,
             transform: Vec::new(),
             vertical_align: VerticalAlign::Baseline,
             grid_template_columns: Vec::new(),
@@ -4651,6 +4657,20 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             if let Some(px) = values::parse_length_px(v.trim(), s.font_size) {
                 s.column_gap = px;
             }
+        }
+        // `justify-self` — the INLINE-axis twin of `align-self` for a grid item. Same keyword set:
+        // the flex spellings (`flex-start`/`flex-end`) are accepted alongside the logical ones
+        // because authors write both, and a grid item styled by a flex-era design token is common.
+        "justify-self" => {
+            s.justify_self = match v.trim() {
+                "auto" => None,
+                "center" => Some(AlignItems::Center),
+                "flex-end" | "end" | "right" => Some(AlignItems::FlexEnd),
+                "flex-start" | "start" | "left" => Some(AlignItems::FlexStart),
+                "baseline" => Some(AlignItems::Baseline),
+                "stretch" => Some(AlignItems::Stretch),
+                _ => None,
+            };
         }
         "align-self" => {
             s.align_self = match v.trim() {

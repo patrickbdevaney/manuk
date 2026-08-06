@@ -849,6 +849,13 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
             0 => None,
             v => Some(map_ai(v)),
         };
+        // `justify-self` — the same shape one axis over, and the half that was missing. `align_self`
+        // reached taffy and this did not, so a grid item asking for `justify-self: end` sat at the
+        // START of its track: Chrome x=140 in a 200px track against our x=0.
+        s.justify_self = match av(cv.clone_justify_self().0) {
+            0 => None,
+            v => Some(map_ai(v)),
+        };
         // row-gap / column-gap: `normal` → 0, else the length part.
         use stylo::values::generics::length::GenericLengthPercentageOrNormal as GapVal;
         let gap_px =

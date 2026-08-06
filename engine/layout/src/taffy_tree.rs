@@ -279,6 +279,7 @@ pub fn to_taffy_style(cs: &ComputedStyle, calc: &mut Vec<(f32, f32)>) -> Style {
         },
         align_items: Some(map_align(cs.align_items)),
         align_self: cs.align_self.map(map_align),
+        justify_self: cs.justify_self.map(map_align),
         justify_content: map_justify(cs.justify_content),
         gap: Size {
             width: length(cs.column_gap),
